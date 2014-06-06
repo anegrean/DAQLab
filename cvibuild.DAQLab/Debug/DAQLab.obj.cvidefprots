@@ -1,0 +1,16 @@
+[main]
+Class="Function"
+Prototype="int main(int argc, char **argv);"
+
+[CB_DAQLab_MainPan]
+Class="Function"
+Prototype="int CB_DAQLab_MainPan(int panel, int event, void *callbackData, int eventData1, int eventData2);"
+
+[SetCtrlsInPanCBInfo]
+Class="Function"
+Prototype="int SetCtrlsInPanCBInfo(void *callbackData, int (*callbackFn)(int, int, int, void *, int, int), int panHndl);"
+
+[DLMsg]
+Class="Function"
+Prototype="void DLMsg(const char *text, int beep);"
+

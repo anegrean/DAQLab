@@ -19,6 +19,12 @@
 
 #define  MainPan                          2       /* callback function: CB_DAQLab_MainPan */
 
+#define  TasksPan                         3
+
+#define  TCDelPan                         4       /* callback function: DAQLab_TCDelPan_CB */
+#define  TCDelPan_TaskControllers         2       /* control type: listBox, callback function: (none) */
+#define  TCDelPan_DelBTTN                 3       /* control type: command, callback function: DAQLab_DelTaskControllersBTTN_CB */
+
 
      /* Control Arrays: */
 
@@ -33,6 +39,8 @@
      /* Callback Prototypes: */
 
 int  CVICALLBACK CB_DAQLab_MainPan(int panel, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK DAQLab_DelTaskControllersBTTN_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK DAQLab_TCDelPan_CB(int panel, int event, void *callbackData, int eventData1, int eventData2);
 
 
 #ifdef __cplusplus

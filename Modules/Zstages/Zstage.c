@@ -38,9 +38,6 @@ const double ZStepSizes[] = { 0.1, 0.2, 0.5, 1, 2, 5, 10,
 //==============================================================================
 // Static functions
 
-static int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl);
-
-
 //==============================================================================
 // Global variables
 
@@ -77,20 +74,28 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod)
 		// DATA
 		
 	zstage->module_base.name		= StrDup(MOD_Zstage_NAME);
+	zstage->module_base.XMLname		= StrDup(MOD_Zstage_XMLTAG);
 	
 		// METHODS
 	
 		// overriding methods
 	zstage->module_base.Discard 	= discard_Zstage;
 	zstage->module_base.Load		= Zstage_Load;
+	zstage->module_base.LoadCfg		= Zstage_LoadCfg;
 	
 	//---------------------------
 	// Child Level 1: Zstage_type 
 	
 		// DATA
 	
+	zstage->zPos					= NULL; 
 	zstage->revertDirection			= 0;
-	zstage->zPos					= NULL;
+	zstage->zHomePos				= NULL;
+	zstage->zULimPos				= NULL;
+	zstage->zLLimPos				= NULL;
+	zstage->zStackStep				= 0;
+	
+
 
 		// METHODS
 		
@@ -114,19 +119,28 @@ void discard_Zstage (DAQLabModule_type* mod)
 	if (!mod) return;
 	
 	// discard Zstage_type specific data
-	//Zstage_type* zstage = (Zstage_type*) mod;
+	Zstage_type* zstage = (Zstage_type*) mod;
 	
+	OKfree(zstage->zPos);
+	OKfree(zstage->zHomePos);
+	OKfree(zstage->zULimPos);
+	OKfree(zstage->zLLimPos);
+
 	// discard DAQLabModule_type specific data
 	discard_DAQLabModule(mod);
 }
 
 
 /// HIFN Loads ZStage specific resources. 
-static int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl) 
+int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl) 
 {
 	char	stepsizeName[50];
 	
+	// load panel resources
 	int panHndl = LoadPanel(workspacePanHndl, MOD_Zstage_UI_ZStage, ZStagePan);
+	
+	// place panel handles in module structure
+	ListInsertItem(mod->ctrlPanelHndls, &panHndl, END_OF_LIST);
 	
 	// connect module data and user interface callbackFn to all direct controls in the panel
 	SetCtrlsInPanCBInfo(mod, ((Zstage_type*)mod)->uiCtrlsCB, panHndl);
@@ -136,11 +150,6 @@ static int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 		Fmt(stepsizeName, "%s<%f[p1]", ZStepSizes[i]);
 		InsertListItem(panHndl, ZStagePan_ZStepSize, -1, stepsizeName, ZStepSizes[i]);   
 	}
-	
-
-	// display workspace pannels
-	DisplayPanel(panHndl);
-	
 	
 	return 0;
 
@@ -203,4 +212,11 @@ int CVICALLBACK Zstage_UI_CB (int panel, int control, int event,
 			break;
 	}
 	return 0;
+}
+
+int Zstage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement) 
+{
+	Zstage_type*  	zstage = (Zstage_type*) mod; 
+	
+	return DAQLabModule_LoadCfg(mod, DAQLabCfg_RootElement);
 }

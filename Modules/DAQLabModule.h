@@ -34,31 +34,36 @@ struct DAQLabModule {
 	// DATA
 	
 		// module name
-	char*		name;
+	char*						name;
+	char*						XMLname;
+	
+		// module XML node
+	ActiveXMLObj_IXMLDOMNode_	XMLNode;
 		// module configuration panel; one panel per module
-	int			cfgPanHndl;									
+	int							cfgPanHndl;									
 		// module control panel handles of int type to be loaded in the DAQLab workspace
-	ListType	ctrlPanelHndls;	
+	ListType					ctrlPanelHndls;	
 	
 	// METHODS
 		
 		// discards module-specific data  
-	void	(* Discard ) 	(DAQLabModule_type* self);	
+	void	(* Discard ) 		(DAQLabModule_type* self);	
 	
 		// loads module into DAQLab workspace
-	int		(* Load )		(DAQLabModule_type* self, int workspacePanHndl);
+	int		(* Load )			(DAQLabModule_type* self, int workspacePanHndl);
 	
 		// loads config from XML node
-	int		(* LoadCfg ) 	(DAQLabModule_type* self);
+	int		(* LoadCfg ) 		(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
 	
 		// adds config to XML node
-	int		(* SaveCfg )	(DAQLabModule_type* self);
+	int		(* SaveCfg )		(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
 
 };
 
 
 //==============================================================================
 // Constants
+
 
 //==============================================================================
 // External variables
@@ -67,12 +72,19 @@ struct DAQLabModule {
 // Global functions
 
 	// module creation/discarding
-void			init_DAQLabModule				(DAQLabModule_type* mod);
-void 			discard_DAQLabModule 			(DAQLabModule_type* mod);
+void							init_DAQLabModule					(DAQLabModule_type* mod);
+void 							discard_DAQLabModule 				(DAQLabModule_type* mod);
 
-	// lists available modules 
-ListType		DAQLabModule_populate 			(void);
-void			DAQLabModule_empty				(ListType* modules);
+	// removes modules
+void							DAQLabModule_empty					(ListType* modules);
+
+	// displays or hides all the workspace panels of a module
+
+void							DAQLabModule_DisplayWorkspacePanels (DAQLabModule_type* mod, BOOL visible);
+
+	// loads generic DAQLab module configuration from an XML file
+
+int								DAQLabModule_LoadCfg				(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);			
 
 
 #ifdef __cplusplus

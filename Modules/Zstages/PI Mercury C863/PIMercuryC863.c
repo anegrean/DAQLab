@@ -10,7 +10,7 @@
 
 //==============================================================================
 // Include files
-
+#include "DAQLab.h" 		// include this first 
 #include <ansi_c.h> 
 #include "PIMercuryC863.h"
 
@@ -25,6 +25,12 @@
 
 //==============================================================================
 // Static functions
+
+static int PIMercuryC863_Load (DAQLabModule_type* mod, int workspacePanHndl);
+
+static int PIMercuryC863_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+
+static int PIMercuryC863_Move (Zstage_type* self, Zstage_move_type moveType, double moveVal);
 
 //==============================================================================
 // Global variables
@@ -53,24 +59,33 @@ DAQLabModule_type*	initalloc_PIMercuryC863	(DAQLabModule_type* mod)
 	// Parent Level 0: DAQLabModule_type 
 	
 		// DATA
-		
+	
+		// updating name
+	OKfree(zstage->module_base.name);
 	zstage->module_base.name		= StrDup(MOD_PIMercuryC863_NAME);
+		// updating XML name
+	OKfree(zstage->module_base.XMLname); 
+	zstage->module_base.XMLname		= StrDup(MOD_PIMercuryC863_XMLTAG);
 		
 
 		//METHODS
 	
 		// overriding methods
 	zstage->module_base.Discard 	= discard_PIMercuryC863;
+	zstage->module_base.Load 		= PIMercuryC863_Load;
+	zstage->module_base.LoadCfg		= PIMercuryC863_LoadCfg;
+		
 	
 	//---------------------------
 	// Child Level 1: Zstage_type 
 	
 		// DATA
 	
-	zstage->zPos					= NULL;
-	zstage->revertDirection			= 0;
-
+	
 		// METHODS
+	
+		// overriding methods
+	zstage->MoveZ					= PIMercuryC863_Move;  
 		
 		
 	
@@ -97,3 +112,26 @@ void discard_PIMercuryC863 (DAQLabModule_type* mod)
 	// discard Zstage_type specific data
 	discard_Zstage (mod);
 }
+
+/// HIFN Loads PIMercuryC863 motorized stage specific resources. 
+static int PIMercuryC863_Load (DAQLabModule_type* mod, int workspacePanHndl)
+{
+	// load generic Z stage resources
+	Zstage_Load (mod, workspacePanHndl); 
+	return 0;
+	
+}
+
+/// HIFN Moves a PIMercuryC863 motorized stage 
+static int PIMercuryC863_Move (Zstage_type* self, Zstage_move_type moveType, double moveVal)
+{
+	return 0;
+}
+
+static int PIMercuryC863_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement)
+{
+	PIMercuryC863_type* 	PIMzstage	= (PIMercuryC863_type*) mod;
+	
+	return Zstage_LoadCfg(mod, DAQLabCfg_RootElement); 
+}
+

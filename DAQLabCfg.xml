@@ -1,1 +1,3 @@
-<DAQLabConfig><dog>-1</dog><cat>1.333333</cat></DAQLabConfig>
+<DAQLabConfig>
+  <ZStage_PIMercuryC863>-1</ZStage_PIMercuryC863>
+</DAQLabConfig>

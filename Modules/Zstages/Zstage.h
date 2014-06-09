@@ -49,6 +49,18 @@ struct Zstage {
 		// Flag to revert movement direction, default 0, set to 1 to revert direction
 	BOOL				revertDirection;
 	
+		// Home position of Zstage, if NULL, home position was not set.
+	double*				zHomePos;
+	
+		// Upper limit position of Zstage, if NULL, there is no limit 			( zLLimPos < zULimPos )
+	double*				zULimPos;
+	
+		// Lower limit position of Zstage, if NULL, there is no lower limit
+	double*				zLLimPos;
+	
+		// Step size used for iterating the position of the stage, must be a positive number
+	double				zStackStep;
+	
 	// METHODS
 	
 		// Callback to install on controls from selected panel in UI_ZStage.uir
@@ -67,6 +79,7 @@ struct Zstage {
 // Constants
 
 #define MOD_Zstage_NAME 	"Generic Z stage"
+#define MOD_Zstage_XMLTAG	"ZStage"			// no space!
 
 
 //==============================================================================
@@ -77,6 +90,12 @@ struct Zstage {
 
 DAQLabModule_type*	initalloc_Zstage 	(DAQLabModule_type* mod);
 void 				discard_Zstage 		(DAQLabModule_type* mod);
+
+	// loads generic Z stage resources
+int					Zstage_Load 		(DAQLabModule_type* mod, int workspacePanHndl);
+
+	// loads generic Z stage configuration from an XML file  
+int 				Zstage_LoadCfg 		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
 
 #ifdef __cplusplus
     }

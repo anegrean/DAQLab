@@ -23,7 +23,8 @@
 //==============================================================================
 // Constants
 
-#define MOD_PIMercuryC863_NAME 	"PI Mercury C863 servo motion controller" 
+#define MOD_PIMercuryC863_NAME 		"ZStage_PIMercuryC863" 
+#define MOD_PIMercuryC863_XMLTAG	"ZStage_PIMercuryC863"   // no space!
 
 //==============================================================================
 // Types

@@ -26,7 +26,7 @@
 #define MOD_Zstage_UI_ZStage "./Modules/Zstages/UI_ZStage.uir"
 
 	// step sizes in [um] displayed in the ZStagePan_ZStepSize control
-const double ZStepSizes[] = { 0.1, 0.2, 0.5, 1, 2, 5, 10, 
+const double ZStepSizes[] = { 0.1, 0.2, 0.5, 1, 1.5, 2, 5, 10, 
 							  20, 50, 100, 200, 500, 1000 };  
 	
 //==============================================================================
@@ -37,6 +37,20 @@ const double ZStepSizes[] = { 0.1, 0.2, 0.5, 1, 2, 5, 10,
 
 //==============================================================================
 // Static functions
+
+//-----------------------------------------
+// ZStage Task Controller Callbacks
+//-----------------------------------------
+
+static FCallReturn_type*	Zstage_ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*	Zstage_IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*	Zstage_StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*	Zstage_DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*	Zstage_StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type* 	Zstage_ResetTC 					(TaskControl_type* taskControl, BOOL const* abortFlag); 
+static FCallReturn_type* 	Zstage_ErrorTC 					(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static FCallReturn_type*	Zstage_EventHandler				(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
+
 
 //==============================================================================
 // Global variables
@@ -75,6 +89,10 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod)
 		
 	zstage->module_base.name		= StrDup(MOD_Zstage_NAME);
 	zstage->module_base.XMLname		= StrDup(MOD_Zstage_XMLTAG);
+	zstage->module_base.taskControl	= init_TaskControl_type (MOD_Zstage_NAME, Zstage_ConfigureTC, Zstage_IterateTC, Zstage_StartTC, Zstage_ResetTC,
+															 Zstage_DoneTC, Zstage_StoppedTC, NULL, Zstage_EventHandler,Zstage_ErrorTC);   
+		// connect ZStage module data to Task Controller
+	SetTaskControlModuleData(zstage->module_base.taskControl, zstage);
 	
 		// METHODS
 	
@@ -194,6 +212,10 @@ int CVICALLBACK Zstage_UI_CB (int panel, int control, int event,
 					
 					break;
 					
+				case ZStagePan_GoHomePos:
+					
+					break;
+					
 				case ZStagePan_ZAbsPos:
 					
 					break;
@@ -206,6 +228,27 @@ int CVICALLBACK Zstage_UI_CB (int panel, int control, int event,
 					
 					break;
 					
+				case ZStagePan_Cycle_RelStart:
+				case ZStagePan_Cycle_RelEnd:
+					
+					break;
+					
+				case ZStagePan_SetStartPos:
+					
+					break;
+					
+				case ZStagePan_SetEndPos:
+					
+					break;
+					
+				case ZStagePan_AddHomePos:
+					
+					break;
+					
+				case ZStagePan_UpdateHomePos:
+					
+					break;
+					
 			}
 			
 
@@ -213,6 +256,66 @@ int CVICALLBACK Zstage_UI_CB (int panel, int control, int event,
 	}
 	return 0;
 }
+
+//-----------------------------------------
+// ZStage Task Controller Callbacks
+//-----------------------------------------
+
+static FCallReturn_type* Zstage_ConfigureTC	(TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* Zstage_IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* Zstage_StartTC	(TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* Zstage_DoneTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+static FCallReturn_type* Zstage_StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* Zstage_ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* Zstage_ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+{
+	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* Zstage_EventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
+{
+	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
 
 int Zstage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement) 
 {

@@ -117,6 +117,7 @@ struct TaskControl {
 	DoneFptr_type			DoneFptr;
 	StoppedFptr_type		StoppedFptr;
 	DataReceivedFptr_type	DataReceivedFptr;
+	ModuleEventFptr_type	ModuleEventFptr;
 	ErrorFptr_type			ErrorFptr;
 };
 
@@ -180,6 +181,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 										DoneFptr_type			DoneFptr,
 										StoppedFptr_type		StoppedFptr,
 										DataReceivedFptr_type	DataReceivedFptr,
+										ModuleEventFptr_type	ModuleEventFptr,
 										ErrorFptr_type			ErrorFptr)
 {
 	TaskControl_type* a = malloc (sizeof(TaskControl_type));
@@ -225,6 +227,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	a -> DoneFptr				= DoneFptr;
 	a -> StoppedFptr			= StoppedFptr;
 	a -> DataReceivedFptr		= DataReceivedFptr;
+	a -> ModuleEventFptr		= ModuleEventFptr;
 	a -> ErrorFptr				= ErrorFptr;
 	
 	return a;
@@ -283,6 +286,11 @@ void SetTaskControlName (TaskControl_type* taskControl, char newName[])
 	taskControl->taskName = StrDup(newName);
 }
 
+void SetTaskControlState (TaskControl_type* taskControl, TaskStates_type newState)
+{
+	taskControl->state = newState;
+}
+
 TaskStates_type	GetTaskControlState (TaskControl_type* taskControl)
 {
 	return taskControl->state;
@@ -318,7 +326,7 @@ void* GetTaskControlModuleData (TaskControl_type* taskControl)
 	return taskControl->moduleData; 
 }
 
-void SetTaskControlLog (TaskControl_type* taskControl, TaskExecutionLog_type*	logPtr)
+void SetTaskControlLog (TaskControl_type* taskControl, TaskExecutionLog_type* logPtr)
 {
 	taskControl->logPtr = logPtr;
 }
@@ -612,6 +620,11 @@ static char* EventToString (TaskEvents_type event)
 		case TASK_EVENT_ERROR_OUT_OF_MEMORY:
 			
 			return StrDup("Out of memory");
+			
+		case TASK_EVENT_CUSTOM_MODULE_EVENT:
+			
+			return StrDup("Device or Module specific event");
+			
 	}
 	
 	return StrDup("?");
@@ -653,6 +666,10 @@ static char* FCallToString (TaskFCall_type fcall)
 		case TASK_FCALL_DATA_RECEIVED:
 			
 			return StrDup("FunctionCall Data Received");
+			
+		case TASK_FCALL_MODULE_EVENT:
+			
+			return StrDup("FunctionCall Module Event");
 			
 		case TASK_FCALL_ERROR:
 			
@@ -972,6 +989,12 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 			else functionMissingFlag = 1;
 			break;
 			
+		case TASK_EVENT_CUSTOM_MODULE_EVENT:
+			
+			if (taskControl->ModuleEventFptr) fCallResult = (*taskControl->ModuleEventFptr)(taskControl, taskControl->state, taskControl->currIterIdx, fCallData, &taskControl->abortFlag);
+			else functionMissingFlag = 1;
+			break;
+			
 		case TASK_FCALL_ERROR:
 			
 			if (taskControl->ErrorFptr)  fCallResult = (*taskControl->ErrorFptr)(taskControl, taskControl->errorMsg->errorInfo, &taskControl->abortFlag);
@@ -1249,7 +1272,22 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 					
-					break;	
+					break;
+					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_MODULE_EVENT, eventpacket.eventInfo)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
+					
+					break;
 					
 				default:
 					
@@ -1427,6 +1465,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+					
+					break;
+					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_MODULE_EVENT, eventpacket.eventInfo)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
 					
 					break;
 					
@@ -1655,6 +1708,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+					
+					break;
+					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_MODULE_EVENT, eventpacket.eventInfo)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
 					
 					break;
 					
@@ -1906,6 +1974,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_MODULE_EVENT, eventpacket.eventInfo)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
+					
+					break;
+					
 				default:
 					
 					eventStr = EventToString(eventpacket.event);
@@ -2151,6 +2234,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_MODULE_EVENT, eventpacket.eventInfo)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
+					
+					break;
+					
 				default:
 					
 					eventStr = EventToString(eventpacket.event);
@@ -2274,6 +2372,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+					
+					break;
+					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_MODULE_EVENT, eventpacket.eventInfo)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
 					
 					break;
 					
@@ -2449,6 +2562,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+					
+					break;
+					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_MODULE_EVENT, eventpacket.eventInfo)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
 					
 					break;
 					
@@ -2709,6 +2837,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_MODULE_EVENT, eventpacket.eventInfo)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
+					
+					break;
+					
 				default:
 					
 					eventStr = EventToString(eventpacket.event);
@@ -2811,6 +2954,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_MODULE_EVENT, eventpacket.eventInfo)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
+					
+					break;
+					
 				default:
 					
 					eventStr = EventToString(eventpacket.event);
@@ -2903,6 +3061,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 						break;
 					}
+					
+					break;
+					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_MODULE_EVENT, eventpacket.eventInfo)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
 					
 					break;
 			}

@@ -70,6 +70,7 @@ void init_DAQLabModule (DAQLabModule_type* mod)
 	mod->name			= NULL;
 	mod->XMLname		= NULL;
 	mod->XMLNode		= 0;
+	mod->taskControl	= NULL;
 	mod->cfgPanHndl		= 0;
 	mod->ctrlPanelHndls	= ListCreate(sizeof(int));
 	
@@ -99,6 +100,8 @@ void discard_DAQLabModule (DAQLabModule_type* mod)
 	
 	OKfree(mod->name);
 	OKfree(mod->XMLname);
+	// discard Task Controller
+	discard_TaskControl_type(&mod->taskControl);
 }
 
 void DAQLabModule_empty	(ListType* modules)

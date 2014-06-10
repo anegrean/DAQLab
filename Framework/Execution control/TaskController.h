@@ -224,10 +224,16 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 
 
 
-
-
-
 ========================================================================================================================================*/
+
+
+#ifndef __TaskController_H__
+#define __TaskController_H__
+
+#ifdef __cplusplus
+    extern "C" {
+#endif
+
 
 #include <toolbox.h>
 
@@ -268,7 +274,8 @@ typedef enum {
 	TASK_EVENT_STOP_CONTINUOUS_TASK,	// Event sent from parent Task Controller to its continuous SubTasks to stop them.
 	TASK_EVENT_SUBTASK_STATE_CHANGED,   // When one of the SubTask Controllers switches to another state.
 	TASK_EVENT_DATA_RECEIVED,			// When data is placed in an otherwise empty data queue of a Task Controller.
-	TASK_EVENT_ERROR_OUT_OF_MEMORY		// To signal that an out of memory event occured.
+	TASK_EVENT_ERROR_OUT_OF_MEMORY,		// To signal that an out of memory event occured.
+	TASK_EVENT_CUSTOM_MODULE_EVENT		// To signal custom module or device events.
 } TaskEvents_type;
 
 //----------------------------------------
@@ -283,7 +290,8 @@ typedef enum {
 	TASK_FCALL_DONE,					// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
 	TASK_FCALL_STOPPED,					// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
 	TASK_FCALL_DATA_RECEIVED,			// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
-	TASK_FCALL_ERROR
+	TASK_FCALL_ERROR,
+	TASK_FCALL_MODULE_EVENT				// Called for custom module events that are not handled directly by the Task Controller
 } TaskFCall_type;
 
 typedef struct TaskControl 			TaskControl_type;
@@ -334,6 +342,10 @@ typedef FCallReturn_type* 	(*ErrorFptr_type) 				(TaskControl_type* taskControl,
 // with the state of the Task Controller
 typedef FCallReturn_type*	(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, CmtTSQHandle dataQID, BOOL const* abortFlag);
 
+// Called for passing custom module or device events that are not handled directly by the Task Controller
+typedef FCallReturn_type*	(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
+
+
 // Called after receiving a task control event and eventInfo must be disposed of
 typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
 
@@ -355,6 +367,7 @@ TaskControl_type*  	 	init_TaskControl_type			(const char				taskname[],
 														 DoneFptr_type			DoneFptr,
 														 StoppedFptr_type		StoppedFptr,
 														 DataReceivedFptr_type	DataReceivedFptr,
+														 ModuleEventFptr_type	ModuleEventFptr,
 														 ErrorFptr_type			ErrorFptr);
 
 void 					discard_TaskControl_type		(TaskControl_type** a);
@@ -367,8 +380,10 @@ void 					SetTaskControlName 				(TaskControl_type* taskControl, char newName[])
 														// returns pointer to dynamically allocated Task Controller name (null terminated string) 
 char*					GetTaskControlName				(TaskControl_type* taskControl);
 
+														// use this function wisely, mostly intended to be used in a custom module event callback
+void					SetTaskControlState				(TaskControl_type* taskControl, TaskStates_type	newState);
 TaskStates_type			GetTaskControlState				(TaskControl_type* taskControl);
-
+														
 														// repeats = 1 by default
 void					SetTaskControlIterations		(TaskControl_type* taskControl, size_t repeat);
 size_t					GetTaskControlIterations		(TaskControl_type* taskControl);
@@ -443,7 +458,12 @@ void					discard_TaskExecutionLog_type	(TaskExecutionLog_type** a);
 
 
 
-	
+
+#ifdef __cplusplus
+    }
+#endif
+
+#endif  /* ndef __TaskController_H__ */	
 	
 	
 	

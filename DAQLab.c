@@ -17,8 +17,7 @@
 #include "UI_DAQLab.h"
 #include "UI_TaskController.h"
 #include "DAQLabModule.h"
-#include "TaskController.h"
-
+#include "TaskController.h" 
 //==============================================================================
 // Include modules
 
@@ -182,6 +181,8 @@ static UITaskCtrl_type*		DAQLab_init_UITaskCtrl_type				(TaskControl_type* taskC
 
 static void					DAQLab_discard_UITaskCtrl_type			(UITaskCtrl_type** a);
 
+
+
 //-----------------------------------------
 // UI Task Controller Callbacks
 //-----------------------------------------
@@ -200,6 +201,12 @@ static FCallReturn_type* 	DAQLab_ErrorUITC 					(TaskControl_type* taskControl, 
 
 //==============================================================================
 // Global functions
+
+void CVICALLBACK 			DAQLab_ManageModules_CB 				(int menuBar, int menuItem, void *callbackData, int panel);
+
+
+
+
 
 /// HIFN  Main entry point
 /// HIRET Return indicates if function was successful.
@@ -834,6 +841,12 @@ static void CVICALLBACK DAQLab_TaskMenu_CB (int menuBarHandle, int menuItemID, v
 	
 }
 
+void CVICALLBACK DAQLab_ManageModules_CB (int menuBar, int menuItem, void *callbackData, int panel)
+{
+	return;
+}
+
+
 static void	DAQLab_TaskMenu_AddTaskController 	(void) 
 {
 	
@@ -883,7 +896,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 		
 	// create new task controller
 	newTaskControllerPtr = init_TaskControl_type (newControllerName, DAQLab_ConfigureUITC, DAQLab_IterateUITC, DAQLab_StartUITC, 
-												  DAQLab_ResetUITC, DAQLab_DoneUITC, DAQLab_StoppedUITC, NULL, DAQLab_ErrorUITC); 
+												  DAQLab_ResetUITC, DAQLab_DoneUITC, DAQLab_StoppedUITC, NULL, NULL, DAQLab_ErrorUITC); 
 	
 	
 	if (!newTaskControllerPtr) {
@@ -1049,7 +1062,7 @@ static FCallReturn_type* DAQLab_ConfigureUITC (TaskControl_type* taskControl, BO
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	unsigned int		repeat;
 	
-	// change Task Controller name background color from green (0x002BD22F) to gray (0x00F0F0F0)
+	// change Task Controller name background color to gray (0x00F0F0F0)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
 	// undim Repeat button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
@@ -1150,8 +1163,8 @@ static FCallReturn_type* DAQLab_ErrorUITC (TaskControl_type* taskControl, char* 
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
-	// change Task Controller name background color to light red (0x00F86B87)
-	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F86B87);
+	// change Task Controller name background color to light red (0x00FF3333)
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00FF3333);
 	// print error info and make some noise
 	DLMsg(errorMsg, 1);
 	DLMsg("\n\n", 0);

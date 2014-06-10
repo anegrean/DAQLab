@@ -20,6 +20,7 @@
 
 #include "cvidef.h"
 #include <toolbox.h>
+#include "TaskController.h"
 
 //==============================================================================
 // Types
@@ -39,6 +40,8 @@ struct DAQLabModule {
 	
 		// module XML node
 	ActiveXMLObj_IXMLDOMNode_	XMLNode;
+		// Task Controller for the module, if any
+	TaskControl_type* 			taskControl;
 		// module configuration panel; one panel per module
 	int							cfgPanHndl;									
 		// module control panel handles of int type to be loaded in the DAQLab workspace

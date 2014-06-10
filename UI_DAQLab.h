@@ -33,13 +33,15 @@
 
      /* Menu Bars, Menus, and Menu Items: */
 
-          /* (no menu bars in the resource file) */
+#define  MainMenu                         1
+#define  MainMenu_Modules                 2       /* callback function: DAQLab_ManageModules_CB */
 
 
      /* Callback Prototypes: */
 
 int  CVICALLBACK CB_DAQLab_MainPan(int panel, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK DAQLab_DelTaskControllersBTTN_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+void CVICALLBACK DAQLab_ManageModules_CB(int menubar, int menuItem, void *callbackData, int panel);
 int  CVICALLBACK DAQLab_TCDelPan_CB(int panel, int event, void *callbackData, int eventData1, int eventData2);
 
 

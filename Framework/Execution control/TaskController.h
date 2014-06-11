@@ -237,7 +237,7 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 
 #include <toolbox.h>
 
-#define TASKCONTROLLER_UI		"UI_TaskController.uir" 
+#define TASKCONTROLLER_UI		"./Framework/Execution control/UI_TaskController.uir" 
 #define TASK_EVENT_TIMEOUT 		3.0		// Event timeout in [s].
 #define N_TASK_EVENT_QITEMS		100		// Number of events waiting to be processed by the state machine.
 

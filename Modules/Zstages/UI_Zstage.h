@@ -29,7 +29,7 @@
 #define  ZStagePan_AddHomePos             13      /* control type: command, callback function: (none) */
 #define  ZStagePan_SetEndPos              14      /* control type: command, callback function: (none) */
 #define  ZStagePan_SetStartPos            15      /* control type: command, callback function: (none) */
-#define  ZStagePan_HomePosList            16      /* control type: listBox, callback function: (none) */
+#define  ZStagePan_RefPosList             16      /* control type: listBox, callback function: (none) */
 #define  ZStagePan_ZStageStatus           17      /* control type: LED, callback function: (none) */
 
 

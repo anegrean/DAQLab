@@ -59,12 +59,20 @@ typedef enum {
 	DL_CSTRING		// null-terminated string
 	
 } DAQLabXMLTypes;
+
+typedef enum {
+	
+	DL_ELEMENT,
+	DL_ATTRIBUTE
+	
+} DAQLabXMLNodeTypes;
 		
 	// DAQLab node type used to define an array of XML child nodes to be added to a parent node
 typedef struct{
+	
 	char*			tag;	// null-terminated string
 	DAQLabXMLTypes 	type;
-	void*			pData;  // make sure the data 
+	void*			pData;
 	
 } DAQLabXMLNode;
 
@@ -81,10 +89,10 @@ int		SetCtrlsInPanCBInfo 	(void* callbackData, CtrlCallbackPtr callbackFn, int p
 
 	// displays messages in the main workspace log panel and optionally beeps
 void	DLMsg					(const char* text, BOOL beep);
-	// adds multiple XML Element children for a parent XML Element
-int		DLAddXMLElem			(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLElements[], size_t nElements);
-	// adds multiple XML Attributes to an XML Element 
-int		DLAddXMLAttr			(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMAttribute_ xmlElement, DAQLabXMLNode childXMLAttributes[], size_t nElements);
+	// adds multiple XML Element children or attributes for a parent XML Element
+int		DLAddToXMLElem			(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes);
+	// places the value of multiple XML Attributes of an Element into user provided pointers
+int		DLGetXMLAttributes		(ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode Attributes[], size_t nAttributes);  
 
 
 #ifdef __cplusplus

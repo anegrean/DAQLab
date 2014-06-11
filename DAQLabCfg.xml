@@ -1,3 +1,1 @@
-<DAQLabConfig>
-  <ZStage_PIMercuryC863>-1</ZStage_PIMercuryC863>
-</DAQLabConfig>
+<DAQLabConfig TaskPanTopPos="8" TaskPanLeftPos="0" LogPanTopPos="42" LogPanLeftPos="37"/>

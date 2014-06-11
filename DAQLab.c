@@ -75,16 +75,17 @@ typedef struct {
 // required data type.
 
 typedef enum _DAQLabMessageID{
-										// parameter types (data1, data2, data3, data4)
-	// errors							// to pass in DAQLab_Msg
-	DAQLAB_MSG_ERR_DOM_CREATION,		// HRESULT* error code, 0, 0, 0
-	DAQLAB_MSG_ERR_ACTIVEXML,			// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0
+											// parameter types (data1, data2, data3, data4)
+	// errors								// to pass in DAQLab_Msg
+	DAQLAB_MSG_ERR_DOM_CREATION,			// HRESULT* error code, 0, 0, 0
+	DAQLAB_MSG_ERR_ACTIVEXML,				// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0
+	DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, // HRESULT* error code, 0, 0, 0
 	
 	// warnings									
-	DAQLAB_MSG_WARN_NO_CFG_FILE,		// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0       
+	DAQLAB_MSG_WARN_NO_CFG_FILE,			// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0       
 	
 	// success									
-	DAQLAB_MSG_OK_DOM_CREATION			// 0, 0, 0, 0 
+	DAQLAB_MSG_OK_DOM_CREATION				// 0, 0, 0, 0 
 	
 
 } DAQLabMessageID;
@@ -180,6 +181,8 @@ static int CVICALLBACK 		DAQLab_TaskControllers_CB 				(int panel, int control, 
 static UITaskCtrl_type*		DAQLab_init_UITaskCtrl_type				(TaskControl_type* taskControl);  	
 
 static void					DAQLab_discard_UITaskCtrl_type			(UITaskCtrl_type** a);
+
+static int					DAQLab_SaveXMLEnvironmentConfig			(void);
 
 
 
@@ -325,20 +328,23 @@ static int DAQLab_Load (void)
 	
 	// add multiple XML elements to root element
 	
-	int 		dog_val = -1;
-	float		cat_val = 4.0/3;
+	int 		dog_val = 0;
+	double		cat_val = 4/3;
+	
 	DAQLabXMLNode children[] = { {"dog", DL_INT, &dog_val},
 								 {"cat", DL_FLOAT, &cat_val}
 															 };  
 	
-	DLAddXMLElem (DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, children, NumElem(children));
+	//DLAddToXMLElem (DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, children, DL_ATTRIBUTE, NumElem(children));
 	
+	DLGetXMLAttributes(DAQLabCfg_RootElement, children, NumElem(children));  
+	
+	
+	
+	
+	
+	 */
 
-	
-	
-	errChk ( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) );   */
-	
-	
 
 	
 	
@@ -351,17 +357,63 @@ static int DAQLab_Load (void)
 	
 }
 
+
+static int	DAQLab_SaveXMLEnvironmentConfig	(void)
+{
+	int			error;
+	
+	// save Tasks and Log panel positions
+	int				taskPanTopPos;
+	int				taskPanLeftPos;
+	int				logPanTopPos;
+	int				logPanLeftPos;
+	DAQLabXMLNode 	attributes[] = { 	{"TaskPanTopPos", DL_INT, &taskPanTopPos},
+								 		{"TaskPanLeftPos", DL_INT, &taskPanLeftPos},
+										{"LogPanTopPos", DL_INT, &logPanTopPos},
+										{"LogPanLeftPos", DL_INT, &logPanLeftPos}	};  
+	
+	errChk( GetPanelAttribute(TasksUI.panHndl, ATTR_LEFT, &taskPanLeftPos) );
+	errChk( GetPanelAttribute(TasksUI.panHndl, ATTR_TOP, &taskPanTopPos) );
+	errChk( GetPanelAttribute(logPanHndl, ATTR_LEFT, &logPanLeftPos) );
+	errChk( GetPanelAttribute(logPanHndl, ATTR_TOP, &logPanTopPos) );
+	
+	
+	errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, attributes, DL_ATTRIBUTE, NumElem(attributes)) );
+	
+	return 0;
+	
+	Error:
+	
+	return error;
+	
+}
+
 static int DAQLab_Close (void)
-{   
+{  
+	int		error = 0;
+	
+	
+	errChk( DAQLab_SaveXMLEnvironmentConfig() );
+	
 	// save module specific info
 	
 	
 	// dispose modules list
 	DAQLabModule_empty (&DAQLabModules);
 	
+	errChk ( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) );   
+	
 	QuitUserInterface(0);  
 	
 	return 0;
+	
+	Error:
+	
+	MessagePopup("Error", "Could not save new DAQLab settings.");
+	
+	QuitUserInterface(0);  
+	
+	return error;
 }
 
 
@@ -454,6 +506,12 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 			
 			break;
 			
+		case DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES:
+			CA_GetAutomationErrorString(*(HRESULT*)data1, buffCA, sizeof(buffCA));
+			DLMsg("Error: Could not obtain XML attribute value from element.", 1);
+			DLMsg(buffCA, 0);
+			DLMsg("\n", 0);
+		
 		case DAQLAB_MSG_OK_DOM_CREATION:
 			
 			DLMsg("XML DOM created successfully.\n\n", 0);
@@ -582,7 +640,9 @@ static int	DAQLab_SaveXMLDOM (const char fileName[], CAObjHandle* xmlDOM)
 	return xmlerror;
 }
 
-int	DLAddXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLElements[], size_t nElements)
+/// HIFN Adds a list of attributes or elements to an element
+/// HIPAR nodeTypeFlag/ set 1 to add elements or 0 to add attributes
+int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes)
 {
 	HRESULT							xmlerror;
 	ERRORINFO						xmlERRINFO;
@@ -590,13 +650,14 @@ int	DLAddXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 	VARIANT							xmlVal;
 	BSTR							bstrVal;
 	
-	for (int i = 0; i < nElements; i++) {
+	for (int i = 0; i < nNodes; i++) {
 		
-		// create new element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, childXMLElements[i].tag, &newXMLElement) );
-		
+		if (nodeType == DL_ELEMENT)
+			// create new element
+			XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, childXMLNodes[i].tag, &newXMLElement) );
+	
 		// convert to variant
-		switch (childXMLElements[i].type) {
+		switch (childXMLNodes[i].type) {
 			
 			case DL_NULL:
 				
@@ -605,81 +666,95 @@ int	DLAddXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 			
 			case DL_BOOL:
 				
-				xmlVal = CA_VariantBool ((VBOOL)*(BOOL*)childXMLElements[i].pData);
+				xmlVal = CA_VariantBool ((VBOOL)*(BOOL*)childXMLNodes[i].pData);
 				break;
 				
 			case DL_CHAR:
 				
-				xmlVal = CA_VariantChar(*(char*)childXMLElements[i].pData);
+				xmlVal = CA_VariantChar(*(char*)childXMLNodes[i].pData);
 				break;
 				
 			case DL_UCHAR:
 				
-				xmlVal = CA_VariantUChar(*(unsigned char*)childXMLElements[i].pData);
+				xmlVal = CA_VariantUChar(*(unsigned char*)childXMLNodes[i].pData);
 				break;
 				
 			case DL_SHORT:
 				
-				xmlVal = CA_VariantShort(*(short*)childXMLElements[i].pData);
+				xmlVal = CA_VariantShort(*(short*)childXMLNodes[i].pData);
 				break;
 				
 			case DL_USHORT:
 				
-				xmlVal = CA_VariantUShort(*(unsigned short*)childXMLElements[i].pData);
+				xmlVal = CA_VariantUShort(*(unsigned short*)childXMLNodes[i].pData);
 				break;
 			
 			case DL_INT:
 				
-				xmlVal = CA_VariantInt(*(int*)childXMLElements[i].pData);
-				break;
+				xmlVal = CA_VariantInt(*(int*)(childXMLNodes[i].pData));
+				break;							   
 				
 			case DL_UINT:
 				
-				xmlVal = CA_VariantUInt(*(unsigned int*)childXMLElements[i].pData);
+				xmlVal = CA_VariantUInt(*(unsigned int*)childXMLNodes[i].pData);
 				break;
 				
 			case DL_LONG:
 				
-				xmlVal = CA_VariantLong(*(long*)childXMLElements[i].pData);
+				xmlVal = CA_VariantLong(*(long*)childXMLNodes[i].pData);
 				break;
 			
 			case DL_ULONG:
 				
-				xmlVal = CA_VariantULong(*(unsigned long*)childXMLElements[i].pData);
+				xmlVal = CA_VariantULong(*(unsigned long*)childXMLNodes[i].pData);
 				break;
 				
 			case DL_LONGLONG:
 				
-				xmlVal = CA_VariantLongLong(*(long long*)childXMLElements[i].pData);
+				xmlVal = CA_VariantLongLong(*(long long*)childXMLNodes[i].pData);
 				break;
 				
 			case DL_ULONGLONG:
 				
-				xmlVal = CA_VariantULongLong(*(unsigned long long*)childXMLElements[i].pData);
+				xmlVal = CA_VariantULongLong(*(unsigned long long*)childXMLNodes[i].pData);
 				break;
 			
 			case DL_FLOAT:
 				
-				xmlVal = CA_VariantFloat(*(float*)childXMLElements[i].pData);
+				xmlVal = CA_VariantFloat(*(float*)childXMLNodes[i].pData);
 				break;
 			
 			case DL_DOUBLE:
 				
-				xmlVal = CA_VariantDouble(*(double*)childXMLElements[i].pData);
+				xmlVal = CA_VariantDouble(*(double*)childXMLNodes[i].pData);
 				break;
 				
 			case DL_CSTRING:
 				
-				CA_CStringToBSTR((char*)childXMLElements[i].pData, &bstrVal); 
+				CA_CStringToBSTR((char*)childXMLNodes[i].pData, &bstrVal); 
 				xmlVal = CA_VariantBSTR(bstrVal);
 				break;
 		}
 		
-		// set element typed value
-		XMLErrChk ( ActiveXML_IXMLDOMElement_SetnodeTypedValue(newXMLElement, &xmlERRINFO, xmlVal) );
+		switch (nodeType) {
+			
+			case DL_ELEMENT:
+				
+				// set element typed value
+				XMLErrChk ( ActiveXML_IXMLDOMElement_SetnodeTypedValue(newXMLElement, &xmlERRINFO, xmlVal) );
+				// add new element as child
+				XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, &xmlERRINFO, newXMLElement, NULL) );
+				
+				break;
+				
+			case DL_ATTRIBUTE:
+				
+				// add attribute to element
+				XMLErrChk ( ActiveXML_IXMLDOMElement_setAttribute(parentXMLElement, &xmlERRINFO, childXMLNodes[i].tag, xmlVal) );  
+				
+				break;
+		}
 		
-		// add new element as child
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, &xmlERRINFO, newXMLElement, NULL) );
 	}
 	
 	
@@ -690,6 +765,116 @@ int	DLAddXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, &xmlDOM, &xmlerror, &xmlERRINFO, 0);
 	
 	return xmlerror;
+}
+
+int DLGetXMLAttributes (ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode Attributes[], size_t nAttributes)
+{
+	int								error;
+	HRESULT							xmlerror;
+	ERRORINFO						xmlERRINFO;
+	ActiveXMLObj_IXMLDOMElement_	newXMLElement;
+	VARIANT							xmlVal;
+	BSTR							bstrVal;
+	
+	
+	for (int i = 0; i < nAttributes; i++) {
+		
+		// get attribute value
+		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttribute(parentXMLElement, &xmlERRINFO, Attributes[i].tag, &xmlVal) ); 
+		
+		// convert from variant to values
+		switch (Attributes[i].type) {
+			
+			case DL_NULL:
+				
+				break;
+			
+			case DL_BOOL:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_BOOL, Attributes[i].pData) ); 
+				break;
+				
+			case DL_CHAR:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_CHAR, Attributes[i].pData) ); 
+				break;
+				
+			case DL_UCHAR:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_UCHAR, Attributes[i].pData) ); 
+				break;
+				
+			case DL_SHORT:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_SHORT, Attributes[i].pData) ); 
+				break;
+				
+			case DL_USHORT:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_USHORT, Attributes[i].pData) ); 
+				break;
+			
+			case DL_INT:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_INT, Attributes[i].pData) ); 
+				break;
+				
+			case DL_UINT:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_UINT, Attributes[i].pData) ); 
+				break;
+				
+			case DL_LONG:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_LONG, Attributes[i].pData) ); 
+				break;
+			
+			case DL_ULONG:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_ULONG, Attributes[i].pData) ); 
+				break;
+				
+			case DL_LONGLONG:
+				
+				
+				break;
+				
+			case DL_ULONGLONG:
+				
+				
+				break;
+			
+			case DL_FLOAT:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_FLOAT, Attributes[i].pData) ); 
+				break;
+			
+			case DL_DOUBLE:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_DOUBLE, Attributes[i].pData) ); 
+				break;
+				
+			case DL_CSTRING:
+				
+				errChk( CA_VariantConvertToType(&xmlVal, CAVT_CSTRING, Attributes[i].pData) ); 
+				break;
+				
+		}
+		
+	}
+	
+	return 0;
+	
+	XMLError:
+	
+	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, &xmlerror, 0, 0, 0);
+	
+	return xmlerror;
+	
+	Error:  // conversion error
+	
+	return error;
+
 }
 
 static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskControl)

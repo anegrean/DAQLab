@@ -1,0 +1,120 @@
+[init_TaskControl_type]
+Class="Function"
+Prototype="struct TaskControl *init_TaskControl_type(const char *taskname, struct FCallReturn *(*ConfigureFptr)(struct TaskControl *, const int *), struct FCallReturn *(*IterateFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*StartFptr)(struct TaskControl *, const int *), struct FCallReturn *(*ResetFptr)(struct TaskControl *, const int *), struct FCallReturn *(*DoneFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*StoppedFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*DataReceivedFptr)(struct TaskControl *, TaskStates_type, int, const int *), struct FCallReturn *(*ModuleEventFptr)(struct TaskControl *, TaskStates_type, unsigned int, void *, const int *), struct FCallReturn *(*ErrorFptr)(struct TaskControl *, char *, const int *));"
+
+[discard_TaskControl_type]
+Class="Function"
+Prototype="void discard_TaskControl_type(struct TaskControl **a);"
+
+[GetTaskControlName]
+Class="Function"
+Prototype="char *GetTaskControlName(struct TaskControl *taskControl);"
+
+[SetTaskControlName]
+Class="Function"
+Prototype="void SetTaskControlName(struct TaskControl *taskControl, char *newName);"
+
+[SetTaskControlState]
+Class="Function"
+Prototype="void SetTaskControlState(struct TaskControl *taskControl, TaskStates_type newState);"
+
+[GetTaskControlState]
+Class="Function"
+Prototype="TaskStates_type GetTaskControlState(struct TaskControl *taskControl);"
+
+[SetTaskControlIterations]
+Class="Function"
+Prototype="void SetTaskControlIterations(struct TaskControl *taskControl, unsigned int repeat);"
+
+[GetTaskControlIterations]
+Class="Function"
+Prototype="unsigned int GetTaskControlIterations(struct TaskControl *taskControl);"
+
+[SetTaskControlIterationsWait]
+Class="Function"
+Prototype="void SetTaskControlIterationsWait(struct TaskControl *taskControl, double waitBetweenIterations);"
+
+[GetTaskControlIterationsWait]
+Class="Function"
+Prototype="double GetTaskControlIterationsWait(struct TaskControl *taskControl);"
+
+[SetTaskControlModuleData]
+Class="Function"
+Prototype="void SetTaskControlModuleData(struct TaskControl *taskControl, void *moduleData);"
+
+[GetTaskControlModuleData]
+Class="Function"
+Prototype="void *GetTaskControlModuleData(struct TaskControl *taskControl);"
+
+[SetTaskControlLog]
+Class="Function"
+Prototype="void SetTaskControlLog(struct TaskControl *taskControl, struct TaskExecutionLog *logPtr);"
+
+[AddDataQueue]
+Class="Function"
+Prototype="int AddDataQueue(struct TaskControl *taskControl, int dataQID);"
+
+[RemoveDataQueue]
+Class="Function"
+Prototype="int RemoveDataQueue(struct TaskControl *taskControl, int dataQID);"
+
+[RemoveAllDataQueues]
+Class="Function"
+Prototype="void RemoveAllDataQueues(struct TaskControl *taskControl);"
+
+[init_TaskExecutionLog_type]
+Class="Function"
+Prototype="struct TaskExecutionLog *init_TaskExecutionLog_type(int logBoxPanHandle, int logBoxControl);"
+
+[discard_TaskExecutionLog_type]
+Class="Function"
+Prototype="void discard_TaskExecutionLog_type(struct TaskExecutionLog **a);"
+
+[init_FCallReturn_type]
+Class="Function"
+Prototype="struct FCallReturn *init_FCallReturn_type(int valFCall, const char *errorOrigin, const char *errorDescription, int SuspendExecution);"
+
+[discard_FCallReturn_type]
+Class="Function"
+Prototype="void discard_FCallReturn_type(struct FCallReturn **a);"
+
+[TaskEventItemsInQueue]
+Class="Function"
+Prototype="void TaskEventItemsInQueue(int queueHandle, unsigned int event, int value, void *callbackData);"
+
+[TaskDataItemsInQueue]
+Class="Function"
+Prototype="void TaskDataItemsInQueue(int queueHandle, unsigned int event, int value, void *callbackData);"
+
+[ScheduleTaskEventHandler]
+Class="Function"
+Prototype="int ScheduleTaskEventHandler(void *functionData);"
+
+[TaskEventHandlerExecutionCallback]
+Class="Function"
+Prototype="void TaskEventHandlerExecutionCallback(int poolHandle, int functionID, unsigned int event, int value, void *callbackData);"
+
+[TaskControlEvent]
+Class="Function"
+Prototype="int TaskControlEvent(struct TaskControl *RecipientTaskControl, TaskEvents_type event, void *eventInfo, void (*disposeEventInfoFptr)(void *));"
+
+[ContinueTaskControlExecution]
+Class="Function"
+Prototype="void ContinueTaskControlExecution(struct TaskControl *taskControl, struct FCallReturn *fCallResult);"
+
+[AbortTaskControlExecution]
+Class="Function"
+Prototype="void AbortTaskControlExecution(struct TaskControl *taskControl);"
+
+[TaskControlEventToSubTasks]
+Class="Function"
+Prototype="int TaskControlEventToSubTasks(struct TaskControl *SenderTaskControl, TaskEvents_type event, void *eventInfo, void (*disposeEventInfoFptr)(void *));"
+
+[AddSubTaskToParent]
+Class="Function"
+Prototype="int AddSubTaskToParent(struct TaskControl *parent, struct TaskControl *child);"
+
+[RemoveSubTaskFromParent]
+Class="Function"
+Prototype="int RemoveSubTaskFromParent(struct TaskControl *child);"
+

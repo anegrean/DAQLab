@@ -87,8 +87,7 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod)
 	
 		// DATA
 		
-	zstage->module_base.name		= StrDup(MOD_Zstage_NAME);
-	zstage->module_base.XMLname		= StrDup(MOD_Zstage_XMLTAG);
+	zstage->module_base.className	= StrDup(MOD_Zstage_NAME);
 	zstage->module_base.taskControl	= init_TaskControl_type (MOD_Zstage_NAME, Zstage_ConfigureTC, Zstage_IterateTC, Zstage_StartTC, Zstage_ResetTC,
 															 Zstage_DoneTC, Zstage_StoppedTC, NULL, Zstage_EventHandler,Zstage_ErrorTC);   
 		// connect ZStage module data to Task Controller
@@ -99,7 +98,7 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod)
 		// overriding methods
 	zstage->module_base.Discard 	= discard_Zstage;
 	zstage->module_base.Load		= Zstage_Load;
-	zstage->module_base.LoadCfg		= Zstage_LoadCfg;
+	zstage->module_base.LoadCfg		= NULL; //Zstage_LoadCfg;
 	
 	//---------------------------
 	// Child Level 1: Zstage_type 
@@ -162,6 +161,9 @@ int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 	// connect module data and user interface callbackFn to all direct controls in the panel
 	SetCtrlsInPanCBInfo(mod, ((Zstage_type*)mod)->uiCtrlsCB, panHndl);
+	
+	// change panel title to module instance name
+	SetPanelAttribute(panHndl, ATTR_TITLE, mod->instanceName);
 	
 	// populate Z step sizes
 	for (int i = 0; i < NumElem(ZStepSizes); i++) {
@@ -316,10 +318,11 @@ static FCallReturn_type* Zstage_EventHandler (TaskControl_type* taskControl, Tas
 	return init_FCallReturn_type(0, "", "", 0);
 }
 
-
+   /*
 int Zstage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement) 
 {
 	Zstage_type*  	zstage = (Zstage_type*) mod; 
 	
 	return DAQLabModule_LoadCfg(mod, DAQLabCfg_RootElement);
 }
+		  */

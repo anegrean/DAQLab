@@ -6,11 +6,11 @@ Prototype="void init_DAQLabModule(struct DAQLabModule *mod);"
 Class="Function"
 Prototype="void discard_DAQLabModule(struct DAQLabModule *mod);"
 
-[DAQLabModule_populate]
-Class="Function"
-Prototype="struct ListStructTag *DAQLabModule_populate();"
-
 [DAQLabModule_empty]
 Class="Function"
 Prototype="void DAQLabModule_empty(struct ListStructTag **modules);"
+
+[DAQLabModule_DisplayWorkspacePanels]
+Class="Function"
+Prototype="void DAQLabModule_DisplayWorkspacePanels(struct DAQLabModule *mod, int visible);"
 

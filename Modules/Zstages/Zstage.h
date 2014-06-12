@@ -79,7 +79,6 @@ struct Zstage {
 // Constants
 
 #define MOD_Zstage_NAME 	"Generic Z stage"
-#define MOD_Zstage_XMLTAG	"ZStage"			// no space!
 
 
 //==============================================================================
@@ -95,7 +94,7 @@ void 				discard_Zstage 		(DAQLabModule_type* mod);
 int					Zstage_Load 		(DAQLabModule_type* mod, int workspacePanHndl);
 
 	// loads generic Z stage configuration from an XML file  
-int 				Zstage_LoadCfg 		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+//int 				Zstage_LoadCfg 		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
 
 #ifdef __cplusplus
     }

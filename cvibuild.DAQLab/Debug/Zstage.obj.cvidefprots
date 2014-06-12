@@ -6,6 +6,10 @@ Prototype="struct DAQLabModule *initalloc_Zstage(struct DAQLabModule *mod);"
 Class="Function"
 Prototype="void discard_Zstage(struct DAQLabModule *mod);"
 
+[Zstage_Load]
+Class="Function"
+Prototype="int Zstage_Load(struct DAQLabModule *mod, int workspacePanHndl);"
+
 [Zstage_UI_CB]
 Class="Function"
 Prototype="int Zstage_UI_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"

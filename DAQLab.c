@@ -34,6 +34,7 @@
 #define DAQLAB_CFG_FILE								"DAQLabCfg.xml"
 
 #define DAQLAB_CFG_DOM_ROOT_NAME					"DAQLabConfig"
+#define DAQLAB_UITASKCONTROLLER_XML_TAG				"UITaskController"
 	// log panel displayed at startup and displays received messages
 #define DAQLAB_LOG_PANEL							TRUE
 
@@ -47,6 +48,8 @@
 
 	// maximum number of characters allowed for a UI Task Controller name
 #define DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS		50
+	// maximum DAQLab module instance name length
+#define DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS		50
 
 //==============================================================================
 // Types
@@ -61,8 +64,9 @@ typedef DAQLabModule_type* (* const ModuleInitAllocFunction_type ) (DAQLabModule
 typedef struct {
 	
 	char*							ModuleName;
-	char*							ModuleXMLName;
 	ModuleInitAllocFunction_type	ModuleInitFptr;
+	BOOL							multipleInstancesFlag;	  // allows multiple instances of the module
+	size_t							nInstances;				  // counter for the total number of instances
 
 } AvailableDAQLabModules_type;
 
@@ -109,7 +113,7 @@ typedef struct {						  // Glues UI Task Controller to panel handle
 //------------------------------------------------------------------------------------------------
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {
 	
-	{ MOD_PIMercuryC863_NAME, MOD_PIMercuryC863_XMLTAG, initalloc_PIMercuryC863 } 
+	{ MOD_PIMercuryC863_NAME, initalloc_PIMercuryC863, FALSE, 0 } 
 	
 };
 
@@ -184,6 +188,12 @@ static void					DAQLab_discard_UITaskCtrl_type			(UITaskCtrl_type** a);
 
 static int					DAQLab_SaveXMLEnvironmentConfig			(void);
 
+static int					DAQLab_VariantToType					(VARIANT* variantVal, DAQLabXMLTypes vartype, void* value);
+
+static BOOL					DAQLab_ValidControllerName				(char name[], void* listPtr);
+
+static BOOL					DAQLab_ValidModuleName					(char name[], void* listPtr);  
+
 
 
 //-----------------------------------------
@@ -205,7 +215,7 @@ static FCallReturn_type* 	DAQLab_ErrorUITC 					(TaskControl_type* taskControl, 
 //==============================================================================
 // Global functions
 
-void CVICALLBACK 			DAQLab_ManageModules_CB 				(int menuBar, int menuItem, void *callbackData, int panel);
+void CVICALLBACK 			DAQLab_MenuModules_CB					(int menuBar, int menuItem, void *callbackData, int panel);
 
 
 
@@ -246,8 +256,34 @@ int main (int argc, char *argv[])
 /// HIRET negative value if fail
 static int DAQLab_Load (void)
 {
-	int						error 			= 0;
-	DAQLabModule_type** 	modulePtr;
+	int								error 					= 0;
+	DAQLabModule_type** 			modulePtr;
+	BOOL							FoundDAQLabSettingsFlag	= 0;		// if FALSE, no XML settings were found and default will be used
+	HRESULT							xmlerror;  
+	ERRORINFO						xmlERRINFO;
+	ActiveXMLObj_IXMLDOMNodeList_	xmlUITaskControlers;
+	ActiveXMLObj_IXMLDOMNode_		xmlTaskControllerNode;
+	long							nUITaskControlers;
+									// DAQLab UI data
+	int								taskPanTopPos;
+	int								taskPanLeftPos;
+	int								logPanTopPos;
+	int								logPanLeftPos;
+	char*							UITCName				= NULL;
+	unsigned int					UITCIterations;
+	double							UITCWait;
+	TaskControl_type*				newTaskControllerPtr;
+	UITaskCtrl_type*				UITaskCtrlsPtr;
+									// template to load DAQLab Environment parameters
+	DAQLabXMLNode 					attr1[] = { {"TaskPanTopPos", DL_INT, &taskPanTopPos},
+							 					{"TaskPanLeftPos", DL_INT, &taskPanLeftPos},
+												{"LogPanTopPos", DL_INT, &logPanTopPos},
+												{"LogPanLeftPos", DL_INT, &logPanLeftPos} };
+									// template to load UI Task Controller parameters			
+	DAQLabXMLNode					attr2[] = {	{"Name", DL_CSTRING, &UITCName},
+												{"Iterations", DL_UINT, &UITCIterations},
+												{"Wait", DL_DOUBLE, &UITCWait} };
+										
 	
 	//---------------------------------------------------------------------------------
 	// Load resources
@@ -273,6 +309,12 @@ static int DAQLab_Load (void)
 	// maximize main panel by default
 	SetPanelAttribute(mainPanHndl, ATTR_WINDOW_ZOOM, VAL_MAXIMIZE);
 	
+	// center Tasks panel and Log panel by default (their positions will be overriden if a valid XML config is found)
+	SetPanelAttribute(TasksUI.panHndl, ATTR_LEFT, VAL_AUTO_CENTER);
+	SetPanelAttribute(TasksUI.panHndl, ATTR_TOP, VAL_AUTO_CENTER);
+	SetPanelAttribute(logPanHndl, ATTR_LEFT, VAL_AUTO_CENTER);
+	SetPanelAttribute(logPanHndl, ATTR_TOP, VAL_AUTO_CENTER);
+	
 	// add menu bar to Tasks panel
 	errChk (TasksUI.menuBarHndl			= NewMenuBar(TasksUI.panHndl) );
 	errChk (TasksUI.menuID_Manage		= NewMenu(TasksUI.menuBarHndl, "Manage", -1) );
@@ -282,9 +324,6 @@ static int DAQLab_Load (void)
 	// get height and width of Task Controller panel
 	GetPanelAttribute(TasksUI.controllerPanHndl, ATTR_HEIGHT, &TasksUI.controllerPanHeight);
 	GetPanelAttribute(TasksUI.controllerPanHndl, ATTR_WIDTH, &TasksUI.controllerPanWidth);
-	
-	
-	
 	
 	
 	DAQLab_RedrawTaskControllerUI();
@@ -298,7 +337,49 @@ static int DAQLab_Load (void)
 		DisplayPanel(logPanHndl);
 	
 	// init DAQLab DOM
-	errChk ( DAQLab_NewXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl, &DAQLabCfg_RootElement) );
+	errChk ( FoundDAQLabSettingsFlag = DAQLab_NewXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl, &DAQLabCfg_RootElement) );
+	
+	// skip loading of settings if none are found
+	if (!FoundDAQLabSettingsFlag) goto DAQLabNoSettings;
+	
+	// settings were found, apply settings to UI panels
+	DLGetXMLElementAttributes(DAQLabCfg_RootElement, attr1, NumElem(attr1));  
+	// apply loaded panel positions
+	errChk( SetPanelAttribute(TasksUI.panHndl, ATTR_LEFT, taskPanLeftPos) );
+	errChk( SetPanelAttribute(TasksUI.panHndl, ATTR_TOP, taskPanTopPos) );
+	errChk( SetPanelAttribute(logPanHndl, ATTR_LEFT, logPanLeftPos) );
+	errChk( SetPanelAttribute(logPanHndl, ATTR_TOP, logPanTopPos) );
+	
+	// load UI Task Controller settings
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(DAQLabCfg_RootElement, &xmlERRINFO, DAQLAB_UITASKCONTROLLER_XML_TAG, &xmlUITaskControlers) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlUITaskControlers, &xmlERRINFO, &nUITaskControlers) );
+	for (int i = 0; i < nUITaskControlers; i++) {
+		// get xml Task Controller Node
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlUITaskControlers, &xmlERRINFO, i, &xmlTaskControllerNode) );
+		// read in attributes
+		errChk( DLGetXMLNodeAttributes(xmlTaskControllerNode, attr2, NumElem(attr2)) ); 
+		// create new UI Task Controller
+		newTaskControllerPtr = init_TaskControl_type (UITCName, DAQLab_ConfigureUITC, DAQLab_IterateUITC, DAQLab_StartUITC, 
+												 	  DAQLab_ResetUITC, DAQLab_DoneUITC, DAQLab_StoppedUITC, NULL, NULL, DAQLab_ErrorUITC); 
+		if (!newTaskControllerPtr) {
+			DLMsg("Error: Task Controller could not be created.\n\n", 1);
+			return -1;
+		}
+
+		// set UITC iterations
+		SetTaskControlIterations(newTaskControllerPtr, UITCIterations);
+		// set UITC wait between iterations
+		SetTaskControlIterationsWait(newTaskControllerPtr, UITCWait);
+		// add new Task Controller to the environment
+		UITaskCtrlsPtr = DAQLab_AddTaskControllerToUI(newTaskControllerPtr);
+		// attach callback data to the Task Controller
+		SetTaskControlModuleData(newTaskControllerPtr, UITaskCtrlsPtr);
+		// send a configure event to the Task Controller
+		TaskControlEvent(newTaskControllerPtr, TASK_EVENT_CONFIGURE, NULL, NULL);
+	}
+	
+	
+	
 	
 	
 	/*
@@ -323,68 +404,102 @@ static int DAQLab_Load (void)
 	
 	*/
 	
+	// discard DOM after loading all settings
+	CA_DiscardObjHandle (DAQLabCfg_DOMHndl);
 	
-	/*
-	
-	// add multiple XML elements to root element
-	
-	int 		dog_val = 0;
-	double		cat_val = 4/3;
-	
-	DAQLabXMLNode children[] = { {"dog", DL_INT, &dog_val},
-								 {"cat", DL_FLOAT, &cat_val}
-															 };  
-	
-	//DLAddToXMLElem (DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, children, DL_ATTRIBUTE, NumElem(children));
-	
-	DLGetXMLAttributes(DAQLabCfg_RootElement, children, NumElem(children));  
-	
-	
-	
-	
-	
-	 */
-
-
-	
-	
+	DAQLabNoSettings:
 	
 	return 0;
 	
 	Error:
 	
 	return error;
+	
+	XMLError:
+	
+	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, &DAQLabCfg_DOMHndl, &xmlerror, &xmlERRINFO, 0);
+	
+	return xmlerror;
 	
 }
 
 
 static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 {
-	int			error;
+	int								error;
+	HRESULT							xmlerror; 
+	ERRORINFO						xmlERRINFO;
+	ActiveXMLObj_IXMLDOMElement_	newXMLElement; 
+	
+	// create new DOM
+	XMLErrChk ( ActiveXML_NewDOMDocument60IXMLDOMDocument3_ (NULL, 1, LOCALE_NEUTRAL, 0, &DAQLabCfg_DOMHndl) );
+	// create new DAQLab Config root element and append it to the DOM
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_CFG_DOM_ROOT_NAME, &newXMLElement) );
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_appendChild(DAQLabCfg_DOMHndl, &xmlERRINFO, newXMLElement, &DAQLabCfg_RootElement) );
 	
 	// save Tasks and Log panel positions
-	int				taskPanTopPos;
-	int				taskPanLeftPos;
-	int				logPanTopPos;
-	int				logPanLeftPos;
-	DAQLabXMLNode 	attributes[] = { 	{"TaskPanTopPos", DL_INT, &taskPanTopPos},
-								 		{"TaskPanLeftPos", DL_INT, &taskPanLeftPos},
-										{"LogPanTopPos", DL_INT, &logPanTopPos},
-										{"LogPanLeftPos", DL_INT, &logPanLeftPos}	};  
+	int								taskPanTopPos;
+	int								taskPanLeftPos;
+	int								logPanTopPos;
+	int								logPanLeftPos;
+	DAQLabXMLNode 					attr1[] = {	{"TaskPanTopPos", DL_INT, &taskPanTopPos},
+								 				{"TaskPanLeftPos", DL_INT, &taskPanLeftPos},
+												{"LogPanTopPos", DL_INT, &logPanTopPos},
+												{"LogPanLeftPos", DL_INT, &logPanLeftPos}	};  
 	
 	errChk( GetPanelAttribute(TasksUI.panHndl, ATTR_LEFT, &taskPanLeftPos) );
 	errChk( GetPanelAttribute(TasksUI.panHndl, ATTR_TOP, &taskPanTopPos) );
 	errChk( GetPanelAttribute(logPanHndl, ATTR_LEFT, &logPanLeftPos) );
 	errChk( GetPanelAttribute(logPanHndl, ATTR_TOP, &logPanTopPos) );
 	
+	errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, attr1, DL_ATTRIBUTE, NumElem(attr1)) );
 	
-	errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, attributes, DL_ATTRIBUTE, NumElem(attributes)) );
+	// save UI Task Controllers
+	UITaskCtrl_type**				UItaskCtrlPtrPtr;
+	DAQLabXMLNode 					attr2[3];
+	int								niter;
+	double							wait;
+	
+	for (int i = 1; i <= ListNumItems(TasksUI.UItaskCtrls); i++) {
+		UItaskCtrlPtrPtr = ListGetPtrToItem (TasksUI.UItaskCtrls, i);
+		// create new XML UITaskController element
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_UITASKCONTROLLER_XML_TAG, &newXMLElement) );
+		// initialize attributes
+		// name
+		attr2[0].tag 	= "Name";
+		attr2[0].type 	= DL_CSTRING;
+		attr2[0].pData	= GetTaskControlName((*UItaskCtrlPtrPtr)->taskControl);
+		// iterations
+		niter 			= GetTaskControlIterations((*UItaskCtrlPtrPtr)->taskControl);
+		attr2[1].tag 	= "Iterations";
+		attr2[1].type 	= DL_UINT;
+		attr2[1].pData	= &niter; 
+		// wait
+		wait 			= GetTaskControlIterationsWait((*UItaskCtrlPtrPtr)->taskControl);
+		attr2[2].tag 	= "Wait";
+		attr2[2].type 	= DL_DOUBLE;
+		attr2[2].pData	= &wait; 
+		
+		// add attributes to task controller element
+		errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, newXMLElement, attr2, DL_ATTRIBUTE, NumElem(attr2)) );
+		// add task controller element to DAQLab root element
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (DAQLabCfg_RootElement, &xmlERRINFO, newXMLElement, NULL) );
+		// free attributes memory
+		OKfree(attr2[0].pData);
+	}
+	
 	
 	return 0;
 	
 	Error:
 	
 	return error;
+	
+	XMLError:
+	
+	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, &DAQLabCfg_DOMHndl, &xmlerror, &xmlERRINFO, 0);
+	
+	return xmlerror;
 	
 }
 
@@ -401,7 +516,10 @@ static int DAQLab_Close (void)
 	// dispose modules list
 	DAQLabModule_empty (&DAQLabModules);
 	
-	errChk ( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) );   
+	errChk ( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) ); 
+	
+	// discard DOM after saving all settings
+	CA_DiscardObjHandle (DAQLabCfg_DOMHndl);
 	
 	QuitUserInterface(0);  
 	
@@ -527,8 +645,8 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 /// HIFN Creates an MSXML DOM object using ActiveX connection to Microsoft XML 6.0 from a specified .xml file.
 /// HIFN If no .xml file is found, an empty DOM is created.
 /// HIPAR fileName/ String of XML file name, including .xml file extension.
-/// HIRET New DOM object handle from loaded .xml file or an empty DOM if file not found or not specified.
-/// HIRET New Topmost (parent) element handle of the DOM to which other elements and attributes can be added.   
+/// HIRET 0 if DOM object handle was loaded from .xml file and root element was found.
+/// HIRET 1 if an empty DOM was created or a new root element had to be created.
 /// OUT xmlDOM 
 /// OUT rootElement 
 static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveXMLObj_IXMLDOMElement_* rootElement)
@@ -537,6 +655,7 @@ static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveX
 	ERRORINFO							xmlERRINFO;
 	VBOOL								xmlLoaded;
 	BOOL								rootElementNameOK		= FALSE;
+	BOOL								foundXMLDOMFlag			= 1;
 	ActiveXMLObj_IXMLDOMElement_		newElement;
 	BSTR								bstrFileName;
 	double 								t1, t2;
@@ -594,9 +713,11 @@ static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveX
 	
 		// append root element to DOM and return handle to root element
 		XMLErrChk ( ActiveXML_IXMLDOMDocument3_appendChild(*xmlDOM, &xmlERRINFO, newElement, rootElement) );
+		
+		foundXMLDOMFlag = 0;
 	} 
 	
-	return 0;
+	return foundXMLDOMFlag;
 	
 	XMLError:
 	
@@ -647,7 +768,7 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 	HRESULT							xmlerror;
 	ERRORINFO						xmlERRINFO;
 	ActiveXMLObj_IXMLDOMElement_	newXMLElement;
-	VARIANT							xmlVal;
+	VARIANT							xmlVal				= CA_VariantNULL ();
 	BSTR							bstrVal;
 	
 	for (int i = 0; i < nNodes; i++) {
@@ -767,99 +888,110 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 	return xmlerror;
 }
 
-int DLGetXMLAttributes (ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode Attributes[], size_t nAttributes)
+static int DAQLab_VariantToType	(VARIANT* varPtr, DAQLabXMLTypes vartype, void* valuePtr)
+{
+	int	error;
+	
+	switch (vartype) {
+		
+		case DL_NULL:
+			
+			break;
+		
+		case DL_BOOL:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_BOOL, valuePtr) ); 
+			break;
+			
+		case DL_CHAR:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_CHAR, valuePtr) ); 
+			break;
+			
+		case DL_UCHAR:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_UCHAR, valuePtr) ); 
+			break;
+			
+		case DL_SHORT:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_SHORT, valuePtr) ); 
+			break;
+			
+		case DL_USHORT:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_USHORT, valuePtr) ); 
+			break;
+		
+		case DL_INT:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_INT, valuePtr) ); 
+			break;
+			
+		case DL_UINT:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_UINT, valuePtr) ); 
+			break;
+			
+		case DL_LONG:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_LONG, valuePtr) ); 
+			break;
+		
+		case DL_ULONG:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_ULONG, valuePtr) ); 
+			break;
+			
+		case DL_LONGLONG:
+			
+			
+			break;
+			
+		case DL_ULONGLONG:
+			
+			
+			break;
+		
+		case DL_FLOAT:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_FLOAT, valuePtr) ); 
+			break;
+		
+		case DL_DOUBLE:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_DOUBLE, valuePtr) ); 
+			break;
+			
+		case DL_CSTRING:
+			
+			errChk( CA_VariantConvertToType(varPtr, CAVT_CSTRING, valuePtr) ); 
+			break;
+			
+	}
+		
+	return 0;
+		
+	Error:  // conversion error
+	
+	return error;
+	
+}
+
+int DLGetXMLElementAttributes (ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes)
 {
 	int								error;
 	HRESULT							xmlerror;
 	ERRORINFO						xmlERRINFO;
-	ActiveXMLObj_IXMLDOMElement_	newXMLElement;
 	VARIANT							xmlVal;
-	BSTR							bstrVal;
-	
 	
 	for (int i = 0; i < nAttributes; i++) {
 		
 		// get attribute value
-		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttribute(parentXMLElement, &xmlERRINFO, Attributes[i].tag, &xmlVal) ); 
+		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttribute(XMLElement, &xmlERRINFO, Attributes[i].tag, &xmlVal) ); 
 		
 		// convert from variant to values
-		switch (Attributes[i].type) {
-			
-			case DL_NULL:
-				
-				break;
-			
-			case DL_BOOL:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_BOOL, Attributes[i].pData) ); 
-				break;
-				
-			case DL_CHAR:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_CHAR, Attributes[i].pData) ); 
-				break;
-				
-			case DL_UCHAR:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_UCHAR, Attributes[i].pData) ); 
-				break;
-				
-			case DL_SHORT:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_SHORT, Attributes[i].pData) ); 
-				break;
-				
-			case DL_USHORT:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_USHORT, Attributes[i].pData) ); 
-				break;
-			
-			case DL_INT:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_INT, Attributes[i].pData) ); 
-				break;
-				
-			case DL_UINT:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_UINT, Attributes[i].pData) ); 
-				break;
-				
-			case DL_LONG:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_LONG, Attributes[i].pData) ); 
-				break;
-			
-			case DL_ULONG:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_ULONG, Attributes[i].pData) ); 
-				break;
-				
-			case DL_LONGLONG:
-				
-				
-				break;
-				
-			case DL_ULONGLONG:
-				
-				
-				break;
-			
-			case DL_FLOAT:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_FLOAT, Attributes[i].pData) ); 
-				break;
-			
-			case DL_DOUBLE:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_DOUBLE, Attributes[i].pData) ); 
-				break;
-				
-			case DL_CSTRING:
-				
-				errChk( CA_VariantConvertToType(&xmlVal, CAVT_CSTRING, Attributes[i].pData) ); 
-				break;
-				
-		}
+		errChk( DAQLab_VariantToType(&xmlVal, Attributes[i].type, Attributes[i].pData) );
 		
 	}
 	
@@ -877,6 +1009,41 @@ int DLGetXMLAttributes (ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXML
 
 }
 
+int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes)
+{
+	int									error;
+	HRESULT								xmlerror;
+	ERRORINFO							xmlERRINFO;
+	VARIANT								xmlVal;
+	ActiveXMLObj_IXMLDOMNamedNodeMap_	xmlNamedNodeMap;	 // list of attributes
+	ActiveXMLObj_IXMLDOMNode_			xmlAttributeNode;	 // selected attribute
+	
+	// get list of attributes
+	XMLErrChk ( ActiveXML_IXMLDOMNode_Getattributes(XMLNode, &xmlERRINFO, &xmlNamedNodeMap) );  
+	
+	for (int i = 0; i < nAttributes; i++) {
+		// get attribute as variant
+		XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlERRINFO, Attributes[i].tag, &xmlAttributeNode) );  
+		XMLErrChk ( ActiveXML_IXMLDOMNode_GetnodeTypedValue(xmlAttributeNode, &xmlERRINFO, &xmlVal) );  
+		// convert from variant to values
+		errChk( DAQLab_VariantToType (&xmlVal, Attributes[i].type, Attributes[i].pData) );
+		
+	}
+	
+	return 0;
+	
+	XMLError:
+	
+	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, &xmlerror, 0, 0, 0);
+	
+	return xmlerror;
+	
+	Error:  // conversion error
+	
+	return error;
+	
+}
+
 static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskControl)
 {
 	int error = 0;
@@ -889,7 +1056,12 @@ static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskContr
 	// add taskControl data and callback to handle events
 	SetCtrlsInPanCBInfo(taskControl, DAQLab_TaskControllers_CB, newUItaskCtrl->panHndl);
 	// set UI Task Controller name
-	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Name, GetTaskControlName(taskControl));  
+	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Name, GetTaskControlName(taskControl)); 
+	// set UI Task Controller repeats
+	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Repeat, GetTaskControlIterations(taskControl)); 
+	// set UI Task Controller wait
+	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Wait, GetTaskControlIterationsWait(taskControl)); 
+	
 	
 	return newUItaskCtrl;
 	
@@ -1026,63 +1198,228 @@ static void CVICALLBACK DAQLab_TaskMenu_CB (int menuBarHandle, int menuItemID, v
 	
 }
 
-void CVICALLBACK DAQLab_ManageModules_CB (int menuBar, int menuItem, void *callbackData, int panel)
+void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
+	int						modulesPanHndl;
+	int						error;
+	DAQLabModule_type**		modulePtrPtr;
+	char*					fullModuleName;
+	
+	modulesPanHndl = LoadPanel(0, DAQLAB_UI_DAQLAB, ModulesPan);
+	
+	// list available modules
+	for (int i = 0; i < NumElem(DAQLabModules_InitFunctions); i++) {
+		InsertListItem(modulesPanHndl, ModulesPan_Available, -1, DAQLabModules_InitFunctions[i].ModuleName, i);  
+	}
+	// if there are modules to add, undim Add button
+	if (NumElem(DAQLabModules_InitFunctions))
+		SetCtrlAttribute(modulesPanHndl, ModulesPan_Add, ATTR_DIMMED, 0);
+	else
+		SetCtrlAttribute(modulesPanHndl, ModulesPan_Add, ATTR_DIMMED, 1);
+		
+	// list installed modules
+	for (size_t i = 1; i <= ListNumItems(DAQLabModules); i++) {
+		modulePtrPtr = ListGetPtrToItem(DAQLabModules, i);
+		fullModuleName = StrDup((*modulePtrPtr)->className);
+		AppendString(&fullModuleName, ": ", -1);
+		AppendString(&fullModuleName, (*modulePtrPtr)->instanceName, -1);
+		InsertListItem(modulesPanHndl, ModulesPan_Installed, -1, fullModuleName, (*modulePtrPtr)->instanceName);
+		OKfree(fullModuleName);
+	} 
+	// if there are modules installed, undim Remove button
+	if (ListNumItems(DAQLabModules))
+		SetCtrlAttribute(modulesPanHndl, ModulesPan_Remove, ATTR_DIMMED, 0); 
+	else
+		SetCtrlAttribute(modulesPanHndl, ModulesPan_Remove, ATTR_DIMMED, 1); 
+	
+	// display popup panel
+	InstallPopup(modulesPanHndl);
+	
 	return;
 }
 
 
-static void	DAQLab_TaskMenu_AddTaskController 	(void) 
+int CVICALLBACK DAQLab_ModulesPan_CB (int panel, int event, void *callbackData, int eventData1, int eventData2)
 {
+	switch (event)
+	{
+		case EVENT_CLOSE:
+			
+			DiscardPanel(panel);
+
+			break;
+	}
+	return 0;
+}
+
+static BOOL	DAQLab_ValidModuleName (char name[], void* listPtr)
+{
+	ListType				modules = *(ListType*)listPtr;
+	DAQLabModule_type**		modulePtrPtr;
 	
-	char 				newControllerName[DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS+1]; 
-	char				msg1[]													= "Enter name.";
-	char				msg2[]													= "Invalid name. Enter new name.";
-	char				msg3[]													= "Names must be different. Enter new name.";
-	char*				popupAddControllerMsg;								 
-	int					selectedBTTN;
-	BOOL 				foundFlag;
-	UITaskCtrl_type**	UITaskCtrlsPtrPtr;
-	UITaskCtrl_type*	UITaskCtrlsPtr;
-	TaskControl_type* 	newTaskControllerPtr;
+	for (int i = 1; i <= ListNumItems(modules); i++) {
+		modulePtrPtr = ListGetPtrToItem(modules , i);
+		if (!strcmp((*modulePtrPtr)->instanceName, name)) return FALSE; // module with same instance name exists already
+	}
 	
-	popupAddControllerMsg = msg1; 
+	return TRUE;
+}
+
+int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			
+			char*					newModuleName;
+			char*					fullModuleName;
+			char*					moduleName;
+			int						moduleidx;		// 0-based index of selected module
+			DAQLabModule_type*  	newModulePtr;
+			DAQLabModule_type**		modulePtrPtr;
+			int*					panHndlPtr;
+			int						nchars;
+			
+			
+			switch (control) {
+					
+				case ModulesPan_Add:
+					
+					newModuleName = DLGetUINameInput ("New Module Instance", DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS, DAQLab_ValidModuleName, &DAQLabModules);
+					if (!newModuleName) return 0; // operation cancelled, do nothing
+					
+					GetCtrlIndex(panel, ModulesPan_Available, &moduleidx);
+					// call module init function
+					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL);
+					// add instance name to module
+					newModulePtr->instanceName = newModuleName; 
+					// call module load function
+					(*newModulePtr->Load) 	(newModulePtr, mainPanHndl);
+					// display module workspace panels
+					for (int i = 1; i <= ListNumItems(newModulePtr->ctrlPanelHndls); i++) {
+						panHndlPtr = ListGetPtrToItem(newModulePtr->ctrlPanelHndls, i);
+						if (*panHndlPtr) DisplayPanel(*panHndlPtr);
+					}
+					// insert module to modules list
+					ListInsertItem(DAQLabModules, &newModulePtr, END_OF_LIST);
+					// add full module name to list box
+					fullModuleName = StrDup(newModulePtr->className);
+					AppendString(&fullModuleName, ": ", -1);
+					AppendString(&fullModuleName, newModulePtr->instanceName, -1);
+					InsertListItem(panel, ModulesPan_Installed, -1, fullModuleName, newModulePtr->instanceName);
+					OKfree(fullModuleName);
+					// undim remove module button
+					SetCtrlAttribute(panel, ModulesPan_Remove, ATTR_DIMMED, 0); 
+					
+					break;
+					
+				case ModulesPan_Remove:
+					
+					GetCtrlIndex(panel, ModulesPan_Installed, &moduleidx);
+					GetValueLengthFromIndex(panel, ModulesPan_Installed, moduleidx, &nchars);
+					moduleName = malloc ((nchars+1)*sizeof(char));
+					if (!moduleName) {
+						DLMsg("Error: Out of memory.", 1);
+						return 0;
+					}
+					// get module instance name
+					GetValueFromIndex(panel, ModulesPan_Installed, moduleidx, moduleName); 
+					// remove module if found
+					for (int i = 1; i <= ListNumItems(DAQLabModules); i++) {
+						modulePtrPtr = ListGetPtrToItem (DAQLabModules, i);
+						if (!strcmp((*modulePtrPtr)->instanceName, moduleName)) {
+							// call module discard function
+							(*(*modulePtrPtr)->Discard)	(*modulePtrPtr);
+							// also remove from DAQLab modules list
+							ListRemoveItem(DAQLabModules, 0, i);
+							break;
+						}
+					}
+					OKfree(moduleName);
+					// remove from installed modules list
+					DeleteListItem(panel, ModulesPan_Installed, moduleidx, 1);
+					
+					break;
+			}
+
+			break;
+	}
+	return 0;
+}
+
+/// HIFN Displays a popup box where the user can give a string after which a validate function pointer is called. 
+/// HIFN If the string is not validated for example because the name already exists, then the popup box appears again until a valid name is given or until it is cancelled.
+/// HIPAR validateInputFptr/ if function returns TRUE, input is valid, otherwise not and popup is displayed again.
+/// HIRET Dynamically allocated string if input was succesful or NULL if operation was cancelled.
+char* DLGetUINameInput (char popupWndName[], size_t maxInputLength, ValidateInputFptr_type validateInputFptr, void* dataPtr)
+{
+	char* 	newName 				= malloc ((maxInputLength+1)*sizeof(char));
+	char	msg1[]					= "Enter name.";
+	char	msg2[]					= "Invalid name. Enter new name.";
+	char	msg3[]					= "Names must be different. Enter new name.";
+	char*	popupMsg;								 
+	int		selectedBTTN;
+	
+	if (!validateInputFptr) {OKfree(newName); return NULL;}  // do nothing 
+	popupMsg = msg1; 
 	do {
-		// obtain new Task Controller name if one is given, else nothing happens
-		selectedBTTN = GenericMessagePopup ("New Task Controller", popupAddControllerMsg, "Ok", "Cancel", "", newControllerName, DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS * sizeof(char),
+		NewInput:
+		// obtain new name if one is given, else nothing happens
+		selectedBTTN = GenericMessagePopup (popupWndName, popupMsg, "Ok", "Cancel", "", newName, maxInputLength * sizeof(char),
 											 0, VAL_GENERIC_POPUP_INPUT_STRING,VAL_GENERIC_POPUP_BTN1,VAL_GENERIC_POPUP_BTN2);
+		// remove surrounding white spaces 
+		RemoveSurroundingWhiteSpace(newName);
+		
 		// if OK and name is not valid
-		if ( (selectedBTTN == VAL_GENERIC_POPUP_BTN1) && (!strcmp (newControllerName,"")) ) {
-			popupAddControllerMsg = msg2;
-			continue;  // display again popup to enter new name
+		if ( (selectedBTTN == VAL_GENERIC_POPUP_BTN1) && !*newName ) {
+			popupMsg = msg2;
+			goto NewInput;  // display again popup to enter new name
 		} else
 			// if cancelled
-			if (selectedBTTN == VAL_GENERIC_POPUP_BTN2) return;  // do nothing
+			if (selectedBTTN == VAL_GENERIC_POPUP_BTN2) {OKfree(newName); return NULL;}  // do nothing
 			
-		// name is valid, but there may be another Task Controller with the same name already, which is not allowed
+		// name is valid, provided function pointer is called for additional check 
 			
-		// remove surrounding white spaces 
-		RemoveSurroundingWhiteSpace(newControllerName);
-		
-		// check if there is already another Task Controller with the same name
-		foundFlag = FALSE;
-		for (size_t i = 1; i <= ListNumItems(TasksUI.UItaskCtrls); i++) {
-			UITaskCtrlsPtrPtr = ListGetPtrToItem(TasksUI.UItaskCtrls, i);
-			if (strcmp (GetTaskControlName((*UITaskCtrlsPtrPtr)->taskControl), newControllerName) == 0) {
-				foundFlag = TRUE;
-				break;
-			}
-		}
-		
 		// if another Task Controller with the same name exists display popup again
-		popupAddControllerMsg = msg3;
+		popupMsg = msg3;
 		
-	} while (foundFlag);
-		
+	} while (!(*validateInputFptr)(newName, dataPtr)); // repeat while input is not valid
+	
+	return 	newName;
+	
+}
+
+static BOOL	DAQLab_ValidControllerName (char name[], void* listPtr)
+{
+	ListType			controllerList		= *(ListType*) listPtr;
+	BOOL 				foundFlag 			= FALSE; 
+	UITaskCtrl_type**	UITaskCtrlsPtrPtr;  
+	
+	// check if there is already another Task Controller with the same name
+	for (size_t i = 1; i <= ListNumItems(controllerList); i++) {
+		UITaskCtrlsPtrPtr = ListGetPtrToItem(controllerList, i);
+		if (strcmp (GetTaskControlName((*UITaskCtrlsPtrPtr)->taskControl), name) == 0) {
+			foundFlag = TRUE;
+			break;
+		}
+	}
+	
+	return !foundFlag; // valid input if there is no other controller with the same name
+}
+
+static void	DAQLab_TaskMenu_AddTaskController 	(void) 
+{
+	UITaskCtrl_type*	UITaskCtrlsPtr;
+	TaskControl_type* 	newTaskControllerPtr;
+	char*				newControllerName;
+	
+	newControllerName = DLGetUINameInput ("New Task Controller", DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS, DAQLab_ValidControllerName, &TasksUI.UItaskCtrls);
+	if (!newControllerName) return; // operation cancelled, do nothing
+	
 	// create new task controller
 	newTaskControllerPtr = init_TaskControl_type (newControllerName, DAQLab_ConfigureUITC, DAQLab_IterateUITC, DAQLab_StartUITC, 
 												  DAQLab_ResetUITC, DAQLab_DoneUITC, DAQLab_StoppedUITC, NULL, NULL, DAQLab_ErrorUITC); 
-	
+	OKfree(newControllerName);
 	
 	if (!newTaskControllerPtr) {
 		DLMsg("Error: Task Controller could not be created.\n\n", 1);
@@ -1105,7 +1442,7 @@ static void	DAQLab_TaskMenu_DeleteTaskController (void)
 	int					error;
 	UITaskCtrl_type** 	UITaskCtrlsPtrPtr;
 	
-	errChk( delPanHndl = LoadPanel(0, DAQLAB_UI_DAQLAB, TCDelPan) );
+	delPanHndl = LoadPanel(0, DAQLAB_UI_DAQLAB, TCDelPan);
 	
 	// list Task Controllers
 	
@@ -1116,8 +1453,6 @@ static void	DAQLab_TaskMenu_DeleteTaskController (void)
 	
 	// display popup panel
 	InstallPopup(delPanHndl);
-	
-	Error:
 	
 }
 
@@ -1267,9 +1602,6 @@ static FCallReturn_type* DAQLab_IterateUITC	(TaskControl_type* taskControl, size
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
-	// make a test error
-	if (currentIteration > 5) return init_FCallReturn_type(-2, "DAQLab_IterateUITC", "Test", 0);
-	
 	// iteration complete, update current iteration number
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, currentIteration + 1);
 	
@@ -1367,54 +1699,7 @@ static FCallReturn_type* DAQLab_ErrorUITC (TaskControl_type* taskControl, char* 
 	return init_FCallReturn_type(0, "", "", 0); 
 }
 
-
 /*
-	// create root element node
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DOMHndl, &xmlERRINFO, "DAQLab", &DAQLab_root) );
-	
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createNode(DOMHndl, &xmlERRINFO, CA_VariantInt(NODE_ELEMENT), "root", "", &DAQLab_rootNode) ); 
-	
-	// create attribute node
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createAttribute (DOMHndl, &xmlERRINFO, "Size", &attrNode) );
-	
-	// add double value to attribute node
-	XMLErrChk ( ActiveXML_IXMLDOMAttribute_Setvalue (attrNode, &xmlERRINFO, CA_VariantDouble(3.141)) );
-	
-	
-	// set element attribute
-	XMLErrChk ( ActiveXML_IXMLDOMElement_setAttribute(DAQLab_rootNode, &xmlERRINFO, "Size", CA_VariantDouble(3.141)) ); 
-	
-		/*   this works */
-	/*
-	t1 = Timer();
-	
-	// create root element by loading XML syntacs directly to DOM
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_loadXML (DOMHndl, &xmlERRINFO, "<root></root>", &XMLrootCreated) );
-	
-	// get document root element
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_GetdocumentElement (DOMHndl, &xmlERRINFO, &DAQLab_rootElement) );
-	
-	// add attribute to root element
-	XMLErrChk ( ActiveXML_IXMLDOMElement_setAttribute(DAQLab_rootElement, &xmlERRINFO, "Size", CA_VariantDouble(3.141)) ); 
-	/*	*/
-			/*
-	t2 = Timer();
-		
-	diff = (t2 - t1) * 1000; // in ms
-	
-	/
-	// create root element
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DOMHndl, &xmlERRINFO, "DAQLab", &DAQLab_rootElement) );
-	
-	// append root element to DOM
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_appendChild(DOMHndl, &xmlERRINFO, DAQLab_rootElement, &DAQLab_rootNode) )
-	
-	*/
-
-
-/*
-
-
 /// HIFN  Returns a list of available modules that are loaded from DAQLabModules_InitFunctions[] declared in DAQLabModule.c 
 /// HIRET Returns non-zero list handle if successful
 /// HIRET 0 if error occured

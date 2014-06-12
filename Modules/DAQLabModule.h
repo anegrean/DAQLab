@@ -34,10 +34,10 @@ struct DAQLabModule {
 	
 	// DATA
 	
-		// module name
-	char*						name;
-	char*						XMLname;
-	
+		// module class name
+	char*						className;
+		// module instance name
+	char*						instanceName;
 		// module XML node
 	ActiveXMLObj_IXMLDOMNode_	XMLNode;
 		// Task Controller for the module, if any
@@ -87,7 +87,7 @@ void							DAQLabModule_DisplayWorkspacePanels (DAQLabModule_type* mod, BOOL vis
 
 	// loads generic DAQLab module configuration from an XML file
 
-int								DAQLabModule_LoadCfg				(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);			
+//int								DAQLabModule_LoadCfg				(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);			
 
 
 #ifdef __cplusplus

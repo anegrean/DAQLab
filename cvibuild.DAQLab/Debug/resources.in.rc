@@ -20,13 +20,13 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "\0"
+            VALUE "CompanyName", "Vrije Universiteit Amsterdam\0"
             VALUE "FileDescription", "DAQLab (Debug x86)\0"
             VALUE "FileVersion", "1.0\0"
             VALUE "InternalName", "DAQLab\0"
-            VALUE "LegalCopyright", "Copyright ©  2014\0"
+            VALUE "LegalCopyright", "Copyright © Vrije Universiteit Amsterdam 2014\0"
             VALUE "OriginalFilename", "DAQLab.exe\0"
-            VALUE "ProductName", " DAQLab\0"
+            VALUE "ProductName", "Vrije Universiteit Amsterdam DAQLab\0"
             VALUE "ProductVersion", "1.0\0"
         END
     END

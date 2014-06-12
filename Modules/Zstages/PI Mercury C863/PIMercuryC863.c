@@ -61,19 +61,16 @@ DAQLabModule_type*	initalloc_PIMercuryC863	(DAQLabModule_type* mod)
 		// DATA
 	
 		// updating name
-	OKfree(zstage->module_base.name);
-	zstage->module_base.name		= StrDup(MOD_PIMercuryC863_NAME);
-		// updating XML name
-	OKfree(zstage->module_base.XMLname); 
-	zstage->module_base.XMLname		= StrDup(MOD_PIMercuryC863_XMLTAG);
+	OKfree(zstage->module_base.className);
+	zstage->module_base.className	= StrDup(MOD_PIMercuryC863_NAME);
 		
-
+	
 		//METHODS
 	
 		// overriding methods
 	zstage->module_base.Discard 	= discard_PIMercuryC863;
 	zstage->module_base.Load 		= PIMercuryC863_Load;
-	zstage->module_base.LoadCfg		= PIMercuryC863_LoadCfg;
+	zstage->module_base.LoadCfg		= NULL; //PIMercuryC863_LoadCfg;
 		
 	
 	//---------------------------
@@ -128,10 +125,12 @@ static int PIMercuryC863_Move (Zstage_type* self, Zstage_move_type moveType, dou
 	return 0;
 }
 
+/*
 static int PIMercuryC863_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement)
 {
 	PIMercuryC863_type* 	PIMzstage	= (PIMercuryC863_type*) mod;
 	
 	return Zstage_LoadCfg(mod, DAQLabCfg_RootElement); 
 }
+*/
 

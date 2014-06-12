@@ -76,6 +76,8 @@ typedef struct{
 	
 } DAQLabXMLNode;
 
+	// function pointer type to validate user input, return TRUE for valid input
+typedef BOOL (*ValidateInputFptr_type) (char inputStr[], void* dataPtr); 
 	
 
 //==============================================================================
@@ -85,15 +87,18 @@ typedef struct{
 // Global functions
 	
 	// installs callback data and callback function in all controls directly within panel 
-int		SetCtrlsInPanCBInfo 	(void* callbackData, CtrlCallbackPtr callbackFn, int panHndl);
+int		SetCtrlsInPanCBInfo 			(void* callbackData, CtrlCallbackPtr callbackFn, int panHndl);
 
 	// displays messages in the main workspace log panel and optionally beeps
-void	DLMsg					(const char* text, BOOL beep);
+void	DLMsg							(const char* text, BOOL beep);
+	// displays a popup box where the user can give a string after which a validate function pointer is called
+char*	DLGetUINameInput				(char popupWndName[], size_t maxInputLength, ValidateInputFptr_type validateInputFptr, void* dataPtr);
 	// adds multiple XML Element children or attributes for a parent XML Element
-int		DLAddToXMLElem			(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes);
+int		DLAddToXMLElem					(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes);
 	// places the value of multiple XML Attributes of an Element into user provided pointers
-int		DLGetXMLAttributes		(ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode Attributes[], size_t nAttributes);  
-
+int		DLGetXMLElementAttributes		(ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes);
+	// places the value of multiple XML Attributes of a Nodet into user provided pointers
+int 	DLGetXMLNodeAttributes 			(ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes);
 
 #ifdef __cplusplus
     }

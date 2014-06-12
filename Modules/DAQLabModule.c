@@ -67,8 +67,8 @@ void init_DAQLabModule (DAQLabModule_type* mod)
 {
 	// DATA
 	
-	mod->name			= NULL;
-	mod->XMLname		= NULL;
+	mod->className		= NULL;
+	mod->instanceName	= NULL;
 	mod->XMLNode		= 0;
 	mod->taskControl	= NULL;
 	mod->cfgPanHndl		= 0;
@@ -78,7 +78,7 @@ void init_DAQLabModule (DAQLabModule_type* mod)
 	
 	mod->Discard		= discard_DAQLabModule;
 	mod->Load			= NULL;
-	mod->LoadCfg		= DAQLabModule_LoadCfg;
+	mod->LoadCfg		= NULL;
 	mod->SaveCfg		= NULL;
 }
 
@@ -98,8 +98,8 @@ void discard_DAQLabModule (DAQLabModule_type* mod)
 	}
 	ListDispose(mod->ctrlPanelHndls);
 	
-	OKfree(mod->name);
-	OKfree(mod->XMLname);
+	OKfree(mod->className);
+	OKfree(mod->instanceName);
 	// discard Task Controller
 	discard_TaskControl_type(&mod->taskControl);
 }
@@ -136,7 +136,7 @@ void DAQLabModule_DisplayWorkspacePanels (DAQLabModule_type* mod, BOOL visible)
 			HidePanel(*panHndlPtr);
 	}
 }
-
+	  /*
 /// HIFN  Loads configuration data for a generic DAQLab module from an XML file.
 /// HIRET If configuration is found, returns DAQLab module XML Element node handle of intptr_t type.
 /// HIRET 0 if configuration was not found or error occured.
@@ -178,6 +178,7 @@ int DAQLabModule_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  
 	 
 	return 0;
 }
+	  */
 
 /// HIFN Displays predefined error and warning messages in the main workspace log panel.
 /// HIPAR msgID/ If required, pass in additional data to format the message.

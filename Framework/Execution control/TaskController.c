@@ -455,10 +455,10 @@ static ErrorMsg_type* init_ErrorMsg_type (int errorID, const char errorOrigin[],
 	
 	a -> errorID = errorID;
 	
-	nchars 			= snprintf(a->errorInfo, 0, "<%s Error ID: %d, Reason: %s.>", errorOrigin, errorID, errorDescription); 
+	nchars 			= snprintf(a->errorInfo, 0, "<%s Error ID: %d, Reason:\n\t %s>", errorOrigin, errorID, errorDescription); 
 	a->errorInfo 	= malloc((nchars+1) * sizeof(char));
 	if (!a->errorInfo) {free(a); return NULL;}
-	snprintf(a->errorInfo, nchars, "<%s Error ID: %d, Reason: %s.>", errorOrigin, errorID, errorDescription); 
+	snprintf(a->errorInfo, nchars, "<%s Error ID: %d, Reason:\n\t %s>", errorOrigin, errorID, errorDescription); 
 	
 	return a;
 }
@@ -483,11 +483,11 @@ static ErrorMsg_type* FCallReturnToErrorMsg	(FCallReturn_type** fCallReturn, Tas
 	
 	a -> errorID 	= (*fCallReturn)->retVal;
 	
-	nchars = snprintf(a -> errorInfo, 0, "<%s Error ID: %d, Reason: %s.>", 
+	nchars = snprintf(a -> errorInfo, 0, "<%s Error ID: %d, Reason:\n\t %s>", 
 					  FCallToString(fID), (*fCallReturn)->retVal, (*fCallReturn)->errorInfo); 
 	a -> errorInfo	= malloc ((nchars+1)*sizeof(char));
 	if (!a->errorInfo) {free(a); return NULL;}
-	snprintf(a -> errorInfo, nchars, "<%s Error ID: %d, Reason: %s.>", 
+	snprintf(a -> errorInfo, nchars, "<%s Error ID: %d, Reason:\n\t %s>", 
 					  FCallToString(fID), (*fCallReturn)->retVal, (*fCallReturn)->errorInfo); 
 	
 	discard_FCallReturn_type(fCallReturn);
@@ -507,10 +507,10 @@ FCallReturn_type* init_FCallReturn_type (int valFCall, const char errorOrigin[],
 	result -> retVal 	= valFCall;
 	if (errorDescription) {
 		
-		nchars 	= snprintf(Msg, 0, "<%s Error ID %d. Reason: %s.>", errorOrigin, valFCall, errorDescription);
+		nchars 	= snprintf(Msg, 0, "<%s Error ID %d. Reason: %s>", errorOrigin, valFCall, errorDescription);
 		Msg		= malloc((nchars+1)*sizeof(char));
 		if (!Msg) {free(result); return NULL;}
-		snprintf(Msg, nchars, "<%s Error. Reason: %s.>", errorOrigin, errorDescription);
+		snprintf(Msg, nchars, "<%s Error. Reason: %s>", errorOrigin, errorDescription);
 		result -> errorInfo	= Msg;
 	} else
 		result -> errorInfo = NULL;

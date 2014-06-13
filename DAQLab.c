@@ -84,6 +84,7 @@ typedef enum _DAQLabMessageID{
 	DAQLAB_MSG_ERR_DOM_CREATION,			// HRESULT* error code, 0, 0, 0
 	DAQLAB_MSG_ERR_ACTIVEXML,				// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0
 	DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, // HRESULT* error code, 0, 0, 0
+	DAQLAB_MSG_ERR_LOADING_MODULE,			// char* module instance name, char* error description 
 	
 	// warnings									
 	DAQLAB_MSG_WARN_NO_CFG_FILE,			// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0       
@@ -629,6 +630,18 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 			DLMsg("Error: Could not obtain XML attribute value from element.", 1);
 			DLMsg(buffCA, 0);
 			DLMsg("\n", 0);
+			
+		case DAQLAB_MSG_ERR_LOADING_MODULE:
+			DLMsg("Error: Could not load module ", 1);
+			DLMsg((char*)data1, 0);	// module name
+			DLMsg(" to DAQLab environment.", 0);
+			if (data2) {
+				DLMsg(" Reason:\n\t", 0);
+				DLMsg((char*)data2, 0); // error description
+				DLMsg("\n\n", 0);
+			}
+			
+			
 		
 		case DAQLAB_MSG_OK_DOM_CREATION:
 			
@@ -1205,7 +1218,7 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 	DAQLabModule_type**		modulePtrPtr;
 	char*					fullModuleName;
 	
-	modulesPanHndl = LoadPanel(0, DAQLAB_UI_DAQLAB, ModulesPan);
+	modulesPanHndl = LoadPanel(mainPanHndl, DAQLAB_UI_DAQLAB, ModulesPan);
 	
 	// list available modules
 	for (int i = 0; i < NumElem(DAQLabModules_InitFunctions); i++) {
@@ -1232,25 +1245,13 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 	else
 		SetCtrlAttribute(modulesPanHndl, ModulesPan_Remove, ATTR_DIMMED, 1); 
 	
-	// display popup panel
-	InstallPopup(modulesPanHndl);
+	// display panel
+	DisplayPanel(modulesPanHndl);
 	
 	return;
 }
 
 
-int CVICALLBACK DAQLab_ModulesPan_CB (int panel, int event, void *callbackData, int eventData1, int eventData2)
-{
-	switch (event)
-	{
-		case EVENT_CLOSE:
-			
-			DiscardPanel(panel);
-
-			break;
-	}
-	return 0;
-}
 
 static BOOL	DAQLab_ValidModuleName (char name[], void* listPtr)
 {
@@ -1294,7 +1295,11 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					// add instance name to module
 					newModulePtr->instanceName = newModuleName; 
 					// call module load function
-					(*newModulePtr->Load) 	(newModulePtr, mainPanHndl);
+					if ( (*newModulePtr->Load) 	(newModulePtr, mainPanHndl) < 0) {
+						// dispose of module if not loaded properly
+						(*newModulePtr->Discard ) 	(newModulePtr);
+						break;
+					}
 					// display module workspace panels
 					for (int i = 1; i <= ListNumItems(newModulePtr->ctrlPanelHndls); i++) {
 						panHndlPtr = ListGetPtrToItem(newModulePtr->ctrlPanelHndls, i);
@@ -1699,22 +1704,17 @@ static FCallReturn_type* DAQLab_ErrorUITC (TaskControl_type* taskControl, char* 
 	return init_FCallReturn_type(0, "", "", 0); 
 }
 
-/*
-/// HIFN  Returns a list of available modules that are loaded from DAQLabModules_InitFunctions[] declared in DAQLabModule.c 
-/// HIRET Returns non-zero list handle if successful
-/// HIRET 0 if error occured
-ListType DAQLabModule_populate (void)
+int CVICALLBACK CloseDAQLabModulesPan_CB (int panel, int control, int event,
+		void *callbackData, int eventData1, int eventData2)
 {
-	ListType modules = ListCreate(sizeof(DAQLabModule_type*));
-	if (!modules) return 0;
-	
-	DAQLabModule_type* modptr;
-	for (int i = 0; i < NumElem(DAQLabModules_InitFunctions); i++) {
-		modptr = (*DAQLabModules_InitFunctions[i])(NULL);
-		ListInsertItem(modules, &modptr, END_OF_LIST);
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			
+			DiscardPanel(panel);
+
+			break;
 	}
-	
-	return modules;
+	return 0;
 }
 
-*/

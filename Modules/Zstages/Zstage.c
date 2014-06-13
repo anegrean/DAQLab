@@ -107,7 +107,7 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod)
 	
 	zstage->zPos					= NULL; 
 	zstage->revertDirection			= 0;
-	zstage->zHomePos				= NULL;
+	zstage->zRefPos					= ListCreate(sizeof(double));
 	zstage->zULimPos				= NULL;
 	zstage->zLLimPos				= NULL;
 	zstage->zStackStep				= 0;
@@ -139,7 +139,7 @@ void discard_Zstage (DAQLabModule_type* mod)
 	Zstage_type* zstage = (Zstage_type*) mod;
 	
 	OKfree(zstage->zPos);
-	OKfree(zstage->zHomePos);
+	ListDispose(zstage->zRefPos);
 	OKfree(zstage->zULimPos);
 	OKfree(zstage->zLLimPos);
 
@@ -151,7 +151,8 @@ void discard_Zstage (DAQLabModule_type* mod)
 /// HIFN Loads ZStage specific resources. 
 int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl) 
 {
-	char	stepsizeName[50];
+	Zstage_type* 	zstage 				= (Zstage_type*) mod;  
+	char			stepsizeName[50];
 	
 	// load panel resources
 	int panHndl = LoadPanel(workspacePanHndl, MOD_Zstage_UI_ZStage, ZStagePan);
@@ -169,6 +170,14 @@ int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	for (int i = 0; i < NumElem(ZStepSizes); i++) {
 		Fmt(stepsizeName, "%s<%f[p1]", ZStepSizes[i]);
 		InsertListItem(panHndl, ZStagePan_ZStepSize, -1, stepsizeName, ZStepSizes[i]);   
+	}
+	
+	// update stage absolute position if position has been determined
+	if (zstage->zPos)
+		SetCtrlVal(panHndl, ZStagePan_ZAbsPos, *zstage->zPos);
+	else {
+		DLMsg("Stage position must be determined first. Aborting load operation.", 1);
+		return -1;
 	}
 	
 	return 0;

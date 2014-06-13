@@ -19,11 +19,12 @@
 
 #define  MainPan                          2       /* callback function: CB_DAQLab_MainPan */
 
-#define  ModulesPan                       3       /* callback function: DAQLab_ModulesPan_CB */
+#define  ModulesPan                       3
 #define  ModulesPan_Remove                2       /* control type: command, callback function: DAQLab_ManageDAQLabModules_CB */
 #define  ModulesPan_Add                   3       /* control type: command, callback function: DAQLab_ManageDAQLabModules_CB */
 #define  ModulesPan_Installed             4       /* control type: listBox, callback function: (none) */
 #define  ModulesPan_Available             5       /* control type: listBox, callback function: (none) */
+#define  ModulesPan_Close                 6       /* control type: command, callback function: CloseDAQLabModulesPan_CB */
 
 #define  TasksPan                         4
 
@@ -46,10 +47,10 @@
      /* Callback Prototypes: */
 
 int  CVICALLBACK CB_DAQLab_MainPan(int panel, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK CloseDAQLabModulesPan_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK DAQLab_DelTaskControllersBTTN_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK DAQLab_ManageDAQLabModules_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 void CVICALLBACK DAQLab_MenuModules_CB(int menubar, int menuItem, void *callbackData, int panel);
-int  CVICALLBACK DAQLab_ModulesPan_CB(int panel, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK DAQLab_TCDelPan_CB(int panel, int event, void *callbackData, int eventData1, int eventData2);
 
 

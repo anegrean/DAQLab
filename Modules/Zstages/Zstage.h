@@ -49,8 +49,8 @@ struct Zstage {
 		// Flag to revert movement direction, default 0, set to 1 to revert direction
 	BOOL				revertDirection;
 	
-		// Home position of Zstage, if NULL, home position was not set.
-	double*				zHomePos;
+		// Reference positions of Zstage of double type
+	ListType			zRefPos;
 	
 		// Upper limit position of Zstage, if NULL, there is no limit 			( zLLimPos < zULimPos )
 	double*				zULimPos;

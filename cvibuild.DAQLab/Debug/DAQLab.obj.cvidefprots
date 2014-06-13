@@ -30,10 +30,6 @@ Prototype="int DLGetXMLNodeAttributes(CAObjHandle XMLNode, DAQLabXMLNode *Attrib
 Class="Function"
 Prototype="void DAQLab_MenuModules_CB(int menuBar, int menuItem, void *callbackData, int panel);"
 
-[DAQLab_ModulesPan_CB]
-Class="Function"
-Prototype="int DAQLab_ModulesPan_CB(int panel, int event, void *callbackData, int eventData1, int eventData2);"
-
 [DAQLab_ManageDAQLabModules_CB]
 Class="Function"
 Prototype="int DAQLab_ManageDAQLabModules_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
@@ -49,4 +45,8 @@ Prototype="int DAQLab_TCDelPan_CB(int panel, int event, void *callbackData, int 
 [DAQLab_DelTaskControllersBTTN_CB]
 Class="Function"
 Prototype="int DAQLab_DelTaskControllersBTTN_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
+
+[CloseDAQLabModulesPan_CB]
+Class="Function"
+Prototype="int CloseDAQLabModulesPan_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
 

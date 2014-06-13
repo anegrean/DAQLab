@@ -40,6 +40,12 @@ struct PIMercuryC863 {
 	Zstage_type 	zstage_base;
 
 	// DATA
+		
+		// ID of PI Mercury controller
+	long			PIStageID;
+		// axis name assigned to the controller 
+	char			assignedAxis[2];
+	
 	
 	// METHODS
 	

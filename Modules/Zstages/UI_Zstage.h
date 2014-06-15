@@ -24,13 +24,11 @@
 #define  ZStagePan_Cycle_RelStart         8       /* control type: numeric, callback function: (none) */
 #define  ZStagePan_NSteps                 9       /* control type: numeric, callback function: (none) */
 #define  ZStagePan_Stop                   10      /* control type: command, callback function: (none) */
-#define  ZStagePan_GoHomePos              11      /* control type: command, callback function: (none) */
-#define  ZStagePan_UpdateHomePos          12      /* control type: command, callback function: (none) */
-#define  ZStagePan_AddHomePos             13      /* control type: command, callback function: (none) */
-#define  ZStagePan_SetEndPos              14      /* control type: command, callback function: (none) */
-#define  ZStagePan_SetStartPos            15      /* control type: command, callback function: (none) */
-#define  ZStagePan_RefPosList             16      /* control type: listBox, callback function: (none) */
-#define  ZStagePan_ZStageStatus           17      /* control type: LED, callback function: (none) */
+#define  ZStagePan_AddRefPos              11      /* control type: command, callback function: (none) */
+#define  ZStagePan_SetEndPos              12      /* control type: command, callback function: (none) */
+#define  ZStagePan_SetStartPos            13      /* control type: command, callback function: (none) */
+#define  ZStagePan_RefPosList             14      /* control type: listBox, callback function: (none) */
+#define  ZStagePan_Status                 15      /* control type: LED, callback function: (none) */
 
 
      /* Control Arrays: */

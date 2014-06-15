@@ -14,7 +14,7 @@
 -stackcommit:4096
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\DAQLab.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\DAQLabModule.obj
--in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\PIMercuryC863.obj
+-in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\PIStage.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\TaskController.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\Zstage.obj
 -more:c:\program files (x86)\national instruments\cvi2013\bin\msvc\cvistart.lib
@@ -44,7 +44,7 @@
 -more:c:\Program Files (x86)\National Instruments\Shared\CVI\Bin\msvc\nivision.lib
 -more:c:\Program Files (x86)\National Instruments\CVI2013\bin\msvc\nivxi.lib
 -more:c:\Program Files (x86)\National Instruments\CVI2013\bin\msvc\omp.lib
--more:d:\ELE_DAQLab\Modules\Zstages\PI Mercury C863\drivers and docs\PI_GCS\PI_GCS2_DLL.lib
+-more:d:\ELE_DAQLab\Modules\Zstages\PI Stage\drivers and docs\PI_GCS\PI_GCS2_DLL.lib
 -more:c:\Program Files (x86)\National Instruments\CVI2013\toolslib\toolbox\msvc\toolbox.obj
 -more:c:\program files (x86)\national instruments\cvi2013\sdk\lib\msvc\user32.lib
 -more:c:\program files (x86)\national instruments\cvi2013\sdk\lib\msvc\uuid.lib

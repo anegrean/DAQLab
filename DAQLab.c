@@ -21,7 +21,7 @@
 //==============================================================================
 // Include modules
 
-#include "PIMercuryC863.h"
+#include "PIStage.h"
 
 
 
@@ -59,11 +59,11 @@
 //------------------------------------------------------------------------------------------------
 
 // Constant function pointer that is used to launch the initialization of different DAQLabModules 
-typedef DAQLabModule_type* (* const ModuleInitAllocFunction_type ) (DAQLabModule_type* mod);
+typedef DAQLabModule_type* (* const ModuleInitAllocFunction_type ) (DAQLabModule_type* mod, char className[], char instanceName[]);
 
 typedef struct {
 	
-	char*							ModuleName;
+	char*							className;
 	ModuleInitAllocFunction_type	ModuleInitFptr;
 	BOOL							multipleInstancesFlag;	  // allows multiple instances of the module
 	size_t							nInstances;				  // counter for the total number of instances
@@ -112,9 +112,9 @@ typedef struct {						  // Glues UI Task Controller to panel handle
 //------------------------------------------------------------------------------------------------
 //                              AVAILABLE DAQLab MODULES
 //------------------------------------------------------------------------------------------------
-AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {
-	
-	{ MOD_PIMercuryC863_NAME, initalloc_PIMercuryC863, FALSE, 0 } 
+AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
+																  // counter always to 0
+	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 } 
 	
 };
 
@@ -258,7 +258,6 @@ int main (int argc, char *argv[])
 static int DAQLab_Load (void)
 {
 	int								error 					= 0;
-	DAQLabModule_type** 			modulePtr;
 	BOOL							FoundDAQLabSettingsFlag	= 0;		// if FALSE, no XML settings were found and default will be used
 	HRESULT							xmlerror;  
 	ERRORINFO						xmlERRINFO;
@@ -378,32 +377,6 @@ static int DAQLab_Load (void)
 		// send a configure event to the Task Controller
 		TaskControlEvent(newTaskControllerPtr, TASK_EVENT_CONFIGURE, NULL, NULL);
 	}
-	
-	
-	
-	
-	
-	/*
-	// init modules list
-	modules = DAQLabModule_populate();
-	*/
-	
-	
-	
-	
-	/*
-	// load modules to workspace and make their panels visible
-	for (int i = 1; i <= ListNumItems(modules); i++) {
-		modulePtr = ListGetPtrToItem(modules, i);
-		// load config data from XML to module structures
-		(*(*modulePtr)->LoadCfg)(*modulePtr, DAQLabCfg_RootElement);
-		
-		// load module to workspace
-		(*(*modulePtr)->Load)(*modulePtr, mainPanHndl);
-		DAQLabModule_DisplayWorkspacePanels(*modulePtr, TRUE);
-	}
-	
-	*/
 	
 	// discard DOM after loading all settings
 	CA_DiscardObjHandle (DAQLabCfg_DOMHndl);
@@ -1222,7 +1195,7 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 	
 	// list available modules
 	for (int i = 0; i < NumElem(DAQLabModules_InitFunctions); i++) {
-		InsertListItem(modulesPanHndl, ModulesPan_Available, -1, DAQLabModules_InitFunctions[i].ModuleName, i);  
+		InsertListItem(modulesPanHndl, ModulesPan_Available, -1, DAQLabModules_InitFunctions[i].className, i);  
 	}
 	// if there are modules to add, undim Add button
 	if (NumElem(DAQLabModules_InitFunctions))
@@ -1272,7 +1245,7 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 	{
 		case EVENT_COMMIT:
 			
-			char*					newModuleName;
+			char*					newInstanceName;
 			char*					fullModuleName;
 			char*					moduleName;
 			int						moduleidx;		// 0-based index of selected module
@@ -1286,25 +1259,22 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					
 				case ModulesPan_Add:
 					
-					newModuleName = DLGetUINameInput ("New Module Instance", DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS, DAQLab_ValidModuleName, &DAQLabModules);
-					if (!newModuleName) return 0; // operation cancelled, do nothing
+					newInstanceName = DLGetUINameInput ("New Module Instance", DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS, DAQLab_ValidModuleName, &DAQLabModules);
+					if (!newInstanceName) return 0; // operation cancelled, do nothing
 					
 					GetCtrlIndex(panel, ModulesPan_Available, &moduleidx);
 					// call module init function
-					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL);
-					// add instance name to module
-					newModulePtr->instanceName = newModuleName; 
+					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[moduleidx].className, newInstanceName);
 					// call module load function
 					if ( (*newModulePtr->Load) 	(newModulePtr, mainPanHndl) < 0) {
 						// dispose of module if not loaded properly
-						(*newModulePtr->Discard ) 	(newModulePtr);
+						(*newModulePtr->Discard ) 	(&newModulePtr);
 						break;
 					}
-					// display module workspace panels
-					for (int i = 1; i <= ListNumItems(newModulePtr->ctrlPanelHndls); i++) {
-						panHndlPtr = ListGetPtrToItem(newModulePtr->ctrlPanelHndls, i);
-						if (*panHndlPtr) DisplayPanel(*panHndlPtr);
-					}
+					// display module panels if method is defined
+					if (newModulePtr->DisplayPanels)
+						(*newModulePtr->DisplayPanels) (newModulePtr, TRUE);
+					
 					// insert module to modules list
 					ListInsertItem(DAQLabModules, &newModulePtr, END_OF_LIST);
 					// add full module name to list box
@@ -1334,7 +1304,7 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 						modulePtrPtr = ListGetPtrToItem (DAQLabModules, i);
 						if (!strcmp((*modulePtrPtr)->instanceName, moduleName)) {
 							// call module discard function
-							(*(*modulePtrPtr)->Discard)	(*modulePtrPtr);
+							(*(*modulePtrPtr)->Discard)	(modulePtrPtr);
 							// also remove from DAQLab modules list
 							ListRemoveItem(DAQLabModules, 0, i);
 							break;
@@ -1487,7 +1457,7 @@ int CVICALLBACK DAQLab_DelTaskControllersBTTN_CB (int panel, int control, int ev
 	{
 		case EVENT_COMMIT:
 			
-			size_t	idx;	 // 0-based list index
+			int		idx;	 // 0-based list index
 			int		result;
 			int		nitems;
 			
@@ -1571,8 +1541,8 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 					break;
 					
 			}
-			
 			break;
+			
 	}
 	
 	return 0;

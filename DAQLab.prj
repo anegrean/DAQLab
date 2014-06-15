@@ -24,8 +24,8 @@ Folder 0 = "Modules"
 FolderEx 0 = "Modules"
 Folder 1 = "Modules/Zstages"
 FolderEx 1 = "Modules/Zstages"
-Folder 2 = "Modules/Zstages/PI Mercury C863"
-FolderEx 2 = "Modules/Zstages/PI Mercury C863"
+Folder 2 = "Modules/Zstages/PI Stage"
+FolderEx 2 = "Modules/Zstages/PI Stage"
 Folder 3 = "Modules/XYstages"
 FolderEx 3 = "Modules/XYstages"
 Folder 4 = "Modules/VUPhotonCtr"
@@ -114,12 +114,11 @@ File Type = "Include"
 Res Id = 7
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/Zstages/PI Mercury C863/drivers and docs/PI_GCS/PI_GCS2_DLL.h"
-Path Line0001 = "/d/ELE_DAQLab/Modules/Zstages/PI Mercury C863/drivers and docs/PI_GCS/PI_GCS2_DL"
-Path Line0002 = "L.h"
+Path Rel Path = "Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.h"
+Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.h"
 Exclude = False
 Project Flags = 0
-Folder = "Modules/Zstages/PI Mercury C863"
+Folder = "Modules/Zstages/PI Stage"
 Folder Id = 2
 
 [File 0008]
@@ -127,12 +126,11 @@ File Type = "Library"
 Res Id = 8
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/Zstages/PI Mercury C863/drivers and docs/PI_GCS/PI_GCS2_DLL.lib"
-Path Line0001 = "/d/ELE_DAQLab/Modules/Zstages/PI Mercury C863/drivers and docs/PI_GCS/PI_GCS2_DL"
-Path Line0002 = "L.lib"
+Path Rel Path = "Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.lib"
+Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.lib"
 Exclude = False
 Project Flags = 0
-Folder = "Modules/Zstages/PI Mercury C863"
+Folder = "Modules/Zstages/PI Stage"
 Folder Id = 2
 
 [File 0009]
@@ -140,12 +138,12 @@ File Type = "CSource"
 Res Id = 9
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/Zstages/PI Mercury C863/PIMercuryC863.c"
-Path = "/d/ELE_DAQLab/Modules/Zstages/PI Mercury C863/PIMercuryC863.c"
+Path Rel Path = "Modules/Zstages/PI Stage/PIStage.c"
+Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/PIStage.c"
 Exclude = False
 Compile Into Object File = False
 Project Flags = 0
-Folder = "Modules/Zstages/PI Mercury C863"
+Folder = "Modules/Zstages/PI Stage"
 Folder Id = 2
 
 [File 0010]
@@ -153,11 +151,11 @@ File Type = "Include"
 Res Id = 10
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/Zstages/PI Mercury C863/PIMercuryC863.h"
-Path = "/d/ELE_DAQLab/Modules/Zstages/PI Mercury C863/PIMercuryC863.h"
+Path Rel Path = "Modules/Zstages/PI Stage/PIStage.h"
+Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/PIStage.h"
 Exclude = False
 Project Flags = 0
-Folder = "Modules/Zstages/PI Mercury C863"
+Folder = "Modules/Zstages/PI Stage"
 Folder Id = 2
 
 [File 0011]

@@ -1,6 +1,6 @@
 //==============================================================================
 //
-// Title:		PIMercuryC863.h
+// Title:		PIStage.h
 // Purpose:		A short description of the interface.
 //
 // Created on:	10-3-2014 at 12:06:57 by Adrian Negrean.
@@ -8,8 +8,8 @@
 //
 //==============================================================================
 
-#ifndef __PIMercuryC863_H__
-#define __PIMercuryC863_H__
+#ifndef __PIStage_H__
+#define __PIStage_H__
 
 #ifdef __cplusplus
     extern "C" {
@@ -23,17 +23,17 @@
 //==============================================================================
 // Constants
 
-#define MOD_PIMercuryC863_NAME 		"PIMercuryC863 motion controller" 
+#define MOD_PIStage_NAME 		"PIStage motion controller" 
 
 //==============================================================================
 // Types
 		
-typedef struct PIMercuryC863 PIMercuryC863_type;
+typedef struct PIStage PIStage_type;
 		
 //==============================================================================
 // Module implementation
 
-struct PIMercuryC863 {
+struct PIStage {
 	
 	// SUPER, must be the first member to inherit from
 	
@@ -57,11 +57,11 @@ struct PIMercuryC863 {
 //==============================================================================
 // Global functions
 
-DAQLabModule_type*	initalloc_PIMercuryC863		(DAQLabModule_type* mod);
-void 				discard_PIMercuryC863 		(DAQLabModule_type* mod);
+DAQLabModule_type*	initalloc_PIStage		(DAQLabModule_type* mod, char className[], char instanceName[]);
+void 				discard_PIStage 		(DAQLabModule_type** mod);
 
 #ifdef __cplusplus
     }
 #endif
 
-#endif  /* ndef __PIMercuryC863_H__ */
+#endif  /* ndef __PIStage_H__ */

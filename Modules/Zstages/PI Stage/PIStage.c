@@ -1,0 +1,634 @@
+#include <userint.h>
+
+//==============================================================================
+//
+// Title:		PIStage.c
+// Purpose:		A short description of the implementation.
+//
+// Created on:	10-3-2014 at 12:06:57 by Adrian Negrean.
+// Copyright:	. All Rights Reserved.
+//
+//==============================================================================
+
+//==============================================================================
+// Include files
+#include "DAQLab.h" 		// include this first 
+#include <formatio.h> 
+#include <ansi_c.h> 
+#include "PIStage.h"
+#include "PI_GCS2_DLL.h"	   
+
+//==============================================================================
+// Constants
+
+//------------------------------------------------------------------------------
+// Custom PID settings for the servo motion controller
+//------------------------------------------------------------------------------
+#define PIStage_PPAR				0x01	 	// P parameter list ID, see hardware documentation
+#define PIStage_IPAR				0x02	 	// I parameter list ID
+#define PIStage_DPAR				0x03	 	// D parameter list ID
+
+#define PIStage_PTERM 				40		 
+#define PIStage_ITERM 				1800
+#define PIStage_DTERM 				3300
+#define	PIStage_USECUSTOMPID		TRUE	 	// overrides factory PID settings
+
+//------------------------------------------------------------------------------
+// Custom stage settings
+//------------------------------------------------------------------------------
+	
+#define PIStage_VELOCITY			2			// stage movement velocity   
+#define PIStage_SETTLING_PRECISION	0.0001		// positive value, in [mm]
+#define PIStage_SETTLING_TIMEOUT	3			// timeout in [s]
+
+//------------------------------------------------------------------------------
+// USB connection ID
+//------------------------------------------------------------------------------
+#define PIStage_ID 					"0115500620"
+
+//------------------------------------------------------------------------------
+// PI Stage type
+//------------------------------------------------------------------------------
+#define PIStage_STAGE_TYPE 			"M-605.2DD"
+
+
+//==============================================================================
+// Types
+
+typedef struct {
+	Zstage_move_type	moveType;
+	double				moveVal;
+} PIStageCommand_type;
+
+//==============================================================================
+// Static global variables
+
+//==============================================================================
+// Static functions
+
+static int						PIStage_Load 						(DAQLabModule_type* mod, int workspacePanHndl);
+
+static int 						PIStage_LoadCfg 					(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+
+static int						PIStage_Move 						(Zstage_type* zstage, Zstage_move_type moveType, double moveVal);
+
+static int						PIStage_Stop						(Zstage_type* zstage);
+
+static int						PIStage_InitHardware 				(PIStage_type* PIstage);
+
+static PIStageCommand_type*		init_PIStageCommand_type			(Zstage_move_type moveType, double moveVal);
+
+static void						discard_PIStageCommand_type			(PIStageCommand_type** a);
+
+static void						dispose_PIStageCommand_EventInfo	(void* eventInfo);
+
+
+//-----------------------------------------
+// PIStage Task Controller Callbacks
+//-----------------------------------------
+
+static FCallReturn_type*	PIStage_ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*	PIStage_IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*	PIStage_StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*	PIStage_DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*	PIStage_StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type* 	PIStage_ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag); 
+static FCallReturn_type* 	PIStage_ErrorTC 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static FCallReturn_type*	PIStage_EventHandler			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
+
+
+//==============================================================================
+// Global variables
+
+//==============================================================================
+// Global functions
+
+DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], char instanceName[])
+{
+	PIStage_type* 	PIzstage;
+	Zstage_type*  	zstage;
+	
+	if (!mod) {
+		PIzstage = malloc (sizeof(PIStage_type));
+		if (!PIzstage) return NULL;
+	} else
+		PIzstage = (PIStage_type*) mod;
+	
+	zstage = (Zstage_type*) PIzstage;
+	
+	// initialize base class
+	initalloc_Zstage ((DAQLabModule_type*)zstage, className, instanceName);
+	//------------------------------------------------------------
+	
+	//---------------------------
+	// Parent Level 0: DAQLabModule_type 
+	
+		// DATA
+	
+		// adding PIStage specific Task Controller
+	zstage->module_base.taskControl	= init_TaskControl_type (zstage->module_base.instanceName, PIStage_ConfigureTC, PIStage_IterateTC, PIStage_StartTC, PIStage_ResetTC,
+											 				 PIStage_DoneTC, PIStage_StoppedTC, NULL, PIStage_EventHandler, PIStage_ErrorTC);  	
+		// coupling Task Controller module data to PIStage
+	SetTaskControlModuleData(zstage->module_base.taskControl, PIzstage); 
+		
+		//METHODS
+	
+		// overriding methods
+	zstage->module_base.Discard 	= discard_PIStage;
+	zstage->module_base.Load 		= PIStage_Load;
+	zstage->module_base.LoadCfg		= NULL; //PIStage_LoadCfg;
+		
+	
+	//---------------------------
+	// Child Level 1: Zstage_type 
+	
+		// DATA
+	
+	
+		// METHODS
+	
+		// overriding methods
+	zstage->MoveZ					= PIStage_Move; 
+	zstage->StopZ					= PIStage_Stop;
+		
+		
+	
+	//--------------------------
+	// Child Level 2: PIStage_type
+	
+		// DATA
+		
+	PIzstage->PIStageID			= -1;
+	PIzstage->assignedAxis[0]		= 0;
+	
+	
+		// METHODS
+	
+		
+	//----------------------------------------------------------
+	if (!mod)
+		return (DAQLabModule_type*) zstage;
+	else
+		return NULL;
+}
+
+void discard_PIStage (DAQLabModule_type** mod)
+{
+	PIStage_type* PIzstage = (PIStage_type*) (*mod);
+	
+	if (!PIzstage) return;
+	
+	// if connection was established and if still connected, close connection otherwise the DLL thread throws an error
+	if (PIzstage->PIStageID != -1)
+		if (PI_IsConnected(PIzstage->PIStageID))
+			PI_CloseConnection(PIzstage->PIStageID);
+			
+	
+	// discard PIStage_type specific data
+	
+	// discard Zstage_type specific data
+	discard_Zstage (mod);
+}
+
+static PIStageCommand_type*	init_PIStageCommand_type (Zstage_move_type moveType, double moveVal)
+{
+	PIStageCommand_type* a = malloc(sizeof(PIStageCommand_type));
+	if (!a) return NULL;
+	
+	a -> moveType 	= moveType;
+	a -> moveVal	= moveVal;
+	
+	return a;
+}
+
+static void	discard_PIStageCommand_type	(PIStageCommand_type** a)
+{
+	if (!*a) return;
+	OKfree(*a);
+	return;
+}
+
+static void	dispose_PIStageCommand_EventInfo (void* eventInfo)
+{
+	PIStageCommand_type* command = eventInfo;
+	discard_PIStageCommand_type(&command);
+}
+
+/// HIFN Loads PIStage motorized stage specific resources. 
+static int PIStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
+{
+	if (PIStage_InitHardware((PIStage_type*) mod) < 0) return -1;
+	
+	// load generic Z stage resources
+	Zstage_Load (mod, workspacePanHndl); 
+	return 0;
+	
+}
+
+/// HIFN Moves a motorized stage 
+static int PIStage_Move (Zstage_type* zstage, Zstage_move_type moveType, double moveVal)
+{
+	return TaskControlEvent(zstage->module_base.taskControl, TASK_EVENT_CUSTOM_MODULE_EVENT, 
+					 init_PIStageCommand_type(moveType, moveVal), dispose_PIStageCommand_EventInfo); 
+}
+
+/// HIFN Stops stage motion
+static int PIStage_Stop (Zstage_type* zstage)
+{
+	PIStage_type* 	PIstage 			= (PIStage_type*) zstage; 
+		
+	int 			PIerror;
+	char			buff[10000]			=""; 
+	char			msg[10000]			=""; 
+	
+	if (!PI_HLT(PIstage->PIStageID, PIstage->assignedAxis)) {
+		PIerror = PI_GetError(PIstage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error stopping stage. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	}
+	
+	return 0;
+}
+
+/// HIFN Connects to a PIStage motion controller and adjusts its motion parameters
+/// HIRET 0 if connection was established and -1 for error
+static int PIStage_InitHardware (PIStage_type* PIstage)
+{
+	BOOL 			ServoONFlag				= TRUE; 
+	BOOL			IsReferencedFlag;
+	BOOL			HasLimitSwitchesFlag;
+	BOOL			ReadyFlag;
+	int				PIerror;
+	int				idx;
+	unsigned int	pidParameters[3]		= {PIStage_PPAR, PIStage_IPAR, PIStage_DPAR};  
+	double			pidValues[3]			= {PIStage_PTERM, PIStage_ITERM, PIStage_DTERM};
+	double			velocity				= PIStage_VELOCITY;
+	size_t			nOcurrences;
+	size_t			nchars;
+	char			msg[10000]				="";
+	char			buff[10000]				="";
+	char			stagelist[10000]			="";
+	char			axes[255]				="";
+	long 			ID; 						
+	char 			szStrings[255]			="";
+	
+	
+	// establish connection
+	DLMsg("Connecting to PI stage controller...\n\n", 0); 
+	if ((ID = PI_ConnectUSB(PIStage_ID)) < 0) {
+		Fmt(msg,"Could not connect to PI stage controller with USB ID %s.\n\n", PIStage_ID);
+		DLMsg(msg, 1);
+		return -1;
+	} else
+		PIstage->PIStageID = ID;
+	
+	// print servo controller info
+	if (!PI_qIDN(ID, buff, 10000)) {
+		PIerror = PI_GetError(ID); 
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error reading PI stage controller info. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	} else {
+		Fmt(msg, "Connected to: %s\n", buff);
+		DLMsg(msg,0);
+	}
+	
+	// get all possible axes that the servo controller can move
+	if (!PI_qSAI_ALL(ID, axes, 255)) {
+		PIerror = PI_GetError(ID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error getting PI stage controller available axes. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	}
+	
+	// assign by default the first axis found if this is not already set
+	if (!PIstage->assignedAxis[0]) {
+		PIstage->assignedAxis[0] = axes[0];
+		PIstage->assignedAxis[1] = 0;		// set the null character
+	}
+	
+	// check if stages database is present from which parameters can be loaded
+	if (!PI_qVST(ID, stagelist, 10000)) {
+		PIerror = PI_GetError(ID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error getting list of installed stages. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	}
+	// process buff to check if there are any stages in the list by checking the number of times "\n" or number 10 is present
+	// if there are no stages, then buff will contain "NOSTAGES \n" and thus only one occurrence of "\n".
+	idx 		= 0;
+	nOcurrences = 0;
+	nchars		= strlen(stagelist);
+	while (idx < 10000 && idx < nchars) {
+		if (stagelist[idx] == 10) nOcurrences++; 
+		idx++;
+	}
+	
+	if (nOcurrences <= 1) {
+		DLMsg("Error loading PI stage controller. No stage database was found.\n\n", 1);
+		return -1;
+	}
+	
+	// loading stage specific info (mechanics, limits, factory PID values, etc.)
+	DLMsg("Loading PI stage servo controller settings...", 0);
+	if (!PI_CST(ID, PIstage->assignedAxis, PIStage_STAGE_TYPE)) {
+		PIerror = PI_GetError(ID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "\n\nError loading factory stage settings. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	} else
+		DLMsg("Loaded.\n\n", 0);
+		
+	// adjust PID settings simultaneously for the assigned axis
+	if (PIStage_USECUSTOMPID)
+		for (int i = 0; i < 3; i++)
+			if (!PI_SPA(ID, PIstage->assignedAxis, pidParameters + i, pidValues + i, szStrings)){
+				PIerror = PI_GetError(ID);
+				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+				Fmt(msg, "Error changing PID servo parameters. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+				DLMsg(msg, 1);
+				return -1;	
+			}
+	
+	// adjust stage velocity
+	if (!PI_VEL(ID, PIstage->assignedAxis, &velocity)){
+		PIerror = PI_GetError(ID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error changing stage velocity. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;	
+	}
+	
+	
+		
+	// turn servo on for the given axis
+	if (!PI_SVO(ID, PIstage->assignedAxis, &ServoONFlag)) {
+		PIerror = PI_GetError(ID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error turning servo ON. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	}
+	
+	// check if axis is already referenced
+	if (!PI_qFRF(ID, PIstage->assignedAxis, &IsReferencedFlag)) {   
+		PIerror = PI_GetError(ID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error checking if axis is referenced already. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	}
+	
+	if (IsReferencedFlag) {
+		// if referenced read in current position
+		if (!PIstage->zstage_base.zPos) {
+			PIstage->zstage_base.zPos = malloc(sizeof(double));
+			if(!PIstage->zstage_base.zPos) return -1;
+		}
+		if (!PI_qPOS(ID, PIstage->assignedAxis, PIstage->zstage_base.zPos)) {
+			OKfree(PIstage->zstage_base.zPos);
+			PIerror = PI_GetError(ID);
+			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+			Fmt(msg, "Error getting stage position. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+			DLMsg(msg, 1);
+			return -1;
+		}
+	} else {
+		// check if there are limit switches
+		if (!PI_qLIM(ID, PIstage->assignedAxis, &HasLimitSwitchesFlag)) {
+			PIerror = PI_GetError(ID);
+			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+			Fmt(msg, "Checking if stage has limit switches failed. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+			DLMsg(msg, 1);
+			return -1;
+		}
+		 
+		// reference axis
+		if (HasLimitSwitchesFlag) {
+			if (!PI_FPL(ID, PIstage->assignedAxis)) {
+				PIerror = PI_GetError(ID);
+				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+				Fmt(msg, "Referencing stage failed. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+				DLMsg(msg, 1);
+				return -1;
+			}
+		} else {
+			DLMsg("Stage does not have limit switches and cannot be referenced.\n\n", 1);   
+			return -1;
+		} 
+		
+		// wait until stage motion completes
+		do {
+			Sleep(500);
+			if (!PI_qONT(ID, PIstage->assignedAxis, &ReadyFlag)) {
+				PIerror = PI_GetError(ID);
+				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+				Fmt(msg, "Could not query if target reached. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+				DLMsg(msg, 1);
+				return -1;
+			}
+		} while (!ReadyFlag);
+		
+		Sleep(PIStage_SETTLING_TIMEOUT * 1000);	// make sure stage settles before reading position
+		
+		// check if stage is referenced
+		if (!PI_qFRF(ID, PIstage->assignedAxis, &IsReferencedFlag)) {   
+			PIerror = PI_GetError(ID);
+			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+			Fmt(msg, "Error checking if stage is referenced already. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+			DLMsg(msg, 1);
+			return -1;
+		}
+	
+		if (IsReferencedFlag) {
+			// if referenced read in current position
+			if (!PIstage->zstage_base.zPos) {
+				PIstage->zstage_base.zPos = malloc(sizeof(double));
+				if(!PIstage->zstage_base.zPos) return -1;
+			}
+			
+			if (!PI_qPOS(ID, PIstage->assignedAxis, PIstage->zstage_base.zPos)) {
+				OKfree(PIstage->zstage_base.zPos);
+				PIerror = PI_GetError(ID);
+				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+				Fmt(msg, "Error getting stage position. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+				DLMsg(msg, 1);
+				return -1;
+			}
+		} else {
+			// referencing failed
+			DLMsg("Failed to reference stage.\n\n", 1);
+			return -1;
+		}
+	}
+	
+	return 0;
+}
+
+//-----------------------------------------
+// ZStage Task Controller Callbacks
+//-----------------------------------------
+
+static FCallReturn_type* PIStage_ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* PIStage_IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* PIStage_StartTC	(TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* PIStage_DoneTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+static FCallReturn_type* PIStage_StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* PIStage_ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* PIStage_ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+{
+	PIStage_type* 		PIStage = GetTaskControlModuleData(taskControl);
+	Zstage_type*		zstage	= (Zstage_type*) PIStage;
+	
+	// turn on error LED
+	if (zstage->StatusLED)
+		(*zstage->StatusLED) (zstage, ZSTAGE_LED_ERROR);
+	
+	// update position values
+	if (zstage->UpdatePositionDisplay)
+	(*zstage->UpdatePositionDisplay) (zstage);	
+	
+	// print error message
+	DLMsg(errorMsg, 1);
+	
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+static FCallReturn_type* PIStage_EventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
+{
+	PIStage_type* 			PIStage			= GetTaskControlModuleData(taskControl);
+	Zstage_type*			zstage			= (Zstage_type*) PIStage; 
+	PIStageCommand_type*	command 		= eventData;
+	BOOL					ReadyFlag;
+	int						PIerror;
+	char					msg[10000]		="";
+	char					buff[10000]		="";
+	double					actualPos;
+	double					targetPos;
+	double					time;
+	BOOL					movetype;
+	
+	switch (command->moveType) {
+			
+		case ZSTAGE_MOVE_REL:
+			
+			movetype = TRUE;
+			
+			break;
+			
+		case ZSTAGE_MOVE_ABS:
+			
+			movetype = FALSE;
+			
+			break; 
+	}
+			
+	// move relative to current position with given amount in [mm]
+	targetPos = (*zstage->zPos) * movetype + command->moveVal;
+	if (!PI_MOV(PIStage->PIStageID, PIStage->assignedAxis, &targetPos)) {
+		PIerror = PI_GetError(PIStage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
+		Fmt(msg, "Moving stage relative to current position failed. PI stage DLL Error ID %d: %s.", PIerror, buff);
+		return init_FCallReturn_type(-1, "PIStage_EventHandler", msg, 0);
+	}
+			
+	// turn on moving LED
+	if (zstage->StatusLED)
+		(*zstage->StatusLED) (zstage, ZSTAGE_LED_MOVING);
+	
+	// wait until stage is on target
+	do {
+		Sleep(100);
+		if (!PI_qONT(PIStage->PIStageID, PIStage->assignedAxis, &ReadyFlag)) {
+			PIerror = PI_GetError(PIStage->PIStageID);
+			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
+			Fmt(msg, "Could not query if target reached. PI stage DLL Error ID %d: %s.", PIerror, buff);
+			return init_FCallReturn_type(-1, "PIStage_EventHandler", msg, 0);
+		}
+	} while (!ReadyFlag);
+	
+	// wait until stage settles within given precision
+	time = Timer();
+	do {
+		// get target position
+		if (!PI_qMOV(PIStage->PIStageID, PIStage->assignedAxis, &targetPos)) {
+			PIerror = PI_GetError(PIStage->PIStageID);
+			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
+			Fmt(msg, "Error getting target position. PI stage DLL Error ID %d: %s.", PIerror, buff);
+			return init_FCallReturn_type(-1, "PIStage_EventHandler", msg, 0);
+		}
+		Sleep (100);
+		// get current position
+		if (!PI_qPOS(PIStage->PIStageID, PIStage->assignedAxis, &actualPos)) {
+			PIerror = PI_GetError(PIStage->PIStageID);
+			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
+			Fmt(msg, "Error getting current position. PI stage DLL Error ID %d: %s.", PIerror, buff);
+			return init_FCallReturn_type(-1, "PIStage_EventHandler", msg, 0);
+		}
+	} while ( (( actualPos > targetPos + PIStage_SETTLING_PRECISION/2.0) ||
+			   ( actualPos < targetPos - PIStage_SETTLING_PRECISION/2.0)) && (Timer() < time + PIStage_SETTLING_TIMEOUT));	// quit loop if after 2 sec positions don't match
+			
+	// turn off moving LED
+	if (zstage->StatusLED)
+		(*zstage->StatusLED) (zstage, ZSTAGE_LED_IDLE);
+			
+	// update position in structure data
+	*zstage->zPos = actualPos;
+			
+	// update displayed position
+	if (zstage->UpdatePositionDisplay)
+		(*zstage->UpdatePositionDisplay) (zstage);
+			
+	return init_FCallReturn_type(0, "", "", 0);
+}
+
+/*
+static int PIStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement)
+{
+	PIStage_type* 	PIzstage	= (PIStage_type*) mod;
+	
+	return Zstage_LoadCfg(mod, DAQLabCfg_RootElement); 
+}
+*/
+

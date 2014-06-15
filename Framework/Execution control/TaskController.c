@@ -822,7 +822,7 @@ void CVICALLBACK TaskEventHandlerExecutionCallback (CmtThreadPoolHandle poolHand
 		case EVENT_TP_THREAD_FUNCTION_BEGIN:
 			
 			break;
-		
+			
 		case EVENT_TP_THREAD_FUNCTION_END:
 			
 			// Restart manually this function if there are more event items in the queue.
@@ -989,7 +989,7 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 			else functionMissingFlag = 1;
 			break;
 			
-		case TASK_EVENT_CUSTOM_MODULE_EVENT:
+		case TASK_FCALL_MODULE_EVENT:
 			
 			if (taskControl->ModuleEventFptr) fCallResult = (*taskControl->ModuleEventFptr)(taskControl, taskControl->state, taskControl->currIterIdx, fCallData, &taskControl->abortFlag);
 			else functionMissingFlag = 1;

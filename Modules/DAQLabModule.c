@@ -63,16 +63,20 @@ static void 	DAQLabModule_Msg 				(DAQLabModuleMessageID msgID, void* data1, voi
 
 
 /// HIFN Allocates memory and initializes a generic DAQLabModule
-void init_DAQLabModule (DAQLabModule_type* mod)
+DAQLabModule_type* initalloc_DAQLabModule (DAQLabModule_type* mod, char className[], char instanceName[])
 {
+	if (!mod) {
+		mod = malloc (sizeof(DAQLabModule_type));
+		if (!mod) return NULL;
+	} 
+	
 	// DATA
 	
-	mod->className		= NULL;
-	mod->instanceName	= NULL;
+	mod->className		= StrDup(className);
+	mod->instanceName	= StrDup(instanceName);
 	mod->XMLNode		= 0;
 	mod->taskControl	= NULL;
 	mod->cfgPanHndl		= 0;
-	mod->ctrlPanelHndls	= ListCreate(sizeof(int));
 	
 	// METHODS
 	
@@ -80,63 +84,44 @@ void init_DAQLabModule (DAQLabModule_type* mod)
 	mod->Load			= NULL;
 	mod->LoadCfg		= NULL;
 	mod->SaveCfg		= NULL;
+	mod->DisplayPanels	= NULL;
+	
+	return mod;
 }
 
 /// HIFN Deallocates a generic DAQLabModule 
-void discard_DAQLabModule (DAQLabModule_type* mod) 
+void discard_DAQLabModule (DAQLabModule_type** mod) 
 {
-	int* panHndlPtr;
+	if (!*mod) return;
 	
-	if (!mod) return;
+	OKfree((*mod)->className);
+	OKfree((*mod)->instanceName);
 	
-	if (mod->cfgPanHndl)
-		DiscardPanel(mod->cfgPanHndl);
+	discard_TaskControl_type(&(*mod)->taskControl);
 	
-	for (size_t i = 1; i <= ListNumItems(mod->ctrlPanelHndls); i++) {
-		panHndlPtr = ListGetPtrToItem(mod->ctrlPanelHndls, i);
-		DiscardPanel(*panHndlPtr);
-	}
-	ListDispose(mod->ctrlPanelHndls);
+	if ((*mod)->cfgPanHndl)
+		DiscardPanel((*mod)->cfgPanHndl);
 	
-	OKfree(mod->className);
-	OKfree(mod->instanceName);
-	// discard Task Controller
-	discard_TaskControl_type(&mod->taskControl);
+	OKfree(*mod);
 }
 
 void DAQLabModule_empty	(ListType* modules)
 {
-	DAQLabModule_type** modptr;
+	DAQLabModule_type** modPtrPtr;
 	
 	if (!(*modules)) return;
 	
 	for (size_t i = 1; i <= ListNumItems(*modules); i++) {
-		modptr = ListGetPtrToItem(*modules, i);
+		modPtrPtr = ListGetPtrToItem(*modules, i);
 		// call discard method specific to each module
-		(*(*modptr)->Discard)(*modptr);
-		// free dynamically allocated memory for each module
-		OKfree(*modptr);
+		(*(*modPtrPtr)->Discard)(modPtrPtr);
 	}
 	
 	ListDispose(*modules);
 	*modules = 0;
 }
 
-void DAQLabModule_DisplayWorkspacePanels (DAQLabModule_type* mod, BOOL visible)
-{
-	int* panHndlPtr;
-	
-	if (!mod) return;
-	
-	for (size_t i = 1; i <= ListNumItems(mod->ctrlPanelHndls); i++) {
-		panHndlPtr = ListGetPtrToItem(mod->ctrlPanelHndls, i);
-		if (visible)
-			DisplayPanel(*panHndlPtr);
-		else
-			HidePanel(*panHndlPtr);
-	}
-}
-	  /*
+/*
 /// HIFN  Loads configuration data for a generic DAQLab module from an XML file.
 /// HIRET If configuration is found, returns DAQLab module XML Element node handle of intptr_t type.
 /// HIRET 0 if configuration was not found or error occured.

@@ -32,6 +32,14 @@ typedef enum {
 
 } Zstage_move_type;
 
+typedef enum {
+	
+	ZSTAGE_LED_IDLE,
+	ZSTAGE_LED_MOVING,
+	ZSTAGE_LED_ERROR
+	
+} Zstage_LED_type;
+
 //==============================================================================
 // Module implementation
 
@@ -43,13 +51,15 @@ struct Zstage {
 
 	// DATA
 	
+	int					controlPanHndl;
+	
 		// Current position of Zstage, if NULL, position was not determined.
-	double*				zPos;
+	double*				zPos;   // in [mm]
 	
 		// Flag to revert movement direction, default 0, set to 1 to revert direction
 	BOOL				revertDirection;
 	
-		// Reference positions of Zstage of double type
+		// Reference positions of Zstage of Zstage_RefPosition_type*
 	ListType			zRefPos;
 	
 		// Upper limit position of Zstage, if NULL, there is no limit 			( zLLimPos < zULimPos )
@@ -69,9 +79,19 @@ struct Zstage {
 		// For hardware specific functionality override other methods such as MoveZ.
 	CtrlCallbackPtr		uiCtrlsCB;
 	
+		// Callback to install on the panel from UI_ZStage.uir
+	PanelCallbackPtr	uiPanelCB;
+	
 		// Default NULL, functionality not implemented.
 		// Override: Required, provides hardware specific movement of Zstage.
-	int		(* MoveZ ) 	(Zstage_type* self, Zstage_move_type moveType, double moveVal);	 
+		// moveVal in [mm] same units as zPos
+	int					(* MoveZ) 					(Zstage_type* self, Zstage_move_type moveType, double moveVal);
+		// Stops Z stage motion
+	int					(* StopZ)					(Zstage_type* self);
+		// Changes the status of the LED on the Zstage control panel
+	int					(* StatusLED)   			(Zstage_type* self, Zstage_LED_type status);
+		// Updates position display of stage from structure data
+	int					(* UpdatePositionDisplay)	(Zstage_type* self);
 
 };
 
@@ -87,8 +107,8 @@ struct Zstage {
 //==============================================================================
 // Global functions
 
-DAQLabModule_type*	initalloc_Zstage 	(DAQLabModule_type* mod);
-void 				discard_Zstage 		(DAQLabModule_type* mod);
+DAQLabModule_type*	initalloc_Zstage 	(DAQLabModule_type* mod, char className[], char instanceName[]);
+void 				discard_Zstage 		(DAQLabModule_type** mod);
 
 	// loads generic Z stage resources
 int					Zstage_Load 		(DAQLabModule_type* mod, int workspacePanHndl);

@@ -1,6 +1,6 @@
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" ;
-Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIMercuryC863.obj" ;
+Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\Zstage.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\MSXML\\msvc\\ActiveXML.obj" ;
@@ -53,8 +53,8 @@ Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "c:\\Program File
 NoCare "c:\\Program Files (x86)\\National Instruments\\CVI2013\\bin\\msvc\\nivxi.lib" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "c:\\Program Files (x86)\\National Instruments\\CVI2013\\bin\\msvc\\omp.lib" ;
 NoCare "c:\\Program Files (x86)\\National Instruments\\CVI2013\\bin\\msvc\\omp.lib" ;
-Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\Modules\\Zstages\\PI Mercury C863\\drivers and docs\\PI_GCS\\PI_GCS2_DLL.lib" ;
-NoCare "d:\\ELE_DAQLab\\Modules\\Zstages\\PI Mercury C863\\drivers and docs\\PI_GCS\\PI_GCS2_DLL.lib" ;
+Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage\\drivers and docs\\PI_GCS\\PI_GCS2_DLL.lib" ;
+NoCare "d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage\\drivers and docs\\PI_GCS\\PI_GCS2_DLL.lib" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "c:\\Program Files (x86)\\National Instruments\\CVI2013\\toolslib\\toolbox\\msvc\\toolbox.obj" ;
 NoCare "c:\\Program Files (x86)\\National Instruments\\CVI2013\\toolslib\\toolbox\\msvc\\toolbox.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "c:\\program files (x86)\\national instruments\\cvi2013\\sdk\\lib\\msvc\\user32.lib" ;

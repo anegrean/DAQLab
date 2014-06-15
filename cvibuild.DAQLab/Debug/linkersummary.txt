@@ -1,6 +1,6 @@
 DAQLab.obj
 DAQLabModule.obj
-PIMercuryC863.obj
+PIStage.obj
 TaskController.obj
 Zstage.obj
 cvi.lib

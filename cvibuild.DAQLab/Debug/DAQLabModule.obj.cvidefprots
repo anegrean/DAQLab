@@ -1,16 +1,12 @@
-[init_DAQLabModule]
+[initalloc_DAQLabModule]
 Class="Function"
-Prototype="void init_DAQLabModule(struct DAQLabModule *mod);"
+Prototype="struct DAQLabModule *initalloc_DAQLabModule(struct DAQLabModule *mod, char *className, char *instanceName);"
 
 [discard_DAQLabModule]
 Class="Function"
-Prototype="void discard_DAQLabModule(struct DAQLabModule *mod);"
+Prototype="void discard_DAQLabModule(struct DAQLabModule **mod);"
 
 [DAQLabModule_empty]
 Class="Function"
 Prototype="void DAQLabModule_empty(struct ListStructTag **modules);"
-
-[DAQLabModule_DisplayWorkspacePanels]
-Class="Function"
-Prototype="void DAQLabModule_DisplayWorkspacePanels(struct DAQLabModule *mod, int visible);"
 

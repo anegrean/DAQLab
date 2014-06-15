@@ -44,22 +44,23 @@ struct DAQLabModule {
 	TaskControl_type* 			taskControl;
 		// module configuration panel; one panel per module
 	int							cfgPanHndl;									
-		// module control panel handles of int type to be loaded in the DAQLab workspace
-	ListType					ctrlPanelHndls;	
 	
 	// METHODS
 		
 		// discards module-specific data  
-	void	(* Discard ) 		(DAQLabModule_type* self);	
+	void	(* Discard) 		(DAQLabModule_type** self);	
 	
 		// loads module into DAQLab workspace
-	int		(* Load )			(DAQLabModule_type* self, int workspacePanHndl);
+	int		(* Load)			(DAQLabModule_type* self, int workspacePanHndl);
 	
 		// loads config from XML node
-	int		(* LoadCfg ) 		(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+	int		(* LoadCfg) 		(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
 	
 		// adds config to XML node
-	int		(* SaveCfg )		(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+	int		(* SaveCfg)			(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+	
+		// if visibleFlag is TRUE, displays or otherwise hides all module panels
+	int		(* DisplayPanels)	(DAQLabModule_type* self, BOOL visibleFlag);
 
 };
 
@@ -74,18 +75,13 @@ struct DAQLabModule {
 // Global functions
 
 	// module creation/discarding
-void							init_DAQLabModule					(DAQLabModule_type* mod);
-void 							discard_DAQLabModule 				(DAQLabModule_type* mod);
+DAQLabModule_type*				initalloc_DAQLabModule				(DAQLabModule_type* mod, char className[], char instanceName[]);
+void 							discard_DAQLabModule 				(DAQLabModule_type** mod);
 
 	// removes modules
 void							DAQLabModule_empty					(ListType* modules);
 
-	// displays or hides all the workspace panels of a module
-
-void							DAQLabModule_DisplayWorkspacePanels (DAQLabModule_type* mod, BOOL visible);
-
 	// loads generic DAQLab module configuration from an XML file
-
 //int								DAQLabModule_LoadCfg				(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);			
 
 

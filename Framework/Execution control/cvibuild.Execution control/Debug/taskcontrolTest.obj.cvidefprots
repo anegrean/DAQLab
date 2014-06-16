@@ -1,0 +1,16 @@
+[main]
+Class="Function"
+Prototype="int main(int argc, char **argv);"
+
+[ZStage_Iterate]
+Class="Function"
+Prototype="struct FCallReturn *ZStage_Iterate(struct TaskControl *taskControl, unsigned int currentIteration, const int *abortFlag);"
+
+[CB_ControlPan]
+Class="Function"
+Prototype="int CB_ControlPan(int panel, int event, void *callbackData, int eventData1, int eventData2);"
+
+[CB_TaskController]
+Class="Function"
+Prototype="int CB_TaskController(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
+

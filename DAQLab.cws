@@ -30,7 +30,7 @@ Save Changes Before Compiling = "Always"
 Hide Windows = False
 Break At First Statement = False
 Sort Type = "File Name"
-Number of Opened Files = 18
+Number of Opened Files = 17
 Window Confinement Region Enabled = True
 MainColumnWidth = 313
 FileDateColumnWidth = 70
@@ -58,7 +58,7 @@ Disk Date = 3472621200
 In Projects = ""
 Window Top = 152
 Window Left = 74
-Window Z-Order = 11
+Window Z-Order = 10
 Source Window State = "1,273,273,273,28,36,36,0,3,80,0,0,0,0,0,25,261,0,273,28,349,683,1,0,"
 
 [File 0003]
@@ -68,7 +68,7 @@ Disk Date = 3472621200
 In Projects = ""
 Window Top = 212
 Window Left = 106
-Window Z-Order = 12
+Window Z-Order = 11
 Source Window State = "1,418,418,418,8,15,8,0,3,80,0,0,0,0,0,25,402,0,418,15,349,683,1,0,"
 
 [File 0004]
@@ -78,30 +78,20 @@ Disk Date = 3472621200
 In Projects = ""
 Window Top = 32
 Window Left = 10
-Window Z-Order = 17
+Window Z-Order = 16
 Source Window State = "1,1913,1913,1913,13,20,20,0,3,80,0,0,0,0,0,25,1901,0,1913,13,349,683,1,0,"
 
 [File 0005]
-Path Line0001 = "/d/ELE_DAQLab/Modules/Zstages/PI Mercury C863/drivers and docs/PI_GCS/PI_GCS2_DL"
-Path Line0002 = "L.h"
-File Type = "Include"
-Disk Date = 3469432834
-In Projects = ""
-Window Top = 30
-Window Z-Order = 10
-Source Window State = "1,223,223,223,18,24,24,0,3,70,0,0,0,0,0,28,209,6,223,18,400,600,1,0,"
-
-[File 0006]
 Path = "/c/Program Files (x86)/National Instruments/CVI2013/include/ansi/stdarg.h"
 File Type = "Include"
 Disk Date = 3472621200
 In Projects = ""
 Window Top = 62
 Window Left = 26
-Window Z-Order = 18
+Window Z-Order = 17
 Source Window State = "1,29,29,29,14,21,21,0,3,80,0,0,0,0,0,25,0,0,29,14,349,683,1,0,"
 
-[File 0007]
+[File 0006]
 Path = "/d/ELE_DAQLab/UI_DAQLab.uir"
 File Type = "User Interface Resource"
 Disk Date = 3485530345
@@ -110,9 +100,9 @@ Window Top = 182
 Window Left = 90
 Window Height = 349
 Window Width = 683
-Window Z-Order = 3
+Window Z-Order = 4
 
-[File 0008]
+[File 0007]
 Path = "/d/ELE_DAQLab/Modules/Zstages/UI_Zstage.uir"
 File Type = "User Interface Resource"
 Disk Date = 3485699503
@@ -121,19 +111,19 @@ Window Top = 152
 Window Left = 66
 Window Height = 349
 Window Width = 659
-Window Z-Order = 4
+Window Z-Order = 1
 
-[File 0009]
+[File 0008]
 Path = "/d/ELE_DAQLab/MSXML/ActiveXML.h"
 File Type = "Include"
 Disk Date = 3477370774
 In Projects = "1,"
 Window Top = 94
 Window Left = 42
-Window Z-Order = 15
+Window Z-Order = 14
 Source Window State = "1,183,183,183,20,49,49,0,3,72,0,0,0,0,0,19,174,0,183,20,271,619,1,0,"
 
-[File 0010]
+[File 0009]
 Path = "/d/ELE_DAQLab/DAQLab.h"
 File Type = "Include"
 Disk Date = 3485445054
@@ -142,27 +132,27 @@ Window Top = 30
 Window Z-Order = 7
 Source Window State = "1,79,79,79,0,74,74,0,0,70,0,0,0,0,0,28,71,0,94,14,400,600,1,0,"
 
-[File 0011]
+[File 0010]
 Path = "/c/Program Files (x86)/National Instruments/CVI2013/include/cviauto.h"
 File Type = "Include"
 Disk Date = 3472621200
 In Projects = ""
 Window Top = 30
 Window Left = 6
-Window Z-Order = 13
+Window Z-Order = 12
 Source Window State = "1,168,168,168,2,11,11,0,3,60,0,0,0,0,0,25,156,0,168,2,349,523,1,0,"
 
-[File 0012]
+[File 0011]
 Path = "/c/Program Files (x86)/National Instruments/CVI2013/sdk/include/WTypes.h"
 File Type = "Include"
 Disk Date = 3472621200
 In Projects = ""
 Window Top = 117
 Window Left = 54
-Window Z-Order = 16
+Window Z-Order = 15
 Source Window State = "1,1129,1129,1129,14,26,26,0,3,72,0,0,0,0,0,19,1115,0,1129,14,271,619,1,0,"
 
-[File 0013]
+[File 0012]
 Path = "/d/ELE_DAQLab/Modules/Zstages/UI_Zstage.h"
 File Type = "Include"
 Disk Date = 3485699503
@@ -172,27 +162,27 @@ Window Left = 74
 Window Z-Order = 5
 Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,25,0,0,0,0,349,683,1,0,"
 
-[File 0014]
+[File 0013]
 Path = "/c/Program Files (x86)/National Instruments/CVI2013/sdk/include/Windows.h"
 File Type = "Include"
 Disk Date = 3472621200
 In Projects = ""
 Window Top = 152
 Window Left = 74
-Window Z-Order = 14
+Window Z-Order = 13
 Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,22,37,0,48,1,310,683,1,0,"
 
-[File 0015]
+[File 0014]
 Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.h"
 File Type = "Include"
 Disk Date = 3485700669
 In Projects = "1,"
 Window Top = 152
 Window Left = 74
-Window Z-Order = 2
+Window Z-Order = 3
 Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,22,0,0,0,0,310,683,1,0,"
 
-[File 0016]
+[File 0015]
 Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.uir"
 File Type = "User Interface Resource"
 Disk Date = 3485700669
@@ -201,9 +191,9 @@ Window Top = 32
 Window Left = 10
 Window Height = 310
 Window Width = 523
-Window Z-Order = 1
+Window Z-Order = 2
 
-[File 0017]
+[File 0016]
 Path = "/d/ELE_2010_2961_PCM/TasksUI.uir"
 File Type = "User Interface Resource"
 Disk Date = 3481723285
@@ -214,86 +204,7 @@ Window Height = 310
 Window Width = 603
 Window Z-Order = 9
 
-[File 0018]
-Path = "/d/ELE_DAQLab/Modules/DAQLabModule.c"
-File Type = "CSource"
-Disk Date = 3485606445
-In Projects = "1,"
-Window Top = 84
-Window Left = 401
-Window Released = True
-Source Window State = "1,107,107,107,5,23,23,0,3,178,0,0,0,0,0,69,58,0,107,5,975,1465,0,0,"
-
-[File 0019]
-Path = "/d/ELE_DAQLab/Modules/DAQLabModule.h"
-File Type = "Include"
-Disk Date = 3485611046
-In Projects = "1,"
-Window Top = 56
-Window Left = 280
-Window Released = True
-Source Window State = "1,81,81,81,32,50,32,0,0,146,0,0,0,0,0,66,32,0,59,32,935,1205,0,0,"
-
-[File 0020]
-Path = "/d/ELE_DAQLab/Modules/Zstages/Zstage.c"
-File Type = "CSource"
-Disk Date = 3485699105
-In Projects = "1,"
-Window Top = 51
-Window Left = 222
-Window Released = True
-Source Window State = "1,304,304,304,11,39,39,0,0,158,0,1,0,1,0,66,271,0,307,8,940,1301,0,0,"
-
-[File 0021]
-Path = "/d/ELE_DAQLab/Modules/Zstages/Zstage.h"
-File Type = "Include"
-Disk Date = 3485697769
-In Projects = "1,"
-Window Top = 40
-Window Left = 348
-Window Released = True
-Source Window State = "1,93,93,93,27,48,27,0,3,153,0,0,0,0,0,62,62,0,93,48,889,1262,0,0,"
-
-[File 0022]
-Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
-File Type = "CSource"
-Disk Date = 3485599606
-In Projects = "1,"
-Window Top = 104
-Window Left = 336
-Window Released = True
-Source Window State = "1,991,991,991,13,43,13,0,0,145,0,0,0,0,0,57,1003,0,1031,0,817,1196,0,0,"
-
-[File 0023]
-Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
-File Type = "Include"
-Disk Date = 3485342933
-In Projects = "1,"
-Window Top = 62
-Window Left = -927
-Window Released = True
-Source Window State = "1,293,293,293,4,27,4,0,0,192,0,0,0,0,0,62,348,0,361,21,879,1572,0,0,"
-
-[File 0024]
-Path = "/d/ELE_DAQLab/DAQLab.c"
-File Type = "CSource"
-Disk Date = 3485700481
-In Projects = "1,"
-Window Top = 15
-Window Left = 114
-Window Released = True
-Source Window State = "1,1545,1546,1545,8,114,8,0,0,205,0,0,0,0,0,70,1490,0,1545,4,946,1517,0,0,"
-
-[File 0025]
-Path = "/d/ELE_DAQLab/UI_DAQLab.h"
-File Type = "Include"
-Disk Date = 3485530346
-In Projects = "1,"
-Window Top = 122
-Window Left = 58
-Source Window State = "1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,349,683,1,0,"
-
-[File 0026]
+[File 0017]
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.h"
 File Type = "Include"
 Disk Date = 3469432834
@@ -303,23 +214,7 @@ Window Left = 26
 Window Z-Order = 6
 Source Window State = "1,131,131,131,27,41,27,0,0,80,0,0,0,0,0,23,426,0,126,25,323,683,1,0,"
 
-[File 0027]
-Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.lib"
-File Type = "Library"
-Disk Date = 3469432834
-In Projects = "1,"
-
-[File 0028]
-Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/PIStage.c"
-File Type = "CSource"
-Disk Date = 3485699797
-In Projects = "1,"
-Window Top = 96
-Window Left = 91
-Window Released = True
-Source Window State = "1,529,529,529,6,35,35,0,0,145,0,0,0,0,0,59,489,0,528,49,846,1200,0,0,"
-
-[File 0029]
+[File 0018]
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/PIStage.h"
 File Type = "Include"
 Disk Date = 3485610291
@@ -328,6 +223,101 @@ Window Top = 32
 Window Left = 10
 Window Z-Order = 8
 Source Window State = "1,59,59,59,20,37,37,0,0,70,0,0,0,0,0,25,14,0,24,23,349,603,1,0,"
+
+[File 0019]
+Path = "/d/ELE_DAQLab/Modules/DAQLabModule.c"
+File Type = "CSource"
+Disk Date = 3485606445
+In Projects = "1,"
+Window Top = 84
+Window Left = 401
+Window Released = True
+Source Window State = "1,107,107,107,5,23,23,0,3,0,0,0,0,0,0,0,58,0,107,5,975,1465,0,0,"
+
+[File 0020]
+Path = "/d/ELE_DAQLab/Modules/DAQLabModule.h"
+File Type = "Include"
+Disk Date = 3485611046
+In Projects = "1,"
+Window Top = 56
+Window Left = 280
+Window Released = True
+Source Window State = "1,81,81,81,32,50,32,0,0,0,0,0,0,0,0,0,32,0,59,32,935,1205,0,0,"
+
+[File 0021]
+Path = "/d/ELE_DAQLab/Modules/Zstages/Zstage.c"
+File Type = "CSource"
+Disk Date = 3485699105
+In Projects = "1,"
+Window Top = 51
+Window Left = 222
+Window Released = True
+Source Window State = "1,304,304,304,11,39,39,0,0,0,0,1,0,1,0,0,271,0,307,8,940,1301,0,0,"
+
+[File 0022]
+Path = "/d/ELE_DAQLab/Modules/Zstages/Zstage.h"
+File Type = "Include"
+Disk Date = 3485697769
+In Projects = "1,"
+Window Top = 40
+Window Left = 348
+Window Released = True
+Source Window State = "1,93,93,93,27,48,27,0,3,0,0,0,0,0,0,0,62,0,93,48,889,1262,0,0,"
+
+[File 0023]
+Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.lib"
+File Type = "Library"
+Disk Date = 3469432834
+In Projects = "1,"
+
+[File 0024]
+Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/PIStage.c"
+File Type = "CSource"
+Disk Date = 3485699797
+In Projects = "1,"
+Window Top = 96
+Window Left = 91
+Window Released = True
+Source Window State = "1,529,529,529,6,35,35,0,0,0,0,0,0,0,0,0,489,0,528,49,846,1200,0,0,"
+
+[File 0025]
+Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
+File Type = "CSource"
+Disk Date = 3485770875
+In Projects = "1,"
+Window Top = 102
+Window Left = 197
+Window Released = True
+Source Window State = "1,656,656,656,13,31,31,0,0,145,0,0,0,0,0,57,628,0,650,63,817,1196,0,0,"
+
+[File 0026]
+Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
+File Type = "Include"
+Disk Date = 3485756566
+In Projects = "1,"
+Window Top = 93
+Window Left = 165
+Window Released = True
+Source Window State = "1,286,286,286,4,22,22,0,0,192,0,0,0,0,0,62,274,0,286,40,879,1572,0,0,"
+
+[File 0027]
+Path = "/d/ELE_DAQLab/DAQLab.c"
+File Type = "CSource"
+Disk Date = 3485700481
+In Projects = "1,"
+Window Top = 15
+Window Left = 114
+Window Released = True
+Source Window State = "1,1545,1546,1545,8,114,8,0,0,0,0,0,0,0,0,0,1490,0,1545,4,946,1517,0,0,"
+
+[File 0028]
+Path = "/d/ELE_DAQLab/UI_DAQLab.h"
+File Type = "Include"
+Disk Date = 3485530346
+In Projects = "1,"
+Window Top = 122
+Window Left = 58
+Source Window State = "1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,349,683,1,0,"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

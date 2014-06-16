@@ -1,5 +1,4 @@
 CCFLAGS = -g ;
-UNSAVED_DIR = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\UnsavedChanges" ;
 HDRS = 	"c:\\program files (x86)\\national instruments\\cvi2013\\include"
 	"C:\\Program Files (x86)\\National Instruments\\Shared\\CVI\\include"
 	"C:\\ProgramData\\National Instruments\\CVI2013\\include"
@@ -36,34 +35,10 @@ HDRS = 	"c:\\program files (x86)\\national instruments\\cvi2013\\include"
 	"d:\\ELE_DAQLab\\Framework\\Execution control"
 	"d:\\ELE_DAQLab\\Modules\\Zstages"
 	;
-include Jamfile_instr ;
-Object "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" : "d:\\ELE_DAQLab\\DAQLab.c" ;
-FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" = 1 ;
-DEFPROTS on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj.cvidefprots" ;
-OUTFILE on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj.out" ;
-PrjObjects += "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" ;
-Object "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" : "d:\\ELE_DAQLab\\Modules\\DAQLabModule.c" ;
-FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" = 2 ;
-DEFPROTS on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj.cvidefprots" ;
-OUTFILE on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj.out" ;
-PrjObjects += "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" ;
-Object "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" : "d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage\\PIStage.c" ;
-FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" = 3 ;
-DEFPROTS on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj.cvidefprots" ;
-OUTFILE on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj.out" ;
-PrjObjects += "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" ;
 Object "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj" : "d:\\ELE_DAQLab\\Framework\\Execution control\\TaskController.c" ;
-FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj" = 4 ;
+FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj" = 1 ;
 DEFPROTS on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj.cvidefprots" ;
 OUTFILE on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj.out" ;
 PrjObjects += "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj" ;
-Object "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\Zstage.obj" : "d:\\ELE_DAQLab\\Modules\\Zstages\\Zstage.c" ;
-FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\Zstage.obj" = 5 ;
-DEFPROTS on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\Zstage.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\Zstage.obj.cvidefprots" ;
-OUTFILE on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\Zstage.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\Zstage.obj.out" ;
-PrjObjects += "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\Zstage.obj" ;
-Object "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\resources.res" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\resources.in.rc" ;
-MainFromObjects "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : $(PrjObjects) $(InstrObjects) ;
-Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\link_options.txt" ;
-Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\resources.res" ;
-Depends all : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" ;
+Always $(PrjObjects) ;
+Depends all : $(PrjObjects) ;

@@ -94,8 +94,8 @@ struct TaskControl {
 	unsigned int			eventQThreadID;				// Thread ID in which queue events are processed.
 	CmtThreadFunctionID		threadFunctionID;			// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
 	TaskStates_type 		state;						// Module execution state.
-	size_t					repeat;						// Total number of repeats, 
-														// 0 - continuous, 1..N - finite number of repeats
+	size_t					repeat;						// Total number of repeats. If repeat is 0, then the iteration function is not called. 
+	TaskMode_type			mode;						// Finite or continuous type of task controller
 	size_t					currIterIdx;    			// 1-based task execution iteration index  
 	TaskControl_type*		parenttask;					// Pointer to parent task that own this subtask. 
 														// If this is the main task, it has no parent and this is NULL. 
@@ -209,6 +209,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	a -> subtaskIdx				= 0;  
 	a -> state					= TASK_STATE_UNCONFIGURED;
 	a -> repeat					= 1;
+	a -> mode					= TASK_FINITE;
 	a -> currIterIdx			= 0;
 	a -> parenttask				= NULL;
 	a -> moduleData				= NULL;
@@ -304,6 +305,16 @@ void SetTaskControlIterations (TaskControl_type* taskControl, size_t repeat)
 size_t GetTaskControlIterations	(TaskControl_type* taskControl)
 {
 	return taskControl->repeat;
+}
+
+void SetTaskControlMode	(TaskControl_type* taskControl, TaskMode_type mode)
+{
+	taskControl->mode = mode;	
+}
+
+TaskMode_type GetTaskControlMode (TaskControl_type* taskControl)
+{
+	return taskControl->mode;
 }
 
 void SetTaskControlIterationsWait (TaskControl_type* taskControl, double waitBetweenIterations)
@@ -458,7 +469,7 @@ static ErrorMsg_type* init_ErrorMsg_type (int errorID, const char errorOrigin[],
 	nchars 			= snprintf(a->errorInfo, 0, "<%s Error ID: %d, Reason:\n\t %s>", errorOrigin, errorID, errorDescription); 
 	a->errorInfo 	= malloc((nchars+1) * sizeof(char));
 	if (!a->errorInfo) {free(a); return NULL;}
-	snprintf(a->errorInfo, nchars, "<%s Error ID: %d, Reason:\n\t %s>", errorOrigin, errorID, errorDescription); 
+	snprintf(a->errorInfo, nchars+1, "<%s Error ID: %d, Reason:\n\t %s>", errorOrigin, errorID, errorDescription); 
 	
 	return a;
 }
@@ -487,7 +498,7 @@ static ErrorMsg_type* FCallReturnToErrorMsg	(FCallReturn_type** fCallReturn, Tas
 					  FCallToString(fID), (*fCallReturn)->retVal, (*fCallReturn)->errorInfo); 
 	a -> errorInfo	= malloc ((nchars+1)*sizeof(char));
 	if (!a->errorInfo) {free(a); return NULL;}
-	snprintf(a -> errorInfo, nchars, "<%s Error ID: %d, Reason:\n\t %s>", 
+	snprintf(a -> errorInfo, nchars+1, "<%s Error ID: %d, Reason:\n\t %s>", 
 					  FCallToString(fID), (*fCallReturn)->retVal, (*fCallReturn)->errorInfo); 
 	
 	discard_FCallReturn_type(fCallReturn);
@@ -510,7 +521,7 @@ FCallReturn_type* init_FCallReturn_type (int valFCall, const char errorOrigin[],
 		nchars 	= snprintf(Msg, 0, "<%s Error ID %d. Reason: %s>", errorOrigin, valFCall, errorDescription);
 		Msg		= malloc((nchars+1)*sizeof(char));
 		if (!Msg) {free(result); return NULL;}
-		snprintf(Msg, nchars, "<%s Error. Reason: %s>", errorOrigin, errorDescription);
+		snprintf(Msg, nchars+1, "<%s Error. Reason: %s>", errorOrigin, errorDescription);
 		result -> errorInfo	= Msg;
 	} else
 		result -> errorInfo = NULL;
@@ -897,6 +908,7 @@ void AbortTaskControlExecution (TaskControl_type* taskControl)
 	// send STOP event to self
 	TaskControlEvent(taskControl, TASK_EVENT_STOP, NULL, NULL);
 	
+	// abort SubTasks recursively
 	for (size_t i = 1; i <= ListNumItems(taskControl->subtasks); i++) {
 		subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
 		AbortTaskControlExecution(subtaskPtr->subtask);
@@ -1295,7 +1307,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					stateStr = StateToString(taskControl->state);	 	
 					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff = malloc ((nchars+1)*sizeof(char));
-					snprintf(buff, nchars, "%s event is invalid for %s state", eventStr, stateStr);
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
@@ -1489,7 +1501,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					stateStr = StateToString(taskControl->state);	 	
 					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff = malloc ((nchars+1)*sizeof(char));
-					snprintf(buff, nchars, "%s event is invalid for %s state", eventStr, stateStr);
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
@@ -1541,19 +1553,23 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 						
-					// call iteration function
-					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
+					// call iteration function if iterations are possible
+					if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
+						if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
 						
-						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
-						break;
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+							break;
+						}
+						
+						// increment iteration index
+						taskControl->currIterIdx++;
 					}
 					
-					// increment iteration index
-					taskControl->currIterIdx++;
+					
 					
 					// send START event to all subtasks (if there are any)
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
@@ -1565,9 +1581,47 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
-					if ((taskControl->currIterIdx < taskControl->repeat || !taskControl->repeat)) {  	// if more iterations for this Task Controller are needed
+					if (!ListNumItems(taskControl->subtasks)) { 
+					// if there are no SubTask Controllers 
+						if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
+						// if there more iterations are needed
+							if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) { 	// post to self ITERATE event
+								taskControl->errorMsg =
+								init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE self posting failed"); 
+								
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+								break;
+							}
+							
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
+							
+						} else {
+							// call done function
+							if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DONE, NULL)) {
+								taskControl->errorMsg = 
+								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+								discard_ErrorMsg_type(&errMsg);
+						
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+								break;
+							}
+							// switch to DONE state  
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);					
+						}
+					
+					} else
+						// if there are SubTask Controllers
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
+						
+					
+					
+					/*
+					if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {  
+						// if more iterations for this Task Controller are needed
 						if (!ListNumItems(taskControl->subtasks)) 										// if there are no SubTask Controllers
-							if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {   // post to self ITERATE event
+							if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) { 	// post to self ITERATE event
 								taskControl->errorMsg =
 								init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE self posting failed"); 
 								
@@ -1592,6 +1646,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);					// switch to DONE state  
 					}
+					*/
 						
 					
 					break;
@@ -1610,19 +1665,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 				case TASK_EVENT_ONE_ITERATION:
 					
-					// call iteration function
-					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
+					// call iteration function if more iterations are possible
+					if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
+						if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
 						
-						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
-						break;
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+							break;
+						}
+						
+						// increment iteration index
+						taskControl->currIterIdx++;
 					}
-					
-					// increment iteration index
-					taskControl->currIterIdx++;
 					
 					// send START event to all subtasks
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
@@ -1636,7 +1693,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					if (!ListNumItems(taskControl->subtasks)) {
 						// if there are no subtasks check if done or idle
-						if (!taskControl->repeat) {
+						if (taskControl->mode == TASK_CONTINUOUS) {
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
 							
 						} else
@@ -1732,7 +1789,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					stateStr = StateToString(taskControl->state);	 	
 					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff = malloc ((nchars+1)*sizeof(char));
-					snprintf(buff, nchars, "%s event is invalid for %s state", eventStr, stateStr);
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
@@ -1787,6 +1844,77 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
+					// call iteration function if iterations are possible
+					if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
+						if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+						
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+							break;
+						}
+						
+						// increment iteration index
+						taskControl->currIterIdx++;
+					}
+					
+					
+					
+					// send START event to all subtasks (if there are any)
+					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
+						taskControl->errorMsg =
+						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
+						
+						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+						break;
+					}
+					
+					if (!ListNumItems(taskControl->subtasks)) { 
+					// if there are no SubTask Controllers 
+						if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
+						// if there more iterations are needed
+							if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) { 	// post to self ITERATE event
+								taskControl->errorMsg =
+								init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE self posting failed"); 
+								
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+								break;
+							}
+							
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
+							
+						} else {
+							// call done function
+							if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DONE, NULL)) {
+								taskControl->errorMsg = 
+								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+								discard_ErrorMsg_type(&errMsg);
+						
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+								break;
+							}
+							// switch to DONE state  
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);					
+						}
+					
+					} else
+						// if there are SubTask Controllers
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
+					/*
+					// iterate
+					if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
+						taskControl->errorMsg =
+						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE self posting failed"); 
+						
+						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+						break;
+					}
 					
 					// send START event to all subtasks
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
@@ -1798,19 +1926,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
-					
-					// iterate
-					if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE self posting failed"); 
-						
-						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
-						break;
-					}
-					
 					// change state
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
+					
+					*/
 					
 					break;
 					
@@ -1827,18 +1946,20 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				// is switch to an IDLE or done state.
 				
 					// call iteration function
-					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
+					if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {   
+						if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
 						
-						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
-						break;
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+							break;
+						}
+						
+						// increment iteration index
+						taskControl->currIterIdx++;
 					}
-					
-					// increment iteration index
-					taskControl->currIterIdx++;
 					
 					// send START event to all subtasks
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
@@ -1852,7 +1973,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					if (!ListNumItems(taskControl->subtasks)) {
 						// if there are no subtasks check if done or idle
-						if (!taskControl->repeat) {
+						if (taskControl->mode == TASK_CONTINUOUS) {
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
 							
 						} else
@@ -1995,7 +2116,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					stateStr = StateToString(taskControl->state);	 	
 					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff = malloc ((nchars+1)*sizeof(char));
-					snprintf(buff, nchars, "%s event is invalid for %s state", eventStr, stateStr);
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
@@ -2021,24 +2142,26 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						SyncWait(Timer(), taskControl->waitBetweenIterations);
 					
 					// call iteration function
-					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
+					if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
+						if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
 						
-						// abort the entire Nested Task Controller hierarchy
-						AbortTaskControlExecution(taskControl);
+							// abort the entire Nested Task Controller hierarchy
+							AbortTaskControlExecution(taskControl);
 						
-						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
-						break;
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+							break;
+						}
+						
+						// increment iteration index
+						taskControl->currIterIdx++;
 					}
 					
-					// increment iteration index
-					taskControl->currIterIdx++;
-					
 					if (!ListNumItems(taskControl->subtasks))
-						if ((taskControl->currIterIdx < taskControl->repeat || !taskControl->repeat)) {
+						if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
 							// continue iterations, stay in RUNNING state
 							if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
 								taskControl->errorMsg =
@@ -2079,7 +2202,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				// Stops iterations and switches to IDLE or DONE states if there are no SubTask Controllers or to STOPPING state and waits for SubTasks to complete their iterations
 					
 					if (!ListNumItems(taskControl->subtasks)) {
-						if (!taskControl->repeat) {
+						// if there are no SubTask Controllers
+						if (taskControl->mode == TASK_CONTINUOUS) {
 							// switch to DONE state if continuous task controller
 							if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DONE, NULL)) {
 								taskControl->errorMsg = 
@@ -2125,8 +2249,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 					
-					// send STOP command to self if continuous task controller otherwise do nothing
-					if (!taskControl->repeat)
+					// send STOP command to self if continuous task controller and forward TASK_EVENT_STOP_CONTINUOUS_TASK to subtasks
+					if (taskControl->mode == TASK_CONTINUOUS) 
 						if (TaskControlEvent(taskControl, TASK_EVENT_STOP, NULL, NULL) < 0) {
 							taskControl->errorMsg =
 							init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_STOP self posting failed"); 
@@ -2135,6 +2259,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
 							break;
 						}
+					
+					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
+						taskControl->errorMsg =
+						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
+						
+						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+						break;
+					}
 						
 					break;
 					
@@ -2171,7 +2304,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// If all subtasks are done and there are iterations left (for finite mode) or Task Controller
 					// is simply in continuous mode, perform another iteration
 					if (AllDoneFlag)  
-						if ((taskControl->currIterIdx < taskControl->repeat || !taskControl->repeat)) {
+						if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
 							// continue iterations, stay in RUNNING state
 							if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
 								taskControl->errorMsg =
@@ -2255,7 +2388,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					stateStr = StateToString(taskControl->state);	 	
 					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff = malloc ((nchars+1)*sizeof(char));
-					snprintf(buff, nchars, "%s event is invalid for %s state", eventStr, stateStr);
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
@@ -2275,8 +2408,49 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				
 				case TASK_EVENT_STOP:
 					
-					// ignore this command
+					// Stops iterations and switches to IDLE or DONE states if there are no SubTask Controllers or stays in STOPPING state and waits for SubTasks to complete their iterations
 					
+					if (!ListNumItems(taskControl->subtasks)) {
+						// if there are no SubTask Controllers
+						if (taskControl->mode == TASK_CONTINUOUS) {
+							// switch to DONE state if continuous task controller
+							if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DONE, NULL)) {
+								taskControl->errorMsg = 
+								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+								discard_ErrorMsg_type(&errMsg);
+						
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+								break;
+							}
+							
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
+							
+						} else {
+							// switch to IDLE state if finite task controller
+							if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_STOPPED, NULL)) {
+								taskControl->errorMsg = 
+								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+								discard_ErrorMsg_type(&errMsg);
+						
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+								break;
+							}
+							
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
+						}
+					} else 
+						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
+						if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
+							taskControl->errorMsg =
+							init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
+						
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
+						
 					break;
 					
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
@@ -2319,7 +2493,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// If all subtasks are IDLE or DONE, then stop this Task Controller as well
 					if (IdleOrDoneFlag) 
-						if (!taskControl->repeat) {
+						if (taskControl->mode == TASK_CONTINUOUS) {
 							// switch to DONE state if continuous task controller
 							if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DONE, NULL)) {
 								taskControl->errorMsg = 
@@ -2396,7 +2570,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					stateStr = StateToString(taskControl->state);	 	
 					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff = malloc ((nchars+1)*sizeof(char));
-					snprintf(buff, nchars, "%s event is invalid for %s state", eventStr, stateStr);
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
@@ -2421,18 +2595,20 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_ITERATE:
 					
 					// call iteration function
-					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
+					if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) { 
+						if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL)) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
 						
-						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
-						break;
-					}
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+							break;
+						}
 					
-					// increment iteration index
-					taskControl->currIterIdx++;
+						// increment iteration index
+						taskControl->currIterIdx++;
+					}
 					
 					// send START event to all subtasks (if there are any)
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
@@ -2445,7 +2621,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					}
 					
 					if (!ListNumItems(taskControl->subtasks))
-						if ((taskControl->currIterIdx < taskControl->repeat && taskControl->repeat))
+						if ((taskControl->currIterIdx < taskControl->repeat && taskControl->mode == TASK_FINITE))
 							// if finite Task Controller and there are more iterations, switch to IDLE state
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
 						
@@ -2521,7 +2697,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// If all subtasks are done and there are iterations left switch to IDLE state
 					if (AllDoneFlag) 
-						if ((taskControl->currIterIdx < taskControl->repeat || !taskControl->repeat)) {
+						if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
 						} else {
 							// call done function
@@ -2586,7 +2762,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					stateStr = StateToString(taskControl->state);	 	
 					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff = malloc ((nchars+1)*sizeof(char));
-					snprintf(buff, nchars, "%s event is invalid for %s state", eventStr, stateStr);
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
@@ -2638,6 +2814,23 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// reset iterations
 					taskControl->currIterIdx = 0;
 					
+					// switch to INITIAL state
+					ChangeState(taskControl, eventpacket.event, TASK_STATE_INITIAL);
+					
+					// send START event to self
+					if (TaskControlEvent(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
+						taskControl->errorMsg =
+						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_START self posting failed"); 
+						
+						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+						break;
+					}
+					
+					
+					
+					/*
+					
 					// send START event to all subtasks
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
 						taskControl->errorMsg =
@@ -2671,6 +2864,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// change state
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
+					
+					*/
 					
 					break;
 					
@@ -2858,7 +3053,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					stateStr = StateToString(taskControl->state);	 	
 					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff = malloc ((nchars+1)*sizeof(char));
-					snprintf(buff, nchars, "%s event is invalid for %s state", eventStr, stateStr);
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
@@ -2975,7 +3170,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					stateStr = StateToString(taskControl->state);	 	
 					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff = malloc ((nchars+1)*sizeof(char));
-					snprintf(buff, nchars, "%s event is invalid for %s state", eventStr, stateStr);
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
@@ -3011,45 +3206,17 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					break;
 					
 				case TASK_EVENT_START:
-					
-					// clear error
-					discard_ErrorMsg_type(&taskControl->errorMsg);
-					break;
-					
 				case TASK_EVENT_ITERATE:
-					
-					// clear error
-					discard_ErrorMsg_type(&taskControl->errorMsg);
-					break;
-					
 				case TASK_EVENT_RESET:
-					
-					// clear error
-					discard_ErrorMsg_type(&taskControl->errorMsg);
-					break;
-					
 				case TASK_EVENT_STOP:
-					
-					// clear error
-					discard_ErrorMsg_type(&taskControl->errorMsg);
-					break;
-					
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
-					
-					// clear error
-					discard_ErrorMsg_type(&taskControl->errorMsg);
-					break;
-					
 				case TASK_EVENT_SUBTASK_STATE_CHANGED:
 					
-					// clear error
-					discard_ErrorMsg_type(&taskControl->errorMsg);
+					// ignore and stay in error state
+					
 					break;
 					
 				case TASK_EVENT_DATA_RECEIVED:
-					
-					// clear error
-					discard_ErrorMsg_type(&taskControl->errorMsg);
 					
 					// call data received event function
 					if (errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DATA_RECEIVED, eventpacket.eventInfo)) {

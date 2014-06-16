@@ -1,9 +1,9 @@
 [Workspace Header]
-Version = 1201
+Version = 1301
 Pathname = "/d/ELE_DAQLab/Framework/Execution control/Execution control.cws"
-CVI Dir = "/c/program files (x86)/national instruments/cvi2012"
+CVI Dir = "/c/program files (x86)/national instruments/cvi2013"
 CVI Shared Dir = "/C/Program Files (x86)/National Instruments/Shared/CVI"
-CVI Pub Local Dir = "/C/ProgramData/National Instruments/CVI2012"
+CVI Pub Local Dir = "/C/ProgramData/National Instruments/CVI2013"
 CVI Pub Global Dir = "/C/ProgramData/National Instruments/CVI"
 IVI Standard Root Dir = "/C/Program Files (x86)/IVI Foundation/IVI"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
@@ -12,19 +12,19 @@ VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
 Number of Projects = 1
 Active Project = 1
 Project 0001 = "Execution control.prj"
-Drag Bar Left = 283
-Window Top = 45
-Window Left = 43
-Window Bottom = 881
-Window Right = 1408
+Drag Bar Left = 330
+Window Top = 65
+Window Left = -1225
+Window Bottom = 1004
+Window Right = 263
 Maximized = False
 Maximized Children = True
 Max32 Number Of Errors = 20
 Track Include File Dependencies = True
 Prompt For Missing Includes = True
 Stop On First Error File = False
-Bring Up Err Win For Warnings = True
-Show Build Dialog = False
+Bring Up Err Win At Start = True
+Bring Up Err Win For Errors = False
 Save Changes Before Running = "Always"
 Save Changes Before Compiling = "Always"
 Hide Windows = False
@@ -32,20 +32,18 @@ Break At First Statement = False
 Sort Type = "File Name"
 Number of Opened Files = 3
 Window Confinement Region Enabled = True
-MainColumnWidth = 266
+MainColumnWidth = 313
 FileDateColumnWidth = 70
 FileSizeColumnWidth = 70
-StatusColumnWidth = 70
 
 [Project Header 0001]
-Version = 1201
+Version = 1301
 Don't Update DistKit = False
 Platform Code = 4
 Build Configuration = "Debug"
 Warn User If Debugging Release = 1
 Batch Build Release = False
 Batch Build Debug = False
-Force Rebuild = False
 
 [File 0001]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTestUI.uir"
@@ -70,32 +68,32 @@ Source Window State = "1,0,0,0,0,0,0,0,0,70,0,0,0,0,0,28,0,0,0,0,400,600,1,0,"
 [File 0003]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 File Type = "Include"
-Disk Date = 3485262865
+Disk Date = 3485756566
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Window Z-Order = 1
-Source Window State = "1,321,321,321,60,140,60,0,3,130,0,0,0,0,0,55,319,43,321,140,349,683,1,0,"
+Source Window State = "1,401,401,401,24,42,24,0,0,140,0,0,0,0,0,31,418,0,442,24,349,683,1,0,"
 
 [File 0004]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 File Type = "CSource"
-Disk Date = 3485262494
+Disk Date = 3485770875
 In Projects = "1,"
-Window Top = 63
-Window Left = -910
+Window Top = 59
+Window Left = 76
 Window Released = True
-Source Window State = "1,304,304,304,5,23,5,0,0,0,0,0,0,0,0,0,268,0,281,30,766,1071,0,0,"
+Source Window State = "1,2453,2454,2453,20,25,20,0,0,171,0,0,0,0,0,58,2189,0,2203,25,830,1406,0,0,"
 
 [File 0005]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTest.c"
 File Type = "CSource"
-Disk Date = 3485265420
+Disk Date = 3485771168
 In Projects = "1,"
-Window Top = 76
-Window Left = 254
+Window Top = 164
+Window Left = 291
 Window Released = True
-Source Window State = "1,44,44,44,33,88,33,0,0,158,0,1,0,1,0,64,48,0,87,112,911,1307,0,0,"
+Source Window State = "1,63,63,63,23,27,23,0,0,158,0,1,0,1,0,64,54,0,63,6,911,1307,0,0,"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True
@@ -106,6 +104,7 @@ Debugging Level = "Standard"
 Execution Trace = "Disabled"
 Command Line Args = ""
 Working Directory = ""
+Environment Options = ""
 External Process Path = ""
 
 [Default Build Config 0001 Release]
@@ -117,6 +116,7 @@ Debugging Level = "Standard"
 Execution Trace = "Disabled"
 Command Line Args = ""
 Working Directory = ""
+Environment Options = ""
 External Process Path = ""
 
 [Default Build Config 0001 Debug64]
@@ -128,6 +128,7 @@ Debugging Level = "Standard"
 Execution Trace = "Disabled"
 Command Line Args = ""
 Working Directory = ""
+Environment Options = ""
 External Process Path = ""
 
 [Default Build Config 0001 Release64]
@@ -139,7 +140,11 @@ Debugging Level = "Standard"
 Execution Trace = "Disabled"
 Command Line Args = ""
 Working Directory = ""
+Environment Options = ""
 External Process Path = ""
+
+[Build Dependencies 0001]
+Number of Dependencies = 0
 
 [Build Options 0001]
 Generate Browse Info = True
@@ -176,4 +181,5 @@ External Process Path = ""
 [Command Line Args 0001]
 Command Line Args = ""
 Working Directory = ""
+Environment Options = ""
 

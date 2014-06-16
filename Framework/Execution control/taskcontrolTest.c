@@ -61,21 +61,23 @@ int main (int argc, char *argv[])
 	// ZStack Task
 	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	SetTaskControlIterations(ZStackTask, 2);
+	//SetTaskControlMode(ZStackTask,TASK_CONTINUOUS);
 	SetTaskControlLog(ZStackTask, TaskExecutionLog);
 	
 	// ZStage
 	ZStage				= init_TaskControl_type ("Z Stage", NULL, ZStage_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlIterations(ZStage, 5);
+	SetTaskControlIterations(ZStage, 2);
 	SetTaskControlLog(ZStage, TaskExecutionLog);
 	
 	// Device X
 	DevX				= init_TaskControl_type ("Device X", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlIterations(DevX, 10);
+	SetTaskControlIterations(DevX, 0);
+	
 	SetTaskControlLog(DevX, TaskExecutionLog);
 	
 	// Make ZStage subtask to ZStack task
 	AddSubTaskToParent(ZStackTask, ZStage);
-	AddSubTaskToParent(ZStackTask, DevX);
+	AddSubTaskToParent(ZStage, DevX);
 	
 	//--------------------------------------------------------------------------
 	

@@ -294,6 +294,16 @@ typedef enum {
 	TASK_FCALL_MODULE_EVENT				// Called for custom module events that are not handled directly by the Task Controller
 } TaskFCall_type;
 
+//----------------------------------------
+// Task Controller Mode
+//----------------------------------------
+typedef enum {
+	TASK_FINITE,
+	TASK_CONTINUOUS
+} TaskMode_type;
+
+
+
 typedef struct TaskControl 			TaskControl_type;
 typedef struct FCallReturn			FCallReturn_type;
 typedef struct TaskExecutionLog		TaskExecutionLog_type;
@@ -387,6 +397,10 @@ TaskStates_type			GetTaskControlState				(TaskControl_type* taskControl);
 														// repeats = 1 by default
 void					SetTaskControlIterations		(TaskControl_type* taskControl, size_t repeat);
 size_t					GetTaskControlIterations		(TaskControl_type* taskControl);
+
+														// mode = TASK_FINITE by default
+void					SetTaskControlMode				(TaskControl_type* taskControl, TaskMode_type mode);
+TaskMode_type			GetTaskControlMode				(TaskControl_type* taskControl);
 
 														// Number of seconds to wait between iterations
 														// wait = 0 by default

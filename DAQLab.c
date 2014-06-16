@@ -272,6 +272,7 @@ static int DAQLab_Load (void)
 	char*							UITCName				= NULL;
 	unsigned int					UITCIterations;
 	double							UITCWait;
+	BOOL							UITCMode;
 	TaskControl_type*				newTaskControllerPtr;
 	UITaskCtrl_type*				UITaskCtrlsPtr;
 									// template to load DAQLab Environment parameters
@@ -282,7 +283,8 @@ static int DAQLab_Load (void)
 									// template to load UI Task Controller parameters			
 	DAQLabXMLNode					attr2[] = {	{"Name", DL_CSTRING, &UITCName},
 												{"Iterations", DL_UINT, &UITCIterations},
-												{"Wait", DL_DOUBLE, &UITCWait} };
+												{"Wait", DL_DOUBLE, &UITCWait}, 
+												{"Mode", DL_BOOL, &UITCMode} };
 										
 	
 	//---------------------------------------------------------------------------------
@@ -370,6 +372,8 @@ static int DAQLab_Load (void)
 		SetTaskControlIterations(newTaskControllerPtr, UITCIterations);
 		// set UITC wait between iterations
 		SetTaskControlIterationsWait(newTaskControllerPtr, UITCWait);
+		// set UITC mode (finite/continuous)
+		SetTaskControlMode(newTaskControllerPtr, UITCMode);
 		// add new Task Controller to the environment
 		UITaskCtrlsPtr = DAQLab_AddTaskControllerToUI(newTaskControllerPtr);
 		// attach callback data to the Task Controller
@@ -430,9 +434,10 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	
 	// save UI Task Controllers
 	UITaskCtrl_type**				UItaskCtrlPtrPtr;
-	DAQLabXMLNode 					attr2[3];
+	DAQLabXMLNode 					attr2[4];
 	int								niter;
 	double							wait;
+	BOOL							mode;
 	
 	for (int i = 1; i <= ListNumItems(TasksUI.UItaskCtrls); i++) {
 		UItaskCtrlPtrPtr = ListGetPtrToItem (TasksUI.UItaskCtrls, i);
@@ -453,6 +458,11 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		attr2[2].tag 	= "Wait";
 		attr2[2].type 	= DL_DOUBLE;
 		attr2[2].pData	= &wait; 
+		// mode (finite = 1, continuous = 0)
+		mode			= GetTaskControlMode((*UItaskCtrlPtrPtr)->taskControl);
+		attr2[3].tag 	= "Mode";
+		attr2[3].type 	= DL_BOOL;
+		attr2[3].pData	= &mode; 
 		
 		// add attributes to task controller element
 		errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, newXMLElement, attr2, DL_ATTRIBUTE, NumElem(attr2)) );
@@ -1046,7 +1056,16 @@ static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskContr
 	// set UI Task Controller repeats
 	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Repeat, GetTaskControlIterations(taskControl)); 
 	// set UI Task Controller wait
-	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Wait, GetTaskControlIterationsWait(taskControl)); 
+	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Wait, GetTaskControlIterationsWait(taskControl));
+	// set UI Task Controller mode
+	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Mode, GetTaskControlMode(taskControl));
+	// dim repeat if TC mode is continuous, otherwise undim
+	if (GetTaskControlMode(taskControl) == TASK_FINITE) 
+		// finite
+		SetCtrlAttribute(newUItaskCtrl->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
+	else
+		// continuous
+		SetCtrlAttribute(newUItaskCtrl->panHndl, TCPan1_Repeat, ATTR_DIMMED, 1);
 	
 	
 	return newUItaskCtrl;
@@ -1490,7 +1509,7 @@ int CVICALLBACK DAQLab_DelTaskControllersBTTN_CB (int panel, int control, int ev
 static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	TaskControl_type* 	taskControl = callbackData;
-	BOOL             	starttask;					  // 1 - task start, 0 - task stop 
+	BOOL             	starttask;					  	// 1 - task start, 0 - task stop 
 	double				waitDVal;
 	
 	switch (event)
@@ -1501,6 +1520,7 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 			
 				case TCPan1_Repeat:
 				case TCPan1_Reset:
+				case TCPan1_Mode:
 					
 					TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 					
@@ -1514,6 +1534,7 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 						SetCtrlAttribute(panel, TCPan1_Repeat, ATTR_DIMMED, 1);
 						SetCtrlAttribute(panel, TCPan1_Wait, ATTR_DIMMED, 1);
 						SetCtrlAttribute(panel, TCPan1_Reset, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, TCPan1_Mode, ATTR_DIMMED, 1);
 						// undim abort button
 						SetCtrlAttribute(panel, TCPan1_Abort, ATTR_DIMMED, 0);
 						// send start task event
@@ -1556,11 +1577,14 @@ static FCallReturn_type* DAQLab_ConfigureUITC (TaskControl_type* taskControl, BO
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	unsigned int		repeat;
+	BOOL				taskControllerMode;		// TRUE - finite iterations, FALSE - continuous
 	
 	// change Task Controller name background color to gray (0x00F0F0F0)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
 	// undim Repeat button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
+	// undim Mode button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
 	// undim Start button
@@ -1569,6 +1593,16 @@ static FCallReturn_type* DAQLab_ConfigureUITC (TaskControl_type* taskControl, BO
 	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Repeat, &repeat);
 	SetTaskControlIterations(taskControl, repeat);
 	
+	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Mode, &taskControllerMode);
+	if (taskControllerMode == TASK_FINITE) {
+		// finite iterations
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
+		SetTaskControlMode(taskControl, TASK_FINITE);
+	} else {
+		// continuous iterations
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 1);
+		SetTaskControlMode(taskControl, TASK_CONTINUOUS);
+	}
 	
 	return init_FCallReturn_type(0, "", "", 0);
 }
@@ -1610,6 +1644,8 @@ static FCallReturn_type* DAQLab_DoneUITC  (TaskControl_type* taskControl, size_t
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
 	// undim Repeat button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
+	// undim Mode button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
 	// update iterations display
@@ -1643,6 +1679,8 @@ static FCallReturn_type* DAQLab_StoppedUITC	(TaskControl_type* taskControl, size
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
+	// undim Mode button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
 	// undim Start/Stop button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
 	// update iterations display
@@ -1669,8 +1707,6 @@ static FCallReturn_type* DAQLab_ErrorUITC (TaskControl_type* taskControl, char* 
 	// undim Reset button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
 	 
-	
-	
 	return init_FCallReturn_type(0, "", "", 0); 
 }
 

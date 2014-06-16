@@ -298,8 +298,8 @@ typedef enum {
 // Task Controller Mode
 //----------------------------------------
 typedef enum {
-	TASK_FINITE,
-	TASK_CONTINUOUS
+	TASK_CONTINUOUS,  // == FALSE
+	TASK_FINITE		  // == TRUE
 } TaskMode_type;
 
 

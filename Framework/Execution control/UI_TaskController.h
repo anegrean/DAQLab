@@ -22,7 +22,7 @@
 #define  TCPan1_Abort                     6       /* control type: command, callback function: (none) */
 #define  TCPan1_Reset                     7       /* control type: command, callback function: (none) */
 #define  TCPan1_Name                      8       /* control type: string, callback function: (none) */
-#define  TCPan1_Finite                    9       /* control type: radioButton, callback function: (none) */
+#define  TCPan1_Mode                      9       /* control type: radioButton, callback function: (none) */
 
 
      /* Control Arrays: */

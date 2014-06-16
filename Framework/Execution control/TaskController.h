@@ -386,36 +386,41 @@ void 					discard_TaskControl_type		(TaskControl_type** a);
 // Task Controller set/get functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void 					SetTaskControlName 				(TaskControl_type* taskControl, char newName[]);
-														// returns pointer to dynamically allocated Task Controller name (null terminated string) 
-char*					GetTaskControlName				(TaskControl_type* taskControl);
+void 					SetTaskControlName 					(TaskControl_type* taskControl, char newName[]);
+															// returns pointer to dynamically allocated Task Controller name (null terminated string) 
+char*					GetTaskControlName					(TaskControl_type* taskControl);
 
-														// use this function wisely, mostly intended to be used in a custom module event callback
-void					SetTaskControlState				(TaskControl_type* taskControl, TaskStates_type	newState);
-TaskStates_type			GetTaskControlState				(TaskControl_type* taskControl);
+															// use this function wisely, mostly intended to be used in a custom module event callback
+void					SetTaskControlState					(TaskControl_type* taskControl, TaskStates_type	newState);
+TaskStates_type			GetTaskControlState					(TaskControl_type* taskControl);
 														
-														// repeats = 1 by default
-void					SetTaskControlIterations		(TaskControl_type* taskControl, size_t repeat);
-size_t					GetTaskControlIterations		(TaskControl_type* taskControl);
+															// repeats = 1 by default
+void					SetTaskControlIterations			(TaskControl_type* taskControl, size_t repeat);
+size_t					GetTaskControlIterations			(TaskControl_type* taskControl);
 
-														// mode = TASK_FINITE by default
-void					SetTaskControlMode				(TaskControl_type* taskControl, TaskMode_type mode);
-TaskMode_type			GetTaskControlMode				(TaskControl_type* taskControl);
+															// iterateFlag = TRUE by default, i.e. call of the iteration function pointer
+															// is done before starting SubTasks, otherwise it's called after the SubTasks complete
+void					SetTaskControlIterateBeforeFlag		(TaskControl_type* taskControl, BOOL iterateBeforeFlag);
+BOOL					GetTaskControlIterateBeforeFlag		(TaskControl_type* taskControl);
 
-														// Number of seconds to wait between iterations
-														// wait = 0 by default
-void					SetTaskControlIterationsWait	(TaskControl_type* taskControl, double waitBetweenIterations);
-double					GetTaskControlIterationsWait	(TaskControl_type* taskControl);
+															// mode = TASK_FINITE by default
+void					SetTaskControlMode					(TaskControl_type* taskControl, TaskMode_type mode);
+TaskMode_type			GetTaskControlMode					(TaskControl_type* taskControl);
 
-														// Module specific data associated with the Task Controller
-														// moduleData = NULL by default
-void					SetTaskControlModuleData		(TaskControl_type* taskControl, void* moduleData);
-void*					GetTaskControlModuleData		(TaskControl_type* taskControl);
+															// Number of seconds to wait between iterations
+															// wait = 0 by default
+void					SetTaskControlIterationsWait		(TaskControl_type* taskControl, double waitBetweenIterations);
+double					GetTaskControlIterationsWait		(TaskControl_type* taskControl);
 
-														// Logs Task Controller activity. Multiple Task Controllers may share
-														// the same log.
-														// logPtr = NULL by default
-void					SetTaskControlLog				(TaskControl_type* taskControl, TaskExecutionLog_type*	logPtr); 
+															// Module specific data associated with the Task Controller
+															// moduleData = NULL by default
+void					SetTaskControlModuleData			(TaskControl_type* taskControl, void* moduleData);
+void*					GetTaskControlModuleData			(TaskControl_type* taskControl);
+
+															// Logs Task Controller activity. Multiple Task Controllers may share
+															// the same log.
+															// logPtr = NULL by default
+void					SetTaskControlLog					(TaskControl_type* taskControl, TaskExecutionLog_type*	logPtr); 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions

@@ -30,6 +30,14 @@ Prototype="void SetTaskControlIterations(struct TaskControl *taskControl, unsign
 Class="Function"
 Prototype="unsigned int GetTaskControlIterations(struct TaskControl *taskControl);"
 
+[SetTaskControlIterateBeforeFlag]
+Class="Function"
+Prototype="void SetTaskControlIterateBeforeFlag(struct TaskControl *taskControl, int iterateBeforeFlag);"
+
+[GetTaskControlIterateBeforeFlag]
+Class="Function"
+Prototype="int GetTaskControlIterateBeforeFlag(struct TaskControl *taskControl);"
+
 [SetTaskControlMode]
 Class="Function"
 Prototype="void SetTaskControlMode(struct TaskControl *taskControl, TaskMode_type mode);"

@@ -62,6 +62,7 @@ int main (int argc, char *argv[])
 	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	SetTaskControlIterations(ZStackTask, 2);
 	//SetTaskControlMode(ZStackTask,TASK_CONTINUOUS);
+	SetTaskControlIterateBeforeFlag(ZStackTask, FALSE);
 	SetTaskControlLog(ZStackTask, TaskExecutionLog);
 	
 	// ZStage
@@ -71,7 +72,7 @@ int main (int argc, char *argv[])
 	
 	// Device X
 	DevX				= init_TaskControl_type ("Device X", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlIterations(DevX, 0);
+	SetTaskControlIterations(DevX, 1);
 	
 	SetTaskControlLog(DevX, TaskExecutionLog);
 	

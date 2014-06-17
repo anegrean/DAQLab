@@ -4,7 +4,7 @@
 // Purpose:		A short description of the interface.
 //
 // Created on:	9-3-2014 at 20:11:54 by Adrian Negrean.
-// Copyright:	. All Rights Reserved.
+// Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 
@@ -19,6 +19,11 @@
 // Include files
 
 #include "DAQLabModule.h"
+
+//==============================================================================
+// Constants
+
+#define MOD_Zstage_NAME 	"Generic Z stage"
 
 //==============================================================================
 // Types
@@ -47,14 +52,27 @@ struct Zstage {
 	
 	// SUPER, must be the first member to inherit from
 	
-	DAQLabModule_type 	module_base;
+	DAQLabModule_type 	baseClass;
 
 	// DATA
 	
 	int					controlPanHndl;
 	
 		// Current position of Zstage, if NULL, position was not determined.
-	double*				zPos;   // in [mm]
+	double*				zPos;   		// in [mm]
+	
+		// Absolute position from which to start moving the stage in a stepping mode
+		// if NULL, position was not initialized
+	double*				startAbsPos;	// in [mm]
+		// Relative position to which the stage is moved from the absolute start position
+		// if 0, no movement from start position occurs
+	double				endRelPos;		// in [mm]
+		
+		// The Z stage step size
+	double				stepSize;		// in [mm]
+	
+		// Number of steps between start and end position with given zStepSize
+	size_t				nZSteps;
 	
 		// Flag to revert movement direction, default 0, set to 1 to revert direction
 	BOOL				revertDirection;
@@ -67,9 +85,6 @@ struct Zstage {
 	
 		// Lower limit position of Zstage, if NULL, there is no lower limit
 	double*				zLLimPos;
-	
-		// Step size used for iterating the position of the stage, must be a positive number
-	double				zStackStep;
 	
 	// METHODS
 	
@@ -92,13 +107,18 @@ struct Zstage {
 	int					(* StatusLED)   			(Zstage_type* self, Zstage_LED_type status);
 		// Updates position display of stage from structure data
 	int					(* UpdatePositionDisplay)	(Zstage_type* self);
+		// Updates number of steps between an absolute start and relative end position to start position given step size 
+		// and rounds up if necessary the end position such that between the start and end positions there is an integer 
+		// multiple of step sizes. These parameters are written to the structure data.
+		// It also updates these values on the display and outputs the number of steps
+	int					(* UpdateZSteps)			(Zstage_type* self);
+	
+	void				(* SetStepCounter)			(Zstage_type* self, size_t val);
+	
+	void				(* DimWhenRunning)			(Zstage_type* self, BOOL dimmed);
+		
 
 };
-
-//==============================================================================
-// Constants
-
-#define MOD_Zstage_NAME 	"Generic Z stage"
 
 
 //==============================================================================

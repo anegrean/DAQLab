@@ -4,7 +4,7 @@
 // Purpose:		A short description of the implementation.
 //
 // Created on:	8-3-2014 at 17:13:45 by Adrian Negrean.
-// Copyright:	. All Rights Reserved.
+// Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 

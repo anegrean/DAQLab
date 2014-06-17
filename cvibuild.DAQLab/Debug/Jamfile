@@ -33,6 +33,7 @@ HDRS = 	"c:\\program files (x86)\\national instruments\\cvi2013\\include"
 	"d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage\\drivers and docs\\PI_GCS"
 	"d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage"
 	"d:\\ELE_DAQLab\\Framework\\Execution control"
+	"d:\\ELE_DAQLab\\Modules\\VUPhotonCtr"
 	"d:\\ELE_DAQLab\\Modules\\Zstages"
 	;
 include Jamfile_instr ;

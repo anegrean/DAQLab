@@ -4,7 +4,7 @@
 // Purpose:		A short description of the interface.
 //
 // Created on:	10-3-2014 at 12:06:57 by Adrian Negrean.
-// Copyright:	. All Rights Reserved.
+// Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 
@@ -37,7 +37,7 @@ struct PIStage {
 	
 	// SUPER, must be the first member to inherit from
 	
-	Zstage_type 	zstage_base;
+	Zstage_type 	baseClass;
 
 	// DATA
 		

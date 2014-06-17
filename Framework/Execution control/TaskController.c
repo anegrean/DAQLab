@@ -1,6 +1,6 @@
 //==============================================================================
 //
-// Title:		taskcontrol.c
+// Title:		TaskController.c
 // Purpose:		A short description of the implementation.
 //
 // Created on:	2014.05.11. at 10:35:38 by Adrian Negrean.

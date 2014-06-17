@@ -4,7 +4,7 @@
 // Purpose:		A short description of the interface.
 //
 // Created on:	8-3-2014 at 14:07:18 by Adrian Negrean.
-// Copyright:	. All Rights Reserved.
+// Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 

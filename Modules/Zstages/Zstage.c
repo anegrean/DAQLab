@@ -4,7 +4,7 @@
 // Purpose:		A short description of the implementation.
 //
 // Created on:	8-3-2014 at 18:33:04 by Adrian Negrean.
-// Copyright:	. All Rights Reserved.
+// Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 
@@ -12,6 +12,7 @@
 // Include files
 #include "DAQLab.h" 		// include this first
 #include <formatio.h>
+#include "toolbox.h"
 #include <userint.h>
 #include "DAQLabModule.h"
 #include "UI_ZStage.h"
@@ -32,8 +33,14 @@
 #define Zstage_POSITION_DISPLAY_PRECISION 1
 
 	// step sizes in [um] displayed in the ZStagePan_ZStepSize control
-const double ZStepSizes[] 			= { 0.1, 0.2, 0.5, 1, 1.5, 2, 5, 10, 
-							  			20, 50, 100, 200, 500, 1000 };  
+const double 	ZStepSizes[] 	= { 0.1, 0.2, 0.5, 1, 1.5, 2, 5, 10, 
+							  		20, 50, 100, 200, 500, 1000 };
+
+	// controls from UI_Zstage.uir that will be dimmed or undimmed when the stage is stepping (RUNNING state)
+const int 		UIZStageCtrls[] = {ZStagePan_MoveZUp, ZStagePan_MoveZDown, ZStagePan_ZAbsPos, ZStagePan_ZRelPos, 
+								   ZStagePan_ZStepSize, ZStagePan_RefPosList, ZStagePan_AddRefPos, ZStagePan_StartAbsPos, 
+								   ZStagePan_EndRelPos };
+
 	
 //==============================================================================
 // Types
@@ -49,11 +56,17 @@ typedef struct {
 //==============================================================================
 // Static functions
 
-static int							Zstage_DisplayPanels			(DAQLabModule_type* self, BOOL visibleFlag); 
+static int							Zstage_DisplayPanels			(DAQLabModule_type* mod, BOOL visibleFlag); 
 
 static int							Zstage_ChangeLEDStatus			(Zstage_type* zstage, Zstage_LED_type status);
 
 static int							Zstage_UpdatePositionDisplay	(Zstage_type* zstage);
+
+static int							Zstage_UpdateZSteps				(Zstage_type* zstage);
+
+static void 						Zstage_SetStepCounter			(Zstage_type* zstage, size_t val);
+
+static void							Zstage_DimWhenRunning		(Zstage_type* zstage, BOOL dimmed);
 
 static Zstage_RefPosition_type*		init_Zstage_RefPosition_type	(char refName[], double refVal);
 
@@ -103,39 +116,41 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 		zstage = (Zstage_type*) mod;
 		
 	// initialize base class
-	initalloc_DAQLabModule(&zstage->module_base, className, instanceName);
+	initalloc_DAQLabModule(&zstage->baseClass, className, instanceName);
 	//------------------------------------------------------------
 	
 	//---------------------------
 	// Parent Level 0: DAQLabModule_type 
 	
 		// DATA
-	zstage->module_base.taskControl		= NULL;  //init_TaskControl_type (MOD_Zstage_NAME, Zstage_ConfigureTC, Zstage_IterateTC, Zstage_StartTC, Zstage_ResetTC,
+	zstage->baseClass.taskControl		= NULL;  //init_TaskControl_type (MOD_Zstage_NAME, Zstage_ConfigureTC, Zstage_IterateTC, Zstage_StartTC, Zstage_ResetTC,
 												 //				 Zstage_DoneTC, Zstage_StoppedTC, NULL, Zstage_EventHandler,Zstage_ErrorTC);   
 		// connect ZStage module data to Task Controller
-												 //SetTaskControlModuleData(zstage->module_base.taskControl, zstage);
+												 //SetTaskControlModuleData(zstage->baseClass.taskControl, zstage);
 		// METHODS
 	
 		// overriding methods
-	zstage->module_base.Discard 		= discard_Zstage;
-	zstage->module_base.Load			= Zstage_Load;
-	zstage->module_base.LoadCfg			= NULL; //Zstage_LoadCfg;
-	zstage->module_base.DisplayPanels	= Zstage_DisplayPanels;
+	zstage->baseClass.Discard 		= discard_Zstage;
+	zstage->baseClass.Load			= Zstage_Load;
+	zstage->baseClass.LoadCfg		= NULL; //Zstage_LoadCfg;
+	zstage->baseClass.DisplayPanels	= Zstage_DisplayPanels;
 	
 	//---------------------------
 	// Child Level 1: Zstage_type 
 	
 		// DATA
 	zstage->controlPanHndl			= 0;
-	zstage->zPos					= NULL; 
+	zstage->zPos					= NULL;
+	zstage->startAbsPos				= NULL;
+	zstage->endRelPos				= 0;
+	zstage->stepSize				= 0;
+	zstage->nZSteps					= 0;
 	zstage->revertDirection			= FALSE;
 	zstage->zRefPos					= ListCreate(sizeof(Zstage_RefPosition_type*));
 	zstage->zULimPos				= NULL;
 	zstage->zLLimPos				= NULL;
-	zstage->zStackStep				= 0;
 	
-
-
+	
 		// METHODS
 		
 		// assign default controls callback to UI_ZStage.uir panel
@@ -148,6 +163,9 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	zstage->StopZ					= NULL;
 	zstage->StatusLED				= NULL;		// functionality assigned if Zstage_Load is called
 	zstage->UpdatePositionDisplay	= NULL;		// functionality assigned if Zstage_Load is called
+	zstage->UpdateZSteps 			= NULL;		// functionality assigned if Zstage_Load is called
+	zstage->SetStepCounter			= NULL;		// functionality assigned if Zstage_Load is called
+	zstage->DimWhenRunning		= NULL;		// functionality assigned if Zstage_Load is called
 	
 	
 	//----------------------------------------------------------
@@ -172,6 +190,7 @@ void discard_Zstage (DAQLabModule_type** mod)
 	if (zstage->controlPanHndl)
 		DiscardPanel(zstage->controlPanHndl);
 	OKfree(zstage->zPos);
+	OKfree(zstage->startAbsPos);
 	
 	for (int i = 1; i <= ListNumItems(zstage->zRefPos); i++) {
 		refPosPtrPtr = ListGetPtrToItem(zstage->zRefPos, i);
@@ -227,14 +246,16 @@ int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// adjust position display precision
 	SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_ZAbsPos, ATTR_PRECISION, Zstage_POSITION_DISPLAY_PRECISION);
 	SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_ZRelPos, ATTR_PRECISION, Zstage_POSITION_DISPLAY_PRECISION);
-	SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_Cycle_RelStart, ATTR_PRECISION, Zstage_POSITION_DISPLAY_PRECISION);
-	SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_Cycle_RelEnd, ATTR_PRECISION, Zstage_POSITION_DISPLAY_PRECISION);
+	SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_StartAbsPos, ATTR_PRECISION, Zstage_POSITION_DISPLAY_PRECISION);
+	SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_EndRelPos, ATTR_PRECISION, Zstage_POSITION_DISPLAY_PRECISION);
 	
 	// populate Z step sizes
 	for (int i = 0; i < NumElem(ZStepSizes); i++) {
 		Fmt(stepsizeName, "%s<%f[p*]", Zstage_POSITION_DISPLAY_PRECISION, ZStepSizes[i]);
 		InsertListItem(zstage->controlPanHndl, ZStagePan_ZStepSize, -1, stepsizeName, ZStepSizes[i]);   
 	}
+	// update Z step size in structure data to be the first element in the list
+	zstage->stepSize = ZStepSizes[0]; 
 	
 	// add functionality to change LED status
 	zstage->StatusLED = Zstage_ChangeLEDStatus;
@@ -242,23 +263,40 @@ int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// add functionality to update stage position
 	zstage->UpdatePositionDisplay = Zstage_UpdatePositionDisplay;
 	
+	// add functionality to update z stepping values
+	zstage->UpdateZSteps = Zstage_UpdateZSteps;
+	
+	// add functionality to reset step counter
+	zstage->SetStepCounter = Zstage_SetStepCounter;
+	
+	// add functionality to dim and undim controls when stage is stepping
+	zstage->DimWhenRunning	 = Zstage_DimWhenRunning;	
+	
 	// update stage absolute position if position has been determined
-	if (zstage->zPos)
+	// make visible stepper controls and update them if position has been determined
+	if (zstage->zPos) {
 		SetCtrlVal(zstage->controlPanHndl, ZStagePan_ZAbsPos, *zstage->zPos * 1000);	  // convert from [mm] to [um]
-	else {
+		SetCtrlVal(zstage->controlPanHndl, ZStagePan_StartAbsPos, *zstage->zPos * 1000);  // convert from [mm] to [um]
+		// add start pos data to structure;
+		zstage->startAbsPos = malloc(sizeof(double));
+		*zstage->startAbsPos = *zstage->zPos;
+	} else {
 		DLMsg("Stage position must be determined first. Aborting load operation.", 1);
 		return -1;
 	}
+	
+	// configure Z Stage Task Controller
+	TaskControlEvent(zstage->baseClass.taskControl, TASK_EVENT_CONFIGURE, NULL, NULL); 
 	
 	return 0;
 
 }
 
-static int Zstage_DisplayPanels	(DAQLabModule_type* self, BOOL visibleFlag)
+static int Zstage_DisplayPanels	(DAQLabModule_type* mod, BOOL visibleFlag)
 {
-	int error = 0;
-	Zstage_type* zstage	= (Zstage_type*) self;
-		
+	Zstage_type* 	zstage		= (Zstage_type*) mod; 
+	int 			error 		= 0;
+	
 	if (visibleFlag)
 		errChk(	DisplayPanel(zstage->controlPanHndl) );
 	else
@@ -316,6 +354,68 @@ static int Zstage_UpdatePositionDisplay	(Zstage_type* zstage)
 	return error;
 }
 
+/// HIPAR stepSize/ in [mm]
+/// HIPAR startAbsPos/ in [mm]
+/// HIPAR endRelPos/ in [mm]
+static int Zstage_UpdateZSteps (Zstage_type* zstage)
+{
+	double		nsteps;
+	double 		stepSize;
+	int			error		= 0;
+	
+	// get step size
+	GetCtrlVal(zstage->controlPanHndl, ZStagePan_ZStepSize, &stepSize);  				// in [um]
+	stepSize 				/= 1000;													// convert to [mm]
+	Assert(stepSize > 0);  	// allow only positive non-zero step sizes
+	zstage->stepSize 		= stepSize;
+	
+	// get absolute start position
+	GetCtrlVal(zstage->controlPanHndl, ZStagePan_StartAbsPos, zstage->startAbsPos);   	// in [um]
+	*zstage->startAbsPos	/= 1000;													// convert to [mm]
+	
+	// get relative end position (to absolute start position)
+	GetCtrlVal(zstage->controlPanHndl, ZStagePan_EndRelPos, &zstage->endRelPos);   		// in [um]
+	zstage->endRelPos		/= 1000;													// convert to [mm]
+	
+	// calculate steps and adjust end position to be multiple of stepSize
+	nsteps					= ceil(zstage->endRelPos/stepSize);
+	zstage->nZSteps			= (size_t) fabs(nsteps);
+	zstage->endRelPos 		= nsteps * stepSize;
+	
+	// display values
+	errChk( SetCtrlVal(zstage->controlPanHndl, ZStagePan_StartAbsPos, *zstage->startAbsPos * 1000) );		// convert from [mm] to [um]
+	errChk( SetCtrlVal(zstage->controlPanHndl, ZStagePan_EndRelPos, zstage->endRelPos * 1000) );			// convert from [mm] to [um]
+	errChk( SetCtrlVal(zstage->controlPanHndl, ZStagePan_NSteps, zstage->nZSteps) );
+	
+	// configure Task Controller
+	TaskControlEvent(zstage->baseClass.taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+	
+	return 0;
+	
+	Error:
+	
+	return error;
+}
+
+static void Zstage_SetStepCounter	(Zstage_type* zstage, size_t val)
+{
+	SetCtrlVal(zstage->controlPanHndl, ZStagePan_Step, val);
+}
+
+static void	Zstage_DimWhenRunning (Zstage_type* zstage, BOOL dimmed)
+{
+	int menubarHndl = GetPanelMenuBar (zstage->controlPanHndl);
+	
+	SetMenuBarAttribute(menubarHndl, 0, ATTR_DIMMED, dimmed);
+	
+	for (int i = 0; i < NumElem(UIZStageCtrls); i++) {
+		SetCtrlAttribute(zstage->controlPanHndl, UIZStageCtrls[i], ATTR_DIMMED, dimmed);
+	}
+	
+	
+	
+}
+
 //==============================================================================
 // Global functions for module specific UI management
 
@@ -325,17 +425,15 @@ static int CVICALLBACK Zstage_UICtrls_CB (int panel, int control, int event, voi
 	Zstage_type* 				zstage 			= callbackData;
 	int							refPosIdx;						// 0-based index of ref pos selected in the list
 	Zstage_RefPosition_type**	refPosPtrPtr;
-	double						stepsize;	  					// in [mm]
+	double						stepsize;	  					
 	double 						direction;
-	double 						moveAbsPos;   					// in [mm]
-	double						moveRelPos;   					// in [mm]
+	double 						moveAbsPos;   					
+	double						moveRelPos; 
 	char						refPosDisplayItem[Zstage_MAX_REF_POS_LENGTH + 50];
 	
 	switch (event) {
 			
 		case EVENT_COMMIT:
-			
-		
 			
 			GetCtrlVal(panel, ZStagePan_ZStepSize, &stepsize);  // get value in [um]
 			stepsize /= 1000;									// convert from [um] to [mm]
@@ -351,6 +449,12 @@ static int CVICALLBACK Zstage_UICtrls_CB (int panel, int control, int event, voi
 				direction = 1;
 			
 			switch (control) {
+					
+				case ZStagePan_Start:	  // temporary to test z stage controller
+					
+					TaskControlEvent(zstage->baseClass.taskControl, TASK_EVENT_START, NULL, NULL);
+					
+					break;
 			
 				case ZStagePan_MoveZUp:
 					
@@ -389,16 +493,11 @@ static int CVICALLBACK Zstage_UICtrls_CB (int panel, int control, int event, voi
 					
 					break;
 					
-				case ZStagePan_Cycle_RelStart:
-				case ZStagePan_Cycle_RelEnd:
+				case ZStagePan_StartAbsPos:
+				case ZStagePan_EndRelPos:
+				case ZStagePan_ZStepSize:
 					
-					break;
-					
-				case ZStagePan_SetStartPos:
-					
-					break;
-					
-				case ZStagePan_SetEndPos:
+					Zstage_UpdateZSteps	(zstage);
 					
 					break;
 					
@@ -479,11 +578,11 @@ static int CVICALLBACK Zstage_UICtrls_CB (int panel, int control, int event, voi
 			}
 			break;
 			
-		case EVENT_RIGHT_DOUBLE_CLICK: // update reference position value
+		case EVENT_RIGHT_DOUBLE_CLICK: 
 			
 			switch (control) {
 					
-				case ZStagePan_RefPosList:
+				case ZStagePan_RefPosList:  	// update reference position value
 					
 					// get ref pos idx
 					GetCtrlIndex(panel, control, &refPosIdx);
@@ -496,6 +595,19 @@ static int CVICALLBACK Zstage_UICtrls_CB (int panel, int control, int event, voi
 					// store listbox position value in [mm] 
 					ReplaceListItem(panel, ZStagePan_RefPosList, refPosIdx, refPosDisplayItem, (*refPosPtrPtr)->val); 			
 					break;
+					
+				case ZStagePan_StartAbsPos:	// set start position to match current position
+					
+					SetCtrlVal(panel, control, *zstage->zPos * 1000); 							// convert to [um]
+					Zstage_UpdateZSteps	(zstage);  
+					break;
+					
+				case ZStagePan_EndRelPos: 	// set relative end position (to absolute start position) to match current stage position
+					
+					SetCtrlVal(panel, control, (*zstage->zPos - *zstage->startAbsPos) * 1000);   	// convert to [um] 
+					Zstage_UpdateZSteps	(zstage); 
+					break;
+					
 			}
 			break;
 			
@@ -546,6 +658,41 @@ static int CVICALLBACK Zstage_UICtrls_CB (int panel, int control, int event, voi
 					}
 					break;
 					
+				case ZStagePan_StartAbsPos:
+					
+					switch (eventData1) {
+					
+						case MOUSE_WHEEL_SCROLL_UP:
+							
+							SetCtrlVal(panel, control, (*zstage->startAbsPos + stepsize) * 1000);		// convert back to [um]
+							break;
+					
+						case MOUSE_WHEEL_SCROLL_DOWN:
+					
+							SetCtrlVal(panel, control, (*zstage->startAbsPos - stepsize) * 1000);		// convert back to [um]
+							break;
+					
+					}
+					break;
+					
+				case ZStagePan_EndRelPos:
+					
+					switch (eventData1) {
+					
+						case MOUSE_WHEEL_SCROLL_UP:
+							
+							SetCtrlVal(panel, control, (zstage->endRelPos + stepsize) * 1000);		// convert back to [um]
+							break;
+					
+						case MOUSE_WHEEL_SCROLL_DOWN:
+					
+							SetCtrlVal(panel, control, (zstage->endRelPos - stepsize) * 1000);		// convert back to [um]
+							break;
+					
+					}
+					break;
+					
+					
 				break;
 			}
 	}
@@ -580,55 +727,56 @@ static BOOL Zstage_ValidateRefPosName (char inputStr[], void* dataPtr)
 
 static FCallReturn_type* Zstage_ConfigureTC	(TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "", 0);
 }
 
 static FCallReturn_type* Zstage_IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	
 	
 	return init_FCallReturn_type(0, "", "", 0);
 }
 
 static FCallReturn_type* Zstage_StartTC	(TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "", 0);
 }
 
 static FCallReturn_type* Zstage_DoneTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "", 0);
 }
 static FCallReturn_type* Zstage_StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "", 0);
 }
 
 static FCallReturn_type* Zstage_ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "", 0);
 }
 
 static FCallReturn_type* Zstage_ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
 {
-	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "", 0);
 }
 
 static FCallReturn_type* Zstage_EventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
 {
-	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "", 0);
 }

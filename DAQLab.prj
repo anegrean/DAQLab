@@ -9,7 +9,7 @@ IVI Standard Root Dir = "/C/Program Files (x86)/IVI Foundation/IVI"
 VXIplug&play Framework Dir = "/C/Program Files (x86)/IVI Foundation/VISA/winnt"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
-Number of Files = 20
+Number of Files = 24
 Target Type = "Executable"
 Flags = 2064
 Copied From Locked InstrDrv Directory = False
@@ -159,8 +159,57 @@ Folder = "Modules/Zstages/PI Stage"
 Folder Id = 2
 
 [File 0011]
-File Type = "Function Panel"
+File Type = "Include"
 Res Id = 11
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/VUPhotonCtr/UI_VUPhotonCtr.h"
+Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/UI_VUPhotonCtr.h"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/VUPhotonCtr"
+Folder Id = 4
+
+[File 0012]
+File Type = "User Interface Resource"
+Res Id = 12
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/VUPhotonCtr/UI_VUPhotonCtr.uir"
+Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/UI_VUPhotonCtr.uir"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/VUPhotonCtr"
+Folder Id = 4
+
+[File 0013]
+File Type = "CSource"
+Res Id = 13
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/VUPhotonCtr/VUPhotonCtr.c"
+Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.c"
+Exclude = True
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Modules/VUPhotonCtr"
+Folder Id = 4
+
+[File 0014]
+File Type = "Include"
+Res Id = 14
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/VUPhotonCtr/VUPhotonCtr.h"
+Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.h"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/VUPhotonCtr"
+Folder Id = 4
+
+[File 0015]
+File Type = "Function Panel"
+Res Id = 15
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "MSXML/ActiveXML.fp"
@@ -170,9 +219,9 @@ Project Flags = 0
 Folder = "XML"
 Folder Id = 5
 
-[File 0012]
+[File 0016]
 File Type = "Include"
-Res Id = 12
+Res Id = 16
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "MSXML/ActiveXML.h"
@@ -182,9 +231,9 @@ Project Flags = 0
 Folder = "XML"
 Folder Id = 5
 
-[File 0013]
+[File 0017]
 File Type = "CSource"
-Res Id = 13
+Res Id = 17
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/TaskController.c"
@@ -195,9 +244,9 @@ Project Flags = 0
 Folder = "Framework"
 Folder Id = 6
 
-[File 0014]
+[File 0018]
 File Type = "Include"
-Res Id = 14
+Res Id = 18
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/TaskController.h"
@@ -207,9 +256,9 @@ Project Flags = 0
 Folder = "Framework"
 Folder Id = 6
 
-[File 0015]
+[File 0019]
 File Type = "Include"
-Res Id = 15
+Res Id = 19
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/UI_TaskController.h"
@@ -219,9 +268,9 @@ Project Flags = 0
 Folder = "Framework"
 Folder Id = 6
 
-[File 0016]
+[File 0020]
 File Type = "User Interface Resource"
-Res Id = 16
+Res Id = 20
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/UI_TaskController.uir"
@@ -231,9 +280,9 @@ Project Flags = 0
 Folder = "Framework"
 Folder Id = 6
 
-[File 0017]
+[File 0021]
 File Type = "CSource"
-Res Id = 17
+Res Id = 21
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.c"
@@ -243,9 +292,9 @@ Compile Into Object File = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0018]
+[File 0022]
 File Type = "Include"
-Res Id = 18
+Res Id = 22
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.h"
@@ -254,9 +303,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0019]
+[File 0023]
 File Type = "Include"
-Res Id = 19
+Res Id = 23
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.h"
@@ -265,9 +314,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0020]
+[File 0024]
 File Type = "User Interface Resource"
-Res Id = 20
+Res Id = 24
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.uir"

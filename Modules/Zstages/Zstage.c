@@ -165,7 +165,7 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	zstage->UpdatePositionDisplay	= NULL;		// functionality assigned if Zstage_Load is called
 	zstage->UpdateZSteps 			= NULL;		// functionality assigned if Zstage_Load is called
 	zstage->SetStepCounter			= NULL;		// functionality assigned if Zstage_Load is called
-	zstage->DimWhenRunning		= NULL;		// functionality assigned if Zstage_Load is called
+	zstage->DimWhenRunning			= NULL;		// functionality assigned if Zstage_Load is called
 	
 	
 	//----------------------------------------------------------

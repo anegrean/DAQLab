@@ -1,1 +1,1 @@
-<DAQLabConfig TaskPanTopPos="141" TaskPanLeftPos="785" LogPanTopPos="175" LogPanLeftPos="1243"><UITaskController Name="asd" Iterations="50" Wait="2" Mode="1"/></DAQLabConfig>
+<DAQLabConfig TaskPanTopPos="129" TaskPanLeftPos="359" LogPanTopPos="175" LogPanLeftPos="1243"><UITaskController Name="Z Stack" Iterations="1" Wait="0" Mode="1"/></DAQLabConfig>

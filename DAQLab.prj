@@ -9,7 +9,7 @@ IVI Standard Root Dir = "/C/Program Files (x86)/IVI Foundation/IVI"
 VXIplug&play Framework Dir = "/C/Program Files (x86)/IVI Foundation/VISA/winnt"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
-Number of Files = 24
+Number of Files = 26
 Target Type = "Executable"
 Flags = 2064
 Copied From Locked InstrDrv Directory = False
@@ -32,8 +32,10 @@ Folder 4 = "Modules/VUPhotonCtr"
 FolderEx 4 = "Modules/VUPhotonCtr"
 Folder 5 = "XML"
 FolderEx 5 = "XML"
-Folder 6 = "Framework"
-FolderEx 6 = "Framework"
+Folder 6 = "Framework/Execution control "
+FolderEx 6 = "Framework/Execution control "
+Folder 7 = "Framework/Virtual channels"
+FolderEx 7 = "Framework/Virtual channels"
 
 [File 0001]
 File Type = "CSource"
@@ -189,7 +191,7 @@ Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/VUPhotonCtr/VUPhotonCtr.c"
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.c"
-Exclude = True
+Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Modules/VUPhotonCtr"
@@ -241,7 +243,7 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 Exclude = False
 Compile Into Object File = False
 Project Flags = 0
-Folder = "Framework"
+Folder = "Framework/Execution control "
 Folder Id = 6
 
 [File 0018]
@@ -253,7 +255,7 @@ Path Rel Path = "Framework/Execution control/TaskController.h"
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 Exclude = False
 Project Flags = 0
-Folder = "Framework"
+Folder = "Framework/Execution control "
 Folder Id = 6
 
 [File 0019]
@@ -265,7 +267,7 @@ Path Rel Path = "Framework/Execution control/UI_TaskController.h"
 Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.h"
 Exclude = False
 Project Flags = 0
-Folder = "Framework"
+Folder = "Framework/Execution control "
 Folder Id = 6
 
 [File 0020]
@@ -277,12 +279,37 @@ Path Rel Path = "Framework/Execution control/UI_TaskController.uir"
 Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.uir"
 Exclude = False
 Project Flags = 0
-Folder = "Framework"
+Folder = "Framework/Execution control "
 Folder Id = 6
 
 [File 0021]
 File Type = "CSource"
 Res Id = 21
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Virtual channels/VChannel.c"
+Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.c"
+Exclude = False
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Framework/Virtual channels"
+Folder Id = 7
+
+[File 0022]
+File Type = "Include"
+Res Id = 22
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Virtual channels/VChannel.h"
+Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Virtual channels"
+Folder Id = 7
+
+[File 0023]
+File Type = "CSource"
+Res Id = 23
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.c"
@@ -292,9 +319,9 @@ Compile Into Object File = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0022]
+[File 0024]
 File Type = "Include"
-Res Id = 22
+Res Id = 24
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.h"
@@ -303,9 +330,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0023]
+[File 0025]
 File Type = "Include"
-Res Id = 23
+Res Id = 25
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.h"
@@ -314,9 +341,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0024]
+[File 0026]
 File Type = "User Interface Resource"
-Res Id = 24
+Res Id = 26
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.uir"

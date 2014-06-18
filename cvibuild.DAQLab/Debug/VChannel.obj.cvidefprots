@@ -1,0 +1,12 @@
+[init_SourceVChan_type]
+Class="Function"
+Prototype="struct SourceVChan *init_SourceVChan_type(char *name, VChanData_type dataType, void *vChanOwner);"
+
+[init_SinkVChan_type]
+Class="Function"
+Prototype="struct SinkVChan *init_SinkVChan_type(char *name, VChanData_type dataType, void *vChanOwner, int queueSize, unsigned int dataSize);"
+
+[discard_VChan_type]
+Class="Function"
+Prototype="void discard_VChan_type(struct VChan **vchan);"
+

@@ -71,37 +71,57 @@ typedef enum {
 //------------------------------------------------------------------------------
 
 	// Callback when a VChan connection is established between a Source and Sink
-typedef void	(* Connected_CBFptr_type) 		(SourceVChan_type* source, SinkVChan_type* sink);
+typedef void	(* Connected_CBFptr_type) 		(VChan_type* self, VChan_type* connectedVChan);
 
-	// Callback when a VChan connection is broken
-typedef void	(* Disconnected_CBFptr_type) 	(VChan_type* vchan);
+	// Callback when a VChan connection is broken by calling VChan_Disconnect. When disconnecting
+	// a Source type VChan, this callback will be called for each Sink.
+typedef void	(* Disconnected_CBFptr_type) 	(VChan_type* self, VChan_type* disconnectedVChan);
 
 
 //==============================================================================
 // Global functions
 
+//------------------------------------------------------------------------------
+// Creation / Destruction
+//------------------------------------------------------------------------------
 
 SourceVChan_type*		init_SourceVChan_type	(char 						name[], 
 										  	  	 VChanData_type 			dataType,
-										 	  	 void* 						vChanOwner);
+										 	  	 void* 						vChanOwner,
+												 Connected_CBFptr_type		Connected_CBFptr,
+												 Disconnected_CBFptr_type	Disconnected_CBFptr);
 
 
 SinkVChan_type*			init_SinkVChan_type		(char 						name[], 
 										  	  	 VChanData_type 			dataType,
 										 	  	 void* 						vChanOwner,
 												 int 						queueSize,
-												 size_t						dataSize);
+												 size_t						dataSize,
+												 Connected_CBFptr_type		Connected_CBFptr,
+												 Disconnected_CBFptr_type	Disconnected_CBFptr);
 
-	// Discard common to both types of VChan. Cast SourceVChan_type** and SinkVChan_type**
-	// to VChan_type**
+	// Discard common to both types of VChan. Cast SourceVChan_type** and SinkVChan_type** to VChan_type**.
 void 					discard_VChan_type 		(VChan_type** vchan); 
 
+//------------------------------------------------------------------------------
+// Connections
+//------------------------------------------------------------------------------
 
-int						VChan_Connect			(SourceVChan_type* source, SinkVChan_type* sink);
-	// When disconnecting a Sink, its Source is detached and it is also removed from the list of
-	// Sinks from the Source. The provided Disconnected_CBFptr_type function is called to signal this event.
-	// When disconnecting a Source, it is removed from all its Sinks.
-int						VChan_Disconnect		(VChan_type* vchan);  
+	// Connects a Sink and a Source VChan .
+BOOL					VChan_Connect			(SourceVChan_type* source, SinkVChan_type* sink);
+
+	// Disconnects a VChan. 
+BOOL					VChan_Disconnect		(VChan_type* vchan); 
+
+//------------------------------------------------------------------------------
+// Set/Get
+//------------------------------------------------------------------------------
+
+void 					SetVChanName 			(VChan_type* vchan, char newName[]);
+
+	// Returns pointer to dynamically allocated VChan name (null terminated string) 
+char*					GetVChanName			(VChan_type* vchan);
+
 
 
 #ifdef __cplusplus

@@ -2,6 +2,8 @@ DAQLab.obj
 DAQLabModule.obj
 PIStage.obj
 TaskController.obj
+VChannel.obj
+VUPhotonCtr.obj
 Zstage.obj
 cvi.lib
 cviauto.lib

@@ -1,12 +1,28 @@
 [init_SourceVChan_type]
 Class="Function"
-Prototype="struct SourceVChan *init_SourceVChan_type(char *name, VChanData_type dataType, void *vChanOwner);"
+Prototype="struct SourceVChan *init_SourceVChan_type(char *name, VChanData_type dataType, void *vChanOwner, void (*Connected_CBFptr)(struct VChan *, struct VChan *), void (*Disconnected_CBFptr)(struct VChan *, struct VChan *));"
 
 [init_SinkVChan_type]
 Class="Function"
-Prototype="struct SinkVChan *init_SinkVChan_type(char *name, VChanData_type dataType, void *vChanOwner, int queueSize, unsigned int dataSize);"
+Prototype="struct SinkVChan *init_SinkVChan_type(char *name, VChanData_type dataType, void *vChanOwner, int queueSize, unsigned int dataSize, void (*Connected_CBFptr)(struct VChan *, struct VChan *), void (*Disconnected_CBFptr)(struct VChan *, struct VChan *));"
 
 [discard_VChan_type]
 Class="Function"
 Prototype="void discard_VChan_type(struct VChan **vchan);"
+
+[VChan_Connect]
+Class="Function"
+Prototype="int VChan_Connect(struct SourceVChan *source, struct SinkVChan *sink);"
+
+[VChan_Disconnect]
+Class="Function"
+Prototype="int VChan_Disconnect(struct VChan *vchan);"
+
+[SetVChanName]
+Class="Function"
+Prototype="void SetVChanName(struct VChan *vchan, char *newName);"
+
+[GetVChanName]
+Class="Function"
+Prototype="char *GetVChanName(struct VChan *vchan);"
 

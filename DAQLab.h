@@ -22,9 +22,13 @@
 #include "cvidef.h"
 #include <userint.h>
 #include <utility.h>
+#include "VChannel.h"
 
 //==============================================================================
 // Constants
+
+	// Max number of characters for a virtual channel name
+#define	DAQLAB_MAX_VCHAN_NAME	50	
 		
 //==============================================================================
 // Macros
@@ -81,18 +85,47 @@ typedef BOOL (*ValidateInputFptr_type) (char inputStr[], void* dataPtr);
 	
 
 //==============================================================================
-// External variables
-
-//==============================================================================
 // Global functions
-	
+
+//-------------------------------------------------------------------------------
+// DAQLab Virtual Channel management
+//-------------------------------------------------------------------------------
+
+	// Registers a VChan with the DAQLab framework
+BOOL				DLRegisterVChan					(VChan_type* vchan);
+
+	// Deregisters a VChan from the DAQLab framework
+BOOL				DLUnregisterVChan				(VChan_type* vchan);
+
+	// Searches for a given VChan object and if found, return pointer to it. 
+VChan_type**		DLVChanExists					(VChan_type* vchan, size_t* idx);
+
+	// Searches for a given VChan name and if found, return pointer to it. 
+VChan_type**		DLVChanNameExists				(char name[], size_t* idx);
+
+	// To Validate a new VChan name, pass this function as a parameter when calling DLGetUINameInput.
+BOOL				DLValidateVChanName				(char newVChanName[], void* null);
+
+//-------------------------------------------------------------------------------
+// DAQLab handy programmer's tools
+//-------------------------------------------------------------------------------
+
 	// installs callback data and callback function in all controls directly within panel 
 int		SetCtrlsInPanCBInfo 			(void* callbackData, CtrlCallbackPtr callbackFn, int panHndl);
+
+//-------------------------------------------------------------------------------
+// DAQLab user interface management
+//-------------------------------------------------------------------------------
 
 	// displays messages in the main workspace log panel and optionally beeps
 void	DLMsg							(const char* text, BOOL beep);
 	// displays a popup box where the user can give a string after which a validate function pointer is called
 char*	DLGetUINameInput				(char popupWndName[], size_t maxInputLength, ValidateInputFptr_type validateInputFptr, void* dataPtr);
+
+
+//-------------------------------------------------------------------------------
+// DAQLab XML management
+//-------------------------------------------------------------------------------
 	// adds multiple XML Element children or attributes for a parent XML Element
 int		DLAddToXMLElem					(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes);
 	// places the value of multiple XML Attributes of an Element into user provided pointers

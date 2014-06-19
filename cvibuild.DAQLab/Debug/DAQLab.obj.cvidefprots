@@ -10,6 +10,26 @@ Prototype="int CB_DAQLab_MainPan(int panel, int event, void *callbackData, int e
 Class="Function"
 Prototype="int SetCtrlsInPanCBInfo(void *callbackData, int (*callbackFn)(int, int, int, void *, int, int), int panHndl);"
 
+[DLRegisterVChan]
+Class="Function"
+Prototype="int DLRegisterVChan(struct VChan *vchan);"
+
+[DLUnregisterVChan]
+Class="Function"
+Prototype="int DLUnregisterVChan(struct VChan *vchan);"
+
+[DLVChanExists]
+Class="Function"
+Prototype="struct VChan **DLVChanExists(struct VChan *vchan, unsigned int *idx);"
+
+[DLVChanNameExists]
+Class="Function"
+Prototype="struct VChan **DLVChanNameExists(char *name, unsigned int *idx);"
+
+[DLValidateVChanName]
+Class="Function"
+Prototype="int DLValidateVChanName(char *newVChanName, void *null);"
+
 [DLMsg]
 Class="Function"
 Prototype="void DLMsg(const char *text, int beep);"

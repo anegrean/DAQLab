@@ -17,11 +17,13 @@
 #include "UI_DAQLab.h"
 #include "UI_TaskController.h"
 #include "DAQLabModule.h"
-#include "TaskController.h" 
+#include "TaskController.h"
+
 //==============================================================================
 // Include modules
 
 #include "PIStage.h"
+#include "VUPhotonCtr.h"
 
 
 
@@ -114,7 +116,8 @@ typedef struct {						  // Glues UI Task Controller to panel handle
 //------------------------------------------------------------------------------------------------
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 } 
+	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 }
 	
 };
 
@@ -144,12 +147,13 @@ static struct TasksUI_ {								// UI data container for Task Controllers
 	
 } 						TasksUI				= {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	
-	// different modules that inherit from DAQLabModule_type 
-	// list elements of DAQLabModule_type* size
+	// Different modules that inherit from DAQLabModule_type 
+	// List elements of DAQLabModule_type* type
 ListType		DAQLabModules				= 0;
 
-
-
+	// Virtual channels from all the modules that register such channels with the framework
+	// List elements of VChan_type* type
+ListType		VChannels					= 0;
 
 							
 
@@ -302,6 +306,7 @@ static int DAQLab_Load (void)
 		// Framework
 	nullChk ( TasksUI.UItaskCtrls 		= ListCreate(sizeof(UITaskCtrl_type*)) );	// list with UI Task Controllers
 	nullChk ( DAQLabModules   			= ListCreate(sizeof(DAQLabModule_type*)) );	// list with loaded DAQLab modules
+	nullChk ( VChannels		   			= ListCreate(sizeof(VChan_type*)) );		// list with Virtual Channels
 	
 	
 	//---------------------------------------------------------------------------------
@@ -500,10 +505,15 @@ static int DAQLab_Close (void)
 	// dispose modules list
 	DAQLabModule_empty (&DAQLabModules);
 	
+	// discard VChans list
+	ListDispose(VChannels);  
+	
 	errChk ( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) ); 
 	
 	// discard DOM after saving all settings
 	CA_DiscardObjHandle (DAQLabCfg_DOMHndl);
+	
+	
 	
 	QuitUserInterface(0);  
 	
@@ -549,6 +559,80 @@ int	SetCtrlsInPanCBInfo (void* callbackData, CtrlCallbackPtr callbackFn, int pan
 	
 	Error:
 	return error;
+}
+
+/// HIFN Registers a VChan with the DAQLab framework.
+/// HIRET TRUE if VChan was added, FALSE if error occured.
+BOOL DLRegisterVChan (VChan_type* vchan)
+{
+	if (!vchan) return FALSE;
+	return ListInsertItem(VChannels, &vchan, END_OF_LIST);
+}
+
+/// HIFN Disconnects and removes a VChan from the DAQLab framework.
+/// HIRET TRUE if successful, FALSE if error occured or channel not found.
+int DLUnregisterVChan (VChan_type* vchan)
+{   
+	size_t			itemPos;
+	VChan_type* 	VChanPtr	 = *DLVChanExists(vchan, &itemPos);
+	if (!VChanPtr) return FALSE;
+	
+	VChan_Disconnect(VChanPtr);
+	ListRemoveItem(VChannels, 0, itemPos);
+	
+	return TRUE;
+}
+
+/// HIFN Checks if a VChan object is present in the DAQLab framework.
+/// OUT idx 1-based index of VChan object in a ListType list of VChans kept by the DAQLab framework. Pass 0 if this is not needed. If item is not found, *idx is 0.
+/// HIRET Pointer to the found VChan_type* if VChan exists, NULL otherwise. 
+/// HIRET Pointer is valid until another call to DLRegisterVChan or DLUnregisterVChan. 
+VChan_type** DLVChanExists (VChan_type* vchan, size_t* idx)
+{
+	VChan_type** VChanPtrPtr;
+	for (int i = 1; i <= ListNumItems(VChannels); i++) {
+		VChanPtrPtr = ListGetPtrToItem(VChannels, i);
+		if (*VChanPtrPtr == vchan) {
+			if (idx) *idx = i;
+			return VChanPtrPtr;
+		}
+	}
+	if (idx) *idx = 0;
+	return NULL;
+}
+
+/// HIFN Searches for a given VChan name and if found, return pointer to it.
+/// OUT idx 1-based index of VChan object in a ListType list of VChans kept by the DAQLab framework. Pass 0 if this is not needed. If item is not found, *idx is 0.
+/// HIRET Pointer to the found VChan_type* if VChan exists, NULL otherwise. 
+/// HIRET Pointer is valid until another call to DLRegisterVChan or DLUnregisterVChan. 
+VChan_type** DLVChanNameExists (char name[], size_t* idx)
+{
+	VChan_type** 	VChanPtrPtr;
+	char*			listName;
+	for (int i = 1; i <= ListNumItems(VChannels); i++) {
+		VChanPtrPtr = ListGetPtrToItem(VChannels, i);
+		listName = GetVChanName(*VChanPtrPtr);
+		if (!strcmp(listName, name)) {
+			if (idx) *idx = i;
+			OKfree(listName);
+			return VChanPtrPtr;
+		}
+		OKfree(listName);
+	}
+	
+	if (idx) *idx = 0;
+	return NULL;
+	
+}
+
+/// HIFN Validate function for VChan names.
+/// HIRET True if newVChanName is unique among the framwork VChan names, False otherwise
+BOOL DLValidateVChanName (char newVChanName[], void* null)
+{
+	if (DLVChanNameExists(newVChanName, 0))
+		return FALSE;
+	else
+		return TRUE;
 }
 
 void DLMsg(const char* text, BOOL beep)
@@ -1042,9 +1126,11 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 
 static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskControl)
 {
-	int error = 0;
-	UITaskCtrl_type* newUItaskCtrl = malloc(sizeof(UITaskCtrl_type));
+	int 				error = 0;
+	UITaskCtrl_type* 	newUItaskCtrl = malloc(sizeof(UITaskCtrl_type));
+	char*				name;
 	if (!newUItaskCtrl) return NULL;
+	
 	
 	// duplicate Task Controller panel
 	errChk( newUItaskCtrl->panHndl		= DuplicatePanel(TasksUI.panHndl, TasksUI.controllerPanHndl, "", 0, DAQLAB_TASKCONTROLLERS_PAN_MARGIN) );
@@ -1052,7 +1138,9 @@ static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskContr
 	// add taskControl data and callback to handle events
 	SetCtrlsInPanCBInfo(taskControl, DAQLab_TaskControllers_CB, newUItaskCtrl->panHndl);
 	// set UI Task Controller name
-	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Name, GetTaskControlName(taskControl)); 
+	name = GetTaskControlName(taskControl);
+	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Name, name);
+	OKfree(name);
 	// set UI Task Controller repeats
 	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Repeat, GetTaskControlIterations(taskControl)); 
 	// set UI Task Controller wait
@@ -1182,8 +1270,7 @@ static void	DAQLab_RedrawTaskControllerUI (void)
 							+ 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN + menubarHeight);
 		SetPanelAttribute(TasksUI.panHndl, ATTR_WIDTH, TasksUI.controllerPanWidth + 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN); 
 		
-		// return to normal width and remove scroll bars
-		SetPanelAttribute(TasksUI.panHndl, ATTR_WIDTH, TasksUI.controllerPanWidth + 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN);
+		// remove scroll bars
 		SetPanelAttribute(TasksUI.panHndl, ATTR_SCROLL_BARS, VAL_NO_SCROLL_BARS);
 		
 	}
@@ -1387,17 +1474,20 @@ static BOOL	DAQLab_ValidControllerName (char name[], void* listPtr)
 {
 	ListType			controllerList		= *(ListType*) listPtr;
 	BOOL 				foundFlag 			= FALSE; 
-	UITaskCtrl_type**	UITaskCtrlsPtrPtr;  
+	UITaskCtrl_type**	UITaskCtrlsPtrPtr;
+	char*				nameTC				= NULL;
 	
 	// check if there is already another Task Controller with the same name
 	for (size_t i = 1; i <= ListNumItems(controllerList); i++) {
 		UITaskCtrlsPtrPtr = ListGetPtrToItem(controllerList, i);
-		if (strcmp (GetTaskControlName((*UITaskCtrlsPtrPtr)->taskControl), name) == 0) {
+		nameTC = GetTaskControlName((*UITaskCtrlsPtrPtr)->taskControl);
+		if (strcmp (nameTC, name) == 0) {
 			foundFlag = TRUE;
 			break;
 		}
+		OKfree(nameTC);
 	}
-	
+	OKfree(nameTC);
 	return !foundFlag; // valid input if there is no other controller with the same name
 }
 
@@ -1435,6 +1525,7 @@ static void	DAQLab_TaskMenu_DeleteTaskController (void)
 	int					delPanHndl;
 	int					error;
 	UITaskCtrl_type** 	UITaskCtrlsPtrPtr;
+	char*				name;
 	
 	delPanHndl = LoadPanel(0, DAQLAB_UI_DAQLAB, TCDelPan);
 	
@@ -1442,7 +1533,9 @@ static void	DAQLab_TaskMenu_DeleteTaskController (void)
 	
 	for (size_t i = 1; i <= ListNumItems(TasksUI.UItaskCtrls); i++) {
 		UITaskCtrlsPtrPtr = ListGetPtrToItem(TasksUI.UItaskCtrls, i);
-		InsertListItem(delPanHndl, TCDelPan_TaskControllers, -1, GetTaskControlName((*UITaskCtrlsPtrPtr)->taskControl), i); 
+		name = GetTaskControlName((*UITaskCtrlsPtrPtr)->taskControl);
+		InsertListItem(delPanHndl, TCDelPan_TaskControllers, -1, name, i); 
+		OKfree(name);
 	}
 	
 	// display popup panel

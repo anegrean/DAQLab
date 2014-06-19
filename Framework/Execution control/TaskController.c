@@ -281,7 +281,7 @@ void discard_TaskControl_type(TaskControl_type** a)
 
 char* GetTaskControlName (TaskControl_type* taskControl)
 {
-	return taskControl->taskName;
+	return StrDup(taskControl->taskName);
 }
 
 void SetTaskControlName (TaskControl_type* taskControl, char newName[])

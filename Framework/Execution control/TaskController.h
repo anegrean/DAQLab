@@ -397,39 +397,38 @@ void 					discard_TaskControl_type		(TaskControl_type** a);
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void 					SetTaskControlName 					(TaskControl_type* taskControl, char newName[]);
-															// returns pointer to dynamically allocated Task Controller name (null terminated string) 
+	// Returns pointer to dynamically allocated Task Controller name (null terminated string) 
 char*					GetTaskControlName					(TaskControl_type* taskControl);
 
-															// use this function wisely, mostly intended to be used in a custom module event callback
+	// Use this function wisely, mostly intended to be used in a custom module event callback
 void					SetTaskControlState					(TaskControl_type* taskControl, TaskStates_type	newState);
 TaskStates_type			GetTaskControlState					(TaskControl_type* taskControl);
 														
-															// repeats = 1 by default
+	// repeats = 1 by default
 void					SetTaskControlIterations			(TaskControl_type* taskControl, size_t repeat);
 size_t					GetTaskControlIterations			(TaskControl_type* taskControl);
 
-															// iterateFlag = TRUE by default, i.e. call of the iteration function pointer
-															// is done before starting SubTasks, otherwise it's called after the SubTasks complete
+	// iterateFlag = TRUE by default, i.e. call of the iteration function pointer is done before starting SubTasks, 
+	// otherwise it's called after the SubTasks complete
 void					SetTaskControlIterateBeforeFlag		(TaskControl_type* taskControl, BOOL iterateBeforeFlag);
 BOOL					GetTaskControlIterateBeforeFlag		(TaskControl_type* taskControl);
 
-															// mode = TASK_FINITE by default
+	// mode = TASK_FINITE by default
 void					SetTaskControlMode					(TaskControl_type* taskControl, TaskMode_type mode);
 TaskMode_type			GetTaskControlMode					(TaskControl_type* taskControl);
 
-															// Number of seconds to wait between iterations
-															// wait = 0 by default
+	// Number of seconds to wait between iterations
+	// wait = 0 by default
 void					SetTaskControlIterationsWait		(TaskControl_type* taskControl, double waitBetweenIterations);
 double					GetTaskControlIterationsWait		(TaskControl_type* taskControl);
 
-															// Module specific data associated with the Task Controller
-															// moduleData = NULL by default
+	// Module specific data associated with the Task Controller
+	// moduleData = NULL by default
 void					SetTaskControlModuleData			(TaskControl_type* taskControl, void* moduleData);
 void*					GetTaskControlModuleData			(TaskControl_type* taskControl);
 
-															// Logs Task Controller activity. Multiple Task Controllers may share
-															// the same log.
-															// logPtr = NULL by default
+	// Logs Task Controller activity. Multiple Task Controllers may share the same log.
+	// logPtr = NULL by default
 void					SetTaskControlLog					(TaskControl_type* taskControl, TaskExecutionLog_type*	logPtr); 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -444,8 +443,8 @@ int						RemoveSubTaskFromParent			(TaskControl_type* child);
 // Task Controller event posting and execution control functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 														
-														// Pass NULL to eventInfo if there is no additional data carried by the event 
-														// Pass NULL to disposeEventInfoFptr if eventInfo should NOT be disposed after processing the event
+	// Pass NULL to eventInfo if there is no additional data carried by the event 
+	// Pass NULL to disposeEventInfoFptr if eventInfo should NOT be disposed after processing the event
 int 					TaskControlEvent				(TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventInfo, 
 														 DisposeEventInfoFptr_type disposeEventInfoFptr); 
 
@@ -454,7 +453,7 @@ int						TaskControlEventToSubTasks  	(TaskControl_type* SenderTaskControl, Task
 
 void					ContinueTaskControlExecution	(TaskControl_type* taskControl, FCallReturn_type* fCallResult);
 
-														// Aborts iterations for the entire Nested Task Controller hierarchy
+	// Aborts iterations for the entire Nested Task Controller hierarchy
 void					AbortTaskControlExecution		(TaskControl_type* taskControl);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -477,9 +476,9 @@ void					RemoveAllDataQueues				(TaskControl_type* taskControl);
 // Task Controller logging functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-TaskExecutionLog_type*	init_TaskExecutionLog_type		(int logBoxPanHandle, int logBoxControl); // Pass panel handle and text box control IDs if any
-																								  // to display task controller execution. Pass 0 for both
-																								  // if this is not required.
+	// Pass panel handle and text box control IDs if any to display task controller execution.
+	// Pass 0 for both if this is not required.
+TaskExecutionLog_type*	init_TaskExecutionLog_type		(int logBoxPanHandle, int logBoxControl); 
 
 void					discard_TaskExecutionLog_type	(TaskExecutionLog_type** a);
 

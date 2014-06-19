@@ -1,0 +1,12 @@
+[initalloc_VUPhotonCtr]
+Class="Function"
+Prototype="struct DAQLabModule *initalloc_VUPhotonCtr(struct DAQLabModule *mod, char *className, char *instanceName);"
+
+[discard_VUPhotonCtr]
+Class="Function"
+Prototype="void discard_VUPhotonCtr(struct DAQLabModule **mod);"
+
+[MenuSettings_CB]
+Class="Function"
+Prototype="void MenuSettings_CB(int menuBar, int menuItem, void *callbackData, int panel);"
+

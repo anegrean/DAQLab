@@ -27,10 +27,6 @@
 	// Maximum number of measurement channels	
 #define MAX_CHANELS				4
 
-	// Maximum number of channels displayed at once on the main panel. If there are
-	// more channels, the a horizontal scroll bar will be added to the panel.
-#define MAX_VISIBLE_CHANELS		4
-
 	// Maximum gain applied to a PMT in [V]
 #define MAX_GAIN_VOLTAGE		0.9
 
@@ -88,11 +84,11 @@ struct VUPhotonCtr {
 		
 	int					mainPanHndl; 
 	
+	int					chanPanHndl;
+	
 	int					statusPanHndl;
 	
 	int					settingsPanHndl;
-	
-	int					chanPanHndl;
 	
 	int					taskPanHndl;
 	
@@ -131,7 +127,7 @@ struct VUPhotonCtr {
 //==============================================================================
 // Static functions
 
-static Channel_type* 				init_Channel_type 				(VUPhotonCtr_type* vupcInstance, int panHndl, size_t chanIdx);
+static Channel_type* 				init_Channel_type 				(VUPhotonCtr_type* vupcInstance, int panHndl, size_t chanIdx, char VChanName[]);
 
 static void							UpdateAcqSetDisplay				(VUPhotonCtr_type* vupc);
 
@@ -252,8 +248,17 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	
 	// discard VUPhotonCtr_type specific data
 	
-	if (vupc->mainPanHndl)
+	// discard channel resources
+	for (int i = 0; i < MAX_CHANELS; i++)
+		discard_Channel_type(&vupc->channels[i]);
+	
+	// main panel and panels loaded into it (channels and task control)
+	if (vupc->mainPanHndl) {
 		DiscardPanel(vupc->mainPanHndl);
+		vupc->mainPanHndl = 0;
+		vupc->taskPanHndl = 0;
+		vupc->chanPanHndl = 0;
+	}
 	
 	if (vupc->statusPanHndl)
 		DiscardPanel(vupc->statusPanHndl);
@@ -261,28 +266,17 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	if (vupc->settingsPanHndl)
 		DiscardPanel(vupc->settingsPanHndl);
 	
-	if (vupc->chanPanHndl)
-		DiscardPanel(vupc->chanPanHndl);
-	
-	if (vupc->taskPanHndl)
-		DiscardPanel(vupc->taskPanHndl);
-	
-	
-	for (int i = 0; i < MAX_CHANELS; i++)
-		discard_Channel_type(&vupc->channels[i]);
-	
-	
 	// discard DAQLabModule_type specific data
 	discard_DAQLabModule(mod);
 }
 
-static Channel_type* init_Channel_type (VUPhotonCtr_type* vupcInstance, int panHndl, size_t chanIdx)
+static Channel_type* init_Channel_type (VUPhotonCtr_type* vupcInstance, int panHndl, size_t chanIdx, char VChanName[])
 {
 	Channel_type* chan = malloc (sizeof(Channel_type));
 	if (!chan) return NULL;
 	
 	chan->vupcInstance	= vupcInstance;
-	chan->VChan			= NULL;
+	chan->VChan			= init_SourceVChan_type(VChanName, VCHAN_USHORT, chan, NULL, NULL); 
 	chan->chanIdx		= chanIdx;
 	chan->panHndl   	= panHndl;
 	chan->gain			= 0;
@@ -299,17 +293,15 @@ static void	discard_Channel_type (Channel_type** chan)
 {
 	if (!*chan) return;
 	
-	if ((*chan)->panHndl)
+	if ((*chan)->panHndl) {
 		DiscardPanel((*chan)->panHndl);
-	
-	// unregister channel with device structure
-	VUPhotonCtr_type* vupc = (*chan)->vupcInstance; 
-	vupc->channels[(*chan)->chanIdx - 1] = NULL;
+		(*chan)->panHndl = 0;
+	}
 	
 	// discard SourceVChan
 	discard_VChan_type((VChan_type**)&(*chan)->VChan);
 	
-	OKfree(*chan);
+	OKfree(*chan);  // this also removes the channel from the device structure
 }
 
 static int InitHardware (VUPhotonCtr_type* vupc)
@@ -334,10 +326,10 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	vupc->mainPanHndl 		= LoadPanel(workspacePanHndl, UI_VUPhotonCtr, VUPCMain);
 	// load settings panel
 	vupc->settingsPanHndl   = LoadPanel(workspacePanHndl, UI_VUPhotonCtr, VUPCSet);
-	// load channel panel
-	vupc->chanPanHndl		= LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCChan);
 	// load Task Controller panel
 	vupc->taskPanHndl		= LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCTask);
+	// load channel panel, the dimensions of which will be used to adjust the size of the main panel
+	vupc->chanPanHndl		= LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCChan);
 	
 	// connect module data and user interface callbackFn to all direct controls in the settings and task panels
 	SetCtrlsInPanCBInfo(mod, VUPCSettings_CB, vupc->settingsPanHndl);
@@ -360,7 +352,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 	// populate settings panel with available channels
 	for (int i = 1; i <= MAX_CHANELS; i++) {
-		sprintf(buff,"ch. %d", i);
+		sprintf(buff,"Ch. %d", i);
 		InsertListItem(vupc->settingsPanHndl, VUPCSet_Channels, -1, buff, i);  						 
 	}
 	
@@ -373,6 +365,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_NSamples, *vupc->nSamples);
 	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_SamplingRate, *vupc->samplingRate/1000);					// display in [kHz]
 	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_Duration, *vupc->nSamples/(*vupc->samplingRate*1000));	// display in [s]
+	
+	// redraw main panel
+	RedrawMainPanel(vupc);
 	
 	return 0;
 	
@@ -402,28 +397,33 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
 {
 	size_t		nChannels		= 0;
-	int			menubarHeight;
-	int			chanPanHeight;
-	int			chanPanWidth;
-	int			taskPanWidth;
+	int			menubarHeight	= 0;
+	int			chanPanHeight	= 0;
+	int			chanPanWidth	= 0;
+	int			taskPanWidth	= 0;
 	
 	// count the number of channels in use
 	for (size_t i = 0; i < MAX_CHANELS; i++)
-		if (vupc->channels[i]) nChannels++;
+		if (vupc->channels[i]) nChannels++; 
 	
-	// get channel panel and menubar dimensions
-	GetPanelAttribute(vupc->mainPanHndl, ATTR_MENU_HEIGHT, &menubarHeight);
+	// get channel panel attributes from the first loaded channel since they are all the same
 	GetPanelAttribute(vupc->chanPanHndl, ATTR_HEIGHT, &chanPanHeight);
-	GetPanelAttribute(vupc->chanPanHndl, ATTR_WIDTH, &chanPanWidth);
+	GetPanelAttribute(vupc->chanPanHndl, ATTR_WIDTH, &chanPanWidth);	
 	
-	// adjust size of main panel to match the size of one channel panel
-	SetPanelAttribute(vupc->mainPanHndl, ATTR_HEIGHT, chanPanHeight + 2 * MAIN_PAN_MARGIN + menubarHeight);
-	SetPanelAttribute(vupc->mainPanHndl, ATTR_WIDTH, chanPanWidth + 2 * MAIN_PAN_MARGIN); 
-	
-	if (!nChannels) return; // do nothing if there are no channels in use
-	
+	// get main panel menubar dimensions
+	GetPanelAttribute(vupc->mainPanHndl, ATTR_MENU_HEIGHT, &menubarHeight);
 	// get task panel width, since height must be the same as for the channel panel
-	GetPanelAttribute(vupc->taskPanHndl, ATTR_HEIGHT, &taskPanWidth);
+	GetPanelAttribute(vupc->taskPanHndl, ATTR_WIDTH, &taskPanWidth);
+	
+	// adjust size of main panel to match the size of one channel plus task panel and space in between
+	SetPanelAttribute(vupc->mainPanHndl, ATTR_HEIGHT, chanPanHeight + 2 * MAIN_PAN_MARGIN + menubarHeight);
+	SetPanelAttribute(vupc->mainPanHndl, ATTR_WIDTH, chanPanWidth + taskPanWidth + MAIN_PAN_SPACING + 2 * MAIN_PAN_MARGIN); 
+	
+	
+	if (!nChannels) {
+		HidePanel(vupc->taskPanHndl);
+		return;
+	}
 	
 	// reposition channel panels and display them
 	nChannels = 0;
@@ -431,11 +431,13 @@ static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
 		if (vupc->channels[i]){
 			nChannels++;
 			SetPanelAttribute(vupc->channels[i]->panHndl, ATTR_LEFT, (chanPanWidth + MAIN_PAN_SPACING) * (nChannels-1) + MAIN_PAN_MARGIN);  
+			SetPanelAttribute(vupc->channels[i]->panHndl, ATTR_TOP, MAIN_PAN_MARGIN + menubarHeight);  
 			DisplayPanel(vupc->channels[i]->panHndl);
 		}
 	
 	// reposition Task Controller panel to be the end of all channel panels
-	SetPanelAttribute(vupc->taskPanHndl, ATTR_LEFT, (chanPanWidth + MAIN_PAN_SPACING) * nChannels + MAIN_PAN_MARGIN);  
+	SetPanelAttribute(vupc->taskPanHndl, ATTR_LEFT, (chanPanWidth + MAIN_PAN_SPACING) * nChannels + MAIN_PAN_MARGIN);
+	SetPanelAttribute(vupc->taskPanHndl, ATTR_TOP, MAIN_PAN_MARGIN + menubarHeight);  
 	DisplayPanel(vupc->taskPanHndl);
 	
 	// adjust main panel width and insert a horizontal scrollbar if necessary, in which case, adjust also the height
@@ -444,12 +446,12 @@ static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
 		SetPanelAttribute(vupc->mainPanHndl, ATTR_WIDTH, chanPanWidth * MAX_VISIBLE_CHANNELS + taskPanWidth + 
 						  MAIN_PAN_SPACING * MAX_VISIBLE_CHANNELS + 2 * MAIN_PAN_MARGIN);
 		// increase height and add scrollbars
-		SetPanelAttribute(vupc->mainPanHndl, ATTR_HEIGHT, chanPanHeight + 2 *  MAIN_PAN_MARGIN + VAL_LARGE_SCROLL_BARS);
+		SetPanelAttribute(vupc->mainPanHndl, ATTR_HEIGHT, chanPanHeight + 2 *  MAIN_PAN_MARGIN + VAL_LARGE_SCROLL_BARS + menubarHeight);
 		SetPanelAttribute(vupc->mainPanHndl, ATTR_SCROLL_BARS, VAL_HORIZ_SCROLL_BAR);
 	} else {
 		// adjust size of main panel to match the size of the required number of channels plus Task Controller panel
 		SetPanelAttribute(vupc->mainPanHndl, ATTR_WIDTH, chanPanWidth * nChannels + taskPanWidth + MAIN_PAN_SPACING * nChannels + 2 * MAIN_PAN_MARGIN);
-		SetPanelAttribute(vupc->mainPanHndl, ATTR_HEIGHT, chanPanHeight + 2 * MAIN_PAN_MARGIN); 
+		SetPanelAttribute(vupc->mainPanHndl, ATTR_HEIGHT, chanPanHeight + 2 * MAIN_PAN_MARGIN + menubarHeight); 
 		// remove scroll bars
 		SetPanelAttribute(vupc->mainPanHndl, ATTR_SCROLL_BARS, VAL_NO_SCROLL_BARS);
 	}	 
@@ -498,7 +500,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 {
 	VUPhotonCtr_type* 	vupc 		=   callbackData;
 	char*				vChanName;
-	char				vChanNameBuff[DAQLAB_MAX_VCHAN_NAME + 50];
+	char				buff[DAQLAB_MAX_VCHAN_NAME + 50];
 	switch (event) {
 			
 		case EVENT_COMMIT:
@@ -537,7 +539,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 				case VUPCSet_Channels:
 					
 					// eventData1 =  The new mark state of the list item
-					// eventData2 =  itemIndex of the item whose mark state is being changed
+					// eventData2 =  0-based itemIndex of the item whose mark state is being changed
 					
 					SourceVChan_type* 	srcVChan;
 					Channel_type*		chan;
@@ -545,26 +547,38 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 					if (eventData1) {
 						// channel checked, give new VChan name and add channel
 						vChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
-						if (!vChanName) return 0;	// action cancelled
-						
-						sprintf(vChanNameBuff, "ch. %d: %s", eventData2+1, vChanName); 
-						ReplaceListItem(panel, control, eventData2, vChanNameBuff, eventData2+1);
-						
+						if (!vChanName) {
+							// uncheck channel
+							CheckListItem(panel, control, eventData2, 0);
+							return 0;	// action cancelled
+						}
+						// rename label in settings panel
+						sprintf(buff, "Ch. %d: %s", eventData2+1, vChanName); 
+						ReplaceListItem(panel, control, eventData2, buff, eventData2+1);
 						// create channel
-						chan = init_Channel_type(vupc, DuplicatePanel(vupc->mainPanHndl, vupc->chanPanHndl, "", 0, 0), eventData2+1);  
-						
-						// create source VChan
-						srcVChan = init_SourceVChan_type(vChanName, VCHAN_USHORT, chan, NULL, NULL); 
-						
+						chan = init_Channel_type(vupc, LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCChan), eventData2+1, vChanName);  
+						// rename channel mode label
+						sprintf(buff, "Ch. %d", eventData2+1);
+						SetCtrlAttribute(chan->panHndl, VUPCChan_Mode, ATTR_LABEL_TEXT, buff); 
 						// register VChan with DAQLab
-						DLRegisterVChan(srcVChan);
-						
+						DLRegisterVChan(chan->VChan);
 						// update main panel
 						RedrawMainPanel(vupc);
 						
 						
 					} else {
 						// channel unchecked, remove channel
+						// get channel pointer
+						srcVChan = vupc->channels[eventData2]->VChan;
+						// unregister VChan from DAQLab framework
+						DLUnregisterVChan(srcVChan);
+						// discard channel data
+						discard_Channel_type(&vupc->channels[eventData2]);
+						// update channel list in the settings panel
+						sprintf(buff, "Ch. %d", eventData2+1); 
+						ReplaceListItem(panel, control, eventData2, buff, eventData2+1);
+						// update main panel
+						RedrawMainPanel(vupc);
 					}
 
 					

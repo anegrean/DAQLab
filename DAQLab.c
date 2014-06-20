@@ -86,7 +86,8 @@ typedef enum _DAQLabMessageID{
 	DAQLAB_MSG_ERR_DOM_CREATION,			// HRESULT* error code, 0, 0, 0
 	DAQLAB_MSG_ERR_ACTIVEXML,				// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0
 	DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, // HRESULT* error code, 0, 0, 0
-	DAQLAB_MSG_ERR_LOADING_MODULE,			// char* module instance name, char* error description 
+	DAQLAB_MSG_ERR_LOADING_MODULE,			// char* module instance name, char* error description
+	DAQLAB_MSG_ERR_VCHAN_NOT_FOUND,			// VChan_type*, 0, 0, 0
 	
 	// warnings									
 	DAQLAB_MSG_WARN_NO_CFG_FILE,			// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0       
@@ -574,10 +575,13 @@ BOOL DLRegisterVChan (VChan_type* vchan)
 int DLUnregisterVChan (VChan_type* vchan)
 {   
 	size_t			itemPos;
-	VChan_type* 	VChanPtr	 = *DLVChanExists(vchan, &itemPos);
-	if (!VChanPtr) return FALSE;
+	VChan_type** 	VChanPtr	 = DLVChanExists(vchan, &itemPos);
+	if (!VChanPtr) {
+		DAQLab_Msg(DAQLAB_MSG_ERR_VCHAN_NOT_FOUND, vchan, 0, 0, 0);
+		return FALSE;
+	}
 	
-	VChan_Disconnect(VChanPtr);
+	VChan_Disconnect(*VChanPtr);
 	ListRemoveItem(VChannels, 0, itemPos);
 	
 	return TRUE;
@@ -648,8 +652,9 @@ void DLMsg(const char* text, BOOL beep)
 /// HIPAR msgID/ If required, pass in additional data to format the message.
 static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* data3, void* data4)
 {
-	char buff[1000]="";
-	char buffCA[1000]="";
+	char 	buff[1000]		="";
+	char 	buffCA[1000]	="";
+	char*	name;
 	
 	switch (msgID) {
 		
@@ -665,7 +670,6 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 				DLMsg("\n\n", 0);
 			} else
 				DLMsg("\n", 0);
-			
 			break;
 			
 		case DAQLAB_MSG_ERR_DOM_CREATION:
@@ -675,7 +679,6 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 			DLMsg(buff, 1);
 			DLMsg(buffCA, 0);
 			DLMsg("\n\n", 0);
-			
 			break;
 		
 		case DAQLAB_MSG_ERR_ACTIVEXML:
@@ -689,7 +692,6 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 				DLMsg("\n\n", 0);
 			} else
 				DLMsg("\n", 0);
-			
 			break;
 			
 		case DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES:
@@ -697,6 +699,7 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 			DLMsg("Error: Could not obtain XML attribute value from element.", 1);
 			DLMsg(buffCA, 0);
 			DLMsg("\n", 0);
+			break;
 			
 		case DAQLAB_MSG_ERR_LOADING_MODULE:
 			DLMsg("Error: Could not load module ", 1);
@@ -707,9 +710,15 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 				DLMsg((char*)data2, 0); // error description
 				DLMsg("\n\n", 0);
 			}
+			break;
 			
+		case DAQLAB_MSG_ERR_VCHAN_NOT_FOUND:
+			name = GetVChanName(data1);
+			Fmt(buff, "Error: Could not find virtual channel \"%s\" in the DAQLab framework.", name);
+			DLMsg(buff, 1);
+			OKfree(name);
+			break;
 			
-		
 		case DAQLAB_MSG_OK_DOM_CREATION:
 			
 			DLMsg("XML DOM created successfully.\n\n", 0);

@@ -68,7 +68,7 @@ Disk Date = 3472621200
 In Projects = ""
 Window Top = 32
 Window Left = 10
-Window Z-Order = 2
+Window Z-Order = 4
 Source Window State = "1,1695,1695,1695,8,31,31,0,3,80,0,0,0,0,0,25,1683,0,1695,8,349,683,1,0,"
 
 [File 0004]
@@ -116,11 +116,11 @@ Source Window State = "1,183,183,183,20,49,49,0,3,72,0,0,0,0,0,19,0,0,183,20,271
 [File 0008]
 Path = "/d/ELE_DAQLab/DAQLab.h"
 File Type = "Include"
-Disk Date = 3486058095
+Disk Date = 3486102017
 In Projects = "1,"
 Window Top = 30
-Window Z-Order = 1
-Source Window State = "1,94,94,94,20,35,20,0,0,114,0,0,0,0,0,53,82,0,100,20,400,600,1,0,"
+Window Z-Order = 2
+Source Window State = "1,97,97,97,20,37,20,0,0,70,0,0,0,0,0,28,82,0,97,20,400,600,1,0,"
 
 [File 0009]
 Path = "/c/Program Files (x86)/National Instruments/CVI2013/include/cviauto.h"
@@ -181,7 +181,7 @@ Window Top = 32
 Window Left = 10
 Window Height = 310
 Window Width = 523
-Window Z-Order = 4
+Window Z-Order = 3
 
 [File 0015]
 Path = "/d/ELE_2010_2961_PCM/TasksUI.uir"
@@ -275,30 +275,30 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 File Type = "CSource"
 Disk Date = 3486057685
 In Projects = "1,"
-Window Top = 102
-Window Left = -866
+Window Top = 143
+Window Left = -1240
 Window Released = True
-Source Window State = "1,281,281,281,6,24,6,0,3,145,0,0,0,0,0,57,258,0,281,24,817,1196,0,0,"
+Source Window State = "1,1555,1555,1555,21,38,21,0,0,155,0,0,0,0,0,71,1525,0,1554,38,817,1196,0,0,"
 
 [File 0025]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 File Type = "Include"
-Disk Date = 3486057685
+Disk Date = 3486115557
 In Projects = "1,"
-Window Top = 51
-Window Left = -1110
+Window Top = 87
+Window Left = -361
 Window Released = True
-Source Window State = "1,478,478,478,94,95,94,0,0,150,0,0,0,0,0,62,381,0,479,47,879,1240,0,0,"
+Source Window State = "1,259,259,259,4,22,4,0,3,150,0,0,0,0,0,62,253,0,259,22,879,1240,0,0,"
 
 [File 0026]
 Path = "/d/ELE_DAQLab/DAQLab.c"
 File Type = "CSource"
-Disk Date = 3486058095
+Disk Date = 3486108577
 In Projects = "1,"
-Window Top = 70
-Window Left = 147
+Window Top = 62
+Window Left = 40
 Window Released = True
-Source Window State = "1,628,628,628,11,14,11,0,0,185,0,0,0,0,0,67,819,0,245,57,944,1517,0,0,"
+Source Window State = "1,574,574,574,4,21,21,0,0,185,0,0,0,0,0,67,553,0,583,13,944,1517,0,0,"
 
 [File 0027]
 Path = "/d/ELE_DAQLab/UI_DAQLab.h"
@@ -312,12 +312,12 @@ Source Window State = "1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,349,683,1,0,"
 [File 0028]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.c"
 File Type = "CSource"
-Disk Date = 3486060995
+Disk Date = 3486118149
 In Projects = "1,"
-Window Top = 129
-Window Left = 201
+Window Top = 155
+Window Left = 160
 Window Released = True
-Source Window State = "1,339,339,339,40,51,40,0,0,131,0,1,0,1,0,56,241,0,265,40,800,1085,0,0,"
+Source Window State = "1,578,578,578,68,81,68,0,0,158,0,1,0,1,0,56,529,0,578,72,800,1303,0,0,"
 
 [File 0029]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.h"
@@ -345,27 +345,27 @@ Window Top = 182
 Window Left = 90
 Window Height = 323
 Window Width = 683
-Window Z-Order = 3
+Window Z-Order = 1
 
 [File 0032]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.c"
 File Type = "CSource"
-Disk Date = 3486057685
+Disk Date = 3486107854
 In Projects = "1,"
-Window Top = 112
-Window Left = 541
+Window Top = 91
+Window Left = 303
 Window Released = True
-Source Window State = "1,289,289,289,5,23,23,0,3,165,0,0,0,0,0,60,259,0,289,5,854,1360,0,0,"
+Source Window State = "1,290,290,290,5,23,23,0,0,165,0,0,0,0,0,60,260,0,296,0,854,1360,0,0,"
 
 [File 0033]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.h"
 File Type = "Include"
-Disk Date = 3486057685
+Disk Date = 3486107854
 In Projects = "1,"
-Window Top = 175
-Window Left = -993
+Window Top = 163
+Window Left = -1149
 Window Released = True
-Source Window State = "1,103,103,103,49,61,49,0,0,146,0,0,0,0,0,56,67,0,103,31,803,1205,0,0,"
+Source Window State = "1,122,122,122,24,36,24,0,0,146,0,0,0,0,0,56,116,0,122,71,803,1205,0,0,"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

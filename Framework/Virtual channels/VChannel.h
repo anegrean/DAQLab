@@ -123,6 +123,46 @@ void 					SetVChanName 			(VChan_type* vchan, char newName[]);
 char*					GetVChanName			(VChan_type* vchan);
 
 
+//-----------------------------
+//				 TEST
+//-------------------
+
+// discard function pointer type
+typedef void	(* DiscardFptr_type) 		(VChan_type** vchan);
+typedef BOOL	(* DisconnectFptr_type)	   	(VChan_type* vchan);
+
+struct VChan {
+	
+	//-----------------------
+	// Identification
+	//-----------------------
+	
+	char*						name;					// Name of virtual chanel. 
+	VChanData_type				dataType;				// Type of data which goes through the channel.
+	VChanDataFlow_type 			dataFlow;   			// Direction of data flow into or out of the channel.
+														
+	//-----------------------	
+	// Source code connection
+	//-----------------------
+	void*						vChanOwner;				// Reference to object that owns the VChan.
+	
+	//-----------------------
+	// Methods
+	//-----------------------
+	
+	DiscardFptr_type			DiscardFptr;			// Discards VChan type-specific data. 
+	
+	DisconnectFptr_type			DisconnectFptr;			// Disconnects a VChan.
+	
+	//-----------------------
+	// Callbacks
+	//-----------------------
+	
+	Connected_CBFptr_type		Connected_CBFptr;		// Callback when another VChan has been connected to this one.
+	
+	Disconnected_CBFptr_type	Disconnected_CBFptr;   	// Callback when another VChan has been disconnected from this one.
+	
+};
 
 #ifdef __cplusplus
     }

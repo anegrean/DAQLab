@@ -42,7 +42,7 @@ START/STOP/CONFIG
 	:  		 |- Z Stage (N)
 	:		 		  |- DAQ Device (1)
 					  |- PMT Data (1)
-	:  		   		  |- Scan Engine (1)	
+	:  		   		  |- Scan Engine (1) 	
 	:  		
 	:- Display (x) 
 The execution of this complex task is as follows. The parent "Z Stack" task is executed once and its completion,
@@ -263,7 +263,7 @@ typedef enum {
 	TASK_STATE_STOPPING,				// Task Controller received a STOP event and waits for SubTasks to complete their iterations
 	TASK_STATE_ITERATING,				// Task Controller performs one iteration.
 	TASK_STATE_DONE,					// Task Controller finished required iterations if operation was finite
-	TASK_STATE_WAITING,
+	TASK_STATE_WAITING,		// not in use
 	TASK_STATE_ERROR
 } TaskStates_type;
 

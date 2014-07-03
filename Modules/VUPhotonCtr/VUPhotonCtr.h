@@ -22,13 +22,27 @@
 
 //==============================================================================
 // Constants
+
+#define MOD_VUPhotonCtr_NAME 		"VU Photon Counter"
 		
-#define MOD_VUPhotonCtr_NAME 		"VU Photon Counter" 
+
 
 //==============================================================================
 // Types
-		
+
 typedef struct VUPhotonCtr	VUPhotonCtr_type;
+
+typedef enum {
+	PMT_LED_OFF,
+	PMT_LED_ON,
+	PMT_LED_ERROR
+} PMT_LED_type;
+
+typedef enum {
+	PMT_MODE_OFF,
+	PMT_MODE_ON,
+	PMT_MODE_ON_ACQ
+} PMT_Mode_type;
 
 
 //==============================================================================

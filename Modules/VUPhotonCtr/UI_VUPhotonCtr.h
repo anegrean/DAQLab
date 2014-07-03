@@ -35,10 +35,9 @@
 #define  VUPCChan_Plate                   4       /* control type: deco, callback function: (none) */
 #define  VUPCChan_Mode                    5       /* control type: ring, callback function: (none) */
 #define  VUPCChan_LED_STATE1              6       /* control type: LED, callback function: (none) */
-#define  VUPCChan_LED_CURR1               7       /* control type: LED, callback function: (none) */
-#define  VUPCChan_LED_TEMP1               8       /* control type: LED, callback function: (none) */
-#define  VUPCChan_Threshold               9       /* control type: numeric, callback function: (none) */
-#define  VUPCChan_Gain                    10      /* control type: numeric, callback function: (none) */
+#define  VUPCChan_LED_TEMP1               7       /* control type: LED, callback function: (none) */
+#define  VUPCChan_Threshold               8       /* control type: numeric, callback function: (none) */
+#define  VUPCChan_Gain                    9       /* control type: numeric, callback function: (none) */
 
 #define  VUPCMain                         3
 

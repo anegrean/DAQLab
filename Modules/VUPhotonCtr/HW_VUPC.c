@@ -20,10 +20,17 @@
 // macro
 #define OKfree(ptr) if (ptr) { free(ptr); ptr = NULL; }
 
+#ifndef errChk
+#define errChk(fCall) if (error = (fCall), error < 0) \
+{goto Error;} else
+#endif
+
 //==============================================================================
 // Constants
 
 #define QUEUE_LENGTH	100   
+	
+#define NUMTHREADS		1
 
 //==============================================================================
 // Types
@@ -77,6 +84,7 @@ PMTregcommand 	newcommand;
 //==============================================================================
 // Global functions
 int CVICALLBACK PMTThreadFunction(void *(functionData));
+int StartDAQThread(CmtThreadPoolHandle poolHandle) ;
 
 
 
@@ -164,7 +172,7 @@ int GetPMTControllerVersion(void)
 	major=(version>>4)&0x0000000F;
 //	Fmt (buffer, "%s<PMT controller version %i[w2p0].%i[w2p0]\n", major, minor);
 //	AppendString(reply, buffer, -1); 
-	if(!((major==MAJOR_VERSION)&&(minor==MINOR_VERSION))) err=1;
+	if(!((major==MAJOR_VERSION)&&(minor==MINOR_VERSION))) err=-1;
 	return err;
 }
 
@@ -174,13 +182,14 @@ int PMTController_Init(void)
 	int error=0;
 	unsigned long timeout=1000;  //in ms
 	
-	VUPCI_Set_Read_Timeout(timeout) ;
 	
-	if(!(VUPCI_Open())){
-		return 1;
-	}
-	error=GetPMTControllerVersion();
+	errChk(VUPCI_Open());
+	errChk(CmtNewThreadPool(NUMTHREADS,&poolHandle));
+	errChk(StartDAQThread(poolHandle));
+	errChk(GetPMTControllerVersion());
+	errChk(VUPCI_Set_Read_Timeout(timeout)) ;
 	
+Error:
 	
 	return error;  
 }

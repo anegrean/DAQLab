@@ -26,11 +26,7 @@
 
 	// VUPhotonCtr UI resource
 #define UI_VUPhotonCtr			"./Modules/VUPhotonCtr/UI_VUPhotonCtr.uir"
-	// Maximum number of measurement channels
-#define MAX_CHANELS				4
-
-	// Maximum gain applied to a PMT in [V]
-#define MAX_GAIN_VOLTAGE		0.9
+	
 
 	// Default number of samples for finite measurement mode
 #define DEFAULT_NSAMPLES		10000
@@ -47,10 +43,7 @@
 	// Maximum visible channels in the main photon counter panel
 #define MAX_VISIBLE_CHANNELS	4
 
-#define PMT1	1
-#define PMT2	2 
-#define PMT3	3 
-#define PMT4	4 
+
 
 //==============================================================================
 // Types
@@ -96,6 +89,8 @@ struct VUPhotonCtr {
 	int					statusPanHndl;
 
 	int					settingsPanHndl;
+	
+	int 				counterPanHndl;
 
 	int					taskPanHndl;
 	
@@ -107,7 +102,7 @@ struct VUPhotonCtr {
 		// Array of channels of Channel_type*, the index of the array corresponding to the
 		// hardware channel index. If a channel is not in use, its value in the array is NULL.
 
-	Channel_type*		channels[MAX_CHANELS];
+	Channel_type*		channels[MAX_CHANNELS];
 
 		//-------------------------
 		// Device IO settings
@@ -125,13 +120,17 @@ struct VUPhotonCtr {
 	double*				samplingRate;
 	
 	//added Lex (?)
-	int 				statusreg;
-	
 	int 				controlreg;  
 	
 
 
-	// METHODS
+	// METHODS   
+	
+		// Callback to install on controls from selected panel in UI_VUPhotonCtr.uir
+		// Override: Optional, to change UI panel behavior. 
+		// For hardware specific functionality override other methods such as SetPMT_Mode.
+	CtrlCallbackPtr		uiCtrlsCB;
+	
 			// Default NULL, functionality not implemented.
 			// Override: Required, provides hardware specific movement of VUPhotonCtr.
 			// Sets the Mode of the Selected PMT 
@@ -142,10 +141,6 @@ struct VUPhotonCtr {
 		int					(* SetPMT_Cooling) 			(VUPhotonCtr_type* self, int PMTnr, BOOL value);
 			// Sets the Gain and Threshold of the Selected PMT 
 		int					(* SetPMT_GainThresh) 		(VUPhotonCtr_type* self, int PMTnr, double gain,double threshold);
-			// Changes the status LED of the  on the VUPhotonCtr control panel
-		int					(* StatusPMTLED)   			(VUPhotonCtr_type* self, int PMTnr, PMT_LED_type status);
-			// Changes the temp LED of the  on the VUPhotonCtr control panel
-		int					(* TempPMTLED)   			(VUPhotonCtr_type* self, int PMTnr, BOOL on_temp);
 			// Updates status display of Photon Counter from structure data
 		int					(* UpdateVUPhotonCtrDisplay) (VUPhotonCtr_type* self);
 
@@ -189,12 +184,14 @@ static int CVICALLBACK 				VUPCTask_CB 					(int panel, int control, int event, 
 
 void CVICALLBACK 					MenuSettings_CB 				(int menuBar, int menuItem, void *callbackData, int panel);
 
+static int CVICALLBACK 				VUPCPhotonCounter_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int PMT_Set_Mode (VUPhotonCtr_type* self, int PMTnr, PMT_Mode_type mode);
 static int PMT_Set_Fan (VUPhotonCtr_type* self, int PMTnr, BOOL value);
 static int PMT_Set_Cooling (VUPhotonCtr_type* self, int PMTnr, BOOL value);
-static int PMT_Set_GainThresh (VUPhotonCtr_type* self, int PMTnr, double gain,double threshold); 
-static int PMT_Set_StatusLED (VUPhotonCtr_type* vupc, int PMTnr,PMT_LED_type status);
-static int PMT_Set_TempLED (VUPhotonCtr_type* vupc, int PMTnr,BOOL temp_OK);
+static int PMT_Set_GainThresh (VUPhotonCtr_type* self, int PMTnr, float gain,float threshold); 
+//static int PMT_Set_StatusLED (VUPhotonCtr_type* vupc, int PMTnr,PMT_LED_type status);
+//static int PMT_Set_TempLED (VUPhotonCtr_type* vupc, int PMTnr,BOOL temp_OK);
 static int PMTController_UpdateDisplay (VUPhotonCtr_type* self);
 void PMTController_DimWhenRunning (VUPhotonCtr_type* self, BOOL dimmed);
 static int PMTController_SetTestMode(VUPhotonCtr_type* vupc,BOOL testmode);
@@ -267,8 +264,9 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	vupc->mainPanHndl				= 0;
 	vupc->statusPanHndl				= 0;
 	vupc->settingsPanHndl			= 0;
+	vupc->counterPanHndl			= 0;     
 
-	for (int i = 0; i < MAX_CHANELS; i++)
+	for (int i = 0; i < MAX_CHANNELS; i++)
 		vupc->channels[i] = NULL;
 
 	vupc->DevNSamples				= DEFAULT_NSAMPLES;
@@ -278,7 +276,10 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 
 
 		// METHODS
-
+			// assign default controls callback to UI_VUPhotonCtr.uir panel
+	vupc->uiCtrlsCB				= VUPCChannel_CB;
+	
+	
 
 
 	//----------------------------------------------------------
@@ -299,7 +300,7 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	// discard VUPhotonCtr_type specific data
 
 	// discard channel resources
-	for (int i = 0; i < MAX_CHANELS; i++)
+	for (int i = 0; i < MAX_CHANNELS; i++)
 		discard_Channel_type(&vupc->channels[i]);
 
 	// main panel and panels loaded into it (channels and task control)
@@ -315,6 +316,9 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 
 	if (vupc->settingsPanHndl)
 		DiscardPanel(vupc->settingsPanHndl);
+	
+	if (vupc->counterPanHndl)
+		DiscardPanel(vupc->counterPanHndl);
 
 	// discard DAQLabModule_type specific data
 	discard_DAQLabModule(mod);
@@ -356,7 +360,12 @@ static void	discard_Channel_type (Channel_type** chan)
 
 static int InitHardware (VUPhotonCtr_type* vupc)
 {
-	return 0;
+	int error;
+	
+	vupc->controlreg=0;
+	error=PMTController_Init(&vupc->controlreg);
+	
+	return error;
 }
 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl)
@@ -376,14 +385,22 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	vupc->mainPanHndl 		= LoadPanel(workspacePanHndl, UI_VUPhotonCtr, VUPCMain);
 	// load settings panel
 	vupc->settingsPanHndl   = LoadPanel(workspacePanHndl, UI_VUPhotonCtr, VUPCSet);
+		// load Photoncounter status and control panel
+	vupc->counterPanHndl	= LoadPanel(workspacePanHndl, UI_VUPhotonCtr, CounterPan);
+	
 	// load Task Controller panel
 	vupc->taskPanHndl		= LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCTask);
 	// load channel panel, the dimensions of which will be used to adjust the size of the main panel
 	vupc->chanPanHndl		= LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCChan);
+	
 
 	// connect module data and user interface callbackFn to all direct controls in the settings and task panels
 	SetCtrlsInPanCBInfo(mod, VUPCSettings_CB, vupc->settingsPanHndl);
 	SetCtrlsInPanCBInfo(mod, VUPCTask_CB, vupc->taskPanHndl);
+	SetCtrlsInPanCBInfo(mod, VUPCPhotonCounter_CB, vupc->counterPanHndl);   
+	
+
+	
 	// connect module data to Settings menubar item
 	errChk( menubarHndl = NewMenuBar(vupc->mainPanHndl) );
 	errChk( menuItemSettingsHndl = NewMenu(menubarHndl, "Settings", -1) );
@@ -401,7 +418,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	OKfree(name);
 
 	// populate settings panel with available channels
-	for (int i = 1; i <= MAX_CHANELS; i++) {
+	for (int i = 1; i <= MAX_CHANNELS; i++) {
 		sprintf(buff,"Ch. %d", i);
 		InsertListItem(vupc->settingsPanHndl, VUPCSet_Channels, -1, buff, i);
 	}
@@ -425,10 +442,6 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	vupc->SetPMT_Cooling = PMT_Set_Cooling;
 	// add functionality to set the PMT Gain and Threshold
 	vupc->SetPMT_GainThresh = PMT_Set_GainThresh;
-	// add functionality to change status LED        
-	vupc->StatusPMTLED = PMT_Set_StatusLED;     
-	// add functionality to change temp LED
-	vupc->TempPMTLED = PMT_Set_TempLED;
 	// Updates status display of Photon Counter
 	vupc->UpdateVUPhotonCtrDisplay = PMTController_UpdateDisplay;
 		// add functionality to dim and undim controls when controller is running
@@ -475,7 +488,7 @@ static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
 	int			taskPanWidth	= 0;
 
 	// count the number of channels in use
-	for (size_t i = 0; i < MAX_CHANELS; i++)
+	for (size_t i = 0; i < MAX_CHANNELS; i++)
 		if (vupc->channels[i]) nChannels++;
 
 	// get channel panel attributes from the first loaded channel since they are all the same
@@ -499,13 +512,17 @@ static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
 
 	// reposition channel panels and display them
 	nChannels = 0;
-	for (int i = 0; i < MAX_CHANELS; i++)
+	for (int i = 0; i < MAX_CHANNELS; i++)
 		if (vupc->channels[i]){
 			nChannels++;
 			SetPanelAttribute(vupc->channels[i]->panHndl, ATTR_LEFT, (chanPanWidth + MAIN_PAN_SPACING) * (nChannels-1) + MAIN_PAN_MARGIN);
 			SetPanelAttribute(vupc->channels[i]->panHndl, ATTR_TOP, MAIN_PAN_MARGIN + menubarHeight);
 			DisplayPanel(vupc->channels[i]->panHndl);
+			
 		}
+	
+	
+	
 
 	// reposition Task Controller panel to be the end of all channel panels
 	SetPanelAttribute(vupc->taskPanHndl, ATTR_LEFT, (chanPanWidth + MAIN_PAN_SPACING) * nChannels + MAIN_PAN_MARGIN);
@@ -527,6 +544,10 @@ static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
 		// remove scroll bars
 		SetPanelAttribute(vupc->mainPanHndl, ATTR_SCROLL_BARS, VAL_NO_SCROLL_BARS);
 	}
+	
+	//? 
+	PMTController_UpdateDisplay(vupc);
+	DisplayPanel(vupc->counterPanHndl);   
 
 }
 
@@ -540,40 +561,7 @@ static int PMT_Set_Mode (VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode)
 {
 	int error = 0;     
 	
-	if(mode==PMT_MODE_ON){
-		switch(PMTnr){
-			case PMT1:
-				vupc->controlreg=vupc->controlreg|PMT1HV_BIT|APPSTART_BIT;  //set bit
-				break;
-			case PMT2:
-				vupc->controlreg=vupc->controlreg|PMT2HV_BIT|APPSTART_BIT;
-				break;
-			case PMT3:
-				vupc->controlreg=vupc->controlreg|PMT3HV_BIT|APPSTART_BIT;
-				break;
-			case PMT4:
-				vupc->controlreg=vupc->controlreg|PMT4HV_BIT|APPSTART_BIT;
-				break;
-		}
-	}
-	else {
-		switch(PMTnr){
-			case PMT1:
-				vupc->controlreg=vupc->controlreg&(~PMT1HV_BIT);   //clear bit
-				break;
-			case PMT2:
-				vupc->controlreg=vupc->controlreg&(~PMT2HV_BIT);
-				break;
-			case PMT3:
-				vupc->controlreg=vupc->controlreg&(~PMT3HV_BIT);
-				break;
-			case PMT4:
-				vupc->controlreg=vupc->controlreg&(~PMT4HV_BIT);
-				break;
-		}
-	}
-		//write control register
-	error=WritePMTReg(CTRL_REG,vupc->controlreg);      
+	error=PMT_SetMode (&vupc->controlreg, PMTnr,mode);
 	
 	return error;
 }
@@ -583,40 +571,7 @@ static int PMT_Set_Fan (VUPhotonCtr_type* vupc, int PMTnr, BOOL value)
 {
 	int error = 0; 
 	
-	if(value){				//Fan On
-		switch(PMTnr){
-			case PMT1:
-				vupc->controlreg=vupc->controlreg|PMT1FAN_BIT;  //set bit
-				break;
-			case PMT2:
-				vupc->controlreg=vupc->controlreg|PMT2FAN_BIT;
-				break;
-			case PMT3:
-				vupc->controlreg=vupc->controlreg|PMT3FAN_BIT;
-				break;
-			case PMT4:
-				vupc->controlreg=vupc->controlreg|PMT4FAN_BIT;
-				break;
-		}
-	}
-	else {
-		switch(PMTnr){
-			case PMT1:
-				vupc->controlreg=vupc->controlreg&(~PMT1FAN_BIT);   //clear bit
-				break;
-			case PMT2:
-				vupc->controlreg=vupc->controlreg&(~PMT2FAN_BIT);
-				break;
-			case PMT3:
-				vupc->controlreg=vupc->controlreg&(~PMT3FAN_BIT);
-				break;
-			case PMT4:
-				vupc->controlreg=vupc->controlreg&(~PMT4FAN_BIT);
-				break;
-		}
-	}
-	//write control register
-	error=WritePMTReg(CTRL_REG,vupc->controlreg);        
+	error=PMT_SetFan (&vupc->controlreg,PMTnr,value);    
 	
 	return error;
 }
@@ -625,40 +580,7 @@ static int PMT_Set_Cooling (VUPhotonCtr_type* vupc, int PMTnr, BOOL value)
 {
 	int error = 0; 
 	
-	if(value){			//Peltier ON
-		switch(PMTnr){
-			case PMT1:
-				vupc->controlreg=vupc->controlreg|PMT1PELT_BIT;  //set bit
-				break;
-			case PMT2:
-				vupc->controlreg=vupc->controlreg|PMT2PELT_BIT;
-				break;
-			case PMT3:
-				vupc->controlreg=vupc->controlreg|PMT3PELT_BIT;
-				break;
-			case PMT4:
-				vupc->controlreg=vupc->controlreg|PMT4PELT_BIT;
-				break;
-		}
-	}
-	else {
-		switch(PMTnr){
-			case PMT1:
-				vupc->controlreg=vupc->controlreg&(~PMT1PELT_BIT);   //clear bit
-				break;
-			case PMT2:
-				vupc->controlreg=vupc->controlreg&(~PMT2PELT_BIT);
-				break;
-			case PMT3:
-				vupc->controlreg=vupc->controlreg&(~PMT3PELT_BIT);
-				break;
-			case PMT4:
-				vupc->controlreg=vupc->controlreg&(~PMT4PELT_BIT);
-				break;
-		}
-	}
-	//write control register
-	error=WritePMTReg(CTRL_REG,vupc->controlreg);        
+	error=PMT_SetCooling (&vupc->controlreg, PMTnr,value);       
 	
 	return error;
 }
@@ -670,54 +592,13 @@ int SetPMTGainTresh(VUPhotonCtr_type* vupc,int PMTnr,unsigned int PMTGain,unsign
 {
 	int error=0;
 	
-	unsigned long combinedval;
-	unsigned long THMASK=0x0000FFFF;
-	unsigned long GAINMASK=0xFFFF0000;   
- 
-	//read control register
-	error=ReadPMTReg(CTRL_REG,&vupc->controlreg);
-	combinedval=((PMTGain<<16)&GAINMASK)+(PMTThreshold&THMASK);   
-	
-	switch(PMTnr){
-		case PMT1:
-			error=WritePMTReg(PMT1_CTRL_REG,combinedval);  
-			//write control register
-			vupc->controlreg=vupc->controlreg|UPDPMT12_BIT|APPSTART_BIT; //set bit  
-		//	controlreg=controlreg&~APPSTART_BIT;  //clear bit 
-			//write control register
-			error=WritePMTReg(CTRL_REG,vupc->controlreg);   
-			vupc->controlreg=vupc->controlreg&~UPDPMT12_BIT;  //clear bit 
-			break;
-		case PMT2:
-			error=WritePMTReg(PMT2_CTRL_REG,combinedval);  
-				//write control register
-			vupc->controlreg=vupc->controlreg|UPDPMT12_BIT|APPSTART_BIT;  //set bit 
-			//write control register
-			error=WritePMTReg(CTRL_REG,vupc->controlreg);   
-			vupc->controlreg=vupc->controlreg&~UPDPMT12_BIT;  //clear bit 
-			break;
-		case PMT3:
-			error=WritePMTReg(PMT3_CTRL_REG,combinedval);
-				//write control register
-			vupc->controlreg=vupc->controlreg|UPDPMT34_BIT|APPSTART_BIT;  //set bit   
-			//write control register
-			error=WritePMTReg(CTRL_REG,vupc->controlreg);   
-			vupc->controlreg=vupc->controlreg&~UPDPMT34_BIT;  //clear bit 
-			break;
-		case PMT4:
-			error=WritePMTReg(PMT4_CTRL_REG,combinedval); 
-			//write control register
-			vupc->controlreg=vupc->controlreg|UPDPMT34_BIT|APPSTART_BIT;  //set bit   
-			//write control register
-			error=WritePMTReg(CTRL_REG,vupc->controlreg);   
-			vupc->controlreg=vupc->controlreg&~UPDPMT34_BIT;  //clear bit 
-			break;
-	}
+	error=PMT_SetGainTresh(&vupc->controlreg,PMTnr,PMTGain,PMTThreshold);
+		  
 	return error;
 }
 
 
-int ConvertVoltsToBits(double value_in_volts)
+int ConvertVoltsToBits(float value_in_volts)
 {
 	  int value_in_bits;
 	  double voltsperbit=1/65535.0;
@@ -727,7 +608,7 @@ int ConvertVoltsToBits(double value_in_volts)
 }
 
 
-static int PMT_Set_GainThresh (VUPhotonCtr_type* vupc, int PMTnr, double gain,double threshold)  
+static int PMT_Set_GainThresh (VUPhotonCtr_type* vupc, int PMTnr, float gain,float threshold)  
 {
 	int error = 0;   
 	unsigned int gain_in_bits;
@@ -745,10 +626,7 @@ static int PMTController_SetTestMode(VUPhotonCtr_type* vupc,BOOL testmode)
 {
 	int error=0;
 	
-	if (testmode) vupc->controlreg=vupc->controlreg|TESTMODE0_BIT;  //set bit
-	else vupc->controlreg=vupc->controlreg&(~TESTMODE0_BIT);  //clear bit 
-	//write control register
-	error=WritePMTReg(CTRL_REG,vupc->controlreg); 
+	error=PMT_SetTestMode(&vupc->controlreg,testmode);
 	
 	return error;
 }
@@ -757,15 +635,7 @@ static int PMTController_Reset(VUPhotonCtr_type* vupc)
 {
 	int error=0;
 	
-	//set reset bit
-	vupc->controlreg=vupc->controlreg|RESET_BIT;
-	//write control register
-	error=WritePMTReg(CTRL_REG,vupc->controlreg); 
-	Delay(0.01);
-	//clear reset bit
-	vupc->controlreg=vupc->controlreg&~RESET_BIT;
-	//write control register
-	error=WritePMTReg(CTRL_REG,vupc->controlreg); 
+	error=PMTReset(&vupc->controlreg);
 	
 	return error;
 }
@@ -775,79 +645,86 @@ static int PMTController_ResetFifo(VUPhotonCtr_type* vupc)
 {
 	int error=0;
 	
-	//set fifo reset bit  
-	vupc->controlreg=vupc->controlreg|FFRESET_BIT;
-	//write control register
-	error=WritePMTReg(CTRL_REG,vupc->controlreg); 
-	Delay(0.01);
-	//clear fifo reset bit 
-	vupc->controlreg=vupc->controlreg&~FFRESET_BIT; 
-	//write control register
-	error=WritePMTReg(CTRL_REG,vupc->controlreg); 
+	error=PMTClearFifo();
 	
 	return error;
 }
 
 
-
-
-static int PMT_Set_StatusLED (VUPhotonCtr_type* vupc, int PMTnr,PMT_LED_type status)
+static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 {
 	int error = 0;
-	int selPanHndl;   // selected panel handle
-	int selCntrl;	  // selected control;
-
 	
-	selPanHndl=vupc->channels[PMTnr]->panHndl;
-	selCntrl=VUPCChan_LED_STATE1;
+	//error=PMT_UpdateDisplay (vupc);
 
-	switch (status) {
-
-		case PMT_LED_OFF:
-
-			errChk( SetCtrlVal(selPanHndl, selCntrl, FALSE) );
-			break;
-
-		case PMT_LED_ON:
-
-			errChk( SetCtrlAttribute(selPanHndl, selCntrl, ATTR_ON_COLOR, VAL_GREEN) );
-			errChk( SetCtrlVal(selPanHndl, selCntrl, TRUE) );
-			break;
-
-		case PMT_LED_ERROR:
-
-			errChk( SetCtrlAttribute(selPanHndl, selCntrl, ATTR_ON_COLOR, VAL_RED) );
-			errChk( SetCtrlVal(selPanHndl, selCntrl, TRUE) );
-			break;
+	int i;
+	BOOL HV;
+	BOOL CurrentErr;
+	unsigned long statreg;
+	
+	
+	//Get status from Hardware
+	error=ReadPMTReg(CTRL_REG,&vupc->controlreg);  
+	error=ReadPMTReg(STAT_REG,&statreg); 
+	
+	//Update UI
+	// photon counter
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_STATUS, statreg);
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_COMMAND, vupc->controlreg); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_RUNNING, statreg&RUNNING_BIT);
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_UNDER, statreg&FFUNDRFL_BIT); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_EMPTY, statreg&FFEMPTY_BIT); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_QFULL, statreg&FFQFULL_BIT); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_AFULL, statreg&FFALMFULL_BIT); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_OVERFLOW, statreg&FFOVERFLOW_BIT); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_TRIGFAIL, statreg&TRIGFAIL_BIT);
+	
+	for(i=0;i<MAX_CHANNELS;i++)  {
+		if(vupc->channels[i]) {
+			if(vupc->channels[i]->chanIdx==PMT1){
+			//PMT1 is selected
+				HV=vupc->controlreg&PMT1HV_BIT;
+				CurrentErr=statreg&PMT1CURR_BIT;
+			
+				if (CurrentErr) SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_RED);    
+				else SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_GREEN);
+			
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr); 
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT1TEMP_BIT);
+			}
+			if(vupc->channels[i]->chanIdx==PMT2){
+			//PMT2 is selected
+				HV=vupc->controlreg&PMT2HV_BIT;
+				CurrentErr=statreg&PMT2CURR_BIT;
+			
+				if (CurrentErr) SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_RED);    
+				else SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_GREEN);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr); 
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT2TEMP_BIT);
+			}
+			if(vupc->channels[i]->chanIdx==PMT3){
+			//PMT3 is selected
+				HV=vupc->controlreg&PMT3HV_BIT;
+				CurrentErr=statreg&PMT3CURR_BIT;
+			
+				if (CurrentErr) SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_RED);    
+				else SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_GREEN);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr); 
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT3TEMP_BIT); 
+			}
+			if(vupc->channels[i]->chanIdx==PMT4){
+			//PMT4 is selected
+				HV=vupc->controlreg&PMT4HV_BIT;
+				CurrentErr=statreg&PMT4CURR_BIT;
+			
+				if (CurrentErr) SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_RED);    
+				else SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_GREEN);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr); 
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT4TEMP_BIT); 
+			}
+		}
 	}
-
-	return 0;
-
-	Error:
-
-	return error;
-}
-
-static int PMT_Set_TempLED (VUPhotonCtr_type* vupc, int PMTnr,BOOL temp_OK)
-{
-	int error = 0;
-	int selPanHndl;   // selected panel handle
-	int selCntrl;	  // selected control;
-
-	selPanHndl=vupc->channels[PMTnr]->panHndl;
-	selCntrl=VUPCChan_LED_TEMP1;
 	
-	errChk( SetCtrlVal(selPanHndl, selCntrl, temp_OK) );
-	return 0;
-
-	Error:
-
-	return error;
-}
-
-static int PMTController_UpdateDisplay (VUPhotonCtr_type* self)
-{
-	int error = 0;      
 	
 	return error;
 }
@@ -862,6 +739,11 @@ void PMTController_DimWhenRunning (VUPhotonCtr_type* self, BOOL dimmed)
 static int CVICALLBACK VUPCChannel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	Channel_type*	chan 	= callbackData;
+	int intval;
+	float gain;
+	float thresh_mV;
+	float thresh;  
+	int error;
 
 	switch (event) {
 
@@ -870,26 +752,40 @@ static int CVICALLBACK VUPCChannel_CB (int panel, int control, int event, void *
 			switch (control) {
 
 				case VUPCChan_Mode:
-
+					GetCtrlVal(panel,control,&intval);
+					error=PMT_Set_Mode (chan->vupcInstance, chan->chanIdx,intval);	
 					break;
 
 				case VUPCChan_Gain:
-
+					//get gain value
+					GetCtrlVal(panel,control,&gain);
+					//get threshold value
+					GetCtrlVal(panel,control-1,&thresh_mV);  //relies on threshold control being 1 lower than gain control (Lex; nasty but works) 
+					thresh=thresh_mV/1000;	   				 //convert to volts
+					error=PMT_Set_GainThresh (chan->vupcInstance, chan->chanIdx,gain,thresh);		
 					break;
 
 				case VUPCChan_Threshold:
-
+					//get threshold value 
+					GetCtrlVal(panel,control,&thresh_mV);
+					thresh=thresh_mV/1000; 					//convert to volts   
+					//get gain value   
+					GetCtrlVal(panel,control+1,&gain);      //relies on threshold control being 1 lower than gain control (Lex; nasty but works) 
+					
+					error=PMT_Set_GainThresh (chan->vupcInstance, chan->chanIdx,gain,thresh);	
 					break;
 
 				case VUPCChan_Cooling:
-
+					GetCtrlVal(panel,control,&intval);
+					error=PMT_Set_Cooling (chan->vupcInstance, chan->chanIdx,intval);	
 					break;
 
 				case VUPCChan_Fan:
-
+					GetCtrlVal(panel,control,&intval);
+					error=PMT_Set_Fan (chan->vupcInstance, chan->chanIdx,intval);	
 					break;
 			}
-
+			PMTController_UpdateDisplay(chan->vupcInstance);
 			break;
 	}
 
@@ -962,12 +858,20 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						SetCtrlAttribute(chan->panHndl, VUPCChan_Mode, ATTR_LABEL_TEXT, buff);
 						// register VChan with DAQLab
 						DLRegisterVChan(chan->VChan);
+						
+						// connect module data and user interface callbackFn to all direct controls in the panel
+						SetCtrlsInPanCBInfo(chan, ((VUPhotonCtr_type*)vupc)->uiCtrlsCB, chan->panHndl);
+						
 						// update main panel
 						RedrawMainPanel(vupc);
 
 
 					} else {
 						// channel unchecked, remove channel
+						
+							//clear corresponding control bits in control register       
+						PMT_ClearControl(&vupc->controlreg,vupc->channels[eventData2]->chanIdx);
+						
 						// get channel pointer
 						srcVChan = vupc->channels[eventData2]->VChan;
 						// unregister VChan from DAQLab framework
@@ -979,6 +883,8 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						ReplaceListItem(panel, control, eventData2, buff, eventData2+1);
 						// update main panel
 						RedrawMainPanel(vupc);
+						
+					
 					}
 
 
@@ -1018,6 +924,44 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 
 	return 0;
 }
+
+
+static int CVICALLBACK VUPCPhotonCounter_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	VUPhotonCtr_type* 	vupc 	=   callbackData;
+	BOOL testmode;
+	int error;
+
+	switch (event) {
+
+		case EVENT_COMMIT:
+
+			switch (control) {
+
+				case CounterPan_BTTN_FFRESET:
+					error=PMTClearFifo();
+					PMTController_UpdateDisplay(vupc);
+					break;
+
+				case CounterPan_BTTN_RESET :
+					error=PMTReset(&vupc->controlreg);
+					PMTController_UpdateDisplay(vupc);
+					break;
+
+				case CounterPan_BTTN_TestMode:
+					GetCtrlVal(panel,control,&testmode);
+					error=PMT_SetTestMode(&vupc->controlreg,testmode);
+					PMTController_UpdateDisplay(vupc);
+					break;
+
+			}
+			break;
+	}
+
+	return 0;
+}
+
+
 
 void CVICALLBACK MenuSettings_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {

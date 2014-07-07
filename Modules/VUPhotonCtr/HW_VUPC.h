@@ -22,7 +22,6 @@
 
 //==============================================================================
 // Constants
-		
 			 //instrument registers
 #define	 CTRL_REG		0x0000
 #define	 STAT_REG		0x0004
@@ -72,28 +71,37 @@
 #define FFALMFULL_BIT	0x00002000
 #define FFOVERFLOW_BIT	0x00004000
 		
-#define WDTE_ERR_BIT	0x01000000
-#define RDTE_ERR_BIT	0x02000000
-#define DTE_DONE_BIT	0x80000000
-		
-#define MAJOR_VERSION	1
-#define MINOR_VERSION	5 
+#define PMT1	1
+#define PMT2	2 
+#define PMT3	3 
+#define PMT4	4 
 
-		//driver status bits
-#define READYFORDATA	0x00000001
-#define WORKERACTIVE	0x00000002
-		
-#define BYTESPERPIXEL	8  
-		
-// Constants
-#define MAXBUFSIZE	1000000  //1 MB ?
 		
 #define READ	0
 #define WRITE	1	
+		
+// Maximum number of measurement channels
+#define MAX_CHANNELS				4
+
+	// Maximum gain applied to a PMT in [V]
+#define MAX_GAIN_VOLTAGE		0.9
 
 
 //==============================================================================
 // Types
+typedef enum {
+	PMT_LED_OFF,
+	PMT_LED_ON,
+	PMT_LED_ERROR
+} PMT_LED_type;
+	
+typedef enum {
+	PMT_MODE_OFF,
+	PMT_MODE_ON,
+	PMT_MODE_ON_ACQ
+} PMT_Mode_type;
+
+
 
 //==============================================================================
 // External variables
@@ -103,8 +111,18 @@
 
 int ReadPMTReg(unsigned long regaddress,unsigned long *regval);
 int WritePMTReg(unsigned long regaddress,unsigned long regvalue);
-int PMTController_Init(void);
+int PMTController_Init(unsigned long* controlreg);
 int PMTController_Finalize(void);
+int PMTReset(unsigned long* controlreg);
+int PMTClearFifo(void);
+int PMT_SetMode (unsigned long* controlreg, int PMTnr, PMT_Mode_type mode);
+int PMT_SetFan (unsigned long* controlreg, int PMTnr, BOOL value);
+int PMT_SetCooling (unsigned long* controlreg, int PMTnr, BOOL value);
+int PMT_SetGainTresh(unsigned long* controlreg,int PMTnr,unsigned int PMTGain,unsigned int PMTThreshold);
+int PMT_SetTestMode(unsigned long* controlreg,BOOL testmode);
+int PMT_ClearControl(unsigned long* controlreg,int PMTnr);
+//int PMT_UpdateDisplay (VUPhotonCtr_type* vupc);
+
 
 #ifdef __cplusplus
     }

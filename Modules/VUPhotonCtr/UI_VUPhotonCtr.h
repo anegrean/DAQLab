@@ -17,17 +17,16 @@
 #define  CounterPan                       1
 #define  CounterPan_NUM_COMMAND           2       /* control type: numeric, callback function: (none) */
 #define  CounterPan_NUM_STATUS            3       /* control type: numeric, callback function: (none) */
-#define  CounterPan_BTTN_SYNC             4       /* control type: command, callback function: CB_SyncHW */
-#define  CounterPan_BTTN_FFRESET          5       /* control type: command, callback function: CB_ResetFifo */
-#define  CounterPan_BTTN_RESET            6       /* control type: command, callback function: CB_ResetHW */
-#define  CounterPan_LED_TRIGFAIL          7       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_OVERFLOW     8       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_AFULL        9       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_QFULL        10      /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_EMPTY        11      /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_UNDER        12      /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_RUNNING           13      /* control type: LED, callback function: (none) */
-#define  CounterPan_BTTN_TestMode         14      /* control type: textButton, callback function: CB_TestMode */
+#define  CounterPan_BTTN_FFRESET          4       /* control type: command, callback function: (none) */
+#define  CounterPan_BTTN_RESET            5       /* control type: command, callback function: (none) */
+#define  CounterPan_LED_TRIGFAIL          6       /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_FIFO_OVERFLOW     7       /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_FIFO_AFULL        8       /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_FIFO_QFULL        9       /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_FIFO_EMPTY        10      /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_FIFO_UNDER        11      /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_RUNNING           12      /* control type: LED, callback function: (none) */
+#define  CounterPan_BTTN_TestMode         13      /* control type: textButton, callback function: (none) */
 
 #define  VUPCChan                         2
 #define  VUPCChan_Fan                     2       /* control type: radioButton, callback function: (none) */
@@ -74,12 +73,7 @@
 #define  VUPC_UNNAMEDM                    2
 
 
-     /* Callback Prototypes: */
-
-int  CVICALLBACK CB_ResetFifo(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-int  CVICALLBACK CB_ResetHW(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-int  CVICALLBACK CB_SyncHW(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-int  CVICALLBACK CB_TestMode(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+     /* (no callbacks specified in the resource file) */ 
 
 
 #ifdef __cplusplus

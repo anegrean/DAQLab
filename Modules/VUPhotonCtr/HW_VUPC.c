@@ -27,10 +27,30 @@
 
 //==============================================================================
 // Constants
+		
+
+		
+#define WDTE_ERR_BIT	0x01000000
+#define RDTE_ERR_BIT	0x02000000
+#define DTE_DONE_BIT	0x80000000
+		
+#define MAJOR_VERSION	1
+#define MINOR_VERSION	5 
+
+		//driver status bits
+#define READYFORDATA	0x00000001
+#define WORKERACTIVE	0x00000002
+		
+#define BYTESPERPIXEL	8  
+		
+// Constants
+#define MAXBUFSIZE	1000000  //1 MB ?
 
 #define QUEUE_LENGTH	100   
 	
 #define NUMTHREADS		1
+	
+
 
 //==============================================================================
 // Types
@@ -85,6 +105,7 @@ PMTregcommand 	newcommand;
 // Global functions
 int CVICALLBACK PMTThreadFunction(void *(functionData));
 int StartDAQThread(CmtThreadPoolHandle poolHandle) ;
+int PMTReset(unsigned long* controlreg);
 
 
 
@@ -177,7 +198,7 @@ int GetPMTControllerVersion(void)
 }
 
 
-int PMTController_Init(void)
+int PMTController_Init(unsigned long* controlreg)
 {
 	int error=0;
 	unsigned long timeout=1000;  //in ms
@@ -187,7 +208,9 @@ int PMTController_Init(void)
 	errChk(CmtNewThreadPool(NUMTHREADS,&poolHandle));
 	errChk(StartDAQThread(poolHandle));
 	errChk(GetPMTControllerVersion());
-	errChk(VUPCI_Set_Read_Timeout(timeout)) ;
+	
+	error=PMTReset(controlreg);
+	VUPCI_Set_Read_Timeout(timeout);
 	
 Error:
 	
@@ -303,8 +326,277 @@ int ReadBuffer(unsigned short int* samplebuffer,int bufsize)
 	return result;
 }
 
- 
 
+int PMT_SetMode (unsigned long* controlreg, int PMTnr, PMT_Mode_type mode)  
+{
+	int error = 0;     
+	
+	if(mode==PMT_MODE_ON){
+		switch(PMTnr){
+			case PMT1:
+				*controlreg=*controlreg|PMT1HV_BIT|APPSTART_BIT;  //set bit
+				break;
+			case PMT2:
+				*controlreg=*controlreg|PMT2HV_BIT|APPSTART_BIT;
+				break;
+			case PMT3:
+				*controlreg=*controlreg|PMT3HV_BIT|APPSTART_BIT;
+				break;
+			case PMT4:
+				*controlreg=*controlreg|PMT4HV_BIT|APPSTART_BIT;
+				break;
+		}
+	}
+	else {
+		switch(PMTnr){
+			case PMT1:
+				*controlreg=*controlreg&(~PMT1HV_BIT);   //clear bit
+				break;
+			case PMT2:
+				*controlreg=*controlreg&(~PMT2HV_BIT);
+				break;
+			case PMT3:
+				*controlreg=*controlreg&(~PMT3HV_BIT);
+				break;
+			case PMT4:
+				*controlreg=*controlreg&(~PMT4HV_BIT);
+				break;
+		}
+	}
+		//write control register
+	error=WritePMTReg(CTRL_REG,*controlreg);      
+	
+	return error;
+}
+
+
+int PMT_SetFan (unsigned long* controlreg, int PMTnr, BOOL value)  
+{
+	int error = 0; 
+	
+	if(value){				//Fan On
+		switch(PMTnr){
+			case PMT1:
+				*controlreg=*controlreg|PMT1FAN_BIT;  //set bit
+				break;
+			case PMT2:
+				*controlreg=*controlreg|PMT2FAN_BIT;
+				break;
+			case PMT3:
+				*controlreg=*controlreg|PMT3FAN_BIT;
+				break;
+			case PMT4:
+				*controlreg=*controlreg|PMT4FAN_BIT;
+				break;
+		}
+	}
+	else {
+		switch(PMTnr){
+			case PMT1:
+				*controlreg=*controlreg&(~PMT1FAN_BIT);   //clear bit
+				break;
+			case PMT2:
+				*controlreg=*controlreg&(~PMT2FAN_BIT);
+				break;
+			case PMT3:
+				*controlreg=*controlreg&(~PMT3FAN_BIT);
+				break;
+			case PMT4:
+				*controlreg=*controlreg&(~PMT4FAN_BIT);
+				break;
+		}
+	}
+	//write control register
+	error=WritePMTReg(CTRL_REG,*controlreg);        
+	
+	return error;
+}
+
+
+int PMT_SetCooling (unsigned long* controlreg, int PMTnr, BOOL value)  
+{
+	int error = 0; 
+	
+	if(value){			//Peltier ON
+		switch(PMTnr){
+			case PMT1:
+				*controlreg=*controlreg|PMT1PELT_BIT;  //set bit
+				break;
+			case PMT2:
+				*controlreg=*controlreg|PMT2PELT_BIT;
+				break;
+			case PMT3:
+				*controlreg=*controlreg|PMT3PELT_BIT;
+				break;
+			case PMT4:
+				*controlreg=*controlreg|PMT4PELT_BIT;
+				break;
+		}
+	}
+	else {
+		switch(PMTnr){
+			case PMT1:
+				*controlreg=*controlreg&(~PMT1PELT_BIT);   //clear bit
+				break;
+			case PMT2:
+				*controlreg=*controlreg&(~PMT2PELT_BIT);
+				break;
+			case PMT3:
+				*controlreg=*controlreg&(~PMT3PELT_BIT);
+				break;
+			case PMT4:
+				*controlreg=*controlreg&(~PMT4PELT_BIT);
+				break;
+		}
+	}
+	//write control register
+	error=WritePMTReg(CTRL_REG,*controlreg);        
+	
+	return error;
+}
+
+
+///  HIFN  Sets the PMT gain
+///  HIPAR PMTnr/PMT number,PMTGain /Gain, range ......
+///  HIRET returns error, no error when 0
+int PMT_SetGainTresh(unsigned long* controlreg,int PMTnr,unsigned int PMTGain,unsigned int PMTThreshold)
+{
+	int error=0;
+	
+	unsigned long combinedval;
+	unsigned long THMASK=0x0000FFFF;
+	unsigned long GAINMASK=0xFFFF0000;   
+ 
+	//read control register
+	error=ReadPMTReg(CTRL_REG,controlreg);
+	combinedval=((PMTGain<<16)&GAINMASK)+(PMTThreshold&THMASK);   
+	
+	switch(PMTnr){
+		case PMT1:
+			error=WritePMTReg(PMT1_CTRL_REG,combinedval);  
+			//write control register
+			*controlreg=*controlreg|UPDPMT12_BIT|APPSTART_BIT; //set bit  
+		//	controlreg=controlreg&~APPSTART_BIT;  //clear bit 
+			//write control register
+			error=WritePMTReg(CTRL_REG,*controlreg);   
+			*controlreg=*controlreg&~UPDPMT12_BIT;  //clear bit 
+			break;
+		case PMT2:
+			error=WritePMTReg(PMT2_CTRL_REG,combinedval);  
+				//write control register
+			*controlreg=*controlreg|UPDPMT12_BIT|APPSTART_BIT;  //set bit 
+			//write control register
+			error=WritePMTReg(CTRL_REG,*controlreg);   
+			*controlreg=*controlreg&~UPDPMT12_BIT;  //clear bit 
+			break;
+		case PMT3:
+			error=WritePMTReg(PMT3_CTRL_REG,combinedval);
+				//write control register
+			*controlreg=*controlreg|UPDPMT34_BIT|APPSTART_BIT;  //set bit   
+			//write control register
+			error=WritePMTReg(CTRL_REG,*controlreg);   
+			*controlreg=*controlreg&~UPDPMT34_BIT;  //clear bit 
+			break;
+		case PMT4:
+			error=WritePMTReg(PMT4_CTRL_REG,combinedval); 
+			//write control register
+			*controlreg=*controlreg|UPDPMT34_BIT|APPSTART_BIT;  //set bit   
+			//write control register
+			error=WritePMTReg(CTRL_REG,*controlreg);   
+			*controlreg=*controlreg&~UPDPMT34_BIT;  //clear bit 
+			break;
+	}
+	return error;
+}
+
+
+int PMT_SetTestMode(unsigned long* controlreg,BOOL testmode)
+{
+	int error=0;
+	
+	if (testmode) *controlreg=*controlreg|TESTMODE0_BIT;  //set bit
+	else *controlreg=*controlreg&(~TESTMODE0_BIT);  //clear bit 
+	//write control register
+	error=WritePMTReg(CTRL_REG,*controlreg); 
+	
+	return error;
+}
+
+ /*
+int PMT_UpdateDisplay (VUPhotonCtr_type* vupc)
+{
+	int error = 0;
+	int i;
+	BOOL HV;
+	BOOL CurrentErr;
+	unsigned long statreg;
+	
+	
+	//Get status from Hardware
+	error=ReadPMTReg(CTRL_REG,vupc->controlreg);  
+	error=ReadPMTReg(STAT_REG,&statreg); 
+	
+	//Update UI
+	// photon counter
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_STATUS, statreg);
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_COMMAND, vupc->controlreg); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_RUNNING, statreg&RUNNING_BIT);
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_UNDER, statreg&FFUNDRFL_BIT); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_EMPTY, statreg&FFEMPTY_BIT); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_QFULL, statreg&FFQFULL_BIT); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_AFULL, statreg&FFALMFULL_BIT); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_OVERFLOW, statreg&FFOVERFLOW_BIT); 
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_TRIGFAIL, statreg&TRIGFAIL_BIT);
+	
+	for(i=0;i<MAX_CHANNELS;i++)  {
+		if(vupc->channels[i]) {
+			if(vupc->channels[i]->chanIdx==PMT1){
+			//PMT1 is selected
+				HV=vupc->controlreg&PMT1HV_BIT;
+				CurrentErr=statreg&PMT1CURR_BIT;
+			
+				if (CurrentErr) SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_RED);    
+				else SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_GREEN);
+			
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr); 
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT1TEMP_BIT);
+			}
+			if(vupc->channels[i]->chanIdx==PMT2){
+			//PMT2 is selected
+				HV=vupc->controlreg&PMT2HV_BIT;
+				CurrentErr=statreg&PMT2CURR_BIT;
+			
+				if (CurrentErr) SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_RED);    
+				else SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_GREEN);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr); 
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT2TEMP_BIT);
+			}
+			if(vupc->channels[i]->chanIdx==PMT3){
+			//PMT3 is selected
+				HV=vupc->controlreg&PMT3HV_BIT;
+				CurrentErr=statreg&PMT3CURR_BIT;
+			
+				if (CurrentErr) SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_RED);    
+				else SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_GREEN);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr); 
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT3TEMP_BIT); 
+			}
+			if(vupc->channels[i]->chanIdx==PMT4){
+			//PMT4 is selected
+				HV=vupc->controlreg&PMT4HV_BIT;
+				CurrentErr=statreg&PMT4CURR_BIT;
+			
+				if (CurrentErr) SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_RED);    
+				else SetCtrlAttribute(vupc->channels[i]->panHndl,VUPCChan_LED_STATE1, ATTR_ON_COLOR, VAL_GREEN);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr); 
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT4TEMP_BIT); 
+			}
+		}
+	}
+	
+	return error;
+}
+ */
 
 int PMTReadActions(unsigned short int* samplebuffer,int numbytes)
 {
@@ -375,25 +667,24 @@ int PMTStopAcq(void)
 
 ///  HIFN  resets the PMT Controller 
  /// HIRET returns error, no error when 0
-int PMTReset(void)
+int PMTReset(unsigned long* controlreg)
 {
 	int error=0;
-	unsigned long controlreg;
-	
-	
-	error=ReadPMTReg(CTRL_REG,&controlreg);
+
+	//error=ReadPMTReg(CTRL_REG,controlreg);
+	*controlreg=0;   //clear control reg
 	//set reset bit   
-	controlreg=controlreg|RESET_BIT; 
-	error=WritePMTReg(CTRL_REG,controlreg);
+	*controlreg=*controlreg|RESET_BIT; 
+	error=WritePMTReg(CTRL_REG,*controlreg);
 	//clear reset bit
-	controlreg=controlreg&~RESET_BIT;
-	error=WritePMTReg(CTRL_REG,controlreg); 
+	*controlreg=*controlreg&~RESET_BIT;
+	error=WritePMTReg(CTRL_REG,*controlreg); 
 	
 	return error;
 }
 
 
-void PMTClearFifo(void)
+int PMTClearFifo(void)
 {
 	int error=0;
 	unsigned long controlreg;  
@@ -405,7 +696,32 @@ void PMTClearFifo(void)
 	
 	//clear fifo reset bit
 	controlreg=controlreg&~FFRESET_BIT;
-	error=WritePMTReg(CTRL_REG,controlreg); 	
+	error=WritePMTReg(CTRL_REG,controlreg);
+	
+	return error;
+}
+
+int PMT_ClearControl(unsigned long* controlreg,int PMTnr)
+{
+	int error=0;
+	
+	switch(PMTnr){
+		case PMT1:
+			*controlreg=*controlreg&~0x70000;    //clear control FAN,TEC and HV bitsfor PMT1
+			break;
+		case PMT2:
+			*controlreg=*controlreg&~0x700000;   //clear control FAN,TEC and HV bitsfor PMT2        
+			break;
+		case PMT3:
+			*controlreg=*controlreg&~0x7000000;  //clear control FAN,TEC and HV bitsfor PMT3       
+			break;
+		case PMT4:
+			*controlreg=*controlreg&~0x70000000; //clear control FAN,TEC and HV bitsfor PMT4       
+			break;
+	}
+	error=WritePMTReg(CTRL_REG,*controlreg);
+	
+	return error;
 }
 
 
@@ -567,3 +883,5 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
 	
 	return 0;
 }
+
+

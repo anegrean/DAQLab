@@ -68,7 +68,7 @@ Disk Date = 3472621200
 In Projects = ""
 Window Top = 32
 Window Left = 10
-Window Z-Order = 4
+Window Z-Order = 5
 Source Window State = "1,1695,1695,1695,8,31,31,0,3,80,0,0,0,0,0,25,1683,0,1695,8,349,683,1,0,"
 
 [File 0004]
@@ -90,7 +90,7 @@ Window Top = 182
 Window Left = 90
 Window Height = 349
 Window Width = 683
-Window Z-Order = 5
+Window Z-Order = 6
 
 [File 0006]
 Path = "/d/ELE_DAQLab/Modules/Zstages/UI_Zstage.uir"
@@ -101,7 +101,7 @@ Window Top = 152
 Window Left = 66
 Window Height = 349
 Window Width = 659
-Window Z-Order = 7
+Window Z-Order = 1
 
 [File 0007]
 Path = "/d/ELE_DAQLab/MSXML/ActiveXML.h"
@@ -119,7 +119,7 @@ File Type = "Include"
 Disk Date = 3486102017
 In Projects = "1,"
 Window Top = 30
-Window Z-Order = 2
+Window Z-Order = 3
 Source Window State = "1,97,97,97,20,37,20,0,0,70,0,0,0,0,0,28,82,0,97,20,400,600,1,0,"
 
 [File 0009]
@@ -159,7 +159,7 @@ Disk Date = 3472621200
 In Projects = ""
 Window Top = 152
 Window Left = 74
-Window Z-Order = 6
+Window Z-Order = 7
 Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,22,37,0,48,1,310,683,1,0,"
 
 [File 0013]
@@ -181,7 +181,7 @@ Window Top = 32
 Window Left = 10
 Window Height = 310
 Window Width = 523
-Window Z-Order = 3
+Window Z-Order = 4
 
 [File 0015]
 Path = "/d/ELE_2010_2961_PCM/TasksUI.uir"
@@ -217,13 +217,13 @@ Source Window State = "1,55,56,56,45,45,45,0,3,70,0,0,0,0,0,25,0,0,55,45,349,603
 [File 0018]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/UI_VUPhotonCtr.uir"
 File Type = "User Interface Resource"
-Disk Date = 3486029236
+Disk Date = 3487581807
 In Projects = "1,"
 Window Top = 182
 Window Left = 90
 Window Height = 323
 Window Width = 683
-Window Z-Order = 1
+Window Z-Order = 2
 
 [File 0019]
 Path = "/d/ELE_DAQLab/Modules/DAQLabModule.c"
@@ -253,7 +253,7 @@ In Projects = "1,"
 Window Top = 51
 Window Left = 102
 Window Released = True
-Source Window State = "1,294,309,294,0,7,0,0,3,0,0,1,0,1,0,0,261,0,309,7,934,1301,0,0,"
+Source Window State = "1,422,422,422,11,45,11,0,0,158,0,1,0,1,0,66,419,0,426,29,934,1301,0,0,"
 
 [File 0022]
 Path = "/d/ELE_DAQLab/Modules/Zstages/Zstage.h"
@@ -284,14 +284,14 @@ Source Window State = "1,585,585,585,0,15,0,0,0,0,0,0,0,0,0,0,192,0,224,4,845,12
 [File 0025]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/UI_VUPhotonCtr.h"
 File Type = "Include"
-Disk Date = 3486029236
+Disk Date = 3487581807
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 
 [File 0026]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.c"
 File Type = "CSource"
-Disk Date = 3486118149
+Disk Date = 3487581807
 In Projects = "1,"
 Window Top = 155
 Window Left = 160
@@ -301,7 +301,7 @@ Source Window State = "1,578,578,578,68,81,68,0,0,0,0,1,0,1,0,0,529,0,578,72,800
 [File 0027]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.h"
 File Type = "Include"
-Disk Date = 3485884697
+Disk Date = 3487581807
 In Projects = "1,"
 Window Top = 169
 Window Left = 674
@@ -316,7 +316,7 @@ In Projects = "1,"
 Window Top = 143
 Window Left = -1240
 Window Released = True
-Source Window State = "1,1555,1555,1555,21,38,21,0,0,0,0,0,0,0,0,0,1525,0,1554,38,817,1196,0,0,"
+Source Window State = "1,99,99,99,28,39,39,0,3,145,0,0,0,0,0,57,73,0,99,28,817,1196,0,0,"
 
 [File 0029]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
@@ -326,7 +326,7 @@ In Projects = "1,"
 Window Top = 93
 Window Left = -1199
 Window Released = True
-Source Window State = "1,259,259,259,4,22,4,0,0,150,0,0,0,0,0,62,29,0,64,87,879,1240,0,0,"
+Source Window State = "1,437,437,437,20,44,20,0,3,150,0,0,0,0,0,62,399,0,437,44,879,1240,0,0,"
 
 [File 0030]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.c"
@@ -346,12 +346,12 @@ In Projects = "1,"
 Window Top = 163
 Window Left = -1149
 Window Released = True
-Source Window State = "1,122,122,122,24,36,24,0,0,0,0,0,0,0,0,0,116,0,122,71,803,1205,0,0,"
+Source Window State = "1,66,66,66,2,16,16,0,3,146,0,0,0,0,0,56,38,0,66,2,803,1205,0,0,"
 
 [File 0032]
 Path = "/d/ELE_DAQLab/DAQLab.c"
 File Type = "CSource"
-Disk Date = 3486108577
+Disk Date = 3487568258
 In Projects = "1,"
 Window Top = 62
 Window Left = 40

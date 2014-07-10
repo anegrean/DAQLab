@@ -13,11 +13,11 @@ Number of Projects = 1
 Active Project = 1
 Project 0001 = "Execution control.prj"
 Drag Bar Left = 330
-Window Top = 30
-Window Left = -1273
-Window Bottom = 1067
-Window Right = 215
-Maximized = True
+Window Top = 81
+Window Left = -1265
+Window Bottom = 1118
+Window Right = 581
+Maximized = False
 Maximized Children = True
 Max32 Number Of Errors = 20
 Track Include File Dependencies = True
@@ -54,7 +54,7 @@ Window Top = 62
 Window Left = 26
 Window Height = 310
 Window Width = 523
-Window Z-Order = 3
+Window Z-Order = 2
 
 [File 0002]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTestUI.h"
@@ -62,38 +62,38 @@ File Type = "Include"
 Disk Date = 3484985933
 In Projects = "1,"
 Window Top = 30
-Window Z-Order = 2
+Window Z-Order = 3
 Source Window State = "1,0,0,0,0,0,0,0,0,70,0,0,0,0,0,28,0,0,0,0,400,600,1,0,"
 
 [File 0003]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 File Type = "Include"
-Disk Date = 3485877239
+Disk Date = 3487851152
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Window Z-Order = 1
-Source Window State = "1,402,402,402,24,55,24,0,0,114,0,0,0,0,0,68,373,0,403,24,349,683,1,0,"
+Source Window State = "1,262,262,262,4,40,4,0,0,185,0,0,0,0,0,56,250,0,447,16,349,683,1,0,"
 
 [File 0004]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 File Type = "CSource"
-Disk Date = 3485877270
+Disk Date = 3487856502
 In Projects = "1,"
-Window Top = 233
-Window Left = 259
+Window Top = 100
+Window Left = 118
 Window Released = True
-Source Window State = "1,317,317,317,5,36,36,0,0,0,0,0,0,0,0,0,286,0,314,50,895,1406,0,0,"
+Source Window State = "1,1045,1045,1045,11,18,11,0,0,205,0,0,0,0,0,70,999,0,1049,33,895,1406,0,0,"
 
 [File 0005]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTest.c"
 File Type = "CSource"
-Disk Date = 3485785043
+Disk Date = 3487856592
 In Projects = "1,"
 Window Top = 70
-Window Left = -1223
+Window Left = 212
 Window Released = True
-Source Window State = "1,80,80,80,23,29,29,0,3,158,0,1,0,1,0,64,45,0,80,23,911,1307,0,0,"
+Source Window State = "1,150,150,150,26,31,45,0,0,158,0,1,0,1,0,64,49,0,69,38,911,1307,0,0,"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

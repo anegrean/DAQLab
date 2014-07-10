@@ -2,11 +2,12 @@ TaskController.obj
 taskcontrolTest.obj
 cvi.lib
 cvistart.lib
-kernel32.lib
+asynctmr.obj
 toolbox.obj
 advapi32.lib
 cviauto.lib
 gdi32.lib
+kernel32.lib
 user32.lib
 EXE Symbol Module
 Resource Module

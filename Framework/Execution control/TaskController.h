@@ -255,14 +255,17 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 // Task Controller States
 //----------------------------------------
 typedef enum {
-	TASK_STATE_UNCONFIGURED,			// Task Controller is not configured.
-	TASK_STATE_CONFIGURED,				// Task Controller is configured.
-	TASK_STATE_INITIAL,					// Initial state of Task Controller before any iterations are performed.
-	TASK_STATE_IDLE,					// Task Controller is configured.
-	TASK_STATE_RUNNING,					// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped
-	TASK_STATE_STOPPING,				// Task Controller received a STOP event and waits for SubTasks to complete their iterations
-	TASK_STATE_ITERATING,				// Task Controller performs one iteration.
-	TASK_STATE_DONE,					// Task Controller finished required iterations if operation was finite
+	TASK_STATE_UNCONFIGURED,				// Task Controller is not configured.
+	TASK_STATE_CONFIGURED,					// Task Controller is configured.
+	TASK_STATE_INITIAL,						// Initial state of Task Controller before any iterations are performed.
+	TASK_STATE_IDLE,						// Task Controller is configured.
+	TASK_STATE_RUNNING,						// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped
+	TASK_STATE_RUNNING_WAITING_ITERATION,	// Task Controller is iterating but the iteration occuring in another thread is not yet complete.
+											// Iteration is complete when a TASK_EVENT_ITERATION_DONE is received in this state.
+	TASK_STATE_STOPPING,					// Task Controller received a STOP event and waits for SubTasks to complete their iterations
+	TASK_STATE_ITERATING,					// Task Controller performs one iteration.
+	TASK_STATE_ITERATING_WAITING_ITERATION, // Task Controller is performing one iteration but the iteration occurs in another thread and is not yet complete.
+	TASK_STATE_DONE,						// Task Controller finished required iterations if operation was finite
 	TASK_STATE_WAITING,		// not in use
 	TASK_STATE_ERROR
 } TaskStates_type;
@@ -276,7 +279,10 @@ typedef enum {
 										// In case of an IDLE state, the Task Controller returns the module or
 										// device to its initial state (iteration index = 0). In case of a PAUSED
 										// state, it continues iterating the module or device.
-	TASK_EVENT_ITERATE,					// Used to signal that another iteration is needed while in a RUNNING state.
+	TASK_EVENT_ITERATE,					// Used to signal that another iteration is needed while in a RUNNING state. This may be signalled
+										// by the Task Controller or another thread if the iteration occurs in another thread.
+	TASK_EVENT_ITERATION_DONE,			// Used to signal that an iteration completed if it was not carried out in the same thread as the call to TASK_FCALL_ITERATE.
+	TASK_EVENT_ITERATION_TIMEOUT,		// Generated when TASK_EVENT_ITERATION_DONE is not received after a given timeout. 
 	TASK_EVENT_ONE_ITERATION,			// Performs only one iteration of the Task Controller in an IDLE or DONE state.
 	TASK_EVENT_RESET,					// Resets iteration index to 0, calls given reset function and brings State Controller 
 										// back to INITIAL state.
@@ -320,9 +326,7 @@ typedef struct TaskExecutionLog		TaskExecutionLog_type;
 
 //--------------------------------------------------------------------------------
 // Task Controller Function Pointer Types
-// return 0 for success and to signal execution continuation
-// return positive integers for the number of seconds to wait until function calls ContinueTaskControlExecution
-// return -1 to wait indefinitely until ContinueTaskControlExecution
+// return 0 for success.
 // return negative numbers <-1 in case of error.
 //
 // The execution of each function when called happens in a separate thread from 
@@ -339,6 +343,9 @@ typedef struct TaskExecutionLog		TaskExecutionLog_type;
 typedef FCallReturn_type* 	(*ConfigureFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag);
 
 // Called each time a Task Controller performs an iteration of a device or module
+// return 0 for success and to signal execution continuation
+// return positive integers for the number of seconds to wait until a TASK_EVENT_ITERATE is received to continue iterating
+// return -1 to wait indefinitely until a TASK_EVENT_ITERATE is received.
 typedef FCallReturn_type* 	(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
 // Called before the first iteration starts from an INITIAL state
@@ -408,7 +415,7 @@ TaskStates_type			GetTaskControlState					(TaskControl_type* taskControl);
 void					SetTaskControlIterations			(TaskControl_type* taskControl, size_t repeat);
 size_t					GetTaskControlIterations			(TaskControl_type* taskControl);
 
-	// iterateFlag = TRUE by default, i.e. call of the iteration function pointer is done before starting SubTasks, 
+	// iterateBeforeFlag = TRUE by default, i.e. call of the iteration function pointer is done before starting SubTasks, 
 	// otherwise it's called after the SubTasks complete
 void					SetTaskControlIterateBeforeFlag		(TaskControl_type* taskControl, BOOL iterateBeforeFlag);
 BOOL					GetTaskControlIterateBeforeFlag		(TaskControl_type* taskControl);
@@ -431,6 +438,9 @@ void*					GetTaskControlModuleData			(TaskControl_type* taskControl);
 	// logPtr = NULL by default
 void					SetTaskControlLog					(TaskControl_type* taskControl, TaskExecutionLog_type*	logPtr); 
 
+	// Obtains status of the abort flag that can be used to abort an iteration happening in another thread outside of the provided IterateFptr 
+BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -439,6 +449,14 @@ int						AddSubTaskToParent				(TaskControl_type* parent, TaskControl_type* chil
 
 int						RemoveSubTaskFromParent			(TaskControl_type* child);
 
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// HW trigger and data exchange dependencies
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+/*
+int						AddHWTrigSlaveToMaster			(TaskControl_type* master, TaskControl_type* slave
+		
+int						RemoveHWTrigSlaveFromMaster		(
+*/
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller event posting and execution control functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -451,8 +469,6 @@ int 					TaskControlEvent				(TaskControl_type* RecipientTaskControl, TaskEvents
 int						TaskControlEventToSubTasks  	(TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventInfo, 
 														 DisposeEventInfoFptr_type disposeEventInfoFptr); 
 
-void					ContinueTaskControlExecution	(TaskControl_type* taskControl, FCallReturn_type* fCallResult);
-
 	// Aborts iterations for the entire Nested Task Controller hierarchy
 void					AbortTaskControlExecution		(TaskControl_type* taskControl);
 
@@ -460,7 +476,7 @@ void					AbortTaskControlExecution		(TaskControl_type* taskControl);
 // Task Controller function call management functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-FCallReturn_type*		init_FCallReturn_type			(int valFCall, const char errorOrigin[], const char errorDescription[], int SuspendExecution);
+FCallReturn_type*		init_FCallReturn_type			(int valFCall, const char errorOrigin[], const char errorDescription[], int Timeout);
 
 void					discard_FCallReturn_type		(FCallReturn_type** a);
 

@@ -6,6 +6,18 @@ Prototype="struct DAQLabModule *initalloc_VUPhotonCtr(struct DAQLabModule *mod, 
 Class="Function"
 Prototype="void discard_VUPhotonCtr(struct DAQLabModule **mod);"
 
+[SetPMTGainTresh]
+Class="Function"
+Prototype="int SetPMTGainTresh(struct VUPhotonCtr *vupc, int PMTnr, unsigned int PMTGain, unsigned int PMTThreshold);"
+
+[ConvertVoltsToBits]
+Class="Function"
+Prototype="int ConvertVoltsToBits(float value_in_volts);"
+
+[PMTController_DimWhenRunning]
+Class="Function"
+Prototype="void PMTController_DimWhenRunning(struct VUPhotonCtr *self, int dimmed);"
+
 [MenuSettings_CB]
 Class="Function"
 Prototype="void MenuSettings_CB(int menuBar, int menuItem, void *callbackData, int panel);"

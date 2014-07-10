@@ -60,14 +60,14 @@ int main (int argc, char *argv[])
 	
 	// ZStack Task
 	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlIterations(ZStackTask, 2);
+	SetTaskControlIterations(ZStackTask, 1);
 	//SetTaskControlMode(ZStackTask,TASK_CONTINUOUS);
 	SetTaskControlIterateBeforeFlag(ZStackTask, FALSE);
 	SetTaskControlLog(ZStackTask, TaskExecutionLog);
 	
 	// ZStage
 	ZStage				= init_TaskControl_type ("Z Stage", NULL, ZStage_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlIterations(ZStage, 2);
+	SetTaskControlIterations(ZStage, 1);
 	SetTaskControlLog(ZStage, TaskExecutionLog);
 	
 	// Device X
@@ -90,7 +90,7 @@ int main (int argc, char *argv[])
 
 FCallReturn_type* ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "", 5); // timeout after 5 seconds.
 }
 
 int CVICALLBACK CB_ControlPan (int panel, int event, void *callbackData,
@@ -148,9 +148,9 @@ int CVICALLBACK CB_TaskController (int panel, int control, int event,
 					
 				case ControlPan_IterCompleteBTTN:
 					
-					ContinueTaskControlExecution(ZStage, 0);
+					TaskControlEvent(ZStage, TASK_EVENT_ITERATION_DONE, NULL, NULL);
 					
-					break;
+					break; 
 			}
 			
 			   

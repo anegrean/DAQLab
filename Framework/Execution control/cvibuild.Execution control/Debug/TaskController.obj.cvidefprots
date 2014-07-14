@@ -118,6 +118,10 @@ Prototype="void TaskEventHandlerExecutionCallback(int poolHandle, int functionID
 Class="Function"
 Prototype="int TaskControlEvent(struct TaskControl *RecipientTaskControl, TaskEvents_type event, void *eventInfo, void (*disposeEventInfoFptr)(void *));"
 
+[TaskControlIterationDone]
+Class="Function"
+Prototype="int TaskControlIterationDone(struct TaskControl *taskControl, int errorID, char *errorInfo);"
+
 [AbortTaskControlExecution]
 Class="Function"
 Prototype="void AbortTaskControlExecution(struct TaskControl *taskControl);"

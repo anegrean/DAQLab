@@ -463,8 +463,15 @@ int						RemoveHWTrigSlaveFromMaster		(
 														
 	// Pass NULL to eventInfo if there is no additional data carried by the event 
 	// Pass NULL to disposeEventInfoFptr if eventInfo should NOT be disposed after processing the event
+	// 
 int 					TaskControlEvent				(TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventInfo, 
 														 DisposeEventInfoFptr_type disposeEventInfoFptr); 
+
+	// Used to signal the Task Controller that an iteration is done when performed in a separate thread.
+	// Pass to errorInfo an empty string as "", if there is no error and the iteration completed succesfully. Otherwise,
+	// pass an error message string. Pass 0 to errorID if there is no error, otherwise pass an error code.
+int						TaskControlIterationDone		(TaskControl_type* taskControl, int errorID, char errorInfo[]);
+
 
 int						TaskControlEventToSubTasks  	(TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventInfo, 
 														 DisposeEventInfoFptr_type disposeEventInfoFptr); 

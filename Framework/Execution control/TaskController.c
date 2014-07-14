@@ -145,6 +145,10 @@ static ErrorMsg_type* 			init_ErrorMsg_type 				(int errorID, const char errorOr
 static void						discard_ErrorMsg_type 			(ErrorMsg_type** a);
 static ErrorMsg_type*			FCallReturnToErrorMsg			(FCallReturn_type** fCallReturn, TaskFCall_type fID);
 
+// Task Controller iteration done return info when performing iteration in another thread
+static void						disposeTCIterDoneInfo 			(void* eventInfo);
+
+
 static char*					StateToString					(TaskStates_type state);
 static char*					EventToString					(TaskEvents_type event);
 static char*					FCallToString					(TaskFCall_type fcall);
@@ -891,6 +895,19 @@ int TaskControlEvent (TaskControl_type* RecipientTaskControl, TaskEvents_type ev
 	else return -1;
 }
 
+int	TaskControlIterationDone (TaskControl_type* taskControl, int errorID, char errorInfo[])
+{
+	if (errorID)
+		return TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, init_ErrorMsg_type(errorID, "External Task Control Iteration", errorInfo), disposeTCIterDoneInfo);
+	else
+		return TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
+}
+
+static void disposeTCIterDoneInfo (void* eventInfo) 
+{
+	discard_ErrorMsg_type((ErrorMsg_type**)&eventInfo);
+}
+
 static int ChangeState (TaskControl_type* taskControl, TaskEvents_type event, TaskStates_type newState)
 {
 	// if logging enabled, record state change
@@ -1128,7 +1145,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 #define TaskEventHandler_Error_MsgPostToSelfFailed		-4
 #define TaskEventHandler_Error_SubTaskInErrorState		-5
 #define TaskEventHandler_Error_InvalidEventInState		-6
-#define TaskEventHandler_Error_IterateFCallTmeout		-7	
+#define TaskEventHandler_Error_IterateFCallTmeout		-7
+#define	TaskEventHandler_Error_IterateExternThread		-8
 
 	
 	EventPacket_type 	eventpacket;
@@ -2472,6 +2490,20 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						taskControl->iterationTimerID = 0;
 					}
 						
+					// check if error occured during iteration
+					if (eventpacket.eventInfo) {
+						ErrorMsg_type* errMsg = eventpacket.eventInfo;
+						
+						taskControl->errorMsg =
+							init_ErrorMsg_type(TaskEventHandler_Error_IterateExternThread, taskControl->taskName, errMsg->errorInfo); 
+						// abort the entire Nested Task Controller hierarchy
+						AbortTaskControlExecution(taskControl);
+							
+						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+								
+						break;
+					}
 					
 					// if iteration was complete 
 					if (!taskControl->abortIterationFlag) {

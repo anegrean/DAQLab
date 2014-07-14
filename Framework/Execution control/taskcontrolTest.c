@@ -148,7 +148,7 @@ int CVICALLBACK CB_TaskController (int panel, int control, int event,
 					
 				case ControlPan_IterCompleteBTTN:
 					
-					TaskControlEvent(ZStage, TASK_EVENT_ITERATION_DONE, NULL, NULL);
+					TaskControlIterationDone(ZStage, 0, "");
 					
 					break; 
 			}

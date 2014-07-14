@@ -73,27 +73,27 @@ In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Window Z-Order = 1
-Source Window State = "1,262,262,262,4,40,4,0,0,185,0,0,0,0,0,56,250,0,447,16,349,683,1,0,"
+Source Window State = "1,284,284,284,4,32,4,0,3,185,0,0,0,0,0,56,277,0,284,32,349,683,1,0,"
 
 [File 0004]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 File Type = "CSource"
-Disk Date = 3487856502
+Disk Date = 3488177572
 In Projects = "1,"
-Window Top = 100
-Window Left = 118
+Window Top = 73
+Window Left = 85
 Window Released = True
-Source Window State = "1,1045,1045,1045,11,18,11,0,0,205,0,0,0,0,0,70,999,0,1049,33,895,1406,0,0,"
+Source Window State = "1,2468,2472,2468,20,23,20,0,0,171,0,0,0,0,0,63,2548,0,2648,24,895,1406,0,0,"
 
 [File 0005]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTest.c"
 File Type = "CSource"
-Disk Date = 3487856592
+Disk Date = 3488178145
 In Projects = "1,"
-Window Top = 70
-Window Left = 212
+Window Top = 65
+Window Left = 145
 Window Released = True
-Source Window State = "1,150,150,150,26,31,45,0,0,158,0,1,0,1,0,64,49,0,69,38,911,1307,0,0,"
+Source Window State = "1,64,64,64,48,53,48,0,0,158,0,1,0,1,0,64,49,0,92,63,911,1307,0,0,"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

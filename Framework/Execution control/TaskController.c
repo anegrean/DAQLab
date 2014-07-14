@@ -2342,36 +2342,36 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// If all subtasks are done and there are iterations left (for finite mode) or Task Controller
 					// is simply in continuous mode, perform another iteration
-					if (AllDoneFlag)  
-						if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
-							// call iteration function after SubTasks completed
-							if (!taskControl->iterateBeforeFlag) {
-								if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL, &timeout))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
-						
-									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL, NULL);
-									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
-									break;
-								}
-								// if iteration is complete when TASK_FCALL_ITERATE returns
-								if (!timeout)
-									// increment iteration index
-									taskControl->currIterIdx++;
-								else {
-									// if iteration is not complete when TASK_FCALL_ITERATE returns
-									// reset abort iteration flag
-									taskControl->abortIterationFlag = FALSE;
-									ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING_WAITING_ITERATION);
-									// set an iteration timeout async timer until which a TASK_EVENT_ITERATION_DONE must be received 
-									// if timeout elapses without receiving a TASK_EVENT_ITERATION_DONE, a TASK_EVENT_ITERATION_TIMEOUT is generated 
-									if (timeout > 0)
-										taskControl->iterationTimerID = NewAsyncTimer(timeout, 1, 1, TaskControlIterTimeout, taskControl);
-									break;
-								}
+					if (AllDoneFlag) {
+						// call iteration function after SubTasks completed
+						if (!taskControl->iterateBeforeFlag) {
+							if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL, &timeout))) {
+								taskControl->errorMsg = 
+								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+								discard_ErrorMsg_type(&errMsg);
+								
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL, NULL);
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+								break;
 							}
-							
+							// if iteration is complete when TASK_FCALL_ITERATE returns
+							if (!timeout)
+								// increment iteration index
+								taskControl->currIterIdx++;
+							else {
+								// if iteration is not complete when TASK_FCALL_ITERATE returns
+								// reset abort iteration flag
+								taskControl->abortIterationFlag = FALSE;
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING_WAITING_ITERATION);
+								// set an iteration timeout async timer until which a TASK_EVENT_ITERATION_DONE must be received 
+								// if timeout elapses without receiving a TASK_EVENT_ITERATION_DONE, a TASK_EVENT_ITERATION_TIMEOUT is generated 
+								if (timeout > 0)
+									taskControl->iterationTimerID = NewAsyncTimer(timeout, 1, 1, TaskControlIterTimeout, taskControl);
+								break;
+							}
+						}
+						// iterate if required
+						if ((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) {
 							// continue iterations, stay in RUNNING state
 							if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
 								taskControl->errorMsg =
@@ -2396,6 +2396,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
 						}
+					}
 					
 					break;
 					
@@ -2641,6 +2642,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						taskControl->errorMsg =
 						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
 						
+						// remove timeout timer
+						if (taskControl->iterationTimerID > 0) {
+							DiscardAsyncTimer(taskControl->iterationTimerID);
+							taskControl->iterationTimerID = 0;
+						}
+						
 						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 						break;	
@@ -2655,6 +2662,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
 							discard_ErrorMsg_type(&errMsg);
 							
+							// remove timeout timer
+							if (taskControl->iterationTimerID > 0) {
+								DiscardAsyncTimer(taskControl->iterationTimerID);
+								taskControl->iterationTimerID = 0;
+							}
+							
 							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 							break;
@@ -2666,6 +2679,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					taskControl->errorMsg =
 						init_ErrorMsg_type(TaskEventHandler_Error_OutOfMemory, taskControl->taskName, "Out of memory");
+					
+					// remove timeout timer
+					if (taskControl->iterationTimerID > 0) {
+						DiscardAsyncTimer(taskControl->iterationTimerID);
+						taskControl->iterationTimerID = 0;
+					}
 					
 					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL, NULL);
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
@@ -2679,7 +2698,13 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						taskControl->errorMsg = 
 						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
 						discard_ErrorMsg_type(&errMsg);
-							
+						
+						// remove timeout timer
+						if (taskControl->iterationTimerID > 0) {
+							DiscardAsyncTimer(taskControl->iterationTimerID);
+							taskControl->iterationTimerID = 0;
+						}
+						
 						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 						break;
@@ -2688,6 +2713,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					break;
 					
 				default:
+					
+					// remove timeout timer
+					if (taskControl->iterationTimerID > 0) {
+						DiscardAsyncTimer(taskControl->iterationTimerID);
+						taskControl->iterationTimerID = 0;
+					}
 					
 					eventStr = EventToString(eventpacket.event);
 					stateStr = StateToString(taskControl->state);	 	
@@ -3709,6 +3740,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_STOP:
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+				case TASK_EVENT_ITERATION_TIMEOUT:
 					
 					// ignore and stay in error state
 					

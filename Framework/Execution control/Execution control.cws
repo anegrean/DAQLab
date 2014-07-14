@@ -13,11 +13,11 @@ Number of Projects = 1
 Active Project = 1
 Project 0001 = "Execution control.prj"
 Drag Bar Left = 330
-Window Top = 81
-Window Left = -1265
-Window Bottom = 1118
-Window Right = 581
-Maximized = False
+Window Top = 54
+Window Left = -1346
+Window Bottom = 1091
+Window Right = 405
+Maximized = True
 Maximized Children = True
 Max32 Number Of Errors = 20
 Track Include File Dependencies = True
@@ -68,22 +68,22 @@ Source Window State = "1,0,0,0,0,0,0,0,0,70,0,0,0,0,0,28,0,0,0,0,400,600,1,0,"
 [File 0003]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 File Type = "Include"
-Disk Date = 3488188801
+Disk Date = 3488217104
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Window Z-Order = 1
-Source Window State = "1,284,284,284,4,32,4,0,0,185,0,0,0,0,0,70,433,0,313,67,349,683,1,0,"
+Source Window State = "1,261,261,261,4,44,4,0,0,114,0,0,0,0,0,53,419,0,459,24,349,683,1,0,"
 
 [File 0004]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 File Type = "CSource"
-Disk Date = 3488198169
+Disk Date = 3488217372
 In Projects = "1,"
-Window Top = 73
-Window Left = 85
+Window Top = 83
+Window Left = 211
 Window Released = True
-Source Window State = "1,2468,2472,2468,20,23,20,0,0,0,0,0,0,0,0,0,2548,0,2648,24,895,1406,0,0,"
+Source Window State = "1,32,32,32,2,23,23,0,3,171,0,0,0,0,0,63,1,0,32,2,895,1406,0,0,"
 
 [File 0005]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTest.c"
@@ -93,7 +93,7 @@ In Projects = "1,"
 Window Top = 65
 Window Left = 145
 Window Released = True
-Source Window State = "1,64,64,64,48,53,48,0,0,158,0,1,0,1,0,64,49,0,92,63,911,1307,0,0,"
+Source Window State = "1,64,64,64,48,53,48,0,0,0,0,1,0,1,0,0,49,0,92,63,911,1307,0,0,"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

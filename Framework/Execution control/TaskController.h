@@ -255,18 +255,21 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 // Task Controller States
 //----------------------------------------
 typedef enum {
-	TASK_STATE_UNCONFIGURED,				// Task Controller is not configured.
-	TASK_STATE_CONFIGURED,					// Task Controller is configured.
-	TASK_STATE_INITIAL,						// Initial state of Task Controller before any iterations are performed.
-	TASK_STATE_IDLE,						// Task Controller is configured.
-	TASK_STATE_RUNNING,						// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped
-	TASK_STATE_RUNNING_WAITING_ITERATION,	// Task Controller is iterating but the iteration occuring in another thread is not yet complete.
-											// Iteration is complete when a TASK_EVENT_ITERATION_DONE is received in this state.
-	TASK_STATE_STOPPING,					// Task Controller received a STOP event and waits for SubTasks to complete their iterations
-	TASK_STATE_ITERATING,					// Task Controller performs one iteration.
-	TASK_STATE_ITERATING_WAITING_ITERATION, // Task Controller is performing one iteration but the iteration occurs in another thread and is not yet complete.
-	TASK_STATE_DONE,						// Task Controller finished required iterations if operation was finite
-	TASK_STATE_WAITING,		// not in use
+	TASK_STATE_UNCONFIGURED,					// Task Controller is not configured.
+	TASK_STATE_CONFIGURED,						// Task Controller is configured.
+	TASK_STATE_INITIAL,							// Initial state of Task Controller before any iterations are performed.
+	TASK_STATE_IDLE,							// Task Controller is configured.
+	TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES,   // A HW Master Trigger Task Controller is waiting for HW Slave Trigger Task Controllers to be 
+												// in a TASK_STATE_RUNNING_WAITING_ITERATION state before it can proceed with calling the IterateFptr 
+												// which generates a HW Trigger for the Slaves. 
+	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped
+	TASK_STATE_RUNNING_WAITING_ITERATION,		// Task Controller is iterating but the iteration occuring in another thread is not yet complete.
+												// Iteration is complete when a TASK_EVENT_ITERATION_DONE is received in this state.
+	TASK_STATE_STOPPING,						// Task Controller received a STOP event and waits for SubTasks to complete their iterations
+	TASK_STATE_ITERATING,						// Task Controller performs one iteration.
+	TASK_STATE_ITERATING_WAITING_ITERATION, 	// Task Controller is performing one iteration but the iteration occurs in another thread and is not yet complete.
+	TASK_STATE_DONE,							// Task Controller finished required iterations if operation was finite
+	TASK_STATE_WAITING,							// not in use
 	TASK_STATE_ERROR
 } TaskStates_type;
 
@@ -275,23 +278,24 @@ typedef enum {
 //----------------------------------------
 typedef enum {
 	TASK_EVENT_CONFIGURE,
-	TASK_EVENT_START,					// Starts a Task Controller that is in an IDLE or PAUSED state. 
-										// In case of an IDLE state, the Task Controller returns the module or
-										// device to its initial state (iteration index = 0). In case of a PAUSED
-										// state, it continues iterating the module or device.
-	TASK_EVENT_ITERATE,					// Used to signal that another iteration is needed while in a RUNNING state. This may be signalled
-										// by the Task Controller or another thread if the iteration occurs in another thread.
-	TASK_EVENT_ITERATION_DONE,			// Used to signal that an iteration completed if it was not carried out in the same thread as the call to TASK_FCALL_ITERATE.
-	TASK_EVENT_ITERATION_TIMEOUT,		// Generated when TASK_EVENT_ITERATION_DONE is not received after a given timeout. 
-	TASK_EVENT_ONE_ITERATION,			// Performs only one iteration of the Task Controller in an IDLE or DONE state.
-	TASK_EVENT_RESET,					// Resets iteration index to 0, calls given reset function and brings State Controller 
-										// back to INITIAL state.
-	TASK_EVENT_STOP,					// Stops Task Controller iterations and allows SubTask Controllers to complete their iterations.
-	TASK_EVENT_STOP_CONTINUOUS_TASK,	// Event sent from parent Task Controller to its continuous SubTasks to stop them.
-	TASK_EVENT_SUBTASK_STATE_CHANGED,   // When one of the SubTask Controllers switches to another state.
-	TASK_EVENT_DATA_RECEIVED,			// When data is placed in an otherwise empty data queue of a Task Controller.
-	TASK_EVENT_ERROR_OUT_OF_MEMORY,		// To signal that an out of memory event occured.
-	TASK_EVENT_CUSTOM_MODULE_EVENT		// To signal custom module or device events.
+	TASK_EVENT_START,							// Starts a Task Controller that is in an IDLE or PAUSED state. 
+												// In case of an IDLE state, the Task Controller returns the module or
+												// device to its initial state (iteration index = 0). In case of a PAUSED
+												// state, it continues iterating the module or device.
+	TASK_EVENT_ITERATE,							// Used to signal that another iteration is needed while in a RUNNING state. This may be signalled
+												// by the Task Controller or another thread if the iteration occurs in another thread.
+	TASK_EVENT_ITERATION_DONE,					// Used to signal that an iteration completed if it was not carried out in the same thread as the call to TASK_FCALL_ITERATE.
+	TASK_EVENT_ITERATION_TIMEOUT,				// Generated when TASK_EVENT_ITERATION_DONE is not received after a given timeout. 
+	TASK_EVENT_ONE_ITERATION,					// Performs only one iteration of the Task Controller in an IDLE or DONE state.
+	TASK_EVENT_RESET,							// Resets iteration index to 0, calls given reset function and brings State Controller 
+												// back to INITIAL state.
+	TASK_EVENT_STOP,							// Stops Task Controller iterations and allows SubTask Controllers to complete their iterations.
+	TASK_EVENT_STOP_CONTINUOUS_TASK,			// Event sent from parent Task Controller to its continuous SubTasks to stop them.
+	TASK_EVENT_SUBTASK_STATE_CHANGED,   		// When one of the SubTask Controllers switches to another state.
+	TASK_EVENT_SLAVE_HWTRIG_STATE_CHANGED,		// When a Slave HW Trig Task Controller changes state it informs its Master HW Trig Task Controller. 
+	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue of a Task Controller.
+	TASK_EVENT_ERROR_OUT_OF_MEMORY,				// To signal that an out of memory event occured.
+	TASK_EVENT_CUSTOM_MODULE_EVENT				// To signal custom module or device events.
 } TaskEvents_type;
 
 //----------------------------------------
@@ -452,11 +456,11 @@ int						RemoveSubTaskFromParent			(TaskControl_type* child);
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // HW trigger and data exchange dependencies
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-/*
-int						AddHWTrigSlaveToMaster			(TaskControl_type* master, TaskControl_type* slave
+
+int						AddHWSlaveTrigToMaster			(TaskControl_type* master, TaskControl_type* slave);
 		
-int						RemoveHWTrigSlaveFromMaster		(
-*/
+int						RemoveHWSlaveTrigFromMaster		(TaskControl_type* slave);
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller event posting and execution control functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------

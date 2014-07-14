@@ -45,6 +45,11 @@ typedef struct {
 	TaskControl_type*		subtask;					// Pointer to Subtask Controller.
 } SubTask_type;
 
+typedef struct {
+	TaskStates_type			subtaskState;				// Updated when a Slave HW Triggered Task Controller changes its state.
+	TaskControl_type*		slaveHWTrigTask;			// pointer to Slave HW Triggered Task Controller.
+} SlaveHWTrigTask_type;
+
 typedef enum {
 	TASK_CONTROL_STATE_CHANGE,
 	TASK_CONTROL_FUNCTION_CALL
@@ -88,8 +93,8 @@ struct TaskExecutionLog {
 struct TaskControl {
 	// Task control data
 	char*					taskName;					// Name of Task Controller
-	size_t					subtaskIdx;					// 1-based index of subtask from subtasks list. If task doesn't have a parent
-														// task then index is 0.
+	size_t					subtaskIdx;					// 1-based index of subtask from parent Task subtasks list. If task doesn't have a parent task then index is 0.
+	size_t					slaveHWTrigIdx;				// 1-based index of Slave HW Trig from Master HW Trig Slave list. If Task Controller is not a HW Trig Slave, then index is 0.
 	CmtTSQHandle			eventQ;						// Event queue to which the state machine reacts.
 	ListType				dataQs;						// Incoming data queues, list of CmtTSQHandle type.
 	unsigned int			eventQThreadID;				// Thread ID in which queue events are processed.
@@ -101,6 +106,10 @@ struct TaskControl {
 	TaskControl_type*		parenttask;					// Pointer to parent task that own this subtask. 
 														// If this is the main task, it has no parent and this is NULL. 
 	ListType				subtasks;					// List of subtasks of SubTask_type.
+	TaskControl_type*		masterHWTrigTask;			// If this is a Slave HW Triggered Task Controller, then masterHWTrigTask is a Task Controller 
+														// from which a HW trigger must be received in order to carry out an iteration.
+	ListType				slaveHWTrigTasks;			// If this is a Master HW Triggered Task Controller then slaveHWTrigTasks is a list of SlaveHWTrigTask_type
+														// HW Triggered Slave Task Controllers.
 	void*					moduleData;					// Reference to module specific data that is 
 														// controlled by the task.
 	TaskExecutionLog_type*	logPtr;						// Pointer to logging structure. NULL if logging is not enabled.
@@ -153,10 +162,14 @@ static char*					StateToString					(TaskStates_type state);
 static char*					EventToString					(TaskEvents_type event);
 static char*					FCallToString					(TaskFCall_type fcall);
 
-// eventInfo functions
+// SubTask eventInfo functions
 static SubTaskEventInfo_type* 	init_SubTaskEventInfo_type 		(size_t subtaskIdx, TaskStates_type state);
 static void						discard_SubTaskEventInfo_type 	(SubTaskEventInfo_type** a);
 static void						disposeSubTaskEventInfo			(void* eventInfo);
+
+// HW Trigger eventInfo functions
+
+// Queue eventInfo functions
 static void						disposeCmtTSQHandleEventInfo	(void* eventInfo);
 
 //==============================================================================
@@ -199,6 +212,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	a -> eventQ				= 0;
 	a -> dataQs				= 0;
 	a -> subtasks			= 0;
+	a -> slaveHWTrigTasks	= 0;
 	
 	if (CmtNewTSQ(N_TASK_EVENT_QITEMS, sizeof(EventPacket_type), 0, &a->eventQ) < 0)
 		goto Error;
@@ -214,13 +228,18 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	a -> subtasks			= ListCreate(sizeof(SubTask_type));
 	if (!a->subtasks) goto Error;
 	
+	a -> slaveHWTrigTasks	= ListCreate(sizeof(SlaveHWTrigTask_type));
+	if (!a->slaveHWTrigTasks) goto Error;
+	
 	a -> taskName 				= StrDup(taskname);
-	a -> subtaskIdx				= 0;  
+	a -> subtaskIdx				= 0;
+	a -> slaveHWTrigIdx			= 0;
 	a -> state					= TASK_STATE_UNCONFIGURED;
 	a -> repeat					= 1;
 	a -> mode					= TASK_FINITE;
 	a -> currIterIdx			= 0;
 	a -> parenttask				= NULL;
+	a -> masterHWTrigTask		= NULL;
 	a -> moduleData				= NULL;
 	a -> logPtr					= NULL;
 	a -> errorMsg				= NULL;
@@ -245,9 +264,10 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	
 	Error:
 	
-	if (a->eventQ) 		CmtDiscardTSQ(a->eventQ);
-	if (a->dataQs)	 	ListDispose(a->dataQs);
-	if (a->subtasks)    ListDispose(a->subtasks);
+	if (a->eventQ) 				CmtDiscardTSQ(a->eventQ);
+	if (a->dataQs)	 			ListDispose(a->dataQs);
+	if (a->subtasks)    		ListDispose(a->subtasks);
+	if (a->slaveHWTrigTasks)	ListDispose(a->slaveHWTrigTasks);
 	OKfree(a);
 	
 	return NULL;
@@ -582,13 +602,17 @@ static char* StateToString (TaskStates_type state)
 			
 			return StrDup("Idle");
 			
+		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
+			
+			return StrDup("Running and Waiting For HW Trig Slaves");
+			
 		case TASK_STATE_RUNNING:
 			
 			return StrDup("Running");
 			
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
 			
-			return StrDup("Running, Waiting For Iteration");
+			return StrDup("Running and Waiting For Iteration Completion");
 			
 		case TASK_STATE_STOPPING:
 			
@@ -600,7 +624,7 @@ static char* StateToString (TaskStates_type state)
 			
 		case TASK_STATE_ITERATING_WAITING_ITERATION:
 			
-			return StrDup("Iterating, Waiting For Iteration"); 
+			return StrDup("Iterating and Waiting For Iteration Completion"); 
 			
 		case TASK_STATE_DONE:
 			
@@ -661,7 +685,11 @@ static char* EventToString (TaskEvents_type event)
 			
 		case TASK_EVENT_SUBTASK_STATE_CHANGED:
 			
-			return StrDup("SubTask State Changed"); 
+			return StrDup("SubTask State Changed");
+			
+		case TASK_EVENT_SLAVE_HWTRIG_STATE_CHANGED:
+			
+			return StrDup("Slave HW Trig Task State Changed"); 
 			
 		case TASK_EVENT_DATA_RECEIVED:
 			
@@ -910,6 +938,7 @@ static void disposeTCIterDoneInfo (void* eventInfo)
 
 static int ChangeState (TaskControl_type* taskControl, TaskEvents_type event, TaskStates_type newState)
 {
+	int error;
 	// if logging enabled, record state change
 	if (taskControl->logPtr) {
 		TaskControlLog_type logItem = {taskControl, 
@@ -937,10 +966,19 @@ static int ChangeState (TaskControl_type* taskControl, TaskEvents_type event, Ta
 	taskControl->state = newState;
 	// if there is a parent task, inform it of subtask state chage
 	if (taskControl->parenttask)
-		return TaskControlEvent(taskControl->parenttask, TASK_EVENT_SUBTASK_STATE_CHANGED, 
-								init_SubTaskEventInfo_type(taskControl->subtaskIdx, taskControl->state), disposeSubTaskEventInfo);
-	else
-		return 0;
+		if ((error = TaskControlEvent(taskControl->parenttask, TASK_EVENT_SUBTASK_STATE_CHANGED, 
+					init_SubTaskEventInfo_type(taskControl->subtaskIdx, taskControl->state), disposeSubTaskEventInfo)) < 0) goto Error;
+	
+!!!!	if (taskControl->masterHWTrigTask)
+		if ((error = TaskControlEvent(taskControl->masterHWTrigTask, TASK_EVENT_SLAVE_HWTRIG_STATE_CHANGED, 
+					init_SubTaskEventInfo_type(taskControl->subtaskIdx, taskControl->state), disposeSubTaskEventInfo)) < 0) goto Error;
+		
+	
+	return 0;
+	
+	Error:
+	
+	return error;
 }
 
 void AbortTaskControlExecution (TaskControl_type* taskControl)
@@ -1117,13 +1155,70 @@ int	RemoveSubTaskFromParent	(TaskControl_type* child)
 		subtaskPtr = ListGetPtrToItem(child->parenttask->subtasks, i);
 		if (child == subtaskPtr->subtask) {
 			ListRemoveItem(child->parenttask->subtasks, 0, i);
+			// update subtask indices
+			for (size_t i = 1; i <= ListNumItems(child->parenttask->subtasks); i++) {
+				subtaskPtr = ListGetPtrToItem(child->parenttask->subtasks, i);
+				subtaskPtr->subtask->subtaskIdx = i;
+			}
+			child->subtaskIdx = 0;
 			child->parenttask = NULL;
+			
 			return 0; // found and removed
 		}
 		
 	}
 	
-	return -1; // not found
+	return -2; // not found
+}
+
+int	AddHWSlaveTrigToMaster (TaskControl_type* master, TaskControl_type* slave)
+{
+	SlaveHWTrigTask_type newSlave;
+	if (!master || !slave) return -1; 
+	
+	if (slave->masterHWTrigTask) 
+		return -2; // slave already assigned
+	
+	// assign master to slave
+	slave->masterHWTrigTask = master;
+	
+	// assign slave to master
+	newSlave.slaveHWTrigTask 	= slave;
+	newSlave.subtaskState		= slave->state;
+	
+	// insert subtask
+	if (!ListInsertItem(master->slaveHWTrigTasks, &newSlave, END_OF_LIST)) return -1;
+	
+	// update Slave HW Trig index within Master HW Trig Slave list
+	slaveHWTrigIdx = ListNumItems(master->slaveHWTrigTasks);
+	
+	return 0;
+}
+
+int RemoveHWSlaveTrigFromMaster (TaskControl_type* slave)
+{
+	SlaveHWTrigTask_type* slavePtr; 
+	
+	if (!slave || !slave->masterHWTrigTask) return -1;
+	
+	for (size_t i = 1; i <= ListNumItems(slave->masterHWTrigTask->slaveHWTrigTasks); i++) {
+		slavePtr = ListGetPtrToItem(slave->masterHWTrigTask->slaveHWTrigTasks, i);
+		if (slave == slavePtr->slaveHWTrigTask) {
+			ListRemoveItem(slave->masterHWTrigTask->slaveHWTrigTasks, 0, i);
+			// update slave indices from master list
+			for (size_t i = 1; i <= ListNumItems(slave->masterHWTrigTask->slaveHWTrigTasks); i++) {
+				slavePtr = ListGetPtrToItem(slave->masterHWTrigTask->slaveHWTrigTasks, i);
+				slavePtr->slaveHWTrigTask->slaveHWTrigIdx = i;
+			}
+			slave->slaveHWTrigIdx = 0;
+			slave->masterHWTrigTask = NULL;
+			
+			return 0; // found and removed
+		}
+		
+	}
+	
+	return -2; // not found
 }
 
 /// HIFN Called after a certain timeout if a TASK_EVENT_ITERATION_TIMEOUT is not received

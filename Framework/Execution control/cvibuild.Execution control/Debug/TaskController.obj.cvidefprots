@@ -30,6 +30,14 @@ Prototype="void SetTaskControlIterations(struct TaskControl *taskControl, unsign
 Class="Function"
 Prototype="unsigned int GetTaskControlIterations(struct TaskControl *taskControl);"
 
+[SetTaskControlIterationTimeout]
+Class="Function"
+Prototype="void SetTaskControlIterationTimeout(struct TaskControl *taskControl, int timeout);"
+
+[GetTaskControlIterationTimeout]
+Class="Function"
+Prototype="int GetTaskControlIterationTimeout(struct TaskControl *taskControl);"
+
 [SetTaskControlIterateBeforeFlag]
 Class="Function"
 Prototype="void SetTaskControlIterateBeforeFlag(struct TaskControl *taskControl, int iterateBeforeFlag);"
@@ -70,6 +78,14 @@ Prototype="void SetTaskControlLog(struct TaskControl *taskControl, struct TaskEx
 Class="Function"
 Prototype="int GetTaskControlAbortIterationFlag(struct TaskControl *taskControl);"
 
+[SetTaskControlHWTrigMode]
+Class="Function"
+Prototype="void SetTaskControlHWTrigMode(struct TaskControl *taskControl, HWTriggerMode_type trigMode);"
+
+[GetTaskControlHWTrigMode]
+Class="Function"
+Prototype="HWTriggerMode_type GetTaskControlHWTrigMode(struct TaskControl *taskControl);"
+
 [AddDataQueue]
 Class="Function"
 Prototype="int AddDataQueue(struct TaskControl *taskControl, int dataQID);"
@@ -92,7 +108,7 @@ Prototype="void discard_TaskExecutionLog_type(struct TaskExecutionLog **a);"
 
 [init_FCallReturn_type]
 Class="Function"
-Prototype="struct FCallReturn *init_FCallReturn_type(int valFCall, const char *errorOrigin, const char *errorDescription, int timeout);"
+Prototype="struct FCallReturn *init_FCallReturn_type(int valFCall, const char *errorOrigin, const char *errorDescription);"
 
 [discard_FCallReturn_type]
 Class="Function"
@@ -137,6 +153,14 @@ Prototype="int AddSubTaskToParent(struct TaskControl *parent, struct TaskControl
 [RemoveSubTaskFromParent]
 Class="Function"
 Prototype="int RemoveSubTaskFromParent(struct TaskControl *child);"
+
+[AddHWSlaveTrigToMaster]
+Class="Function"
+Prototype="int AddHWSlaveTrigToMaster(struct TaskControl *master, struct TaskControl *slave);"
+
+[RemoveHWSlaveTrigFromMaster]
+Class="Function"
+Prototype="int RemoveHWSlaveTrigFromMaster(struct TaskControl *slave);"
 
 [TaskControlIterTimeout]
 Class="Function"

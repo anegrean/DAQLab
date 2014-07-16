@@ -314,15 +314,27 @@ typedef enum {
 	TASK_FCALL_MODULE_EVENT				// Called for custom module events that are not handled directly by the Task Controller
 } TaskFCall_type;
 
-//----------------------------------------
+//---------------------------------------------------------------
 // Task Controller Mode
-//----------------------------------------
+//---------------------------------------------------------------
 typedef enum {
 	TASK_CONTINUOUS,  // == FALSE
 	TASK_FINITE		  // == TRUE
 } TaskMode_type;
 
+//---------------------------------------------------------------
+// Task Controller HW Triggerring (for both Slaves and Masters)
+//---------------------------------------------------------------
+typedef enum {
+	TASK_HWTRIGGER_FIRST_ITERATION,		// Device sends or receives a HW trigger only for the first time the iteration function is executed after the task starts.
+	TASK_HWTRIGGER_EACH_ITERATION		// Device sends or receives a HW trigger each time the provided iteration function is executed after the task starts. 
+} HWTriggerMode_type;
 
+typedef enum {
+	TASK_NO_HWTRIGGER,
+	TASK_MASTER_HWTRIGGER,
+	TASK_SLAVE_HWTRIGGER
+} HWTrigger_type;
 
 typedef struct TaskControl 			TaskControl_type;
 typedef struct FCallReturn			FCallReturn_type;
@@ -419,10 +431,27 @@ TaskStates_type			GetTaskControlState					(TaskControl_type* taskControl);
 void					SetTaskControlIterations			(TaskControl_type* taskControl, size_t repeat);
 size_t					GetTaskControlIterations			(TaskControl_type* taskControl);
 
+	// Task Controller Iteration block completion timeout
+	// default timeout = 0, Iteration block complete after calling IterateFptr. Otherwise iteration will complete
+	// in another thread after a return from a call to IterateFptr. If timeout < 0, Task Controller will wait indefinitely to
+	// receive TASK_EVENT_ITERATION_DONE. If timeout > 0, a timeout error is generated if after timeout seconds TASK_EVENT_ITERATION_DONE
+	// is not received.
+void					SetTaskControlIterationTimeout		(TaskControl_type* taskControl, int timeout);
+int						GetTaskControlIterationTimeout		(TaskControl_type* taskControl);
+
 	// iterateBeforeFlag = TRUE by default, i.e. call of the iteration function pointer is done before starting SubTasks, 
 	// otherwise it's called after the SubTasks complete
 void					SetTaskControlIterateBeforeFlag		(TaskControl_type* taskControl, BOOL iterateBeforeFlag);
 BOOL					GetTaskControlIterateBeforeFlag		(TaskControl_type* taskControl);
+
+	// Complete Iteration Before Starting SubTasks (CIBSST) Flag
+	// completeIterationFlag = TRUE by default
+	// When TRUE, the iteration block of a Task Controller is considered complete before sending a TASK_EVENT_START to SubTasks if there are any.
+	// If IterateFptr exits with timeout = 0, then iteration is considered complete and this flag can be only TRUE. For any other value of the timeout
+	// this flag may be either FALSE or TRUE. If it is FALSE, it means that the iteration block is not considered complete by the time 
+	// TASK_EVENT_START is sent to SubTasks.
+int						SetTaskControlCIBSSTFlag			(TaskControl_type* taskControl, BOOL completeIterationFlag);
+BOOL					GetTaskControlCIBSSTFlag			(TaskControl_type* taskControl);
 
 	// mode = TASK_FINITE by default
 void					SetTaskControlMode					(TaskControl_type* taskControl, TaskMode_type mode);
@@ -444,6 +473,13 @@ void					SetTaskControlLog					(TaskControl_type* taskControl, TaskExecutionLog_
 
 	// Obtains status of the abort flag that can be used to abort an iteration happening in another thread outside of the provided IterateFptr 
 BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
+
+	// HW Trigger mode for Slave and Master HW Triggered Task Controller. Default trigmode = TASK_HWTRIGGER_EACH_ITERATION
+void					SetTaskControlHWTrigMode			(TaskControl_type* taskControl, HWTriggerMode_type trigMode);
+HWTriggerMode_type		GetTaskControlHWTrigMode			(TaskControl_type* taskControl);
+
+	// Task Controller HW Trigger types based on how the Task Controller is connected using AddHWSlaveTrigToMaster and RemoveHWSlaveTrigFromMaster 
+HWTrigger_type          GetTaskControlHWTrigger				(TaskControl_type* taskControl);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions
@@ -487,7 +523,7 @@ void					AbortTaskControlExecution		(TaskControl_type* taskControl);
 // Task Controller function call management functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-FCallReturn_type*		init_FCallReturn_type			(int valFCall, const char errorOrigin[], const char errorDescription[], int Timeout);
+FCallReturn_type*		init_FCallReturn_type			(int valFCall, const char errorOrigin[], const char errorDescription[]);
 
 void					discard_FCallReturn_type		(FCallReturn_type** a);
 

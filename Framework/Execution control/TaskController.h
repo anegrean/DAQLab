@@ -248,7 +248,6 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 #include <toolbox.h>
 
 #define TASKCONTROLLER_UI		"./Framework/Execution control/UI_TaskController.uir" 
-#define TASK_EVENT_TIMEOUT 		3.0		// Event timeout in [s].
 #define N_TASK_EVENT_QITEMS		100		// Number of events waiting to be processed by the state machine.
 
 //----------------------------------------
@@ -259,17 +258,12 @@ typedef enum {
 	TASK_STATE_CONFIGURED,						// Task Controller is configured.
 	TASK_STATE_INITIAL,							// Initial state of Task Controller before any iterations are performed.
 	TASK_STATE_IDLE,							// Task Controller is configured.
-	TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES,   // A HW Master Trigger Task Controller is waiting for HW Slave Trigger Task Controllers to be 
-												// in a TASK_STATE_RUNNING_WAITING_ITERATION state before it can proceed with calling the IterateFptr 
-												// which generates a HW Trigger for the Slaves. 
-	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped
+	TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES,   // A HW Master Trigger Task Controller is waiting for HW Slave Trigger Task Controllers to be armed.
+	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped.
 	TASK_STATE_RUNNING_WAITING_ITERATION,		// Task Controller is iterating but the iteration occuring in another thread is not yet complete.
 												// Iteration is complete when a TASK_EVENT_ITERATION_DONE is received in this state.
-	TASK_STATE_STOPPING,						// Task Controller received a STOP event and waits for SubTasks to complete their iterations
-	TASK_STATE_ITERATING,						// Task Controller performs one iteration.
-	TASK_STATE_ITERATING_WAITING_ITERATION, 	// Task Controller is performing one iteration but the iteration occurs in another thread and is not yet complete.
+	TASK_STATE_STOPPING,						// Task Controller received a STOP event and waits for SubTasks to complete their iterations.
 	TASK_STATE_DONE,							// Task Controller finished required iterations if operation was finite
-	TASK_STATE_WAITING,							// not in use
 	TASK_STATE_ERROR
 } TaskStates_type;
 
@@ -292,7 +286,7 @@ typedef enum {
 	TASK_EVENT_STOP,							// Stops Task Controller iterations and allows SubTask Controllers to complete their iterations.
 	TASK_EVENT_STOP_CONTINUOUS_TASK,			// Event sent from parent Task Controller to its continuous SubTasks to stop them.
 	TASK_EVENT_SUBTASK_STATE_CHANGED,   		// When one of the SubTask Controllers switches to another state.
-	TASK_EVENT_SLAVE_HWTRIG_STATE_CHANGED,		// When a Slave HW Trig Task Controller changes state it informs its Master HW Trig Task Controller. 
+	TASK_EVENT_HWTRIG_SLAVE_ARMED,				// When a Slave HW Trig Task Controller is armed, it informs the Master HW Triggering Task Controller. 
 	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue of a Task Controller.
 	TASK_EVENT_ERROR_OUT_OF_MEMORY,				// To signal that an out of memory event occured.
 	TASK_EVENT_CUSTOM_MODULE_EVENT				// To signal custom module or device events.
@@ -323,13 +317,20 @@ typedef enum {
 } TaskMode_type;
 
 //---------------------------------------------------------------
-// Task Controller HW Triggerring (for both Slaves and Masters)
+// Task Controller Iteration Execution Mode
 //---------------------------------------------------------------
 typedef enum {
-	TASK_HWTRIGGER_FIRST_ITERATION,		// Device sends or receives a HW trigger only for the first time the iteration function is executed after the task starts.
-	TASK_HWTRIGGER_EACH_ITERATION		// Device sends or receives a HW trigger each time the provided iteration function is executed after the task starts. 
-} HWTriggerMode_type;
+	TASK_ITERATE_BEFORE_SUBTASKS_START,		// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
+											// IterateFptr is called and completes before sending TASK_EVENT_START to all SubTasks.
+	TASK_ITERATE_AFTER_SUBTASKS_COMPLETE,	// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
+											// IterateFptr is called after all SubTasks reach TASK_STATE_DONE.
+	TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS  // The iteration block of the Task Controller is still running after a call to IterateFptr and after a TASK_EVENT_START 
+											// is sent to all SubTasks. The iteration block is carried out in parallel with the execution of the SubTasks.
+} TaskIterMode_type;
 
+//---------------------------------------------------------------
+// Task Controller HW Triggerring (for both Slaves and Masters)
+//---------------------------------------------------------------
 typedef enum {
 	TASK_NO_HWTRIGGER,
 	TASK_MASTER_HWTRIGGER,
@@ -359,10 +360,11 @@ typedef struct TaskExecutionLog		TaskExecutionLog_type;
 typedef FCallReturn_type* 	(*ConfigureFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag);
 
 // Called each time a Task Controller performs an iteration of a device or module
-// return 0 for success and to signal execution continuation
-// return positive integers for the number of seconds to wait until a TASK_EVENT_ITERATE is received to continue iterating
-// return -1 to wait indefinitely until a TASK_EVENT_ITERATE is received.
-typedef FCallReturn_type* 	(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+// This function is called in a separate thread from the Task Controller thread. The iteration can be completed either within this function call
+// or even in another thread. In either case, to signal back to the Task Controller that the iteration function is complete, send a
+// TASK_EVENT_ITERATION_DONE event using TaskControlEvent and passing for eventInfo init_FCallReturn_type (...) and for disposeEventInfoFptr
+// discard_FCallReturn_type.
+typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
 // Called before the first iteration starts from an INITIAL state
 typedef FCallReturn_type* 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag); 
@@ -439,19 +441,10 @@ size_t					GetTaskControlIterations			(TaskControl_type* taskControl);
 void					SetTaskControlIterationTimeout		(TaskControl_type* taskControl, int timeout);
 int						GetTaskControlIterationTimeout		(TaskControl_type* taskControl);
 
-	// iterateBeforeFlag = TRUE by default, i.e. call of the iteration function pointer is done before starting SubTasks, 
-	// otherwise it's called after the SubTasks complete
-void					SetTaskControlIterateBeforeFlag		(TaskControl_type* taskControl, BOOL iterateBeforeFlag);
-BOOL					GetTaskControlIterateBeforeFlag		(TaskControl_type* taskControl);
-
-	// Complete Iteration Before Starting SubTasks (CIBSST) Flag
-	// completeIterationFlag = TRUE by default
-	// When TRUE, the iteration block of a Task Controller is considered complete before sending a TASK_EVENT_START to SubTasks if there are any.
-	// If IterateFptr exits with timeout = 0, then iteration is considered complete and this flag can be only TRUE. For any other value of the timeout
-	// this flag may be either FALSE or TRUE. If it is FALSE, it means that the iteration block is not considered complete by the time 
-	// TASK_EVENT_START is sent to SubTasks.
-int						SetTaskControlCIBSSTFlag			(TaskControl_type* taskControl, BOOL completeIterationFlag);
-BOOL					GetTaskControlCIBSSTFlag			(TaskControl_type* taskControl);
+	// Task Controller Iteration Mode
+	// default, iterationMode = TASK_ITERATE_BEFORE_SUBTASKS_START
+int						SetTaskControlIterMode				(TaskControl_type* taskControl, TaskIterMode_type iterMode);
+TaskIterMode_type		GetTaskControlIterMode				(TaskControl_type* taskControl);
 
 	// mode = TASK_FINITE by default
 void					SetTaskControlMode					(TaskControl_type* taskControl, TaskMode_type mode);
@@ -473,10 +466,6 @@ void					SetTaskControlLog					(TaskControl_type* taskControl, TaskExecutionLog_
 
 	// Obtains status of the abort flag that can be used to abort an iteration happening in another thread outside of the provided IterateFptr 
 BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
-
-	// HW Trigger mode for Slave and Master HW Triggered Task Controller. Default trigmode = TASK_HWTRIGGER_EACH_ITERATION
-void					SetTaskControlHWTrigMode			(TaskControl_type* taskControl, HWTriggerMode_type trigMode);
-HWTriggerMode_type		GetTaskControlHWTrigMode			(TaskControl_type* taskControl);
 
 	// Task Controller HW Trigger types based on how the Task Controller is connected using AddHWSlaveTrigToMaster and RemoveHWSlaveTrigFromMaster 
 HWTrigger_type          GetTaskControlHWTrigger				(TaskControl_type* taskControl);

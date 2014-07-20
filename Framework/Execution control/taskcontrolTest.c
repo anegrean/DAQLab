@@ -42,7 +42,7 @@ TaskControl_type* 		DevX;
 //==============================================================================
 // Global functions
 
-FCallReturn_type* ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+void ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
 
 int main (int argc, char *argv[])
@@ -61,8 +61,6 @@ int main (int argc, char *argv[])
 	// ZStack Task
 	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	SetTaskControlIterations(ZStackTask, 1);
-	//SetTaskControlMode(ZStackTask,TASK_CONTINUOUS);
-	SetTaskControlIterateBeforeFlag(ZStackTask, TRUE);
 	SetTaskControlLog(ZStackTask, TaskExecutionLog);
 	
 	// ZStage
@@ -88,9 +86,9 @@ int main (int argc, char *argv[])
 	return 0;
 }
 
-FCallReturn_type* ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+void ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	return init_FCallReturn_type(0, "", "", 5);  // 5 s timeout
+	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
 }
 
 int CVICALLBACK CB_ControlPan (int panel, int event, void *callbackData,

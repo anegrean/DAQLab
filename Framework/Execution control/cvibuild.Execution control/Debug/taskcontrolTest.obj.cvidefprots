@@ -4,7 +4,7 @@ Prototype="int main(int argc, char **argv);"
 
 [ZStage_Iterate]
 Class="Function"
-Prototype="struct FCallReturn *ZStage_Iterate(struct TaskControl *taskControl, unsigned int currentIteration, const int *abortFlag);"
+Prototype="void ZStage_Iterate(struct TaskControl *taskControl, unsigned int currentIteration, const int *abortFlag);"
 
 [CB_ControlPan]
 Class="Function"

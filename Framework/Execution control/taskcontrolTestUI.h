@@ -17,12 +17,13 @@
 #define  ControlPan                       1       /* callback function: CB_ControlPan */
 #define  ControlPan_IterCompleteBTTN      2       /* control type: command, callback function: CB_TaskController */
 #define  ControlPan_StepBTTN              3       /* control type: command, callback function: CB_TaskController */
-#define  ControlPan_AbortBTTN             4       /* control type: command, callback function: CB_TaskController */
-#define  ControlPan_StopBTTN              5       /* control type: command, callback function: CB_TaskController */
-#define  ControlPan_StartBTTN             6       /* control type: command, callback function: CB_TaskController */
-#define  ControlPan_ConfigureBTTN         7       /* control type: command, callback function: CB_TaskController */
-#define  ControlPan_ExecutionLogBox       8       /* control type: textBox, callback function: (none) */
-#define  ControlPan_LED                   9       /* control type: LED, callback function: (none) */
+#define  ControlPan_ArmBTTN               4       /* control type: command, callback function: CB_TaskController */
+#define  ControlPan_AbortBTTN             5       /* control type: command, callback function: CB_TaskController */
+#define  ControlPan_StopBTTN              6       /* control type: command, callback function: CB_TaskController */
+#define  ControlPan_StartBTTN             7       /* control type: command, callback function: CB_TaskController */
+#define  ControlPan_ConfigureBTTN         8       /* control type: command, callback function: CB_TaskController */
+#define  ControlPan_ExecutionLogBox       9       /* control type: textBox, callback function: (none) */
+#define  ControlPan_LED                   10      /* control type: LED, callback function: (none) */
 
 
      /* Control Arrays: */

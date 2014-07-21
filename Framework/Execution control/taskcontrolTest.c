@@ -44,6 +44,8 @@ TaskControl_type* 		DevX;
 
 void ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
+void DevX_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
 
 int main (int argc, char *argv[])
 {
@@ -60,7 +62,9 @@ int main (int argc, char *argv[])
 	
 	// ZStack Task
 	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlIterations(ZStackTask, 1);
+	SetTaskControlIterations(ZStackTask, 10);
+	SetTaskControlIterMode(ZStackTask, TASK_ITERATE_BEFORE_SUBTASKS_START);
+	SetTaskControlIterationsWait(ZStackTask, 0);
 	SetTaskControlLog(ZStackTask, TaskExecutionLog);
 	
 	// ZStage
@@ -69,15 +73,16 @@ int main (int argc, char *argv[])
 	SetTaskControlLog(ZStage, TaskExecutionLog);
 	
 	// Device X
-	DevX				= init_TaskControl_type ("Device X", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+	DevX				= init_TaskControl_type ("Device X", NULL, DevX_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	SetTaskControlIterations(DevX, 1);
 	
 	SetTaskControlLog(DevX, TaskExecutionLog);
 	
 	// Make ZStage subtask to ZStack task
 	AddSubTaskToParent(ZStackTask, ZStage);
-	AddSubTaskToParent(ZStage, DevX);
+//	AddSubTaskToParent(ZStage, DevX);
 	
+	AddHWSlaveTrigToMaster(ZStage, DevX); 
 	//--------------------------------------------------------------------------
 	
 	RunUserInterface();
@@ -88,6 +93,13 @@ int main (int argc, char *argv[])
 
 void ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
+	//TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);    
+	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
+}
+
+void DevX_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{  
+	TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);    
 	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
 }
 
@@ -148,7 +160,11 @@ int CVICALLBACK CB_TaskController (int panel, int control, int event,
 					
 					TaskControlIterationDone(ZStage, 0, "");
 					
-					break; 
+					break;
+					
+				case ControlPan_ArmBTTN:
+					
+					break;
 			}
 			
 			   

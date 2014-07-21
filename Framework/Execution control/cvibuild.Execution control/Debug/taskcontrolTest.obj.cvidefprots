@@ -6,6 +6,10 @@ Prototype="int main(int argc, char **argv);"
 Class="Function"
 Prototype="void ZStage_Iterate(struct TaskControl *taskControl, unsigned int currentIteration, const int *abortFlag);"
 
+[DevX_Iterate]
+Class="Function"
+Prototype="void DevX_Iterate(struct TaskControl *taskControl, unsigned int currentIteration, const int *abortFlag);"
+
 [CB_ControlPan]
 Class="Function"
 Prototype="int CB_ControlPan(int panel, int event, void *callbackData, int eventData1, int eventData2);"

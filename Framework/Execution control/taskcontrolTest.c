@@ -46,6 +46,8 @@ void ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOO
 
 void DevX_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
+void ZStackTask_ErrorHandler (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+
 
 int main (int argc, char *argv[])
 {
@@ -61,26 +63,26 @@ int main (int argc, char *argv[])
 	TaskExecutionLog 	= init_TaskExecutionLog_type(ControllerPan, ControlPan_ExecutionLogBox);
 	
 	// ZStack Task
-	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlIterations(ZStackTask, 10);
-	SetTaskControlIterMode(ZStackTask, TASK_ITERATE_BEFORE_SUBTASKS_START);
+	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ZStackTask_ErrorHandler);
+	SetTaskControlIterations(ZStackTask, 1);
+	SetTaskControlIterMode(ZStackTask, TASK_ITERATE_AFTER_SUBTASKS_COMPLETE);
 	SetTaskControlIterationsWait(ZStackTask, 0);
 	SetTaskControlLog(ZStackTask, TaskExecutionLog);
 	
 	// ZStage
 	ZStage				= init_TaskControl_type ("Z Stage", NULL, ZStage_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlIterations(ZStage, 1);
+	SetTaskControlIterations(ZStage, 2);
 	SetTaskControlLog(ZStage, TaskExecutionLog);
 	
 	// Device X
 	DevX				= init_TaskControl_type ("Device X", NULL, DevX_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlIterations(DevX, 1);
+	SetTaskControlIterations(DevX, 2);
 	
 	SetTaskControlLog(DevX, TaskExecutionLog);
 	
 	// Make ZStage subtask to ZStack task
 	AddSubTaskToParent(ZStackTask, ZStage);
-//	AddSubTaskToParent(ZStage, DevX);
+	AddSubTaskToParent(ZStackTask, DevX);
 	
 	AddHWSlaveTrigToMaster(ZStage, DevX); 
 	//--------------------------------------------------------------------------
@@ -89,6 +91,11 @@ int main (int argc, char *argv[])
 	
 	
 	return 0;
+}
+
+void ZStackTask_ErrorHandler (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+{
+	MessagePopup("Error", errorMsg);
 }
 
 void ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)

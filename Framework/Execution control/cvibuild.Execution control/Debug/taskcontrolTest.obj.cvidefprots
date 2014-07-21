@@ -2,6 +2,10 @@
 Class="Function"
 Prototype="int main(int argc, char **argv);"
 
+[ZStackTask_ErrorHandler]
+Class="Function"
+Prototype="void ZStackTask_ErrorHandler(struct TaskControl *taskControl, char *errorMsg, const int *abortFlag);"
+
 [ZStage_Iterate]
 Class="Function"
 Prototype="void ZStage_Iterate(struct TaskControl *taskControl, unsigned int currentIteration, const int *abortFlag);"

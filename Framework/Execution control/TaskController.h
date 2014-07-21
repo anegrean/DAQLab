@@ -381,7 +381,7 @@ typedef FCallReturn_type* 	(*StoppedFptr_type) 			(TaskControl_type* taskControl
 
 // Called when Task Controller encounters an error, 
 // to continue Task Controller execution, a return from this function is needed
-typedef FCallReturn_type* 	(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
 
 // Called when data is placed in a Task Controller data queue if this operation is compatible
 // with the state of the Task Controller

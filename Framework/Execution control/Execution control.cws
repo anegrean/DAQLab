@@ -13,10 +13,10 @@ Number of Projects = 1
 Active Project = 1
 Project 0001 = "Execution control.prj"
 Drag Bar Left = 330
-Window Top = 141
-Window Left = -205
-Window Bottom = 1178
-Window Right = 1546
+Window Top = 224
+Window Left = -430
+Window Bottom = 1261
+Window Right = 1321
 Maximized = False
 Maximized Children = True
 Max32 Number Of Errors = 20
@@ -48,7 +48,7 @@ Batch Build Debug = False
 [File 0001]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTestUI.uir"
 File Type = "User Interface Resource"
-Disk Date = 3488808853
+Disk Date = 3488818801
 In Projects = "1,"
 Window Top = 62
 Window Left = 26
@@ -59,7 +59,7 @@ Window Z-Order = 1
 [File 0002]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTestUI.h"
 File Type = "Include"
-Disk Date = 3488808854
+Disk Date = 3488818801
 In Projects = "1,"
 Window Top = 30
 Window Z-Order = 2
@@ -68,32 +68,32 @@ Source Window State = "1,0,0,0,0,0,0,0,0,70,0,0,0,0,0,28,0,0,0,0,400,600,1,0,"
 [File 0003]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 File Type = "CSource"
-Disk Date = 3488808853
+Disk Date = 3488818660
 In Projects = "1,"
-Window Top = 53
-Window Left = 48
+Window Top = 49
+Window Left = 493
 Window Released = True
-Source Window State = "1,3112,3112,3112,43,85,43,0,0,197,0,0,0,0,0,64,1368,0,1376,63,911,1618,0,0,"
+Source Window State = "1,571,571,571,24,39,24,0,0,197,0,0,0,0,0,64,2348,0,2396,41,911,1618,0,0,"
 
 [File 0004]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 File Type = "Include"
-Disk Date = 3488727570
+Disk Date = 3488817196
 In Projects = "1,"
 Window Top = 273
 Window Left = -1267
 Window Released = True
-Source Window State = "1,288,288,288,4,33,33,0,0,181,0,0,0,0,0,56,297,0,296,46,812,1488,0,0,"
+Source Window State = "1,383,383,383,0,132,132,0,3,181,0,0,0,0,0,56,350,0,383,0,812,1488,0,0,"
 
 [File 0005]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTest.c"
 File Type = "CSource"
-Disk Date = 3488811609
+Disk Date = 3488819120
 In Projects = "1,"
-Window Top = 146
-Window Left = 116
+Window Top = 30
+Window Left = 178
 Window Released = True
-Source Window State = "1,65,65,65,39,77,39,0,0,158,0,1,0,1,0,64,50,0,83,36,911,1307,0,0,"
+Source Window State = "1,67,67,67,39,77,39,0,0,158,0,1,0,1,0,66,56,0,67,75,941,1307,0,0,"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

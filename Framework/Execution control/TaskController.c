@@ -564,12 +564,12 @@ static void	disposeSlaveHWTrigTaskEventInfo	(void* eventInfo)
 
 static BOOL	MasterHWTrigTaskHasChildSlaves	(TaskControl_type* taskControl)
 {
-	SlaveHWTrigTask_type*   slaveHWTrigPtr; 
-	BOOL 					flag			= 0;	// assume all Slave HW Triggered Task Controllers are not a SubTask of taskControl
+	SubTask_type*   subtaskPtr; 
+	BOOL 			flag			= 0;	// assume all Slave HW Triggered Task Controllers are not a SubTask of taskControl
 	
-	for (size_t i = 1; i <= ListNumItems(taskControl->slaveHWTrigTasks); i++) {
-		slaveHWTrigPtr = ListGetPtrToItem(taskControl->slaveHWTrigTasks, i);
-		if (slaveHWTrigPtr->slaveHWTrigTask->masterHWTrigTask == taskControl) {
+	for (size_t i = 1; i <= ListNumItems(taskControl->subtasks); i++) {
+		subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+		if (subtaskPtr->subtask->masterHWTrigTask == taskControl) {
 			flag = 1;
 			break;
 		}
@@ -1218,14 +1218,14 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 			
 		case TASK_FCALL_ERROR:
 			
-			if (taskControl->ErrorFptr)  fCallResult = (*taskControl->ErrorFptr)(taskControl, taskControl->errorMsg->errorInfo, &taskControl->abortFlag);
+			if (taskControl->ErrorFptr)  (*taskControl->ErrorFptr)(taskControl, taskControl->errorMsg->errorInfo, &taskControl->abortFlag);
 			else functionMissingFlag = 1;
 			break;
 				
 	}
 	
 	
-	if (!fCallResult) 
+	if (!fCallResult && fID != TASK_FCALL_ITERATE && fID != TASK_FCALL_ERROR) 
 		if (functionMissingFlag)
 			return NULL;																				// function not provided
 		else

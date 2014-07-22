@@ -24,6 +24,7 @@
 
 #include "PIStage.h"
 #include "VUPhotonCtr.h"
+#include "/Modules/NIDAQmx/NIDAQmx.h"
 
 
 
@@ -117,8 +118,9 @@ typedef struct {						  // Glues UI Task Controller to panel handle
 //------------------------------------------------------------------------------------------------
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
-	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 }
+	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+	{ MOD_NIDAQmx_NAME, initalloc_NIDAQmx, TRUE, 0 }
+	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 }
 	
 };
 

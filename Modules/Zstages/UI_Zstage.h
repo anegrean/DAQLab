@@ -17,18 +17,19 @@
 #define  ZStagePan                        1
 #define  ZStagePan_MoveZDown              2       /* control type: pictButton, callback function: (none) */
 #define  ZStagePan_MoveZUp                3       /* control type: pictButton, callback function: (none) */
-#define  ZStagePan_ZRelPos                4       /* control type: numeric, callback function: (none) */
-#define  ZStagePan_ZAbsPos                5       /* control type: numeric, callback function: (none) */
-#define  ZStagePan_ZStepSize              6       /* control type: ring, callback function: (none) */
-#define  ZStagePan_EndRelPos              7       /* control type: numeric, callback function: (none) */
-#define  ZStagePan_StartAbsPos            8       /* control type: numeric, callback function: (none) */
-#define  ZStagePan_Step                   9       /* control type: numeric, callback function: (none) */
-#define  ZStagePan_NSteps                 10      /* control type: numeric, callback function: (none) */
-#define  ZStagePan_Stop                   11      /* control type: command, callback function: (none) */
-#define  ZStagePan_AddRefPos              12      /* control type: command, callback function: (none) */
-#define  ZStagePan_RefPosList             13      /* control type: listBox, callback function: (none) */
-#define  ZStagePan_Status                 14      /* control type: LED, callback function: (none) */
-#define  ZStagePan_Start                  15      /* control type: command, callback function: (none) */
+#define  ZStagePan_Plate                  4       /* control type: deco, callback function: (none) */
+#define  ZStagePan_ZRelPos                5       /* control type: numeric, callback function: (none) */
+#define  ZStagePan_ZAbsPos                6       /* control type: numeric, callback function: (none) */
+#define  ZStagePan_ZStepSize              7       /* control type: ring, callback function: (none) */
+#define  ZStagePan_EndRelPos              8       /* control type: numeric, callback function: (none) */
+#define  ZStagePan_StartAbsPos            9       /* control type: numeric, callback function: (none) */
+#define  ZStagePan_Step                   10      /* control type: numeric, callback function: (none) */
+#define  ZStagePan_NSteps                 11      /* control type: numeric, callback function: (none) */
+#define  ZStagePan_Stop                   12      /* control type: command, callback function: (none) */
+#define  ZStagePan_AddRefPos              13      /* control type: command, callback function: (none) */
+#define  ZStagePan_RefPosList             14      /* control type: listBox, callback function: (none) */
+#define  ZStagePan_Status                 15      /* control type: LED, callback function: (none) */
+#define  ZStagePan_Start                  16      /* control type: command, callback function: (none) */
 
 
      /* Control Arrays: */

@@ -11,10 +11,11 @@
 //==============================================================================
 // Include files
 #include "DAQLab.h" 		// include this first
+#include "DAQLabModule.h"
 #include <formatio.h>
 #include "toolbox.h"
 #include <userint.h>
-#include "DAQLabModule.h"
+
 #include "UI_ZStage.h"
 #include "Zstage.h"
 
@@ -125,11 +126,11 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 		// DATA
 	zstage->baseClass.taskControl		= NULL;  //init_TaskControl_type (MOD_Zstage_NAME, Zstage_ConfigureTC, Zstage_IterateTC, Zstage_StartTC, Zstage_ResetTC,
 												 //				 Zstage_DoneTC, Zstage_StoppedTC, NULL, Zstage_EventHandler,Zstage_ErrorTC);   
-		// connect ZStage module data to Task Controller
+			// connect ZStage module data to Task Controller
 												 //SetTaskControlModuleData(zstage->baseClass.taskControl, zstage);
 		// METHODS
 	
-		// overriding methods
+			// overriding methods
 	zstage->baseClass.Discard 		= discard_Zstage;
 	zstage->baseClass.Load			= Zstage_Load;
 	zstage->baseClass.LoadCfg		= NULL; //Zstage_LoadCfg;
@@ -153,12 +154,12 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	
 		// METHODS
 		
-		// assign default controls callback to UI_ZStage.uir panel
+			// assign default controls callback to UI_ZStage.uir panel
 	zstage->uiCtrlsCB				= Zstage_UICtrls_CB;
 	
-		// assign default panel callback to UI_Zstage.uir
+			// assign default panel callback to UI_Zstage.uir
 	zstage->uiPanelCB				= Zstage_UIPan_CB;
-		// no functionality
+			// no functionality
 	zstage->MoveZ					= NULL;
 	zstage->StopZ					= NULL;
 	zstage->StatusLED				= NULL;		// functionality assigned if Zstage_Load is called

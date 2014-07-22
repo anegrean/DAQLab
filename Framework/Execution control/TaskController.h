@@ -338,8 +338,12 @@ typedef enum {
 } HWTrigger_type;
 
 typedef struct TaskControl 			TaskControl_type;
-typedef struct FCallReturn			FCallReturn_type;
 typedef struct TaskExecutionLog		TaskExecutionLog_type;
+
+typedef struct FCallReturn {
+	int						retVal;			// Value returned by function call.
+	char*					errorInfo;		// In case of error, additional info.
+} FCallReturn_type;
 
 //--------------------------------------------------------------------------------
 // Task Controller Function Pointer Types

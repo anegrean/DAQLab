@@ -59,11 +59,6 @@ typedef enum {
 	TASK_CONTROL_FUNCTION_CALL
 } Action_type;
 
-typedef struct FCallReturn {
-	int						retVal;						// Value returned by function call.
-	char*					errorInfo;					// In case of error, additional info.
-} FCallReturn_type;
-
 typedef struct {
 	int						errorID;
 	char*					errorInfo;
@@ -3102,15 +3097,17 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					if (eventpacket.eventInfo) {
 						ErrorMsg_type* errMsg = eventpacket.eventInfo;
 						
-						taskControl->errorMsg =
+						if (errMsg->errorID < 0) {
+							taskControl->errorMsg =
 							init_ErrorMsg_type(TaskEventHandler_Error_IterateExternThread, taskControl->taskName, errMsg->errorInfo); 
-						// abort the entire Nested Task Controller hierarchy
-						AbortTaskControlExecution(taskControl);
+							// abort the entire Nested Task Controller hierarchy
+							AbortTaskControlExecution(taskControl);
 							
-						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 								
-						break;
+							break;
+						}
 					}
 					
 					//---------------------------------------------------------------------------------------------------------------   

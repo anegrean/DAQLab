@@ -1,14 +1,15 @@
 DAQLab.obj
 DAQLabModule.obj
+NIDAQmx.obj
 PIStage.obj
 TaskController.obj
 VChannel.obj
-VUPhotonCtr.obj
 Zstage.obj
 cvi.lib
 cviauto.lib
 cvistart.lib
 ActiveXML.obj
+asynctmr.obj
 kernel32.lib
 PI_GCS2_DLL.lib
 toolbox.obj

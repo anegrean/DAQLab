@@ -9,7 +9,7 @@ IVI Standard Root Dir = "/C/Program Files (x86)/IVI Foundation/IVI"
 VXIplug&play Framework Dir = "/C/Program Files (x86)/IVI Foundation/VISA/winnt"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
-Number of Files = 26
+Number of Files = 30
 Target Type = "Executable"
 Flags = 2064
 Copied From Locked InstrDrv Directory = False
@@ -36,6 +36,8 @@ Folder 6 = "Framework/Execution control "
 FolderEx 6 = "Framework/Execution control "
 Folder 7 = "Framework/Virtual channels"
 FolderEx 7 = "Framework/Virtual channels"
+Folder 8 = "Modules/NIDAQmx"
+FolderEx 8 = "Modules/NIDAQmx"
 
 [File 0001]
 File Type = "CSource"
@@ -191,7 +193,7 @@ Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/VUPhotonCtr/VUPhotonCtr.c"
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.c"
-Exclude = False
+Exclude = True
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Modules/VUPhotonCtr"
@@ -312,6 +314,55 @@ File Type = "CSource"
 Res Id = 23
 Path Is Rel = True
 Path Rel To = "Project"
+Path Rel Path = "Modules/NIDAQmx/NIDAQmx.c"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmx/NIDAQmx.c"
+Exclude = False
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Modules/NIDAQmx"
+Folder Id = 8
+
+[File 0024]
+File Type = "Include"
+Res Id = 24
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/NIDAQmx/NIDAQmx.h"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmx/NIDAQmx.h"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/NIDAQmx"
+Folder Id = 8
+
+[File 0025]
+File Type = "Include"
+Res Id = 25
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/NIDAQmx/UI_NIDAQmx.h"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmx/UI_NIDAQmx.h"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/NIDAQmx"
+Folder Id = 8
+
+[File 0026]
+File Type = "User Interface Resource"
+Res Id = 26
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/NIDAQmx/UI_NIDAQmx.uir"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmx/UI_NIDAQmx.uir"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/NIDAQmx"
+Folder Id = 8
+
+[File 0027]
+File Type = "CSource"
+Res Id = 27
+Path Is Rel = True
+Path Rel To = "Project"
 Path Rel Path = "DAQLab.c"
 Path = "/d/ELE_DAQLab/DAQLab.c"
 Exclude = False
@@ -319,9 +370,9 @@ Compile Into Object File = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0024]
+[File 0028]
 File Type = "Include"
-Res Id = 24
+Res Id = 28
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.h"
@@ -330,9 +381,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0025]
+[File 0029]
 File Type = "Include"
-Res Id = 25
+Res Id = 29
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.h"
@@ -341,9 +392,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0026]
+[File 0030]
 File Type = "User Interface Resource"
-Res Id = 26
+Res Id = 30
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.uir"

@@ -502,8 +502,10 @@ static void PIStage_IterateTC (TaskControl_type* taskControl, size_t currentIter
 		(*zstage->SetStepCounter) (zstage, currentIteration);
 	
 	// move to start position for the first iteration
-	if (!currentIteration) 
+	if (!currentIteration) {
 		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, PIStage_TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_ABS, *zstage->startAbsPos), dispose_FCallReturn_EventInfo); 
+		return;
+	}
 	
 	// step stage
 	if (zstage->endRelPos > 0)

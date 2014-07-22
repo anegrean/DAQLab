@@ -1,6 +1,6 @@
 [init_TaskControl_type]
 Class="Function"
-Prototype="struct TaskControl *init_TaskControl_type(const char *taskname, struct FCallReturn *(*ConfigureFptr)(struct TaskControl *, const int *), struct FCallReturn *(*IterateFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*StartFptr)(struct TaskControl *, const int *), struct FCallReturn *(*ResetFptr)(struct TaskControl *, const int *), struct FCallReturn *(*DoneFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*StoppedFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*DataReceivedFptr)(struct TaskControl *, TaskStates_type, int, const int *), struct FCallReturn *(*ModuleEventFptr)(struct TaskControl *, TaskStates_type, unsigned int, void *, const int *), struct FCallReturn *(*ErrorFptr)(struct TaskControl *, char *, const int *));"
+Prototype="struct TaskControl *init_TaskControl_type(const char *taskname, struct FCallReturn *(*ConfigureFptr)(struct TaskControl *, const int *), void (*IterateFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*StartFptr)(struct TaskControl *, const int *), struct FCallReturn *(*ResetFptr)(struct TaskControl *, const int *), struct FCallReturn *(*DoneFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*StoppedFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*DataReceivedFptr)(struct TaskControl *, TaskStates_type, int, const int *), struct FCallReturn *(*ModuleEventFptr)(struct TaskControl *, TaskStates_type, unsigned int, void *, const int *), void (*ErrorFptr)(struct TaskControl *, char *, const int *));"
 
 [discard_TaskControl_type]
 Class="Function"
@@ -30,13 +30,21 @@ Prototype="void SetTaskControlIterations(struct TaskControl *taskControl, unsign
 Class="Function"
 Prototype="unsigned int GetTaskControlIterations(struct TaskControl *taskControl);"
 
-[SetTaskControlIterateBeforeFlag]
+[SetTaskControlIterationTimeout]
 Class="Function"
-Prototype="void SetTaskControlIterateBeforeFlag(struct TaskControl *taskControl, int iterateBeforeFlag);"
+Prototype="void SetTaskControlIterationTimeout(struct TaskControl *taskControl, int timeout);"
 
-[GetTaskControlIterateBeforeFlag]
+[GetTaskControlIterationTimeout]
 Class="Function"
-Prototype="int GetTaskControlIterateBeforeFlag(struct TaskControl *taskControl);"
+Prototype="int GetTaskControlIterationTimeout(struct TaskControl *taskControl);"
+
+[SetTaskControlIterMode]
+Class="Function"
+Prototype="int SetTaskControlIterMode(struct TaskControl *taskControl, TaskIterMode_type iterMode);"
+
+[GetTaskControlIterMode]
+Class="Function"
+Prototype="TaskIterMode_type GetTaskControlIterMode(struct TaskControl *taskControl);"
 
 [SetTaskControlMode]
 Class="Function"
@@ -66,6 +74,14 @@ Prototype="void *GetTaskControlModuleData(struct TaskControl *taskControl);"
 Class="Function"
 Prototype="void SetTaskControlLog(struct TaskControl *taskControl, struct TaskExecutionLog *logPtr);"
 
+[GetTaskControlAbortIterationFlag]
+Class="Function"
+Prototype="int GetTaskControlAbortIterationFlag(struct TaskControl *taskControl);"
+
+[GetTaskControlHWTrigger]
+Class="Function"
+Prototype="HWTrigger_type GetTaskControlHWTrigger(struct TaskControl *taskControl);"
+
 [AddDataQueue]
 Class="Function"
 Prototype="int AddDataQueue(struct TaskControl *taskControl, int dataQID);"
@@ -88,11 +104,15 @@ Prototype="void discard_TaskExecutionLog_type(struct TaskExecutionLog **a);"
 
 [init_FCallReturn_type]
 Class="Function"
-Prototype="struct FCallReturn *init_FCallReturn_type(int valFCall, const char *errorOrigin, const char *errorDescription, int timeout);"
+Prototype="struct FCallReturn *init_FCallReturn_type(int valFCall, const char *errorOrigin, const char *errorDescription);"
 
 [discard_FCallReturn_type]
 Class="Function"
 Prototype="void discard_FCallReturn_type(struct FCallReturn **a);"
+
+[dispose_FCallReturn_EventInfo]
+Class="Function"
+Prototype="void dispose_FCallReturn_EventInfo(void *eventInfo);"
 
 [TaskEventItemsInQueue]
 Class="Function"
@@ -114,9 +134,17 @@ Prototype="void TaskEventHandlerExecutionCallback(int poolHandle, int functionID
 Class="Function"
 Prototype="int TaskControlEvent(struct TaskControl *RecipientTaskControl, TaskEvents_type event, void *eventInfo, void (*disposeEventInfoFptr)(void *));"
 
+[TaskControlIterationDone]
+Class="Function"
+Prototype="int TaskControlIterationDone(struct TaskControl *taskControl, int errorID, char *errorInfo);"
+
 [AbortTaskControlExecution]
 Class="Function"
 Prototype="void AbortTaskControlExecution(struct TaskControl *taskControl);"
+
+[ScheduleIterateFunction]
+Class="Function"
+Prototype="int ScheduleIterateFunction(void *functionData);"
 
 [TaskControlEventToSubTasks]
 Class="Function"
@@ -129,6 +157,14 @@ Prototype="int AddSubTaskToParent(struct TaskControl *parent, struct TaskControl
 [RemoveSubTaskFromParent]
 Class="Function"
 Prototype="int RemoveSubTaskFromParent(struct TaskControl *child);"
+
+[AddHWSlaveTrigToMaster]
+Class="Function"
+Prototype="int AddHWSlaveTrigToMaster(struct TaskControl *master, struct TaskControl *slave);"
+
+[RemoveHWSlaveTrigFromMaster]
+Class="Function"
+Prototype="int RemoveHWSlaveTrigFromMaster(struct TaskControl *slave);"
 
 [TaskControlIterTimeout]
 Class="Function"

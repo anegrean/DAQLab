@@ -85,12 +85,12 @@ static int CVICALLBACK 				Zstage_UIPan_CB 				(int panel, int event, void *call
 //-----------------------------------------
 
 static FCallReturn_type*	Zstage_ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*	Zstage_IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void					Zstage_IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	Zstage_StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
 static FCallReturn_type*	Zstage_DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	Zstage_StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type* 	Zstage_ResetTC 					(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static FCallReturn_type* 	Zstage_ErrorTC 					(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static void				 	Zstage_ErrorTC 					(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
 static FCallReturn_type*	Zstage_EventHandler				(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
 
 
@@ -530,9 +530,8 @@ static int CVICALLBACK Zstage_UICtrls_CB (int panel, int control, int event, voi
 					DLMsg("Error. Could not add new reference position. Out of memory?\n\n", 1);
 					return 0;
 					
-					break;
-					
 			}
+			
 			break;
 			
 		case EVENT_KEYPRESS:		// delete reference position from list
@@ -691,9 +690,6 @@ static int CVICALLBACK Zstage_UICtrls_CB (int panel, int control, int event, voi
 					
 					}
 					break;
-					
-					
-				break;
 			}
 	}
 	
@@ -729,56 +725,55 @@ static FCallReturn_type* Zstage_ConfigureTC	(TaskControl_type* taskControl, BOOL
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
-static FCallReturn_type* Zstage_IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void Zstage_IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
 }
 
 static FCallReturn_type* Zstage_StartTC	(TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* Zstage_DoneTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 static FCallReturn_type* Zstage_StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* Zstage_ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
-static FCallReturn_type* Zstage_ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+static void Zstage_ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "", 0);
 }
 
 static FCallReturn_type* Zstage_EventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
    /*

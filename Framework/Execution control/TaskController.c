@@ -695,6 +695,13 @@ void discard_FCallReturn_type (FCallReturn_type** a)
 	OKfree(*a);
 }
 
+void dispose_FCallReturn_EventInfo (void* eventInfo)
+{
+	FCallReturn_type* fCallReturnPtr = eventInfo;
+	
+	discard_FCallReturn_type(&fCallReturnPtr);
+}
+
 static char* StateToString (TaskStates_type state)
 {
 	switch (state) {

@@ -516,6 +516,10 @@ FCallReturn_type*		init_FCallReturn_type			(int valFCall, const char errorOrigin
 
 void					discard_FCallReturn_type		(FCallReturn_type** a);
 
+	// When calling TaskControlEvent and passing a FCallReturn_type* as eventInfo, pass this function pointer to
+	// disposeEventInfoFptr
+void					dispose_FCallReturn_EventInfo	(void* eventInfo);
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------

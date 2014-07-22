@@ -90,12 +90,12 @@ static void						dispose_PIStageCommand_EventInfo	(void* eventInfo);
 //-----------------------------------------
 
 static FCallReturn_type*	PIStage_ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*	PIStage_IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void					PIStage_IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	PIStage_StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
 static FCallReturn_type*	PIStage_DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	PIStage_StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type* 	PIStage_ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static FCallReturn_type* 	PIStage_ErrorTC 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static void				 	PIStage_ErrorTC 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
 static FCallReturn_type*	PIStage_EventHandler			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
 
 
@@ -489,10 +489,10 @@ static FCallReturn_type* PIStage_ConfigureTC (TaskControl_type* taskControl, BOO
 	// first iteration the stage doesn't move from the starting position, therefore for nZSteps there will be nZSteps+1 iterations
 	SetTaskControlIterations(taskControl, zstage->nZSteps + 1);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
-static FCallReturn_type* PIStage_IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void PIStage_IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	Zstage_type* 		zstage 		= GetTaskControlModuleData(taskControl);
 	FCallReturn_type*	freturn;
@@ -503,13 +503,13 @@ static FCallReturn_type* PIStage_IterateTC (TaskControl_type* taskControl, size_
 	
 	// move to start position for the first iteration
 	if (!currentIteration) 
-		return PIStage_TaskControllerMove (zstage, ZSTAGE_MOVE_ABS, *zstage->startAbsPos); 
+		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, PIStage_TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_ABS, *zstage->startAbsPos), dispose_FCallReturn_EventInfo); 
 	
 	// step stage
 	if (zstage->endRelPos > 0)
-		return PIStage_TaskControllerMove (zstage, ZSTAGE_MOVE_REL, zstage->stepSize);  
+		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, PIStage_TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_REL, zstage->stepSize), dispose_FCallReturn_EventInfo);  
 	else
-		return PIStage_TaskControllerMove (zstage, ZSTAGE_MOVE_REL, -zstage->stepSize); 
+		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, PIStage_TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_REL, -zstage->stepSize), dispose_FCallReturn_EventInfo); 
 	
 }
 
@@ -520,7 +520,7 @@ static FCallReturn_type* PIStage_StartTC	(TaskControl_type* taskControl, BOOL co
 	// dim items
 	(*zstage->baseClass.DimWhenRunning) (zstage, TRUE);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* PIStage_DoneTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
@@ -530,7 +530,7 @@ static FCallReturn_type* PIStage_DoneTC (TaskControl_type* taskControl, size_t c
 	// undim items
 	(*zstage->baseClass.DimWhenRunning) (zstage, FALSE);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 static FCallReturn_type* PIStage_StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
@@ -539,7 +539,7 @@ static FCallReturn_type* PIStage_StoppedTC (TaskControl_type* taskControl, size_
 	// undim items
 	(*zstage->baseClass.DimWhenRunning) (zstage, FALSE);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* PIStage_ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
@@ -549,10 +549,10 @@ static FCallReturn_type* PIStage_ResetTC (TaskControl_type* taskControl, BOOL co
 	if (zstage->SetStepCounter)
 		(*zstage->SetStepCounter) (zstage, 0); 
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
-static FCallReturn_type* PIStage_ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+static void PIStage_ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
 {
 	PIStage_type* 		PIStage = GetTaskControlModuleData(taskControl);
 	Zstage_type*		zstage	= (Zstage_type*) PIStage;
@@ -571,7 +571,6 @@ static FCallReturn_type* PIStage_ErrorTC (TaskControl_type* taskControl, char* e
 	// undim items
 	(*zstage->DimWhenRunning) (zstage, FALSE);
 	
-	return init_FCallReturn_type(0, "", "", 0);
 }
 
 static FCallReturn_type* PIStage_EventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
@@ -614,7 +613,7 @@ static FCallReturn_type* PIStage_TaskControllerMove	(PIStage_type* PIStage, Zsta
 		PIerror = PI_GetError(PIStage->PIStageID);
 		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
 		Fmt(msg, "Moving stage relative to current position failed. PI stage DLL Error ID %d: %s.", PIerror, buff);
-		return init_FCallReturn_type(-1, "PIStage_EventHandler", msg, 0);
+		return init_FCallReturn_type(-1, "PIStage_EventHandler", msg);
 	}
 			
 	// turn on moving LED
@@ -628,7 +627,7 @@ static FCallReturn_type* PIStage_TaskControllerMove	(PIStage_type* PIStage, Zsta
 			PIerror = PI_GetError(PIStage->PIStageID);
 			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
 			Fmt(msg, "Could not query if target reached. PI stage DLL Error ID %d: %s.", PIerror, buff);
-			return init_FCallReturn_type(-1, "PIStage_EventHandler", msg, 0);
+			return init_FCallReturn_type(-1, "PIStage_EventHandler", msg);
 		}
 	} while (!ReadyFlag);
 	
@@ -640,7 +639,7 @@ static FCallReturn_type* PIStage_TaskControllerMove	(PIStage_type* PIStage, Zsta
 			PIerror = PI_GetError(PIStage->PIStageID);
 			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
 			Fmt(msg, "Error getting target position. PI stage DLL Error ID %d: %s.", PIerror, buff);
-			return init_FCallReturn_type(-1, "PIStage_EventHandler", msg, 0);
+			return init_FCallReturn_type(-1, "PIStage_EventHandler", msg);
 		}
 		Sleep (100);
 		// get current position
@@ -648,7 +647,7 @@ static FCallReturn_type* PIStage_TaskControllerMove	(PIStage_type* PIStage, Zsta
 			PIerror = PI_GetError(PIStage->PIStageID);
 			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
 			Fmt(msg, "Error getting current position. PI stage DLL Error ID %d: %s.", PIerror, buff);
-			return init_FCallReturn_type(-1, "PIStage_EventHandler", msg, 0);
+			return init_FCallReturn_type(-1, "PIStage_EventHandler", msg);
 		}
 	} while ( (( actualPos > targetPos + PIStage_SETTLING_PRECISION/2.0) ||
 			   ( actualPos < targetPos - PIStage_SETTLING_PRECISION/2.0)) && (Timer() < time + PIStage_SETTLING_TIMEOUT));	// quit loop if after 2 sec positions don't match
@@ -664,7 +663,7 @@ static FCallReturn_type* PIStage_TaskControllerMove	(PIStage_type* PIStage, Zsta
 	if (zStage->UpdatePositionDisplay)
 		(*zStage->UpdatePositionDisplay) (zStage);
 			
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
 /*

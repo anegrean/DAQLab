@@ -207,12 +207,12 @@ static BOOL					DAQLab_ValidModuleName					(char name[], void* listPtr);
 //-----------------------------------------
 
 static FCallReturn_type*	DAQLab_ConfigureUITC				(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*	DAQLab_IterateUITC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void					DAQLab_IterateUITC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	DAQLab_StartUITC					(TaskControl_type* taskControl, BOOL const* abortFlag);
 static FCallReturn_type*	DAQLab_DoneUITC						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	DAQLab_StoppedUITC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type* 	DAQLab_ResetUITC 					(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static FCallReturn_type* 	DAQLab_ErrorUITC 					(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static void				 	DAQLab_ErrorUITC 					(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
 
 
 //==============================================================================
@@ -1219,7 +1219,8 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 	if (!*UItaskCtrlPtrPtr) return -1;
 	TaskStates_type	state = GetTaskControlState((*UItaskCtrlPtrPtr)->taskControl);
 	
-	if (state == TASK_STATE_RUNNING || state == TASK_STATE_STOPPING || state == TASK_STATE_ITERATING || state == TASK_STATE_WAITING)
+	if (state != TASK_STATE_UNCONFIGURED && state != TASK_STATE_CONFIGURED && 
+		state != TASK_STATE_INITIAL && state != TASK_STATE_IDLE && state != TASK_STATE_DONE && state != TASK_STATE_ERROR)
 		return -2;
 	
 	DAQLab_discard_UITaskCtrl_type(UItaskCtrlPtrPtr);
@@ -1302,7 +1303,6 @@ static void CVICALLBACK DAQLab_TaskMenu_CB (int menuBarHandle, int menuItemID, v
 void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
 	int						modulesPanHndl;
-	int						error;
 	DAQLabModule_type**		modulePtrPtr;
 	char*					fullModuleName;
 	
@@ -1366,7 +1366,6 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 			int						moduleidx;		// 0-based index of selected module
 			DAQLabModule_type*  	newModulePtr;
 			DAQLabModule_type**		modulePtrPtr;
-			int*					panHndlPtr;
 			int						nchars;
 			
 			
@@ -1532,7 +1531,6 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 static void	DAQLab_TaskMenu_DeleteTaskController (void)
 {
 	int					delPanHndl;
-	int					error;
 	UITaskCtrl_type** 	UITaskCtrlsPtrPtr;
 	char*				name;
 	
@@ -1706,17 +1704,17 @@ static FCallReturn_type* DAQLab_ConfigureUITC (TaskControl_type* taskControl, BO
 		SetTaskControlMode(taskControl, TASK_CONTINUOUS);
 	}
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
-static FCallReturn_type* DAQLab_IterateUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void DAQLab_IterateUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
 	// iteration complete, update current iteration number
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, currentIteration + 1);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
 }
 
 static FCallReturn_type* DAQLab_StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
@@ -1727,7 +1725,7 @@ static FCallReturn_type* DAQLab_StartUITC (TaskControl_type* taskControl, BOOL c
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x002BD22F);
 	ProcessSystemEvents();	// required to update the background color
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* DAQLab_DoneUITC  (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
@@ -1753,7 +1751,7 @@ static FCallReturn_type* DAQLab_DoneUITC  (TaskControl_type* taskControl, size_t
 	// update iterations display
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, currentIteration);
 	
-	return init_FCallReturn_type(0, "", "", 0);
+	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* DAQLab_ResetUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
@@ -1762,7 +1760,7 @@ static FCallReturn_type* DAQLab_ResetUITC (TaskControl_type* taskControl, BOOL c
 	
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, 0);
 	
-	return init_FCallReturn_type(0, "", "", 0); 
+	return init_FCallReturn_type(0, "", ""); 
 }
 
 static FCallReturn_type* DAQLab_StoppedUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
@@ -1788,10 +1786,10 @@ static FCallReturn_type* DAQLab_StoppedUITC	(TaskControl_type* taskControl, size
 	// update iterations display
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, currentIteration);
 	
-	return init_FCallReturn_type(0, "", "", 0); 
+	return init_FCallReturn_type(0, "", ""); 
 }
 
-static FCallReturn_type* DAQLab_ErrorUITC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+static void DAQLab_ErrorUITC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
@@ -1808,8 +1806,6 @@ static FCallReturn_type* DAQLab_ErrorUITC (TaskControl_type* taskControl, char* 
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
 	// undim Reset button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
-	 
-	return init_FCallReturn_type(0, "", "", 0); 
 }
 
 int CVICALLBACK CloseDAQLabModulesPan_CB (int panel, int control, int event,

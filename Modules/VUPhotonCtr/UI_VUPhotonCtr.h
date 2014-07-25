@@ -19,7 +19,7 @@
 #define  CounterPan_NUM_STATUS            3       /* control type: numeric, callback function: (none) */
 #define  CounterPan_BTTN_FFRESET          4       /* control type: command, callback function: (none) */
 #define  CounterPan_BTTN_RESET            5       /* control type: command, callback function: (none) */
-#define  CounterPan_LED_TRIGFAIL          6       /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_DOOROPEN          6       /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_FIFO_OVERFLOW     7       /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_FIFO_AFULL        8       /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_FIFO_QFULL        9       /* control type: LED, callback function: (none) */
@@ -27,6 +27,7 @@
 #define  CounterPan_LED_FIFO_UNDER        11      /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_RUNNING           12      /* control type: LED, callback function: (none) */
 #define  CounterPan_BTTN_TestMode         13      /* control type: textButton, callback function: (none) */
+#define  CounterPan_TOGGLESTART           14      /* control type: textButton, callback function: (none) */
 
 #define  VUPCChan                         2
 #define  VUPCChan_Fan                     2       /* control type: radioButton, callback function: (none) */

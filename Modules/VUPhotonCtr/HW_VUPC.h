@@ -64,7 +64,7 @@
 #define PMT3CURR_BIT	0x00000040
 #define PMT4TEMP_BIT	0x00000080		
 #define PMT4CURR_BIT	0x00000100
-#define TRIGFAIL_BIT	0x00000200
+#define DOOROPEN_BIT	0x00000200
 #define FFUNDRFL_BIT	0x00000400		
 #define FFEMPTY_BIT		0x00000800
 #define FFQFULL_BIT		0x00001000
@@ -102,6 +102,12 @@ typedef enum {
 } PMT_Mode_type;
 
 
+typedef enum {
+	MEASMODE_FINITE,
+	MEASMODE_CONTINUOUS
+
+} Measurement_type;
+
 
 //==============================================================================
 // External variables
@@ -111,17 +117,22 @@ typedef enum {
 
 int ReadPMTReg(unsigned long regaddress,unsigned long *regval);
 int WritePMTReg(unsigned long regaddress,unsigned long regvalue);
-int PMTController_Init(unsigned long* controlreg);
+int PMTController_Init(void);
 int PMTController_Finalize(void);
-int PMTReset(unsigned long* controlreg);
+int PMTReset(void);
 int PMTClearFifo(void);
-int PMT_SetMode (unsigned long* controlreg, int PMTnr, PMT_Mode_type mode);
-int PMT_SetFan (unsigned long* controlreg, int PMTnr, BOOL value);
-int PMT_SetCooling (unsigned long* controlreg, int PMTnr, BOOL value);
-int PMT_SetGainTresh(unsigned long* controlreg,int PMTnr,unsigned int PMTGain,unsigned int PMTThreshold);
-int PMT_SetTestMode(unsigned long* controlreg,BOOL testmode);
-int PMT_ClearControl(unsigned long* controlreg,int PMTnr);
-//int PMT_UpdateDisplay (VUPhotonCtr_type* vupc);
+int PMT_SetMode ( int PMTnr, PMT_Mode_type mode);
+int PMT_SetFan (int PMTnr, BOOL value);
+int PMT_SetCooling (int PMTnr, BOOL value);
+int PMT_SetGainTresh(int PMTnr,unsigned int PMTGain,unsigned int PMTThreshold);
+int PMT_SetTestMode(BOOL testmode);
+int PMT_ClearControl(int PMTnr);
+void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples);
+void ResetDataCounter(void);
+int GetDataCounter(void);
+int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl) ;
+int PMTStopAcq(void);
+
 
 
 #ifdef __cplusplus

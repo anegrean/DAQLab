@@ -17,20 +17,23 @@
 
 //==============================================================================
 // Include files
-
+#include "cvidef.h"
+#include <toolbox.h>
 #include "DAQLabModule.h"
 
 //==============================================================================
 // Constants
 
 #define MOD_VUPhotonCtr_NAME 		"VU Photon Counter"
-		
+
 
 
 //==============================================================================
 // Types
 
-typedef struct VUPhotonCtr	VUPhotonCtr_type;   
+typedef struct VUPhotonCtr	VUPhotonCtr_type;
+
+
 
 
 

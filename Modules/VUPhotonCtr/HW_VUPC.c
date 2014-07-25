@@ -1,12 +1,3 @@
-
-#include <formatio.h>
-#include "cvidef.h"
-#include <toolbox.h>
-#include <userint.h>
-#include "TaskController.h"
-#include "VUPCIkernel_dma.h"
- 
-
 //==============================================================================
 //
 // Title:		HW_VUPC.c
@@ -19,22 +10,19 @@
 
 //==============================================================================
 // Include files
-
+#include "DAQLab.h"
+#include <formatio.h>
+#include "cvidef.h"
+#include <toolbox.h>
+#include <userint.h>
+#include "TaskController.h"
+#include "VUPCIkernel_dma.h"
 #include "HW_VUPC.h"
-
-// macro
-#define OKfree(ptr) if (ptr) { free(ptr); ptr = NULL; }
-
-#ifndef errChk
-#define errChk(fCall) if (error = (fCall), error < 0) \
-{goto Error;} else
-#endif
+#include "VUPhotonCtr.h"
 
 //==============================================================================
 // Constants
-		
 
-		
 #define WDTE_ERR_BIT	0x01000000
 #define RDTE_ERR_BIT	0x02000000
 #define DTE_DONE_BIT	0x80000000
@@ -737,8 +725,8 @@ void SetNewBuffer(void)
 }
 
 
-///  HIFN  starts the PMT Controller Acquisition
- /// HIRET returns error, no error when 0
+/// HIFN  starts the PMT Controller Acquisition
+/// HIRET returns error, no error when 0
 int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl)
 {
 	int error=0;

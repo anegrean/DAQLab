@@ -1382,9 +1382,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 	EventPacket_type 		eventpacket;
 	SubTask_type* 			subtaskPtr; 
 	SlaveHWTrigTask_type*   slaveHWTrigPtr;
-	int						nItems;
 	ErrorMsg_type*			errMsg			= NULL;
-	ErrorMsg_type*			tmpErrMsg		= NULL;
 	char*					buff			= NULL;
 	char*					eventStr;
 	char*					stateStr;

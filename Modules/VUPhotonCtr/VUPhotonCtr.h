@@ -17,8 +17,6 @@
 
 //==============================================================================
 // Include files
-#include "cvidef.h"
-#include <toolbox.h>
 #include "DAQLabModule.h"
 
 //==============================================================================
@@ -33,10 +31,11 @@
 
 typedef struct VUPhotonCtr	VUPhotonCtr_type;
 
-
-
-
-
+// Operation mode of photon counter.
+typedef enum {
+	MEASMODE_FINITE,
+	MEASMODE_CONTINUOUS
+} Measurement_type;
 
 
 

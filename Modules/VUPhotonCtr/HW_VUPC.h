@@ -18,7 +18,7 @@
 //==============================================================================
 // Include files
 
-#include "cvidef.h"
+#include "VUPhotonCtr.h"
 
 //==============================================================================
 // Constants
@@ -100,14 +100,6 @@ typedef enum {
 	PMT_MODE_ON,
 	PMT_MODE_ON_ACQ
 } PMT_Mode_type;
-
-
-typedef enum {
-	MEASMODE_FINITE,
-	MEASMODE_CONTINUOUS
-
-} Measurement_type;
-
 
 //==============================================================================
 // External variables

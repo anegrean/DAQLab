@@ -10,6 +10,10 @@ Prototype="int CB_DAQLab_MainPan(int panel, int event, void *callbackData, int e
 Class="Function"
 Prototype="int SetCtrlsInPanCBInfo(void *callbackData, int (*callbackFn)(int, int, int, void *, int, int), int panHndl);"
 
+[DLUniqueStrings]
+Class="Function"
+Prototype="int DLUniqueStrings(struct ListStructTag *stringList, unsigned int *idx);"
+
 [DLRegisterVChan]
 Class="Function"
 Prototype="int DLRegisterVChan(struct VChan *vchan);"
@@ -49,6 +53,10 @@ Prototype="int DLGetXMLNodeAttributes(CAObjHandle XMLNode, DAQLabXMLNode *Attrib
 [DAQLab_MenuModules_CB]
 Class="Function"
 Prototype="void DAQLab_MenuModules_CB(int menuBar, int menuItem, void *callbackData, int panel);"
+
+[DAQLab_ValidModuleName]
+Class="Function"
+Prototype="int DAQLab_ValidModuleName(char *name, void *listPtr);"
 
 [DAQLab_ManageDAQLabModules_CB]
 Class="Function"

@@ -1,13 +1,11 @@
 DAQLab.obj
 DAQLabModule.obj
-NIDAQmxDev.obj
 PIStage.obj
 TaskController.obj
 VChannel.obj
 Zstage.obj
 cvi.lib
 cviauto.lib
-NIDAQmx.lib
 cvistart.lib
 ActiveXML.obj
 asynctmr.obj

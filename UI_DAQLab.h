@@ -23,7 +23,7 @@
 #define  ModulesPan_Remove                2       /* control type: command, callback function: DAQLab_ManageDAQLabModules_CB */
 #define  ModulesPan_Add                   3       /* control type: command, callback function: DAQLab_ManageDAQLabModules_CB */
 #define  ModulesPan_Installed             4       /* control type: listBox, callback function: (none) */
-#define  ModulesPan_Available             5       /* control type: listBox, callback function: (none) */
+#define  ModulesPan_Available             5       /* control type: listBox, callback function: DAQLab_ManageDAQLabModules_CB */
 #define  ModulesPan_Close                 6       /* control type: command, callback function: CloseDAQLabModulesPan_CB */
 
 #define  TasksPan                         4

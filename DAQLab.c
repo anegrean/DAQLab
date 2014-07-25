@@ -24,7 +24,7 @@
 
 #include "PIStage.h"
 #include "VUPhotonCtr.h"
-#include "/Modules/NIDAQmx/NIDAQmx.h"
+#include "NIDAQmxDev.h"
 
 
 
@@ -87,6 +87,9 @@ typedef enum _DAQLabMessageID{
 	DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, // HRESULT* error code, 0, 0, 0
 	DAQLAB_MSG_ERR_LOADING_MODULE,			// char* module instance name, char* error description
 	DAQLAB_MSG_ERR_VCHAN_NOT_FOUND,			// VChan_type*, 0, 0, 0
+	DAQLAB_MSG_ERR_NOT_UNIQUE_CLASS_NAME,	// char* class name, 0, 0, 0
+	
+	
 	
 	// warnings									
 	DAQLAB_MSG_WARN_NO_CFG_FILE,			// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0       
@@ -116,8 +119,8 @@ typedef struct {						  // Glues UI Task Controller to panel handle
 //------------------------------------------------------------------------------------------------
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
-	{ MOD_NIDAQmxDev_NAME, initalloc_NIDAQmxDev, FALSE, 0 }
+	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 }
+//	{ MOD_NIDAQmxDev_NAME, initalloc_NIDAQmxDev, FALSE, 0 }
 	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 }
 	
 };
@@ -554,9 +557,32 @@ int	SetCtrlsInPanCBInfo (void* callbackData, CtrlCallbackPtr callbackFn, int pan
 		// get next control in the panel
 		GetCtrlAttribute(panHndl, ctrlID, ATTR_NEXT_CTRL, &ctrlID);
 	}
-	
+
 	Error:
 	return error;
+}
+
+/// HIFN Checks if all strings in a list are unique.
+/// OUT idx/ 1-based index of string item in the list that is not unique. If items are unique than this is 0.
+/// HIRET True if all strings are unique, False otherwise.
+BOOL DLUniqueStrings (ListType stringList, size_t* idx)
+{
+	char** strPtr1 = NULL;
+	char** strPtr2 = NULL;
+	
+	size_t ni = ListNumItems(stringList);
+	for (size_t i = 1; i < ni; ni++)
+		for (size_t j = i+1; j <= ni; j++) {
+			strPtr1 = ListGetPtrToItem (stringList, i);
+			strPtr1 = ListGetPtrToItem (stringList, j);
+			if (!strcmp(*strPtr1, *strPtr2)) {
+				if (idx) *idx = i;
+				return FALSE;
+			}
+		}
+	
+	if (idx) *idx = 0;
+	return TRUE;
 }
 
 /// HIFN Registers a VChan with the DAQLab framework.
@@ -714,6 +740,11 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 			Fmt(buff, "Error: Could not find virtual channel \"%s\" in the DAQLab framework.", name);
 			DLMsg(buff, 1);
 			OKfree(name);
+			break;
+			
+		case DAQLAB_MSG_ERR_NOT_UNIQUE_CLASS_NAME:
+			DLMsg((char*)data1, 1);
+			DLMsg(" is not a unique module class name.\n\n", 0);
 			break;
 			
 		case DAQLAB_MSG_OK_DOM_CREATION:
@@ -1302,21 +1333,39 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 	int						modulesPanHndl;
 	DAQLabModule_type**		modulePtrPtr;
 	char*					fullModuleName;
+	size_t					nModules;			
+	ListType				moduleClassNames;	// of char* type
+	size_t					idx;
+	
+	// check if module class names are unique
+	moduleClassNames = ListCreate(sizeof(char*));
+	nModules = NumElem(DAQLabModules_InitFunctions);
+	for (size_t i = 0; i < nModules; i++)
+		ListInsertItem(moduleClassNames, &DAQLabModules_InitFunctions[i].className, END_OF_LIST);
+	
+	if (!DLUniqueStrings(moduleClassNames, &idx)) {
+		DAQLab_Msg(DAQLAB_MSG_ERR_NOT_UNIQUE_CLASS_NAME, DAQLabModules_InitFunctions[idx].className, NULL, NULL, NULL); 
+		return;
+	}
+	
+	ListDispose(moduleClassNames);
 	
 	modulesPanHndl = LoadPanel(mainPanHndl, DAQLAB_UI_DAQLAB, ModulesPan);
 	
 	// list available modules
-	for (int i = 0; i < NumElem(DAQLabModules_InitFunctions); i++) {
+	for (int i = 0; i < nModules; i++) {
 		InsertListItem(modulesPanHndl, ModulesPan_Available, -1, DAQLabModules_InitFunctions[i].className, i);  
 	}
+	
 	// if there are modules to add, undim Add button
-	if (NumElem(DAQLabModules_InitFunctions))
+	if (nModules)
 		SetCtrlAttribute(modulesPanHndl, ModulesPan_Add, ATTR_DIMMED, 0);
 	else
 		SetCtrlAttribute(modulesPanHndl, ModulesPan_Add, ATTR_DIMMED, 1);
 		
 	// list installed modules
-	for (size_t i = 1; i <= ListNumItems(DAQLabModules); i++) {
+	nModules = ListNumItems(DAQLabModules);
+	for (size_t i = 1; i <= nModules; i++) {
 		modulePtrPtr = ListGetPtrToItem(DAQLabModules, i);
 		fullModuleName = StrDup((*modulePtrPtr)->className);
 		AppendString(&fullModuleName, ": ", -1);
@@ -1324,8 +1373,9 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 		InsertListItem(modulesPanHndl, ModulesPan_Installed, -1, fullModuleName, (*modulePtrPtr)->instanceName);
 		OKfree(fullModuleName);
 	} 
+	
 	// if there are modules installed, undim Remove button
-	if (ListNumItems(DAQLabModules))
+	if (nModules)
 		SetCtrlAttribute(modulesPanHndl, ModulesPan_Remove, ATTR_DIMMED, 0); 
 	else
 		SetCtrlAttribute(modulesPanHndl, ModulesPan_Remove, ATTR_DIMMED, 1); 
@@ -1353,6 +1403,8 @@ BOOL DAQLab_ValidModuleName (char name[], void* listPtr)
 
 int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+	
+	
 	switch (event)
 	{
 		case EVENT_COMMIT:
@@ -1364,16 +1416,23 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 			DAQLabModule_type*  	newModulePtr;
 			DAQLabModule_type**		modulePtrPtr;
 			int						nchars;
-			
+			int						nModules;
+			size_t					nInstalledModules;
+			size_t					nAvailableModules 	= NumElem(DAQLabModules_InitFunctions);
 			
 			switch (control) {
 					
 				case ModulesPan_Add:
 					
-					newInstanceName = DLGetUINameInput ("New Module Instance", DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS, DAQLab_ValidModuleName, &DAQLabModules);
-					if (!newInstanceName) return 0; // operation cancelled, do nothing
-					
 					GetCtrlIndex(panel, ModulesPan_Available, &moduleidx);
+					
+					if (DAQLabModules_InitFunctions[moduleidx].multipleInstancesFlag) {
+						newInstanceName = DLGetUINameInput ("New Module Instance", DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS, DAQLab_ValidModuleName, &DAQLabModules);
+						if (!newInstanceName) return 0; // operation cancelled, do nothing
+					} else
+						// use class name as instance name since there is only one instance
+						newInstanceName = StrDup(DAQLabModules_InitFunctions[moduleidx].className);
+					
 					// call module init function
 					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[moduleidx].className, newInstanceName);
 					// call module load function
@@ -1388,6 +1447,8 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					
 					// insert module to modules list
 					ListInsertItem(DAQLabModules, &newModulePtr, END_OF_LIST);
+					// increase module instance counter
+					DAQLabModules_InitFunctions[moduleidx].nInstances++;
 					// add full module name to list box
 					fullModuleName = StrDup(newModulePtr->className);
 					AppendString(&fullModuleName, ": ", -1);
@@ -1395,7 +1456,10 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					InsertListItem(panel, ModulesPan_Installed, -1, fullModuleName, newModulePtr->instanceName);
 					OKfree(fullModuleName);
 					// undim remove module button
-					SetCtrlAttribute(panel, ModulesPan_Remove, ATTR_DIMMED, 0); 
+					SetCtrlAttribute(panel, ModulesPan_Remove, ATTR_DIMMED, 0);
+					// if multiple instances are not allowed, dim add button
+					if (!DAQLabModules_InitFunctions[moduleidx].multipleInstancesFlag)
+						SetCtrlAttribute(panel, ModulesPan_Add, ATTR_DIMMED, 1);
 					
 					break;
 					
@@ -1411,9 +1475,16 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					// get module instance name
 					GetValueFromIndex(panel, ModulesPan_Installed, moduleidx, moduleName); 
 					// remove module if found
-					for (int i = 1; i <= ListNumItems(DAQLabModules); i++) {
+					nInstalledModules = ListNumItems(DAQLabModules);
+					for (size_t i = 1; i <= nInstalledModules; i++) {
 						modulePtrPtr = ListGetPtrToItem (DAQLabModules, i);
 						if (!strcmp((*modulePtrPtr)->instanceName, moduleName)) {
+							// update number of instances
+							for (size_t j = 0; j < nAvailableModules; j++)
+								if (!strcmp(DAQLabModules_InitFunctions[j].className, (*modulePtrPtr)->className)) {
+									DAQLabModules_InitFunctions[j].nInstances--;
+									break;
+								}
 							// call module discard function
 							(*(*modulePtrPtr)->Discard)	(modulePtrPtr);
 							// also remove from DAQLab modules list
@@ -1421,10 +1492,29 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 							break;
 						}
 					}
+					
+					// undim add button
+					SetCtrlAttribute(panel, ModulesPan_Add, ATTR_DIMMED, 0); 
+							
 					OKfree(moduleName);
 					// remove from installed modules list
 					DeleteListItem(panel, ModulesPan_Installed, moduleidx, 1);
+					// if there are no more modules in the list, dim remove button
+					GetNumListItems(panel, ModulesPan_Installed, &nModules);
+					if (!nModules)
+						SetCtrlAttribute(panel, ModulesPan_Remove, ATTR_DIMMED, 1);	
 					
+					break;
+					
+				case ModulesPan_Available:
+					
+					GetCtrlIndex(panel, ModulesPan_Available, &moduleidx);
+					// dim add button if multiple instances are not allowed and there is already such a module installed
+					if (!DAQLabModules_InitFunctions[moduleidx].multipleInstancesFlag && DAQLabModules_InitFunctions[moduleidx].nInstances)
+						SetCtrlAttribute(panel, ModulesPan_Add, ATTR_DIMMED, 1);
+					else
+						SetCtrlAttribute(panel, ModulesPan_Add, ATTR_DIMMED, 0);
+						
 					break;
 			}
 

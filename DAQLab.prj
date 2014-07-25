@@ -9,7 +9,7 @@ IVI Standard Root Dir = "/C/Program Files (x86)/IVI Foundation/IVI"
 VXIplug&play Framework Dir = "/C/Program Files (x86)/IVI Foundation/VISA/winnt"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
-Number of Files = 30
+Number of Files = 32
 Target Type = "Executable"
 Flags = 2064
 Copied From Locked InstrDrv Directory = False
@@ -163,8 +163,33 @@ Folder = "Modules/Zstages/PI Stage"
 Folder Id = 2
 
 [File 0011]
-File Type = "Include"
+File Type = "CSource"
 Res Id = 11
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/VUPhotonCtr/HW_VUPC.c"
+Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/HW_VUPC.c"
+Exclude = True
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Modules/VUPhotonCtr"
+Folder Id = 4
+
+[File 0012]
+File Type = "Include"
+Res Id = 12
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/VUPhotonCtr/HW_VUPC.h"
+Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/HW_VUPC.h"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/VUPhotonCtr"
+Folder Id = 4
+
+[File 0013]
+File Type = "Include"
+Res Id = 13
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/VUPhotonCtr/UI_VUPhotonCtr.h"
@@ -174,9 +199,9 @@ Project Flags = 0
 Folder = "Modules/VUPhotonCtr"
 Folder Id = 4
 
-[File 0012]
+[File 0014]
 File Type = "User Interface Resource"
-Res Id = 12
+Res Id = 14
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/VUPhotonCtr/UI_VUPhotonCtr.uir"
@@ -186,22 +211,22 @@ Project Flags = 0
 Folder = "Modules/VUPhotonCtr"
 Folder Id = 4
 
-[File 0013]
+[File 0015]
 File Type = "CSource"
-Res Id = 13
+Res Id = 15
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/VUPhotonCtr/VUPhotonCtr.c"
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.c"
-Exclude = True
+Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Modules/VUPhotonCtr"
 Folder Id = 4
 
-[File 0014]
+[File 0016]
 File Type = "Include"
-Res Id = 14
+Res Id = 16
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/VUPhotonCtr/VUPhotonCtr.h"
@@ -211,9 +236,9 @@ Project Flags = 0
 Folder = "Modules/VUPhotonCtr"
 Folder Id = 4
 
-[File 0015]
+[File 0017]
 File Type = "Function Panel"
-Res Id = 15
+Res Id = 17
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "MSXML/ActiveXML.fp"
@@ -223,9 +248,9 @@ Project Flags = 0
 Folder = "XML"
 Folder Id = 5
 
-[File 0016]
+[File 0018]
 File Type = "Include"
-Res Id = 16
+Res Id = 18
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "MSXML/ActiveXML.h"
@@ -235,9 +260,9 @@ Project Flags = 0
 Folder = "XML"
 Folder Id = 5
 
-[File 0017]
+[File 0019]
 File Type = "CSource"
-Res Id = 17
+Res Id = 19
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/TaskController.c"
@@ -248,9 +273,9 @@ Project Flags = 0
 Folder = "Framework/Execution control "
 Folder Id = 6
 
-[File 0018]
+[File 0020]
 File Type = "Include"
-Res Id = 18
+Res Id = 20
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/TaskController.h"
@@ -260,9 +285,9 @@ Project Flags = 0
 Folder = "Framework/Execution control "
 Folder Id = 6
 
-[File 0019]
+[File 0021]
 File Type = "Include"
-Res Id = 19
+Res Id = 21
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/UI_TaskController.h"
@@ -272,9 +297,9 @@ Project Flags = 0
 Folder = "Framework/Execution control "
 Folder Id = 6
 
-[File 0020]
+[File 0022]
 File Type = "User Interface Resource"
-Res Id = 20
+Res Id = 22
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/UI_TaskController.uir"
@@ -284,9 +309,9 @@ Project Flags = 0
 Folder = "Framework/Execution control "
 Folder Id = 6
 
-[File 0021]
+[File 0023]
 File Type = "CSource"
-Res Id = 21
+Res Id = 23
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Virtual channels/VChannel.c"
@@ -297,9 +322,9 @@ Project Flags = 0
 Folder = "Framework/Virtual channels"
 Folder Id = 7
 
-[File 0022]
+[File 0024]
 File Type = "Include"
-Res Id = 22
+Res Id = 24
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Virtual channels/VChannel.h"
@@ -309,22 +334,22 @@ Project Flags = 0
 Folder = "Framework/Virtual channels"
 Folder Id = 7
 
-[File 0023]
+[File 0025]
 File Type = "CSource"
-Res Id = 23
+Res Id = 25
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/NIDAQmxDev/NIDAQmxDev.c"
 Path = "/d/ELE_DAQLab/Modules/NIDAQmxDev/NIDAQmxDev.c"
-Exclude = False
+Exclude = True
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Modules/NIDAQmxDev"
 Folder Id = 8
 
-[File 0024]
+[File 0026]
 File Type = "Include"
-Res Id = 24
+Res Id = 26
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/NIDAQmxDev/NIDAQmxDev.h"
@@ -334,9 +359,9 @@ Project Flags = 0
 Folder = "Modules/NIDAQmxDev"
 Folder Id = 8
 
-[File 0025]
+[File 0027]
 File Type = "Include"
-Res Id = 25
+Res Id = 27
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/NIDAQmxDev/UI_NIDAQmxDev.h"
@@ -346,9 +371,9 @@ Project Flags = 0
 Folder = "Modules/NIDAQmxDev"
 Folder Id = 8
 
-[File 0026]
+[File 0028]
 File Type = "User Interface Resource"
-Res Id = 26
+Res Id = 28
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/NIDAQmxDev/UI_NIDAQmxDev.uir"
@@ -358,9 +383,9 @@ Project Flags = 0
 Folder = "Modules/NIDAQmxDev"
 Folder Id = 8
 
-[File 0027]
+[File 0029]
 File Type = "CSource"
-Res Id = 27
+Res Id = 29
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.c"
@@ -370,9 +395,9 @@ Compile Into Object File = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0028]
+[File 0030]
 File Type = "Include"
-Res Id = 28
+Res Id = 30
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.h"
@@ -381,9 +406,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0029]
+[File 0031]
 File Type = "Include"
-Res Id = 29
+Res Id = 31
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.h"
@@ -392,9 +417,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0030]
+[File 0032]
 File Type = "User Interface Resource"
-Res Id = 30
+Res Id = 32
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.uir"
@@ -496,7 +521,7 @@ Config Name = "Release"
 Is 64-Bit = False
 Is Release = True
 Default Calling Convention = "cdecl"
-Optimization Level = "No optimizations"
+Optimization Level = "Optimize for speed (level 1)"
 Require Prototypes = True
 Show Warning IDs in Build Output = False
 Selected Warning Level = "None"

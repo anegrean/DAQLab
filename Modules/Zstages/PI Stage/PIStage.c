@@ -495,7 +495,6 @@ static FCallReturn_type* PIStage_ConfigureTC (TaskControl_type* taskControl, BOO
 static void PIStage_IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	Zstage_type* 		zstage 		= GetTaskControlModuleData(taskControl);
-	FCallReturn_type*	freturn;
 	
 	// update iteration counter
 	if (zstage->SetStepCounter)
@@ -520,7 +519,7 @@ static FCallReturn_type* PIStage_StartTC	(TaskControl_type* taskControl, BOOL co
 	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	
 	// dim items
-	(*zstage->baseClass.DimWhenRunning) (zstage, TRUE);
+	(*zstage->baseClass.DimWhenRunning) ((Zstage_type*)zstage, TRUE);
 	
 	return init_FCallReturn_type(0, "", "");
 }
@@ -530,7 +529,7 @@ static FCallReturn_type* PIStage_DoneTC (TaskControl_type* taskControl, size_t c
 	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	
 	// undim items
-	(*zstage->baseClass.DimWhenRunning) (zstage, FALSE);
+	(*zstage->baseClass.DimWhenRunning) ((Zstage_type*)zstage, FALSE);
 	
 	return init_FCallReturn_type(0, "", "");
 }
@@ -539,7 +538,7 @@ static FCallReturn_type* PIStage_StoppedTC (TaskControl_type* taskControl, size_
 	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	
 	// undim items
-	(*zstage->baseClass.DimWhenRunning) (zstage, FALSE);
+	(*zstage->baseClass.DimWhenRunning) ((Zstage_type*)zstage, FALSE);
 	
 	return init_FCallReturn_type(0, "", "");
 }

@@ -167,55 +167,57 @@ typedef struct {
 	ListType COchanSet;	    // list of IOchanSet_type for COchan channels configured for the DAQ task
 } IOchan_type;
 
+// Used for continuous data AO streaming
 typedef struct {
-	size_t        writeblock;        // size of writeblock is IO_block_size
-	size_t        numchan;           // number of output channels
+	size_t        	writeblock;        	// Size of writeblock is IO_block_size
+	size_t        	numchan;           	// Number of output channels
 	
-	float64**     datain;            
-	float64**     databuff;
-	float64*      dataout;			 // array length is writeblock * numchan used for DAQmx write call, data is grouped by channel
-	CmtTSQHandle* queue;
+	float64**     	datain;            
+	float64**     	databuff;
+	float64*      	dataout;			// Array length is writeblock * numchan used for DAQmx write call, data is grouped by channel
+	CmtTSQHandle* 	queue;
 	
-	size_t*       datain_size; 
-	size_t*       databuff_size;
+	size_t*       	datain_size; 
+	size_t*      	databuff_size;
 	
-	size_t*       idx;				 // array of pointers with index for each channel from which to continue writing data (not used yet)  
-	size_t*       datain_repeat;	 // number of times to repeat the an entire data packet
-	size_t*       datain_remainder;  // number of elements from the beginning of the data packet to still generate, 
-									 // WARNING: this does not apply when looping is ON. In this case when receiving a new data packet, a full cycle is generated before switching.
+	size_t*       	idx;				// Array of pointers with index for each channel from which to continue writing data (not used yet)  
+	size_t*       	datain_repeat;	 	// Number of times to repeat the an entire data packet
+	size_t*      	datain_remainder;  	// Number of elements from the beginning of the data packet to still generate, 
+									 	// WARNING: this does not apply when looping is ON. In this case when receiving a new data packet, a full cycle is generated before switching.
 	
-	BOOL*         datain_loop;	     // data will be looped regardless of repeat value until new data packet is provided
+	BOOL*         	datain_loop;	   	// Data will be looped regardless of repeat value until new data packet is provided
 } WriteAOData;
 
+// Used for continuous data AO streaming 
 typedef struct {
-	WriteAOData*   writeAOdata;  // AO data structure used for streaming
+	WriteAOData*   	writeAOdata;
 } RawDAQData;
 
 // Settings for DAQ task
 typedef struct {
-	TaskHandle		taskHndl;		// DAqmx task handle.
-	MeasMode_type 	measmode;      	// Measurement mode e.g. finite or continuous.
-	double       	samplerate;    	// Sampling rate in [Hz].
-	size_t        	nsamples;	    // Total number of samples to be acquired in case of a finite recording.
-	double        	duration;	    // Duration of finite recording.
-	size_t        	blocksize;     	// Number of samples for reading or writing after which callbacks are called.
-	TaskTrig_type 	starttrig;     	// Task trigger data.
+	TaskHandle		taskHndl;			// DAqmx task handle.
+	MeasMode_type 	measmode;      		// Measurement mode e.g. finite or continuous.
+	double       	samplerate;    		// Sampling rate in [Hz].
+	size_t        	nsamples;	    	// Total number of samples to be acquired in case of a finite recording.
+	double        	duration;	    	// Duration of finite recording.
+	size_t        	blocksize;     		// Number of samples for reading or writing after which callbacks are called.
+	TaskTrig_type 	starttrig;     		// Task trigger data.
 	
-	char*         	sampclksource; 	// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
-	BOOL          	sampclkedge;   	// sample clock active edge, 0 = Rising, 1 = Falling
+	char*         	sampclksource; 		// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
+	BOOL          	sampclkedge;   		// Sample clock active edge, 0 = Rising, 1 = Falling
 	
-	char*         	refclksource;  // reference clock source used to sync internal clock, if NULL internal clock has no reference clock 
-	double        	refclkfreq;    // reference clock frequency if such a clock is used
+	char*         	refclksource;  		// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock 
+	double        	refclkfreq;    		// Reference clock frequency if such a clock is used
 	
-	double        	timeout;       // task timeout [s] 
+	double        	timeout;       		// Task timeout [s] 
 } DAQtaskSet_type;
 
 // DAQ Task definition
 typedef struct {
 	DAQdev_type*    	device;       				  // Device to be used during IO task
 	IOchan_type*    	chan;         				  // Channels used in the task of IOchan_type
+	TaskControl_type*   taskControl;				  // Task Controller for the DAQmx module
 	DAQtaskSet_type 	taskset[MAX_DAQmx_TASKS];     // Array of task settings of DAQtaskSet_type// task settings: [0] = AI, [1] = AO, [2] = DI, [3] = DO, [4] = CI, [5] = CO
-	TaskControl_type*   taskControl;
 } DAQtask_type;
 
 //==============================================================================
@@ -229,7 +231,7 @@ struct NIDAQmxDev {
 	
 	// DATA
 	
-	ListType            DAQtasks;   // list of DAQtask_type having an element per DAQ device 
+	ListType            DAQtasks;   // list of DAQtask_type* for each DAQmx device 
 	
 		//-------------------------
 		// UI
@@ -251,6 +253,9 @@ static int	 currDev = -1;        // currently selected device from the DAQ table
 //==============================================================================
 // Static functions
 
+static DAQtask_type* 		init_DAQtask_type 				(DAQdev_type* device);
+static void 				discard_DAQtask_type			(DAQtask_type* DAQtask);
+
 static int 					init_DevList 					(ListType devlist, int panHndl, int tableCtrl);
 static void 				empty_DevList 					(ListType devList); 
 
@@ -259,8 +264,8 @@ static void 				discard_DAQdev_type				(DAQdev_type** a);
 
 static int					Load 							(DAQLabModule_type* mod, int workspacePanHndl);
 
-void 						init_IORange_type				(IORange_type* range);
-void 						discard_IORange_type			(IORange_type* a);
+static void					init_IORange_type				(IORange_type* range);
+static void 				discard_IORange_type			(IORange_type* a);
 
 static char* 				substr							(const char* token, char** idxstart);
 
@@ -273,14 +278,15 @@ static void CVICALLBACK 	DeleteDev_CB 					(int menuBarHandle, int menuItemID, v
 // ZStage Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type*	NIDAQmxDev_ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
-static void					NIDAQmxDev_IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static FCallReturn_type*	NIDAQmxDev_StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*	NIDAQmxDev_DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static FCallReturn_type*	NIDAQmxDev_StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static FCallReturn_type* 	NIDAQmxDev_ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static void				 	NIDAQmxDev_ErrorTC 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
-static FCallReturn_type*	NIDAQmxDev_EventHandler			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
+static FCallReturn_type*	ConfigureTC						(TaskControl_type* taskControl, BOOL const* abortFlag);
+static void					IterateTC						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*	StartTC							(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*	DoneTC							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*	StoppedTC						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type* 	ResetTC 						(TaskControl_type* taskControl, BOOL const* abortFlag); 
+static void				 	ErrorTC 						(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static FCallReturn_type*	DataReceivedTC					(TaskControl_type* taskControl, TaskStates_type taskState, CmtTSQHandle dataQID, BOOL const* abortFlag);
+static FCallReturn_type*	ModuleEventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
 
 
 
@@ -451,21 +457,21 @@ static void discard_DAQdev_type(DAQdev_type** a)
 	discard_IORange_type(&(*a)->AIVrngs);
 	discard_IORange_type(&(*a)->AOVrngs);
 	
-	*a = NULL;
+	OKfree(*a);
 }
 
 //------------------------------------------------------------------------------
 // IORange_type
 //------------------------------------------------------------------------------
 
-void init_IORange_type(IORange_type* range)
+static void init_IORange_type(IORange_type* range)
 {
 	range -> Nrngs 	= 0;
 	range -> low 	= NULL;
 	range -> high 	= NULL;
 }
 
-void discard_IORange_type(IORange_type* a)
+static void discard_IORange_type(IORange_type* a)
 {
 	a->Nrngs = 0;
 	OKfree(a->low);
@@ -476,35 +482,50 @@ void discard_IORange_type(IORange_type* a)
 // DAQtask_type
 //------------------------------------------------------------------------------
 
-int init_DAQtask_type (DAQtask_type* DAQtask)
+static DAQtask_type* init_DAQtask_type (DAQdev_type* device)
 {
-	DAQtask -> device        = NULL;        // No device has been assigned   !dynamically allocated with malloc
-	DAQtask -> chan			 = NULL; 
-	for (int i = 0; i < MAX_DAQmx_TASKS; i++) {
-		(DAQtask -> taskset[i]).measmode              = MeasNone;
-		(DAQtask -> taskset[i]).samplerate            = 50000;	   	// Default [Hz]
-		(DAQtask -> taskset[i]).nsamples              = 0;
-		(DAQtask -> taskset[i]).duration              = 0; 
-		(DAQtask -> taskset[i]).blocksize             = 4096;      	// Must be a power of 2 because of how the DAQmx output buffers work. 
-																	// The size of the output buffer is set to twice the blocksize 
-		(DAQtask -> taskset[i]).starttrig.trigtype    = TRIG_None;
-		(DAQtask -> taskset[i]).starttrig.trigsource  = NULL;      // dynamically allocated
-		(DAQtask -> taskset[i]).starttrig.edgetype    = 0;
-		(DAQtask -> taskset[i]).starttrig.level       = 0;
-		(DAQtask -> taskset[i]).starttrig.windowtop   = 0;
-		(DAQtask -> taskset[i]).starttrig.windowbttm  = 0;
-		(DAQtask -> taskset[i]).starttrig.wndtrigcond = 0; 
-		(DAQtask -> taskset[i]).sampclksource 		  = NULL;      // dynamically allocated
-		(DAQtask -> taskset[i]).sampclkedge		      = 0;
-		(DAQtask -> taskset[i]).refclksource 		  = NULL;      // dynamically allocated
-		(DAQtask -> taskset[i]).refclkfreq		      = 1e7;       // in [Hz], here 10 MHz reference clock assumed
-		(DAQtask -> taskset[i]).timeout			      = 5;
-	};
+	DAQtask_type* a = malloc (sizeof(DAQtask_type));
+	if (!a) return NULL;
 	
-	return NewDAQStateMachine(DAQtask); // return error if there is one
-};
+	a -> device											= device;
+	a -> chan										  	= NULL; 
+	
+	//--------------------------
+	// Task Controller
+	//--------------------------
+	
+	a -> taskControl = init_TaskControl_type (MOD_NIDAQmxDev_NAME, ConfigureTC, IterateTC, StartTC, ResetTC,
+												 		     DoneTC, StoppedTC, DataReceivedTC, ModuleEventHandler, ErrorTC);
+	
+	//--------------------------
+	// DAQmx task settings
+	//--------------------------
+	
+	for (int i = 0; i < MAX_DAQmx_TASKS; i++) {
+		(a -> taskset[i]).measmode              	= MeasNone;
+		(a -> taskset[i]).samplerate            	= 50000;	   	// Default [Hz]
+		(a -> taskset[i]).nsamples              	= 0;
+		(a -> taskset[i]).duration              	= 0; 
+		(a -> taskset[i]).blocksize             	= 4096;      	// Must be a power of 2 because of how the DAQmx output buffers work. 
+																	// The size of the output buffer is set to twice the blocksize 
+		(a -> taskset[i]).starttrig.trigtype    	= TRIG_None;
+		(a -> taskset[i]).starttrig.trigsource  	= NULL;      	// Dynamically allocated
+		(a -> taskset[i]).starttrig.edgetype    	= 0;
+		(a -> taskset[i]).starttrig.level       	= 0;
+		(a -> taskset[i]).starttrig.windowtop   	= 0;
+		(a -> taskset[i]).starttrig.windowbttm  	= 0;
+		(a -> taskset[i]).starttrig.wndtrigcond 	= 0; 
+		(a -> taskset[i]).sampclksource 		  	= NULL;      	// Dynamically allocated
+		(a -> taskset[i]).sampclkedge		      	= 0;
+		(a -> taskset[i]).refclksource 		  		= NULL;      	// Dynamically allocated
+		(a -> taskset[i]).refclkfreq		      	= 1e7;       	// In [Hz], here 10 MHz reference clock assumed
+		(a -> taskset[i]).timeout			      	= 5;			// Timeout in [s]
+	}
+	
+	return a;
+}
 
-void discard_DAQtask_type(DAQtask_type* DAQtask)
+static void discard_DAQtask_type(DAQtask_type* DAQtask)
 {
 	if (!DAQtask) return;
 	

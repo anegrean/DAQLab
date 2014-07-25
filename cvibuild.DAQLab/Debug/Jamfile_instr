@@ -1,9 +1,9 @@
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" ;
-Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmxDev.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\VChannel.obj" ;
+Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\VUPhotonCtr.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\Zstage.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\MSXML\\msvc\\ActiveXML.obj" ;
 NoCare "d:\\ELE_DAQLab\\MSXML\\msvc\\ActiveXML.obj" ;

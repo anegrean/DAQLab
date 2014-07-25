@@ -135,9 +135,10 @@ struct VUPhotonCtr {
 		// Points to either device set sampling rate or virtual channel set sampling rate.
 		// By default it points to the device sampling rate DevSamplingRate. In [Hz]
 	double*				samplingRate;
-
-	int 				numiterations;	  //
-	Measurement_type	measmode;        //in continuous mode, no need to count data
+		// ?	
+	int 				numiterations;
+		// Finite number of samples or continuous measurement
+	Measurement_type	measmode;        
 
 
 
@@ -148,26 +149,27 @@ struct VUPhotonCtr {
 		// For hardware specific functionality override other methods such as SetPMT_Mode.
 	CtrlCallbackPtr		uiCtrlsCB;
 
-			// Default NULL, functionality not implemented.
-			// Override: Required, provides hardware specific movement of VUPhotonCtr.
-			// Sets the Mode of the Selected PMT
-		int					(* SetPMT_Mode) 			(VUPhotonCtr_type* self, int PMTnr, PMT_Mode_type mode);
-			// Sets the Fan of the Selected PMT ON or OFF
-		int					(* SetPMT_Fan) 				(VUPhotonCtr_type* self, int PMTnr, BOOL value);
-			// Sets the Cooling of the Selected PMT ON or OFF
-		int					(* SetPMT_Cooling) 			(VUPhotonCtr_type* self, int PMTnr, BOOL value);
-			// Sets the Gain and Threshold of the Selected PMT
-		int					(* SetPMT_GainThresh) 		(VUPhotonCtr_type* self, int PMTnr, double gain,double threshold);
-			// Updates status display of Photon Counter from structure data
-		int					(* UpdateVUPhotonCtrDisplay) (VUPhotonCtr_type* self);
+		// Default NULL, functionality not implemented.
+		// Override: Required, provides hardware specific operation of VUPhotonCtr.
+			
+		// Sets the Mode of the Selected PMT
+	int					(* SetPMT_Mode) 			(VUPhotonCtr_type* self, int PMTnr, PMT_Mode_type mode);
+		// Sets the Fan of the Selected PMT ON or OFF
+	int					(* SetPMT_Fan) 				(VUPhotonCtr_type* self, int PMTnr, BOOL value);
+		// Sets the Cooling of the Selected PMT ON or OFF
+	int					(* SetPMT_Cooling) 			(VUPhotonCtr_type* self, int PMTnr, BOOL value);
+		// Sets the Gain and Threshold of the Selected PMT
+	int					(* SetPMT_GainThresh) 		(VUPhotonCtr_type* self, int PMTnr, double gain,double threshold);
+		// Updates status display of Photon Counter from structure data
+	int					(* UpdateVUPhotonCtrDisplay) (VUPhotonCtr_type* self);
 
-		void				(* DimWhenRunning)			(VUPhotonCtr_type* self, BOOL dimmed);
-			// Sets the Test Mode of the PMT Controller
-		int					(* SetTestMode) 			(VUPhotonCtr_type* self, BOOL value);
-			// Resets the PMT Controller
-		int					(* ResetController) 		(VUPhotonCtr_type* self);
-			 // Resets the Fifo of thePMT Controller
-		int					(* ResetFifo) 		        (VUPhotonCtr_type* self);
+	void				(* DimWhenRunning)			(VUPhotonCtr_type* self, BOOL dimmed);
+		// Sets the Test Mode of the PMT Controller
+	int					(* SetTestMode) 			(VUPhotonCtr_type* self, BOOL value);
+		// Resets the PMT Controller
+	int					(* ResetController) 		(VUPhotonCtr_type* self);
+		 // Resets the Fifo of thePMT Controller
+	int					(* ResetFifo) 		        (VUPhotonCtr_type* self);
 };
 
 //==============================================================================
@@ -222,12 +224,12 @@ static int PMTController_ResetFifo(void);
 //-----------------------------------------
 
 static FCallReturn_type*	ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*	IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void					IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
 static FCallReturn_type*	DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type* 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type* 	ErrorTC 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
 static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
 
@@ -299,7 +301,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 
 		// METHODS
 			// assign default controls callback to UI_VUPhotonCtr.uir panel
-	vupc->uiCtrlsCB				= VUPCChannel_CB;
+	vupc->uiCtrlsCB					= VUPCChannel_CB;
 
 
 
@@ -1147,7 +1149,7 @@ static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const*
 	return init_FCallReturn_type(0, "", "");
 }
 
-static FCallReturn_type* IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	double timeout=3.0;
@@ -1159,9 +1161,6 @@ static FCallReturn_type* IterateTC (TaskControl_type* taskControl, size_t curren
 	Setnrsamples_in_iteration(vupc->measmode,vupc->DevSamplingRate,vupc->DevNSamples); 
 	
 	PMTStartAcq(vupc->measmode,currentIteration,taskControl);
-
-
-	return init_FCallReturn_type(0, "", "");
 
 }
 
@@ -1214,7 +1213,7 @@ static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abo
 	return init_FCallReturn_type(0, "", "");
 }
 
-static FCallReturn_type* ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+static void ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	int error=0;

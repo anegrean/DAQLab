@@ -20,6 +20,7 @@
 		
 #include "ActiveXML.h"        // must be first to be included 
 #include "cvidef.h"
+#include <toolbox.h>
 #include <userint.h>
 #include <utility.h>
 #include "VChannel.h"
@@ -112,8 +113,10 @@ BOOL				DLValidateVChanName				(char newVChanName[], void* null);
 // DAQLab handy programmer's tools
 //-------------------------------------------------------------------------------
 
-	// installs callback data and callback function in all controls directly within panel 
+	// Installs callback data and callback function in all controls directly within panel 
 int		SetCtrlsInPanCBInfo 			(void* callbackData, CtrlCallbackPtr callbackFn, int panHndl);
+	// Checks if all strings in a list are unique; strings must be of char* type
+BOOL	DLUniqueStrings					(ListType stringList, size_t* idx);
 
 //-------------------------------------------------------------------------------
 // DAQLab user interface management

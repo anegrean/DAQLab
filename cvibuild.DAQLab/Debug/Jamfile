@@ -30,7 +30,7 @@ HDRS = 	"c:\\program files (x86)\\national instruments\\cvi2013\\include"
 	"c:\\ProgramData\\National Instruments\\CVI2013\\bin"
 	"c:\\Program Files (x86)\\National Instruments\\Shared\\CVI\\Bin"
 	"d:\\ELE_DAQLab\\Modules"
-	"d:\\ELE_DAQLab\\Modules\\NIDAQmx"
+	"d:\\ELE_DAQLab\\Modules\\NIDAQmxDev"
 	"d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage\\drivers and docs\\PI_GCS"
 	"d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage"
 	"d:\\ELE_DAQLab\\Framework\\Execution control"
@@ -49,11 +49,11 @@ FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" = 2 ;
 DEFPROTS on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj.cvidefprots" ;
 OUTFILE on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj.out" ;
 PrjObjects += "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" ;
-Object "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmx.obj" : "d:\\ELE_DAQLab\\Modules\\NIDAQmx\\NIDAQmx.c" ;
-FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmx.obj" = 3 ;
-DEFPROTS on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmx.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmx.obj.cvidefprots" ;
-OUTFILE on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmx.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmx.obj.out" ;
-PrjObjects += "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmx.obj" ;
+Object "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmxDev.obj" : "d:\\ELE_DAQLab\\Modules\\NIDAQmxDev\\NIDAQmxDev.c" ;
+FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmxDev.obj" = 3 ;
+DEFPROTS on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmxDev.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmxDev.obj.cvidefprots" ;
+OUTFILE on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmxDev.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmxDev.obj.out" ;
+PrjObjects += "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmxDev.obj" ;
 Object "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" : "d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage\\PIStage.c" ;
 FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" = 4 ;
 DEFPROTS on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj.cvidefprots" ;

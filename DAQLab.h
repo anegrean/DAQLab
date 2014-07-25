@@ -28,7 +28,9 @@
 // Constants
 
 	// Max number of characters for a virtual channel name
-#define	DAQLAB_MAX_VCHAN_NAME	50	
+#define	DAQLAB_MAX_VCHAN_NAME	50
+	// maximum DAQLab module instance name length
+#define DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS		50
 		
 //==============================================================================
 // Macros
@@ -122,6 +124,11 @@ void	DLMsg							(const char* text, BOOL beep);
 	// displays a popup box where the user can give a string after which a validate function pointer is called
 char*	DLGetUINameInput				(char popupWndName[], size_t maxInputLength, ValidateInputFptr_type validateInputFptr, void* dataPtr);
 
+//-------------------------------------------------------------------------------
+// DAQLab module management
+//-------------------------------------------------------------------------------
+
+BOOL DAQLab_ValidModuleName (char name[], void* listPtr);
 
 //-------------------------------------------------------------------------------
 // DAQLab XML management

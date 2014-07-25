@@ -1,8 +1,0 @@
-[initalloc_PIMercuryC863]
-Class="Function"
-Prototype="struct DAQLabModule *initalloc_PIMercuryC863(struct DAQLabModule *mod);"
-
-[discard_PIMercuryC863]
-Class="Function"
-Prototype="void discard_PIMercuryC863(struct DAQLabModule *mod);"
-

@@ -36,8 +36,8 @@ Folder 6 = "Framework/Execution control "
 FolderEx 6 = "Framework/Execution control "
 Folder 7 = "Framework/Virtual channels"
 FolderEx 7 = "Framework/Virtual channels"
-Folder 8 = "Modules/NIDAQmx"
-FolderEx 8 = "Modules/NIDAQmx"
+Folder 8 = "Modules/NIDAQmxDev"
+FolderEx 8 = "Modules/NIDAQmxDev"
 
 [File 0001]
 File Type = "CSource"
@@ -314,12 +314,12 @@ File Type = "CSource"
 Res Id = 23
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/NIDAQmx/NIDAQmx.c"
-Path = "/d/ELE_DAQLab/Modules/NIDAQmx/NIDAQmx.c"
+Path Rel Path = "Modules/NIDAQmxDev/NIDAQmxDev.c"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmxDev/NIDAQmxDev.c"
 Exclude = False
 Compile Into Object File = False
 Project Flags = 0
-Folder = "Modules/NIDAQmx"
+Folder = "Modules/NIDAQmxDev"
 Folder Id = 8
 
 [File 0024]
@@ -327,11 +327,11 @@ File Type = "Include"
 Res Id = 24
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/NIDAQmx/NIDAQmx.h"
-Path = "/d/ELE_DAQLab/Modules/NIDAQmx/NIDAQmx.h"
+Path Rel Path = "Modules/NIDAQmxDev/NIDAQmxDev.h"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmxDev/NIDAQmxDev.h"
 Exclude = False
 Project Flags = 0
-Folder = "Modules/NIDAQmx"
+Folder = "Modules/NIDAQmxDev"
 Folder Id = 8
 
 [File 0025]
@@ -339,11 +339,11 @@ File Type = "Include"
 Res Id = 25
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/NIDAQmx/UI_NIDAQmx.h"
-Path = "/d/ELE_DAQLab/Modules/NIDAQmx/UI_NIDAQmx.h"
+Path Rel Path = "Modules/NIDAQmxDev/UI_NIDAQmxDev.h"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmxDev/UI_NIDAQmxDev.h"
 Exclude = False
 Project Flags = 0
-Folder = "Modules/NIDAQmx"
+Folder = "Modules/NIDAQmxDev"
 Folder Id = 8
 
 [File 0026]
@@ -351,11 +351,11 @@ File Type = "User Interface Resource"
 Res Id = 26
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/NIDAQmx/UI_NIDAQmx.uir"
-Path = "/d/ELE_DAQLab/Modules/NIDAQmx/UI_NIDAQmx.uir"
+Path Rel Path = "Modules/NIDAQmxDev/UI_NIDAQmxDev.uir"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmxDev/UI_NIDAQmxDev.uir"
 Exclude = False
 Project Flags = 0
-Folder = "Modules/NIDAQmx"
+Folder = "Modules/NIDAQmxDev"
 Folder Id = 8
 
 [File 0027]

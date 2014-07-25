@@ -51,8 +51,6 @@
 
 	// maximum number of characters allowed for a UI Task Controller name
 #define DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS		50
-	// maximum DAQLab module instance name length
-#define DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS		50
 
 //==============================================================================
 // Types
@@ -119,7 +117,7 @@ typedef struct {						  // Glues UI Task Controller to panel handle
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
 	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
-	{ MOD_NIDAQmx_NAME, initalloc_NIDAQmx, TRUE, 0 }
+	{ MOD_NIDAQmxDev_NAME, initalloc_NIDAQmxDev, FALSE, 0 }
 	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 }
 	
 };
@@ -199,9 +197,6 @@ static int					DAQLab_SaveXMLEnvironmentConfig			(void);
 static int					DAQLab_VariantToType					(VARIANT* variantVal, DAQLabXMLTypes vartype, void* value);
 
 static BOOL					DAQLab_ValidControllerName				(char name[], void* listPtr);
-
-static BOOL					DAQLab_ValidModuleName					(char name[], void* listPtr);  
-
 
 
 //-----------------------------------------
@@ -1343,7 +1338,7 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 
 
 
-static BOOL	DAQLab_ValidModuleName (char name[], void* listPtr)
+BOOL DAQLab_ValidModuleName (char name[], void* listPtr)
 {
 	ListType				modules = *(ListType*)listPtr;
 	DAQLabModule_type**		modulePtrPtr;

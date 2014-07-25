@@ -1,8 +1,0 @@
-[initalloc_NIDAQmx]
-Class="Function"
-Prototype="struct DAQLabModule *initalloc_NIDAQmx(struct DAQLabModule *mod, char *className, char *instanceName);"
-
-[discard_NIDAQmx]
-Class="Function"
-Prototype="void discard_NIDAQmx(struct DAQLabModule **mod);"
-

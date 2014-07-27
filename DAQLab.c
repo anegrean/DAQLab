@@ -24,7 +24,7 @@
 
 #include "PIStage.h"
 #include "VUPhotonCtr.h"
-#include "NIDAQmxDev.h"
+#include "NIDAQmxManager.h"
 
 
 
@@ -80,14 +80,16 @@ typedef struct {
 // required data type.
 
 typedef enum _DAQLabMessageID{
-											// parameter types (data1, data2, data3, data4)
-	// errors								// to pass in DAQLab_Msg
-	DAQLAB_MSG_ERR_DOM_CREATION,			// HRESULT* error code, 0, 0, 0
-	DAQLAB_MSG_ERR_ACTIVEXML,				// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0
-	DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, // HRESULT* error code, 0, 0, 0
-	DAQLAB_MSG_ERR_LOADING_MODULE,			// char* module instance name, char* error description
-	DAQLAB_MSG_ERR_VCHAN_NOT_FOUND,			// VChan_type*, 0, 0, 0
-	DAQLAB_MSG_ERR_NOT_UNIQUE_CLASS_NAME,	// char* class name, 0, 0, 0
+													// parameter types (data1, data2, data3, data4)
+	// errors										// to pass in DAQLab_Msg
+	DAQLAB_MSG_ERR_DOM_CREATION,					// HRESULT* error code, 0, 0, 0
+	DAQLAB_MSG_ERR_ACTIVEXML,						// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0
+	DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, 		// HRESULT* error code, 0, 0, 0
+	DAQLAB_MSG_ERR_LOADING_MODULE,					// char* module instance name, char* error description
+	DAQLAB_MSG_ERR_VCHAN_NOT_FOUND,					// VChan_type*, 0, 0, 0
+	DAQLAB_MSG_ERR_NOT_UNIQUE_CLASS_NAME,			// char* class name, 0, 0, 0
+	DAQLAB_MSG_ERR_NOT_UNIQUE_INSTANCE_NAME,		// char* instance name, 0, 0, 0
+	DAQLAB_MSG_ERR_NOT_UNIQUE_TASKCONTROLLER_NAME,	// char* task controller name, 0, 0, 0
 	
 	
 	
@@ -120,7 +122,7 @@ typedef struct {						  // Glues UI Task Controller to panel handle
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
 	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 }
-//	{ MOD_NIDAQmxDev_NAME, initalloc_NIDAQmxDev, FALSE, 0 }
+//	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 }
 	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 }
 	
 };
@@ -149,11 +151,15 @@ static struct TasksUI_ {								// UI data container for Task Controllers
 	int			menuItem_SubTasks;
 	ListType	UItaskCtrls;							// UI Task Controllers of UITaskCtrl_type*   
 	
-} 						TasksUI				= {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+} 				TasksUI						= {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	
-	// Different modules that inherit from DAQLabModule_type 
-	// List elements of DAQLabModule_type* type
+	// List of modules loaded in the framework. Modules inherit from DAQLabModule_type 
+	// List of DAQLabModule_type* type
 ListType		DAQLabModules				= 0;
+
+	// List of Task Controllers provided by all modules (including UI Task Controllers) to the framework
+	// List of TaskControl_type* type
+ListType		DAQLabTCs				= 0;
 
 	// Virtual channels from all the modules that register such channels with the framework
 	// List elements of VChan_type* type
@@ -165,41 +171,47 @@ ListType		VChannels					= 0;
 // Static functions
 //==============================================================================
 
-static int					DAQLab_Load 							(void);
+static int					DAQLab_Load 								(void);
 
-static int 					DAQLab_Close 							(void);
+static int 					DAQLab_Close 								(void);
 
-static void 				DAQLab_Msg 								(DAQLabMessageID msgID, void* data1, void* data2, void* data3, void* data4);
+static void 				DAQLab_Msg 									(DAQLabMessageID msgID, void* data1, void* data2, void* data3, void* data4);
 
-static int					DAQLab_NewXMLDOM	   					(const char fileName[], CAObjHandle* xmlDOM, ActiveXMLObj_IXMLDOMElement_* rootElement); 
+static int					DAQLab_NewXMLDOM	   						(const char fileName[], CAObjHandle* xmlDOM, ActiveXMLObj_IXMLDOMElement_* rootElement); 
 
-static int					DAQLab_SaveXMLDOM						(const char fileName[], CAObjHandle* xmlDOM);
+static int					DAQLab_SaveXMLDOM							(const char fileName[], CAObjHandle* xmlDOM);
 
-static UITaskCtrl_type*		DAQLab_AddTaskControllerToUI			(TaskControl_type* taskControl);
+static UITaskCtrl_type*		DAQLab_AddTaskControllerToUI				(TaskControl_type* taskControl);
 
-static int					DAQLab_RemoveTaskControllerFromUI		(int index);
+static int					DAQLab_RemoveTaskControllerFromUI			(int index);
 
-static void					DAQLab_RedrawTaskControllerUI			(void);
+static BOOL					DAQLab_RemoveTaskControllersFromFramework 	(ListType tcList);	// of TaskControl_type*
 
-static void CVICALLBACK 	DAQLab_TaskMenu_CB 						(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+static BOOL					DAQLab_AddTaskControllersToFramework		(ListType tcList);	// of TaskControl_type*
 
-static void					DAQLab_TaskMenu_AddTaskController 		(void);
+static void					DAQLab_RedrawTaskControllerUI				(void);
 
-static void					DAQLab_TaskMenu_DeleteTaskController 	(void);
+static void CVICALLBACK 	DAQLab_TaskMenu_CB 							(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 
-static void					DAQLab_TaskMenu_ManageSubTasks 			(void);
+static void					DAQLab_TaskMenu_AddTaskController 			(void);
 
-static int CVICALLBACK 		DAQLab_TaskControllers_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static void					DAQLab_TaskMenu_DeleteTaskController 		(void);
 
-static UITaskCtrl_type*		DAQLab_init_UITaskCtrl_type				(TaskControl_type* taskControl);  	
+static void					DAQLab_TaskMenu_ManageSubTasks 				(void);
 
-static void					DAQLab_discard_UITaskCtrl_type			(UITaskCtrl_type** a);
+static int CVICALLBACK 		DAQLab_TaskControllers_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int					DAQLab_SaveXMLEnvironmentConfig			(void);
+static UITaskCtrl_type*		DAQLab_init_UITaskCtrl_type					(TaskControl_type* taskControl);  	
 
-static int					DAQLab_VariantToType					(VARIANT* variantVal, DAQLabXMLTypes vartype, void* value);
+static void					DAQLab_discard_UITaskCtrl_type				(UITaskCtrl_type** a);
 
-static BOOL					DAQLab_ValidControllerName				(char name[], void* listPtr);
+static int					DAQLab_SaveXMLEnvironmentConfig				(void);
+
+static int					DAQLab_VariantToType						(VARIANT* variantVal, DAQLabXMLTypes vartype, void* value);
+
+static BOOL					DAQLab_ValidControllerName					(char name[], void* listPtr);
+
+static BOOL 				DAQLab_CheckValidModuleName 				(char name[], void* dataPtr);
 
 
 //-----------------------------------------
@@ -307,6 +319,7 @@ static int DAQLab_Load (void)
 		// Framework
 	nullChk ( TasksUI.UItaskCtrls 		= ListCreate(sizeof(UITaskCtrl_type*)) );	// list with UI Task Controllers
 	nullChk ( DAQLabModules   			= ListCreate(sizeof(DAQLabModule_type*)) );	// list with loaded DAQLab modules
+	nullChk ( DAQLabTCs			= ListCreate(sizeof(TaskControl_type*)) );	// list with loaded Task Controllers
 	nullChk ( VChannels		   			= ListCreate(sizeof(VChan_type*)) );		// list with Virtual Channels
 	
 	
@@ -364,8 +377,16 @@ static int DAQLab_Load (void)
 	for (int i = 0; i < nUITaskControlers; i++) {
 		// get xml Task Controller Node
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlUITaskControlers, &xmlERRINFO, i, &xmlTaskControllerNode) );
+		
 		// read in attributes
 		errChk( DLGetXMLNodeAttributes(xmlTaskControllerNode, attr2, NumElem(attr2)) ); 
+		
+		// check if Task Controller name is unique
+		if (!DLValidTaskControllerName(UITCName)) {
+			DAQLab_Msg(DAQLAB_MSG_ERR_NOT_UNIQUE_TASKCONTROLLER_NAME, UITCName, NULL, NULL, NULL);
+			return -1;
+		}
+		
 		// create new UI Task Controller
 		newTaskControllerPtr = init_TaskControl_type (UITCName, DAQLab_ConfigureUITC, DAQLab_IterateUITC, DAQLab_StartUITC, 
 												 	  DAQLab_ResetUITC, DAQLab_DoneUITC, DAQLab_StoppedUITC, NULL, NULL, DAQLab_ErrorUITC); 
@@ -380,7 +401,7 @@ static int DAQLab_Load (void)
 		SetTaskControlIterationsWait(newTaskControllerPtr, UITCWait);
 		// set UITC mode (finite/continuous)
 		SetTaskControlMode(newTaskControllerPtr, UITCMode);
-		// add new Task Controller to the environment
+		// add new Task Controller to the environment and framework
 		UITaskCtrlsPtr = DAQLab_AddTaskControllerToUI(newTaskControllerPtr);
 		// attach callback data to the Task Controller
 		SetTaskControlModuleData(newTaskControllerPtr, UITaskCtrlsPtr);
@@ -506,6 +527,9 @@ static int DAQLab_Close (void)
 	// dispose modules list
 	DAQLabModule_empty (&DAQLabModules);
 	
+	// discard Task Controller list
+	ListDispose(DAQLabTCs);
+	
 	// discard VChans list
 	ListDispose(VChannels);  
 	
@@ -563,7 +587,7 @@ int	SetCtrlsInPanCBInfo (void* callbackData, CtrlCallbackPtr callbackFn, int pan
 }
 
 /// HIFN Checks if all strings in a list are unique.
-/// OUT idx/ 1-based index of string item in the list that is not unique. If items are unique than this is 0.
+/// HIPAR idx/ 1-based index of string item in the list that is not unique. If items are unique than this is 0.
 /// HIRET True if all strings are unique, False otherwise.
 BOOL DLUniqueStrings (ListType stringList, size_t* idx)
 {
@@ -583,6 +607,29 @@ BOOL DLUniqueStrings (ListType stringList, size_t* idx)
 	
 	if (idx) *idx = 0;
 	return TRUE;
+}
+
+
+/// HIFN Copies a list of strings to a new list.
+/// HIPAR src/ list of char* null-terminated strings.
+/// HIRET New list of strings if succesful, otherwise 0.
+ListType StringListCpy(ListType src)
+{
+	ListType 	dest 		= ListCreate(sizeof(char*));
+	int 		n 			= ListNumItems(src);
+  	char* 		dupStr;
+	char** 		stringPtr 	= NULL;
+	
+	if (!dest) return 0;
+	
+	while (n){	  
+		stringPtr 	= ListGetPtrToItem(src, n);	  
+		dupStr 		= StrDup (*stringPtr);
+  		ListInsertItem (dest, &dupStr, FRONT_OF_LIST);
+  		n--;
+	}
+	
+	return dest;
 }
 
 /// HIFN Registers a VChan with the DAQLab framework.
@@ -745,6 +792,16 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 		case DAQLAB_MSG_ERR_NOT_UNIQUE_CLASS_NAME:
 			DLMsg((char*)data1, 1);
 			DLMsg(" is not a unique module class name.\n\n", 0);
+			break;
+			
+		case DAQLAB_MSG_ERR_NOT_UNIQUE_INSTANCE_NAME:
+			DLMsg((char*)data1, 1);
+			DLMsg(" is not a unique module instance name.\n\n", 0);
+			break;
+			
+		case DAQLAB_MSG_ERR_NOT_UNIQUE_TASKCONTROLLER_NAME:
+			DLMsg((char*)data1, 1);
+			DLMsg(" is not a unique Task Controller name.\n\n", 0);
 			break;
 			
 		case DAQLAB_MSG_OK_DOM_CREATION:
@@ -1212,7 +1269,7 @@ static void	DAQLab_discard_UITaskCtrl_type	(UITaskCtrl_type** a)
 	OKfree(*a);
 }
 
-/// HIFN Adds a Task Controller to the user interface.
+/// HIFN Adds a Task Controller to the user interface and to the framework
 /// HIRET 0 for success, -1 error.
 static UITaskCtrl_type* DAQLab_AddTaskControllerToUI (TaskControl_type* taskControl)    
 {
@@ -1220,6 +1277,9 @@ static UITaskCtrl_type* DAQLab_AddTaskControllerToUI (TaskControl_type* taskCont
 	UITaskCtrl_type*	newUItaskCtrlPtr;
 	
 	if (!taskControl) return NULL;
+	
+	// add Task Controller to the framework
+	ListInsertItem(DAQLabTCs, &taskControl, END_OF_LIST);
 	
 	newUItaskCtrlPtr = DAQLab_init_UITaskCtrl_type(taskControl);
 	
@@ -1251,6 +1311,13 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 		state != TASK_STATE_INITIAL && state != TASK_STATE_IDLE && state != TASK_STATE_DONE && state != TASK_STATE_ERROR)
 		return -2;
 	
+	// remove from DAQLab framework
+	ListType tcList = ListCreate(sizeof(TaskControl_type*));
+	ListInsertItem(tcList, &(*UItaskCtrlPtrPtr)->taskControl, END_OF_LIST);
+	if (!DAQLab_RemoveTaskControllersFromFramework (tcList))
+		return -1;
+	ListDispose(tcList);
+	
 	DAQLab_discard_UITaskCtrl_type(UItaskCtrlPtrPtr);
 	
 	ListRemoveItem(TasksUI.UItaskCtrls, 0, index);
@@ -1258,6 +1325,77 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 	DAQLab_RedrawTaskControllerUI();
 	
 	return 0;
+}
+
+/// HIFN Removes a list of Task Controllers provided by tcList as TaskControl_type* list elements from the DAQLab framework.
+/// HIRET True if all Task Controllers were removed successfully or if there are no Task Controllers to be removed, False otherwise.
+static BOOL DAQLab_RemoveTaskControllersFromFramework (ListType tcList)
+{
+	TaskControl_type** 	tcToBeRemovedPtrPtr;
+	TaskControl_type** 	tcPtrPtr;
+	size_t				nRemoved				= 0;
+	
+	size_t n = ListNumItems(tcList);
+	size_t m = ListNumItems(DAQLabTCs);
+	for (size_t i = 1; i <= n; i++) {
+		tcToBeRemovedPtrPtr = ListGetPtrToItem(tcList, i);
+		for (size_t j = 1; j <= m; j++) {
+			tcPtrPtr			= ListGetPtrToItem(DAQLabTCs, j);
+			if (*tcToBeRemovedPtrPtr == *tcPtrPtr) {
+				ListRemoveItem(DAQLabTCs, 0, j);
+				nRemoved++;
+			}
+		}
+	}
+			
+	return (nRemoved == n);
+}
+
+/// HIFN Adds a list of Task Controllers provided by tcList as TaskControl_type* list elements to the DAQLab framework if their names are unique.
+/// HIRET TRUE if successful or if list is empty.
+/// HIRET FALSE if Task Controller names in tcList and the framework are not unique.
+static BOOL DAQLab_AddTaskControllersToFramework (ListType tcList)
+{
+	ListType 	tcNamesList 	= ListCreate(sizeof(char*));
+	size_t		nTCs			= ListNumItems(tcList);
+	char**		tcNamePtr;
+	size_t		tcNameIdx;
+	
+	if (!nTCs) return 0;
+	
+	//---------------------------------------------------------
+	// check if the Task Controllers provided have unique names
+	//---------------------------------------------------------
+	
+	// build up list with Task Controller names
+	for (size_t i = 1; i <= nTCs; i++) {
+		tcNamePtr = ListGetPtrToItem(tcList, i);
+		ListInsertItem(tcNamesList, tcNamePtr, END_OF_LIST);
+	}
+	// check if names are unique among themselves
+	if (!DLUniqueStrings(tcNamesList, &tcNameIdx)) {
+		tcNamePtr = ListGetPtrToItem(tcNamesList, tcNameIdx);
+		DAQLab_Msg(DAQLAB_MSG_ERR_NOT_UNIQUE_TASKCONTROLLER_NAME, *tcNamePtr, NULL, NULL, NULL);	
+		ListDispose(tcNamesList);
+		return FALSE;	
+	}
+	ListDispose(tcNamesList);
+	// check if names are unique within the framework
+	for (size_t i = 1; i <= nTCs; i++) {
+		tcNamePtr = ListGetPtrToItem(tcList, i);
+		if (!DLValidTaskControllerName(*tcNamePtr)) {
+			DAQLab_Msg(DAQLAB_MSG_ERR_NOT_UNIQUE_TASKCONTROLLER_NAME, *tcNamePtr, NULL, NULL, NULL);	
+			return FALSE;
+		}
+	}
+	
+	//--------------------------------------
+	// add Task Controllers to the framework
+	//--------------------------------------
+	
+	ListAppend(DAQLabTCs, tcList);
+	
+	return TRUE;
 }
 
 static void	DAQLab_RedrawTaskControllerUI (void)
@@ -1386,15 +1524,19 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 	return;
 }
 
-
-
-BOOL DAQLab_ValidModuleName (char name[], void* listPtr)
+static BOOL DAQLab_CheckValidModuleName (char name[], void* dataPtr)
 {
-	ListType				modules = *(ListType*)listPtr;
+	return DLValidModuleInstanceName(name);	
+}
+
+/// HIFN Checks if module instance name is unique and valid.
+/// HIRET True if name is unique and valid, False otherwise.
+BOOL DLValidModuleInstanceName (char name[])
+{
 	DAQLabModule_type**		modulePtrPtr;
 	
-	for (int i = 1; i <= ListNumItems(modules); i++) {
-		modulePtrPtr = ListGetPtrToItem(modules , i);
+	for (int i = 1; i <= ListNumItems(DAQLabModules); i++) {
+		modulePtrPtr = ListGetPtrToItem(DAQLabModules, i);
 		if (!strcmp((*modulePtrPtr)->instanceName, name)) return FALSE; // module with same instance name exists already
 	}
 	
@@ -1403,8 +1545,6 @@ BOOL DAQLab_ValidModuleName (char name[], void* listPtr)
 
 int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	
-	
 	switch (event)
 	{
 		case EVENT_COMMIT:
@@ -1427,18 +1567,34 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					GetCtrlIndex(panel, ModulesPan_Available, &moduleidx);
 					
 					if (DAQLabModules_InitFunctions[moduleidx].multipleInstancesFlag) {
-						newInstanceName = DLGetUINameInput ("New Module Instance", DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS, DAQLab_ValidModuleName, &DAQLabModules);
+						newInstanceName = DLGetUINameInput ("New Module Instance", DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS, DAQLab_CheckValidModuleName, NULL);
 						if (!newInstanceName) return 0; // operation cancelled, do nothing
-					} else
+					} else 
 						// use class name as instance name since there is only one instance
-						newInstanceName = StrDup(DAQLabModules_InitFunctions[moduleidx].className);
+						// check if class name is unique among existing module instance names
+						if (!DLValidModuleInstanceName(DAQLabModules_InitFunctions[moduleidx].className)) {
+							// ask for unique instance name
+							newInstanceName = DLGetUINameInput ("New Module Instance", DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS, DAQLab_CheckValidModuleName, NULL);
+							if (!newInstanceName) return 0; // operation cancelled, do nothing
+						} else
+							newInstanceName = StrDup(DAQLabModules_InitFunctions[moduleidx].className);
 					
 					// call module init function
 					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[moduleidx].className, newInstanceName);
+					
+					// try to add the Task Controllers to the framework if their names are unique
+					if (!DAQLab_AddTaskControllersToFramework(newModulePtr->taskControllers)) {
+						// discard module
+						(*newModulePtr->Discard) (&newModulePtr);
+						return 0;
+					}
+					
 					// call module load function
 					if ( (*newModulePtr->Load) 	(newModulePtr, mainPanHndl) < 0) {
+						// remove the added Task Controllers from the framework
+						DAQLab_RemoveTaskControllersFromFramework(newModulePtr->taskControllers);
 						// dispose of module if not loaded properly
-						(*newModulePtr->Discard ) 	(&newModulePtr);
+						(*newModulePtr->Discard) 	(&newModulePtr);
 						break;
 					}
 					// display module panels if method is defined
@@ -1485,6 +1641,8 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 									DAQLabModules_InitFunctions[j].nInstances--;
 									break;
 								}
+							// remove Task Controllers from the framework
+							DAQLab_RemoveTaskControllersFromFramework((*modulePtrPtr)->taskControllers);
 							// call module discard function
 							(*(*modulePtrPtr)->Discard)	(modulePtrPtr);
 							// also remove from DAQLab modules list
@@ -1567,23 +1725,28 @@ char* DLGetUINameInput (char popupWndName[], size_t maxInputLength, ValidateInpu
 
 static BOOL	DAQLab_ValidControllerName (char name[], void* listPtr)
 {
-	ListType			controllerList		= *(ListType*) listPtr;
-	BOOL 				foundFlag 			= FALSE; 
-	UITaskCtrl_type**	UITaskCtrlsPtrPtr;
-	char*				nameTC				= NULL;
+	return DLValidTaskControllerName (name);
+}
+
+BOOL DLValidTaskControllerName (char name[])
+{
+	TaskControl_type**	taskControlPtrPtr;
+	char*				nameTC				= NULL; 
+	BOOL 				foundFlag 			= FALSE;
+	size_t				n					= ListNumItems(DAQLabTCs);
 	
 	// check if there is already another Task Controller with the same name
-	for (size_t i = 1; i <= ListNumItems(controllerList); i++) {
-		UITaskCtrlsPtrPtr = ListGetPtrToItem(controllerList, i);
-		nameTC = GetTaskControlName((*UITaskCtrlsPtrPtr)->taskControl);
-		if (strcmp (nameTC, name) == 0) {
-			foundFlag = TRUE;
-			break;
-		}
+	for (size_t i = 1; i <= n; i++) {
 		OKfree(nameTC);
+		taskControlPtrPtr = ListGetPtrToItem(DAQLabTCs, i);
+		nameTC = GetTaskControlName(*taskControlPtrPtr);
+		if (!strcmp(nameTC, name)) {
+			OKfree(nameTC);
+			return FALSE;
+		}
 	}
 	OKfree(nameTC);
-	return !foundFlag; // valid input if there is no other controller with the same name
+	return TRUE;
 }
 
 static void	DAQLab_TaskMenu_AddTaskController 	(void) 
@@ -1592,7 +1755,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	TaskControl_type* 	newTaskControllerPtr;
 	char*				newControllerName;
 	
-	newControllerName = DLGetUINameInput ("New Task Controller", DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS, DAQLab_ValidControllerName, &TasksUI.UItaskCtrls);
+	newControllerName = DLGetUINameInput ("New Task Controller", DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS, DAQLab_ValidControllerName, NULL);
 	if (!newControllerName) return; // operation cancelled, do nothing
 	
 	// create new task controller
@@ -1603,9 +1766,9 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	if (!newTaskControllerPtr) {
 		DLMsg("Error: Task Controller could not be created.\n\n", 1);
 		return;
-	};
+	}
 	
-	// add new Task Controller to the environment
+	// add new Task Controller to the UI environment and to the framework list
 	UITaskCtrlsPtr = DAQLab_AddTaskControllerToUI(newTaskControllerPtr);
 	
 	// attach callback data to the Task Controller

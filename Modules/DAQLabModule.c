@@ -72,11 +72,12 @@ DAQLabModule_type* initalloc_DAQLabModule (DAQLabModule_type* mod, char classNam
 	
 	// DATA
 	
-	mod->className		= StrDup(className);
-	mod->instanceName	= StrDup(instanceName);
-	mod->XMLNode		= 0;
-	mod->taskControl	= NULL;
-	mod->cfgPanHndl		= 0;
+	mod->className			= StrDup(className);
+	mod->instanceName		= StrDup(instanceName);
+	mod->XMLNode			= 0;
+	mod->taskControllers	= ListCreate(sizeof(TaskControl_type*));
+	if (!mod->taskControllers) {OKfree(mod->className); OKfree(mod->instanceName); OKfree(mod); return NULL;}
+	mod->cfgPanHndl			= 0;
 	
 	// METHODS
 	
@@ -97,7 +98,7 @@ void discard_DAQLabModule (DAQLabModule_type** mod)
 	OKfree((*mod)->className);
 	OKfree((*mod)->instanceName);
 	
-	discard_TaskControl_type(&(*mod)->taskControl);
+	ListDispose((*mod)->taskControllers);
 	
 	if ((*mod)->cfgPanHndl)
 		DiscardPanel((*mod)->cfgPanHndl);

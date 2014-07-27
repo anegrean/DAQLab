@@ -56,6 +56,8 @@ struct Zstage {
 
 	// DATA
 	
+	TaskControl_type*	taskController;
+	
 	int					controlPanHndl;
 	
 		// Current position of Zstage, if NULL, position was not determined.

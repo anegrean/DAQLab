@@ -118,16 +118,28 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 		
 	// initialize base class
 	initalloc_DAQLabModule(&zstage->baseClass, className, instanceName);
+	
+	// initialize Task Controller
+	//
+	// TaskControl_type* tc = init_TaskControl_type (instanceName, Zstage_ConfigureTC, Zstage_IterateTC, Zstage_StartTC, Zstage_ResetTC,
+	//		    			  Zstage_DoneTC, Zstage_StoppedTC, NULL, Zstage_EventHandler,Zstage_ErrorTC); 
+	//
+	// if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ztage); return NULL;}
+	//
+	// connect ZStage module data to Task Controller
+	//
+	// SetTaskControlModuleData(tc, zstage);  
 	//------------------------------------------------------------
 	
 	//---------------------------
 	// Parent Level 0: DAQLabModule_type 
 	
 		// DATA
-	zstage->baseClass.taskControl		= NULL;  //init_TaskControl_type (MOD_Zstage_NAME, Zstage_ConfigureTC, Zstage_IterateTC, Zstage_StartTC, Zstage_ResetTC,
-												 //				 Zstage_DoneTC, Zstage_StoppedTC, NULL, Zstage_EventHandler,Zstage_ErrorTC);   
-			// connect ZStage module data to Task Controller
-												 //SetTaskControlModuleData(zstage->baseClass.taskControl, zstage);
+			
+			// adding Task Controller to module list
+			
+	// ListInsertItem(zstage->baseClass.taskControllers, &tc, END_OF_LIST);  
+												 
 		// METHODS
 	
 			// overriding methods
@@ -140,6 +152,8 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	// Child Level 1: Zstage_type 
 	
 		// DATA
+		
+	// zstage->taskController		= tc;
 	zstage->controlPanHndl			= 0;
 	zstage->zPos					= NULL;
 	zstage->startAbsPos				= NULL;
@@ -187,6 +201,8 @@ void discard_Zstage (DAQLabModule_type** mod)
 	if (!zstage) return;
 	
 	// discard Zstage_type specific data
+	
+	discard_TaskControl_type(&zstage->taskController);
 	
 	if (zstage->controlPanHndl)
 		DiscardPanel(zstage->controlPanHndl);
@@ -287,7 +303,7 @@ int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	}
 	
 	// configure Z Stage Task Controller
-	TaskControlEvent(zstage->baseClass.taskControl, TASK_EVENT_CONFIGURE, NULL, NULL); 
+	TaskControlEvent(zstage->taskController, TASK_EVENT_CONFIGURE, NULL, NULL); 
 	
 	return 0;
 
@@ -303,10 +319,7 @@ static int Zstage_DisplayPanels	(DAQLabModule_type* mod, BOOL visibleFlag)
 	else
 		errChk( HidePanel(zstage->controlPanHndl) );
 	
-	return 0;
-	
 	Error:
-	
 	return error;
 }
 
@@ -389,7 +402,7 @@ static int Zstage_UpdateZSteps (Zstage_type* zstage)
 	errChk( SetCtrlVal(zstage->controlPanHndl, ZStagePan_NSteps, zstage->nZSteps) );
 	
 	// configure Task Controller
-	TaskControlEvent(zstage->baseClass.taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+	TaskControlEvent(zstage->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
 	
 	return 0;
 	
@@ -453,7 +466,7 @@ static int CVICALLBACK Zstage_UICtrls_CB (int panel, int control, int event, voi
 					
 				case ZStagePan_Start:	  // temporary to test z stage controller
 					
-					TaskControlEvent(zstage->baseClass.taskControl, TASK_EVENT_START, NULL, NULL);
+					TaskControlEvent(zstage->taskController, TASK_EVENT_START, NULL, NULL);
 					
 					break;
 			

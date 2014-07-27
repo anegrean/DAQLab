@@ -296,6 +296,9 @@ void discard_TaskControl_type(TaskControl_type** a)
 	CmtTSQHandle*	tsqPtr;
 	if (!*a) return;
 	
+	// disconnect from parent Task Controller if there is any
+	RemoveSubTaskFromParent(*a);
+	
 	OKfree((*a)->taskName);
 	CmtDiscardTSQ((*a)->eventQ);
 	for (size_t i = 1; i <= ListNumItems((*a)->dataQs); i++) {

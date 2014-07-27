@@ -36,8 +36,8 @@ Folder 6 = "Framework/Execution control "
 FolderEx 6 = "Framework/Execution control "
 Folder 7 = "Framework/Virtual channels"
 FolderEx 7 = "Framework/Virtual channels"
-Folder 8 = "Modules/NIDAQmxDev"
-FolderEx 8 = "Modules/NIDAQmxDev"
+Folder 8 = "Modules/NIDAQmxManager"
+FolderEx 8 = "Modules/NIDAQmxManager"
 
 [File 0001]
 File Type = "CSource"
@@ -169,7 +169,7 @@ Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/VUPhotonCtr/HW_VUPC.c"
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/HW_VUPC.c"
-Exclude = True
+Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Modules/VUPhotonCtr"
@@ -218,7 +218,7 @@ Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/VUPhotonCtr/VUPhotonCtr.c"
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.c"
-Exclude = False
+Exclude = True
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Modules/VUPhotonCtr"
@@ -339,12 +339,12 @@ File Type = "CSource"
 Res Id = 25
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/NIDAQmxDev/NIDAQmxDev.c"
-Path = "/d/ELE_DAQLab/Modules/NIDAQmxDev/NIDAQmxDev.c"
-Exclude = True
+Path Rel Path = "Modules/NIDAQmxManager/NIDAQmxManager.c"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/NIDAQmxManager.c"
+Exclude = False
 Compile Into Object File = False
 Project Flags = 0
-Folder = "Modules/NIDAQmxDev"
+Folder = "Modules/NIDAQmxManager"
 Folder Id = 8
 
 [File 0026]
@@ -352,11 +352,11 @@ File Type = "Include"
 Res Id = 26
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/NIDAQmxDev/NIDAQmxDev.h"
-Path = "/d/ELE_DAQLab/Modules/NIDAQmxDev/NIDAQmxDev.h"
+Path Rel Path = "Modules/NIDAQmxManager/NIDAQmxManager.h"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/NIDAQmxManager.h"
 Exclude = False
 Project Flags = 0
-Folder = "Modules/NIDAQmxDev"
+Folder = "Modules/NIDAQmxManager"
 Folder Id = 8
 
 [File 0027]
@@ -364,11 +364,11 @@ File Type = "Include"
 Res Id = 27
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/NIDAQmxDev/UI_NIDAQmxDev.h"
-Path = "/d/ELE_DAQLab/Modules/NIDAQmxDev/UI_NIDAQmxDev.h"
+Path Rel Path = "Modules/NIDAQmxManager/UI_NIDAQmxManager.h"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/UI_NIDAQmxManager.h"
 Exclude = False
 Project Flags = 0
-Folder = "Modules/NIDAQmxDev"
+Folder = "Modules/NIDAQmxManager"
 Folder Id = 8
 
 [File 0028]
@@ -376,11 +376,11 @@ File Type = "User Interface Resource"
 Res Id = 28
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/NIDAQmxDev/UI_NIDAQmxDev.uir"
-Path = "/d/ELE_DAQLab/Modules/NIDAQmxDev/UI_NIDAQmxDev.uir"
+Path Rel Path = "Modules/NIDAQmxManager/UI_NIDAQmxManager.uir"
+Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/UI_NIDAQmxManager.uir"
 Exclude = False
 Project Flags = 0
-Folder = "Modules/NIDAQmxDev"
+Folder = "Modules/NIDAQmxManager"
 Folder Id = 8
 
 [File 0029]

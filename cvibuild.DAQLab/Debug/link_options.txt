@@ -14,10 +14,10 @@
 -stackcommit:4096
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\DAQLab.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\DAQLabModule.obj
+-in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\HW_VUPC.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\PIStage.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\TaskController.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\VChannel.obj
--in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\VUPhotonCtr.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\Zstage.obj
 -more:c:\program files (x86)\national instruments\cvi2013\bin\msvc\cvistart.lib
 -more:c:\program files (x86)\national instruments\cvi2013\bin\msvc\cvi.lib

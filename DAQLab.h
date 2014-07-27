@@ -32,7 +32,8 @@
 #define	DAQLAB_MAX_VCHAN_NAME	50
 	// maximum DAQLab module instance name length
 #define DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS		50
-		
+	// maximum Task Controller name length
+#define DAQLAB_MAX_TASKCONTROLLER_NAME_NCHARS		50		
 //==============================================================================
 // Macros
 
@@ -114,9 +115,13 @@ BOOL				DLValidateVChanName				(char newVChanName[], void* null);
 //-------------------------------------------------------------------------------
 
 	// Installs callback data and callback function in all controls directly within panel 
-int		SetCtrlsInPanCBInfo 			(void* callbackData, CtrlCallbackPtr callbackFn, int panHndl);
+int					SetCtrlsInPanCBInfo 			(void* callbackData, CtrlCallbackPtr callbackFn, int panHndl);
+
 	// Checks if all strings in a list are unique; strings must be of char* type
-BOOL	DLUniqueStrings					(ListType stringList, size_t* idx);
+BOOL				DLUniqueStrings					(ListType stringList, size_t* idx);
+
+	// Copies a list of strings to a new list.
+ListType 			StringListCpy					(ListType src); 
 
 //-------------------------------------------------------------------------------
 // DAQLab user interface management
@@ -124,6 +129,7 @@ BOOL	DLUniqueStrings					(ListType stringList, size_t* idx);
 
 	// displays messages in the main workspace log panel and optionally beeps
 void	DLMsg							(const char* text, BOOL beep);
+
 	// displays a popup box where the user can give a string after which a validate function pointer is called
 char*	DLGetUINameInput				(char popupWndName[], size_t maxInputLength, ValidateInputFptr_type validateInputFptr, void* dataPtr);
 
@@ -131,15 +137,21 @@ char*	DLGetUINameInput				(char popupWndName[], size_t maxInputLength, ValidateI
 // DAQLab module management
 //-------------------------------------------------------------------------------
 
-BOOL DAQLab_ValidModuleName (char name[], void* listPtr);
+	// Checks if module instance name is unique within the framework
+BOOL 	DLValidModuleInstanceName		(char name[]);
+
+	// Checks if Task Controller name is unique within the framework
+BOOL 	DLValidTaskControllerName		(char name[]);
 
 //-------------------------------------------------------------------------------
 // DAQLab XML management
 //-------------------------------------------------------------------------------
 	// adds multiple XML Element children or attributes for a parent XML Element
 int		DLAddToXMLElem					(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes);
+
 	// places the value of multiple XML Attributes of an Element into user provided pointers
 int		DLGetXMLElementAttributes		(ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes);
+
 	// places the value of multiple XML Attributes of a Nodet into user provided pointers
 int 	DLGetXMLNodeAttributes 			(ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes);
 

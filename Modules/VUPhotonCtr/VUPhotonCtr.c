@@ -94,6 +94,12 @@ struct VUPhotonCtr {
 	DAQLabModule_type 	baseClass;
 
 	// DATA
+	
+		//-------------------------
+		// Task Controller
+		//-------------------------
+		
+	TaskControl_type*	taskController;
 
 		//-------------------------
 		// UI
@@ -205,6 +211,8 @@ void CVICALLBACK 					MenuSettings_CB 				(int menuBar, int menuItem, void *call
 
 static int CVICALLBACK 				VUPCPhotonCounter_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
+static BOOL 						ValidTaskControllerName			(char name[], void* dataPtr);
+
 static int PMT_Set_Mode ( int PMTnr, PMT_Mode_type mode);
 static int PMT_Set_Fan ( int PMTnr, BOOL value);
 static int PMT_Set_Cooling ( int PMTnr, BOOL value);
@@ -246,8 +254,9 @@ static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, Tas
 /// HIRET NULL if only initialization was performed.
 DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className[], char instanceName[])
 {
-	VUPhotonCtr_type* vupc;
-
+	VUPhotonCtr_type* 	vupc;
+	TaskControl_type*	tc;
+	
 	if (!mod) {
 		vupc = malloc (sizeof(VUPhotonCtr_type));
 		if (!vupc) return NULL;
@@ -256,18 +265,25 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 
 	// initialize base class
 	initalloc_DAQLabModule(&vupc->baseClass, className, instanceName);
+	
+	// create VUPhotonCtr Task Controller
+	tc = init_TaskControl_type (instanceName, ConfigureTC, IterateTC, StartTC, ResetTC,
+								DoneTC, StoppedTC, NULL, ModuleEventHandler, ErrorTC);
+	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
+	
+	// connect PIStage data to Task Controller
+	SetTaskControlModuleData(tc, vupc);
+	
 	//------------------------------------------------------------
 
 	//---------------------------
 	// Parent Level 0: DAQLabModule_type
 
 		// DATA
-	vupc->baseClass.taskControl		= init_TaskControl_type (MOD_VUPhotonCtr_NAME, ConfigureTC, IterateTC, StartTC, ResetTC,
-												 		     DoneTC, StoppedTC, NULL, ModuleEventHandler, ErrorTC);
-
-
-		// connect VUPhotonCtr module data to Task Controller
-	SetTaskControlModuleData(vupc->baseClass.taskControl, vupc);
+		
+			// adding Task Controller to module list    
+	ListInsertItem(vupc->baseClass.taskControllers, &tc, END_OF_LIST); 
+	
 		// METHODS
 
 		// overriding methods
@@ -282,6 +298,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	// Child Level 1: VUPhotonCtr_type
 
 		// DATA
+	vupc->taskController			= tc;
 	vupc->mainPanHndl				= 0;
 	vupc->statusPanHndl				= 0;
 	vupc->settingsPanHndl			= 0;
@@ -320,10 +337,15 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 
 	if (!vupc) return;
 	
-	//clean up hardware  stuff
-	 PMTController_Finalize();
-
+	//---------------------------------------
 	// discard VUPhotonCtr_type specific data
+	//---------------------------------------
+	
+	// clean up hardware
+	PMTController_Finalize();
+	
+	// discard Task Controller
+	discard_TaskControl_type(&vupc->taskController);
 
 	// discard channel resources
 	for (int i = 0; i < MAX_CHANNELS; i++)
@@ -346,7 +368,10 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	if (vupc->counterPanHndl)
 		DiscardPanel(vupc->counterPanHndl);
 
+	//----------------------------------------
 	// discard DAQLabModule_type specific data
+	//----------------------------------------
+	
 	discard_DAQLabModule(mod);
 }
 
@@ -386,7 +411,7 @@ static void	discard_Channel_type (Channel_type** chan)
 
 void ErrortoTaskController(VUPhotonCtr_type* vupc,int error,char errstring[])
 {
-	if (vupc->baseClass.taskControl!=NULL) AbortTaskControlExecution(vupc->baseClass.taskControl); 
+	if (vupc->taskController!=NULL) AbortTaskControlExecution(vupc->taskController); 
 }
 
 static int InitHardware (VUPhotonCtr_type* vupc)
@@ -494,7 +519,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// configure Photoncounter Task Controller
 	//default settings:
 
-	TaskControlEvent(vupc->baseClass.taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+	TaskControlEvent(vupc->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
 
 
 	return 0;
@@ -1027,7 +1052,7 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 
 				case VUPCTask_Mode:		  //repeat mode
 					GetCtrlVal(panel,control,&mode);
-					SetTaskControlMode	(vupc->baseClass.taskControl,mode);
+					SetTaskControlMode	(vupc->taskController,mode);
 					//set Rio module in right mode
 
 					break;
@@ -1035,12 +1060,12 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 				case VUPCTask_Repeat:
 					GetCtrlVal(panel,control,&repeat);
 					vupc->numiterations=repeat;
-					SetTaskControlIterations (vupc->baseClass.taskControl,repeat);
+					SetTaskControlIterations (vupc->taskController,repeat);
 					break;
 
 				case VUPCTask_Wait:
 					GetCtrlVal(panel,control,&waitBetweenIterations);
-					SetTaskControlIterationsWait (vupc->baseClass.taskControl,waitBetweenIterations);
+					SetTaskControlIterationsWait (vupc->taskController,waitBetweenIterations);
 					//prog RIO module
 					break;
 
@@ -1048,7 +1073,7 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 			}
 
 			// (re) configure Photoncounter Task Controller
-			TaskControlEvent(vupc->baseClass.taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+			TaskControlEvent(vupc->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
 
 			break;
 	}
@@ -1074,12 +1099,12 @@ static int CVICALLBACK VUPCPhotonCounter_CB (int panel, int control, int event, 
 				case CounterPan_TOGGLESTART:
 					// temporary to test photon counting controller
 					GetCtrlVal(panel,control,&start);
-					if (start) TaskControlEvent(vupc->baseClass.taskControl, TASK_EVENT_START, NULL, NULL);
+					if (start) TaskControlEvent(vupc->taskController, TASK_EVENT_START, NULL, NULL);
 					else {
 						//stop iteration in continuous mode?
 					//	PMTStopAcq();
-					//	if (vupc->measmode==MEASMODE_CONTINUOUS) TaskControlIterationDone (vupc->baseClass.taskControl, 0,NULL);
-						TaskControlEvent(vupc->baseClass.taskControl, TASK_EVENT_STOP, NULL, NULL);
+					//	if (vupc->measmode==MEASMODE_CONTINUOUS) TaskControlIterationDone (vupc->taskController, 0,NULL);
+						TaskControlEvent(vupc->taskController, TASK_EVENT_STOP, NULL, NULL);
 					}
 					break;
 
@@ -1105,6 +1130,11 @@ static int CVICALLBACK VUPCPhotonCounter_CB (int panel, int control, int event, 
 	}
 
 	return 0;
+}
+
+static BOOL ValidTaskControllerName	(char name[], void* dataPtr)
+{
+	return DLValidTaskControllerName(name);
 }
 
 void HWIterationDone(TaskControl_type* taskControl,int errorID, char errorInfo[])
@@ -1237,8 +1267,6 @@ static void ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* 
 	// undim items
 	(*vupc->DimWhenRunning) (vupc, FALSE);
 
-
-	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)

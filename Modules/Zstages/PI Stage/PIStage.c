@@ -107,8 +107,9 @@ static FCallReturn_type*	PIStage_EventHandler			(TaskControl_type* taskControl, 
 
 DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], char instanceName[])
 {
-	PIStage_type* 	PIzstage;
-	Zstage_type*  	zstage;
+	PIStage_type* 		PIzstage;
+	Zstage_type*  		zstage;
+	TaskControl_type*	tc;
 	
 	if (!mod) {
 		PIzstage = malloc (sizeof(PIStage_type));
@@ -120,6 +121,15 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 	
 	// initialize base class
 	initalloc_Zstage ((DAQLabModule_type*)zstage, className, instanceName);
+	
+	// create PIStage Task Controller
+	tc = init_TaskControl_type (instanceName, PIStage_ConfigureTC, PIStage_IterateTC, PIStage_StartTC, PIStage_ResetTC,
+											 				 PIStage_DoneTC, PIStage_StoppedTC, NULL, PIStage_EventHandler, PIStage_ErrorTC);
+	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&PIzstage); return NULL;}
+	
+	// connect PIStage data to Task Controller
+	SetTaskControlModuleData(tc, PIzstage);
+	
 	//------------------------------------------------------------
 	
 	//---------------------------
@@ -127,12 +137,9 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 	
 		// DATA
 	
-		// adding PIStage specific Task Controller
-	zstage->baseClass.taskControl	= init_TaskControl_type (zstage->baseClass.instanceName, PIStage_ConfigureTC, PIStage_IterateTC, PIStage_StartTC, PIStage_ResetTC,
-											 				 PIStage_DoneTC, PIStage_StoppedTC, NULL, PIStage_EventHandler, PIStage_ErrorTC);  	
-		// coupling Task Controller module data to PIStage
-	SetTaskControlModuleData(zstage->baseClass.taskControl, PIzstage); 
-		
+		// adding Task Controller to module list
+	ListInsertItem(zstage->baseClass.taskControllers, &tc, END_OF_LIST); 
+	
 		//METHODS
 	
 		// overriding methods
@@ -145,6 +152,9 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 	// Child Level 1: Zstage_type 
 	
 		// DATA
+		
+			// Task Controller
+	zstage->taskController		= tc;
 	
 	
 		// METHODS
@@ -231,7 +241,7 @@ static int PIStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 /// HIFN Moves a motorized stage 
 static int PIStage_Move (Zstage_type* zstage, Zstage_move_type moveType, double moveVal)
 {
-	return TaskControlEvent(zstage->baseClass.taskControl, TASK_EVENT_CUSTOM_MODULE_EVENT, 
+	return TaskControlEvent(zstage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, 
 					 init_PIStageCommand_type(moveType, moveVal), dispose_PIStageCommand_EventInfo); 
 }
 
@@ -253,7 +263,7 @@ static int PIStage_Stop (Zstage_type* zstage)
 	}
 	
 	// stop the Task Controller as well
-	TaskControlEvent(zstage->baseClass.taskControl, TASK_EVENT_STOP, NULL, NULL);
+	TaskControlEvent(zstage->taskController, TASK_EVENT_STOP, NULL, NULL);
 	
 	return 0;
 }

@@ -40,8 +40,8 @@ struct DAQLabModule {
 	char*						instanceName;
 		// module XML node
 	ActiveXMLObj_IXMLDOMNode_	XMLNode;
-		// Task Controller for the module, if any
-	TaskControl_type* 			taskControl;
+		// List of Task Controllers provided by the module to the framework. Of TaskControl_type* 
+	ListType		 			taskControllers;
 		// module configuration panel; one panel per module
 	int							cfgPanHndl;									
 	

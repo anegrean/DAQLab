@@ -54,9 +54,9 @@ Prototype="int DLGetXMLNodeAttributes(CAObjHandle XMLNode, DAQLabXMLNode *Attrib
 Class="Function"
 Prototype="void DAQLab_MenuModules_CB(int menuBar, int menuItem, void *callbackData, int panel);"
 
-[DAQLab_ValidModuleName]
+[DLValidModuleInstanceName]
 Class="Function"
-Prototype="int DAQLab_ValidModuleName(char *name, void *listPtr);"
+Prototype="int DLValidModuleInstanceName(char *name);"
 
 [DAQLab_ManageDAQLabModules_CB]
 Class="Function"
@@ -65,6 +65,10 @@ Prototype="int DAQLab_ManageDAQLabModules_CB(int panel, int control, int event, 
 [DLGetUINameInput]
 Class="Function"
 Prototype="char *DLGetUINameInput(char *popupWndName, unsigned int maxInputLength, int (*validateInputFptr)(char *, void *), void *dataPtr);"
+
+[DLValidTaskControllerName]
+Class="Function"
+Prototype="int DLValidTaskControllerName(char *name);"
 
 [DAQLab_TCDelPan_CB]
 Class="Function"

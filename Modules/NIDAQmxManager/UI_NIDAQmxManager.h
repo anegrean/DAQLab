@@ -23,8 +23,8 @@
 #define  DAQSetPan1_TAB                   2       /* control type: tab, callback function: (none) */
 
 #define  DevListPan                       3
-#define  DevListPan_DAQtable              2       /* control type: table, callback function: (none) */
-#define  DevListPan_CancelBTTN            3       /* control type: command, callback function: ManageDevices_CB */
+#define  DevListPan_DAQTable              2       /* control type: table, callback function: (none) */
+#define  DevListPan_DoneBTTN              3       /* control type: command, callback function: ManageDevices_CB */
 #define  DevListPan_AddBTTN               4       /* control type: command, callback function: ManageDevices_CB */
 #define  DevListPan_Plate                 5       /* control type: deco, callback function: (none) */
 
@@ -33,13 +33,13 @@
 #define  NIDAQmxPan                       5
 #define  NIDAQmxPan_Devices               2       /* control type: tab, callback function: (none) */
 
-#define  PANEL                            6
-#define  PANEL_DelChan                    2       /* control type: command, callback function: CB_DelChan */
-#define  PANEL_AddChan                    3       /* control type: command, callback function: CB_AddChan */
-#define  PANEL_TaskSet                    4       /* control type: tab, callback function: (none) */
-#define  PANEL_ChanSet                    5       /* control type: tab, callback function: (none) */
-#define  PANEL_PhysChan                   6       /* control type: listBox, callback function: (none) */
-#define  PANEL_ChanTypes                  7       /* control type: tree, callback function: CB_ChanTypes */
+#define  TaskSetPan                       6
+#define  TaskSetPan_DelChan               2       /* control type: command, callback function: (none) */
+#define  TaskSetPan_AddChan               3       /* control type: command, callback function: (none) */
+#define  TaskSetPan_TaskSet               4       /* control type: tab, callback function: (none) */
+#define  TaskSetPan_ChanSet               5       /* control type: tab, callback function: (none) */
+#define  TaskSetPan_PhysChan              6       /* control type: listBox, callback function: (none) */
+#define  TaskSetPan_MeasType              7       /* control type: tree, callback function: (none) */
 
      /* tab page panel controls */
 #define  IO_StartTrigSource               2       /* control type: string, callback function: CB_AIAOTaskSet */
@@ -77,12 +77,9 @@
 
      /* Callback Prototypes: */
 
-int  CVICALLBACK CB_AddChan(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK CB_AIAORange(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK CB_AIAOTaskSet(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK CB_AIAOterminal(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-int  CVICALLBACK CB_ChanTypes(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-int  CVICALLBACK CB_DelChan(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK CB_VChanName(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK ManageDevices_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 

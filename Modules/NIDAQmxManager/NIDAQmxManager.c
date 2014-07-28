@@ -22,7 +22,7 @@
 // Constants
 
 	// NIDAQmxManager UI resource 
-#define MOD_NIDAQmxManager_UI_NIDAQmxManager 		"./Modules/NIDAQmxManager/UI_NIDAQmxManager.uir"	
+#define MOD_NIDAQmxManager_UI 		"./Modules/NIDAQmxManager/UI_NIDAQmxManager.uir"	
 	// max number of DAQmx tasks that can be configured on the device.
 #define MAX_DAQmx_TASKS 6
 	// Taskset constants
@@ -191,11 +191,11 @@ typedef struct {
 
 // DAQ Task definition
 typedef struct {
-	DAQmxDevAttr_type*	devAttributes;				// Device to be used during IO task
+	DAQmxDevAttr_type*	attr;						// Device to be used during IO task
 	IOchan_type*    	chan;						// Channels used in the task of IOchan_type
 	TaskControl_type*   taskController;				// Task Controller for the DAQmx module
 	DAQTaskSet_type 	taskset[MAX_DAQmx_TASKS];	// Array of task settings of DAQTaskSet_type// task settings: [0] = AI, [1] = AO, [2] = DI, [3] = DO, [4] = CI, [5] = CO
-} DAQDev_type;
+} DAQmxDev_type;
 
 // Used for continuous data AO streaming
 typedef struct {
@@ -234,13 +234,14 @@ struct NIDAQmxManager {
 	
 	// DATA
 	
-	ListType            DAQmxDevices;   // list of DAQDev_type* for each DAQmx device 
+	ListType            DAQmxDevices;   // list of DAQmxDev_type* for each DAQmx device 
 	
 		//-------------------------
 		// UI
 		//-------------------------
 	
 	int					mainPanHndl;
+	int					taskSetPanHndl;
 	int					devListPanHndl;
 	
 	
@@ -256,16 +257,16 @@ static int	 currDev = -1;        // currently selected device from the DAQ table
 //========================================================================================================================================================================================================
 // Static functions
 
-static DAQDev_type* 		init_DAQDev_type 				(DAQmxDevAttr_type* devAttributes, char instanceName[]);
-static void 				discard_DAQDev_type				(DAQDev_type** a);
+static DAQmxDev_type* 		init_DAQmxDev_type 				(DAQmxDevAttr_type** attr, char taskControllerName[]);
+static void 				discard_DAQmxDev_type			(DAQmxDev_type** a);
 
 static int 					init_DevList 					(ListType devlist, int panHndl, int tableCtrl);
 static void 				empty_DevList 					(ListType devList); 
 
 	// device attributes management
-static int	 				init_DAQmxDevAttr_type			(DAQmxDevAttr_type* a); 
+static DAQmxDevAttr_type* 	init_DAQmxDevAttr_type			(void); 
 static void 				discard_DAQmxDevAttr_type		(DAQmxDevAttr_type** a);
-static DAQmxDevAttr_type* 	copy_DAQmxDevAttr_type			(DAQmxDevAttr_type* devAttributes);
+static DAQmxDevAttr_type* 	copy_DAQmxDevAttr_type			(DAQmxDevAttr_type* attr);
 
 static void					init_IORange_type				(IORange_type* range);
 static void 				discard_IORange_type			(IORange_type* a);
@@ -287,10 +288,11 @@ static int 					DisplayPanels					(DAQLabModule_type* mod, BOOL visibleFlag);
 static int CVICALLBACK 		MainPan_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static void CVICALLBACK 	ManageDevPan_CB 				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 static void CVICALLBACK 	DeleteDev_CB 					(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle); 
+static int 					DAQmxDevTaskSet_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 
 //-----------------------------------------
-// ZStage Task Controller Callbacks
+// NIDAQmx Device Task Controller Callbacks
 //-----------------------------------------
 
 static FCallReturn_type*	ConfigureTC						(TaskControl_type* taskControl, BOOL const* abortFlag);
@@ -359,10 +361,11 @@ DAQLabModule_type*	initalloc_NIDAQmxManager (DAQLabModule_type* mod, char classN
 	// Child Level 1: NIDAQmxManager_type
 	
 		// DATA
-	nidaq->DAQmxDevices				= ListCreate(sizeof(DAQDev_type*));
+	nidaq->DAQmxDevices				= ListCreate(sizeof(DAQmxDev_type*));
 	if (!nidaq->DAQmxDevices) {discard_DAQLabModule((DAQLabModule_type**)&nidaq); return NULL;}
 	
 	nidaq->mainPanHndl				= 0;
+	nidaq->taskSetPanHndl			= 0;
 	nidaq->devListPanHndl			= 0;
 	
 								
@@ -380,7 +383,7 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 {
 	NIDAQmxManager_type* 	nidaq 		= (NIDAQmxManager_type*) (*mod);
 	size_t					nDAQDevs	= ListNumItems(nidaq->DAQmxDevices);
-	DAQDev_type**			DAQDevPtrPtr;
+	DAQmxDev_type**			DAQDevPtrPtr;
 	
 	if (!nidaq) return;
 	
@@ -391,11 +394,19 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 	// discard DAQmx device data
 	for (size_t i = nDAQDevs; i ; i--) {
 		DAQDevPtrPtr = ListGetPtrToItem(nidaq->DAQmxDevices, i);
-		discard_DAQDev_type(DAQDevPtrPtr);
+		discard_DAQmxDev_type(DAQDevPtrPtr);
 	}
 	ListDispose(nidaq->DAQmxDevices);
 	
+	// discard UI
+	if (nidaq->mainPanHndl) {DiscardPanel(nidaq->mainPanHndl); nidaq->mainPanHndl = 0;}
+	if (nidaq->taskSetPanHndl) {DiscardPanel(nidaq->taskSetPanHndl); nidaq->taskSetPanHndl = 0;}
+	if (nidaq->devListPanHndl) {DiscardPanel(nidaq->devListPanHndl); nidaq->devListPanHndl = 0;}
+	
+	//----------------------------------------
 	// discard DAQLabModule_type specific data
+	//----------------------------------------
+	
 	discard_DAQLabModule(mod);
 }
 
@@ -403,9 +414,12 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 // DAQmxDevAttr_type
 //------------------------------------------------------------------------------
 
-static int init_DAQmxDevAttr_type(DAQmxDevAttr_type* a)
+static DAQmxDevAttr_type* init_DAQmxDevAttr_type(void)
 {
 	int error = 0;
+	
+	DAQmxDevAttr_type* a = malloc (sizeof(DAQmxDevAttr_type));
+	if (!a) return NULL;
 	
 	a -> name         	= NULL; // dynamically allocated string
 	a -> type         	= NULL; // dynamically allocated string
@@ -450,7 +464,7 @@ static int init_DAQmxDevAttr_type(DAQmxDevAttr_type* a)
 	init_IORange_type(&a->AIVrngs);
 	init_IORange_type(&a->AOVrngs);
 	
-	return 0;
+	return a;
 	Error:
 	
 	if (a->AIchan) 		ListDispose(a->AIchan);
@@ -462,7 +476,12 @@ static int init_DAQmxDevAttr_type(DAQmxDevAttr_type* a)
 	if (a->CIchan) 		ListDispose(a->CIchan);
 	if (a->COchan) 		ListDispose(a->COchan);
 	
-	return error;
+	discard_IORange_type(&a->AIVrngs);
+	discard_IORange_type(&a->AOVrngs);
+	
+	free(a);
+	
+	return NULL;
 }
 
 static void discard_DAQmxDevAttr_type(DAQmxDevAttr_type** a)
@@ -488,37 +507,37 @@ static void discard_DAQmxDevAttr_type(DAQmxDevAttr_type** a)
 	OKfree(*a);
 }
 
-static DAQmxDevAttr_type* copy_DAQmxDevAttr_type(DAQmxDevAttr_type* devAttributes)
+static DAQmxDevAttr_type* copy_DAQmxDevAttr_type(DAQmxDevAttr_type* attr)
 {
 	DAQmxDevAttr_type* a = malloc (sizeof(DAQmxDevAttr_type));
-	if (!a || !devAttributes) return NULL;
+	if (!a || !attr) return NULL;
 
 	// shallow copy dev data
-	memcpy(a, devAttributes, sizeof(DAQmxDevAttr_type)); 
+	memcpy(a, attr, sizeof(DAQmxDevAttr_type)); 
 
 	// Deep copy name and type members
-	a -> name = StrDup (devAttributes -> name); // !uses malloc, must dispose using free
-	a -> type = StrDup (devAttributes -> type); // !uses malloc, must dispose using free
+	a -> name = StrDup (attr -> name); // !uses malloc, must dispose using free
+	a -> type = StrDup (attr -> type); // !uses malloc, must dispose using free
 	// Deep copy physical channel lists 
-	a -> AIchan  = StringListCpy(devAttributes -> AIchan);
-	a -> AOchan  = StringListCpy(devAttributes -> AOchan);
-	a -> DIlines = StringListCpy(devAttributes -> DIlines);	   
-	a -> DIports = StringListCpy(devAttributes -> DIports);  
-	a -> DOlines = StringListCpy(devAttributes -> DOlines);		  
-	a -> DOports = StringListCpy(devAttributes -> DOports);		   
-	a -> CIchan  = StringListCpy(devAttributes -> CIchan);		   
-	a -> COchan  = StringListCpy(devAttributes -> COchan);
+	a -> AIchan  = StringListCpy(attr -> AIchan);
+	a -> AOchan  = StringListCpy(attr -> AOchan);
+	a -> DIlines = StringListCpy(attr -> DIlines);	   
+	a -> DIports = StringListCpy(attr -> DIports);  
+	a -> DOlines = StringListCpy(attr -> DOlines);		  
+	a -> DOports = StringListCpy(attr -> DOports);		   
+	a -> CIchan  = StringListCpy(attr -> CIchan);		   
+	a -> COchan  = StringListCpy(attr -> COchan);
 	// copy AI ranges
-	a -> AIVrngs.Nrngs = devAttributes -> AIVrngs.Nrngs;
-	a -> AIVrngs.low   = malloc(devAttributes -> AIVrngs.Nrngs * sizeof(double));
-	memcpy(a -> AIVrngs.low, devAttributes -> AIVrngs.low, devAttributes -> AIVrngs.Nrngs * sizeof(double));  
-	a -> AIVrngs.high  = malloc(devAttributes -> AIVrngs.Nrngs * sizeof(double));
-	memcpy(a -> AIVrngs.high, devAttributes -> AIVrngs.high, devAttributes -> AIVrngs.Nrngs * sizeof(double));
+	a -> AIVrngs.Nrngs = attr -> AIVrngs.Nrngs;
+	a -> AIVrngs.low   = malloc(attr -> AIVrngs.Nrngs * sizeof(double));
+	memcpy(a -> AIVrngs.low, attr -> AIVrngs.low, attr -> AIVrngs.Nrngs * sizeof(double));  
+	a -> AIVrngs.high  = malloc(attr -> AIVrngs.Nrngs * sizeof(double));
+	memcpy(a -> AIVrngs.high, attr -> AIVrngs.high, attr -> AIVrngs.Nrngs * sizeof(double));
 	// copy AO ranges
-	a -> AOVrngs.low = malloc(devAttributes -> AOVrngs.Nrngs * sizeof(double));
-	memcpy(a -> AOVrngs.low, devAttributes -> AOVrngs.low, devAttributes -> AOVrngs.Nrngs * sizeof(double));  
-	a -> AOVrngs.high = malloc(devAttributes -> AOVrngs.Nrngs * sizeof(double));
-	memcpy(a -> AOVrngs.high, devAttributes -> AOVrngs.high, devAttributes -> AOVrngs.Nrngs * sizeof(double));
+	a -> AOVrngs.low = malloc(attr -> AOVrngs.Nrngs * sizeof(double));
+	memcpy(a -> AOVrngs.low, attr -> AOVrngs.low, attr -> AOVrngs.Nrngs * sizeof(double));  
+	a -> AOVrngs.high = malloc(attr -> AOVrngs.Nrngs * sizeof(double));
+	memcpy(a -> AOVrngs.high, attr -> AOVrngs.high, attr -> AOVrngs.Nrngs * sizeof(double));
 	
 	return a;
 }
@@ -660,23 +679,28 @@ static void discard_IOchan_type (IOchan_type** a)
 }
 
 //------------------------------------------------------------------------------
-// DAQDev_type
+// DAQmxDev_type
 //------------------------------------------------------------------------------
 
-static DAQDev_type* init_DAQDev_type (DAQmxDevAttr_type* devAttributes, char instanceName[])
+static DAQmxDev_type* init_DAQmxDev_type (DAQmxDevAttr_type** attr, char taskControllerName[])
 {
-	DAQDev_type* a = malloc (sizeof(DAQDev_type));
+	DAQmxDev_type* a = malloc (sizeof(DAQmxDev_type));
 	if (!a) return NULL;
 	
-	a -> devAttributes								= devAttributes;
-	a -> chan									  	= NULL; 
+	a -> attr								= *attr;
+	a -> chan								= NULL; 
 	
-	//--------------------------
+	//-------------------------------------------------------------------------------------------------
 	// Task Controller
-	//--------------------------
+	//-------------------------------------------------------------------------------------------------
+	a -> taskController = init_TaskControl_type (taskControllerName, ConfigureTC, IterateTC, StartTC, 
+						  ResetTC, DoneTC, StoppedTC, DataReceivedTC, ModuleEventHandler, ErrorTC);
+	if (!a->taskController) {discard_DAQmxDevAttr_type(attr); free(a); return NULL;}
+	// connect DAQmxDev data to Task Controller
+	SetTaskControlModuleData(a -> taskController, a);
+	//-------------------------------------------------------------------------------------------------
 	
-	a -> taskController = init_TaskControl_type (instanceName, ConfigureTC, IterateTC, StartTC, ResetTC,
-											  	 DoneTC, StoppedTC, DataReceivedTC, ModuleEventHandler, ErrorTC);
+
 	
 	//--------------------------
 	// DAQmx task settings
@@ -706,11 +730,11 @@ static DAQDev_type* init_DAQDev_type (DAQmxDevAttr_type* devAttributes, char ins
 	return a;
 }
 
-static void discard_DAQDev_type(DAQDev_type** a)
+static void discard_DAQmxDev_type(DAQmxDev_type** a)
 {
 	if (!(*a)) return;
 	
-	discard_DAQmxDevAttr_type(&(*a)->devAttributes);
+	discard_DAQmxDevAttr_type(&(*a)->attr);
 	
 	discard_IOchan_type(&(*a)->chan);
 	
@@ -731,18 +755,22 @@ static void discard_DAQDev_type(DAQDev_type** a)
 
 int	Load (DAQLabModule_type* mod, int workspacePanHndl)
 {
-	int					error						= 0;
+	int						error						= 0;
 	NIDAQmxManager_type* 	nidaq						= (NIDAQmxManager_type*) mod;  
-	int					menubarHndl					= 0; 
-	int					menuItemDevicesHndl			= 0;
+	int						menubarHndl					= 0; 
+	int						menuItemDevicesHndl			= 0;
 	
 	// main panel 
-	errChk(nidaq->mainPanHndl = LoadPanel(workspacePanHndl, MOD_NIDAQmxManager_UI_NIDAQmxManager, NIDAQmxPan));
+	errChk(nidaq->mainPanHndl = LoadPanel(workspacePanHndl, MOD_NIDAQmxManager_UI, NIDAQmxPan));
 	// device list panel
-	errChk(nidaq->devListPanHndl = LoadPanel(workspacePanHndl, MOD_NIDAQmxManager_UI_NIDAQmxManager, DevListPan));
-	
+	errChk(nidaq->devListPanHndl = LoadPanel(workspacePanHndl, MOD_NIDAQmxManager_UI, DevListPan));
+	// DAQmx task settings panel
+	errChk(nidaq->taskSetPanHndl = LoadPanel(workspacePanHndl, MOD_NIDAQmxManager_UI, TaskSetPan));
+	   
 	// connect module data and user interface callbackFn to all direct controls in the main panel
 	SetCtrlsInPanCBInfo(mod, MainPan_CB, nidaq->mainPanHndl);
+	// add callback data to the Add button from the device list panel
+	SetCtrlAttribute(nidaq->devListPanHndl, DevListPan_AddBTTN, ATTR_CALLBACK_DATA, nidaq); 
 	
 	// add menubar and link it to module data
 	menubarHndl 		= NewMenuBar(nidaq->mainPanHndl);
@@ -755,7 +783,8 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl)
 	Error:
 	
 	if (nidaq->mainPanHndl) {DiscardPanel(nidaq->mainPanHndl); nidaq->mainPanHndl = 0;}
-	if (nidaq->devListPanHndl) {DiscardPanel(nidaq->devListPanHndl); nidaq->devListPanHndl = 0;} 
+	if (nidaq->devListPanHndl) {DiscardPanel(nidaq->devListPanHndl); nidaq->devListPanHndl = 0;}
+	if (nidaq->taskSetPanHndl) {DiscardPanel(nidaq->taskSetPanHndl); nidaq->taskSetPanHndl = 0;} 
 	
 	return error;
 }
@@ -764,18 +793,18 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl)
 /// HIRET positive value for the number of devices found, 0 if there are no devices and negative values for error.
 static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 {
-	int				error		= 0;
-    int 			buffersize  = 0;
-	char* 			tmpnames	= NULL;
-	char* 			tmpsubstr	= NULL;
-	char* 			dev_pt     	= NULL;
-	char** 			idxnames  	= NULL;          // Used to break up the names string
-	char** 			idxstr    	= NULL;          // Used to break up the other strings like AI channels
-	DAQmxDevAttr_type 	dev; 
-	int 			ndev        = 0;
-	int 			columns     = 0;
-	int 			nelem       = 0;
-	double* 		rngs     	= NULL;
+	int					error		= 0;
+    int 				buffersize  = 0;
+	char* 				tmpnames	= NULL;
+	char* 				tmpsubstr	= NULL;
+	char* 				dev_pt     	= NULL;
+	char** 				idxnames  	= NULL;          // Used to break up the names string
+	char** 				idxstr    	= NULL;          // Used to break up the other strings like AI channels
+	DAQmxDevAttr_type* 	devAttrPtr; 
+	int 				ndev        = 0;
+	int 				columns     = 0;
+	int 				nelem       = 0;
+	double* 			rngs     	= NULL;
 
 	
 	// Allocate memory for pointers to work on the strings
@@ -784,18 +813,18 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	*idxstr = NULL;
 	
 	// Get number of table columns
-	GetNumTableColumns (panHndl, DevListPan_DAQtable, &columns);
+	GetNumTableColumns (panHndl, DevListPan_DAQTable, &columns);
 	
 	// Empty list of devices detected in the computer
 	empty_DevList(devlist);
 	
 	// Empty Table contents
-	DeleteTableRows (panHndl, DevListPan_DAQtable, 1, -1);
+	DeleteTableRows (panHndl, DevListPan_DAQTable, 1, -1);
 	
 	// Get string of device names in the computer
 	buffersize = DAQmxGetSystemInfoAttribute (DAQmx_Sys_DevNames, NULL);  
 	if (!buffersize) {
-		SetCtrlAttribute (panHndl, DevListPan_DAQtable, ATTR_LABEL_TEXT,"No devices found"); 
+		SetCtrlAttribute (panHndl, DevListPan_DAQTable, ATTR_LABEL_TEXT,"No devices found"); 
 		return 0;
 	}
 	
@@ -812,25 +841,25 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		ndev++; 
 		// Init DAQmxDevAttr_type dev structure and fill it with data
 		
-		if ((error = init_DAQmxDevAttr_type(&dev)) < 0) {   
+		if (!(devAttrPtr = init_DAQmxDevAttr_type())) {   
 			DLMsg("Error: DAQmxDevAttr_type structure could not be initialized.\n\n", 1);
-			return error;
+			return -1;
 		}
 		
 		// 1. Name (dynamically allocated)
-		dev.name = dev_pt;
+		devAttrPtr->name = dev_pt;
 		
 		// 2. Type (dynamically allocated)
 		errChk(buffersize = DAQmxGetDeviceAttribute(dev_pt, DAQmx_Dev_ProductType, NULL));
-		nullChk(dev.type = malloc(buffersize));
+		nullChk(devAttrPtr->type = malloc(buffersize));
 		
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_ProductType, dev.type, buffersize));
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_ProductType, devAttrPtr->type, buffersize));
 		
 		// 3. Product Number
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_ProductNum, &dev.productNum));
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_ProductNum, &devAttrPtr->productNum));
 		
 		// 4. S/N
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_SerialNum, &dev.serial); 
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_SerialNum, &devAttrPtr->serial)); 
 		
 		// Macro to fill lists with channel names and count
 		#define FILLSTRLIST(property, list, nitems) 									\
@@ -846,63 +875,63 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 				} 																		\
 									
 		// 5. AI
-		FILLSTRLIST(DAQmx_Dev_AI_PhysicalChans, dev.AIchan, dev.nAI);  
+		FILLSTRLIST(DAQmx_Dev_AI_PhysicalChans, devAttrPtr->AIchan, devAttrPtr->nAI);  
 		// 6. AO
-		FILLSTRLIST(DAQmx_Dev_AO_PhysicalChans, dev.AOchan, dev.nAO);
+		FILLSTRLIST(DAQmx_Dev_AO_PhysicalChans, devAttrPtr->AOchan, devAttrPtr->nAO);
 		// 7. DI lines
-		FILLSTRLIST(DAQmx_Dev_DI_Lines, dev.DIlines, dev.nDIlines);
+		FILLSTRLIST(DAQmx_Dev_DI_Lines, devAttrPtr->DIlines, devAttrPtr->nDIlines);
 		// 8. DI ports
-		FILLSTRLIST(DAQmx_Dev_DI_Ports, dev.DIports, dev.nDIports);					
+		FILLSTRLIST(DAQmx_Dev_DI_Ports, devAttrPtr->DIports, devAttrPtr->nDIports);					
 		// 9. DO lines
-		FILLSTRLIST(DAQmx_Dev_DO_Lines, dev.DOlines, dev.nDOlines);  
+		FILLSTRLIST(DAQmx_Dev_DO_Lines, devAttrPtr->DOlines, devAttrPtr->nDOlines);  
 		// 10. DO ports
-		FILLSTRLIST(DAQmx_Dev_DO_Ports, dev.DOports, dev.nDOports);
+		FILLSTRLIST(DAQmx_Dev_DO_Ports, devAttrPtr->DOports, devAttrPtr->nDOports);
 		// 11. CI 
-		FILLSTRLIST(DAQmx_Dev_CI_PhysicalChans, dev.CIchan, dev.nCI);  
+		FILLSTRLIST(DAQmx_Dev_CI_PhysicalChans, devAttrPtr->CIchan, devAttrPtr->nCI);  
 		// 12. CO 
-		FILLSTRLIST(DAQmx_Dev_CO_PhysicalChans, dev.COchan, dev.nCO);
+		FILLSTRLIST(DAQmx_Dev_CO_PhysicalChans, devAttrPtr->COchan, devAttrPtr->nCO);
 		// 13. Single Channel AI max rate
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_MaxSingleChanRate, &dev.AISCmaxrate)); 	// [Hz]
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_MaxSingleChanRate, &devAttrPtr->AISCmaxrate)); 	// [Hz]
 		// 14. Multiple Channel AI max rate
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_MaxMultiChanRate, &dev.AIMCmaxrate));  	// [Hz]
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_MaxMultiChanRate, &devAttrPtr->AIMCmaxrate));  	// [Hz]
 		// 15. AI min rate 
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_MinRate, &dev.AIminrate));  	         	// [Hz] 
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_MinRate, &devAttrPtr->AIminrate));  	         	// [Hz] 
 		// 16. AO max rate  
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_MaxRate, &dev.AOmaxrate)); 			 	// [Hz]
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_MaxRate, &devAttrPtr->AOmaxrate)); 			 	// [Hz]
 		// 17. AO min rate  
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_MinRate, &dev.AOminrate)); 			 	// [Hz]
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_MinRate, &devAttrPtr->AOminrate)); 			 	// [Hz]
 		// 18. DI max rate
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_MaxRate, &dev.DImaxrate)); 			 	// [Hz]
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_MaxRate, &devAttrPtr->DImaxrate)); 			 	// [Hz]
 		// 19. DO max rate
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_MaxRate, &dev.DOmaxrate));    		 		// [Hz]
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_MaxRate, &devAttrPtr->DOmaxrate));    		 		// [Hz]
 		
 		/*---Get IO ranges---*/
 		
 		// AI voltage ranges
-		if((nelem = DAQmxGetDeviceAttribute(dev.name, DAQmx_Dev_AI_VoltageRngs, NULL)) > 0){
-			dev.AIVrngs.Nrngs = (int) nelem/2;
+		if((nelem = DAQmxGetDeviceAttribute(devAttrPtr->name, DAQmx_Dev_AI_VoltageRngs, NULL)) > 0){
+			devAttrPtr->AIVrngs.Nrngs = (int) nelem/2;
 			nullChk(rngs = malloc (nelem * sizeof(double)));
-			nullChk(dev.AIVrngs.low = malloc((dev.AIVrngs.Nrngs) * sizeof(double)));
-			nullChk(dev.AIVrngs.high = malloc((dev.AIVrngs.Nrngs) * sizeof(double)));
-			errChk(DAQmxGetDeviceAttribute(dev.name, DAQmx_Dev_AI_VoltageRngs, rngs, nelem));
-			for (size_t i = 0; i < dev.AIVrngs.Nrngs; i++){
-				dev.AIVrngs.low[i] = rngs[2*i];	
-				dev.AIVrngs.high[i] = rngs[2*i+1];
+			nullChk(devAttrPtr->AIVrngs.low = malloc((devAttrPtr->AIVrngs.Nrngs) * sizeof(double)));
+			nullChk(devAttrPtr->AIVrngs.high = malloc((devAttrPtr->AIVrngs.Nrngs) * sizeof(double)));
+			errChk(DAQmxGetDeviceAttribute(devAttrPtr->name, DAQmx_Dev_AI_VoltageRngs, rngs, nelem));
+			for (size_t i = 0; i < devAttrPtr->AIVrngs.Nrngs; i++){
+				devAttrPtr->AIVrngs.low[i] = rngs[2*i];	
+				devAttrPtr->AIVrngs.high[i] = rngs[2*i+1];
 			}
 			
 			OKfree(rngs);
 		}
 		
 		// AO voltage ranges
-		if((nelem = DAQmxGetDeviceAttribute(dev.name, DAQmx_Dev_AO_VoltageRngs, NULL)) > 0){
-			dev.AOVrngs.Nrngs = (int) nelem/2;
+		if((nelem = DAQmxGetDeviceAttribute(devAttrPtr->name, DAQmx_Dev_AO_VoltageRngs, NULL)) > 0){
+			devAttrPtr->AOVrngs.Nrngs = (int) nelem/2;
 			nullChk(rngs = malloc(nelem * sizeof(double)));
-			nullChk(dev.AOVrngs.low = malloc((dev.AOVrngs.Nrngs) * sizeof(double)));
-			nullChk(dev.AOVrngs.high = malloc((dev.AOVrngs.Nrngs) * sizeof(double)));
-			errChk(DAQmxGetDeviceAttribute(dev.name, DAQmx_Dev_AO_VoltageRngs, rngs, nelem));
-			for (int i = 0; i < dev.AOVrngs.Nrngs; i++){
-				dev.AOVrngs.low[i] = rngs[2*i];	
-				dev.AOVrngs.high[i] = rngs[2*i+1];
+			nullChk(devAttrPtr->AOVrngs.low = malloc((devAttrPtr->AOVrngs.Nrngs) * sizeof(double)));
+			nullChk(devAttrPtr->AOVrngs.high = malloc((devAttrPtr->AOVrngs.Nrngs) * sizeof(double)));
+			errChk(DAQmxGetDeviceAttribute(devAttrPtr->name, DAQmx_Dev_AO_VoltageRngs, rngs, nelem));
+			for (int i = 0; i < devAttrPtr->AOVrngs.Nrngs; i++){
+				devAttrPtr->AOVrngs.low[i] = rngs[2*i];	
+				devAttrPtr->AOVrngs.high[i] = rngs[2*i+1];
 			}
 			
 			OKfree(rngs);
@@ -924,47 +953,47 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		#define DAQTable(cell, info) SetTableCellVal (panHndl, tableCtrl , MakePoint (cell,ndev), info)     
         
 		// 1. Name
-		DAQTable(1, dev.name);
+		DAQTable(1, devAttrPtr->name);
 		// 2. Type
-		DAQTable(2, dev.type); 
+		DAQTable(2, devAttrPtr->type); 
 		// 3. Product Number
-		DAQTable(3, dev.productNum); 
+		DAQTable(3, devAttrPtr->productNum); 
 		// 4. S/N
-		DAQTable(4, dev.serial);
+		DAQTable(4, devAttrPtr->serial);
 		// 5. # AI chan 
-		DAQTable(5, dev.nAI);
+		DAQTable(5, devAttrPtr->nAI);
 		// 6. # AO chan
-		DAQTable(6, dev.nAO);
+		DAQTable(6, devAttrPtr->nAO);
 		// 7. # DI lines
-		DAQTable(7, dev.nDIlines);
+		DAQTable(7, devAttrPtr->nDIlines);
 		// 8. # DI ports  
-		DAQTable(8, dev.nDIports);
+		DAQTable(8, devAttrPtr->nDIports);
 		// 9. # DO lines
-		DAQTable(9, dev.nDOlines);
+		DAQTable(9, devAttrPtr->nDOlines);
 		// 10. # DO ports  
-		DAQTable(10, dev.nDOports);
+		DAQTable(10, devAttrPtr->nDOports);
 		// 11. # CI 
-		DAQTable(11, dev.nCI);
+		DAQTable(11, devAttrPtr->nCI);
 		// 12. # CO ports  
-		DAQTable(12, dev.nCO);
+		DAQTable(12, devAttrPtr->nCO);
 		// 13. Single Channel AI max rate  
-		DAQTable(13, dev.AISCmaxrate/1000); // display in [kHz]
+		DAQTable(13, devAttrPtr->AISCmaxrate/1000); // display in [kHz]
 		// 14. Multiple Channel AI max rate 
-		DAQTable(14, dev.AIMCmaxrate/1000); // display in [kHz] 
+		DAQTable(14, devAttrPtr->AIMCmaxrate/1000); // display in [kHz] 
 		// 15. AI min rate
-		DAQTable(15, dev.AIminrate/1000);   // display in [kHz] 
+		DAQTable(15, devAttrPtr->AIminrate/1000);   // display in [kHz] 
 		// 16. AO max rate
-		DAQTable(16, dev.AOmaxrate/1000);   // display in [kHz]
+		DAQTable(16, devAttrPtr->AOmaxrate/1000);   // display in [kHz]
 		// 17. AO min rate  
-		DAQTable(17, dev.AOminrate/1000);   // display in [kHz] 
+		DAQTable(17, devAttrPtr->AOminrate/1000);   // display in [kHz] 
 		// 18. DI max rate
-		DAQTable(18, dev.DImaxrate/1000);   // display in [kHz] 
+		DAQTable(18, devAttrPtr->DImaxrate/1000);   // display in [kHz] 
 		// 19. DO max rate  
-		DAQTable(19, dev.DOmaxrate/1000);   // display in [kHz]   
+		DAQTable(19, devAttrPtr->DOmaxrate/1000);   // display in [kHz]   
 		
 		
 		/* Add device to list */
-		ListInsertItem(devlist, &dev, END_OF_LIST);
+		ListInsertItem(devlist, &devAttrPtr, END_OF_LIST);
 		
 		//Get the next device name in the list
 		dev_pt = substr (", ", idxnames); 
@@ -987,19 +1016,18 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	OKfree(idxnames);
 	OKfree(idxstr);
 	OKfree(tmpnames);
-	OKfree(dev.type);
-	OKfree(rngs);
+	discard_DAQmxDevAttr_type(&devAttrPtr);
 	
 	return error;
 }
 
 static void empty_DevList (ListType devList)
 {
-    DAQmxDevAttr_type* devPtr;
+    DAQmxDevAttr_type** devPtrPtr;
 	
 	while (ListNumItems (devList)) {
-		devPtr = ListGetPtrToItem (devList, END_OF_LIST);
-		discard_DAQmxDevAttr_type (&devPtr);
+		devPtrPtr = ListGetPtrToItem (devList, END_OF_LIST);
+		discard_DAQmxDevAttr_type (devPtrPtr);
 		ListRemoveItem (devList, NULL, END_OF_LIST);
 	}
 }
@@ -1012,35 +1040,76 @@ static int CVICALLBACK 	MainPan_CB (int panel, int control, int event, void *cal
 static void CVICALLBACK ManageDevPan_CB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
 {
 	NIDAQmxManager_type* 	nidaq 		= (NIDAQmxManager_type*) callbackData;
-	int 				error 		= 0;
-	int					nDev		= 0;								// number of DAQ devices found
+	int 					error 		= 0;
+	int						nDev		= 0;								// number of DAQ devices found
 	
 	if (!devList)
-		nullChk(devList	= ListCreate(sizeof(DAQmxDevAttr_type)));
+		nullChk(devList	= ListCreate(sizeof(DAQmxDevAttr_type*)));
 	
-	// add callback data to the Add button
-	SetCtrlAttribute(nidaq->devListPanHndl, DevListPan_AddBTTN, ATTR_CALLBACK_DATA, nidaq); 
-	
+	// clear table
+	DeleteTableRows(nidaq->devListPanHndl, DevListPan_DAQTable, 1, -1);
+	// display device properties table
 	DisplayPanel(nidaq->devListPanHndl);
 	
 	// find devices
-	errChk(nDev = init_DevList(devList, nidaq->devListPanHndl, DevListPan_DAQtable));
+	errChk(nDev = init_DevList(devList, nidaq->devListPanHndl, DevListPan_DAQTable));
 	
 	if (nDev > 0)
 		SetCtrlAttribute(nidaq->devListPanHndl, DevListPan_AddBTTN, ATTR_DIMMED, 0); 
 		
 	
-	return 0;
+	return;
 	Error:
 	
-	if (devList)		{ListDispose(devList); devList = 0;}
+	if (devList) {ListDispose(devList); devList = 0;}
 	
-	return error;
+	return;
 }
 
 static void CVICALLBACK DeleteDev_CB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
 {
+	NIDAQmxManager_type* 	nidaq 			= (NIDAQmxManager_type*) callbackData;
+	DAQmxDev_type**			DAQmxDevPtrPtr;
+	int						activeTabIdx;		// 0-based index
+	int						activeTabPageHndl;
+	int						nTabPages;
+	ListType				TCList; 
 	
+	// get selected tab index
+	GetActiveTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, &activeTabIdx);
+	// remove Tab and add an empty "None" tab page if there are no more tabs
+	DeleteTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, activeTabIdx, 1);
+	GetNumTabPages(nidaq->mainPanHndl, NIDAQmxPan_Devices, &nTabPages);
+	if (!nTabPages) InsertTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, 0, "None");
+	// get pointer to selected DAQmx device and remove its Task Controller from the framework
+	DAQmxDevPtrPtr = ListGetPtrToItem(nidaq->DAQmxDevices, activeTabIdx + 1);
+	TCList = ListCreate(sizeof(TaskControl_type*));
+	ListInsertItem(TCList, &(*DAQmxDevPtrPtr)->taskController, END_OF_LIST);
+	DLRemoveTaskControllers(TCList);
+	ListDispose(TCList);
+	// remove Task Controller from the list of module Task Controllers
+	ListRemoveItem(nidaq->baseClass.taskControllers, 0, activeTabIdx + 1);
+	// discard DAQmx device data and remove device also from the module list
+	discard_DAQmxDev_type(DAQmxDevPtrPtr);
+	ListRemoveItem(nidaq->DAQmxDevices, 0, activeTabIdx + 1);
+}
+
+static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			
+			switch (control) {
+					
+				case TaskSetPan_MeasType:
+					
+					break;
+			}
+			break;
+	}
+	
+	return 0;
 }
 
 int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -1054,17 +1123,48 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 				case DevListPan_AddBTTN:
 					
 					NIDAQmxManager_type* 	nidaq				 = (NIDAQmxManager_type*) callbackData;
-					char*					newInstanceName; 
+					char*					newTCName; 
+					DAQmxDev_type*			newDAQmxDev;
+					DAQmxDevAttr_type*		newDAQmxDevAttrPtr;
+					ListType				newTCList;
+					int						newDAQmxDevPanHndl;
+					int						newTabPageIdx;
+					int						panHndl;
+					void*					callbackData;
 					
-					newInstanceName = DLGetUINameInput ("New DAQmx Device Instance", DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS, , NULL);
-					if (!newInstanceName) return 0; // operation cancelled, do nothing	
+					// create new Task Controller for the DAQmx device
+					newTCName = DLGetUINameInput ("New DAQmx Task Controller", DAQLAB_MAX_TASKCONTROLLER_NAME_NCHARS, ValidTaskControllerName, NULL);
+					if (!newTCName) return 0; // operation cancelled, do nothing	
 					
+					// copy device attributes
+					newDAQmxDevAttrPtr = copy_DAQmxDevAttr_type(*(DAQmxDevAttr_type**)ListGetPtrToItem(devList, currDev));
+					// add new DAQmx device to module list and framework
+					newDAQmxDev = init_DAQmxDev_type(&newDAQmxDevAttrPtr, newTCName);
+					ListInsertItem(nidaq->DAQmxDevices, &newDAQmxDev, END_OF_LIST);
+					ListInsertItem(nidaq->baseClass.taskControllers, &newDAQmxDev->taskController, END_OF_LIST);
+					newTCList = ListCreate(sizeof(TaskControl_type*));
+					ListInsertItem(newTCList, &newDAQmxDev->taskController, END_OF_LIST);
+					DLAddTaskControllers(newTCList);
+					ListDispose(newTCList);
 					
-					
-					
+					// copy DAQmx Task settings panel to module tab and get handle to the panel inserted in the tab
+					newTabPageIdx = InsertPanelAsTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, -1, nidaq->taskSetPanHndl);
+					GetPanelHandleFromTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, newTabPageIdx, &newDAQmxDevPanHndl);
+					// change tab title to new Task Controller name
+					SetTabPageAttribute(nidaq->mainPanHndl, NIDAQmxPan_Devices, newTabPageIdx, ATTR_LABEL_TEXT, newTCName);
+					// remove "None" labelled Tab (always first tab) if its panel doesn't have callback data attached to it  
+					GetPanelHandleFromTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, 0, &panHndl);
+					GetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, &callbackData); 
+					if (!callbackData) DeleteTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, 0, 1);
+					// connect DAQmx data and user interface callbackFn to all direct controls in the new panel 
+					SetCtrlsInPanCBInfo(newDAQmxDev, DAQmxDevTaskSet_CB, newDAQmxDevPanHndl);
+					// connect DAQmx data to the panel as well
+					SetPanelAttribute(newDAQmxDevPanHndl, ATTR_CALLBACK_DATA, newDAQmxDev);
+				
+					OKfree(newTCName);
 					break;
 					
-				case DevListPan_CancelBTTN:
+				case DevListPan_DoneBTTN:
 					
 					HidePanel(panel);
 					
@@ -1076,7 +1176,7 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 		case EVENT_LEFT_CLICK:
 			
 			// filter only left click event on the daq table
-			if (control != DevListPan_DAQtable) return 0;
+			if (control != DevListPan_DAQTable) return 0;
 			
 			Point Mouse_Coords;
 			Point Cell;
@@ -1116,10 +1216,7 @@ static char* substr(const char* token, char** idxstart)
 	if (idxend != NULL){
 		if (**idxstart != 0) {
 			tmp=malloc((idxend-*idxstart+1)*sizeof(char)); // allocate memory for characters to copy plus null character
-			if (tmp == NULL){
-				MessagePopup("Error","Not enough memory.");
-				return NULL;
-			};
+			if (tmp == NULL) return NULL;
         	// Copy substring
 			memcpy(tmp, *idxstart, (idxend-*idxstart)*sizeof(char));
 			// Add null character
@@ -1127,19 +1224,17 @@ static char* substr(const char* token, char** idxstart)
 			// Update
 			*idxstart = idxend+strlen(token);
 			return tmp;
-		};} else {
+		}
+	} else {
 		tmp = malloc((strlen(*idxstart)+1)*sizeof(char));
-		if (tmp == NULL){
-			MessagePopup("Error","Not enough memory.");
-			return NULL;
-		};
+		if (tmp == NULL) return NULL;
 		// Initialize with a null character
 		*tmp = 0;
 		// Copy substring
 		strcpy(tmp, *idxstart);
 		*idxstart = NULL; 
 		return tmp;
-	};
+	}
 	return NULL;
 }
 
@@ -1162,6 +1257,70 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 	return error;
 }
 
+//-----------------------------------------
+// NIDAQmx Device Task Controller Callbacks
+//-----------------------------------------
+
+static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
+}
+
+static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+}
+
+static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
+}
+
+static FCallReturn_type* DoneTC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
+}
+
+static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
+}
+static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
+}
+
+static void	ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+{
+	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+
+}
+
+static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, CmtTSQHandle dataQID, BOOL const* abortFlag)
+{
+	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
+}
+
+static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
+{
+	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
+}
 
 
 

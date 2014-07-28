@@ -14,6 +14,10 @@ Prototype="int SetCtrlsInPanCBInfo(void *callbackData, int (*callbackFn)(int, in
 Class="Function"
 Prototype="int DLUniqueStrings(struct ListStructTag *stringList, unsigned int *idx);"
 
+[StringListCpy]
+Class="Function"
+Prototype="struct ListStructTag *StringListCpy(struct ListStructTag *src);"
+
 [DLRegisterVChan]
 Class="Function"
 Prototype="int DLRegisterVChan(struct VChan *vchan);"
@@ -49,6 +53,14 @@ Prototype="int DLGetXMLElementAttributes(CAObjHandle XMLElement, DAQLabXMLNode *
 [DLGetXMLNodeAttributes]
 Class="Function"
 Prototype="int DLGetXMLNodeAttributes(CAObjHandle XMLNode, DAQLabXMLNode *Attributes, unsigned int nAttributes);"
+
+[DLRemoveTaskControllers]
+Class="Function"
+Prototype="int DLRemoveTaskControllers(struct ListStructTag *tcList);"
+
+[DLAddTaskControllers]
+Class="Function"
+Prototype="int DLAddTaskControllers(struct ListStructTag *tcList);"
 
 [DAQLab_MenuModules_CB]
 Class="Function"

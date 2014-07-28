@@ -1,0 +1,12 @@
+[initalloc_NIDAQmxManager]
+Class="Function"
+Prototype="struct DAQLabModule *initalloc_NIDAQmxManager(struct DAQLabModule *mod, char *className, char *instanceName);"
+
+[discard_NIDAQmxManager]
+Class="Function"
+Prototype="void discard_NIDAQmxManager(struct DAQLabModule **mod);"
+
+[ManageDevices_CB]
+Class="Function"
+Prototype="int ManageDevices_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
+

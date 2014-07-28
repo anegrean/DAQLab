@@ -121,8 +121,8 @@ typedef struct {						  // Glues UI Task Controller to panel handle
 //------------------------------------------------------------------------------------------------
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 }
-//	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 }
+	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 }
 	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 }
 	
 };
@@ -185,9 +185,9 @@ static UITaskCtrl_type*		DAQLab_AddTaskControllerToUI				(TaskControl_type* task
 
 static int					DAQLab_RemoveTaskControllerFromUI			(int index);
 
-static BOOL					DAQLab_RemoveTaskControllersFromFramework 	(ListType tcList);	// of TaskControl_type*
+BOOL						DLAddTaskControllers		(ListType tcList);	// of TaskControl_type* 
 
-static BOOL					DAQLab_AddTaskControllersToFramework		(ListType tcList);	// of TaskControl_type*
+BOOL						DLRemoveTaskControllers 	(ListType tcList);	// of TaskControl_type*
 
 static void					DAQLab_RedrawTaskControllerUI				(void);
 
@@ -595,10 +595,10 @@ BOOL DLUniqueStrings (ListType stringList, size_t* idx)
 	char** strPtr2 = NULL;
 	
 	size_t ni = ListNumItems(stringList);
-	for (size_t i = 1; i < ni; ni++)
+	for (size_t i = 1; i < ni; i++)
 		for (size_t j = i+1; j <= ni; j++) {
 			strPtr1 = ListGetPtrToItem (stringList, i);
-			strPtr1 = ListGetPtrToItem (stringList, j);
+			strPtr2 = ListGetPtrToItem (stringList, j);
 			if (!strcmp(*strPtr1, *strPtr2)) {
 				if (idx) *idx = i;
 				return FALSE;
@@ -608,7 +608,6 @@ BOOL DLUniqueStrings (ListType stringList, size_t* idx)
 	if (idx) *idx = 0;
 	return TRUE;
 }
-
 
 /// HIFN Copies a list of strings to a new list.
 /// HIPAR src/ list of char* null-terminated strings.
@@ -1314,7 +1313,7 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 	// remove from DAQLab framework
 	ListType tcList = ListCreate(sizeof(TaskControl_type*));
 	ListInsertItem(tcList, &(*UItaskCtrlPtrPtr)->taskControl, END_OF_LIST);
-	if (!DAQLab_RemoveTaskControllersFromFramework (tcList))
+	if (!DLRemoveTaskControllers (tcList))
 		return -1;
 	ListDispose(tcList);
 	
@@ -1329,7 +1328,7 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 
 /// HIFN Removes a list of Task Controllers provided by tcList as TaskControl_type* list elements from the DAQLab framework.
 /// HIRET True if all Task Controllers were removed successfully or if there are no Task Controllers to be removed, False otherwise.
-static BOOL DAQLab_RemoveTaskControllersFromFramework (ListType tcList)
+BOOL DLRemoveTaskControllers (ListType tcList)
 {
 	TaskControl_type** 	tcToBeRemovedPtrPtr;
 	TaskControl_type** 	tcPtrPtr;
@@ -1354,14 +1353,14 @@ static BOOL DAQLab_RemoveTaskControllersFromFramework (ListType tcList)
 /// HIFN Adds a list of Task Controllers provided by tcList as TaskControl_type* list elements to the DAQLab framework if their names are unique.
 /// HIRET TRUE if successful or if list is empty.
 /// HIRET FALSE if Task Controller names in tcList and the framework are not unique.
-static BOOL DAQLab_AddTaskControllersToFramework (ListType tcList)
+BOOL DLAddTaskControllers (ListType tcList)
 {
 	ListType 	tcNamesList 	= ListCreate(sizeof(char*));
 	size_t		nTCs			= ListNumItems(tcList);
 	char**		tcNamePtr;
 	size_t		tcNameIdx;
 	
-	if (!nTCs) return 0;
+	if (!nTCs) return TRUE;
 	
 	//---------------------------------------------------------
 	// check if the Task Controllers provided have unique names
@@ -1583,7 +1582,7 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[moduleidx].className, newInstanceName);
 					
 					// try to add the Task Controllers to the framework if their names are unique
-					if (!DAQLab_AddTaskControllersToFramework(newModulePtr->taskControllers)) {
+					if (!DLAddTaskControllers(newModulePtr->taskControllers)) {
 						// discard module
 						(*newModulePtr->Discard) (&newModulePtr);
 						return 0;
@@ -1592,7 +1591,7 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					// call module load function
 					if ( (*newModulePtr->Load) 	(newModulePtr, mainPanHndl) < 0) {
 						// remove the added Task Controllers from the framework
-						DAQLab_RemoveTaskControllersFromFramework(newModulePtr->taskControllers);
+						DLRemoveTaskControllers(newModulePtr->taskControllers);
 						// dispose of module if not loaded properly
 						(*newModulePtr->Discard) 	(&newModulePtr);
 						break;
@@ -1642,7 +1641,7 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 									break;
 								}
 							// remove Task Controllers from the framework
-							DAQLab_RemoveTaskControllersFromFramework((*modulePtrPtr)->taskControllers);
+							DLRemoveTaskControllers((*modulePtrPtr)->taskControllers);
 							// call module discard function
 							(*(*modulePtrPtr)->Discard)	(modulePtrPtr);
 							// also remove from DAQLab modules list

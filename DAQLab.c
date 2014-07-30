@@ -615,7 +615,7 @@ BOOL DLUniqueStrings (ListType stringList, size_t* idx)
 ListType StringListCpy(ListType src)
 {
 	ListType 	dest 		= ListCreate(sizeof(char*));
-	int 		n 			= ListNumItems(src);
+	size_t 		n 			= ListNumItems(src);
   	char* 		dupStr;
 	char** 		stringPtr 	= NULL;
 	

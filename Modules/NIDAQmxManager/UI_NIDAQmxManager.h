@@ -39,7 +39,9 @@
 #define  TaskSetPan_TaskSet               4       /* control type: tab, callback function: (none) */
 #define  TaskSetPan_ChanSet               5       /* control type: tab, callback function: (none) */
 #define  TaskSetPan_PhysChan              6       /* control type: listBox, callback function: (none) */
-#define  TaskSetPan_MeasType              7       /* control type: tree, callback function: (none) */
+#define  TaskSetPan_IOType                7       /* control type: ring, callback function: (none) */
+#define  TaskSetPan_IOMode                8       /* control type: ring, callback function: (none) */
+#define  TaskSetPan_IO                    9       /* control type: ring, callback function: (none) */
 
      /* tab page panel controls */
 #define  IO_StartTrigSource               2       /* control type: string, callback function: CB_AIAOTaskSet */

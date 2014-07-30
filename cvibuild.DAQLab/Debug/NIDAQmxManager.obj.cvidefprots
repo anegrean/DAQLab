@@ -6,6 +6,10 @@ Prototype="struct DAQLabModule *initalloc_NIDAQmxManager(struct DAQLabModule *mo
 Class="Function"
 Prototype="void discard_NIDAQmxManager(struct DAQLabModule **mod);"
 
+[DisposeDAQmxChannelList]
+Class="Function"
+Prototype="int DisposeDAQmxChannelList(unsigned int index, void *ptrToItem, void *callbackData);"
+
 [ManageDevices_CB]
 Class="Function"
 Prototype="int ManageDevices_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"

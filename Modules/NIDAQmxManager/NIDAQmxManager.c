@@ -23,15 +23,7 @@
 
 	// NIDAQmxManager UI resource 
 #define MOD_NIDAQmxManager_UI 		"./Modules/NIDAQmxManager/UI_NIDAQmxManager.uir"	
-	// max number of DAQmx tasks that can be configured on the device.
-#define MAX_DAQmx_TASKS 6
-	// Taskset constants
-#define	AITSK			0
-#define	AOTSK			1  
-#define	DITSK			2
-#define	DOTSK			3	  
-#define	CITSK			4
-#define	COTSK			5  
+
 	// IO
 #define DAQmxAcquire	0
 #define DAQmxGenerate	1
@@ -52,8 +44,9 @@ typedef struct {
 	double* 			high; 						// high value
 } IORange_type;
 
-// DAQmx Channel definitions
-
+//--------------------------
+// DAQmx channel definitions
+//--------------------------
 // AI
 typedef struct {
 	char* 				physChanName;				// Physical channel name, e.g. dev1/ai0
@@ -61,7 +54,8 @@ typedef struct {
 	int					terminalCfg;				// List of bitfield terminal configurations supported by the channel.
 	IORange_type* 		Vrngs;      				// Ranges for voltage input  [V]
 	IORange_type* 		Irngs;      				// Ranges for current input  [A]
-} DAQmxAIChannel_type;
+	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+} AIChannel_type;
 
 // AO
 typedef struct {
@@ -70,7 +64,8 @@ typedef struct {
 	int					terminalCfg;				// List of bitfield terminal configurations supported by the channel.
 	IORange_type* 		Vrngs;      				// Ranges for voltage output  [V]
 	IORange_type* 		Irngs;      				// Ranges for current output  [A]
-} DAQmxAOChannel_type;
+	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+} AOChannel_type;
 
 // DI Line
 typedef struct {
@@ -78,7 +73,8 @@ typedef struct {
 	ListType			sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital input.
 	BOOL				sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital input physical channel.
 	BOOL				changeDetectSupported;		// Indicates if the change detection timing type is supported for the digital input physical channel.
-} DAQmxDILineChannel_type;
+	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+} DILineChannel_type;
 
 // DI Port
 typedef struct {
@@ -87,14 +83,16 @@ typedef struct {
 	BOOL				sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital input physical channel.
 	BOOL				changeDetectSupported;		// Indicates if the change detection timing type is supported for the digital input physical channel.
 	unsigned int		portWidth;					// Indicates in bits the width of digital input port.
-} DAQmxDIPortChannel_type;
+	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+} DIPortChannel_type;
 
 // DO Line
 typedef struct {
 	char* 				physChanName;				// Physical channel name, e.g. dev1/port0/line0
 	BOOL				sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital output physical channel.
 	ListType			sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital output.
-} DAQmxDOLineChannel_type;
+	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+} DOLineChannel_type;
 
 // DO Port
 typedef struct {
@@ -102,19 +100,22 @@ typedef struct {
 	BOOL				sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital output physical channel.
 	ListType			sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital output.
 	unsigned int		portWidth;					// Indicates in bits the width of digital output port.
-} DAQmxDOPortChannel_type;
+	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+} DOPortChannel_type;
 
 // CI
 typedef struct {
 	char* 				physChanName;				// Physical channel name, e.g. dev1/ctr0
 	ListType			supportedMeasTypes;			// Indicates the measurement types supported by the channel.
-} DAQmxCIChannel_type;
+	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+} CIChannel_type;
 
 // CO
 typedef struct {
 	char* 				physChanName;				// Physical channel name, e.g. dev1/ctr0
 	ListType			supportedOutputTypes;		// Indicates the output types supported by the channel.
-} DAQmxCOChannel_type;
+	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+} COChannel_type;
 
 // DAQ device parameters
 typedef struct {
@@ -129,21 +130,21 @@ typedef struct {
 	double       		AOminrate;    				// AO minimum rate              [Hz]
 	double       		DImaxrate;    				// DI maximum rate              [Hz]
 	double       		DOmaxrate;    				// DO maximum rate              [Hz]
-	ListType     		AIchan;       				// List of DAQmxAIChannel_type*
-	ListType     		AOchan;	   					// List of DAQmxAOChannel_type*
-	ListType     		DIlines;      				// List of DAQmxDILineChannel_type*
-	ListType     		DIports;      				// List of DAQmxDIPortChannel_type*
-	ListType     		DOlines;      				// List of DAQmxDOLineChannel_type*
-	ListType     		DOports;      				// List of DAQmxDOPortChannel_type*
-	ListType     		CIchan;	   					// List of DAQmxCIChannel_type*
-	ListType     		COchan;	   					// List of DAQmxCOChannel_type*
+	ListType     		AIchan;       				// List of AIChannel_type*
+	ListType     		AOchan;	   					// List of AOChannel_type*
+	ListType     		DIlines;      				// List of DILineChannel_type*
+	ListType     		DIports;      				// List of DIPortChannel_type*
+	ListType     		DOlines;      				// List of DOLineChannel_type*
+	ListType     		DOports;      				// List of DOPortChannel_type*
+	ListType     		CIchan;	   					// List of CIChannel_type*
+	ListType     		COchan;	   					// List of COChannel_type*
 	BOOL				AnalogTriggering;			// Indicates if the device supports analog triggering.
 	BOOL				DigitalTriggering;			// Indicates if the device supports digital triggering.
 	ListType			AISupportedMeasTypes;		// List of int type. Indicates the measurement types supported by the physical channels of the device for analog input.
 	ListType			AOSupportedOutputTypes;		// List of int type. Indicates the generation types supported by the physical channels of the device for analog output.
 	ListType			CISupportedMeasTypes;		// List of int type. Indicates the generation types supported by the physical channels of the device for counter input.
 	ListType			COSupportedOutputTypes;		// List of int type. Indicates the generation types supported by the physical channels of the device for counter output.
-} DAQmxDevAttr_type;
+} DevAttr_type;
 
 // Terminal type
 typedef enum{
@@ -154,6 +155,7 @@ typedef enum{
 	T_PSEUDODIFF 									// pseudo-differential
 } Terminal_type;
 
+// Trigger types
 typedef enum{
 	TRIG_None,
 	TRIG_DigitalEdge,
@@ -174,6 +176,8 @@ typedef struct {
 
 // Analog Input & Output channel type settings
 typedef struct {
+	char*				name;						// full physical channel name used by DAQmx, e.g. Dev1/ai1 
+	char*				vname;       				// virtual channel name
 	double        		Vmax;      					// maximum voltage [V]
 	double        		Vmin;       				// minimum voltage [V]
 	Terminal_type 		terminal;   				// terminal type 	
@@ -181,11 +185,15 @@ typedef struct {
 
 // Digital Line/Port Input & Digital Line/Port Output channel type settings
 typedef struct {
-	BOOL 				invert;    					// invert polarity (for ports the polarity is inverted for all lines)
+	char*				name;						// full physical channel name used by DAQmx, e.g. Dev1/port0/line0 
+	char*				vname;       				// virtual channel name
+	BOOL 				invert;    					// invert polarity (for ports the polarity is inverted for all lines
 } DIDOChanSet_type;
 
 // Counter Input for Counting Edges, channel type settings
 typedef struct {
+	char*				name;						// full physical channel name used by DAQmx, e.g. Dev1/ctr0
+	char*				vname;       				// virtual channel name
 	BOOL 				ActiveEdge; 				// 0 - Falling, 1 - Rising
 	int 				initialcount;				// value to start counting from
 	enum {
@@ -197,72 +205,96 @@ typedef struct {
 
 // Counter Output channel type settings
 typedef struct {
+	char*				name;						// full physical channel name used by DAQmx, e.g. Dev1/ctr0
+	char*				vname;       				// virtual channel name
 	double 				hightime;   				// the time the pulse stays high [s]
 	double 				lowtime;    				// the time the pulse stays low [s]
 	double 				initialdel; 				// initial delay [s]
 	BOOL 				idlestate;    				// LOW = 0, HIGH = 1 - terminal state at rest, pulses switch this to the oposite state
 } COChanSet_type;
 	
-// channel settings wrap structure
-typedef struct {
-	char*				name;						// dynamically allocated full physical channel name used by DAQmx, e.g. Dev1/ai1 
-	char*				vname;       				// dynamically allocated virtual channel name, e.g. GalvoX
-	void*				settings;    				// points to one of the specific channel settings structures  such as AIAOChanSet_type etc..
-} IOchanSet_type;
-
-// Channels used in DAQ task
-typedef struct {
-	int      			nAI;           				// # AI chan
-	int      			nAO;           				// # AO chan
-	int      			nDILines;      				// # DI lines
-	int      			nDIPorts;      				// # DI ports
-	int      			nDOLines;      				// # DO lines
-	int      			nDOPorts;      				// # DO ports
-	int      			nCI;       					// # Counter inputs
-	int      			nCO;       					// # Counter outputs
-	ListType 			AIchanSet;     				// list of IOchanSet_type for AI channels configured for the DAQ task
-	ListType 			AOchanSet;     				// list of IOchanSet_type for AO channels configured for the DAQ task 
-	ListType 			DIlinesSet;    				// list of IOchanSet_type for DIlines channels configured for the DAQ task
-	ListType 			DIportsSet;    				// list of IOchanSet_type for DIports channels configured for the DAQ task
-	ListType 			DOlinesSet;    				// list of IOchanSet_type for DOlines channels configured for the DAQ task
-	ListType 			DOportsSet;    				// list of IOchanSet_type for DOports channels configured for the DAQ task
-	ListType 			CIchanSet;	    			// list of IOchanSet_type for CIchan channels configured for the DAQ task
-	ListType 			COchanSet;	    			// list of IOchanSet_type for COchan channels configured for the DAQ task
-} IOchan_type;
-
 // Measurement mode
 typedef enum{
-	MeasNone, // no selection
 	MeasFinite,
-	MeasCont,
-	MeasContRegen
+	MeasCont
 } MeasMode_type; 
 
-// Settings for DAQ task
+//--------------------
+// DAQmx task settings
+//--------------------
+// AI
 typedef struct {
-	TaskHandle			taskHndl;					// DAqmx task handle.
+	TaskHandle			taskHndl;					// DAQmx task handle.
+	ListType 			chanSet;     				// Channel settings. Of AIAOChanSet_type*
 	double        		timeout;       				// Task timeout [s]
-	MeasMode_type 		measmode;      				// Measurement mode e.g. finite or continuous.
+	MeasMode_type 		measmode;      				// Measurement mode: finite or continuous.
 	double       		samplerate;    				// Sampling rate in [Hz].
 	size_t        		nsamples;	    			// Total number of samples to be acquired in case of a finite recording.
-	double        		duration;	    			// Duration of finite recording.
-	size_t        		blocksize;     				// Number of samples for reading or writing after which callbacks are called.
+	size_t        		blocksize;     				// Number of samples for reading after which callbacks are called.
 	TaskTrig_type 		starttrig;     				// Task trigger data.
-	
 	char*         		sampclksource; 				// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
 	BOOL          		sampclkedge;   				// Sample clock active edge, 0 = Rising, 1 = Falling
-	
-	char*         		refclksource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock 
-	double        		refclkfreq;    				// Reference clock frequency if such a clock is used
-} DAQTaskSet_type;
+	char*         		refclksource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
+	double        		refclkfreq;    				// Reference clock frequency if such a clock is used.
+} AITaskSet_type;
+
+// AO
+typedef struct {
+	TaskHandle			taskHndl;					// DAQmx task handle.
+	ListType 			chanSet;     				// Channel settings. Of AIAOChanSet_type*
+	double        		timeout;       				// Task timeout [s]
+	MeasMode_type 		measmode;      				// Measurement mode: finite or continuous.
+	double       		samplerate;    				// Sampling rate in [Hz].
+	size_t        		nsamples;	    			// Total number of samples to be acquired in case of a finite recording.
+	size_t        		blocksize;     				// Number of samples for reading after which callbacks are called.
+	TaskTrig_type 		starttrig;     				// Task trigger data.
+	char*         		sampclksource; 				// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
+	BOOL          		sampclkedge;   				// Sample clock active edge, 0 = Rising, 1 = Falling
+	char*         		refclksource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
+	double        		refclkfreq;    				// Reference clock frequency if such a clock is used.
+} AOTaskSet_type;
+
+// DI
+typedef struct {
+	TaskHandle			taskHndl;					// DAQmx task handle.
+	ListType 			chanSet;     				// Channel settings. Of AIAOChanSet_type*
+	double        		timeout;       				// Task timeout [s]
+} DITaskSet_type;
+
+// DO
+typedef struct {
+	TaskHandle			taskHndl;					// DAQmx task handle.
+	ListType 			chanSet;     				// Channel settings. Of AIAOChanSet_type*
+	double        		timeout;       				// Task timeout [s]
+} DOTaskSet_type;
+
+// CI
+typedef struct {
+	TaskHandle			taskHndl;					// DAQmx task handle.
+	ListType 			chanSet;     				// Channel settings. Of AIAOChanSet_type*
+	double        		timeout;       				// Task timeout [s]
+} CITaskSet_type;
+
+// CO
+typedef struct {
+	TaskHandle			taskHndl;					// DAQmx task handle.
+	ListType 			chanSet;     				// Channel settings. Of AIAOChanSet_type*
+	double        		timeout;       				// Task timeout [s]
+} COTaskSet_type;
 
 // DAQ Task definition
 typedef struct {
-	DAQmxDevAttr_type*	attr;						// Device to be used during IO task
+	int					devPanHndl;					// Panel handle to DAQmx task settings.
+	DevAttr_type*		attr;						// Device to be used during IO task
 	IOchan_type*    	chan;						// Channels used in the task of IOchan_type
 	TaskControl_type*   taskController;				// Task Controller for the DAQmx module
-	DAQTaskSet_type 	taskset[MAX_DAQmx_TASKS];	// Array of task settings of DAQTaskSet_type// task settings: [0] = AI, [1] = AO, [2] = DI, [3] = DO, [4] = CI, [5] = CO
-} DAQmxDev_type;
+	AITaskSet_type*		AITaskSet;					// AI task settings
+	AOTaskSet_type*		AOTaskSet;					// AO task settings
+	DITaskSet_type*		DITaskSet;					// DI task settings
+	DOTaskSet_type*		DOTaskSet;					// DO task settings
+	CITaskSet_type*		CITaskSet;					// CI task settings
+	COTaskSet_type*		COTaskSet;					// CO task settings
+} Dev_type;
 
 // Used for continuous data AO streaming
 typedef struct {
@@ -301,7 +333,7 @@ struct NIDAQmxManager {
 	
 	// DATA
 	
-	ListType            DAQmxDevices;   // list of DAQmxDev_type* for each DAQmx device 
+	ListType            DAQmxDevices;   // list of Dev_type* for each DAQmx device 
 	
 		//-------------------------
 		// UI
@@ -324,104 +356,132 @@ static int	 currDev = -1;        // currently selected device from the DAQ table
 //========================================================================================================================================================================================================
 // Static functions
 
-static DAQmxDev_type* 				init_DAQmxDev_type 					(DAQmxDevAttr_type** attr, char taskControllerName[]);
-static void 						discard_DAQmxDev_type				(DAQmxDev_type** a);
+static Dev_type* 					init_Dev_type 					(DevAttr_type** attr, char taskControllerName[]);
+static void 						discard_Dev_type				(Dev_type** a);
 
-static int 							init_DevList 						(ListType devlist, int panHndl, int tableCtrl);
-static void 						empty_DevList 						(ListType devList); 
+static int 							init_DevList 					(ListType devlist, int panHndl, int tableCtrl);
+static void 						empty_DevList 					(ListType devList); 
 
 	// device attributes management
-static DAQmxDevAttr_type* 			init_DAQmxDevAttr_type				(void); 
-static void 						discard_DAQmxDevAttr_type			(DAQmxDevAttr_type** a);
-static DAQmxDevAttr_type* 			copy_DAQmxDevAttr_type				(DAQmxDevAttr_type* attr);
+static DevAttr_type* 				init_DevAttr_type				(void); 
+static void 						discard_DevAttr_type			(DevAttr_type** a);
+static DevAttr_type* 				copy_DevAttr_type				(DevAttr_type* attr);
 
 	// AI channel
-static DAQmxAIChannel_type* 		init_DAQmxAIChannel_type			(void); 
-static void 						discard_DAQmxAIChannel_type			(DAQmxAIChannel_type** a);
-int CVICALLBACK 					DisposeDAQmxAIChannelList 			(size_t index, void *ptrToItem, void *callbackData);
-static DAQmxAIChannel_type* 		copy_DAQmxAIChannel_type			(DAQmxAIChannel_type* channel);
-static ListType						copy_DAQmxAIChannelList				(ListType chanList);
+static AIChannel_type* 				init_AIChannel_type				(void); 
+static void 						discard_AIChannel_type			(AIChannel_type** a);
+int CVICALLBACK 					DisposeAIChannelList	 		(size_t index, void* ptrToItem, void* callbackData);
+static AIChannel_type* 				copy_AIChannel_type				(AIChannel_type* channel);
+static ListType						copy_AIChannelList				(ListType chanList);
 
 	// AO channel
-static DAQmxAOChannel_type* 		init_DAQmxAOChannel_type			(void); 
-static void 						discard_DAQmxAOChannel_type			(DAQmxAOChannel_type** a);
-int CVICALLBACK 					DisposeDAQmxAOChannelList 			(size_t index, void *ptrToItem, void *callbackData);
-static DAQmxAOChannel_type* 		copy_DAQmxAOChannel_type			(DAQmxAOChannel_type* channel);
-static ListType						copy_DAQmxAOChannelList				(ListType chanList);
+static AOChannel_type* 				init_AOChannel_type				(void); 
+static void 						discard_AOChannel_type			(AOChannel_type** a);
+int CVICALLBACK 					DisposeAOChannelList 			(size_t index, void* ptrToItem, void*callbackData);
+static AOChannel_type* 				copy_AOChannel_type				(AOChannel_type* channel);
+static ListType						copy_AOChannelList				(ListType chanList);
 
 	// DI Line channel
-static DAQmxDILineChannel_type* 	init_DAQmxDILineChannel_type		(void); 
-static void 						discard_DAQmxDILineChannel_type		(DAQmxDILineChannel_type** a);
-int CVICALLBACK 					DisposeDAQmxDILineChannelList 		(size_t index, void *ptrToItem, void *callbackData);
-static DAQmxDILineChannel_type* 	copy_DAQmxDILineChannel_type		(DAQmxDILineChannel_type* channel);
-static ListType						copy_DAQmxDILineChannelList			(ListType chanList);
+static DILineChannel_type* 			init_DILineChannel_type			(void); 
+static void 						discard_DILineChannel_type		(DILineChannel_type** a);
+int CVICALLBACK 					DisposeDILineChannelList	 	(size_t index, void* ptrToItem, void* callbackData);
+static DILineChannel_type* 			copy_DILineChannel_type			(DILineChannel_type* channel);
+static ListType						copy_DILineChannelList			(ListType chanList);
 
 	// DI Port channel
-static DAQmxDIPortChannel_type* 	init_DAQmxDIPortChannel_type		(void); 
-static void 						discard_DAQmxDIPortChannel_type		(DAQmxDIPortChannel_type** a);
-int CVICALLBACK 					DisposeDAQmxDIPortChannelList 		(size_t index, void *ptrToItem, void *callbackData);
-static DAQmxDIPortChannel_type* 	copy_DAQmxDIPortChannel_type		(DAQmxDIPortChannel_type* channel);
-static ListType						copy_DAQmxDIPortChannelList			(ListType chanList);
+static DIPortChannel_type* 			init_DIPortChannel_type			(void); 
+static void 						discard_DIPortChannel_type		(DIPortChannel_type** a);
+int CVICALLBACK 					DisposeDIPortChannelList 		(size_t index, void* ptrToItem, void* callbackData);
+static DIPortChannel_type* 			copy_DIPortChannel_type			(DIPortChannel_type* channel);
+static ListType						copy_DIPortChannelList			(ListType chanList);
 
 	// DO Line channel
-static DAQmxDOLineChannel_type* 	init_DAQmxDOLineChannel_type		(void); 
-static void 						discard_DAQmxDOLineChannel_type		(DAQmxDOLineChannel_type** a);
-int CVICALLBACK 					DisposeDAQmxDOLineChannelList 		(size_t index, void *ptrToItem, void *callbackData);
-static DAQmxDOLineChannel_type* 	copy_DAQmxDOLineChannel_type		(DAQmxDOLineChannel_type* channel);
-static ListType						copy_DAQmxDOLineChannelList			(ListType chanList);
+static DOLineChannel_type* 			init_DOLineChannel_type			(void); 
+static void 						discard_DOLineChannel_type		(DOLineChannel_type** a);
+int CVICALLBACK 					DisposeDOLineChannelList	 	(size_t index, void* ptrToItem, void* callbackData);
+static DOLineChannel_type* 			copy_DOLineChannel_type			(DOLineChannel_type* channel);
+static ListType						copy_DOLineChannelList			(ListType chanList);
 
 	// DO Port channel
-static DAQmxDOPortChannel_type* 	init_DAQmxDOPortChannel_type		(void); 
-static void 						discard_DAQmxDOPortChannel_type		(DAQmxDOPortChannel_type** a);
-int CVICALLBACK 					DisposeDAQmxDOPortChannelList 		(size_t index, void *ptrToItem, void *callbackData);
-static DAQmxDOPortChannel_type* 	copy_DAQmxDOPortChannel_type		(DAQmxDOPortChannel_type* channel);
-static ListType						copy_DAQmxDOPortChannelList			(ListType chanList);
+static DOPortChannel_type* 			init_DOPortChannel_type			(void); 
+static void 						discard_DOPortChannel_type		(DOPortChannel_type** a);
+int CVICALLBACK 					DisposeDOPortChannelList 		(size_t index, void* ptrToItem, void* callbackData);
+static DOPortChannel_type* 			copy_DOPortChannel_type			(DOPortChannel_type* channel);
+static ListType						copy_DOPortChannelList			(ListType chanList);
 
 	// CI channel
-static DAQmxCIChannel_type* 		init_DAQmxCIChannel_type			(void); 
-static void 						discard_DAQmxCIChannel_type			(DAQmxCIChannel_type** a);
-int CVICALLBACK 					DisposeDAQmxCIChannelList 			(size_t index, void *ptrToItem, void *callbackData);
-static DAQmxCIChannel_type* 		copy_DAQmxCIChannel_type			(DAQmxCIChannel_type* channel);
-static ListType						copy_DAQmxCIChannelList				(ListType chanList);
+static CIChannel_type* 				init_CIChannel_type				(void); 
+static void 						discard_CIChannel_type			(CIChannel_type** a);
+int CVICALLBACK 					DisposeCIChannelList 			(size_t index, void* ptrToItem, void* callbackData);
+static CIChannel_type* 				copy_CIChannel_type				(CIChannel_type* channel);
+static ListType						copy_CIChannelList				(ListType chanList);
 
 	// CO channel
-static DAQmxCOChannel_type* 		init_DAQmxCOChannel_type			(void); 
-static void 						discard_DAQmxCOChannel_type			(DAQmxCOChannel_type** a);
-int CVICALLBACK 					DisposeDAQmxCOChannelList 			(size_t index, void *ptrToItem, void *callbackData);
-static DAQmxCOChannel_type* 		copy_DAQmxCOChannel_type			(DAQmxCOChannel_type* channel);
-static ListType						copy_DAQmxCOChannelList				(ListType chanList);
+static COChannel_type* 				init_COChannel_type				(void); 
+static void 						discard_COChannel_type			(COChannel_type** a);
+int CVICALLBACK 					DisposeCOChannelList 			(size_t index, void* ptrToItem, void* callbackData);
+static COChannel_type* 				copy_COChannel_type				(COChannel_type* channel);
+static ListType						copy_COChannelList				(ListType chanList);
 
+	// AI task settings
+static AITaskSet_type*				init_AITaskSet_type				(void);
+static void							discard_AITaskSet_type			(AITaskSet_type** a);
+
+	// AO task settings
+static AOTaskSet_type*				init_AOTaskSet_type				(void);
+static void							discard_AOTaskSet_type			(AOTaskSet_type** a);
+
+	// DI task settings
+static DITaskSet_type*				init_DITaskSet_type				(void);
+static void							discard_DITaskSet_type			(DITaskSet_type** a);
+
+	// DO task settings
+static DOTaskSet_type*				init_DOTaskSet_type				(void);
+static void							discard_DOTaskSet_type			(DOTaskSet_type** a);
+
+	// CI task settings
+static CITaskSet_type*				init_CITaskSet_type				(void);
+static void							discard_CITaskSet_type			(CITaskSet_type** a);
+
+	// CO task settings
+static COTaskSet_type*				init_COTaskSet_type				(void);
+static void							discard_COTaskSet_type			(COTaskSet_type** a);
+
+	// channels & property lists
+static ListType						GetPhysChanPropertyList			(char chanName[], int chanProperty); 
+static void							PopulateChannels				(Dev_type* dev);
 	// IO mode/type
-static ListType						GetSupportedIOTypes					(char devName[], int IOType);
-static ListType						GetPhysChanSupportedIOTypes			(char chanName[], int chanIOAttribute);
-static void 						PopulateIOMode 						(DAQmxDev_type* dev, int panHndl, int controlID, int ioVal);
-static void 						PopulateIOType 						(DAQmxDev_type* dev, int panHndl, int controlID, int ioVal, int ioMode); 
+static ListType						GetSupportedIOTypes				(char devName[], int IOType);
+static void 						PopulateIOMode 					(Dev_type* dev, int panHndl, int controlID, int ioVal);
+static void 						PopulateIOType 					(Dev_type* dev, int panHndl, int controlID, int ioVal, int ioMode); 
 
 	// ranges
-static IORange_type* 				init_IORange_type					(void);
-static void 						discard_IORange_type				(IORange_type** a);
-static IORange_type*				copy_IORange_type					(IORange_type* IOrange);
-static IORange_type*				GetIORanges							(char devName[], int rangeType);
+static IORange_type* 				init_IORange_type				(void);
+static void 						discard_IORange_type			(IORange_type** a);
+static IORange_type*				copy_IORange_type				(IORange_type* IOrange);
+static IORange_type*				GetIORanges						(char devName[], int rangeType);
  
 	// IO channel management
-static IOchan_type* 				init_IOchan_type					(void);
-static void 						discard_IOchan_type					(IOchan_type** a);
+static IOchan_type* 				init_IOchan_type				(void);
+static void 						discard_IOchan_type				(IOchan_type** a);
 
-static void 						init_IOchanSet_type					(IOchanSet_type* a);
-static void 						discard_IOchanSet_type				(IOchanSet_type** a);
+static void 						init_IOchanSet_type				(IOchanSet_type* a);
+static void 						discard_IOchanSet_type			(IOchanSet_type** a);
 
-static int							Load 								(DAQLabModule_type* mod, int workspacePanHndl);
+static int							Load 							(DAQLabModule_type* mod, int workspacePanHndl);
 
-static char* 						substr								(const char* token, char** idxstart);
+static char* 						substr							(const char* token, char** idxstart);
 
-static BOOL							ValidTaskControllerName				(char name[], void* dataPtr);
+static BOOL							ValidTaskControllerName			(char name[], void* dataPtr);
 
-static int 							DisplayPanels						(DAQLabModule_type* mod, BOOL visibleFlag);
+static int 							DisplayPanels					(DAQLabModule_type* mod, BOOL visibleFlag);
 
-static int CVICALLBACK 				MainPan_CB							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-static void CVICALLBACK 			ManageDevPan_CB 					(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
-static void CVICALLBACK 			DeleteDev_CB 						(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle); 
-static int 							DAQmxDevTaskSet_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				MainPan_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static void CVICALLBACK 			ManageDevPan_CB 				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+static void CVICALLBACK 			DeleteDev_CB 					(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle); 
+
+	// adjustment of the DAQmx task settings panel
+static int 							DAQmxDevTaskSet_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 
 //-----------------------------------------
@@ -444,7 +504,7 @@ static FCallReturn_type*			ModuleEventHandler				(TaskControl_type* taskControl,
 //========================================================================================================================================================================================================
 // Global variables
 
-ListType					devList			= 0;		// List of DAQ devices available of DAQmxDevAttr_type. This will be updated every time init_DevList(ListType) is executed.
+ListType					devList			= 0;		// List of DAQ devices available of DevAttr_type. This will be updated every time init_DevList(ListType) is executed.
 
 //========================================================================================================================================================================================================
 // Global functions
@@ -494,7 +554,7 @@ DAQLabModule_type*	initalloc_NIDAQmxManager (DAQLabModule_type* mod, char classN
 	// Child Level 1: NIDAQmxManager_type
 	
 		// DATA
-	nidaq->DAQmxDevices				= ListCreate(sizeof(DAQmxDev_type*));
+	nidaq->DAQmxDevices				= ListCreate(sizeof(Dev_type*));
 	if (!nidaq->DAQmxDevices) {discard_DAQLabModule((DAQLabModule_type**)&nidaq); return NULL;}
 	
 	nidaq->mainPanHndl				= 0;
@@ -516,7 +576,7 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 {
 	NIDAQmxManager_type* 	nidaq 		= (NIDAQmxManager_type*) (*mod);
 	size_t					nDAQDevs	= ListNumItems(nidaq->DAQmxDevices);
-	DAQmxDev_type**			DAQDevPtrPtr;
+	Dev_type**			DAQDevPtrPtr;
 	
 	if (!nidaq) return;
 	
@@ -527,7 +587,7 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 	// discard DAQmx device data
 	for (size_t i = nDAQDevs; i ; i--) {
 		DAQDevPtrPtr = ListGetPtrToItem(nidaq->DAQmxDevices, i);
-		discard_DAQmxDev_type(DAQDevPtrPtr);
+		discard_Dev_type(DAQDevPtrPtr);
 	}
 	ListDispose(nidaq->DAQmxDevices);
 	
@@ -544,14 +604,14 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 }
 
 //------------------------------------------------------------------------------
-// DAQmxDevAttr_type
+// DevAttr_type
 //------------------------------------------------------------------------------
 
-static DAQmxDevAttr_type* init_DAQmxDevAttr_type(void)
+static DevAttr_type* init_DevAttr_type(void)
 {
 	int error = 0;
 	
-	DAQmxDevAttr_type* a = malloc (sizeof(DAQmxDevAttr_type));
+	DevAttr_type* a = malloc (sizeof(DevAttr_type));
 	if (!a) return NULL;
 	
 	a -> name         			= NULL; // dynamically allocated string
@@ -577,14 +637,14 @@ static DAQmxDevAttr_type* init_DAQmxDevAttr_type(void)
 	a -> COchan					= 0;
 	
 	// create list of channels
-	nullChk(a -> AIchan   		= ListCreate (sizeof(DAQmxAIChannel_type*)));
-	nullChk(a -> AOchan	  		= ListCreate (sizeof(DAQmxAOChannel_type*)));
-	nullChk(a -> DIlines  		= ListCreate (sizeof(DAQmxDILineChannel_type*)));
-	nullChk(a -> DIports  		= ListCreate (sizeof(DAQmxDIPortChannel_type*)));
-	nullChk(a -> DOlines  		= ListCreate (sizeof(DAQmxDOLineChannel_type*)));
-	nullChk(a -> DOports  		= ListCreate (sizeof(DAQmxDOPortChannel_type*)));
-	nullChk(a -> CIchan   		= ListCreate (sizeof(DAQmxCIChannel_type*)));
-	nullChk(a -> COchan   		= ListCreate (sizeof(DAQmxCOChannel_type*)));
+	nullChk(a -> AIchan   		= ListCreate (sizeof(AIChannel_type*)));
+	nullChk(a -> AOchan	  		= ListCreate (sizeof(AOChannel_type*)));
+	nullChk(a -> DIlines  		= ListCreate (sizeof(DILineChannel_type*)));
+	nullChk(a -> DIports  		= ListCreate (sizeof(DIPortChannel_type*)));
+	nullChk(a -> DOlines  		= ListCreate (sizeof(DOLineChannel_type*)));
+	nullChk(a -> DOports  		= ListCreate (sizeof(DOPortChannel_type*)));
+	nullChk(a -> CIchan   		= ListCreate (sizeof(CIChannel_type*)));
+	nullChk(a -> COchan   		= ListCreate (sizeof(COChannel_type*)));
 	
 	// triggering supported
 	a -> AnalogTriggering		= 0;
@@ -613,7 +673,7 @@ static DAQmxDevAttr_type* init_DAQmxDevAttr_type(void)
 	return NULL;
 }
 
-static void discard_DAQmxDevAttr_type(DAQmxDevAttr_type** a)
+static void discard_DevAttr_type(DevAttr_type** a)
 {
 	if (!(*a)) return;
 	
@@ -621,14 +681,14 @@ static void discard_DAQmxDevAttr_type(DAQmxDevAttr_type** a)
 	OKfree((*a)->type);
 	
 	// discard channel lists and free pointers within lists.
-	if ((*a)->AIchan) 	ListApplyToEachEx ((*a)->AIchan, 1, DisposeDAQmxAIChannelList, NULL); ListDispose((*a)->AIchan); 
-	if ((*a)->AOchan) 	ListApplyToEachEx ((*a)->AOchan, 1, DisposeDAQmxAOChannelList, NULL); ListDispose((*a)->AOchan);	  
-	if ((*a)->DIlines) 	ListApplyToEachEx ((*a)->DIlines, 1, DisposeDAQmxDILineChannelList, NULL); ListDispose((*a)->DIlines);  
-	if ((*a)->DIports)	ListApplyToEachEx ((*a)->DIports, 1, DisposeDAQmxDIPortChannelList, NULL); ListDispose((*a)->DIports);  
-	if ((*a)->DOlines)	ListApplyToEachEx ((*a)->DOlines, 1, DisposeDAQmxDOLineChannelList, NULL); ListDispose((*a)->DOlines);  
-	if ((*a)->DOports)	ListApplyToEachEx ((*a)->DOports, 1, DisposeDAQmxDOPortChannelList, NULL); ListDispose((*a)->DOports);  
-	if ((*a)->CIchan)	ListApplyToEachEx ((*a)->CIchan, 1, DisposeDAQmxCIChannelList, NULL); ListDispose((*a)->CIchan);   
-	if ((*a)->COchan)	ListApplyToEachEx ((*a)->COchan, 1, DisposeDAQmxCOChannelList, NULL); ListDispose((*a)->COchan);
+	if ((*a)->AIchan) 	ListApplyToEachEx ((*a)->AIchan, 1, DisposeAIChannelList, NULL); ListDispose((*a)->AIchan); 
+	if ((*a)->AOchan) 	ListApplyToEachEx ((*a)->AOchan, 1, DisposeAOChannelList, NULL); ListDispose((*a)->AOchan);	  
+	if ((*a)->DIlines) 	ListApplyToEachEx ((*a)->DIlines, 1, DisposeDILineChannelList, NULL); ListDispose((*a)->DIlines);  
+	if ((*a)->DIports)	ListApplyToEachEx ((*a)->DIports, 1, DisposeDIPortChannelList, NULL); ListDispose((*a)->DIports);  
+	if ((*a)->DOlines)	ListApplyToEachEx ((*a)->DOlines, 1, DisposeDOLineChannelList, NULL); ListDispose((*a)->DOlines);  
+	if ((*a)->DOports)	ListApplyToEachEx ((*a)->DOports, 1, DisposeDOPortChannelList, NULL); ListDispose((*a)->DOports);  
+	if ((*a)->CIchan)	ListApplyToEachEx ((*a)->CIchan, 1, DisposeCIChannelList, NULL); ListDispose((*a)->CIchan);   
+	if ((*a)->COchan)	ListApplyToEachEx ((*a)->COchan, 1, DisposeCOChannelList, NULL); ListDispose((*a)->COchan);
 	
 	// discard supported IO type lists
 	if ((*a)->AISupportedMeasTypes)		ListDispose((*a)->AISupportedMeasTypes);
@@ -639,10 +699,10 @@ static void discard_DAQmxDevAttr_type(DAQmxDevAttr_type** a)
 	OKfree(*a);
 }
 
-static DAQmxDevAttr_type* copy_DAQmxDevAttr_type(DAQmxDevAttr_type* attr)
+static DevAttr_type* copy_DevAttr_type(DevAttr_type* attr)
 {
 	if (!attr) return NULL; 
-	DAQmxDevAttr_type* a = init_DAQmxDevAttr_type();
+	DevAttr_type* a = init_DevAttr_type();
 	if (!a) return NULL; 
 
 	// product ID
@@ -664,14 +724,14 @@ static DAQmxDevAttr_type* copy_DAQmxDevAttr_type(DAQmxDevAttr_type* attr)
 			
 	// physical channel lists 
 	
-	if (!(	a -> AIchan  				= copy_DAQmxAIChannelList(attr -> AIchan)))			goto Error;
-	if (!(	a -> AOchan  				= copy_DAQmxAOChannelList(attr -> AOchan)))			goto Error; 
-	if (!(	a -> DIlines 				= copy_DAQmxDILineChannelList(attr -> DIlines)))	goto Error; 	   
-	if (!(	a -> DIports 				= copy_DAQmxDIPortChannelList(attr -> DIports)))	goto Error;   
-	if (!(	a -> DOlines 				= copy_DAQmxDOLineChannelList(attr -> DOlines)))	goto Error; 		  
-	if (!(	a -> DOports 				= copy_DAQmxDOPortChannelList(attr -> DOports)))	goto Error; 		   
-	if (!(	a -> CIchan  				= copy_DAQmxCIChannelList(attr -> CIchan)))			goto Error; 		   
-	if (!(	a -> COchan  				= copy_DAQmxCOChannelList(attr -> COchan)))			goto Error; 
+	if (!(	a -> AIchan  				= copy_AIChannelList(attr -> AIchan)))			goto Error;
+	if (!(	a -> AOchan  				= copy_AOChannelList(attr -> AOchan)))			goto Error; 
+	if (!(	a -> DIlines 				= copy_DILineChannelList(attr -> DIlines)))	goto Error; 	   
+	if (!(	a -> DIports 				= copy_DIPortChannelList(attr -> DIports)))	goto Error;   
+	if (!(	a -> DOlines 				= copy_DOLineChannelList(attr -> DOlines)))	goto Error; 		  
+	if (!(	a -> DOports 				= copy_DOPortChannelList(attr -> DOports)))	goto Error; 		   
+	if (!(	a -> CIchan  				= copy_CIChannelList(attr -> CIchan)))			goto Error; 		   
+	if (!(	a -> COchan  				= copy_COChannelList(attr -> COchan)))			goto Error; 
 	
 	// trigger support
 	
@@ -688,16 +748,16 @@ static DAQmxDevAttr_type* copy_DAQmxDevAttr_type(DAQmxDevAttr_type* attr)
 	return a;
 	
 	Error:
-	discard_DAQmxDevAttr_type(&a);
+	discard_DevAttr_type(&a);
 	return NULL;
 }
 
 //------------------------------------------------------------------------------
-// DAQmxAIChannel_type
+// AIChannel_type
 //------------------------------------------------------------------------------
-static DAQmxAIChannel_type* init_DAQmxAIChannel_type (void)
+static AIChannel_type* init_AIChannel_type (void)
 {
-	DAQmxAIChannel_type* a = malloc (sizeof(DAQmxAIChannel_type));
+	AIChannel_type* a = malloc (sizeof(AIChannel_type));
 	if (!a) return NULL;
 	
 	a->physChanName 		= NULL;
@@ -705,11 +765,12 @@ static DAQmxAIChannel_type* init_DAQmxAIChannel_type (void)
 	a->Vrngs				= NULL;
 	a->Irngs				= NULL;
 	a->terminalCfg			= 0;
+	a->inUse				= FALSE;
 	
 	return a;
 }
 
-static void discard_DAQmxAIChannel_type (DAQmxAIChannel_type** a)
+static void discard_AIChannel_type (AIChannel_type** a)
 {
 	if (!*a) return;
 	
@@ -720,17 +781,17 @@ static void discard_DAQmxAIChannel_type (DAQmxAIChannel_type** a)
 	OKfree(*a);
 }
 
-int CVICALLBACK DisposeDAQmxAIChannelList (size_t index, void *ptrToItem, void *callbackData)
+int CVICALLBACK DisposeAIChannelList (size_t index, void *ptrToItem, void *callbackData)
 {
-	DAQmxAIChannel_type** chanPtrPtr = ptrToItem;
+	AIChannel_type** chanPtrPtr = ptrToItem;
 	
-	discard_DAQmxAIChannel_type(chanPtrPtr);
+	discard_AIChannel_type(chanPtrPtr);
 	return 0;
 }
 
-static DAQmxAIChannel_type* copy_DAQmxAIChannel_type (DAQmxAIChannel_type* channel)
+static AIChannel_type* copy_AIChannel_type (AIChannel_type* channel)
 {
-	DAQmxAIChannel_type* a = init_DAQmxAIChannel_type();
+	AIChannel_type* a = init_AIChannel_type();
 	if (!a) return NULL;
 	
 	if (!(	a->physChanName 			= StrDup(channel->physChanName)))			goto Error;
@@ -742,24 +803,24 @@ static DAQmxAIChannel_type* copy_DAQmxAIChannel_type (DAQmxAIChannel_type* chann
 	return a;
 	
 	Error:
-	discard_DAQmxAIChannel_type(&a);
+	discard_AIChannel_type(&a);
 	return NULL;
 }
 
-/// HIFN Copies a list of DAQmxAIChannel_type* elements
-/// HIRET If successful, a list with copied DAQmxAIChannel_type* elements is returned, otherwise 0.
-static ListType	copy_DAQmxAIChannelList (ListType chanList)
+/// HIFN Copies a list of AIChannel_type* elements
+/// HIRET If successful, a list with copied AIChannel_type* elements is returned, otherwise 0.
+static ListType	copy_AIChannelList (ListType chanList)
 {
-	ListType 				dest 		= ListCreate(sizeof(DAQmxAIChannel_type*));
+	ListType 				dest 		= ListCreate(sizeof(AIChannel_type*));
 	size_t 					n 			= ListNumItems(chanList);
-  	DAQmxAIChannel_type* 	chanCopy;
-	DAQmxAIChannel_type** 	chanPtrPtr 	= NULL;
+  	AIChannel_type* 	chanCopy;
+	AIChannel_type** 	chanPtrPtr 	= NULL;
 	
 	if (!dest) return 0;
 	
 	while (n){	  
 		chanPtrPtr 	= ListGetPtrToItem(chanList, n);	  
-		chanCopy 	= copy_DAQmxAIChannel_type(*chanPtrPtr);
+		chanCopy 	= copy_AIChannel_type(*chanPtrPtr);
 		if (!chanCopy) goto Error;
   		ListInsertItem (dest, &chanCopy, FRONT_OF_LIST);
   		n--;
@@ -768,16 +829,16 @@ static ListType	copy_DAQmxAIChannelList (ListType chanList)
 	return dest;
 	
 	Error:
-	ListApplyToEachEx (dest, 1, DisposeDAQmxAIChannelList, NULL); ListDispose(dest);  
+	ListApplyToEachEx (dest, 1, DisposeAIChannelList, NULL); ListDispose(dest);  
 	return 0;
 }
 
 //------------------------------------------------------------------------------
-// DAQmxAOChannel_type
+// AOChannel_type
 //------------------------------------------------------------------------------
-static DAQmxAOChannel_type* init_DAQmxAOChannel_type (void)
+static AOChannel_type* init_AOChannel_type (void)
 {
-	DAQmxAOChannel_type* a = malloc (sizeof(DAQmxAOChannel_type));
+	AOChannel_type* a = malloc (sizeof(AOChannel_type));
 	if (!a) return NULL;
 	
 	a->physChanName 			= NULL;
@@ -785,11 +846,12 @@ static DAQmxAOChannel_type* init_DAQmxAOChannel_type (void)
 	a->Vrngs					= NULL;
 	a->Irngs					= NULL;
 	a->terminalCfg				= 0;
+	a->inUse					= FALSE;
 	
 	return a;
 }
 
-static void discard_DAQmxAOChannel_type (DAQmxAOChannel_type** a)
+static void discard_AOChannel_type (AOChannel_type** a)
 {
 	if (!*a) return;
 	
@@ -800,17 +862,17 @@ static void discard_DAQmxAOChannel_type (DAQmxAOChannel_type** a)
 	OKfree(*a);
 }
 
-int CVICALLBACK DisposeDAQmxAOChannelList (size_t index, void *ptrToItem, void *callbackData)
+int CVICALLBACK DisposeAOChannelList (size_t index, void *ptrToItem, void *callbackData)
 {
-	DAQmxAOChannel_type** chanPtrPtr = ptrToItem;
+	AOChannel_type** chanPtrPtr = ptrToItem;
 	
-	discard_DAQmxAOChannel_type(chanPtrPtr);
+	discard_AOChannel_type(chanPtrPtr);
 	return 0;
 }
 
-static DAQmxAOChannel_type* copy_DAQmxAOChannel_type (DAQmxAOChannel_type* channel)
+static AOChannel_type* copy_AOChannel_type (AOChannel_type* channel)
 {
-	DAQmxAOChannel_type* a = init_DAQmxAOChannel_type();
+	AOChannel_type* a = init_AOChannel_type();
 	if (!a) return NULL;
 	
 	if (!(	a->physChanName 			= StrDup(channel->physChanName)))				goto Error;
@@ -822,24 +884,24 @@ static DAQmxAOChannel_type* copy_DAQmxAOChannel_type (DAQmxAOChannel_type* chann
 	return a;
 	
 	Error:
-	discard_DAQmxAOChannel_type(&a);
+	discard_AOChannel_type(&a);
 	return NULL;
 }
 
-/// HIFN Copies a list of DAQmxAOChannel_type* elements
-/// HIRET If successful, a list with copied DAQmxAOChannel_type* elements is returned, otherwise 0.
-static ListType	copy_DAQmxAOChannelList (ListType chanList)
+/// HIFN Copies a list of AOChannel_type* elements
+/// HIRET If successful, a list with copied AOChannel_type* elements is returned, otherwise 0.
+static ListType	copy_AOChannelList (ListType chanList)
 {
-	ListType 				dest 		= ListCreate(sizeof(DAQmxAOChannel_type*));
+	ListType 				dest 		= ListCreate(sizeof(AOChannel_type*));
 	size_t 					n 			= ListNumItems(chanList);
-  	DAQmxAOChannel_type* 	chanCopy;
-	DAQmxAOChannel_type** 	chanPtrPtr 	= NULL;
+  	AOChannel_type* 	chanCopy;
+	AOChannel_type** 	chanPtrPtr 	= NULL;
 	
 	if (!dest) return 0;
 	
 	while (n){	  
 		chanPtrPtr 	= ListGetPtrToItem(chanList, n);	  
-		chanCopy 	= copy_DAQmxAOChannel_type(*chanPtrPtr);
+		chanCopy 	= copy_AOChannel_type(*chanPtrPtr);
 		if (!chanCopy) goto Error;
   		ListInsertItem (dest, &chanCopy, FRONT_OF_LIST);
   		n--;
@@ -848,27 +910,28 @@ static ListType	copy_DAQmxAOChannelList (ListType chanList)
 	return dest;
 	
 	Error:
-	ListApplyToEachEx (dest, 1, DisposeDAQmxAOChannelList, NULL); ListDispose(dest);  
+	ListApplyToEachEx (dest, 1, DisposeAOChannelList, NULL); ListDispose(dest);  
 	return 0;
 }
 
 //------------------------------------------------------------------------------
-// DAQmxDILineChannel_type
+// DILineChannel_type
 //------------------------------------------------------------------------------
-static DAQmxDILineChannel_type* init_DAQmxDILineChannel_type (void)
+static DILineChannel_type* init_DILineChannel_type (void)
 {
-	DAQmxDILineChannel_type* a = malloc (sizeof(DAQmxDILineChannel_type));
+	DILineChannel_type* a = malloc (sizeof(DILineChannel_type));
 	if (!a) return NULL;
 	
 	a->physChanName 			= NULL;
 	a->sampModes				= 0;
 	a->changeDetectSupported	= 0;
 	a->sampClkSupported			= 0;
+	a->inUse					= FALSE;
 	
 	return a;
 }
 
-static void discard_DAQmxDILineChannel_type (DAQmxDILineChannel_type** a)
+static void discard_DILineChannel_type (DILineChannel_type** a)
 {
 	if (!*a) return;
 	
@@ -877,17 +940,17 @@ static void discard_DAQmxDILineChannel_type (DAQmxDILineChannel_type** a)
 	OKfree(*a);
 }
 
-int CVICALLBACK DisposeDAQmxDILineChannelList (size_t index, void *ptrToItem, void *callbackData)
+int CVICALLBACK DisposeDILineChannelList (size_t index, void *ptrToItem, void *callbackData)
 {
-	DAQmxDILineChannel_type** chanPtrPtr = ptrToItem;
+	DILineChannel_type** chanPtrPtr = ptrToItem;
 	
-	discard_DAQmxDILineChannel_type(chanPtrPtr);
+	discard_DILineChannel_type(chanPtrPtr);
 	return 0;
 }
 
-static DAQmxDILineChannel_type* copy_DAQmxDILineChannel_type (DAQmxDILineChannel_type* channel)
+static DILineChannel_type* copy_DILineChannel_type (DILineChannel_type* channel)
 {
-	DAQmxDILineChannel_type* a = init_DAQmxDILineChannel_type();
+	DILineChannel_type* a = init_DILineChannel_type();
 	if (!a) return NULL;
 	
 	if (!(	a->physChanName 			= StrDup(channel->physChanName)))		goto Error;
@@ -898,24 +961,24 @@ static DAQmxDILineChannel_type* copy_DAQmxDILineChannel_type (DAQmxDILineChannel
 	return a;
 	
 	Error:
-	discard_DAQmxDILineChannel_type(&a);
+	discard_DILineChannel_type(&a);
 	return NULL;
 }
 
-/// HIFN Copies a list of DAQmxDILineChannel_type* elements
-/// HIRET If successful, a list with copied DAQmxDILineChannel_type* elements is returned, otherwise 0.
-static ListType	copy_DAQmxDILineChannelList (ListType chanList)
+/// HIFN Copies a list of DILineChannel_type* elements
+/// HIRET If successful, a list with copied DILineChannel_type* elements is returned, otherwise 0.
+static ListType	copy_DILineChannelList (ListType chanList)
 {
-	ListType 					dest 		= ListCreate(sizeof(DAQmxDILineChannel_type*));
+	ListType 					dest 		= ListCreate(sizeof(DILineChannel_type*));
 	size_t 						n 			= ListNumItems(chanList);
-  	DAQmxDILineChannel_type* 	chanCopy;
-	DAQmxDILineChannel_type** 	chanPtrPtr 	= NULL;
+  	DILineChannel_type* 	chanCopy;
+	DILineChannel_type** 	chanPtrPtr 	= NULL;
 	
 	if (!dest) return 0;
 	
 	while (n){	  
 		chanPtrPtr 	= ListGetPtrToItem(chanList, n);	  
-		chanCopy 	= copy_DAQmxDILineChannel_type(*chanPtrPtr);
+		chanCopy 	= copy_DILineChannel_type(*chanPtrPtr);
 		if (!chanCopy) goto Error;
   		ListInsertItem (dest, &chanCopy, FRONT_OF_LIST);
   		n--;
@@ -924,16 +987,16 @@ static ListType	copy_DAQmxDILineChannelList (ListType chanList)
 	return dest;
 	
 	Error:
-	ListApplyToEachEx (dest, 1, DisposeDAQmxDILineChannelList, NULL); ListDispose(dest);  
+	ListApplyToEachEx (dest, 1, DisposeDILineChannelList, NULL); ListDispose(dest);  
 	return 0;
 }
 
 //------------------------------------------------------------------------------ 
-// DAQmxDIPortChannel_type
+// DIPortChannel_type
 //------------------------------------------------------------------------------ 
-static DAQmxDIPortChannel_type* init_DAQmxDIPortChannel_type (void)
+static DIPortChannel_type* init_DIPortChannel_type (void)
 {
-	DAQmxDIPortChannel_type* a = malloc (sizeof(DAQmxDIPortChannel_type));
+	DIPortChannel_type* a = malloc (sizeof(DIPortChannel_type));
 	if (!a) return NULL;
 	
 	a->physChanName 			= NULL;
@@ -941,11 +1004,12 @@ static DAQmxDIPortChannel_type* init_DAQmxDIPortChannel_type (void)
 	a->changeDetectSupported	= 0;
 	a->sampClkSupported			= 0;
 	a->portWidth				= 0;
+	a->inUse					= FALSE;
 	
 	return a;
 }
 
-static void discard_DAQmxDIPortChannel_type (DAQmxDIPortChannel_type** a)
+static void discard_DIPortChannel_type (DIPortChannel_type** a)
 {
 	if (!*a) return;
 	
@@ -954,17 +1018,17 @@ static void discard_DAQmxDIPortChannel_type (DAQmxDIPortChannel_type** a)
 	OKfree(*a);
 }
 
-int CVICALLBACK DisposeDAQmxDIPortChannelList (size_t index, void *ptrToItem, void *callbackData)
+int CVICALLBACK DisposeDIPortChannelList (size_t index, void *ptrToItem, void *callbackData)
 {
-	DAQmxDIPortChannel_type** chanPtrPtr = ptrToItem;
+	DIPortChannel_type** chanPtrPtr = ptrToItem;
 	
-	discard_DAQmxDIPortChannel_type(chanPtrPtr);
+	discard_DIPortChannel_type(chanPtrPtr);
 	return 0;
 }
 
-static DAQmxDIPortChannel_type* copy_DAQmxDIPortChannel_type (DAQmxDIPortChannel_type* channel)
+static DIPortChannel_type* copy_DIPortChannel_type (DIPortChannel_type* channel)
 {
-	DAQmxDIPortChannel_type* a = init_DAQmxDIPortChannel_type();
+	DIPortChannel_type* a = init_DIPortChannel_type();
 	if (!a) return NULL;
 	
 	if (!(	a->physChanName 			= StrDup(channel->physChanName)))		goto Error;
@@ -976,24 +1040,24 @@ static DAQmxDIPortChannel_type* copy_DAQmxDIPortChannel_type (DAQmxDIPortChannel
 	return a;
 	
 	Error:
-	discard_DAQmxDIPortChannel_type(&a);
+	discard_DIPortChannel_type(&a);
 	return NULL;
 }
 
-/// HIFN Copies a list of DAQmxDIPortChannel_type* elements
-/// HIRET If successful, a list with copied DAQmxDIPortChannel_type* elements is returned, otherwise 0.
-static ListType	copy_DAQmxDIPortChannelList (ListType chanList)
+/// HIFN Copies a list of DIPortChannel_type* elements
+/// HIRET If successful, a list with copied DIPortChannel_type* elements is returned, otherwise 0.
+static ListType	copy_DIPortChannelList (ListType chanList)
 {
-	ListType 					dest 		= ListCreate(sizeof(DAQmxDIPortChannel_type*));
+	ListType 					dest 		= ListCreate(sizeof(DIPortChannel_type*));
 	size_t 						n 			= ListNumItems(chanList);
-  	DAQmxDIPortChannel_type* 	chanCopy;
-	DAQmxDIPortChannel_type** 	chanPtrPtr 	= NULL;
+  	DIPortChannel_type* 	chanCopy;
+	DIPortChannel_type** 	chanPtrPtr 	= NULL;
 	
 	if (!dest) return 0;
 	
 	while (n){	  
 		chanPtrPtr 	= ListGetPtrToItem(chanList, n);	  
-		chanCopy 	= copy_DAQmxDIPortChannel_type(*chanPtrPtr);
+		chanCopy 	= copy_DIPortChannel_type(*chanPtrPtr);
 		if (!chanCopy) goto Error;
   		ListInsertItem (dest, &chanCopy, FRONT_OF_LIST);
   		n--;
@@ -1002,26 +1066,27 @@ static ListType	copy_DAQmxDIPortChannelList (ListType chanList)
 	return dest;
 	
 	Error:
-	ListApplyToEachEx (dest, 1, DisposeDAQmxDIPortChannelList, NULL); ListDispose(dest);  
+	ListApplyToEachEx (dest, 1, DisposeDIPortChannelList, NULL); ListDispose(dest);  
 	return 0;
 }
 
 //------------------------------------------------------------------------------
-// DAQmxDOLineChannel_type
+// DOLineChannel_type
 //------------------------------------------------------------------------------
-static DAQmxDOLineChannel_type* init_DAQmxDOLineChannel_type (void)
+static DOLineChannel_type* init_DOLineChannel_type (void)
 {
-	DAQmxDOLineChannel_type* a = malloc (sizeof(DAQmxDOLineChannel_type));
+	DOLineChannel_type* a = malloc (sizeof(DOLineChannel_type));
 	if (!a) return NULL;
 	
 	a->physChanName 			= NULL;
 	a->sampModes				= 0;
 	a->sampClkSupported			= 0;
+	a->inUse					= FALSE;
 	
 	return a;
 }
 
-static void discard_DAQmxDOLineChannel_type (DAQmxDOLineChannel_type** a)
+static void discard_DOLineChannel_type (DOLineChannel_type** a)
 {
 	if (!*a) return;
 	
@@ -1030,17 +1095,17 @@ static void discard_DAQmxDOLineChannel_type (DAQmxDOLineChannel_type** a)
 	OKfree(*a);
 }
 
-int CVICALLBACK DisposeDAQmxDOLineChannelList (size_t index, void *ptrToItem, void *callbackData)
+int CVICALLBACK DisposeDOLineChannelList (size_t index, void *ptrToItem, void *callbackData)
 {
-	DAQmxDOLineChannel_type** chanPtrPtr = ptrToItem;
+	DOLineChannel_type** chanPtrPtr = ptrToItem;
 	
-	discard_DAQmxDOLineChannel_type(chanPtrPtr);
+	discard_DOLineChannel_type(chanPtrPtr);
 	return 0;
 }
 
-static DAQmxDOLineChannel_type* copy_DAQmxDOLineChannel_type (DAQmxDOLineChannel_type* channel)
+static DOLineChannel_type* copy_DOLineChannel_type (DOLineChannel_type* channel)
 {
-	DAQmxDOLineChannel_type* a = init_DAQmxDOLineChannel_type();
+	DOLineChannel_type* a = init_DOLineChannel_type();
 	if (!a) return NULL;
 	
 	if (!(	a->physChanName 			= StrDup(channel->physChanName)))		goto Error;
@@ -1050,24 +1115,24 @@ static DAQmxDOLineChannel_type* copy_DAQmxDOLineChannel_type (DAQmxDOLineChannel
 	return a;
 	
 	Error:
-	discard_DAQmxDOLineChannel_type(&a);
+	discard_DOLineChannel_type(&a);
 	return NULL;
 }
 
-/// HIFN Copies a list of DAQmxDOLineChannel_type* elements
-/// HIRET If successful, a list with copied DAQmxDOLineChannel_type* elements is returned, otherwise 0.
-static ListType	copy_DAQmxDOLineChannelList (ListType chanList)
+/// HIFN Copies a list of DOLineChannel_type* elements
+/// HIRET If successful, a list with copied DOLineChannel_type* elements is returned, otherwise 0.
+static ListType	copy_DOLineChannelList (ListType chanList)
 {
-	ListType 					dest 		= ListCreate(sizeof(DAQmxDOLineChannel_type*));
+	ListType 					dest 		= ListCreate(sizeof(DOLineChannel_type*));
 	size_t 						n 			= ListNumItems(chanList);
-  	DAQmxDOLineChannel_type* 	chanCopy;
-	DAQmxDOLineChannel_type** 	chanPtrPtr 	= NULL;
+  	DOLineChannel_type* 	chanCopy;
+	DOLineChannel_type** 	chanPtrPtr 	= NULL;
 	
 	if (!dest) return 0;
 	
 	while (n){	  
 		chanPtrPtr 	= ListGetPtrToItem(chanList, n);	  
-		chanCopy 	= copy_DAQmxDOLineChannel_type(*chanPtrPtr);
+		chanCopy 	= copy_DOLineChannel_type(*chanPtrPtr);
 		if (!chanCopy) goto Error;
   		ListInsertItem (dest, &chanCopy, FRONT_OF_LIST);
   		n--;
@@ -1076,27 +1141,28 @@ static ListType	copy_DAQmxDOLineChannelList (ListType chanList)
 	return dest;
 	
 	Error:
-	ListApplyToEachEx (dest, 1, DisposeDAQmxDOLineChannelList, NULL); ListDispose(dest);  
+	ListApplyToEachEx (dest, 1, DisposeDOLineChannelList, NULL); ListDispose(dest);  
 	return 0;
 }
 
 //------------------------------------------------------------------------------
-// DAQmxDOPortChannel_type
+// DOPortChannel_type
 //------------------------------------------------------------------------------
-static DAQmxDOPortChannel_type* init_DAQmxDOPortChannel_type (void)
+static DOPortChannel_type* init_DOPortChannel_type (void)
 {
-	DAQmxDOPortChannel_type* a = malloc (sizeof(DAQmxDOPortChannel_type));
+	DOPortChannel_type* a = malloc (sizeof(DOPortChannel_type));
 	if (!a) return NULL;
 	
 	a->physChanName 			= NULL;
 	a->sampModes				= 0;
 	a->sampClkSupported			= 0;
 	a->portWidth				= 0;
+	a->inUse					= FALSE;
 	
 	return a;
 }
 
-static void discard_DAQmxDOPortChannel_type (DAQmxDOPortChannel_type** a)
+static void discard_DOPortChannel_type (DOPortChannel_type** a)
 {
 	if (!*a) return;
 	
@@ -1105,17 +1171,17 @@ static void discard_DAQmxDOPortChannel_type (DAQmxDOPortChannel_type** a)
 	OKfree(*a);
 }
 
-int CVICALLBACK DisposeDAQmxDOPortChannelList (size_t index, void *ptrToItem, void *callbackData)
+int CVICALLBACK DisposeDOPortChannelList (size_t index, void *ptrToItem, void *callbackData)
 {
-	DAQmxDOPortChannel_type** chanPtrPtr = ptrToItem;
+	DOPortChannel_type** chanPtrPtr = ptrToItem;
 	
-	discard_DAQmxDOPortChannel_type(chanPtrPtr);
+	discard_DOPortChannel_type(chanPtrPtr);
 	return 0;
 }
 
-static DAQmxDOPortChannel_type* copy_DAQmxDOPortChannel_type (DAQmxDOPortChannel_type* channel)
+static DOPortChannel_type* copy_DOPortChannel_type (DOPortChannel_type* channel)
 {
-	DAQmxDOPortChannel_type* a = init_DAQmxDOPortChannel_type();
+	DOPortChannel_type* a = init_DOPortChannel_type();
 	if (!a) return NULL;
 	
 	if (!(	a->physChanName 			= StrDup(channel->physChanName)))		goto Error;
@@ -1126,24 +1192,24 @@ static DAQmxDOPortChannel_type* copy_DAQmxDOPortChannel_type (DAQmxDOPortChannel
 	return a;
 	
 	Error:
-	discard_DAQmxDOPortChannel_type(&a);
+	discard_DOPortChannel_type(&a);
 	return NULL;
 }
 
-/// HIFN Copies a list of DAQmxDOPortChannel_type* elements
-/// HIRET If successful, a list with copied DAQmxDOPortChannel_type* elements is returned, otherwise 0.
-static ListType	copy_DAQmxDOPortChannelList (ListType chanList)
+/// HIFN Copies a list of DOPortChannel_type* elements
+/// HIRET If successful, a list with copied DOPortChannel_type* elements is returned, otherwise 0.
+static ListType	copy_DOPortChannelList (ListType chanList)
 {
-	ListType 					dest 		= ListCreate(sizeof(DAQmxDOPortChannel_type*));
+	ListType 					dest 		= ListCreate(sizeof(DOPortChannel_type*));
 	size_t 						n 			= ListNumItems(chanList);
-  	DAQmxDOPortChannel_type* 	chanCopy;
-	DAQmxDOPortChannel_type** 	chanPtrPtr 	= NULL;
+  	DOPortChannel_type* 	chanCopy;
+	DOPortChannel_type** 	chanPtrPtr 	= NULL;
 	
 	if (!dest) return 0;
 	
 	while (n){	  
 		chanPtrPtr 	= ListGetPtrToItem(chanList, n);	  
-		chanCopy 	= copy_DAQmxDOPortChannel_type(*chanPtrPtr);
+		chanCopy 	= copy_DOPortChannel_type(*chanPtrPtr);
 		if (!chanCopy) goto Error;
   		ListInsertItem (dest, &chanCopy, FRONT_OF_LIST);
   		n--;
@@ -1152,25 +1218,26 @@ static ListType	copy_DAQmxDOPortChannelList (ListType chanList)
 	return dest;
 	
 	Error:
-	ListApplyToEachEx (dest, 1, DisposeDAQmxDOPortChannelList, NULL); ListDispose(dest);  
+	ListApplyToEachEx (dest, 1, DisposeDOPortChannelList, NULL); ListDispose(dest);  
 	return 0;
 }
 
 //------------------------------------------------------------------------------
-// DAQmxCIChannel_type
+// CIChannel_type
 //------------------------------------------------------------------------------
-static DAQmxCIChannel_type* init_DAQmxCIChannel_type (void)
+static CIChannel_type* init_CIChannel_type (void)
 {
-	DAQmxCIChannel_type* a = malloc (sizeof(DAQmxCIChannel_type));
+	CIChannel_type* a = malloc (sizeof(CIChannel_type));
 	if (!a) return NULL;
 	
 	a->physChanName 		= NULL;
 	a->supportedMeasTypes   = 0;
+	a->inUse				= FALSE;
 	
 	return a;
 }
 
-static void discard_DAQmxCIChannel_type (DAQmxCIChannel_type** a)
+static void discard_CIChannel_type (CIChannel_type** a)
 {
 	if (!*a) return;
 	
@@ -1180,17 +1247,17 @@ static void discard_DAQmxCIChannel_type (DAQmxCIChannel_type** a)
 	OKfree(*a);
 }
 
-int CVICALLBACK DisposeDAQmxCIChannelList (size_t index, void *ptrToItem, void *callbackData)
+int CVICALLBACK DisposeCIChannelList (size_t index, void *ptrToItem, void *callbackData)
 {
-	DAQmxCIChannel_type** chanPtrPtr = ptrToItem;
+	CIChannel_type** chanPtrPtr = ptrToItem;
 	
-	discard_DAQmxCIChannel_type(chanPtrPtr);
+	discard_CIChannel_type(chanPtrPtr);
 	return 0;
 }
 
-static DAQmxCIChannel_type* copy_DAQmxCIChannel_type (DAQmxCIChannel_type* channel)
+static CIChannel_type* copy_CIChannel_type (CIChannel_type* channel)
 {
-	DAQmxCIChannel_type* a = init_DAQmxCIChannel_type();
+	CIChannel_type* a = init_CIChannel_type();
 	if (!a) return NULL;
 	
 	if (!(	a->physChanName 			= StrDup(channel->physChanName)))			goto Error;
@@ -1199,24 +1266,24 @@ static DAQmxCIChannel_type* copy_DAQmxCIChannel_type (DAQmxCIChannel_type* chann
 	return a;
 	
 	Error:
-	discard_DAQmxCIChannel_type(&a);
+	discard_CIChannel_type(&a);
 	return NULL;
 }
 
-/// HIFN Copies a list of DAQmxCIChannel_type* elements
-/// HIRET If successful, a list with copied DAQmxCIChannel_type* elements is returned, otherwise 0.
-static ListType	copy_DAQmxCIChannelList (ListType chanList)
+/// HIFN Copies a list of CIChannel_type* elements
+/// HIRET If successful, a list with copied CIChannel_type* elements is returned, otherwise 0.
+static ListType	copy_CIChannelList (ListType chanList)
 {
-	ListType 				dest 		= ListCreate(sizeof(DAQmxCIChannel_type*));
+	ListType 				dest 		= ListCreate(sizeof(CIChannel_type*));
 	size_t 					n 			= ListNumItems(chanList);
-  	DAQmxCIChannel_type* 	chanCopy;
-	DAQmxCIChannel_type** 	chanPtrPtr 	= NULL;
+  	CIChannel_type* 	chanCopy;
+	CIChannel_type** 	chanPtrPtr 	= NULL;
 	
 	if (!dest) return 0;
 	
 	while (n){	  
 		chanPtrPtr 	= ListGetPtrToItem(chanList, n);	  
-		chanCopy 	= copy_DAQmxCIChannel_type(*chanPtrPtr);
+		chanCopy 	= copy_CIChannel_type(*chanPtrPtr);
 		if (!chanCopy) goto Error;
   		ListInsertItem (dest, &chanCopy, FRONT_OF_LIST);
   		n--;
@@ -1225,25 +1292,26 @@ static ListType	copy_DAQmxCIChannelList (ListType chanList)
 	return dest;
 	
 	Error:
-	ListApplyToEachEx (dest, 1, DisposeDAQmxCIChannelList, NULL); ListDispose(dest);  
+	ListApplyToEachEx (dest, 1, DisposeCIChannelList, NULL); ListDispose(dest);  
 	return 0;
 }
 
 //------------------------------------------------------------------------------
-// DAQmxCOChannel_type
+// COChannel_type
 //------------------------------------------------------------------------------
-static DAQmxCOChannel_type* init_DAQmxCOChannel_type (void)
+static COChannel_type* init_COChannel_type (void)
 {
-	DAQmxCOChannel_type* a = malloc (sizeof(DAQmxCOChannel_type));
+	COChannel_type* a = malloc (sizeof(COChannel_type));
 	if (!a) return NULL;
 	
 	a->physChanName 			= NULL;
 	a->supportedOutputTypes   	= 0;
+	a->inUse					= FALSE;
 	
 	return a;
 }
 
-static void discard_DAQmxCOChannel_type (DAQmxCOChannel_type** a)
+static void discard_COChannel_type (COChannel_type** a)
 {
 	if (!*a) return;
 	
@@ -1253,17 +1321,17 @@ static void discard_DAQmxCOChannel_type (DAQmxCOChannel_type** a)
 	OKfree(*a);
 }
 
-int CVICALLBACK DisposeDAQmxCOChannelList (size_t index, void *ptrToItem, void *callbackData)
+int CVICALLBACK DisposeCOChannelList (size_t index, void *ptrToItem, void *callbackData)
 {
-	DAQmxCOChannel_type** chanPtrPtr = ptrToItem;
+	COChannel_type** chanPtrPtr = ptrToItem;
 	
-	discard_DAQmxCOChannel_type(chanPtrPtr);
+	discard_COChannel_type(chanPtrPtr);
 	return 0;
 }
 
-static DAQmxCOChannel_type* copy_DAQmxCOChannel_type (DAQmxCOChannel_type* channel)
+static COChannel_type* copy_COChannel_type (COChannel_type* channel)
 {
-	DAQmxCOChannel_type* a = init_DAQmxCOChannel_type();
+	COChannel_type* a = init_COChannel_type();
 	if (!a) return NULL;
 	
 	if (!(	a->physChanName 			= StrDup(channel->physChanName)))			goto Error;
@@ -1272,24 +1340,24 @@ static DAQmxCOChannel_type* copy_DAQmxCOChannel_type (DAQmxCOChannel_type* chann
 	return a;
 	
 	Error:
-	discard_DAQmxCOChannel_type(&a);
+	discard_COChannel_type(&a);
 	return NULL;
 }
 
-/// HIFN Copies a list of DAQmxCOChannel_type* elements
-/// HIRET If successful, a list with copied DAQmxCOChannel_type* elements is returned, otherwise 0.
-static ListType	copy_DAQmxCOChannelList (ListType chanList)
+/// HIFN Copies a list of COChannel_type* elements
+/// HIRET If successful, a list with copied COChannel_type* elements is returned, otherwise 0.
+static ListType	copy_COChannelList (ListType chanList)
 {
-	ListType 				dest 		= ListCreate(sizeof(DAQmxCOChannel_type*));
+	ListType 				dest 		= ListCreate(sizeof(COChannel_type*));
 	size_t 					n 			= ListNumItems(chanList);
-  	DAQmxCOChannel_type* 	chanCopy;
-	DAQmxCOChannel_type** 	chanPtrPtr 	= NULL;
+  	COChannel_type* 	chanCopy;
+	COChannel_type** 	chanPtrPtr 	= NULL;
 	
 	if (!dest) return 0;
 	
 	while (n){	  
 		chanPtrPtr 	= ListGetPtrToItem(chanList, n);	  
-		chanCopy 	= copy_DAQmxCOChannel_type(*chanPtrPtr);
+		chanCopy 	= copy_COChannel_type(*chanPtrPtr);
 		if (!chanCopy) goto Error;
   		ListInsertItem (dest, &chanCopy, FRONT_OF_LIST);
   		n--;
@@ -1298,11 +1366,131 @@ static ListType	copy_DAQmxCOChannelList (ListType chanList)
 	return dest;
 	
 	Error:
-	ListApplyToEachEx (dest, 1, DisposeDAQmxCOChannelList, NULL); ListDispose(dest);  
+	ListApplyToEachEx (dest, 1, DisposeCOChannelList, NULL); ListDispose(dest);  
 	return 0;
 }
 
-//------------------------------------------------------------------------------ 
+//------------------------------------------------------------------------------
+// AITaskSet_type
+//------------------------------------------------------------------------------
+static AITaskSet_type* init_AITaskSet_type (void)
+{
+	AITaskSet_type* a = malloc (sizeof(AITaskSet_type));
+	if (!a) return NULL;
+	
+	a -> taskHndl		= NULL;
+	a -> chanSet		= ListCreate(sizeof(AIAOChanSet_type*));
+	a -> timeout		= 
+	a -> measmode		=
+	a -> samplerate		= 
+	a -> nsamples		= 
+	a -> blocksize		=
+	a -> starttrig		=
+	a -> sampclksource	=
+	a -> sampclkedge	=
+	a -> refclksource	=
+	a -> refclkfreq		=
+		
+	/*
+	
+	for (int i = 0; i < MAX_DAQmx_TASKS; i++) {
+		(a -> taskset[i]).measmode              	= MeasNone;
+		(a -> taskset[i]).samplerate            	= 50000;	   	// Default [Hz]
+		(a -> taskset[i]).nsamples              	= 0;
+		(a -> taskset[i]).duration              	= 0; 
+		(a -> taskset[i]).blocksize             	= 4096;      	// Must be a power of 2 because of how the DAQmx output buffers work. 
+																	// The size of the output buffer is set to twice the blocksize 
+		(a -> taskset[i]).starttrig.trigtype    	= TRIG_None;
+		(a -> taskset[i]).starttrig.trigsource  	= NULL;      	// Dynamically allocated
+		(a -> taskset[i]).starttrig.edgetype    	= 0;
+		(a -> taskset[i]).starttrig.level       	= 0;
+		(a -> taskset[i]).starttrig.windowtop   	= 0;
+		(a -> taskset[i]).starttrig.windowbttm  	= 0;
+		(a -> taskset[i]).starttrig.wndtrigcond 	= 0; 
+		(a -> taskset[i]).sampclksource 		  	= NULL;      	// Dynamically allocated
+		(a -> taskset[i]).sampclkedge		      	= 0;
+		(a -> taskset[i]).refclksource 		  		= NULL;      	// Dynamically allocated
+		(a -> taskset[i]).refclkfreq		      	= 1e7;       	// In [Hz], here 10 MHz reference clock assumed
+		(a -> taskset[i]).timeout			      	= 5;			// Timeout in [s]
+	}
+	 */
+	
+	return a;
+}
+
+static void	discard_AITaskSet_type (AITaskSet_type** a)
+{
+	
+}
+
+//------------------------------------------------------------------------------
+// AOTaskSet_type
+//------------------------------------------------------------------------------
+static AOTaskSet_type* init_AOTaskSet_type (void)
+{
+  
+}
+
+static void	discard_AOTaskSet_type (AOTaskSet_type** a)
+{
+	
+}
+
+//------------------------------------------------------------------------------
+// DITaskSet_type
+//------------------------------------------------------------------------------
+static DITaskSet_type* init_DITaskSet_type (void)
+{
+	
+}
+
+static void	discard_DITaskSet_type (DITaskSet_type** a)
+{
+	
+}
+
+//------------------------------------------------------------------------------
+// DOTaskSet_type
+//------------------------------------------------------------------------------
+static DOTaskSet_type* init_DOTaskSet_type (void)
+{
+	
+}
+
+static void discard_DOTaskSet_type (DOTaskSet_type** a)
+{
+	
+}
+
+//------------------------------------------------------------------------------
+// CITaskSet_type
+//------------------------------------------------------------------------------
+static CITaskSet_type* init_CITaskSet_type (void)
+{
+	
+}
+
+static void	discard_CITaskSet_type (CITaskSet_type** a)
+{
+	
+}
+
+//------------------------------------------------------------------------------
+// COTaskSet_type
+//------------------------------------------------------------------------------
+static COTaskSet_type* init_COTaskSet_type (void)
+{
+	
+}
+
+static void discard_COTaskSet_type (COTaskSet_type** a)
+{
+	
+}
+
+
+
+
 //------------------------------------------------------------------------------ 
 
 static IORange_type* GetIORanges (char devName[], int rangeType)
@@ -1369,34 +1557,223 @@ static ListType GetSupportedIOTypes (char devName[], int IOType)
 	return 0;
 }
 
-/// HIFN Obtains a list of supported IO types for a given physical channel
+/// HIFN Obtains a list of physical channel properties for a given DAQmx channel attribute that returns an array of properties.
 /// HIPAR chanName/ Physical channel name, e.g. dev1/ai0
-/// HIPAR chanIOAttribute/ Measurement or output type, pass one of the following constants: DAQmx_PhysicalChan_AI_SupportedMeasTypes, DAQmx_PhysicalChan_AO_SupportedOutputTypes,
-/// HIPAR chanIOAttribute/ DAQmx_PhysicalChan_CI_SupportedMeasTypes, DAQmx_PhysicalChan_CO_SupportedOutputTypes
-static ListType	GetPhysChanSupportedIOTypes	(char chanName[], int chanIOAttribute)
+/// HIPAR chanIOAttribute/ Physical channel property returning an array such as: DAQmx_PhysicalChan_AI_SupportedMeasTypes, DAQmx_PhysicalChan_AO_SupportedOutputTypes,etc.
+static ListType	GetPhysChanPropertyList	(char chanName[], int chanProperty)
 {
-	ListType 	IOTypes 	= ListCreate(sizeof(int));
-	int			nelem		= 0;
-	int*		io			= NULL;
+	ListType 	propertyList 	= ListCreate(sizeof(int));
+	int			nelem			= 0;
+	int*		properties		= NULL;
 	
-	if (!IOTypes) return 0;
+	if (!propertyList) return 0;
 	
-	if((nelem = DAQmxGetPhysicalChanAttribute(chanName, chanIOAttribute, NULL)) < 0) goto Error;
+	nelem = DAQmxGetPhysicalChanAttribute(chanName, chanProperty, NULL); 
+	if (!nelem) return propertyList;
+	if (nelem < 0) goto Error;
 	
-	io = malloc (nelem * sizeof(int));
-	if (!io) goto Error; // also if nelem = 0, i.e. no IO types found
+	properties = malloc (nelem * sizeof(int));
+	if (!properties) goto Error; // also if nelem = 0, i.e. no properties found
 	
-	if (DAQmxGetDeviceAttribute(chanName, chanIOAttribute, io, nelem) < 0) goto Error;
+	if (DAQmxGetPhysicalChanAttribute(chanName, chanProperty, properties, nelem) < 0) goto Error;
 	
 	for (size_t i = 0; i < nelem; i++)
-		ListInsertItem(IOTypes, &io[i], END_OF_LIST);
+		ListInsertItem(propertyList, &properties[i], END_OF_LIST);
 	
-	return IOTypes;
+	return propertyList;
 	
 	Error:
-	OKfree(io);
-	ListDispose(IOTypes);
+	OKfree(properties);
+	ListDispose(propertyList);
 	return 0;
+}
+
+static void	PopulateChannels (Dev_type* dev)
+{
+	int							ioVal;
+	int							ioMode;
+	int							ioType;
+	int							nItems;
+	char*						shortChName;
+	ListType					chanList;
+	AIChannel_type**		AIChanPtrPtr;
+	AOChannel_type**   	AOChanPtrPtr;
+	DILineChannel_type**	DILineChanPtrPtr;
+	DIPortChannel_type**  	DIPortChanPtrPtr;
+	DOLineChannel_type**	DOLineChanPtrPtr;
+	DOPortChannel_type**  	DOPortChanPtrPtr;
+	CIChannel_type**		CIChanPtrPtr;
+	COChannel_type**   	COChanPtrPtr;
+	size_t						n;
+	
+	GetCtrlVal(dev->devPanHndl, TaskSetPan_IO, &ioVal);
+	GetCtrlVal(dev->devPanHndl, TaskSetPan_IOMode, &ioMode);
+	GetCtrlVal(dev->devPanHndl, TaskSetPan_IOType, &ioType);
+	
+	ClearListCtrl(dev->devPanHndl, TaskSetPan_PhysChan); 
+	
+	switch (ioVal) {
+			
+		case DAQmxAcquire:
+			
+			switch (ioMode) {
+				
+				case DAQmxAnalog:
+					
+					n = ListNumItems(dev->attr->AIchan);
+					for (int i = 1; i <= n; i++) {
+						AIChanPtrPtr = ListGetPtrToItem(dev->attr->AIchan, i);
+						// select only channels that support this measurement type since not all channels of the same type may have the same capabilities
+						// as well as select channels that have not been already added to the DAQmx tasks
+						if (ListFindItem ((*AIChanPtrPtr)->supportedMeasTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*AIChanPtrPtr)->inUse) {
+							shortChName = strstr((*AIChanPtrPtr)->physChanName, "/") + 1;  
+							// insert physical channel name in the list
+							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*AIChanPtrPtr)->physChanName);
+						}
+					}
+					
+					break;
+					
+				case DAQmxDigital:
+					
+					switch (ioType) {
+						
+						case DAQmxDigLines:
+							
+							n = ListNumItems(dev->attr->DIlines);
+							for (int i = 1; i <= n; i++) {
+								DILineChanPtrPtr = ListGetPtrToItem(dev->attr->DIlines, i);
+								// select channels that have not been already added to the DAQmx tasks
+								if (!(*DILineChanPtrPtr)->inUse) {
+									shortChName = strstr((*DILineChanPtrPtr)->physChanName, "/") + 1;  
+									// insert physical channel name in the list
+									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DILineChanPtrPtr)->physChanName);
+								}
+							}
+							
+							break;
+							
+						case DAQmxDigPorts:
+							
+							n = ListNumItems(dev->attr->DIports);
+							for (int i = 1; i <= n; i++) {
+								DIPortChanPtrPtr = ListGetPtrToItem(dev->attr->DIports, i);
+								// select channels that have not been already added to the DAQmx tasks
+								if (!(*DIPortChanPtrPtr)->inUse) {
+									shortChName = strstr((*DIPortChanPtrPtr)->physChanName, "/") + 1;  
+									// insert physical channel name in the list
+									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DIPortChanPtrPtr)->physChanName);
+								}
+							}
+							
+							break;
+					}
+					
+					break;
+					
+				case DAQmxCounter:
+					
+					n = ListNumItems(dev->attr->CIchan);
+					for (int i = 1; i <= n; i++) {
+						CIChanPtrPtr = ListGetPtrToItem(dev->attr->CIchan, i);
+						// select only channels that support this measurement type since not all channels of the same type may have the same capabilities
+						// as well as select channels that have not been already added to the DAQmx tasks
+						if (ListFindItem ((*CIChanPtrPtr)->supportedMeasTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*CIChanPtrPtr)->inUse) {
+							shortChName = strstr((*CIChanPtrPtr)->physChanName, "/") + 1; 
+							// insert physical channel name in the list
+							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*CIChanPtrPtr)->physChanName);
+						}
+					}
+					
+					break;
+			}
+			
+			break;
+			
+		case DAQmxGenerate:
+			
+			switch (ioMode) {
+				
+				case DAQmxAnalog:
+					
+					n = ListNumItems(dev->attr->AOchan);
+					for (int i = 1; i <= n; i++) {
+						AOChanPtrPtr = ListGetPtrToItem(dev->attr->AOchan, i);
+						// select only channels that support this measurement type since not all channels of the same type may have the same capabilities
+						// as well as select channels that have not been already added to the DAQmx tasks
+						if (ListFindItem ((*AOChanPtrPtr)->supportedOutputTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*AOChanPtrPtr)->inUse) {
+							shortChName = strstr((*AOChanPtrPtr)->physChanName, "/") + 1;
+							// insert physical channel name in the list
+							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*AOChanPtrPtr)->physChanName);
+						}
+					}
+					
+					break;
+					
+				case DAQmxDigital:
+					
+						switch (ioType) {
+						
+						case DAQmxDigLines:
+							
+							n = ListNumItems(dev->attr->DOlines);
+							for (int i = 1; i <= n; i++) {
+								DOLineChanPtrPtr = ListGetPtrToItem(dev->attr->DOlines, i);
+								// select channels that have not been already added to the DAQmx tasks
+								if (!(*DOLineChanPtrPtr)->inUse) {
+									shortChName = strstr((*DOLineChanPtrPtr)->physChanName, "/") + 1;
+									// insert physical channel name in the list
+									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DOLineChanPtrPtr)->physChanName);
+								}
+							}
+							
+							break;
+							
+						case DAQmxDigPorts:
+							
+							n = ListNumItems(dev->attr->DOports);
+							for (int i = 1; i <= n; i++) {
+								DOPortChanPtrPtr = ListGetPtrToItem(dev->attr->DOports, i);
+								// select channels that have not been already added to the DAQmx tasks
+								if (!(*DOPortChanPtrPtr)->inUse) {
+									shortChName = strstr((*DOPortChanPtrPtr)->physChanName, "/") + 1;
+									// insert physical channel name in the list
+									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DOPortChanPtrPtr)->physChanName);
+								}
+							}
+							
+							break;
+					}
+					
+					break;
+					
+				case DAQmxCounter:
+					
+					n = ListNumItems(dev->attr->COchan);
+					for (int i = 1; i <= n; i++) {
+						COChanPtrPtr = ListGetPtrToItem(dev->attr->COchan, i);
+						// select only channels that support this measurement type since not all channels of the same type may have the same capabilities
+						// as well as select channels that have not been already added to the DAQmx tasks
+						if (ListFindItem ((*COChanPtrPtr)->supportedOutputTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*COChanPtrPtr)->inUse) {
+							shortChName = strstr((*COChanPtrPtr)->physChanName, "/") + 1;
+							// insert physical channel name in the list
+							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*COChanPtrPtr)->physChanName);
+						}
+					}
+					
+					break;
+			}
+			
+			break;
+	}
+	
+	// undim add channel button if there are any channels
+	GetNumListItems(dev->devPanHndl, TaskSetPan_PhysChan, &nItems);
+	if (nItems)
+		SetCtrlAttribute(dev->devPanHndl, TaskSetPan_AddChan, ATTR_DIMMED, 0); 
+	else
+		SetCtrlAttribute(dev->devPanHndl, TaskSetPan_AddChan, ATTR_DIMMED, 1);
+	
 }
 
 //------------------------------------------------------------------------------
@@ -1430,6 +1807,7 @@ static IORange_type* copy_IORange_type (IORange_type* IOrange)
 	IORange_type* a = init_IORange_type();
 	if (!a) return NULL;
 	
+	if (!IOrange->Nrngs) return a; // no ranges
 	// allocate memory for the ranges
 	a->low = malloc(IOrange->Nrngs * sizeof(double));
 	if (!a->low) goto Error;
@@ -1568,62 +1946,46 @@ static void discard_IOchan_type (IOchan_type** a)
 }
 
 //------------------------------------------------------------------------------
-// DAQmxDev_type
+// Dev_type
 //------------------------------------------------------------------------------
 
-static DAQmxDev_type* init_DAQmxDev_type (DAQmxDevAttr_type** attr, char taskControllerName[])
+static Dev_type* init_Dev_type (DevAttr_type** attr, char taskControllerName[])
 {
-	DAQmxDev_type* a = malloc (sizeof(DAQmxDev_type));
+	Dev_type* a = malloc (sizeof(Dev_type));
 	if (!a) return NULL;
 	
-	a -> attr								= *attr;
-	a -> chan								= NULL; 
+	a -> devPanHndl			= 0;
+	a -> attr				= *attr;
+	a -> chan				= NULL; 
 	
 	//-------------------------------------------------------------------------------------------------
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
 	a -> taskController = init_TaskControl_type (taskControllerName, ConfigureTC, IterateTC, StartTC, 
 						  ResetTC, DoneTC, StoppedTC, DataReceivedTC, ModuleEventHandler, ErrorTC);
-	if (!a->taskController) {discard_DAQmxDevAttr_type(attr); free(a); return NULL;}
+	if (!a->taskController) {discard_DevAttr_type(attr); free(a); return NULL;}
 	// connect DAQmxDev data to Task Controller
 	SetTaskControlModuleData(a -> taskController, a);
-	//-------------------------------------------------------------------------------------------------
-	
-
 	
 	//--------------------------
 	// DAQmx task settings
 	//--------------------------
 	
-	for (int i = 0; i < MAX_DAQmx_TASKS; i++) {
-		(a -> taskset[i]).measmode              	= MeasNone;
-		(a -> taskset[i]).samplerate            	= 50000;	   	// Default [Hz]
-		(a -> taskset[i]).nsamples              	= 0;
-		(a -> taskset[i]).duration              	= 0; 
-		(a -> taskset[i]).blocksize             	= 4096;      	// Must be a power of 2 because of how the DAQmx output buffers work. 
-																	// The size of the output buffer is set to twice the blocksize 
-		(a -> taskset[i]).starttrig.trigtype    	= TRIG_None;
-		(a -> taskset[i]).starttrig.trigsource  	= NULL;      	// Dynamically allocated
-		(a -> taskset[i]).starttrig.edgetype    	= 0;
-		(a -> taskset[i]).starttrig.level       	= 0;
-		(a -> taskset[i]).starttrig.windowtop   	= 0;
-		(a -> taskset[i]).starttrig.windowbttm  	= 0;
-		(a -> taskset[i]).starttrig.wndtrigcond 	= 0; 
-		(a -> taskset[i]).sampclksource 		  	= NULL;      	// Dynamically allocated
-		(a -> taskset[i]).sampclkedge		      	= 0;
-		(a -> taskset[i]).refclksource 		  		= NULL;      	// Dynamically allocated
-		(a -> taskset[i]).refclkfreq		      	= 1e7;       	// In [Hz], here 10 MHz reference clock assumed
-		(a -> taskset[i]).timeout			      	= 5;			// Timeout in [s]
-	}
+	a -> AITaskSet			= NULL;			
+	a -> AOTaskSet			= NULL;
+	a -> DITaskSet			= NULL;
+	a -> DOTaskSet			= NULL;
+	a -> CITaskSet			= NULL;
+	a -> COTaskSet			= NULL;	
 	
 	return a;
 }
 
-static void discard_DAQmxDev_type(DAQmxDev_type** a)
+static void discard_Dev_type(Dev_type** a)
 {
 	if (!(*a)) return;
 	
-	discard_DAQmxDevAttr_type(&(*a)->attr);
+	discard_DevAttr_type(&(*a)->attr);
 	
 	discard_IOchan_type(&(*a)->chan);
 	
@@ -1678,7 +2040,7 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl)
 	return error;
 }
 
-/// HIFN Populates table and a devlist of DAQmxDevAttr_type with NIDAQmxManager devices and their properties.
+/// HIFN Populates table and a devlist of DevAttr_type with NIDAQmxManager devices and their properties.
 /// HIRET positive value for the number of devices found, 0 if there are no devices and negative values for error.
 static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 {
@@ -1689,15 +2051,15 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	char* 						dev_pt     			= NULL;
 	char** 						idxnames  			= NULL;          // Used to break up the names string
 	char** 						idxstr    			= NULL;          // Used to break up the other strings like AI channels
-	DAQmxDevAttr_type* 			devAttrPtr; 
-	DAQmxAIChannel_type*		newAIChanPtr		= NULL;
-	DAQmxAOChannel_type*		newAOChanPtr		= NULL;
-	DAQmxDILineChannel_type*	newDILineChanPtr	= NULL;
-	DAQmxDIPortChannel_type*	newDIPortChanPtr	= NULL;
-	DAQmxDOLineChannel_type*	newDOLineChanPtr	= NULL;
-	DAQmxDOPortChannel_type*	newDOPortChanPtr	= NULL;
-	DAQmxCIChannel_type*		newCIChanPtr		= NULL;
-	DAQmxCOChannel_type*		newCOChanPtr		= NULL;
+	DevAttr_type* 			devAttrPtr; 
+	AIChannel_type*		newAIChanPtr		= NULL;
+	AOChannel_type*		newAOChanPtr		= NULL;
+	DILineChannel_type*	newDILineChanPtr	= NULL;
+	DIPortChannel_type*	newDIPortChanPtr	= NULL;
+	DOLineChannel_type*	newDOLineChanPtr	= NULL;
+	DOPortChannel_type*	newDOPortChanPtr	= NULL;
+	CIChannel_type*		newCIChanPtr		= NULL;
+	COChannel_type*		newCOChanPtr		= NULL;
 	int 						ndev        		= 0;
 	int 						columns     		= 0;
 	unsigned int   				nAI;          						// # AI chan
@@ -1741,10 +2103,10 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	while (dev_pt!=NULL)
 	{
 		ndev++; 
-		// Init DAQmxDevAttr_type dev structure and fill it with data
+		// Init DevAttr_type dev structure and fill it with data
 		
-		if (!(devAttrPtr = init_DAQmxDevAttr_type())) {   
-			DLMsg("Error: DAQmxDevAttr_type structure could not be initialized.\n\n", 1);
+		if (!(devAttrPtr = init_DevAttr_type())) {   
+			DLMsg("Error: DevAttr_type structure could not be initialized.\n\n", 1);
 			return -1;
 		}
 		
@@ -1763,21 +2125,6 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		// 4. S/N
 		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_SerialNum, &devAttrPtr->serial)); 
 		
-		// Macro to fill lists with channel names and count
-		#define FILLSTRLIST(property, list, nitems) 									\
-				errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, property, NULL));  \
-				nullChk(*idxstr = realloc (*idxstr, buffersize)); 						\
-				errChk(DAQmxGetDeviceAttribute (dev_pt, property, *idxstr, buffersize));\
-				nitems = 0; 															\
-				tmpsubstr = substr (", ", idxstr);										\
-				while (tmpsubstr != NULL) {												\
-					if (!(newChanPtr = init_DAQmxChannel_type())) goto Error;			\
-					newChanPtr->physChanName = tmpsubstr;
-					newChanPtr->IOTypes = GetPhysChanSupportedIOTypes(tmpsubstr,  
-					nitems++; 															\
-					ListInsertItem (list, &tmpsubstr, END_OF_LIST);						\
-					tmpsubstr = substr (", ", idxstr); 									\
-				} 																		\
 		//------------------------------------------------									  
 		// Channel properties							
 		//------------------------------------------------
@@ -1789,9 +2136,9 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		nAI = 0; 															
 		tmpsubstr = substr (", ", idxstr);										
 		while (tmpsubstr != NULL) {												
-			if (!(newAIChanPtr = init_DAQmxAIChannel_type())) goto Error;			
+			if (!(newAIChanPtr = init_AIChannel_type())) goto Error;			
 			newAIChanPtr->physChanName 			= tmpsubstr;
-			newAIChanPtr->supportedMeasTypes 	= GetPhysChanSupportedIOTypes(tmpsubstr, DAQmx_PhysicalChan_AI_SupportedMeasTypes);  
+			newAIChanPtr->supportedMeasTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_AI_SupportedMeasTypes);  
 			newAIChanPtr->Vrngs					= GetIORanges(dev_pt, DAQmx_Dev_AI_VoltageRngs);
 			newAIChanPtr->Irngs					= GetIORanges(dev_pt, DAQmx_Dev_AI_CurrentRngs);
 			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_AI_TermCfgs, &newAIChanPtr->terminalCfg); 
@@ -1807,29 +2154,115 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		nAO = 0; 															
 		tmpsubstr = substr (", ", idxstr);										
 		while (tmpsubstr != NULL) {												
-			if (!(newAOChanPtr = init_DAQmxAOChannel_type())) goto Error;			
+			if (!(newAOChanPtr = init_AOChannel_type())) goto Error;			
 			newAOChanPtr->physChanName 			= tmpsubstr;
-			newAOChanPtr->supportedOutputTypes 	= GetPhysChanSupportedIOTypes(tmpsubstr, DAQmx_PhysicalChan_AO_SupportedOutputTypes);  
+			newAOChanPtr->supportedOutputTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_AO_SupportedOutputTypes);  
 			newAOChanPtr->Vrngs					= GetIORanges(dev_pt, DAQmx_Dev_AO_VoltageRngs);
 			newAOChanPtr->Irngs					= GetIORanges(dev_pt, DAQmx_Dev_AO_CurrentRngs);
 			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_AO_TermCfgs, &newAOChanPtr->terminalCfg); 
-			ListInsertItem (devAttrPtr->AIchan, &newAIChanPtr, END_OF_LIST);						
+			ListInsertItem (devAttrPtr->AOchan, &newAOChanPtr, END_OF_LIST);						
 			tmpsubstr = substr (", ", idxstr); 									
 			nAO++; 															
 		} 	
-		
+					 
 		// 7. DI lines
-		FILLSTRLIST(DAQmx_Dev_DI_Lines, devAttrPtr->DIlines, nDIlines);
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Lines, NULL));  
+		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Lines, *idxstr, buffersize));
+		nDIlines = 0; 															
+		tmpsubstr = substr (", ", idxstr);										
+		while (tmpsubstr != NULL) {												
+			if (!(newDILineChanPtr = init_DILineChannel_type())) goto Error;			
+			newDILineChanPtr->physChanName 			= tmpsubstr;
+			newDILineChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DI_SampModes);  
+			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_ChangeDetectSupported, &newDILineChanPtr->changeDetectSupported);
+			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_SampClkSupported, &newDILineChanPtr->sampClkSupported);
+			ListInsertItem (devAttrPtr->DIlines, &newDILineChanPtr, END_OF_LIST);						
+			tmpsubstr = substr (", ", idxstr); 									
+			nDIlines++; 															
+		} 	
+		
 		// 8. DI ports
-		FILLSTRLIST(DAQmx_Dev_DI_Ports, devAttrPtr->DIports, nDIports);					
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Ports, NULL));  
+		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Ports, *idxstr, buffersize));
+		nDIports = 0; 															
+		tmpsubstr = substr (", ", idxstr);										
+		while (tmpsubstr != NULL) {												
+			if (!(newDIPortChanPtr = init_DIPortChannel_type())) goto Error;			
+			newDIPortChanPtr->physChanName 			= tmpsubstr;
+			newDIPortChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DI_SampModes);  
+			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_ChangeDetectSupported, &newDIPortChanPtr->changeDetectSupported);
+			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_SampClkSupported, &newDIPortChanPtr->sampClkSupported);
+			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_PortWidth, &newDIPortChanPtr->portWidth);
+			ListInsertItem (devAttrPtr->DIports, &newDIPortChanPtr, END_OF_LIST);						
+			tmpsubstr = substr (", ", idxstr); 									
+			nDIports++; 															
+		} 	
+		
 		// 9. DO lines
-		FILLSTRLIST(DAQmx_Dev_DO_Lines, devAttrPtr->DOlines, nDOlines);  
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Lines, NULL));  
+		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Lines, *idxstr, buffersize));
+		nDOlines = 0; 															
+		tmpsubstr = substr (", ", idxstr);										
+		while (tmpsubstr != NULL) {												
+			if (!(newDOLineChanPtr = init_DOLineChannel_type())) goto Error;			
+			newDOLineChanPtr->physChanName 			= tmpsubstr;
+			newDOLineChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DO_SampModes);  
+			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_SampClkSupported, &newDOLineChanPtr->sampClkSupported);
+			ListInsertItem (devAttrPtr->DOlines, &newDOLineChanPtr, END_OF_LIST);						
+			tmpsubstr = substr (", ", idxstr); 									
+			nDOlines++; 															
+		} 	
+		
 		// 10. DO ports
-		FILLSTRLIST(DAQmx_Dev_DO_Ports, devAttrPtr->DOports, nDOports);
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Ports, NULL));  
+		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Ports, *idxstr, buffersize));
+		nDOports = 0; 															
+		tmpsubstr = substr (", ", idxstr);										
+		while (tmpsubstr != NULL) {												
+			if (!(newDOPortChanPtr = init_DOPortChannel_type())) goto Error;			
+			newDOPortChanPtr->physChanName 			= tmpsubstr;
+			newDOPortChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DO_SampModes);  
+			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_SampClkSupported, &newDOPortChanPtr->sampClkSupported);
+			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_PortWidth, &newDOPortChanPtr->portWidth);  
+			ListInsertItem (devAttrPtr->DOports, &newDOPortChanPtr, END_OF_LIST);						
+			tmpsubstr = substr (", ", idxstr); 									
+			nDOports++; 															
+		} 	
+		
 		// 11. CI 
-		FILLSTRLIST(DAQmx_Dev_CI_PhysicalChans, devAttrPtr->CIchan, nCI);  
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CI_PhysicalChans, NULL));  
+		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CI_PhysicalChans, *idxstr, buffersize));
+		nCI = 0; 															
+		tmpsubstr = substr (", ", idxstr);										
+		while (tmpsubstr != NULL) {												
+			if (!(newCIChanPtr = init_CIChannel_type())) goto Error;			
+			newCIChanPtr->physChanName 			= tmpsubstr;
+			newCIChanPtr->supportedMeasTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_CI_SupportedMeasTypes);  
+			ListInsertItem (devAttrPtr->CIchan, &newCIChanPtr, END_OF_LIST);						
+			tmpsubstr = substr (", ", idxstr); 									
+			nCI++; 															
+		} 	
+		
 		// 12. CO 
-		FILLSTRLIST(DAQmx_Dev_CO_PhysicalChans, devAttrPtr->COchan, nCO);
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CO_PhysicalChans, NULL));  
+		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CO_PhysicalChans, *idxstr, buffersize));
+		nCO = 0; 															
+		tmpsubstr = substr (", ", idxstr);										
+		while (tmpsubstr != NULL) {												
+			if (!(newCOChanPtr = init_COChannel_type())) goto Error;			
+			newCOChanPtr->physChanName 			= tmpsubstr;
+			newCOChanPtr->supportedOutputTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_CO_SupportedOutputTypes);  
+			ListInsertItem (devAttrPtr->COchan, &newCOChanPtr, END_OF_LIST);						
+			tmpsubstr = substr (", ", idxstr); 									
+			nCO++; 															
+		} 	
+		
 		// 13. Single Channel AI max rate
 		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_MaxSingleChanRate, &devAttrPtr->AISCmaxrate)); 	// [Hz]
 		// 14. Multiple Channel AI max rate
@@ -1844,17 +2277,6 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_MaxRate, &devAttrPtr->DImaxrate)); 			 	// [Hz]
 		// 19. DO max rate
 		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_MaxRate, &devAttrPtr->DOmaxrate));    		 		// [Hz]
-		
-		// --- IO ranges ---
-		
-		// AI voltage ranges
-		devAttrPtr->AIVrngs = GetIORanges(devAttrPtr->name, DAQmx_Dev_AI_VoltageRngs);
-		// AO voltage ranges 
-		devAttrPtr->AOVrngs = GetIORanges(devAttrPtr->name, DAQmx_Dev_AO_VoltageRngs);
-		// AI current ranges
-		devAttrPtr->AIIrngs = GetIORanges(devAttrPtr->name, DAQmx_Dev_AI_CurrentRngs);
-		// AO current ranges 
-		devAttrPtr->AOIrngs = GetIORanges(devAttrPtr->name, DAQmx_Dev_AO_CurrentRngs);
 		
 		// --- Triggering ---
 		
@@ -1949,17 +2371,17 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	OKfree(idxnames);
 	OKfree(idxstr);
 	OKfree(tmpnames);
-	discard_DAQmxDevAttr_type(&devAttrPtr);
+	discard_DevAttr_type(&devAttrPtr);
 	return error;
 }
 
 static void empty_DevList (ListType devList)
 {
-    DAQmxDevAttr_type** devPtrPtr;
+    DevAttr_type** devPtrPtr;
 	
 	while (ListNumItems (devList)) {
 		devPtrPtr = ListGetPtrToItem (devList, END_OF_LIST);
-		discard_DAQmxDevAttr_type (devPtrPtr);
+		discard_DevAttr_type (devPtrPtr);
 		ListRemoveItem (devList, NULL, END_OF_LIST);
 	}
 }
@@ -1976,7 +2398,7 @@ static void CVICALLBACK ManageDevPan_CB (int menuBarHandle, int menuItemID, void
 	int						nDev		= 0;								// number of DAQ devices found
 	
 	if (!devList)
-		nullChk(devList	= ListCreate(sizeof(DAQmxDevAttr_type*)));
+		nullChk(devList	= ListCreate(sizeof(DevAttr_type*)));
 	
 	// clear table
 	DeleteTableRows(nidaq->devListPanHndl, DevListPan_DAQTable, 1, -1);
@@ -2001,7 +2423,7 @@ static void CVICALLBACK ManageDevPan_CB (int menuBarHandle, int menuItemID, void
 static void CVICALLBACK DeleteDev_CB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
 {
 	NIDAQmxManager_type* 	nidaq 			= (NIDAQmxManager_type*) callbackData;
-	DAQmxDev_type**			DAQmxDevPtrPtr;
+	Dev_type**			DAQmxDevPtrPtr;
 	int						activeTabIdx;		// 0-based index
 	int						nTabPages;
 	ListType				TCList; 
@@ -2021,11 +2443,11 @@ static void CVICALLBACK DeleteDev_CB (int menuBarHandle, int menuItemID, void *c
 	// remove Task Controller from the list of module Task Controllers
 	ListRemoveItem(nidaq->baseClass.taskControllers, 0, activeTabIdx + 1);
 	// discard DAQmx device data and remove device also from the module list
-	discard_DAQmxDev_type(DAQmxDevPtrPtr);
+	discard_Dev_type(DAQmxDevPtrPtr);
 	ListRemoveItem(nidaq->DAQmxDevices, 0, activeTabIdx + 1);
 }
 
-static void PopulateIOMode (DAQmxDev_type* dev, int panHndl, int controlID, int ioVal)
+static void PopulateIOMode (Dev_type* dev, int panHndl, int controlID, int ioVal)
 {
 	ClearListCtrl(panHndl, controlID); 
 	
@@ -2061,7 +2483,7 @@ static void PopulateIOMode (DAQmxDev_type* dev, int panHndl, int controlID, int 
 	}
 }
 
-static void PopulateIOType (DAQmxDev_type* dev, int panHndl, int controlID, int ioVal, int ioMode)
+static void PopulateIOType (Dev_type* dev, int panHndl, int controlID, int ioVal, int ioMode)
 {
 	size_t	n;
 	int*	measTypePtr;
@@ -2333,7 +2755,7 @@ static void PopulateIOType (DAQmxDev_type* dev, int panHndl, int controlID, int 
 
 static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	DAQmxDev_type* 	dev	 		= (DAQmxDev_type*) callbackData;
+	Dev_type* 	dev	 		= (Dev_type*) callbackData;
 	int				ioVal;
 	int				ioMode;
 	
@@ -2349,6 +2771,7 @@ static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callback
 					PopulateIOMode(dev, panel, TaskSetPan_IOMode, ioVal); 
 					GetCtrlVal(panel, TaskSetPan_IOMode, &ioMode);
 					PopulateIOType(dev, panel, TaskSetPan_IOType, ioVal, ioMode);
+					PopulateChannels (dev);
 					break;
 					
 				case TaskSetPan_IOMode:
@@ -2356,6 +2779,12 @@ static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callback
 					GetCtrlVal(panel, TaskSetPan_IO, &ioVal);
 					GetCtrlVal(panel, TaskSetPan_IOMode, &ioMode);
 					PopulateIOType(dev, panel, TaskSetPan_IOType, ioVal, ioMode);
+					PopulateChannels (dev);
+					break;
+					
+				case TaskSetPan_IOType:
+					
+					PopulateChannels (dev);
 					break;
 			}
 			break;
@@ -2375,15 +2804,17 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 				case DevListPan_AddBTTN:
 					
 					NIDAQmxManager_type* 	nidaq				 = (NIDAQmxManager_type*) callbackData;
-					char*					newTCName; 
-					DAQmxDev_type*			newDAQmxDev;
-					DAQmxDevAttr_type*		newDAQmxDevAttrPtr;
+					char*					newTCName;
+					char*					newTabName;
+					Dev_type*			newDAQmxDev;
+					DevAttr_type*		newDAQmxDevAttrPtr;
 					ListType				newTCList;
 					int						newDAQmxDevPanHndl;
 					int						newTabPageIdx;
 					int						panHndl;
 					int						ioVal;
 					int						ioMode;
+					int						ioType;
 					void*					callbackData;
 					
 					// create new Task Controller for the DAQmx device
@@ -2391,9 +2822,9 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					if (!newTCName) return 0; // operation cancelled, do nothing	
 					
 					// copy device attributes
-					newDAQmxDevAttrPtr = copy_DAQmxDevAttr_type(*(DAQmxDevAttr_type**)ListGetPtrToItem(devList, currDev));
+					newDAQmxDevAttrPtr = copy_DevAttr_type(*(DevAttr_type**)ListGetPtrToItem(devList, currDev));
 					// add new DAQmx device to module list and framework
-					newDAQmxDev = init_DAQmxDev_type(&newDAQmxDevAttrPtr, newTCName);
+					newDAQmxDev = init_Dev_type(&newDAQmxDevAttrPtr, newTCName);
 					ListInsertItem(nidaq->DAQmxDevices, &newDAQmxDev, END_OF_LIST);
 					ListInsertItem(nidaq->baseClass.taskControllers, &newDAQmxDev->taskController, END_OF_LIST);
 					newTCList = ListCreate(sizeof(TaskControl_type*));
@@ -2404,8 +2835,14 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					// copy DAQmx Task settings panel to module tab and get handle to the panel inserted in the tab
 					newTabPageIdx = InsertPanelAsTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, -1, nidaq->taskSetPanHndl);
 					GetPanelHandleFromTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, newTabPageIdx, &newDAQmxDevPanHndl);
+					// keep track of the DAQmx task settings panel handle
+					newDAQmxDev->devPanHndl = newDAQmxDevPanHndl;
 					// change tab title to new Task Controller name
-					SetTabPageAttribute(nidaq->mainPanHndl, NIDAQmxPan_Devices, newTabPageIdx, ATTR_LABEL_TEXT, newTCName);
+					newTabName = StrDup(newDAQmxDevAttrPtr->name);
+					AppendString(&newTabName, ": ", -1);
+					AppendString(&newTabName, newTCName, -1);
+					SetTabPageAttribute(nidaq->mainPanHndl, NIDAQmxPan_Devices, newTabPageIdx, ATTR_LABEL_TEXT, newTabName);
+					free(newTabName);
 					// remove "None" labelled Tab (always first tab) if its panel doesn't have callback data attached to it  
 					GetPanelHandleFromTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, 0, &panHndl);
 					GetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, &callbackData); 
@@ -2435,7 +2872,12 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					PopulateIOMode(newDAQmxDev, newDAQmxDevPanHndl, TaskSetPan_IOMode, ioVal);
 					GetCtrlVal(newDAQmxDevPanHndl, TaskSetPan_IOMode, &ioMode);
 					PopulateIOType(newDAQmxDev, newDAQmxDevPanHndl, TaskSetPan_IOType, ioVal, ioMode);
+					
 					//------------------------------------------------------------------------------------------------
+					// add channels
+					//------------------------------------------------------------------------------------------------
+					PopulateChannels (newDAQmxDev);
+					
 					break;
 					
 				case DevListPan_DoneBTTN:
@@ -2537,61 +2979,61 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 
 static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "");
 }
 
 static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
 }
 
 static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* DoneTC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "");
 }
 static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "");
 }
 
 static void	ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
 {
-	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
 
 }
 
 static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, CmtTSQHandle dataQID, BOOL const* abortFlag)
 {
-	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
 {
-	DAQmxDev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "");
 }

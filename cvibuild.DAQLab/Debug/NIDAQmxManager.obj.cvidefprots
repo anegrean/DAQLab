@@ -6,9 +6,37 @@ Prototype="struct DAQLabModule *initalloc_NIDAQmxManager(struct DAQLabModule *mo
 Class="Function"
 Prototype="void discard_NIDAQmxManager(struct DAQLabModule **mod);"
 
-[DisposeDAQmxChannelList]
+[DisposeDAQmxAIChannelList]
 Class="Function"
-Prototype="int DisposeDAQmxChannelList(unsigned int index, void *ptrToItem, void *callbackData);"
+Prototype="int DisposeDAQmxAIChannelList(unsigned int index, void *ptrToItem, void *callbackData);"
+
+[DisposeDAQmxAOChannelList]
+Class="Function"
+Prototype="int DisposeDAQmxAOChannelList(unsigned int index, void *ptrToItem, void *callbackData);"
+
+[DisposeDAQmxDILineChannelList]
+Class="Function"
+Prototype="int DisposeDAQmxDILineChannelList(unsigned int index, void *ptrToItem, void *callbackData);"
+
+[DisposeDAQmxDIPortChannelList]
+Class="Function"
+Prototype="int DisposeDAQmxDIPortChannelList(unsigned int index, void *ptrToItem, void *callbackData);"
+
+[DisposeDAQmxDOLineChannelList]
+Class="Function"
+Prototype="int DisposeDAQmxDOLineChannelList(unsigned int index, void *ptrToItem, void *callbackData);"
+
+[DisposeDAQmxDOPortChannelList]
+Class="Function"
+Prototype="int DisposeDAQmxDOPortChannelList(unsigned int index, void *ptrToItem, void *callbackData);"
+
+[DisposeDAQmxCIChannelList]
+Class="Function"
+Prototype="int DisposeDAQmxCIChannelList(unsigned int index, void *ptrToItem, void *callbackData);"
+
+[DisposeDAQmxCOChannelList]
+Class="Function"
+Prototype="int DisposeDAQmxCOChannelList(unsigned int index, void *ptrToItem, void *callbackData);"
 
 [ManageDevices_CB]
 Class="Function"

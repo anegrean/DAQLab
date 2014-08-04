@@ -699,7 +699,7 @@ VChan_type** DLVChanNameExists (char name[], size_t* idx)
 }
 
 /// HIFN Validate function for VChan names.
-/// HIRET True if newVChanName is unique among the framwork VChan names, False otherwise
+/// HIRET True if newVChanName is unique among the framework VChan names, False otherwise
 BOOL DLValidateVChanName (char newVChanName[], void* null)
 {
 	if (DLVChanNameExists(newVChanName, 0))

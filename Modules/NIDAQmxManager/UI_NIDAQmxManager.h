@@ -14,13 +14,14 @@
 
      /* Panels and Controls: */
 
-#define  AIAOSetPan                       1
-#define  AIAOSetPan_AIAOterminal          2       /* control type: ring, callback function: CB_AIAOterminal */
-#define  AIAOSetPan_VChanName             3       /* control type: string, callback function: CB_VChanName */
-#define  AIAOSetPan_AIAORange             4       /* control type: ring, callback function: CB_AIAORange */
+#define  AIAOChSet                        1
+#define  AIAOChSet_Terminal               2       /* control type: ring, callback function: (none) */
+#define  AIAOChSet_VChanName              3       /* control type: string, callback function: (none) */
+#define  AIAOChSet_Range                  4       /* control type: ring, callback function: (none) */
+#define  AIAOChSet_OnDemand               5       /* control type: radioButton, callback function: (none) */
 
-#define  DAQSetPan1                       2
-#define  DAQSetPan1_TAB                   2       /* control type: tab, callback function: (none) */
+#define  AIAOTskSet                       2
+#define  AIAOTskSet_Tab                   2       /* control type: tab, callback function: (none) */
 
 #define  DevListPan                       3
 #define  DevListPan_DAQTable              2       /* control type: table, callback function: (none) */
@@ -28,43 +29,86 @@
 #define  DevListPan_AddBTTN               4       /* control type: command, callback function: ManageDevices_CB */
 #define  DevListPan_Plate                 5       /* control type: deco, callback function: (none) */
 
-#define  DIDOSetPan                       4
+#define  DIDOChSet                        4
 
 #define  NIDAQmxPan                       5
 #define  NIDAQmxPan_Devices               2       /* control type: tab, callback function: (none) */
 
-#define  TaskSetPan                       6
-#define  TaskSetPan_DelChan               2       /* control type: command, callback function: (none) */
-#define  TaskSetPan_AddChan               3       /* control type: command, callback function: (none) */
-#define  TaskSetPan_TaskSet               4       /* control type: tab, callback function: (none) */
-#define  TaskSetPan_ChanSet               5       /* control type: tab, callback function: (none) */
-#define  TaskSetPan_PhysChan              6       /* control type: listBox, callback function: (none) */
-#define  TaskSetPan_IOType                7       /* control type: ring, callback function: (none) */
-#define  TaskSetPan_IOMode                8       /* control type: ring, callback function: (none) */
-#define  TaskSetPan_IO                    9       /* control type: ring, callback function: (none) */
+#define  RefTrig1                         6
+#define  RefTrig1_Slope                   2       /* control type: ring, callback function: (none) */
+#define  RefTrig1_TrigType                3       /* control type: ring, callback function: (none) */
+#define  RefTrig1_Duration                4       /* control type: numeric, callback function: (none) */
+#define  RefTrig1_NSamples                5       /* control type: numeric, callback function: (none) */
+#define  RefTrig1_TrigSource              6       /* control type: string, callback function: (none) */
+
+#define  RefTrig2                         7
+#define  RefTrig2_TrigType                2       /* control type: ring, callback function: (none) */
+#define  RefTrig2_NSamples                3       /* control type: numeric, callback function: (none) */
+#define  RefTrig2_Duration                4       /* control type: numeric, callback function: (none) */
+
+#define  RefTrig3                         8
+#define  RefTrig3_TrigSource              2       /* control type: string, callback function: (none) */
+#define  RefTrig3_NSamples                3       /* control type: numeric, callback function: (none) */
+#define  RefTrig3_Duration                4       /* control type: numeric, callback function: (none) */
+#define  RefTrig3_Level                   5       /* control type: numeric, callback function: (none) */
+#define  RefTrig3_TrigType                6       /* control type: ring, callback function: (none) */
+
+#define  RefTrig4                         9
+#define  RefTrig4_TrigSource              2       /* control type: string, callback function: (none) */
+#define  RefTrig4_NSamples                3       /* control type: numeric, callback function: (none) */
+#define  RefTrig4_Duration                4       /* control type: numeric, callback function: (none) */
+#define  RefTrig4_TrigType                5       /* control type: ring, callback function: (none) */
+#define  RefTrig4_WndType                 6       /* control type: ring, callback function: (none) */
+#define  RefTrig4_TrigWndTop              7       /* control type: numeric, callback function: (none) */
+#define  RefTrig4_TrigWndBttm             8       /* control type: numeric, callback function: (none) */
+
+#define  StartTrig1                       10
+#define  StartTrig1_Slope                 2       /* control type: ring, callback function: (none) */
+#define  StartTrig1_TrigSource            3       /* control type: string, callback function: (none) */
+#define  StartTrig1_TrigType              4       /* control type: ring, callback function: (none) */
+
+#define  StartTrig2                       11
+#define  StartTrig2_TrigType              2       /* control type: ring, callback function: (none) */
+
+#define  StartTrig3                       12
+#define  StartTrig3_TrigSource            2       /* control type: string, callback function: (none) */
+#define  StartTrig3_Level                 3       /* control type: numeric, callback function: (none) */
+#define  StartTrig3_TrigType              4       /* control type: ring, callback function: (none) */
+
+#define  StartTrig4                       13
+#define  StartTrig4_TrigSource            2       /* control type: string, callback function: (none) */
+#define  StartTrig4_TrigType              3       /* control type: ring, callback function: (none) */
+#define  StartTrig4_WndType               4       /* control type: ring, callback function: (none) */
+#define  StartTrig4_TrigWndTop            5       /* control type: numeric, callback function: (none) */
+#define  StartTrig4_TrigWndBttm           6       /* control type: numeric, callback function: (none) */
+
+#define  TaskSetPan                       14
+#define  TaskSetPan_DAQTasks              2       /* control type: tab, callback function: (none) */
+#define  TaskSetPan_PhysChan              3       /* control type: listBox, callback function: (none) */
+#define  TaskSetPan_IOType                4       /* control type: ring, callback function: (none) */
+#define  TaskSetPan_IOMode                5       /* control type: ring, callback function: (none) */
+#define  TaskSetPan_IO                    6       /* control type: ring, callback function: (none) */
 
      /* tab page panel controls */
-#define  IO_StartTrigSource               2       /* control type: string, callback function: CB_AIAOTaskSet */
-#define  IO_RefClkSource                  3       /* control type: string, callback function: CB_AIAOTaskSet */
-#define  IO_SampleClkSource               4       /* control type: string, callback function: CB_AIAOTaskSet */
-#define  IO_RefClkFreq                    5       /* control type: numeric, callback function: CB_AIAOTaskSet */
-#define  IO_Timeout                       6       /* control type: numeric, callback function: CB_AIAOTaskSet */
+#define  Chan_ChanSet                     2       /* control type: tab, callback function: (none) */
 
      /* tab page panel controls */
-#define  SET_BlockSize                    2       /* control type: numeric, callback function: CB_AIAOTaskSet */
-#define  SET_SamplingRate                 3       /* control type: numeric, callback function: CB_AIAOTaskSet */
-#define  SET_Duration                     4       /* control type: numeric, callback function: CB_AIAOTaskSet */
-#define  SET_Samples                      5       /* control type: numeric, callback function: CB_AIAOTaskSet */
-#define  SET_TrigType                     6       /* control type: ring, callback function: CB_AIAOTaskSet */
-#define  SET_MeasMode                     7       /* control type: ring, callback function: CB_AIAOTaskSet */
-#define  SET_UseAsReferenceCHKBOX         8       /* control type: radioButton, callback function: CB_AIAOTaskSet */
+#define  Set_BlockSize                    2       /* control type: numeric, callback function: (none) */
+#define  Set_SamplingRate                 3       /* control type: numeric, callback function: (none) */
+#define  Set_Duration                     4       /* control type: numeric, callback function: (none) */
+#define  Set_NSamples                     5       /* control type: numeric, callback function: (none) */
+#define  Set_MeasMode                     6       /* control type: ring, callback function: (none) */
+#define  Set_UseRefSampRate               7       /* control type: radioButton, callback function: (none) */
+#define  Set_UseRefNSamples               8       /* control type: radioButton, callback function: (none) */
 
      /* tab page panel controls */
-#define  TRIG_TrigSlope                   2       /* control type: ring, callback function: CB_AIAOTaskSet */
-#define  TRIG_TrigLevel                   3       /* control type: numeric, callback function: CB_AIAOTaskSet */
-#define  TRIG_TrigWndType                 4       /* control type: ring, callback function: CB_AIAOTaskSet */
-#define  TRIG_TrigWndTop                  5       /* control type: numeric, callback function: CB_AIAOTaskSet */
-#define  TRIG_TrigWndBttm                 6       /* control type: numeric, callback function: CB_AIAOTaskSet */
+#define  Timing_RefClkSource              2       /* control type: string, callback function: (none) */
+#define  Timing_SampleClkSource           3       /* control type: string, callback function: (none) */
+#define  Timing_RefClkFreq                4       /* control type: numeric, callback function: (none) */
+#define  Timing_Timeout                   5       /* control type: numeric, callback function: (none) */
+
+     /* tab page panel controls */
+#define  Trig_TrigSet                     2       /* control type: tab, callback function: (none) */
 
 
      /* Control Arrays: */
@@ -79,10 +123,6 @@
 
      /* Callback Prototypes: */
 
-int  CVICALLBACK CB_AIAORange(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-int  CVICALLBACK CB_AIAOTaskSet(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-int  CVICALLBACK CB_AIAOterminal(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-int  CVICALLBACK CB_VChanName(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK ManageDevices_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 

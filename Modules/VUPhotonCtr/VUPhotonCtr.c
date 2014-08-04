@@ -77,7 +77,6 @@ typedef struct {
 	float				gain;			// gain applied to the detector in [V]
 	float				maxGain;		// maximum gain voltage allowed in [V]
 	float				threshold;		// discriminator threshold in [mV]
-
 } Channel_type;
 
 
@@ -132,17 +131,15 @@ struct VUPhotonCtr {
 		//-------------------------
 
 		// Number of samples to acquire if in finite mode. This value is set by the device.
-	size_t				DevNSamples;
+	size_t				nSamples;
 		// Acquisition rate set by the device in [Hz]. This value is set by the device.
-	double				DevSamplingRate;
+	double				samplingRate;
 		// Points to either device set number of samples or virtual channel set number of samples.
-		// By default it points to the device number of samples DevNSamples. In [Hz]
-	size_t*				nSamples;
+		// By default it points to the device number of samples nSamples. In [Hz]
+	size_t*				refNSamples;
 		// Points to either device set sampling rate or virtual channel set sampling rate.
-		// By default it points to the device sampling rate DevSamplingRate. In [Hz]
-	double*				samplingRate;
-		// ?	
-	int 				numiterations;
+		// By default it points to the device sampling rate samplingRate. In [Hz]
+	double*				refSamplingRate;
 		// Finite number of samples or continuous measurement
 	Measurement_type	measmode;        
 
@@ -307,13 +304,12 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	for (int i = 0; i < MAX_CHANNELS; i++)
 		vupc->channels[i] = NULL;
 
-	vupc->DevNSamples				= DEFAULT_NSAMPLES;
-	vupc->nSamples					= &vupc->DevNSamples;	  // by default point to device set number of samples
-	vupc->DevSamplingRate			= DEFAULT_SAMPLING_RATE;
-	vupc->samplingRate				= &vupc->DevSamplingRate; // by default point to device set sampling rate
+	vupc->nSamples				= DEFAULT_NSAMPLES;
+	vupc->refNSamples				= &vupc->nSamples;	  // by default point to device set number of samples
+	vupc->samplingRate			= DEFAULT_SAMPLING_RATE;
+	vupc->refSamplingRate				= &vupc->samplingRate; // by default point to device set sampling rate
 
-	vupc->numiterations=1;
-	vupc->measmode=MEASMODE_FINITE;
+	vupc->measmode					= MEASMODE_FINITE;
 
 
 		// METHODS
@@ -491,9 +487,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	SetCtrlIndex(vupc->settingsPanHndl, VUPCSet_MeasMode, 0);
 
 	// update acquisition settings display from structure data
-	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_NSamples, *vupc->nSamples);
-	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_SamplingRate, *vupc->samplingRate/1000);					// display in [kHz]
-	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_Duration, *vupc->nSamples/(*vupc->samplingRate*1000));	// display in [s]
+	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_NSamples, *vupc->refNSamples);
+	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_SamplingRate, *vupc->refSamplingRate/1000);					// display in [kHz]
+	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_Duration, *vupc->refNSamples/(*vupc->refSamplingRate*1000));	// display in [s]
 
 
 	// add functionality to set PMT mode
@@ -935,16 +931,16 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 
 				case VUPCSet_MeasMode:
 					GetCtrlIndex(panel,VUPCSet_MeasMode,&vupc->measmode);
-					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->samplingRate);  
-					GetCtrlVal(panel,VUPCSet_NSamples,vupc->nSamples);   
-					Setnrsamples_in_iteration(vupc->measmode,*vupc->samplingRate,*vupc->nSamples);
+					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate);  
+					GetCtrlVal(panel,VUPCSet_NSamples,vupc->refNSamples);   
+					Setnrsamples_in_iteration(vupc->measmode,*vupc->refSamplingRate,*vupc->refNSamples);
 					break;
 
 				case VUPCSet_SamplingRate:
 					GetCtrlIndex(panel,VUPCSet_MeasMode,&vupc->measmode);
-					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->samplingRate);  
-					GetCtrlVal(panel,VUPCSet_NSamples,vupc->nSamples);   
-					Setnrsamples_in_iteration(vupc->measmode,*vupc->samplingRate,*vupc->nSamples);
+					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate);  
+					GetCtrlVal(panel,VUPCSet_NSamples,vupc->refNSamples);   
+					Setnrsamples_in_iteration(vupc->measmode,*vupc->refSamplingRate,*vupc->refNSamples);
 					
 					break;
 
@@ -954,9 +950,9 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 
 				case VUPCSet_NSamples:
 					GetCtrlIndex(panel,VUPCSet_MeasMode,&vupc->measmode);
-					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->samplingRate);  
-					GetCtrlVal(panel,VUPCSet_NSamples,vupc->nSamples);   
-					Setnrsamples_in_iteration(vupc->measmode,*vupc->samplingRate,*vupc->nSamples);
+					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate);  
+					GetCtrlVal(panel,VUPCSet_NSamples,vupc->refNSamples);   
+					Setnrsamples_in_iteration(vupc->measmode,*vupc->refSamplingRate,*vupc->refNSamples);
 					break;
 
 				case VUPCSet_Close:
@@ -1040,8 +1036,8 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 {
 	VUPhotonCtr_type* 	vupc 	=   callbackData;
 
-	int mode;
-	int repeat;
+	int 	mode;
+	int 	repeat;
 	double waitBetweenIterations;
 
 	switch (event) {
@@ -1059,8 +1055,7 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 
 				case VUPCTask_Repeat:
 					GetCtrlVal(panel,control,&repeat);
-					vupc->numiterations=repeat;
-					SetTaskControlIterations (vupc->taskController,repeat);
+					SetTaskControlIterations (vupc->taskController, repeat+1);
 					break;
 
 				case VUPCTask_Wait:
@@ -1171,11 +1166,6 @@ static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const*
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
-	//start from 1
-	SetTaskControlIterations(taskControl, vupc->numiterations+1);
-
-
-
 	return init_FCallReturn_type(0, "", "");
 }
 
@@ -1188,7 +1178,7 @@ static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 
 	VUPC_SetStepCounter(vupc,currentIteration);
 	
-	Setnrsamples_in_iteration(vupc->measmode,vupc->DevSamplingRate,vupc->DevNSamples); 
+	Setnrsamples_in_iteration(vupc->measmode,vupc->samplingRate,vupc->nSamples); 
 	
 	PMTStartAcq(vupc->measmode,currentIteration,taskControl);
 

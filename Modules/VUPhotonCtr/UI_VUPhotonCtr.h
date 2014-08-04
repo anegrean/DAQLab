@@ -49,7 +49,7 @@
 #define  VUPCSet_MeasMode                 7       /* control type: ring, callback function: (none) */
 #define  VUPCSet_Close                    8       /* control type: command, callback function: (none) */
 #define  VUPCSet_UseRefNSamples           9       /* control type: radioButton, callback function: (none) */
-#define  VUPCSet_UseRefSampling           10      /* control type: radioButton, callback function: (none) */
+#define  VUPCSet_UseRefSampRate           10      /* control type: radioButton, callback function: (none) */
 #define  VUPCSet_RefChan                  11      /* control type: ring, callback function: (none) */
 
 #define  VUPCStatus                       5

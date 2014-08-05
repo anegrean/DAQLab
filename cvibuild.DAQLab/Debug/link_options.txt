@@ -32,6 +32,7 @@
 -more:c:\Program Files (x86)\National Instruments\CVI2013\bin\msvc\cvinetv.lib
 -more:c:\Program Files (x86)\National Instruments\CVI2013\bin\msvc\cvintwrk.lib
 -more:c:\Program Files (x86)\National Instruments\CVI2013\bin\msvc\cvitdms.lib
+-more:c:\Program Files (x86)\National Instruments\Shared\CVI\toolslib\custctrl\msvc\daqmxioctrl.lib
 -more:c:\program files (x86)\national instruments\cvi2013\sdk\lib\msvc\gdi32.lib
 -more:c:\Program Files (x86)\National Instruments\CVI2013\bin\msvc\gpib.lib
 -more:c:\Program Files (x86)\National Instruments\Shared\CVI\toolslib\custctrl\msvc\ImageControl.obj

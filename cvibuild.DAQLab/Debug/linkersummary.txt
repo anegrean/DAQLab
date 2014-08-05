@@ -7,6 +7,7 @@ VChannel.obj
 Zstage.obj
 cvi.lib
 cviauto.lib
+daqmxioctrl.lib
 NIDAQmx.lib
 cvistart.lib
 ActiveXML.obj

@@ -17,7 +17,8 @@
 #include "NIDAQmxManager.h"
 #include "VChannel.h"
 #include "UI_NIDAQmxManager.h"
-#include <nidaqmx.h>						   
+#include <nidaqmx.h>
+#include "daqmxioctrl.h"
 										 		 
 //========================================================================================================================================================================================================
 // Constants
@@ -199,19 +200,28 @@ typedef enum {
 } TrigWndCond_type;									// Window trigger condition for analog triggering.
 
 typedef enum {
-	TrigEdge_Rising,
-	TrigEdge_Falling
-} TrigEdge_type;									// For analog and digital edge trigger type
+	TrigSlope_Rising,
+	TrigSlope_Falling
+} TrigSlope_type;									// For analog and digital edge trigger type
 	
 typedef struct {
 	Trig_type 			trigType;					// Trigger type.
 	char*     			trigSource;   				// Trigger source.
-	TrigEdge_type		edgeType;     				// For analog and digital edge trig type.
+	double*				samplingRate;				// Reference to task sampling rate in [Hz]
+	TrigSlope_type		slope;     					// For analog and digital edge trig type.
 	double   			level; 						// For analog edge trigger.
 	double    			wndTop; 	   				// For analog window trigger.
 	double   			wndBttm;   					// For analog window trigger.
 	TrigWndCond_type	wndTrigCond;  				// For analog window trigger.
 	size_t				nPreTrigSamples;			// For reference type trigger. Number of pre-trigger samples to acquire.
+	int					trigSlopeCtrlID;			// Trigger setting control copy IDs
+	int					trigSourceCtrlID;			// Trigger setting control copy IDs
+	int					preTrigDurationCtrlID;		// Trigger setting control copy IDs
+	int					preTrigNSamplesCtrlID;		// Trigger setting control copy IDs
+	int					levelCtrlID;				// Trigger setting control copy IDs
+	int					windowTrigCondCtrlID;		// Trigger setting control copy IDs
+	int					windowTopCtrlID;			// Trigger setting control copy IDs
+	int					windowBottomCtrlID;			// Trigger setting control copy IDs
 } TaskTrig_type;
 
 // Analog Input & Output channel type settings
@@ -504,7 +514,7 @@ static COTaskSet_type*				init_COTaskSet_type				(void);
 static void							discard_COTaskSet_type			(COTaskSet_type** a);
 
 	// task trigger
-static TaskTrig_type*				init_TaskTrig_type				(void);
+static TaskTrig_type*				init_TaskTrig_type				(double* samplingRate);
 static void							discard_TaskTrig_type			(TaskTrig_type** a);
 
 	// channels & property lists
@@ -534,6 +544,17 @@ static int							AddDAQmxChannel					(Dev_type* dev, DAQmxIO_type ioVal, DAQmxIO
 static int CVICALLBACK 				MainPan_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static void CVICALLBACK 			ManageDevPan_CB 				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 static void CVICALLBACK 			DeleteDev_CB 					(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle); 
+	// trigger settings callbacks
+static int CVICALLBACK 				TaskStartTrigType_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				TaskReferenceTrigType_CB		(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				TriggerSlope_CB	 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				TriggerLevel_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				TriggerSource_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				TriggerWindowType_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				TriggerWindowBttm_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				TriggerWindowTop_CB				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				TriggerPreTrigDuration_CB 		(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				TriggerPreTrigSamples_CB 		(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 	// adjustment of the DAQmx task settings panel
 static int 							DAQmxDevTaskSet_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
@@ -1658,6 +1679,7 @@ static DIDOTaskSet_type* init_DIDOTaskSet_type (void)
 
 static void	discard_DIDOTaskSet_type (DIDOTaskSet_type** a)
 {
+	if (!*a) return; 
 	
 }
 
@@ -1673,9 +1695,6 @@ static void	discard_CITaskSet_type (CITaskSet_type** a)
 {
 	if (!*a) return; 
 	
-	OKfree((*a)->name);
-	discard_VChan_type((VChan_type**)&(*a)->srcVChan);
-	OKfree(*a);	
 }
 
 //------------------------------------------------------------------------------
@@ -1690,28 +1709,34 @@ static void discard_COTaskSet_type (COTaskSet_type** a)
 {
 	if (!*a) return; 
 	
-	OKfree((*a)->name);
-	discard_VChan_type((VChan_type**)&(*a)->sinkVChan);
-	OKfree(*a);		
 }
 
 //------------------------------------------------------------------------------ 
 // TaskTrig_type
 //------------------------------------------------------------------------------ 
 
-static TaskTrig_type* init_TaskTrig_type (void)
+static TaskTrig_type* init_TaskTrig_type (double* samplingRate)
 {
 	TaskTrig_type* a = malloc (sizeof(TaskTrig_type));
 	if (!a) return NULL;
 	
-	a->trigType			= Trig_None;
-	a->trigSource		= NULL;
-	a->edgeType			= TrigEdge_Rising;
-	a->level			= 0;
-	a->wndBttm			= 0;
-	a->wndTop			= 0;
-	a->wndTrigCond		= TrigWnd_Entering;
-	a->nPreTrigSamples 	= 2;				// applies only to reference type trigger
+	a -> trigType				= Trig_None;
+	a -> trigSource				= NULL;
+	a -> slope				= TrigSlope_Rising;
+	a -> level					= 0;
+	a -> wndBttm				= 0;
+	a -> wndTop					= 0;
+	a -> wndTrigCond			= TrigWnd_Entering;
+	a -> nPreTrigSamples 		= 2;				// applies only to reference type trigger
+	a -> trigSlopeCtrlID		= 0;	
+	a -> trigSourceCtrlID		= 0;
+	a -> preTrigDurationCtrlID	= 0;
+	a -> preTrigNSamplesCtrlID	= 0;
+	a -> levelCtrlID			= 0;
+	a -> windowTrigCondCtrlID	= 0;
+	a -> windowTopCtrlID		= 0;
+	a -> windowBottomCtrlID		= 0;
+	a -> samplingRate			= samplingRate;
 		
 	return a;	
 }
@@ -2566,6 +2591,384 @@ static void CVICALLBACK DeleteDev_CB (int menuBarHandle, int menuItemID, void *c
 	
 }
 
+static int CVICALLBACK TaskStartTrigType_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+			
+		TaskTrig_type* taskTrigPtr = callbackData; 
+			
+		case EVENT_COMMIT:
+			
+			// get trigger type
+			int trigType;
+			GetCtrlVal(panel, control, &trigType);
+			
+			// clear all possible controls except the select trigger type control
+			if (taskTrigPtr->levelCtrlID) 			{DiscardCtrl(panel, taskTrigPtr->levelCtrlID); taskTrigPtr->levelCtrlID = 0;} 
+			if (taskTrigPtr->trigSlopeCtrlID)		{DiscardCtrl(panel, taskTrigPtr->trigSlopeCtrlID); taskTrigPtr->trigSlopeCtrlID = 0;} 
+			if (taskTrigPtr->trigSourceCtrlID)		{NIDAQmx_DiscardIOCtrl(panel, taskTrigPtr->trigSourceCtrlID); taskTrigPtr->trigSourceCtrlID = 0;} 
+			if (taskTrigPtr->windowTrigCondCtrlID)	{DiscardCtrl(panel, taskTrigPtr->windowTrigCondCtrlID); taskTrigPtr->windowTrigCondCtrlID = 0;} 
+			if (taskTrigPtr->windowBottomCtrlID)	{DiscardCtrl(panel, taskTrigPtr->windowBottomCtrlID); taskTrigPtr->windowBottomCtrlID = 0;} 
+			if (taskTrigPtr->windowTopCtrlID)		{DiscardCtrl(panel, taskTrigPtr->windowTopCtrlID); taskTrigPtr->windowTopCtrlID = 0;} 
+			
+			// load resources
+			int DigEdgeTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig1);
+			int DigPatternTrig_PanHndl 	= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig2);
+			int AnEdgeTrig_PanHndl	 	= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig3);
+			int AnWindowTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig4);
+			
+			// add controls based on the selected trigger type
+			switch (trigType) {
+					
+				case Trig_None:
+					break;
+					
+				case Trig_DigitalEdge:
+					
+					// trigger slope
+					taskTrigPtr->trigSlopeCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, StartTrig1_Slope, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->trigSlopeCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->trigSlopeCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerSlope_CB);
+					// trigger source
+					taskTrigPtr->trigSourceCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, StartTrig1_Source, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerSource_CB);					
+					// turn string control into terminal control to select the trigger source
+					NIDAQmx_NewTerminalCtrl(panel, taskTrigPtr->trigSourceCtrlID, 0); // single terminal selection 
+					// adjust trigger terminal control properties
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+					break;
+					
+				case Trig_DigitalPattern:
+					
+					// not yet implemented, but similarly, here controls should be copied to the new panel
+					break;
+					
+				case Trig_AnalogEdge:
+					
+					// level
+					taskTrigPtr->levelCtrlID = DuplicateCtrl(AnEdgeTrig_PanHndl, StartTrig3_Level, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->levelCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->levelCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerLevel_CB );
+					// trigger source
+					taskTrigPtr->trigSourceCtrlID = DuplicateCtrl(AnEdgeTrig_PanHndl, StartTrig3_Source, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerSource_CB);					
+					// turn string control into terminal control to select the trigger source
+					NIDAQmx_NewTerminalCtrl(panel, taskTrigPtr->trigSourceCtrlID, 0); // single terminal selection 
+					// adjust trigger terminal control properties
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+					break;
+					
+				case Trig_AnalogWindow:
+					
+					// window type
+					taskTrigPtr->windowTrigCondCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, StartTrig4_WndType, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
+					SetCtrlAttribute(panel, taskTrigPtr->windowTrigCondCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->windowTrigCondCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerWindowType_CB);
+					// window top
+					taskTrigPtr->windowTopCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, StartTrig4_TrigWndTop, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
+					SetCtrlAttribute(panel, taskTrigPtr->windowTopCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->windowTopCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerWindowTop_CB);
+					// window bottom
+					taskTrigPtr->windowBottomCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, StartTrig4_TrigWndBttm, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
+					SetCtrlAttribute(panel, taskTrigPtr->windowBottomCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->windowBottomCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerWindowBttm_CB);
+					// trigger source
+					taskTrigPtr->trigSourceCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, StartTrig4_Source, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerSource_CB);					
+					// turn string control into terminal control to select the trigger source
+					NIDAQmx_NewTerminalCtrl(panel, taskTrigPtr->trigSourceCtrlID, 0); // single terminal selection 
+					// adjust trigger terminal control properties
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+					break;
+			}
+			
+			// discard resources
+			DiscardPanel(DigEdgeTrig_PanHndl);
+			DiscardPanel(DigPatternTrig_PanHndl);
+			DiscardPanel(AnEdgeTrig_PanHndl);
+			DiscardPanel(AnWindowTrig_PanHndl);
+			
+			break;
+	}
+	
+	return 0;
+}
+
+static int CVICALLBACK TaskReferenceTrigType_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+			
+		TaskTrig_type* taskTrigPtr = callbackData; 
+			
+		case EVENT_COMMIT:
+			
+			// get trigger type
+			int trigType;
+			GetCtrlVal(panel, control, &trigType);
+			
+			// clear all possible controls except the select trigger type control
+			if (taskTrigPtr->levelCtrlID) 			{DiscardCtrl(panel, taskTrigPtr->levelCtrlID); taskTrigPtr->levelCtrlID = 0;} 
+			if (taskTrigPtr->preTrigDurationCtrlID) {DiscardCtrl(panel, taskTrigPtr->preTrigDurationCtrlID); taskTrigPtr->preTrigDurationCtrlID = 0;} 
+			if (taskTrigPtr->preTrigNSamplesCtrlID) {DiscardCtrl(panel, taskTrigPtr->preTrigNSamplesCtrlID); taskTrigPtr->preTrigNSamplesCtrlID = 0;} 
+			if (taskTrigPtr->trigSlopeCtrlID)		{DiscardCtrl(panel, taskTrigPtr->trigSlopeCtrlID); taskTrigPtr->trigSlopeCtrlID = 0;} 
+			if (taskTrigPtr->trigSourceCtrlID)		{NIDAQmx_DiscardIOCtrl(panel, taskTrigPtr->trigSourceCtrlID); taskTrigPtr->trigSourceCtrlID = 0;} 
+			if (taskTrigPtr->windowTrigCondCtrlID)	{DiscardCtrl(panel, taskTrigPtr->windowTrigCondCtrlID); taskTrigPtr->windowTrigCondCtrlID = 0;} 
+			if (taskTrigPtr->windowBottomCtrlID)	{DiscardCtrl(panel, taskTrigPtr->windowBottomCtrlID); taskTrigPtr->windowBottomCtrlID = 0;} 
+			if (taskTrigPtr->windowTopCtrlID)		{DiscardCtrl(panel, taskTrigPtr->windowTopCtrlID); taskTrigPtr->windowTopCtrlID = 0;} 
+			
+			// load resources
+			int DigEdgeTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, RefTrig1);
+			int DigPatternTrig_PanHndl	 	= LoadPanel(0, MOD_NIDAQmxManager_UI, RefTrig2);
+			int AnEdgeTrig_PanHndl	 		= LoadPanel(0, MOD_NIDAQmxManager_UI, RefTrig3);
+			int AnWindowTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, RefTrig4);
+			
+			// add controls based on the selected trigger type
+			switch (trigType) {
+					
+				case Trig_None:
+					break;
+					
+				case Trig_DigitalEdge:
+					
+					// trigger slope
+					taskTrigPtr->trigSlopeCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, RefTrig1_Slope, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->trigSlopeCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->trigSlopeCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerSlope_CB);
+					// pre-trigger samples
+					taskTrigPtr->preTrigNSamplesCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, RefTrig1_NSamples, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_DATA_TYPE, VAL_SIZE_T);
+					SetCtrlVal(panel, taskTrigPtr->preTrigNSamplesCtrlID, taskTrigPtr->nPreTrigSamples);
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerPreTrigSamples_CB);
+					// pre-trigger duration
+					taskTrigPtr->preTrigDurationCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, RefTrig1_Duration, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlVal(panel, taskTrigPtr->preTrigDurationCtrlID, taskTrigPtr->nPreTrigSamples/(*taskTrigPtr->samplingRate));  // display in [s]
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigDurationCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigDurationCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerPreTrigDuration_CB);
+					// trigger source
+					taskTrigPtr->trigSourceCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, RefTrig1_Source, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerSource_CB);					
+					// turn string control into terminal control to select the trigger source
+					NIDAQmx_NewTerminalCtrl(panel, taskTrigPtr->trigSourceCtrlID, 0); // single terminal selection 
+					// adjust trigger terminal control properties
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+					break;
+					
+				case Trig_DigitalPattern:
+					
+					// not yet implemented, but similarly, here controls should be copied to the new panel
+					break;
+					
+				case Trig_AnalogEdge:
+					
+					// level
+					taskTrigPtr->levelCtrlID = DuplicateCtrl(AnEdgeTrig_PanHndl, RefTrig3_Level, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->levelCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->levelCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerLevel_CB );
+					// pre-trigger samples
+					taskTrigPtr->preTrigNSamplesCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, RefTrig3_NSamples, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_DATA_TYPE, VAL_SIZE_T);
+					SetCtrlVal(panel, taskTrigPtr->preTrigNSamplesCtrlID, taskTrigPtr->nPreTrigSamples);
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerPreTrigSamples_CB);
+					// pre-trigger duration
+					taskTrigPtr->preTrigDurationCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, RefTrig3_Duration, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlVal(panel, taskTrigPtr->preTrigDurationCtrlID, taskTrigPtr->nPreTrigSamples/(*taskTrigPtr->samplingRate));  // display in [s]
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigDurationCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigDurationCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerPreTrigDuration_CB);
+					// trigger source
+					taskTrigPtr->trigSourceCtrlID = DuplicateCtrl(AnEdgeTrig_PanHndl, RefTrig3_Source, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerSource_CB);					
+					// turn string control into terminal control to select the trigger source
+					NIDAQmx_NewTerminalCtrl(panel, taskTrigPtr->trigSourceCtrlID, 0); // single terminal selection 
+					// adjust trigger terminal control properties
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+					break;
+					
+				case Trig_AnalogWindow:
+					
+					// window type
+					taskTrigPtr->windowTrigCondCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, RefTrig4_WndType, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
+					SetCtrlAttribute(panel, taskTrigPtr->windowTrigCondCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->windowTrigCondCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerWindowType_CB);
+					// window top
+					taskTrigPtr->windowTopCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, RefTrig4_TrigWndTop, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
+					SetCtrlAttribute(panel, taskTrigPtr->windowTopCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->windowTopCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerWindowTop_CB);
+					// window bottom
+					taskTrigPtr->windowBottomCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, RefTrig4_TrigWndBttm, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
+					SetCtrlAttribute(panel, taskTrigPtr->windowBottomCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->windowBottomCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerWindowBttm_CB);
+					// pre-trigger samples
+					taskTrigPtr->preTrigNSamplesCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, RefTrig4_NSamples, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_DATA_TYPE, VAL_SIZE_T);
+					SetCtrlVal(panel, taskTrigPtr->preTrigNSamplesCtrlID, taskTrigPtr->nPreTrigSamples);
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerPreTrigSamples_CB);
+					// pre-trigger duration
+					taskTrigPtr->preTrigDurationCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, RefTrig4_Duration, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlVal(panel, taskTrigPtr->preTrigDurationCtrlID, taskTrigPtr->nPreTrigSamples/(*taskTrigPtr->samplingRate));  // display in [s]
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigDurationCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->preTrigDurationCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerPreTrigDuration_CB);
+					// trigger source
+					taskTrigPtr->trigSourceCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, RefTrig4_Source, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
+					SetCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerSource_CB);					
+					// turn string control into terminal control to select the trigger source
+					NIDAQmx_NewTerminalCtrl(panel, taskTrigPtr->trigSourceCtrlID, 0); // single terminal selection 
+					// adjust trigger terminal control properties
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
+					NIDAQmx_SetTerminalCtrlAttribute(panel, taskTrigPtr->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+					break;
+			}
+			
+			// discard resources
+			DiscardPanel(DigEdgeTrig_PanHndl);
+			DiscardPanel(DigPatternTrig_PanHndl);
+			DiscardPanel(AnEdgeTrig_PanHndl);
+			DiscardPanel(AnWindowTrig_PanHndl);
+			
+			break;
+	}
+	
+	return 0;
+}
+
+static int CVICALLBACK TriggerSlope_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+		
+		case EVENT_COMMIT:
+			
+			TaskTrig_type* taskTrigPtr = callbackData; 
+			GetCtrlVal(panel, control, &taskTrigPtr->slope);
+			break;
+	}
+	
+	return 0;
+}
+
+static int CVICALLBACK TriggerLevel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+		
+		case EVENT_COMMIT:
+			
+			TaskTrig_type* taskTrigPtr = callbackData;
+			GetCtrlVal(panel, control, &taskTrigPtr->level);
+			break;
+	}
+	
+	return 0;
+}
+
+static int CVICALLBACK TriggerSource_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+		
+		case EVENT_COMMIT:
+			
+			TaskTrig_type* 	taskTrigPtr = callbackData; 
+			int 		  	buffsize	= 0;
+			
+			GetCtrlAttribute(panel, control, ATTR_STRING_TEXT_LENGTH, &buffsize);
+			OKfree(taskTrigPtr->trigSource);
+			taskTrigPtr->trigSource = malloc((buffsize+1) * sizeof(char)); // including ASCII null  
+			GetCtrlVal(panel, control, taskTrigPtr->trigSource);
+			break;
+	}
+	
+	return 0;
+}
+
+static int CVICALLBACK TriggerWindowType_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+		
+		case EVENT_COMMIT:
+			
+			TaskTrig_type* taskTrigPtr = callbackData;   
+			GetCtrlVal(panel, control, &taskTrigPtr->wndTrigCond);
+			break;
+	}
+	
+	return 0;
+}
+
+static int CVICALLBACK TriggerWindowBttm_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+		
+		case EVENT_COMMIT:
+			
+			TaskTrig_type* taskTrigPtr = callbackData;
+			GetCtrlVal(panel, control, &taskTrigPtr->wndBttm);
+			break;
+	}
+	
+	return 0;
+}
+
+static int CVICALLBACK TriggerWindowTop_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+		
+		case EVENT_COMMIT:
+			
+			TaskTrig_type* taskTrigPtr = callbackData;   
+			GetCtrlVal(panel, control, &taskTrigPtr->wndTop);
+			break;
+	}
+	
+	return 0;
+}
+
+static int CVICALLBACK TriggerPreTrigDuration_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+		
+		case EVENT_COMMIT:
+			
+			TaskTrig_type* taskTrigPtr = callbackData;
+			double	duration;
+			GetCtrlVal(panel, control, &duration);
+			// calculate number of samples given sampling rate
+			taskTrigPtr->nPreTrigSamples = (size_t) (*taskTrigPtr->samplingRate * duration);
+			SetCtrlVal(panel, taskTrigPtr->preTrigNSamplesCtrlID, taskTrigPtr->nPreTrigSamples);
+			// recalculate duration to match the number of samples and sampling rate
+			SetCtrlVal(panel, control, taskTrigPtr->nPreTrigSamples/(*taskTrigPtr->samplingRate)); 
+			break;
+	}
+	
+	return 0;
+}
+
+static int CVICALLBACK TriggerPreTrigSamples_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+		
+		case EVENT_COMMIT:
+			
+			TaskTrig_type* taskTrigPtr = callbackData;   
+			GetCtrlVal(panel, control, &taskTrigPtr->nPreTrigSamples);
+			// recalculate duration
+			SetCtrlVal(panel, taskTrigPtr->preTrigDurationCtrlID, taskTrigPtr->nPreTrigSamples/(*taskTrigPtr->samplingRate)); 
+			break;
+	}
+	
+	return 0;
+}
+
 static void PopulateIOMode (Dev_type* dev, int panHndl, int controlID, int ioVal)
 {
 	ClearListCtrl(panHndl, controlID); 
@@ -2874,9 +3277,10 @@ static void PopulateIOType (Dev_type* dev, int panHndl, int controlID, int ioVal
 
 static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	Dev_type* 	dev	 		= (Dev_type*) callbackData;
+	Dev_type* 		dev	 		= (Dev_type*) callbackData;
 	int				ioVal;
 	int				ioMode;
+	int				ioType;
 	
 	switch (event)
 	{
@@ -2914,13 +3318,27 @@ static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callback
 					
 				case TaskSetPan_PhysChan:
 					
-					int		nItems;
+					int		itemIdx;
+					char*	chanName	= NULL;
+					int		buffsize;
 					
-					GetCtrlIndex(panel, control, &nItems);
+					GetCtrlIndex(panel, control, &itemIdx);
 					// continue if there are any channels to add
-					if (nItems < 0) break;
+					if (itemIdx < 0) break;
 					
+					// get physical channel name
+					GetValueLengthFromIndex(panel, control, itemIdx, &buffsize);
+					chanName = malloc((buffsize+1) * sizeof(char)); // including ASCII null  
+					GetValueFromIndex(panel, control, itemIdx, chanName);
 					
+					GetCtrlVal(panel, TaskSetPan_IO, &ioVal);
+					GetCtrlVal(panel, TaskSetPan_IOMode, &ioMode);
+					GetCtrlVal(panel, TaskSetPan_IOType, &ioType);
+					
+					// add channel
+					AddDAQmxChannel(dev, ioVal, ioMode, ioType, chanName);	
+					
+					OKfree(chanName);
 					break;
 			}
 			break;
@@ -3164,30 +3582,38 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 								// connect AI task settings data to the panel
 								SetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, dev->AITaskSet);
 								
+								CONTINUE HERE, ADD BACK PANEL, OR CHECK WHY ERROR HAPPENS
 								//--------------------------
 								// adjust "Channels" tab
 								//--------------------------
-								// remove "None" labelled channel tab
+								// get channels tab panel handle
 								int chanPanHndl;
 								GetPanelHandleFromTabPage(dev->AITaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_ChanTabIdx, &chanPanHndl);
+								// remove "None" labelled channel tab
 								DeleteTabPage(chanPanHndl, Chan_ChanSet, 0, 1);
 								
 								//--------------------------
 								// adjust "Settings" tab
 								//--------------------------
-								// set controls to their default
+								// get settings tab panel handle
 								int setPanHndl;
 								GetPanelHandleFromTabPage(dev->AITaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_SettingsTabIdx, &setPanHndl);
+								// set controls to their default
 								SetCtrlVal(setPanHndl, Set_SamplingRate, dev->AITaskSet->sampleRate);
+								
+								SetCtrlAttribute(setPanHndl, Set_NSamples, ATTR_DATA_TYPE, VAL_SIZE_T);
 								SetCtrlVal(setPanHndl, Set_NSamples, dev->AITaskSet->nSamples);
+								
+								SetCtrlAttribute(setPanHndl, Set_BlockSize, ATTR_DATA_TYPE, VAL_SIZE_T);
 								SetCtrlVal(setPanHndl, Set_BlockSize, dev->AITaskSet->blockSize);
+								
 								SetCtrlVal(setPanHndl, Set_Duration, dev->AITaskSet->nSamples/(dev->AITaskSet->sampleRate*1000));
 								SetCtrlIndex(setPanHndl, Set_MeasMode, dev->AITaskSet->measMode);
 								
 								//--------------------------
 								// adjust "Timing" tab
 								//--------------------------
-								// set controls to their default
+								// get timing tab panel handle
 								int timingPanHndl;
 								GetPanelHandleFromTabPage(dev->AITaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_TimingTabIdx, &timingPanHndl);
 								
@@ -3210,8 +3636,6 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 								// set default reference clock source (none)
 								SetCtrlVal(timingPanHndl, Timing_RefClkSource, "");
 					
-								
-								
 								// set ref clock freq and timeout to default
 								SetCtrlVal(timingPanHndl, Timing_RefClkFreq, dev->AITaskSet->refClkFreq);
 								SetCtrlVal(timingPanHndl, Timing_Timeout, dev->AITaskSet->timeout);
@@ -3219,15 +3643,100 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 								//--------------------------
 								// adjust "Trigger" tab
 								//--------------------------
+								// get trigger tab panel handle
+								int trigPanHndl;
+								GetPanelHandleFromTabPage(dev->AITaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_TriggerTabIdx, &trigPanHndl);
 								
-								CONTINUE HERE!
+								// remove "None" tab if there are supported triggers
+								if (dev->attr->AITriggerUsage)
+									DeleteTabPage(trigPanHndl, Trig_TrigSet, 0, 1);
 								
-								NIDAQmx_NewTerminalCtrl(timingPanHndl, Timing_StartTrigSource, 0); // single terminal selection 
+								// add supported trigger panels
+								// start trigger
+								if (dev->attr->AITriggerUsage | DAQmx_Val_Bit_TriggerUsageTypes_Start) {
+									// load resources
+									int start_DigEdgeTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig1);
+									// add trigger data structure
+									dev->AITaskSet->startTrig = init_TaskTrig_type(dev->AITaskSet->refSampleRate);
+									
+									// add start trigger panel
+									int newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Start");
+									// get start trigger tab panel handle
+									int startTrigPanHndl;
+									GetPanelHandleFromTabPage(trigPanHndl, Trig_TrigSet, newTabIdx, &startTrigPanHndl);
+									// add control to select trigger type
+									int trigTypeCtrlID = DuplicateCtrl(start_DigEdgeTrig_PanHndl, StartTrig1_TrigType, startTrigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);
+									// add callback data and callback function to the control
+									SetCtrlAttribute(startTrigPanHndl, trigTypeCtrlID, ATTR_CALLBACK_DATA, dev->AITaskSet->startTrig);
+									SetCtrlAttribute(startTrigPanHndl, trigTypeCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TaskStartTrigType_CB);
+									// insert trigger type options
+									InsertListItem(startTrigPanHndl, trigTypeCtrlID, -1, "None", Trig_None); 
+									if (dev->attr->DigitalTriggering) {
+										InsertListItem(startTrigPanHndl, trigTypeCtrlID, -1, "Digital Edge", Trig_DigitalEdge); 
+										InsertListItem(startTrigPanHndl, trigTypeCtrlID, -1, "Digital Pattern", Trig_DigitalPattern);
+									}
+									
+									if (dev->attr->AnalogTriggering) {
+										InsertListItem(startTrigPanHndl, trigTypeCtrlID, -1, "Analog Edge", Trig_AnalogEdge); 
+										InsertListItem(startTrigPanHndl, trigTypeCtrlID, -1, "Analog Window", Trig_AnalogWindow);
+									}
+									// set no trigger type by default
+									SetCtrlIndex(startTrigPanHndl, trigTypeCtrlID, 0); 
+									
+									// discard resources
+									DiscardPanel(start_DigEdgeTrig_PanHndl);
+								}
 								
-								// adjust trigger terminal control properties
-								NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, Timing_StartTrigSource, NIDAQmx_IOCtrl_Limit_To_Device, 0);
-								NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, Timing_StartTrigSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
-								NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, Timing_StartTrigSource, NIDAQmx_IOCtrl_Dimmed, 1);
+								// reference trigger
+								if (dev->attr->AITriggerUsage | DAQmx_Val_Bit_TriggerUsageTypes_Reference) {
+									// load resources
+									int reference_DigEdgeTrig_PanHndl	= LoadPanel(0, MOD_NIDAQmxManager_UI, RefTrig1);
+									// add trigger data structure
+									dev->AITaskSet->referenceTrig = init_TaskTrig_type(dev->AITaskSet->refSampleRate);
+									
+									// add reference trigger panel
+									int newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Reference");
+									// get reference trigger tab panel handle
+									int referenceTrigPanHndl;
+									GetPanelHandleFromTabPage(trigPanHndl, Trig_TrigSet, newTabIdx, &referenceTrigPanHndl);
+									// add control to select trigger type
+									int trigTypeCtrlID = DuplicateCtrl(reference_DigEdgeTrig_PanHndl, RefTrig1_TrigType, referenceTrigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);
+									// add callback data and callback function to the control
+									SetCtrlAttribute(referenceTrigPanHndl, trigTypeCtrlID, ATTR_CALLBACK_DATA, dev->AITaskSet->referenceTrig);
+									SetCtrlAttribute(referenceTrigPanHndl, trigTypeCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TaskReferenceTrigType_CB);
+									// insert trigger type options
+									InsertListItem(referenceTrigPanHndl, trigTypeCtrlID, -1, "None", Trig_None); 
+									if (dev->attr->DigitalTriggering) {
+										InsertListItem(referenceTrigPanHndl, trigTypeCtrlID, -1, "Digital Edge", Trig_DigitalEdge); 
+										InsertListItem(referenceTrigPanHndl, trigTypeCtrlID, -1, "Digital Pattern", Trig_DigitalPattern);
+									}
+									
+									if (dev->attr->AnalogTriggering) {
+										InsertListItem(referenceTrigPanHndl, trigTypeCtrlID, -1, "Analog Edge", Trig_AnalogEdge); 
+										InsertListItem(referenceTrigPanHndl, trigTypeCtrlID, -1, "Analog Window", Trig_AnalogWindow);
+									}
+									// set no trigger type by default
+									SetCtrlIndex(referenceTrigPanHndl, trigTypeCtrlID, 0); 
+									
+									// discard resources
+									DiscardPanel(reference_DigEdgeTrig_PanHndl);
+								}
+								
+								// pause trigger
+								if (dev->attr->AITriggerUsage | DAQmx_Val_Bit_TriggerUsageTypes_Pause) {
+								}
+								
+								// advance trigger
+								if (dev->attr->AITriggerUsage | DAQmx_Val_Bit_TriggerUsageTypes_Advance) {
+								}
+								
+								// arm start trigger
+								if (dev->attr->AITriggerUsage | DAQmx_Val_Bit_TriggerUsageTypes_ArmStart) {
+								}
+								
+								// handshake trigger
+								if (dev->attr->AITriggerUsage | DAQmx_Val_Bit_TriggerUsageTypes_Handshake) {
+								}
 								
 							}
 							

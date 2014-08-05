@@ -39,7 +39,7 @@
 #define  RefTrig1_TrigType                3       /* control type: ring, callback function: (none) */
 #define  RefTrig1_Duration                4       /* control type: numeric, callback function: (none) */
 #define  RefTrig1_NSamples                5       /* control type: numeric, callback function: (none) */
-#define  RefTrig1_TrigSource              6       /* control type: string, callback function: (none) */
+#define  RefTrig1_Source                  6       /* control type: string, callback function: (none) */
 
 #define  RefTrig2                         7
 #define  RefTrig2_TrigType                2       /* control type: ring, callback function: (none) */
@@ -47,14 +47,14 @@
 #define  RefTrig2_Duration                4       /* control type: numeric, callback function: (none) */
 
 #define  RefTrig3                         8
-#define  RefTrig3_TrigSource              2       /* control type: string, callback function: (none) */
+#define  RefTrig3_Source                  2       /* control type: string, callback function: (none) */
 #define  RefTrig3_NSamples                3       /* control type: numeric, callback function: (none) */
 #define  RefTrig3_Duration                4       /* control type: numeric, callback function: (none) */
 #define  RefTrig3_Level                   5       /* control type: numeric, callback function: (none) */
 #define  RefTrig3_TrigType                6       /* control type: ring, callback function: (none) */
 
 #define  RefTrig4                         9
-#define  RefTrig4_TrigSource              2       /* control type: string, callback function: (none) */
+#define  RefTrig4_Source                  2       /* control type: string, callback function: (none) */
 #define  RefTrig4_NSamples                3       /* control type: numeric, callback function: (none) */
 #define  RefTrig4_Duration                4       /* control type: numeric, callback function: (none) */
 #define  RefTrig4_TrigType                5       /* control type: ring, callback function: (none) */
@@ -64,19 +64,19 @@
 
 #define  StartTrig1                       10
 #define  StartTrig1_Slope                 2       /* control type: ring, callback function: (none) */
-#define  StartTrig1_TrigSource            3       /* control type: string, callback function: (none) */
+#define  StartTrig1_Source                3       /* control type: string, callback function: (none) */
 #define  StartTrig1_TrigType              4       /* control type: ring, callback function: (none) */
 
 #define  StartTrig2                       11
 #define  StartTrig2_TrigType              2       /* control type: ring, callback function: (none) */
 
 #define  StartTrig3                       12
-#define  StartTrig3_TrigSource            2       /* control type: string, callback function: (none) */
+#define  StartTrig3_Source                2       /* control type: string, callback function: (none) */
 #define  StartTrig3_Level                 3       /* control type: numeric, callback function: (none) */
 #define  StartTrig3_TrigType              4       /* control type: ring, callback function: (none) */
 
 #define  StartTrig4                       13
-#define  StartTrig4_TrigSource            2       /* control type: string, callback function: (none) */
+#define  StartTrig4_Source                2       /* control type: string, callback function: (none) */
 #define  StartTrig4_TrigType              3       /* control type: ring, callback function: (none) */
 #define  StartTrig4_WndType               4       /* control type: ring, callback function: (none) */
 #define  StartTrig4_TrigWndTop            5       /* control type: numeric, callback function: (none) */

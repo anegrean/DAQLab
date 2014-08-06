@@ -1,15 +1,5 @@
 CCFLAGS = -g ;
-HDRS = 	"c:\\program files (x86)\\national instruments\\cvi2013\\include"
-	"C:\\Program Files (x86)\\National Instruments\\Shared\\CVI\\include"
-	"C:\\ProgramData\\National Instruments\\CVI2013\\include"
-	"C:\\ProgramData\\National Instruments\\CVI\\include"
-	"c:\\program files (x86)\\national instruments\\cvi2013\\include\\ansi"
-	"c:\\program files (x86)\\national instruments\\cvi2013\\include\\clang\\2.9"
-	"C:\\Program Files (x86)\\IVI Foundation\\IVI\\Include"
-	"C:\\Program Files (x86)\\IVI Foundation\\VISA\\winnt\\include"
-	"c:\\program files (x86)\\national instruments\\cvi2013\\sdk\\include"
-	"d:\\ELE_DAQLab"
-	"c:\\program files (x86)\\national instruments\\cvi2013\\toolslib\\activex\\word"
+HDRS = 	"c:\\program files (x86)\\national instruments\\cvi2013\\toolslib\\activex\\word"
 	"c:\\program files (x86)\\national instruments\\cvi2013\\toolslib\\activex\\excel"
 	"c:\\program files (x86)\\national instruments\\cvi2013\\toolslib\\custctrl"
 	"c:\\program files (x86)\\national instruments\\cvi2013\\toolslib\\custctrl\\custsupp"
@@ -25,20 +15,46 @@ HDRS = 	"c:\\program files (x86)\\national instruments\\cvi2013\\include"
 	"C:\\Program Files (x86)\\National Instruments\\Shared\\CVI\\toolslib\\custctrl\\custsupp"
 	"C:\\Program Files (x86)\\National Instruments\\Shared\\CVI\\instr"
 	"C:\\ProgramData\\National Instruments\\CVI2013\\instr"
+	"c:\\program files (x86)\\national instruments\\cvi2013\\include"
+	"C:\\Program Files (x86)\\National Instruments\\Shared\\CVI\\include"
+	"C:\\ProgramData\\National Instruments\\CVI2013\\include"
+	"C:\\ProgramData\\National Instruments\\CVI\\include"
+	"c:\\program files (x86)\\national instruments\\cvi2013\\include\\ansi"
+	"c:\\program files (x86)\\national instruments\\cvi2013\\include\\clang\\2.9"
+	"C:\\Program Files (x86)\\IVI Foundation\\IVI\\Include"
+	"C:\\Program Files (x86)\\IVI Foundation\\VISA\\winnt\\include"
+	"c:\\program files (x86)\\national instruments\\cvi2013\\sdk\\include"
 	"d:\\ELE_DAQLab\\MSXML"
 	"c:\\Program Files (x86)\\National Instruments\\CVI2013\\bin"
 	"c:\\ProgramData\\National Instruments\\CVI2013\\bin"
 	"c:\\Program Files (x86)\\National Instruments\\Shared\\CVI\\Bin"
-	"d:\\ELE_DAQLab\\Modules"
-	"d:\\ELE_DAQLab\\Modules\\VUPhotonCtr"
-	"d:\\ELE_DAQLab\\Modules\\NIDAQmxManager"
-	"d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage\\drivers and docs\\PI_GCS"
-	"d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage"
-	"d:\\ELE_DAQLab\\Framework\\Execution control"
-	"d:\\ELE_DAQLab\\Modules\\Zstages"
-	"d:\\ELE_DAQLab\\Framework\\Virtual channels"
 	;
 include Jamfile_instr ;
+LOCATE on "ActiveXML.h" = "d:\\ELE_DAQLab\\MSXML" ;
+LOCATE on "DAQLab.c" = "d:\\ELE_DAQLab" ;
+LOCATE on "DAQLab.h" = "d:\\ELE_DAQLab" ;
+LOCATE on "DAQLabModule.c" = "d:\\ELE_DAQLab\\Modules" ;
+LOCATE on "DAQLabModule.h" = "d:\\ELE_DAQLab\\Modules" ;
+LOCATE on "HW_VUPC.c" = "d:\\ELE_DAQLab\\Modules\\VUPhotonCtr" ;
+LOCATE on "HW_VUPC.h" = "d:\\ELE_DAQLab\\Modules\\VUPhotonCtr" ;
+LOCATE on "NIDAQmxManager.c" = "d:\\ELE_DAQLab\\Modules\\NIDAQmxManager" ;
+LOCATE on "NIDAQmxManager.h" = "d:\\ELE_DAQLab\\Modules\\NIDAQmxManager" ;
+LOCATE on "PI_GCS2_DLL.h" = "d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage\\drivers and docs\\PI_GCS" ;
+LOCATE on "PIStage.c" = "d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage" ;
+LOCATE on "PIStage.h" = "d:\\ELE_DAQLab\\Modules\\Zstages\\PI Stage" ;
+LOCATE on "TaskController.c" = "d:\\ELE_DAQLab\\Framework\\Execution control" ;
+LOCATE on "TaskController.h" = "d:\\ELE_DAQLab\\Framework\\Execution control" ;
+LOCATE on "UI_DAQLab.h" = "d:\\ELE_DAQLab" ;
+LOCATE on "UI_NIDAQmxManager.h" = "d:\\ELE_DAQLab\\Modules\\NIDAQmxManager" ;
+LOCATE on "UI_TaskController.h" = "d:\\ELE_DAQLab\\Framework\\Execution control" ;
+LOCATE on "UI_VUPhotonCtr.h" = "d:\\ELE_DAQLab\\Modules\\VUPhotonCtr" ;
+LOCATE on "UI_Zstage.h" = "d:\\ELE_DAQLab\\Modules\\Zstages" ;
+LOCATE on "VChannel.c" = "d:\\ELE_DAQLab\\Framework\\Virtual channels" ;
+LOCATE on "VChannel.h" = "d:\\ELE_DAQLab\\Framework\\Virtual channels" ;
+LOCATE on "VUPhotonCtr.c" = "d:\\ELE_DAQLab\\Modules\\VUPhotonCtr" ;
+LOCATE on "VUPhotonCtr.h" = "d:\\ELE_DAQLab\\Modules\\VUPhotonCtr" ;
+LOCATE on "Zstage.c" = "d:\\ELE_DAQLab\\Modules\\Zstages" ;
+LOCATE on "Zstage.h" = "d:\\ELE_DAQLab\\Modules\\Zstages" ;
 Object "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" : "d:\\ELE_DAQLab\\DAQLab.c" ;
 FILENUM on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" = 1 ;
 DEFPROTS on "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" = "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj.cvidefprots" ;

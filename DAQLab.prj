@@ -1,5 +1,5 @@
 [Project Header]
-Version = 1301
+Version = 1302
 Pathname = "/d/ELE_DAQLab/DAQLab.prj"
 CVI Dir = "/c/program files (x86)/national instruments/cvi2013"
 CVI Shared Dir = "/C/Program Files (x86)/National Instruments/Shared/CVI"
@@ -9,7 +9,7 @@ IVI Standard Root Dir = "/C/Program Files (x86)/IVI Foundation/IVI"
 VXIplug&play Framework Dir = "/C/Program Files (x86)/IVI Foundation/VISA/winnt"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
-Number of Files = 32
+Number of Files = 33
 Target Type = "Executable"
 Flags = 2064
 Copied From Locked InstrDrv Directory = False
@@ -18,7 +18,6 @@ Locked InstrDrv Name = ""
 Don't Display Deploy InstrDrv Dialog = False
 
 [Folders]
-Instrument Files Folder Not Added Yet = True
 Library Files Folder Not Added Yet = True
 Folder 0 = "Modules"
 FolderEx 0 = "Modules"
@@ -38,6 +37,8 @@ Folder 7 = "Framework/Virtual channels"
 FolderEx 7 = "Framework/Virtual channels"
 Folder 8 = "Modules/NIDAQmxManager"
 FolderEx 8 = "Modules/NIDAQmxManager"
+Folder 9 = "Instrument Files"
+FolderEx 9 = "Instrument Files"
 
 [File 0001]
 File Type = "CSource"
@@ -384,8 +385,22 @@ Folder = "Modules/NIDAQmxManager"
 Folder Id = 8
 
 [File 0029]
-File Type = "CSource"
+File Type = "Function Panel"
 Res Id = 29
+Path Is Rel = True
+Path Rel To = "CVI"
+Path Rel To Override = "CVI Shared"
+Path Rel Path = "toolslib/custctrl/daqmxioctrl.fp"
+Path Line0001 = "/c/Program Files (x86)/National Instruments/Shared/CVI/toolslib/custctrl/daqmxio"
+Path Line0002 = "ctrl.fp"
+Exclude = False
+Project Flags = 0
+Folder = "Instrument Files"
+Folder Id = 9
+
+[File 0030]
+File Type = "CSource"
+Res Id = 30
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.c"
@@ -395,9 +410,9 @@ Compile Into Object File = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0030]
+[File 0031]
 File Type = "Include"
-Res Id = 30
+Res Id = 31
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.h"
@@ -406,9 +421,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0031]
+[File 0032]
 File Type = "Include"
-Res Id = 31
+Res Id = 32
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.h"
@@ -417,9 +432,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0032]
+[File 0033]
 File Type = "User Interface Resource"
-Res Id = 32
+Res Id = 33
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.uir"
@@ -488,7 +503,7 @@ Numeric File Version = "1,0,0,0"
 Numeric Prod Version = "1,0,0,0"
 Comments = ""
 Comments Ex = ""
-Company Name = "Vrije Universiteit Amsterdam"
+Company Name = ""
 Company Name Ex = "%company"
 File Description = "DAQLab (Debug x86)"
 File Description Ex = "%application (%rel_dbg %arch)"
@@ -496,7 +511,7 @@ File Version = "1.0"
 File Version Ex = "%f1.%f2"
 Internal Name = "DAQLab"
 Internal Name Ex = "%basename"
-Legal Copyright = "Copyright © Vrije Universiteit Amsterdam 2014"
+Legal Copyright = "Copyright ©  2014"
 Legal Copyright Ex = "Copyright © %company %Y"
 Legal Trademarks = ""
 Legal Trademarks Ex = ""
@@ -504,7 +519,7 @@ Original Filename = "DAQLab.exe"
 Original Filename Ex = "%filename"
 Private Build = ""
 Private Build Ex = ""
-Product Name = "Vrije Universiteit Amsterdam DAQLab"
+Product Name = " DAQLab"
 Product Name Ex = "%company %application"
 Product Version = "1.0"
 Product Version Ex = "%p1.%p2"
@@ -632,7 +647,7 @@ Numeric File Version = "1,0,0,0"
 Numeric Prod Version = "1,0,0,0"
 Comments = ""
 Comments Ex = ""
-Company Name = "Vrije Universiteit Amsterdam"
+Company Name = ""
 Company Name Ex = "%company"
 File Description = "DAQLab (Debug x64)"
 File Description Ex = "%application (%rel_dbg %arch)"
@@ -640,7 +655,7 @@ File Version = "1.0"
 File Version Ex = "%f1.%f2"
 Internal Name = "DAQLab"
 Internal Name Ex = "%basename"
-Legal Copyright = "Copyright © Vrije Universiteit Amsterdam 2014"
+Legal Copyright = "Copyright ©  2014"
 Legal Copyright Ex = "Copyright © %company %Y"
 Legal Trademarks = ""
 Legal Trademarks Ex = ""
@@ -648,7 +663,7 @@ Original Filename = "DAQLab.exe"
 Original Filename Ex = "%filename"
 Private Build = ""
 Private Build Ex = ""
-Product Name = "Vrije Universiteit Amsterdam DAQLab"
+Product Name = " DAQLab"
 Product Name Ex = "%company %application"
 Product Version = "1.0"
 Product Version Ex = "%p1.%p2"

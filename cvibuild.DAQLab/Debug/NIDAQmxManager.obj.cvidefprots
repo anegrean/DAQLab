@@ -42,3 +42,19 @@ Prototype="int DisposeCOChannelList(unsigned int index, void *ptrToItem, void *c
 Class="Function"
 Prototype="int ManageDevices_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
 
+[AODAQmxTaskDataRequest_CB]
+Class="Function"
+Prototype="long AODAQmxTaskDataRequest_CB(void *taskHandle, long everyNsamplesEventType, unsigned long nSamples, void *callbackData);"
+
+[AODAQmxTaskDone_CB]
+Class="Function"
+Prototype="long AODAQmxTaskDone_CB(void *taskHandle, long status, void *callbackData);"
+
+[AIDAQmxTaskDataAvailable_CB]
+Class="Function"
+Prototype="long AIDAQmxTaskDataAvailable_CB(void *taskHandle, long everyNsamplesEventType, unsigned long nSamples, void *callbackData);"
+
+[AIDAQmxTaskDone_CB]
+Class="Function"
+Prototype="long AIDAQmxTaskDone_CB(void *taskHandle, long status, void *callbackData);"
+

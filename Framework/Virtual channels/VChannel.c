@@ -23,7 +23,7 @@
 //==============================================================================
 // Types
 
-/*
+
 // discard function pointer type
 typedef void	(* DiscardFptr_type) 		(VChan_type** vchan);
 typedef BOOL	(* DisconnectFptr_type)	   	(VChan_type* vchan);
@@ -63,7 +63,7 @@ struct VChan {
 	
 	Disconnected_CBFptr_type	Disconnected_CBFptr;   	// Callback when another VChan has been disconnected from this one.
 	
-}; */
+};
 
 //---------------------------------------------------------------------------------------------------
 // Sink VChan
@@ -350,5 +350,10 @@ void SetVChanName (VChan_type* vchan, char newName[])
 char* GetVChanName (VChan_type* vchan)
 {
 	return StrDup(vchan->name);
+}
+
+CmtTSQHandle GetSinkTSQHndl	(SinkVChan_type* sink)
+{
+	return sink->tsqHndl;
 }
 

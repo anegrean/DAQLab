@@ -46,11 +46,12 @@
 #define  RefTrig2_Duration                4       /* control type: numeric, callback function: (none) */
 
 #define  RefTrig3                         8
-#define  RefTrig3_Source                  2       /* control type: string, callback function: (none) */
-#define  RefTrig3_NSamples                3       /* control type: numeric, callback function: (none) */
-#define  RefTrig3_Duration                4       /* control type: numeric, callback function: (none) */
-#define  RefTrig3_Level                   5       /* control type: numeric, callback function: (none) */
-#define  RefTrig3_TrigType                6       /* control type: ring, callback function: (none) */
+#define  RefTrig3_Slope                   2       /* control type: ring, callback function: (none) */
+#define  RefTrig3_Source                  3       /* control type: string, callback function: (none) */
+#define  RefTrig3_NSamples                4       /* control type: numeric, callback function: (none) */
+#define  RefTrig3_Duration                5       /* control type: numeric, callback function: (none) */
+#define  RefTrig3_Level                   6       /* control type: numeric, callback function: (none) */
+#define  RefTrig3_TrigType                7       /* control type: ring, callback function: (none) */
 
 #define  RefTrig4                         9
 #define  RefTrig4_Source                  2       /* control type: string, callback function: (none) */
@@ -70,9 +71,10 @@
 #define  StartTrig2_TrigType              2       /* control type: ring, callback function: (none) */
 
 #define  StartTrig3                       12
-#define  StartTrig3_Source                2       /* control type: string, callback function: (none) */
-#define  StartTrig3_Level                 3       /* control type: numeric, callback function: (none) */
-#define  StartTrig3_TrigType              4       /* control type: ring, callback function: (none) */
+#define  StartTrig3_Slope                 2       /* control type: ring, callback function: (none) */
+#define  StartTrig3_Source                3       /* control type: string, callback function: (none) */
+#define  StartTrig3_Level                 4       /* control type: numeric, callback function: (none) */
+#define  StartTrig3_TrigType              5       /* control type: ring, callback function: (none) */
 
 #define  StartTrig4                       13
 #define  StartTrig4_Source                2       /* control type: string, callback function: (none) */

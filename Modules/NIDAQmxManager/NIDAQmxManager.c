@@ -27,26 +27,37 @@
 #define MOD_NIDAQmxManager_UI 		"./Modules/NIDAQmxManager/UI_NIDAQmxManager.uir"	
 	// Out of memory message
 #define OutOfMemoryMsg				"Error: Out of memory.\n\n"
+	//----------------------------
 	// DAQmx Task default settings
-#define DAQmxDefault_Task_Timeout			5.0				// in [s]
-	// AI
-#define DAQmxDefault_AITask_SampleRate		1000.0			// in [Hz]
-#define DAQmxDefault_AITask_MeasMode		MeasFinite
-#define	DAQmxDefault_AITask_NSamples		1000
-#define	DAQmxDefault_AITask_BlockSize		4096			// must be a power of 2 !
-#define DAQmxDefault_AITask_RefClkFreq		10000000.0		// in [Hz]
+	//----------------------------
+	// General task settings that use hw-timing IO
+#define DAQmxDefault_Task_Timeout					5.0				// in [s]
+#define DAQmxDefault_Task_SampleRate				100.0			// in [Hz]
+#define DAQmxDefault_Task_MeasMode					MeasFinite
+#define	DAQmxDefault_Task_NSamples					100
+#define	DAQmxDefault_Task_BlockSize					4096			// must be a power of 2 !
+#define DAQmxDefault_Task_RefClkFreq				10000000.0		// in [Hz]
+	// CI Frequency
+#define DAQmxDefault_CI_Frequency_Task_MinFreq		2				// in [Hz]
+#define DAQmxDefault_CI_Frequency_Task_MaxFreq		100				// in [Hz]
+#define DAQmxDefault_CI_Frequency_Task_Edge			Edge_Rising
+#define DAQmxDefault_CI_Frequency_Task_MeasMethod	Meas_LowFreq1Ctr
+#define DAQmxDefault_CI_Frequency_Task_MeasTime		0.001			// in [s]
+#define DAQmxDefault_CI_Frequency_Task_Divisor		4
+
+
 	// DAQmx task settings tab names
-#define DAQmxAITaskSetTabName				"AI"
-#define DAQmxAOTaskSetTabName				"AO"
-#define DAQmxDITaskSetTabName				"DI"
-#define DAQmxDOTaskSetTabName				"DO"
-#define DAQmxCITaskSetTabName				"CI"
-#define DAQmxCOTaskSetTabName				"CO"
+#define DAQmxAITaskSetTabName						"AI"
+#define DAQmxAOTaskSetTabName						"AO"
+#define DAQmxDITaskSetTabName						"DI"
+#define DAQmxDOTaskSetTabName						"DO"
+#define DAQmxCITaskSetTabName						"CI"
+#define DAQmxCOTaskSetTabName						"CO"
 	// DAQmx AI and AO task settings tab indices
-#define DAQmxAIAOTskSet_ChanTabIdx			0
-#define DAQmxAIAOTskSet_SettingsTabIdx		1
-#define DAQmxAIAOTskSet_TimingTabIdx		2
-#define DAQmxAIAOTskSet_TriggerTabIdx		3
+#define DAQmxAIAOTskSet_ChanTabIdx					0
+#define DAQmxAIAOTskSet_SettingsTabIdx				1
+#define DAQmxAIAOTskSet_TimingTabIdx				2
+#define DAQmxAIAOTskSet_TriggerTabIdx				3
 
 	// DAQmx error macro
 #define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto DAQmxError; else
@@ -390,6 +401,32 @@ typedef enum {
 	TrigSlope_Rising	=  DAQmx_Val_Rising,
 	TrigSlope_Falling	=  DAQmx_Val_Falling
 } TrigSlope_type;									// For analog and digital edge trigger type
+
+typedef enum {
+	SampClockEdge_Rising	=  DAQmx_Val_Rising,
+	SampClockEdge_Falling   =  DAQmx_Val_Falling
+} SampClockEdge_type;								// Sampling clock active edge.
+
+// Measurement mode
+typedef enum{
+	MeasFinite	= DAQmx_Val_FiniteSamps,
+	MeasCont	= DAQmx_Val_ContSamps
+} MeasMode_type; 
+
+typedef struct {
+	MeasMode_type 		measMode;      				// Measurement mode: finite or continuous.
+	double       		sampleRate;    				// Sampling rate in [Hz] if device task settings is used as reference.
+	size_t        		nSamples;	    			// Total number of samples to be acquired in case of a finite recording if device task settings is used as reference.
+	size_t*				refNSamples;				// Points to either device or VChan-based number of samples to acquire. By default points to device.
+	double*				refSampleRate;				// Points to either device or VChan-based sampling rate. By default points to device.
+	size_t        		blockSize;     				// Number of samples for reading after which callbacks are called.
+	char*         		sampClkSource; 				// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
+	SampClockEdge_type 	sampClkEdge;   				// Sample clock active edge.
+	char*         		refClkSource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
+	double        		refClkFreq;    				// Reference clock frequency if such a clock is used.
+	BOOL				useRefNSamples;				// The number of samples to be acquired by this module is taken from the connecting VChan.
+	BOOL				useRefSamplingRate;			// The sampling rate used by this module is taken from the connecting VChan.
+} TaskTiming_type;
 	
 typedef struct {
 	Trig_type 			trigType;					// Trigger type.
@@ -417,7 +454,7 @@ struct ChanSet {
 	//DATA
 	char*						name;						// Full physical channel name used by DAQmx, e.g. Dev1/ai1 
 	Channel_type				chanType;					// Channel type.
-	TaskHandle					taskHndl;					// Only for counter channels. Each counter requires a separate task.
+	TaskHandle					taskHndl;					// Only for counter type channels. Each counter requires a separate task.
 	SourceVChan_type*			srcVChan;					// Source VChan assigned to input type physical channels. Otherwise NULL.
 	SinkVChan_type*				sinkVChan;					// Sink VChan assigned to output type physical channels. Otherwise NULL.
 	BOOL						onDemand;					// If TRUE, the channel is updated/read out using software-timing.
@@ -431,7 +468,7 @@ typedef struct {
 	double        		Vmax;      					// Maximum voltage [V]
 	double        		Vmin;       				// Minimum voltage [V]
 	Terminal_type 		terminal;   				// Terminal type 	
-} ChanSet_AIAOVoltage_type;
+} ChanSet_AIAO_Voltage_type;
 
 typedef enum {
 	ShuntResistor_Internal = DAQmx_Val_Internal,	// Use the internal shunt resistor for current measurements.
@@ -445,7 +482,7 @@ typedef struct {
 	ShuntResistor_type	shuntResistorType;
 	double				shuntResistorValue;			// If shuntResistorType = ShuntResistor_External, this gives the value of the shunt resistor in [Ohms] 
 	Terminal_type 		terminal;   				// Terminal type 	
-} ChanSet_AIAOCurrent_type;
+} ChanSet_AIAO_Current_type;
 
 
 // Digital Line/Port Input & Digital Line/Port Output channel type settings
@@ -458,13 +495,41 @@ typedef struct {
 typedef struct {
 	ChanSet_type		baseClass;					// Channel settings common to all channel types.
 	BOOL 				ActiveEdge; 				// 0 - Falling, 1 - Rising
-	int 				initialcount;				// value to start counting from
+	int 				initialCount;				// value to start counting from
 	enum {
 		C_UP, 
 		C_DOWN, 
 		C_EXT
-	} 					cdirection; 				// count direction, C_EXT = externally controlled
+	} 					countDirection; 				// count direction, C_EXT = externally controlled
 } CIEdgeChanSet_type;
+
+// Counter Input for measuring the frequency of a digital signal
+typedef enum {
+	Edge_Rising			=  DAQmx_Val_Rising,
+	Edge_Falling		=  DAQmx_Val_Falling
+} Edge_type;
+
+typedef enum {
+	Meas_LowFreq1Ctr	= DAQmx_Val_LowFreq1Ctr,	// Use one counter that uses a constant timebase to measure the input signal.
+	Meas_HighFreq2Ctr	= DAQmx_Val_HighFreq2Ctr,	// Use two counters, one of which counts pulses of the signal to measure during the specified measurement time.
+	Meas_LargeRng2Ctr	= DAQmx_Val_LargeRng2Ctr    // Use one counter to divide the frequency of the input signal to create a lower-frequency signal 
+						  							// that the second counter can more easily measure.
+} MeasMethod_type;
+
+typedef struct {
+	ChanSet_type		baseClass;					// Channel settings common to all channel types.
+	double        		freqMax;      				// Maximum frequency expected to be measured [Hz]
+	double        		freqMin;       				// Minimum frequency expected to be measured [Hz]
+	Edge_type			edgeType;					// Specifies between which edges to measure the frequency or period of the signal.
+	MeasMethod_type		measMethod;					// The method used to calculate the period or frequency of the signal. 
+	double				measTime;					// The length of time to measure the frequency or period of a digital signal, when measMethod is DAQmx_Val_HighFreq2Ctr.
+													// Measurement accuracy increases with increased measurement time and with increased signal frequency.
+													// Caution: If you measure a high-frequency signal for too long a time, the count register could roll over, resulting in an incorrect measurement. 
+	unsigned int		divisor;					// The value by which to divide the input signal, when measMethod is DAQmx_Val_LargeRng2Ctr. The larger this value, the more accurate the measurement, 
+													// but too large a value can cause the count register to roll over, resulting in an incorrect measurement.
+	char*				freqInputTerminal;			// If other then default terminal assigned to the counter, otherwise this is NULL.
+	TaskTiming_type*	timing;						// Task timing info.
+} ChanSet_CI_Frequency_type;
 
 // Counter Output channel type settings
 typedef struct {
@@ -475,12 +540,6 @@ typedef struct {
 	BOOL 				idlestate;    				// LOW = 0, HIGH = 1 - terminal state at rest, pulses switch this to the oposite state
 } COChanSet_type;
 	
-// Measurement mode
-typedef enum{
-	MeasFinite	= DAQmx_Val_FiniteSamps,
-	MeasCont	= DAQmx_Val_ContSamps
-} MeasMode_type; 
-
 //--------------------
 // DAQmx task settings
 //--------------------
@@ -500,11 +559,6 @@ typedef enum {
 	DAQmxDigLines,
  	DAQmxDigPorts
 } DAQmxDigChan_type;
-
-typedef enum {
-	SampClockEdge_Rising	=  DAQmx_Val_Rising,
-	SampClockEdge_Falling   =  DAQmx_Val_Falling
-} SampClockEdge_type;								// Sampling clock active edge.
 
 // Used for continuous AO streaming
 typedef struct {
@@ -529,32 +583,25 @@ typedef struct {
 
 // AI and AO
 typedef struct {
-	TaskHandle			taskHndl;					// DAQmx task handle for hw-timed AI or AO.
 	int					panHndl;					// Panel handle to task settings.
+	TaskHandle			taskHndl;					// DAQmx task handle for hw-timed AI or AO.
 	ListType 			chanSet;     				// Channel settings. Of ChanSet_type*
 	double        		timeout;       				// Task timeout [s]
-	MeasMode_type 		measMode;      				// Measurement mode: finite or continuous.
-	double       		sampleRate;    				// Sampling rate in [Hz] if device task settings is used as reference.
-	size_t        		nSamples;	    			// Total number of samples to be acquired in case of a finite recording if device task settings is used as reference.
-	size_t*				refNSamples;				// Points to either device or VChan-based number of samples to acquire. By default points to device.
-	double*				refSampleRate;				// Points to either device or VChan-based sampling rate. By default points to device.
-	size_t        		blockSize;     				// Number of samples for reading after which callbacks are called.
 	TaskTrig_type* 		startTrig;     				// Task start trigger type. If NULL then there is no start trigger.
 	TaskTrig_type* 		referenceTrig;     			// Task reference trigger type. If NULL then there is no reference trigger.
-	char*         		sampClkSource; 				// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
-	SampClockEdge_type 	sampClkEdge;   				// Sample clock active edge.
-	char*         		refClkSource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
-	double        		refClkFreq;    				// Reference clock frequency if such a clock is used.
-	BOOL				useRefNSamples;				// The number of samples to be acquired by this module is taken from the connecting VChan.
-	BOOL				useRefSamplingRate;			// The sampling rate used by this module is taken from the connecting VChan.
 	WriteAOData_type*	writeAOData;				// Used for continuous AO streaming 
+	TaskTiming_type*	timing;						// Task timing info
 } AIAOTaskSet_type;
 
-// DI
+// DI and DO
 typedef struct {
+	int					panHndl;					// Panel handle to task settings.
 	TaskHandle			taskHndl;					// DAQmx task handle for hw-timed DI and DO.
 	ListType 			chanSet;     				// Channel settings. Of ChanSet_type*
 	double        		timeout;       				// Task timeout [s]
+	TaskTrig_type* 		startTrig;     				// Task start trigger type. If NULL then there is no start trigger.
+	TaskTrig_type* 		referenceTrig;     			// Task reference trigger type. If NULL then there is no reference trigger.
+	TaskTiming_type*	timing;						// Task timing info
 } DIDOTaskSet_type;
 
 // CI
@@ -701,12 +748,16 @@ static void							init_ChanSet_type						(ChanSet_type* chanSet, char physChanNa
 static void							discard_ChanSet_type					(ChanSet_type** a);
 
 	// AI and AO Voltage
-static ChanSet_type*				init_ChanSet_AIAOVoltage_type			(char physChanName[], Channel_type chanType);
-static void							discard_ChanSet_AIAOVoltage_type		(ChanSet_type** a);
+static ChanSet_type*				init_ChanSet_AIAO_Voltage_type			(char physChanName[], Channel_type chanType);
+static void							discard_ChanSet_AIAO_Voltage_type		(ChanSet_type** a);
 
 	// DI and DO 
 static ChanSet_type*				init_ChanSet_DIDO_type					(char physChanName[], Channel_type chanType);
 static void							discard_ChanSet_DIDO_type				(ChanSet_type** a);
+
+	// CI
+static ChanSet_type* 				init_ChanSet_CI_Frequency_type 			(char physChanName[]);
+static void 						discard_ChanSet_CI_Frequency_type 		(ChanSet_type** a);
 
 	// channels & property lists
 static ListType						GetPhysChanPropertyList					(char chanName[], int chanProperty); 
@@ -732,6 +783,12 @@ static IORange_type*				GetIORanges								(char devName[], int rangeType);
 	// task trigger
 static TaskTrig_type*				init_TaskTrig_type						(double* samplingRate);
 static void							discard_TaskTrig_type					(TaskTrig_type** a);
+
+//------------------
+// DAQmx task timing
+//------------------
+static TaskTiming_type*				init_TaskTiming_type					(void);
+static void							discard_TaskTiming_type					(TaskTiming_type** a);
 
 //--------------------
 // DAQmx task settings
@@ -770,12 +827,21 @@ static void 						DisplayLastDAQmxLibraryError 			(void);
 //---------------------
 // DAQmx task callbacks
 //---------------------
-	// AO
-int32 CVICALLBACK 					AODAQmxTaskDataRequest_CB				(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData);
-int32 CVICALLBACK 					AODAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 status, void *callbackData);
 	// AI
 int32 CVICALLBACK 					AIDAQmxTaskDataAvailable_CB 			(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData);
 int32 CVICALLBACK 					AIDAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 status, void *callbackData);
+
+	// AO
+int32 CVICALLBACK 					AODAQmxTaskDataRequest_CB				(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData);
+int32 CVICALLBACK 					AODAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 status, void *callbackData);
+
+	// DI
+int32 CVICALLBACK 					DIDAQmxTaskDataAvailable_CB 			(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData);
+int32 CVICALLBACK 					DIDAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 status, void *callbackData);
+
+	// DO
+int32 CVICALLBACK 					DODAQmxTaskDataRequest_CB				(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData);
+int32 CVICALLBACK 					DODAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 status, void *callbackData);
 
 static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
 
@@ -1817,6 +1883,10 @@ static void	discard_ChanSet_type (ChanSet_type** a)
 	
 	OKfree((*a)->name);
 	
+	// discard DAQmx task if any
+	// DAQmx task
+	if ((*a)->taskHndl) {DAQmxClearTask ((*a)->taskHndl); (*a)->taskHndl = 0;}
+	
 	discard_VChan_type((VChan_type**)&(*a)->srcVChan);
 	discard_VChan_type((VChan_type**)&(*a)->sinkVChan);
 	
@@ -1824,16 +1894,17 @@ static void	discard_ChanSet_type (ChanSet_type** a)
 }
 
 //------------------------------------------------------------------------------
-// ChanSet_AIAOVoltage_type
+// ChanSet_AIAO_Voltage_type
 //------------------------------------------------------------------------------
-static ChanSet_type* init_ChanSet_AIAOVoltage_type (char physChanName[], Channel_type chanType)
+static ChanSet_type* init_ChanSet_AIAO_Voltage_type (char physChanName[], Channel_type chanType)
 {
-	ChanSet_AIAOVoltage_type* a = malloc (sizeof(ChanSet_AIAOVoltage_type));
+	ChanSet_AIAO_Voltage_type* a = malloc (sizeof(ChanSet_AIAO_Voltage_type));
 	if (!a) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(&a->baseClass, physChanName, chanType, discard_ChanSet_AIAOVoltage_type);
+	init_ChanSet_type(&a->baseClass, physChanName, chanType, discard_ChanSet_AIAO_Voltage_type);
 	
+	// init child
 	a -> terminal	= Terminal_None;
 	a -> Vmin		= 0;
 	a -> Vmax		= 0;
@@ -1841,16 +1912,17 @@ static ChanSet_type* init_ChanSet_AIAOVoltage_type (char physChanName[], Channel
 	return (ChanSet_type*)a;
 }
 
-static void	discard_ChanSet_AIAOVoltage_type (ChanSet_type** a)
+static void	discard_ChanSet_AIAO_Voltage_type (ChanSet_type** a)
 {
 	if (!*a) return;
-	
-	// discard AIAOVoltage_type specific data
 	
 	// discard base class
 	discard_ChanSet_type(a);
 }
 
+//------------------------------------------------------------------------------
+// ChanSet_DIDO_type
+//------------------------------------------------------------------------------
 static ChanSet_type* init_ChanSet_DIDO_type (char physChanName[], Channel_type chanType) 
 {
 	ChanSet_DIDO_type* a = malloc (sizeof(ChanSet_DIDO_type));
@@ -1859,6 +1931,7 @@ static ChanSet_type* init_ChanSet_DIDO_type (char physChanName[], Channel_type c
 	// initialize base class
 	init_ChanSet_type(&a->baseClass, physChanName, chanType, discard_ChanSet_DIDO_type);
 	
+	// init child
 	a -> invert		= FALSE;
 	
 	return (ChanSet_type*)a;
@@ -1868,11 +1941,50 @@ static void discard_ChanSet_DIDO_type (ChanSet_type** a)
 {
 	if (!*a) return; 
 	
-	// discard ChanSet_DIDO_type specific data
-	
 	// discard base class
 	discard_ChanSet_type(a);	
 }
+
+//------------------------------------------------------------------------------
+// ChanSet_CI_Frequency_type
+//------------------------------------------------------------------------------
+static ChanSet_type* init_ChanSet_CI_Frequency_type (char physChanName[])
+{
+	ChanSet_CI_Frequency_type* a = malloc (sizeof(ChanSet_CI_Frequency_type));
+	if (!a) return NULL;
+	
+	// initialize base class
+	init_ChanSet_type(&a->baseClass, physChanName, Chan_CI_Frequency, discard_ChanSet_CI_Frequency_type); 
+	
+			a -> divisor 			= DAQmxDefault_CI_Frequency_Task_Divisor;
+			a -> edgeType			= DAQmxDefault_CI_Frequency_Task_Edge;
+			a -> freqMax			= DAQmxDefault_CI_Frequency_Task_MaxFreq;
+			a -> freqMin			= DAQmxDefault_CI_Frequency_Task_MinFreq;
+			a -> measMethod			= DAQmxDefault_CI_Frequency_Task_MeasMethod;
+			a -> measTime			= DAQmxDefault_CI_Frequency_Task_MeasTime;
+			a -> freqInputTerminal  = NULL;
+	if (!(  a -> timing				= init_TaskTiming_type()))	goto Error;
+	
+	
+	return (ChanSet_type*)a;
+Error:
+	OKfree(a);
+	return NULL;
+}
+
+static void discard_ChanSet_CI_Frequency_type (ChanSet_type** a)
+{
+	if (!*a) return; 
+	
+	ChanSet_CI_Frequency_type* chCIFreqPtr = *(ChanSet_CI_Frequency_type**) a;
+	
+	OKfree(chCIFreqPtr->freqInputTerminal);
+	discard_TaskTiming_type(&chCIFreqPtr->timing);
+	
+	// discard base class
+	discard_ChanSet_type(a);
+}
+
 
 //------------------------------------------------------------------------------
 // AIAOTaskSet_type
@@ -1882,36 +1994,29 @@ static AIAOTaskSet_type* init_AIAOTaskSet_type (void)
 	AIAOTaskSet_type* a = malloc (sizeof(AIAOTaskSet_type));
 	if (!a) return NULL;
 	
-	a -> taskHndl			= NULL;
-	a -> panHndl			= 0;
-	if (!(a -> chanSet		= ListCreate(sizeof(ChanSet_type*)))) goto Error;
-	a -> timeout			= DAQmxDefault_Task_Timeout;
-	a -> measMode			= DAQmxDefault_AITask_MeasMode;
-	a -> sampleRate			= DAQmxDefault_AITask_SampleRate;
-	a -> nSamples			= DAQmxDefault_AITask_NSamples;
-	a -> blockSize			= DAQmxDefault_AITask_BlockSize;
-	a -> refNSamples		= &a->nSamples;
-	a -> refSampleRate		= &a->sampleRate;
-	a -> startTrig			= NULL;
-	a -> referenceTrig		= NULL;
-	a -> sampClkSource		= NULL;   								// use onboard clock for sampling
-	a -> sampClkEdge		= SampClockEdge_Rising;
-	a -> refClkSource		= NULL;									// onboard clock has no external reference to sync to
-	a -> refClkFreq			= DAQmxDefault_AITask_RefClkFreq;
-	a -> useRefNSamples		= FALSE;
-	a -> useRefSamplingRate = FALSE;
-	a -> writeAOData		= NULL;
+			// init
+			a -> chanSet			= 0;
+			a -> timing				= NULL;
+			
+			a -> panHndl			= 0;
+			a -> taskHndl			= NULL;
+			a -> timeout			= DAQmxDefault_Task_Timeout;
+	if (!(	a -> chanSet			= ListCreate(sizeof(ChanSet_type*)))) 	goto Error;
+	if (!(	a -> timing				= init_TaskTiming_type()))				goto Error;	
+			a -> startTrig			= NULL;
+			a -> referenceTrig		= NULL;
+			a -> writeAOData		= NULL;
 		
 	return a;
 Error:
+	if (a->chanSet) ListDispose(a->chanSet);
+	discard_TaskTiming_type(&a->timing);
 	OKfree(a);
 	return NULL;
 }
 
 static void	discard_AIAOTaskSet_type (AIAOTaskSet_type** a)
 {
-	
-	
 	if (!*a) return;
 	
 	// DAQmx task
@@ -1930,9 +2035,8 @@ static void	discard_AIAOTaskSet_type (AIAOTaskSet_type** a)
 	discard_TaskTrig_type(&(*a)->startTrig);
 	discard_TaskTrig_type(&(*a)->referenceTrig);
 	
-	// discard clock info
-	OKfree((*a)->sampClkSource);
-	OKfree((*a)->refClkSource);
+	// discard timing info
+	discard_TaskTiming_type(&(*a)->timing);
 	
 	// discard writeAOData structure
 	discard_WriteAOData_type(&(*a)->writeAOData);
@@ -1963,7 +2067,7 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	
 	
 	
-			a -> writeblock			= dev->AOTaskSet->blockSize;
+			a -> writeblock			= dev->AOTaskSet->timing->blockSize;
 			a -> numchan			= nAO;
 	
 	// init
@@ -2070,13 +2174,53 @@ static void	discard_WriteAOData_type (WriteAOData_type** a)
 //------------------------------------------------------------------------------
 static DIDOTaskSet_type* init_DIDOTaskSet_type (void)
 {
-
+	DIDOTaskSet_type* a = malloc (sizeof(DIDOTaskSet_type));
+	if (!a) return NULL;
+	
+			a -> panHndl			= 0;
+			a -> taskHndl			= NULL;
+			// init
+			a -> chanSet			= 0;
+			a -> timing				= NULL;
+			
+	if (!(	a -> chanSet			= ListCreate(sizeof(ChanSet_type*)))) 	goto Error;
+	if (!(	a -> timing				= init_TaskTiming_type()))				goto Error;
+			a -> timeout			= DAQmxDefault_Task_Timeout;
+			a -> startTrig			= NULL;
+			a -> referenceTrig		= NULL;
+			
+	return a;
+Error:
+	if (a->chanSet)	ListDispose(a->chanSet);
+	discard_TaskTiming_type(&a->timing);
+	OKfree(a);
+	return NULL;
 }
 
 static void	discard_DIDOTaskSet_type (DIDOTaskSet_type** a)
 {
-	if (!*a) return; 
+	if (!*a) return;
 	
+	// DAQmx task
+	if ((*a)->taskHndl) {DAQmxClearTask ((*a)->taskHndl); (*a)->taskHndl = 0;}
+	// channels
+	if ((*a)->chanSet) {
+		ChanSet_type** chanSetPtrPtr = ListGetDataPtr((*a)->chanSet);
+		while(*chanSetPtrPtr) {
+			(*(*chanSetPtrPtr)->discardFptr)	((ChanSet_type**)chanSetPtrPtr);
+			chanSetPtrPtr++;
+		}
+		ListDispose((*a)->chanSet);
+	}
+	
+	// discard trigger data
+	discard_TaskTrig_type(&(*a)->startTrig);
+	discard_TaskTrig_type(&(*a)->referenceTrig);
+	
+	// discard task timing info
+	discard_TaskTiming_type(&(*a)->timing);
+	
+	OKfree(*a); 
 }
 
 //------------------------------------------------------------------------------
@@ -2084,13 +2228,37 @@ static void	discard_DIDOTaskSet_type (DIDOTaskSet_type** a)
 //------------------------------------------------------------------------------
 static CITaskSet_type* init_CITaskSet_type (void)
 {
+	CITaskSet_type* a = malloc (sizeof(CITaskSet_type));
+	if (!a) return NULL;
 	
+			a -> timeout		= DAQmxDefault_Task_Timeout;
+			// init
+			a -> chanTaskSet	= 0;
+	
+	if (!(	a -> chanTaskSet	= ListCreate(sizeof(ChanSet_type*)))) 	goto Error;
+	
+	return a;
+Error:
+	if (a->chanTaskSet) ListDispose(a->chanTaskSet);
+	OKfree(a);
+	return NULL;
 }
 
 static void	discard_CITaskSet_type (CITaskSet_type** a)
 {
-	if (!*a) return; 
+	if (!*a) return;
 	
+	// channels and DAQmx tasks
+	if ((*a)->chanTaskSet) {
+		ChanSet_type** chanSetPtrPtr = ListGetDataPtr((*a)->chanTaskSet);
+		while(*chanSetPtrPtr) {
+			(*(*chanSetPtrPtr)->discardFptr)	((ChanSet_type**)chanSetPtrPtr);
+			chanSetPtrPtr++;
+		}
+		ListDispose((*a)->chanTaskSet);
+	}
+	
+	OKfree(*a);
 }
 
 //------------------------------------------------------------------------------
@@ -2110,7 +2278,6 @@ static void discard_COTaskSet_type (COTaskSet_type** a)
 //------------------------------------------------------------------------------ 
 // TaskTrig_type
 //------------------------------------------------------------------------------ 
-
 static TaskTrig_type* init_TaskTrig_type (double* samplingRate)
 {
 	TaskTrig_type* a = malloc (sizeof(TaskTrig_type));
@@ -2144,7 +2311,41 @@ static void	discard_TaskTrig_type (TaskTrig_type** a)
 	OKfree(*a);
 }
 
+//------------------------------------------------------------------------------ 
+// TaskTiming_type
+//------------------------------------------------------------------------------ 
+static TaskTiming_type*	init_TaskTiming_type (void)
+{
+	TaskTiming_type* a = malloc(sizeof(TaskTiming_type));
+	if (!a) return NULL;
+	
+	a -> measMode				= DAQmxDefault_Task_MeasMode;
+	a -> sampleRate				= DAQmxDefault_Task_SampleRate;
+	a -> nSamples				= DAQmxDefault_Task_NSamples;
+	a -> blockSize				= DAQmxDefault_Task_BlockSize;
+	a -> refNSamples			= &a->nSamples;
+	a -> refSampleRate			= &a->sampleRate;
+	a -> sampClkSource			= NULL;   								// use onboard clock for sampling
+	a -> sampClkEdge			= SampClockEdge_Rising;
+	a -> refClkSource			= NULL;									// onboard clock has no external reference to sync to
+	a -> refClkFreq				= DAQmxDefault_Task_RefClkFreq;
+	a -> useRefNSamples			= FALSE;
+	a -> useRefSamplingRate 	= FALSE;
+	
+	return a;
+}
 
+static void discard_TaskTiming_type	(TaskTiming_type** a)
+{
+	if (!*a) return;
+	
+	OKfree((*a)->sampClkSource);
+	OKfree((*a)->refClkSource);
+	
+	OKfree(*a);
+}
+
+//------------------------------------------------------------------------------ 
 static IORange_type* GetIORanges (char devName[], int rangeType)
 {
 	IORange_type* 	IORngsPtr	= init_IORange_type();
@@ -4168,17 +4369,17 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						int setPanHndl;
 						GetPanelHandleFromTabPage(dev->AITaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_SettingsTabIdx, &setPanHndl);
 						// set controls to their default
-						SetCtrlVal(setPanHndl, Set_SamplingRate, dev->AITaskSet->sampleRate/1000);					// display in [kHz]
+						SetCtrlVal(setPanHndl, Set_SamplingRate, dev->AITaskSet->timing->sampleRate/1000);					// display in [kHz]
 								
 						SetCtrlAttribute(setPanHndl, Set_NSamples, ATTR_DATA_TYPE, VAL_SIZE_T);
-						SetCtrlVal(setPanHndl, Set_NSamples, dev->AITaskSet->nSamples);
+						SetCtrlVal(setPanHndl, Set_NSamples, dev->AITaskSet->timing->nSamples);
 							
 						SetCtrlAttribute(setPanHndl, Set_BlockSize, ATTR_DATA_TYPE, VAL_SIZE_T);
-						SetCtrlVal(setPanHndl, Set_BlockSize, dev->AITaskSet->blockSize);
+						SetCtrlVal(setPanHndl, Set_BlockSize, dev->AITaskSet->timing->blockSize);
 								
-						SetCtrlVal(setPanHndl, Set_Duration, dev->AITaskSet->nSamples/dev->AITaskSet->sampleRate); 	// display in [s]
+						SetCtrlVal(setPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples/dev->AITaskSet->timing->sampleRate); 	// display in [s]
 						int ctrlIdx;
-						GetIndexFromValue(setPanHndl, Set_MeasMode, &ctrlIdx, dev->AITaskSet->measMode); 
+						GetIndexFromValue(setPanHndl, Set_MeasMode, &ctrlIdx, dev->AITaskSet->timing->measMode); 
 						SetCtrlIndex(setPanHndl, Set_MeasMode, ctrlIdx);
 								
 						//--------------------------
@@ -4197,7 +4398,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, Timing_SampleClkSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 					
 						// set default sample clock source
-						dev->AITaskSet->sampClkSource = StrDup("OnboardClock");
+						dev->AITaskSet->timing->sampClkSource = StrDup("OnboardClock");
 						SetCtrlVal(timingPanHndl, Timing_SampleClkSource, "OnboardClock");
 					
 						// adjust reference clock terminal control properties
@@ -4208,7 +4409,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						SetCtrlVal(timingPanHndl, Timing_RefClkSource, "");
 					
 						// set ref clock freq and timeout to default
-						SetCtrlVal(timingPanHndl, Timing_RefClkFreq, dev->AITaskSet->refClkFreq/1e6);				// display in [MHz]						
+						SetCtrlVal(timingPanHndl, Timing_RefClkFreq, dev->AITaskSet->timing->refClkFreq/1e6);				// display in [MHz]						
 						SetCtrlVal(timingPanHndl, Timing_Timeout, dev->AITaskSet->timeout);							// display in [s]
 								
 						//--------------------------
@@ -4228,7 +4429,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// load resources
 							int start_DigEdgeTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig1);
 							// add trigger data structure
-							dev->AITaskSet->startTrig = init_TaskTrig_type(dev->AITaskSet->refSampleRate);
+							dev->AITaskSet->startTrig = init_TaskTrig_type(dev->AITaskSet->timing->refSampleRate);
 									
 							// add start trigger panel
 							int newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Start");
@@ -4263,7 +4464,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// load resources
 							int reference_DigEdgeTrig_PanHndl	= LoadPanel(0, MOD_NIDAQmxManager_UI, RefTrig1);
 							// add trigger data structure
-							dev->AITaskSet->referenceTrig = init_TaskTrig_type(dev->AITaskSet->refSampleRate);
+							dev->AITaskSet->referenceTrig = init_TaskTrig_type(dev->AITaskSet->timing->refSampleRate);
 									
 							// add reference trigger panel
 							int newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Reference");
@@ -4330,7 +4531,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						case DAQmx_Val_Voltage:			
 							
 							// init new channel data
-							ChanSet_AIAOVoltage_type* newChan 	= (ChanSet_AIAOVoltage_type*) init_ChanSet_AIAOVoltage_type(chName, Chan_AI_Voltage);
+							ChanSet_AIAO_Voltage_type* newChan 	= (ChanSet_AIAO_Voltage_type*) init_ChanSet_AIAO_Voltage_type(chName, Chan_AI_Voltage);
 							
 							// insert new channel settings tab
 							int chanSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, AIAOChSet);  
@@ -4464,17 +4665,17 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						int setPanHndl;
 						GetPanelHandleFromTabPage(dev->AOTaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_SettingsTabIdx, &setPanHndl);
 						// set controls to their default
-						SetCtrlVal(setPanHndl, Set_SamplingRate, dev->AOTaskSet->sampleRate/1000);					// display in [kHz]
+						SetCtrlVal(setPanHndl, Set_SamplingRate, dev->AOTaskSet->timing->sampleRate / 1000);					// display in [kHz]
 								
 						SetCtrlAttribute(setPanHndl, Set_NSamples, ATTR_DATA_TYPE, VAL_SIZE_T);
-						SetCtrlVal(setPanHndl, Set_NSamples, dev->AOTaskSet->nSamples);
+						SetCtrlVal(setPanHndl, Set_NSamples, dev->AOTaskSet->timing->nSamples);
 								
 						SetCtrlAttribute(setPanHndl, Set_BlockSize, ATTR_DATA_TYPE, VAL_SIZE_T);
-						SetCtrlVal(setPanHndl, Set_BlockSize, dev->AOTaskSet->blockSize);
+						SetCtrlVal(setPanHndl, Set_BlockSize, dev->AOTaskSet->timing->blockSize);
 							
-						SetCtrlVal(setPanHndl, Set_Duration, dev->AOTaskSet->nSamples/dev->AOTaskSet->sampleRate); 	// display in [s]
+						SetCtrlVal(setPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate); 	// display in [s]
 						int ctrlIdx;    
-						GetIndexFromValue(setPanHndl, Set_MeasMode, &ctrlIdx, dev->AOTaskSet->measMode);
+						GetIndexFromValue(setPanHndl, Set_MeasMode, &ctrlIdx, dev->AOTaskSet->timing->measMode);
 						SetCtrlIndex(setPanHndl, Set_MeasMode, ctrlIdx);
 								
 						//--------------------------
@@ -4493,7 +4694,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, Timing_SampleClkSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 					
 						// set default sample clock source
-						dev->AOTaskSet->sampClkSource = StrDup("OnboardClock");
+						dev->AOTaskSet->timing->sampClkSource = StrDup("OnboardClock");
 						SetCtrlVal(timingPanHndl, Timing_SampleClkSource, "OnboardClock");
 					
 						// adjust reference clock terminal control properties
@@ -4504,7 +4705,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						SetCtrlVal(timingPanHndl, Timing_RefClkSource, "");
 					
 						// set ref clock freq and timeout to default
-						SetCtrlVal(timingPanHndl, Timing_RefClkFreq, dev->AOTaskSet->refClkFreq/1e6);				// display in [MHz]						
+						SetCtrlVal(timingPanHndl, Timing_RefClkFreq, dev->AOTaskSet->timing->refClkFreq / 1e6);				// display in [MHz]						
 						SetCtrlVal(timingPanHndl, Timing_Timeout, dev->AOTaskSet->timeout);							// display in [s]
 								
 						//--------------------------
@@ -4524,7 +4725,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// load resources
 							int start_DigEdgeTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig1);
 							// add trigger data structure
-							dev->AOTaskSet->startTrig = init_TaskTrig_type(dev->AOTaskSet->refSampleRate);
+							dev->AOTaskSet->startTrig = init_TaskTrig_type(dev->AOTaskSet->timing->refSampleRate);
 									
 							// add start trigger panel
 							int newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Start");
@@ -4559,7 +4760,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// load resources
 							int reference_DigEdgeTrig_PanHndl	= LoadPanel(0, MOD_NIDAQmxManager_UI, RefTrig1);
 							// add trigger data structure
-							dev->AOTaskSet->referenceTrig = init_TaskTrig_type(dev->AOTaskSet->refSampleRate);
+							dev->AOTaskSet->referenceTrig = init_TaskTrig_type(dev->AOTaskSet->timing->refSampleRate);
 									
 							// add reference trigger panel
 							int newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Reference");
@@ -4627,7 +4828,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						case DAQmx_Val_Voltage:
 							
 							// init new channel data
-							ChanSet_AIAOVoltage_type* newChan 	= (ChanSet_AIAOVoltage_type*) init_ChanSet_AIAOVoltage_type(chName, Chan_AO_Voltage);
+							ChanSet_AIAO_Voltage_type* newChan 	= (ChanSet_AIAO_Voltage_type*) init_ChanSet_AIAO_Voltage_type(chName, Chan_AO_Voltage);
 							
 							// insert new channel settings tab
 							int chanSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, AIAOChSet);  
@@ -4846,10 +5047,10 @@ static int ConfigDAQmxAITask (Dev_type* dev)
 	if (!hwTimingFlag) return 0;	// do nothing
 	
 	// create DAQmx AI task 
-	{char* taskName = GetTaskControlName(dev->taskController);
+	char* taskName = GetTaskControlName(dev->taskController);
 	AppendString(&taskName, " AI Task", -1);
 	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->AITaskSet->taskHndl));
-	OKfree(taskName);}
+	OKfree(taskName);
 	
 	// create AI channels
 	chanSetPtrPtr = ListGetDataPtr(dev->AITaskSet->chanSet);
@@ -4865,16 +5066,16 @@ static int ConfigDAQmxAITask (Dev_type* dev)
 			
 			case Chan_AI_Voltage:
 				
-				DAQmxErrChk (DAQmxCreateAIVoltageChan(dev->AITaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAOVoltage_type**)chanSetPtrPtr)->terminal, 
-													  (*(ChanSet_AIAOVoltage_type**)chanSetPtrPtr)->Vmin, (*(ChanSet_AIAOVoltage_type**)chanSetPtrPtr)->Vmax, DAQmx_Val_Volts, NULL)); 
+				DAQmxErrChk (DAQmxCreateAIVoltageChan(dev->AITaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAO_Voltage_type**)chanSetPtrPtr)->terminal, 
+													  (*(ChanSet_AIAO_Voltage_type**)chanSetPtrPtr)->Vmin, (*(ChanSet_AIAO_Voltage_type**)chanSetPtrPtr)->Vmax, DAQmx_Val_Volts, NULL)); 
 				
 				break;
 				
 			case Chan_AI_Current:
 				
-				DAQmxErrChk (DAQmxCreateAICurrentChan(dev->AITaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAOCurrent_type**)chanSetPtrPtr)->terminal, 
-													  (*(ChanSet_AIAOCurrent_type**)chanSetPtrPtr)->Imin, (*(ChanSet_AIAOCurrent_type**)chanSetPtrPtr)->Imax, DAQmx_Val_Amps,
-													  (*(ChanSet_AIAOCurrent_type**)chanSetPtrPtr)->shuntResistorType, (*(ChanSet_AIAOCurrent_type**)chanSetPtrPtr)->shuntResistorValue, NULL));
+				DAQmxErrChk (DAQmxCreateAICurrentChan(dev->AITaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->terminal, 
+													  (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->Imin, (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->Imax, DAQmx_Val_Amps,
+													  (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->shuntResistorType, (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->shuntResistorValue, NULL));
 							  
 				break;
 				
@@ -4891,110 +5092,112 @@ static int ConfigDAQmxAITask (Dev_type* dev)
 	
 	// sample clock source
 	// if no sample clock is given, then use OnboardClock by default
-	if (!dev->AITaskSet->sampClkSource) 
+	if (!dev->AITaskSet->timing->sampClkSource) 
 		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
 	else
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, dev->AITaskSet->sampClkSource));
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, dev->AITaskSet->timing->sampClkSource));
 	
 	// sample clock edge
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AITaskSet->sampClkEdge));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AITaskSet->timing->sampClkEdge));
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->sampleRate));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, *dev->AITaskSet->timing->refSampleRate));
 	
 	// set operation mode: finite, continuous
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AITaskSet->measMode));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AITaskSet->timing->measMode));
 	
 	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
 	
-	// set number of samples per channel read within one call of the read function, i.e. blocksize
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->AITaskSet->blockSize));
-	
 	// if a reference clock is given, use it to synchronize the internal clock
-	if (dev->AITaskSet->refClkSource) {
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Src, dev->AITaskSet->refClkSource));
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AITaskSet->refClkFreq));
+	if (dev->AITaskSet->timing->refClkSource) {
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Src, dev->AITaskSet->timing->refClkSource));
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AITaskSet->timing->refClkFreq));
 	}
 	
-	// adjust manually input buffer size to be even multiple of blocksizes and make sure that the input buffer is
+	// adjust manually the number of samples to acquire and  input buffer size to be even multiple of blocksizes and make sure that the input buffer is
 	// at least equal or larger than the total number of samples per channel to be acquired in case of finite acquisition and at least the number of
 	// default samples for continuous acquisition (which is adjusted automatically depending on the sampling rate)
 	
-	switch (dev->AITaskSet->measMode) {
+	switch (dev->AITaskSet->timing->measMode) {
 		int		quot;
 		int		defaultBuffSize; 
 		
 		case MeasFinite:
-				
-			quot = dev->AITaskSet->nSamples  / dev->AITaskSet->blockSize; 
+			
+			// set number of samples per channel
+			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *dev->AITaskSet->timing->refNSamples));
+			quot = *dev->AITaskSet->timing->refNSamples  / dev->AITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
-			DAQmxErrChk(DAQmxCfgInputBuffer (dev->AITaskSet->taskHndl, dev->AITaskSet->blockSize * quot));
+			DAQmxErrChk(DAQmxCfgInputBuffer (dev->AITaskSet->taskHndl, dev->AITaskSet->timing->blockSize * quot));
 			break;
 				
 		case MeasCont:
 			
 			DAQmxGetBufferAttribute(dev->AITaskSet->taskHndl, DAQmx_Buf_Input_BufSize, &defaultBuffSize);
-			quot = defaultBuffSize / dev->AITaskSet->blockSize; 
+			quot = defaultBuffSize / dev->AITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
-			DAQmxErrChk(DAQmxCfgInputBuffer (dev->AITaskSet->taskHndl, dev->AITaskSet->blockSize * quot));
+			DAQmxErrChk(DAQmxCfgInputBuffer (dev->AITaskSet->taskHndl, dev->AITaskSet->timing->blockSize * quot));
 			break;
 	}
-	
-	//----------------------
-	// Add AI Task callbacks
-	//----------------------
-	// register AI data available callback 
-	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->AOTaskSet->blockSize, 0, AIDAQmxTaskDataAvailable_CB, dev)); 
-	// register AI task done event callback (which is called also if the task encounters an error)
-	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AITaskSet->taskHndl, 0, AIDAQmxTaskDone_CB, dev));
 	
 	//----------------------
 	// Configure AI triggers
 	//----------------------
 	// configure start trigger
-	switch (dev->AITaskSet->startTrig->trigType) {
-		case Trig_None:
-			break;
+	if (dev->AITaskSet->startTrig)
+		switch (dev->AITaskSet->startTrig->trigType) {
+			case Trig_None:
+				break;
 			
-		case Trig_AnalogEdge:
-			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope, dev->AITaskSet->startTrig->level));  
-			break;
+			case Trig_AnalogEdge:
+				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope, dev->AITaskSet->startTrig->level));  
+				break;
 			
-		case Trig_AnalogWindow:
-			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->wndTrigCond, 
-						 dev->AITaskSet->startTrig->wndTop, dev->AITaskSet->startTrig->wndBttm));  
-			break;
+			case Trig_AnalogWindow:
+				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->wndTrigCond, 
+							 dev->AITaskSet->startTrig->wndTop, dev->AITaskSet->startTrig->wndBttm));  
+				break;
 			
-		case Trig_DigitalEdge:
-			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope));  
-			break;
+			case Trig_DigitalEdge:
+				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope));  
+				break;
 			
-		case Trig_DigitalPattern:
-			break;
-	}
+			case Trig_DigitalPattern:
+				break;
+		}
 	
 	// configure reference trigger
-	switch (dev->AITaskSet->referenceTrig->trigType) {
-		case Trig_None:
-			break;
+	if (dev->AITaskSet->referenceTrig)
+		switch (dev->AITaskSet->referenceTrig->trigType) {
+			case Trig_None:
+				break;
 			
-		case Trig_AnalogEdge:
-			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->level));  
-			break;
+			case Trig_AnalogEdge:
+				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->level));  
+				break;
 			
-		case Trig_AnalogWindow:
-			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->wndTrigCond, 
-						 dev->AITaskSet->referenceTrig->wndTop, dev->AITaskSet->referenceTrig->wndBttm));  
-			break;
+			case Trig_AnalogWindow:
+				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->wndTrigCond, 
+							 dev->AITaskSet->referenceTrig->wndTop, dev->AITaskSet->referenceTrig->wndBttm));  
+				break;
 			
-		case Trig_DigitalEdge:
-			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope));  
-			break;
+			case Trig_DigitalEdge:
+				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope));  
+				break;
 			
-		case Trig_DigitalPattern:
-			break;
-	}
+			case Trig_DigitalPattern:
+				break;
+		}
+	
+	//----------------------
+	// Add AI Task callbacks
+	//----------------------
+	// register AI data available callback 
+	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->AITaskSet->timing->blockSize, 0, AIDAQmxTaskDataAvailable_CB, dev)); 
+	// register AI task done event callback (which is called also if the task encounters an error)
+	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AITaskSet->taskHndl, 0, AIDAQmxTaskDone_CB, dev));
+	
 		
 	return 0;
 Error:
@@ -5035,10 +5238,10 @@ static int ConfigDAQmxAOTask (Dev_type* dev)
 	if (!hwTimingFlag) return 0;	// do nothing
 	
 	// create DAQmx AO task 
-	{char* taskName = GetTaskControlName(dev->taskController);
+	char* taskName = GetTaskControlName(dev->taskController);
 	AppendString(&taskName, " AO Task", -1);
 	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->AOTaskSet->taskHndl));
-	OKfree(taskName);}
+	OKfree(taskName);
 	
 	// create AO channels
 	chanSetPtrPtr = ListGetDataPtr(dev->AOTaskSet->chanSet);
@@ -5055,15 +5258,15 @@ static int ConfigDAQmxAOTask (Dev_type* dev)
 			case Chan_AO_Voltage:
 				
 				// create channel
-				DAQmxErrChk (DAQmxCreateAOVoltageChan(dev->AOTaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAOVoltage_type**)chanSetPtrPtr)->Vmin, 
-													  (*(ChanSet_AIAOVoltage_type**)chanSetPtrPtr)->Vmax, DAQmx_Val_Volts, NULL)); 
+				DAQmxErrChk (DAQmxCreateAOVoltageChan(dev->AOTaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAO_Voltage_type**)chanSetPtrPtr)->Vmin, 
+													  (*(ChanSet_AIAO_Voltage_type**)chanSetPtrPtr)->Vmax, DAQmx_Val_Volts, NULL)); 
 				
 				break;
 				
 			case Chan_AO_Current:
 				
-				DAQmxErrChk (DAQmxCreateAOCurrentChan(dev->AOTaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAOCurrent_type**)chanSetPtrPtr)->Imin,
-													  (*(ChanSet_AIAOCurrent_type**)chanSetPtrPtr)->Imax, DAQmx_Val_Amps, NULL));
+				DAQmxErrChk (DAQmxCreateAOCurrentChan(dev->AOTaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->Imin,
+													  (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->Imax, DAQmx_Val_Amps, NULL));
 							  
 				break;
 			/*	
@@ -5085,90 +5288,93 @@ static int ConfigDAQmxAOTask (Dev_type* dev)
 	
 	// sample clock source
 	// if no sample clock is given, then OnboardClock is used by default
-	if (!dev->AOTaskSet->sampClkSource) 
+	if (!dev->AOTaskSet->timing->sampClkSource) 
 		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
 	else
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->AOTaskSet->sampClkSource));
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->AOTaskSet->timing->sampClkSource));
 	
 	// sample clock edge
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AOTaskSet->sampClkEdge));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AOTaskSet->timing->sampClkEdge));
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AOTaskSet->sampleRate));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, *dev->AOTaskSet->timing->refSampleRate));
 	
 	// set operation mode: finite, continuous
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AOTaskSet->measMode));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AOTaskSet->timing->measMode));
 	
 	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
 	
-	// set number of samples per channel written within one call of the write function, i.e. blocksize
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->AOTaskSet->blockSize));
+	// set number of samples per channel for finite acquisition
+	if (dev->AOTaskSet->timing->measMode == MeasFinite)
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *dev->AOTaskSet->timing->refNSamples));
 	
 	// if a reference clock is given, use it to synchronize the internal clock
-	if (dev->AOTaskSet->refClkSource) {
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->AOTaskSet->refClkSource));
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AOTaskSet->refClkFreq));
+	if (dev->AOTaskSet->timing->refClkSource) {
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->AOTaskSet->timing->refClkSource));
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AOTaskSet->timing->refClkFreq));
 	}
 	
 	// disable AO regeneration
 	DAQmxSetWriteAttribute (dev->AOTaskSet->taskHndl, DAQmx_Write_RegenMode, DAQmx_Val_DoNotAllowRegen);
 	
 	// adjust output buffer size to be even multiple of blocksize
-	DAQmxErrChk (DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, 2 * dev->AOTaskSet->blockSize));
+	DAQmxErrChk (DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, 2 * dev->AOTaskSet->timing->blockSize));
 	
 	//----------------------
 	// Configure AO triggers
 	//----------------------
 	// configure start trigger
-	switch (dev->AOTaskSet->startTrig->trigType) {
-		case Trig_None:
-			break;
+	if (dev->AOTaskSet->startTrig)
+		switch (dev->AOTaskSet->startTrig->trigType) {
+			case Trig_None:
+				break;
 			
-		case Trig_AnalogEdge:
-			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope, dev->AOTaskSet->startTrig->level));  
-			break;
+			case Trig_AnalogEdge:
+				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope, dev->AOTaskSet->startTrig->level));  
+				break;
 			
-		case Trig_AnalogWindow:
-			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->wndTrigCond, 
-						 dev->AOTaskSet->startTrig->wndTop, dev->AOTaskSet->startTrig->wndBttm));  
-			break;
+			case Trig_AnalogWindow:
+				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->wndTrigCond, 
+							 dev->AOTaskSet->startTrig->wndTop, dev->AOTaskSet->startTrig->wndBttm));  
+				break;
 			
-		case Trig_DigitalEdge:
-			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope));  
-			break;
+			case Trig_DigitalEdge:
+				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope));  
+				break;
 			
-		case Trig_DigitalPattern:
-			break;
-	}
+			case Trig_DigitalPattern:
+				break;
+		}
 	
 	// configure reference trigger
-	switch (dev->AOTaskSet->referenceTrig->trigType) {
-		case Trig_None:
-			break;
+	if (dev->AOTaskSet->referenceTrig)
+		switch (dev->AOTaskSet->referenceTrig->trigType) {
+			case Trig_None:
+				break;
 			
-		case Trig_AnalogEdge:
-			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, dev->AOTaskSet->referenceTrig->level));  
-			break;
+			case Trig_AnalogEdge:
+				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, dev->AOTaskSet->referenceTrig->level));  
+				break;
 			
-		case Trig_AnalogWindow:
-			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->wndTrigCond, 
-						 dev->AOTaskSet->referenceTrig->wndTop, dev->AOTaskSet->referenceTrig->wndBttm));  
-			break;
+			case Trig_AnalogWindow:
+				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->wndTrigCond, 
+							 dev->AOTaskSet->referenceTrig->wndTop, dev->AOTaskSet->referenceTrig->wndBttm));  
+				break;
 			
-		case Trig_DigitalEdge:
-			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope));  
-			break;
+			case Trig_DigitalEdge:
+				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope));  
+				break;
 			
-		case Trig_DigitalPattern:
-			break;
-	}
+			case Trig_DigitalPattern:
+				break;
+		}
 	
 	//----------------------
 	// Add AO Task callbacks
 	//----------------------
 	// register AO data request callback 
-	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->blockSize, 0, AODAQmxTaskDataRequest_CB, dev)); 
+	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev)); 
 	// register AO task done event callback (which is called also if the task encounters an error)
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev));
 	
@@ -5187,8 +5393,152 @@ DAQmxError:
 
 static int ConfigDAQmxDITask (Dev_type* dev)
 {
+	int 				error 			= 0;
+	ChanSet_type** 		chanSetPtrPtr;
 	
+	if (!dev->DITaskSet) return 0;	// do nothing
 	
+	// check if there is at least one DI task that requires HW-timing
+	BOOL hwTimingFlag = FALSE;
+	chanSetPtrPtr = ListGetDataPtr(dev->DITaskSet->chanSet);
+	while(*chanSetPtrPtr) {
+		if (!(*chanSetPtrPtr)->onDemand) {
+			hwTimingFlag = TRUE;
+			break;
+		}
+		chanSetPtrPtr++;
+	}
+	// continue setting up the DI task if any channels require HW-timing
+	if (!hwTimingFlag) return 0;	// do nothing
+	
+	// create DAQmx DI task 
+	char* taskName = GetTaskControlName(dev->taskController);
+	AppendString(&taskName, " DI Task", -1);
+	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->DITaskSet->taskHndl));
+	OKfree(taskName);
+	
+	// create DI channels
+	chanSetPtrPtr = ListGetDataPtr(dev->DITaskSet->chanSet);
+	while(*chanSetPtrPtr) {
+		
+		// include in the task only channel for which HW-timing is required
+		if ((*chanSetPtrPtr)->onDemand) {
+			chanSetPtrPtr++;
+			continue;
+		}
+		
+		DAQmxErrChk (DAQmxCreateDIChan(dev->DITaskSet->taskHndl, (*chanSetPtrPtr)->name, "", DAQmx_Val_ChanForAllLines)); 
+		
+		chanSetPtrPtr++;
+	}
+				 
+	// sample clock source
+	// if no sample clock is given, then use OnboardClock by default
+	if (!dev->DITaskSet->timing->sampClkSource) 
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+	else
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Src, dev->DITaskSet->timing->sampClkSource));
+	
+	// sample clock edge
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DITaskSet->timing->sampClkEdge));
+	
+	// sampling rate
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Rate, *dev->DITaskSet->timing->refSampleRate));
+	
+	// set operation mode: finite, continuous
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DITaskSet->timing->measMode));
+	
+	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	
+	// if a reference clock is given, use it to synchronize the internal clock
+	if (dev->DITaskSet->timing->refClkSource) {
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_RefClk_Src, dev->DITaskSet->timing->refClkSource));
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->DITaskSet->timing->refClkFreq));
+	}
+	
+	// adjust manually number of samples and input buffer size to be even multiple of blocksizes and make sure that the input buffer is
+	// at least equal or larger than the total number of samples per channel to be acquired in case of finite acquisition and at least the number of
+	// default samples for continuous acquisition (which is adjusted automatically depending on the sampling rate)
+	
+	switch (dev->DITaskSet->timing->measMode) {
+		int		quot;
+		int		defaultBuffSize; 
+		
+		case MeasFinite:
+			
+			// set number of samples per channel read within one call of the read function, i.e. blocksize
+			DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *dev->DITaskSet->timing->refNSamples));
+			quot = *dev->DITaskSet->timing->refNSamples  / dev->DITaskSet->timing->blockSize; 
+			if (quot % 2) quot++;
+			DAQmxErrChk(DAQmxCfgInputBuffer (dev->DITaskSet->taskHndl, dev->DITaskSet->timing->blockSize * quot));
+			break;
+				
+		case MeasCont:
+			
+			DAQmxGetBufferAttribute(dev->DITaskSet->taskHndl, DAQmx_Buf_Input_BufSize, &defaultBuffSize);
+			quot = defaultBuffSize / dev->DITaskSet->timing->blockSize; 
+			if (quot % 2) quot++;
+			DAQmxErrChk(DAQmxCfgInputBuffer (dev->DITaskSet->taskHndl, dev->DITaskSet->timing->blockSize * quot));
+			break;
+	}
+	
+	//----------------------
+	// Configure DI triggers
+	//----------------------
+	// configure start trigger
+	switch (dev->DITaskSet->startTrig->trigType) {
+		case Trig_None:
+			break;
+			
+		case Trig_AnalogEdge:
+			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope, dev->DITaskSet->startTrig->level));  
+			break;
+			
+		case Trig_AnalogWindow:
+			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->wndTrigCond, 
+						 dev->DITaskSet->startTrig->wndTop, dev->DITaskSet->startTrig->wndBttm));  
+			break;
+			
+		case Trig_DigitalEdge:
+			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope));  
+			break;
+			
+		case Trig_DigitalPattern:
+			break;
+	}
+	
+	// configure reference trigger
+	switch (dev->DITaskSet->referenceTrig->trigType) {
+		case Trig_None:
+			break;
+			
+		case Trig_AnalogEdge:
+			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, dev->DITaskSet->referenceTrig->level));  
+			break;
+			
+		case Trig_AnalogWindow:
+			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->wndTrigCond, 
+						 dev->DITaskSet->referenceTrig->wndTop, dev->DITaskSet->referenceTrig->wndBttm));  
+			break;
+			
+		case Trig_DigitalEdge:
+			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope));  
+			break;
+			
+		case Trig_DigitalPattern:
+			break;
+	}
+	
+	//----------------------
+	// Add DI Task callbacks
+	//----------------------
+	// register DI data available callback 
+	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->DITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DITaskSet->timing->blockSize, 0, DIDAQmxTaskDataAvailable_CB, dev)); 
+	// register DI task done event callback (which is called also if the task encounters an error)
+	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DITaskSet->taskHndl, 0, DIDAQmxTaskDone_CB, dev));
+	
+		
 	return 0;
 Error:
 	return -1;
@@ -5204,7 +5554,136 @@ DAQmxError:
 
 static int ConfigDAQmxDOTask (Dev_type* dev)
 {
+	int 				error 			= 0;
+	ChanSet_type** 		chanSetPtrPtr;
 	
+	if (!dev->DOTaskSet) return 0;	// do nothing
+	
+	// check if there is at least one DO task that requires HW-timing
+	BOOL hwTimingFlag = FALSE;
+	chanSetPtrPtr = ListGetDataPtr(dev->DOTaskSet->chanSet);
+	while(*chanSetPtrPtr) {
+		if (!(*chanSetPtrPtr)->onDemand) {
+			hwTimingFlag = TRUE;
+			break;
+		}
+		chanSetPtrPtr++;
+	}
+	// continue setting up the DO task if any channels require HW-timing
+	if (!hwTimingFlag) return 0;	// do nothing
+	
+	// create DAQmx DO task 
+	char* taskName = GetTaskControlName(dev->taskController);
+	AppendString(&taskName, " DO Task", -1);
+	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->DOTaskSet->taskHndl));
+	OKfree(taskName);
+	
+	// create DO channels
+	chanSetPtrPtr = ListGetDataPtr(dev->DOTaskSet->chanSet);
+	while(*chanSetPtrPtr) {
+		
+		// include in the task only channel for which HW-timing is required
+		if ((*chanSetPtrPtr)->onDemand) {
+			chanSetPtrPtr++;
+			continue;
+		}
+		
+		DAQmxErrChk (DAQmxCreateDOChan(dev->DOTaskSet->taskHndl, (*chanSetPtrPtr)->name, "", DAQmx_Val_ChanForAllLines)); 
+		
+		chanSetPtrPtr++;
+	}
+				 
+	// sample clock source
+	// if no sample clock is given, then use OnboardClock by default
+	if (!dev->DOTaskSet->timing->sampClkSource) 
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+	else
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->DOTaskSet->timing->sampClkSource));
+	
+	// sample clock edge
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DOTaskSet->timing->sampClkEdge));
+	
+	// sampling rate
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Rate, *dev->DOTaskSet->timing->refSampleRate));
+	
+	// set operation mode: finite, continuous
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DOTaskSet->timing->measMode));
+	
+	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	
+	// if a reference clock is given, use it to synchronize the internal clock
+	if (dev->DOTaskSet->timing->refClkSource) {
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->DOTaskSet->timing->refClkSource));
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->DOTaskSet->timing->refClkFreq));
+	}
+	
+	// set number of samples per channel for finite acquisition
+	if (dev->DOTaskSet->timing->measMode == MeasFinite)
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *dev->DOTaskSet->timing->refNSamples));
+	
+	// disable DO regeneration
+	DAQmxSetWriteAttribute (dev->DOTaskSet->taskHndl, DAQmx_Write_RegenMode, DAQmx_Val_DoNotAllowRegen);
+	
+	// adjust output buffer size to be even multiple of blocksize
+	DAQmxErrChk (DAQmxCfgOutputBuffer(dev->DOTaskSet->taskHndl, 2 * dev->DOTaskSet->timing->blockSize));
+	
+	//----------------------
+	// Configure DO triggers
+	//----------------------
+	// configure start trigger
+	switch (dev->DOTaskSet->startTrig->trigType) {
+		case Trig_None:
+			break;
+			
+		case Trig_AnalogEdge:
+			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope, dev->DOTaskSet->startTrig->level));  
+			break;
+			
+		case Trig_AnalogWindow:
+			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->wndTrigCond, 
+						 dev->DOTaskSet->startTrig->wndTop, dev->DOTaskSet->startTrig->wndBttm));  
+			break;
+			
+		case Trig_DigitalEdge:
+			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope));  
+			break;
+			
+		case Trig_DigitalPattern:
+			break;
+	}
+	
+	// configure reference trigger
+	switch (dev->DOTaskSet->referenceTrig->trigType) {
+		case Trig_None:
+			break;
+			
+		case Trig_AnalogEdge:
+			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, dev->DOTaskSet->referenceTrig->level));  
+			break;
+			
+		case Trig_AnalogWindow:
+			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->wndTrigCond, 
+						 dev->DOTaskSet->referenceTrig->wndTop, dev->DOTaskSet->referenceTrig->wndBttm));  
+			break;
+			
+		case Trig_DigitalEdge:
+			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope));  
+			break;
+			
+		case Trig_DigitalPattern:
+			break;
+	}
+	
+	//----------------------
+	// Add DO Task callbacks
+	//----------------------
+	// register DO data available callback 
+	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->DOTaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DOTaskSet->timing->blockSize, 0, DODAQmxTaskDataRequest_CB, dev)); 
+	// register DO task done event callback (which is called also if the task encounters an error)
+	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DOTaskSet->taskHndl, 0, DODAQmxTaskDone_CB, dev));
+	
+		
 	return 0;
 Error:
 	return -1;
@@ -5220,6 +5699,99 @@ DAQmxError:
 
 static int ConfigDAQmxCITask (Dev_type* dev)
 {
+	int 				error 			= 0;
+	ChanSet_type** 		chanSetPtrPtr;
+	
+	if (!dev->CITaskSet) return 0;	// do nothing
+	
+	// check if there is at least one CI task that requires HW-timing
+	BOOL hwTimingFlag = FALSE;
+	chanSetPtrPtr = ListGetDataPtr(dev->CITaskSet->chanTaskSet);
+	while(*chanSetPtrPtr) {
+		if (!(*chanSetPtrPtr)->onDemand) {
+			hwTimingFlag = TRUE;
+			break;
+		}
+		chanSetPtrPtr++;
+	}
+	// continue setting up the CI task if any channels require HW-timing
+	if (!hwTimingFlag) return 0;	// do nothing
+	
+	// create CI channels
+	chanSetPtrPtr = ListGetDataPtr(dev->CITaskSet->chanTaskSet);
+	while(*chanSetPtrPtr) {
+		
+		// include in the task only channel for which HW-timing is required
+		if ((*chanSetPtrPtr)->onDemand) {
+			chanSetPtrPtr++;
+			continue;
+		}
+		
+		// create DAQmx CI task for each counter
+		char* taskName = GetTaskControlName(dev->taskController);
+		AppendString(&taskName, " CI Task on ", -1);
+		AppendString(&taskName, (*chanSetPtrPtr)->name, -1);
+		DAQmxErrChk (DAQmxCreateTask(taskName, &(*chanSetPtrPtr)->taskHndl));
+		OKfree(taskName);
+				
+		switch ((*chanSetPtrPtr)->chanType) {
+				
+			case Chan_CI_Frequency:
+				
+				ChanSet_CI_Frequency_type*	chCIFreqPtr = *(ChanSet_CI_Frequency_type**)chanSetPtrPtr;
+				
+				DAQmxErrChk (DAQmxCreateCIFreqChan((*chanSetPtrPtr)->taskHndl, (*chanSetPtrPtr)->name, "", chCIFreqPtr->freqMin, chCIFreqPtr->freqMax, DAQmx_Val_Hz, 
+												   chCIFreqPtr->edgeType, chCIFreqPtr->measMethod, chCIFreqPtr->measTime, chCIFreqPtr->divisor, NULL));
+				
+				// use another terminal for the counter if other than default
+				if (chCIFreqPtr->freqInputTerminal)
+				DAQmxErrChk (DAQmxSetChanAttribute((*chanSetPtrPtr)->taskHndl, (*chanSetPtrPtr)->name, DAQmx_CI_Freq_Term, chCIFreqPtr->freqInputTerminal));
+				
+				// sample clock source
+				// if no sample clock is given, then use OnboardClock by default
+				if (!chCIFreqPtr->timing->sampClkSource) 
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+				else
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_Src, chCIFreqPtr->timing->sampClkSource));
+	
+				// sample clock edge
+				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreqPtr->timing->sampClkEdge));
+	
+				// sampling rate
+				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_Rate, *chCIFreqPtr->timing->refSampleRate));
+	
+				// set operation mode: finite, continuous
+				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampQuant_SampMode, chCIFreqPtr->timing->measMode));
+	
+				// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
+				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	
+				// if a reference clock is given, use it to synchronize the internal clock
+				if (chCIFreqPtr->timing->refClkSource) {
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Src, chCIFreqPtr->timing->refClkSource));
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Rate, chCIFreqPtr->timing->refClkFreq));
+				}
+	
+				// set number of samples per channel for finite acquisition
+				if (chCIFreqPtr->timing->measMode == MeasFinite)
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *chCIFreqPtr->timing->refNSamples));
+				
+				
+				DAQmxErrChk (DAQmxSetTrigAttribute(gTaskHandle,DAQmx_ArmStartTrig_Type,DAQmx_Val_DigEdge));
+				DAQmxErrChk (DAQmxSetTrigAttribute(gTaskHandle,DAQmx_DigEdge_ArmStartTrig_Src,sampleClkSrc));
+				DAQmxErrChk (DAQmxSetTrigAttribute(gTaskHandle,DAQmx_DigEdge_ArmStartTrig_Edge,DAQmx_Val_Rising));
+				
+				break;
+				
+			default:
+				DLMsg("Error: Channel type not implemented.", 1);
+				goto Error;
+				break;
+		}
+		
+		chanSetPtrPtr++;
+	}
+				 
 	
 	return 0;
 Error:
@@ -5266,6 +5838,26 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 }
 
 int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
+{
+	
+}
+
+int32 CVICALLBACK DIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
+{
+	
+}
+
+int32 CVICALLBACK DIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
+{
+	
+}
+
+int32 CVICALLBACK DODAQmxTaskDataRequest_CB	(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
+{
+	
+}
+
+int32 CVICALLBACK DODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
 	
 }

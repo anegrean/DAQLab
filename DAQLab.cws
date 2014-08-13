@@ -12,12 +12,8 @@ VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
 Number of Projects = 1
 Active Project = 1
 Project 0001 = "DAQLab.prj"
-Project 0001 Folder Modules/VUPhotonCtr Collapsed = True
-Project 0001 FolderId 4 Collapsed = True
 Project 0001 Folder XML Collapsed = True
 Project 0001 FolderId 5 Collapsed = True
-Project 0001 Folder Framework/Execution control  Collapsed = True
-Project 0001 FolderId 6 Collapsed = True
 Project 0001 Folder Instrument Files Collapsed = True
 Project 0001 FolderId 9 Collapsed = True
 Drag Bar Left = 312
@@ -297,7 +293,7 @@ In Projects = "1,"
 Window Top = 112
 Window Left = 95
 Window Released = True
-Source Window State = "1,93,93,93,5,25,25,0,3,0,0,0,0,0,0,0,60,0,93,5,975,1465,0,0,"
+Source Window State = "1,100,100,100,24,39,39,0,3,178,0,0,0,0,0,69,43,0,100,24,975,1465,0,0,"
 
 [File 0026]
 Path = "/d/ELE_DAQLab/Modules/DAQLabModule.h"
@@ -307,7 +303,7 @@ In Projects = "1,"
 Window Top = 56
 Window Left = 386
 Window Released = True
-Source Window State = "1,62,62,62,15,28,15,0,3,0,0,0,0,0,0,0,21,0,62,28,935,1205,0,0,"
+Source Window State = "1,43,43,43,32,47,32,0,0,146,0,0,0,0,0,66,21,0,42,92,935,1205,0,0,"
 
 [File 0027]
 Path = "/d/ELE_DAQLab/Modules/Zstages/Zstage.c"
@@ -389,10 +385,10 @@ Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.c"
 File Type = "CSource"
 Disk Date = 3490012626
 In Projects = "1,"
-Window Top = 101
-Window Left = 75
+Window Top = 106
+Window Left = 131
 Window Released = True
-Source Window State = "1,135,135,135,24,39,24,0,0,0,0,0,0,0,0,0,108,0,135,36,776,1509,0,0,"
+Source Window State = "1,1153,1153,1153,17,32,32,0,3,184,0,0,0,0,0,54,1126,0,1153,17,776,1509,0,0,"
 
 [File 0036]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.h"
@@ -409,50 +405,50 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 File Type = "CSource"
 Disk Date = 3489229178
 In Projects = "1,"
-Window Top = 208
-Window Left = 191
+Window Top = 38
+Window Left = 398
 Window Released = True
-Source Window State = "1,348,348,348,5,29,29,0,3,0,0,0,0,0,0,0,77,0,348,5,914,1447,0,0,"
+Source Window State = "1,348,348,348,5,29,29,0,3,176,0,0,0,0,0,64,77,0,348,5,914,1447,0,0,"
 
 [File 0038]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 File Type = "Include"
-Disk Date = 3488876181
+Disk Date = 3490699377
 In Projects = "1,"
-Window Top = 62
-Window Left = -1129
+Window Top = 53
+Window Left = 113
 Window Released = True
-Source Window State = "1,429,429,429,24,42,24,0,3,0,0,0,0,0,0,0,403,0,429,42,916,1098,0,0,"
+Source Window State = "1,502,502,502,67,104,67,0,0,145,0,0,0,0,0,64,237,0,274,40,916,1196,0,0,"
 
 [File 0039]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.c"
 File Type = "CSource"
 Disk Date = 3490533773
 In Projects = "1,"
-Window Top = 107
-Window Left = -1128
+Window Top = 100
+Window Left = -1020
 Window Released = True
-Source Window State = "1,354,354,354,13,27,13,0,0,0,0,0,0,0,0,0,300,0,308,78,854,1360,0,0,"
+Source Window State = "1,266,266,266,16,35,35,0,0,165,0,0,0,0,0,60,254,0,278,19,854,1360,0,0,"
 
 [File 0040]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.h"
 File Type = "Include"
 Disk Date = 3490537914
 In Projects = "1,"
-Window Top = 110
-Window Left = -1120
+Window Top = 104
+Window Left = -1138
 Window Released = True
-Source Window State = "1,125,125,125,0,71,0,0,0,0,0,0,0,0,0,0,78,0,122,34,803,1205,0,0,"
+Source Window State = "1,36,36,36,8,25,25,0,0,146,0,0,0,0,0,56,45,0,73,7,803,1205,0,0,"
 
 [File 0041]
 Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/NIDAQmxManager.c"
 File Type = "CSource"
-Disk Date = 3490635049
+Disk Date = 3490639660
 In Projects = "1,"
-Window Top = 30
-Window Left = 30
+Window Top = 61
+Window Left = 15
 Window Released = True
-Source Window State = "1,5699,5699,5699,11,28,28,0,0,196,0,0,0,0,0,68,5725,0,5766,8,958,1605,0,0,"
+Source Window State = "1,4170,4170,4170,52,67,67,0,0,196,0,0,0,0,0,68,249,0,4157,89,958,1605,0,0,"
 
 [File 0042]
 Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/UI_NIDAQmxManager.h"

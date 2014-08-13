@@ -34,6 +34,8 @@ typedef struct SinkVChan 	SinkVChan_type;
 
 typedef struct SourceVChan 	SourceVChan_type;
 
+typedef struct DataPacket	DataPacket_type;
+
 //------------------------------------------------------------------------------
 // Virtual channel data flow direction
 //------------------------------------------------------------------------------

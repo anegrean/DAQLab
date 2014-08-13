@@ -260,7 +260,7 @@ typedef enum {
 	TASK_STATE_IDLE,							// Task Controller is configured.
 	TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES,   // A HW Master Trigger Task Controller is waiting for HW Slave Trigger Task Controllers to be armed.
 	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped.
-	TASK_STATE_RUNNING_WAITING_ITERATION,		// Task Controller is iterating but the iteration occuring in another thread is not yet complete.
+	TASK_STATE_RUNNING_WAITING_ITERATION,		// Task Controller is iterating but the iteration (possibly occuring in another thread) is not yet complete.
 												// Iteration is complete when a TASK_EVENT_ITERATION_DONE is received in this state.
 	TASK_STATE_STOPPING,						// Task Controller received a STOP event and waits for SubTasks to complete their iterations.
 	TASK_STATE_DONE,							// Task Controller finished required iterations if operation was finite
@@ -408,18 +408,18 @@ typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
 // Task Controller creation / destruction functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-TaskControl_type*  	 	init_TaskControl_type			(const char				taskname[], 
-												 	 	 ConfigureFptr_type 	ConfigureFptr,
-												 	 	 IterateFptr_type		IterateFptr,
-												 		 StartFptr_type			StartFptr,
-												  		 ResetFptr_type			ResetFptr,
-														 DoneFptr_type			DoneFptr,
-														 StoppedFptr_type		StoppedFptr,
-														 DataReceivedFptr_type	DataReceivedFptr,
-														 ModuleEventFptr_type	ModuleEventFptr,
-														 ErrorFptr_type			ErrorFptr);
+TaskControl_type*  	 	init_TaskControl_type				(const char				taskname[], 
+												 	 	 	ConfigureFptr_type 		ConfigureFptr,
+												 	 		IterateFptr_type		IterateFptr,
+												 		 	StartFptr_type			StartFptr,
+												  		 	ResetFptr_type			ResetFptr,
+														 	DoneFptr_type			DoneFptr,
+														 	StoppedFptr_type		StoppedFptr,
+														 	DataReceivedFptr_type	DataReceivedFptr,
+														 	ModuleEventFptr_type	ModuleEventFptr,
+														 	ErrorFptr_type			ErrorFptr);
 
-void 					discard_TaskControl_type		(TaskControl_type** a);
+void 					discard_TaskControl_type			(TaskControl_type** a);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller set/get functions
@@ -478,17 +478,17 @@ HWTrigger_type          GetTaskControlHWTrigger				(TaskControl_type* taskContro
 // Task Controller composition functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-int						AddSubTaskToParent				(TaskControl_type* parent, TaskControl_type* child);
+int						AddSubTaskToParent					(TaskControl_type* parent, TaskControl_type* child);
 
-int						RemoveSubTaskFromParent			(TaskControl_type* child);
+int						RemoveSubTaskFromParent				(TaskControl_type* child);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-// HW trigger and data exchange dependencies
+// HW trigger dependencies
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-int						AddHWSlaveTrigToMaster			(TaskControl_type* master, TaskControl_type* slave);
+int						AddHWSlaveTrigToMaster				(TaskControl_type* master, TaskControl_type* slave);
 		
-int						RemoveHWSlaveTrigFromMaster		(TaskControl_type* slave);
+int						RemoveHWSlaveTrigFromMaster			(TaskControl_type* slave);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller event posting and execution control functions
@@ -497,40 +497,40 @@ int						RemoveHWSlaveTrigFromMaster		(TaskControl_type* slave);
 	// Pass NULL to eventInfo if there is no additional data carried by the event 
 	// Pass NULL to disposeEventInfoFptr if eventInfo should NOT be disposed after processing the event
 	// 
-int 					TaskControlEvent				(TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventInfo, 
-														 DisposeEventInfoFptr_type disposeEventInfoFptr); 
+int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventInfo, 
+														 	DisposeEventInfoFptr_type disposeEventInfoFptr); 
 
-	// Used to signal the Task Controller that an iteration is done when performed in a separate thread.
+	// Used to signal the Task Controller that an iteration is done.
 	// Pass to errorInfo an empty string as "", if there is no error and the iteration completed succesfully. Otherwise,
 	// pass an error message string. Pass 0 to errorID if there is no error, otherwise pass an error code.
-int						TaskControlIterationDone		(TaskControl_type* taskControl, int errorID, char errorInfo[]);
+int						TaskControlIterationDone			(TaskControl_type* taskControl, int errorID, char errorInfo[]);
 
 
-int						TaskControlEventToSubTasks  	(TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventInfo, 
-														 DisposeEventInfoFptr_type disposeEventInfoFptr); 
+int						TaskControlEventToSubTasks  		(TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventInfo, 
+														 	DisposeEventInfoFptr_type disposeEventInfoFptr); 
 
 	// Aborts iterations for the entire Nested Task Controller hierarchy
-void					AbortTaskControlExecution		(TaskControl_type* taskControl);
+void					AbortTaskControlExecution			(TaskControl_type* taskControl);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller function call management functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-FCallReturn_type*		init_FCallReturn_type			(int valFCall, const char errorOrigin[], const char errorDescription[]);
+FCallReturn_type*		init_FCallReturn_type				(int valFCall, const char errorOrigin[], const char errorDescription[]);
 
-void					discard_FCallReturn_type		(FCallReturn_type** a);
+void					discard_FCallReturn_type			(FCallReturn_type** a);
 
 	// When calling TaskControlEvent and passing a FCallReturn_type* as eventInfo, pass this function pointer to
 	// disposeEventInfoFptr
-void					dispose_FCallReturn_EventInfo	(void* eventInfo);
+void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-int						AddDataQueue					(TaskControl_type* taskControl, CmtTSQHandle dataQID); 
-int						RemoveDataQueue					(TaskControl_type* taskControl, CmtTSQHandle dataQID); 
-void					RemoveAllDataQueues				(TaskControl_type* taskControl);
+int						AddDataQueue						(TaskControl_type* taskControl, CmtTSQHandle dataQID); 
+int						RemoveDataQueue						(TaskControl_type* taskControl, CmtTSQHandle dataQID); 
+void					RemoveAllDataQueues					(TaskControl_type* taskControl);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller logging functions
@@ -538,9 +538,9 @@ void					RemoveAllDataQueues				(TaskControl_type* taskControl);
 
 	// Pass panel handle and text box control IDs if any to display task controller execution.
 	// Pass 0 for both if this is not required.
-TaskExecutionLog_type*	init_TaskExecutionLog_type		(int logBoxPanHandle, int logBoxControl); 
+TaskExecutionLog_type*	init_TaskExecutionLog_type			(int logBoxPanHandle, int logBoxControl); 
 
-void					discard_TaskExecutionLog_type	(TaskExecutionLog_type** a);
+void					discard_TaskExecutionLog_type		(TaskExecutionLog_type** a);
 
 	
 

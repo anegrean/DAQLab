@@ -11,9 +11,11 @@
 //==============================================================================
 // Include files
 
-#include "toolbox.h"
+#include "DAQLab.h"		// include this first!
 #include <ansi_c.h>
-#include "VChannel.h"
+#include "toolbox.h" 
+#include "nivision.h"
+#include "utility.h"
 
 //==============================================================================
 // Constants
@@ -96,7 +98,7 @@ struct SourceVChan {
 	// Base class
 	//-----------------------
 	
-	VChan_type					baseClass;				// must be first member to allow inheritance from parent
+	VChan_type					baseClass;				// Must be first member to allow inheritance from parent
 	
 	//-----------------------	
 	// Communication
@@ -109,22 +111,31 @@ struct SourceVChan {
 //---------------------------------------------------------------------------------------------------
 // Data Packet
 //---------------------------------------------------------------------------------------------------
+/*
 struct DataPacket {
-	
+	VChanData_type 				dataType; 				// Data type contained in the data packet.
+	void*         				data;     				// Pointer to data of dataType
+	CmtTSVHandle   				ctr;      				// Although there are multiple sinks that can receive a data packet, 
+														// there is only one copy of the data in the memory. 
+														// To de-allocate memory for the data, each sink must call ReleaseDataPacket 
+														// which in the end frees the memory if ctr being a thread safe variable reaches 0 
+	DiscardDataFptr_type 		discardFptr;
 };
-
+*/
 //==============================================================================
 // Static functions
 
-static int 	init_VChan_type 			(VChan_type* 				vchan, 
-										 char 						name[], 
-										 VChanData_type 			dataType, 
-										 VChanDataFlow_type 		flowType, 
-										 void* 						vChanOwner, 	
-										 DiscardFptr_type 			DiscardFptr,
-										 DisconnectFptr_type		DisconnectFptr,
-										 Connected_CBFptr_type		Connected_CBFptr,
-										 Disconnected_CBFptr_type	Disconnected_CBFptr)
+static void 				discard_DataPacket_type		(DataPacket_type* a);
+							
+static int 					init_VChan_type 			(VChan_type* 				vchan, 
+														 char 						name[], 
+										 				 VChanData_type 			dataType, 
+										 				 VChanDataFlow_type 		flowType, 
+														 void* 						vChanOwner, 	
+										 				 DiscardFptr_type 			DiscardFptr,
+										 				 DisconnectFptr_type		DisconnectFptr,
+														 Connected_CBFptr_type		Connected_CBFptr,
+										 				 Disconnected_CBFptr_type	Disconnected_CBFptr)
 {
 	// Data
 	vchan -> name   				= StrDup(name); 
@@ -250,7 +261,7 @@ SourceVChan_type* init_SourceVChan_type	(char 						name[],
 	if (!vchan) return NULL;
 	
 	// init base VChan type
-	if (init_VChan_type ((VChan_type*) vchan, name, dataType, VCHAN_SOURCE, vChanOwner, 
+	if (init_VChan_type ((VChan_type*) vchan, name, dataType, VChan_Source, vChanOwner, 
 						 discard_SourceVChan_type, disconnectSourceVChan, Connected_CBFptr, Disconnected_CBFptr) < 0) goto Error;
 	
 	// init list with Sink VChans
@@ -276,7 +287,7 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 	if (!vchan) return NULL;
 	
 	// init base VChan type
-	if (init_VChan_type ((VChan_type*) vchan, name, dataType, VCHAN_SINK, vChanOwner, 
+	if (init_VChan_type ((VChan_type*) vchan, name, dataType, VChan_Sink, vChanOwner, 
 						 discard_SinkVChan_type, disconnectSourceVChan, Connected_CBFptr, Disconnected_CBFptr) < 0) goto Error;
 	
 		// INIT DATA
@@ -301,6 +312,54 @@ void discard_VChan_type (VChan_type** vchan)
 	
 	// call discard function specific to the VChan type
 	(*(*vchan)->DiscardFptr)	(vchan);
+}
+
+//---------------------------------
+// Data Packet management functions
+//---------------------------------
+int init_DataPacket_type(DataPacket_type* dataPacket, VChanData_type dataType, void* data, DiscardDataFptr_type discardFptr)
+{
+	if (!dataPacket) return -1;
+	
+	dataPacket -> dataType 		= dataType;
+	dataPacket -> data     		= data;
+	dataPacket -> discardFptr   = discardFptr;
+	
+	// create counter to keep track of how many sinks still need this data packet
+	if (CmtNewTSV(sizeof(int), &dataPacket->ctr) < 0) return -1;
+	// set counter to 0
+	int* ctrTSVptr;
+	CmtGetTSVPtr(dataPacket->ctr, &ctrTSVptr);
+	*ctrTSVptr = 0;
+	CmtReleaseTSVPtr(dataPacket->ctr);
+	
+	return 0;
+}
+
+static void discard_DataPacket_type(DataPacket_type* a)
+{
+	if (!a) return;
+	
+	// discard counter
+	CmtDiscardTSV(a->ctr);
+	
+	// discard data
+	(*a->discardFptr)	(&a->data);
+	
+}
+
+void ReleaseDataPacket(DataPacket_type* a)
+{
+	int* ctrTSVptr;
+	
+	if (!a) return;
+	
+	CmtGetTSVPtr(a->ctr, &ctrTSVptr);
+	if (*ctrTSVptr > 1) {
+		(*ctrTSVptr)--;
+		CmtReleaseTSVPtr(a->ctr);
+	} else {CmtReleaseTSVPtr(a->ctr); discard_DataPacket_type(a);} 
+	
 }
 
 /// HIFN Connects a Source and Sink VChan and if provided, calls their Connected_CBFptr callbacks to signal this event.
@@ -364,3 +423,54 @@ CmtTSQHandle GetSinkTSQHndl	(SinkVChan_type* sink)
 	return sink->tsqHndl;
 }
 
+//==============================================================================
+// VChan data types management
+
+Waveform_type* init_Waveform_type (WaveformEnum_type waveformType, size_t n, void* waveform, double rate, double repeat)
+{
+	Waveform_type* a = malloc (sizeof(Waveform_type));
+	if (!a) return NULL;
+	
+	a->waveformType	= waveformType; 
+	a->data			= waveform;
+	a->rate			= rate;
+	a->repeat		= repeat;
+	
+	return a;
+}
+
+void discard_Waveform_type (void** waveform)
+{
+	Waveform_type** waveformPtrPtr =(Waveform_type**)waveform;
+	if (!*waveformPtrPtr) return;
+	
+	OKfree((*waveformPtrPtr)->data);
+	OKfree(*waveformPtrPtr);
+}
+
+Image_type* init_Image_type	(ImageEnum_type imageType, void* image)
+{
+	Image_type* a = malloc (sizeof(Image_type));
+	if (!a) return NULL;
+	
+	a->imageType	= imageType; 
+	a->data			= image;
+}
+
+void discard_Image_type	(void** image)
+{
+	Image_type** imagePtrPtr	= (Image_type**)image;
+	
+	// dispose here of different image types
+	switch ((*imagePtrPtr)->imageType) {
+			
+		case Image_NIVIsion:
+			
+			imaqDispose((*imagePtrPtr)->data);
+			
+			break;
+		// add below more cases for other image types
+	}
+	
+	OKfree(*image);
+}

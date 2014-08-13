@@ -46,7 +46,7 @@
 {goto XMLError;} else
 //==============================================================================
 // Types
-	
+
 	// DAQLab XML data types
 typedef enum {
 	
@@ -122,6 +122,21 @@ BOOL				DLUniqueStrings					(ListType stringList, size_t* idx);
 
 	// Copies a list of strings to a new list.
 ListType 			StringListCpy					(ListType src); 
+
+	// Used to return extended error info in case of error.
+#ifndef __FCallReturn_type__
+#define __FCallReturn_type__
+
+typedef struct FCallReturn {
+	int						retVal;			// Value returned by function call.
+	char*					errorInfo;		// In case of error, additional info.
+} FCallReturn_type;
+
+FCallReturn_type*	init_FCallReturn_type				(int valFCall, const char errorOrigin[], const char errorDescription[]);
+
+void				discard_FCallReturn_type			(FCallReturn_type** a);
+
+#endif
 
 //-------------------------------------------------------------------------------
 // DAQLab user interface management

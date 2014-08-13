@@ -42,6 +42,10 @@ Prototype="int DisposeCOChannelList(unsigned int index, void *ptrToItem, void *c
 Class="Function"
 Prototype="int ManageDevices_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
 
+[adrian]
+Class="Function"
+Prototype="int adrian();"
+
 [AODAQmxTaskDataRequest_CB]
 Class="Function"
 Prototype="long AODAQmxTaskDataRequest_CB(void *taskHandle, long everyNsamplesEventType, unsigned long nSamples, void *callbackData);"
@@ -57,4 +61,20 @@ Prototype="long AIDAQmxTaskDataAvailable_CB(void *taskHandle, long everyNsamples
 [AIDAQmxTaskDone_CB]
 Class="Function"
 Prototype="long AIDAQmxTaskDone_CB(void *taskHandle, long status, void *callbackData);"
+
+[DIDAQmxTaskDataAvailable_CB]
+Class="Function"
+Prototype="long DIDAQmxTaskDataAvailable_CB(void *taskHandle, long everyNsamplesEventType, unsigned long nSamples, void *callbackData);"
+
+[DIDAQmxTaskDone_CB]
+Class="Function"
+Prototype="long DIDAQmxTaskDone_CB(void *taskHandle, long status, void *callbackData);"
+
+[DODAQmxTaskDataRequest_CB]
+Class="Function"
+Prototype="long DODAQmxTaskDataRequest_CB(void *taskHandle, long everyNsamplesEventType, unsigned long nSamples, void *callbackData);"
+
+[DODAQmxTaskDone_CB]
+Class="Function"
+Prototype="long DODAQmxTaskDone_CB(void *taskHandle, long status, void *callbackData);"
 

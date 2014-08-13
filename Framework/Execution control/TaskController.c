@@ -14,6 +14,7 @@
 #include "asynctmr.h"
 #include <formatio.h>
 #include "TaskController.h"
+#include "VChannel.h"
 
 //==============================================================================
 // Constants
@@ -83,13 +84,20 @@ struct TaskExecutionLog {
 	int						logBoxControl;
 };
 
+// Structure binding Task Controller and VChan data for passing to TSQ callback	
+typedef struct {
+	TaskControl_type* 		taskControl;
+	SinkVChan_type* 		sinkVChan;
+	CmtTSQCallbackID		itemsInQueueCBID;
+} VChanCallbackData_type;
+
 struct TaskControl {
 	// Task control data
 	char*					taskName;					// Name of Task Controller
 	size_t					subtaskIdx;					// 1-based index of subtask from parent Task subtasks list. If task doesn't have a parent task then index is 0.
 	size_t					slaveHWTrigIdx;				// 1-based index of Slave HW Trig from Master HW Trig Slave list. If Task Controller is not a HW Trig Slave, then index is 0.
 	CmtTSQHandle			eventQ;						// Event queue to which the state machine reacts.
-	ListType				dataQs;						// Incoming data queues, list of CmtTSQHandle type.
+	ListType				dataQs;						// Incoming data queues, list of VChanCallbackData_type*.
 	unsigned int			eventQThreadID;				// Thread ID in which queue events are processed.
 	CmtThreadFunctionID		threadFunctionID;			// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
 	TaskStates_type 		state;						// Module execution state.
@@ -181,8 +189,10 @@ static BOOL						HWTrigSlavesAreArmed			(TaskControl_type* master);
 // Reset Armed status of HW Triggered Slaves from the list of a Master HW Triggering Task Controller
 static void						HWTrigSlavesArmedStatusReset	(TaskControl_type* master);
 
-// Queue eventInfo functions
-static void						disposeCmtTSQHandleEventInfo	(void* eventInfo);
+// VChan and Task Control binding
+static VChanCallbackData_type*	init_VChanCallbackData_type		(TaskControl_type* taskControl, SinkVChan_type* sinkVChan);
+static void						discard_VChanCallbackData_type	(VChanCallbackData_type** a);
+static void						disposeCmtTSQVChanEventInfo		(void* eventInfo);
 
 //==============================================================================
 // Global variables
@@ -231,7 +241,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	if (CmtNewTSQ(N_TASK_EVENT_QITEMS, sizeof(EventPacket_type), 0, &a->eventQ) < 0)
 		goto Error;
 	
-	a -> dataQs				= ListCreate(sizeof(CmtTSQHandle));	
+	a -> dataQs				= ListCreate(sizeof(VChanCallbackData_type*));	
 	if (!a->dataQs) goto Error;
 		
 	a -> eventQThreadID		= CmtGetCurrentThreadID ();
@@ -299,11 +309,15 @@ void discard_TaskControl_type(TaskControl_type** a)
 	// disconnect from parent Task Controller if there is any
 	RemoveSubTaskFromParent(*a);
 	
+	// name
 	OKfree((*a)->taskName);
+	// event queue
 	CmtDiscardTSQ((*a)->eventQ);
-	for (size_t i = 1; i <= ListNumItems((*a)->dataQs); i++) {
-		tsqPtr = ListGetPtrToItem((*a)->dataQs, i);
-		CmtDiscardTSQ(*tsqPtr);
+	// incoming data queues (does not free the queue itself!)
+	VChanCallbackData_type** VChanTSQDataPtrPtr = ListGetDataPtr((*a)->dataQs);
+	while(*VChanTSQDataPtrPtr) {
+		discard_VChanCallbackData_type(VChanTSQDataPtrPtr);
+		VChanTSQDataPtrPtr++;
 	}
 	ListDispose((*a)->dataQs);
 	
@@ -431,44 +445,58 @@ HWTrigger_type GetTaskControlHWTrigger (TaskControl_type* taskControl)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-
-int	AddDataQueue (TaskControl_type* taskControl, CmtTSQHandle dataQID)
+int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, TaskVChanFuncAssign_type VChanFunc)
 {
-	if (!dataQID) return -1;	// insert only non-zero QIDs
+	// check if Sink VChan is already assigned to the Task Controller
+	VChanCallbackData_type**	VChanTSQDataPtrPtr 	= ListGetDataPtr(taskControl->dataQs);
+	while(*VChanTSQDataPtrPtr) {
+		if ((*VChanTSQDataPtrPtr)->sinkVChan == sinkVChan) return -2;
+		VChanTSQDataPtrPtr++;
+	}
 	
-	if (!ListInsertItem(taskControl->dataQs, &dataQID, END_OF_LIST)) 
+	CmtTSQHandle				tsqID 				= GetSinkTSQHndl(sinkVChan);
+	VChanCallbackData_type*		VChanTSQDataPtr		= init_VChanCallbackData_type(taskControl, sinkVChan);
+	
+	if (!ListInsertItem(taskControl->dataQs, &VChanTSQDataPtr, END_OF_LIST)) 
 		return -1;
 	
 	// add callback
 	// process items in queue events in the same thread that is used to initialize the task control (generally main thread)
-	CmtInstallTSQCallback(dataQID, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskDataItemsInQueue, taskControl, taskControl -> eventQThreadID, NULL); 
+	CmtInstallTSQCallback(tsqID, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskDataItemsInQueue, VChanTSQDataPtr, taskControl -> eventQThreadID, &VChanTSQDataPtr->itemsInQueueCBID); 
 	
 	return 0;
 }
 
-int	RemoveDataQueue (TaskControl_type* taskControl, CmtTSQHandle dataQID)
+int	RemoveSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
 {
-	CmtTSQHandle* QHndlPtr;
+	VChanCallbackData_type**	VChanTSQDataPtrPtr;
 	for (size_t i = 1; i <= ListNumItems(taskControl->dataQs); i++) {
-		QHndlPtr = ListGetPtrToItem(taskControl->dataQs, i);
-		if (*QHndlPtr == dataQID) {
-			CmtDiscardTSQ(*QHndlPtr);
+		VChanTSQDataPtrPtr = ListGetPtrToItem(taskControl->dataQs, i);
+		if ((*VChanTSQDataPtrPtr)->sinkVChan == sinkVChan) {
+			// remove queue Task Controller callback
+			CmtUninstallTSQCallback(GetSinkTSQHndl((*VChanTSQDataPtrPtr)->sinkVChan), (*VChanTSQDataPtrPtr)->itemsInQueueCBID);
+			// free memory for queue item
+			discard_VChanCallbackData_type(VChanTSQDataPtrPtr);
+			// and remove from queue
 			ListRemoveItem(taskControl->dataQs, 0, i);
-			return 0; 	// queue found and removed
+			return 0; 	// Sink VChan found and removed
 		}
 	}
 	
-	return -1;			// queue not found
+	return -1;			// Sink VChan not found
 }
 
-void RemoveAllDataQueues (TaskControl_type* taskControl)
+void RemoveAllSinkVChans (TaskControl_type* taskControl)
 {
-	CmtTSQHandle* QHndlPtr;
-	for (size_t i = 1; i <= ListNumItems(taskControl->dataQs); i++) {
-		QHndlPtr = ListGetPtrToItem(taskControl->dataQs, i);
-		CmtDiscardTSQ(*QHndlPtr);
-		ListRemoveItem(taskControl->dataQs, 0, i);
+	VChanCallbackData_type** VChanTSQDataPtrPtr = ListGetDataPtr(taskControl->dataQs);
+	while(*VChanTSQDataPtrPtr) {
+		// remove queue Task Controller callback
+		CmtUninstallTSQCallback(GetSinkTSQHndl((*VChanTSQDataPtrPtr)->sinkVChan), (*VChanTSQDataPtrPtr)->itemsInQueueCBID);
+		// free memory for queue item
+		discard_VChanCallbackData_type(VChanTSQDataPtrPtr);
+		VChanTSQDataPtrPtr++;
 	}
+	ListClear(taskControl->dataQs);
 }
 
 
@@ -608,10 +636,29 @@ static void	HWTrigSlavesArmedStatusReset (TaskControl_type* master)
 }
 
 
-static void	disposeCmtTSQHandleEventInfo (void* eventInfo)
+static void	disposeCmtTSQVChanEventInfo (void* eventInfo)
 {
 	if (!eventInfo) return;
 	free(eventInfo);
+}
+
+static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
+{
+	VChanCallbackData_type* a = malloc(sizeof(VChanCallbackData_type));
+	if (!a) return NULL;
+	
+	a->sinkVChan 			= sinkVChan;
+	a->taskControl  		= taskControl;
+	a->itemsInQueueCBID		= 0;
+	
+	return a;
+}
+
+static void	discard_VChanCallbackData_type (VChanCallbackData_type** a)
+{
+	if (!*a) return;
+	
+	OKfree(*a);
 }
 
 static ErrorMsg_type* init_ErrorMsg_type (int errorID, const char errorOrigin[], const char errorDescription[])
@@ -969,18 +1016,17 @@ void CVICALLBACK TaskEventItemsInQueue (CmtTSQHandle queueHandle, unsigned int e
 
 void CVICALLBACK TaskDataItemsInQueue (CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData)
 {
-	TaskControl_type* 	taskControl 		= callbackData;
-	CmtTSQHandle*		QHndlPtr			= malloc(sizeof(CmtTSQHandle));
-	if (!QHndlPtr) {
+	VChanCallbackData_type*		VChanTSQDataPtr		= callbackData;
+	SinkVChan_type**			VChanPtrPtr			= malloc(sizeof(SinkVChan_type*));
+	if (!VChanPtrPtr) {
 		// flush queue
-		CmtFlushTSQ(queueHandle, TSQ_FLUSH_ALL, NULL);
-		TaskControlEvent(taskControl, TASK_EVENT_ERROR_OUT_OF_MEMORY, NULL, NULL);
+		CmtFlushTSQ(GetSinkTSQHndl(VChanTSQDataPtr->sinkVChan), TSQ_FLUSH_ALL, NULL);
+		TaskControlEvent(VChanTSQDataPtr->taskControl, TASK_EVENT_ERROR_OUT_OF_MEMORY, NULL, NULL);
 	} else {
-		*QHndlPtr = queueHandle;
+		*VChanPtrPtr = VChanTSQDataPtr->sinkVChan;
 		// inform Task Controller that data was placed in an otherwise empty data queue
-		TaskControlEvent(taskControl, TASK_EVENT_DATA_RECEIVED, QHndlPtr, disposeCmtTSQHandleEventInfo);
+		TaskControlEvent(VChanTSQDataPtr->taskControl, TASK_EVENT_DATA_RECEIVED, VChanPtrPtr, disposeCmtTSQVChanEventInfo);
 	}
-
 }
 
 int CVICALLBACK ScheduleTaskEventHandler (void* functionData)
@@ -1211,7 +1257,7 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 			
 		case TASK_FCALL_DATA_RECEIVED:
 			
-			if (taskControl->DataReceivedFptr) fCallResult = (*taskControl->DataReceivedFptr)(taskControl, taskControl->state, *(CmtTSQHandle*)fCallData, &taskControl->abortFlag);
+			if (taskControl->DataReceivedFptr) fCallResult = (*taskControl->DataReceivedFptr)(taskControl, taskControl->state, *(SinkVChan_type**)fCallData, &taskControl->abortFlag);
 			else functionMissingFlag = 1;
 			break;
 			

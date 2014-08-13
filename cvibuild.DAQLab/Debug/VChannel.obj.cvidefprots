@@ -10,6 +10,14 @@ Prototype="struct SinkVChan *init_SinkVChan_type(char *name, VChanData_type data
 Class="Function"
 Prototype="void discard_VChan_type(struct VChan **vchan);"
 
+[init_DataPacket_type]
+Class="Function"
+Prototype="int init_DataPacket_type(struct DataPacket *dataPacket, VChanData_type dataType, void *data, void (*discardFptr)(void **));"
+
+[ReleaseDataPacket]
+Class="Function"
+Prototype="void ReleaseDataPacket(struct DataPacket *a);"
+
 [VChan_Connect]
 Class="Function"
 Prototype="int VChan_Connect(struct SourceVChan *source, struct SinkVChan *sink);"
@@ -25,4 +33,24 @@ Prototype="void SetVChanName(struct VChan *vchan, char *newName);"
 [GetVChanName]
 Class="Function"
 Prototype="char *GetVChanName(struct VChan *vchan);"
+
+[GetSinkTSQHndl]
+Class="Function"
+Prototype="int GetSinkTSQHndl(struct SinkVChan *sink);"
+
+[init_Waveform_type]
+Class="Function"
+Prototype="Waveform_type *init_Waveform_type(WaveformEnum_type waveformType, unsigned int n, void *waveform, double rate, double repeat);"
+
+[discard_Waveform_type]
+Class="Function"
+Prototype="void discard_Waveform_type(void **waveform);"
+
+[init_Image_type]
+Class="Function"
+Prototype="Image_type *init_Image_type(ImageEnum_type imageType, void *image);"
+
+[discard_Image_type]
+Class="Function"
+Prototype="void discard_Image_type(void **image);"
 

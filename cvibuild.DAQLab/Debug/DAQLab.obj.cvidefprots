@@ -18,6 +18,14 @@ Prototype="int DLUniqueStrings(struct ListStructTag *stringList, unsigned int *i
 Class="Function"
 Prototype="struct ListStructTag *StringListCpy(struct ListStructTag *src);"
 
+[init_FCallReturn_type]
+Class="Function"
+Prototype="struct FCallReturn *init_FCallReturn_type(int valFCall, const char *errorOrigin, const char *errorDescription);"
+
+[discard_FCallReturn_type]
+Class="Function"
+Prototype="void discard_FCallReturn_type(struct FCallReturn **a);"
+
 [DLRegisterVChan]
 Class="Function"
 Prototype="int DLRegisterVChan(struct VChan *vchan);"

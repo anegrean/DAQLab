@@ -11,11 +11,11 @@
 //========================================================================================================================================================================================================
 // Include files
 
-#include "DAQLab.h" 		// include this first 
+#include "DAQLab.h" 		// include this first
+#include <formatio.h> 
 #include <userint.h>
 #include "DAQLabModule.h"
 #include "NIDAQmxManager.h"
-#include "VChannel.h"
 #include "UI_NIDAQmxManager.h"
 #include <nidaqmx.h>
 #include "daqmxioctrl.h"
@@ -568,7 +568,7 @@ typedef struct {
 	float64**     		datain;            
 	float64**     		databuff;
 	float64*      		dataout;					// Array length is writeblock * numchan used for DAQmx write call, data is grouped by channel
-	CmtTSQHandle* 		queue;
+	SinkVChan_type**	sinkVChans;					// Array of SinkVChan_type*
 	
 	size_t*       		datain_size; 
 	size_t*      		databuff_size;
@@ -843,14 +843,27 @@ int32 CVICALLBACK 					DIDAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 st
 int32 CVICALLBACK 					DODAQmxTaskDataRequest_CB				(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData);
 int32 CVICALLBACK 					DODAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 status, void *callbackData);
 
+//-------------------------------------
+// DAQmx module and VChan data exchange
+//-------------------------------------
+	// AO
+FCallReturn_type* 					WriteAODAQmx 							(Dev_type* dev);  
+
+//--------------------------------------------
+// Various DAQmx module managemement functions
+//--------------------------------------------
+
 static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
 
 static char* 						substr									(const char* token, char** idxstart);
 
 static BOOL							ValidTaskControllerName					(char name[], void* dataPtr);
 
-static int 							DisplayPanels							(DAQLabModule_type* mod, BOOL visibleFlag);
+//---------------------------
+// DAQmx module UI management
+//---------------------------
 
+static int 							DisplayPanels							(DAQLabModule_type* mod, BOOL visibleFlag); 
 static int CVICALLBACK 				MainPan_CB								(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static void CVICALLBACK 			ManageDevPan_CB 						(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 static void CVICALLBACK 			DeleteDev_CB 							(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle); 
@@ -865,7 +878,6 @@ static int CVICALLBACK 				TriggerWindowBttm_CB 					(int panel, int control, in
 static int CVICALLBACK 				TriggerWindowTop_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerPreTrigDuration_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerPreTrigSamples_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
 	// adjustment of the DAQmx task settings panel
 static int 							DAQmxDevTaskSet_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -880,7 +892,7 @@ static FCallReturn_type*			DoneTC									(TaskControl_type* taskControl, size_t
 static FCallReturn_type*			StoppedTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type* 			ResetTC 								(TaskControl_type* taskControl, BOOL const* abortFlag); 
 static void				 			ErrorTC 								(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
-static FCallReturn_type*			DataReceivedTC							(TaskControl_type* taskControl, TaskStates_type taskState, CmtTSQHandle dataQID, BOOL const* abortFlag);
+static FCallReturn_type*			DataReceivedTC							(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 static FCallReturn_type*			ModuleEventHandler						(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
 
 
@@ -2074,7 +2086,7 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 			a -> datain           	= NULL;
 			a -> databuff         	= NULL;
 			a -> dataout          	= NULL;
-			a -> queue            	= NULL;
+			a -> sinkVChans        	= NULL;
 			a -> datain_size      	= NULL;
 			a -> databuff_size    	= NULL;
 			a -> idx              	= NULL;
@@ -2093,14 +2105,14 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	// dataout
 	if (!(	a -> dataout 			= malloc(nAO * a->writeblock * sizeof(float64))))			goto Error;
 	
-	// queue (TSQ handles)
-	if (!(	a -> queue 				= malloc(nAO * sizeof(CmtTSQHandle))))						goto Error;
+	// sink VChans
+	if (!(	a -> sinkVChans			= malloc(nAO * sizeof(SinkVChan_type*))))					goto Error;
 	
 	chanSetPtrPtr = ListGetDataPtr(dev->AOTaskSet->chanSet);
 	i = 0;
 	while(*chanSetPtrPtr) {
 		if (!(*chanSetPtrPtr)->onDemand) {
-			a->queue[i] = GetSinkTSQHndl((*chanSetPtrPtr)->sinkVChan);
+			a->sinkVChans[i] = (*chanSetPtrPtr)->sinkVChan;
 			i++;
 		}
 		chanSetPtrPtr++;
@@ -2136,7 +2148,7 @@ Error:
 	OKfree(a->datain);
 	OKfree(a->databuff);
 	OKfree(a->dataout);
-	OKfree(a->queue);
+	OKfree(a->sinkVChans);
 	OKfree(a->datain_size);
 	OKfree(a->databuff_size);
 	OKfree(a->idx);
@@ -2158,7 +2170,7 @@ static void	discard_WriteAOData_type (WriteAOData_type** a)
 	}
 	
 	OKfree((*a)->dataout);
-	OKfree((*a)->queue);
+	OKfree((*a)->sinkVChans);
 	OKfree((*a)->datain_size);
 	OKfree((*a)->databuff_size);
 	OKfree((*a)->idx);
@@ -2448,15 +2460,14 @@ static void	PopulateChannels (Dev_type* dev)
 	int							ioType;
 	int							nItems;
 	char*						shortChName;
-	ListType					chanList;
-	AIChannel_type**		AIChanPtrPtr;
-	AOChannel_type**   	AOChanPtrPtr;
-	DILineChannel_type**	DILineChanPtrPtr;
-	DIPortChannel_type**  	DIPortChanPtrPtr;
-	DOLineChannel_type**	DOLineChanPtrPtr;
-	DOPortChannel_type**  	DOPortChanPtrPtr;
-	CIChannel_type**		CIChanPtrPtr;
-	COChannel_type**   	COChanPtrPtr;
+	AIChannel_type**			AIChanPtrPtr;
+	AOChannel_type**   			AOChanPtrPtr;
+	DILineChannel_type**		DILineChanPtrPtr;
+	DIPortChannel_type**  		DIPortChanPtrPtr;
+	DOLineChannel_type**		DOLineChanPtrPtr;
+	DOPortChannel_type**  		DOPortChanPtrPtr;
+	CIChannel_type**			CIChanPtrPtr;
+	COChannel_type**   			COChanPtrPtr;
 	size_t						n;
 	
 	GetCtrlVal(dev->devPanHndl, TaskSetPan_IO, &ioVal);
@@ -4156,7 +4167,6 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					int						panHndl;
 					int						ioVal;
 					int						ioMode;
-					int						ioType;
 					void*					callbackData;
 					
 					// create new Task Controller for the DAQmx device
@@ -4912,7 +4922,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 	
 	return 0;		
 }
-
+				  
 static void DisplayLastDAQmxLibraryError (void)
 {
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
@@ -5776,10 +5786,11 @@ static int ConfigDAQmxCITask (Dev_type* dev)
 				if (chCIFreqPtr->timing->measMode == MeasFinite)
 					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *chCIFreqPtr->timing->refNSamples));
 				
-				
+				/*
 				DAQmxErrChk (DAQmxSetTrigAttribute(gTaskHandle,DAQmx_ArmStartTrig_Type,DAQmx_Val_DigEdge));
 				DAQmxErrChk (DAQmxSetTrigAttribute(gTaskHandle,DAQmx_DigEdge_ArmStartTrig_Src,sampleClkSrc));
 				DAQmxErrChk (DAQmxSetTrigAttribute(gTaskHandle,DAQmx_DigEdge_ArmStartTrig_Edge,DAQmx_Val_Rising));
+				*/
 				
 				break;
 				
@@ -5808,6 +5819,7 @@ DAQmxError:
 
 static int ConfigDAQmxCOTask (Dev_type* dev)
 {
+	int error = 0;
 	
 	return 0;
 Error:
@@ -5822,43 +5834,221 @@ DAQmxError:
 	return error;
 }
 
+///HIFN Writes data continuously to a DAQmx AO.
+///HIRET NULL if there is no error and FCallReturn_type* data in case of error. 
+FCallReturn_type* WriteAODAQmx (Dev_type* dev) 
+{
+#define WriteAODAQmx_Err_DataUnderflow -1
+	
+	DataPacket_type 		datapacket; 
+	WriteAOData_type*    	data            = dev->AOTaskSet->writeAOData;
+	size_t          		queue_items;
+	size_t          		ncopies;                // number of datapacket copies to fill at least a writeblock size
+	size_t         		 	numwrote;
+	int             		error           = 0;
+	float64*        		tmpbuff;
+	FCallReturn_type*		fCallReturn		= NULL;
+
+	// cycle over channels
+	for (int i = 0; i < data->numchan; i++) {
+		CmtTSQHandle	tsqID = GetSinkTSQHndl(data->sinkVChans[i]);
+		while (data->databuff_size[i] < data->writeblock) {
+			
+			// if datain[i] is empty, get data packet from queue
+			if (!data->datain_size[i]) {
+				
+				// check if there are any data packets in the queue
+				CmtGetTSQAttribute(tsqID, ATTR_TSQ_ITEMS_IN_QUEUE, &queue_items);
+						
+				// if there are no more data packets, then return error
+				if (!queue_items) {
+					char* VChanName = GetVChanName((VChan_type*)data->sinkVChans[i]);
+					char* errMsg = StrDup("Error: Analog output task encountered a data underflow for VChan \"");
+					AppendString(&errMsg, VChanName, -1);
+					AppendString(&errMsg, "\"", -1);
+					fCallReturn = init_FCallReturn_type(WriteAODAQmx_Err_DataUnderflow, "WriteAODAQmx", errMsg);
+					free(errMsg);
+					free(VChanName);
+					goto Error;
+				}
+				
+				// get data packet from queue
+				CmtReadTSQData (tsqID, &datapacket,1,0,0);
+				
+				// copy data packet to datain
+				data->datain[i] = malloc (datapacket.n * sizeof(float64));
+				memcpy(data->datain[i], datapacket.data, datapacket.n * sizeof(float64));
+				data->datain_size[i] = datapacket.n;
+				/*
+					// for testing
+					OKfree(testdatain);
+					testdatain = malloc (datapacket.n * sizeof(float64));
+					memcpy(testdatain, data->datain[i], datapacket.n * sizeof(float64)); */
+				
+				// copy repeats
+				if (datapacket.repeat) {
+					data->datain_repeat[i]    = (size_t) datapacket.repeat;
+					data->datain_remainder[i] = (size_t) ((datapacket.repeat - (double) data->datain_repeat[i]) * (double) datapacket.n);
+					data->datain_loop[i]      = 0;
+				} else data->datain_loop[i]   = 1;
+				
+				// data packet not needed anymore, release it (data is deleted if there are no other sinks that need it)
+				ReleaseDataPacket(&datapacket); 
+			}
+			
+			// get number of datain copies needed to fill the rest of databuff
+			ncopies = (data->writeblock - data->databuff_size[i]) /data->datain_size[i] + 1;
+			
+			if ((ncopies < data->datain_repeat[i]) || data->datain_loop[i]) {
+				// if there are sufficient repeats in datain which may have finite or infinte repeats
+				// allocate memory for buffer
+				data->databuff[i] = realloc (data->databuff[i], (data->databuff_size[i] + ncopies * data->datain_size[i]) * sizeof(float64));
+				
+				// insert one or more data copies in the buffer
+				for (int j = 0; j < ncopies; j++)
+					memcpy(data->databuff[i] + data->databuff_size[i] + j * data->datain_size[i], data->datain[i], data->datain_size[i] * sizeof (float64));
+				
+				// update number of data elements in the buffer
+				data->databuff_size[i] += ncopies * data->datain_size[i];
+				/*	
+					// for testing
+					OKfree(testdatabuff);
+					testdatabuff = malloc(data->databuff_size[i] * sizeof(float64));
+					memcpy(testdatabuff, data->databuff[i], data->databuff_size[i] * sizeof(float64)); */
+				
+				// if repeats is finite,  update number of repeats left in datain
+				if (!data->datain_loop[i]) 
+					data->datain_repeat[i] -= ncopies;
+				else {
+					// if repeats is infinite, check if there is another data packet waiting in the queue
+					CmtGetTSQAttribute(tsqID, ATTR_TSQ_ITEMS_IN_QUEUE, &queue_items);
+					
+					// if there is another data packet in the queue, then switch to the new packet by freeing datain[i]
+					if (queue_items) {
+						OKfree(data->datain[i]);
+						data->datain_size[i] = 0;
+					}
+				
+				}
+				
+				break; // this branch satisfies data->databuff_size[i] > data->writeblock and the while loop can exit
+				
+			} else 
+				if (data->datain_repeat[i]) {
+					// if the repeats in datain are not sufficient or they are just the right amount
+					// allocate memory for buffer
+					data->databuff[i] = realloc (data->databuff[i], (data->databuff_size[i] + data->datain_repeat[i] * data->datain_size[i]) * sizeof(float64));
+					
+					// insert the datain[i] in the buffer repeat times
+					for (int j = 0; j < data->datain_repeat[i]; j++)
+						memcpy(data->databuff[i] + data->databuff_size[i] + j * data->datain_size[i], data->datain[i], data->datain_size[i] * sizeof (float64));
+			
+					// update number of data elements in the buffer
+					data->databuff_size[i] += data->datain_repeat[i] * data->datain_size[i];
+					
+					// no more repeats left
+					data->datain_repeat[i] = 0;
+				
+				} else {
+					
+					// copy remainding elements if there are any
+					if (data->datain_remainder[i]){
+						data->databuff[i] = realloc (data->databuff[i], (data->databuff_size[i] + data->datain_remainder[i]) * sizeof(float64));
+						memcpy(data->databuff[i] + data->databuff_size[i], data->datain[i], data->datain_remainder[i] * sizeof(float64));
+						data->databuff_size[i] += data->datain_remainder[i];
+						data->datain_remainder[i] = 0;
+					}
+					
+					// datain[i] not needed anymore
+					OKfree(data->datain[i]);
+					data->datain_size[i] = 0;
+				
+				}
+			
+		}
+	}
+	
+	// build dataout from buffers and at the same time, update elements left in the buffers
+	for (int i = 0; i < data->numchan; i++) {
+		// build dataout with one writeblock from databuff
+		memcpy(data->dataout + i * data->writeblock, data->databuff[i], data->writeblock * sizeof(float64));
+		// keep remaining data
+		tmpbuff = malloc ((data->databuff_size[i] - data->writeblock) * sizeof(float64));
+		memcpy(tmpbuff, data->databuff[i] + data->writeblock, (data->databuff_size[i] - data->writeblock) * sizeof(float64)); 
+		// clean buffer and restore remaining data
+		OKfree(data->databuff[i]);
+		data->databuff[i] = tmpbuff;
+		// update number of elements in databuff[i]
+		data->databuff_size[i] -= data->writeblock;
+	}
+	
+	DAQmxErrChk(DAQmxWriteAnalogF64(AOtaskHandle, data->writeblock, 0, 3.0, DAQmx_Val_GroupByChannel, data->dataout, &numwrote, NULL));
+	 
+	
+	return NULL; 
+	
+DAQmxError:
+	
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "WriteAODAQmx", errMsg);
+	free(errMsg);
+	
+Error:
+	
+	DAQmxStopTask(AOtaskHandle);
+	return fCallReturn;
+}	 
+
 int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
+	Dev_type*	dev = callbackData;
+//	dev->AOTaskSet->
+	
+	
 	
 }
 
 int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
+	Dev_type*	dev = callbackData;
 	
 }
 
 int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
+	Dev_type*	dev = callbackData;
 	
 }
 
 int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
+	Dev_type*	dev = callbackData;
 	
 }
 
 int32 CVICALLBACK DIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
+	Dev_type*	dev = callbackData;
 	
 }
 
 int32 CVICALLBACK DIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
+	Dev_type*	dev = callbackData;
 	
 }
 
 int32 CVICALLBACK DODAQmxTaskDataRequest_CB	(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
+	Dev_type*	dev = callbackData;
 	
 }
 
 int32 CVICALLBACK DODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
+	Dev_type*	dev = callbackData;
 	
 }
 
@@ -5913,7 +6103,7 @@ static void	ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* 
 
 }
 
-static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, CmtTSQHandle dataQID, BOOL const* abortFlag)
+static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	

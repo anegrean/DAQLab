@@ -246,9 +246,12 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 
 
 #include <toolbox.h>
+#include "VChannel.h"
 
 #define TASKCONTROLLER_UI		"./Framework/Execution control/UI_TaskController.uir" 
 #define N_TASK_EVENT_QITEMS		100		// Number of events waiting to be processed by the state machine.
+
+// Handy return type for functions that produce error descriptions
 
 //----------------------------------------
 // Task Controller States
@@ -329,6 +332,17 @@ typedef enum {
 } TaskIterMode_type;
 
 //---------------------------------------------------------------
+// Task Controller Virtual Channel Function Assignment
+//---------------------------------------------------------------
+typedef enum {
+	TASK_VCHAN_FUNC_NONE,
+	TASK_VCHAN_FUNC_START,
+	TASK_VCHAN_FUNC_ITERATE,
+	TASK_VCHAN_FUNC_DONE
+} TaskVChanFuncAssign_type;
+	
+
+//---------------------------------------------------------------
 // Task Controller HW Triggerring (for both Slaves and Masters)
 //---------------------------------------------------------------
 typedef enum {
@@ -339,11 +353,6 @@ typedef enum {
 
 typedef struct TaskControl 			TaskControl_type;
 typedef struct TaskExecutionLog		TaskExecutionLog_type;
-
-typedef struct FCallReturn {
-	int						retVal;			// Value returned by function call.
-	char*					errorInfo;		// In case of error, additional info.
-} FCallReturn_type;
 
 //--------------------------------------------------------------------------------
 // Task Controller Function Pointer Types
@@ -360,7 +369,7 @@ typedef struct FCallReturn {
 // assigned to each Task Controller state machine.
 //--------------------------------------------------------------------------------
 
-// Called when a Task Controller needs to be configured based on module or device settings 
+// Called when a Task Controller needs to be configured based on module or device settings. 
 typedef FCallReturn_type* 	(*ConfigureFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag);
 
 // Called each time a Task Controller performs an iteration of a device or module
@@ -370,32 +379,28 @@ typedef FCallReturn_type* 	(*ConfigureFptr_type) 			(TaskControl_type* taskContr
 // discard_FCallReturn_type.
 typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
-// Called before the first iteration starts from an INITIAL state
+// Called before the first iteration starts from an INITIAL state.
 typedef FCallReturn_type* 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag); 
 
-// Called when device or module must be returned to its initial state (iteration index = 0)
+// Called when device or module must be returned to its initial state (iteration index = 0).
 typedef FCallReturn_type* 	(*ResetFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag); 
 
-// Called automatically when a finite Task Controller finishes required iterations or a
-// continuous Task Controller is stopped manually
+// Called automatically when a finite Task Controller finishes required iterations or a continuous Task Controller is stopped manually.
 typedef FCallReturn_type* 	(*DoneFptr_type) 				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag); 
 
-// Called when a running finite Task Controller is stopped manually, before reaching a DONE state
+// Called when a running finite Task Controller is stopped manually, before reaching a DONE state .
 typedef FCallReturn_type* 	(*StoppedFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag); 
 
-// Called when Task Controller encounters an error, 
-// to continue Task Controller execution, a return from this function is needed
+// Called when Task Controller encounters an error, to continue Task Controller execution, a return from this function is needed.
 typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
 
-// Called when data is placed in a Task Controller data queue if this operation is compatible
-// with the state of the Task Controller
-typedef FCallReturn_type*	(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, CmtTSQHandle dataQID, BOOL const* abortFlag);
+// Called when data is placed in a Task Controller Sink VChan.
+typedef FCallReturn_type*	(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
-// Called for passing custom module or device events that are not handled directly by the Task Controller
+// Called for passing custom module or device events that are not handled directly by the Task Controller.
 typedef FCallReturn_type*	(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
-
-// Called after receiving a task control event and eventInfo must be disposed of
+// Called after receiving a task control event and eventInfo must be disposed of.
 typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
 
 
@@ -516,9 +521,19 @@ void					AbortTaskControlExecution			(TaskControl_type* taskControl);
 // Task Controller function call management functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
+#ifndef __FCallReturn_type__
+#define __FCallReturn_type__
+
+typedef struct FCallReturn {
+	int						retVal;			// Value returned by function call.
+	char*					errorInfo;		// In case of error, additional info.
+} FCallReturn_type;
+
 FCallReturn_type*		init_FCallReturn_type				(int valFCall, const char errorOrigin[], const char errorDescription[]);
 
 void					discard_FCallReturn_type			(FCallReturn_type** a);
+
+#endif
 
 	// When calling TaskControlEvent and passing a FCallReturn_type* as eventInfo, pass this function pointer to
 	// disposeEventInfoFptr
@@ -528,9 +543,10 @@ void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-int						AddDataQueue						(TaskControl_type* taskControl, CmtTSQHandle dataQID); 
-int						RemoveDataQueue						(TaskControl_type* taskControl, CmtTSQHandle dataQID); 
-void					RemoveAllDataQueues					(TaskControl_type* taskControl);
+	// Adds a VChan to the Task Controller that is used to receive incoming data.
+int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, TaskVChanFuncAssign_type VChanFunc); 
+int						RemoveSinkVChan 					(TaskControl_type* taskControl, SinkVChan_type* sinkVChan);
+void 					RemoveAllSinkVChans 				(TaskControl_type* taskControl);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller logging functions

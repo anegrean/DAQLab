@@ -1,5 +1,6 @@
 DAQLab.obj
 DAQLabModule.obj
+DAQLabUtility.obj
 NIDAQmxManager.obj
 PIStage.obj
 TaskController.obj
@@ -9,6 +10,7 @@ cvi.lib
 cviauto.lib
 daqmxioctrl.lib
 NIDAQmx.lib
+nivision.lib
 cvistart.lib
 ActiveXML.obj
 asynctmr.obj

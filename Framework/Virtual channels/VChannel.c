@@ -10,17 +10,20 @@
 
 //==============================================================================
 // Include files
-
-#include "DAQLab.h"		// include this first!
+#include "DAQLabUtility.h"
 #include <ansi_c.h>
 #include "toolbox.h" 
 #include "nivision.h"
 #include "utility.h"
+#include "VChannel.h"
 
 //==============================================================================
 // Constants
 
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}  
+#define DEFAULT_SinkVChan_QueueSize			1000
+#define DEFAULT_SinkVChan_QueueWriteTimeout	1000.0	// number of [ms] to wait while trying
+													// to add a data packet to a Sink VChan TSQ
 
 //==============================================================================
 // Types
@@ -85,6 +88,7 @@ struct SinkVChan {
 	
 	SourceVChan_type*			sourceVChan;			// SourceVChan attached to this sink.
 	CmtTSQHandle       			tsqHndl; 				// Thread safe queue handle to receive incoming data.
+	double						writeTimeout;
 	
 };
 
@@ -278,7 +282,6 @@ SourceVChan_type* init_SourceVChan_type	(char 						name[],
 SinkVChan_type* init_SinkVChan_type	(char 						name[], 
 									 VChanData_type 			dataType,
 									 void* 						vChanOwner,
-									 int 						queueSize,
 									 size_t						dataSize,
 									 Connected_CBFptr_type		Connected_CBFptr,
 									 Disconnected_CBFptr_type	Disconnected_CBFptr)
@@ -294,9 +297,9 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 		
 	vchan->sourceVChan = NULL;
 	// init thread safe queue
-	CmtNewTSQ(queueSize, dataSize, 0, &vchan->tsqHndl); 
-	
-	
+	CmtNewTSQ(DEFAULT_SinkVChan_QueueSize, dataSize, 0, &vchan->tsqHndl); 
+	// init write timeout (time to keep on trying to write a data packet to the queue)
+	vchan->writeTimeout = DEFAULT_SinkVChan_QueueWriteTimeout;
 	
 	return vchan;
 	Error:
@@ -362,6 +365,62 @@ void ReleaseDataPacket(DataPacket_type* a)
 	
 }
 
+FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dataPacket)
+{
+#define SendDataPacket_Err_TSQWrite		-1
+	
+	// set sinks counter
+	int* ctrTSVptr;
+	CmtGetTSVPtr(dataPacket->ctr, &ctrTSVptr);
+	*ctrTSVptr = ListNumItems(source->sinkVChans);
+	CmtReleaseTSVPtr(dataPacket->ctr);
+	
+	// send data to sinks
+	SinkVChan_type** 	sinkPtrPtr 		= ListGetDataPtr(source->sinkVChans);
+	int					itemsWritten;
+	while(*sinkPtrPtr) {
+		
+		// put data packet into Sink VChan TSQ
+		itemsWritten = CmtWriteTSQData((*sinkPtrPtr)->tsqHndl, dataPacket, 1, (*sinkPtrPtr)->writeTimeout, NULL);
+		
+		// check if writing the items to the sink queue succeeded
+		if (itemsWritten < 0) {
+			char* 				errMsg 										= StrDup("Writing data to ");
+			char*				sinkName									= GetVChanName((VChan_type*)*sinkPtrPtr);
+			char				cmtStatusMessage[CMT_MAX_MESSAGE_BUF_SIZE];
+			FCallReturn_type*   fCallReturn;
+			
+			AppendString(&errMsg, sinkName, -1); 
+			AppendString(&errMsg, " failed. Reason: ", -1); 
+			CmtGetErrorMessage(itemsWritten, cmtStatusMessage);
+			AppendString(&errMsg, cmtStatusMessage, -1); 
+			fCallReturn = init_FCallReturn_type(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
+			OKfree(errMsg);
+			OKfree(sinkName);
+			return fCallReturn;
+		}
+		
+		// check if the number of written elements is the same as what was requested
+		if (!itemsWritten) {
+			char* 				errMsg 										= StrDup("Sink VChan ");
+			char*				sinkName									= GetVChanName((VChan_type*)*sinkPtrPtr);
+			FCallReturn_type*   fCallReturn;
+			
+			AppendString(&errMsg, sinkName, -1); 
+			AppendString(&errMsg, " is full", -1); 
+			fCallReturn = init_FCallReturn_type(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
+			OKfree(errMsg);
+			OKfree(sinkName);
+			return fCallReturn;
+		}
+		
+		// get next sink
+		sinkPtrPtr++;
+	}
+	
+	return NULL; // no error
+}
+
 /// HIFN Connects a Source and Sink VChan and if provided, calls their Connected_CBFptr callbacks to signal this event.
 /// HIFN The Source VChan's Connected_CBFptr will be called before the Sink's Connected_CBFptr. 
 /// HIRET TRUE if successful, FALSE otherwise
@@ -418,11 +477,34 @@ char* GetVChanName (VChan_type* vchan)
 	return StrDup(vchan->name);
 }
 
-CmtTSQHandle GetSinkTSQHndl	(SinkVChan_type* sink)
+CmtTSQHandle GetSinkVChanTSQHndl	(SinkVChan_type* sink)
 {
 	return sink->tsqHndl;
 }
 
+void SetSinkVChanTSQSize (SinkVChan_type* sink, size_t nItems)
+{
+	CmtSetTSQAttribute(sink->tsqHndl, ATTR_TSQ_QUEUE_SIZE, nItems); 
+}
+
+size_t GetSinkVChanTSQSize (SinkVChan_type* sink)
+{
+	size_t nItems;
+	
+	CmtGetTSQAttribute(sink->tsqHndl, ATTR_TSQ_QUEUE_SIZE, &nItems); 
+	
+	return nItems;
+}
+
+void SetSinkVChanWriteTimeout (SinkVChan_type* sink, double time)
+{
+	sink->writeTimeout = time;
+}
+
+double GetSinkVChanWriteTimeout	(SinkVChan_type* sink)
+{
+	return sink->writeTimeout;
+}
 //==============================================================================
 // VChan data types management
 
@@ -455,6 +537,8 @@ Image_type* init_Image_type	(ImageEnum_type imageType, void* image)
 	
 	a->imageType	= imageType; 
 	a->data			= image;
+	
+	return a;
 }
 
 void discard_Image_type	(void** image)

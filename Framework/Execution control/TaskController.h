@@ -244,7 +244,7 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
     extern "C" {
 #endif
 
-
+#include "DAQLabUtility.h"
 #include <toolbox.h>
 #include "VChannel.h"
 
@@ -520,20 +520,6 @@ void					AbortTaskControlExecution			(TaskControl_type* taskControl);
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller function call management functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-
-#ifndef __FCallReturn_type__
-#define __FCallReturn_type__
-
-typedef struct FCallReturn {
-	int						retVal;			// Value returned by function call.
-	char*					errorInfo;		// In case of error, additional info.
-} FCallReturn_type;
-
-FCallReturn_type*		init_FCallReturn_type				(int valFCall, const char errorOrigin[], const char errorDescription[]);
-
-void					discard_FCallReturn_type			(FCallReturn_type** a);
-
-#endif
 
 	// When calling TaskControlEvent and passing a FCallReturn_type* as eventInfo, pass this function pointer to
 	// disposeEventInfoFptr

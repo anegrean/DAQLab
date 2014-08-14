@@ -17,7 +17,9 @@
 
 //==============================================================================
 // Include files
-
+		
+#include "DAQLabUtility.h"
+		
 //==============================================================================
 // Constants
 
@@ -108,7 +110,6 @@ struct DataPacket {
 	DiscardDataFptr_type 		discardFptr;
 };
 
-
 //==============================================================================
 // Global functions
 
@@ -116,75 +117,87 @@ struct DataPacket {
 // VChan Creation / Destruction
 //------------------------------------------------------------------------------
 
-SourceVChan_type*		init_SourceVChan_type	(char 						name[], 
-										  	  	 VChanData_type 			dataType,
-										 	  	 void* 						vChanOwner,
-												 Connected_CBFptr_type		Connected_CBFptr,
-												 Disconnected_CBFptr_type	Disconnected_CBFptr);
+SourceVChan_type*		init_SourceVChan_type		(char 						name[], 
+										  	  	 	VChanData_type 			dataType,
+										 	  	 	void* 						vChanOwner,
+												 	Connected_CBFptr_type		Connected_CBFptr,
+												 	Disconnected_CBFptr_type	Disconnected_CBFptr);
 
 
-SinkVChan_type*			init_SinkVChan_type		(char 						name[], 
-										  	  	 VChanData_type 			dataType,
-										 	  	 void* 						vChanOwner,
-												 int 						queueSize,
-												 size_t						dataSize,
-												 Connected_CBFptr_type		Connected_CBFptr,
-												 Disconnected_CBFptr_type	Disconnected_CBFptr);
+SinkVChan_type*			init_SinkVChan_type			(char 						name[], 
+										  	  	 	VChanData_type 			dataType,
+										 	  	 	void* 						vChanOwner,
+												 	size_t						dataSize,
+												 	Connected_CBFptr_type		Connected_CBFptr,
+												 	Disconnected_CBFptr_type	Disconnected_CBFptr);
 
 	// Discard common to both types of VChan. Cast SourceVChan_type** and SinkVChan_type** to VChan_type**.
-void 					discard_VChan_type 		(VChan_type** vchan); 
+void 					discard_VChan_type 			(VChan_type** vchan); 
 
 //------------------------------------------------------------------------------
 // VChan Connections
 //------------------------------------------------------------------------------
 
 	// Connects a Sink and a Source VChan .
-BOOL					VChan_Connect			(SourceVChan_type* source, SinkVChan_type* sink);
+BOOL					VChan_Connect				(SourceVChan_type* source, SinkVChan_type* sink);
 
 	// Disconnects a VChan. 
-BOOL					VChan_Disconnect		(VChan_type* vchan); 
+BOOL					VChan_Disconnect			(VChan_type* vchan); 
 
 //------------------------------------------------------------------------------
 // VChan Set/Get
 //------------------------------------------------------------------------------
 
 	// Assigns new VChan name
-void 					SetVChanName 			(VChan_type* vchan, char newName[]);
+void 					SetVChanName 				(VChan_type* vchan, char newName[]);
 
 	// Returns pointer to dynamically allocated VChan name (null terminated string) 
-char*					GetVChanName			(VChan_type* vchan);
+char*					GetVChanName				(VChan_type* vchan);
 
 	// Returns the thread safe queue handle of a sink VChan
-CmtTSQHandle			GetSinkTSQHndl			(SinkVChan_type* sink);
+CmtTSQHandle			GetSinkVChanTSQHndl			(SinkVChan_type* sink);
+
+	// The maximum number of datapackets a Sink VChan can hold
+void					SetSinkVChanTSQSize			(SinkVChan_type* sink, size_t nItems);
+
+size_t					GetSinkVChanTSQSize			(SinkVChan_type* sink);
+
+	// Time in [ms] to keep on trying to write a data packet to a Sink VChan TSQ		
+void					SetSinkVChanWriteTimeout	(SinkVChan_type* sink, double time);	
+double					GetSinkVChanWriteTimeout	(SinkVChan_type* sink);
+
 
 //------------------------------------------------------------------------------
 // Data Packet Management
 //------------------------------------------------------------------------------
 
 	// Initializes a data packet
-int 					init_DataPacket_type	(DataPacket_type* 			dataPacket, 
-												 VChanData_type 			dataType, 
-												 void* 						data,
-												 DiscardDataFptr_type 		discardFptr);
+int 					init_DataPacket_type		(DataPacket_type* 			dataPacket, 
+												 	 VChanData_type 			dataType, 
+												  	 void* 						data,
+												 	 DiscardDataFptr_type 		discardFptr);
 
 	// Discards the data from a data packet when it is not needed anymore
-void 					ReleaseDataPacket		(DataPacket_type* a);
+void 					ReleaseDataPacket			(DataPacket_type* a);
+
+	// Sends a data packet from a Source VChan to its Sink VChans
+FCallReturn_type* 		SendDataPacket 				(SourceVChan_type* source, DataPacket_type* dataPacket); 
 
 //------------------------------------------------------------------------------
 // VChan Data Types Management
 //------------------------------------------------------------------------------
 	// Waveforms
 	// Note: the provided waveform must be allocated with malloc.
-Waveform_type*			init_Waveform_type		(WaveformEnum_type waveformType, size_t n, void* waveform, double rate, double repeat);
+Waveform_type*			init_Waveform_type			(WaveformEnum_type waveformType, size_t n, void* waveform, double rate, double repeat);
 
 	// Discards all waveform types
-void					discard_Waveform_type	(void** waveform); // provide this to the discardFptr parameter from init_DataPacket_type
+void					discard_Waveform_type		(void** waveform); // provide this to the discardFptr parameter from init_DataPacket_type
 
 	// Images
-Image_type*				init_Image_type			(ImageEnum_type imageType, void* image);
+Image_type*				init_Image_type				(ImageEnum_type imageType, void* image);
 
 	// Discards all image types.
-void					discard_Image_type		(void** image);
+void					discard_Image_type			(void** image);
 
 
 #ifdef __cplusplus

@@ -4,7 +4,7 @@ Prototype="struct SourceVChan *init_SourceVChan_type(char *name, VChanData_type 
 
 [init_SinkVChan_type]
 Class="Function"
-Prototype="struct SinkVChan *init_SinkVChan_type(char *name, VChanData_type dataType, void *vChanOwner, int queueSize, unsigned int dataSize, void (*Connected_CBFptr)(struct VChan *, struct VChan *), void (*Disconnected_CBFptr)(struct VChan *, struct VChan *));"
+Prototype="struct SinkVChan *init_SinkVChan_type(char *name, VChanData_type dataType, void *vChanOwner, unsigned int dataSize, void (*Connected_CBFptr)(struct VChan *, struct VChan *), void (*Disconnected_CBFptr)(struct VChan *, struct VChan *));"
 
 [discard_VChan_type]
 Class="Function"
@@ -17,6 +17,10 @@ Prototype="int init_DataPacket_type(struct DataPacket *dataPacket, VChanData_typ
 [ReleaseDataPacket]
 Class="Function"
 Prototype="void ReleaseDataPacket(struct DataPacket *a);"
+
+[SendDataPacket]
+Class="Function"
+Prototype="struct FCallReturn *SendDataPacket(struct SourceVChan *source, struct DataPacket *dataPacket);"
 
 [VChan_Connect]
 Class="Function"
@@ -34,9 +38,25 @@ Prototype="void SetVChanName(struct VChan *vchan, char *newName);"
 Class="Function"
 Prototype="char *GetVChanName(struct VChan *vchan);"
 
-[GetSinkTSQHndl]
+[GetSinkVChanTSQHndl]
 Class="Function"
-Prototype="int GetSinkTSQHndl(struct SinkVChan *sink);"
+Prototype="int GetSinkVChanTSQHndl(struct SinkVChan *sink);"
+
+[SetSinkVChanTSQSize]
+Class="Function"
+Prototype="void SetSinkVChanTSQSize(struct SinkVChan *sink, unsigned int nItems);"
+
+[GetSinkVChanTSQSize]
+Class="Function"
+Prototype="unsigned int GetSinkVChanTSQSize(struct SinkVChan *sink);"
+
+[SetSinkVChanWriteTimeout]
+Class="Function"
+Prototype="void SetSinkVChanWriteTimeout(struct SinkVChan *sink, double time);"
+
+[GetSinkVChanWriteTimeout]
+Class="Function"
+Prototype="double GetSinkVChanWriteTimeout(struct SinkVChan *sink);"
 
 [init_Waveform_type]
 Class="Function"

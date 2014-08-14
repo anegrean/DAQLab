@@ -10,6 +10,7 @@
 
 //==============================================================================
 // Include files
+#include "DAQLabUtility.h"
 #include <windows.h>
 #include "asynctmr.h"
 #include <formatio.h>
@@ -41,12 +42,10 @@ typedef struct {
 	TaskEvents_type 			event;					// Task Control Event.
 	void*						eventInfo;				// Extra information per event allocated dynamically
 	DisposeEventInfoFptr_type   disposeEventInfoFptr;   // Function pointer to dispose of the eventInfo
-	
 } EventPacket_type;
 
 typedef struct {
-	TaskStates_type			subtaskState;				// Updated by parent task when informed by subtask that a state
-														// change occured.
+	TaskStates_type			subtaskState;				// Updated by parent task when informed by subtask that a state change occured.
 	TaskControl_type*		subtask;					// Pointer to Subtask Controller.
 } SubTask_type;
 
@@ -454,7 +453,7 @@ int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, Task
 		VChanTSQDataPtrPtr++;
 	}
 	
-	CmtTSQHandle				tsqID 				= GetSinkTSQHndl(sinkVChan);
+	CmtTSQHandle				tsqID 				= GetSinkVChanTSQHndl(sinkVChan);
 	VChanCallbackData_type*		VChanTSQDataPtr		= init_VChanCallbackData_type(taskControl, sinkVChan);
 	
 	if (!ListInsertItem(taskControl->dataQs, &VChanTSQDataPtr, END_OF_LIST)) 
@@ -474,7 +473,7 @@ int	RemoveSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
 		VChanTSQDataPtrPtr = ListGetPtrToItem(taskControl->dataQs, i);
 		if ((*VChanTSQDataPtrPtr)->sinkVChan == sinkVChan) {
 			// remove queue Task Controller callback
-			CmtUninstallTSQCallback(GetSinkTSQHndl((*VChanTSQDataPtrPtr)->sinkVChan), (*VChanTSQDataPtrPtr)->itemsInQueueCBID);
+			CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtrPtr)->sinkVChan), (*VChanTSQDataPtrPtr)->itemsInQueueCBID);
 			// free memory for queue item
 			discard_VChanCallbackData_type(VChanTSQDataPtrPtr);
 			// and remove from queue
@@ -491,7 +490,7 @@ void RemoveAllSinkVChans (TaskControl_type* taskControl)
 	VChanCallbackData_type** VChanTSQDataPtrPtr = ListGetDataPtr(taskControl->dataQs);
 	while(*VChanTSQDataPtrPtr) {
 		// remove queue Task Controller callback
-		CmtUninstallTSQCallback(GetSinkTSQHndl((*VChanTSQDataPtrPtr)->sinkVChan), (*VChanTSQDataPtrPtr)->itemsInQueueCBID);
+		CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtrPtr)->sinkVChan), (*VChanTSQDataPtrPtr)->itemsInQueueCBID);
 		// free memory for queue item
 		discard_VChanCallbackData_type(VChanTSQDataPtrPtr);
 		VChanTSQDataPtrPtr++;
@@ -708,36 +707,6 @@ static ErrorMsg_type* FCallReturnToErrorMsg	(FCallReturn_type** fCallReturn, Tas
 	discard_FCallReturn_type(fCallReturn);
 	
 	return a;
-}
-
-FCallReturn_type* init_FCallReturn_type (int valFCall, const char errorOrigin[], const char errorDescription[])
-{
-	char*				Msg		= NULL;
-	size_t				nchars;
-	FCallReturn_type* 	result 	= malloc(sizeof(FCallReturn_type));
-	
-	if (!result) return NULL;
-	
-	result -> retVal 	= valFCall;
-	if (errorDescription) {
-		
-		nchars 	= snprintf(Msg, 0, "<%s Error ID %d. Reason: %s>", errorOrigin, valFCall, errorDescription);
-		Msg		= malloc((nchars+1)*sizeof(char));
-		if (!Msg) {free(result); return NULL;}
-		snprintf(Msg, nchars+1, "<%s Error. Reason: %s>", errorOrigin, errorDescription);
-		result -> errorInfo	= Msg;
-	} else
-		result -> errorInfo = NULL;
-		
-	return result;
-}
-
-void discard_FCallReturn_type (FCallReturn_type** a)
-{
-	if (!*a) return;
-	
-	OKfree((*a)->errorInfo);
-	OKfree(*a);
 }
 
 void dispose_FCallReturn_EventInfo (void* eventInfo)
@@ -1020,7 +989,7 @@ void CVICALLBACK TaskDataItemsInQueue (CmtTSQHandle queueHandle, unsigned int ev
 	SinkVChan_type**			VChanPtrPtr			= malloc(sizeof(SinkVChan_type*));
 	if (!VChanPtrPtr) {
 		// flush queue
-		CmtFlushTSQ(GetSinkTSQHndl(VChanTSQDataPtr->sinkVChan), TSQ_FLUSH_ALL, NULL);
+		CmtFlushTSQ(GetSinkVChanTSQHndl(VChanTSQDataPtr->sinkVChan), TSQ_FLUSH_ALL, NULL);
 		TaskControlEvent(VChanTSQDataPtr->taskControl, TASK_EVENT_ERROR_OUT_OF_MEMORY, NULL, NULL);
 	} else {
 		*VChanPtrPtr = VChanTSQDataPtr->sinkVChan;

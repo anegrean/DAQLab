@@ -813,7 +813,9 @@ static void							discard_CITaskSet_type					(CITaskSet_type** a);
 static COTaskSet_type*				init_COTaskSet_type						(void);
 static void							discard_COTaskSet_type					(COTaskSet_type** a);
 
-	// DAQmx tasks management
+//-----------------------
+// DAQmx tasks management
+//-----------------------
 static int 							ConfigDAQmxDevice						(Dev_type* dev); 
 static int 							ConfigDAQmxAITask 						(Dev_type* dev);
 static int 							ConfigDAQmxAOTask 						(Dev_type* dev);
@@ -823,6 +825,7 @@ static int 							ConfigDAQmxCITask 						(Dev_type* dev);
 static int 							ConfigDAQmxCOTask 						(Dev_type* dev);
 static int 							ClearDAQmxTasks 						(Dev_type* dev); 
 static void 						DisplayLastDAQmxLibraryError 			(void);
+static BOOL							DAQmxTasksDone							(Dev_type* dev);
 
 //---------------------
 // DAQmx task callbacks
@@ -3955,6 +3958,36 @@ static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callback
 					
 					PopulateChannels (dev);
 					break;
+					
+				case TaskSetPan_Mode:
+					
+					// dim number of repeats
+					BOOL	finiteFlag;
+					GetCtrlVal(panel, control, &finiteFlag);
+					if (finiteFlag) {
+						SetCtrlAttribute(panel, TaskSetPan_Repeat, ATTR_DIMMED, 0);
+						SetTaskControlMode(dev->taskController, TASK_FINITE);
+					} else {
+						SetCtrlAttribute(panel, TaskSetPan_Repeat, ATTR_DIMMED, 1);
+						SetTaskControlMode(dev->taskController, TASK_CONTINUOUS);
+					}
+					break;
+					
+				case TaskSetPan_Wait:
+					
+					double	waitTime;
+					GetCtrlVal(panel, control, &waitTime);
+					SetTaskControlIterationsWait(dev->taskController, waitTime);
+					break;
+					
+				case TaskSetPan_Repeat:
+					
+					size_t nRepeat;
+					GetCtrlVal(panel, control, &nRepeat);
+					SetTaskControlIterations(dev->taskController, nRepeat);
+					break;
+					
+					
 			}
 			break;
 			
@@ -4229,6 +4262,26 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					// add channels
 					//------------------------------------------------------------------------------------------------
 					PopulateChannels (newDAQmxDev);
+					
+					//------------------------------------------------------------------------------------------------
+					// initialize Task Controller UI controls
+					//------------------------------------------------------------------------------------------------
+					// set repeats and change data type to size_t
+					SetCtrlAttribute(newDAQmxDevPanHndl, TaskSetPan_Repeat, ATTR_DATA_TYPE, VAL_SIZE_T);
+					SetCtrlVal(newDAQmxDevPanHndl, TaskSetPan_Repeat, GetTaskControlIterations(newDAQmxDev->taskController)); 
+					// chage data type of iterations to size_t
+					SetCtrlAttribute(newDAQmxDevPanHndl, TaskSetPan_TotalIterations, ATTR_DATA_TYPE, VAL_SIZE_T);
+					// set wait
+					SetCtrlVal(newDAQmxDevPanHndl, TaskSetPan_Wait, GetTaskControlIterationsWait(newDAQmxDev->taskController));
+					// set mode
+					SetCtrlVal(newDAQmxDevPanHndl, TaskSetPan_Mode, GetTaskControlMode(newDAQmxDev->taskController));
+					// dim repeat if TC mode is continuous, otherwise undim
+					if (GetTaskControlMode(newDAQmxDev->taskController) == TASK_FINITE) 
+						// finite
+						SetCtrlAttribute(newDAQmxDevPanHndl, TaskSetPan_Repeat, ATTR_DIMMED, 0);
+					else
+						// continuous
+						SetCtrlAttribute(newDAQmxDevPanHndl, TaskSetPan_Repeat, ATTR_DIMMED, 1);
 					
 					break;
 					
@@ -5003,7 +5056,7 @@ Error:
 	return error;
 }
 
-static int 	ConfigDAQmxDevice (Dev_type* dev)
+static int ConfigDAQmxDevice (Dev_type* dev)
 {
 	int 	error	= 0;
 	
@@ -5205,7 +5258,9 @@ static int ConfigDAQmxAITask (Dev_type* dev)
 	//----------------------
 	// register AI data available callback 
 	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->AITaskSet->timing->blockSize, 0, AIDAQmxTaskDataAvailable_CB, dev)); 
-	// register AI task done event callback (which is called also if the task encounters an error)
+	// register AI task done event callback
+	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
+	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AITaskSet->taskHndl, 0, AIDAQmxTaskDone_CB, dev));
 	
 		
@@ -5385,7 +5440,9 @@ static int ConfigDAQmxAOTask (Dev_type* dev)
 	//----------------------
 	// register AO data request callback 
 	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev)); 
-	// register AO task done event callback (which is called also if the task encounters an error)
+	// register AO task done event callback
+	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
+	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev));
 	
 	return 0;
@@ -5546,6 +5603,8 @@ static int ConfigDAQmxDITask (Dev_type* dev)
 	// register DI data available callback 
 	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->DITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DITaskSet->timing->blockSize, 0, DIDAQmxTaskDataAvailable_CB, dev)); 
 	// register DI task done event callback (which is called also if the task encounters an error)
+	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
+	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DITaskSet->taskHndl, 0, DIDAQmxTaskDone_CB, dev));
 	
 		
@@ -5690,6 +5749,8 @@ static int ConfigDAQmxDOTask (Dev_type* dev)
 	//----------------------
 	// register DO data available callback 
 	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->DOTaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DOTaskSet->timing->blockSize, 0, DODAQmxTaskDataRequest_CB, dev)); 
+	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
+	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
 	// register DO task done event callback (which is called also if the task encounters an error)
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DOTaskSet->taskHndl, 0, DODAQmxTaskDone_CB, dev));
 	
@@ -5838,20 +5899,22 @@ DAQmxError:
 ///HIRET NULL if there is no error and FCallReturn_type* data in case of error. 
 FCallReturn_type* WriteAODAQmx (Dev_type* dev) 
 {
-#define WriteAODAQmx_Err_DataUnderflow -1
+#define WriteAODAQmx_Err_DataUnderflow 		-1
+#define WriteAODAQmx_Err_DataType			-2
 	
 	DataPacket_type 		datapacket; 
-	WriteAOData_type*    	data            = dev->AOTaskSet->writeAOData;
+	WriteAOData_type*    	data            	= dev->AOTaskSet->writeAOData;
 	size_t          		queue_items;
 	size_t          		ncopies;                // number of datapacket copies to fill at least a writeblock size
 	size_t         		 	numwrote;
-	int             		error           = 0;
+	int             		error           	= 0;
 	float64*        		tmpbuff;
-	FCallReturn_type*		fCallReturn		= NULL;
+	FCallReturn_type*		fCallReturn			= NULL;
+	BOOL					DataTypeErrorFlag	= FALSE;
 
 	// cycle over channels
 	for (int i = 0; i < data->numchan; i++) {
-		CmtTSQHandle	tsqID = GetSinkTSQHndl(data->sinkVChans[i]);
+		CmtTSQHandle	tsqID = GetSinkVChanTSQHndl(data->sinkVChans[i]);
 		while (data->databuff_size[i] < data->writeblock) {
 			
 			// if datain[i] is empty, get data packet from queue
@@ -5875,20 +5938,33 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 				// get data packet from queue
 				CmtReadTSQData (tsqID, &datapacket,1,0,0);
 				
+				// check if data packet is a double waveform
+				if (datapacket.dataType != VChan_Waveform) 
+					DataTypeErrorFlag = TRUE;
+				else
+					if ((((Waveform_type*)datapacket.data)->waveformType != Waveform_float) || (((Waveform_type*)datapacket.data)->waveformType != Waveform_double))
+						DataTypeErrorFlag = TRUE;
+				
+				if (DataTypeErrorFlag) { 
+					char* VChanName = GetVChanName((VChan_type*)data->sinkVChans[i]);
+					char* errMsg = StrDup("Error: Data from VChan \"");
+					AppendString(&errMsg, VChanName, -1);
+					AppendString(&errMsg, "\" provided for the analog output task is not of a Waveform_double or Waveform_float type", -1);
+					fCallReturn = init_FCallReturn_type(WriteAODAQmx_Err_DataType, "WriteAODAQmx", errMsg);
+					free(errMsg);
+					free(VChanName);
+					goto Error;
+				}
+				
 				// copy data packet to datain
-				data->datain[i] = malloc (datapacket.n * sizeof(float64));
-				memcpy(data->datain[i], datapacket.data, datapacket.n * sizeof(float64));
-				data->datain_size[i] = datapacket.n;
-				/*
-					// for testing
-					OKfree(testdatain);
-					testdatain = malloc (datapacket.n * sizeof(float64));
-					memcpy(testdatain, data->datain[i], datapacket.n * sizeof(float64)); */
+				data->datain[i] = malloc (((Waveform_type*)datapacket.data)->n * sizeof(float64));
+				memcpy(data->datain[i], ((Waveform_type*)datapacket.data)->data, ((Waveform_type*)datapacket.data)->n * sizeof(float64));
+				data->datain_size[i] = ((Waveform_type*)datapacket.data)->n;
 				
 				// copy repeats
-				if (datapacket.repeat) {
-					data->datain_repeat[i]    = (size_t) datapacket.repeat;
-					data->datain_remainder[i] = (size_t) ((datapacket.repeat - (double) data->datain_repeat[i]) * (double) datapacket.n);
+				if (((Waveform_type*)datapacket.data)->repeat) {
+					data->datain_repeat[i]    = (size_t) ((Waveform_type*)datapacket.data)->repeat;
+					data->datain_remainder[i] = (size_t) ((((Waveform_type*)datapacket.data)->repeat - (double) data->datain_repeat[i]) * (double) ((Waveform_type*)datapacket.data)->n);
 					data->datain_loop[i]      = 0;
 				} else data->datain_loop[i]   = 1;
 				
@@ -5910,11 +5986,6 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 				
 				// update number of data elements in the buffer
 				data->databuff_size[i] += ncopies * data->datain_size[i];
-				/*	
-					// for testing
-					OKfree(testdatabuff);
-					testdatabuff = malloc(data->databuff_size[i] * sizeof(float64));
-					memcpy(testdatabuff, data->databuff[i], data->databuff_size[i] * sizeof(float64)); */
 				
 				// if repeats is finite,  update number of repeats left in datain
 				if (!data->datain_loop[i]) 
@@ -5982,9 +6053,8 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 		data->databuff_size[i] -= data->writeblock;
 	}
 	
-	DAQmxErrChk(DAQmxWriteAnalogF64(AOtaskHandle, data->writeblock, 0, 3.0, DAQmx_Val_GroupByChannel, data->dataout, &numwrote, NULL));
+	DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &numwrote, NULL));
 	 
-	
 	return NULL; 
 	
 DAQmxError:
@@ -5997,35 +6067,279 @@ DAQmxError:
 	
 Error:
 	
-	DAQmxStopTask(AOtaskHandle);
+	ClearDAQmxTasks(dev);
 	return fCallReturn;
 }	 
 
-int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
+static BOOL	DAQmxTasksDone(Dev_type* dev)
 {
-	Dev_type*	dev = callbackData;
-//	dev->AOTaskSet->
+	BOOL taskDoneFlag;
 	
+	// AI task
+	if (dev->AITaskSet)
+	if (dev->AITaskSet->taskHndl) {
+		DAQmxGetTaskAttribute(dev->AITaskSet->taskHndl, DAQmx_Task_Complete, &taskDoneFlag);
+		if (!taskDoneFlag) return FALSE;
+	}
 	
+	// AO task
+	if (dev->AOTaskSet)
+	if (dev->AOTaskSet->taskHndl) {
+		DAQmxGetTaskAttribute(dev->AOTaskSet->taskHndl, DAQmx_Task_Complete, &taskDoneFlag); 
+		if (!taskDoneFlag) return FALSE; 
+	}
 	
-}
-
-int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
-{
-	Dev_type*	dev = callbackData;
+	// DI task
+	if (dev->DITaskSet)
+	if (dev->DITaskSet->taskHndl) {
+		DAQmxGetTaskAttribute(dev->DITaskSet->taskHndl, DAQmx_Task_Complete, &taskDoneFlag);   
+		if (!taskDoneFlag) return FALSE;
+	}
 	
+	// DO task
+	if (dev->DOTaskSet)
+	if (dev->DOTaskSet->taskHndl) {
+		DAQmxGetTaskAttribute(dev->DOTaskSet->taskHndl, DAQmx_Task_Complete, &taskDoneFlag);  
+		if (!taskDoneFlag) return FALSE;
+	}
+	
+	// CI task
+	if (dev->CITaskSet) {
+	   ChanSet_type** chanSetPtrPtr = ListGetDataPtr(dev->CITaskSet->chanTaskSet);
+	   while(*chanSetPtrPtr) {
+		   if ((*chanSetPtrPtr)->taskHndl) {
+			   DAQmxGetTaskAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_Task_Complete, &taskDoneFlag); 
+			   if (!taskDoneFlag) return FALSE;
+		   }
+		   chanSetPtrPtr++;
+	   }
+	}
+	
+	// CO task
+	if (dev->COTaskSet) {
+		ChanSet_type** chanSetPtrPtr = ListGetDataPtr(dev->COTaskSet->chanTaskSet);
+		while(*chanSetPtrPtr) {
+			if ((*chanSetPtrPtr)->taskHndl) {
+				DAQmxGetTaskAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_Task_Complete, &taskDoneFlag); 
+				if (!taskDoneFlag) return FALSE;
+		   }
+		   chanSetPtrPtr++;
+		}
+	}
+	
+	return TRUE;
 }
 
 int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
-	Dev_type*	dev = callbackData;
+#define AIDAQmxTaskDataAvailable_CB_Err_OutOfMemory		-1 
+#define AIDAQmxTaskDone_CB_Err_SendDataPacket	-2  
 	
+	Dev_type*			dev 			= callbackData;
+	float64*    		readBuffer		= NULL;				// temporary buffer to place data into
+	uInt32				nAI;
+	int					nRead;
+	int					error			= 0;
+	
+	
+	// allocate memory to read samples
+	DAQmxGetTaskAttribute(taskHandle, DAQmx_Task_NumChans, &nAI);
+	readBuffer = malloc(nSamples * nAI * sizeof(float64));
+	if (!readBuffer) goto MemError;
+	
+	// read samples from the AI buffer
+	DAQmxErrChk(DAQmxReadAnalogF64(taskHandle, nSamples, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL));
+	
+	// forward data to Source VChan
+	ChanSet_type**		chanSetPtrPtr 	= ListGetDataPtr(dev->AITaskSet->chanSet);
+	size_t				chIdx			= 0;
+	double*				waveformData;
+	Waveform_type*		waveform;
+	DataPacket_type		dataPacket;
+	FCallReturn_type*	fCallReturn;
+	while(*chanSetPtrPtr) {
+		
+		// include only channels for which HW-timing is required
+		if ((*chanSetPtrPtr)->onDemand) {
+			chanSetPtrPtr++;
+			continue;
+		}
+		
+		// create waveform
+		waveformData = malloc(nSamples * sizeof(double));
+		if (!waveformData) goto MemError;
+		memcpy(waveformData, readBuffer + chIdx * nSamples, nSamples * sizeof(double));
+		waveform = init_Waveform_type(Waveform_double, nSamples, waveformData, *dev->AITaskSet->timing->refSampleRate, 1); 
+		init_DataPacket_type(&dataPacket, VChan_Waveform, waveform, discard_Waveform_type);
+		
+		// send data packet with waveform
+		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, &dataPacket);
+		if (fCallReturn) goto SendDataError;
+		
+		// next AI channel
+		chanSetPtrPtr++;
+		chIdx++;
+	}
+	
+	OKfree(readBuffer);
+	return 0;
+	
+DAQmxError:
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	TaskControlIterationDone(dev->taskController, error, errMsg);
+	free(errMsg);
+	ClearDAQmxTasks(dev); 
+	OKfree(readBuffer); 
+	return 0;
+	
+MemError:
+	ClearDAQmxTasks(dev);
+	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDataAvailable_CB_Err_OutOfMemory, "Error: Out of memory");  
+	OKfree(readBuffer);
+	return 0;
+	
+SendDataError:
+	ClearDAQmxTasks(dev);
+	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDone_CB_Err_SendDataPacket, fCallReturn->errorInfo);  
+	discard_FCallReturn_type(&fCallReturn);
+	OKfree(readBuffer);
+	return 0;
 }
 
+// Called only if a running task encounters an error or stops by itself in case of a finite acquisition of generation task. 
+// It is not called if task stops after calling DAQmxClearTask or DAQmxStopTask.
 int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
+{
+#define AIDAQmxTaskDone_CB_Err_OutOfMemory		-1
+#define AIDAQmxTaskDone_CB_Err_SendDataPacket	-2
+	
+	Dev_type*			dev 			= callbackData;
+	uInt32				nSamples;									// number of samples per channel in the AI buffer
+	float64*    		readBuffer		= NULL;						// temporary buffer to place data into       
+	uInt32				nAI;
+	int					error			= 0;
+	int					nRead;
+
+	
+	// in case of error abort all tasks and finish Task Controller iteration with an error
+	if (status < 0) goto DAQmxError;
+	
+	// get all read samples from the input buffer 
+	DAQmxGetReadAttribute(taskHandle, DAQmx_Read_AvailSampPerChan, &nSamples); 
+	
+	// if there are no samples left in the buffer, stop here, otherwise read them out
+	if (!nSamples) return 0;
+	
+	// allocate memory for samples
+	DAQmxGetTaskAttribute(taskHandle, DAQmx_Task_NumChans, &nAI);
+	readBuffer = malloc(nSamples * nAI * sizeof(float64));
+	if (!readBuffer) goto MemError;
+	
+	// read remainding samples from the AI buffer
+	DAQmxErrChk(DAQmxReadAnalogF64(taskHandle, -1, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL));
+	
+	// forward data to Source VChans
+	ChanSet_type**		chanSetPtrPtr 	= ListGetDataPtr(dev->AITaskSet->chanSet);
+	size_t				chIdx			= 0;
+	double*				waveformData;
+	Waveform_type*		waveform;
+	DataPacket_type		dataPacket;
+	FCallReturn_type*	fCallReturn;
+	while(*chanSetPtrPtr) {
+		
+		// include only channels for which HW-timing is required
+		if ((*chanSetPtrPtr)->onDemand) {
+			chanSetPtrPtr++;
+			continue;
+		}
+		
+		// create waveform
+		waveformData = malloc(nSamples * sizeof(double));
+		if (!waveformData) goto MemError;
+		memcpy(waveformData, readBuffer + chIdx * nSamples, nSamples * sizeof(double));
+		waveform = init_Waveform_type(Waveform_double, nSamples, waveformData, *dev->AITaskSet->timing->refSampleRate, 1); 
+		init_DataPacket_type(&dataPacket, VChan_Waveform, waveform, discard_Waveform_type);
+		
+		// send data packet with waveform
+		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, &dataPacket);
+		if (fCallReturn) goto SendDataError;
+		
+		// next AI channel
+		chanSetPtrPtr++;
+		chIdx++;
+	}
+	
+	// Task Controller iteration is complete if all DAQmx Tasks are complete
+	if (DAQmxTasksDone(dev))
+		TaskControlIterationDone(dev->taskController, 0, "");
+	
+	OKfree(readBuffer);
+	return 0;
+	
+DAQmxError:
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	TaskControlIterationDone(dev->taskController, error, errMsg);
+	free(errMsg);
+	ClearDAQmxTasks(dev); 
+	OKfree(readBuffer); 
+	return 0;
+	
+MemError:
+	ClearDAQmxTasks(dev);
+	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDone_CB_Err_OutOfMemory, "Error: Out of memory");  
+	OKfree(readBuffer);
+	return 0;
+	
+SendDataError:
+	ClearDAQmxTasks(dev);
+	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDone_CB_Err_SendDataPacket, fCallReturn->errorInfo);  
+	discard_FCallReturn_type(&fCallReturn);
+	OKfree(readBuffer);
+	return 0;
+}
+
+int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
+{
+	Dev_type*			dev 			= callbackData;
+	FCallReturn_type*	fCallReturn		= NULL; 
+	
+	fCallReturn = WriteAODAQmx(dev);
+		
+	if (fCallReturn) { 
+		TaskControlIterationDone(dev->taskController, fCallReturn->retVal, fCallReturn->errorInfo);
+		discard_FCallReturn_type(&fCallReturn);
+	}
+		
+	return 0;
+}
+
+// Called only if a running task encounters an error or stops by itself in case of a finite acquisition of generation task. 
+// It is not called if task stops after calling DAQmxClearTask or DAQmxStopTask.
+int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
 	Dev_type*	dev = callbackData;
 	
+	// in case of error abort all tasks and finish Task Controller iteration with an error
+	if (status < 0) goto DAQmxError;
+	
+	// Task Controller iteration is complete if all DAQmx Tasks are complete
+	if (DAQmxTasksDone(dev))
+		TaskControlIterationDone(dev->taskController, 0, "");
+		
+	return 0;
+DAQmxError:
+	
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	TaskControlIterationDone(dev->taskController, status, errMsg);
+	free(errMsg);
+	ClearDAQmxTasks(dev); 
+	return 0;
 }
 
 int32 CVICALLBACK DIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
@@ -6034,6 +6348,8 @@ int32 CVICALLBACK DIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	
 }
 
+// Called only if a running task encounters an error or stops by itself in case of a finite acquisition of generation task. 
+// It is not called if task stops after calling DAQmxClearTask or DAQmxStopTask.
 int32 CVICALLBACK DIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
 	Dev_type*	dev = callbackData;
@@ -6046,6 +6362,8 @@ int32 CVICALLBACK DODAQmxTaskDataRequest_CB	(TaskHandle taskHandle, int32 everyN
 	
 }
 
+// Called only if a running task encounters an error or stops by itself in case of a finite acquisition of generation task. 
+// It is not called if task stops after calling DAQmxClearTask or DAQmxStopTask.
 int32 CVICALLBACK DODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
 	Dev_type*	dev = callbackData;

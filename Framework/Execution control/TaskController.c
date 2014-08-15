@@ -313,10 +313,11 @@ void discard_TaskControl_type(TaskControl_type** a)
 	// event queue
 	CmtDiscardTSQ((*a)->eventQ);
 	// incoming data queues (does not free the queue itself!)
-	VChanCallbackData_type** VChanTSQDataPtrPtr = ListGetDataPtr((*a)->dataQs);
-	while(*VChanTSQDataPtrPtr) {
+	VChanCallbackData_type** 	VChanTSQDataPtrPtr;
+	int 						nItems = ListNumItems((*a)->dataQs);
+	for (size_t i = 1; i <= nItems; i++) {
+		VChanTSQDataPtrPtr = ListGetPtrToItem((*a)->dataQs, i);
 		discard_VChanCallbackData_type(VChanTSQDataPtrPtr);
-		VChanTSQDataPtrPtr++;
 	}
 	ListDispose((*a)->dataQs);
 	
@@ -447,10 +448,11 @@ HWTrigger_type GetTaskControlHWTrigger (TaskControl_type* taskControl)
 int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, TaskVChanFuncAssign_type VChanFunc)
 {
 	// check if Sink VChan is already assigned to the Task Controller
-	VChanCallbackData_type**	VChanTSQDataPtrPtr 	= ListGetDataPtr(taskControl->dataQs);
-	while(*VChanTSQDataPtrPtr) {
+	VChanCallbackData_type**	VChanTSQDataPtrPtr;
+	int 						nItems = ListNumItems(taskControl->dataQs);
+	for (size_t i = 1; i <= nItems; i++) {
+		VChanTSQDataPtrPtr = ListGetPtrToItem(taskControl->dataQs, i);
 		if ((*VChanTSQDataPtrPtr)->sinkVChan == sinkVChan) return -2;
-		VChanTSQDataPtrPtr++;
 	}
 	
 	CmtTSQHandle				tsqID 				= GetSinkVChanTSQHndl(sinkVChan);
@@ -487,13 +489,14 @@ int	RemoveSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
 
 void RemoveAllSinkVChans (TaskControl_type* taskControl)
 {
-	VChanCallbackData_type** VChanTSQDataPtrPtr = ListGetDataPtr(taskControl->dataQs);
-	while(*VChanTSQDataPtrPtr) {
+	VChanCallbackData_type** 	VChanTSQDataPtrPtr;
+	int 						nItems = ListNumItems(taskControl->dataQs);
+	for (size_t i = 1; i <= nItems; i++) {
+		VChanTSQDataPtrPtr = ListGetPtrToItem(taskControl->dataQs, i);
 		// remove queue Task Controller callback
 		CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtrPtr)->sinkVChan), (*VChanTSQDataPtrPtr)->itemsInQueueCBID);
 		// free memory for queue item
 		discard_VChanCallbackData_type(VChanTSQDataPtrPtr);
-		VChanTSQDataPtrPtr++;
 	}
 	ListClear(taskControl->dataQs);
 }

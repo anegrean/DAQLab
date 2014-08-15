@@ -1251,11 +1251,12 @@ Error:
 
 static AIChannel_type* GetAIChannel (Dev_type* dev, char physChanName[])
 {
-	AIChannel_type** chPtrPtr = ListGetDataPtr(dev->attr->AIchan);
-	while(*chPtrPtr) {
+	AIChannel_type** 	chPtrPtr;
+	size_t				nItems		= ListNumItems(dev->attr->AIchan); 	
+	for (size_t i = 1; i <= nItems; i++) { 
+		chPtrPtr = ListGetPtrToItem(dev->attr->AIchan, i);
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
-		chPtrPtr++;
 	}
 	return NULL;
 }
@@ -1343,11 +1344,12 @@ Error:
 
 static AOChannel_type* GetAOChannel (Dev_type* dev, char physChanName[])
 {
-	AOChannel_type** chPtrPtr = ListGetDataPtr(dev->attr->AOchan);
-	while(*chPtrPtr) {
+	AOChannel_type** 	chPtrPtr;
+	size_t				nItems		= ListNumItems(dev->attr->AOchan); 	
+	for (size_t i = 1; i <= nItems; i++) {
+		chPtrPtr = ListGetPtrToItem(dev->attr->AOchan, i); 
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
-		chPtrPtr++;
 	}
 	return NULL;
 }
@@ -1431,11 +1433,12 @@ Error:
 
 static DILineChannel_type* GetDILineChannel (Dev_type* dev, char physChanName[])
 {
-	DILineChannel_type** chPtrPtr = ListGetDataPtr(dev->attr->DIlines);
-	while(*chPtrPtr) {
+	DILineChannel_type** 	chPtrPtr;
+	size_t					nItems		= ListNumItems(dev->attr->DIlines); 	
+	for (size_t i = 1; i <= nItems; i++) {
+		chPtrPtr = ListGetPtrToItem(dev->attr->DIlines, i); 	
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
-		chPtrPtr++;
 	}
 	return NULL;
 }
@@ -1521,11 +1524,12 @@ Error:
 
 static DIPortChannel_type* GetDIPortChannel (Dev_type* dev, char physChanName[])
 {
-	DIPortChannel_type** chPtrPtr = ListGetDataPtr(dev->attr->DIports);
-	while(*chPtrPtr) {
+	DIPortChannel_type** 	chPtrPtr;
+	size_t					nItems		= ListNumItems(dev->attr->DIports); 	
+	for (size_t i = 1; i <= nItems; i++) {
+		chPtrPtr = ListGetPtrToItem(dev->attr->DIports, i); 		
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
-		chPtrPtr++;
 	}
 	return NULL;
 }
@@ -1607,11 +1611,12 @@ Error:
 
 static DOLineChannel_type* GetDOLineChannel (Dev_type* dev, char physChanName[])
 {
-	DOLineChannel_type** chPtrPtr = ListGetDataPtr(dev->attr->DOlines);
-	while(*chPtrPtr) {
+	DOLineChannel_type** 	chPtrPtr;
+	size_t					nItems		= ListNumItems(dev->attr->DOlines); 	
+	for (size_t i = 1; i <= nItems; i++) {	
+		chPtrPtr= ListGetPtrToItem(dev->attr->DOlines, i);
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
-		chPtrPtr++;
 	}
 	return NULL;
 }
@@ -1695,11 +1700,12 @@ Error:
 
 static DOPortChannel_type* GetDOPortChannel (Dev_type* dev, char physChanName[])
 {
-	DOPortChannel_type** chPtrPtr = ListGetDataPtr(dev->attr->DOports);
-	while(*chPtrPtr) {
+	DOPortChannel_type** chPtrPtr;
+	size_t					nItems		= ListNumItems(dev->attr->DOports); 	
+	for (size_t i = 1; i <= nItems; i++) {
+		chPtrPtr = ListGetPtrToItem(dev->attr->DOports, i);
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
-		chPtrPtr++;
 	}
 	return NULL;
 }
@@ -1780,11 +1786,12 @@ Error:
 
 static CIChannel_type* GetCIChannel (Dev_type* dev, char physChanName[])
 {
-	CIChannel_type** chPtrPtr = ListGetDataPtr(dev->attr->CIchan);
-	while(*chPtrPtr) {
+	CIChannel_type** 	chPtrPtr;
+	size_t				nItems		= ListNumItems(dev->attr->CIchan); 	
+	for (size_t i = 1; i <= nItems; i++) {	
+		chPtrPtr = ListGetPtrToItem(dev->attr->CIchan, i);
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
-		chPtrPtr++;
 	}
 	return NULL;
 }
@@ -1865,11 +1872,12 @@ Error:
 
 static COChannel_type* GetCOChannel (Dev_type* dev, char physChanName[])
 {
-	COChannel_type** chPtrPtr = ListGetDataPtr(dev->attr->COchan);
-	while(*chPtrPtr) {
+	COChannel_type** 	chPtrPtr;
+	size_t				nItems		= ListNumItems(dev->attr->COchan); 	
+	for (size_t i = 1; i <= nItems; i++) {		
+		chPtrPtr = ListGetPtrToItem(dev->attr->COchan, i);
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
-		chPtrPtr++;
 	}
 	return NULL;
 }
@@ -2038,10 +2046,11 @@ static void	discard_AIAOTaskSet_type (AIAOTaskSet_type** a)
 	if ((*a)->taskHndl) {DAQmxClearTask ((*a)->taskHndl); (*a)->taskHndl = 0;}
 	// channels
 	if ((*a)->chanSet) {
-		ChanSet_type** chanSetPtrPtr = ListGetDataPtr((*a)->chanSet);
-		while(*chanSetPtrPtr) {
+		ChanSet_type** 		chanSetPtrPtr;
+		size_t				nItems			= ListNumItems((*a)->chanSet); 	
+		for (size_t i = 1; i <= nItems; i++) {			
+			chanSetPtrPtr = ListGetPtrToItem((*a)->chanSet, i);
 			(*(*chanSetPtrPtr)->discardFptr)	((ChanSet_type**)chanSetPtrPtr);
-			chanSetPtrPtr++;
 		}
 		ListDispose((*a)->chanSet);
 	}
@@ -2064,15 +2073,15 @@ static void	discard_AIAOTaskSet_type (AIAOTaskSet_type** a)
 //------------------------------------------------------------------------------
 static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 {
-	ChanSet_type** 		chanSetPtrPtr;
+	ChanSet_type**		chanSetPtrPtr;
 	size_t				nAO				= 0;
 	size_t				i;
 	
 	// count number of AO channels using HW-timing
-	chanSetPtrPtr = ListGetDataPtr(dev->AOTaskSet->chanSet);
-	while(*chanSetPtrPtr) {
+	size_t	nItems	= ListNumItems(dev->AOTaskSet->chanSet); 	
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 		if (!(*chanSetPtrPtr)->onDemand) nAO++;
-		chanSetPtrPtr++;
 	}
 	// return NULL if there are no channels using HW-timing
 	if (!nAO) return NULL;
@@ -2111,14 +2120,14 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	// sink VChans
 	if (!(	a -> sinkVChans			= malloc(nAO * sizeof(SinkVChan_type*))))					goto Error;
 	
-	chanSetPtrPtr = ListGetDataPtr(dev->AOTaskSet->chanSet);
-	i = 0;
-	while(*chanSetPtrPtr) {
+	nItems		= ListNumItems(dev->AOTaskSet->chanSet); 
+	size_t k 	= 0;
+	for (i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 		if (!(*chanSetPtrPtr)->onDemand) {
-			a->sinkVChans[i] = (*chanSetPtrPtr)->sinkVChan;
-			i++;
+			a->sinkVChans[k] = (*chanSetPtrPtr)->sinkVChan;
+			k++;
 		}
-		chanSetPtrPtr++;
 	}
 	
 	// datain_size
@@ -2220,10 +2229,11 @@ static void	discard_DIDOTaskSet_type (DIDOTaskSet_type** a)
 	if ((*a)->taskHndl) {DAQmxClearTask ((*a)->taskHndl); (*a)->taskHndl = 0;}
 	// channels
 	if ((*a)->chanSet) {
-		ChanSet_type** chanSetPtrPtr = ListGetDataPtr((*a)->chanSet);
-		while(*chanSetPtrPtr) {
+		ChanSet_type** 	chanSetPtrPtr;
+		size_t			nItems	= ListNumItems((*a)->chanSet);
+		for (size_t i = 1; i <= nItems; i++) {	
+			chanSetPtrPtr= ListGetPtrToItem((*a)->chanSet, i);
 			(*(*chanSetPtrPtr)->discardFptr)	((ChanSet_type**)chanSetPtrPtr);
-			chanSetPtrPtr++;
 		}
 		ListDispose((*a)->chanSet);
 	}
@@ -2265,10 +2275,11 @@ static void	discard_CITaskSet_type (CITaskSet_type** a)
 	
 	// channels and DAQmx tasks
 	if ((*a)->chanTaskSet) {
-		ChanSet_type** chanSetPtrPtr = ListGetDataPtr((*a)->chanTaskSet);
-		while(*chanSetPtrPtr) {
+		ChanSet_type** 	chanSetPtrPtr;
+		size_t			nItems			= ListNumItems((*a)->chanTaskSet);
+		for (size_t i = 1; i <= nItems; i++) {	
+			chanSetPtrPtr = ListGetPtrToItem((*a)->chanTaskSet, i);
 			(*(*chanSetPtrPtr)->discardFptr)	((ChanSet_type**)chanSetPtrPtr);
-			chanSetPtrPtr++;
 		}
 		ListDispose((*a)->chanTaskSet);
 	}
@@ -4071,15 +4082,16 @@ static int RemoveDAQmxAIChannel_CB (int panel, int control, int event, void *cal
 			AIChannel_type* AIChanAttr 	= GetAIChannel(dev, aiChanPtr->name);
 			AIChanAttr->inUse = FALSE;
 			// remove channel from AI task
-			ChanSet_type** 	chanSetPtrPtr 	= ListGetDataPtr(dev->AITaskSet->chanSet);
+			ChanSet_type** 	chanSetPtrPtr;
+			size_t			nItems			= ListNumItems(dev->AITaskSet->chanSet);
 			size_t			chIdx			= 1;
-			while (*chanSetPtrPtr) {
+			for (size_t i = 1; i <= nItems; i++) {	
+				chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 				if (*chanSetPtrPtr == aiChanPtr) {
 					(*(*chanSetPtrPtr)->discardFptr)	(chanSetPtrPtr);
 					ListRemoveItem(dev->AITaskSet->chanSet, 0, chIdx);
 					break;
 				}
-				chanSetPtrPtr++;
 				chIdx++;
 			}
 			
@@ -4138,15 +4150,16 @@ static int RemoveDAQmxAOChannel_CB (int panel, int control, int event, void *cal
 			AOChannel_type* AOChanAttr 	= GetAOChannel(dev, aoChanPtr->name);
 			AOChanAttr->inUse = FALSE;
 			// remove channel from AO task
-			ChanSet_type** 	chanSetPtrPtr 	= ListGetDataPtr(dev->AOTaskSet->chanSet);
+			ChanSet_type** 	chanSetPtrPtr;
+			size_t			nItems			= ListNumItems(dev->AOTaskSet->chanSet);
 			size_t			chIdx			= 1;
-			while (*chanSetPtrPtr) {
+			for (size_t i = 1; i <= nItems; i++) {	
+				chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 				if (*chanSetPtrPtr == aoChanPtr) {
 					(*(*chanSetPtrPtr)->discardFptr)	(chanSetPtrPtr);
 					ListRemoveItem(dev->AOTaskSet->chanSet, 0, chIdx);
 					break;
 				}
-				chanSetPtrPtr++;
 				chIdx++;
 			}
 			
@@ -4441,6 +4454,9 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						SetCtrlVal(setPanHndl, Set_BlockSize, dev->AITaskSet->timing->blockSize);
 								
 						SetCtrlVal(setPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples/dev->AITaskSet->timing->sampleRate); 	// display in [s]
+						// measurement mode
+						InsertListItem(setPanHndl, Set_MeasMode, -1, "Finite", MeasFinite);
+						InsertListItem(setPanHndl, Set_MeasMode, -1, "Continuous", MeasCont);
 						int ctrlIdx;
 						GetIndexFromValue(setPanHndl, Set_MeasMode, &ctrlIdx, dev->AITaskSet->timing->measMode); 
 						SetCtrlIndex(setPanHndl, Set_MeasMode, ctrlIdx);
@@ -4499,7 +4515,8 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// get start trigger tab panel handle
 							int startTrigPanHndl;
 							GetPanelHandleFromTabPage(trigPanHndl, Trig_TrigSet, newTabIdx, &startTrigPanHndl);
-							// add control to select trigger type
+							// add control to select trigger type and put background plate
+							DuplicateCtrl(start_DigEdgeTrig_PanHndl, StartTrig1_Plate, startTrigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);
 							int trigTypeCtrlID = DuplicateCtrl(start_DigEdgeTrig_PanHndl, StartTrig1_TrigType, startTrigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);
 							// add callback data and callback function to the control
 							SetCtrlAttribute(startTrigPanHndl, trigTypeCtrlID, ATTR_CALLBACK_DATA, dev->AITaskSet->startTrig);
@@ -4534,7 +4551,8 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// get reference trigger tab panel handle
 							int referenceTrigPanHndl;
 							GetPanelHandleFromTabPage(trigPanHndl, Trig_TrigSet, newTabIdx, &referenceTrigPanHndl);
-							// add control to select trigger type
+							// add control to select trigger type and put background plate
+							DuplicateCtrl(reference_DigEdgeTrig_PanHndl, RefTrig1_Plate, referenceTrigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);
 							int trigTypeCtrlID = DuplicateCtrl(reference_DigEdgeTrig_PanHndl, RefTrig1_TrigType, referenceTrigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);
 							// add callback data and callback function to the control
 							SetCtrlAttribute(referenceTrigPanHndl, trigTypeCtrlID, ATTR_CALLBACK_DATA, dev->AITaskSet->referenceTrig);
@@ -4737,6 +4755,9 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						SetCtrlVal(setPanHndl, Set_BlockSize, dev->AOTaskSet->timing->blockSize);
 							
 						SetCtrlVal(setPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate); 	// display in [s]
+						// measurement mode
+						InsertListItem(setPanHndl, Set_MeasMode, -1, "Finite", MeasFinite);
+						InsertListItem(setPanHndl, Set_MeasMode, -1, "Continuous", MeasCont);
 						int ctrlIdx;    
 						GetIndexFromValue(setPanHndl, Set_MeasMode, &ctrlIdx, dev->AOTaskSet->timing->measMode);
 						SetCtrlIndex(setPanHndl, Set_MeasMode, ctrlIdx);
@@ -4795,7 +4816,8 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// get start trigger tab panel handle
 							int startTrigPanHndl;
 							GetPanelHandleFromTabPage(trigPanHndl, Trig_TrigSet, newTabIdx, &startTrigPanHndl);
-							// add control to select trigger type
+							// add control to select trigger type and put background plate
+							DuplicateCtrl(start_DigEdgeTrig_PanHndl, StartTrig1_Plate, startTrigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);
 							int trigTypeCtrlID = DuplicateCtrl(start_DigEdgeTrig_PanHndl, StartTrig1_TrigType, startTrigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);
 							// add callback data and callback function to the control
 							SetCtrlAttribute(startTrigPanHndl, trigTypeCtrlID, ATTR_CALLBACK_DATA, dev->AOTaskSet->startTrig);
@@ -4831,6 +4853,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							int referenceTrigPanHndl;
 							GetPanelHandleFromTabPage(trigPanHndl, Trig_TrigSet, newTabIdx, &referenceTrigPanHndl);
 							// add control to select trigger type
+							DuplicateCtrl(reference_DigEdgeTrig_PanHndl, RefTrig1_Plate, referenceTrigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);
 							int trigTypeCtrlID = DuplicateCtrl(reference_DigEdgeTrig_PanHndl, RefTrig1_TrigType, referenceTrigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);
 							// add callback data and callback function to the control
 							SetCtrlAttribute(referenceTrigPanHndl, trigTypeCtrlID, ATTR_CALLBACK_DATA, dev->AOTaskSet->referenceTrig);
@@ -5027,25 +5050,27 @@ static int ClearDAQmxTasks (Dev_type* dev)
 	
 	// CI task
 	if (dev->CITaskSet) {
-	   ChanSet_type** chanSetPtrPtr = ListGetDataPtr(dev->CITaskSet->chanTaskSet);
-	   while(*chanSetPtrPtr) {
-		   if ((*chanSetPtrPtr)->taskHndl) {
-			   DAQmxClearTask((*chanSetPtrPtr)->taskHndl);
-			   (*chanSetPtrPtr)->taskHndl = NULL;
-		   }
-		   chanSetPtrPtr++;
-	   }
+		ChanSet_type** 	chanSetPtrPtr;
+		size_t			nItems			= ListNumItems(dev->CITaskSet->chanTaskSet);
+	   	for (size_t i = 1; i <= nItems; i++) {	
+			chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+			if ((*chanSetPtrPtr)->taskHndl) {
+				DAQmxClearTask((*chanSetPtrPtr)->taskHndl);
+				(*chanSetPtrPtr)->taskHndl = NULL;
+			}
+		}
 	}
 	
 	// CO task
 	if (dev->COTaskSet) {
-		ChanSet_type** chanSetPtrPtr = ListGetDataPtr(dev->COTaskSet->chanTaskSet);
-		while(*chanSetPtrPtr) {
+		ChanSet_type** 	chanSetPtrPtr;
+		size_t			nItems			= ListNumItems(dev->COTaskSet->chanTaskSet);
+	   	for (size_t i = 1; i <= nItems; i++) {	
+			chanSetPtrPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);	
 			if ((*chanSetPtrPtr)->taskHndl) {
 				DAQmxClearTask((*chanSetPtrPtr)->taskHndl);
 				(*chanSetPtrPtr)->taskHndl = NULL;
-		   }
-		   chanSetPtrPtr++;
+			}
 		}
 	}
 	
@@ -5098,13 +5123,13 @@ static int ConfigDAQmxAITask (Dev_type* dev)
 	
 	// check if there is at least one AI task that requires HW-timing
 	BOOL hwTimingFlag = FALSE;
-	chanSetPtrPtr = ListGetDataPtr(dev->AITaskSet->chanSet);
-	while(*chanSetPtrPtr) {
+	size_t	nItems = ListNumItems(dev->AITaskSet->chanSet);
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		if (!(*chanSetPtrPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
-		chanSetPtrPtr++;
 	}
 	// continue setting up the AI task if any channels require HW-timing
 	if (!hwTimingFlag) return 0;	// do nothing
@@ -5116,14 +5141,12 @@ static int ConfigDAQmxAITask (Dev_type* dev)
 	OKfree(taskName);
 	
 	// create AI channels
-	chanSetPtrPtr = ListGetDataPtr(dev->AITaskSet->chanSet);
-	while(*chanSetPtrPtr) {
-		
+	nItems = ListNumItems(dev->AITaskSet->chanSet);
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) {
-			chanSetPtrPtr++;
-			continue;
-		}
+		if ((*chanSetPtrPtr)->onDemand) continue;
 		
 		switch((*chanSetPtrPtr)->chanType) {
 			
@@ -5149,8 +5172,6 @@ static int ConfigDAQmxAITask (Dev_type* dev)
 				goto Error;
 				break;
 		}
-		
-		chanSetPtrPtr++;
 	}
 	
 	// sample clock source
@@ -5290,14 +5311,14 @@ static int ConfigDAQmxAOTask (Dev_type* dev)
 	if (!dev->AOTaskSet->writeAOData) goto MemError;
 	
 	// check if there is at least one AO task that requires HW-timing
-	BOOL hwTimingFlag = FALSE;
-	chanSetPtrPtr = ListGetDataPtr(dev->AOTaskSet->chanSet);
-	while(*chanSetPtrPtr) {
+	BOOL 	hwTimingFlag 	= FALSE;
+	size_t	nItems			= ListNumItems(dev->AOTaskSet->chanSet);
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 		if (!(*chanSetPtrPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
-		chanSetPtrPtr++;
 	}
 	// continue setting up the AO task if any channels require HW-timing
 	if (!hwTimingFlag) return 0;	// do nothing
@@ -5309,14 +5330,12 @@ static int ConfigDAQmxAOTask (Dev_type* dev)
 	OKfree(taskName);
 	
 	// create AO channels
-	chanSetPtrPtr = ListGetDataPtr(dev->AOTaskSet->chanSet);
-	while(*chanSetPtrPtr) {
-		
+	nItems			= ListNumItems(dev->AOTaskSet->chanSet);
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) {
-			chanSetPtrPtr++;
-			continue;
-		}
+		if ((*chanSetPtrPtr)->onDemand) continue;
 		
 		switch((*chanSetPtrPtr)->chanType) {
 			
@@ -5347,8 +5366,6 @@ static int ConfigDAQmxAOTask (Dev_type* dev)
 				goto Error;
 				break;
 		}
-										
-		chanSetPtrPtr++;
 	}
 	
 	// sample clock source
@@ -5466,14 +5483,14 @@ static int ConfigDAQmxDITask (Dev_type* dev)
 	if (!dev->DITaskSet) return 0;	// do nothing
 	
 	// check if there is at least one DI task that requires HW-timing
-	BOOL hwTimingFlag = FALSE;
-	chanSetPtrPtr = ListGetDataPtr(dev->DITaskSet->chanSet);
-	while(*chanSetPtrPtr) {
+	BOOL 	hwTimingFlag 	= FALSE;
+	size_t	nItems			= ListNumItems(dev->DITaskSet->chanSet);
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
 		if (!(*chanSetPtrPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
-		chanSetPtrPtr++;
 	}
 	// continue setting up the DI task if any channels require HW-timing
 	if (!hwTimingFlag) return 0;	// do nothing
@@ -5485,18 +5502,14 @@ static int ConfigDAQmxDITask (Dev_type* dev)
 	OKfree(taskName);
 	
 	// create DI channels
-	chanSetPtrPtr = ListGetDataPtr(dev->DITaskSet->chanSet);
-	while(*chanSetPtrPtr) {
-		
+	nItems	= ListNumItems(dev->DITaskSet->chanSet); 
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
+	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) {
-			chanSetPtrPtr++;
-			continue;
-		}
+		if ((*chanSetPtrPtr)->onDemand) continue;
 		
 		DAQmxErrChk (DAQmxCreateDIChan(dev->DITaskSet->taskHndl, (*chanSetPtrPtr)->name, "", DAQmx_Val_ChanForAllLines)); 
-		
-		chanSetPtrPtr++;
 	}
 				 
 	// sample clock source
@@ -5629,14 +5642,14 @@ static int ConfigDAQmxDOTask (Dev_type* dev)
 	if (!dev->DOTaskSet) return 0;	// do nothing
 	
 	// check if there is at least one DO task that requires HW-timing
-	BOOL hwTimingFlag = FALSE;
-	chanSetPtrPtr = ListGetDataPtr(dev->DOTaskSet->chanSet);
-	while(*chanSetPtrPtr) {
+	BOOL 	hwTimingFlag 	= FALSE;
+	size_t	nItems			= ListNumItems(dev->DOTaskSet->chanSet);
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
 		if (!(*chanSetPtrPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
-		chanSetPtrPtr++;
 	}
 	// continue setting up the DO task if any channels require HW-timing
 	if (!hwTimingFlag) return 0;	// do nothing
@@ -5648,18 +5661,14 @@ static int ConfigDAQmxDOTask (Dev_type* dev)
 	OKfree(taskName);
 	
 	// create DO channels
-	chanSetPtrPtr = ListGetDataPtr(dev->DOTaskSet->chanSet);
-	while(*chanSetPtrPtr) {
-		
+	nItems	= ListNumItems(dev->DOTaskSet->chanSet);
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) {
-			chanSetPtrPtr++;
-			continue;
-		}
+		if ((*chanSetPtrPtr)->onDemand) continue;
 		
 		DAQmxErrChk (DAQmxCreateDOChan(dev->DOTaskSet->taskHndl, (*chanSetPtrPtr)->name, "", DAQmx_Val_ChanForAllLines)); 
-		
-		chanSetPtrPtr++;
 	}
 				 
 	// sample clock source
@@ -5776,27 +5785,25 @@ static int ConfigDAQmxCITask (Dev_type* dev)
 	if (!dev->CITaskSet) return 0;	// do nothing
 	
 	// check if there is at least one CI task that requires HW-timing
-	BOOL hwTimingFlag = FALSE;
-	chanSetPtrPtr = ListGetDataPtr(dev->CITaskSet->chanTaskSet);
-	while(*chanSetPtrPtr) {
+	BOOL 	hwTimingFlag 	= FALSE;
+	size_t	nItems			= ListNumItems(dev->CITaskSet->chanTaskSet);
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 		if (!(*chanSetPtrPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
-		chanSetPtrPtr++;
 	}
 	// continue setting up the CI task if any channels require HW-timing
 	if (!hwTimingFlag) return 0;	// do nothing
 	
 	// create CI channels
-	chanSetPtrPtr = ListGetDataPtr(dev->CITaskSet->chanTaskSet);
-	while(*chanSetPtrPtr) {
-		
+	nItems	= ListNumItems(dev->CITaskSet->chanTaskSet);
+	for (size_t i = 1; i <= nItems; i++) {	
+		chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) {
-			chanSetPtrPtr++;
-			continue;
-		}
+		if ((*chanSetPtrPtr)->onDemand) continue;
 		
 		// create DAQmx CI task for each counter
 		char* taskName = GetTaskControlName(dev->taskController);
@@ -5860,8 +5867,6 @@ static int ConfigDAQmxCITask (Dev_type* dev)
 				goto Error;
 				break;
 		}
-		
-		chanSetPtrPtr++;
 	}
 				 
 	
@@ -6105,26 +6110,28 @@ static BOOL	DAQmxTasksDone(Dev_type* dev)
 	
 	// CI task
 	if (dev->CITaskSet) {
-	   ChanSet_type** chanSetPtrPtr = ListGetDataPtr(dev->CITaskSet->chanTaskSet);
-	   while(*chanSetPtrPtr) {
+	   ChanSet_type** 	chanSetPtrPtr;
+	   size_t			nItems			= ListNumItems(dev->CITaskSet->chanTaskSet);
+	   for (size_t i = 1; i <= nItems; i++) {
+		   chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 		   if ((*chanSetPtrPtr)->taskHndl) {
 			   DAQmxGetTaskAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_Task_Complete, &taskDoneFlag); 
 			   if (!taskDoneFlag) return FALSE;
 		   }
-		   chanSetPtrPtr++;
 	   }
 	}
 	
 	// CO task
 	if (dev->COTaskSet) {
-		ChanSet_type** chanSetPtrPtr = ListGetDataPtr(dev->COTaskSet->chanTaskSet);
-		while(*chanSetPtrPtr) {
-			if ((*chanSetPtrPtr)->taskHndl) {
+		ChanSet_type** 	chanSetPtrPtr;
+		size_t			nItems			= ListNumItems(dev->COTaskSet->chanTaskSet);
+	   for (size_t i = 1; i <= nItems; i++) {
+		   chanSetPtrPtr= ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+		   if ((*chanSetPtrPtr)->taskHndl) {
 				DAQmxGetTaskAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_Task_Complete, &taskDoneFlag); 
 				if (!taskDoneFlag) return FALSE;
 		   }
-		   chanSetPtrPtr++;
-		}
+	   }
 	}
 	
 	return TRUE;
@@ -6151,19 +6158,17 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	DAQmxErrChk(DAQmxReadAnalogF64(taskHandle, nSamples, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL));
 	
 	// forward data to Source VChan
-	ChanSet_type**		chanSetPtrPtr 	= ListGetDataPtr(dev->AITaskSet->chanSet);
+	ChanSet_type**		chanSetPtrPtr;
+	size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet);
 	size_t				chIdx			= 0;
 	double*				waveformData;
 	Waveform_type*		waveform;
 	DataPacket_type		dataPacket;
 	FCallReturn_type*	fCallReturn;
-	while(*chanSetPtrPtr) {
-		
+	for (size_t i = 1; i <= nItems; i++) {
+		chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) {
-			chanSetPtrPtr++;
-			continue;
-		}
+		if ((*chanSetPtrPtr)->onDemand) continue;
 		
 		// create waveform
 		waveformData = malloc(nSamples * sizeof(double));
@@ -6177,7 +6182,6 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		if (fCallReturn) goto SendDataError;
 		
 		// next AI channel
-		chanSetPtrPtr++;
 		chIdx++;
 	}
 	
@@ -6241,19 +6245,17 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	DAQmxErrChk(DAQmxReadAnalogF64(taskHandle, -1, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL));
 	
 	// forward data to Source VChans
-	ChanSet_type**		chanSetPtrPtr 	= ListGetDataPtr(dev->AITaskSet->chanSet);
+	ChanSet_type**		chanSetPtrPtr;
+	size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet);
 	size_t				chIdx			= 0;
 	double*				waveformData;
 	Waveform_type*		waveform;
 	DataPacket_type		dataPacket;
 	FCallReturn_type*	fCallReturn;
-	while(*chanSetPtrPtr) {
-		
+	for (size_t i = 1; i <= nItems; i++) {
+		chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) {
-			chanSetPtrPtr++;
-			continue;
-		}
+		if ((*chanSetPtrPtr)->onDemand) continue;
 		
 		// create waveform
 		waveformData = malloc(nSamples * sizeof(double));
@@ -6267,7 +6269,6 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		if (fCallReturn) goto SendDataError;
 		
 		// next AI channel
-		chanSetPtrPtr++;
 		chIdx++;
 	}
 	

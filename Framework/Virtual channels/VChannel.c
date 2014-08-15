@@ -376,10 +376,11 @@ FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dat
 	CmtReleaseTSVPtr(dataPacket->ctr);
 	
 	// send data to sinks
-	SinkVChan_type** 	sinkPtrPtr 		= ListGetDataPtr(source->sinkVChans);
+	SinkVChan_type** 	sinkPtrPtr;
+	size_t				nItems			= ListNumItems(source->sinkVChans);
 	int					itemsWritten;
-	while(*sinkPtrPtr) {
-		
+	for (size_t i = 1; i <= nItems; i++) {
+		sinkPtrPtr = ListGetPtrToItem(source->sinkVChans,i);
 		// put data packet into Sink VChan TSQ
 		itemsWritten = CmtWriteTSQData((*sinkPtrPtr)->tsqHndl, dataPacket, 1, (*sinkPtrPtr)->writeTimeout, NULL);
 		
@@ -413,9 +414,6 @@ FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dat
 			OKfree(sinkName);
 			return fCallReturn;
 		}
-		
-		// get next sink
-		sinkPtrPtr++;
 	}
 	
 	return NULL; // no error

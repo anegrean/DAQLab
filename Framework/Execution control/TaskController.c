@@ -10,6 +10,8 @@
 
 //==============================================================================
 // Include files
+#include <userint.h>
+#include "UI_TaskController.h"
 #include "DAQLabUtility.h"
 #include <windows.h>
 #include "asynctmr.h"
@@ -22,6 +24,9 @@
 
 #define FCALL_THREAD_SLEEP 10.0							// put thread to sleep in [ms] until function calls return
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}
+
+	// Task Controller UI
+#define TASK_CONTROLLER_UI		"UI_TaskController.uir"
 
 //==============================================================================
 // Types
@@ -126,7 +131,7 @@ struct TaskControl {
 	BOOL					slaveArmedFlag;				// TRUE when HW Triggering is enabled for the Task Controller and Slave has been armed before sending TASK_EVENT_ITERATION_DONE.
 	int						nIterationsFlag;			// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
 	int						iterationTimerID;			// Keeps track of the timeout timer when iteration is performed in another thread.
-				
+	
 	// Event handler function pointers
 	ConfigureFptr_type		ConfigureFptr;
 	IterateFptr_type		IterateFptr;
@@ -134,6 +139,7 @@ struct TaskControl {
 	ResetFptr_type			ResetFptr;
 	DoneFptr_type			DoneFptr;
 	StoppedFptr_type		StoppedFptr;
+	DimUIFptr_type			DimUIFptr;
 	DataReceivedFptr_type	DataReceivedFptr;
 	ModuleEventFptr_type	ModuleEventFptr;
 	ErrorFptr_type			ErrorFptr;
@@ -193,10 +199,17 @@ static VChanCallbackData_type*	init_VChanCallbackData_type		(TaskControl_type* t
 static void						discard_VChanCallbackData_type	(VChanCallbackData_type** a);
 static void						disposeCmtTSQVChanEventInfo		(void* eventInfo);
 
+// Disposes UI dim event info
+static void						disposeDimUIEventInfo			(void* eventInfo);
+
+// Populates a Tree control recursively with Task Controllers starting with the provided taskControl
+static void 					AddRecursiveTaskTreeItems 		(int panHndl, int TreeCtrlID, int relativeIdx, TaskControl_type* taskControl);
+
 //==============================================================================
 // Global variables
 
-int mainThreadID;	// Main thread ID where UI callbacks are processed
+int 	mainThreadID;			// Main thread ID where UI callbacks are processed
+int		managerPanHndl	= 0;	// Panel handle for the Task Control Manager
 
 //==============================================================================
 // Global functions
@@ -213,6 +226,8 @@ void 	CVICALLBACK TaskEventHandlerExecutionCallback 	(CmtThreadPoolHandle poolHa
 
 int 	CVICALLBACK TaskControlIterTimeout 				(int reserved, int timerId, int event, void *callbackData, int eventData1, int eventData2); 
 
+int 	CVICALLBACK CloseDAQLabModulesPan_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller creation / destruction functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -225,6 +240,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 										ResetFptr_type			ResetFptr,
 										DoneFptr_type			DoneFptr,
 										StoppedFptr_type		StoppedFptr,
+										DimUIFptr_type			DimUIFptr,
 										DataReceivedFptr_type	DataReceivedFptr,
 										ModuleEventFptr_type	ModuleEventFptr,
 										ErrorFptr_type			ErrorFptr)
@@ -282,6 +298,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	a -> ResetFptr				= ResetFptr;
 	a -> DoneFptr				= DoneFptr;
 	a -> StoppedFptr			= StoppedFptr;
+	a -> DimUIFptr				= DimUIFptr;
 	a -> DataReceivedFptr		= DataReceivedFptr;
 	a -> ModuleEventFptr		= ModuleEventFptr;
 	a -> ErrorFptr				= ErrorFptr;
@@ -302,7 +319,6 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 /// HIFN Discards recursively a Task controller.
 void discard_TaskControl_type(TaskControl_type** a)
 {
-	CmtTSQHandle*	tsqPtr;
 	if (!*a) return;
 	
 	// disconnect from parent Task Controller if there is any
@@ -644,6 +660,12 @@ static void	disposeCmtTSQVChanEventInfo (void* eventInfo)
 	free(eventInfo);
 }
 
+static void	disposeDimUIEventInfo (void* eventInfo)
+{
+	if (!eventInfo) return;
+	free(eventInfo);
+}
+
 static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
 {
 	VChanCallbackData_type* a = malloc(sizeof(VChanCallbackData_type));
@@ -828,6 +850,10 @@ static char* EventToString (TaskEvents_type event)
 			
 			return StrDup("Device or Module specific event");
 			
+		case TASK_EVENT_DIM_UI:
+			
+			return StrDup("UI dim/undim");
+			
 	}
 	
 	return StrDup("?");
@@ -865,6 +891,10 @@ static char* FCallToString (TaskFCall_type fcall)
 		case TASK_FCALL_STOPPED:
 			
 			return StrDup("FunctionCall Stopped");
+			
+		case TASK_FCALL_DIM_UI:
+			
+			return StrDup("FunctionCall Dim UI");
 			
 		case TASK_FCALL_DATA_RECEIVED:
 			
@@ -1227,6 +1257,11 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 			else functionMissingFlag = 1;
 			break;
 			
+		case TASK_FCALL_DIM_UI:
+			
+			if (taskControl->DimUIFptr) (*taskControl->DimUIFptr)(taskControl, *(BOOL*)fCallData); 
+			break;
+			
 		case TASK_FCALL_DATA_RECEIVED:
 			
 			if (taskControl->DataReceivedFptr) fCallResult = (*taskControl->DataReceivedFptr)(taskControl, taskControl->state, *(SinkVChan_type**)fCallData, &taskControl->abortFlag);
@@ -1241,14 +1276,24 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 			
 		case TASK_FCALL_ERROR:
 			
-			if (taskControl->ErrorFptr)  (*taskControl->ErrorFptr)(taskControl, taskControl->errorMsg->errorInfo, &taskControl->abortFlag);
-			else functionMissingFlag = 1;
+			// undim UI
+			if (taskControl->DimUIFptr) (*taskControl->DimUIFptr)(taskControl, FALSE); 
+			
+			// if the task controller doesn't have a parent then inform SubTask Controllers to undim as well
+			if(!taskControl->parenttask) {
+				BOOL* dimUIFlagPtr 	= malloc(sizeof(BOOL));
+				*dimUIFlagPtr 		= FALSE;
+				TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo); 
+			}
+			
+			// call ErrorFptr
+			if (taskControl->ErrorFptr)  (*taskControl->ErrorFptr)		(taskControl, taskControl->errorMsg->errorInfo, &taskControl->abortFlag);
 			break;
 				
 	}
 	
 	
-	if (!fCallResult && fID != TASK_FCALL_ITERATE && fID != TASK_FCALL_ERROR) 
+	if (!fCallResult && fID != TASK_FCALL_ITERATE && fID != TASK_FCALL_ERROR && fID != TASK_FCALL_DIM_UI) 
 		if (functionMissingFlag)
 			return NULL;																				// function not provided
 		else
@@ -1312,6 +1357,58 @@ int	RemoveSubTaskFromParent	(TaskControl_type* child)
 	}
 	
 	return -2; // not found
+}
+
+void DisplayTaskControlManager (int parentPanHndl, ListType UITCList, ListType allTCList)
+{
+	size_t				nUITCs	= ListNumItems(UITCList);
+	size_t				nAllTCs	= ListNumItems(allTCList);
+	TaskControl_type**  tcPtrPtr;
+	TaskControl_type*	tcPtr;
+	
+	// load UI
+	if (!managerPanHndl)
+		managerPanHndl = LoadPanel(parentPanHndl, TASK_CONTROLLER_UI, TaskPan); 
+	
+	// populate UITC tree
+	for (size_t i = 1; i <= nUITCs; i++) {
+		tcPtrPtr = ListGetPtrToItem(UITCList, i);
+		tcPtr = *tcPtrPtr;
+		if (!tcPtr) continue; // make sure there are no NULL elements in the list
+		
+		AddRecursiveTaskTreeItems (managerPanHndl, TaskPan_TaskTree, 0, tcPtr);
+	}
+	
+	DisplayPanel(managerPanHndl);
+}
+			   
+static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int relativeIdx, TaskControl_type* taskControl)
+{
+	SubTask_type*	subtaskPtr;
+	size_t			nSubTaskTCs	= ListNumItems(taskControl->subtasks);
+	int				parentIdx;
+	int				childIdx;
+	
+	parentIdx = InsertTreeItem(managerPanHndl, TaskPan_TaskTree, VAL_SIBLING, relativeIdx, VAL_LAST, taskControl->taskName, NULL, NULL, taskControl->taskName);   
+	for (size_t i = 1; i <= nSubTaskTCs; i++) {
+		subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+		childIdx = InsertTreeItem(managerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, subtaskPtr->subtask->taskName, NULL, NULL, subtaskPtr->subtask->taskName);   
+		AddRecursiveTaskTreeItems(managerPanHndl, TaskPan_TaskTree, childIdx, subtaskPtr->subtask); 
+	}
+}
+
+int CVICALLBACK CloseDAQLabModulesPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			
+			DiscardPanel(managerPanHndl);
+			managerPanHndl = 0;
+
+			break;
+	}
+	return 0;
 }
 
 int	AddHWSlaveTrigToMaster (TaskControl_type* master, TaskControl_type* slave)
@@ -1408,6 +1505,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 	char*					eventStr;
 	char*					stateStr;
 	size_t					nchars;
+	BOOL					dimUIFlag;
+	BOOL*					dimUIFlagPtr;
 	
 	// get Task Controler event 
 	// (since this function was called, there should be at least one event in the queue)
@@ -1598,6 +1697,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 							break;
 						}
+					
+					break;
+					
+				case TASK_EVENT_DIM_UI:
+					
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, eventpacket.eventInfo); 
 					
 					break;
 					
@@ -1795,6 +1900,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_DIM_UI:
+					
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, eventpacket.eventInfo); 
+					
+					break;
+					
 				default:
 					
 					eventStr = EventToString(eventpacket.event);
@@ -1890,7 +2001,30 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);   
+					ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING); 
+					
+					//---------------------------------------------------------------------------------------------------------------------
+					// If the task controller doesn't have a parent then call dim UI function and inform SubTask Controllers to dim as well
+					//---------------------------------------------------------------------------------------------------------------------
+					
+					if(taskControl->parenttask) break; // stop here
+					
+					// call the dim UI function of this Task Controller
+					dimUIFlag = TRUE;
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+					// dim SubTasks
+					dimUIFlagPtr 	= malloc(sizeof(BOOL));
+					*dimUIFlagPtr 	= TRUE;
+					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+						taskControl->errorMsg =
+						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+						break;
+					} 
+					
 					
 					break;
 					
@@ -1972,6 +2106,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_DIM_UI:
+					
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, eventpacket.eventInfo); 
+					
+					break;
+					
 				default:
 					
 					eventStr = EventToString(eventpacket.event);
@@ -1988,7 +2128,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
-			
 			}
 			
 			break;
@@ -2056,7 +2195,29 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);   
+					ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
+					
+					//---------------------------------------------------------------------------------------------------------------------
+					// If the task controller doesn't have a parent then call dim UI function and inform SubTask Controllers to dim as well
+					//---------------------------------------------------------------------------------------------------------------------
+					
+					if(taskControl->parenttask) break; // stop here
+					
+					// call the dim UI function of this Task Controller
+					dimUIFlag = TRUE;
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+					// dim SubTasks
+					dimUIFlagPtr 	= malloc(sizeof(BOOL));
+					*dimUIFlagPtr 	= TRUE;
+					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+						taskControl->errorMsg =
+						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+						break;
+					} 
 					
 					break;
 					
@@ -2176,6 +2337,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_DIM_UI:
+					
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, eventpacket.eventInfo); 
+					
+					break;
+					
 				default:
 					
 					eventStr = EventToString(eventpacket.event);
@@ -2282,6 +2449,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 						break;
 					}
+					
+					break;
+					
+				case TASK_EVENT_DIM_UI:
+					
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, eventpacket.eventInfo); 
 					
 					break;
 					
@@ -2737,6 +2910,25 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
 							
+							// if the task controller doesn't have a parent then call undim UI function and undim SubTask Controllers as well
+							if(taskControl->parenttask) break; // stop here
+					
+							// call the undim UI function of this Task Controller
+							dimUIFlag = FALSE;
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+							// undim SubTasks
+							dimUIFlagPtr 	= malloc(sizeof(BOOL));
+							*dimUIFlagPtr 	= FALSE;
+							if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+								taskControl->errorMsg =
+								init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+								break;
+							} 
+							
 						} else {
 							// switch to IDLE state if finite task controller
 							if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_STOPPED, NULL))) {
@@ -2750,6 +2942,25 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 							
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
+							
+							// if the task controller doesn't have a parent then call undim UI function and undim SubTask Controllers as well
+							if(taskControl->parenttask) break; // stop here
+					
+							// call the undim UI function of this Task Controller
+							dimUIFlag = FALSE;
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+							// undim SubTasks
+							dimUIFlagPtr 	= malloc(sizeof(BOOL));
+							*dimUIFlagPtr 	= FALSE;
+							if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+								taskControl->errorMsg =
+								init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+								break;
+							} 
 						}
 					} else {
 						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
@@ -3019,6 +3230,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_DIM_UI:
+					
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, eventpacket.eventInfo); 
+					
+					break;
+					
 				default:
 					
 					eventStr = EventToString(eventpacket.event);
@@ -3171,6 +3388,25 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								}
 							
 								ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
+								
+								// if the task controller doesn't have a parent then call undim UI function and undim SubTask Controllers as well
+								if(taskControl->parenttask) break; // stop here
+					
+								// call the undim UI function of this Task Controller
+								dimUIFlag = FALSE;
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+								// undim SubTasks
+								dimUIFlagPtr 	= malloc(sizeof(BOOL));
+								*dimUIFlagPtr 	= FALSE;
+								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+									taskControl->errorMsg =
+									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+									break;
+								} 
 							
 							} else {
 								// switch to IDLE state if finite task controller
@@ -3185,6 +3421,25 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								}
 							
 								ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
+								
+								// if the task controller doesn't have a parent then call undim UI function and undim SubTask Controllers as well
+								if(taskControl->parenttask) break; // stop here
+					
+								// call the undim UI function of this Task Controller
+								dimUIFlag = FALSE;
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+								// undim SubTasks
+								dimUIFlagPtr 	= malloc(sizeof(BOOL));
+								*dimUIFlagPtr 	= FALSE;
+								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+									taskControl->errorMsg =
+									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+									break;
+								} 
 							}
 						} else {
 							
@@ -3217,7 +3472,26 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//----------------------------------------------------------------------------------------------------------------
 									
 							if (ListNumItems(taskControl->subtasks)) {
-										
+								
+								// if the task controller doesn't have a parent then call dim UI function and dim SubTask Controllers as well
+								if(!taskControl->parenttask) {
+									// call the dim UI function of this Task Controller
+									dimUIFlag = TRUE;
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+									// dim SubTasks
+									dimUIFlagPtr 	= malloc(sizeof(BOOL));
+									*dimUIFlagPtr 	= TRUE;
+									if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+										taskControl->errorMsg =
+										init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+										FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+										ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+										break;
+									}
+								}
+								
 								// send START event to all subtasks
 								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
 									taskControl->errorMsg =
@@ -3275,7 +3549,25 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 					
 							if (!AllDoneFlag) {
-								ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING); 
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
+								// if the task controller doesn't have a parent then call dim UI function and dim SubTask Controllers as well
+								if(!taskControl->parenttask) {
+									// call the dim UI function of this Task Controller
+									dimUIFlag = TRUE;
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+									// dim SubTasks
+									dimUIFlagPtr 	= malloc(sizeof(BOOL));
+									*dimUIFlagPtr 	= TRUE;
+									if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+										taskControl->errorMsg =
+										init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+										FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+										ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+										break;
+									}
+								}
 								break;
 							}
 							
@@ -3440,6 +3732,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_DIM_UI:
+					
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, eventpacket.eventInfo); 
+					
+					break;
+					
 				default:
 					
 					// remove timeout timer
@@ -3490,6 +3788,24 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 							
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
+							// if the task controller doesn't have a parent then call undim UI function and undim SubTask Controllers as well
+							if(!taskControl->parenttask) {
+								// call the undim UI function of this Task Controller
+								dimUIFlag = FALSE;
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+								// undim SubTasks
+								dimUIFlagPtr 	= malloc(sizeof(BOOL));
+								*dimUIFlagPtr 	= FALSE;
+								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+									taskControl->errorMsg =
+									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+									break;
+								}
+							}
 							
 						} else {
 							// switch to IDLE state if finite task controller
@@ -3504,6 +3820,25 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 							
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
+							
+							// if the task controller doesn't have a parent then call undim UI function and undim SubTask Controllers as well
+							if(!taskControl->parenttask) {
+								// call the undim UI function of this Task Controller
+								dimUIFlag = FALSE;
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+								// undim SubTasks
+								dimUIFlagPtr 	= malloc(sizeof(BOOL));
+								*dimUIFlagPtr 	= FALSE;
+								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+									taskControl->errorMsg =
+									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+									break;
+								}
+							}
 						}
 					} else 
 						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
@@ -3572,6 +3907,25 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
 							
+							// if the task controller doesn't have a parent then call undim UI function and undim SubTask Controllers as well
+							if(!taskControl->parenttask) {
+								// call the undim UI function of this Task Controller
+								dimUIFlag = FALSE;
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+								// undim SubTasks
+								dimUIFlagPtr 	= malloc(sizeof(BOOL));
+								*dimUIFlagPtr 	= FALSE;
+								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+									taskControl->errorMsg =
+									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+									break;
+								}
+							}
+							
 						} else {
 							// switch to IDLE state if finite task controller
 							if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_STOPPED, NULL))) {
@@ -3585,6 +3939,25 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 							
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
+							
+							// if the task controller doesn't have a parent then call undim UI function and undim SubTask Controllers as well
+							if(!taskControl->parenttask) {
+								// call the undim UI function of this Task Controller
+								dimUIFlag = FALSE;
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, &dimUIFlag); 
+					
+								// undim SubTasks
+								dimUIFlagPtr 	= malloc(sizeof(BOOL));
+								*dimUIFlagPtr 	= FALSE;
+								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_DIM_UI, dimUIFlagPtr, disposeDimUIEventInfo) < 0) {
+									taskControl->errorMsg =
+									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, " TASK_EVENT_DIM_UI posting to SubTasks failed"); 
+						
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+									break;
+								}
+							}
 						}
 						
 					break;
@@ -3626,6 +3999,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 							break;
 						}
+					
+					break;
+					
+				case TASK_EVENT_DIM_UI:
+					
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, eventpacket.eventInfo); 
 					
 					break;
 					
@@ -3847,6 +4226,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_DIM_UI:
+					
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, eventpacket.eventInfo); 
+					
+					break;
+					
 				default:
 					
 					eventStr = EventToString(eventpacket.event);
@@ -3938,6 +4323,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 					
 					break;
+					
+				case TASK_EVENT_DIM_UI:
+					
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DIM_UI, eventpacket.eventInfo); 
+					
+					break;
 			}
 			
 			break;
@@ -3947,5 +4338,3 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 	if (eventpacket.eventInfo && eventpacket.disposeEventInfoFptr)
 		(*eventpacket.disposeEventInfoFptr)(eventpacket.eventInfo);
 }
-
-

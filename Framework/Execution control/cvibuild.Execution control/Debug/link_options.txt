@@ -12,8 +12,10 @@
 -browsedeps:d:\ELE_DAQLab\Framework\Execution control\cvibuild.Execution control\Debug\moduledependencies.txt
 -stackreserve:1048576
 -stackcommit:4096
+-in:d:\ELE_DAQLab\Framework\Execution control\cvibuild.Execution control\Debug\DAQLabUtility.obj
 -in:d:\ELE_DAQLab\Framework\Execution control\cvibuild.Execution control\Debug\TaskController.obj
 -in:d:\ELE_DAQLab\Framework\Execution control\cvibuild.Execution control\Debug\taskcontrolTest.obj
+-in:d:\ELE_DAQLab\Framework\Execution control\cvibuild.Execution control\Debug\VChannel.obj
 -more:c:\program files (x86)\national instruments\cvi2013\bin\msvc\cvistart.lib
 -more:c:\program files (x86)\national instruments\cvi2013\bin\msvc\cvi.lib
 -more:c:\program files (x86)\national instruments\cvi2013\sdk\lib\msvc\advapi32.lib

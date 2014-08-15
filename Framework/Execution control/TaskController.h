@@ -292,7 +292,8 @@ typedef enum {
 	TASK_EVENT_HWTRIG_SLAVE_ARMED,				// When a Slave HW Trig Task Controller is armed, it informs the Master HW Triggering Task Controller. 
 	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue of a Task Controller.
 	TASK_EVENT_ERROR_OUT_OF_MEMORY,				// To signal that an out of memory event occured.
-	TASK_EVENT_CUSTOM_MODULE_EVENT				// To signal custom module or device events.
+	TASK_EVENT_CUSTOM_MODULE_EVENT,				// To signal custom module or device events.
+	TASK_EVENT_DIM_UI
 } TaskEvents_type;
 
 //----------------------------------------
@@ -306,6 +307,7 @@ typedef enum {
 	TASK_FCALL_RESET,
 	TASK_FCALL_DONE,					// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
 	TASK_FCALL_STOPPED,					// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
+	TASK_FCALL_DIM_UI,					// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
 	TASK_FCALL_DATA_RECEIVED,			// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
 	TASK_FCALL_ERROR,
 	TASK_FCALL_MODULE_EVENT				// Called for custom module events that are not handled directly by the Task Controller
@@ -391,6 +393,9 @@ typedef FCallReturn_type* 	(*DoneFptr_type) 				(TaskControl_type* taskControl, 
 // Called when a running finite Task Controller is stopped manually, before reaching a DONE state .
 typedef FCallReturn_type* 	(*StoppedFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag); 
 
+// Called when a Task Controller needs to dim or undim certain module controls to allow/prevent user interaction.
+typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimmed); 
+
 // Called when Task Controller encounters an error, to continue Task Controller execution, a return from this function is needed.
 typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
 
@@ -410,7 +415,7 @@ typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
 
 //======================================== INTERFACE ===================================================================================================
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-// Task Controller creation / destruction functions
+// Task Controller creation/destruction functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 TaskControl_type*  	 	init_TaskControl_type				(const char				taskname[], 
@@ -420,6 +425,7 @@ TaskControl_type*  	 	init_TaskControl_type				(const char				taskname[],
 												  		 	ResetFptr_type			ResetFptr,
 														 	DoneFptr_type			DoneFptr,
 														 	StoppedFptr_type		StoppedFptr,
+															DimUIFptr_type			DimUIFptr,
 														 	DataReceivedFptr_type	DataReceivedFptr,
 														 	ModuleEventFptr_type	ModuleEventFptr,
 														 	ErrorFptr_type			ErrorFptr);
@@ -486,6 +492,11 @@ HWTrigger_type          GetTaskControlHWTrigger				(TaskControl_type* taskContro
 int						AddSubTaskToParent					(TaskControl_type* parent, TaskControl_type* child);
 
 int						RemoveSubTaskFromParent				(TaskControl_type* child);
+
+	// Provides GUI for managing connections between provided a list of Task Controllers
+	// parentPanHndl - panel handle in which to display the Task Controller Management UI. If parentPanHndl = 0, the UI is displayed as a main panel
+	// tcList - list of Task Controllers of TaskControl_type*
+void 					DisplayTaskControlManager 			(int parentPanHndl, ListType UITCList, ListType allTCList); 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // HW trigger dependencies

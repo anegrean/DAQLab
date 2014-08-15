@@ -1,6 +1,9 @@
+DAQLabUtility.obj
 TaskController.obj
 taskcontrolTest.obj
+VChannel.obj
 cvi.lib
+nivision.lib
 cvistart.lib
 asynctmr.obj
 toolbox.obj

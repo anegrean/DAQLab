@@ -1494,12 +1494,6 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 		InsertListItem(modulesPanHndl, ModulesPan_Available, -1, DAQLabModules_InitFunctions[i].className, i);  
 	}
 	
-	// if there are modules to add, undim Add button
-	if (nModules)
-		SetCtrlAttribute(modulesPanHndl, ModulesPan_Add, ATTR_DIMMED, 0);
-	else
-		SetCtrlAttribute(modulesPanHndl, ModulesPan_Add, ATTR_DIMMED, 1);
-		
 	// list installed modules
 	nModules = ListNumItems(DAQLabModules);
 	for (size_t i = 1; i <= nModules; i++) {
@@ -1507,15 +1501,9 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 		fullModuleName = StrDup((*modulePtrPtr)->className);
 		AppendString(&fullModuleName, ": ", -1);
 		AppendString(&fullModuleName, (*modulePtrPtr)->instanceName, -1);
-		InsertListItem(modulesPanHndl, ModulesPan_Installed, -1, fullModuleName, (*modulePtrPtr)->instanceName);
+		InsertListItem(modulesPanHndl, ModulesPan_Loaded, -1, fullModuleName, (*modulePtrPtr)->instanceName);
 		OKfree(fullModuleName);
 	} 
-	
-	// if there are modules installed, undim Remove button
-	if (nModules)
-		SetCtrlAttribute(modulesPanHndl, ModulesPan_Remove, ATTR_DIMMED, 0); 
-	else
-		SetCtrlAttribute(modulesPanHndl, ModulesPan_Remove, ATTR_DIMMED, 1); 
 	
 	// display panel
 	DisplayPanel(modulesPanHndl);
@@ -1546,7 +1534,7 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 {
 	switch (event)
 	{
-		case EVENT_COMMIT:
+		case EVENT_LEFT_DOUBLE_CLICK:
 			
 			char*					newInstanceName;
 			char*					fullModuleName;
@@ -1561,10 +1549,15 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 			
 			switch (control) {
 					
-				case ModulesPan_Add:
+				case ModulesPan_Available:
 					
 					GetCtrlIndex(panel, ModulesPan_Available, &moduleidx);
+					if (moduleidx < 0) return 0; // no modules listed   
 					
+					// do nothing if multiple instances are not allowed and there is already such a module installed
+					if (!DAQLabModules_InitFunctions[moduleidx].multipleInstancesFlag && DAQLabModules_InitFunctions[moduleidx].nInstances)
+						return 0;
+			
 					if (DAQLabModules_InitFunctions[moduleidx].multipleInstancesFlag) {
 						newInstanceName = DLGetUINameInput ("New Module Instance", DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS, DAQLab_CheckValidModuleName, NULL);
 						if (!newInstanceName) return 0; // operation cancelled, do nothing
@@ -1608,27 +1601,24 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					fullModuleName = StrDup(newModulePtr->className);
 					AppendString(&fullModuleName, ": ", -1);
 					AppendString(&fullModuleName, newModulePtr->instanceName, -1);
-					InsertListItem(panel, ModulesPan_Installed, -1, fullModuleName, newModulePtr->instanceName);
+					InsertListItem(panel, ModulesPan_Loaded, -1, fullModuleName, newModulePtr->instanceName);
 					OKfree(fullModuleName);
-					// undim remove module button
-					SetCtrlAttribute(panel, ModulesPan_Remove, ATTR_DIMMED, 0);
-					// if multiple instances are not allowed, dim add button
-					if (!DAQLabModules_InitFunctions[moduleidx].multipleInstancesFlag)
-						SetCtrlAttribute(panel, ModulesPan_Add, ATTR_DIMMED, 1);
 					
 					break;
 					
-				case ModulesPan_Remove:
+				case ModulesPan_Loaded:
 					
-					GetCtrlIndex(panel, ModulesPan_Installed, &moduleidx);
-					GetValueLengthFromIndex(panel, ModulesPan_Installed, moduleidx, &nchars);
+					GetCtrlIndex(panel, ModulesPan_Loaded, &moduleidx);
+					if (moduleidx < 0) return 0; // no modules listed
+					
+					GetValueLengthFromIndex(panel, ModulesPan_Loaded, moduleidx, &nchars);
 					moduleName = malloc ((nchars+1)*sizeof(char));
 					if (!moduleName) {
 						DLMsg("Error: Out of memory.", 1);
 						return 0;
 					}
 					// get module instance name
-					GetValueFromIndex(panel, ModulesPan_Installed, moduleidx, moduleName); 
+					GetValueFromIndex(panel, ModulesPan_Loaded, moduleidx, moduleName); 
 					// remove module if found
 					nInstalledModules = ListNumItems(DAQLabModules);
 					for (size_t i = 1; i <= nInstalledModules; i++) {
@@ -1650,32 +1640,15 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 						}
 					}
 					
-					// undim add button
-					SetCtrlAttribute(panel, ModulesPan_Add, ATTR_DIMMED, 0); 
-							
 					OKfree(moduleName);
 					// remove from installed modules list
-					DeleteListItem(panel, ModulesPan_Installed, moduleidx, 1);
-					// if there are no more modules in the list, dim remove button
-					GetNumListItems(panel, ModulesPan_Installed, &nModules);
-					if (!nModules)
-						SetCtrlAttribute(panel, ModulesPan_Remove, ATTR_DIMMED, 1);	
+					DeleteListItem(panel, ModulesPan_Loaded, moduleidx, 1);
 					
-					break;
-					
-				case ModulesPan_Available:
-					
-					GetCtrlIndex(panel, ModulesPan_Available, &moduleidx);
-					// dim add button if multiple instances are not allowed and there is already such a module installed
-					if (!DAQLabModules_InitFunctions[moduleidx].multipleInstancesFlag && DAQLabModules_InitFunctions[moduleidx].nInstances)
-						SetCtrlAttribute(panel, ModulesPan_Add, ATTR_DIMMED, 1);
-					else
-						SetCtrlAttribute(panel, ModulesPan_Add, ATTR_DIMMED, 0);
-						
-					break;
+					break; 
 			}
-
+					
 			break;
+			
 	}
 	return 0;
 }

@@ -1,0 +1,8 @@
+[init_FCallReturn_type]
+Class="Function"
+Prototype="struct FCallReturn *init_FCallReturn_type(int valFCall, const char *errorOrigin, const char *errorDescription);"
+
+[discard_FCallReturn_type]
+Class="Function"
+Prototype="void discard_FCallReturn_type(struct FCallReturn **a);"
+

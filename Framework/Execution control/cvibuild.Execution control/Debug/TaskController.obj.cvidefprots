@@ -1,6 +1,6 @@
 [init_TaskControl_type]
 Class="Function"
-Prototype="struct TaskControl *init_TaskControl_type(const char *taskname, struct FCallReturn *(*ConfigureFptr)(struct TaskControl *, const int *), void (*IterateFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*StartFptr)(struct TaskControl *, const int *), struct FCallReturn *(*ResetFptr)(struct TaskControl *, const int *), struct FCallReturn *(*DoneFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*StoppedFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*DataReceivedFptr)(struct TaskControl *, TaskStates_type, int, const int *), struct FCallReturn *(*ModuleEventFptr)(struct TaskControl *, TaskStates_type, unsigned int, void *, const int *), void (*ErrorFptr)(struct TaskControl *, char *, const int *));"
+Prototype="struct TaskControl *init_TaskControl_type(const char *taskname, struct FCallReturn *(*ConfigureFptr)(struct TaskControl *, const int *), void (*IterateFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*StartFptr)(struct TaskControl *, const int *), struct FCallReturn *(*ResetFptr)(struct TaskControl *, const int *), struct FCallReturn *(*DoneFptr)(struct TaskControl *, unsigned int, const int *), struct FCallReturn *(*StoppedFptr)(struct TaskControl *, unsigned int, const int *), void (*DimUIFptr)(struct TaskControl *, int), struct FCallReturn *(*DataReceivedFptr)(struct TaskControl *, TaskStates_type, struct SinkVChan *, const int *), struct FCallReturn *(*ModuleEventFptr)(struct TaskControl *, TaskStates_type, unsigned int, void *, const int *), void (*ErrorFptr)(struct TaskControl *, char *, const int *));"
 
 [discard_TaskControl_type]
 Class="Function"
@@ -82,17 +82,17 @@ Prototype="int GetTaskControlAbortIterationFlag(struct TaskControl *taskControl)
 Class="Function"
 Prototype="HWTrigger_type GetTaskControlHWTrigger(struct TaskControl *taskControl);"
 
-[AddDataQueue]
+[AddSinkVChan]
 Class="Function"
-Prototype="int AddDataQueue(struct TaskControl *taskControl, int dataQID);"
+Prototype="int AddSinkVChan(struct TaskControl *taskControl, struct SinkVChan *sinkVChan, TaskVChanFuncAssign_type VChanFunc);"
 
-[RemoveDataQueue]
+[RemoveSinkVChan]
 Class="Function"
-Prototype="int RemoveDataQueue(struct TaskControl *taskControl, int dataQID);"
+Prototype="int RemoveSinkVChan(struct TaskControl *taskControl, struct SinkVChan *sinkVChan);"
 
-[RemoveAllDataQueues]
+[RemoveAllSinkVChans]
 Class="Function"
-Prototype="void RemoveAllDataQueues(struct TaskControl *taskControl);"
+Prototype="void RemoveAllSinkVChans(struct TaskControl *taskControl);"
 
 [init_TaskExecutionLog_type]
 Class="Function"
@@ -102,13 +102,9 @@ Prototype="struct TaskExecutionLog *init_TaskExecutionLog_type(int logBoxPanHand
 Class="Function"
 Prototype="void discard_TaskExecutionLog_type(struct TaskExecutionLog **a);"
 
-[init_FCallReturn_type]
+[dispose_FCallReturn_EventInfo]
 Class="Function"
-Prototype="struct FCallReturn *init_FCallReturn_type(int valFCall, const char *errorOrigin, const char *errorDescription);"
-
-[discard_FCallReturn_type]
-Class="Function"
-Prototype="void discard_FCallReturn_type(struct FCallReturn **a);"
+Prototype="void dispose_FCallReturn_EventInfo(void *eventInfo);"
 
 [TaskEventItemsInQueue]
 Class="Function"
@@ -153,6 +149,14 @@ Prototype="int AddSubTaskToParent(struct TaskControl *parent, struct TaskControl
 [RemoveSubTaskFromParent]
 Class="Function"
 Prototype="int RemoveSubTaskFromParent(struct TaskControl *child);"
+
+[DisplayTaskControlManager]
+Class="Function"
+Prototype="void DisplayTaskControlManager(int parentPanHndl, struct ListStructTag *UITCList, struct ListStructTag *allTCList);"
+
+[CloseDAQLabModulesPan_CB]
+Class="Function"
+Prototype="int CloseDAQLabModulesPan_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
 
 [AddHWSlaveTrigToMaster]
 Class="Function"

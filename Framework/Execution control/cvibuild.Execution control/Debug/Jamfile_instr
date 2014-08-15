@@ -1,5 +1,7 @@
+Depends "d:\\ELE_DAQLab\\Framework\\Execution control\\cvibuild.Execution control\\Debug\\Execution control.exe" : "d:\\ELE_DAQLab\\Framework\\Execution control\\cvibuild.Execution control\\Debug\\DAQLabUtility.obj" ;
 Depends "d:\\ELE_DAQLab\\Framework\\Execution control\\cvibuild.Execution control\\Debug\\Execution control.exe" : "d:\\ELE_DAQLab\\Framework\\Execution control\\cvibuild.Execution control\\Debug\\TaskController.obj" ;
 Depends "d:\\ELE_DAQLab\\Framework\\Execution control\\cvibuild.Execution control\\Debug\\Execution control.exe" : "d:\\ELE_DAQLab\\Framework\\Execution control\\cvibuild.Execution control\\Debug\\taskcontrolTest.obj" ;
+Depends "d:\\ELE_DAQLab\\Framework\\Execution control\\cvibuild.Execution control\\Debug\\Execution control.exe" : "d:\\ELE_DAQLab\\Framework\\Execution control\\cvibuild.Execution control\\Debug\\VChannel.obj" ;
 Depends "d:\\ELE_DAQLab\\Framework\\Execution control\\cvibuild.Execution control\\Debug\\Execution control.exe" : "c:\\program files (x86)\\national instruments\\cvi2013\\sdk\\lib\\msvc\\advapi32.lib" ;
 NoCare "c:\\program files (x86)\\national instruments\\cvi2013\\sdk\\lib\\msvc\\advapi32.lib" ;
 Depends "d:\\ELE_DAQLab\\Framework\\Execution control\\cvibuild.Execution control\\Debug\\Execution control.exe" : "c:\\ProgramData\\National Instruments\\CVI2013\\bin\\msvc\\analysis.lib" ;

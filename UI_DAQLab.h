@@ -1,6 +1,5 @@
 /**************************************************************************/
 /* LabWindows/CVI User Interface Resource (UIR) Include File              */
-/* Copyright (c) National Instruments 2014. All Rights Reserved.          */
 /*                                                                        */
 /* WARNING: Do not add to, delete from, or otherwise modify the contents  */
 /*          of this include file.                                         */
@@ -20,17 +19,17 @@
 #define  MainPan                          2       /* callback function: CB_DAQLab_MainPan */
 
 #define  ModulesPan                       3
-#define  ModulesPan_Remove                2       /* control type: command, callback function: DAQLab_ManageDAQLabModules_CB */
-#define  ModulesPan_Add                   3       /* control type: command, callback function: DAQLab_ManageDAQLabModules_CB */
-#define  ModulesPan_Installed             4       /* control type: listBox, callback function: (none) */
-#define  ModulesPan_Available             5       /* control type: listBox, callback function: DAQLab_ManageDAQLabModules_CB */
-#define  ModulesPan_Close                 6       /* control type: command, callback function: CloseDAQLabModulesPan_CB */
+#define  ModulesPan_Plate                 2       /* control type: deco, callback function: (none) */
+#define  ModulesPan_Loaded                3       /* control type: listBox, callback function: DAQLab_ManageDAQLabModules_CB */
+#define  ModulesPan_Available             4       /* control type: listBox, callback function: DAQLab_ManageDAQLabModules_CB */
+#define  ModulesPan_Close                 5       /* control type: command, callback function: CloseDAQLabModulesPan_CB */
 
 #define  TasksPan                         4
 
 #define  TCDelPan                         5       /* callback function: DAQLab_TCDelPan_CB */
-#define  TCDelPan_TaskControllers         2       /* control type: listBox, callback function: (none) */
-#define  TCDelPan_DelBTTN                 3       /* control type: command, callback function: DAQLab_DelTaskControllersBTTN_CB */
+#define  TCDelPan_Plate                   2       /* control type: deco, callback function: (none) */
+#define  TCDelPan_TaskControllers         3       /* control type: listBox, callback function: (none) */
+#define  TCDelPan_DelBTTN                 4       /* control type: command, callback function: DAQLab_DelTaskControllersBTTN_CB */
 
 
      /* Control Arrays: */

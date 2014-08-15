@@ -1,0 +1,76 @@
+[init_SourceVChan_type]
+Class="Function"
+Prototype="struct SourceVChan *init_SourceVChan_type(char *name, VChanData_type dataType, void *vChanOwner, void (*Connected_CBFptr)(struct VChan *, struct VChan *), void (*Disconnected_CBFptr)(struct VChan *, struct VChan *));"
+
+[init_SinkVChan_type]
+Class="Function"
+Prototype="struct SinkVChan *init_SinkVChan_type(char *name, VChanData_type dataType, void *vChanOwner, unsigned int dataSize, void (*Connected_CBFptr)(struct VChan *, struct VChan *), void (*Disconnected_CBFptr)(struct VChan *, struct VChan *));"
+
+[discard_VChan_type]
+Class="Function"
+Prototype="void discard_VChan_type(struct VChan **vchan);"
+
+[init_DataPacket_type]
+Class="Function"
+Prototype="int init_DataPacket_type(struct DataPacket *dataPacket, VChanData_type dataType, void *data, void (*discardFptr)(void **));"
+
+[ReleaseDataPacket]
+Class="Function"
+Prototype="void ReleaseDataPacket(struct DataPacket *a);"
+
+[SendDataPacket]
+Class="Function"
+Prototype="struct FCallReturn *SendDataPacket(struct SourceVChan *source, struct DataPacket *dataPacket);"
+
+[VChan_Connect]
+Class="Function"
+Prototype="int VChan_Connect(struct SourceVChan *source, struct SinkVChan *sink);"
+
+[VChan_Disconnect]
+Class="Function"
+Prototype="int VChan_Disconnect(struct VChan *vchan);"
+
+[SetVChanName]
+Class="Function"
+Prototype="void SetVChanName(struct VChan *vchan, char *newName);"
+
+[GetVChanName]
+Class="Function"
+Prototype="char *GetVChanName(struct VChan *vchan);"
+
+[GetSinkVChanTSQHndl]
+Class="Function"
+Prototype="int GetSinkVChanTSQHndl(struct SinkVChan *sink);"
+
+[SetSinkVChanTSQSize]
+Class="Function"
+Prototype="void SetSinkVChanTSQSize(struct SinkVChan *sink, unsigned int nItems);"
+
+[GetSinkVChanTSQSize]
+Class="Function"
+Prototype="unsigned int GetSinkVChanTSQSize(struct SinkVChan *sink);"
+
+[SetSinkVChanWriteTimeout]
+Class="Function"
+Prototype="void SetSinkVChanWriteTimeout(struct SinkVChan *sink, double time);"
+
+[GetSinkVChanWriteTimeout]
+Class="Function"
+Prototype="double GetSinkVChanWriteTimeout(struct SinkVChan *sink);"
+
+[init_Waveform_type]
+Class="Function"
+Prototype="Waveform_type *init_Waveform_type(WaveformEnum_type waveformType, unsigned int n, void *waveform, double rate, double repeat);"
+
+[discard_Waveform_type]
+Class="Function"
+Prototype="void discard_Waveform_type(void **waveform);"
+
+[init_Image_type]
+Class="Function"
+Prototype="Image_type *init_Image_type(ImageEnum_type imageType, void *image);"
+
+[discard_Image_type]
+Class="Function"
+Prototype="void discard_Image_type(void **image);"
+

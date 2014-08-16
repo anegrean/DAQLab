@@ -485,6 +485,13 @@ BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
 	// Task Controller HW Trigger types based on how the Task Controller is connected using AddHWSlaveTrigToMaster and RemoveHWSlaveTrigFromMaster 
 HWTrigger_type          GetTaskControlHWTrigger				(TaskControl_type* taskControl);
 
+	// Returns the parent Task Controller, given a Task Controller. If none, returns NULL.
+TaskControl_type*		GetTaskControlParent				(TaskControl_type* taskControl);
+
+	// Creates a list of SubTask Controllers of TaskControl_type* elements, given a Task Controller. 
+	// If there are no SubTasks, the list is empty. Use ListDispose to dispose of list.
+ListType				GetTaskControlSubTasks				(TaskControl_type* taskControl);
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -492,11 +499,6 @@ HWTrigger_type          GetTaskControlHWTrigger				(TaskControl_type* taskContro
 int						AddSubTaskToParent					(TaskControl_type* parent, TaskControl_type* child);
 
 int						RemoveSubTaskFromParent				(TaskControl_type* child);
-
-	// Provides GUI for managing connections between provided a list of Task Controllers
-	// parentPanHndl - panel handle in which to display the Task Controller Management UI. If parentPanHndl = 0, the UI is displayed as a main panel
-	// tcList - list of Task Controllers of TaskControl_type*
-void 					DisplayTaskControlManager 			(int parentPanHndl, ListType UITCList, ListType allTCList); 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // HW trigger dependencies

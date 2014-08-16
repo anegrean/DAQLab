@@ -25,9 +25,6 @@
 #define FCALL_THREAD_SLEEP 10.0							// put thread to sleep in [ms] until function calls return
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}
 
-	// Task Controller UI
-#define TASK_CONTROLLER_UI		"UI_TaskController.uir"
-
 //==============================================================================
 // Types
 
@@ -202,14 +199,10 @@ static void						disposeCmtTSQVChanEventInfo		(void* eventInfo);
 // Disposes UI dim event info
 static void						disposeDimUIEventInfo			(void* eventInfo);
 
-// Populates a Tree control recursively with Task Controllers starting with the provided taskControl
-static void 					AddRecursiveTaskTreeItems 		(int panHndl, int TreeCtrlID, int relativeIdx, TaskControl_type* taskControl);
-
 //==============================================================================
 // Global variables
 
 int 	mainThreadID;			// Main thread ID where UI callbacks are processed
-int		managerPanHndl	= 0;	// Panel handle for the Task Control Manager
 
 //==============================================================================
 // Global functions
@@ -225,8 +218,6 @@ int 	CVICALLBACK ScheduleIterateFunction 			(void* functionData);
 void 	CVICALLBACK TaskEventHandlerExecutionCallback 	(CmtThreadPoolHandle poolHandle, CmtThreadFunctionID functionID, unsigned int event, int value, void *callbackData);
 
 int 	CVICALLBACK TaskControlIterTimeout 				(int reserved, int timerId, int event, void *callbackData, int eventData1, int eventData2); 
-
-int 	CVICALLBACK CloseDAQLabModulesPan_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller creation / destruction functions
@@ -456,6 +447,27 @@ HWTrigger_type GetTaskControlHWTrigger (TaskControl_type* taskControl)
 			return TASK_SLAVE_HWTRIGGER;
 		else
 			return TASK_NO_HWTRIGGER; 
+}
+
+TaskControl_type* GetTaskControlParent (TaskControl_type* taskControl)
+{
+	return taskControl->parenttask;
+}
+
+ListType GetTaskControlSubTasks (TaskControl_type* taskControl)
+{
+	size_t	nSubTasks = ListNumItems(taskControl->subtasks);
+	
+	ListType SubTasks = ListCreate(sizeof(TaskControl_type*));
+	if (!SubTasks) return 0;
+	
+	SubTask_type*	subtaskPtr;
+	for (size_t i = 1; i <= nSubTasks; i++) {
+		subtaskPtr = ListGetPtrToItem (taskControl->subtasks, i);
+		ListInsertItem(SubTasks, &subtaskPtr->subtask, END_OF_LIST);
+	}
+	
+	return SubTasks;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1357,58 +1369,6 @@ int	RemoveSubTaskFromParent	(TaskControl_type* child)
 	}
 	
 	return -2; // not found
-}
-
-void DisplayTaskControlManager (int parentPanHndl, ListType UITCList, ListType allTCList)
-{
-	size_t				nUITCs	= ListNumItems(UITCList);
-	size_t				nAllTCs	= ListNumItems(allTCList);
-	TaskControl_type**  tcPtrPtr;
-	TaskControl_type*	tcPtr;
-	
-	// load UI
-	if (!managerPanHndl)
-		managerPanHndl = LoadPanel(parentPanHndl, TASK_CONTROLLER_UI, TaskPan); 
-	
-	// populate UITC tree
-	for (size_t i = 1; i <= nUITCs; i++) {
-		tcPtrPtr = ListGetPtrToItem(UITCList, i);
-		tcPtr = *tcPtrPtr;
-		if (!tcPtr) continue; // make sure there are no NULL elements in the list
-		
-		AddRecursiveTaskTreeItems (managerPanHndl, TaskPan_TaskTree, 0, tcPtr);
-	}
-	
-	DisplayPanel(managerPanHndl);
-}
-			   
-static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int relativeIdx, TaskControl_type* taskControl)
-{
-	SubTask_type*	subtaskPtr;
-	size_t			nSubTaskTCs	= ListNumItems(taskControl->subtasks);
-	int				parentIdx;
-	int				childIdx;
-	
-	parentIdx = InsertTreeItem(managerPanHndl, TaskPan_TaskTree, VAL_SIBLING, relativeIdx, VAL_LAST, taskControl->taskName, NULL, NULL, taskControl->taskName);   
-	for (size_t i = 1; i <= nSubTaskTCs; i++) {
-		subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
-		childIdx = InsertTreeItem(managerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, subtaskPtr->subtask->taskName, NULL, NULL, subtaskPtr->subtask->taskName);   
-		AddRecursiveTaskTreeItems(managerPanHndl, TaskPan_TaskTree, childIdx, subtaskPtr->subtask); 
-	}
-}
-
-int CVICALLBACK CloseDAQLabModulesPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
-{
-	switch (event)
-	{
-		case EVENT_COMMIT:
-			
-			DiscardPanel(managerPanHndl);
-			managerPanHndl = 0;
-
-			break;
-	}
-	return 0;
 }
 
 int	AddHWSlaveTrigToMaster (TaskControl_type* master, TaskControl_type* slave)

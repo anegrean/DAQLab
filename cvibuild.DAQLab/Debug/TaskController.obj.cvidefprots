@@ -82,6 +82,14 @@ Prototype="int GetTaskControlAbortIterationFlag(struct TaskControl *taskControl)
 Class="Function"
 Prototype="HWTrigger_type GetTaskControlHWTrigger(struct TaskControl *taskControl);"
 
+[GetTaskControlParent]
+Class="Function"
+Prototype="struct TaskControl *GetTaskControlParent(struct TaskControl *taskControl);"
+
+[GetTaskControlSubTasks]
+Class="Function"
+Prototype="struct ListStructTag *GetTaskControlSubTasks(struct TaskControl *taskControl);"
+
 [AddSinkVChan]
 Class="Function"
 Prototype="int AddSinkVChan(struct TaskControl *taskControl, struct SinkVChan *sinkVChan, TaskVChanFuncAssign_type VChanFunc);"
@@ -149,14 +157,6 @@ Prototype="int AddSubTaskToParent(struct TaskControl *parent, struct TaskControl
 [RemoveSubTaskFromParent]
 Class="Function"
 Prototype="int RemoveSubTaskFromParent(struct TaskControl *child);"
-
-[DisplayTaskControlManager]
-Class="Function"
-Prototype="void DisplayTaskControlManager(int parentPanHndl, struct ListStructTag *UITCList, struct ListStructTag *allTCList);"
-
-[CloseDAQLabModulesPan_CB]
-Class="Function"
-Prototype="int CloseDAQLabModulesPan_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
 
 [AddHWSlaveTrigToMaster]
 Class="Function"

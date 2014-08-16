@@ -90,6 +90,10 @@ Prototype="int DAQLab_TCDelPan_CB(int panel, int event, void *callbackData, int 
 Class="Function"
 Prototype="int DAQLab_DelTaskControllersBTTN_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
 
+[TaskTree_CB]
+Class="Function"
+Prototype="int TaskTree_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
+
 [CloseDAQLabModulesPan_CB]
 Class="Function"
 Prototype="int CloseDAQLabModulesPan_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"

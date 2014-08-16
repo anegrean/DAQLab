@@ -1,6 +1,5 @@
 /**************************************************************************/
 /* LabWindows/CVI User Interface Resource (UIR) Include File              */
-/* Copyright (c) National Instruments 2014. All Rights Reserved.          */
 /*                                                                        */
 /* WARNING: Do not add to, delete from, or otherwise modify the contents  */
 /*          of this include file.                                         */
@@ -15,9 +14,9 @@
      /* Panels and Controls: */
 
 #define  ZStagePan                        1
-#define  ZStagePan_MoveZDown              2       /* control type: pictButton, callback function: (none) */
-#define  ZStagePan_MoveZUp                3       /* control type: pictButton, callback function: (none) */
-#define  ZStagePan_Plate                  4       /* control type: deco, callback function: (none) */
+#define  ZStagePan_Plate                  2       /* control type: deco, callback function: (none) */
+#define  ZStagePan_MoveZDown              3       /* control type: pictButton, callback function: (none) */
+#define  ZStagePan_MoveZUp                4       /* control type: pictButton, callback function: (none) */
 #define  ZStagePan_ZRelPos                5       /* control type: numeric, callback function: (none) */
 #define  ZStagePan_ZAbsPos                6       /* control type: numeric, callback function: (none) */
 #define  ZStagePan_ZStepSize              7       /* control type: ring, callback function: (none) */

@@ -201,7 +201,6 @@ void discard_Zstage (DAQLabModule_type** mod)
 	if (!zstage) return;
 	
 	// discard Zstage_type specific data
-	
 	discard_TaskControl_type(&zstage->taskController);
 	
 	if (zstage->controlPanHndl)

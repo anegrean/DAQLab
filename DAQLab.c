@@ -32,25 +32,33 @@
 // Constants
 	
 	// DAQLab main workspace UI resource
-#define DAQLAB_UI_DAQLAB							"UI_DAQLab.uir"
+#define DAQLAB_UI_DAQLAB									"UI_DAQLab.uir"
 	// name of config file
-#define DAQLAB_CFG_FILE								"DAQLabCfg.xml"
+#define DAQLAB_CFG_FILE										"DAQLabCfg.xml"
 
-#define DAQLAB_CFG_DOM_ROOT_NAME					"DAQLabConfig"
-#define DAQLAB_UITASKCONTROLLER_XML_TAG				"UITaskController"
+#define DAQLAB_CFG_DOM_ROOT_NAME							"DAQLabConfig"
+#define DAQLAB_UITASKCONTROLLER_XML_TAG						"UITaskController"
 	// log panel displayed at startup and displays received messages
-#define DAQLAB_LOG_PANEL							TRUE
+#define DAQLAB_LOG_PANEL									TRUE
 
 	// number of Task Controllers visible at once. If there are more, a scroll bar appears.
-#define DAQLAB_NVISIBLE_TASKCONTROLLERS				4
+#define DAQLAB_NVISIBLE_TASKCONTROLLERS						4
 
 	// number of pixels between inserted Task Controller panel and outer Tasks panel
-#define DAQLAB_TASKCONTROLLERS_PAN_MARGIN			5
+#define DAQLAB_TASKCONTROLLERS_PAN_MARGIN					5
 	// vertical spacing between Task Controllers in the panel
-#define DAQLAB_TASKCONTROLLERS_SPACING				5 
+#define DAQLAB_TASKCONTROLLERS_SPACING						5 
 
 	// maximum number of characters allowed for a UI Task Controller name
-#define DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS		50
+#define DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS				50
+
+	// Task Tree Manager 
+#define TaskTreeManager_Modules_Label						"Modules"
+#define TaskTreeManager_UITCs_Label							"UI Task Controllers"
+#define BitFlag_IsTaskController							1
+#define BitFlag_IsUITaskController							2
+#define BitFlag_AcceptsTaskControllerChild					4
+#define BitFlag_AcceptsUITaskControllerChild				8
 
 //==============================================================================
 // Types
@@ -148,7 +156,7 @@ static struct TasksUI_ {								// UI data container for Task Controllers
 	int			menuID_Manage;
 	int			menuItem_Add;
 	int			menuItem_Delete;
-	int			menuItem_SubTasks;
+	int			menuItem_TaskTree;
 	ListType	UItaskCtrls;							// UI Task Controllers of UITaskCtrl_type*   
 	
 } 				TasksUI						= {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -159,11 +167,14 @@ ListType		DAQLabModules				= 0;
 
 	// List of Task Controllers provided by all modules (including UI Task Controllers) to the framework
 	// List of TaskControl_type* type
-ListType		DAQLabTCs				= 0;
+ListType		DAQLabTCs					= 0;
 
 	// Virtual channels from all the modules that register such channels with the framework
 	// List elements of VChan_type* type
 ListType		VChannels					= 0;
+
+	// Panel handle for the Task Tree Manager 
+int				TaskTreeManagerPanHndl		= 0;	
 
 							
 
@@ -197,8 +208,6 @@ static void					DAQLab_TaskMenu_AddTaskController 			(void);
 
 static void					DAQLab_TaskMenu_DeleteTaskController 		(void);
 
-static void					DAQLab_TaskMenu_ManageSubTasks 				(void);
-
 static int CVICALLBACK 		DAQLab_TaskControllers_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static UITaskCtrl_type*		DAQLab_init_UITaskCtrl_type					(TaskControl_type* taskControl);  	
@@ -213,18 +222,25 @@ static BOOL					DAQLab_ValidControllerName					(char name[], void* listPtr);
 
 static BOOL 				DAQLab_CheckValidModuleName 				(char name[], void* dataPtr);
 
+static void					DisplayTaskTreeManager	 					(int parentPanHndl, ListType UITCs, ListType modules); 
+
+static void 				AddRecursiveTaskTreeItems 					(int panHndl, int TreeCtrlID, int parentIdx, TaskControl_type* taskControl);
+
+int 						CVICALLBACK TaskTree_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
+
 
 //-----------------------------------------
 // UI Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type*	DAQLab_ConfigureUITC				(TaskControl_type* taskControl, BOOL const* abortFlag);
-static void					DAQLab_IterateUITC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static FCallReturn_type*	DAQLab_StartUITC					(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*	DAQLab_DoneUITC						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static FCallReturn_type*	DAQLab_StoppedUITC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static FCallReturn_type* 	DAQLab_ResetUITC 					(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static void				 	DAQLab_ErrorUITC 					(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static FCallReturn_type*	ConfigureUITC								(TaskControl_type* taskControl, BOOL const* abortFlag);
+static void					IterateUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*	StartUITC									(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*	DoneUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*	StoppedUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void					DimUITC										(TaskControl_type* taskControl, BOOL dimmed);
+static FCallReturn_type* 	ResetUITC 									(TaskControl_type* taskControl, BOOL const* abortFlag); 
+static void				 	ErrorUITC 									(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
 
 
 //==============================================================================
@@ -319,7 +335,7 @@ static int DAQLab_Load (void)
 		// Framework
 	nullChk ( TasksUI.UItaskCtrls 		= ListCreate(sizeof(UITaskCtrl_type*)) );	// list with UI Task Controllers
 	nullChk ( DAQLabModules   			= ListCreate(sizeof(DAQLabModule_type*)) );	// list with loaded DAQLab modules
-	nullChk ( DAQLabTCs			= ListCreate(sizeof(TaskControl_type*)) );	// list with loaded Task Controllers
+	nullChk ( DAQLabTCs					= ListCreate(sizeof(TaskControl_type*)) );	// list with loaded Task Controllers
 	nullChk ( VChannels		   			= ListCreate(sizeof(VChan_type*)) );		// list with Virtual Channels
 	
 	
@@ -341,7 +357,7 @@ static int DAQLab_Load (void)
 	errChk (TasksUI.menuID_Manage		= NewMenu(TasksUI.menuBarHndl, "Manage", -1) );
 	errChk (TasksUI.menuItem_Add 		= NewMenuItem(TasksUI.menuBarHndl, TasksUI.menuID_Manage, "Add", -1, (VAL_MENUKEY_MODIFIER | 'A'), DAQLab_TaskMenu_CB, &TasksUI) );
 	errChk (TasksUI.menuItem_Delete 	= NewMenuItem(TasksUI.menuBarHndl, TasksUI.menuID_Manage, "Delete", -1, (VAL_MENUKEY_MODIFIER | 'D'), DAQLab_TaskMenu_CB, &TasksUI) );
-	errChk (TasksUI.menuItem_SubTasks	= NewMenuItem(TasksUI.menuBarHndl, TasksUI.menuID_Manage, "SubTasks", -1, (VAL_MENUKEY_MODIFIER | 'S'), DAQLab_TaskMenu_CB, &TasksUI) );
+	errChk (TasksUI.menuItem_TaskTree	= NewMenuItem(TasksUI.menuBarHndl, TasksUI.menuID_Manage, "Task Tree", -1, (VAL_MENUKEY_MODIFIER | 'S'), DAQLab_TaskMenu_CB, &TasksUI) );
 	// get height and width of Task Controller panel
 	GetPanelAttribute(TasksUI.controllerPanHndl, ATTR_HEIGHT, &TasksUI.controllerPanHeight);
 	GetPanelAttribute(TasksUI.controllerPanHndl, ATTR_WIDTH, &TasksUI.controllerPanWidth);
@@ -388,8 +404,8 @@ static int DAQLab_Load (void)
 		}
 		
 		// create new UI Task Controller
-		newTaskControllerPtr = init_TaskControl_type (UITCName, DAQLab_ConfigureUITC, DAQLab_IterateUITC, DAQLab_StartUITC, 
-												 	  DAQLab_ResetUITC, DAQLab_DoneUITC, DAQLab_StoppedUITC, NULL, NULL, DAQLab_ErrorUITC); 
+		newTaskControllerPtr = init_TaskControl_type (UITCName, ConfigureUITC, IterateUITC, StartUITC, 
+												 	  ResetUITC, DoneUITC, StoppedUITC, DimUITC, NULL, NULL, ErrorUITC); 
 		if (!newTaskControllerPtr) {
 			DLMsg("Error: Task Controller could not be created.\n\n", 1);
 			return -1;
@@ -1277,15 +1293,19 @@ static UITaskCtrl_type* DAQLab_AddTaskControllerToUI (TaskControl_type* taskCont
 	
 	if (!taskControl) return NULL;
 	
-	// add Task Controller to the framework
-	ListInsertItem(DAQLabTCs, &taskControl, END_OF_LIST);
-	
 	newUItaskCtrlPtr = DAQLab_init_UITaskCtrl_type(taskControl);
 	
-	nullChk( ListInsertItem(TasksUI.UItaskCtrls, &newUItaskCtrlPtr, END_OF_LIST) );
+	nullChk(ListInsertItem(TasksUI.UItaskCtrls, &newUItaskCtrlPtr, END_OF_LIST) );
+	
+	// add Task Controller to the framework
+	ListType tcList = ListCreate(sizeof(TaskControl_type*));
+	ListInsertItem(tcList, &taskControl, END_OF_LIST);
+	DLAddTaskControllers (tcList);
+	
+	ListDispose(tcList);
 	
 	DAQLab_RedrawTaskControllerUI();
-
+	
 	return newUItaskCtrlPtr;
 	
 	Error:
@@ -1313,13 +1333,13 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 	// remove from DAQLab framework
 	ListType tcList = ListCreate(sizeof(TaskControl_type*));
 	ListInsertItem(tcList, &(*UItaskCtrlPtrPtr)->taskControl, END_OF_LIST);
+	UITaskCtrl_type*	removedUITC;
+	ListRemoveItem(TasksUI.UItaskCtrls, &removedUITC, index);  
 	if (!DLRemoveTaskControllers (tcList))
 		return -1;
 	ListDispose(tcList);
 	
-	DAQLab_discard_UITaskCtrl_type(UItaskCtrlPtrPtr);
-	
-	ListRemoveItem(TasksUI.UItaskCtrls, 0, index);
+	DAQLab_discard_UITaskCtrl_type(&removedUITC);
 	
 	DAQLab_RedrawTaskControllerUI();
 	
@@ -1335,18 +1355,24 @@ BOOL DLRemoveTaskControllers (ListType tcList)
 	size_t				nRemoved				= 0;
 	
 	size_t n = ListNumItems(tcList);
-	size_t m = ListNumItems(DAQLabTCs);
+	size_t nDAQLabTCs;
 	for (size_t i = 1; i <= n; i++) {
 		tcToBeRemovedPtrPtr = ListGetPtrToItem(tcList, i);
-		for (size_t j = 1; j <= m; j++) {
-			tcPtrPtr			= ListGetPtrToItem(DAQLabTCs, j);
+		nDAQLabTCs = ListNumItems(DAQLabTCs);
+		for (size_t j = 1; j <= nDAQLabTCs; j++) {
+			tcPtrPtr = ListGetPtrToItem(DAQLabTCs, j);
 			if (*tcToBeRemovedPtrPtr == *tcPtrPtr) {
 				ListRemoveItem(DAQLabTCs, 0, j);
 				nRemoved++;
+				break;
 			}
 		}
 	}
-			
+	
+	// update Task Tree if it is displayed
+	if (TaskTreeManagerPanHndl)
+		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+	
 	return (nRemoved == n);
 }
 
@@ -1359,6 +1385,11 @@ BOOL DLAddTaskControllers (ListType tcList)
 	size_t		nTCs			= ListNumItems(tcList);
 	char**		tcNamePtr;
 	size_t		tcNameIdx;
+	
+	// update Task Tree if it is displayed
+	// do this first to display a new module in the UI even if it has no Task Controllers
+	if (TaskTreeManagerPanHndl)
+		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 	
 	if (!nTCs) return TRUE;
 	
@@ -1410,16 +1441,16 @@ static void	DAQLab_RedrawTaskControllerUI (void)
 		SetPanelAttribute(TasksUI.panHndl, ATTR_HEIGHT, TasksUI.controllerPanHeight + 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN + menubarHeight);
 		SetPanelAttribute(TasksUI.panHndl, ATTR_WIDTH, TasksUI.controllerPanWidth + 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN); 
 		
-		// dimm delete and subtasks menu items since there are no Task Controllers
+		// dimm delete and task tree menu items since there are no Task Controllers
 		SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_Delete, ATTR_DIMMED, 1);
-		SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_SubTasks, ATTR_DIMMED, 1);
+		SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_TaskTree, ATTR_DIMMED, 1);
 		
 		return;
 	}
 	
-	// undim delete and subtasks menu items 
+	// undim delete and task tree menu items 
 	SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_Delete, ATTR_DIMMED, 0);
-	SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_SubTasks, ATTR_DIMMED, 0);
+	SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_TaskTree, ATTR_DIMMED, 0);
 	
 	// reposition Task Controller panels and display them
 	for (int i = 1; i <= nControllers; i++) {
@@ -1461,8 +1492,8 @@ static void CVICALLBACK DAQLab_TaskMenu_CB (int menuBarHandle, int menuItemID, v
 	if (menuItemID == TasksUI.menuItem_Delete ) DAQLab_TaskMenu_DeleteTaskController();
 		
 	// menu item SubTasks
-	if (menuItemID == TasksUI.menuItem_SubTasks) DAQLab_TaskMenu_ManageSubTasks();
-	
+	if (menuItemID == TasksUI.menuItem_TaskTree) DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+		
 }
 
 void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbackData, int panel)
@@ -1543,7 +1574,6 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 			DAQLabModule_type*  	newModulePtr;
 			DAQLabModule_type**		modulePtrPtr;
 			int						nchars;
-			int						nModules;
 			size_t					nInstalledModules;
 			size_t					nAvailableModules 	= NumElem(DAQLabModules_InitFunctions);
 			
@@ -1574,6 +1604,18 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					// call module init function
 					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[moduleidx].className, newInstanceName);
 					
+					// call module load function
+					if ( (*newModulePtr->Load) 	(newModulePtr, mainPanHndl) < 0) {
+						// dispose of module if not loaded properly
+						(*newModulePtr->Discard) 	(&newModulePtr);
+						return 0;
+					}
+					
+					// insert module to modules list
+					ListInsertItem(DAQLabModules, &newModulePtr, END_OF_LIST);
+					// increase module instance counter
+					DAQLabModules_InitFunctions[moduleidx].nInstances++;
+					
 					// try to add the Task Controllers to the framework if their names are unique
 					if (!DLAddTaskControllers(newModulePtr->taskControllers)) {
 						// discard module
@@ -1581,22 +1623,10 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 						return 0;
 					}
 					
-					// call module load function
-					if ( (*newModulePtr->Load) 	(newModulePtr, mainPanHndl) < 0) {
-						// remove the added Task Controllers from the framework
-						DLRemoveTaskControllers(newModulePtr->taskControllers);
-						// dispose of module if not loaded properly
-						(*newModulePtr->Discard) 	(&newModulePtr);
-						break;
-					}
 					// display module panels if method is defined
 					if (newModulePtr->DisplayPanels)
 						(*newModulePtr->DisplayPanels) (newModulePtr, TRUE);
 					
-					// insert module to modules list
-					ListInsertItem(DAQLabModules, &newModulePtr, END_OF_LIST);
-					// increase module instance counter
-					DAQLabModules_InitFunctions[moduleidx].nInstances++;
 					// add full module name to list box
 					fullModuleName = StrDup(newModulePtr->className);
 					AppendString(&fullModuleName, ": ", -1);
@@ -1630,12 +1660,14 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 									DAQLabModules_InitFunctions[j].nInstances--;
 									break;
 								}
+							// remove from DAQLab modules list
+							DAQLabModule_type* removedDAQLabModule;
+							ListRemoveItem(DAQLabModules, &removedDAQLabModule, i);
 							// remove Task Controllers from the framework
-							DLRemoveTaskControllers((*modulePtrPtr)->taskControllers);
+							DLRemoveTaskControllers(removedDAQLabModule->taskControllers);
 							// call module discard function
-							(*(*modulePtrPtr)->Discard)	(modulePtrPtr);
-							// also remove from DAQLab modules list
-							ListRemoveItem(DAQLabModules, 0, i);
+							(*removedDAQLabModule->Discard)	(&removedDAQLabModule);
+							
 							break;
 						}
 					}
@@ -1704,7 +1736,6 @@ BOOL DLValidTaskControllerName (char name[])
 {
 	TaskControl_type**	taskControlPtrPtr;
 	char*				nameTC				= NULL; 
-	BOOL 				foundFlag 			= FALSE;
 	size_t				n					= ListNumItems(DAQLabTCs);
 	
 	// check if there is already another Task Controller with the same name
@@ -1731,8 +1762,8 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	if (!newControllerName) return; // operation cancelled, do nothing
 	
 	// create new task controller
-	newTaskControllerPtr = init_TaskControl_type (newControllerName, DAQLab_ConfigureUITC, DAQLab_IterateUITC, DAQLab_StartUITC, 
-												  DAQLab_ResetUITC, DAQLab_DoneUITC, DAQLab_StoppedUITC, NULL, NULL, DAQLab_ErrorUITC); 
+	newTaskControllerPtr = init_TaskControl_type (newControllerName, ConfigureUITC, IterateUITC, StartUITC, 
+												  ResetUITC, DoneUITC, StoppedUITC, DimUITC, NULL, NULL, ErrorUITC); 
 	OKfree(newControllerName);
 	
 	if (!newTaskControllerPtr) {
@@ -1769,12 +1800,6 @@ static void	DAQLab_TaskMenu_DeleteTaskController (void)
 	
 	// display popup panel
 	InstallPopup(delPanHndl);
-	
-}
-
-
-static void	DAQLab_TaskMenu_ManageSubTasks	(void)
-{
 	
 }
 
@@ -1891,11 +1916,161 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 	return 0;
 }
 
+/// HIFN Provides GUI for assembling Task Control trees from Module provided Task Controllers and User Interface Task Controllers (UITCs).
+/// HIPAR parentPanHndl/ Panel handle in which to display the Task Tree Manager. If 0, the UI is displayed as a main panel.
+/// HIPAR UITCList/ Provide a list of User Interface Task Controllers (UITCs) of UITaskCtrl_type* type that allow the user to control the execution of each Task Tree.
+/// HIPAR modules/ Provide a list of installed DAQLab modules of DAQLabModule_type* type. 
+static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType modules)
+{
+	size_t					nUITCs			= ListNumItems(UITCs);
+	size_t					nModules		= ListNumItems(modules);
+	size_t					nTCs;
+	TaskControl_type**  	tcPtrPtr;
+	TaskControl_type*		tcPtr;
+	UITaskCtrl_type**		UITCPtrPtr;
+	DAQLabModule_type**		modulePtrPtr;
+	DAQLabModule_type*		modulePtr;
+	int						parentIdx;
+	int						childIdx;
+	char*					name;
+	
+	// load UI
+	if (!TaskTreeManagerPanHndl)
+		TaskTreeManagerPanHndl = LoadPanel(parentPanHndl, DAQLAB_UI_DAQLAB, TaskPan); 
+	
+	// clear Task Tree
+	DeleteListItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, 0, -1); 
+	
+	// populate available module task controllers
+	parentIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_SIBLING, 0, VAL_LAST, TaskTreeManager_Modules_Label, NULL, NULL, 0);
+	for (size_t i = 1; i <= nModules; i++) {
+		modulePtrPtr 	= ListGetPtrToItem(modules, i);
+		modulePtr		= *modulePtrPtr;
+		
+		// Note: Tree item value contains bit flag properties of the tree item
+		childIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, modulePtr->instanceName, NULL, NULL, 0);
+		// add all Task Controllers from the module that are not yet assigned to any task tree, i.e. they don't have a parent task controller.
+		nTCs = ListNumItems(modulePtr->taskControllers);
+		for (size_t j = 1; j <= nTCs; j++) {
+			tcPtrPtr = ListGetPtrToItem(modulePtr->taskControllers, i);
+			tcPtr = *tcPtrPtr;
+			if (GetTaskControlParent(tcPtr)) continue; // skip if it has a parent
+			
+			name = GetTaskControlName(tcPtr);
+			InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, childIdx, VAL_LAST, name, NULL, NULL, BitFlag_IsTaskController);
+			OKfree(name);
+		}
+	}
+	
+	// populate UITC tree
+	parentIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_SIBLING, 0, VAL_LAST, TaskTreeManager_UITCs_Label, NULL, NULL, BitFlag_AcceptsUITaskControllerChild);
+	for (size_t i = 1; i <= nUITCs; i++) {
+		UITCPtrPtr = ListGetPtrToItem(UITCs, i);
+		tcPtr = (*UITCPtrPtr)->taskControl;
+		
+		// Note: Tree item value contains bit flag properties of the tree item
+		name = GetTaskControlName(tcPtr);
+		childIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, name, NULL, NULL, (BitFlag_IsTaskController | BitFlag_IsUITaskController 
+								  | BitFlag_AcceptsTaskControllerChild | BitFlag_AcceptsUITaskControllerChild));   
+		OKfree(name);
+		AddRecursiveTaskTreeItems (TaskTreeManagerPanHndl, TaskPan_TaskTree, childIdx, tcPtr);
+	}
+	
+	DisplayPanel(TaskTreeManagerPanHndl);
+}
+			   
+static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentIdx, TaskControl_type* taskControl)
+{
+	ListType				SubTasks		= GetTaskControlSubTasks(taskControl);
+	size_t					nSubTaskTCs		= ListNumItems(SubTasks);
+	int						childIdx;
+	TaskControl_type**		tcPtrPtr;
+	char*					name;
+	
+	for (size_t i = 1; i <= nSubTaskTCs; i++) {
+		tcPtrPtr = ListGetPtrToItem(SubTasks, i);
+		// Note: Tree item value shows if another tree item can be dropped on it 
+		name = GetTaskControlName(*tcPtrPtr);
+		childIdx = InsertTreeItem(panHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, name, NULL, NULL, (BitFlag_IsTaskController | BitFlag_AcceptsTaskControllerChild | BitFlag_AcceptsUITaskControllerChild)); 
+		OKfree(name);
+		AddRecursiveTaskTreeItems(panHndl, TaskPan_TaskTree, childIdx, *tcPtrPtr); 
+	}
+	
+	ListDispose(SubTasks);
+}
+
+int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (control) {
+			
+		case TaskPan_Close:
+			
+			if (event == EVENT_COMMIT) {
+				DiscardPanel(TaskTreeManagerPanHndl);
+				TaskTreeManagerPanHndl = 0;
+			}
+			
+			break;
+			
+		case TaskPan_TaskTree:
+			
+			switch (event) {
+					
+				static int 			dragItemIdx;
+				static unsigned int dragItemVal; 
+				static int			targetItemIdx;
+					
+				case EVENT_DRAG:
+					
+					// allow only Task Controllers to be dragged
+					GetValueFromIndex(panel, control, eventData2, &dragItemVal);
+					if (!(dragItemVal&BitFlag_IsTaskController)) return 1; // swallow drag event
+					
+					dragItemIdx = eventData2;
+					
+					break;
+					
+				case EVENT_DROP:
+					
+					// do not allow a Task Controller to be added if this is not possible
+				{
+					int 			relation = LoWord(eventData1);  // VAL_CHILD or VAL_SIBLING
+					int			 	position = HiWord(eventData1);  // VAL_PREV, VAL_NEXT, or VAL_FIRST 
+					unsigned int 	itemVal;
+					// eventData2 = relativeIndex. relativeIndex is the index of the relative of the new potential drop location.
+					GetValueFromIndex(panel, control, eventData2, &itemVal);
+					if (!((itemVal&BitFlag_AcceptsTaskControllerChild && dragItemVal&BitFlag_IsTaskController) ||
+						(itemVal&BitFlag_AcceptsUITaskControllerChild && dragItemVal&BitFlag_IsUITaskController))) return 1; // swallow drop event
+					// do not allow drop to root element
+					int				treeLevel;
+					GetTreeItemLevel(panel, control, eventData2, &treeLevel);
+					if (!treeLevel && relation == VAL_SIBLING) return 1;  
+					
+					targetItemIdx = eventData2;
+				}
+					break;
+					
+				case EVENT_DROPPED:
+					
+				{
+					// eventData2 - item index
+					
+					
+				}
+					break;
+					
+			}
+			break;
+	}
+	
+	return 0;
+}
+
 //-----------------------------------------
 // UI Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type* DAQLab_ConfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static FCallReturn_type* ConfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	unsigned int		repeat;
@@ -1929,7 +2104,7 @@ static FCallReturn_type* DAQLab_ConfigureUITC (TaskControl_type* taskControl, BO
 	return init_FCallReturn_type(0, "", "");
 }
 
-static void DAQLab_IterateUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void IterateUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
@@ -1939,7 +2114,7 @@ static void DAQLab_IterateUITC	(TaskControl_type* taskControl, size_t currentIte
 	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
 }
 
-static FCallReturn_type* DAQLab_StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static FCallReturn_type* StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
@@ -1950,7 +2125,7 @@ static FCallReturn_type* DAQLab_StartUITC (TaskControl_type* taskControl, BOOL c
 	return init_FCallReturn_type(0, "", "");
 }
 
-static FCallReturn_type* DAQLab_DoneUITC  (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static FCallReturn_type* DoneUITC  (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
@@ -1976,7 +2151,7 @@ static FCallReturn_type* DAQLab_DoneUITC  (TaskControl_type* taskControl, size_t
 	return init_FCallReturn_type(0, "", "");
 }
 
-static FCallReturn_type* DAQLab_ResetUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static FCallReturn_type* ResetUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
@@ -1985,7 +2160,7 @@ static FCallReturn_type* DAQLab_ResetUITC (TaskControl_type* taskControl, BOOL c
 	return init_FCallReturn_type(0, "", ""); 
 }
 
-static FCallReturn_type* DAQLab_StoppedUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static FCallReturn_type* StoppedUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
@@ -2011,7 +2186,12 @@ static FCallReturn_type* DAQLab_StoppedUITC	(TaskControl_type* taskControl, size
 	return init_FCallReturn_type(0, "", ""); 
 }
 
-static void DAQLab_ErrorUITC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+static void	DimUITC	(TaskControl_type* taskControl, BOOL dimmed)
+{
+	
+}
+
+static void ErrorUITC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	

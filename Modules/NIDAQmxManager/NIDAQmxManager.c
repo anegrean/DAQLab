@@ -893,6 +893,7 @@ static void							IterateTC								(TaskControl_type* taskControl, size_t curren
 static FCallReturn_type*			StartTC									(TaskControl_type* taskControl, BOOL const* abortFlag);
 static FCallReturn_type*			DoneTC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*			StoppedTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void							DimTC									(TaskControl_type* taskControl, BOOL dimmed);
 static FCallReturn_type* 			ResetTC 								(TaskControl_type* taskControl, BOOL const* abortFlag); 
 static void				 			ErrorTC 								(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
 static FCallReturn_type*			DataReceivedTC							(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
@@ -2713,7 +2714,7 @@ static Dev_type* init_Dev_type (DevAttr_type** attr, char taskControllerName[])
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
 	a -> taskController = init_TaskControl_type (taskControllerName, ConfigureTC, IterateTC, StartTC, 
-						  ResetTC, DoneTC, StoppedTC, DataReceivedTC, ModuleEventHandler, ErrorTC);
+						  ResetTC, DoneTC, StoppedTC, DimTC, DataReceivedTC, ModuleEventHandler, ErrorTC);
 	if (!a->taskController) {discard_DevAttr_type(attr); free(a); return NULL;}
 	// connect DAQmxDev data to Task Controller
 	SetTaskControlModuleData(a -> taskController, a);
@@ -3188,21 +3189,22 @@ Error:
 static void CVICALLBACK DeleteDev_CB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
 {
 	NIDAQmxManager_type* 	nidaq 			= (NIDAQmxManager_type*) callbackData;
-	Dev_type**			DAQmxDevPtrPtr;
+	Dev_type**				DAQmxDevPtrPtr;
 	int						activeTabIdx;		// 0-based index
 	int						nTabPages;
 	ListType				TCList; 
 	
 	// get selected tab index
 	GetActiveTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, &activeTabIdx);
+	// remove Task Controller from the list of module Task Controllers
+	ListRemoveItem(nidaq->baseClass.taskControllers, 0, activeTabIdx + 1);
 	// get pointer to selected DAQmx device and remove its Task Controller from the framework
 	DAQmxDevPtrPtr = ListGetPtrToItem(nidaq->DAQmxDevices, activeTabIdx + 1);
 	TCList = ListCreate(sizeof(TaskControl_type*));
 	ListInsertItem(TCList, &(*DAQmxDevPtrPtr)->taskController, END_OF_LIST);
-	DLRemoveTaskControllers(TCList);
+	DLRemoveTaskControllers(TCList); // must be done after Task Controller is removed from the module to update DAQLab UI
 	ListDispose(TCList);
-	// remove Task Controller from the list of module Task Controllers
-	ListRemoveItem(nidaq->baseClass.taskControllers, 0, activeTabIdx + 1);
+	
 	// discard DAQmx device data and remove device also from the module list
 	discard_Dev_type(DAQmxDevPtrPtr);
 	ListRemoveItem(nidaq->DAQmxDevices, 0, activeTabIdx + 1);
@@ -6408,6 +6410,13 @@ static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, size_t curren
 	
 	return init_FCallReturn_type(0, "", "");
 }
+
+static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
+{
+	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+}
+
 static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);

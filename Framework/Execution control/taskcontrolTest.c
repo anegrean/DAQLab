@@ -85,14 +85,6 @@ int main (int argc, char *argv[])
 	AddSubTaskToParent(ZStackTask, DevX);
 	
 	//AddHWSlaveTrigToMaster(ZStage, DevX); 
-	//--------------------------------------------------------------------------
-	// display task controller tree
-	//--------------------------------------------------------------------------
-	// create test list with task controllers
-	ListType UITCList = ListCreate(sizeof(TaskControl_type*));
-	ListInsertItem(UITCList, &ZStackTask, END_OF_LIST);
-	
-	DisplayTaskControlManager(0, UITCList, 0); 
 	
 	RunUserInterface();
 	

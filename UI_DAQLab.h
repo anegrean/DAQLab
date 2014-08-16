@@ -24,9 +24,14 @@
 #define  ModulesPan_Available             4       /* control type: listBox, callback function: DAQLab_ManageDAQLabModules_CB */
 #define  ModulesPan_Close                 5       /* control type: command, callback function: CloseDAQLabModulesPan_CB */
 
-#define  TasksPan                         4
+#define  TaskPan                          4
+#define  TaskPan_Plate                    2       /* control type: deco, callback function: (none) */
+#define  TaskPan_TaskTree                 3       /* control type: tree, callback function: TaskTree_CB */
+#define  TaskPan_Close                    4       /* control type: command, callback function: TaskTree_CB */
 
-#define  TCDelPan                         5       /* callback function: DAQLab_TCDelPan_CB */
+#define  TasksPan                         5
+
+#define  TCDelPan                         6       /* callback function: DAQLab_TCDelPan_CB */
 #define  TCDelPan_Plate                   2       /* control type: deco, callback function: (none) */
 #define  TCDelPan_TaskControllers         3       /* control type: listBox, callback function: (none) */
 #define  TCDelPan_DelBTTN                 4       /* control type: command, callback function: DAQLab_DelTaskControllersBTTN_CB */
@@ -51,6 +56,7 @@ int  CVICALLBACK DAQLab_DelTaskControllersBTTN_CB(int panel, int control, int ev
 int  CVICALLBACK DAQLab_ManageDAQLabModules_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 void CVICALLBACK DAQLab_MenuModules_CB(int menubar, int menuItem, void *callbackData, int panel);
 int  CVICALLBACK DAQLab_TCDelPan_CB(int panel, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK TaskTree_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 
 #ifdef __cplusplus

@@ -128,6 +128,7 @@ struct TaskControl {
 	BOOL					slaveArmedFlag;				// TRUE when HW Triggering is enabled for the Task Controller and Slave has been armed before sending TASK_EVENT_ITERATION_DONE.
 	int						nIterationsFlag;			// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
 	int						iterationTimerID;			// Keeps track of the timeout timer when iteration is performed in another thread.
+	BOOL					UITCFlag;					// Determines whether the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
 	
 	// Event handler function pointers
 	ConfigureFptr_type		ConfigureFptr;
@@ -281,6 +282,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	a -> slaveArmedFlag			= FALSE;
 	a -> nIterationsFlag		= -1;
 	a -> iterationTimerID		= 0;
+	a -> UITCFlag				= FALSE;
 	
 	// task controller function pointers
 	a -> ConfigureFptr 			= ConfigureFptr;
@@ -468,6 +470,16 @@ ListType GetTaskControlSubTasks (TaskControl_type* taskControl)
 	}
 	
 	return SubTasks;
+}
+
+void SetTaskControlUITCFlag	(TaskControl_type* taskControl, BOOL UITCFlag)
+{
+	taskControl->UITCFlag = UITCFlag; 
+}
+
+BOOL GetTaskControlUITCFlag	(TaskControl_type* taskControl)
+{
+	return taskControl->UITCFlag; 
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1350,13 +1362,15 @@ int	AddSubTaskToParent (TaskControl_type* parent, TaskControl_type* child)
 int	RemoveSubTaskFromParent	(TaskControl_type* child)
 {
 	if (!child || !child->parenttask) return -1;
-	SubTask_type* subtaskPtr;
-	for (size_t i = 1; i <= ListNumItems(child->parenttask->subtasks); i++) {
+	SubTask_type* 	subtaskPtr;
+	size_t			nSubTasks	= ListNumItems(child->parenttask->subtasks);
+	for (size_t i = 1; i <= nSubTasks; i++) {
 		subtaskPtr = ListGetPtrToItem(child->parenttask->subtasks, i);
 		if (child == subtaskPtr->subtask) {
 			ListRemoveItem(child->parenttask->subtasks, 0, i);
 			// update subtask indices
-			for (size_t i = 1; i <= ListNumItems(child->parenttask->subtasks); i++) {
+			nSubTasks = ListNumItems(child->parenttask->subtasks);
+			for (size_t i = 1; i <= nSubTasks; i++) {
 				subtaskPtr = ListGetPtrToItem(child->parenttask->subtasks, i);
 				subtaskPtr->subtask->subtaskIdx = i;
 			}
@@ -1407,16 +1421,18 @@ int RemoveHWSlaveTrigFromMaster (TaskControl_type* slave)
 	
 	if (!slave || !slave->masterHWTrigTask) return -1;
 	
-	for (size_t i = 1; i <= ListNumItems(slave->masterHWTrigTask->slaveHWTrigTasks); i++) {
+	size_t	nSlaves = ListNumItems(slave->masterHWTrigTask->slaveHWTrigTasks);
+	for (size_t i = 1; i <= nSlaves; i++) {
 		slavePtr = ListGetPtrToItem(slave->masterHWTrigTask->slaveHWTrigTasks, i);
 		if (slave == slavePtr->slaveHWTrigTask) {
 			ListRemoveItem(slave->masterHWTrigTask->slaveHWTrigTasks, 0, i);
 			// update slave indices from master list
-			for (size_t i = 1; i <= ListNumItems(slave->masterHWTrigTask->slaveHWTrigTasks); i++) {
+			nSlaves = ListNumItems(slave->masterHWTrigTask->slaveHWTrigTasks);
+			for (size_t i = 1; i <= nSlaves; i++) {
 				slavePtr = ListGetPtrToItem(slave->masterHWTrigTask->slaveHWTrigTasks, i);
 				slavePtr->slaveHWTrigTask->slaveHWTrigIdx = i;
 			}
-			slave->slaveHWTrigIdx = 0;
+			slave->slaveHWTrigIdx 	= 0;
 			slave->masterHWTrigTask = NULL;
 			
 			return 0; // found and removed
@@ -1425,6 +1441,47 @@ int RemoveHWSlaveTrigFromMaster (TaskControl_type* slave)
 	}
 	
 	return -2; // not found
+}
+
+int RemoveAllHWSlaveTrigsFromMaster	(TaskControl_type* master)
+{
+	if (!master) return -1;
+	SlaveHWTrigTask_type* 	slavePtr; 
+	size_t					nSlaves = ListNumItems(master->slaveHWTrigTasks);
+	
+	for (size_t i = 1; i <= nSlaves; i++) {
+		slavePtr = ListGetPtrToItem(master->slaveHWTrigTasks, i);
+		slavePtr->slaveHWTrigTask->slaveHWTrigIdx 	= 0;
+		slavePtr->slaveHWTrigTask->masterHWTrigTask	= NULL;
+	}
+	ListClear(master->slaveHWTrigTasks);
+	
+	return 0;
+}
+
+int	DisassembleTaskTreeBranch (TaskControl_type* taskControlNode)
+{
+	if (!taskControlNode) return -1;
+	
+	// disconnect from parent if any
+	RemoveSubTaskFromParent(taskControlNode);
+	
+	// disconnect HW triggering
+	RemoveHWSlaveTrigFromMaster(taskControlNode);
+	RemoveAllHWSlaveTrigsFromMaster(taskControlNode);
+	
+	// add here how to handle VChans   <------------------------------------------------------------------------------
+	
+	
+	// disconnect SubTask if any recursively
+	SubTask_type* 	subtaskPtr;
+	size_t			nSubTasks = ListNumItems(taskControlNode->subtasks);
+	for (size_t i = 1; i <= nSubTasks; i++) {
+		subtaskPtr = ListGetPtrToItem(taskControlNode->subtasks, i);
+		DisassembleTaskTreeBranch(subtaskPtr->subtask);
+	}
+	
+	return 0;
 }
 
 /// HIFN Called after a certain timeout if a TASK_EVENT_ITERATION_TIMEOUT is not received

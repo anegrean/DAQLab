@@ -52,13 +52,6 @@
 	// maximum number of characters allowed for a UI Task Controller name
 #define DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS				50
 
-	// Task Tree Manager 
-#define TaskTreeManager_Modules_Label						"Modules"
-#define TaskTreeManager_UITCs_Label							"UI Task Controllers"
-#define BitFlag_IsTaskController							1
-#define BitFlag_IsUITaskController							2
-#define BitFlag_AcceptsTaskControllerChild					4
-#define BitFlag_AcceptsUITaskControllerChild				8
 
 //==============================================================================
 // Types
@@ -114,12 +107,28 @@ typedef enum _DAQLabMessageID{
 //										 Framework Typedefs
 //-------------------------------------------------------------------------------------------------
 
-typedef struct {						  // Glues UI Task Controller to panel handle
+	// Glues UI Task Controller to panel handle
+typedef struct {						  
 										  
 	int					panHndl;
 	TaskControl_type*   taskControl;
 	
 } UITaskCtrl_type;
+
+// Task Tree Manager 
+#define TaskTreeManager_Modules_Label						"Modules"
+#define TaskTreeManager_UITCs_Label							"UI Task Controllers"
+	// Glues Task Tree nodes to Task Controllers. 
+	// If node does not have a Task Controller then taskControl = NULL
+typedef struct {
+	TaskControl_type*   taskControl;
+	BOOL				acceptsTCChild;		// If True, this node accepts a Task Controller child node
+	BOOL				acceptsUITCChild;   // If True, this node accepts a user interface type Task Controller
+	BOOL				canBeDeleted;		// If True, node can be deleted from its current position in the tree
+} TaskTreeNode_type;
+	
+	
+	
 
 //==============================================================================
 // Static global variables
@@ -166,7 +175,7 @@ static struct TasksUI_ {								// UI data container for Task Controllers
 ListType		DAQLabModules				= 0;
 
 	// List of Task Controllers provided by all modules (including UI Task Controllers) to the framework
-	// List of TaskControl_type* type
+	// List of TaskControl_type* elements
 ListType		DAQLabTCs					= 0;
 
 	// Virtual channels from all the modules that register such channels with the framework
@@ -174,9 +183,12 @@ ListType		DAQLabTCs					= 0;
 ListType		VChannels					= 0;
 
 	// Panel handle for the Task Tree Manager 
-int				TaskTreeManagerPanHndl		= 0;	
+int				TaskTreeManagerPanHndl		= 0;
 
-							
+	// List of Task Tree nodes of TaskTreeNode_type needed to operate the Task Tree Manager 
+ListType		TaskTreeNodes				= 0;
+
+
 
 //==============================================================================
 // Static functions
@@ -196,9 +208,9 @@ static UITaskCtrl_type*		DAQLab_AddTaskControllerToUI				(TaskControl_type* task
 
 static int					DAQLab_RemoveTaskControllerFromUI			(int index);
 
-BOOL						DLAddTaskControllers		(ListType tcList);	// of TaskControl_type* 
+BOOL						DLAddTaskControllers						(ListType tcList);	// of TaskControl_type* 
 
-BOOL						DLRemoveTaskControllers 	(ListType tcList);	// of TaskControl_type*
+BOOL						DLRemoveTaskControllers 					(ListType tcList);	// of TaskControl_type*
 
 static void					DAQLab_RedrawTaskControllerUI				(void);
 
@@ -227,7 +239,6 @@ static void					DisplayTaskTreeManager	 					(int parentPanHndl, ListType UITCs,
 static void 				AddRecursiveTaskTreeItems 					(int panHndl, int TreeCtrlID, int parentIdx, TaskControl_type* taskControl);
 
 int 						CVICALLBACK TaskTree_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
-
 
 //-----------------------------------------
 // UI Task Controller Callbacks
@@ -411,6 +422,8 @@ static int DAQLab_Load (void)
 			return -1;
 		}
 
+		// mark Task Controller as UITC
+		SetTaskControlUITCFlag(newTaskControllerPtr, TRUE);
 		// set UITC iterations
 		SetTaskControlIterations(newTaskControllerPtr, UITCIterations);
 		// set UITC wait between iterations
@@ -545,6 +558,9 @@ static int DAQLab_Close (void)
 	
 	// discard Task Controller list
 	ListDispose(DAQLabTCs);
+	
+	// discard Task Tree node list
+	if (TaskTreeNodes) ListDispose(TaskTreeNodes);
 	
 	// discard VChans list
 	ListDispose(VChannels);  
@@ -1776,6 +1792,8 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	
 	// attach callback data to the Task Controller
 	SetTaskControlModuleData(newTaskControllerPtr, UITaskCtrlsPtr);
+	// mark the Task Controller as an User Interface Task Controller type
+	SetTaskControlUITCFlag(newTaskControllerPtr, TRUE);
 	// send a configure event to the Task Controller
 	TaskControlEvent(newTaskControllerPtr, TASK_EVENT_CONFIGURE, NULL, NULL);
 	
@@ -1933,47 +1951,83 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 	int						parentIdx;
 	int						childIdx;
 	char*					name;
+	TaskTreeNode_type		node;
 	
 	// load UI
 	if (!TaskTreeManagerPanHndl)
 		TaskTreeManagerPanHndl = LoadPanel(parentPanHndl, DAQLAB_UI_DAQLAB, TaskPan); 
 	
+	// clear previous Task Tree nodes list
+	if (!TaskTreeNodes) TaskTreeNodes = ListCreate(sizeof(TaskTreeNode_type));
+	ListClear(TaskTreeNodes);
+	
 	// clear Task Tree
 	DeleteListItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, 0, -1); 
 	
 	// populate available module task controllers
-	parentIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_SIBLING, 0, VAL_LAST, TaskTreeManager_Modules_Label, NULL, NULL, 0);
+	// insert Task Tree node
+	node.taskControl 			= NULL;
+	node.acceptsUITCChild   	= FALSE;
+	node.acceptsTCChild			= FALSE;
+	node.canBeDeleted			= FALSE;
+	ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
+	parentIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_SIBLING, 0, VAL_LAST, TaskTreeManager_Modules_Label, NULL, NULL, ListNumItems(TaskTreeNodes));
+	
 	for (size_t i = 1; i <= nModules; i++) {
 		modulePtrPtr 	= ListGetPtrToItem(modules, i);
 		modulePtr		= *modulePtrPtr;
 		
-		// Note: Tree item value contains bit flag properties of the tree item
-		childIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, modulePtr->instanceName, NULL, NULL, 0);
+		// insert Task Tree node
+		node.taskControl 			= NULL;
+		node.acceptsUITCChild   	= FALSE;
+		node.acceptsTCChild			= FALSE;
+		node.canBeDeleted			= FALSE;
+		ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
+		childIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, modulePtr->instanceName, NULL, NULL, ListNumItems(TaskTreeNodes));
+		
 		// add all Task Controllers from the module that are not yet assigned to any task tree, i.e. they don't have a parent task controller.
 		nTCs = ListNumItems(modulePtr->taskControllers);
 		for (size_t j = 1; j <= nTCs; j++) {
-			tcPtrPtr = ListGetPtrToItem(modulePtr->taskControllers, i);
+			tcPtrPtr = ListGetPtrToItem(modulePtr->taskControllers, j);
 			tcPtr = *tcPtrPtr;
 			if (GetTaskControlParent(tcPtr)) continue; // skip if it has a parent
 			
+			// insert Task Tree node
+			node.taskControl 			= tcPtr;
+			node.acceptsUITCChild   	= FALSE;
+			node.acceptsTCChild			= FALSE;
+			node.canBeDeleted			= FALSE;
+			ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
 			name = GetTaskControlName(tcPtr);
-			InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, childIdx, VAL_LAST, name, NULL, NULL, BitFlag_IsTaskController);
+			InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, childIdx, VAL_LAST, name, NULL, NULL, ListNumItems(TaskTreeNodes));
 			OKfree(name);
 		}
 	}
 	
 	// populate UITC tree
-	parentIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_SIBLING, 0, VAL_LAST, TaskTreeManager_UITCs_Label, NULL, NULL, BitFlag_AcceptsUITaskControllerChild);
+	// insert Task Tree node
+	node.taskControl 			= NULL;
+	node.acceptsUITCChild   	= TRUE;
+	node.acceptsTCChild			= FALSE;
+	node.canBeDeleted			= FALSE;
+	ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
+	parentIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_SIBLING, 0, VAL_LAST, TaskTreeManager_UITCs_Label, NULL, NULL, ListNumItems(TaskTreeNodes));
+	
 	for (size_t i = 1; i <= nUITCs; i++) {
 		UITCPtrPtr = ListGetPtrToItem(UITCs, i);
 		tcPtr = (*UITCPtrPtr)->taskControl;
+		if (GetTaskControlParent(tcPtr)) continue; // skip if it has a parent
 		
-		// Note: Tree item value contains bit flag properties of the tree item
+		// insert Task Tree node
+		node.taskControl 			= tcPtr;
+		node.acceptsUITCChild   	= TRUE;
+		node.acceptsTCChild			= TRUE;
+		node.canBeDeleted			= TRUE;
+		ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
 		name = GetTaskControlName(tcPtr);
-		childIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, name, NULL, NULL, (BitFlag_IsTaskController | BitFlag_IsUITaskController 
-								  | BitFlag_AcceptsTaskControllerChild | BitFlag_AcceptsUITaskControllerChild));   
+		childIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, name, NULL, NULL, ListNumItems(TaskTreeNodes));   
 		OKfree(name);
-		AddRecursiveTaskTreeItems (TaskTreeManagerPanHndl, TaskPan_TaskTree, childIdx, tcPtr);
+		AddRecursiveTaskTreeItems(TaskTreeManagerPanHndl, TaskPan_TaskTree, childIdx, tcPtr);
 	}
 	
 	DisplayPanel(TaskTreeManagerPanHndl);
@@ -1983,16 +2037,26 @@ static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentId
 {
 	ListType				SubTasks		= GetTaskControlSubTasks(taskControl);
 	size_t					nSubTaskTCs		= ListNumItems(SubTasks);
+	size_t					nUITCs			= ListNumItems(TasksUI.UItaskCtrls);
 	int						childIdx;
 	TaskControl_type**		tcPtrPtr;
 	char*					name;
+	BOOL					isUITCFlag;
+	TaskTreeNode_type		node; 
 	
 	for (size_t i = 1; i <= nSubTaskTCs; i++) {
 		tcPtrPtr = ListGetPtrToItem(SubTasks, i);
-		// Note: Tree item value shows if another tree item can be dropped on it 
+		
+		// insert Task Tree node
+		node.taskControl 			= *tcPtrPtr;
+		node.acceptsUITCChild   	= TRUE;
+		node.acceptsTCChild			= TRUE;
+		node.canBeDeleted			= TRUE;
+		ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
 		name = GetTaskControlName(*tcPtrPtr);
-		childIdx = InsertTreeItem(panHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, name, NULL, NULL, (BitFlag_IsTaskController | BitFlag_AcceptsTaskControllerChild | BitFlag_AcceptsUITaskControllerChild)); 
+		childIdx = InsertTreeItem(panHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, name, NULL, NULL, ListNumItems(TaskTreeNodes)); 
 		OKfree(name);
+		
 		AddRecursiveTaskTreeItems(panHndl, TaskPan_TaskTree, childIdx, *tcPtrPtr); 
 	}
 	
@@ -2016,47 +2080,82 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			
 			switch (event) {
 					
-				static int 			dragItemIdx;
-				static unsigned int dragItemVal; 
-				static int			targetItemIdx;
+				static TaskTreeNode_type*	dragTreeNodePtr;
+				static TaskTreeNode_type*   targetTreeNodePtr;
+				static int					relation;
+				int 						nodeListIdx; 
 					
 				case EVENT_DRAG:
 					
 					// allow only Task Controllers to be dragged
-					GetValueFromIndex(panel, control, eventData2, &dragItemVal);
-					if (!(dragItemVal&BitFlag_IsTaskController)) return 1; // swallow drag event
-					
-					dragItemIdx = eventData2;
+					GetValueFromIndex(panel, control, eventData2, &nodeListIdx);
+					dragTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
+					if (!dragTreeNodePtr->taskControl) return 1; // swallow drag event
 					
 					break;
 					
 				case EVENT_DROP:
 					
 					// do not allow a Task Controller to be added if this is not possible
-				{
-					int 			relation = LoWord(eventData1);  // VAL_CHILD or VAL_SIBLING
-					int			 	position = HiWord(eventData1);  // VAL_PREV, VAL_NEXT, or VAL_FIRST 
-					unsigned int 	itemVal;
+						relation = LoWord(eventData1);  // VAL_CHILD or VAL_SIBLING
+					int	position = HiWord(eventData1);  // VAL_PREV, VAL_NEXT, or VAL_FIRST 
+					
 					// eventData2 = relativeIndex. relativeIndex is the index of the relative of the new potential drop location.
-					GetValueFromIndex(panel, control, eventData2, &itemVal);
-					if (!((itemVal&BitFlag_AcceptsTaskControllerChild && dragItemVal&BitFlag_IsTaskController) ||
-						(itemVal&BitFlag_AcceptsUITaskControllerChild && dragItemVal&BitFlag_IsUITaskController))) return 1; // swallow drop event
+					GetValueFromIndex(panel, control, eventData2, &nodeListIdx);
+					targetTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
+					
+					if (!((targetTreeNodePtr->acceptsTCChild && !GetTaskControlUITCFlag(dragTreeNodePtr->taskControl)) ||
+						(targetTreeNodePtr->acceptsUITCChild && GetTaskControlUITCFlag(dragTreeNodePtr->taskControl)))) return 1; // swallow drop event
+						
 					// do not allow drop to root element
 					int				treeLevel;
 					GetTreeItemLevel(panel, control, eventData2, &treeLevel);
 					if (!treeLevel && relation == VAL_SIBLING) return 1;  
 					
-					targetItemIdx = eventData2;
-				}
 					break;
 					
 				case EVENT_DROPPED:
 					
-				{
 					// eventData2 - item index
+					TaskControl_type* 	parentTaskController;
 					
+					if (targetTreeNodePtr->taskControl)
+						parentTaskController = GetTaskControlParent(targetTreeNodePtr->taskControl);
+					else
+						parentTaskController = NULL;
 					
-				}
+					// disconnect Task Controller that was dragged from its parent
+					RemoveSubTaskFromParent(dragTreeNodePtr->taskControl);
+					
+					if (relation == VAL_CHILD && targetTreeNodePtr->taskControl)
+						AddSubTaskToParent(targetTreeNodePtr->taskControl, dragTreeNodePtr->taskControl); 
+					else
+						if (relation == VAL_SIBLING && parentTaskController)
+							AddSubTaskToParent(parentTaskController, dragTreeNodePtr->taskControl); 
+							
+					break;
+					
+				case EVENT_KEYPRESS:
+					
+					// continue only if Del key is pressed
+					if (eventData1 != VAL_FWD_DELETE_VKEY) break;
+					
+					TaskTreeNode_type*	selectedTreeNodePtr;
+					int					selectedNodeIdx;
+					GetActiveTreeItem(panel, control, &selectedNodeIdx);
+					GetValueFromIndex(panel, control, selectedNodeIdx, &nodeListIdx);
+					selectedTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
+					
+					// continue only if node can be deleted
+					if (!selectedTreeNodePtr->canBeDeleted) break;
+					
+					// disconnect Task Controller branch and dissasemble its components including their HW Trigger and Virtual Channel connections 
+					DisassembleTaskTreeBranch(selectedTreeNodePtr->taskControl);
+					
+					DeleteListItem(panel, control, nodeListIdx, 1);
+					// refresh Task Tree
+					DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+					
 					break;
 					
 			}

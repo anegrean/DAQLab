@@ -82,7 +82,7 @@ int main (int argc, char *argv[])
 	
 	// Make ZStage subtask to ZStack task
 	AddSubTaskToParent(ZStackTask, ZStage);
-	AddSubTaskToParent(ZStackTask, DevX);
+	//AddSubTaskToParent(ZStackTask, DevX);
 	
 	//AddHWSlaveTrigToMaster(ZStage, DevX); 
 	

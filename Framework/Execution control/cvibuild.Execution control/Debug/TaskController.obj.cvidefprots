@@ -82,6 +82,22 @@ Prototype="int GetTaskControlAbortIterationFlag(struct TaskControl *taskControl)
 Class="Function"
 Prototype="HWTrigger_type GetTaskControlHWTrigger(struct TaskControl *taskControl);"
 
+[GetTaskControlParent]
+Class="Function"
+Prototype="struct TaskControl *GetTaskControlParent(struct TaskControl *taskControl);"
+
+[GetTaskControlSubTasks]
+Class="Function"
+Prototype="struct ListStructTag *GetTaskControlSubTasks(struct TaskControl *taskControl);"
+
+[SetTaskControlUITCFlag]
+Class="Function"
+Prototype="void SetTaskControlUITCFlag(struct TaskControl *taskControl, int UITCFlag);"
+
+[GetTaskControlUITCFlag]
+Class="Function"
+Prototype="int GetTaskControlUITCFlag(struct TaskControl *taskControl);"
+
 [AddSinkVChan]
 Class="Function"
 Prototype="int AddSinkVChan(struct TaskControl *taskControl, struct SinkVChan *sinkVChan, TaskVChanFuncAssign_type VChanFunc);"
@@ -150,14 +166,6 @@ Prototype="int AddSubTaskToParent(struct TaskControl *parent, struct TaskControl
 Class="Function"
 Prototype="int RemoveSubTaskFromParent(struct TaskControl *child);"
 
-[DisplayTaskControlManager]
-Class="Function"
-Prototype="void DisplayTaskControlManager(int parentPanHndl, struct ListStructTag *UITCList, struct ListStructTag *allTCList);"
-
-[CloseDAQLabModulesPan_CB]
-Class="Function"
-Prototype="int CloseDAQLabModulesPan_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);"
-
 [AddHWSlaveTrigToMaster]
 Class="Function"
 Prototype="int AddHWSlaveTrigToMaster(struct TaskControl *master, struct TaskControl *slave);"
@@ -165,6 +173,14 @@ Prototype="int AddHWSlaveTrigToMaster(struct TaskControl *master, struct TaskCon
 [RemoveHWSlaveTrigFromMaster]
 Class="Function"
 Prototype="int RemoveHWSlaveTrigFromMaster(struct TaskControl *slave);"
+
+[RemoveAllHWSlaveTrigsFromMaster]
+Class="Function"
+Prototype="int RemoveAllHWSlaveTrigsFromMaster(struct TaskControl *master);"
+
+[DisassembleTaskTreeBranch]
+Class="Function"
+Prototype="int DisassembleTaskTreeBranch(struct TaskControl *taskControlNode);"
 
 [TaskControlIterTimeout]
 Class="Function"

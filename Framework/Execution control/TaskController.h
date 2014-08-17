@@ -492,6 +492,10 @@ TaskControl_type*		GetTaskControlParent				(TaskControl_type* taskControl);
 	// If there are no SubTasks, the list is empty. Use ListDispose to dispose of list.
 ListType				GetTaskControlSubTasks				(TaskControl_type* taskControl);
 
+	// Describes whether a Task Controller is meant to be used as an User Interface Task Controller that allows the user to control the execution of a Task Tree.
+	// True, TC is of an UITC type, False otherwise. default = False
+void					SetTaskControlUITCFlag				(TaskControl_type* taskControl, BOOL UITCFlag);
+BOOL					GetTaskControlUITCFlag				(TaskControl_type* taskControl);
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -500,6 +504,7 @@ int						AddSubTaskToParent					(TaskControl_type* parent, TaskControl_type* chi
 
 int						RemoveSubTaskFromParent				(TaskControl_type* child);
 
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // HW trigger dependencies
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -507,6 +512,11 @@ int						RemoveSubTaskFromParent				(TaskControl_type* child);
 int						AddHWSlaveTrigToMaster				(TaskControl_type* master, TaskControl_type* slave);
 		
 int						RemoveHWSlaveTrigFromMaster			(TaskControl_type* slave);
+
+int 					RemoveAllHWSlaveTrigsFromMaster		(TaskControl_type* master);
+
+	// Disconnects a given Task Controller from its parent, disconnects all child nodes from each other as well as any VChan or HW-triggers
+int						DisassembleTaskTreeBranch			(TaskControl_type* taskControlNode); 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller event posting and execution control functions

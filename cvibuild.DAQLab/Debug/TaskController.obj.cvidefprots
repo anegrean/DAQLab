@@ -90,6 +90,14 @@ Prototype="struct TaskControl *GetTaskControlParent(struct TaskControl *taskCont
 Class="Function"
 Prototype="struct ListStructTag *GetTaskControlSubTasks(struct TaskControl *taskControl);"
 
+[SetTaskControlUITCFlag]
+Class="Function"
+Prototype="void SetTaskControlUITCFlag(struct TaskControl *taskControl, int UITCFlag);"
+
+[GetTaskControlUITCFlag]
+Class="Function"
+Prototype="int GetTaskControlUITCFlag(struct TaskControl *taskControl);"
+
 [AddSinkVChan]
 Class="Function"
 Prototype="int AddSinkVChan(struct TaskControl *taskControl, struct SinkVChan *sinkVChan, TaskVChanFuncAssign_type VChanFunc);"
@@ -165,6 +173,14 @@ Prototype="int AddHWSlaveTrigToMaster(struct TaskControl *master, struct TaskCon
 [RemoveHWSlaveTrigFromMaster]
 Class="Function"
 Prototype="int RemoveHWSlaveTrigFromMaster(struct TaskControl *slave);"
+
+[RemoveAllHWSlaveTrigsFromMaster]
+Class="Function"
+Prototype="int RemoveAllHWSlaveTrigsFromMaster(struct TaskControl *master);"
+
+[DisassembleTaskTreeBranch]
+Class="Function"
+Prototype="int DisassembleTaskTreeBranch(struct TaskControl *taskControlNode);"
 
 [TaskControlIterTimeout]
 Class="Function"

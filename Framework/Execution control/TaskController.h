@@ -293,7 +293,6 @@ typedef enum {
 	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue of a Task Controller.
 	TASK_EVENT_ERROR_OUT_OF_MEMORY,				// To signal that an out of memory event occured.
 	TASK_EVENT_CUSTOM_MODULE_EVENT,				// To signal custom module or device events.
-	TASK_EVENT_DIM_UI
 } TaskEvents_type;
 
 //----------------------------------------
@@ -397,7 +396,7 @@ typedef FCallReturn_type* 	(*StoppedFptr_type) 			(TaskControl_type* taskControl
 typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimmed); 
 
 // Called when Task Controller encounters an error, to continue Task Controller execution, a return from this function is needed.
-typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg);
 
 // Called when data is placed in a Task Controller Sink VChan.
 typedef FCallReturn_type*	(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);

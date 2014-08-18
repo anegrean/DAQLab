@@ -276,7 +276,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	a -> errorMsg				= NULL;
 	a -> waitBetweenIterations	= 0;
 	a -> abortFlag				= 0;
-	a -> abortIterationFlag		= 0;
+	a -> abortIterationFlag		= FALSE;
 	a -> slaveArmedFlag			= FALSE;
 	a -> nIterationsFlag		= -1;
 	a -> iterationTimerID		= 0;
@@ -2048,13 +2048,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;	
 					}
 					
-					// if subtask is unconfigured, switch to unconfigured
-					if (subtaskPtr->subtaskState == TASK_STATE_UNCONFIGURED) {
-						// insert action to perform
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_UNCONFIGURED);
-						break;	
-					}
-					
 					break;
 					
 			
@@ -3195,8 +3188,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// There are no SubTasks or SubTasks are done, ask for another iteration if more are needed 
 					//---------------------------------------------------------------------------------------------------------------- 
 									
-					//if (((taskControl->currIterIdx < taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)) && !taskControl->iterateOnceFlag) {
-					if ((taskControl->currIterIdx < taskControl->repeat || (!taskControl->repeat && !taskControl->currIterIdx) || taskControl->mode == TASK_CONTINUOUS) && taskControl->nIterationsFlag ) { 
+					if ((taskControl->currIterIdx < taskControl->repeat || (!taskControl->repeat && !taskControl->currIterIdx) || taskControl->mode == TASK_CONTINUOUS) && taskControl->nIterationsFlag && !taskControl->abortIterationFlag) {
 								
 						// ask for another iteration
 						if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) { 	// post to self ITERATE event
@@ -3212,12 +3204,22 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
 						
 					} else {
-								
+						
 						//---------------------------------------------------------------------------------------------------------------- 	 
 						// If Task Controller is continuous and only one iteration was requested, switch to IDLE state
 						//---------------------------------------------------------------------------------------------------------------- 	 
 								
 						if (taskControl->mode == TASK_CONTINUOUS) {
+							if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_STOPPED, NULL))) {
+									taskControl->errorMsg = 
+									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+									discard_ErrorMsg_type(&errMsg);
+						
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+									break;
+								}
+							
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
 							// undim Task Tree if this is a Root Task Controller
 							if(!taskControl->parenttask) 
@@ -3230,6 +3232,16 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						//---------------------------------------------------------------------------------------------------------------- 	
 										
 						if (taskControl->currIterIdx < taskControl->repeat) {
+							if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_STOPPED, NULL))) {
+									taskControl->errorMsg = 
+									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+									discard_ErrorMsg_type(&errMsg);
+						
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+									break;
+								}
+							
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
 							// undim Task Tree if this is a Root Task Controller
 							if(!taskControl->parenttask) 
@@ -3307,6 +3319,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					if (taskControl->nIterationsFlag > 0)
 						taskControl->nIterationsFlag--;
 					
+					
 					//---------------------------------------------------------------------------------------------------------------   
 					// If iteration was aborted
 					//---------------------------------------------------------------------------------------------------------------   
@@ -3369,6 +3382,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						break;
 					}
+					
 					
 					//---------------------------------------------------------------------------------------------------------------   
 					// Decide how to switch state
@@ -3484,7 +3498,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_STOP:
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 				
-					// set abort flag to signal external thread executing the iteration that it must finish
+					
 					taskControl->abortIterationFlag = TRUE;
 					
 					break;

@@ -234,7 +234,7 @@ static FCallReturn_type*	StartTC					(TaskControl_type* taskControl, BOOL const*
 static FCallReturn_type*	DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type* 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag);
-static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg);
 static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
 
@@ -1233,7 +1233,7 @@ static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abo
 	return init_FCallReturn_type(0, "", "");
 }
 
-static void ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	int error=0;

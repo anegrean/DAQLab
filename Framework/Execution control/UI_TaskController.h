@@ -16,12 +16,13 @@
 #define  TCPan1                           1
 #define  TCPan1_StartStop                 2       /* control type: textButton, callback function: (none) */
 #define  TCPan1_Wait                      3       /* control type: numeric, callback function: (none) */
-#define  TCPan1_Repeat                    4       /* control type: numeric, callback function: (none) */
-#define  TCPan1_TotalIterations           5       /* control type: numeric, callback function: (none) */
-#define  TCPan1_Abort                     6       /* control type: command, callback function: (none) */
-#define  TCPan1_Reset                     7       /* control type: command, callback function: (none) */
-#define  TCPan1_Name                      8       /* control type: string, callback function: (none) */
-#define  TCPan1_Mode                      9       /* control type: radioButton, callback function: (none) */
+#define  TCPan1_Plate                     4       /* control type: deco, callback function: (none) */
+#define  TCPan1_Repeat                    5       /* control type: numeric, callback function: (none) */
+#define  TCPan1_TotalIterations           6       /* control type: numeric, callback function: (none) */
+#define  TCPan1_Abort                     7       /* control type: command, callback function: (none) */
+#define  TCPan1_Reset                     8       /* control type: command, callback function: (none) */
+#define  TCPan1_Name                      9       /* control type: string, callback function: (none) */
+#define  TCPan1_Mode                      10      /* control type: radioButton, callback function: (none) */
 
 
      /* Control Arrays: */

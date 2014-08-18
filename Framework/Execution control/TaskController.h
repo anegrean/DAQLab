@@ -249,7 +249,7 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 #include "VChannel.h"
 
 #define TASKCONTROLLER_UI		"./Framework/Execution control/UI_TaskController.uir" 
-#define N_TASK_EVENT_QITEMS		100		// Number of events waiting to be processed by the state machine.
+#define N_TASK_EVENT_QITEMS		1000		// Number of events waiting to be processed by the state machine.
 
 // Handy return type for functions that produce error descriptions
 
@@ -316,8 +316,8 @@ typedef enum {
 // Task Controller Mode
 //---------------------------------------------------------------
 typedef enum {
-	TASK_CONTINUOUS,  // == FALSE
-	TASK_FINITE		  // == TRUE
+	TASK_CONTINUOUS = FALSE,
+	TASK_FINITE 	= TRUE
 } TaskMode_type;
 
 //---------------------------------------------------------------
@@ -477,9 +477,6 @@ void*					GetTaskControlModuleData			(TaskControl_type* taskControl);
 	// Logs Task Controller activity. Multiple Task Controllers may share the same log.
 	// logPtr = NULL by default
 void					SetTaskControlLog					(TaskControl_type* taskControl, TaskExecutionLog_type*	logPtr); 
-
-	// Obtains status of the abort flag that can be used to abort an iteration happening in another thread outside of the provided IterateFptr 
-BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
 
 	// Task Controller HW Trigger types based on how the Task Controller is connected using AddHWSlaveTrigToMaster and RemoveHWSlaveTrigFromMaster 
 HWTrigger_type          GetTaskControlHWTrigger				(TaskControl_type* taskControl);

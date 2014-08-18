@@ -91,7 +91,7 @@ static FCallReturn_type*	Zstage_StartTC					(TaskControl_type* taskControl, BOOL
 static FCallReturn_type*	Zstage_DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	Zstage_StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type* 	Zstage_ResetTC 					(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static void				 	Zstage_ErrorTC 					(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static void				 	Zstage_ErrorTC 					(TaskControl_type* taskControl, char* errorMsg);
 static FCallReturn_type*	Zstage_EventHandler				(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
 
 
@@ -776,7 +776,7 @@ static FCallReturn_type* Zstage_ResetTC (TaskControl_type* taskControl, BOOL con
 	return init_FCallReturn_type(0, "", "");
 }
 
-static void Zstage_ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+static void Zstage_ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	

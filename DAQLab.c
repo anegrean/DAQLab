@@ -251,7 +251,7 @@ static FCallReturn_type*	DoneUITC									(TaskControl_type* taskControl, size_t
 static FCallReturn_type*	StoppedUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static void					DimUITC										(TaskControl_type* taskControl, BOOL dimmed);
 static FCallReturn_type* 	ResetUITC 									(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static void				 	ErrorUITC 									(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static void				 	ErrorUITC 									(TaskControl_type* taskControl, char* errorMsg);
 
 
 //==============================================================================
@@ -1271,7 +1271,7 @@ static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskContr
 	// set UI Task Controller wait
 	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Wait, GetTaskControlIterationsWait(taskControl));
 	// set UI Task Controller mode
-	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Mode, GetTaskControlMode(taskControl));
+	SetCtrlVal(newUItaskCtrl->panHndl, TCPan1_Mode, !GetTaskControlMode(taskControl));
 	// dim repeat if TC mode is continuous, otherwise undim
 	if (GetTaskControlMode(taskControl) == TASK_FINITE) 
 		// finite
@@ -2177,8 +2177,6 @@ static FCallReturn_type* ConfigureUITC (TaskControl_type* taskControl, BOOL cons
 	
 	// change Task Controller name background color to gray (0x00F0F0F0)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
-	// undim Repeat button
-	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
 	// undim Mode button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
 	// undim Iteration Wait button
@@ -2190,7 +2188,7 @@ static FCallReturn_type* ConfigureUITC (TaskControl_type* taskControl, BOOL cons
 	SetTaskControlIterations(taskControl, repeat);
 	
 	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Mode, &taskControllerMode);
-	if (taskControllerMode == TASK_FINITE) {
+	if (!taskControllerMode == TASK_FINITE) {
 		// finite iterations
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
 		SetTaskControlMode(taskControl, TASK_FINITE);
@@ -2227,6 +2225,7 @@ static FCallReturn_type* StartUITC (TaskControl_type* taskControl, BOOL const* a
 static FCallReturn_type* DoneUITC  (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
+	BOOL				taskControllerMode;
 	
 	// change Task Controller name background color from green (0x002BD22F) to gray (0x00F0F0F0)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
@@ -2238,8 +2237,10 @@ static FCallReturn_type* DoneUITC  (TaskControl_type* taskControl, size_t curren
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
 	// undim Reset button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
-	// undim Repeat button
-	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
+	// undim Repeat button if task is finite
+	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Mode, &taskControllerMode);  
+	if (!taskControllerMode == TASK_FINITE)
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
 	// undim Mode button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
 	// undim Iteration Wait button
@@ -2262,23 +2263,26 @@ static FCallReturn_type* ResetUITC (TaskControl_type* taskControl, BOOL const* a
 static FCallReturn_type* StoppedUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
+	BOOL				taskControllerMode;
 	
 	// change Task Controller name background color from green (0x002BD22F) to gray (0x00F0F0F0)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
 	// switch Stop button back to Start button
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_StartStop, 0);
+	// undim Start/Stop button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
 	// dim Abort button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
 	// undim Reset button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
-	// undim Repeat button
-	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
+	// undim Repeat button if task is finite 
+	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Mode, &taskControllerMode);  
+	if (!taskControllerMode == TASK_FINITE)
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
 	// undim Mode button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
-	// undim Start/Stop button
-	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
 	// update iterations display
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, currentIteration);
 	
@@ -2287,12 +2291,17 @@ static FCallReturn_type* StoppedUITC	(TaskControl_type* taskControl, size_t curr
 
 static void	DimUITC	(TaskControl_type* taskControl, BOOL dimmed)
 {
+	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
+	// ignore if this is a Root UITC
+	if (GetTaskControlParent(controllerUIDataPtr->taskControl))
+		SetPanelAttribute(controllerUIDataPtr->panHndl, ATTR_DIMMED, dimmed);
 }
 
-static void ErrorUITC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+static void ErrorUITC (TaskControl_type* taskControl, char* errorMsg)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
+	BOOL				taskControllerMode;
 	
 	// change Task Controller name background color to light red (0x00FF3333)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00FF3333);
@@ -2307,6 +2316,10 @@ static void ErrorUITC (TaskControl_type* taskControl, char* errorMsg, BOOL const
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
 	// undim Reset button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
+	// undim Repeat button if task is finite 
+	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Mode, &taskControllerMode);  
+	if (!taskControllerMode == TASK_FINITE)
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
 }
 
 int CVICALLBACK CloseDAQLabModulesPan_CB (int panel, int control, int event,

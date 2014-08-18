@@ -14,9 +14,9 @@ Active Project = 1
 Project 0001 = "Execution control.prj"
 Drag Bar Left = 312
 Window Top = 40
-Window Left = -1258
+Window Left = -1129
 Window Bottom = 1124
-Window Right = 631
+Window Right = 760
 Maximized = False
 Maximized Children = True
 Max32 Number Of Errors = 20
@@ -68,7 +68,7 @@ Source Window State = "1,0,0,0,0,0,0,0,0,192,0,0,0,0,0,40,0,0,0,0,400,600,1,0,"
 [File 0003]
 Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.uir"
 File Type = "User Interface Resource"
-Disk Date = 3491039003
+Disk Date = 3491213618
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
@@ -96,32 +96,32 @@ Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 [File 0006]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 File Type = "CSource"
-Disk Date = 3491211420
+Disk Date = 3491220338
 In Projects = "1,"
 Window Top = 63
 Window Left = 32
 Window Released = True
-Source Window State = "1,336,336,336,13,25,25,0,0,197,0,0,0,0,0,64,1505,0,1537,12,911,1618,0,0,"
+Source Window State = "1,336,336,336,13,25,25,0,0,0,0,0,0,0,0,0,1505,0,1537,12,911,1618,0,0,"
 
 [File 0007]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 File Type = "Include"
-Disk Date = 3491208196
+Disk Date = 3491219533
 In Projects = "1,"
 Window Top = 145
 Window Left = -944
 Window Released = True
-Source Window State = "1,295,295,295,4,21,4,0,0,181,0,0,0,0,0,56,422,0,294,92,812,1488,0,0,"
+Source Window State = "1,295,295,295,4,21,4,0,0,0,0,0,0,0,0,0,422,0,294,92,812,1488,0,0,"
 
 [File 0008]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTest.c"
 File Type = "CSource"
-Disk Date = 3491211701
+Disk Date = 3491222102
 In Projects = "1,"
 Window Top = 50
 Window Left = 167
 Window Released = True
-Source Window State = "1,67,67,67,39,75,39,0,0,158,0,1,0,1,0,66,36,0,51,24,941,1307,0,0,"
+Source Window State = "1,74,74,74,29,35,29,0,0,158,0,1,0,1,0,66,36,0,73,31,941,1307,0,0,"
 
 [File 0009]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.c"

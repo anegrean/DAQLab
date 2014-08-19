@@ -234,6 +234,7 @@ static FCallReturn_type*	StartTC					(TaskControl_type* taskControl, BOOL const*
 static FCallReturn_type*	DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type* 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag);
+static void					DimTC					(TaskControl_type* taskControl, BOOL dimmed);
 static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg);
 static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
@@ -265,7 +266,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	
 	// create VUPhotonCtr Task Controller
 	tc = init_TaskControl_type (instanceName, ConfigureTC, IterateTC, StartTC, ResetTC,
-								DoneTC, StoppedTC, NULL, ModuleEventHandler, ErrorTC);
+								DoneTC, StoppedTC, DimTC, NULL, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
 	
 	// connect PIStage data to Task Controller
@@ -1231,6 +1232,12 @@ static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abo
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
 	return init_FCallReturn_type(0, "", "");
+}
+
+static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
+{
+	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
+	
 }
 
 static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)

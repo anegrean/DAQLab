@@ -293,6 +293,8 @@ typedef enum {
 	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue of a Task Controller.
 	TASK_EVENT_ERROR_OUT_OF_MEMORY,				// To signal that an out of memory event occured.
 	TASK_EVENT_CUSTOM_MODULE_EVENT,				// To signal custom module or device events.
+	TASK_EVENT_SUBTASK_ADDED_TO_PARENT,			// When a SubTask is added to a parent Task Controller
+	TASK_EVENT_SUBTASK_REMOVED_FROM_PARENT		// When a SubTask is disconnected from a parent task Controller
 } TaskEvents_type;
 
 //----------------------------------------
@@ -307,6 +309,7 @@ typedef enum {
 	TASK_FCALL_DONE,					// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
 	TASK_FCALL_STOPPED,					// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
 	TASK_FCALL_DIM_UI,					// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
+	TASK_FCALL_UITC_ACTIVE,				// Called when an UITC has a parent Task Controller attached to or deattached from it.
 	TASK_FCALL_DATA_RECEIVED,			// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
 	TASK_FCALL_ERROR,
 	TASK_FCALL_MODULE_EVENT				// Called for custom module events that are not handled directly by the Task Controller
@@ -395,6 +398,11 @@ typedef FCallReturn_type* 	(*StoppedFptr_type) 			(TaskControl_type* taskControl
 // Called when a Task Controller needs to dim or undim certain module controls to allow/prevent user interaction.
 typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimmed); 
 
+// Called when an UITC has a parent Task Controller attached to or deattached from it, in the former case the UITC functioning as a simple Task Controller
+// without the possibility for the user to control the Task execution. This function must dim/undim UITC controls that prevent/allow the user to control
+// the task execution.
+typedef void				(*UITCActiveFptr_type)			(TaskControl_type* taskControl, BOOL UITCActive);
+
 // Called when Task Controller encounters an error, to continue Task Controller execution, a return from this function is needed.
 typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg);
 
@@ -425,6 +433,7 @@ TaskControl_type*  	 	init_TaskControl_type				(const char				taskname[],
 														 	DoneFptr_type			DoneFptr,
 														 	StoppedFptr_type		StoppedFptr,
 															DimUIFptr_type			DimUIFptr,
+															UITCActiveFptr_type		UITCActiveFptr,
 														 	DataReceivedFptr_type	DataReceivedFptr,
 														 	ModuleEventFptr_type	ModuleEventFptr,
 														 	ErrorFptr_type			ErrorFptr);

@@ -455,6 +455,8 @@ struct ChanSet {
 	char*						name;						// Full physical channel name used by DAQmx, e.g. Dev1/ai1 
 	Channel_type				chanType;					// Channel type.
 	TaskHandle					taskHndl;					// Only for counter type channels. Each counter requires a separate task.
+	TaskTrig_type* 				startTrig;     				// Only for counter type channels. Task start trigger type. If NULL then there is no start trigger.
+	TaskTrig_type* 				referenceTrig;     			// Only for counter type channels. Task reference trigger type. If NULL then there is no reference trigger.
 	SourceVChan_type*			srcVChan;					// Source VChan assigned to input type physical channels. Otherwise NULL.
 	SinkVChan_type*				sinkVChan;					// Sink VChan assigned to output type physical channels. Otherwise NULL.
 	BOOL						onDemand;					// If TRUE, the channel is updated/read out using software-timing.
@@ -816,16 +818,24 @@ static void							discard_COTaskSet_type					(COTaskSet_type** a);
 //-----------------------
 // DAQmx tasks management
 //-----------------------
-static int 							ConfigDAQmxDevice						(Dev_type* dev); 
-static int 							ConfigDAQmxAITask 						(Dev_type* dev);
-static int 							ConfigDAQmxAOTask 						(Dev_type* dev);
-static int 							ConfigDAQmxDITask 						(Dev_type* dev);
-static int 							ConfigDAQmxDOTask 						(Dev_type* dev);
-static int 							ConfigDAQmxCITask 						(Dev_type* dev);
-static int 							ConfigDAQmxCOTask 						(Dev_type* dev);
-static int 							ClearDAQmxTasks 						(Dev_type* dev); 
+static FCallReturn_type*			ConfigDAQmxDevice						(Dev_type* dev); 
+static FCallReturn_type*			ConfigDAQmxAITask 						(Dev_type* dev);
+static FCallReturn_type*			ConfigDAQmxAOTask 						(Dev_type* dev);
+static FCallReturn_type*			ConfigDAQmxDITask 						(Dev_type* dev);
+static FCallReturn_type*			ConfigDAQmxDOTask 						(Dev_type* dev);
+static FCallReturn_type*			ConfigDAQmxCITask 						(Dev_type* dev);
+static FCallReturn_type*			ConfigDAQmxCOTask 						(Dev_type* dev);
 static void 						DisplayLastDAQmxLibraryError 			(void);
+	// Clears all DAQmx Tasks defined for the device
+static int 							ClearDAQmxTasks 						(Dev_type* dev); 
+	// Stops all DAQmx Tasks defined for the device
+static FCallReturn_type*			StopDAQmxTasks 							(Dev_type* dev); 
+	// Checks if all DAQmx Tasks are done
 static BOOL							DAQmxTasksDone							(Dev_type* dev);
+	// Starts all DAQmx Tasks defined for the device
+	// Note: Tasks that have a HW-trigger defined will start before tasks that do not have any HW-trigger defined. This allows the later type of
+	// tasks to trigger the HW-triggered tasks. If all tasks are started successfully, it returns NULL, otherwise returns a negative value with DAQmx error code and error string combined.
+static FCallReturn_type*			StartAllDAQmxTasks						(Dev_type* dev);
 
 //---------------------
 // DAQmx task callbacks
@@ -895,7 +905,7 @@ static FCallReturn_type*			DoneTC									(TaskControl_type* taskControl, size_t
 static FCallReturn_type*			StoppedTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static void							DimTC									(TaskControl_type* taskControl, BOOL dimmed);
 static FCallReturn_type* 			ResetTC 								(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static void				 			ErrorTC 								(TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+static void				 			ErrorTC 								(TaskControl_type* taskControl, char* errorMsg);
 static FCallReturn_type*			DataReceivedTC							(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 static FCallReturn_type*			ModuleEventHandler						(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
 
@@ -1893,12 +1903,14 @@ static COChannel_type* GetCOChannel (Dev_type* dev, char physChanName[])
 
 static void  init_ChanSet_type (ChanSet_type* chanSet, char physChanName[], Channel_type chanType, DiscardChanSetFptr_type discardFptr)
 {
-	chanSet -> name			= StrDup(physChanName);
-	chanSet -> chanType		= chanType;
-	chanSet -> sinkVChan	= NULL;
-	chanSet -> srcVChan		= NULL;
-	chanSet -> onDemand		= FALSE;	// hw-timing by default
-	chanSet -> discardFptr	= discardFptr;
+	chanSet -> name				= StrDup(physChanName);
+	chanSet -> chanType			= chanType;
+	chanSet -> sinkVChan		= NULL;
+	chanSet -> srcVChan			= NULL;
+	chanSet -> onDemand			= FALSE;	// hw-timing by default
+	chanSet -> discardFptr		= discardFptr;
+	chanSet -> startTrig		= NULL;
+	chanSet -> referenceTrig	= NULL;
 }
 
 static void	discard_ChanSet_type (ChanSet_type** a)
@@ -1907,12 +1919,16 @@ static void	discard_ChanSet_type (ChanSet_type** a)
 	
 	OKfree((*a)->name);
 	
-	// discard DAQmx task if any
-	// DAQmx task
-	if ((*a)->taskHndl) {DAQmxClearTask ((*a)->taskHndl); (*a)->taskHndl = 0;}
-	
+	// VChans
 	discard_VChan_type((VChan_type**)&(*a)->srcVChan);
 	discard_VChan_type((VChan_type**)&(*a)->sinkVChan);
+	
+	// discard DAQmx task if any
+	if ((*a)->taskHndl) {DAQmxClearTask ((*a)->taskHndl); (*a)->taskHndl = 0;}
+	
+	// discard triggers if any
+	discard_TaskTrig_type(&(*a)->startTrig);
+	discard_TaskTrig_type(&(*a)->referenceTrig);
 	
 	OKfree(*a);
 }
@@ -2473,7 +2489,6 @@ static void	PopulateChannels (Dev_type* dev)
 	int							ioVal;
 	int							ioMode;
 	int							ioType;
-	int							nItems;
 	char*						shortChName;
 	AIChannel_type**			AIChanPtrPtr;
 	AOChannel_type**   			AOChanPtrPtr;
@@ -2714,7 +2729,7 @@ static Dev_type* init_Dev_type (DevAttr_type** attr, char taskControllerName[])
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
 	a -> taskController = init_TaskControl_type (taskControllerName, ConfigureTC, IterateTC, StartTC, 
-						  ResetTC, DoneTC, StoppedTC, DimTC, DataReceivedTC, ModuleEventHandler, ErrorTC);
+						  ResetTC, DoneTC, StoppedTC, DimTC, NULL, DataReceivedTC, ModuleEventHandler, ErrorTC);
 	if (!a->taskController) {discard_DevAttr_type(attr); free(a); return NULL;}
 	// connect DAQmxDev data to Task Controller
 	SetTaskControlModuleData(a -> taskController, a);
@@ -3973,33 +3988,11 @@ static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callback
 					break;
 					
 				case TaskSetPan_Mode:
-					
-					// dim number of repeats
-					BOOL	finiteFlag;
-					GetCtrlVal(panel, control, &finiteFlag);
-					if (finiteFlag) {
-						SetCtrlAttribute(panel, TaskSetPan_Repeat, ATTR_DIMMED, 0);
-						SetTaskControlMode(dev->taskController, TASK_FINITE);
-					} else {
-						SetCtrlAttribute(panel, TaskSetPan_Repeat, ATTR_DIMMED, 1);
-						SetTaskControlMode(dev->taskController, TASK_CONTINUOUS);
-					}
-					break;
-					
+				case TaskSetPan_Repeat:
 				case TaskSetPan_Wait:
 					
-					double	waitTime;
-					GetCtrlVal(panel, control, &waitTime);
-					SetTaskControlIterationsWait(dev->taskController, waitTime);
+					TaskControlEvent(dev->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
 					break;
-					
-				case TaskSetPan_Repeat:
-					
-					size_t nRepeat;
-					GetCtrlVal(panel, control, &nRepeat);
-					SetTaskControlIterations(dev->taskController, nRepeat);
-					break;
-					
 					
 			}
 			break;
@@ -5083,45 +5076,105 @@ Error:
 	return error;
 }
 
-static int ConfigDAQmxDevice (Dev_type* dev)
+static FCallReturn_type* StopDAQmxTasks (Dev_type* dev)
 {
-	int 	error	= 0;
+#define StopDAQmxTasks_Err_NULLDev		-1
 	
-	if (!dev) return 0; // do nothing
+	int 				error			= 0;  
+	FCallReturn_type*   fCallReturn		= NULL;
+	
+	if (!dev) return init_FCallReturn_type(StopDAQmxTasks_Err_NULLDev, "StopDAQmxTasks", "No reference to device");  
+	
+	// AI task
+	if (dev->AITaskSet)
+	if (dev->AITaskSet->taskHndl) errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
+   
+	// AO task
+	if (dev->AOTaskSet)
+	if (dev->AOTaskSet->taskHndl) errChk(DAQmxStopTask(dev->AOTaskSet->taskHndl));
+	
+	// DI task
+	if (dev->DITaskSet)
+	if (dev->DITaskSet->taskHndl) errChk(DAQmxStopTask(dev->DITaskSet->taskHndl));
+	
+	// DO task
+	if (dev->DOTaskSet)
+	if (dev->DOTaskSet->taskHndl) errChk(DAQmxStopTask(dev->DOTaskSet->taskHndl));
+	
+	// CI task
+	if (dev->CITaskSet) {
+		ChanSet_type** 	chanSetPtrPtr;
+		size_t			nItems			= ListNumItems(dev->CITaskSet->chanTaskSet);
+	   	for (size_t i = 1; i <= nItems; i++) {	
+			chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+			if ((*chanSetPtrPtr)->taskHndl) DAQmxStopTask((*chanSetPtrPtr)->taskHndl);
+		}
+	}
+	
+	// CO task
+	if (dev->COTaskSet) {
+		ChanSet_type** 	chanSetPtrPtr;
+		size_t			nItems			= ListNumItems(dev->COTaskSet->chanTaskSet);
+	   	for (size_t i = 1; i <= nItems; i++) {	
+			chanSetPtrPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);	
+			if ((*chanSetPtrPtr)->taskHndl) DAQmxStopTask((*chanSetPtrPtr)->taskHndl);
+		}
+	}
+	
+	return NULL;
+	
+Error:
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "StopDAQmxTasks", errMsg);
+	free(errMsg);
+	return fCallReturn;
+}
+
+static FCallReturn_type* ConfigDAQmxDevice (Dev_type* dev)
+{
+#define StartAllDAQmxTasks_Err_NULLDev		-1
+	
+	FCallReturn_type*	fCallReturn	= NULL;
+	if (!dev) return init_FCallReturn_type(StartAllDAQmxTasks_Err_NULLDev, "ConfigDAQmxDevice", "No reference to device");
 	
 	// clear previous DAQmx tasks if any
 	ClearDAQmxTasks(dev);
 	
-	// Configure AO DAQmx Task
-	errChk(ConfigDAQmxAOTask(dev));	
-	
 	// Configure AI DAQmx Task
-	errChk(ConfigDAQmxAITask(dev));
+	if ((fCallReturn = ConfigDAQmxAITask(dev)))		goto Error;
+	
+	// Configure AO DAQmx Task
+	if ((fCallReturn = ConfigDAQmxAOTask(dev)))		goto Error;	
 	
 	// Configure DI DAQmx Task
-	errChk(ConfigDAQmxDITask(dev));
+	if ((fCallReturn = ConfigDAQmxDITask(dev)))		goto Error;
 	
 	// Configure DO DAQmx Task
-	errChk(ConfigDAQmxDOTask(dev));
+	if ((fCallReturn = ConfigDAQmxDOTask(dev)))		goto Error;
 	
 	// Configure CI DAQmx Task
-	errChk(ConfigDAQmxCITask(dev));
+	if ((fCallReturn = ConfigDAQmxCITask(dev)))		goto Error;
 	
 	// Configure CO DAQmx Task
-	errChk(ConfigDAQmxCOTask(dev));
+	if ((fCallReturn = ConfigDAQmxCOTask(dev)))		goto Error;
 	
-	return 0;
+	return NULL;
+	
 Error:
 	ClearDAQmxTasks(dev);
-	return error;
+	return fCallReturn;
 }
 
-static int ConfigDAQmxAITask (Dev_type* dev) 
+static FCallReturn_type* ConfigDAQmxAITask (Dev_type* dev) 
 {
+#define ConfigDAQmxAITask_Err_ChannelNotImplemented		-1
 	int 				error 			= 0;
 	ChanSet_type** 		chanSetPtrPtr;
+	FCallReturn_type*	fCallReturn		= NULL;
 	
-	if (!dev->AOTaskSet) return 0;	// do nothing
+	if (!dev->AOTaskSet) return NULL;	// do nothing
 	
 	// check if there is at least one AI task that requires HW-timing
 	BOOL hwTimingFlag = FALSE;
@@ -5134,7 +5187,7 @@ static int ConfigDAQmxAITask (Dev_type* dev)
 		}
 	}
 	// continue setting up the AI task if any channels require HW-timing
-	if (!hwTimingFlag) return 0;	// do nothing
+	if (!hwTimingFlag) return NULL;	// do nothing
 	
 	// create DAQmx AI task 
 	char* taskName = GetTaskControlName(dev->taskController);
@@ -5170,9 +5223,8 @@ static int ConfigDAQmxAITask (Dev_type* dev)
 			// add here more channel type cases
 			
 			default:
-				DLMsg("Error: Channel type not implemented.", 1);
+				fCallReturn = init_FCallReturn_type(ConfigDAQmxAITask_Err_ChannelNotImplemented, "ConfigDAQmxAITask", "Channel type not implemented");
 				goto Error;
-				break;
 		}
 	}
 	
@@ -5287,25 +5339,30 @@ static int ConfigDAQmxAITask (Dev_type* dev)
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AITaskSet->taskHndl, 0, AIDAQmxTaskDone_CB, dev));
 	
 		
-	return 0;
-Error:
-	return -1;
+	return NULL;
 	
-MemError:
-	DLMsg("Error: Out of memory.\n\n",1);	   
-	return -1;
+Error:
+	return fCallReturn;
 	
 DAQmxError:
-	DisplayLastDAQmxLibraryError();
-	return error;
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "ConfigDAQmxAITask", errMsg);
+	free(errMsg);
+	return fCallReturn;
 }
 
-static int ConfigDAQmxAOTask (Dev_type* dev)
+static FCallReturn_type* ConfigDAQmxAOTask (Dev_type* dev)
 {
+#define ConfigDAQmxAOTask_Err_OutOfMemory				-1
+#define ConfigDAQmxAOTask_Err_ChannelNotImplemented		-2
+	
 	int 				error 			= 0;
 	ChanSet_type** 		chanSetPtrPtr;
+	FCallReturn_type*	fCallReturn		= NULL;
 	
-	if (!dev->AOTaskSet) return 0;	// do nothing
+	if (!dev->AOTaskSet) return NULL;	// do nothing
 	
 	// clear and init writeAOData used for continuous streaming
 	discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
@@ -5364,9 +5421,8 @@ static int ConfigDAQmxAOTask (Dev_type* dev)
 			*/
 			
 			default:
-				DLMsg("Error: Channel type not implemented.", 1);
+				fCallReturn = init_FCallReturn_type(ConfigDAQmxAOTask_Err_ChannelNotImplemented, "ConfigDAQmxAOTask", "Channel type not implemented");
 				goto Error;
-				break;
 		}
 	}
 	
@@ -5464,25 +5520,29 @@ static int ConfigDAQmxAOTask (Dev_type* dev)
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev));
 	
-	return 0;
+	return NULL;
 Error:
-	return -1;
+	return fCallReturn;
 	
 MemError:
-	DLMsg("Error: Out of memory.\n\n",1);	   
-	return -1;
+	return init_FCallReturn_type(ConfigDAQmxAOTask_Err_OutOfMemory, "ConfigDAQmxAOTask", "Out of memory");
 	
 DAQmxError:
-	DisplayLastDAQmxLibraryError();
-	return error;	
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "ConfigDAQmxAOTask", errMsg);
+	free(errMsg);
+	return fCallReturn;
 }
 
-static int ConfigDAQmxDITask (Dev_type* dev)
+static FCallReturn_type* ConfigDAQmxDITask (Dev_type* dev)
 {
 	int 				error 			= 0;
 	ChanSet_type** 		chanSetPtrPtr;
+	FCallReturn_type*	fCallReturn		= NULL;
 	
-	if (!dev->DITaskSet) return 0;	// do nothing
+	if (!dev->DITaskSet) return NULL;	// do nothing
 	
 	// check if there is at least one DI task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
@@ -5495,7 +5555,7 @@ static int ConfigDAQmxDITask (Dev_type* dev)
 		}
 	}
 	// continue setting up the DI task if any channels require HW-timing
-	if (!hwTimingFlag) return 0;	// do nothing
+	if (!hwTimingFlag) return NULL;	// do nothing
 	
 	// create DAQmx DI task 
 	char* taskName = GetTaskControlName(dev->taskController);
@@ -5623,25 +5683,24 @@ static int ConfigDAQmxDITask (Dev_type* dev)
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DITaskSet->taskHndl, 0, DIDAQmxTaskDone_CB, dev));
 	
 		
-	return 0;
-Error:
-	return -1;
-	
-MemError:
-	DLMsg("Error: Out of memory.\n\n",1);	   
-	return -1;
-	
+	return NULL;
+
 DAQmxError:
-	DisplayLastDAQmxLibraryError();
-	return error;	
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "ConfigDAQmxDITask", errMsg);
+	free(errMsg);
+	return fCallReturn;	
 }
 
-static int ConfigDAQmxDOTask (Dev_type* dev)
+static FCallReturn_type* ConfigDAQmxDOTask (Dev_type* dev)
 {
 	int 				error 			= 0;
 	ChanSet_type** 		chanSetPtrPtr;
+	FCallReturn_type*	fCallReturn		= NULL;
 	
-	if (!dev->DOTaskSet) return 0;	// do nothing
+	if (!dev->DOTaskSet) return NULL;	// do nothing
 	
 	// check if there is at least one DO task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
@@ -5654,7 +5713,7 @@ static int ConfigDAQmxDOTask (Dev_type* dev)
 		}
 	}
 	// continue setting up the DO task if any channels require HW-timing
-	if (!hwTimingFlag) return 0;	// do nothing
+	if (!hwTimingFlag) return NULL;	// do nothing
 	
 	// create DAQmx DO task 
 	char* taskName = GetTaskControlName(dev->taskController);
@@ -5766,25 +5825,25 @@ static int ConfigDAQmxDOTask (Dev_type* dev)
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DOTaskSet->taskHndl, 0, DODAQmxTaskDone_CB, dev));
 	
 		
-	return 0;
-Error:
-	return -1;
-	
-MemError:
-	DLMsg("Error: Out of memory.\n\n",1);	   
-	return -1;
-	
+	return NULL;
+
 DAQmxError:
-	DisplayLastDAQmxLibraryError();
-	return error;
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "ConfigDAQmxDOTask", errMsg);
+	free(errMsg);
+	return fCallReturn;
 }
 
-static int ConfigDAQmxCITask (Dev_type* dev)
+static FCallReturn_type* ConfigDAQmxCITask (Dev_type* dev)
 {
+#define ConfigDAQmxCITask_Err_ChanNotImplemented		-1 
 	int 				error 			= 0;
 	ChanSet_type** 		chanSetPtrPtr;
+	FCallReturn_type*	fCallReturn		= NULL;
 	
-	if (!dev->CITaskSet) return 0;	// do nothing
+	if (!dev->CITaskSet) return NULL;	// do nothing
 	
 	// check if there is at least one CI task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
@@ -5797,7 +5856,7 @@ static int ConfigDAQmxCITask (Dev_type* dev)
 		}
 	}
 	// continue setting up the CI task if any channels require HW-timing
-	if (!hwTimingFlag) return 0;	// do nothing
+	if (!hwTimingFlag) return NULL;	// do nothing
 	
 	// create CI channels
 	nItems	= ListNumItems(dev->CITaskSet->chanTaskSet);
@@ -5865,41 +5924,41 @@ static int ConfigDAQmxCITask (Dev_type* dev)
 				break;
 				
 			default:
-				DLMsg("Error: Channel type not implemented.", 1);
+				fCallReturn = init_FCallReturn_type(ConfigDAQmxCITask_Err_ChanNotImplemented, "ConfigDAQmxCITask", "Channel type not implemented");
 				goto Error;
-				break;
 		}
 	}
 				 
 	
-	return 0;
+	return NULL;
 Error:
-	return -1;
-	
-MemError:
-	DLMsg("Error: Out of memory.\n\n",1);	   
-	return -1;
+	return fCallReturn;
 	
 DAQmxError:
-	DisplayLastDAQmxLibraryError();
-	return error;
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "ConfigDAQmxCITask", errMsg);
+	free(errMsg);
+	return fCallReturn;
 }
 
-static int ConfigDAQmxCOTask (Dev_type* dev)
+static FCallReturn_type* ConfigDAQmxCOTask (Dev_type* dev)
 {
-	int error = 0;
+	int 				error 			= 0;
+	FCallReturn_type*   fCallReturn		= NULL;
 	
-	return 0;
+	return NULL;
 Error:
-	return -1;
-	
-MemError:
-	DLMsg("Error: Out of memory.\n\n",1);	   
-	return -1;
+	return fCallReturn;
 	
 DAQmxError:
-	DisplayLastDAQmxLibraryError();
-	return error;
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "ConfigDAQmxCOTask", errMsg);
+	free(errMsg);
+	return fCallReturn;
 }
 
 ///HIFN Writes data continuously to a DAQmx AO.
@@ -6137,6 +6196,247 @@ static BOOL	DAQmxTasksDone(Dev_type* dev)
 	}
 	
 	return TRUE;
+}
+
+static FCallReturn_type* StartAllDAQmxTasks (Dev_type* dev)
+{
+#define	StartAllDAQmxTasks_Err_OutOfMem		-1
+#define StartAllDAQmxTasks_Err_NULLDev		-2
+#define StartAllDAQmxTasks_Err_NULLTask		-3
+	
+	int					error;
+	FCallReturn_type*   fCallReturn			= NULL;
+	ListType 			NonTriggeredTasks	= 0;
+	ListType 			TriggeredTasks		= 0;
+	BOOL				triggeredFlag;
+	size_t				nItems;
+	
+	if (!dev) {
+		fCallReturn = init_FCallReturn_type(StartAllDAQmxTasks_Err_NULLDev, "StartAllDAQmxTasks", "No reference to device");
+		goto Error;
+	}
+	
+	if (! (NonTriggeredTasks = ListCreate(sizeof(TaskHandle))) ) goto MemError;  // DAQmx tasks without any HW-trigger defined
+	if (! (TriggeredTasks = ListCreate(sizeof(TaskHandle))) ) goto MemError;  // DAQmx tasks with HW-triggering
+	
+	//--------------------------------------------
+	// AI task
+	//--------------------------------------------
+	if (!dev->AITaskSet) goto SkipAITask;
+	// check task handle
+	if (!dev->AITaskSet->taskHndl) {
+		fCallReturn = init_FCallReturn_type(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "AI Task handle is missing");
+		goto Error;
+	}
+	// start trig
+	triggeredFlag = FALSE;
+	if (dev->AITaskSet->startTrig)
+		if (dev->AITaskSet->startTrig->trigType != Trig_None) 
+			triggeredFlag = TRUE;
+	// ref trig
+	if (dev->AITaskSet->referenceTrig)
+		if (dev->AITaskSet->referenceTrig->trigType != Trig_None)
+			triggeredFlag = TRUE;
+	// add to one of the lists
+	if (triggeredFlag)
+		ListInsertItem(TriggeredTasks, &dev->AITaskSet->taskHndl, END_OF_LIST);
+	else
+		ListInsertItem(NonTriggeredTasks, &dev->AITaskSet->taskHndl, END_OF_LIST);
+	
+SkipAITask:
+	//--------------------------------------------
+	// AO task
+	//--------------------------------------------
+	if (!dev->AOTaskSet) goto SkipAOTask; 
+	// check task handle
+	if (!dev->AOTaskSet->taskHndl) {
+		fCallReturn = init_FCallReturn_type(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "AO Task handle is missing");
+		goto Error;
+	}
+	// start trig
+	triggeredFlag = FALSE;
+	if (dev->AOTaskSet->startTrig)
+		if (dev->AOTaskSet->startTrig->trigType != Trig_None) 
+			triggeredFlag = TRUE;
+	// ref trig
+	if (dev->AOTaskSet->referenceTrig)
+		if (dev->AOTaskSet->referenceTrig->trigType != Trig_None)
+			triggeredFlag = TRUE;
+	// add to one of the lists
+	if (triggeredFlag)
+		ListInsertItem(TriggeredTasks, &dev->AOTaskSet->taskHndl, END_OF_LIST);
+	else
+		ListInsertItem(NonTriggeredTasks, &dev->AOTaskSet->taskHndl, END_OF_LIST);
+	
+SkipAOTask:
+	//--------------------------------------------
+	// DI task
+	//--------------------------------------------
+	if (!dev->DITaskSet) goto SkipDITask; 
+	// check task handle
+	if (!dev->DITaskSet->taskHndl) {
+		fCallReturn = init_FCallReturn_type(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "DI Task handle is missing");
+		goto Error;
+	}
+	// start trig
+	triggeredFlag = FALSE;
+	if (dev->DITaskSet->startTrig)
+		if (dev->DITaskSet->startTrig->trigType != Trig_None) 
+			triggeredFlag = TRUE;
+	// ref trig
+	if (dev->DITaskSet->referenceTrig)
+		if (dev->DITaskSet->referenceTrig->trigType != Trig_None)
+			triggeredFlag = TRUE;
+	// add to one of the lists
+	if (triggeredFlag)
+		ListInsertItem(TriggeredTasks, &dev->DITaskSet->taskHndl, END_OF_LIST);
+	else
+		ListInsertItem(NonTriggeredTasks, &dev->DITaskSet->taskHndl, END_OF_LIST);
+	
+SkipDITask:
+	//--------------------------------------------
+	// DO task
+	//--------------------------------------------
+	if (!dev->DOTaskSet) goto SkipDOTask;
+	// check task handle
+	if (!dev->DOTaskSet->taskHndl) {
+		fCallReturn = init_FCallReturn_type(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "DO Task handle is missing");
+		goto Error;
+	}
+	// start trig
+	triggeredFlag = FALSE;
+	if (dev->DOTaskSet->startTrig)
+		if (dev->DOTaskSet->startTrig->trigType != Trig_None) 
+			triggeredFlag = TRUE;
+	// ref trig
+	if (dev->DOTaskSet->referenceTrig)
+		if (dev->DOTaskSet->referenceTrig->trigType != Trig_None)
+			triggeredFlag = TRUE;
+	// add to one of the lists
+	if (triggeredFlag)
+		ListInsertItem(TriggeredTasks, &dev->DOTaskSet->taskHndl, END_OF_LIST);
+	else
+		ListInsertItem(NonTriggeredTasks, &dev->DOTaskSet->taskHndl, END_OF_LIST);
+	
+SkipDOTask:
+	//--------------------------------------------
+	// CI tasks
+	//--------------------------------------------
+	if (dev->CITaskSet) {
+		ChanSet_type** 	chanSetPtrPtr;
+		nItems = ListNumItems(dev->CITaskSet->chanTaskSet);
+		for (size_t i = 1; i <= nItems; i++) {
+			chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+			if ((*chanSetPtrPtr)->taskHndl) {
+				// start trig
+				triggeredFlag = FALSE;
+				if ((*chanSetPtrPtr)->startTrig)
+					if ((*chanSetPtrPtr)->startTrig->trigType != Trig_None) 
+						triggeredFlag = TRUE;
+				// ref trig
+				if ((*chanSetPtrPtr)->referenceTrig)
+					if ((*chanSetPtrPtr)->referenceTrig->trigType != Trig_None)
+						triggeredFlag = TRUE;
+				// add to one of the lists
+				if (triggeredFlag)
+					ListInsertItem(TriggeredTasks, &(*chanSetPtrPtr)->taskHndl, END_OF_LIST);
+				else
+					ListInsertItem(NonTriggeredTasks, &(*chanSetPtrPtr)->taskHndl, END_OF_LIST);
+				
+			} else {
+				fCallReturn = init_FCallReturn_type(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "CI Task handle is missing");
+				goto Error;
+			}
+		}
+	}
+	
+	//--------------------------------------------
+	// CO tasks
+	//--------------------------------------------
+	if (dev->COTaskSet) {
+		ChanSet_type** 	chanSetPtrPtr;
+		nItems = ListNumItems(dev->COTaskSet->chanTaskSet);
+		for (size_t i = 1; i <= nItems; i++) {
+			chanSetPtrPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+			if ((*chanSetPtrPtr)->taskHndl) {
+				// start trig
+				triggeredFlag = FALSE;
+				if ((*chanSetPtrPtr)->startTrig)
+					if ((*chanSetPtrPtr)->startTrig->trigType != Trig_None) 
+						triggeredFlag = TRUE;
+				// ref trig
+				if ((*chanSetPtrPtr)->referenceTrig)
+					if ((*chanSetPtrPtr)->referenceTrig->trigType != Trig_None)
+						triggeredFlag = TRUE;
+				// add to one of the lists
+				if (triggeredFlag)
+					ListInsertItem(TriggeredTasks, &(*chanSetPtrPtr)->taskHndl, END_OF_LIST);
+				else
+					ListInsertItem(NonTriggeredTasks, &(*chanSetPtrPtr)->taskHndl, END_OF_LIST);
+				
+			} else {
+				fCallReturn = init_FCallReturn_type(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "CO Task handle is missing");
+				goto Error;
+			}
+		}
+	}
+	
+	//----------------------
+	// Start Triggered Tasks
+	//----------------------
+	TaskHandle* 	taskHndlPtr;
+	
+	nItems = ListNumItems(TriggeredTasks);
+	for (size_t i = 1; i <= nItems; i++) {
+		taskHndlPtr = ListGetPtrToItem(TriggeredTasks, i);
+		DAQmxErrChk(DAQmxStartTask(*taskHndlPtr));
+	}
+	
+	//--------------------------
+	// Start Non-Triggered Tasks
+	//--------------------------
+	nItems = ListNumItems(NonTriggeredTasks);
+	for (size_t i = 1; i <= nItems; i++) {
+		taskHndlPtr = ListGetPtrToItem(NonTriggeredTasks, i);
+		DAQmxErrChk(DAQmxStartTask(*taskHndlPtr));
+	}
+	
+	// cleanup
+	ListDispose(NonTriggeredTasks);
+	ListDispose(TriggeredTasks);
+	
+	return NULL;
+	
+MemError:
+	if (NonTriggeredTasks) ListDispose(NonTriggeredTasks);
+	if (TriggeredTasks) ListDispose(TriggeredTasks);
+	return init_FCallReturn_type(StartAllDAQmxTasks_Err_OutOfMem, "StartAllDAQmxTasks","Out of memory");
+	
+DAQmxError:  
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "StartAllDAQmxTasks", errMsg);
+	free(errMsg);
+	// stop all triggered tasks
+	nItems = ListNumItems(TriggeredTasks);
+	for (size_t i = 1; i <= nItems; i++) {
+		taskHndlPtr = ListGetPtrToItem(TriggeredTasks, i);
+		DAQmxErrChk(DAQmxStopTask(*taskHndlPtr));
+	}
+	// stop all non-triggered tasks
+	nItems = ListNumItems(NonTriggeredTasks);
+	for (size_t i = 1; i <= nItems; i++) {
+		taskHndlPtr = ListGetPtrToItem(NonTriggeredTasks, i);
+		DAQmxErrChk(DAQmxStopTask(*taskHndlPtr));
+	}
+	
+	// fall through here
+Error:
+	if (NonTriggeredTasks) ListDispose(NonTriggeredTasks);
+	if (TriggeredTasks) ListDispose(TriggeredTasks);
+	return fCallReturn;
+	
 }
 
 int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
@@ -6381,20 +6681,46 @@ static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const*
 {
 	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
+	// set finite/continuous Mode and dim number of repeats if neccessary
+	BOOL	continuousFlag;
+	GetCtrlVal(daqDev->devPanHndl, TaskSetPan_Mode, &continuousFlag);
+	if (continuousFlag) {
+		SetCtrlAttribute(daqDev->devPanHndl, TaskSetPan_Repeat, ATTR_DIMMED, 1);
+		SetTaskControlMode(daqDev->taskController, TASK_CONTINUOUS);
+	} else {
+		SetCtrlAttribute(daqDev->devPanHndl, TaskSetPan_Repeat, ATTR_DIMMED, 0);
+		SetTaskControlMode(daqDev->taskController, TASK_FINITE);
+	}
+	
+	// wait time
+	double	waitTime;
+	GetCtrlVal(daqDev->devPanHndl, TaskSetPan_Wait, &waitTime);
+	SetTaskControlIterationsWait(daqDev->taskController, waitTime);
+	
+	// repeats
+	size_t nRepeat;
+	GetCtrlVal(daqDev->devPanHndl, TaskSetPan_Repeat, &nRepeat);
+	SetTaskControlIterations(daqDev->taskController, nRepeat);
+	
 	return init_FCallReturn_type(0, "", "");
 }
 
 static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	Dev_type*				daqDev			= GetTaskControlModuleData(taskControl);
 	
+	// update iteration display
+	SetCtrlVal(daqDev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
+	
+	// start all DAQmx Tasks
+	return StartAllDAQmxTasks(daqDev);
 }
 
 static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "");
+	return ConfigDAQmxDevice(daqDev);
 }
 
 static FCallReturn_type* DoneTC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
@@ -6408,12 +6734,28 @@ static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, size_t curren
 {
 	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "");
+	return StopDAQmxTasks(daqDev);
 }
 
 static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 {
 	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
+	
+	if (dimmed) {
+		// device panel
+		SetCtrlAttribute(daqDev->devPanHndl, TaskSetPan_IO, ATTR_DIMMED, 1);
+		SetCtrlAttribute(daqDev->devPanHndl, TaskSetPan_IOMode, ATTR_DIMMED, 1);
+		SetCtrlAttribute(daqDev->devPanHndl, TaskSetPan_IOType, ATTR_DIMMED, 1);
+		SetCtrlAttribute(daqDev->devPanHndl, TaskSetPan_PhysChan, ATTR_DIMMED, 1);
+		SetCtrlAttribute(daqDev->devPanHndl, TaskSetPan_Mode, ATTR_DIMMED, 1);
+		SetCtrlAttribute(daqDev->devPanHndl, TaskSetPan_Repeat, ATTR_DIMMED, 1);
+		SetCtrlAttribute(daqDev->devPanHndl, TaskSetPan_Wait, ATTR_DIMMED, 1);
+		// channel panels
+		daqDev->AITaskSet->
+		
+	} else {
+		
+	}
 	
 }
 
@@ -6424,11 +6766,12 @@ static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abo
 	return init_FCallReturn_type(0, "", "");
 }
 
-static void	ErrorTC (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+static void	ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 {
 	Dev_type*	daqDev	= GetTaskControlModuleData(taskControl);
 	
-
+	DLMsg(errorMsg, 1);
+	
 }
 
 static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)

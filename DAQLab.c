@@ -250,6 +250,7 @@ static FCallReturn_type*	StartUITC									(TaskControl_type* taskControl, BOOL 
 static FCallReturn_type*	DoneUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	StoppedUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static void					DimUITC										(TaskControl_type* taskControl, BOOL dimmed);
+static void					UITCActive									(TaskControl_type* taskControl, BOOL UITCActive);
 static FCallReturn_type* 	ResetUITC 									(TaskControl_type* taskControl, BOOL const* abortFlag); 
 static void				 	ErrorUITC 									(TaskControl_type* taskControl, char* errorMsg);
 
@@ -416,7 +417,7 @@ static int DAQLab_Load (void)
 		
 		// create new UI Task Controller
 		newTaskControllerPtr = init_TaskControl_type (UITCName, ConfigureUITC, IterateUITC, StartUITC, 
-												 	  ResetUITC, DoneUITC, StoppedUITC, DimUITC, NULL, NULL, ErrorUITC); 
+												 	  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, NULL, ErrorUITC); 
 		if (!newTaskControllerPtr) {
 			DLMsg("Error: Task Controller could not be created.\n\n", 1);
 			return -1;
@@ -1480,7 +1481,8 @@ static void	DAQLab_RedrawTaskControllerUI (void)
 		
 		// adjust size of Tasks panel to its maximum
 		SetPanelAttribute(TasksUI.panHndl, ATTR_HEIGHT, TasksUI.controllerPanHeight * DAQLAB_NVISIBLE_TASKCONTROLLERS + 
-						  DAQLAB_TASKCONTROLLERS_SPACING * (DAQLAB_NVISIBLE_TASKCONTROLLERS - 1)  + 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN + menubarHeight);
+						  DAQLAB_TASKCONTROLLERS_SPACING * (DAQLAB_NVISIBLE_TASKCONTROLLERS - 1) + 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN + menubarHeight);
+		
 		// increase width and add scrollbars
 		SetPanelAttribute(TasksUI.panHndl, ATTR_WIDTH, TasksUI.controllerPanWidth + 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN + VAL_LARGE_SCROLL_BARS);
 		SetPanelAttribute(TasksUI.panHndl, ATTR_SCROLL_BARS, VAL_VERT_SCROLL_BAR);
@@ -1492,7 +1494,8 @@ static void	DAQLab_RedrawTaskControllerUI (void)
 							+ 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN + menubarHeight);
 		SetPanelAttribute(TasksUI.panHndl, ATTR_WIDTH, TasksUI.controllerPanWidth + 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN); 
 		
-		// remove scroll bars
+		// remove scroll bars and reset scroll bar offset
+		SetPanelAttribute(TasksUI.panHndl, ATTR_VSCROLL_OFFSET, 0);
 		SetPanelAttribute(TasksUI.panHndl, ATTR_SCROLL_BARS, VAL_NO_SCROLL_BARS);
 		
 	}
@@ -1779,7 +1782,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	
 	// create new task controller
 	newTaskControllerPtr = init_TaskControl_type (newControllerName, ConfigureUITC, IterateUITC, StartUITC, 
-												  ResetUITC, DoneUITC, StoppedUITC, DimUITC, NULL, NULL, ErrorUITC); 
+												  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, NULL, ErrorUITC); 
 	OKfree(newControllerName);
 	
 	if (!newTaskControllerPtr) {
@@ -1900,8 +1903,9 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 						SetCtrlAttribute(panel, TCPan1_Wait, ATTR_DIMMED, 1);
 						SetCtrlAttribute(panel, TCPan1_Reset, ATTR_DIMMED, 1);
 						SetCtrlAttribute(panel, TCPan1_Mode, ATTR_DIMMED, 1);
-						// undim abort button
-						SetCtrlAttribute(panel, TCPan1_Abort, ATTR_DIMMED, 0);
+						// undim abort button if UITC doesn't have a parent task Controller
+						if (!GetTaskControlParent(taskControl))
+							SetCtrlAttribute(panel, TCPan1_Abort, ATTR_DIMMED, 0);
 						// send start task event
 						TaskControlEvent(taskControl, TASK_EVENT_START, NULL, NULL);
 					}
@@ -2181,7 +2185,8 @@ static FCallReturn_type* ConfigureUITC (TaskControl_type* taskControl, BOOL cons
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
-	// undim Start button
+	// undim Start button if UITC doesn't have a parent Task Controller
+	if (!GetTaskControlParent(controllerUIDataPtr->taskControl))
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
 	
 	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Repeat, &repeat);
@@ -2231,12 +2236,14 @@ static FCallReturn_type* DoneUITC  (TaskControl_type* taskControl, size_t curren
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
 	// switch Stop button back to Start button
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_StartStop, 0);
-	// undim Start/Stop button
-	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
+	// undim Start/Stop and Reset buttons if UITC doesn't have a parent task Controller
+	if (!GetTaskControlParent(controllerUIDataPtr->taskControl)) {
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
+	}
 	// dim Abort button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
-	// undim Reset button
-	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
+	
 	// undim Repeat button if task is finite
 	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Mode, &taskControllerMode);  
 	if (!taskControllerMode == TASK_FINITE)
@@ -2269,12 +2276,13 @@ static FCallReturn_type* StoppedUITC	(TaskControl_type* taskControl, size_t curr
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
 	// switch Stop button back to Start button
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_StartStop, 0);
-	// undim Start/Stop button
-	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
+	// undim Start/Stop and Reset buttons if UITC doesn't have a parent task Controller
+	if (!GetTaskControlParent(controllerUIDataPtr->taskControl)) {
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
+	}
 	// dim Abort button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
-	// undim Reset button
-	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
 	// undim Repeat button if task is finite 
 	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Mode, &taskControllerMode);  
 	if (!taskControllerMode == TASK_FINITE)
@@ -2298,6 +2306,22 @@ static void	DimUITC	(TaskControl_type* taskControl, BOOL dimmed)
 		SetPanelAttribute(controllerUIDataPtr->panHndl, ATTR_DIMMED, dimmed);
 }
 
+static void	UITCActive (TaskControl_type* taskControl, BOOL UITCActive)
+{
+	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
+	
+	if (UITCActive) {
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 0);
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
+	} else {
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 1);
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 1);
+	}
+	
+}
+
 static void ErrorUITC (TaskControl_type* taskControl, char* errorMsg)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
@@ -2314,7 +2338,10 @@ static void ErrorUITC (TaskControl_type* taskControl, char* errorMsg)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 1);
 	// dim Abort button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
-	// undim Reset button
+	// undim Reset button if UITC doesn't have a parent task Controller
+	if (!GetTaskControlParent(controllerUIDataPtr->taskControl))
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
+	
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
 	// undim Repeat button if task is finite 
 	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Mode, &taskControllerMode);  

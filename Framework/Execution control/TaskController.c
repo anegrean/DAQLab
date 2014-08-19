@@ -126,7 +126,7 @@ struct TaskControl {
 	BOOL					slaveArmedFlag;				// TRUE when HW Triggering is enabled for the Task Controller and Slave has been armed before sending TASK_EVENT_ITERATION_DONE.
 	int						nIterationsFlag;			// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
 	int						iterationTimerID;			// Keeps track of the timeout timer when iteration is performed in another thread.
-	BOOL					UITCFlag;					// Determines whether the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
+	BOOL					UITCFlag;					// If TRUE, the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
 	
 	// Event handler function pointers
 	ConfigureFptr_type		ConfigureFptr;
@@ -136,6 +136,7 @@ struct TaskControl {
 	DoneFptr_type			DoneFptr;
 	StoppedFptr_type		StoppedFptr;
 	DimUIFptr_type			DimUIFptr;
+	UITCActiveFptr_type		UITCActiveFptr;
 	DataReceivedFptr_type	DataReceivedFptr;
 	ModuleEventFptr_type	ModuleEventFptr;
 	ErrorFptr_type			ErrorFptr;
@@ -231,6 +232,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 										DoneFptr_type			DoneFptr,
 										StoppedFptr_type		StoppedFptr,
 										DimUIFptr_type			DimUIFptr,
+										UITCActiveFptr_type		UITCActiveFptr,
 										DataReceivedFptr_type	DataReceivedFptr,
 										ModuleEventFptr_type	ModuleEventFptr,
 										ErrorFptr_type			ErrorFptr)
@@ -290,6 +292,7 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	a -> DoneFptr				= DoneFptr;
 	a -> StoppedFptr			= StoppedFptr;
 	a -> DimUIFptr				= DimUIFptr;
+	a -> UITCActiveFptr			= UITCActiveFptr;
 	a -> DataReceivedFptr		= DataReceivedFptr;
 	a -> ModuleEventFptr		= ModuleEventFptr;
 	a -> ErrorFptr				= ErrorFptr;
@@ -884,6 +887,14 @@ static char* EventToString (TaskEvents_type event)
 			
 			return StrDup("Device or Module specific event");
 			
+		case TASK_EVENT_SUBTASK_ADDED_TO_PARENT:
+			
+			return StrDup("SubTask added to parent Task"); 
+			
+		case TASK_EVENT_SUBTASK_REMOVED_FROM_PARENT:
+			
+			return StrDup("SubTask removed from parent Task"); 
+			
 	}
 	
 	return StrDup("?");
@@ -925,6 +936,10 @@ static char* FCallToString (TaskFCall_type fcall)
 		case TASK_FCALL_DIM_UI:
 			
 			return StrDup("FunctionCall Dim UI");
+			
+		case TASK_FCALL_UITC_ACTIVE:
+			
+			return StrDup("FunctionCall UITC Active");
 			
 		case TASK_FCALL_DATA_RECEIVED:
 			
@@ -1294,6 +1309,11 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 			if (taskControl->DimUIFptr) (*taskControl->DimUIFptr)(taskControl, *(BOOL*)fCallData); 
 			break;
 			
+		case TASK_FCALL_UITC_ACTIVE:
+			
+			if (taskControl->UITCActiveFptr) (*taskControl->UITCActiveFptr)(taskControl, *(BOOL*)fCallData);
+			break;
+			
 		case TASK_FCALL_DATA_RECEIVED:
 			
 			if (taskControl->DataReceivedFptr) fCallResult = (*taskControl->DataReceivedFptr)(taskControl, taskControl->state, *(SinkVChan_type**)fCallData, &taskControl->abortFlag);
@@ -1313,7 +1333,7 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 				DimTaskTreeBranch (taskControl, event, FALSE);
 
 			// call ErrorFptr
-			if (taskControl->ErrorFptr)  (*taskControl->ErrorFptr)		(taskControl, taskControl->errorMsg->errorInfo);
+			if (taskControl->ErrorFptr) (*taskControl->ErrorFptr)(taskControl, taskControl->errorMsg->errorInfo);
 			break;
 				
 	}
@@ -1351,6 +1371,11 @@ int	AddSubTaskToParent (TaskControl_type* parent, TaskControl_type* child)
 	subtaskItem.subtask			= child;
 	subtaskItem.subtaskState	= child->state;
 	
+	// call UITC Active function to dim/undim UITC Task Control execution
+	BOOL	UITCFlag = FALSE;
+	if (child->UITCFlag)
+		FunctionCall(child, TASK_EVENT_SUBTASK_ADDED_TO_PARENT, TASK_FCALL_UITC_ACTIVE, &UITCFlag);
+	
 	// insert subtask
 	if (!ListInsertItem(parent->subtasks, &subtaskItem, END_OF_LIST)) return -1;
 
@@ -1379,6 +1404,11 @@ int	RemoveSubTaskFromParent	(TaskControl_type* child)
 			}
 			child->subtaskIdx = 0;
 			child->parenttask = NULL;
+			
+			// call UITC Active function to dim/undim UITC Task Control execution
+			BOOL	UITCFlag = TRUE;
+			if (child->UITCFlag)
+				FunctionCall(child, TASK_EVENT_SUBTASK_REMOVED_FROM_PARENT, TASK_FCALL_UITC_ACTIVE, &UITCFlag);
 			
 			return 0; // found and removed
 		}
@@ -1800,9 +1830,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			switch (eventpacket.event) { 
 				
 				case TASK_EVENT_CONFIGURE: 
-					// Reconfigures Task Controller
+					// Reconfigures Task Controller and all its SubTasks
 					
-					// configure again only this task control
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_UNCONFIGURED);
 					if (TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
 						taskControl->errorMsg =

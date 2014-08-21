@@ -282,7 +282,6 @@ SourceVChan_type* init_SourceVChan_type	(char 						name[],
 SinkVChan_type* init_SinkVChan_type	(char 						name[], 
 									 VChanData_type 			dataType,
 									 void* 						vChanOwner,
-									 size_t						dataSize,
 									 Connected_CBFptr_type		Connected_CBFptr,
 									 Disconnected_CBFptr_type	Disconnected_CBFptr)
 {
@@ -297,7 +296,7 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 		
 	vchan->sourceVChan = NULL;
 	// init thread safe queue
-	CmtNewTSQ(DEFAULT_SinkVChan_QueueSize, dataSize, 0, &vchan->tsqHndl); 
+	CmtNewTSQ(DEFAULT_SinkVChan_QueueSize, sizeof(DataPacket_type), 0, &vchan->tsqHndl); 
 	// init write timeout (time to keep on trying to write a data packet to the queue)
 	vchan->writeTimeout = DEFAULT_SinkVChan_QueueWriteTimeout;
 	
@@ -369,17 +368,23 @@ FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dat
 {
 #define SendDataPacket_Err_TSQWrite		-1
 	
+	int		nSinks	= ListNumItems(source->sinkVChans);
+	
+	// if there are no Sink VChans, then dispose of the data and do nothing
+	if (!nSinks) {
+		ReleaseDataPacket(dataPacket);
+		return NULL; 
+	} 
 	// set sinks counter
 	int* ctrTSVptr;
 	CmtGetTSVPtr(dataPacket->ctr, &ctrTSVptr);
-	*ctrTSVptr = ListNumItems(source->sinkVChans);
+	*ctrTSVptr = nSinks;
 	CmtReleaseTSVPtr(dataPacket->ctr);
 	
 	// send data to sinks
 	SinkVChan_type** 	sinkPtrPtr;
-	size_t				nItems			= ListNumItems(source->sinkVChans);
 	int					itemsWritten;
-	for (size_t i = 1; i <= nItems; i++) {
+	for (size_t i = 1; i <= nSinks; i++) {
 		sinkPtrPtr = ListGetPtrToItem(source->sinkVChans,i);
 		// put data packet into Sink VChan TSQ
 		itemsWritten = CmtWriteTSQData((*sinkPtrPtr)->tsqHndl, dataPacket, 1, (*sinkPtrPtr)->writeTimeout, NULL);
@@ -503,6 +508,12 @@ double GetSinkVChanWriteTimeout	(SinkVChan_type* sink)
 {
 	return sink->writeTimeout;
 }
+
+void* GetPtrToVChanOwner (VChan_type* vchan)
+{
+	return vchan->vChanOwner;
+}
+
 //==============================================================================
 // VChan data types management
 

@@ -90,7 +90,7 @@ static void						dispose_PIStageCommand_EventInfo	(void* eventInfo);
 //-----------------------------------------
 
 static FCallReturn_type*		ConfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag);
-static void						IterateTC							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void						IterateTC							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 static FCallReturn_type*		StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag);
 static FCallReturn_type*		DoneTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*		StoppedTC							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
@@ -499,7 +499,7 @@ static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const*
 	return init_FCallReturn_type(0, "", "");
 }
 
-static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
 	Zstage_type* 		zstage 		= GetTaskControlModuleData(taskControl);
 	

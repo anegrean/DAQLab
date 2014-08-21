@@ -245,7 +245,7 @@ int 						CVICALLBACK TaskTree_CB 					(int panel, int control, int event, void 
 //-----------------------------------------
 
 static FCallReturn_type*	ConfigureUITC								(TaskControl_type* taskControl, BOOL const* abortFlag);
-static void					IterateUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void					IterateUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 static FCallReturn_type*	StartUITC									(TaskControl_type* taskControl, BOOL const* abortFlag);
 static FCallReturn_type*	DoneUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	StoppedUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
@@ -677,13 +677,12 @@ BOOL DLRegisterVChan (VChan_type* vchan)
 int DLUnregisterVChan (VChan_type* vchan)
 {   
 	size_t			itemPos;
-	VChan_type** 	VChanPtr	 = DLVChanExists(vchan, &itemPos);
-	if (!VChanPtr) {
+	if (!DLVChanExists(vchan, &itemPos)) {
 		DAQLab_Msg(DAQLAB_MSG_ERR_VCHAN_NOT_FOUND, vchan, 0, 0, 0);
 		return FALSE;
 	}
 	
-	VChan_Disconnect(*VChanPtr);
+	VChan_Disconnect(vchan);
 	ListRemoveItem(VChannels, 0, itemPos);
 	
 	return TRUE;
@@ -691,27 +690,26 @@ int DLUnregisterVChan (VChan_type* vchan)
 
 /// HIFN Checks if a VChan object is present in the DAQLab framework.
 /// OUT idx 1-based index of VChan object in a ListType list of VChans kept by the DAQLab framework. Pass 0 if this is not needed. If item is not found, *idx is 0.
-/// HIRET Pointer to the found VChan_type* if VChan exists, NULL otherwise. 
-/// HIRET Pointer is valid until another call to DLRegisterVChan or DLUnregisterVChan. 
-VChan_type** DLVChanExists (VChan_type* vchan, size_t* idx)
+/// HIRET TRUE if VChan exists, FALSE otherwise. 
+BOOL DLVChanExists (VChan_type* vchan, size_t* idx)
 {
 	VChan_type** VChanPtrPtr;
 	for (int i = 1; i <= ListNumItems(VChannels); i++) {
 		VChanPtrPtr = ListGetPtrToItem(VChannels, i);
 		if (*VChanPtrPtr == vchan) {
 			if (idx) *idx = i;
-			return VChanPtrPtr;
+			return TRUE;
 		}
 	}
 	if (idx) *idx = 0;
-	return NULL;
+	return FALSE;
 }
 
 /// HIFN Searches for a given VChan name and if found, return pointer to it.
 /// OUT idx 1-based index of VChan object in a ListType list of VChans kept by the DAQLab framework. Pass 0 if this is not needed. If item is not found, *idx is 0.
 /// HIRET Pointer to the found VChan_type* if VChan exists, NULL otherwise. 
 /// HIRET Pointer is valid until another call to DLRegisterVChan or DLUnregisterVChan. 
-VChan_type** DLVChanNameExists (char name[], size_t* idx)
+VChan_type* DLVChanNameExists (char name[], size_t* idx)
 {
 	VChan_type** 	VChanPtrPtr;
 	char*			listName;
@@ -721,7 +719,7 @@ VChan_type** DLVChanNameExists (char name[], size_t* idx)
 		if (!strcmp(listName, name)) {
 			if (idx) *idx = i;
 			OKfree(listName);
-			return VChanPtrPtr;
+			return *VChanPtrPtr;
 		}
 		OKfree(listName);
 	}
@@ -2206,7 +2204,7 @@ static FCallReturn_type* ConfigureUITC (TaskControl_type* taskControl, BOOL cons
 	return init_FCallReturn_type(0, "", "");
 }
 
-static void IterateUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void IterateUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	

@@ -28,7 +28,6 @@
 #define  ZStagePan_AddRefPos              13      /* control type: command, callback function: (none) */
 #define  ZStagePan_RefPosList             14      /* control type: listBox, callback function: (none) */
 #define  ZStagePan_Status                 15      /* control type: LED, callback function: (none) */
-#define  ZStagePan_Start                  16      /* control type: command, callback function: (none) */
 
 
      /* Control Arrays: */

@@ -86,7 +86,7 @@ static int CVICALLBACK 				Zstage_UIPan_CB 				(int panel, int event, void *call
 //-----------------------------------------
 
 static FCallReturn_type*	Zstage_ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
-static void					Zstage_IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void					Zstage_IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 static FCallReturn_type*	Zstage_StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
 static FCallReturn_type*	Zstage_DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	Zstage_StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
@@ -463,12 +463,6 @@ static int CVICALLBACK Zstage_UICtrls_CB (int panel, int control, int event, voi
 			
 			switch (control) {
 					
-				case ZStagePan_Start:	  // temporary to test z stage controller
-					
-					TaskControlEvent(zstage->taskController, TASK_EVENT_START, NULL, NULL);
-					
-					break;
-			
 				case ZStagePan_MoveZUp:
 					
 					// move up relative to current position with selected step size
@@ -741,7 +735,7 @@ static FCallReturn_type* Zstage_ConfigureTC	(TaskControl_type* taskControl, BOOL
 	return init_FCallReturn_type(0, "", "");
 }
 
-static void Zstage_IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void Zstage_IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	

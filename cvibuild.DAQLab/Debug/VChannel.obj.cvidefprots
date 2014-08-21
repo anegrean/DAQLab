@@ -4,7 +4,7 @@ Prototype="struct SourceVChan *init_SourceVChan_type(char *name, VChanData_type 
 
 [init_SinkVChan_type]
 Class="Function"
-Prototype="struct SinkVChan *init_SinkVChan_type(char *name, VChanData_type dataType, void *vChanOwner, unsigned int dataSize, void (*Connected_CBFptr)(struct VChan *, struct VChan *), void (*Disconnected_CBFptr)(struct VChan *, struct VChan *));"
+Prototype="struct SinkVChan *init_SinkVChan_type(char *name, VChanData_type dataType, void *vChanOwner, void (*Connected_CBFptr)(struct VChan *, struct VChan *), void (*Disconnected_CBFptr)(struct VChan *, struct VChan *));"
 
 [discard_VChan_type]
 Class="Function"
@@ -57,6 +57,10 @@ Prototype="void SetSinkVChanWriteTimeout(struct SinkVChan *sink, double time);"
 [GetSinkVChanWriteTimeout]
 Class="Function"
 Prototype="double GetSinkVChanWriteTimeout(struct SinkVChan *sink);"
+
+[GetPtrToVChanOwner]
+Class="Function"
+Prototype="void *GetPtrToVChanOwner(struct VChan *vchan);"
 
 [init_Waveform_type]
 Class="Function"

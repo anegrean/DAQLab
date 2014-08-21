@@ -381,7 +381,7 @@ typedef FCallReturn_type* 	(*ConfigureFptr_type) 			(TaskControl_type* taskContr
 // or even in another thread. In either case, to signal back to the Task Controller that the iteration function is complete, send a
 // TASK_EVENT_ITERATION_DONE event using TaskControlEvent and passing for eventInfo init_FCallReturn_type (...) and for disposeEventInfoFptr
 // discard_FCallReturn_type.
-typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
 // Called before the first iteration starts from an INITIAL state.
 typedef FCallReturn_type* 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag); 
@@ -501,6 +501,9 @@ ListType				GetTaskControlSubTasks				(TaskControl_type* taskControl);
 	// True, TC is of an UITC type, False otherwise. default = False
 void					SetTaskControlUITCFlag				(TaskControl_type* taskControl, BOOL UITCFlag);
 BOOL					GetTaskControlUITCFlag				(TaskControl_type* taskControl);
+
+	// Returns TRUE if iteration must be stopped
+BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------

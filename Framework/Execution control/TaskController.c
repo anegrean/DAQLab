@@ -439,11 +439,6 @@ void SetTaskControlLog (TaskControl_type* taskControl, TaskExecutionLog_type* lo
 	taskControl->logPtr = logPtr;
 }
 
-BOOL GetTaskControlAbortIterationFlag (TaskControl_type* taskControl)
-{
-	return taskControl->abortIterationFlag;
-}
-
 HWTrigger_type GetTaskControlHWTrigger (TaskControl_type* taskControl)
 {
 	if (!taskControl->masterHWTrigTask && ListNumItems(taskControl->slaveHWTrigTasks ))
@@ -486,6 +481,10 @@ BOOL GetTaskControlUITCFlag	(TaskControl_type* taskControl)
 	return taskControl->UITCFlag; 
 }
 
+BOOL GetTaskControlAbortIterationFlag (TaskControl_type* taskControl)
+{
+	return taskControl->abortIterationFlag;
+}
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1180,7 +1179,8 @@ void AbortTaskControlExecution (TaskControl_type* taskControl)
 {
 	SubTask_type* subtaskPtr;
 		
-	taskControl->abortFlag = TRUE;
+	taskControl->abortFlag 				= TRUE;
+	taskControl->abortIterationFlag		= TRUE;
 	
 	// send STOP event to self
 	TaskControlEvent(taskControl, TASK_EVENT_STOP, NULL, NULL);
@@ -1198,7 +1198,7 @@ int CVICALLBACK ScheduleIterateFunction (void* functionData)
 {
 	TaskControl_type* taskControl = functionData;
 	
-	(*taskControl->IterateFptr)(taskControl, taskControl->currIterIdx, &taskControl->abortFlag);
+	(*taskControl->IterateFptr)(taskControl, taskControl->currIterIdx, &taskControl->abortIterationFlag);
 	
 	return 0;
 }
@@ -1563,7 +1563,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 		return; // in case there are no items or there is an error
 	
 	// reset abort flag
-	taskControl->abortFlag = 0;
+	taskControl->abortFlag = FALSE;
 	
 	switch (taskControl->state) {
 		

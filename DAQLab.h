@@ -101,11 +101,11 @@ BOOL				DLRegisterVChan					(VChan_type* vchan);
 	// Deregisters a VChan from the DAQLab framework
 BOOL				DLUnregisterVChan				(VChan_type* vchan);
 
-	// Searches for a given VChan object and if found, return pointer to it. 
-VChan_type**		DLVChanExists					(VChan_type* vchan, size_t* idx);
+	// Checks if a given VChan object exists
+BOOL				DLVChanExists					(VChan_type* vchan, size_t* idx);
 
-	// Searches for a given VChan name and if found, return pointer to it. 
-VChan_type**		DLVChanNameExists				(char name[], size_t* idx);
+	// Searches for a given VChan name
+VChan_type*			DLVChanNameExists				(char name[], size_t* idx);
 
 	// To Validate a new VChan name, pass this function as a parameter when calling DLGetUINameInput.
 BOOL				DLValidateVChanName				(char newVChanName[], void* null);

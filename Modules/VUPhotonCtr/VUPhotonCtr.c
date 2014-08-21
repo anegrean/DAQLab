@@ -229,7 +229,7 @@ static int PMTController_ResetFifo(void);
 //-----------------------------------------
 
 static FCallReturn_type*	ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
-static void					IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void					IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 static FCallReturn_type*	StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
 static FCallReturn_type*	DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 static FCallReturn_type*	StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);

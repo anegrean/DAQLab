@@ -118,16 +118,15 @@ struct DataPacket {
 //------------------------------------------------------------------------------
 
 SourceVChan_type*		init_SourceVChan_type		(char 						name[], 
-										  	  	 	VChanData_type 			dataType,
+										  	  	 	VChanData_type 				dataType,
 										 	  	 	void* 						vChanOwner,
 												 	Connected_CBFptr_type		Connected_CBFptr,
 												 	Disconnected_CBFptr_type	Disconnected_CBFptr);
 
 
 SinkVChan_type*			init_SinkVChan_type			(char 						name[], 
-										  	  	 	VChanData_type 			dataType,
+										  	  	 	VChanData_type 				dataType,
 										 	  	 	void* 						vChanOwner,
-												 	size_t						dataSize,
 												 	Connected_CBFptr_type		Connected_CBFptr,
 												 	Disconnected_CBFptr_type	Disconnected_CBFptr);
 
@@ -165,6 +164,8 @@ size_t					GetSinkVChanTSQSize			(SinkVChan_type* sink);
 	// Time in [ms] to keep on trying to write a data packet to a Sink VChan TSQ		
 void					SetSinkVChanWriteTimeout	(SinkVChan_type* sink, double time);	
 double					GetSinkVChanWriteTimeout	(SinkVChan_type* sink);
+
+void*					GetPtrToVChanOwner			(VChan_type* vchan);
 
 
 //------------------------------------------------------------------------------

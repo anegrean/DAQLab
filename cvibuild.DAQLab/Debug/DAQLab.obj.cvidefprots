@@ -28,11 +28,11 @@ Prototype="int DLUnregisterVChan(struct VChan *vchan);"
 
 [DLVChanExists]
 Class="Function"
-Prototype="struct VChan **DLVChanExists(struct VChan *vchan, unsigned int *idx);"
+Prototype="int DLVChanExists(struct VChan *vchan, unsigned int *idx);"
 
 [DLVChanNameExists]
 Class="Function"
-Prototype="struct VChan **DLVChanNameExists(char *name, unsigned int *idx);"
+Prototype="struct VChan *DLVChanNameExists(char *name, unsigned int *idx);"
 
 [DLValidateVChanName]
 Class="Function"

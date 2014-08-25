@@ -1,6 +1,7 @@
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabModule.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLabUtility.obj" ;
+Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\GalvoScanEngine.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\NIDAQmxManager.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\PIStage.obj" ;
 Depends "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\DAQLab.exe" : "d:\\ELE_DAQLab\\cvibuild.DAQLab\\Debug\\TaskController.obj" ;

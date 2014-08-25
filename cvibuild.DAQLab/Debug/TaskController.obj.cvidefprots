@@ -74,10 +74,6 @@ Prototype="void *GetTaskControlModuleData(struct TaskControl *taskControl);"
 Class="Function"
 Prototype="void SetTaskControlLog(struct TaskControl *taskControl, struct TaskExecutionLog *logPtr);"
 
-[GetTaskControlAbortIterationFlag]
-Class="Function"
-Prototype="int GetTaskControlAbortIterationFlag(struct TaskControl *taskControl);"
-
 [GetTaskControlHWTrigger]
 Class="Function"
 Prototype="HWTrigger_type GetTaskControlHWTrigger(struct TaskControl *taskControl);"
@@ -97,6 +93,10 @@ Prototype="void SetTaskControlUITCFlag(struct TaskControl *taskControl, int UITC
 [GetTaskControlUITCFlag]
 Class="Function"
 Prototype="int GetTaskControlUITCFlag(struct TaskControl *taskControl);"
+
+[GetTaskControlAbortIterationFlag]
+Class="Function"
+Prototype="int GetTaskControlAbortIterationFlag(struct TaskControl *taskControl);"
 
 [AddSinkVChan]
 Class="Function"

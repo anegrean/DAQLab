@@ -1,6 +1,7 @@
 DAQLab.obj
 DAQLabModule.obj
 DAQLabUtility.obj
+GalvoScanEngine.obj
 NIDAQmxManager.obj
 PIStage.obj
 TaskController.obj

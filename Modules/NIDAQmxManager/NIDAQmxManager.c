@@ -638,6 +638,7 @@ typedef struct {
 
 //========================================================================================================================================================================================================
 // Module implementation
+typedef struct NIDAQmxManager 	NIDAQmxManager_type;
 
 struct NIDAQmxManager {
 	
@@ -1001,7 +1002,7 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 {
 	NIDAQmxManager_type* 	nidaq 		= (NIDAQmxManager_type*) (*mod);
 	size_t					nDAQDevs	= ListNumItems(nidaq->DAQmxDevices);
-	Dev_type**			DAQDevPtrPtr;
+	Dev_type**				DAQDevPtrPtr;
 	
 	if (!nidaq) return;
 	
@@ -2683,6 +2684,15 @@ Error:
 	return NULL;
 }
 
+static void VChanConnected (VChan_type* self, VChan_type* connectedVChan)
+{
+	// implement how to handle VChan connect/disconnect by this module
+}
+static void VChanDisconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	// implement how to handle VChan connect/disconnect by this module
+}
+
 static ListType GetSupportedIOTypes (char devName[], int IOType)
 {
 	ListType 	IOTypes 	= ListCreate(sizeof(int));
@@ -3076,15 +3086,15 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	char* 						dev_pt     			= NULL;
 	char** 						idxnames  			= NULL;          // Used to break up the names string
 	char** 						idxstr    			= NULL;          // Used to break up the other strings like AI channels
-	DevAttr_type* 			devAttrPtr; 
-	AIChannel_type*		newAIChanPtr		= NULL;
-	AOChannel_type*		newAOChanPtr		= NULL;
-	DILineChannel_type*	newDILineChanPtr	= NULL;
-	DIPortChannel_type*	newDIPortChanPtr	= NULL;
-	DOLineChannel_type*	newDOLineChanPtr	= NULL;
-	DOPortChannel_type*	newDOPortChanPtr	= NULL;
-	CIChannel_type*		newCIChanPtr		= NULL;
-	COChannel_type*		newCOChanPtr		= NULL;
+	DevAttr_type* 				devAttrPtr; 
+	AIChannel_type*				newAIChanPtr		= NULL;
+	AOChannel_type*				newAOChanPtr		= NULL;
+	DILineChannel_type*			newDILineChanPtr	= NULL;
+	DIPortChannel_type*			newDIPortChanPtr	= NULL;
+	DOLineChannel_type*			newDOLineChanPtr	= NULL;
+	DOPortChannel_type*			newDOPortChanPtr	= NULL;
+	CIChannel_type*				newCIChanPtr		= NULL;
+	COChannel_type*				newCOChanPtr		= NULL;
 	int 						ndev        		= 0;
 	int 						columns     		= 0;
 	unsigned int   				nAI;          						// # AI chan

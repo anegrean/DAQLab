@@ -1,4 +1,8 @@
-[Define_Your_Functions_Here]
+[initalloc_GalvoScanEngine]
 Class="Function"
-Prototype="int Define_Your_Functions_Here(int x);"
+Prototype="struct DAQLabModule *initalloc_GalvoScanEngine(struct DAQLabModule *mod, char *className, char *instanceName);"
+
+[discard_GalvoScanEngine]
+Class="Function"
+Prototype="void discard_GalvoScanEngine(struct DAQLabModule **mod);"
 

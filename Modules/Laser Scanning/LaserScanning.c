@@ -1,5 +1,3 @@
-#include <userint.h>
-#include "UI_GalvoScanEngine.h"
 
 //==============================================================================
 //
@@ -15,7 +13,10 @@
 // Include files
 
 #include "DAQLab.h" 		// include this first   
-#include "GalvoScanEngine.h"
+#include "LaserScanning.h"
+#include <userint.h>
+#include "UI_LaserScanning.h"
+
 
 
 //==============================================================================
@@ -23,105 +24,208 @@
 
 #define MOD_GalvoScanEngine_UI 		"./Modules/Galvo Scan Engine/UI_GalvoScanEngine.uir"
 // default VChan names
-#define VChan_XGalvo_Command		"X Galvo Command"
-#define VChan_YGalvo_Command		"Y Galvo Command"
+#define VChan_FastGalvo_Command		"Fast Galvo Command"
+#define VChan_FastGalvo_Position	"Fast Galvo Position" 
+#define VChan_SlowGalvo_Command		"Slow Galvo Command"
+#define VChan_SlowGalvo_Position	"Slow Galvo Position"
 #define VChan_ImageOut				"Image Out"
 
 //==============================================================================
 // Types
 
 	// forward declared
-typedef struct ScanEngine 	ScanEngine_type;  
+typedef struct LaserScanning 	LaserScanning_type;  
 
-//------------------
-// Galvo calibration
-//------------------
+//------------------------------
+// Generic scan axis calibration
+//------------------------------
+
+// Scan axis types
+typedef enum {
+	NonResonant,							// Normal non-resonant deflectors (common galvos).
+	Resonant,								// Resonant deflectors.
+	AOD,									// Acousto-optic deflector.
+	Translation								// Translation type axis such as a moving stage.
+} ScanAxis_type;
+
+// Generic scan axis class
+typedef struct {
+	ScanAxis_type			scanAxisType;
+	char*					calName;
+} ScanAxisCal_type;
+
+//---------------------------------------------------
+// Normal non-resonant galvo scanner calibration data
+//---------------------------------------------------
 typedef struct{
-	
-	int 				n;				// Number of steps.
-	double* 			stepSize;  		// Amplitude in [V] Pk-Pk of the command signal.
-	double* 			halfSwitch;		// Time to reach 50% of the stepsize voltage in [ms].  
-	
+	size_t 					n;				// Number of steps.
+	double* 				stepSize;  		// Amplitude in [V] Pk-Pk of the command signal.
+	double* 				halfSwitch;		// Time to reach 50% of the stepsize voltage in [ms].  
 } SwitchTimes_type;
 
 typedef struct{
-	
-	int 				n;				// Number of amplitudes for whih the slope is measured.
-	double* 			slope; 			// Maximum slope in [V/ms] of the command signal that the galvo can still follow given a certain ramp amplitude.
-	double* 			amplitude;		// Amplitude in [V] Pk-Pk of the command signal.	
-	
+	size_t 					n;				// Number of amplitudes for whih the slope is measured.
+	double* 				slope; 			// Maximum slope in [V/ms] of the command signal that the galvo can still follow given a certain ramp amplitude.
+	double* 				amplitude;		// Amplitude in [V] Pk-Pk of the command signal.	
 } MaxSlopes_type;
 
 typedef struct{
-	
-	int 				n;				// Number of triangle waveform amplitudes.
-	double 				deadTime;		// Dead time in [ms] before and at the end of each line scan when the galvo is not moving at constant speed (due to turning around).
-										// This time is about the same for all scan frequencies and amplitudes that the galvo can follow.
-	double* 			commandAmp;		// Amplitude in [V] Pk-Pk of the command signal.
-	double* 			actualAmp;		// Amplitude in [V] Pk-Pk where the galvo motion is constant.
-	double* 			maxFreq;		// For given amplitude, maximum triangle wave frequency that the galvo can still follow for at least 1 sec.
-										// Note: the line scan frequency is twice this frequency
-	double* 			resLag;			// Residual lag in [ms] that must be added to lag to accurately describe overall lag during dynamic scanning.
-	
+	size_t 					n;				// Number of triangle waveform amplitudes.
+	double 					deadTime;		// Dead time in [ms] before and at the end of each line scan when the galvo is not moving at constant speed (due to turning around).
+											// This time is about the same for all scan frequencies and amplitudes that the galvo can follow.
+	double* 				commandAmp;		// Amplitude in [V] Pk-Pk of the command signal.
+	double* 				actualAmp;		// Amplitude in [V] Pk-Pk where the galvo motion is constant.
+	double* 				maxFreq;		// For given amplitude, maximum triangle wave frequency that the galvo can still follow for at least 1 sec.
+											// Note: the line scan frequency is twice this frequency
+	double* 				resLag;			// Residual lag in [ms] that must be added to lag to accurately describe overall lag during dynamic scanning.
 } TriangleCal_type;
 		
 typedef struct {
-	double*				slope;			// in [V/V]
-	double*				offset;			// in [V]
-	double*				posStdDev;		// in [V]
-	double*				lag;			// in [ms]
-	SwitchTimes_type*	switchTimes;
-	MaxSlopes_type*		maxSlopes;
-	TriangleCal_type*	triangleCal;
+	ScanAxisCal_type		calType;		// Base structure describing scan engine calibration. Must be first member of the structure.
+	double*					slope;			// in [V/V]
+	double*					offset;			// in [V]
+	double*					posStdDev;		// in [V]
+	double*					lag;			// in [ms]
+	SwitchTimes_type*		switchTimes;
+	MaxSlopes_type*			maxSlopes;
+	TriangleCal_type*		triangleCal;
 	struct {
-		double resolution;				// in [V]
-		double minStepSize;				// in [V]
-		double parked;         			// in [V]
-		double scantime;				// in [s]
-	}	 				galvocalUIset;
-} GalvoCal_type;
+		double resolution;					// in [V]
+		double minStepSize;					// in [V]
+		double parked;         				// in [V]
+		double scantime;					// in [s]
+	}	 					galvocalUIset;
+} SimpleGalvoCal_type;
+
+//---------------------------------------------------
+// Resonant galvo scanner calibration data
+//---------------------------------------------------
+
+// add here structures
+
+//---------------------------------------------------
+
+
+
+
+
+//---------------------------------------------------
+// Acousto-optic deflector calibration data
+//---------------------------------------------------
+
+// add here structures
+
+//---------------------------------------------------
+
+
+
+
+
+//---------------------------------------------------
+// Translation axis calibration data
+//---------------------------------------------------
+
+// add here structures
+
+//---------------------------------------------------
+
 
 typedef struct {
-	
-	ScanEngine_type*	scanEngineRef;	// Reference to the scan engine that owns this detection VChan.
-	SinkVChan_type*		detVChan;
-	
+	SinkVChan_type*			detVChan;
 } DetChan_type;
+
+//------------------
+// Scan Engine Class
+//------------------
+// scan engine child classes
+typedef enum {
+	ScanEngine_RectRaster
+} ScanEngineEnum_type;
+
+typedef struct {
+	//-----------------------------------
+	// Scan engine type
+	//-----------------------------------
+	ScanEngineEnum_type		engineType;
+	
+	//-----------------------------------
+	// Reference to axis calibration data
+	//-----------------------------------
+	ScanAxisCal_type*		fastAxisCal;
+	ScanAxisCal_type*		slowAxisCal;
+	
+	//-----------------------------------
+	// Task Controller
+	//-----------------------------------
+	TaskControl_type*		taskControl;
+	
+	//-----------------------------------
+	// VChans
+	//-----------------------------------
+		// Command signals
+	SinkVChan_type*			VChanFastAxisCom;   
+	SinkVChan_type*			VChanSlowAxisCom;   
+		// Position feedback signals (optional)
+	SourceVChan_type*		VChanFastAxisPos;
+	SourceVChan_type*		VChanSlowAxisPos;
+	BOOL					useFastAxisPos;			// Flag to use position feedback to reconstruct scanner position
+	BOOL					useSlowAxisPos;			// Flag to use position feedback to reconstruct scanner position
+		// Scan Engine output
+	SourceVChan_type*		VChanImgOUT;
+		// Detector input channels of DetChan_type* with incoming fluorescence pixel stream 
+	ListType				DetChans; 
+	
+	//-----------------------------------
+	// Methods
+	//-----------------------------------
+	void	(*Discard) (ScanEngine_type** scanEngine);
+		
+} ScanEngine_type;
+
+//------------------------
+// Rectangular raster scan
+//------------------------
+typedef struct {
+	ScanEngine_type			scanEngine;				// Base class, must be first structure member.
+	
+	//----------------
+	// Scan parameters
+	//----------------
+	double					masterClockRate;		// Clock frequency defined as the smallest time unit in [Hz].
+	double					fastAxisSamplingRate;   // Fast axis waveform sampling rate in [Hz].
+	double					slowAxisSamplingRate;	// Slow axis waveform sampling rate in [Hz].
+	size_t					height;					// Image height in [pix].
+	size_t					heightOffset;			// Image height offset from center in [pix].
+	size_t					width;					// Image width in [pix].
+	size_t					widthOffset;			// Image width offset in [pix].
+	double					pixSize;				// Image pixel size in [um]. 
+	double					fps;					// Actual frames per second. Upper limit determined by image size, pixel dwell time, etc.
+} RectangleRaster_type;
+
 
 //----------------------
 // Module implementation
 //----------------------
-struct ScanEngine {
+struct LaserScanning {
 	
 	// SUPER, must be the first member to inherit from
 	
-	DAQLabModule_type 	baseClass;
+	DAQLabModule_type 		baseClass;
 	
 	// DATA
 	
-		//-------------------------
-		// VChans
-		//-------------------------
+		// Calibration data per scan axis. Of ScanAxisCal_type* which can be casted to various child classes such as GalvoCal_type*
+	ListType				calScanAxis;
+		// Scan engines of ScanEngine_type* base class which can be casted to specific scan engines. 
+	ListType				scanEngines;
 	
-		// Galvo command
-	SinkVChan_type*		VChanXCom;
-	SinkVChan_type*		VChanYCom;
-		// Scan Engine output
-	SourceVChan_type*	VChanImgOUT;
-		// Detector input channels of DetChan_type* with incoming fluorescence pixel stream 
-	ListType			DetChans; 
 	
 		//-------------------------
 		// UI
 		//-------------------------
 	
-	int					mainPanHndl;
-	int					scanSetPanHndl;
-	
-	
-	
-	// METHODS 
-	
+	int						mainPanHndl;
+
 };
 
 //==============================================================================
@@ -143,10 +247,19 @@ static void							discard_DetChan_type					(DetChan_type** a);
 static void							DetVChanConnected						(VChan_type* self, VChan_type* connectedVChan);
 static void							DetVChanDisconnected					(VChan_type* self, VChan_type* disconnectedVChan); 
 
-//------------------
-// Galvo calibration
-//------------------
+//----------------------
+// Scan axis calibration
+//----------------------
 static int CVICALLBACK 				GalvoCal_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+//-------------
+// Scan Engines
+//-------------
+	// parent class
+static ScanEngine_type*				init_ScanEngine_type					(ScanEngineEnum_type engineType);
+static void							discard_ScanEngine_type					(ScanEngine_type** scanEngine);
+	// rectangle raster scan
+static void							discard_RectangleRaster_type			(ScanEngine_type** scanEngine);
 
 //------------------
 // Module management
@@ -174,16 +287,16 @@ static void CVICALLBACK 			SettingsMenu_CB 						(int menuBar, int menuItem, voi
 /// HIRET NULL if only initialization was performed.
 DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char className[], char instanceName[])
 {
-	ScanEngine_type*		engine;
+	LaserScanning_type*		ls;
 	
 	if (!mod) {
-		engine = malloc (sizeof(ScanEngine_type));
-		if (!engine) return NULL;
+		ls = malloc (sizeof(LaserScanning_type));
+		if (!ls) return NULL;
 	} else
-		engine = (ScanEngine_type*) mod;
+		ls = (LaserScanning_type*) mod;
 		
 	// initialize base class
-	initalloc_DAQLabModule(&engine->baseClass, className, instanceName);
+	initalloc_DAQLabModule(&ls->baseClass, className, instanceName);
 	//------------------------------------------------------------
 	
 	//---------------------------
@@ -194,17 +307,26 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 		// METHODS
 		
 			// overriding methods
-	engine->baseClass.Discard 		= discard_LaserScanning;
+	ls->baseClass.Discard 			= discard_LaserScanning;
 			
-	engine->baseClass.Load			= Load; 
+	ls->baseClass.Load				= Load; 
 	
-	engine->baseClass.DisplayPanels	= DisplayPanels;
+	ls->baseClass.DisplayPanels		= DisplayPanels;
 			
 	//---------------------------
-	// Child Level 1: ScanEngine_type
+	// Child Level 1: LaserScanning_type
 	
 		// DATA
+	
+		// init
+	ls->calScanAxis					= 0;
+	ls->scanEngines					= 0;
 		
+	if (!(ls->calScanAxis			= ListCreate(sizeof(ScanAxisCal_type*))))	goto Error;
+	if (!(ls->scanEngines			= ListCreate(sizeof(ScanEngine_type*))))	goto Error;
+			
+			
+	/*	
 		//-------
 		// VChans
 		//-------
@@ -213,33 +335,44 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 	engine->VChanImgOUT				= NULL;
 	engine->DetChans				= ListCreate(sizeof(DetChan_type*));
 	if (!engine->DetChans) {discard_LaserScanning((DAQLabModule_type**)&engine); return NULL;}
-	
+	*/
 		//---
 		// UI
 		//---
-	engine->mainPanHndl				= 0;
-	engine->scanSetPanHndl			= 0;
+	ls->mainPanHndl				= 0;
+	
 	
 		// METHODS
 		
 	//----------------------------------------------------------
 	if (!mod)
-		return (DAQLabModule_type*) engine;
+		return (DAQLabModule_type*) ls;
 	else
 		return NULL;
 	
+Error:
+	discard_LaserScanning((DAQLabModule_type**)&ls); 
+	return NULL;
+
 }
 
 void discard_LaserScanning (DAQLabModule_type** mod)
 {
-	ScanEngine_type*		engine		= (ScanEngine_type*) (*mod);
+	LaserScanning_type*		ls		= (LaserScanning_type*) (*mod);
 	
-	if (!engine) return;
+	if (!ls) return;
 	
-	//--------------------------------------
-	// discard ScanEngine_type specific data
-	//--------------------------------------
+	//-----------------------------------------
+	// discard LaserScanning_type specific data
+	//-----------------------------------------
 	
+	if (ls->calScanAxis) {
+		
+		ListDispose(ls->calScanAxis);
+	}
+	if (ls->scanEngines) ListDispose(ls->scanEngines);
+	
+	  /*
 		//----------------------------------
 		// VChans
 		//----------------------------------
@@ -269,7 +402,8 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		// remove VChan from framework
 		DLUnregisterVChan((VChan_type*)(*detChanPtrPtr)->detVChan);
 		discard_DetChan_type(detChanPtrPtr);
-	}
+	}  */
+	  
 		//----------------------------------
 		// UI
 		//----------------------------------
@@ -374,8 +508,6 @@ static DetChan_type* init_DetChan_type (ScanEngine_type* scanEnginePtr, char VCh
 	// register VChan with framework
 	DLRegisterVChan((VChan_type*)det->detVChan);
 	
-	det->scanEngineRef	= scanEnginePtr;
-	
 	return det;
 }
 
@@ -459,6 +591,25 @@ static int CVICALLBACK GalvoCal_CB (int panel, int control, int event, void *cal
 			break;
 	}
 	return 0;
+}
+
+static ScanEngine_type*	init_ScanEngine_type (ScanEngineEnum_type engineType)
+{
+	ScanEngine_type*	engine = NULL;
+	
+	switch (engineType) {
+			
+		case ScanEngine_RectRaster:
+			
+			break;
+	}
+	
+	return engine;
+}
+
+static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
+{
+	
 }
 
 static int CVICALLBACK ScanControl_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)

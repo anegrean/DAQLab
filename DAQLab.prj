@@ -39,24 +39,21 @@ FolderEx 5 Parent = 0
 Folder 6 = "Modules/Laser Scanning"
 FolderEx 6 = "Laser Scanning"
 FolderEx 6 Parent = 0
-Folder 7 = "Modules/Laser Scanning/Galvo Scanner"
-FolderEx 7 = "Galvo Scanner"
-FolderEx 7 Parent = 6
-Folder 8 = "XML"
-FolderEx 8 = "XML"
-Folder 9 = "Instrument Files"
-FolderEx 9 = "Instrument Files"
-Folder 10 = "Framework"
-FolderEx 10 = "Framework"
-Folder 11 = "Framework/Execution Control"
-FolderEx 11 = "Execution Control"
-FolderEx 11 Parent = 10
-Folder 12 = "Framework/Virtual Channels"
-FolderEx 12 = "Virtual Channels"
-FolderEx 12 Parent = 10
-Folder 13 = "Framework/Utility"
-FolderEx 13 = "Utility"
-FolderEx 13 Parent = 10
+Folder 7 = "XML"
+FolderEx 7 = "XML"
+Folder 8 = "Instrument Files"
+FolderEx 8 = "Instrument Files"
+Folder 9 = "Framework"
+FolderEx 9 = "Framework"
+Folder 10 = "Framework/Execution Control"
+FolderEx 10 = "Execution Control"
+FolderEx 10 Parent = 9
+Folder 11 = "Framework/Virtual Channels"
+FolderEx 11 = "Virtual Channels"
+FolderEx 11 Parent = 9
+Folder 12 = "Framework/Utility"
+FolderEx 12 = "Utility"
+FolderEx 12 Parent = 9
 
 [File 0001]
 File Type = "Include"
@@ -363,7 +360,7 @@ Path = "/d/ELE_DAQLab/MSXML/ActiveXML.fp"
 Exclude = False
 Project Flags = 0
 Folder = "XML"
-Folder Id = 8
+Folder Id = 7
 
 [File 0026]
 File Type = "Include"
@@ -375,7 +372,7 @@ Path = "/d/ELE_DAQLab/MSXML/ActiveXML.h"
 Exclude = False
 Project Flags = 0
 Folder = "XML"
-Folder Id = 8
+Folder Id = 7
 
 [File 0027]
 File Type = "Function Panel"
@@ -389,7 +386,7 @@ Path Line0002 = "ctrl.fp"
 Exclude = False
 Project Flags = 0
 Folder = "Instrument Files"
-Folder Id = 9
+Folder Id = 8
 
 [File 0028]
 File Type = "CSource"
@@ -402,7 +399,7 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Execution Control"
-Folder Id = 11
+Folder Id = 10
 
 [File 0029]
 File Type = "Include"
@@ -414,7 +411,7 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Execution Control"
-Folder Id = 11
+Folder Id = 10
 
 [File 0030]
 File Type = "Include"
@@ -426,7 +423,7 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Execution Control"
-Folder Id = 11
+Folder Id = 10
 
 [File 0031]
 File Type = "User Interface Resource"
@@ -438,7 +435,7 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.uir"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Execution Control"
-Folder Id = 11
+Folder Id = 10
 
 [File 0032]
 File Type = "CSource"
@@ -451,7 +448,7 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Virtual Channels"
-Folder Id = 12
+Folder Id = 11
 
 [File 0033]
 File Type = "Include"
@@ -463,7 +460,7 @@ Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Virtual Channels"
-Folder Id = 12
+Folder Id = 11
 
 [File 0034]
 File Type = "CSource"
@@ -476,7 +473,7 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Utility"
-Folder Id = 13
+Folder Id = 12
 
 [File 0035]
 File Type = "Include"
@@ -488,7 +485,7 @@ Path = "/d/ELE_DAQLab/Framework/Utility/DAQLabUtility.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Utility"
-Folder Id = 13
+Folder Id = 12
 
 [File 0036]
 File Type = "CSource"

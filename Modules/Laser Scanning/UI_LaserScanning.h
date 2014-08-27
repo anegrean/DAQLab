@@ -16,19 +16,18 @@
 #define  GalvoScan                        1
 #define  GalvoScan_PixelSize              2       /* control type: numeric, callback function: (none) */
 #define  GalvoScan_Plate_3                3       /* control type: deco, callback function: (none) */
-#define  GalvoScan_Wait                   4       /* control type: numeric, callback function: (none) */
-#define  GalvoScan_Duration               5       /* control type: numeric, callback function: (none) */
-#define  GalvoScan_Plate_2                6       /* control type: deco, callback function: (none) */
-#define  GalvoScan_Plate                  7       /* control type: deco, callback function: (none) */
-#define  GalvoScan_FPS                    8       /* control type: numeric, callback function: (none) */
-#define  GalvoScan_HeightOffset           9       /* control type: numeric, callback function: (none) */
-#define  GalvoScan_WidthOffset            10      /* control type: numeric, callback function: (none) */
-#define  GalvoScan_Width                  11      /* control type: numeric, callback function: (none) */
-#define  GalvoScan_PSF_FWHM               12      /* control type: numeric, callback function: (none) */
-#define  GalvoScan_PixelDwell             13      /* control type: string, callback function: (none) */
-#define  GalvoScan_Height                 14      /* control type: string, callback function: (none) */
-#define  GalvoScan_Mode                   15      /* control type: ring, callback function: (none) */
-#define  GalvoScan_Averages               16      /* control type: numeric, callback function: (none) */
+#define  GalvoScan_Duration               4       /* control type: numeric, callback function: (none) */
+#define  GalvoScan_Plate_2                5       /* control type: deco, callback function: (none) */
+#define  GalvoScan_Plate                  6       /* control type: deco, callback function: (none) */
+#define  GalvoScan_FPS                    7       /* control type: numeric, callback function: (none) */
+#define  GalvoScan_HeightOffset           8       /* control type: numeric, callback function: (none) */
+#define  GalvoScan_WidthOffset            9       /* control type: numeric, callback function: (none) */
+#define  GalvoScan_Width                  10      /* control type: numeric, callback function: (none) */
+#define  GalvoScan_PSF_FWHM               11      /* control type: numeric, callback function: (none) */
+#define  GalvoScan_PixelDwell             12      /* control type: string, callback function: (none) */
+#define  GalvoScan_Height                 13      /* control type: string, callback function: (none) */
+#define  GalvoScan_Mode                   14      /* control type: ring, callback function: (none) */
+#define  GalvoScan_Averages               15      /* control type: numeric, callback function: (none) */
 
 #define  ScanPan                          2
 #define  ScanPan_Plate                    2       /* control type: deco, callback function: (none) */

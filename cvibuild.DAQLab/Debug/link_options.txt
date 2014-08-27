@@ -15,7 +15,7 @@
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\DAQLab.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\DAQLabModule.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\DAQLabUtility.obj
--in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\GalvoScanEngine.obj
+-in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\LaserScanning.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\NIDAQmxManager.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\PIStage.obj
 -in:d:\ELE_DAQLab\cvibuild.DAQLab\Debug\TaskController.obj

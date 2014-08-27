@@ -50,8 +50,11 @@ typedef enum {
 
 // Generic scan axis class
 typedef struct {
+	// DATA
 	ScanAxis_type			scanAxisType;
 	char*					calName;
+	// METHODS
+	void	(*Discard) (ScanAxisCal_type** scanAxisCal);
 } ScanAxisCal_type;
 
 //---------------------------------------------------
@@ -251,13 +254,14 @@ static void							DetVChanDisconnected					(VChan_type* self, VChan_type* discon
 // Scan axis calibration
 //----------------------
 static int CVICALLBACK 				GalvoCal_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static void							discard_ScanAxisCal_type				(ScanAxisCal_type** scanAxisCal);
 
 //-------------
 // Scan Engines
 //-------------
 	// parent class
-static ScanEngine_type*				init_ScanEngine_type					(ScanEngineEnum_type engineType);
-static void							discard_ScanEngine_type					(ScanEngine_type** scanEngine);
+static int 							init_ScanEngine_type 					(ScanEngine_type* engine, ScanEngineEnum_type engineType);
+static void							discard_ScanEngine_type 				(ScanEngine_type** engine);
 	// rectangle raster scan
 static void							discard_RectangleRaster_type			(ScanEngine_type** scanEngine);
 
@@ -325,17 +329,6 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 	if (!(ls->calScanAxis			= ListCreate(sizeof(ScanAxisCal_type*))))	goto Error;
 	if (!(ls->scanEngines			= ListCreate(sizeof(ScanEngine_type*))))	goto Error;
 			
-			
-	/*	
-		//-------
-		// VChans
-		//-------
-	engine->VChanXCom				= NULL;
-	engine->VChanYCom				= NULL;
-	engine->VChanImgOUT				= NULL;
-	engine->DetChans				= ListCreate(sizeof(DetChan_type*));
-	if (!engine->DetChans) {discard_LaserScanning((DAQLabModule_type**)&engine); return NULL;}
-	*/
 		//---
 		// UI
 		//---
@@ -367,43 +360,27 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	//-----------------------------------------
 	
 	if (ls->calScanAxis) {
+		size_t 				nItems = ListNumItems(ls->calScanAxis);
+		ScanAxisCal_type**  calPtrPtr;
+		for (size_t i = 1; i <= nItems; i++) {
+			calPtrPtr = ListGetPtrToItem(ls->calScanAxis, i);
+			(*(*calPtrPtr)->Discard)	(calPtrPtr);
+		}
 		
 		ListDispose(ls->calScanAxis);
 	}
-	if (ls->scanEngines) ListDispose(ls->scanEngines);
 	
-	  /*
-		//----------------------------------
-		// VChans
-		//----------------------------------
-	// X galvo command
-	if (engine->VChanXCom) {
-		DLUnregisterVChan((VChan_type*)engine->VChanXCom);
-		discard_VChan_type((VChan_type**)&engine->VChanXCom);
+	if (ls->scanEngines) {
+		size_t 				nItems = ListNumItems(ls->scanEngines);
+		ScanEngine_type**  	enginePtrPtr;
+		for (size_t i = 1; i <= nItems; i++) {
+			enginePtrPtr = ListGetPtrToItem(ls->scanEngines, i);
+			(*(*enginePtrPtr)->Discard)	(enginePtrPtr);
+		}
+		
+		ListDispose(ls->scanEngines);
 	}
 	
-	// Y galvo command
-	if (engine->VChanYCom) {
-		DLUnregisterVChan((VChan_type*)engine->VChanYCom);
-		discard_VChan_type((VChan_type**)&engine->VChanYCom);
-	}
-	
-	// scan engine image output
-	if (engine->VChanImgOUT) {
-		DLUnregisterVChan((VChan_type*)engine->VChanImgOUT);
-		discard_VChan_type((VChan_type**)&engine->VChanImgOUT);
-	}
-	
-	// detection channels
-	size_t	nDet = ListNumItems(engine->DetChans);
-	DetChan_type** detChanPtrPtr;
-	for (size_t i = 1; i <= nDet; i++) {
-		detChanPtrPtr = ListGetPtrToItem(engine->DetChans, i);
-		// remove VChan from framework
-		DLUnregisterVChan((VChan_type*)(*detChanPtrPtr)->detVChan);
-		discard_DetChan_type(detChanPtrPtr);
-	}  */
-	  
 		//----------------------------------
 		// UI
 		//----------------------------------
@@ -593,23 +570,93 @@ static int CVICALLBACK GalvoCal_CB (int panel, int control, int event, void *cal
 	return 0;
 }
 
-static ScanEngine_type*	init_ScanEngine_type (ScanEngineEnum_type engineType)
+static int init_ScanEngine_type (ScanEngine_type* engine, ScanEngineEnum_type engineType)
 {
-	ScanEngine_type*	engine = NULL;
+	// VChans
+	engine->engineType				= engineType;
+	engine->VChanFastAxisCom		= NULL;
+	engine->VChanSlowAxisCom		= NULL;
+	engine->VChanFastAxisPos		= NULL;
+	engine->VChanSlowAxisPos		= NULL;
+	engine->VChanImgOUT				= NULL;
+	if(!(engine->DetChans			= ListCreate(sizeof(DetChan_type*)))) goto Error;
 	
-	switch (engineType) {
-			
-		case ScanEngine_RectRaster:
-			
-			break;
-	}
+	// reference to axis calibration
+	engine->fastAxisCal				= NULL;
+	engine->slowAxisCal				= NULL;
 	
-	return engine;
+	// task controller
+	engine->taskControl				= NULL;
+	
+	// position feedback flags
+	engine->useFastAxisPos			= FALSE;
+	engine->useSlowAxisPos			= FALSE;
+	engine->Discard					= NULL;
+	
+	return 0;
+Error:
+	return -1;
 }
 
 static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 {
+	ScanEngine_type* engine = *scanEngine;
 	
+	//----------------------------------
+	// VChans
+	//----------------------------------
+	// fast axis command
+	if (engine->VChanFastAxisCom) {
+		DLUnregisterVChan((VChan_type*)engine->VChanFastAxisCom);
+		discard_VChan_type((VChan_type**)&engine->VChanFastAxisCom);
+	}
+	
+	// slow axis command
+	if (engine->VChanSlowAxisCom) {
+		DLUnregisterVChan((VChan_type*)engine->VChanSlowAxisCom);
+		discard_VChan_type((VChan_type**)&engine->VChanSlowAxisCom);
+	}
+	
+	// fast axis position feedback
+	if (engine->VChanFastAxisPos) {
+		DLUnregisterVChan((VChan_type*)engine->VChanFastAxisPos);
+		discard_VChan_type((VChan_type**)&engine->VChanFastAxisPos);
+	}
+	
+	// slow axis position feedback
+	if (engine->VChanSlowAxisPos) {
+		DLUnregisterVChan((VChan_type*)engine->VChanSlowAxisPos);
+		discard_VChan_type((VChan_type**)&engine->VChanSlowAxisPos);
+	}
+	
+	// scan engine image output
+	if (engine->VChanImgOUT) {
+		DLUnregisterVChan((VChan_type*)engine->VChanImgOUT);
+		discard_VChan_type((VChan_type**)&engine->VChanImgOUT);
+	}
+	
+	// detection channels
+	size_t	nDet = ListNumItems(engine->DetChans);
+	DetChan_type** detChanPtrPtr;
+	for (size_t i = 1; i <= nDet; i++) {
+		detChanPtrPtr = ListGetPtrToItem(engine->DetChans, i);
+		// remove VChan from framework
+		DLUnregisterVChan((VChan_type*)(*detChanPtrPtr)->detVChan);
+		discard_DetChan_type(detChanPtrPtr);
+	}
+	
+	//----------------------------------
+	// Task controller
+	//----------------------------------
+	if (engine->taskControl) {
+		ListType tcList = ListCreate(sizeof(TaskControl_type*));
+		ListInsertItem(tcList, &engine->taskControl, END_OF_LIST);
+		DLRemoveTaskControllers(tcList); 
+		ListDispose(tcList);
+		discard_TaskControl_type(engine->taskControl);
+	}
+	
+	OKfree(scanEngine);
 }
 
 static int CVICALLBACK ScanControl_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)

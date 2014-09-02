@@ -1,8 +1,0 @@
-[initalloc_PIStage]
-Class="Function"
-Prototype="struct DAQLabModule *initalloc_PIStage(struct DAQLabModule *mod, char *className, char *instanceName);"
-
-[discard_PIStage]
-Class="Function"
-Prototype="void discard_PIStage(struct DAQLabModule **mod);"
-

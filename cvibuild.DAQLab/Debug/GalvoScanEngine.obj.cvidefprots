@@ -1,8 +1,0 @@
-[initalloc_GalvoScanEngine]
-Class="Function"
-Prototype="struct DAQLabModule *initalloc_GalvoScanEngine(struct DAQLabModule *mod, char *className, char *instanceName);"
-
-[discard_GalvoScanEngine]
-Class="Function"
-Prototype="void discard_GalvoScanEngine(struct DAQLabModule **mod);"
-

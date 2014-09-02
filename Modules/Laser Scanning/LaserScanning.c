@@ -22,19 +22,23 @@
 //==============================================================================
 // Constants
 
-#define MOD_GalvoScanEngine_UI 		"./Modules/Galvo Scan Engine/UI_GalvoScanEngine.uir"
+#define MOD_GalvoScanEngine_UI 				"./Modules/Galvo Scan Engine/UI_GalvoScanEngine.uir"
 // default VChan names
-#define VChan_FastGalvo_Command		"Fast Galvo Command"
-#define VChan_FastGalvo_Position	"Fast Galvo Position" 
-#define VChan_SlowGalvo_Command		"Slow Galvo Command"
-#define VChan_SlowGalvo_Position	"Slow Galvo Position"
-#define VChan_ImageOut				"Image Out"
+#define VChan_Default_FastAxis_Command		"Fast Axis Command"
+#define VChan_Default_FastAxis_Position		"Fast Axis Position" 
+#define VChan_Default_SlowAxis_Command		"Slow Axis Command"
+#define VChan_Default_SlowAxis_Position		"Slow Axis Position"
+#define VChan_Default_ImageOut				"Image Out"
+
+// scan engine settings
+
+#define Max_NewScanEngine_NameLength	50
 
 //==============================================================================
 // Types
 
 	// forward declared
-typedef struct LaserScanning 	LaserScanning_type;  
+typedef struct LaserScanning 	LaserScanning_type; 
 
 //------------------------------
 // Generic scan axis calibration
@@ -103,7 +107,7 @@ typedef struct {
 		double resolution;					// in [V]
 		double minStepSize;					// in [V]
 		double parked;         				// in [V]
-		double scantime;					// in [s]
+		double scanTime;					// in [s]
 	}	 					UISet;
 } NonResGalvoCal_type;
 
@@ -180,9 +184,17 @@ struct ScanEngine {
 	SourceVChan_type*		VChanFastAxisPos;
 	SourceVChan_type*		VChanSlowAxisPos;
 		// Scan Engine output
-	SourceVChan_type*		VChanImgOUT;
+	SourceVChan_type*		VChanImageOut;
 		// Detector input channels of DetChan_type* with incoming fluorescence pixel stream 
 	ListType				DetChans; 
+	
+	//-----------------------------------
+	// UI
+	//-----------------------------------
+	int						scanSetPanHndl;			// Panel handle for adjusting scan settings such as pixel size, etc...
+	int						engineSetPanHndl;		// Panel handle for scan engine settings such as VChans and scan axis types.
+	int						fastAxisCalPanHndl;		// Panel for performing fast axis calibration
+	int						slowAxisCalPanHndl;		// Panel for performing slow axis calibration
 	
 	//-----------------------------------
 	// Methods
@@ -195,14 +207,13 @@ struct ScanEngine {
 // Rectangular raster scan
 //------------------------
 typedef struct {
-	ScanEngine_type			scanEngine;				// Base class, must be first structure member.
+	ScanEngine_type			base;					// Base class, must be first structure member.
 	
 	//----------------
 	// Scan parameters
 	//----------------
-	double					masterClockRate;		// Clock frequency defined as the smallest time unit in [Hz].
-	double					fastAxisSamplingRate;   // Fast axis waveform sampling rate in [Hz].
-	double					slowAxisSamplingRate;	// Slow axis waveform sampling rate in [Hz].
+	double*					fastAxisSamplingRate;   // Pointer to fast axis waveform sampling rate in [Hz]. Value taken from VChanFastAxisCom
+	double*					slowAxisSamplingRate;	// Pointer to slow axis waveform sampling rate in [Hz]. Value taken from VChanSlowAxisCom
 	size_t					height;					// Image height in [pix].
 	size_t					heightOffset;			// Image height offset from center in [pix].
 	size_t					width;					// Image width in [pix].
@@ -233,8 +244,9 @@ struct LaserScanning {
 		// UI
 		//-------------------------
 	
-	int						mainPanHndl;
-
+	int						mainPanHndl;	  // Main panel for the laser scanning module.
+	int						enginesPanHndl;   // List of available scan engine types.
+	
 };
 
 //==============================================================================
@@ -247,6 +259,7 @@ struct LaserScanning {
 // Detection channels
 //-------------------
 static DetChan_type*				init_DetChan_type						(ScanEngine_type* scanEnginePtr, char VChanName[]);
+
 static void							discard_DetChan_type					(DetChan_type** a);
 
 //---------------------------
@@ -254,40 +267,74 @@ static void							discard_DetChan_type					(DetChan_type** a);
 //---------------------------
 	// detection VChans
 static void							DetVChanConnected						(VChan_type* self, VChan_type* connectedVChan);
+
 static void							DetVChanDisconnected					(VChan_type* self, VChan_type* disconnectedVChan); 
 
 //----------------------
 // Scan axis calibration
 //----------------------
 static int CVICALLBACK 				GalvoCal_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 	// generic scan axis calibration data 
+
 static ScanAxisCal_type*			initalloc_ScanAxisCal_type				(ScanAxisCal_type* scanAxisCal);
+
 static void							discard_ScanAxisCal_type				(ScanAxisCal_type** scanAxisCal);
+
 	//-----------------------------------------
 	// Non-resonant galvo axis calibration data
 	//-----------------------------------------
+
 static NonResGalvoCal_type*			init_NonResGalvoCal_type				(char calName[], SourceVChan_type* VChanCom, SinkVChan_type* VChanPos);
+
 static void							discard_NonResGalvoCal_type				(ScanAxisCal_type** scanAxisCal);
+
 	// switch times data
 static SwitchTimes_type* 			init_SwitchTimes_type					(int nElem);
+
 static void 						discard_SwitchTimes_type 				(SwitchTimes_type** a);
+
 	// max slopes data
+
 static MaxSlopes_type* 				init_MaxSlopes_type 					(int nElem);
+
 static void 						discard_MaxSlopes_type 					(MaxSlopes_type** a);
+
 	// triangle wave calibration data
+
 static TriangleCal_type* 			init_TriangleCal_type					(int nElem);
+
 static void 						discard_TriangleCal_type 				(TriangleCal_type** a);
+
 	// galvo calibration
+
 static int 							CalibrateNonResGalvo					(NonResGalvoCal_type** calData);
 
 //-------------
 // Scan Engines
 //-------------
 	// parent class
-static int 							init_ScanEngine_type 					(ScanEngine_type* engine, ScanEngineEnum_type engineType);
+static int 							init_ScanEngine_type 					(ScanEngine_type* 		engine, 
+																			 ScanEngineEnum_type 	engineType,
+																			 char 					fastAxisComVChanName[], 
+								 											 char 					slowAxisComVChanName[], 
+								 											 char					fastAxisPosVChanName[],
+								 											 char					slowAxisPosVChanName[],
+								 											 char					imageOutVChanName);
+
 static void							discard_ScanEngine_type 				(ScanEngine_type** engine);
+
 	// rectangle raster scan
-static void							discard_RectangleRaster_type			(ScanEngine_type** scanEngine);
+
+static RectangleRaster_type*		init_RectangleRaster_type				(char 					engineName[],
+														   					 char 					fastAxisComVChanName[], 
+								 											 char 					slowAxisComVChanName[], 
+								 											 char					fastAxisPosVChanName[],
+								 											 char					slowAxisPosVChanName[],
+								 											 char					imageOutVChanName);
+
+static void							discard_RectangleRaster_type			(ScanEngine_type** engine);
+
 static int CVICALLBACK 				RectangleRasterScan_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
 
 //------------------
@@ -295,13 +342,72 @@ static int CVICALLBACK 				RectangleRasterScan_CB 					(int panel, int control, 
 //------------------
 
 static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
+
 static int 							DisplayPanels							(DAQLabModule_type* mod, BOOL visibleFlag); 
+
 static int CVICALLBACK 				ScanEngineSettings_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-static int CVICALLBACK 				ScanEnginesTab_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+static int CVICALLBACK 				ScanEnginesTab_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static void CVICALLBACK 			SettingsMenu_CB 						(int menuBar, int menuItem, void *callbackData, int panel);
-static void CVICALLBACK 			NewScanEngine_CB						(int menuBar, int menuItem, void *callbackData, int panel);
 
+static void CVICALLBACK 			NewScanEngineMenu_CB					(int menuBar, int menuItem, void *callbackData, int panel);
 
+static int CVICALLBACK 				NewScanEngine_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+static BOOL							ValidScanEngineName						(char name[], void* dataPtr);
+
+//-----------------------------------------
+// Scan Engine VChan management
+//-----------------------------------------
+
+	// Fast Axis Command VChan
+static void							fastAxisComVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
+static void							fastAxisComVChan_Disconnected			(VChan_type* self, VChan_type* disconnectedVChan);
+
+	// Slow Axis Command VChan
+static void							slowAxisComVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
+static void							slowAxisComVChan_Disconnected			(VChan_type* self, VChan_type* disconnectedVChan);
+
+	// Fast Axis Position VChan
+static void							fastAxisPosVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
+static void							fastAxisPosVChan_Disconnected			(VChan_type* self, VChan_type* disconnectedVChan);
+
+	// Slow Axis Position VChan
+static void							slowAxisPosVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
+static void							slowAxisPosVChan_Disconnected			(VChan_type* self, VChan_type* disconnectedVChan);
+
+	// Image Out VChan
+static void							imageOutVChan_Connected					(VChan_type* self, VChan_type* connectedVChan);
+static void							imageOutVChan_Disconnected				(VChan_type* self, VChan_type* disconnectedVChan);
+
+//-----------------------------------------
+// Task Controller Callbacks
+//-----------------------------------------
+
+	// for RectangleRaster_type scanning
+
+static FCallReturn_type*			ConfigureTC_RectRaster					(TaskControl_type* taskControl, BOOL const* abortFlag);
+
+static void							IterateTC_RectRaster					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+
+static FCallReturn_type*			StartTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag);
+
+static FCallReturn_type*			DoneTC_RectRaster						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
+static FCallReturn_type*			StoppedTC_RectRaster					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
+static FCallReturn_type* 			ResetTC_RectRaster 						(TaskControl_type* taskControl, BOOL const* abortFlag);
+
+static void							DimTC_RectRaster						(TaskControl_type* taskControl, BOOL dimmed);
+
+static FCallReturn_type* 			DataReceivedTC_RectRaster 				(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+
+static void 						ErrorTC_RectRaster 						(TaskControl_type* taskControl, char* errorMsg);
+
+static FCallReturn_type*			ModuleEventHandler_RectRaster			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
+
+	// add below more task controller callbacks for different scan engine types
 
 //==============================================================================
 // Global variables
@@ -358,8 +464,8 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 		//---
 		// UI
 		//---
-	ls->mainPanHndl				= 0;
-	
+	ls->mainPanHndl					= 0;
+	ls->enginesPanHndl				= 0;
 	
 		// METHODS
 		
@@ -411,6 +517,7 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		// UI
 		//----------------------------------
 	if (ls->mainPanHndl) {DiscardPanel(ls->mainPanHndl); ls->mainPanHndl = 0;}
+	if (ls->enginesPanHndl) {DiscardPanel(ls->enginesPanHndl); ls->enginesPanHndl = 0;}
 	
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
@@ -436,7 +543,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	newMenuItem			= NewMenu(menubarHndl, "New", -1);
 	SetMenuBarAttribute(menubarHndl, 0, ATTR_SHOW_IMMEDIATE_ACTION_SYMBOL, 0);
 	SetMenuBarAttribute(menubarHndl, newMenuItem, ATTR_CALLBACK_DATA, ls);
-	SetMenuBarAttribute(menubarHndl, newMenuItem, ATTR_CALLBACK_FUNCTION_POINTER, NewScanEngine_CB);
+	SetMenuBarAttribute(menubarHndl, newMenuItem, ATTR_CALLBACK_FUNCTION_POINTER, NewScanEngineMenu_CB);
 	
 	// settings menu item
 	settingsMenuItem	= NewMenu(menubarHndl, "Settings", -1);
@@ -448,6 +555,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	SetCtrlAttribute(ls->mainPanHndl, ScanPan_ScanEngines, ATTR_CALLBACK_DATA, ls);
 	SetCtrlAttribute(ls->mainPanHndl, ScanPan_ScanEngines, ATTR_CALLBACK_FUNCTION_POINTER, ScanEnginesTab_CB);
 	
+	// change main module panel title to module instance name
+	SetPanelAttribute(ls->mainPanHndl, ATTR_TITLE, mod->instanceName);
+	
 	return 0;
 Error:
 	
@@ -458,14 +568,31 @@ Error:
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 {
-	ScanEngine_type*	engine				= (ScanEngine_type*) mod;
-	int					error				= 0;
+	LaserScanning_type*		ls				= (LaserScanning_type*) mod;
+	int						error			= 0;
+	size_t					nEngines		= ListNumItems(ls->scanEngines);
+	ScanEngine_type**		enginePtrPtr;
 	
-	if (engine->mainPanHndl)
-		errChk(SetPanelAttribute(engine->mainPanHndl, ATTR_VISIBLE, visibleFlag));
+	// laser scanning module panels
+	if (ls->mainPanHndl)
+		errChk(SetPanelAttribute(ls->mainPanHndl, ATTR_VISIBLE, visibleFlag));
 	
-	if (engine->scanSetPanHndl)
-		errChk(SetPanelAttribute(engine->scanSetPanHndl, ATTR_VISIBLE, visibleFlag));
+	if (ls->enginesPanHndl)
+		errChk(SetPanelAttribute(ls->enginesPanHndl, ATTR_VISIBLE, visibleFlag));
+	
+	// scan engine calibration panels
+	for(size_t i = 1; i <= nEngines; i++) {
+		enginePtrPtr = ListGetPtrToItem(ls->scanEngines, i);
+		
+		if ((*enginePtrPtr)->engineSetPanHndl)
+			errChk(SetPanelAttribute((*enginePtrPtr)->engineSetPanHndl, ATTR_VISIBLE, visibleFlag));
+			
+		if ((*enginePtrPtr)->fastAxisCalPanHndl)
+			errChk(SetPanelAttribute((*enginePtrPtr)->fastAxisCalPanHndl, ATTR_VISIBLE, visibleFlag));
+		
+		if ((*enginePtrPtr)->slowAxisCalPanHndl)
+			errChk(SetPanelAttribute((*enginePtrPtr)->slowAxisCalPanHndl, ATTR_VISIBLE, visibleFlag));
+	}
 	
 Error:
 	return error;	
@@ -477,20 +604,25 @@ static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callba
 	int					workspacePanHndl;
 	
 	// load settings panel if not loaded already
-	GetPanelAttribute(engine->mainPanHndl, ATTR_PANEL_PARENT, &workspacePanHndl);
-	if (engine->scanSetPanHndl) return;
-		engine->scanSetPanHndl 	= LoadPanel(workspacePanHndl, MOD_GalvoScanEngine_UI, ScanSetPan);
+	GetPanelAttribute(panel, ATTR_PANEL_PARENT, &workspacePanHndl);
+	if (engine->engineSetPanHndl) return; // do nothing
+		engine->engineSetPanHndl 	= LoadPanel(workspacePanHndl, MOD_GalvoScanEngine_UI, ScanSetPan);
 	
-	// update vChans
+	// update VChans from data structure
+	if (engine->VChanFastAxisCom)
+		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_FastAxisCommand, engine->VChanFastAxisCom);
 	
-	if (engine->VChanXCom)
-		SetCtrlVal(engine->scanSetPanHndl, ScanSetPan_XCommand, engine->VChanXCom);
+	if (engine->VChanSlowAxisCom)
+		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_SlowAxisCommand, engine->VChanSlowAxisCom);
 	
-	if (engine->VChanYCom)
-		SetCtrlVal(engine->scanSetPanHndl, ScanSetPan_YCommand, engine->VChanYCom);
+	if (engine->VChanFastAxisPos)
+		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_FastAxisPosition, engine->VChanFastAxisPos);
 	
-	if (engine->VChanImgOUT)
-		SetCtrlVal(engine->scanSetPanHndl, ScanSetPan_ImageOut, engine->VChanImgOUT);
+	if (engine->VChanSlowAxisPos)
+		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_SlowAxisPosition, engine->VChanSlowAxisPos);
+		
+	if (engine->VChanImageOut)
+		SetCtrlVal(engine->scanSetPanHndl, ScanSetPan_ImageOut, engine->VChanImageOut);
 	
 	size_t 			nImgChans = ListNumItems(engine->DetChans);
 	DetChan_type** 	detChanPtrPtr;
@@ -508,11 +640,103 @@ static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callba
 }
 
 // adds a new scan engine
-static void CVICALLBACK NewScanEngine_CB (int menuBar, int menuItem, void *callbackData, int panel)
+static void CVICALLBACK NewScanEngineMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
-	LaserScanning_type*		ls = callbackData;
+	LaserScanning_type*		ls 				= callbackData;
+	int						workspacePanHndl;
+	
+	if (ls->enginesPanHndl) return; // do nothing if panel is already loaded and visible
+	
+	// load panel resources
+	GetPanelAttribute(panel, ATTR_PANEL_PARENT, &workspacePanHndl);
+	ls->enginesPanHndl = LoadPanel(workspacePanHndl, MOD_GalvoScanEngine_UI, EnginesPan); 
+	// add callback and data to controls
+	SetCtrlsInPanCBInfo(ls, NewScanEngine_CB, ls->enginesPanHndl);
+	
+	//------------------------------------------------------------------------------------------------------------------
+	// Insert scan engine types here
+	//------------------------------------------------------------------------------------------------------------------
+	InsertListItem(ls->enginesPanHndl, EnginesPan_ScanTypes, -1, "Rectangular raster scan", ScanEngine_RectRaster);
 	
 	
+	//------------------------------------------------------------------------------------------------------------------
+	
+	DisplayPanel(ls->enginesPanHndl);
+}
+
+static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	if (event != EVENT_COMMIT) return 0; // filter only comit events
+	
+	LaserScanning_type*		ls 	= callbackData;
+	switch (control) {
+			
+		case EnginesPan_OKBTTN:
+			
+			ScanEngineEnum_type 	engineType;
+			ScanEngine_type*		newScanEngine		= NULL;
+			char* 					engineName;
+			int						tabPagePanHndl;
+			int						newTabPageHndl;
+			void*					panDataPtr;
+			int						newTabIdx;
+			int 					scanPanHndl;
+			
+			GetCtrlVal(panel, EnginesPan_ScanTypes, &engineType);
+			
+			engineName = DLGetUINameInput("New Scan Engine Name", Max_NewScanEngine_NameLength, ValidScanEngineName, NULL); 
+			
+			if (!engineName) return 0; // do nothing if operation was cancelled
+			
+			// remove empty "None" tab page
+			GetPanelHandleFromTabPage(ls->enginesPanHndl, ScanPan_ScanEngines, 0, &tabPagePanHndl);
+			GetPanelAttribute(tabPagePanHndl, ATTR_CALLBACK_DATA, &panDataPtr);
+			if (!panDataPtr) DeleteTabPage(ls->enginesPanHndl, ScanPan_ScanEngines, 0, 1);
+			
+			// insert new tab and get the handle to its panel
+			newTabIdx = InsertTabPage(ls->enginesPanHndl, ScanPan_ScanEngines, -1, engineName);
+			GetPanelHandleFromTabPage(ls->enginesPanHndl, ScanPan_ScanEngines, newTabIdx, &newTabPageHndl);
+			
+			//------------------------------------------------------------------------------------------------------------------
+			// Load here panels and resources for all scan engine types
+			//------------------------------------------------------------------------------------------------------------------
+			switch (engineType) {
+					
+				case ScanEngine_RectRaster:
+					
+					// continue here, generate unique VChan names from a given pre defined base VChan name, just in case it already exists.
+					newScanEngine = (ScanEngine_type*) init_RectangleRaster_type(engineName);
+					
+					scanPanHndl = LoadPanel(newTabPageHndl, MOD_GalvoScanEngine_UI, RectRaster); 
+					
+					break;
+				// add below more cases	
+			}
+			//------------------------------------------------------------------------------------------------------------------
+			
+			// add scan engine task controller to the framework
+			ListType tcList = ListCreate(sizeof(TaskControl_type*));
+			ListInsertItem(tcList, &newScanEngine->taskControl, END_OF_LIST);
+			DLAddTaskControllers(tcList);
+			ListDispose(tcList);
+			
+			free(engineName);
+			break;
+			
+		case EnginesPan_CancelBTTN:
+			
+			DiscardPanel(panel);
+			ls->enginesPanHndl = 0;
+			
+			break;
+	}
+	
+	return 0;
+}
+
+static BOOL	ValidScanEngineName (char name[], void* dataPtr)
+{
+	return DLValidTaskControllerName(name);
 }
 
 //-------------------------------------------
@@ -559,12 +783,20 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 		case EVENT_COMMIT:
 			
 			switch (control) {
-					
-				case ScanSetPan_XCommand:
+				
+				case ScanSetPan_FastAxisCommand:
 					
 					break;
 					
-				case ScanSetPan_YCommand:
+				case ScanSetPan_SlowAxisCommand:
+					
+					break;
+					
+				case ScanSetPan_FastAxisPosition:
+					
+					break;
+					
+				case ScanSetPan_SlowAxisPosition:
 					
 					break;
 					
@@ -583,7 +815,27 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					
 					break;
 					
-				case ScanSetPan_Calibrate:
+				case ScanSetPan_NewFastAxisCal:
+					
+					break;
+					
+				case ScanSetPan_NewSlowAxisCal: 
+					
+					break;
+					
+				case ScanSetPan_FastAxisType:
+					
+					break;
+					
+				case ScanSetPan_SlowAxisType:
+					
+					break;
+					
+				case ScanSetPan_FastAxisCal:
+					
+					break;
+					
+				case ScanSetPan_SlowAxisCal:
 					
 					break;
 					
@@ -680,7 +932,6 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], SourceVCha
 	cal->base.Discard		= discard_NonResGalvoCal_type; // override
 	
 	// init NonResGalvoCal_type
-	cal->calSet				= NULL;
 	cal->commandVMin		= 0;
 	cal->commandVMax		= 0;
 	cal->positionVMin		= 0;
@@ -693,8 +944,8 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], SourceVCha
 	cal->maxSlopes			= NULL;
 	cal->triangleCal		= NULL;
 	cal->UISet.resolution  	= 0;
-	cal->UISet.minstepsize 	= 0;
-	cal->UISet.scantime    	= 0;
+	cal->UISet.minStepSize 	= 0;
+	cal->UISet.scanTime    	= 0;
 	cal->UISet.parked		= 0;
 	
 	return cal;
@@ -809,26 +1060,30 @@ Error:
 
 static void discard_TriangleCal_type (TriangleCal_type** a)
 {
-	if (!(*a)) goto DoNothing; 
-	OKfree((*a) -> command_amp);
-	OKfree((*a) -> actual_amp);
-	OKfree((*a) -> maxfreq);
-	OKfree((*a) -> reslag);
-	OKfree(*a);
+	if (!(*a)) return;
 	
-	DoNothing:
-	return;
+	OKfree((*a)->commandAmp);
+	OKfree((*a)->actualAmp);
+	OKfree((*a)->maxFreq);
+	OKfree((*a)->resLag);
+	OKfree(*a);
 }
 
-static int init_ScanEngine_type (ScanEngine_type* engine, ScanEngineEnum_type engineType)
+static int init_ScanEngine_type (ScanEngine_type* 		engine, 
+								 ScanEngineEnum_type 	engineType,
+								 char 					fastAxisComVChanName[], 
+								 char 					slowAxisComVChanName[], 
+								 char					fastAxisPosVChanName[],
+								 char					slowAxisPosVChanName[],
+								 char					imageOutVChanName)					
 {
 	// VChans
 	engine->engineType				= engineType;
-	engine->VChanFastAxisCom		= NULL;
-	engine->VChanSlowAxisCom		= NULL;
-	engine->VChanFastAxisPos		= NULL;
-	engine->VChanSlowAxisPos		= NULL;
-	engine->VChanImgOUT				= NULL;
+	engine->VChanFastAxisCom		= init_SourceVChan_type(fastAxisComVChanName, VChan_Waveform, engine, fastAxisComVChan_Connected, fastAxisComVChan_Disconnected); 
+	engine->VChanSlowAxisCom		= init_SourceVChan_type(slowAxisComVChanName, VChan_Waveform, engine, slowAxisComVChan_Connected, slowAxisComVChan_Disconnected); 
+	engine->VChanFastAxisPos		= init_SinkVChan_type(fastAxisPosVChanName, VChan_Waveform, engine, fastAxisPosVChan_Connected, fastAxisPosVChan_Disconnected); 
+	engine->VChanSlowAxisPos		= init_SinkVChan_type(slowAxisPosVChanName, VChan_Waveform, engine, slowAxisPosVChan_Connected, slowAxisPosVChan_Disconnected); 
+	engine->VChanImageOut			= init_SourceVChan_type(imageOutVChanName, VChan_Image, engine, imageOutVChan_Connected, imageOutVChan_Disconnected); 
 	if(!(engine->DetChans			= ListCreate(sizeof(DetChan_type*)))) goto Error;
 	
 	// reference to axis calibration
@@ -836,10 +1091,18 @@ static int init_ScanEngine_type (ScanEngine_type* engine, ScanEngineEnum_type en
 	engine->slowAxisCal				= NULL;
 	
 	// task controller
-	engine->taskControl				= NULL;
+	engine->taskControl				= NULL; 	// initialized by derived scan engine classes
+	
+	// scan settings panel handle
+	engine->scanSetPanHndl			= 0;
+	// scan engine settings panel handle
+	engine->engineSetPanHndl		= 0;
+	// fast and slow axis calibration panel handles
+	engine->fastAxisCalPanHndl		= 0;
+	engine->slowAxisCalPanHndl		= 0;
 	
 	// position feedback flags
-	engine->Discard					= NULL;
+	engine->Discard					= NULL;	   // overriden by derived scan engine classes
 	
 	return 0;
 Error:
@@ -901,10 +1164,69 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 		ListInsertItem(tcList, &engine->taskControl, END_OF_LIST);
 		DLRemoveTaskControllers(tcList); 
 		ListDispose(tcList);
-		discard_TaskControl_type(engine->taskControl);
+		discard_TaskControl_type(&engine->taskControl);
 	}
 	
+	//----------------------------------
+	// UI
+	//----------------------------------
+	if (engine->engineSetPanHndl)		{DiscardPanel(engine->engineSetPanHndl); engine->engineSetPanHndl = 0;}
+	if (engine->fastAxisCalPanHndl)		{DiscardPanel(engine->fastAxisCalPanHndl); engine->fastAxisCalPanHndl = 0;}
+	if (engine->slowAxisCalPanHndl)		{DiscardPanel(engine->slowAxisCalPanHndl); engine->slowAxisCalPanHndl = 0;}
+	if (engine->scanSetPanHndl)			{DiscardPanel(engine->scanSetPanHndl); engine->scanSetPanHndl = 0;} 
+	
+	
 	OKfree(scanEngine);
+}
+
+static RectangleRaster_type* init_RectangleRaster_type (char 		engineName[], 
+														char 		fastAxisComVChanName[], 
+														char 		slowAxisComVChanName[], 
+														char		fastAxisPosVChanName[],
+														char		slowAxisPosVChanName[],
+														char		imageOutVChanName)
+{
+	RectangleRaster_type*	engine = malloc (sizeof(RectangleRaster_type));
+	if (!engine) return NULL;
+	
+	//--------------------------------------------------------
+	// init base scan engine class
+	//--------------------------------------------------------
+	init_ScanEngine_type(&engine->base, ScanEngine_RectRaster, fastAxisComVChanName, slowAxisComVChanName, fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName);
+	// override discard method
+	engine->base.Discard			= discard_RectangleRaster_type;
+	// add task controller
+	engine->base.taskControl		= init_TaskControl_type(engineName, engine, ConfigureTC_RectRaster, IterateTC_RectRaster, 
+								  	StartTC_RectRaster, ResetTC_RectRaster, DoneTC_RectRaster, StoppedTC_RectRaster, 
+								  	DimTC_RectRaster, NULL, DataReceivedTC_RectRaster, ModuleEventHandler_RectRaster, 
+								  	ErrorTC_RectRaster);
+	
+	if (!engine->base.taskControl) {discard_RectangleRaster_type((ScanEngine_type**)&engine); return NULL;}
+	
+	//--------------------------------------------------------
+	// init RectangleRaster_type
+	//--------------------------------------------------------
+	engine->fastAxisSamplingRate 	= NULL;
+	engine->slowAxisSamplingRate	= NULL;
+	engine->height					= 0;
+	engine->heightOffset			= 0;
+	engine->width					= 0;
+	engine->widthOffset				= 0;
+	engine->pixSize					= 0;
+	engine->fps						= 0;
+	
+	return engine;
+}
+
+static void	discard_RectangleRaster_type (ScanEngine_type** engine)
+{
+	RectangleRaster_type*	rectRasterPtr = (RectangleRaster_type*) *engine;
+	
+	// discard RectangleRaster_type data
+	
+	
+	// discard Scan Engine data
+	discard_ScanEngine_type(engine);
 }
 
 static int CVICALLBACK RectangleRasterScan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -915,43 +1237,43 @@ static int CVICALLBACK RectangleRasterScan_CB (int panel, int control, int event
 			
 			switch (control) {
 			
-				case ScanPan_Mode:
+				case RectRaster_Mode:
 					
 					break;
 					
-				case ScanPan_Duration:
+				case RectRaster_Duration:
 					
 					break;
 				
-				case ScanPan_Height:
+				case RectRaster_Height:
 					
 					break;
 					
-				case ScanPan_Width:
+				case RectRaster_Width:
 					
 					break;
 					
-				case ScanPan_HeightOffset:
+				case RectRaster_HeightOffset:
 					
 					break;
 					
-				case ScanPan_WidthOffset:
+				case RectRaster_WidthOffset:
 					
 					break;
 					
-				case ScanPan_PixelDwell:
+				case RectRaster_PixelDwell:
 					
 					break;
 					
-				case ScanPan_FPS:
+				case RectRaster_FPS:
 					
 					break;
 					
-				case ScanPan_PSF_FWHM:
+				case RectRaster_PSF_FWHM:
 					
 					break;
 					
-				case ScanPan_PixelSize:
+				case RectRaster_PixelSize:
 					
 					break;
 				
@@ -960,4 +1282,127 @@ static int CVICALLBACK RectangleRasterScan_CB (int panel, int control, int event
 			break;
 	}
 	return 0;
+}
+
+//-----------------------------------------
+// Scan Engine VChan management
+//-----------------------------------------
+
+// Fast Axis Command VChan
+static void	fastAxisComVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
+
+static void	fastAxisComVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
+}
+
+// Slow Axis Command VChan
+static void	slowAxisComVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
+
+static void	slowAxisComVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
+}
+
+// Fast Axis Position VChan
+static void fastAxisPosVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
+
+static void	fastAxisPosVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
+}
+
+// Slow Axis Position VChan
+static void slowAxisPosVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
+
+static void	slowAxisPosVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
+}
+
+// Image Out VChan
+static void	imageOutVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
+
+static void imageOutVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
+}
+
+//-----------------------------------------
+// LaserScanning Task Controller Callbacks
+//-----------------------------------------
+
+static FCallReturn_type* ConfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+}
+
+static void	IterateTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+}
+
+static FCallReturn_type* StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+}
+
+static FCallReturn_type* DoneTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+}
+
+static FCallReturn_type* StoppedTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+}
+
+static FCallReturn_type* ResetTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+}
+
+static void	DimTC_RectRaster (TaskControl_type* taskControl, BOOL dimmed)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+}
+
+static FCallReturn_type* DataReceivedTC_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+}
+
+static void ErrorTC_RectRaster (TaskControl_type* taskControl, char* errorMsg)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+}
+
+static FCallReturn_type* ModuleEventHandler_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
 }

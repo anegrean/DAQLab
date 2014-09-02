@@ -265,12 +265,9 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	initalloc_DAQLabModule(&vupc->baseClass, className, instanceName);
 	
 	// create VUPhotonCtr Task Controller
-	tc = init_TaskControl_type (instanceName, ConfigureTC, IterateTC, StartTC, ResetTC,
+	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, IterateTC, StartTC, ResetTC,
 								DoneTC, StoppedTC, DimTC, NULL, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
-	
-	// connect PIStage data to Task Controller
-	SetTaskControlModuleData(tc, vupc);
 	
 	//------------------------------------------------------------
 

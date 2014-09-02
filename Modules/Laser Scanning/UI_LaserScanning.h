@@ -13,21 +13,11 @@
 
      /* Panels and Controls: */
 
-#define  GalvoScan                        1
-#define  GalvoScan_PixelSize              2       /* control type: numeric, callback function: (none) */
-#define  GalvoScan_Plate_3                3       /* control type: deco, callback function: (none) */
-#define  GalvoScan_Duration               4       /* control type: numeric, callback function: (none) */
-#define  GalvoScan_Plate_2                5       /* control type: deco, callback function: (none) */
-#define  GalvoScan_Plate                  6       /* control type: deco, callback function: (none) */
-#define  GalvoScan_FPS                    7       /* control type: numeric, callback function: (none) */
-#define  GalvoScan_HeightOffset           8       /* control type: numeric, callback function: (none) */
-#define  GalvoScan_WidthOffset            9       /* control type: numeric, callback function: (none) */
-#define  GalvoScan_Width                  10      /* control type: numeric, callback function: (none) */
-#define  GalvoScan_PSF_FWHM               11      /* control type: numeric, callback function: (none) */
-#define  GalvoScan_PixelDwell             12      /* control type: string, callback function: (none) */
-#define  GalvoScan_Height                 13      /* control type: string, callback function: (none) */
-#define  GalvoScan_Mode                   14      /* control type: ring, callback function: (none) */
-#define  GalvoScan_Averages               15      /* control type: numeric, callback function: (none) */
+#define  EnginesPan                       1
+#define  EnginesPan_CancelBTTN            2       /* control type: command, callback function: (none) */
+#define  EnginesPan_Plate_3               3       /* control type: deco, callback function: (none) */
+#define  EnginesPan_OKBTTN                4       /* control type: command, callback function: (none) */
+#define  EnginesPan_ScanTypes             5       /* control type: listBox, callback function: (none) */
 
 #define  NonResGCal                       2
 #define  NonResGCal_Tab                   2       /* control type: tab, callback function: (none) */
@@ -38,11 +28,27 @@
 #define  NonResGCal_SaveCalibData         7       /* control type: command, callback function: (none) */
 #define  NonResGCal_Abort                 8       /* control type: command, callback function: (none) */
 
-#define  ScanPan                          3
+#define  RectRaster                       3
+#define  RectRaster_PixelSize             2       /* control type: numeric, callback function: (none) */
+#define  RectRaster_Plate_3               3       /* control type: deco, callback function: (none) */
+#define  RectRaster_Duration              4       /* control type: numeric, callback function: (none) */
+#define  RectRaster_Plate_2               5       /* control type: deco, callback function: (none) */
+#define  RectRaster_Plate                 6       /* control type: deco, callback function: (none) */
+#define  RectRaster_FPS                   7       /* control type: numeric, callback function: (none) */
+#define  RectRaster_HeightOffset          8       /* control type: numeric, callback function: (none) */
+#define  RectRaster_WidthOffset           9       /* control type: numeric, callback function: (none) */
+#define  RectRaster_Width                 10      /* control type: numeric, callback function: (none) */
+#define  RectRaster_PSF_FWHM              11      /* control type: numeric, callback function: (none) */
+#define  RectRaster_PixelDwell            12      /* control type: string, callback function: (none) */
+#define  RectRaster_Height                13      /* control type: string, callback function: (none) */
+#define  RectRaster_Mode                  14      /* control type: ring, callback function: (none) */
+#define  RectRaster_Averages              15      /* control type: numeric, callback function: (none) */
+
+#define  ScanPan                          4
 #define  ScanPan_Plate                    2       /* control type: deco, callback function: (none) */
 #define  ScanPan_ScanEngines              3       /* control type: tab, callback function: (none) */
 
-#define  ScanSetPan                       4
+#define  ScanSetPan                       5
 #define  ScanSetPan_AddImgChan            2       /* control type: command, callback function: (none) */
 #define  ScanSetPan_Close                 3       /* control type: command, callback function: (none) */
 #define  ScanSetPan_NewSlowAxisCal        4       /* control type: command, callback function: (none) */

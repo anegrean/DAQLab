@@ -2985,33 +2985,31 @@ Error:
 
 static Dev_type* init_Dev_type (DevAttr_type** attr, char taskControllerName[])
 {
-	Dev_type* a = malloc (sizeof(Dev_type));
-	if (!a) return NULL;
+	Dev_type* dev = malloc (sizeof(Dev_type));
+	if (!dev) return NULL;
 	
-	a -> devPanHndl			= 0;
-	a -> attr				= *attr;
+	dev -> devPanHndl			= 0;
+	dev -> attr					= *attr;
 	
 	//-------------------------------------------------------------------------------------------------
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
-	a -> taskController = init_TaskControl_type (taskControllerName, ConfigureTC, IterateTC, StartTC, 
+	dev -> taskController = init_TaskControl_type (taskControllerName, dev, ConfigureTC, IterateTC, StartTC, 
 						  ResetTC, DoneTC, StoppedTC, DimTC, NULL, DataReceivedTC, ModuleEventHandler, ErrorTC);
-	if (!a->taskController) {discard_DevAttr_type(attr); free(a); return NULL;}
-	// connect DAQmxDev data to Task Controller
-	SetTaskControlModuleData(a -> taskController, a);
+	if (!dev->taskController) {discard_DevAttr_type(attr); free(dev); return NULL;}
 	
 	//--------------------------
 	// DAQmx task settings
 	//--------------------------
 	
-	a -> AITaskSet			= NULL;			
-	a -> AOTaskSet			= NULL;
-	a -> DITaskSet			= NULL;
-	a -> DOTaskSet			= NULL;
-	a -> CITaskSet			= NULL;
-	a -> COTaskSet			= NULL;	
+	dev -> AITaskSet			= NULL;			
+	dev -> AOTaskSet			= NULL;
+	dev -> DITaskSet			= NULL;
+	dev -> DOTaskSet			= NULL;
+	dev -> CITaskSet			= NULL;
+	dev -> COTaskSet			= NULL;	
 	
-	return a;
+	return dev;
 }
 
 static void discard_Dev_type(Dev_type** a)

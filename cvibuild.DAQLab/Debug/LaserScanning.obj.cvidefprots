@@ -1,0 +1,8 @@
+[initalloc_LaserScanning]
+Class="Function"
+Prototype="struct DAQLabModule *initalloc_LaserScanning(struct DAQLabModule *mod, char *className, char *instanceName);"
+
+[discard_LaserScanning]
+Class="Function"
+Prototype="void discard_LaserScanning(struct DAQLabModule **mod);"
+

@@ -425,7 +425,8 @@ typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
 // Task Controller creation/destruction functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-TaskControl_type*  	 	init_TaskControl_type				(const char				taskname[], 
+TaskControl_type*  	 	init_TaskControl_type				(const char				taskControllerName[],
+															void*					moduleData,
 												 	 	 	ConfigureFptr_type 		ConfigureFptr,
 												 	 		IterateFptr_type		IterateFptr,
 												 		 	StartFptr_type			StartFptr,

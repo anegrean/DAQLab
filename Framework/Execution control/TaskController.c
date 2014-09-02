@@ -224,7 +224,8 @@ int 	CVICALLBACK TaskControlIterTimeout 				(int reserved, int timerId, int even
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 /// HIFN Initializes a Task controller.
-TaskControl_type* init_TaskControl_type(const char				taskname[], 
+TaskControl_type* init_TaskControl_type(const char				taskControllerName[],
+										void*					moduleData,
 										ConfigureFptr_type 		ConfigureFptr,
 										IterateFptr_type		IterateFptr,
 										StartFptr_type			StartFptr,
@@ -262,7 +263,8 @@ TaskControl_type* init_TaskControl_type(const char				taskname[],
 	a -> slaveHWTrigTasks	= ListCreate(sizeof(SlaveHWTrigTask_type));
 	if (!a->slaveHWTrigTasks) goto Error;
 	
-	a -> taskName 				= StrDup(taskname);
+	a -> taskName 				= StrDup(taskControllerName);
+	a -> moduleData				= moduleData;
 	a -> subtaskIdx				= 0;
 	a -> slaveHWTrigIdx			= 0;
 	a -> state					= TASK_STATE_UNCONFIGURED;

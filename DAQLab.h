@@ -96,16 +96,18 @@ typedef BOOL 		(*ValidateInputFptr_type) 		(char inputStr[], void* dataPtr);
 //-------------------------------------------------------------------------------
 
 	// Registers a VChan with the DAQLab framework
-BOOL				DLRegisterVChan					(VChan_type* vchan);
+BOOL				DLRegisterVChan					(VChan_type* VChan);
 
 	// Deregisters a VChan from the DAQLab framework
-BOOL				DLUnregisterVChan				(VChan_type* vchan);
+BOOL				DLUnregisterVChan				(VChan_type* VChan);
 
 	// Checks if a given VChan object exists
-BOOL				DLVChanExists					(VChan_type* vchan, size_t* idx);
+BOOL				DLVChanExists					(VChan_type* VChan, size_t* idx);
 
 	// Searches for a given VChan name
-VChan_type*			DLVChanNameExists				(char name[], size_t* idx);
+VChan_type*			DLVChanNameExists				(char VChanName[], size_t* idx);
+
+char*				DLGetUniqueVChanName			(char baseVChanName[]);
 
 	// To Validate a new VChan name, pass this function as a parameter when calling DLGetUINameInput.
 BOOL				DLValidateVChanName				(char newVChanName[], void* null);
@@ -116,6 +118,9 @@ BOOL				DLValidateVChanName				(char newVChanName[], void* null);
 
 	// Installs callback data and callback function in all controls directly within panel 
 int					SetCtrlsInPanCBInfo 			(void* callbackData, CtrlCallbackPtr callbackFn, int panHndl);
+
+// Gets a string from a text box control getting rid of leading and trailing white spaces.
+char* 				GetStringFromControl			(int panelHandle, int stringControlID);
 
 	// Checks if all strings in a list are unique; strings must be of char* type
 BOOL				DLUniqueStrings					(ListType stringList, size_t* idx);
@@ -138,30 +143,30 @@ char*				DLGetUINameInput				(char popupWndName[], size_t maxInputLength, Valida
 //-------------------------------------------------------------------------------
 
 	// Checks if module instance name is unique within the framework.
-BOOL 	DLValidModuleInstanceName					(char name[]);
+BOOL 				DLValidModuleInstanceName		(char name[]);
 
 	// Checks if Task Controller name is unique within the framework.
-BOOL 	DLValidTaskControllerName					(char name[]);
+BOOL 				DLValidTaskControllerName		(char name[]);
 
 	// Adds a list of Task Controllers to the DAQLab framework.
 	// tcList of TaskControl_type* 
-BOOL	DLAddTaskControllers						(ListType tcList);	
+BOOL				DLAddTaskControllers			(ListType tcList);	
 
 	// Removes a list of Task Controllers from the DAQLab framework.
 	// tcList of TaskControl_type*   
-BOOL	DLRemoveTaskControllers 					(ListType tcList);
+BOOL				DLRemoveTaskControllers 		(ListType tcList);
 
 //-------------------------------------------------------------------------------
 // DAQLab XML management
 //-------------------------------------------------------------------------------
 	// adds multiple XML Element children or attributes for a parent XML Element
-int		DLAddToXMLElem								(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes);
+int					DLAddToXMLElem					(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes);
 
 	// places the value of multiple XML Attributes of an Element into user provided pointers
-int		DLGetXMLElementAttributes					(ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes);
+int					DLGetXMLElementAttributes		(ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes);
 
 	// places the value of multiple XML Attributes of a Nodet into user provided pointers
-int 	DLGetXMLNodeAttributes 						(ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes);
+int 				DLGetXMLNodeAttributes 			(ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes);
 
 #ifdef __cplusplus
     }

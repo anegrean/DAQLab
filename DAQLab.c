@@ -25,7 +25,7 @@
 #include "PIStage.h"
 #include "VUPhotonCtr.h"
 #include "NIDAQmxManager.h"
-#include "GalvoScanEngine.h"
+#include "LaserScanning.h"
 
 
 
@@ -621,6 +621,21 @@ int	SetCtrlsInPanCBInfo (void* callbackData, CtrlCallbackPtr callbackFn, int pan
 	return error;
 }
 
+char* GetStringFromControl (int panelHandle, int stringControlID)
+{
+	size_t     nChars;
+	char*      VChanName; 
+
+	if (GetCtrlAttribute(panelHandle, stringControlID, ATTR_STRING_TEXT_LENGTH, &nChars) < 0) return NULL;
+	VChanName = malloc((nChars+1)*sizeof(char));
+	if (!VChanName) return NULL;
+	
+	GetCtrlVal(panelHandle, stringControlID, VChanName);
+	RemoveSurroundingWhiteSpace(VChanName);
+		
+	return VChanName;
+}
+
 /// HIFN Checks if all strings in a list are unique.
 /// HIPAR idx/ 1-based index of string item in the list that is not unique. If items are unique than this is 0.
 /// HIRET True if all strings are unique, False otherwise.
@@ -668,23 +683,23 @@ ListType StringListCpy(ListType src)
 
 /// HIFN Registers a VChan with the DAQLab framework.
 /// HIRET TRUE if VChan was added, FALSE if error occured.
-BOOL DLRegisterVChan (VChan_type* vchan)
+BOOL DLRegisterVChan (VChan_type* VChan)
 {
-	if (!vchan) return FALSE;
-	return ListInsertItem(VChannels, &vchan, END_OF_LIST);
+	if (!VChan) return FALSE;
+	return ListInsertItem(VChannels, &VChan, END_OF_LIST);
 }
 
 /// HIFN Disconnects and removes a VChan from the DAQLab framework.
 /// HIRET TRUE if successful, FALSE if error occured or channel not found.
-int DLUnregisterVChan (VChan_type* vchan)
+int DLUnregisterVChan (VChan_type* VChan)
 {   
 	size_t			itemPos;
-	if (!DLVChanExists(vchan, &itemPos)) {
-		DAQLab_Msg(DAQLAB_MSG_ERR_VCHAN_NOT_FOUND, vchan, 0, 0, 0);
+	if (!DLVChanExists(VChan, &itemPos)) {
+		DAQLab_Msg(DAQLAB_MSG_ERR_VCHAN_NOT_FOUND, VChan, 0, 0, 0);
 		return FALSE;
 	}
 	
-	VChan_Disconnect(vchan);
+	VChan_Disconnect(VChan);
 	ListRemoveItem(VChannels, 0, itemPos);
 	
 	return TRUE;
@@ -693,42 +708,23 @@ int DLUnregisterVChan (VChan_type* vchan)
 /// HIFN Checks if a VChan object is present in the DAQLab framework.
 /// OUT idx 1-based index of VChan object in a ListType list of VChans kept by the DAQLab framework. Pass 0 if this is not needed. If item is not found, *idx is 0.
 /// HIRET TRUE if VChan exists, FALSE otherwise. 
-BOOL DLVChanExists (VChan_type* vchan, size_t* idx)
+BOOL DLVChanExists (VChan_type* VChan, size_t* idx)
 {
-	VChan_type** VChanPtrPtr;
-	for (int i = 1; i <= ListNumItems(VChannels); i++) {
-		VChanPtrPtr = ListGetPtrToItem(VChannels, i);
-		if (*VChanPtrPtr == vchan) {
-			if (idx) *idx = i;
-			return TRUE;
-		}
-	}
-	if (idx) *idx = 0;
-	return FALSE;
+	return VChanExists(VChannels, VChan, idx);
 }
 
 /// HIFN Searches for a given VChan name and if found, return pointer to it.
 /// OUT idx 1-based index of VChan object in a ListType list of VChans kept by the DAQLab framework. Pass 0 if this is not needed. If item is not found, *idx is 0.
 /// HIRET Pointer to the found VChan_type* if VChan exists, NULL otherwise. 
 /// HIRET Pointer is valid until another call to DLRegisterVChan or DLUnregisterVChan. 
-VChan_type* DLVChanNameExists (char name[], size_t* idx)
+VChan_type* DLVChanNameExists (char VChanName[], size_t* idx)
 {
-	VChan_type** 	VChanPtrPtr;
-	char*			listName;
-	for (int i = 1; i <= ListNumItems(VChannels); i++) {
-		VChanPtrPtr = ListGetPtrToItem(VChannels, i);
-		listName = GetVChanName(*VChanPtrPtr);
-		if (!strcmp(listName, name)) {
-			if (idx) *idx = i;
-			OKfree(listName);
-			return *VChanPtrPtr;
-		}
-		OKfree(listName);
-	}
-	
-	if (idx) *idx = 0;
-	return NULL;
-	
+	return VChanNameExists (VChannels, VChanName, idx); 
+}
+
+char* DLGetUniqueVChanName (char baseVChanName[])
+{
+	return GetUniqueVChanName(VChannels, baseVChanName);
 }
 
 /// HIFN Validate function for VChan names.

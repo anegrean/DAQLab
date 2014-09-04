@@ -114,7 +114,7 @@ struct DataPacket {
 // Global functions
 
 //------------------------------------------------------------------------------
-// VChan Creation / Destruction
+// VChan Creation / Destruction and management functions
 //------------------------------------------------------------------------------
 
 SourceVChan_type*		init_SourceVChan_type		(char 						name[], 
@@ -131,7 +131,19 @@ SinkVChan_type*			init_SinkVChan_type			(char 						name[],
 												 	Disconnected_CBFptr_type	Disconnected_CBFptr);
 
 	// Discard common to both types of VChan. Cast SourceVChan_type** and SinkVChan_type** to VChan_type**.
-void 					discard_VChan_type 			(VChan_type** vchan); 
+void 					discard_VChan_type 			(VChan_type** VChan); 
+
+	// Checks if a VChan object exists among a list of VChans of VChan_type*.
+	// If found and *idx is provided, it returns the 1-based VChan index in the list, otherwise *idx=0.
+BOOL					VChanExists					(ListType VChanList, VChan_type* VChan, size_t* idx);
+
+	// Searches for a given VChan name among a list of VChans of VChan_type*.
+	// If found and *idx is provided, it returns the 1-based VChan index in the list, otherwise *idx=0.
+VChan_type*				VChanNameExists				(ListType VChanList, char VChanName[], size_t* idx);
+
+	// Returns a unique VChan name among a given list of VChans. The unique VChan name has a base name and a number.
+	// VChanList of VChan_type*
+char*					GetUniqueVChanName			(ListType VChanList, char baseVChanName[]);
 
 //------------------------------------------------------------------------------
 // VChan Connections

@@ -14,10 +14,9 @@
      /* Panels and Controls: */
 
 #define  EnginesPan                       1
-#define  EnginesPan_CancelBTTN            2       /* control type: command, callback function: (none) */
+#define  EnginesPan_DoneBTTN              2       /* control type: command, callback function: (none) */
 #define  EnginesPan_Plate_3               3       /* control type: deco, callback function: (none) */
-#define  EnginesPan_OKBTTN                4       /* control type: command, callback function: (none) */
-#define  EnginesPan_ScanTypes             5       /* control type: listBox, callback function: (none) */
+#define  EnginesPan_ScanTypes             4       /* control type: listBox, callback function: (none) */
 
 #define  NonResGCal                       2
 #define  NonResGCal_Tab                   2       /* control type: tab, callback function: (none) */

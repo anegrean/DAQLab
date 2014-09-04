@@ -12,6 +12,7 @@
 // Include files
 #include "DAQLabUtility.h"
 #include <ansi_c.h>
+#include <formatio.h> 
 #include "toolbox.h" 
 #include "nivision.h"
 #include "utility.h"
@@ -308,12 +309,73 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 	
 }
 
-void discard_VChan_type (VChan_type** vchan)
+void discard_VChan_type (VChan_type** VChan)
 {
-	if (!*vchan) return;
+	if (!*VChan) return;
 	
 	// call discard function specific to the VChan type
-	(*(*vchan)->DiscardFptr)	(vchan);
+	(*(*VChan)->DiscardFptr)	(VChan);
+}
+
+/// HIFN Checks if a VChan object exists among a list of VChans of VChan_type*.
+/// OUT idx 1-based index of the found VChan object within the VChan list.Pass 0 if this is not needed. If item is not found, *idx is 0.
+/// HIRET TRUE if VChan exists, FALSE otherwise.  
+BOOL VChanExists (ListType VChanList, VChan_type* VChan, size_t* idx)
+{
+	VChan_type** 	VChanPtrPtr;
+	size_t			nVChans			= ListNumItems(VChanList);
+	for (size_t i = 1; i <= nVChans; i++) {
+		VChanPtrPtr = ListGetPtrToItem(VChanList, i);
+		if (*VChanPtrPtr == VChan) {
+			if (idx) *idx = i;
+			return TRUE;
+		}
+	}
+	if (idx) *idx = 0;
+	return FALSE;
+}
+
+/// HIFN Searches for a given VChan name from a VChan list of VChan_type* and if found, returns a pointer to the VChan object.
+/// OUT idx 1-based index of VChan object in the list of VChans. Pass 0 if this is not needed. If item is not found, *idx is 0.
+/// HIRET Pointer to the found VChan_type* if VChan exists, NULL otherwise. 
+VChan_type* VChanNameExists (ListType VChanList, char VChanName[], size_t* idx)
+{
+	VChan_type** 	VChanPtrPtr;
+	char*			listVChanName;
+	size_t			nVChans		= ListNumItems(VChanList);
+	for (size_t i = 1; i <= nVChans; i++) {
+		VChanPtrPtr = ListGetPtrToItem(VChanList, i);
+		listVChanName = GetVChanName(*VChanPtrPtr);
+		if (!strcmp(listVChanName, VChanName)) {
+			if (idx) *idx = i;
+			OKfree(listVChanName);
+			return *VChanPtrPtr;
+		}
+		OKfree(listVChanName);
+	}
+	
+	if (idx) *idx = 0;
+	return NULL;
+}
+
+char* GetUniqueVChanName (ListType VChanList, char baseVChanName[])
+{
+	size_t n        = 2;
+	char*  name;   
+	char   countstr [500];
+	
+	name = StrDup(baseVChanName);
+	AppendString(&name, " 1", -1);
+	while (VChanNameExists (VChanList, name, 0)) {
+		OKfree(name);
+		name = StrDup(baseVChanName);
+		Fmt(countstr, "%s<%d", n);
+		AppendString(&name, " ", -1);
+		AppendString(&name, countstr, -1);
+		n++;
+	}
+	
+	return name;
 }
 
 //---------------------------------

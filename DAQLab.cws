@@ -133,7 +133,7 @@ Disk Date = 3492686806
 In Projects = "1,"
 Window Top = 30
 Window Z-Order = 2
-Source Window State = "1,112,112,112,20,39,20,0,3,70,0,0,0,0,0,28,86,0,112,39,400,600,1,0,"
+Source Window State = "1,119,119,119,20,39,20,0,3,70,0,0,0,0,0,28,98,0,119,39,400,600,1,0,"
 
 [File 0009]
 Path = "/c/Program Files (x86)/National Instruments/CVI2013/include/userint.h"
@@ -179,7 +179,7 @@ Source Window State = "1,37,38,38,31,32,32,0,0,73,0,0,0,0,0,25,0,0,37,31,349,627
 [File 0013]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/UI_LaserScanning.uir"
 File Type = "User Interface Resource"
-Disk Date = 3492687811
+Disk Date = 3492773566
 In Projects = "1,"
 Window Top = 92
 Window Left = 42
@@ -201,12 +201,13 @@ Window Z-Order = 3
 [File 0015]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/LaserScanning.c"
 File Type = "CSource"
-Disk Date = 3492698383
+Disk Date = 3492773973
 In Projects = "1,"
 Window Top = 30
 Window Left = 179
 Window Released = True
-Source Window State = "1,840,840,840,68,92,68,0,0,205,30,358,0,369,45,40,820,0,848,8,1047,1423,0,4245,"
+Source Window State Line0001 = "0,1466,1467,1466,4,115,4,0,0,205,30,1451,0,1466,4,40,886,0,912,24,1047,1423,0,42"
+Source Window State Line0002 = "45,"
 
 [File 0016]
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.h"
@@ -332,7 +333,7 @@ Source Window State = "1,86,86,86,17,33,33,0,3,0,0,0,0,0,0,0,68,0,86,17,349,683,
 [File 0029]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/UI_LaserScanning.h"
 File Type = "Include"
-Disk Date = 3492686806
+Disk Date = 3492773566
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 
@@ -399,10 +400,10 @@ Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.c"
 File Type = "CSource"
 Disk Date = 3492595357
 In Projects = "1,"
-Window Top = 235
-Window Left = 232
+Window Top = 116
+Window Left = 296
 Window Released = True
-Source Window State = "1,311,311,311,5,23,23,0,0,165,0,0,0,0,0,60,511,0,541,18,854,1360,0,0,"
+Source Window State = "1,311,311,311,5,23,23,0,0,165,0,0,0,0,0,60,511,0,537,70,854,1360,0,0,"
 
 [File 0037]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.h"
@@ -435,10 +436,10 @@ Path = "/d/ELE_DAQLab/DAQLab.c"
 File Type = "CSource"
 Disk Date = 3492683129
 In Projects = "1,"
-Window Top = 44
-Window Left = 141
+Window Top = 30
+Window Left = 143
 Window Released = True
-Source Window State = "1,693,693,693,4,21,21,0,3,173,0,0,0,0,0,65,661,0,693,4,925,1427,0,0,"
+Source Window State = "1,2140,2140,2140,24,57,24,0,0,173,0,0,0,0,0,65,2090,0,2131,43,925,1427,0,0,"
 
 [File 0041]
 Path = "/d/ELE_DAQLab/UI_DAQLab.h"

@@ -199,8 +199,6 @@ struct ScanEngine {
 	//-----------------------------------
 	int						scanSetPanHndl;			// Panel handle for adjusting scan settings such as pixel size, etc...
 	int						engineSetPanHndl;		// Panel handle for scan engine settings such as VChans and scan axis types.
-	int						fastAxisCalPanHndl;		// Panel for performing fast axis calibration
-	int						slowAxisCalPanHndl;		// Panel for performing slow axis calibration
 	
 	//-----------------------------------
 	// Methods
@@ -250,10 +248,13 @@ struct LaserScanning {
 		// UI
 		//-------------------------
 	
-	int						mainPanHndl;	  		// Main panel for the laser scanning module.
-	int						enginesPanHndl;   		// List of available scan engine types.
-	int						menuBarHndl;			// Laser scanning module menu bar.
-	int						settingsMenuItemHndl;	// Settings menu item handle for adjusting scan engine settings such as VChans, etc.
+	int						mainPanHndl;	  			// Main panel for the laser scanning module.
+	int						enginesPanHndl;   			// List of available scan engine types.
+	int						axisCalPanHndl;				// Panel handle to perform scan axis calibration
+	int						manageAxisCalPanHndl;		// Panel handle where axis calibrations are managed.
+	int						newAxisCalTypePanHndl;		// Panel handle to select different calibrations for various axis types.
+	int						menuBarHndl;				// Laser scanning module menu bar.
+	int						engineSettingsMenuItemHndl;	// Settings menu item handle for adjusting scan engine settings such as VChans, etc.
 	
 };
 
@@ -281,13 +282,19 @@ static void							DetVChanDisconnected					(VChan_type* self, VChan_type* discon
 //----------------------
 // Scan axis calibration
 //----------------------
-static int CVICALLBACK 				GalvoCal_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
 	// generic scan axis calibration data 
 
 static ScanAxisCal_type*			initalloc_ScanAxisCal_type				(ScanAxisCal_type* scanAxisCal);
 
 static void							discard_ScanAxisCal_type				(ScanAxisCal_type** scanAxisCal);
+
+void CVICALLBACK 					ScanAxisCalibrationMenu_CB				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+
+static void							UpdateAvailableCalibrations				(ScanEngine_type* scanEngine, ScanAxis_type axisType);
+
+static int CVICALLBACK 				ManageScanAxisCalib_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+static int CVICALLBACK 				NewScanAxisCalib_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 	//-----------------------------------------
 	// Non-resonant galvo axis calibration data
@@ -315,8 +322,7 @@ static TriangleCal_type* 			init_TriangleCal_type					(int nElem);
 static void 						discard_TriangleCal_type 				(TriangleCal_type** a);
 
 	// galvo calibration
-
-static int 							CalibrateNonResGalvo					(NonResGalvoCal_type** calData);
+static int CVICALLBACK 				NonResGalvoCal_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 //-------------
 // Scan Engines
@@ -359,15 +365,14 @@ static int CVICALLBACK 				ScanEngineSettings_CB 					(int panel, int control, i
 
 static int CVICALLBACK 				ScanEnginesTab_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static void CVICALLBACK 			SettingsMenu_CB 						(int menuBar, int menuItem, void *callbackData, int panel);
+void CVICALLBACK 					ScanEngineSettingsMenu_CB				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+
 
 static void CVICALLBACK 			NewScanEngineMenu_CB					(int menuBar, int menuItem, void *callbackData, int panel);
 
 static int CVICALLBACK 				NewScanEngine_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static BOOL							ValidScanEngineName						(char name[], void* dataPtr);
-
-static void							UpdateAvailableCalibrations				(ScanEngine_type* scanEngine, ScanAxis_type axisType);
 
 //-----------------------------------------
 // Scan Engine VChan management
@@ -483,8 +488,11 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 		//---
 	ls->mainPanHndl					= 0;
 	ls->enginesPanHndl				= 0;
+	ls->axisCalPanHndl				= 0;
+	ls->newAxisCalTypePanHndl		= 0;
+	ls->manageAxisCalPanHndl		= 0;		
 	ls->menuBarHndl					= 0;
-	ls->settingsMenuItemHndl		= 0;
+	ls->engineSettingsMenuItemHndl	= 0;
 	
 		// METHODS
 		
@@ -550,6 +558,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	LaserScanning_type*		ls					= (LaserScanning_type*) mod;
 	int 					error 				= 0;
 	int						newMenuItem			= 0;
+	int						settingsMenuItemHndl;
 	
 	// load main panel
 	errChk(ls->mainPanHndl 		= LoadPanel(workspacePanHndl, MOD_LaserScanning_UI, ScanPan));
@@ -562,12 +571,13 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	SetMenuBarAttribute(ls->menuBarHndl, newMenuItem, ATTR_CALLBACK_DATA, ls);
 	SetMenuBarAttribute(ls->menuBarHndl, newMenuItem, ATTR_CALLBACK_FUNCTION_POINTER, NewScanEngineMenu_CB);
 	
-	// settings menu item, dim initially when there are no scan engines
-	ls->settingsMenuItemHndl 	= NewMenu(ls->menuBarHndl, "Settings", -1);
-	SetMenuBarAttribute(ls->menuBarHndl, 0, ATTR_SHOW_IMMEDIATE_ACTION_SYMBOL, 0);
-	SetMenuBarAttribute(ls->menuBarHndl, ls->settingsMenuItemHndl, ATTR_CALLBACK_DATA, ls);
-	SetMenuBarAttribute(ls->menuBarHndl, ls->settingsMenuItemHndl, ATTR_CALLBACK_FUNCTION_POINTER, SettingsMenu_CB);
-	SetMenuBarAttribute(ls->menuBarHndl, ls->settingsMenuItemHndl, ATTR_DIMMED, 1);
+	// settings menu
+	settingsMenuItemHndl 		= NewMenu(ls->menuBarHndl, "Settings", -1);
+	// scan engine settings menu item
+	ls->engineSettingsMenuItemHndl = NewMenuItem(ls->menuBarHndl, settingsMenuItemHndl, "Scan engine", -1, (VAL_MENUKEY_MODIFIER | 'S'), ScanEngineSettingsMenu_CB, ls);  
+	SetMenuBarAttribute(ls->menuBarHndl, ls->engineSettingsMenuItemHndl, ATTR_DIMMED, 1);
+	// axis calibration settings menu item
+	NewMenuItem(ls->menuBarHndl, settingsMenuItemHndl, "Axis calibration", -1, (VAL_MENUKEY_MODIFIER | 'A'), ScanAxisCalibrationMenu_CB, ls);  
 	
 	// add callback function and data to scan engines tab
 	SetCtrlAttribute(ls->mainPanHndl, ScanPan_ScanEngines, ATTR_CALLBACK_DATA, ls);
@@ -598,25 +608,25 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 	if (ls->enginesPanHndl)
 		errChk(SetPanelAttribute(ls->enginesPanHndl, ATTR_VISIBLE, visibleFlag));
 	
+	if (ls->axisCalPanHndl)
+		errChk(SetPanelAttribute(ls->axisCalPanHndl, ATTR_VISIBLE, visibleFlag));
+	
+	if (ls->manageAxisCalPanHndl)
+		errChk(SetPanelAttribute(ls->manageAxisCalPanHndl, ATTR_VISIBLE, visibleFlag));
+	
 	// scan engine calibration panels
 	for(size_t i = 1; i <= nEngines; i++) {
 		enginePtrPtr = ListGetPtrToItem(ls->scanEngines, i);
 		
 		if ((*enginePtrPtr)->engineSetPanHndl)
 			errChk(SetPanelAttribute((*enginePtrPtr)->engineSetPanHndl, ATTR_VISIBLE, visibleFlag));
-			
-		if ((*enginePtrPtr)->fastAxisCalPanHndl)
-			errChk(SetPanelAttribute((*enginePtrPtr)->fastAxisCalPanHndl, ATTR_VISIBLE, visibleFlag));
-		
-		if ((*enginePtrPtr)->slowAxisCalPanHndl)
-			errChk(SetPanelAttribute((*enginePtrPtr)->slowAxisCalPanHndl, ATTR_VISIBLE, visibleFlag));
 	}
 	
 Error:
 	return error;	
 }
 
-static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
+void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
 {
 	LaserScanning_type*		ls					= callbackData;
 	ScanEngine_type**		enginePtr;
@@ -625,16 +635,21 @@ static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callba
 	int						tabIdx;
 	
 	// get pointer to selected scan engine
-	GetActiveTabPage(panel, ScanPan_ScanEngines, &tabIdx);
+	GetActiveTabPage(panelHandle, ScanPan_ScanEngines, &tabIdx);
 	enginePtr = ListGetPtrToItem(ls->scanEngines, tabIdx+1);
 	engine = *enginePtr;
 	
 	// load settings panel if not loaded already
-	GetPanelAttribute(panel, ATTR_PANEL_PARENT, &workspacePanHndl);
+	GetPanelAttribute(panelHandle, ATTR_PANEL_PARENT, &workspacePanHndl);
 	if (engine->engineSetPanHndl) return; // do nothing
-		engine->engineSetPanHndl 	= LoadPanel(workspacePanHndl, MOD_LaserScanning_UI, ScanSetPan);
 	
-		
+	engine->engineSetPanHndl 	= LoadPanel(workspacePanHndl, MOD_LaserScanning_UI, ScanSetPan);
+	// change panel title
+	char* panTitle = GetTaskControlName(engine->taskControl);
+	AppendString(&panTitle, " settings", -1);
+	SetPanelAttribute(engine->engineSetPanHndl, ATTR_TITLE, panTitle);
+	OKfree(panTitle);
+	
 	char* VChanFastAxisComName 	= GetVChanName((VChan_type*)engine->VChanFastAxisCom);
 	char* VChanSlowAxisComName 	= GetVChanName((VChan_type*)engine->VChanSlowAxisCom);
 	char* VChanFastAxisPosName 	= GetVChanName((VChan_type*)engine->VChanFastAxisPos);
@@ -692,7 +707,7 @@ static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callba
 	//----------------------------------------------------------
 	// populate by default NonResonantGalvo type of calibrations
 	//----------------------------------------------------------
-	
+	UpdateAvailableCalibrations	(engine, NonResonantGalvo);
 	
 	
 	
@@ -809,7 +824,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					ListInsertItem(ls->scanEngines, &newScanEngine, END_OF_LIST);
 					
 					// undim scan engine "Settings" menu item
-					SetMenuBarAttribute(ls->menuBarHndl, ls->settingsMenuItemHndl, ATTR_DIMMED, 0); 
+					SetMenuBarAttribute(ls->menuBarHndl, ls->engineSettingsMenuItemHndl, ATTR_DIMMED, 0); 
 			
 					free(engineName);
 					break;
@@ -840,13 +855,136 @@ static BOOL	ValidScanEngineName (char name[], void* dataPtr)
 
 static void	UpdateAvailableCalibrations	(ScanEngine_type* scanEngine, ScanAxis_type axisType)
 {
-/*	size_t					nCal 		= ListNumItems(ls->calScanAxis);
+	size_t					nCal 		= ListNumItems(scanEngine->lsModule->calScanAxis);
 	ScanAxisCal_type**		calPtr;
 	
+	// empty lists, insert empty selection and select by default
+	DeleteListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, 0, -1);
+	DeleteListItem(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, 0, -1);
+	InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, -1,"", 0);  
+	InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, -1,"", 0); 
+	SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, 0);
+	SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, 0);
+	
 	for (size_t i = 1; i <= nCal; i++) {
-		calPtr = ListGetPtrToItem(ls->calScanAxis, i);
-		if ((*calPtr)->scanAxisType == 
-	} */
+		calPtr = ListGetPtrToItem(scanEngine->lsModule->calScanAxis, i);
+		// fast axis calibration list
+		if (((*calPtr)->scanAxisType == axisType) && (*calPtr != scanEngine->slowAxisCal)) 
+			InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, -1, (*calPtr)->calName, 0);
+		// select fast axis list item if calibration is assigned to the scan engine
+		if (scanEngine->fastAxisCal == *calPtr)
+			SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, i);
+		// slow axis calibration list
+		if (((*calPtr)->scanAxisType == axisType) && (*calPtr != scanEngine->fastAxisCal)) 
+			InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, -1, (*calPtr)->calName, 0);
+		// select fast axis list item if calibration is assigned to the scan engine
+		if (scanEngine->slowAxisCal == *calPtr)
+			SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, i);
+	} 
+}
+
+static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	LaserScanning_type*		ls = callbackData;
+	
+	switch (event) {
+			
+		case EVENT_COMMIT:
+			
+			switch (control) {
+				
+				case ManageAxis_New:	   	// new calibration
+					
+					if (ls->newAxisCalTypePanHndl) {
+						SetActivePanel(ls->newAxisCalTypePanHndl);
+						return 0; // do nothing if panel is already loaded (only one calibration may be active at a time)
+					}
+					
+					// populate axis type list
+					InsertListItem(ls->newAxisCalTypePanHndl, AxisSelect_AxisType, -1, "Non-resonant galvo", NonResonantGalvo);
+					InsertListItem(ls->newAxisCalTypePanHndl, AxisSelect_AxisType, -1, "Resonant galvo", ResonantGalvo);
+					InsertListItem(ls->newAxisCalTypePanHndl, AxisSelect_AxisType, -1, "Acousto-optic deflector", AOD);
+					InsertListItem(ls->newAxisCalTypePanHndl, AxisSelect_AxisType, -1, "Translation stage", Translation);
+					// select by default NonResonantGalvo
+					SetCtrlIndex(ls->newAxisCalTypePanHndl, AxisSelect_AxisType, 0);
+					// attach callback function and data to the controls in the panel
+					SetCtrlsInPanCBInfo(ls, NewScanAxisCalib_CB, ls->newAxisCalTypePanHndl); 
+					
+					break;
+					
+				case ManageAxis_Close:	  	// close axis calibration manager
+					
+					DiscardPanel(panel);
+					ls->manageAxisCalPanHndl = 0;
+					break;
+					
+			}
+			break;
+			
+		case EVENT_KEYPRESS:   				// delete calibration
+			
+			if ((control != ManageAxis_AxisCalibList) || (eventData1 != VAL_FWD_DELETE_VKEY)) return 0; // continue only if Del key was pressed
+			
+			break;
+			
+		case LEFT_DOUBLE_CLICK:			   	// open calibration data
+			
+			break;
+	}
+	
+	return 0;
+}
+
+static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	LaserScanning_type*		ls = callbackData;
+	
+	switch (event) {
+			
+		case EVENT_COMMIT:
+			
+			switch (control) {
+					
+				case AxisSelect_OKBTTN:
+					
+					unsigned int 	axisType;
+					int				parentPanHndl;
+					
+					GetPanelAttribute(panel, ATTR_PANEL_PARENT, &parentPanHndl);
+					GetCtrlVal(panel, AxisSelect_AxisType, &axisType);
+					
+					switch (axisType) {
+							
+						case NonResonantGalvo:
+							
+							ls->axisCalPanHndl = LoadPanel(parentPanHndl, MOD_LaserScanning_UI, NonResGCal); 
+							// change panel title
+							SetPanelAttribute(ls->axisCalPanHndl, ATTR_TITLE, "Scan Axis Calibration");
+							// add callback function and data first to all the direct controls in the calibration panel
+							//SetCtrlsInPanCBInfo(
+							break;
+							
+						default:
+							
+							DLMsg("Calibration not implemented for the chosen axis type.", 1);
+					} 
+					
+					// discard panel
+					DiscardPanel(ls->newAxisCalTypePanHndl);
+					ls->newAxisCalTypePanHndl = 0;
+					break;
+					
+				case AxisSelect_CancelBTTN:
+					
+					// discard panel
+					DiscardPanel(ls->newAxisCalTypePanHndl);
+					ls->newAxisCalTypePanHndl = 0;
+					break;
+			}
+			break;
+	}
+	
+	return 0;
 }
 
 //-------------------------------------------
@@ -931,14 +1069,6 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					engine->engineSetPanHndl = 0;
 					break;
 					
-				case ScanSetPan_NewFastAxisCal:
-					
-					break;
-					
-				case ScanSetPan_NewSlowAxisCal: 
-					
-					break;
-					
 				case ScanSetPan_FastAxisType:
 					
 					break;
@@ -965,7 +1095,7 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 			GetCtrlIndex(panel, ScanSetPan_ImgChans, &listItemIdx); 
 			detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
 			DLUnregisterVChan((VChan_type*)(*detChanPtr)->detVChan);
-			discard_VChan_type((VChan_type*)(*detChanPtr)->detVChan);
+			discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
 			DeleteListItem(panel, ScanSetPan_ImgChans, listItemIdx, 1);  
 			break;
 			
@@ -976,7 +1106,7 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 			
 			GetCtrlIndex(panel, ScanSetPan_ImgChans, &listItemIdx); 
 			detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
-			SetVChanName((*detChanPtr)->detVChan, newName);
+			SetVChanName((VChan_type*)(*detChanPtr)->detVChan, newName);
 			ReplaceListItem(panel, ScanSetPan_ImgChans, listItemIdx, newName, newName);  
 			break;
 	}
@@ -1012,14 +1142,14 @@ static int CVICALLBACK ScanEnginesTab_CB (int panel, int control, int event, voi
 	// if there are no more scan engines, add default "None" tab page and dim "Settings" menu item
 	GetNumTabPages(panel, control, &nTabs);
 	if (!nTabs) {
-		SetMenuBarAttribute(ls->menuBarHndl, ls->settingsMenuItemHndl, ATTR_DIMMED, 1); 
+		SetMenuBarAttribute(ls->menuBarHndl, ls->engineSettingsMenuItemHndl, ATTR_DIMMED, 1); 
 		InsertTabPage(panel, control, -1, "None");
 	}
 	
 	return 0;
 }
 
-static int CVICALLBACK GalvoCal_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK NonResGalvoCal_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	switch (event)
 	{
@@ -1051,6 +1181,34 @@ static void discard_ScanAxisCal_type (ScanAxisCal_type** scanAxisCal)
 {
 	OKfree((*scanAxisCal)->calName);
 	OKfree(*scanAxisCal);
+}
+
+void CVICALLBACK ScanAxisCalibrationMenu_CB	(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
+{
+	LaserScanning_type*		ls 				= callbackData;
+	int						parentPanHndl;
+	
+	// if panel is already loaded, do nothing
+	if (ls->manageAxisCalPanHndl) return;
+	// get workspace panel handle
+	GetPanelAttribute(panelHandle, ATTR_PANEL_PARENT, &parentPanHndl);
+	
+	ls->manageAxisCalPanHndl = LoadPanel(parentPanHndl, MOD_LaserScanning_UI, ManageAxis);
+	//change panel title
+	SetPanelAttribute(ls->manageAxisCalPanHndl, ATTR_TITLE, ls->baseClass.instanceName);
+	
+	// list available calibrations
+	size_t					nCal 			= ListNumItems(ls->calScanAxis);
+	ScanAxisCal_type**		calPtr;
+	for (size_t i = 1; i <= nCal; i++) {
+		calPtr = ListGetPtrToItem(ls->calScanAxis, i);
+		InsertListItem(ls->manageAxisCalPanHndl, ManageAxis_AxisCalibList, -1, (*calPtr)->calName, 0); 
+	} 
+	
+	// attach callback function and data to all controls in the panel
+	SetCtrlsInPanCBInfo(ls, ManageScanAxisCalib_CB, ls->manageAxisCalPanHndl); 
+	
+	
 }
 
 static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], SourceVChan_type* VChanCom, SinkVChan_type* VChanPos)
@@ -1235,9 +1393,6 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	engine->scanSetPanHndl			= 0;
 	// scan engine settings panel handle
 	engine->engineSetPanHndl		= 0;
-	// fast and slow axis calibration panel handles
-	engine->fastAxisCalPanHndl		= 0;
-	engine->slowAxisCalPanHndl		= 0;
 	
 	// position feedback flags
 	engine->Discard					= NULL;	   // overriden by derived scan engine classes
@@ -1309,8 +1464,6 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	// UI
 	//----------------------------------
 	if (engine->engineSetPanHndl)		{DiscardPanel(engine->engineSetPanHndl); engine->engineSetPanHndl = 0;}
-	if (engine->fastAxisCalPanHndl)		{DiscardPanel(engine->fastAxisCalPanHndl); engine->fastAxisCalPanHndl = 0;}
-	if (engine->slowAxisCalPanHndl)		{DiscardPanel(engine->slowAxisCalPanHndl); engine->slowAxisCalPanHndl = 0;}
 	
 	OKfree(engine);
 }

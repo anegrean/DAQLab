@@ -34,6 +34,12 @@
 typedef void	(* DiscardFptr_type) 		(VChan_type** vchan);
 typedef BOOL	(* DisconnectFptr_type)	   	(VChan_type* vchan);
 
+//==============================================================================
+// Globals
+
+	// local global list of VChans linking UpdateSwitchboard to Switchboard_CB
+ListType						SwitchboardVChanList	= 0;  
+
 //---------------------------------------------------------------------------------------------------
 // Base VChan
 //---------------------------------------------------------------------------------------------------
@@ -47,11 +53,14 @@ struct VChan {
 	char*						name;					// Name of virtual chanel. 
 	VChanData_type				dataType;				// Type of data which goes through the channel.
 	VChanDataFlow_type 			dataFlow;   			// Direction of data flow into or out of the channel.
+	BOOL						useAsReference;			// If TRUE and VChan is a Source type, then all Sinks pick up additional VChan properties from this VChan.
+														// If TRUE and VChan is Sink type, a connected Source and all its Sinks pick up additional properties from this VChan.
+														// If FALSE (default), this VChan can pick up additional properties from other VChans. 
 														
 	//-----------------------	
 	// Source code connection
 	//-----------------------
-	void*						vChanOwner;				// Reference to object that owns the VChan.
+	void*						VChanOwner;				// Reference to object that owns the VChan.
 	
 	//-----------------------
 	// Methods
@@ -131,12 +140,14 @@ struct DataPacket {
 // Static functions
 
 static void 				discard_DataPacket_type		(DataPacket_type* a);
+
+static int CVICALLBACK 		Switchboard_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 							
 static int 					init_VChan_type 			(VChan_type* 				vchan, 
 														 char 						name[], 
 										 				 VChanData_type 			dataType, 
 										 				 VChanDataFlow_type 		flowType, 
-														 void* 						vChanOwner, 	
+														 void* 						VChanOwner, 	
 										 				 DiscardFptr_type 			DiscardFptr,
 										 				 DisconnectFptr_type		DisconnectFptr,
 														 Connected_CBFptr_type		Connected_CBFptr,
@@ -147,7 +158,8 @@ static int 					init_VChan_type 			(VChan_type* 				vchan,
 	if (!vchan->name) return -1;
 	vchan -> dataType				= dataType;
 	vchan -> dataFlow				= flowType;
-	vchan -> vChanOwner				= vChanOwner;
+	vchan -> useAsReference			= FALSE;
+	vchan -> VChanOwner				= VChanOwner;
 	
 	// Callbacks
 	vchan -> Connected_CBFptr		= Connected_CBFptr;
@@ -226,6 +238,7 @@ static BOOL disconnectSinkVChan (VChan_type* vchan)
 	SinkVChan_type**		sinkPtrPtr;
 	SourceVChan_type*		src				= sink->sourceVChan;
 	
+	if (!src) return TRUE; // do nothing if there is no source to disconnect
 	// remove source from sink
 	sink->sourceVChan = NULL;
 	
@@ -258,7 +271,7 @@ static BOOL disconnectSinkVChan (VChan_type* vchan)
 
 SourceVChan_type* init_SourceVChan_type	(char 						name[], 
 										 VChanData_type 			dataType,
-										 void* 						vChanOwner,
+										 void* 						VChanOwner,
 										 Connected_CBFptr_type		Connected_CBFptr,
 										 Disconnected_CBFptr_type	Disconnected_CBFptr)
 {
@@ -266,7 +279,7 @@ SourceVChan_type* init_SourceVChan_type	(char 						name[],
 	if (!vchan) return NULL;
 	
 	// init base VChan type
-	if (init_VChan_type ((VChan_type*) vchan, name, dataType, VChan_Source, vChanOwner, 
+	if (init_VChan_type ((VChan_type*) vchan, name, dataType, VChan_Source, VChanOwner, 
 						 discard_SourceVChan_type, disconnectSourceVChan, Connected_CBFptr, Disconnected_CBFptr) < 0) goto Error;
 	
 	// init list with Sink VChans
@@ -282,7 +295,7 @@ SourceVChan_type* init_SourceVChan_type	(char 						name[],
 
 SinkVChan_type* init_SinkVChan_type	(char 						name[], 
 									 VChanData_type 			dataType,
-									 void* 						vChanOwner,
+									 void* 						VChanOwner,
 									 Connected_CBFptr_type		Connected_CBFptr,
 									 Disconnected_CBFptr_type	Disconnected_CBFptr)
 {
@@ -290,8 +303,8 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 	if (!vchan) return NULL;
 	
 	// init base VChan type
-	if (init_VChan_type ((VChan_type*) vchan, name, dataType, VChan_Sink, vChanOwner, 
-						 discard_SinkVChan_type, disconnectSourceVChan, Connected_CBFptr, Disconnected_CBFptr) < 0) goto Error;
+	if (init_VChan_type ((VChan_type*) vchan, name, dataType, VChan_Sink, VChanOwner, 
+						 discard_SinkVChan_type, disconnectSinkVChan, Connected_CBFptr, Disconnected_CBFptr) < 0) goto Error;
 	
 		// INIT DATA
 		
@@ -489,31 +502,31 @@ FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dat
 /// HIFN Connects a Source and Sink VChan and if provided, calls their Connected_CBFptr callbacks to signal this event.
 /// HIFN The Source VChan's Connected_CBFptr will be called before the Sink's Connected_CBFptr. 
 /// HIRET TRUE if successful, FALSE otherwise
-BOOL VChan_Connect (SourceVChan_type* source, SinkVChan_type* sink)
+BOOL VChan_Connect (SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan)
 {
 	SinkVChan_type** sinkPtrPtr;
 	
-	if (!source || !sink) return FALSE;
+	if (!srcVChan || !sinkVChan) return FALSE;
 	// check if sink is already connected
-	for (int i = 1; i <= ListNumItems(source->sinkVChans); i++) {
-		sinkPtrPtr = ListGetPtrToItem(source->sinkVChans, i);
-		if (*sinkPtrPtr == sink) return FALSE;
+	for (int i = 1; i <= ListNumItems(srcVChan->sinkVChans); i++) {
+		sinkPtrPtr = ListGetPtrToItem(srcVChan->sinkVChans, i);
+		if (*sinkPtrPtr == sinkVChan) return FALSE;
 	}
 	// if sink is already connected to another source, disconnect that sink from source
-	if (sink->sourceVChan) 
-		if(!VChan_Disconnect((VChan_type*)sink) ) return FALSE;
+	if (sinkVChan->sourceVChan) 
+		if(!VChan_Disconnect((VChan_type*)sinkVChan) ) return FALSE;
 		
 	// add sink to source's list of sinks
-	if (!ListInsertItem(source->sinkVChans, &sink, END_OF_LIST)) return FALSE;
+	if (!ListInsertItem(srcVChan->sinkVChans, &sinkVChan, END_OF_LIST)) return FALSE;
 	// add source reference to sink
-	sink->sourceVChan = source;
+	sinkVChan->sourceVChan = srcVChan;
 	
 	// call source and sink connect callbacks if provided
-	if (source->baseClass.Connected_CBFptr)
-		(*source->baseClass.Connected_CBFptr)	((VChan_type*)source, (VChan_type*) sink);
+	if (srcVChan->baseClass.Connected_CBFptr)
+		(*srcVChan->baseClass.Connected_CBFptr)	((VChan_type*)srcVChan, (VChan_type*)sinkVChan);
 	
-	if (sink->baseClass.Connected_CBFptr)
-		(*sink->baseClass.Connected_CBFptr)	((VChan_type*)sink, (VChan_type*)source);
+	if (sinkVChan->baseClass.Connected_CBFptr)
+		(*sinkVChan->baseClass.Connected_CBFptr)	((VChan_type*)sinkVChan, (VChan_type*)srcVChan);
 	
 	return TRUE;	
 }
@@ -522,58 +535,90 @@ BOOL VChan_Connect (SourceVChan_type* source, SinkVChan_type* sink)
 /// HIFN When disconnecting a Sink, its Source is detached and it is also removed from the Source's list of Sinks.
 /// HIFN When disconnecting a Source, it is removed from all its Sinks.
 /// HIRET TRUE if successful, FALSE otherwise
-BOOL VChan_Disconnect (VChan_type* vchan)
+BOOL VChan_Disconnect (VChan_type* VChan)
 {
-	return (*vchan->DisconnectFptr)	(vchan);
+	return (*VChan->DisconnectFptr)	(VChan);
 }
 
 
 //==============================================================================
 // Set/Get functions
 
-void SetVChanName (VChan_type* vchan, char newName[])
+void SetVChanName (VChan_type* VChan, char newName[])
 { 
-	OKfree(vchan->name);
-	vchan->name = StrDup(newName);
+	OKfree(VChan->name);
+	VChan->name = StrDup(newName);
 }
  
-char* GetVChanName (VChan_type* vchan)
+char* GetVChanName (VChan_type* VChan)
 {
-	return StrDup(vchan->name);
+	return StrDup(VChan->name);
 }
 
-CmtTSQHandle GetSinkVChanTSQHndl	(SinkVChan_type* sink)
+/// HIFN Given a Source VChan, the function returns the name of the Sink VChan attached to the source having the 1-based index sinkIdx. If index is out of range it returns NULL.
+char* GetSinkVChanName (SourceVChan_type* srcVChan, size_t sinkIdx)
 {
-	return sink->tsqHndl;
+	SinkVChan_type** sinkVChanPtr = ListGetPtrToItem(srcVChan->sinkVChans, sinkIdx);
+	
+	if (!*sinkVChanPtr) return NULL;
+	
+	return GetVChanName((VChan_type*)*sinkVChanPtr);
 }
 
-void SetSinkVChanTSQSize (SinkVChan_type* sink, size_t nItems)
+SinkVChan_type*	GetSinkVChan (SourceVChan_type* srcVChan, size_t sinkIdx)
 {
-	CmtSetTSQAttribute(sink->tsqHndl, ATTR_TSQ_QUEUE_SIZE, nItems); 
+	SinkVChan_type** sinkVChanPtr = ListGetPtrToItem(srcVChan->sinkVChans, sinkIdx);
+	
+	return *sinkVChanPtr;
 }
 
-size_t GetSinkVChanTSQSize (SinkVChan_type* sink)
+SourceVChan_type* GetSourceVChan (SinkVChan_type* sinkVChan)
+{
+	return sinkVChan->sourceVChan;
+}
+
+VChanDataFlow_type GetVChanDataFlowType (VChan_type* VChan)
+{
+	return VChan->dataFlow;
+}
+
+size_t GetNSinkVChans (SourceVChan_type* srcVChan)
+{
+	return ListNumItems(srcVChan->sinkVChans);
+}
+
+CmtTSQHandle GetSinkVChanTSQHndl (SinkVChan_type* sinkVChan)
+{
+	return sinkVChan->tsqHndl;
+}
+
+void SetSinkVChanTSQSize (SinkVChan_type* sinkVChan, size_t nItems)
+{
+	CmtSetTSQAttribute(sinkVChan->tsqHndl, ATTR_TSQ_QUEUE_SIZE, nItems); 
+}
+
+size_t GetSinkVChanTSQSize (SinkVChan_type* sinkVChan)
 {
 	size_t nItems;
 	
-	CmtGetTSQAttribute(sink->tsqHndl, ATTR_TSQ_QUEUE_SIZE, &nItems); 
+	CmtGetTSQAttribute(sinkVChan->tsqHndl, ATTR_TSQ_QUEUE_SIZE, &nItems); 
 	
 	return nItems;
 }
 
-void SetSinkVChanWriteTimeout (SinkVChan_type* sink, double time)
+void SetSinkVChanWriteTimeout (SinkVChan_type* sinkVChan, double time)
 {
-	sink->writeTimeout = time;
+	sinkVChan->writeTimeout = time;
 }
 
-double GetSinkVChanWriteTimeout	(SinkVChan_type* sink)
+double GetSinkVChanWriteTimeout	(SinkVChan_type* sinkVChan)
 {
-	return sink->writeTimeout;
+	return sinkVChan->writeTimeout;
 }
 
-void* GetPtrToVChanOwner (VChan_type* vchan)
+void* GetPtrToVChanOwner (VChan_type* VChan)
 {
-	return vchan->vChanOwner;
+	return VChan->VChanOwner;
 }
 
 //==============================================================================
@@ -628,4 +673,191 @@ void discard_Image_type	(void** image)
 	}
 	
 	OKfree(*image);
+}
+
+/// HIFN Updates a table control with connections between a given list of VChans.
+void UpdateSwitchboard (ListType VChans, int panHandle, int tableControlID)
+{
+	size_t          	nColumns				= 0; 
+	size_t          	nRows					= 0;
+	int             	nItems;
+	int             	colWidth;
+	int  				colIdx;
+	SourceVChan_type** 	sourceVChanPtr			= NULL;
+	VChan_type**		VChanPtr1				= NULL;
+	SourceVChan_type** 	sourceVChanPtr2			= NULL;
+	SinkVChan_type**	sinkVChanPtr			= NULL;
+	SinkVChan_type*		sinkVChan				= NULL;
+	Point           	cell;
+	Rect            	cellRange;
+	BOOL            	assigned;
+	BOOL				referenceExists;
+	BOOL				extraRow;
+	size_t				nVChans					= ListNumItems(VChans);
+	size_t				nSinks;
+	
+	if (!panHandle) return; // do nothing if panel is not loaded or list is not initialized
+	if (!VChans) return;
+	
+	// store a reference to the VChan list in a global variable within the scope of this file
+	SwitchboardVChanList = VChans;
+	// attach callback function to table control
+	SetCtrlAttribute(panHandle, tableControlID, ATTR_CALLBACK_FUNCTION_POINTER, Switchboard_CB);
+	
+	DeleteTableColumns(panHandle, tableControlID, 1, -1);
+	DeleteTableRows(panHandle, tableControlID, 1, -1);
+	
+	// insert source VChans as columns
+	for (size_t chanIdx = 1; chanIdx <= nVChans; chanIdx++) {
+		sourceVChanPtr = ListGetPtrToItem(VChans, chanIdx);
+		if ((*sourceVChanPtr)->baseClass.dataFlow == VChan_Source) { 
+			InsertTableColumns(panHandle, tableControlID, -1, 1, VAL_CELL_COMBO_BOX);
+			nColumns++;
+			
+			// adjust table display
+			SetTableColumnAttribute(panHandle, tableControlID, nColumns, ATTR_USE_LABEL_TEXT, 1);
+			SetTableColumnAttribute(panHandle, tableControlID, nColumns, ATTR_LABEL_JUSTIFY, VAL_CENTER_CENTER_JUSTIFIED);
+			SetTableColumnAttribute(panHandle, tableControlID, nColumns, ATTR_CELL_TYPE, VAL_CELL_COMBO_BOX);
+			SetTableColumnAttribute(panHandle, tableControlID, nColumns, ATTR_LABEL_TEXT, (*sourceVChanPtr)->baseClass.name); 
+			
+			// add rows and create combo boxes for the sinks of this source VChan if there are not enough rows already
+			nSinks = GetNSinkVChans(*sourceVChanPtr);
+			if (nSinks > nRows) {
+				InsertTableRows(panHandle, tableControlID, -1, nSinks - nRows, VAL_CELL_COMBO_BOX);
+				nRows += nSinks - nRows;
+			}
+			
+			// add assigned sink VChans
+			for (size_t idx = 0; idx < nSinks; idx++) {
+				cell.x = nColumns;
+				cell.y = idx + 1;
+				sinkVChanPtr = ListGetPtrToItem((*sourceVChanPtr)->sinkVChans, idx+1);
+				InsertTableCellRingItem(panHandle, tableControlID, cell, -1, (*sinkVChanPtr)->baseClass.name);
+				// select the assigned sink VChan
+				SetTableCellValFromIndex(panHandle, tableControlID, cell, 0); 
+			}
+			
+			// add unassigned sink VChans of the same type
+			extraRow = 0;
+			for (size_t vchanIdx = 1; vchanIdx <= nVChans; vchanIdx++) {
+				VChanPtr1 = ListGetPtrToItem(VChans, vchanIdx);
+				if ((*VChanPtr1)->dataFlow != VChan_Sink) continue; // select only sinks
+				
+				if (!GetSourceVChan((SinkVChan_type*)*VChanPtr1)) assigned = FALSE;
+				else assigned = TRUE;
+						
+				// add Sink VChans only if:
+				// a) useAsReference is FALSE (in which case it picks up VChan properties of the source if useAsReference of the Source is set to TRUE).
+				// b) useAsReference is TRUE and the following conditions are simultaneously met:
+				//		1) Source VChan to which the Sink can be connected has useAsReference FALSE. In this case the Source and all its Sinks will pick up the same VChan properties from the Sink VChan.
+				//		2) There are no other Sink VChans assigned to the source that have useAsReference TRUE.
+				
+				referenceExists = (*sourceVChanPtr)->baseClass.useAsReference; // if Source VChan has useAsReference TRUE, then there is already a reference.
+				nSinks = GetNSinkVChans(*sourceVChanPtr); 
+				if (!referenceExists)
+					// if Source VChan is not used as a reference, then check if any of its Sinks is used as a reference
+					for (size_t i = 1; i <= nSinks; i++) {
+						sinkVChanPtr = ListGetPtrToItem((*sourceVChanPtr)->sinkVChans, i);
+						// check if any of the sinks has a useAsReference set to TRUE
+						if ((*sinkVChanPtr)->baseClass.useAsReference) {referenceExists = TRUE; break;} 
+					}
+				
+				if (!assigned && ((*sourceVChanPtr)->baseClass.dataType == (*VChanPtr1)->dataType) && (!(*VChanPtr1)->useAsReference || ((*VChanPtr1)->useAsReference && !referenceExists))) {
+					if (!extraRow && (nRows <= nSinks)) {
+						InsertTableRows(panHandle, tableControlID, -1, 1, VAL_CELL_COMBO_BOX);
+						extraRow = 1;
+						nRows++;
+					}
+					cellRange.top    = 1;
+					cellRange.left   = nColumns;
+					cellRange.height = nSinks + 1; 
+					cellRange.width  = 1;
+					InsertTableCellRangeRingItem(panHandle, tableControlID, cellRange, -1, (*VChanPtr1)->name);
+				}
+			} 
+			
+			if (nRows) {
+				// insert empty selection
+				cellRange.top    = 1;
+				cellRange.left   = nColumns;
+				cellRange.height = nRows; 
+				cellRange.width  = 1;
+				InsertTableCellRangeRingItem(panHandle, tableControlID, cellRange, 0, "");
+			}
+			
+			// make column slightly wider than contents for better visibility
+			SetColumnWidthToWidestCellContents(panHandle, tableControlID, nColumns);
+			GetTableColumnAttribute(panHandle, tableControlID, nColumns, ATTR_COLUMN_ACTUAL_WIDTH, &colWidth);
+			SetTableColumnAttribute(panHandle, tableControlID, nColumns, ATTR_COLUMN_WIDTH, colWidth + 20); 
+			
+		}
+		
+	}
+	
+	// dim ring controls with only empty selection
+	for (size_t i = 1; i <= nRows; i++) {
+		colIdx = 0;
+		for (size_t j = 1; j <= nVChans	; j++) {
+			VChanPtr1 = ListGetPtrToItem(VChans, j);
+			if ((*VChanPtr1)->dataFlow == VChan_Sink) continue;   // count only source VChans
+			colIdx++;
+			cell.x = colIdx; 
+			cell.y = i;
+			GetNumTableCellRingItems(panHandle, tableControlID, cell, &nItems);
+			if (nItems <= 1) SetTableCellAttribute(panHandle, tableControlID, cell, ATTR_CELL_DIMMED, 1);
+		}
+	}
+}
+
+// callback to operate the VChan switchboard
+static int CVICALLBACK Switchboard_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	if (event != EVENT_COMMIT) return 0; // continue only if event is commit
+	
+	// eventData1 - 1-based row index
+	// eventData2 - 1-based column index
+	SourceVChan_type*		sourceVChan;
+	SinkVChan_type*			sinkVChan;
+	char*         			sourceVChanName;
+	char*         			sinkVChanName;
+	int	        			nChars;
+	Point        			cell;
+	
+	// find source VChan from the table column in the list
+	GetTableColumnAttribute(panel, control, eventData2, ATTR_LABEL_TEXT_LENGTH, &nChars);
+	sourceVChanName = malloc((nChars+1) * sizeof(char));
+	if (!sourceVChanName) return 0;
+	
+	GetTableColumnAttribute(panel, control, eventData2, ATTR_LABEL_TEXT, sourceVChanName);
+	sourceVChan = (SourceVChan_type*)VChanNameExists (SwitchboardVChanList, sourceVChanName, 0);
+	// read in new sink VChan name from the ring control
+	cell.x = eventData2;
+	cell.y = eventData1;
+	GetTableCellValLength(panel, control, cell, &nChars);
+	sinkVChanName = malloc((nChars+1) * sizeof(char));
+	if (!sinkVChanName) return 0;
+	
+	GetTableCellVal(panel, control, cell, sinkVChanName);
+	
+	size_t nSinks = GetNSinkVChans(sourceVChan);
+			
+	// disconnect selected Sink VChan from Source VChan
+	if (nSinks && (eventData1 <= nSinks)) {
+		sinkVChan = GetSinkVChan(sourceVChan, eventData1);
+		VChan_Disconnect((VChan_type*)sinkVChan);
+	}
+		
+	// reconnect new Sink VChan to the Source Vchan
+	if (strcmp(sinkVChanName, "")) {
+		sinkVChan =	(SinkVChan_type*)VChanNameExists(SwitchboardVChanList, sinkVChanName, 0);
+		VChan_Connect(sourceVChan, sinkVChan);
+	}
+			
+	// update table
+	UpdateSwitchboard(SwitchboardVChanList, panel, control);
+			
+	OKfree(sourceVChanName);
+	OKfree(sinkVChanName);
+	
+	return 0;
 }

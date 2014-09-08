@@ -236,7 +236,7 @@ static BOOL					DAQLab_ValidControllerName					(char name[], void* listPtr);
 
 static BOOL 				DAQLab_CheckValidModuleName 				(char name[], void* dataPtr);
 
-static void					DisplayTaskTreeManager	 					(int parentPanHndl, ListType UITCs, ListType modules); 
+static void					DisplayTaskTreeManager	 					(int parentPanHndl, ListType UITCs, ListType modules);
 
 static void 				AddRecursiveTaskTreeItems 					(int panHndl, int TreeCtrlID, int parentIdx, TaskControl_type* taskControl);
 
@@ -685,8 +685,14 @@ ListType StringListCpy(ListType src)
 /// HIRET TRUE if VChan was added, FALSE if error occured.
 BOOL DLRegisterVChan (VChan_type* VChan)
 {
+	int success;
+	
 	if (!VChan) return FALSE;
-	return ListInsertItem(VChannels, &VChan, END_OF_LIST);
+	
+	success = ListInsertItem(VChannels, &VChan, END_OF_LIST);
+	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
+	
+	return success;
 }
 
 /// HIFN Disconnects and removes a VChan from the DAQLab framework.
@@ -701,6 +707,7 @@ int DLUnregisterVChan (VChan_type* VChan)
 	
 	VChan_Disconnect(VChan);
 	ListRemoveItem(VChannels, 0, itemPos);
+	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
 	
 	return TRUE;
 }
@@ -2030,9 +2037,12 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 		AddRecursiveTaskTreeItems(TaskTreeManagerPanHndl, TaskPan_TaskTree, childIdx, tcPtr);
 	}
 	
+	// update Switchboard
+	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
+	
 	DisplayPanel(TaskTreeManagerPanHndl);
 }
-			   
+
 static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentIdx, TaskControl_type* taskControl)
 {
 	ListType				SubTasks		= GetTaskControlSubTasks(taskControl);

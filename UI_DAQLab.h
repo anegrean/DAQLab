@@ -25,9 +25,10 @@
 #define  ModulesPan_Close                 5       /* control type: command, callback function: CloseDAQLabModulesPan_CB */
 
 #define  TaskPan                          4
-#define  TaskPan_Plate                    2       /* control type: deco, callback function: (none) */
-#define  TaskPan_TaskTree                 3       /* control type: tree, callback function: TaskTree_CB */
-#define  TaskPan_Close                    4       /* control type: command, callback function: TaskTree_CB */
+#define  TaskPan_Switchboard              2       /* control type: table, callback function: (none) */
+#define  TaskPan_Plate                    3       /* control type: deco, callback function: (none) */
+#define  TaskPan_TaskTree                 4       /* control type: tree, callback function: TaskTree_CB */
+#define  TaskPan_Close                    5       /* control type: command, callback function: TaskTree_CB */
 
 #define  TasksPan                         5
 

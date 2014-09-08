@@ -900,6 +900,10 @@ static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event
 						return 0; // do nothing if panel is already loaded (only one calibration may be active at a time)
 					}
 					
+					int parentPanHndl;
+					GetPanelAttribute(panel, ATTR_PANEL_PARENT, &parentPanHndl);
+					ls->newAxisCalTypePanHndl = LoadPanel(parentPanHndl, MOD_LaserScanning_UI, AxisSelect); 
+					
 					// populate axis type list
 					InsertListItem(ls->newAxisCalTypePanHndl, AxisSelect_AxisType, -1, "Non-resonant galvo", NonResonantGalvo);
 					InsertListItem(ls->newAxisCalTypePanHndl, AxisSelect_AxisType, -1, "Resonant galvo", ResonantGalvo);
@@ -910,6 +914,7 @@ static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event
 					// attach callback function and data to the controls in the panel
 					SetCtrlsInPanCBInfo(ls, NewScanAxisCalib_CB, ls->newAxisCalTypePanHndl); 
 					
+					DisplayPanel(ls->newAxisCalTypePanHndl);
 					break;
 					
 				case ManageAxis_Close:	  	// close axis calibration manager
@@ -961,22 +966,38 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							// change panel title
 							SetPanelAttribute(ls->axisCalPanHndl, ATTR_TITLE, "Scan Axis Calibration");
 							// add callback function and data first to all the direct controls in the calibration panel
-							//SetCtrlsInPanCBInfo(
+							SetCtrlsInPanCBInfo(ls, NonResGalvoCal_CB, ls->axisCalPanHndl); 
+							
+							int calibPanHndl;
+							// get calibration panel handle
+							GetPanelHandleFromTabPage(ls->axisCalPanHndl, NonResGCal_Tab, 0, &calibPanHndl);
+							// add callback function and data to calibration controls
+							SetCtrlsInPanCBInfo(ls, NonResGalvoCal_CB, calibPanHndl); 
+							
+							int testPanHndl;
+							// get test panel handle
+							GetPanelHandleFromTabPage(ls->axisCalPanHndl, NonResGCal_Tab, 1, &testPanHndl);
+							// add callback function and data to test controls
+							SetCtrlsInPanCBInfo(ls, NonResGalvoCal_CB, testPanHndl); 
+							
 							break;
 							
 						default:
 							
 							DLMsg("Calibration not implemented for the chosen axis type.", 1);
-					} 
+					}
 					
-					// discard panel
+					if (ls->axisCalPanHndl)
+						DisplayPanel(ls->axisCalPanHndl);
+					
+					// discard axis calibration selection panel
 					DiscardPanel(ls->newAxisCalTypePanHndl);
 					ls->newAxisCalTypePanHndl = 0;
 					break;
 					
 				case AxisSelect_CancelBTTN:
 					
-					// discard panel
+					// discard axis calibration selection panel
 					DiscardPanel(ls->newAxisCalTypePanHndl);
 					ls->newAxisCalTypePanHndl = 0;
 					break;
@@ -1092,7 +1113,9 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 			// discard detection channel		
 			// continue only if Del key is pressed and the image channels control is active
 			if (eventData1 != VAL_FWD_DELETE_VKEY || control != ScanSetPan_ImgChans) break;
-			GetCtrlIndex(panel, ScanSetPan_ImgChans, &listItemIdx); 
+			GetCtrlIndex(panel, ScanSetPan_ImgChans, &listItemIdx);
+			if (listItemIdx < 0) break; // stop here if list is empty
+			
 			detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
 			DLUnregisterVChan((VChan_type*)(*detChanPtr)->detVChan);
 			discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
@@ -1154,6 +1177,63 @@ static int CVICALLBACK NonResGalvoCal_CB (int panel, int control, int event, voi
 	switch (event)
 	{
 		case EVENT_COMMIT:
+			
+			switch (control) {
+					
+				case NonResGCal_Abort:
+					
+					break;
+					
+				case NonResGCal_SaveCalib:
+					
+					break;
+					
+				case NonResGCal_Done:
+					
+					break;
+					
+				case NonResGCal_GalvoPlot:
+					
+					double plotX, plotY;
+					GetGraphCursor(panel, control, 1, &plotX, &plotY);
+					SetCtrlVal(panel, NonResGCal_CursorX, plotX);
+					SetCtrlVal(panel, NonResGCal_CursorX, plotY);
+					break;
+			/*	
+				case Cal_CommMinV:
+					
+					break;
+					
+				case Cal_CommMaxV:
+					
+					break;
+					
+				case Cal_PosMinV:
+					
+					break;
+					
+				case Cal_PosMaxV:
+					
+					break;
+					
+				case Cal_ParkedV:
+					
+					break;
+					
+				case Cal_ScanTime:
+					
+					break;
+					
+				case Cal_MinStep:
+					
+					break;
+					
+				case Cal_Resolution:
+					
+					break;
+			*/ // duplicate values!
+					
+			}
 
 			break;
 	}
@@ -1208,7 +1288,7 @@ void CVICALLBACK ScanAxisCalibrationMenu_CB	(int menuBarHandle, int menuItemID, 
 	// attach callback function and data to all controls in the panel
 	SetCtrlsInPanCBInfo(ls, ManageScanAxisCalib_CB, ls->manageAxisCalPanHndl); 
 	
-	
+	DisplayPanel(ls->manageAxisCalPanHndl);
 }
 
 static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], SourceVChan_type* VChanCom, SinkVChan_type* VChanPos)

@@ -150,34 +150,47 @@ char*					GetUniqueVChanName			(ListType VChanList, char baseVChanName[]);
 //------------------------------------------------------------------------------
 
 	// Connects a Sink and a Source VChan .
-BOOL					VChan_Connect				(SourceVChan_type* source, SinkVChan_type* sink);
+BOOL					VChan_Connect				(SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan);
 
 	// Disconnects a VChan. 
-BOOL					VChan_Disconnect			(VChan_type* vchan); 
+BOOL					VChan_Disconnect			(VChan_type* VChan); 
+
+	// provides UI to connect/disconnect VChans
+void 					UpdateSwitchboard 			(ListType VChans, int panHandle, int tableControlID); 
 
 //------------------------------------------------------------------------------
 // VChan Set/Get
 //------------------------------------------------------------------------------
 
 	// Assigns new VChan name
-void 					SetVChanName 				(VChan_type* vchan, char newName[]);
+void 					SetVChanName 				(VChan_type* VChan, char newName[]);
 
 	// Returns pointer to dynamically allocated VChan name (null terminated string) 
-char*					GetVChanName				(VChan_type* vchan);
+char*					GetVChanName				(VChan_type* VChan);
+
+char*					GetSinkVChanName			(SourceVChan_type* srcVChan, size_t sinkIdx);
+
+SinkVChan_type*			GetSinkVChan				(SourceVChan_type* srcVChan, size_t sinkIdx);
+
+SourceVChan_type*		GetSourceVChan				(SinkVChan_type* sinkVChan);
+
+VChanDataFlow_type		GetVChanDataFlowType		(VChan_type* VChan);
+
+size_t					GetNSinkVChans				(SourceVChan_type* srcVChan);
 
 	// Returns the thread safe queue handle of a sink VChan
-CmtTSQHandle			GetSinkVChanTSQHndl			(SinkVChan_type* sink);
+CmtTSQHandle			GetSinkVChanTSQHndl			(SinkVChan_type* sinkVChan);
 
 	// The maximum number of datapackets a Sink VChan can hold
-void					SetSinkVChanTSQSize			(SinkVChan_type* sink, size_t nItems);
+void					SetSinkVChanTSQSize			(SinkVChan_type* sinkVChan, size_t nItems);
 
-size_t					GetSinkVChanTSQSize			(SinkVChan_type* sink);
+size_t					GetSinkVChanTSQSize			(SinkVChan_type* sinkVChan);
 
 	// Time in [ms] to keep on trying to write a data packet to a Sink VChan TSQ		
-void					SetSinkVChanWriteTimeout	(SinkVChan_type* sink, double time);	
-double					GetSinkVChanWriteTimeout	(SinkVChan_type* sink);
+void					SetSinkVChanWriteTimeout	(SinkVChan_type* sinkVChan, double time);	
+double					GetSinkVChanWriteTimeout	(SinkVChan_type* sinkVChan);
 
-void*					GetPtrToVChanOwner			(VChan_type* vchan);
+void*					GetPtrToVChanOwner			(VChan_type* VChan);
 
 
 //------------------------------------------------------------------------------

@@ -36,7 +36,7 @@
 #define  NonResGCal_CursorY               4       /* control type: numeric, callback function: (none) */
 #define  NonResGCal_CursorX               5       /* control type: numeric, callback function: (none) */
 #define  NonResGCal_Done                  6       /* control type: command, callback function: (none) */
-#define  NonResGCal_SaveCalibData         7       /* control type: command, callback function: (none) */
+#define  NonResGCal_SaveCalib             7       /* control type: command, callback function: (none) */
 #define  NonResGCal_Abort                 8       /* control type: command, callback function: (none) */
 
 #define  RectRaster                       5

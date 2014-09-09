@@ -1396,6 +1396,16 @@ BOOL DLRemoveTaskControllers (ListType tcList)
 	return (nRemoved == n);
 }
 
+BOOL DLRemoveTaskController (TaskControl_type* taskController)
+{
+	ListType tcList = ListCreate(sizeof(TaskControl_type*));
+	ListInsertItem(tcList, &taskController, END_OF_LIST);
+	BOOL result = DLRemoveTaskControllers(tcList);
+	ListDispose(tcList);
+	
+	return result;
+}
+
 /// HIFN Adds a list of Task Controllers provided by tcList as TaskControl_type* list elements to the DAQLab framework if their names are unique.
 /// HIRET TRUE if successful or if list is empty.
 /// HIRET FALSE if Task Controller names in tcList and the framework are not unique.
@@ -1446,6 +1456,16 @@ BOOL DLAddTaskControllers (ListType tcList)
 	ListAppend(DAQLabTCs, tcList);
 	
 	return TRUE;
+}
+
+BOOL DLAddTaskController (TaskControl_type* taskController)
+{
+	ListType tcList = ListCreate(sizeof(TaskControl_type*));
+	ListInsertItem(tcList, &taskController, END_OF_LIST);
+	BOOL result = DLAddTaskControllers(tcList);
+	ListDispose(tcList);
+	
+	return result;
 }
 
 static void	DAQLab_RedrawTaskControllerUI (void)
@@ -1772,6 +1792,11 @@ BOOL DLValidTaskControllerName (char name[])
 	}
 	OKfree(nameTC);
 	return TRUE;
+}
+
+char* DLGetUniqueTaskControllerName	(char baseTCName[])
+{
+	return GetUniqueTaskControllerName(DAQLabTCs, baseTCName);
 }
 
 static void	DAQLab_TaskMenu_AddTaskController 	(void) 

@@ -356,6 +356,7 @@ VChan_type* VChanNameExists (ListType VChanList, char VChanName[], size_t* idx)
 	VChan_type** 	VChanPtrPtr;
 	char*			listVChanName;
 	size_t			nVChans		= ListNumItems(VChanList);
+	
 	for (size_t i = 1; i <= nVChans; i++) {
 		VChanPtrPtr = ListGetPtrToItem(VChanList, i);
 		listVChanName = GetVChanName(*VChanPtrPtr);

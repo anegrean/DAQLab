@@ -1420,6 +1420,62 @@ int	RemoveSubTaskFromParent	(TaskControl_type* child)
 	return -2; // not found
 }
 
+TaskControl_type* TaskControllerNameExists (ListType TCList, char TCName[], size_t* idx)
+{
+	TaskControl_type** 	TCPtr;
+	char*				listTCName;
+	size_t				nTCs			= ListNumItems(TCList);
+	
+	for (size_t i = 1; i <= nTCs; i++) {
+		TCPtr = ListGetPtrToItem(TCList, i);
+		listTCName = GetTaskControlName(*TCPtr);
+		if (!strcmp(listTCName, TCName)) {
+			if (idx) *idx = i;
+			OKfree(listTCName);
+			return *TCPtr;
+		}
+		OKfree(listTCName);
+	}
+	
+	if (idx) *idx = 0;
+	return NULL;
+}
+
+BOOL RemoveTaskControllerFromList (ListType TCList, TaskControl_type* taskController)
+{
+	size_t					nTCs 	= ListNumItems(TCList);
+	TaskControl_type**   	TCPtr;
+	for (size_t i = nTCs; i ; i--) {
+		TCPtr = ListGetPtrToItem(TCList, i);
+		if (*TCPtr == taskController) {
+			ListRemoveItem(TCList, 0, i);
+			return TRUE;
+		}
+	}
+	
+	return FALSE;
+}
+
+char* GetUniqueTaskControllerName (ListType TCList, char baseTCName[])
+{
+	size_t n        = 2;
+	char*  name;   
+	char   countstr [500];
+	
+	name = StrDup(baseTCName);
+	AppendString(&name, " 1", -1);
+	while (TaskControllerNameExists (TCList, name, 0)) {
+		OKfree(name);
+		name = StrDup(baseTCName);
+		Fmt(countstr, "%s<%d", n);
+		AppendString(&name, " ", -1);
+		AppendString(&name, countstr, -1);
+		n++;
+	}
+	
+	return name;
+}
+
 int	AddHWSlaveTrigToMaster (TaskControl_type* master, TaskControl_type* slave)
 {
 	SlaveHWTrigTask_type newSlave;

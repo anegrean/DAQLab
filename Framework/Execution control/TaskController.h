@@ -513,6 +513,19 @@ int						AddSubTaskToParent					(TaskControl_type* parent, TaskControl_type* chi
 
 int						RemoveSubTaskFromParent				(TaskControl_type* child);
 
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// Task Controller management functions
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+
+	// Searches for a given Task Controller by name among a list of TaskControl_type* elements. Provide idx if the 1-based list index of the Task Controller is needed,
+	// otherwise set this to 0. If no Task Controller is found then the returned value is NULL and idx = 0.
+TaskControl_type*		TaskControllerNameExists			(ListType TCList, char TCName[], size_t* idx);
+
+	// Removes a given task Controller from a list of task Controllers of TaskControl_type*. Returns TRUE if given Task Controller was found and removed.
+BOOL					RemoveTaskControllerFromList		(ListType TCList, TaskControl_type* taskController);
+
+	// Returns a unique Task Controller name among a given list of Task Controllers. The naming convention uses a given baseTCName and adds a number to the name.
+char* 					GetUniqueTaskControllerName			(ListType TCList, char baseTCName[]);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // HW trigger dependencies

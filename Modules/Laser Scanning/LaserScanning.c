@@ -22,14 +22,16 @@
 //==============================================================================
 // Constants
 
-#define MOD_LaserScanning_UI 				"./Modules/Laser Scanning/UI_LaserScanning.uir"
+#define MOD_LaserScanning_UI 					"./Modules/Laser Scanning/UI_LaserScanning.uir"
 // Default VChan base names. Default base names must be unique among each other!
-#define VChan_Default_FastAxis_Command		"Fast Axis Command"
-#define VChan_Default_FastAxis_Position		"Fast Axis Position" 
-#define VChan_Default_SlowAxis_Command		"Slow Axis Command"
-#define VChan_Default_SlowAxis_Position		"Slow Axis Position"
-#define VChan_Default_ImageOut				"Image"
-#define VChan_Default_DetectionChan			"Detector"
+#define VChan_Default_FastAxis_Command			"Fast Axis Command"
+#define VChan_Default_FastAxis_Position			"Fast Axis Position" 
+#define VChan_Default_SlowAxis_Command			"Slow Axis Command"
+#define VChan_Default_SlowAxis_Position			"Slow Axis Position"
+#define VChan_Default_ImageOut					"Image"
+#define VChan_Default_DetectionChan				"Detector"
+#define AxisCal_Default_TaskController_Name		"Scan Axis Calibration"
+#define AxisCal_Default_NewCalibration_Name		"Calibration"
 
 // scan engine settings
 
@@ -59,8 +61,13 @@ struct ScanAxisCal {
 	// DATA
 	ScanAxis_type			scanAxisType;
 	char*					calName;
+	TaskControl_type*		taskController;	// Task Controller for the calibration of this scan axis.
 	SourceVChan_type*		VChanCom;   	// VChan used to send command signals to the scan axis (optional, depending on the scan axis type)
 	SinkVChan_type*			VChanPos;		// VChan used to receive position feedback signals from the scan axis (optional, depending on the scan axis type)
+	double*					comSampRate;	// Command sample rate in [Hz] taken from VChanCom when connected.
+	double*					posSampRate;	// Position sample rate in [Hz] taken from VChanPos when connected.
+	int						calPanHndl;		// Panel handle for performing scan axis calibration
+	LaserScanning_type*		lsModule;		// Reference to the laser scanning module to which this calibration belongs.
 	// METHODS
 	void	(*Discard) (ScanAxisCal_type** scanAxisCal);
 };
@@ -92,7 +99,7 @@ typedef struct{
 } TriangleCal_type;
 
 typedef struct {
-	ScanAxisCal_type		base;			// Base structure describing scan engine calibration. Must be first member of the structure.
+	ScanAxisCal_type		baseClass;			// Base structure describing scan engine calibration. Must be first member of the structure.
 	double					commandVMin;	// Minimum galvo command voltage in [V] for maximal deflection in a given direction.
 	double					commandVMax;	// Maximum galvo command voltage in [V] for maximal deflection in the oposite direction when applying VminOut.
 	double					positionVMin;   // Minimum galvo position feedback signal expected in [V] for maximal deflection when applying VminOut.
@@ -211,7 +218,7 @@ struct ScanEngine {
 // Rectangular raster scan
 //------------------------
 typedef struct {
-	ScanEngine_type			base;					// Base class, must be first structure member.
+	ScanEngine_type			baseClass;					// Base class, must be first structure member.
 	
 	//----------------
 	// Scan parameters
@@ -238,11 +245,12 @@ struct LaserScanning {
 	
 	// DATA
 	
-		// Calibration data per scan axis. Of ScanAxisCal_type* which can be casted to various child classes such as GalvoCal_type*
-	ListType				calScanAxis;
+		// Available calibration data per scan axis. Of ScanAxisCal_type* which can be casted to various child classes such as GalvoCal_type*
+	ListType				availableCals;
+		// Active calibrations that are in progress. Of ScanAxisCal_type* which can be casted to various child classes such as GalvoCal_type*
+	ListType				activeCal;
 		// Scan engines of ScanEngine_type* base class which can be casted to specific scan engines. 
 	ListType				scanEngines;
-	
 	
 		//-------------------------
 		// UI
@@ -250,7 +258,6 @@ struct LaserScanning {
 	
 	int						mainPanHndl;	  			// Main panel for the laser scanning module.
 	int						enginesPanHndl;   			// List of available scan engine types.
-	int						axisCalPanHndl;				// Panel handle to perform scan axis calibration
 	int						manageAxisCalPanHndl;		// Panel handle where axis calibrations are managed.
 	int						newAxisCalTypePanHndl;		// Panel handle to select different calibrations for various axis types.
 	int						menuBarHndl;				// Laser scanning module menu bar.
@@ -284,9 +291,9 @@ static void							DetVChanDisconnected					(VChan_type* self, VChan_type* discon
 //----------------------
 	// generic scan axis calibration data 
 
-static ScanAxisCal_type*			initalloc_ScanAxisCal_type				(ScanAxisCal_type* scanAxisCal);
+static ScanAxisCal_type*			initalloc_ScanAxisCal_type				(ScanAxisCal_type* cal);
 
-static void							discard_ScanAxisCal_type				(ScanAxisCal_type** scanAxisCal);
+static void							discard_ScanAxisCal_type				(ScanAxisCal_type** cal);
 
 void CVICALLBACK 					ScanAxisCalibrationMenu_CB				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 
@@ -296,13 +303,15 @@ static int CVICALLBACK 				ManageScanAxisCalib_CB					(int panel, int control, i
 
 static int CVICALLBACK 				NewScanAxisCalib_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
+
+
 	//-----------------------------------------
 	// Non-resonant galvo axis calibration data
 	//-----------------------------------------
 
-static NonResGalvoCal_type*			init_NonResGalvoCal_type				(char calName[], SourceVChan_type* VChanCom, SinkVChan_type* VChanPos);
+static NonResGalvoCal_type* 		init_NonResGalvoCal_type 				(LaserScanning_type* lsModule, char calName[], char commandVChanName[], char positionVChanName[]);
 
-static void							discard_NonResGalvoCal_type				(ScanAxisCal_type** scanAxisCal);
+static void							discard_NonResGalvoCal_type				(ScanAxisCal_type** cal);
 
 	// switch times data
 static SwitchTimes_type* 			init_SwitchTimes_type					(int nElem);
@@ -321,8 +330,18 @@ static TriangleCal_type* 			init_TriangleCal_type					(int nElem);
 
 static void 						discard_TriangleCal_type 				(TriangleCal_type** a);
 
+	// command VChan
+static void							NonResGalvoCal_ComVChan_Connected		(VChan_type* self, VChan_type* connectedVChan);
+static void							NonResGalvoCal_ComVChan_Disconnected	(VChan_type* self, VChan_type* disconnectedVChan);
+
+	// position VChan
+static void							NonResGalvoCal_PosVChan_Connected		(VChan_type* self, VChan_type* connectedVChan);
+static void							NonResGalvoCal_PosVChan_Disconnected	(VChan_type* self, VChan_type* disconnectedVChan);
+
 	// galvo calibration
-static int CVICALLBACK 				NonResGalvoCal_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResGalvoCal_MainPan_CB				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResGalvoCal_CalPan_CB				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResGalvoCal_TestPan_CB				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 //-------------
 // Scan Engines
@@ -407,8 +426,28 @@ static void							detVChan_Disconnected					(VChan_type* self, VChan_type* disco
 // Task Controller Callbacks
 //-----------------------------------------
 
-	// for RectangleRaster_type scanning
+	// for Non Resonant Galvo scan axis calibration and testing
+static FCallReturn_type*			ConfigureTC_NonResGalvoCal				(TaskControl_type* taskControl, BOOL const* abortFlag);
 
+static void							IterateTC_NonResGalvoCal				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+
+static FCallReturn_type*			StartTC_NonResGalvoCal					(TaskControl_type* taskControl, BOOL const* abortFlag);
+
+static FCallReturn_type*			DoneTC_NonResGalvoCal					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
+static FCallReturn_type*			StoppedTC_NonResGalvoCal				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
+static FCallReturn_type* 			ResetTC_NonResGalvoCal 					(TaskControl_type* taskControl, BOOL const* abortFlag);
+
+static void							DimTC_NonResGalvoCal					(TaskControl_type* taskControl, BOOL dimmed);
+
+static FCallReturn_type* 			DataReceivedTC_NonResGalvoCal 			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+
+static void 						ErrorTC_NonResGalvoCal 					(TaskControl_type* taskControl, char* errorMsg);
+
+static FCallReturn_type*			ModuleEventHandler_NonResGalvoCal		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
+	
+	// for RectangleRaster_type scanning
 static FCallReturn_type*			ConfigureTC_RectRaster					(TaskControl_type* taskControl, BOOL const* abortFlag);
 
 static void							IterateTC_RectRaster					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
@@ -477,10 +516,12 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 		// DATA
 	
 		// init
-	ls->calScanAxis					= 0;
+	ls->availableCals				= 0;
+	ls->activeCal					= 0;
 	ls->scanEngines					= 0;
 		
-	if (!(ls->calScanAxis			= ListCreate(sizeof(ScanAxisCal_type*))))	goto Error;
+	if (!(ls->availableCals			= ListCreate(sizeof(ScanAxisCal_type*))))	goto Error;
+	if (!(ls->activeCal				= ListCreate(sizeof(ScanAxisCal_type*))))	goto Error;
 	if (!(ls->scanEngines			= ListCreate(sizeof(ScanEngine_type*))))	goto Error;
 			
 		//---
@@ -488,7 +529,6 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 		//---
 	ls->mainPanHndl					= 0;
 	ls->enginesPanHndl				= 0;
-	ls->axisCalPanHndl				= 0;
 	ls->newAxisCalTypePanHndl		= 0;
 	ls->manageAxisCalPanHndl		= 0;		
 	ls->menuBarHndl					= 0;
@@ -518,15 +558,26 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	// discard LaserScanning_type specific data
 	//-----------------------------------------
 	
-	if (ls->calScanAxis) {
-		size_t 				nItems = ListNumItems(ls->calScanAxis);
+	if (ls->availableCals) {
+		size_t 				nItems = ListNumItems(ls->availableCals);
 		ScanAxisCal_type**  calPtrPtr;
 		for (size_t i = 1; i <= nItems; i++) {
-			calPtrPtr = ListGetPtrToItem(ls->calScanAxis, i);
+			calPtrPtr = ListGetPtrToItem(ls->availableCals, i);
 			(*(*calPtrPtr)->Discard)	(calPtrPtr); 
 		}
 		
-		ListDispose(ls->calScanAxis);
+		ListDispose(ls->availableCals);
+	}
+	
+	if (ls->activeCal) {
+		size_t 				nItems = ListNumItems(ls->activeCal);
+		ScanAxisCal_type**  calPtrPtr;
+		for (size_t i = 1; i <= nItems; i++) {
+			calPtrPtr = ListGetPtrToItem(ls->activeCal, i);
+			(*(*calPtrPtr)->Discard)	(calPtrPtr); 
+		}
+		
+		ListDispose(ls->activeCal);
 	}
 	
 	if (ls->scanEngines) {
@@ -545,6 +596,8 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		//----------------------------------
 	if (ls->mainPanHndl) {DiscardPanel(ls->mainPanHndl); ls->mainPanHndl = 0;}
 	if (ls->enginesPanHndl) {DiscardPanel(ls->enginesPanHndl); ls->enginesPanHndl = 0;}
+	if (ls->manageAxisCalPanHndl) {DiscardPanel(ls->manageAxisCalPanHndl); ls->manageAxisCalPanHndl = 0;}
+	if (ls->newAxisCalTypePanHndl) {DiscardPanel(ls->newAxisCalTypePanHndl); ls->newAxisCalTypePanHndl = 0;}
 	
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
@@ -599,7 +652,11 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 	LaserScanning_type*		ls				= (LaserScanning_type*) mod;
 	int						error			= 0;
 	size_t					nEngines		= ListNumItems(ls->scanEngines);
-	ScanEngine_type**		enginePtrPtr;
+	size_t					nActiveCals		= ListNumItems(ls->activeCal);
+	size_t					nAvailableCals	= ListNumItems(ls->availableCals);
+	ScanEngine_type**		enginePtr;
+	ScanAxisCal_type**		calPtr;
+	
 	
 	// laser scanning module panels
 	if (ls->mainPanHndl)
@@ -608,19 +665,33 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 	if (ls->enginesPanHndl)
 		errChk(SetPanelAttribute(ls->enginesPanHndl, ATTR_VISIBLE, visibleFlag));
 	
-	if (ls->axisCalPanHndl)
-		errChk(SetPanelAttribute(ls->axisCalPanHndl, ATTR_VISIBLE, visibleFlag));
-	
 	if (ls->manageAxisCalPanHndl)
 		errChk(SetPanelAttribute(ls->manageAxisCalPanHndl, ATTR_VISIBLE, visibleFlag));
 	
-	// scan engine calibration panels
+	// scan engine settings panels
 	for(size_t i = 1; i <= nEngines; i++) {
-		enginePtrPtr = ListGetPtrToItem(ls->scanEngines, i);
+		enginePtr = ListGetPtrToItem(ls->scanEngines, i);
 		
-		if ((*enginePtrPtr)->engineSetPanHndl)
-			errChk(SetPanelAttribute((*enginePtrPtr)->engineSetPanHndl, ATTR_VISIBLE, visibleFlag));
+		if ((*enginePtr)->engineSetPanHndl)
+			errChk(SetPanelAttribute((*enginePtr)->engineSetPanHndl, ATTR_VISIBLE, visibleFlag));
 	}
+	
+	// active scan axis calibration panels
+	for(size_t i = 1; i <= nActiveCals; i++) {
+		calPtr = ListGetPtrToItem(ls->activeCal, i);
+		
+		if ((*calPtr)->calPanHndl)
+			errChk(SetPanelAttribute((*calPtr)->calPanHndl, ATTR_VISIBLE, visibleFlag));
+	}
+	
+	// available scan axis calibration panels
+	for(size_t i = 1; i <= nAvailableCals; i++) {
+		calPtr = ListGetPtrToItem(ls->availableCals, i);
+		
+		if ((*calPtr)->calPanHndl)
+			errChk(SetPanelAttribute((*calPtr)->calPanHndl, ATTR_VISIBLE, visibleFlag));
+	}
+	
 	
 Error:
 	return error;	
@@ -855,7 +926,7 @@ static BOOL	ValidScanEngineName (char name[], void* dataPtr)
 
 static void	UpdateAvailableCalibrations	(ScanEngine_type* scanEngine, ScanAxis_type axisType)
 {
-	size_t					nCal 		= ListNumItems(scanEngine->lsModule->calScanAxis);
+	size_t					nCal 		= ListNumItems(scanEngine->lsModule->availableCals);
 	ScanAxisCal_type**		calPtr;
 	
 	// empty lists, insert empty selection and select by default
@@ -867,16 +938,16 @@ static void	UpdateAvailableCalibrations	(ScanEngine_type* scanEngine, ScanAxis_t
 	SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, 0);
 	
 	for (size_t i = 1; i <= nCal; i++) {
-		calPtr = ListGetPtrToItem(scanEngine->lsModule->calScanAxis, i);
+		calPtr = ListGetPtrToItem(scanEngine->lsModule->availableCals, i);
 		// fast axis calibration list
 		if (((*calPtr)->scanAxisType == axisType) && (*calPtr != scanEngine->slowAxisCal)) 
-			InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, -1, (*calPtr)->calName, 0);
+			InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, -1, (*calPtr)->calName, i);
 		// select fast axis list item if calibration is assigned to the scan engine
 		if (scanEngine->fastAxisCal == *calPtr)
 			SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, i);
 		// slow axis calibration list
 		if (((*calPtr)->scanAxisType == axisType) && (*calPtr != scanEngine->fastAxisCal)) 
-			InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, -1, (*calPtr)->calName, 0);
+			InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, -1, (*calPtr)->calName, i);
 		// select fast axis list item if calibration is assigned to the scan engine
 		if (scanEngine->slowAxisCal == *calPtr)
 			SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, i);
@@ -912,7 +983,7 @@ static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event
 					// select by default NonResonantGalvo
 					SetCtrlIndex(ls->newAxisCalTypePanHndl, AxisSelect_AxisType, 0);
 					// attach callback function and data to the controls in the panel
-					SetCtrlsInPanCBInfo(ls, NewScanAxisCalib_CB, ls->newAxisCalTypePanHndl); 
+					SetCtrlsInPanCBInfo(ls, NewScanAxisCalib_CB, ls->newAxisCalTypePanHndl);
 					
 					DisplayPanel(ls->newAxisCalTypePanHndl);
 					break;
@@ -962,23 +1033,59 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							
 						case NonResonantGalvo:
 							
-							ls->axisCalPanHndl = LoadPanel(parentPanHndl, MOD_LaserScanning_UI, NonResGCal); 
+							// get unique name for calibration task controller
+							char* calTCName = DLGetUniqueTaskControllerName(AxisCal_Default_TaskController_Name);
+							
+							// get unique name for command signal VChan
+							char* commandVChanName = StrDup(calTCName);
+							AppendString(&commandVChanName,": Command", -1);
+							
+							// get unique name for position feedback signal VChan 
+							char* positionVChanName = StrDup(calTCName);
+							AppendString(&positionVChanName,": Position", -1);
+							
+							// init structure for galvo calibration
+							NonResGalvoCal_type* 	nrgCal = init_NonResGalvoCal_type(ls, calTCName, commandVChanName, positionVChanName);
+							
+							//----------------------------------------
+							// Task Controller and VChans registration
+							//----------------------------------------
+							// add task controller to the laser scanning module
+							ListInsertItem(ls->baseClass.taskControllers, &nrgCal->baseClass.taskController, END_OF_LIST);
+							// register calibration Task Controller with the framework
+							DLAddTaskController(nrgCal->baseClass.taskController);
+							// register VChans with framework
+							DLRegisterVChan((VChan_type*)nrgCal->baseClass.VChanCom);
+							DLRegisterVChan((VChan_type*)nrgCal->baseClass.VChanPos);
+							// add new galvo calibration to laser scanning module list
+							ListInsertItem(ls->activeCal, &nrgCal, END_OF_LIST);
+							//----------------------------------------------------------
+							
+							nrgCal->baseClass.calPanHndl = LoadPanel(parentPanHndl, MOD_LaserScanning_UI, NonResGCal); 
 							// change panel title
-							SetPanelAttribute(ls->axisCalPanHndl, ATTR_TITLE, "Scan Axis Calibration");
+							SetPanelAttribute(nrgCal->baseClass.calPanHndl, ATTR_TITLE, calTCName);
 							// add callback function and data first to all the direct controls in the calibration panel
-							SetCtrlsInPanCBInfo(ls, NonResGalvoCal_CB, ls->axisCalPanHndl); 
+							SetCtrlsInPanCBInfo(nrgCal, NonResGalvoCal_MainPan_CB, nrgCal->baseClass.calPanHndl); 
 							
 							int calibPanHndl;
 							// get calibration panel handle
-							GetPanelHandleFromTabPage(ls->axisCalPanHndl, NonResGCal_Tab, 0, &calibPanHndl);
+							GetPanelHandleFromTabPage(nrgCal->baseClass.calPanHndl, NonResGCal_Tab, 0, &calibPanHndl);
 							// add callback function and data to calibration controls
-							SetCtrlsInPanCBInfo(ls, NonResGalvoCal_CB, calibPanHndl); 
+							SetCtrlsInPanCBInfo(nrgCal, NonResGalvoCal_CalPan_CB, calibPanHndl); 
 							
 							int testPanHndl;
 							// get test panel handle
-							GetPanelHandleFromTabPage(ls->axisCalPanHndl, NonResGCal_Tab, 1, &testPanHndl);
+							GetPanelHandleFromTabPage(nrgCal->baseClass.calPanHndl, NonResGCal_Tab, 1, &testPanHndl);
 							// add callback function and data to test controls
-							SetCtrlsInPanCBInfo(ls, NonResGalvoCal_CB, testPanHndl); 
+							SetCtrlsInPanCBInfo(nrgCal, NonResGalvoCal_TestPan_CB, testPanHndl);
+							
+							// Display calibration panel
+							DisplayPanel(nrgCal->baseClass.calPanHndl);
+							
+							// cleanup
+							OKfree(commandVChanName); 
+							OKfree(positionVChanName);
+							OKfree(calTCName);
 							
 							break;
 							
@@ -987,8 +1094,6 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							DLMsg("Calibration not implemented for the chosen axis type.", 1);
 					}
 					
-					if (ls->axisCalPanHndl)
-						DisplayPanel(ls->axisCalPanHndl);
 					
 					// discard axis calibration selection panel
 					DiscardPanel(ls->newAxisCalTypePanHndl);
@@ -1092,17 +1197,39 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					
 				case ScanSetPan_FastAxisType:
 					
+					unsigned int 	fastAxisType;
+					GetCtrlVal(panel, control, &fastAxisType);
+					
+					UpdateAvailableCalibrations(engine, fastAxisType); 
 					break;
 					
 				case ScanSetPan_SlowAxisType:
 					
+					unsigned int 	slowAxisType;
+					GetCtrlVal(panel, control, &slowAxisType);
+					
+					UpdateAvailableCalibrations(engine, slowAxisType); 
 					break;
 					
 				case ScanSetPan_FastAxisCal:
 					
+					unsigned int	fastAxisCalIdx;
+					GetCtrlVal(panel, control, &fastAxisCalIdx);
+					if (fastAxisCalIdx)
+						engine->fastAxisCal = ListGetPtrToItem(engine->lsModule->availableCals, fastAxisCalIdx); 
+					else
+						engine->fastAxisCal = NULL;
+					
 					break;
 					
 				case ScanSetPan_SlowAxisCal:
+					
+					unsigned int	slowAxisCalIdx;
+					GetCtrlVal(panel, control, &slowAxisCalIdx);
+					if (slowAxisCalIdx)
+						engine->slowAxisCal = ListGetPtrToItem(engine->lsModule->availableCals, slowAxisCalIdx); 
+					else
+						engine->slowAxisCal = NULL;
 					
 					break;
 					
@@ -1172,8 +1299,10 @@ static int CVICALLBACK ScanEnginesTab_CB (int panel, int control, int event, voi
 	return 0;
 }
 
-static int CVICALLBACK NonResGalvoCal_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+	NonResGalvoCal_type*		nrgCal = callbackData;
+	
 	switch (event)
 	{
 		case EVENT_COMMIT:
@@ -1190,6 +1319,20 @@ static int CVICALLBACK NonResGalvoCal_CB (int panel, int control, int event, voi
 					
 				case NonResGCal_Done:
 					
+					// unregister calibration VChans
+					DLUnregisterVChan(nrgCal->baseClass.VChanCom);
+					DLUnregisterVChan(nrgCal->baseClass.VChanPos);
+					// remove task controller from the laser scanning module
+					RemoveTaskControllerFromList(nrgCal->baseClass.lsModule->activeCal, nrgCal->baseClass.taskController);
+					// unregister calibration Task Controller
+					DLRemoveTaskController(nrgCal->baseClass.taskController);
+					
+					// discard active calibration data structure
+					(*nrgCal->baseClass.Discard) (&nrgCal);
+					
+					
+					
+					
 					break;
 					
 				case NonResGCal_GalvoPlot:
@@ -1199,8 +1342,26 @@ static int CVICALLBACK NonResGalvoCal_CB (int panel, int control, int event, voi
 					SetCtrlVal(panel, NonResGCal_CursorX, plotX);
 					SetCtrlVal(panel, NonResGCal_CursorX, plotY);
 					break;
-			/*	
+			}
+
+			break;
+	}
+	return 0;
+}
+
+static int CVICALLBACK NonResGalvoCal_CalPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	NonResGalvoCal_type* nrgCal = callbackData;
+	
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			
+			switch (control) {
+					
 				case Cal_CommMinV:
+					
+					//GetCtrlVal(panel, control, &ls->
 					
 					break;
 					
@@ -1231,8 +1392,6 @@ static int CVICALLBACK NonResGalvoCal_CB (int panel, int control, int event, voi
 				case Cal_Resolution:
 					
 					break;
-			*/ // duplicate values!
-					
 			}
 
 			break;
@@ -1240,27 +1399,55 @@ static int CVICALLBACK NonResGalvoCal_CB (int panel, int control, int event, voi
 	return 0;
 }
 
-static ScanAxisCal_type* initalloc_ScanAxisCal_type	(ScanAxisCal_type* scanAxisCal)
+static int CVICALLBACK NonResGalvoCal_TestPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	// if NULL, allocate memory, otherwise just use the provided address
-	if (!scanAxisCal) {
-		scanAxisCal = malloc (sizeof(ScanAxisCal_type));
-		if (!scanAxisCal) return NULL;
+	NonResGalvoCal_type*	nrgCal = callbackData;
+	
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			/*
+			switch (control) {
+					
+			}*/
+
+			break;
 	}
-	
-	scanAxisCal->calName 		= NULL;
-	scanAxisCal->VChanCom		= NULL;
-	scanAxisCal->VChanPos		= NULL;
-	scanAxisCal->scanAxisType	= NonResonantGalvo;
-	scanAxisCal->Discard		= NULL;
-	
-	return scanAxisCal;	
+	return 0;
 }
 
-static void discard_ScanAxisCal_type (ScanAxisCal_type** scanAxisCal)
+static ScanAxisCal_type* initalloc_ScanAxisCal_type	(ScanAxisCal_type* cal)
 {
-	OKfree((*scanAxisCal)->calName);
-	OKfree(*scanAxisCal);
+	// if NULL, allocate memory, otherwise just use the provided address
+	if (!cal) {
+		cal = malloc (sizeof(ScanAxisCal_type));
+		if (!cal) return NULL;
+	}
+	
+	cal->scanAxisType	= NonResonantGalvo; 
+	cal->calName 		= NULL;
+	cal->taskController	= NULL;
+	cal->VChanCom		= NULL;
+	cal->VChanPos		= NULL;
+	cal->comSampRate	= NULL;
+	cal->posSampRate	= NULL;
+	cal->calPanHndl		= 0;
+	cal->Discard		= NULL;
+	
+	return cal;	
+}
+
+static void discard_ScanAxisCal_type (ScanAxisCal_type** cal)
+{
+	OKfree((*cal)->calName); 
+	discard_TaskControl_type(&(*cal)->taskController);
+	discard_VChan_type((VChan_type**)&(*cal)->VChanCom);
+	discard_VChan_type((VChan_type**)&(*cal)->VChanPos);
+	OKfree((*cal)->comSampRate);
+	OKfree((*cal)->posSampRate);
+	if ((*cal)->calPanHndl) {DiscardPanel((*cal)->calPanHndl); (*cal)->calPanHndl =0;}
+	
+	OKfree(*cal);
 }
 
 void CVICALLBACK ScanAxisCalibrationMenu_CB	(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
@@ -1278,10 +1465,10 @@ void CVICALLBACK ScanAxisCalibrationMenu_CB	(int menuBarHandle, int menuItemID, 
 	SetPanelAttribute(ls->manageAxisCalPanHndl, ATTR_TITLE, ls->baseClass.instanceName);
 	
 	// list available calibrations
-	size_t					nCal 			= ListNumItems(ls->calScanAxis);
+	size_t					nCal 			= ListNumItems(ls->availableCals);
 	ScanAxisCal_type**		calPtr;
 	for (size_t i = 1; i <= nCal; i++) {
-		calPtr = ListGetPtrToItem(ls->calScanAxis, i);
+		calPtr = ListGetPtrToItem(ls->availableCals, i);
 		InsertListItem(ls->manageAxisCalPanHndl, ManageAxis_AxisCalibList, -1, (*calPtr)->calName, 0); 
 	} 
 	
@@ -1291,19 +1478,25 @@ void CVICALLBACK ScanAxisCalibrationMenu_CB	(int menuBarHandle, int menuItemID, 
 	DisplayPanel(ls->manageAxisCalPanHndl);
 }
 
-static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], SourceVChan_type* VChanCom, SinkVChan_type* VChanPos)
+static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModule, char calName[], char commandVChanName[], char positionVChanName[])
 {
 	NonResGalvoCal_type*	cal = malloc(sizeof(NonResGalvoCal_type));
 	if (!cal) return NULL;
 	
 	// init parent class
-	initalloc_ScanAxisCal_type(&cal->base);
-	if(!(cal->base.calName	= StrDup(calName))) {free(cal); return NULL;}
-	cal->base.VChanCom		= VChanCom;
-	cal->base.VChanPos		= VChanPos;
-	cal->base.scanAxisType  = NonResonantGalvo;
-	cal->base.Discard		= discard_NonResGalvoCal_type; // override
+	initalloc_ScanAxisCal_type(&cal->baseClass);
+	if(!(cal->baseClass.calName		= StrDup(calName))) {free(cal); return NULL;}
+	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, VChan_Waveform, cal, NonResGalvoCal_ComVChan_Connected, NonResGalvoCal_ComVChan_Disconnected);   
+	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, VChan_Waveform, cal, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
+	cal->baseClass.scanAxisType  	= NonResonantGalvo;
+	cal->baseClass.Discard			= discard_NonResGalvoCal_type; // override
+	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
+								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, DataReceivedTC_NonResGalvoCal, ModuleEventHandler_NonResGalvoCal, ErrorTC_NonResGalvoCal);
+	// connect sink VChans (VChanPos) to the Task Controller so that it can process incoming galvo position data
+	AddSinkVChan(cal->baseClass.taskController, cal->baseClass.VChanPos, TASK_VCHAN_FUNC_ITERATE);  
+	cal->baseClass.lsModule			= lsModule;
 	
+								  
 	// init NonResGalvoCal_type
 	cal->commandVMin		= 0;
 	cal->commandVMax		= 0;
@@ -1324,9 +1517,23 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], SourceVCha
 	return cal;
 }
 
-static void	discard_NonResGalvoCal_type	(ScanAxisCal_type** scanAxisCal)
+static void	discard_NonResGalvoCal_type	(ScanAxisCal_type** cal)
 {
+	if (!*cal) return;
 	
+	NonResGalvoCal_type*	NRGCal = (NonResGalvoCal_type*) *cal;
+	
+	// discard NonResGalvoCal_type specific data
+	OKfree(NRGCal->slope);
+	OKfree(NRGCal->offset);
+	OKfree(NRGCal->posStdDev);
+	OKfree(NRGCal->lag);
+	discard_SwitchTimes_type(&NRGCal->switchTimes);
+	discard_MaxSlopes_type(&NRGCal->maxSlopes);
+	discard_TriangleCal_type(&NRGCal->triangleCal);
+	
+	// discard ScanAxisCal_type base class data
+	discard_ScanAxisCal_type(cal);
 }
 
 static SwitchTimes_type* init_SwitchTimes_type(int nElem)
@@ -1440,6 +1647,30 @@ static void discard_TriangleCal_type (TriangleCal_type** a)
 	OKfree((*a)->maxFreq);
 	OKfree((*a)->resLag);
 	OKfree(*a);
+}
+
+// calibration command VChan connected callback
+static void	NonResGalvoCal_ComVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
+
+// calibration command VChan disconnected callback
+static void	NonResGalvoCal_ComVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
+}
+
+// calibration position VChan connected callback
+static void	NonResGalvoCal_PosVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
+
+// calibration position VChan disconnected callback
+static void	NonResGalvoCal_PosVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
 }
 
 static int init_ScanEngine_type (ScanEngine_type* 		engine, 
@@ -1562,16 +1793,16 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	//--------------------------------------------------------
 	// init base scan engine class
 	//--------------------------------------------------------
-	init_ScanEngine_type(&engine->base, lsModule, ScanEngine_RectRaster, fastAxisComVChanName, slowAxisComVChanName, fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName);
+	init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster, fastAxisComVChanName, slowAxisComVChanName, fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName);
 	// override discard method
-	engine->base.Discard			= discard_RectangleRaster_type;
+	engine->baseClass.Discard			= discard_RectangleRaster_type;
 	// add task controller
-	engine->base.taskControl		= init_TaskControl_type(engineName, engine, ConfigureTC_RectRaster, IterateTC_RectRaster, 
+	engine->baseClass.taskControl		= init_TaskControl_type(engineName, engine, ConfigureTC_RectRaster, IterateTC_RectRaster, 
 								  	StartTC_RectRaster, ResetTC_RectRaster, DoneTC_RectRaster, StoppedTC_RectRaster, 
 								  	DimTC_RectRaster, NULL, DataReceivedTC_RectRaster, ModuleEventHandler_RectRaster, 
 								  	ErrorTC_RectRaster);
 	
-	if (!engine->base.taskControl) {discard_RectangleRaster_type((ScanEngine_type**)&engine); return NULL;}
+	if (!engine->baseClass.taskControl) {discard_RectangleRaster_type((ScanEngine_type**)&engine); return NULL;}
 	
 	//--------------------------------------------------------
 	// init RectangleRaster_type
@@ -1723,6 +1954,63 @@ static void	DetVChanDisconnected (VChan_type* self, VChan_type* disconnectedVCha
 {
 	
 }
+
+//---------------------------------------------------------------------
+// Non Resonant Galvo Calibration and Testing Task Controller Callbacks 
+//---------------------------------------------------------------------
+
+static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+}
+
+static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
+{
+	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+}
+
+static FCallReturn_type* StartTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+}
+
+static FCallReturn_type* ResetTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+}
+
+static FCallReturn_type* DoneTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+}
+
+static FCallReturn_type* StoppedTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+}
+
+static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
+{
+	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+}
+
+static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+{
+	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+}
+
+static FCallReturn_type* ModuleEventHandler_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
+{
+	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+}
+
+static void ErrorTC_NonResGalvoCal (TaskControl_type* taskControl, char* errorMsg)
+{
+	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+}
+
 
 //-----------------------------------------
 // LaserScanning Task Controller Callbacks

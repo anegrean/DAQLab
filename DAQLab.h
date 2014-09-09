@@ -24,6 +24,7 @@
 #include <userint.h>
 #include <utility.h>
 #include "VChannel.h"
+#include "TaskController.h"
 
 //==============================================================================
 // Constants
@@ -148,13 +149,20 @@ BOOL 				DLValidModuleInstanceName		(char name[]);
 	// Checks if Task Controller name is unique within the framework.
 BOOL 				DLValidTaskControllerName		(char name[]);
 
+	// Returns a unique Task Controller name among existing Task Controllers within the framework
+char*				DLGetUniqueTaskControllerName	(char baseTCName[]);
+
 	// Adds a list of Task Controllers to the DAQLab framework.
 	// tcList of TaskControl_type* 
-BOOL				DLAddTaskControllers			(ListType tcList);	
+BOOL				DLAddTaskControllers			(ListType tcList);
+	// Adds a single Task Controller to the DAQLab framework
+BOOL				DLAddTaskController				(TaskControl_type* taskController);
 
 	// Removes a list of Task Controllers from the DAQLab framework.
 	// tcList of TaskControl_type*   
 BOOL				DLRemoveTaskControllers 		(ListType tcList);
+	// Removes a single Task Controller from the DAQLab framework.
+BOOL				DLRemoveTaskController 			(TaskControl_type* taskController);			
 
 //-------------------------------------------------------------------------------
 // DAQLab XML management

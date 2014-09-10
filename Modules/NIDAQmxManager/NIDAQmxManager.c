@@ -3481,12 +3481,13 @@ static void CVICALLBACK DeleteDev_CB (int menuBarHandle, int menuItemID, void *c
 	DAQmxDevPtrPtr = ListGetPtrToItem(nidaq->DAQmxDevices, activeTabIdx + 1);
 	TCList = ListCreate(sizeof(TaskControl_type*));
 	ListInsertItem(TCList, &(*DAQmxDevPtrPtr)->taskController, END_OF_LIST);
-	DLRemoveTaskControllers(TCList); // must be done after Task Controller is removed from the module to update DAQLab UI
-	ListDispose(TCList);
 	
 	// discard DAQmx device data and remove device also from the module list
 	discard_Dev_type(DAQmxDevPtrPtr);
 	ListRemoveItem(nidaq->DAQmxDevices, 0, activeTabIdx + 1);
+	// Update framework. Must be done after Task Controller is removed from the module
+	DLRemoveTaskControllers(TCList); 
+	ListDispose(TCList);
 	// remove Tab and add an empty "None" tab page if there are no more tabs
 	DeleteTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, activeTabIdx, 1);
 	GetNumTabPages(nidaq->mainPanHndl, NIDAQmxPan_Devices, &nTabPages);

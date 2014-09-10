@@ -439,7 +439,12 @@ TaskControl_type*  	 	init_TaskControl_type				(const char				taskControllerName
 														 	ModuleEventFptr_type	ModuleEventFptr,
 														 	ErrorFptr_type			ErrorFptr);
 
-void 					discard_TaskControl_type			(TaskControl_type** a);
+	// Disconnects a given Task Controller from its parent, disconnects all its child tasks and HW triggering and then discards the Task Controller.
+	// All child Tasks are disconnected from each other including HW triggering dependecies and VChan connections.
+void 					discard_TaskControl_type			(TaskControl_type** taskController);
+
+	// Disconnects HW triggering, VChan connections and discards Task Controllers recursively starting with the given taskController
+void					discard_TaskTreeBranch				(TaskControl_type** taskController);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller set/get functions
@@ -513,6 +518,10 @@ int						AddSubTaskToParent					(TaskControl_type* parent, TaskControl_type* chi
 
 int						RemoveSubTaskFromParent				(TaskControl_type* child);
 
+	// Disconnects a given Task Controller from its parent, disconnects all child nodes from each other as well as any VChan or HW-triggers
+int						DisassembleTaskTreeBranch			(TaskControl_type* taskControlNode); 
+
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller management functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -536,9 +545,6 @@ int						AddHWSlaveTrigToMaster				(TaskControl_type* master, TaskControl_type* 
 int						RemoveHWSlaveTrigFromMaster			(TaskControl_type* slave);
 
 int 					RemoveAllHWSlaveTrigsFromMaster		(TaskControl_type* master);
-
-	// Disconnects a given Task Controller from its parent, disconnects all child nodes from each other as well as any VChan or HW-triggers
-int						DisassembleTaskTreeBranch			(TaskControl_type* taskControlNode); 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller event posting and execution control functions
@@ -576,8 +582,17 @@ void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 
 	// Adds a VChan to the Task Controller that is used to receive incoming data.
 int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, TaskVChanFuncAssign_type VChanFunc); 
+
+	// Removes a Sink VChan assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
+	// Source VChan.
 int						RemoveSinkVChan 					(TaskControl_type* taskControl, SinkVChan_type* sinkVChan);
+
+	// Removes all Sink VChans assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
+	// Source VChan. 
 void 					RemoveAllSinkVChans 				(TaskControl_type* taskControl);
+
+	// Disconnects Source VChans from all Sink VChans assigned to the Task Controller but does not remove the Sink VChans from the Task Controller.
+void					DisconnectAllSinkVChans				(TaskControl_type* taskControl);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller logging functions

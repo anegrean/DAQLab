@@ -2135,6 +2135,9 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						relation = LoWord(eventData1);  // VAL_CHILD or VAL_SIBLING
 					int	position = HiWord(eventData1);  // VAL_PREV, VAL_NEXT, or VAL_FIRST 
 					
+					// allow only child to parent drops
+					if (relation != VAL_CHILD) return 1; // swallow drop event
+					
 					// eventData2 = relativeIndex. relativeIndex is the index of the relative of the new potential drop location.
 					GetValueFromIndex(panel, control, eventData2, &nodeListIdx);
 					targetTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
@@ -2167,6 +2170,9 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					else
 						if (relation == VAL_SIBLING && parentTaskController)
 							AddSubTaskToParent(parentTaskController, dragTreeNodePtr->taskControl); 
+					
+					// allow dragged task controller to be deleted
+					dragTreeNodePtr->canBeDeleted = TRUE;
 							
 					break;
 					
@@ -2187,7 +2193,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					// disconnect Task Controller branch and dissasemble its components including their HW Trigger and Virtual Channel connections 
 					DisassembleTaskTreeBranch(selectedTreeNodePtr->taskControl);
 					
-					DeleteListItem(panel, control, nodeListIdx, 1);
+					DeleteListItem(panel, control, selectedNodeIdx, 1);
 					// refresh Task Tree
 					DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 					

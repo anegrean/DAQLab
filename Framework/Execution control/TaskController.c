@@ -313,41 +313,55 @@ TaskControl_type* init_TaskControl_type(const char				taskControllerName[],
 }
 
 /// HIFN Discards recursively a Task controller.
-void discard_TaskControl_type(TaskControl_type** a)
+void discard_TaskControl_type(TaskControl_type** taskController)
 {
-	if (!*a) return;
+	if (!*taskController) return;
 	
-	size_t	nItems;
+	//----------------------------------------------------------------------------
+	// Disassemble task tree branch recusively starting with the given parent node
+	//----------------------------------------------------------------------------
+	DisassembleTaskTreeBranch(*taskController);
 	
-	// disconnect from parent Task Controller if there is any
-	RemoveSubTaskFromParent(*a);
+	//----------------------------------------------------------------------------
+	// Discard this Task Controller
+	//----------------------------------------------------------------------------
 	
 	// name
-	OKfree((*a)->taskName);
+	OKfree((*taskController)->taskName);
+	
 	// event queue
-	CmtDiscardTSQ((*a)->eventQ);
+	CmtDiscardTSQ((*taskController)->eventQ);
+	
 	// incoming data queues (does not free the queue itself!)
-	VChanCallbackData_type** 	VChanTSQDataPtrPtr;
-	nItems = ListNumItems((*a)->dataQs);
-	for (size_t i = 1; i <= nItems; i++) {
-		VChanTSQDataPtrPtr = ListGetPtrToItem((*a)->dataQs, i);
-		discard_VChanCallbackData_type(VChanTSQDataPtrPtr);
-	}
-	ListDispose((*a)->dataQs);
+	RemoveAllSinkVChans(*taskController);
 	
-	discard_ErrorMsg_type(&(*a)->errorMsg);
+	// error message storage 
+	discard_ErrorMsg_type(&(*taskController)->errorMsg);
 	
+	// child Task Controllers list
+	ListDispose((*taskController)->subtasks);
+	
+	// free Task Controller memory
+	OKfree(*taskController);
+	/*
 	// discard all subtasks recursively
 	SubTask_type* subtaskPtr;
 	nItems = ListNumItems((*a)->subtasks);
 	for (size_t i = 1; i <= nItems; i++) {
 		subtaskPtr = ListGetPtrToItem((*a)->subtasks, i);
 		discard_TaskControl_type(&subtaskPtr->subtask);
-	}
-	ListDispose((*a)->subtasks);
+	} */
+}
+
+void discard_TaskTreeBranch (TaskControl_type** taskController)
+{
+	SubTask_type* subtaskPtr;
+	while(ListNumItems((*taskController)->subtasks)){
+		subtaskPtr = ListGetPtrToItem((*taskController)->subtasks, 1);
+		discard_TaskTreeBranch(&subtaskPtr->subtask);
+	} 
 	
-	// discard memory allocated for this structure
-	OKfree(*a);
+	discard_TaskControl_type(taskController);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -547,6 +561,16 @@ void RemoveAllSinkVChans (TaskControl_type* taskControl)
 	ListClear(taskControl->dataQs);
 }
 
+void DisconnectAllSinkVChans (TaskControl_type* taskControl)
+{
+	VChanCallbackData_type** 	VChanTSQDataPtrPtr;
+	size_t 						nItems = ListNumItems(taskControl->dataQs);
+	for (size_t i = 1; i <= nItems; i++) {
+		VChanTSQDataPtrPtr = ListGetPtrToItem(taskControl->dataQs, i);
+		// disconnect Sink from Source
+		VChan_Disconnect((VChan_type*)(*VChanTSQDataPtrPtr)->sinkVChan);
+	}
+}
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller logging functions
@@ -1561,14 +1585,13 @@ int	DisassembleTaskTreeBranch (TaskControl_type* taskControlNode)
 	RemoveHWSlaveTrigFromMaster(taskControlNode);
 	RemoveAllHWSlaveTrigsFromMaster(taskControlNode);
 	
-	// add here how to handle VChans   <------------------------------------------------------------------------------
+	// disconnect incoming Source VChans from the Sink VChans assigned to this Task Controller
+	DisconnectAllSinkVChans(taskControlNode);
 	
-	
-	// disconnect SubTask if any recursively
+	// disconnect recursively child Task Controllers if any
 	SubTask_type* 	subtaskPtr;
-	size_t			nSubTasks = ListNumItems(taskControlNode->subtasks);
-	for (size_t i = 1; i <= nSubTasks; i++) {
-		subtaskPtr = ListGetPtrToItem(taskControlNode->subtasks, i);
+	while(ListNumItems(taskControlNode->subtasks)) {
+		subtaskPtr = ListGetPtrToItem(taskControlNode->subtasks, 1);
 		DisassembleTaskTreeBranch(subtaskPtr->subtask);
 	}
 	

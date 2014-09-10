@@ -1403,6 +1403,9 @@ BOOL DLRemoveTaskController (TaskControl_type* taskController)
 	BOOL result = DLRemoveTaskControllers(tcList);
 	ListDispose(tcList);
 	
+	// make sure that also the Switchboard is updated in case any connections between VChans are broken
+	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
+	
 	return result;
 }
 

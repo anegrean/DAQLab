@@ -657,6 +657,8 @@ struct NIDAQmxManager {
 	int					mainPanHndl;
 	int					taskSetPanHndl;
 	int					devListPanHndl;
+	int					menuBarHndl;
+	int					deleteDevMenuItemID;
 	
 	
 	// METHODS 
@@ -984,6 +986,8 @@ DAQLabModule_type*	initalloc_NIDAQmxManager (DAQLabModule_type* mod, char classN
 	if (!nidaq->DAQmxDevices) {discard_DAQLabModule((DAQLabModule_type**)&nidaq); return NULL;}
 	
 	nidaq->mainPanHndl				= 0;
+	nidaq->menuBarHndl				= 0;
+	nidaq->deleteDevMenuItemID		= 0;
 	nidaq->taskSetPanHndl			= 0;
 	nidaq->devListPanHndl			= 0;
 	
@@ -1140,8 +1144,8 @@ static DevAttr_type* copy_DevAttr_type(DevAttr_type* attr)
 
 	// product ID
 	
-	if (!(	a -> name					= StrDup (attr -> name))) 							goto Error; 
-	if (!(	a -> type 					= StrDup (attr -> type))) 							goto Error;  
+	if (!(	a -> name					= StrDup (attr -> name))) 						goto Error; 
+	if (!(	a -> type 					= StrDup (attr -> type))) 						goto Error;  
 			a -> productNum				= attr -> productNum;
 			a -> serial					= attr -> serial;
 			
@@ -1159,10 +1163,10 @@ static DevAttr_type* copy_DevAttr_type(DevAttr_type* attr)
 	
 	if (!(	a -> AIchan  				= copy_AIChannelList(attr -> AIchan)))			goto Error;
 	if (!(	a -> AOchan  				= copy_AOChannelList(attr -> AOchan)))			goto Error; 
-	if (!(	a -> DIlines 				= copy_DILineChannelList(attr -> DIlines)))	goto Error; 	   
-	if (!(	a -> DIports 				= copy_DIPortChannelList(attr -> DIports)))	goto Error;   
-	if (!(	a -> DOlines 				= copy_DOLineChannelList(attr -> DOlines)))	goto Error; 		  
-	if (!(	a -> DOports 				= copy_DOPortChannelList(attr -> DOports)))	goto Error; 		   
+	if (!(	a -> DIlines 				= copy_DILineChannelList(attr -> DIlines)))		goto Error; 	   
+	if (!(	a -> DIports 				= copy_DIPortChannelList(attr -> DIports)))		goto Error;   
+	if (!(	a -> DOlines 				= copy_DOLineChannelList(attr -> DOlines)))		goto Error; 		  
+	if (!(	a -> DOports 				= copy_DOPortChannelList(attr -> DOports)))		goto Error; 		   
 	if (!(	a -> CIchan  				= copy_CIChannelList(attr -> CIchan)))			goto Error; 		   
 	if (!(	a -> COchan  				= copy_COChannelList(attr -> COchan)))			goto Error; 
 	
@@ -1182,10 +1186,10 @@ static DevAttr_type* copy_DevAttr_type(DevAttr_type* attr)
 			
 	// supported IO types
 	
-	if (!(	a -> AISupportedMeasTypes	= ListCopy(attr->AISupportedMeasTypes)))			goto Error; 
-	if (!(	a -> AOSupportedOutputTypes	= ListCopy(attr->AOSupportedOutputTypes)))			goto Error; 
-	if (!(	a -> CISupportedMeasTypes	= ListCopy(attr->CISupportedMeasTypes)))			goto Error; 
-	if (!(	a -> COSupportedOutputTypes	= ListCopy(attr->COSupportedOutputTypes)))			goto Error;
+	if (!(	a -> AISupportedMeasTypes	= ListCopy(attr->AISupportedMeasTypes)))		goto Error; 
+	if (!(	a -> AOSupportedOutputTypes	= ListCopy(attr->AOSupportedOutputTypes)))		goto Error; 
+	if (!(	a -> CISupportedMeasTypes	= ListCopy(attr->CISupportedMeasTypes)))		goto Error; 
+	if (!(	a -> COSupportedOutputTypes	= ListCopy(attr->COSupportedOutputTypes)))		goto Error;
 	
 	return a;
 	
@@ -3041,7 +3045,6 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl)
 {
 	int						error						= 0;
 	NIDAQmxManager_type* 	nidaq						= (NIDAQmxManager_type*) mod;  
-	int						menubarHndl					= 0; 
 	int						menuItemDevicesHndl			= 0;
 	
 	// main panel 
@@ -3057,11 +3060,13 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl)
 	SetCtrlAttribute(nidaq->devListPanHndl, DevListPan_AddBTTN, ATTR_CALLBACK_DATA, nidaq); 
 	
 	// add menubar and link it to module data
-	menubarHndl 		= NewMenuBar(nidaq->mainPanHndl);
-	menuItemDevicesHndl = NewMenu(menubarHndl, "Devices", -1);
+	nidaq->menuBarHndl 		= NewMenuBar(nidaq->mainPanHndl);
+	menuItemDevicesHndl 	= NewMenu(nidaq->menuBarHndl, "Devices", -1);
 	
-	NewMenuItem(menubarHndl, menuItemDevicesHndl, "Add", -1, (VAL_MENUKEY_MODIFIER | 'A'), ManageDevPan_CB, mod); 
-	NewMenuItem(menubarHndl, menuItemDevicesHndl, "Delete", -1, (VAL_MENUKEY_MODIFIER | 'D'), DeleteDev_CB, mod);
+	NewMenuItem(nidaq->menuBarHndl, menuItemDevicesHndl, "Add", -1, (VAL_MENUKEY_MODIFIER | 'A'), ManageDevPan_CB, mod); 
+	nidaq->deleteDevMenuItemID = NewMenuItem(nidaq->menuBarHndl, menuItemDevicesHndl, "Delete", -1, (VAL_MENUKEY_MODIFIER | 'D'), DeleteDev_CB, mod);
+	// dim "Delete" menu item since there are no devices to be deleted
+	SetMenuBarAttribute(nidaq->menuBarHndl, nidaq->deleteDevMenuItemID, ATTR_DIMMED, 1); 
 	
 	return 0;
 Error:
@@ -3491,7 +3496,11 @@ static void CVICALLBACK DeleteDev_CB (int menuBarHandle, int menuItemID, void *c
 	// remove Tab and add an empty "None" tab page if there are no more tabs
 	DeleteTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, activeTabIdx, 1);
 	GetNumTabPages(nidaq->mainPanHndl, NIDAQmxPan_Devices, &nTabPages);
-	if (!nTabPages) InsertTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, 0, "None");
+	if (!nTabPages) {
+		InsertTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, 0, "None");
+		// dim "Delete" menu item
+		SetMenuBarAttribute(nidaq->menuBarHndl, nidaq->deleteDevMenuItemID, ATTR_DIMMED, 1);
+	}
 	
 }
 
@@ -4554,6 +4563,9 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					else
 						// continuous
 						SetCtrlAttribute(newDAQmxDevPanHndl, TaskSetPan_Repeat, ATTR_DIMMED, 1);
+					
+					// undim "Delete" menu item
+					SetMenuBarAttribute(nidaq->menuBarHndl, nidaq->deleteDevMenuItemID, ATTR_DIMMED, 0);
 					
 					break;
 					

@@ -560,10 +560,10 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	
 	if (ls->availableCals) {
 		size_t 				nItems = ListNumItems(ls->availableCals);
-		ScanAxisCal_type**  calPtrPtr;
+		ScanAxisCal_type**  calPtr;
 		for (size_t i = 1; i <= nItems; i++) {
-			calPtrPtr = ListGetPtrToItem(ls->availableCals, i);
-			(*(*calPtrPtr)->Discard)	(calPtrPtr); 
+			calPtr = ListGetPtrToItem(ls->availableCals, i);
+			(*(*calPtr)->Discard)	(*calPtr); 
 		}
 		
 		ListDispose(ls->availableCals);
@@ -571,10 +571,10 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	
 	if (ls->activeCal) {
 		size_t 				nItems = ListNumItems(ls->activeCal);
-		ScanAxisCal_type**  calPtrPtr;
+		ScanAxisCal_type**  calPtr;
 		for (size_t i = 1; i <= nItems; i++) {
-			calPtrPtr = ListGetPtrToItem(ls->activeCal, i);
-			(*(*calPtrPtr)->Discard)	(calPtrPtr); 
+			calPtr = ListGetPtrToItem(ls->activeCal, i);
+			(*(*calPtr)->Discard)	(*calPtr); 
 		}
 		
 		ListDispose(ls->activeCal);
@@ -582,10 +582,10 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	
 	if (ls->scanEngines) {
 		size_t 				nItems = ListNumItems(ls->scanEngines);
-		ScanEngine_type**  	enginePtrPtr;
+		ScanEngine_type**  	enginePtr;
 		for (size_t i = 1; i <= nItems; i++) {
-			enginePtrPtr = ListGetPtrToItem(ls->scanEngines, i);
-			(*(*enginePtrPtr)->Discard)	(enginePtrPtr);
+			enginePtr = ListGetPtrToItem(ls->scanEngines, i);
+			(*(*enginePtr)->Discard)	(*enginePtr);
 		}
 		
 		ListDispose(ls->scanEngines);
@@ -1309,29 +1309,25 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 			
 			switch (control) {
 					
-				case NonResGCal_Abort:
-					
-					break;
-					
 				case NonResGCal_SaveCalib:
 					
 					break;
 					
 				case NonResGCal_Done:
 					
+					TaskControl_type*	calTC = nrgCal->baseClass.taskController; 
 					// unregister calibration VChans
 					DLUnregisterVChan(nrgCal->baseClass.VChanCom);
 					DLUnregisterVChan(nrgCal->baseClass.VChanPos);
-					// remove task controller from the laser scanning module
-					RemoveTaskControllerFromList(nrgCal->baseClass.lsModule->activeCal, nrgCal->baseClass.taskController);
-					// unregister calibration Task Controller
-					DLRemoveTaskController(nrgCal->baseClass.taskController);
+					
+					// remove task controller from the laser scanning module list of Task Controllers
+					RemoveTaskControllerFromList(nrgCal->baseClass.lsModule->baseClass.taskControllers, calTC);
 					
 					// discard active calibration data structure
 					(*nrgCal->baseClass.Discard) (&nrgCal);
 					
-					
-					
+					// unregister calibration Task Controller
+					DLRemoveTaskController(calTC);
 					
 					break;
 					
@@ -1361,36 +1357,42 @@ static int CVICALLBACK NonResGalvoCal_CalPan_CB (int panel, int control, int eve
 					
 				case Cal_CommMinV:
 					
-					//GetCtrlVal(panel, control, &ls->
-					
+					GetCtrlVal(panel, control, &nrgCal->commandVMin);
 					break;
 					
 				case Cal_CommMaxV:
 					
+					GetCtrlVal(panel, control, &nrgCal->commandVMax);
 					break;
 					
 				case Cal_PosMinV:
 					
+					GetCtrlVal(panel, control, &nrgCal->positionVMin);
 					break;
 					
 				case Cal_PosMaxV:
 					
+					GetCtrlVal(panel, control, &nrgCal->positionVMax);
 					break;
 					
 				case Cal_ParkedV:
 					
+					GetCtrlVal(panel, control, &nrgCal->UISet.parked);
 					break;
 					
 				case Cal_ScanTime:
 					
+					GetCtrlVal(panel, control, &nrgCal->UISet.scanTime);
 					break;
 					
 				case Cal_MinStep:
 					
+					GetCtrlVal(panel, control, &nrgCal->UISet.minStepSize);
 					break;
 					
 				case Cal_Resolution:
 					
+					GetCtrlVal(panel, control, &nrgCal->UISet.resolution);
 					break;
 			}
 
@@ -1511,7 +1513,7 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	cal->triangleCal		= NULL;
 	cal->UISet.resolution  	= 0;
 	cal->UISet.minStepSize 	= 0;
-	cal->UISet.scanTime    	= 0;
+	cal->UISet.scanTime    	= 2;	// in [s]
 	cal->UISet.parked		= 0;
 	
 	return cal;

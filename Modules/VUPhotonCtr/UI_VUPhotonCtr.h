@@ -1,5 +1,6 @@
 /**************************************************************************/
 /* LabWindows/CVI User Interface Resource (UIR) Include File              */
+/* Copyright (c) National Instruments 2014. All Rights Reserved.          */
 /*                                                                        */
 /* WARNING: Do not add to, delete from, or otherwise modify the contents  */
 /*          of this include file.                                         */
@@ -19,13 +20,12 @@
 #define  CounterPan_BTTN_FFRESET          4       /* control type: command, callback function: (none) */
 #define  CounterPan_BTTN_RESET            5       /* control type: command, callback function: (none) */
 #define  CounterPan_LED_TRIGFAIL          6       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_OVERFLOW     7       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_AFULL        8       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_QFULL        9       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_EMPTY        10      /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_UNDER        11      /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_RUNNING           12      /* control type: LED, callback function: (none) */
-#define  CounterPan_BTTN_TestMode         13      /* control type: textButton, callback function: (none) */
+#define  CounterPan_LED_DOOR_OPEN         7       /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_FIFO_FULL         8       /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_FIFO_EMPTY        9       /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_RUNNING           10      /* control type: LED, callback function: (none) */
+#define  CounterPan_BTTN_TestMode         11      /* control type: textButton, callback function: (none) */
+#define  CounterPan_TOGGLESTART           12      /* control type: textButton, callback function: (none) */
 
 #define  VUPCChan                         2
 #define  VUPCChan_Fan                     2       /* control type: radioButton, callback function: (none) */

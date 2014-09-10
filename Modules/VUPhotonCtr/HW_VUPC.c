@@ -27,8 +27,8 @@
 #define RDTE_ERR_BIT	0x02000000
 #define DTE_DONE_BIT	0x80000000
 		
-#define MAJOR_VERSION	1
-#define MINOR_VERSION	5 
+#define MAJOR_VERSION	2
+#define MINOR_VERSION	0 
 
 		//driver status bits
 #define READYFORDATA	0x00000001
@@ -77,7 +77,7 @@ typedef struct _PMTregcommand {
 TaskControl_type* gtaskControl;
 
 //test
-char* rawfilepath="C:\\Rawdata\\";
+char* rawfilepath="D:\\Rawdata\\";
 
 
 //int              		QuitFlag;
@@ -730,7 +730,7 @@ void SetNewBuffer(void)
 int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl)
 {
 	int error=0;
-//	unsigned long controlreg;  
+	unsigned long controlreg;  
 	
 	gtaskControl=taskControl;
 	
@@ -747,11 +747,11 @@ int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl)
 //	VUPCI_Close(); 
 //	errChk(VUPCI_Open());  
 	
-//	controlreg=GetControlreg();  
+	controlreg=GetControlreg();  
 	//set app start bit  
 //	controlreg=controlreg|DMASTART_BIT; 
-//	controlreg=controlreg|APPSTART_BIT;
-//	error=WritePMTReg(CTRL_REG,controlreg);
+	controlreg=controlreg|APPSTART_BIT;
+	error=WritePMTReg(CTRL_REG,controlreg);
 	
 	while (GetReadyForReading()==0) {
 		  //wait
@@ -775,10 +775,16 @@ Error:
 int PMTStopAcq(void)
 {
 	int error=0;
-//	unsigned long controlreg;    
+	unsigned long controlreg;    
 	
 	readdata=0;  //stop reading  
 	VUPCI_Stop_DMA();
+	
+	controlreg=GetControlreg();  
+	//set app start bit  
+//	controlreg=controlreg|DMASTART_BIT; 
+	controlreg=controlreg&~APPSTART_BIT; //clear appstart bit
+	error=WritePMTReg(CTRL_REG,controlreg);
 	
 	errChk(StopDAQThread(poolHandle));
 	CmtDiscardThreadPool(poolHandle);

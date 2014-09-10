@@ -58,12 +58,12 @@ const int 		UIPhotonCounterCtrls[] = {
 	CounterPan_NUM_STATUS ,
 	CounterPan_BTTN_FFRESET,
 	CounterPan_BTTN_RESET,
-	CounterPan_LED_DOOROPEN,
-	CounterPan_LED_FIFO_OVERFLOW,
-	CounterPan_LED_FIFO_AFULL,
-	CounterPan_LED_FIFO_QFULL,
-	CounterPan_LED_FIFO_EMPTY,
-	CounterPan_LED_FIFO_UNDER,
+	CounterPan_LED_DOOR_OPEN,
+//	CounterPan_LED_FIFO_OVERFLOW,
+//	CounterPan_LED_FIFO_AFULL,
+//	CounterPan_LED_FIFO_QFULL,
+//	CounterPan_LED_FIFO_EMPTY,
+//	CounterPan_LED_FIFO_UNDER,
 	CounterPan_LED_RUNNING ,
 	CounterPan_BTTN_TestMode
 };
@@ -375,7 +375,7 @@ static Channel_type* init_Channel_type (VUPhotonCtr_type* vupcInstance, int panH
 	if (!chan) return NULL;
 
 	chan->vupcInstance	= vupcInstance;
-	chan->VChan			= init_SourceVChan_type(VChanName, VCHAN_USHORT, chan, NULL, NULL);
+	chan->VChan			= init_SourceVChan_type(VChanName, VChan_Image, chan, NULL, NULL);
 	chan->chanIdx		= chanIdx;
 	chan->panHndl   	= panHndl;
 	chan->gain			= 0;
@@ -786,12 +786,12 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_STATUS, statreg);
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_COMMAND, controlreg);
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_RUNNING, statreg&RUNNING_BIT);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_UNDER, statreg&FFUNDRFL_BIT);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_EMPTY, statreg&FFEMPTY_BIT);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_QFULL, statreg&FFQFULL_BIT);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_AFULL, statreg&FFALMFULL_BIT);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_OVERFLOW, statreg&FFOVERFLOW_BIT);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_DOOROPEN, statreg&DOOROPEN_BIT);
+//	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_UNDER, statreg&FFUNDRFL_BIT);
+//	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_EMPTY, statreg&FFEMPTY_BIT);
+//	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_QFULL, statreg&FFQFULL_BIT);
+//	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_AFULL, statreg&FFALMFULL_BIT);
+//	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_OVERFLOW, statreg&FFOVERFLOW_BIT);
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_DOOR_OPEN, statreg&DOOROPEN_BIT);
 
 	for(i=0;i<MAX_CHANNELS;i++)  {
 		if(vupc->channels[i]) {
@@ -1092,6 +1092,8 @@ static int CVICALLBACK VUPCPhotonCounter_CB (int panel, int control, int event, 
 				case CounterPan_TOGGLESTART:
 					// temporary to test photon counting controller
 					GetCtrlVal(panel,control,&start);
+					//test
+					SetTaskControlModuleData (vupc->taskController,vupc); 
 					if (start) TaskControlEvent(vupc->taskController, TASK_EVENT_START, NULL, NULL);
 					else {
 						//stop iteration in continuous mode?

@@ -22,15 +22,20 @@
 
 //==============================================================================
 // Constants
-			 //instrument registers
-#define	 CTRL_REG		0x0000
-#define	 STAT_REG		0x0004
-#define	 VERS_REG		0x0008
-#define	 ERROR_REG		0x000C
-#define	 PMT1_CTRL_REG	0x0010
-#define	 PMT2_CTRL_REG	0x0014
-#define	 PMT3_CTRL_REG	0x0018
-#define	 PMT4_CTRL_REG	0x001C
+				 //instrument registers
+#define	 CTRL_REG		0x00B0		//0x0000
+#define	 STAT_REG		0x00B4		//0x0004
+#define	 VERS_REG		0x00B8		//0x0008
+#define	 ERROR_REG		0x00BC		//0x000C
+#define	 PMT1_CTRL_REG	0x00C0		//0x0010
+#define	 PMT2_CTRL_REG	0x00C4		//0x0014
+#define	 PMT3_CTRL_REG	0x00C8		//0x0018
+#define	 PMT4_CTRL_REG	0x00CC		//0x001C
+			 
+#define	 USCTRL			0x0048      //control of DMA tranaction		 
+#define	 MRDCC_REG		0x0074      //resets MRd channel
+#define	 TLTXC_REG		0x0078      //resets Tx module
+#define	 EBCR_REG		0x0090      //resets FIFO   
 		
 		//control register bits
 #define	APPSTART_BIT	0x00000001

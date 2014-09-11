@@ -64,12 +64,13 @@
 
 //========================================================================================================================================================================================================
 // Types
+typedef struct NIDAQmxManager 	NIDAQmxManager_type; 
 
 // Ranges for DAQmx IO, stored as pairs of low value and high value, e.g. -10 V, 10 V or -1 mA, 1 mA
 typedef struct {
-	int 				Nrngs;   					// number of ranges
-	double* 			low;  						// low value 
-	double* 			high; 						// high value
+	int 					Nrngs;   					// number of ranges
+	double* 				low;  						// low value 
+	double* 				high; 						// high value
 } IORange_type;
 
 //--------------------------
@@ -261,107 +262,107 @@ typedef enum {
 
 // AI
 typedef struct {
-	char* 				physChanName;				// Physical channel name, e.g. dev1/ai0
-	ListType			supportedMeasTypes;			// List of int type. Indicates the measurement types supported by the channel.
-	int					terminalCfg;				// List of bitfield terminal configurations supported by the channel.
-	IORange_type* 		Vrngs;      				// Ranges for voltage input  [V]
-	IORange_type* 		Irngs;      				// Ranges for current input  [A]
-	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+	char* 					physChanName;				// Physical channel name, e.g. dev1/ai0
+	ListType				supportedMeasTypes;			// List of int type. Indicates the measurement types supported by the channel.
+	int						terminalCfg;				// List of bitfield terminal configurations supported by the channel.
+	IORange_type* 			Vrngs;      				// Ranges for voltage input  [V]
+	IORange_type* 			Irngs;      				// Ranges for current input  [A]
+	BOOL					inUse;						// True if channel is in use by a Task, False otherwise
 } AIChannel_type;
 
 // AO
 typedef struct {
-	char* 				physChanName;				// Physical channel name, e.g. dev1/ao0
-	ListType			supportedOutputTypes;		// List of int type. Indicates the output types supported by the channel.
-	int					terminalCfg;				// List of bitfield terminal configurations supported by the channel.
-	IORange_type* 		Vrngs;      				// Ranges for voltage output  [V]
-	IORange_type* 		Irngs;      				// Ranges for current output  [A]
-	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+	char* 					physChanName;				// Physical channel name, e.g. dev1/ao0
+	ListType				supportedOutputTypes;		// List of int type. Indicates the output types supported by the channel.
+	int						terminalCfg;				// List of bitfield terminal configurations supported by the channel.
+	IORange_type* 			Vrngs;      				// Ranges for voltage output  [V]
+	IORange_type* 			Irngs;      				// Ranges for current output  [A]
+	BOOL					inUse;						// True if channel is in use by a Task, False otherwise
 } AOChannel_type;
 
 // DI Line
 typedef struct {
-	char* 				physChanName;				// Physical channel name, e.g. dev1/port0/line0
-	ListType			sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital input.
-	BOOL				sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital input physical channel.
-	BOOL				changeDetectSupported;		// Indicates if the change detection timing type is supported for the digital input physical channel.
-	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+	char* 					physChanName;				// Physical channel name, e.g. dev1/port0/line0
+	ListType				sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital input.
+	BOOL					sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital input physical channel.
+	BOOL					changeDetectSupported;		// Indicates if the change detection timing type is supported for the digital input physical channel.
+	BOOL					inUse;						// True if channel is in use by a Task, False otherwise
 } DILineChannel_type;
 
 // DI Port
 typedef struct {
-	char* 				physChanName;				// Physical channel name, e.g. dev1/port0
-	ListType			sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital input.
-	BOOL				sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital input physical channel.
-	BOOL				changeDetectSupported;		// Indicates if the change detection timing type is supported for the digital input physical channel.
-	unsigned int		portWidth;					// Indicates in bits the width of digital input port.
-	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+	char* 					physChanName;				// Physical channel name, e.g. dev1/port0
+	ListType				sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital input.
+	BOOL					sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital input physical channel.
+	BOOL					changeDetectSupported;		// Indicates if the change detection timing type is supported for the digital input physical channel.
+	unsigned int			portWidth;					// Indicates in bits the width of digital input port.
+	BOOL					inUse;						// True if channel is in use by a Task, False otherwise
 } DIPortChannel_type;
 
 // DO Line
 typedef struct {
-	char* 				physChanName;				// Physical channel name, e.g. dev1/port0/line0
-	BOOL				sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital output physical channel.
-	ListType			sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital output.
-	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+	char* 					physChanName;				// Physical channel name, e.g. dev1/port0/line0
+	BOOL					sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital output physical channel.
+	ListType				sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital output.
+	BOOL					inUse;						// True if channel is in use by a Task, False otherwise
 } DOLineChannel_type;
 
 // DO Port
 typedef struct {
-	char* 				physChanName;				// Physical channel name, e.g. dev1/port0
-	BOOL				sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital output physical channel.
-	ListType			sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital output.
-	unsigned int		portWidth;					// Indicates in bits the width of digital output port.
-	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+	char* 					physChanName;				// Physical channel name, e.g. dev1/port0
+	BOOL					sampClkSupported;			// Indicates if the sample clock timing type is supported for the digital output physical channel.
+	ListType				sampModes;					// List of int type. Indicates the sample modes supported by devices that support sample clocked digital output.
+	unsigned int			portWidth;					// Indicates in bits the width of digital output port.
+	BOOL					inUse;						// True if channel is in use by a Task, False otherwise
 } DOPortChannel_type;
 
 // CI
 typedef struct {
-	char* 				physChanName;				// Physical channel name, e.g. dev1/ctr0
-	ListType			supportedMeasTypes;			// Indicates the measurement types supported by the channel.
-	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+	char* 					physChanName;				// Physical channel name, e.g. dev1/ctr0
+	ListType				supportedMeasTypes;			// Indicates the measurement types supported by the channel.
+	BOOL					inUse;						// True if channel is in use by a Task, False otherwise
 } CIChannel_type;
 
 // CO
 typedef struct {
-	char* 				physChanName;				// Physical channel name, e.g. dev1/ctr0
-	ListType			supportedOutputTypes;		// Indicates the output types supported by the channel.
-	BOOL				inUse;						// True if channel is in use by a Task, False otherwise
+	char* 					physChanName;				// Physical channel name, e.g. dev1/ctr0
+	ListType				supportedOutputTypes;		// Indicates the output types supported by the channel.
+	BOOL					inUse;						// True if channel is in use by a Task, False otherwise
 } COChannel_type;
 
 // DAQ device parameters
 typedef struct {
-	char*        		name;    	   				// Device name.
-	char*        		type;    	   				// Indicates the product name of the device.
-	unsigned int		productNum;					// unique product number
-	unsigned int		serial;       				// device serial number
-	double       		AISCmaxrate;  				// Single channel AI max rate   [Hz]
-	double       		AIMCmaxrate;  				// Multiple channel AI max rate [Hz]
-	double       		AIminrate;    				// AI minimum rate              [Hz]
-	double       		AOmaxrate;    				// AO maximum rate              [Hz]
-	double       		AOminrate;    				// AO minimum rate              [Hz]
-	double       		DImaxrate;    				// DI maximum rate              [Hz]
-	double       		DOmaxrate;    				// DO maximum rate              [Hz]
-	ListType     		AIchan;       				// List of AIChannel_type*
-	ListType     		AOchan;	   					// List of AOChannel_type*
-	ListType     		DIlines;      				// List of DILineChannel_type*
-	ListType     		DIports;      				// List of DIPortChannel_type*
-	ListType     		DOlines;      				// List of DOLineChannel_type*
-	ListType     		DOports;      				// List of DOPortChannel_type*
-	ListType     		CIchan;	   					// List of CIChannel_type*
-	ListType     		COchan;	   					// List of COChannel_type*
-	BOOL				AnalogTriggering;			// Indicates if the device supports analog triggering.
-	BOOL				DigitalTriggering;			// Indicates if the device supports digital triggering.
-	int					AITriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_AI_TrigUsage device attribute for bitfield info.
-	int					AOTriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_AO_TrigUsage device attribute for bitfield info.
-	int					DITriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_DI_TrigUsage device attribute for bitfield info.
-	int					DOTriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_DO_TrigUsage device attribute for bitfield info.
-	int					CITriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_CI_TrigUsage device attribute for bitfield info.
-	int					COTriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_CO_TrigUsage device attribute for bitfield info.
-	ListType			AISupportedMeasTypes;		// List of int type. Indicates the measurement types supported by the physical channels of the device for analog input.
-	ListType			AOSupportedOutputTypes;		// List of int type. Indicates the generation types supported by the physical channels of the device for analog output.
-	ListType			CISupportedMeasTypes;		// List of int type. Indicates the generation types supported by the physical channels of the device for counter input.
-	ListType			COSupportedOutputTypes;		// List of int type. Indicates the generation types supported by the physical channels of the device for counter output.
+	char*        			name;    	   				// Device name.
+	char*        			type;    	   				// Indicates the product name of the device.
+	unsigned int			productNum;					// unique product number
+	unsigned int			serial;       				// device serial number
+	double       			AISCmaxrate;  				// Single channel AI max rate   [Hz]
+	double       			AIMCmaxrate;  				// Multiple channel AI max rate [Hz]
+	double       			AIminrate;    				// AI minimum rate              [Hz]
+	double       			AOmaxrate;    				// AO maximum rate              [Hz]
+	double       			AOminrate;    				// AO minimum rate              [Hz]
+	double       			DImaxrate;    				// DI maximum rate              [Hz]
+	double       			DOmaxrate;    				// DO maximum rate              [Hz]
+	ListType     			AIchan;       				// List of AIChannel_type*
+	ListType     			AOchan;	   					// List of AOChannel_type*
+	ListType     			DIlines;      				// List of DILineChannel_type*
+	ListType     			DIports;      				// List of DIPortChannel_type*
+	ListType     			DOlines;      				// List of DOLineChannel_type*
+	ListType     			DOports;      				// List of DOPortChannel_type*
+	ListType     			CIchan;	   					// List of CIChannel_type*
+	ListType     			COchan;	   					// List of COChannel_type*
+	BOOL					AnalogTriggering;			// Indicates if the device supports analog triggering.
+	BOOL					DigitalTriggering;			// Indicates if the device supports digital triggering.
+	int						AITriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_AI_TrigUsage device attribute for bitfield info.
+	int						AOTriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_AO_TrigUsage device attribute for bitfield info.
+	int						DITriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_DI_TrigUsage device attribute for bitfield info.
+	int						DOTriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_DO_TrigUsage device attribute for bitfield info.
+	int						CITriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_CI_TrigUsage device attribute for bitfield info.
+	int						COTriggerUsage;				// List of bitfields with trigger usage. See DAQmx_Dev_CO_TrigUsage device attribute for bitfield info.
+	ListType				AISupportedMeasTypes;		// List of int type. Indicates the measurement types supported by the physical channels of the device for analog input.
+	ListType				AOSupportedOutputTypes;		// List of int type. Indicates the generation types supported by the physical channels of the device for analog output.
+	ListType				CISupportedMeasTypes;		// List of int type. Indicates the generation types supported by the physical channels of the device for counter input.
+	ListType				COSupportedOutputTypes;		// List of int type. Indicates the generation types supported by the physical channels of the device for counter output.
 } DevAttr_type;
 
 // Terminal type bit fields
@@ -376,11 +377,11 @@ typedef enum {
 
 // Terminal type
 typedef enum {
-	Terminal_None 		= 0, 								// no terminal 
-	Terminal_Diff 		= DAQmx_Val_Diff,					// differential 
-	Terminal_RSE 		= DAQmx_Val_RSE,					// referenced single-ended 
-	Terminal_NRSE 		= DAQmx_Val_NRSE,					// non-referenced single-ended
-	Terminal_PseudoDiff = DAQmx_Val_PseudoDiff				// pseudo-differential
+	Terminal_None 			= 0, 						// no terminal 
+	Terminal_Diff 			= DAQmx_Val_Diff,			// differential 
+	Terminal_RSE 			= DAQmx_Val_RSE,			// referenced single-ended 
+	Terminal_NRSE 			= DAQmx_Val_NRSE,			// non-referenced single-ended
+	Terminal_PseudoDiff 	= DAQmx_Val_PseudoDiff		// pseudo-differential
 } Terminal_type;
 
 // Trigger types
@@ -393,13 +394,13 @@ typedef enum {
 } Trig_type;
 
 typedef enum {
-	TrigWnd_Entering	= DAQmx_Val_EnteringWin,	// Entering window
-	TrigWnd_Leaving		= DAQmx_Val_LeavingWin		// Leaving window
-} TrigWndCond_type;									// Window trigger condition for analog triggering.
+	TrigWnd_Entering		= DAQmx_Val_EnteringWin,	// Entering window
+	TrigWnd_Leaving			= DAQmx_Val_LeavingWin		// Leaving window
+} TrigWndCond_type;										// Window trigger condition for analog triggering.
 
 typedef enum {
-	TrigSlope_Rising	=  DAQmx_Val_Rising,
-	TrigSlope_Falling	=  DAQmx_Val_Falling
+	TrigSlope_Rising		=  DAQmx_Val_Rising,
+	TrigSlope_Falling		=  DAQmx_Val_Falling
 } TrigSlope_type;									// For analog and digital edge trigger type
 
 typedef enum {
@@ -409,140 +410,140 @@ typedef enum {
 
 // Measurement mode
 typedef enum{
-	MeasFinite	= DAQmx_Val_FiniteSamps,
-	MeasCont	= DAQmx_Val_ContSamps
+	MeasFinite				= DAQmx_Val_FiniteSamps,
+	MeasCont				= DAQmx_Val_ContSamps
 } MeasMode_type; 
 
 typedef struct {
-	MeasMode_type 		measMode;      				// Measurement mode: finite or continuous.
-	double       		sampleRate;    				// Sampling rate in [Hz] if device task settings is used as reference.
-	size_t        		nSamples;	    			// Total number of samples to be acquired in case of a finite recording if device task settings is used as reference.
-	size_t*				refNSamples;				// Points to either device or VChan-based number of samples to acquire. By default points to device.
-	double*				refSampleRate;				// Points to either device or VChan-based sampling rate. By default points to device.
-	size_t        		blockSize;     				// Number of samples for reading after which callbacks are called.
-	char*         		sampClkSource; 				// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
-	SampClockEdge_type 	sampClkEdge;   				// Sample clock active edge.
-	char*         		refClkSource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
-	double        		refClkFreq;    				// Reference clock frequency if such a clock is used.
-	BOOL				useRefNSamples;				// The number of samples to be acquired by this module is taken from the connecting VChan.
-	BOOL				useRefSamplingRate;			// The sampling rate used by this module is taken from the connecting VChan.
+	MeasMode_type 			measMode;      				// Measurement mode: finite or continuous.
+	double       			sampleRate;    				// Sampling rate in [Hz] if device task settings is used as reference.
+	size_t        			nSamples;	    			// Total number of samples to be acquired in case of a finite recording if device task settings is used as reference.
+	size_t*					refNSamples;				// Points to either device or VChan-based number of samples to acquire. By default points to device.
+	double*					refSampleRate;				// Points to either device or VChan-based sampling rate. By default points to device.
+	size_t        			blockSize;     				// Number of samples for reading after which callbacks are called.
+	char*         			sampClkSource; 				// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
+	SampClockEdge_type 		sampClkEdge;   				// Sample clock active edge.
+	char*         			refClkSource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
+	double        			refClkFreq;    				// Reference clock frequency if such a clock is used.
+	BOOL					useRefNSamples;				// The number of samples to be acquired by this module is taken from the connecting VChan.
+	BOOL					useRefSamplingRate;			// The sampling rate used by this module is taken from the connecting VChan.
 } TaskTiming_type;
 	
 typedef struct {
-	Trig_type 			trigType;					// Trigger type.
-	char*     			trigSource;   				// Trigger source.
-	double*				samplingRate;				// Reference to task sampling rate in [Hz]
-	TrigSlope_type		slope;     					// For analog and digital edge trig type.
-	double   			level; 						// For analog edge trigger.
-	double    			wndTop; 	   				// For analog window trigger.
-	double   			wndBttm;   					// For analog window trigger.
-	TrigWndCond_type	wndTrigCond;  				// For analog window trigger.
-	size_t				nPreTrigSamples;			// For reference type trigger. Number of pre-trigger samples to acquire.
-	int					trigSlopeCtrlID;			// Trigger setting control copy IDs
-	int					trigSourceCtrlID;			// Trigger setting control copy IDs
-	int					preTrigDurationCtrlID;		// Trigger setting control copy IDs
-	int					preTrigNSamplesCtrlID;		// Trigger setting control copy IDs
-	int					levelCtrlID;				// Trigger setting control copy IDs
-	int					windowTrigCondCtrlID;		// Trigger setting control copy IDs
-	int					windowTopCtrlID;			// Trigger setting control copy IDs
-	int					windowBottomCtrlID;			// Trigger setting control copy IDs
+	Trig_type 				trigType;					// Trigger type.
+	char*     				trigSource;   				// Trigger source.
+	double*					samplingRate;				// Reference to task sampling rate in [Hz]
+	TrigSlope_type			slope;     					// For analog and digital edge trig type.
+	double   				level; 						// For analog edge trigger.
+	double    				wndTop; 	   				// For analog window trigger.
+	double   				wndBttm;   					// For analog window trigger.
+	TrigWndCond_type		wndTrigCond;  				// For analog window trigger.
+	size_t					nPreTrigSamples;			// For reference type trigger. Number of pre-trigger samples to acquire.
+	int						trigSlopeCtrlID;			// Trigger setting control copy IDs
+	int						trigSourceCtrlID;			// Trigger setting control copy IDs
+	int						preTrigDurationCtrlID;		// Trigger setting control copy IDs
+	int						preTrigNSamplesCtrlID;		// Trigger setting control copy IDs
+	int						levelCtrlID;				// Trigger setting control copy IDs
+	int						windowTrigCondCtrlID;		// Trigger setting control copy IDs
+	int						windowTopCtrlID;			// Trigger setting control copy IDs
+	int						windowBottomCtrlID;			// Trigger setting control copy IDs
 } TaskTrig_type;
 
 typedef struct ChanSet	ChanSet_type;
 typedef void (*DiscardChanSetFptr_type) (ChanSet_type** chanSet);
 struct ChanSet {
 	//DATA
-	char*						name;						// Full physical channel name used by DAQmx, e.g. Dev1/ai1 
-	Channel_type				chanType;					// Channel type.
-	int							chanPanHndl;				// Panel handle where channel properties are adjusted
-	TaskHandle					taskHndl;					// Only for counter type channels. Each counter requires a separate task.
-	TaskTrig_type* 				startTrig;     				// Only for counter type channels. Task start trigger type. If NULL then there is no start trigger.
-	TaskTrig_type* 				referenceTrig;     			// Only for counter type channels. Task reference trigger type. If NULL then there is no reference trigger.
-	SourceVChan_type*			srcVChan;					// Source VChan assigned to input type physical channels. Otherwise NULL.
-	SinkVChan_type*				sinkVChan;					// Sink VChan assigned to output type physical channels. Otherwise NULL.
-	BOOL						onDemand;					// If TRUE, the channel is updated/read out using software-timing.
+	char*						name;					// Full physical channel name used by DAQmx, e.g. Dev1/ai1 
+	Channel_type				chanType;				// Channel type.
+	int							chanPanHndl;			// Panel handle where channel properties are adjusted
+	TaskHandle					taskHndl;				// Only for counter type channels. Each counter requires a separate task.
+	TaskTrig_type* 				startTrig;     			// Only for counter type channels. Task start trigger type. If NULL then there is no start trigger.
+	TaskTrig_type* 				referenceTrig;     		// Only for counter type channels. Task reference trigger type. If NULL then there is no reference trigger.
+	SourceVChan_type*			srcVChan;				// Source VChan assigned to input type physical channels. Otherwise NULL.
+	SinkVChan_type*				sinkVChan;				// Sink VChan assigned to output type physical channels. Otherwise NULL.
+	BOOL						onDemand;				// If TRUE, the channel is updated/read out using software-timing.
 	// METHODS
-	DiscardChanSetFptr_type		discardFptr;				// Function pointer to discard specific channel data that is derived from this base class.					
+	DiscardChanSetFptr_type		discardFptr;			// Function pointer to discard specific channel data that is derived from this base class.					
 };
 
 // Analog Input & Output channel type settings
 typedef struct {
-	ChanSet_type		baseClass;					// Channel settings common to all channel types.
-	AIChannel_type*		aiChanAttr;					// If AI channel, this points to channel attributes, otherwise this is NULL.
-	AOChannel_type*		aoChanAttr;					// If AO channel, this points to channel attributes, otherwise this is NULL.
-	double        		Vmax;      					// Maximum voltage [V]
-	double        		Vmin;       				// Minimum voltage [V]
-	Terminal_type 		terminal;   				// Terminal type 	
+	ChanSet_type			baseClass;					// Channel settings common to all channel types.
+	AIChannel_type*			aiChanAttr;					// If AI channel, this points to channel attributes, otherwise this is NULL.
+	AOChannel_type*			aoChanAttr;					// If AO channel, this points to channel attributes, otherwise this is NULL.
+	double        			Vmax;      					// Maximum voltage [V]
+	double        			Vmin;       				// Minimum voltage [V]
+	Terminal_type 			terminal;   				// Terminal type 	
 } ChanSet_AIAO_Voltage_type;
 
 typedef enum {
-	ShuntResistor_Internal = DAQmx_Val_Internal,	// Use the internal shunt resistor for current measurements.
-	ShuntResistor_External = DAQmx_Val_External		// Use an external shunt resistor for current measurement.
+	ShuntResistor_Internal 	= DAQmx_Val_Internal,		// Use the internal shunt resistor for current measurements.
+	ShuntResistor_External 	= DAQmx_Val_External		// Use an external shunt resistor for current measurement.
 } ShuntResistor_type;
 
 typedef struct {
-	ChanSet_type		baseClass;					// Channel settings common to all channel types.
-	double        		Imax;      					// Maximum voltage [A]
-	double        		Imin;       				// Minimum voltage [A]
-	ShuntResistor_type	shuntResistorType;
-	double				shuntResistorValue;			// If shuntResistorType = ShuntResistor_External, this gives the value of the shunt resistor in [Ohms] 
-	Terminal_type 		terminal;   				// Terminal type 	
+	ChanSet_type			baseClass;					// Channel settings common to all channel types.
+	double        			Imax;      					// Maximum voltage [A]
+	double        			Imin;       				// Minimum voltage [A]
+	ShuntResistor_type		shuntResistorType;
+	double					shuntResistorValue;			// If shuntResistorType = ShuntResistor_External, this gives the value of the shunt resistor in [Ohms] 
+	Terminal_type 			terminal;   				// Terminal type 	
 } ChanSet_AIAO_Current_type;
 
 
 // Digital Line/Port Input & Digital Line/Port Output channel type settings
 typedef struct {
-	ChanSet_type		baseClass;					// Channel settings common to all channel types.
-	BOOL 				invert;    					// invert polarity (for ports the polarity is inverted for all lines
+	ChanSet_type			baseClass;					// Channel settings common to all channel types.
+	BOOL 					invert;    					// invert polarity (for ports the polarity is inverted for all lines
 } ChanSet_DIDO_type;
 
 // Counter Input for Counting Edges, channel type settings
 typedef struct {
-	ChanSet_type		baseClass;					// Channel settings common to all channel types.
-	BOOL 				ActiveEdge; 				// 0 - Falling, 1 - Rising
-	int 				initialCount;				// value to start counting from
+	ChanSet_type			baseClass;					// Channel settings common to all channel types.
+	BOOL 					ActiveEdge; 				// 0 - Falling, 1 - Rising
+	int 					initialCount;				// value to start counting from
 	enum {
 		C_UP, 
 		C_DOWN, 
 		C_EXT
-	} 					countDirection; 				// count direction, C_EXT = externally controlled
+	} 						countDirection; 			// count direction, C_EXT = externally controlled
 } CIEdgeChanSet_type;
 
 // Counter Input for measuring the frequency of a digital signal
 typedef enum {
-	Edge_Rising			=  DAQmx_Val_Rising,
-	Edge_Falling		=  DAQmx_Val_Falling
+	Edge_Rising				=  DAQmx_Val_Rising,
+	Edge_Falling			=  DAQmx_Val_Falling
 } Edge_type;
 
 typedef enum {
-	Meas_LowFreq1Ctr	= DAQmx_Val_LowFreq1Ctr,	// Use one counter that uses a constant timebase to measure the input signal.
-	Meas_HighFreq2Ctr	= DAQmx_Val_HighFreq2Ctr,	// Use two counters, one of which counts pulses of the signal to measure during the specified measurement time.
-	Meas_LargeRng2Ctr	= DAQmx_Val_LargeRng2Ctr    // Use one counter to divide the frequency of the input signal to create a lower-frequency signal 
-						  							// that the second counter can more easily measure.
+	Meas_LowFreq1Ctr		= DAQmx_Val_LowFreq1Ctr,	// Use one counter that uses a constant timebase to measure the input signal.
+	Meas_HighFreq2Ctr		= DAQmx_Val_HighFreq2Ctr,	// Use two counters, one of which counts pulses of the signal to measure during the specified measurement time.
+	Meas_LargeRng2Ctr		= DAQmx_Val_LargeRng2Ctr    // Use one counter to divide the frequency of the input signal to create a lower-frequency signal 
+						  								// that the second counter can more easily measure.
 } MeasMethod_type;
 
 typedef struct {
-	ChanSet_type		baseClass;					// Channel settings common to all channel types.
-	double        		freqMax;      				// Maximum frequency expected to be measured [Hz]
-	double        		freqMin;       				// Minimum frequency expected to be measured [Hz]
-	Edge_type			edgeType;					// Specifies between which edges to measure the frequency or period of the signal.
-	MeasMethod_type		measMethod;					// The method used to calculate the period or frequency of the signal. 
-	double				measTime;					// The length of time to measure the frequency or period of a digital signal, when measMethod is DAQmx_Val_HighFreq2Ctr.
-													// Measurement accuracy increases with increased measurement time and with increased signal frequency.
-													// Caution: If you measure a high-frequency signal for too long a time, the count register could roll over, resulting in an incorrect measurement. 
-	unsigned int		divisor;					// The value by which to divide the input signal, when measMethod is DAQmx_Val_LargeRng2Ctr. The larger this value, the more accurate the measurement, 
-													// but too large a value can cause the count register to roll over, resulting in an incorrect measurement.
-	char*				freqInputTerminal;			// If other then default terminal assigned to the counter, otherwise this is NULL.
-	TaskTiming_type*	timing;						// Task timing info.
+	ChanSet_type			baseClass;					// Channel settings common to all channel types.
+	double        			freqMax;      				// Maximum frequency expected to be measured [Hz]
+	double        			freqMin;       				// Minimum frequency expected to be measured [Hz]
+	Edge_type				edgeType;					// Specifies between which edges to measure the frequency or period of the signal.
+	MeasMethod_type			measMethod;					// The method used to calculate the period or frequency of the signal. 
+	double					measTime;					// The length of time to measure the frequency or period of a digital signal, when measMethod is DAQmx_Val_HighFreq2Ctr.
+														// Measurement accuracy increases with increased measurement time and with increased signal frequency.
+														// Caution: If you measure a high-frequency signal for too long a time, the count register could roll over, resulting in an incorrect measurement. 
+	unsigned int			divisor;					// The value by which to divide the input signal, when measMethod is DAQmx_Val_LargeRng2Ctr. The larger this value, the more accurate the measurement, 
+														// but too large a value can cause the count register to roll over, resulting in an incorrect measurement.
+	char*					freqInputTerminal;			// If other then default terminal assigned to the counter, otherwise this is NULL.
+	TaskTiming_type*		timing;						// Task timing info.
 } ChanSet_CI_Frequency_type;
 
 // Counter Output channel type settings
 typedef struct {
-	ChanSet_type		baseClass;					// Channel settings common to all channel types.
-	double 				hightime;   				// the time the pulse stays high [s]
-	double 				lowtime;    				// the time the pulse stays low [s]
-	double 				initialdel; 				// initial delay [s]
-	BOOL 				idlestate;    				// LOW = 0, HIGH = 1 - terminal state at rest, pulses switch this to the oposite state
+	ChanSet_type			baseClass;					// Channel settings common to all channel types.
+	double 					hightime;   				// the time the pulse stays high [s]
+	double 					lowtime;    				// the time the pulse stays low [s]
+	double 					initialdel; 				// initial delay [s]
+	BOOL 					idlestate;    				// LOW = 0, HIGH = 1 - terminal state at rest, pulses switch this to the oposite state
 } COChanSet_type;
 	
 //--------------------
@@ -558,7 +559,7 @@ typedef enum {
 	DAQmxDigital,
 	DAQmxCounter,
 	DAQmxTEDS
-} DAQmxIOMode_type;									// not used
+} DAQmxIOMode_type;										// not used
 
 typedef enum {
 	DAQmxDigLines,
@@ -567,98 +568,98 @@ typedef enum {
 
 // Used for continuous AO streaming
 typedef struct {
-	size_t        		writeblock;        			// Size of writeblock is IO_block_size
-	size_t        		numchan;           			// Number of output channels
+	size_t        			writeblock;        			// Size of writeblock is IO_block_size
+	size_t        			numchan;           			// Number of output channels
 	
-	float64**     		datain;            
-	float64**     		databuff;
-	float64*      		dataout;					// Array length is writeblock * numchan used for DAQmx write call, data is grouped by channel
-	SinkVChan_type**	sinkVChans;					// Array of SinkVChan_type*
+	float64**     			datain;            
+	float64**     			databuff;
+	float64*      			dataout;					// Array length is writeblock * numchan used for DAQmx write call, data is grouped by channel
+	SinkVChan_type**		sinkVChans;					// Array of SinkVChan_type*
 	
-	size_t*       		datain_size; 
-	size_t*      		databuff_size;
+	size_t*       			datain_size; 
+	size_t*      			databuff_size;
 	
-	size_t*       		idx;						// Array of pointers with index for each channel from which to continue writing data (not used yet)  
-	size_t*       		datain_repeat;	 			// Number of times to repeat the an entire data packet
-	size_t*      		datain_remainder;  			// Number of elements from the beginning of the data packet to still generate, 
-									 				// WARNING: this does not apply when looping is ON. In this case when receiving a new data packet, a full cycle is generated before switching.
+	size_t*       			idx;						// Array of pointers with index for each channel from which to continue writing data (not used yet)  
+	size_t*       			datain_repeat;	 			// Number of times to repeat the an entire data packet
+	size_t*      			datain_remainder;  			// Number of elements from the beginning of the data packet to still generate, 
+									 					// WARNING: this does not apply when looping is ON. In this case when receiving a new data packet, a full cycle is generated before switching.
 	
-	BOOL*         		datain_loop;	   			// Data will be looped regardless of repeat value until new data packet is provided
+	BOOL*         			datain_loop;	   			// Data will be looped regardless of repeat value until new data packet is provided
 } WriteAOData_type;
 
 // AI and AO
 typedef struct {
-	int					panHndl;					// Panel handle to task settings.
-	TaskHandle			taskHndl;					// DAQmx task handle for hw-timed AI or AO.
-	ListType 			chanSet;     				// Channel settings. Of ChanSet_type*
-	double        		timeout;       				// Task timeout [s]
-	TaskTrig_type* 		startTrig;     				// Task start trigger type. If NULL then there is no start trigger.
-	TaskTrig_type* 		referenceTrig;     			// Task reference trigger type. If NULL then there is no reference trigger.
-	WriteAOData_type*	writeAOData;				// Used for continuous AO streaming 
-	TaskTiming_type*	timing;						// Task timing info
+	int						panHndl;					// Panel handle to task settings.
+	TaskHandle				taskHndl;					// DAQmx task handle for hw-timed AI or AO.
+	ListType 				chanSet;     				// Channel settings. Of ChanSet_type*
+	double        			timeout;       				// Task timeout [s]
+	TaskTrig_type* 			startTrig;     				// Task start trigger type. If NULL then there is no start trigger.
+	TaskTrig_type* 			referenceTrig;     			// Task reference trigger type. If NULL then there is no reference trigger.
+	WriteAOData_type*		writeAOData;				// Used for continuous AO streaming 
+	TaskTiming_type*		timing;						// Task timing info
 } AIAOTaskSet_type;
 
 // DI and DO
 typedef struct {
-	int					panHndl;					// Panel handle to task settings.
-	TaskHandle			taskHndl;					// DAQmx task handle for hw-timed DI and DO.
-	ListType 			chanSet;     				// Channel settings. Of ChanSet_type*
-	double        		timeout;       				// Task timeout [s]
-	TaskTrig_type* 		startTrig;     				// Task start trigger type. If NULL then there is no start trigger.
-	TaskTrig_type* 		referenceTrig;     			// Task reference trigger type. If NULL then there is no reference trigger.
-	TaskTiming_type*	timing;						// Task timing info
+	int						panHndl;					// Panel handle to task settings.
+	TaskHandle				taskHndl;					// DAQmx task handle for hw-timed DI and DO.
+	ListType 				chanSet;     				// Channel settings. Of ChanSet_type*
+	double        			timeout;       				// Task timeout [s]
+	TaskTrig_type* 			startTrig;     				// Task start trigger type. If NULL then there is no start trigger.
+	TaskTrig_type* 			referenceTrig;     			// Task reference trigger type. If NULL then there is no reference trigger.
+	TaskTiming_type*		timing;						// Task timing info
 } DIDOTaskSet_type;
 
 // CI
 typedef struct {
 	// DAQmx task handles are specified per counter channel within chanTaskSet
-	ListType 			chanTaskSet;   				// Channel and task settings. Of ChanSet_type*
-	double        		timeout;       				// Task timeout [s]
+	ListType 				chanTaskSet;   				// Channel and task settings. Of ChanSet_type*
+	double        			timeout;       				// Task timeout [s]
 } CITaskSet_type;
 
 // CO
 typedef struct {
 	// DAQmx task handles are specified per counter channel chanTaskSet
-	ListType 			chanTaskSet;     			// Channel and task settings. Of ChanSet_type*
-	double        		timeout;       				// Task timeout [s]
+	ListType 				chanTaskSet;     			// Channel and task settings. Of ChanSet_type*
+	double        			timeout;       				// Task timeout [s]
 } COTaskSet_type;
 
 // DAQ Task definition
 typedef struct {
-	int					devPanHndl;					// Panel handle to DAQmx task settings.
-	DevAttr_type*		attr;						// Device to be used during IO task
-	TaskControl_type*   taskController;				// Task Controller for the DAQmx module
-	AIAOTaskSet_type*	AITaskSet;					// AI task settings
-	AIAOTaskSet_type*	AOTaskSet;					// AO task settings
-	DIDOTaskSet_type*	DITaskSet;					// DI task settings
-	DIDOTaskSet_type*	DOTaskSet;					// DO task settings
-	CITaskSet_type*		CITaskSet;					// CI task settings
-	COTaskSet_type*		COTaskSet;					// CO task settings
+	NIDAQmxManager_type*	niDAQModule;				// Reference to the module that owns the DAQmx device. 
+	int						devPanHndl;					// Panel handle to DAQmx task settings.
+	DevAttr_type*			attr;						// Device to be used during IO task
+	TaskControl_type*   	taskController;				// Task Controller for the DAQmx module
+	AIAOTaskSet_type*		AITaskSet;					// AI task settings
+	AIAOTaskSet_type*		AOTaskSet;					// AO task settings
+	DIDOTaskSet_type*		DITaskSet;					// DI task settings
+	DIDOTaskSet_type*		DOTaskSet;					// DO task settings
+	CITaskSet_type*			CITaskSet;					// CI task settings
+	COTaskSet_type*			COTaskSet;					// CO task settings
 } Dev_type;
 
 //========================================================================================================================================================================================================
 // Module implementation
-typedef struct NIDAQmxManager 	NIDAQmxManager_type;
 
 struct NIDAQmxManager {
 	
 	// SUPER, must be the first member to inherit from
 	
-	DAQLabModule_type 	baseClass;
+	DAQLabModule_type 		baseClass;
 	
 	// DATA
 	
-	ListType            DAQmxDevices;   // list of Dev_type* for each DAQmx device 
+	ListType            	DAQmxDevices;   			// list of Dev_type* for each DAQmx device 
 	
 		//-------------------------
 		// UI
 		//-------------------------
 	
-	int					mainPanHndl;
-	int					taskSetPanHndl;
-	int					devListPanHndl;
-	int					menuBarHndl;
-	int					deleteDevMenuItemID;
+	int						mainPanHndl;
+	int						taskSetPanHndl;
+	int						devListPanHndl;
+	int						menuBarHndl;
+	int						deleteDevMenuItemID;
 	
 	
 	// METHODS 
@@ -673,7 +674,7 @@ static int	 currDev = -1;        // currently selected device from the DAQ table
 //========================================================================================================================================================================================================
 // Static functions
 
-static Dev_type* 					init_Dev_type 							(DevAttr_type** attr, char taskControllerName[]);
+static Dev_type* 					init_Dev_type 							(NIDAQmxManager_type* niDAQModule, DevAttr_type** attr, char taskControllerName[]);
 static void 						discard_Dev_type						(Dev_type** a);
 
 static int 							init_DevList 							(ListType devlist, int panHndl, int tableCtrl);
@@ -2168,6 +2169,9 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 		case Set_NSamples:
 			
 			GetCtrlVal(panel, control, &dev->AITaskSet->timing->nSamples);
+			// update duration
+			//SetCtrlVal(panel, Set_Duration, *dev->AITaskSet->timing->refSampleRate STILL A MESS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			// Decide on how to update various controls based on what is chosen as a reference, such as sampling rate
 			break;
 			
 		case Set_Duration:
@@ -2176,9 +2180,9 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			GetCtrlVal(panel, control, &duration);
 			
 			// calculate number of samples
-			*dev->AITaskSet->timing->refNSamples = (size_t)(*dev->AITaskSet->timing->refSampleRate * duration);
+			dev->AITaskSet->timing->nSamples = (size_t)(*dev->AITaskSet->timing->refSampleRate * duration);
 			// update display of number of samples
-			SetCtrlVal(panel, Set_NSamples, *dev->AITaskSet->timing->refNSamples); 
+			SetCtrlVal(panel, Set_NSamples, dev->AITaskSet->timing->nSamples); 
 			
 			break;
 			
@@ -2364,7 +2368,7 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	// return NULL if there are no channels using HW-timing
 	if (!nAO) return NULL;
 	
-	WriteAOData_type* 	a 				= malloc(sizeof(WriteAOData_type));
+	WriteAOData_type* 	a 			= malloc(sizeof(WriteAOData_type));
 	if (!a) return NULL;
 	
 	
@@ -2987,11 +2991,12 @@ Error:
 // Dev_type
 //------------------------------------------------------------------------------
 
-static Dev_type* init_Dev_type (DevAttr_type** attr, char taskControllerName[])
+static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type** attr, char taskControllerName[])
 {
 	Dev_type* dev = malloc (sizeof(Dev_type));
 	if (!dev) return NULL;
 	
+	dev -> niDAQModule			= niDAQModule;
 	dev -> devPanHndl			= 0;
 	dev -> attr					= *attr;
 	
@@ -4356,16 +4361,15 @@ static int RemoveDAQmxAIChannel_CB (int panel, int control, int event, void *cal
 			for (size_t i = 1; i <= nItems; i++) {	
 				chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 				if (*chanSetPtrPtr == aiChanPtr) {
+					// remove from framework
+					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtrPtr)->srcVChan);
+					// discard channel data structure
 					(*(*chanSetPtrPtr)->discardFptr)	(chanSetPtrPtr);
 					ListRemoveItem(dev->AITaskSet->chanSet, 0, chIdx);
 					break;
 				}
 				chIdx++;
 			}
-			
-			// remove VChan
-			
-			
 			
 			// remove channel tab
 			DeleteTabPage(panel, control, tabIdx, 1);
@@ -4424,16 +4428,17 @@ static int RemoveDAQmxAOChannel_CB (int panel, int control, int event, void *cal
 			for (size_t i = 1; i <= nItems; i++) {	
 				chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 				if (*chanSetPtrPtr == aoChanPtr) {
+					// remove from framework
+					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtrPtr)->sinkVChan);
+					// detach from Task Controller										 
+					RemoveSinkVChan(dev->taskController, (*chanSetPtrPtr)->sinkVChan);
+					// discard channel data structure
 					(*(*chanSetPtrPtr)->discardFptr)	(chanSetPtrPtr);
 					ListRemoveItem(dev->AOTaskSet->chanSet, 0, chIdx);
 					break;
 				}
 				chIdx++;
 			}
-			
-			// remove VChan
-			
-			
 			
 			// remove channel tab
 			DeleteTabPage(panel, control, tabIdx, 1);
@@ -4490,7 +4495,7 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					// copy device attributes
 					newDAQmxDevAttrPtr = copy_DevAttr_type(*(DevAttr_type**)ListGetPtrToItem(devList, currDev));
 					// add new DAQmx device to module list and framework
-					newDAQmxDev = init_Dev_type(&newDAQmxDevAttrPtr, newTCName);
+					newDAQmxDev = init_Dev_type(nidaq, &newDAQmxDevAttrPtr, newTCName);
 					ListInsertItem(nidaq->DAQmxDevices, &newDAQmxDev, END_OF_LIST);
 					ListInsertItem(nidaq->baseClass.taskControllers, &newDAQmxDev->taskController, END_OF_LIST);
 					newTCList = ListCreate(sizeof(TaskControl_type*));
@@ -4556,6 +4561,9 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					SetCtrlVal(newDAQmxDevPanHndl, TaskSetPan_Wait, GetTaskControlIterationsWait(newDAQmxDev->taskController));
 					// set mode
 					SetCtrlVal(newDAQmxDevPanHndl, TaskSetPan_Mode, !GetTaskControlMode(newDAQmxDev->taskController));
+					// configure Task Controller
+					TaskControlEvent(newDAQmxDev->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+					
 					// dim repeat if TC mode is continuous, otherwise undim
 					if (GetTaskControlMode(newDAQmxDev->taskController) == TASK_FINITE) 
 						// finite
@@ -4664,6 +4672,8 @@ Error:
 
 static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type ioMode, int ioType, char chName[])
 {
+	char* newVChanName;
+	
 	switch (ioVal) {
 		
 		case DAQmxAcquire: 
@@ -4671,6 +4681,14 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 			switch (ioMode) {
 			
 				case DAQmxAnalog:
+					
+					// try to use physical channel name for the VChan name, if it exists, then ask for another name
+					newVChanName= StrDup(chName);
+					if (DLVChanNameExists(newVChanName, NULL)) {
+						OKfree(newVChanName);
+						newVChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
+						if (!newVChanName) return 0;	// action cancelled
+					}
 					
 					//-------------------------------------------------
 					// if there is no AI task then create it and add UI
@@ -4941,20 +4959,14 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							newChan->Vmax = AIchanAttr->Vrngs->high[AIchanAttr->Vrngs->Nrngs - 1];
 							newChan->Vmin = AIchanAttr->Vrngs->low[AIchanAttr->Vrngs->Nrngs - 1];
 							
-							//--------------
-							// VChan
-							//--------------
-							
-							// try to use physical channel name for the VChan name, if it exists, then ask for another name
-							char* newVChanName = StrDup(chName);
-							if (DLVChanNameExists(newVChanName, NULL)) {
-								OKfree(newVChanName);
-								newVChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
-								if (!newVChanName) return 0;	// action cancelled
-							}
+							//--------------------------
+							// Create and register VChan
+							//--------------------------
 							
 							newChan->baseClass.srcVChan = init_SourceVChan_type(newVChanName, VChan_Waveform, newChan, VChanConnected, VChanDisconnected);  
-							OKfree(newVChanName);	
+							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.srcVChan);
+							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_VChanName, newVChanName);
+							OKfree(newVChanName);
 							
 							//---------------------------------------
 							// Add new AI channel to list of channels
@@ -4989,6 +5001,14 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 			switch (ioMode) {
 			
 				case DAQmxAnalog:
+					
+					// try to use physical channel name for the VChan name, if it exists, then ask for another name
+					newVChanName = StrDup(chName);
+					if (DLVChanNameExists(newVChanName, NULL)) {
+						OKfree(newVChanName);
+						newVChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
+						if (!newVChanName) return 0;	// action cancelled
+					}
 					
 					//-------------------------------------------------
 					// if there is no AO task then create it and add UI
@@ -5259,20 +5279,15 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							newChan->Vmax = AOchanAttr->Vrngs->high[AOchanAttr->Vrngs->Nrngs - 1];
 							newChan->Vmin = AOchanAttr->Vrngs->low[AOchanAttr->Vrngs->Nrngs - 1];
 							
-							//--------------
-							// VChan
-							//--------------
-							
-							// try to use physical channel name for the VChan name, if it exists, then ask for another name
-							char* newVChanName = StrDup(chName);
-							if (DLVChanNameExists(newVChanName, NULL)) {
-								OKfree(newVChanName);
-								newVChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
-								if (!newVChanName) return 0;	// action cancelled
-							}
+							//-------------------------------------------------------------
+							// Create and register VChan with Task Controller and framework
+							//-------------------------------------------------------------
 							
 							newChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, VChan_Waveform, newChan, VChanConnected, VChanDisconnected);  
-							OKfree(newVChanName);	
+							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.sinkVChan);
+							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_VChanName, newVChanName);
+							AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, TASK_VCHAN_FUNC_ITERATE); 
+							OKfree(newVChanName);
 							
 							//---------------------------------------
 							// Add new AO channel to list of channels
@@ -5470,7 +5485,7 @@ static FCallReturn_type* ConfigDAQmxDevice (Dev_type* dev)
 	// Configure CO DAQmx Task
 	if ((fCallReturn = ConfigDAQmxCOTask(dev)))		goto Error;
 	
-	return NULL;
+	return init_FCallReturn_type(0, "", "");;
 	
 Error:
 	ClearDAQmxTasks(dev);
@@ -5484,11 +5499,11 @@ static FCallReturn_type* ConfigDAQmxAITask (Dev_type* dev)
 	ChanSet_type** 		chanSetPtrPtr;
 	FCallReturn_type*	fCallReturn		= NULL;
 	
-	if (!dev->AOTaskSet) return NULL;	// do nothing
+	if (!dev->AITaskSet) return NULL; // do nothing
 	
 	// check if there is at least one AI task that requires HW-timing
-	BOOL hwTimingFlag = FALSE;
-	size_t	nItems = ListNumItems(dev->AITaskSet->chanSet);
+	BOOL 	hwTimingFlag 	= FALSE;
+	size_t	nItems 			= ListNumItems(dev->AITaskSet->chanSet);
 	for (size_t i = 1; i <= nItems; i++) {	
 		chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		if (!(*chanSetPtrPtr)->onDemand) {
@@ -5577,6 +5592,7 @@ static FCallReturn_type* ConfigDAQmxAITask (Dev_type* dev)
 			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *dev->AITaskSet->timing->refNSamples));
 			quot = *dev->AITaskSet->timing->refNSamples  / dev->AITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
+			if (!quot) quot = 1;
 			DAQmxErrChk(DAQmxCfgInputBuffer (dev->AITaskSet->taskHndl, dev->AITaskSet->timing->blockSize * quot));
 			break;
 				
@@ -5585,6 +5601,7 @@ static FCallReturn_type* ConfigDAQmxAITask (Dev_type* dev)
 			DAQmxGetBufferAttribute(dev->AITaskSet->taskHndl, DAQmx_Buf_Input_BufSize, &defaultBuffSize);
 			quot = defaultBuffSize / dev->AITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
+			if (!quot) quot = 1;
 			DAQmxErrChk(DAQmxCfgInputBuffer (dev->AITaskSet->taskHndl, dev->AITaskSet->timing->blockSize * quot));
 			break;
 	}
@@ -6853,7 +6870,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	readBuffer = malloc(nSamples * nAI * sizeof(float64));
 	if (!readBuffer) goto MemError;
 	
-	// read remainding samples from the AI buffer
+	// read remaining samples from the AI buffer
 	DAQmxErrChk(DAQmxReadAnalogF64(taskHandle, -1, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL));
 	
 	// forward data to Source VChans
@@ -6885,8 +6902,11 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	}
 	
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
-	if (DAQmxTasksDone(dev))
+	if (DAQmxTasksDone(dev)) {
+		// stop explicitly the Task
+		DAQmxStopTask(taskHandle);
 		TaskControlIterationDone(dev->taskController, 0, "");
+	}
 	
 	OKfree(readBuffer);
 	return 0;
@@ -7012,6 +7032,10 @@ static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const*
 	GetCtrlVal(daqDev->devPanHndl, TaskSetPan_Repeat, &nRepeat);
 	SetTaskControlIterations(daqDev->taskController, nRepeat);
 	
+	// reset current iteration display
+	SetCtrlVal(daqDev->devPanHndl, TaskSetPan_TotalIterations, 0);
+	
+	
 	return init_FCallReturn_type(0, "", "");
 }
 
@@ -7021,11 +7045,11 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	FCallReturn_type*   fCallReturn;
 	
 	// update iteration display
-	SetCtrlVal(daqDev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
+	SetCtrlVal(daqDev->devPanHndl, TaskSetPan_TotalIterations, currentIteration+1);
 	
 	// start all DAQmx Tasks
 	if ((fCallReturn = StartAllDAQmxTasks(daqDev)))
-		TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->retVal);
+		TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo);
 }
 
 static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abortFlag)
@@ -7082,7 +7106,7 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		// trigger panel
 		int 	trigPanHndl;
 		int		nTabs;
-		GetPanelHandleFromTabPage(daqDev->AITaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_TimingTabIdx, &trigPanHndl);
+		GetPanelHandleFromTabPage(daqDev->AITaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_TriggerTabIdx, &trigPanHndl);
 		GetNumTabPages(trigPanHndl, Trig_TrigSet, &nTabs);
 		for (size_t i = 0; i < nTabs; i++) {
 			GetPanelHandleFromTabPage(trigPanHndl, Trig_TrigSet, i, &panHndl);
@@ -7106,7 +7130,7 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		// trigger panel
 		int 	trigPanHndl;
 		int		nTabs;
-		GetPanelHandleFromTabPage(daqDev->AOTaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_TimingTabIdx, &trigPanHndl);
+		GetPanelHandleFromTabPage(daqDev->AOTaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_TriggerTabIdx, &trigPanHndl);
 		GetNumTabPages(trigPanHndl, Trig_TrigSet, &nTabs);
 		for (size_t i = 0; i < nTabs; i++) {
 			GetPanelHandleFromTabPage(trigPanHndl, Trig_TrigSet, i, &panHndl);

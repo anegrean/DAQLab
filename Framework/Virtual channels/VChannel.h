@@ -206,6 +206,9 @@ int 					init_DataPacket_type		(DataPacket_type* 			dataPacket,
 	// Discards the data from a data packet when it is not needed anymore
 void 					ReleaseDataPacket			(DataPacket_type* a);
 
+	// Releases all data packets in a Sink VChan
+int						ReleaseAllDataPackets		(SinkVChan_type* sinkVChan);
+
 	// Sends a data packet from a Source VChan to its Sink VChans
 FCallReturn_type* 		SendDataPacket 				(SourceVChan_type* source, DataPacket_type* dataPacket); 
 

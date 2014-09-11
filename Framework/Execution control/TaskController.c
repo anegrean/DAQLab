@@ -199,6 +199,9 @@ static void						disposeCmtTSQVChanEventInfo		(void* eventInfo);
 // Dims and undims recursively a Task Controller and all its SubTasks by calling the provided function pointer (i.e. dims/undims an entire Task Tree branch)
 static void						DimTaskTreeBranch 				(TaskControl_type* taskControl, TaskEvents_type event, BOOL dimmed);
 
+// Clears recursively all data packets from the Sink VChans of all Task Controllers in a Task Tree Branch starting with the given Task Controller.
+static void						ClearTaskTreeBranchVChans		(TaskControl_type* taskControl);
+
 //==============================================================================
 // Global variables
 
@@ -275,7 +278,6 @@ TaskControl_type* init_TaskControl_type(const char				taskControllerName[],
 	a -> currIterIdx			= 0;
 	a -> parenttask				= NULL;
 	a -> masterHWTrigTask		= NULL;
-	a -> moduleData				= NULL;
 	a -> logPtr					= NULL;
 	a -> errorMsg				= NULL;
 	a -> waitBetweenIterations	= 0;
@@ -720,11 +722,39 @@ static void	DimTaskTreeBranch (TaskControl_type* taskControl, TaskEvents_type ev
 	
 	// dim/undim
 	FunctionCall(taskControl, event, TASK_FCALL_DIM_UI, &dimmed); 
+	
 	size_t			nSubTasks = ListNumItems(taskControl->subtasks);
 	SubTask_type*	subTaskPtr;
-	for (size_t i = 1; i <= nSubTasks; i++) {
+	
+	for (size_t i = nSubTasks; i; i--) {
 		subTaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
 		DimTaskTreeBranch (subTaskPtr->subtask, event, dimmed);
+	}
+}
+
+void ClearAllSinkVChans	(TaskControl_type* taskControl)
+{
+	size_t						nVChans		= ListNumItems(taskControl->dataQs);
+	VChanCallbackData_type**	VChanCBDataPtr;
+	
+	for (size_t i = nVChans; i; i--) {
+		VChanCBDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
+		ReleaseAllDataPackets((*VChanCBDataPtr)->sinkVChan);
+	}
+}
+
+static void	ClearTaskTreeBranchVChans (TaskControl_type* taskControl)
+{
+	if (!taskControl) return;
+	
+	ClearAllSinkVChans(taskControl);
+	
+	size_t			nSubTasks	 = ListNumItems(taskControl->subtasks);
+	SubTask_type*	subTaskPtr;
+	
+	for (size_t i = nSubTasks; i; i--) {
+		subTaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+		ClearTaskTreeBranchVChans(subTaskPtr->subtask);
 	}
 }
 
@@ -2122,11 +2152,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
 					
 					//-------------------------------------------------------------------------------------------------------------------------
-					// If this is a Root Task Controller, i.e. it doesn't have a parent, then call dim UI function recursively for its SubTasks
+					// If this is a Root Task Controller, i.e. it doesn't have a parent, then: 
+					// - call dim UI function recursively for its SubTasks
+					// - clear data packets from SubTask Sink VChans recursively
 					//-------------------------------------------------------------------------------------------------------------------------
 					
-					if(!taskControl->parenttask) 
+					if(!taskControl->parenttask) {
+						ClearTaskTreeBranchVChans(taskControl);
 						DimTaskTreeBranch(taskControl, eventpacket.event, TRUE);
+					}
 					
 					break;
 					

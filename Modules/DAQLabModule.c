@@ -75,9 +75,16 @@ DAQLabModule_type* initalloc_DAQLabModule (DAQLabModule_type* mod, char classNam
 	mod->className			= StrDup(className);
 	mod->instanceName		= StrDup(instanceName);
 	mod->XMLNode			= 0;
+	mod->cfgPanHndl			= 0; 
+	//init
+	mod->taskControllers	= 0;
+	mod->VChans				= 0;
 	mod->taskControllers	= ListCreate(sizeof(TaskControl_type*));
-	if (!mod->taskControllers) {OKfree(mod->className); OKfree(mod->instanceName); OKfree(mod); return NULL;}
-	mod->cfgPanHndl			= 0;
+	if (!mod->taskControllers) 	goto Error;
+	mod->VChans				= ListCreate(sizeof(VChan_type*));
+	if (!mod->VChans) 			goto Error;
+	
+	
 	
 	// METHODS
 	
@@ -88,6 +95,16 @@ DAQLabModule_type* initalloc_DAQLabModule (DAQLabModule_type* mod, char classNam
 	mod->DisplayPanels	= NULL;
 	
 	return mod;
+	
+Error:
+	
+	OKfree(mod->className); 
+	OKfree(mod->instanceName); 
+	if (mod->taskControllers) ListDispose(mod->taskControllers);
+	if (mod->VChans) ListDispose(mod->VChans); 
+	OKfree(mod); 
+	
+	return NULL;
 }
 
 /// HIFN Deallocates a generic DAQLabModule 
@@ -99,6 +116,7 @@ void discard_DAQLabModule (DAQLabModule_type** mod)
 	OKfree((*mod)->instanceName);
 	
 	ListDispose((*mod)->taskControllers);
+	ListDispose((*mod)->VChans);
 	
 	if ((*mod)->cfgPanHndl)
 		DiscardPanel((*mod)->cfgPanHndl);

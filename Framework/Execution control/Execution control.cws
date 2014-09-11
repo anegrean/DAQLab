@@ -14,10 +14,10 @@ Active Project = 1
 Project 0001 = "Execution control.prj"
 Drag Bar Left = 312
 Window Top = 40
-Window Left = -1129
+Window Left = -1252
 Window Bottom = 1124
-Window Right = 760
-Maximized = False
+Window Right = 637
+Maximized = True
 Maximized Children = True
 Max32 Number Of Errors = 20
 Track Include File Dependencies = True
@@ -54,7 +54,7 @@ Window Top = 62
 Window Left = 26
 Window Height = 310
 Window Width = 523
-Window Z-Order = 2
+Window Z-Order = 1
 
 [File 0002]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTestUI.h"
@@ -62,19 +62,19 @@ File Type = "Include"
 Disk Date = 3488818801
 In Projects = "1,"
 Window Top = 30
-Window Z-Order = 1
-Source Window State = "1,0,0,0,0,0,0,0,0,192,0,0,0,0,0,40,0,0,0,0,400,600,1,0,"
+Window Z-Order = 3
+Source Window State = "1,0,0,0,0,0,0,0,0,70,0,0,0,0,0,28,0,0,0,0,400,600,1,0,"
 
 [File 0003]
 Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.uir"
 File Type = "User Interface Resource"
-Disk Date = 3491213618
+Disk Date = 3491222536
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Window Height = 349
 Window Width = 683
-Window Z-Order = 4
+Window Z-Order = 2
 
 [File 0004]
 Path = "/d/ELE_DAQLab/Framework/Utility/DAQLabUtility.h"
@@ -83,7 +83,7 @@ Disk Date = 3490893561
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
-Window Z-Order = 3
+Window Z-Order = 4
 Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,25,0,0,0,0,349,683,1,0,"
 
 [File 0005]
@@ -96,7 +96,7 @@ Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 [File 0006]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 File Type = "CSource"
-Disk Date = 3491220338
+Disk Date = 3493287064
 In Projects = "1,"
 Window Top = 63
 Window Left = 32
@@ -106,34 +106,34 @@ Source Window State = "1,336,336,336,13,25,25,0,0,0,0,0,0,0,0,0,1505,0,1537,12,9
 [File 0007]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 File Type = "Include"
-Disk Date = 3491219533
+Disk Date = 3493278532
 In Projects = "1,"
-Window Top = 145
-Window Left = -944
+Window Top = 118
+Window Left = -1258
 Window Released = True
-Source Window State = "1,295,295,295,4,21,4,0,0,0,0,0,0,0,0,0,422,0,294,92,812,1488,0,0,"
+Source Window State = "1,295,295,295,4,21,4,0,0,181,0,0,0,0,0,56,524,0,294,92,812,1488,0,0,"
 
 [File 0008]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTest.c"
 File Type = "CSource"
-Disk Date = 3491222102
+Disk Date = 3493296571
 In Projects = "1,"
 Window Top = 50
 Window Left = 167
 Window Released = True
-Source Window State = "1,74,74,74,29,35,29,0,0,158,0,1,0,1,0,66,36,0,73,31,941,1307,0,0,"
+Source Window State = "1,68,68,68,4,48,4,0,0,158,0,1,0,1,0,66,78,0,75,48,941,1307,0,0,"
 
 [File 0009]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.c"
 File Type = "CSource"
-Disk Date = 3490950708
+Disk Date = 3493104948
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 
 [File 0010]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.h"
 File Type = "Include"
-Disk Date = 3490893561
+Disk Date = 3493024913
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 

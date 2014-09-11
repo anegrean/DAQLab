@@ -63,20 +63,21 @@ int main (int argc, char *argv[])
 	TaskExecutionLog 	= init_TaskExecutionLog_type(ControllerPan, ControlPan_ExecutionLogBox);
 	
 	// ZStack Task
-	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ZStackTask_ErrorHandler);
+	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ZStackTask_ErrorHandler);
 	SetTaskControlIterations(ZStackTask, 1);
 	SetTaskControlIterMode(ZStackTask, TASK_ITERATE_BEFORE_SUBTASKS_START);
 	SetTaskControlIterationsWait(ZStackTask, 0);
 	SetTaskControlLog(ZStackTask, TaskExecutionLog);
 	
 	// ZStage
-	ZStage				= init_TaskControl_type ("Z Stage", NULL, NULL, ZStage_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlMode(ZStage, TASK_CONTINUOUS);
-	SetTaskControlIterations(ZStage, 2);
+	ZStage				= init_TaskControl_type ("Z Stage", NULL, NULL, ZStage_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+	SetTaskControlMode(ZStage, TASK_FINITE);
+	SetTaskControlIterations(ZStage, 5);
+	SetTaskControlIterationsWait(ZStackTask, 0);
 	SetTaskControlLog(ZStage, TaskExecutionLog);
 	
 	// Device X
-	DevX				= init_TaskControl_type ("Device X", NULL, NULL, DevX_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+	DevX				= init_TaskControl_type ("Device X", NULL, NULL, DevX_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	SetTaskControlIterations(DevX, 2);
 	
 	SetTaskControlLog(DevX, TaskExecutionLog);
@@ -101,7 +102,8 @@ void ZStackTask_ErrorHandler (TaskControl_type* taskControl, char* errorMsg, BOO
 void ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	//TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);    
-	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
+	//TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
+	Beep();
 }
 
 void DevX_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
@@ -124,8 +126,7 @@ int CVICALLBACK CB_ControlPan (int panel, int event, void *callbackData,
 	return 0;
 }
 
-int CVICALLBACK CB_TaskController (int panel, int control, int event,
-		void *callbackData, int eventData1, int eventData2)
+int CVICALLBACK CB_TaskController (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	switch (event)
 	{

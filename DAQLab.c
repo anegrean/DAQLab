@@ -683,33 +683,65 @@ ListType StringListCpy(ListType src)
 
 /// HIFN Registers a VChan with the DAQLab framework.
 /// HIRET TRUE if VChan was added, FALSE if error occured.
-BOOL DLRegisterVChan (VChan_type* VChan)
+BOOL DLRegisterVChan (DAQLabModule_type* mod, VChan_type* VChan)
 {
-	int success;
-	
 	if (!VChan) return FALSE;
 	
-	success = ListInsertItem(VChannels, &VChan, END_OF_LIST);
+	// add VChan to framework
+	if (!ListInsertItem(VChannels, &VChan, END_OF_LIST)) return FALSE;
+	// add VChan to module list of VChans
+	if (mod)
+		if (!ListInsertItem(mod->VChans, &VChan, END_OF_LIST)) return FALSE;
+	
 	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
 	
-	return success;
+	return TRUE;
 }
 
 /// HIFN Disconnects and removes a VChan from the DAQLab framework.
 /// HIRET TRUE if successful, FALSE if error occured or channel not found.
-int DLUnregisterVChan (VChan_type* VChan)
+int DLUnregisterVChan (DAQLabModule_type* mod, VChan_type* VChan)
 {   
-	size_t			itemPos;
-	if (!DLVChanExists(VChan, &itemPos)) {
+	size_t			DLItemPos;
+	size_t			ModItemPos;
+	// get VChan item position in DAQLab VChan list
+	if (!DLVChanExists(VChan, &DLItemPos)) {
 		DAQLab_Msg(DAQLAB_MSG_ERR_VCHAN_NOT_FOUND, VChan, 0, 0, 0);
 		return FALSE;
 	}
 	
+	// get VChan item position in the Module VChan list
+	VChanExists(mod->VChans, VChan, &ModItemPos);
+	
+	// disconnect VChan from other VChans
 	VChan_Disconnect(VChan);
-	ListRemoveItem(VChannels, 0, itemPos);
+	// remove VChan from module list
+	ListRemoveItem(mod->VChans, 0, ModItemPos);
+	// remove VChan from framework list
+	ListRemoveItem(VChannels, 0, DLItemPos);
+	// update UI
 	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
 	
 	return TRUE;
+}
+
+void DLUnregisterModuleVChans (DAQLabModule_type* mod)
+{
+	size_t			nVChans = ListNumItems(mod->VChans);
+	VChan_type**	VChanPtr;
+	size_t			DLItemPos;
+	
+	for(size_t i = nVChans; i; i--) {
+		VChanPtr = ListGetPtrToItem(mod->VChans, i);
+		// disconnect VChan from other VChans
+		VChan_Disconnect(*VChanPtr);
+		// remove VChan from framework list
+		DLVChanExists(*VChanPtr, &DLItemPos);
+		ListRemoveItem(VChannels, 0, DLItemPos);
+	}
+	ListClear(mod->VChans);
+	// update UI
+	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
 }
 
 /// HIFN Checks if a VChan object is present in the DAQLab framework.
@@ -1708,8 +1740,9 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 							// remove from DAQLab modules list
 							DAQLabModule_type* removedDAQLabModule;
 							ListRemoveItem(DAQLabModules, &removedDAQLabModule, i);
-							// remove Task Controllers from the framework
+							// remove Task Controllers and VChans from the framework
 							DLRemoveTaskControllers(removedDAQLabModule->taskControllers);
+							DLUnregisterModuleVChans(removedDAQLabModule);
 							// call module discard function
 							(*removedDAQLabModule->Discard)	(&removedDAQLabModule);
 							
@@ -2075,11 +2108,9 @@ static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentId
 {
 	ListType				SubTasks		= GetTaskControlSubTasks(taskControl);
 	size_t					nSubTaskTCs		= ListNumItems(SubTasks);
-	size_t					nUITCs			= ListNumItems(TasksUI.UItaskCtrls);
 	int						childIdx;
 	TaskControl_type**		tcPtrPtr;
 	char*					name;
-	BOOL					isUITCFlag;
 	TaskTreeNode_type		node; 
 	
 	for (size_t i = 1; i <= nSubTaskTCs; i++) {

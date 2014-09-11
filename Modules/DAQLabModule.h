@@ -42,6 +42,8 @@ struct DAQLabModule {
 	ActiveXMLObj_IXMLDOMNode_	XMLNode;
 		// List of Task Controllers provided by the module to the framework. Of TaskControl_type* 
 	ListType		 			taskControllers;
+		// List of Virtual Channels provided by the module to the framework. Of VChan_type* 
+	ListType					VChans;
 		// module configuration panel; one panel per module
 	int							cfgPanHndl;									
 	

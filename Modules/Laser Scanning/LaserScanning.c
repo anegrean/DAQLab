@@ -563,7 +563,7 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		ScanAxisCal_type**  calPtr;
 		for (size_t i = 1; i <= nItems; i++) {
 			calPtr = ListGetPtrToItem(ls->availableCals, i);
-			(*(*calPtr)->Discard)	(*calPtr); 
+			(*(*calPtr)->Discard)	(calPtr); 
 		}
 		
 		ListDispose(ls->availableCals);
@@ -574,7 +574,7 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		ScanAxisCal_type**  calPtr;
 		for (size_t i = 1; i <= nItems; i++) {
 			calPtr = ListGetPtrToItem(ls->activeCal, i);
-			(*(*calPtr)->Discard)	(*calPtr); 
+			(*(*calPtr)->Discard)	(calPtr); 
 		}
 		
 		ListDispose(ls->activeCal);
@@ -585,7 +585,7 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		ScanEngine_type**  	enginePtr;
 		for (size_t i = 1; i <= nItems; i++) {
 			enginePtr = ListGetPtrToItem(ls->scanEngines, i);
-			(*(*enginePtr)->Discard)	(*enginePtr);
+			(*(*enginePtr)->Discard)	(enginePtr);
 		}
 		
 		ListDispose(ls->scanEngines);
@@ -885,11 +885,11 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					ListDispose(tcList);
 			
 					// add scan engine VChans to DAQLab framework
-					DLRegisterVChan((VChan_type*)newScanEngine->VChanFastAxisCom);
-					DLRegisterVChan((VChan_type*)newScanEngine->VChanSlowAxisCom);
-					DLRegisterVChan((VChan_type*)newScanEngine->VChanFastAxisPos);
-					DLRegisterVChan((VChan_type*)newScanEngine->VChanSlowAxisPos);
-					DLRegisterVChan((VChan_type*)newScanEngine->VChanImageOut);
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanFastAxisCom);
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanSlowAxisCom);
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanFastAxisPos);
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanSlowAxisPos);
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanImageOut);
 					
 					// add new scan engine to laser scanning module list of scan engines
 					ListInsertItem(ls->scanEngines, &newScanEngine, END_OF_LIST);
@@ -1055,8 +1055,8 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							// register calibration Task Controller with the framework
 							DLAddTaskController(nrgCal->baseClass.taskController);
 							// register VChans with framework
-							DLRegisterVChan((VChan_type*)nrgCal->baseClass.VChanCom);
-							DLRegisterVChan((VChan_type*)nrgCal->baseClass.VChanPos);
+							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanCom);
+							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanPos);
 							// add new galvo calibration to laser scanning module list
 							ListInsertItem(ls->activeCal, &nrgCal, END_OF_LIST);
 							//----------------------------------------------------------
@@ -1186,7 +1186,7 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// insert new VChan to list control, engine list and register with framework
 					InsertListItem(panel, ScanSetPan_ImgChans, -1, newName, newName);
 					ListInsertItem(engine->DetChans, &detChan, END_OF_LIST);
-					DLRegisterVChan((VChan_type*)detChan->detVChan);
+					DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)detChan->detVChan);
 					break;
 					
 				case ScanSetPan_Close:
@@ -1244,7 +1244,7 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 			if (listItemIdx < 0) break; // stop here if list is empty
 			
 			detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
-			DLUnregisterVChan((VChan_type*)(*detChanPtr)->detVChan);
+			DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtr)->detVChan);
 			discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
 			DeleteListItem(panel, ScanSetPan_ImgChans, listItemIdx, 1);  
 			break;
@@ -1317,14 +1317,14 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 					
 					TaskControl_type*	calTC = nrgCal->baseClass.taskController; 
 					// unregister calibration VChans
-					DLUnregisterVChan(nrgCal->baseClass.VChanCom);
-					DLUnregisterVChan(nrgCal->baseClass.VChanPos);
+					DLUnregisterVChan((DAQLabModule_type*)nrgCal->baseClass.lsModule, (VChan_type*)nrgCal->baseClass.VChanCom);
+					DLUnregisterVChan((DAQLabModule_type*)nrgCal->baseClass.lsModule, (VChan_type*)nrgCal->baseClass.VChanPos);
 					
 					// remove task controller from the laser scanning module list of Task Controllers
 					RemoveTaskControllerFromList(nrgCal->baseClass.lsModule->baseClass.taskControllers, calTC);
 					
 					// discard active calibration data structure
-					(*nrgCal->baseClass.Discard) (&nrgCal);
+					(*nrgCal->baseClass.Discard) ((ScanAxisCal_type**)&nrgCal);
 					
 					// unregister calibration Task Controller
 					DLRemoveTaskController(calTC);
@@ -1724,31 +1724,31 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	//----------------------------------
 	// fast axis command
 	if (engine->VChanFastAxisCom) {
-		DLUnregisterVChan((VChan_type*)engine->VChanFastAxisCom);
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisCom);
 		discard_VChan_type((VChan_type**)&engine->VChanFastAxisCom);
 	}
 	
 	// slow axis command
 	if (engine->VChanSlowAxisCom) {
-		DLUnregisterVChan((VChan_type*)engine->VChanSlowAxisCom);
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisCom);
 		discard_VChan_type((VChan_type**)&engine->VChanSlowAxisCom);
 	}
 	
 	// fast axis position feedback
 	if (engine->VChanFastAxisPos) {
-		DLUnregisterVChan((VChan_type*)engine->VChanFastAxisPos);
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisPos);
 		discard_VChan_type((VChan_type**)&engine->VChanFastAxisPos);
 	}
 	
 	// slow axis position feedback
 	if (engine->VChanSlowAxisPos) {
-		DLUnregisterVChan((VChan_type*)engine->VChanSlowAxisPos);
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisPos);
 		discard_VChan_type((VChan_type**)&engine->VChanSlowAxisPos);
 	}
 	
 	// scan engine image output
 	if (engine->VChanImageOut) {
-		DLUnregisterVChan((VChan_type*)engine->VChanImageOut);
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanImageOut);
 		discard_VChan_type((VChan_type**)&engine->VChanImageOut);
 	}
 	
@@ -1758,7 +1758,7 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	for (size_t i = 1; i <= nDet; i++) {
 		detChanPtrPtr = ListGetPtrToItem(engine->DetChans, i);
 		// remove VChan from framework
-		DLUnregisterVChan((VChan_type*)(*detChanPtrPtr)->detVChan);
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtrPtr)->detVChan);
 		discard_DetChan_type(detChanPtrPtr);
 	}
 	

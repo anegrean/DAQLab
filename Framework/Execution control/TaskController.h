@@ -594,6 +594,9 @@ void 					RemoveAllSinkVChans 				(TaskControl_type* taskControl);
 	// Disconnects Source VChans from all Sink VChans assigned to the Task Controller but does not remove the Sink VChans from the Task Controller.
 void					DisconnectAllSinkVChans				(TaskControl_type* taskControl);
 
+	// Clears all data packets from all the Sink VChans of a Task Controller
+void					ClearAllSinkVChans					(TaskControl_type* taskControl);
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller logging functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------

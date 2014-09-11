@@ -25,6 +25,7 @@
 #include <utility.h>
 #include "VChannel.h"
 #include "TaskController.h"
+#include "DAQLabModule.h"
 
 //==============================================================================
 // Constants
@@ -96,11 +97,14 @@ typedef BOOL 		(*ValidateInputFptr_type) 		(char inputStr[], void* dataPtr);
 // DAQLab Virtual Channel management
 //-------------------------------------------------------------------------------
 
-	// Registers a VChan with the DAQLab framework
-BOOL				DLRegisterVChan					(VChan_type* VChan);
+	// Registers a VChan with the DAQLab framework. If the VChan does not belong to a module, pass NULL for the module reference
+BOOL				DLRegisterVChan					(DAQLabModule_type* mod, VChan_type* VChan);
 
-	// Deregisters a VChan from the DAQLab framework
-BOOL				DLUnregisterVChan				(VChan_type* VChan);
+	// Unregisters a VChan from the DAQLab framework
+BOOL				DLUnregisterVChan				(DAQLabModule_type* mod, VChan_type* VChan);
+
+	// Unregisters all VChans from a module from the DAQLab framework
+void				DLUnregisterModuleVChans		(DAQLabModule_type* mod);
 
 	// Checks if a given VChan object exists
 BOOL				DLVChanExists					(VChan_type* VChan, size_t* idx);

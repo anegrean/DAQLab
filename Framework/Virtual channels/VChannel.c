@@ -197,7 +197,10 @@ static void discard_SinkVChan_type (VChan_type** vchan)
 	if (!*vchan) return;
 	
 	// disconnect Sink from Source if connected
-	VChan_Disconnect(*vchan);  
+	VChan_Disconnect(*vchan);
+	
+	// release any data packets still in the VChan TSQ
+	ReleaseAllDataPackets (sink); 
 	
 	// discard Sink VChan specific data 
 	CmtDiscardTSQ(sink->tsqHndl);
@@ -438,6 +441,37 @@ void ReleaseDataPacket(DataPacket_type* a)
 		CmtReleaseTSVPtr(a->ctr);
 	} else {CmtReleaseTSVPtr(a->ctr); discard_DataPacket_type(a);} 
 	
+}
+
+int ReleaseAllDataPackets (SinkVChan_type* sinkVChan)
+{
+#define ReleaseAllDataPackets_Err_NoVChan		-1
+#define ReleaseAllDataPackets_Err_OutOfMem		-2
+	
+	if (!sinkVChan) return ReleaseAllDataPackets_Err_NoVChan;
+	
+	CmtTSQHandle			sinkVChanTSQHndl 	= sinkVChan->tsqHndl;
+	DataPacket_type*		dataPackets;
+	size_t					nPackets;
+	int						error				= 0;
+	
+	errChk(CmtGetTSQAttribute(sinkVChanTSQHndl, ATTR_TSQ_ITEMS_IN_QUEUE, &nPackets));
+	if (!nPackets) return 0; // do nothing
+		
+	// get data packets
+	dataPackets = malloc (nPackets * sizeof(DataPacket_type));
+	if (!dataPackets) return ReleaseAllDataPackets_Err_OutOfMem;
+	
+	errChk(CmtReadTSQData(sinkVChanTSQHndl, dataPackets, nPackets, 0, 0));
+		
+	// release data packets
+	for(size_t j = 0; j < nPackets; j++)
+		ReleaseDataPacket(dataPackets+j);
+		
+	free(dataPackets);
+	
+Error:
+	return error;
 }
 
 FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dataPacket)

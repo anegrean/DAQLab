@@ -27,31 +27,31 @@
 // Types
 
 typedef struct {
-	size_t					subtaskIdx;					// For a TASK_EVENT_SUBTASK_STATE_CHANGED event this is a
-														// 1-based index of subtask (from subtasks list) which generated
-														// the event.
-	TaskStates_type			newSubTaskState;			// For a TASK_EVENT_SUBTASK_STATE_CHANGED event this is the new state
-														// of the subtask
+	size_t						subtaskIdx;					// For a TASK_EVENT_SUBTASK_STATE_CHANGED event this is a
+															// 1-based index of subtask (from subtasks list) which generated
+															// the event.
+	TaskStates_type				newSubTaskState;			// For a TASK_EVENT_SUBTASK_STATE_CHANGED event this is the new state
+															// of the subtask
 } SubTaskEventInfo_type;
 
-typedef struct {										// For a TASK_EVENT_HWTRIG_SLAVE_ARMED event
-	size_t					slaveHWTrigIdx;				// 1-based index of Slave HW Triggered Task Controller from the Master HW Trigerring Slave list.
+typedef struct {											// For a TASK_EVENT_HWTRIG_SLAVE_ARMED event
+	size_t						slaveHWTrigIdx;				// 1-based index of Slave HW Triggered Task Controller from the Master HW Trigerring Slave list.
 } SlaveHWTrigTaskEventInfo_type;
 
 typedef struct {
-	TaskEvents_type 			event;					// Task Control Event.
-	void*						eventInfo;				// Extra information per event allocated dynamically
-	DisposeEventInfoFptr_type   disposeEventInfoFptr;   // Function pointer to dispose of the eventInfo
+	TaskEvents_type 			event;						// Task Control Event.
+	void*						eventInfo;					// Extra information per event allocated dynamically
+	DisposeEventInfoFptr_type   disposeEventInfoFptr;   	// Function pointer to dispose of the eventInfo
 } EventPacket_type;
 
 typedef struct {
-	TaskStates_type			subtaskState;				// Updated by parent task when informed by subtask that a state change occured.
-	TaskControl_type*		subtask;					// Pointer to Subtask Controller.
+	TaskStates_type				subtaskState;				// Updated by parent task when informed by subtask that a state change occured.
+	TaskControl_type*			subtask;					// Pointer to Subtask Controller.
 } SubTask_type;
 
 typedef struct {
-	BOOL					armed;						// TRUE if a Slave HW Triggered Task Controller is ready to be triggered by its Master
-	TaskControl_type*		slaveHWTrigTask;			// pointer to Slave HW Triggered Task Controller.
+	BOOL						armed;						// TRUE if a Slave HW Triggered Task Controller is ready to be triggered by its Master
+	TaskControl_type*			slaveHWTrigTask;			// pointer to Slave HW Triggered Task Controller.
 } SlaveHWTrigTask_type;
 
 typedef enum {
@@ -60,86 +60,87 @@ typedef enum {
 } Action_type;
 
 typedef struct {
-	int						errorID;
-	char*					errorInfo;
+	int							errorID;
+	char*						errorInfo;
 } ErrorMsg_type;
 
 typedef struct TaskControlLog {
-	TaskControl_type*		taskControl;				// Pointer to Task Controller for which this record is made.
-	double					timestamp;					// Timestamp at which the record was created.
-	TaskEvents_type			event;						// Event that triggered the action
-	ListType				subtasks;					// SubTask states when the event occured. List of SubTask_type
-	size_t					IterIdx;					// Current iteration index when event occured.
-	Action_type				action;						// Action type: state change or function call that the event triggered
-	TaskStates_type			oldState;					// In case of state change: old state of Task Controller before a state transition.
-	TaskStates_type			newState;					// In case of state change: new state of Task Controller after a state transition. 
-	TaskFCall_type			fcallID;					// In case of function call: the ID of function which is called.
+	TaskControl_type*			taskControl;				// Pointer to Task Controller for which this record is made.
+	double						timestamp;					// Timestamp at which the record was created.
+	TaskEvents_type				event;						// Event that triggered the action
+	ListType					subtasks;					// SubTask states when the event occured. List of SubTask_type
+	size_t						IterIdx;					// Current iteration index when event occured.
+	Action_type					action;						// Action type: state change or function call that the event triggered
+	TaskStates_type				oldState;					// In case of state change: old state of Task Controller before a state transition.
+	TaskStates_type				newState;					// In case of state change: new state of Task Controller after a state transition. 
+	TaskFCall_type				fcallID;					// In case of function call: the ID of function which is called.
 } TaskControlLog_type;
 
 struct TaskExecutionLog {
-	ListType				log;						// Keeps record of Task Controller events, state changes and actions. List of TaskControlLog_type.
-	CmtThreadLockHandle		lock;						// Prevents multiple threads to add at the same time elements to the list
-	int						logBoxPanHandle;
-	int						logBoxControl;
+	ListType					log;						// Keeps record of Task Controller events, state changes and actions. List of TaskControlLog_type.
+	CmtThreadLockHandle			lock;						// Prevents multiple threads to add at the same time elements to the list
+	int							logBoxPanHandle;
+	int							logBoxControl;
 };
 
 // Structure binding Task Controller and VChan data for passing to TSQ callback	
 typedef struct {
-	TaskControl_type* 		taskControl;
-	SinkVChan_type* 		sinkVChan;
-	CmtTSQCallbackID		itemsInQueueCBID;
+	TaskControl_type* 			taskControl;
+	SinkVChan_type* 			sinkVChan;
+	CmtTSQCallbackID			itemsInQueueCBID;
 } VChanCallbackData_type;
 
 struct TaskControl {
 	// Task control data
-	char*					taskName;					// Name of Task Controller
-	size_t					subtaskIdx;					// 1-based index of subtask from parent Task subtasks list. If task doesn't have a parent task then index is 0.
-	size_t					slaveHWTrigIdx;				// 1-based index of Slave HW Trig from Master HW Trig Slave list. If Task Controller is not a HW Trig Slave, then index is 0.
-	CmtTSQHandle			eventQ;						// Event queue to which the state machine reacts.
-	ListType				dataQs;						// Incoming data queues, list of VChanCallbackData_type*.
-	unsigned int			eventQThreadID;				// Thread ID in which queue events are processed.
-	CmtThreadFunctionID		threadFunctionID;			// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
-	TaskStates_type 		state;						// Module execution state.
-	size_t					repeat;						// Total number of repeats. If repeat is 0, then the iteration function is not called. 
-	int						iterTimeout;				// 0, Task Controller iteration block is complete and execution continues with return from
-														// the iteration function call. 1..N > 0, Task Controller iteration block is not yet complete
-														// and TASK_EVENT_ITERATION_DONE must be received (from another thread) to consider the iteration block complete.
-														// If TASK_EVENT_ITERATION_DONE is not received after iterTimeout seconds then the Task Controller execution will time out 
-														// and genrate an error. For values -N..-1, Task Controller iteration block does not time out and waits for TASK_EVENT_ITERATION_DONE. 
-														// to signal that iteration block is complete.
-	TaskIterMode_type		iterMode;					// Determies how the iteration block of a Task Controller is executed with respect to its subtasks if any.
-	TaskMode_type			mode;						// Finite or continuous type of task controller
-	size_t					currIterIdx;    			// 1-based task execution iteration index  
-	TaskControl_type*		parenttask;					// Pointer to parent task that own this subtask. 
-														// If this is the main task, it has no parent and this is NULL. 
-	ListType				subtasks;					// List of subtasks of SubTask_type.
-	TaskControl_type*		masterHWTrigTask;			// If this is a Slave HW Triggered Task Controller, then masterHWTrigTask is a Task Controller 
-	ListType				slaveHWTrigTasks;			// If this is a Master HW Triggered Task Controller then slaveHWTrigTasks is a list of SlaveHWTrigTask_type
-														// HW Triggered Slave Task Controllers.
-	void*					moduleData;					// Reference to module specific data that is 
-														// controlled by the task.
-	TaskExecutionLog_type*	logPtr;						// Pointer to logging structure. NULL if logging is not enabled.
-	ErrorMsg_type*			errorMsg;					// When switching to an error state, additional error info is written here
-	double					waitBetweenIterations;		// During a RUNNING state, waits specified ammount in seconds between iterations
-	BOOL					abortFlag;					// When set to TRUE, it signals the provided function pointers that they must abort running processes.
-	BOOL					abortIterationFlag;			// When set to TRUE, it signals the external thread running the iteration that it must finish.
-	BOOL					slaveArmedFlag;				// TRUE when HW Triggering is enabled for the Task Controller and Slave has been armed before sending TASK_EVENT_ITERATION_DONE.
-	int						nIterationsFlag;			// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
-	int						iterationTimerID;			// Keeps track of the timeout timer when iteration is performed in another thread.
-	BOOL					UITCFlag;					// If TRUE, the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
+	char*						taskName;					// Name of Task Controller
+	size_t						subtaskIdx;					// 1-based index of subtask from parent Task subtasks list. If task doesn't have a parent task then index is 0.
+	size_t						slaveHWTrigIdx;				// 1-based index of Slave HW Trig from Master HW Trig Slave list. If Task Controller is not a HW Trig Slave, then index is 0.
+	CmtTSQHandle				eventQ;						// Event queue to which the state machine reacts.
+	ListType					dataQs;						// Incoming data queues, list of VChanCallbackData_type*.
+	unsigned int				eventQThreadID;				// Thread ID in which queue events are processed.
+	CmtThreadFunctionID			threadFunctionID;			// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
+	TaskStates_type 			state;						// Module execution state.
+	size_t						repeat;						// Total number of repeats. If repeat is 0, then the iteration function is not called. 
+	int							iterTimeout;				// 0, Task Controller iteration block is complete and execution continues with return from
+															// the iteration function call. 1..N > 0, Task Controller iteration block is not yet complete
+															// and TASK_EVENT_ITERATION_DONE must be received (from another thread) to consider the iteration block complete.
+															// If TASK_EVENT_ITERATION_DONE is not received after iterTimeout seconds then the Task Controller execution will time out 
+															// and genrate an error. For values -N..-1, Task Controller iteration block does not time out and waits for TASK_EVENT_ITERATION_DONE. 
+															// to signal that iteration block is complete.
+	TaskIterMode_type			iterMode;					// Determies how the iteration block of a Task Controller is executed with respect to its subtasks if any.
+	TaskMode_type				mode;						// Finite or continuous type of task controller
+	size_t						currIterIdx;    			// 1-based task execution iteration index  
+	TaskControl_type*			parenttask;					// Pointer to parent task that own this subtask. 
+															// If this is the main task, it has no parent and this is NULL. 
+	ListType					subtasks;					// List of subtasks of SubTask_type.
+	TaskControl_type*			masterHWTrigTask;			// If this is a Slave HW Triggered Task Controller, then masterHWTrigTask is a Task Controller 
+	ListType					slaveHWTrigTasks;			// If this is a Master HW Triggered Task Controller then slaveHWTrigTasks is a list of SlaveHWTrigTask_type
+															// HW Triggered Slave Task Controllers.
+	void*						moduleData;					// Reference to module specific data that is 
+															// controlled by the task.
+	TaskExecutionLog_type*		logPtr;						// Pointer to logging structure. NULL if logging is not enabled.
+	ErrorMsg_type*				errorMsg;					// When switching to an error state, additional error info is written here
+	double						waitBetweenIterations;		// During a RUNNING state, waits specified ammount in seconds between iterations
+	BOOL						abortFlag;					// When set to TRUE, it signals the provided function pointers that they must abort running processes.
+	BOOL						abortIterationFlag;			// When set to TRUE, it signals the external thread running the iteration that it must finish.
+	BOOL						slaveArmedFlag;				// TRUE when HW Triggering is enabled for the Task Controller and Slave has been armed before sending TASK_EVENT_ITERATION_DONE.
+	int							nIterationsFlag;			// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
+	int							iterationTimerID;			// Keeps track of the timeout timer when iteration is performed in another thread.
+	BOOL						UITCFlag;					// If TRUE, the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
 	
 	// Event handler function pointers
-	ConfigureFptr_type		ConfigureFptr;
-	IterateFptr_type		IterateFptr;
-	StartFptr_type			StartFptr;
-	ResetFptr_type			ResetFptr;
-	DoneFptr_type			DoneFptr;
-	StoppedFptr_type		StoppedFptr;
-	DimUIFptr_type			DimUIFptr;
-	UITCActiveFptr_type		UITCActiveFptr;
-	DataReceivedFptr_type	DataReceivedFptr;
-	ModuleEventFptr_type	ModuleEventFptr;
-	ErrorFptr_type			ErrorFptr;
+	ConfigureFptr_type			ConfigureFptr;
+	IterateFptr_type			IterateFptr;
+	AbortIterationFptr_type		AbortIterationFptr;
+	StartFptr_type				StartFptr;
+	ResetFptr_type				ResetFptr;
+	DoneFptr_type				DoneFptr;
+	StoppedFptr_type			StoppedFptr;
+	DimUIFptr_type				DimUIFptr;
+	UITCActiveFptr_type			UITCActiveFptr;
+	DataReceivedFptr_type		DataReceivedFptr;
+	ModuleEventFptr_type		ModuleEventFptr;
+	ErrorFptr_type				ErrorFptr;
 };
 
 //==============================================================================
@@ -227,19 +228,20 @@ int 	CVICALLBACK TaskControlIterTimeout 				(int reserved, int timerId, int even
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 /// HIFN Initializes a Task controller.
-TaskControl_type* init_TaskControl_type(const char				taskControllerName[],
-										void*					moduleData,
-										ConfigureFptr_type 		ConfigureFptr,
-										IterateFptr_type		IterateFptr,
-										StartFptr_type			StartFptr,
-										ResetFptr_type			ResetFptr,
-										DoneFptr_type			DoneFptr,
-										StoppedFptr_type		StoppedFptr,
-										DimUIFptr_type			DimUIFptr,
-										UITCActiveFptr_type		UITCActiveFptr,
-										DataReceivedFptr_type	DataReceivedFptr,
-										ModuleEventFptr_type	ModuleEventFptr,
-										ErrorFptr_type			ErrorFptr)
+TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
+										void*						moduleData,
+										ConfigureFptr_type 			ConfigureFptr,
+										IterateFptr_type			IterateFptr,
+										AbortIterationFptr_type		AbortIterationFptr,
+										StartFptr_type				StartFptr,
+										ResetFptr_type				ResetFptr,
+										DoneFptr_type				DoneFptr,
+										StoppedFptr_type			StoppedFptr,
+										DimUIFptr_type				DimUIFptr,
+										UITCActiveFptr_type			UITCActiveFptr,
+										DataReceivedFptr_type		DataReceivedFptr,
+										ModuleEventFptr_type		ModuleEventFptr,
+										ErrorFptr_type				ErrorFptr)
 {
 	TaskControl_type* a = malloc (sizeof(TaskControl_type));
 	if (!a) return NULL;
@@ -291,6 +293,7 @@ TaskControl_type* init_TaskControl_type(const char				taskControllerName[],
 	// task controller function pointers
 	a -> ConfigureFptr 			= ConfigureFptr;
 	a -> IterateFptr			= IterateFptr;
+	a -> AbortIterationFptr		= AbortIterationFptr;
 	a -> StartFptr				= StartFptr;
 	a -> ResetFptr				= ResetFptr;
 	a -> DoneFptr				= DoneFptr;
@@ -962,51 +965,55 @@ static char* FCallToString (TaskFCall_type fcall)
 		
 		case TASK_FCALL_NONE:
 			
-			return StrDup("FunctionCall None");
+			return StrDup("FCall None");
 		
 		case TASK_FCALL_CONFIGURE:
 			
-			return StrDup("FunctionCall Configure");
+			return StrDup("FCall Configure");
 		
 		case TASK_FCALL_ITERATE:
 			
-			return StrDup("FunctionCall Iterate");
+			return StrDup("FCall Iterate");
+			
+		case TASK_FCALL_ABORT_ITERATION:
+			
+			return StrDup("FCall Abort Iteration");
 			
 		case TASK_FCALL_START:
 			
-			return StrDup("FunctionCall Start");
+			return StrDup("FCall Start");
 			
 		case TASK_FCALL_RESET:
 			
-			return StrDup("FunctionCall Reset");
+			return StrDup("FCall Reset");
 			
 		case TASK_FCALL_DONE:
 			
-			return StrDup("FunctionCall Done");
+			return StrDup("FCall Done");
 			
 		case TASK_FCALL_STOPPED:
 			
-			return StrDup("FunctionCall Stopped");
+			return StrDup("FCall Stopped");
 			
 		case TASK_FCALL_DIM_UI:
 			
-			return StrDup("FunctionCall Dim UI");
+			return StrDup("FCall Dim/Undim UI");
 			
 		case TASK_FCALL_UITC_ACTIVE:
 			
-			return StrDup("FunctionCall UITC Active");
+			return StrDup("FCall UITC Active");
 			
 		case TASK_FCALL_DATA_RECEIVED:
 			
-			return StrDup("FunctionCall Data Received");
+			return StrDup("FCall Data Received");
 			
 		case TASK_FCALL_MODULE_EVENT:
 			
-			return StrDup("FunctionCall Module Event");
+			return StrDup("FCall Module Event");
 			
 		case TASK_FCALL_ERROR:
 			
-			return StrDup("FunctionCall Error");
+			return StrDup("FCall Error");
 			
 	}
 	
@@ -1335,7 +1342,12 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 			CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, ScheduleIterateFunction, taskControl, NULL);
 			
 			break;
-		
+			
+		case TASK_FCALL_ABORT_ITERATION:
+			
+			if (taskControl->AbortIterationFptr) (*taskControl->AbortIterationFptr)(taskControl, taskControl->currIterIdx, &taskControl->abortFlag);
+			break;
+			
 		case TASK_FCALL_START:
 			
 			if (taskControl->StartFptr) fCallResult = (*taskControl->StartFptr)(taskControl, &taskControl->abortFlag);
@@ -3642,8 +3654,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_STOP:
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 				
-					
 					taskControl->abortIterationFlag = TRUE;
+					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ABORT_ITERATION, NULL);
 					
 					break;
 					

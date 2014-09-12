@@ -304,6 +304,7 @@ typedef enum {
 	TASK_FCALL_NONE,
 	TASK_FCALL_CONFIGURE,
 	TASK_FCALL_ITERATE,
+	TASK_FCALL_ABORT_ITERATION,
 	TASK_FCALL_START,
 	TASK_FCALL_RESET,
 	TASK_FCALL_DONE,					// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
@@ -383,6 +384,10 @@ typedef FCallReturn_type* 	(*ConfigureFptr_type) 			(TaskControl_type* taskContr
 // discard_FCallReturn_type.
 typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
+// Called when an iteration must be aborted. This is similar to the use of GetTaskControlAbortIterationFlag except that this function is called back, instead
+// of polling a flag during the iteration.
+typedef void				(*AbortIterationFptr_type)		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
 // Called before the first iteration starts from an INITIAL state.
 typedef FCallReturn_type* 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag); 
 
@@ -398,7 +403,7 @@ typedef FCallReturn_type* 	(*StoppedFptr_type) 			(TaskControl_type* taskControl
 // Called when a Task Controller needs to dim or undim certain module controls to allow/prevent user interaction.
 typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimmed); 
 
-// Called when an UITC has a parent Task Controller attached to or deattached from it, in the former case the UITC functioning as a simple Task Controller
+// Called when an UITC has a parent Task Controller attached to or detached from it, in the former case the UITC functioning as a simple Task Controller
 // without the possibility for the user to control the Task execution. This function must dim/undim UITC controls that prevent/allow the user to control
 // the task execution.
 typedef void				(*UITCActiveFptr_type)			(TaskControl_type* taskControl, BOOL UITCActive);
@@ -425,19 +430,20 @@ typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
 // Task Controller creation/destruction functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-TaskControl_type*  	 	init_TaskControl_type				(const char				taskControllerName[],
-															void*					moduleData,
-												 	 	 	ConfigureFptr_type 		ConfigureFptr,
-												 	 		IterateFptr_type		IterateFptr,
-												 		 	StartFptr_type			StartFptr,
-												  		 	ResetFptr_type			ResetFptr,
-														 	DoneFptr_type			DoneFptr,
-														 	StoppedFptr_type		StoppedFptr,
-															DimUIFptr_type			DimUIFptr,
-															UITCActiveFptr_type		UITCActiveFptr,
-														 	DataReceivedFptr_type	DataReceivedFptr,
-														 	ModuleEventFptr_type	ModuleEventFptr,
-														 	ErrorFptr_type			ErrorFptr);
+TaskControl_type*  	 	init_TaskControl_type				(const char					taskControllerName[],
+															void*						moduleData,
+												 	 	 	ConfigureFptr_type 			ConfigureFptr,
+												 	 		IterateFptr_type			IterateFptr,
+															AbortIterationFptr_type		AbortIterationFptr,
+												 		 	StartFptr_type				StartFptr,
+												  		 	ResetFptr_type				ResetFptr,
+														 	DoneFptr_type				DoneFptr,
+														 	StoppedFptr_type			StoppedFptr,
+															DimUIFptr_type				DimUIFptr,
+															UITCActiveFptr_type			UITCActiveFptr,
+														 	DataReceivedFptr_type		DataReceivedFptr,
+														 	ModuleEventFptr_type		ModuleEventFptr,
+														 	ErrorFptr_type				ErrorFptr);
 
 	// Disconnects a given Task Controller from its parent, disconnects all its child tasks and HW triggering and then discards the Task Controller.
 	// All child Tasks are disconnected from each other including HW triggering dependecies and VChan connections.

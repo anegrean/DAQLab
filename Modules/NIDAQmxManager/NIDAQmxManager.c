@@ -895,20 +895,34 @@ static BOOL							ValidTaskControllerName					(char name[], void* dataPtr);
 //---------------------------
 
 static int 							DisplayPanels							(DAQLabModule_type* mod, BOOL visibleFlag); 
+
 static int CVICALLBACK 				MainPan_CB								(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static void CVICALLBACK 			ManageDevPan_CB 						(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
-static void CVICALLBACK 			DeleteDev_CB 							(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle); 
+
+static void CVICALLBACK 			DeleteDev_CB 							(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+
 	// trigger settings callbacks
 static int CVICALLBACK 				TaskStartTrigType_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 				TaskReferenceTrigType_CB				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 				TriggerSlope_CB	 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 				TriggerLevel_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 				TriggerSource_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 				TriggerWindowType_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 				TriggerWindowBttm_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 				TriggerWindowTop_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 				TriggerPreTrigDuration_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 				TriggerPreTrigSamples_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 	// adjustment of the DAQmx task settings panel
 static int 							DAQmxDevTaskSet_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -917,16 +931,26 @@ static int 							DAQmxDevTaskSet_CB 						(int panel, int control, int event, v
 //-----------------------------------------
 
 static FCallReturn_type*			ConfigureTC								(TaskControl_type* taskControl, BOOL const* abortFlag);
-static void							IterateTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
-static FCallReturn_type*			StartTC									(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*			DoneTC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static FCallReturn_type*			StoppedTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static void							DimTC									(TaskControl_type* taskControl, BOOL dimmed);
-static FCallReturn_type* 			ResetTC 								(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static void				 			ErrorTC 								(TaskControl_type* taskControl, char* errorMsg);
-static FCallReturn_type*			DataReceivedTC							(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
-static FCallReturn_type*			ModuleEventHandler						(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
 
+static void							IterateTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+
+static void							AbortIterationTC						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
+static FCallReturn_type*			StartTC									(TaskControl_type* taskControl, BOOL const* abortFlag);
+
+static FCallReturn_type*			DoneTC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
+static FCallReturn_type*			StoppedTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
+static void							DimTC									(TaskControl_type* taskControl, BOOL dimmed);
+
+static FCallReturn_type* 			ResetTC 								(TaskControl_type* taskControl, BOOL const* abortFlag); 
+
+static void				 			ErrorTC 								(TaskControl_type* taskControl, char* errorMsg);
+
+static FCallReturn_type*			DataReceivedTC							(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+
+static FCallReturn_type*			ModuleEventHandler						(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
 
 
 
@@ -2201,7 +2225,9 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			
 		case Set_MeasMode:
 			
-			GetCtrlVal(panel, control, &dev->AITaskSet->timing->measMode);
+			unsigned int measMode;
+			GetCtrlVal(panel, control, &measMode);
+			dev->AITaskSet->timing->measMode = measMode;
 			break;
 	}		
 	
@@ -2278,7 +2304,7 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			GetCtrlVal(panel, control, &duration);
 			
 			// calculate number of samples
-			*dev->AOTaskSet->timing->refNSamples = (size_t)(*dev->AOTaskSet->timing->refSampleRate * duration);
+			*dev->AOTaskSet->timing->refNSamples = (size_t)(*dev->AOTaskSet->timing->refSampleRate * duration);		// STILL A MESS
 			// update display of number of samples
 			SetCtrlVal(panel, Set_NSamples, *dev->AOTaskSet->timing->refNSamples); 
 			
@@ -2299,7 +2325,9 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			
 		case Set_MeasMode:
 			
-			GetCtrlVal(panel, control, &dev->AOTaskSet->timing->measMode);
+			unsigned int measMode;
+			GetCtrlVal(panel, control, &measMode);
+			dev->AOTaskSet->timing->measMode = measMode;
 			break;
 	}
 	
@@ -3003,7 +3031,7 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type**
 	//-------------------------------------------------------------------------------------------------
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
-	dev -> taskController = init_TaskControl_type (taskControllerName, dev, ConfigureTC, IterateTC, StartTC, 
+	dev -> taskController = init_TaskControl_type (taskControllerName, dev, ConfigureTC, IterateTC, AbortIterationTC, StartTC, 
 						  ResetTC, DoneTC, StoppedTC, DimTC, NULL, DataReceivedTC, ModuleEventHandler, ErrorTC);
 	if (!dev->taskController) {discard_DevAttr_type(attr); free(dev); return NULL;}
 	
@@ -6841,7 +6869,7 @@ SendDataError:
 	return 0;
 }
 
-// Called only if a running task encounters an error or stops by itself in case of a finite acquisition of generation task. 
+// Called only if a running task encounters an error or stops by itself in case of a finite acquisition or generation task. 
 // It is not called if task stops after calling DAQmxClearTask or DAQmxStopTask.
 int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
@@ -7050,6 +7078,12 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	// start all DAQmx Tasks
 	if ((fCallReturn = StartAllDAQmxTasks(daqDev)))
 		TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo);
+}
+
+static void	AbortIterationTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	Dev_type*			daqDev			= GetTaskControlModuleData(taskControl);
+	
 }
 
 static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abortFlag)

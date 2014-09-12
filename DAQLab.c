@@ -418,7 +418,7 @@ static int DAQLab_Load (void)
 		}
 		
 		// create new UI Task Controller
-		newTaskControllerPtr = init_TaskControl_type (UITCName, NULL, ConfigureUITC, IterateUITC, StartUITC, 
+		newTaskControllerPtr = init_TaskControl_type (UITCName, NULL, ConfigureUITC, IterateUITC, NULL, StartUITC, 
 												 	  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, NULL, ErrorUITC); // module data added to the task controller below
 		if (!newTaskControllerPtr) {
 			DLMsg("Error: Task Controller could not be created.\n\n", 1);
@@ -1845,7 +1845,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	if (!newControllerName) return; // operation cancelled, do nothing
 	
 	// create new task controller
-	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, ConfigureUITC, IterateUITC, StartUITC, 
+	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, ConfigureUITC, IterateUITC, NULL, StartUITC, 
 												  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, NULL, ErrorUITC); // module data added to the task controller below
 	OKfree(newControllerName);
 	

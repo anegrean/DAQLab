@@ -46,7 +46,7 @@ void ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOO
 
 void DevX_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
-void ZStackTask_ErrorHandler (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag);
+void ZStackTask_ErrorHandler (TaskControl_type* taskControl, char* errorMsg);
 
 
 int main (int argc, char *argv[])
@@ -63,21 +63,21 @@ int main (int argc, char *argv[])
 	TaskExecutionLog 	= init_TaskExecutionLog_type(ControllerPan, ControlPan_ExecutionLogBox);
 	
 	// ZStack Task
-	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ZStackTask_ErrorHandler);
+	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ZStackTask_ErrorHandler);
 	SetTaskControlIterations(ZStackTask, 1);
 	SetTaskControlIterMode(ZStackTask, TASK_ITERATE_BEFORE_SUBTASKS_START);
 	SetTaskControlIterationsWait(ZStackTask, 0);
 	SetTaskControlLog(ZStackTask, TaskExecutionLog);
 	
 	// ZStage
-	ZStage				= init_TaskControl_type ("Z Stage", NULL, NULL, ZStage_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+	ZStage				= init_TaskControl_type ("Z Stage", NULL, NULL, ZStage_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	SetTaskControlMode(ZStage, TASK_FINITE);
-	SetTaskControlIterations(ZStage, 5);
+	SetTaskControlIterations(ZStage, 1);
 	SetTaskControlIterationsWait(ZStackTask, 0);
 	SetTaskControlLog(ZStage, TaskExecutionLog);
 	
 	// Device X
-	DevX				= init_TaskControl_type ("Device X", NULL, NULL, DevX_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+	DevX				= init_TaskControl_type ("Device X", NULL, NULL, DevX_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	SetTaskControlIterations(DevX, 2);
 	
 	SetTaskControlLog(DevX, TaskExecutionLog);
@@ -94,7 +94,7 @@ int main (int argc, char *argv[])
 	return 0;
 }
 
-void ZStackTask_ErrorHandler (TaskControl_type* taskControl, char* errorMsg, BOOL const* abortFlag)
+void ZStackTask_ErrorHandler (TaskControl_type* taskControl, char* errorMsg)
 {
 	MessagePopup("Error", errorMsg);
 }

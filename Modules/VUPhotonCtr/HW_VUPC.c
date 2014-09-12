@@ -101,7 +101,6 @@ DefineThreadSafeScalarVar(unsigned int,ReadyForReading,0); 	            // acqui
 
 unsigned int 	PMTThreadID; 
 int 			PMTThreadFunctionID;
-CmtTSQHandle 	commandqueue;
 PMTregcommand 	newcommand;
 int readerror=0; 
 int readdata=0;
@@ -128,20 +127,6 @@ unsigned int GetAcquisitionBusy(void)
 }
 
 
-int GetFittingBuffer(int itsamples)
-{
-	 int bufsize=0;
-	 int reqbytes=8*itsamples;
-	 int i;
-	 
-	 for (i=0;i<14;i++){
-		  bufsize=0x80<<i;
-		  if (bufsize>reqbytes) break;
-	 }
-	
-	 return bufsize;
-}
-
 void SetMeasurementMode(int mode)
 {
 	 measurementmode=mode;
@@ -158,28 +143,27 @@ void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples)
 	 
 	 if (mode==1) {   //continuous mode, bufsize based on sample freq
 		 if (samplerate_in_khz>500) {
-			 bufsize=0x100000;  
+			 bufsize=0x200000;  
 		 }
 		 else if (samplerate_in_khz>250) {
-			 bufsize=0x80000;  
+			 bufsize=0x100000;  
 		 }
 		 else if (samplerate_in_khz>125) {
-			 bufsize=0x40000;  
+			 bufsize=0x80000;  
 		 }
 		 else if (samplerate_in_khz>64) {
-			 bufsize=0x20000;  
+			 bufsize=0x40000;  
 		 }
 		 else if (samplerate_in_khz>32) {
-			 bufsize=0x10000;  
+			 bufsize=0x20000;  
 		 }
-		 else bufsize=0x8000;      
+		 else bufsize=0x10000;      
 	 }
 	 else {  //finite mode, bufsize based on sample requested samples
 	 	nrsamples_in_iteration=itsamples;
-	 	bufsize=GetFittingBuffer(itsamples);
+	 	bufsize=8*itsamples;  //8 bytes per sample (pixel)
 	 }
 	 SetPMTBufsize(bufsize);  
-	 VUPCI_Set_DTE_Size(bufsize); 
 	 SetPMTnewbufsizeflag(1);
 }
 
@@ -189,104 +173,27 @@ void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples)
 
  int ReadPMTReg(unsigned long regaddress,unsigned long *regval)
 {
-	 int error=0;
-	 int timeout=20;  //2 sec timeout   
+	int error=0;
+	unsigned long reply=0;
 	 
-	 if (GetAcquisitionBusy()==0){   
-		 //no need to use acq thread
-		  *regval=ImReadReg(regaddress);
-	 }
-	 else {
+	if(!VUPCI_Get_Reg(regaddress,&reply)){ 
+		error=-1;
+	 };
+	*regval=reply;
+	
+	return error;
 	 
-		if (GetPMTCommandFlag()==1){   
-	 	//wait until last command is processed
-	 		do 
-	 		{
-				ProcessSystemEvents(); 
-				Delay(0.1);
-				timeout--;  
-	 		}
-	 		while ((GetPMTCommandFlag()==1)&&(GetAcqBusy()==1)&&(timeout>0));
-	 		if (timeout<=0) {
-				 return -1; 
-	 		}
-	 	}
-	 	//read request, no data read yet
-	 	newcommand.regaddress=regaddress;
-	 	newcommand.regvalue=0;
-	 	newcommand.RW=READ;
-	 
- 	 
-	 	SetPMTCommandFlag(1); 
-	 	CmtWriteTSQData (commandqueue, &newcommand,1,TSQ_INFINITE_TIMEOUT, NULL);
-	  
-	 	if (GetPMTCommandFlag()==1){   
-	 		// wait until data is available  
-	 		timeout=20;
-	 		do 
-	 		{
-				ProcessSystemEvents(); 
-				Delay(0.1);
-				timeout--;  
-	 		}
-	 		while ((GetPMTCommandFlag()==1)&&(GetAcqBusy()==1)&&(timeout>0));
-	 		if (timeout<=0) {
-		 		return -1; 
-	 		}
-	 	}
-	 	//get data
-	 	*regval=GetPMTControllerData();
-	 }
-	 
-	 return error;
 }
 
 
 int WritePMTReg(unsigned long regaddress,unsigned long regvalue)
 {
 	 int error=0;
-	 int timeout=20;  //2 sec timeout
-	
-	 if (GetAcquisitionBusy()==0){   
-		 //no need to use acq thread
-		  error=ImWriteReg(regaddress,regvalue);
-	 }
-	 else {
-	 	if (GetPMTCommandFlag()==1){
-			 do 
-	 		{
-				ProcessSystemEvents(); 
-				Delay(0.1);  
-				timeout--;
-		 	}
-	 		while ((GetPMTCommandFlag()==1)&&(GetAcqBusy()==1)&&(timeout>0));
-	 		if (timeout<=0) {
-				 return -1;
-			 }
-		 }
-	 	//need to sync read and writes
-	 	newcommand.regaddress=regaddress;
-	 	newcommand.regvalue=regvalue;
-	 	newcommand.RW=WRITE;   
 	 
- 	 
-		SetPMTCommandFlag(1); 
-	 	CmtWriteTSQData (commandqueue, &newcommand,1,TSQ_INFINITE_TIMEOUT, NULL);
-	 	// wait until data is processed
-	 	if (GetPMTCommandFlag()==1) {
-	 		timeout=20;
-	 		do 
-			{
-				ProcessSystemEvents(); 
-				Delay(0.1);
-				timeout--; 
-	 		}
-	 		while ((GetPMTCommandFlag()==1)&&(GetAcqBusy()==1)&&(timeout>0));
-	 		if (timeout<=0) {
-				return -1;   
-	 		}
-	 	}
-	 }
+	 if(!VUPCI_Set_Reg(regaddress,regvalue)){ 
+		error=-1;
+	 };
+
 	 return error;
 }
 
@@ -837,6 +744,13 @@ int PMTClearFifo(void)
 	controlreg=controlreg&~FFRESET_BIT;
 	error=WritePMTReg(CTRL_REG,controlreg);
 	
+	//reset DMAChannel
+	error=WritePMTReg(USCTRL,0x0200000A);       
+	//  reset fifo's
+	error=WritePMTReg(EBCR_REG,0x0A);    
+	
+	
+	
 	//here?
 	nrsamples=0;
 	
@@ -883,11 +797,6 @@ int StartDAQThread(CmtThreadPoolHandle poolHandle)
 	
 	ProcessSystemEvents();  //to start the tread functions      
 	
-	/* create queue that holds 100 PMTqueue_elements and grows if needed */
-	CmtNewTSQ(QUEUE_LENGTH, sizeof(PMTregcommand), OPT_TSQ_DYNAMIC_SIZE, &commandqueue);
-	/* QueueReadCallback will be called when ANALYSIS_LENGTH items are in the Queue */     
-	//CmtInstallTSQCallback (commandqueue, EVENT_TSQ_ITEMS_IN_QUEUE, ANALYSIS_LENGTH, QueueReadCallback, 0, PMTThreadID, NULL);
-	
 	
 	//InitializePMTstate();  
 Error:
@@ -915,82 +824,10 @@ int StopDAQThread(CmtThreadPoolHandle poolHandle)
 
 	//UninitializePMTstate();     
 	
-	
-	CmtDiscardTSQ(commandqueue);
 	SetAcqBusy(0); 
 	
 	return error;
 }
-
-
-//called from pmt thread!!
-unsigned long ImReadReg(unsigned long regaddress)
-{
-	 unsigned long reply=0;
-	
-	 if(!VUPCI_Get_Reg(regaddress,&reply)){ 
-		reply=-1;
-	 };
-	 
-	 //update global var if necessary
-	 //so controlreg doesn't have to be read
-	 if (regaddress==CTRL_REG)  SetControlreg(reply); 
-	 
-	 return reply;
-}
-
-//called from pmt thread!! 
-int ImWriteReg(unsigned long regaddress,unsigned long regvalue)
-{
-	 int error=0;
-	 
-	 //update global var if necessary
-	 //so controlreg doesn't have to be read
-	 if (regaddress==CTRL_REG)  SetControlreg(regvalue); 
-	 
-	 if(!VUPCI_Set_Reg(regaddress,regvalue)){ 
-		error=-1;
-	 };
-	 
-	 return error;
-}
-
-//running in the pmt thread
-void DoCommand(void)
-{
-	int error;
-	unsigned long data;
-	
-	int cmtStatusOrItemsRead;
-	int done=0;
-	
-	//read queue until empty or error
-	while (done==0){ 
-		cmtStatusOrItemsRead=CmtReadTSQData (commandqueue, &newcommand, 1,0 , 0);  		 //TSQ_INFINITE_TIMEOUT
-		if (cmtStatusOrItemsRead<0){
-			// error  ,do something here?
-			done=1;
-		}
-		else if (cmtStatusOrItemsRead==0){
-			// queue empty
-			done=1;
-			SetPMTCommandFlag(0);
-		}
-		else  {
-			if (newcommand.RW==WRITE){ 
-				//write command
-				error=ImWriteReg(newcommand.regaddress,newcommand.regvalue);
-				SetPMTCommandFlag(0);
-			}
-			else {
-			//read request
-				data=ImReadReg(newcommand.regaddress);
-				SetPMTControllerData(data);
-				SetPMTCommandFlag(0); 
-			}
-		}
-	}
-}		
 
 
 //thread function,
@@ -1011,7 +848,6 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
 			SetNewBuffer();
 			numbytes=GetPMTBufsize();     
 		}
-		if (GetPMTCommandFlag()==1) DoCommand(); 
 		if ((readdata)&&(!readerror)) {
 			result=PMTReadActions(Samplebuffer,numbytes);
 		}

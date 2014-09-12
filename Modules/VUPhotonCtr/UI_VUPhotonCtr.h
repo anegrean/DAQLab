@@ -25,7 +25,6 @@
 #define  CounterPan_LED_FIFO_EMPTY        9       /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_RUNNING           10      /* control type: LED, callback function: (none) */
 #define  CounterPan_BTTN_TestMode         11      /* control type: textButton, callback function: (none) */
-#define  CounterPan_TOGGLESTART           12      /* control type: textButton, callback function: (none) */
 
 #define  VUPCChan                         2
 #define  VUPCChan_Fan                     2       /* control type: radioButton, callback function: (none) */

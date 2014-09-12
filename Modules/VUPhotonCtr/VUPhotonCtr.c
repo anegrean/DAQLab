@@ -254,6 +254,8 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 {
 	VUPhotonCtr_type* 	vupc;
 	TaskControl_type*	tc;
+	ListType			newTCList;
+	char*				newTCName; 
 	
 	if (!mod) {
 		vupc = malloc (sizeof(VUPhotonCtr_type));
@@ -273,11 +275,25 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 
 	//---------------------------
 	// Parent Level 0: DAQLabModule_type
-
-		// DATA
-		
+					
 			// adding Task Controller to module list    
 	ListInsertItem(vupc->baseClass.taskControllers, &tc, END_OF_LIST); 
+	newTCList = ListCreate(sizeof(TaskControl_type*));
+	ListInsertItem(newTCList, &tc, END_OF_LIST);
+	DLAddTaskControllers(newTCList);
+	ListDispose(newTCList);
+						
+					
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 		// METHODS
 
@@ -309,7 +325,8 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 
 	vupc->measmode					= MEASMODE_FINITE;
 
-
+	//is this correct here? lex
+	SetTaskControlModuleData(tc,vupc);
 		// METHODS
 			// assign default controls callback to UI_VUPhotonCtr.uir panel
 	vupc->uiCtrlsCB					= VUPCChannel_CB;
@@ -375,7 +392,7 @@ static Channel_type* init_Channel_type (VUPhotonCtr_type* vupcInstance, int panH
 	if (!chan) return NULL;
 
 	chan->vupcInstance	= vupcInstance;
-	chan->VChan			= init_SourceVChan_type(VChanName, VChan_Image, chan, NULL, NULL);
+	chan->VChan			= init_SourceVChan_type(VChanName, VChan_Waveform, chan, NULL, NULL);
 	chan->chanIdx		= chanIdx;
 	chan->panHndl   	= panHndl;
 	chan->gain			= 0;
@@ -1088,21 +1105,6 @@ static int CVICALLBACK VUPCPhotonCounter_CB (int panel, int control, int event, 
 
 			switch (control) {
 
-				//added for testing
-				case CounterPan_TOGGLESTART:
-					// temporary to test photon counting controller
-					GetCtrlVal(panel,control,&start);
-					//test
-					SetTaskControlModuleData (vupc->taskController,vupc); 
-					if (start) TaskControlEvent(vupc->taskController, TASK_EVENT_START, NULL, NULL);
-					else {
-						//stop iteration in continuous mode?
-					//	PMTStopAcq();
-					//	if (vupc->measmode==MEASMODE_CONTINUOUS) TaskControlIterationDone (vupc->taskController, 0,NULL);
-						TaskControlEvent(vupc->taskController, TASK_EVENT_STOP, NULL, NULL);
-					}
-					break;
-
 				case CounterPan_BTTN_FFRESET:
 					error=PMTClearFifo();
 					PMTController_UpdateDisplay(vupc);
@@ -1165,6 +1167,8 @@ void CVICALLBACK MenuSettings_CB (int menuBar, int menuItem, void *callbackData,
 static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
+	
+	
 
 	return init_FCallReturn_type(0, "", "");
 }
@@ -1193,6 +1197,11 @@ static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abo
 	//timeout testvalue
 	SetTaskControlIterationTimeout(taskControl,4);
 
+	if (vupc->measmode==MEASMODE_CONTINUOUS) {
+		SetTaskControlMode(vupc->taskController, TASK_CONTINUOUS);
+	} else {
+		SetTaskControlMode(vupc->taskController, TASK_FINITE);
+	}
 
 
 	// dim items
@@ -1209,8 +1218,6 @@ static FCallReturn_type* DoneTC (TaskControl_type* taskControl, size_t currentIt
 
 	// undim items
 	(*vupc->DimWhenRunning) (vupc, FALSE);
-	//reset start button
-	SetCtrlVal(vupc->counterPanHndl,CounterPan_TOGGLESTART,0);
 
 	return init_FCallReturn_type(0, "", "");
 }

@@ -82,6 +82,11 @@ char* rawfilepath="D:\\Rawdata\\";
 
 //int              		QuitFlag;
 unsigned short int* 	Samplebuffer	= NULL;
+unsigned short int* 	Samplebuffer2	= NULL;  
+unsigned short* pmt1dataptr;
+unsigned short* pmt2dataptr;
+unsigned short* pmt3dataptr;
+unsigned short* pmt4dataptr;
 
 int         			measurementmode =MEASMODE_FINITE;  //default
 int 		 			bufsize; 
@@ -100,7 +105,8 @@ DefineThreadSafeScalarVar(unsigned int,ReadyForReading,0); 	            // acqui
 
 
 unsigned int 	PMTThreadID; 
-int 			PMTThreadFunctionID;
+unsigned int 	PMTThread2ID;
+//int 			PMTThreadFunctionID;
 PMTregcommand 	newcommand;
 int readerror=0; 
 int readdata=0;
@@ -114,6 +120,7 @@ int 			iterationnr;              //current iteration number, passed in data
 //==============================================================================
 // Global functions
 int CVICALLBACK PMTThreadFunction(void *(functionData));
+int CVICALLBACK PMTThreadFunction2(void *(functionData));    
 int StartDAQThread(CmtThreadPoolHandle poolHandle) ;
 int StopDAQThread(CmtThreadPoolHandle poolHandle);
 int PMTReset(void);
@@ -283,17 +290,14 @@ int ReadBuffer(unsigned short int* samplebuffer,int bufsize)
 	int numpixels;
 	int numshorts;
 	int ndatapoints;
-	unsigned short* pmt1dataptr;
-	unsigned short* pmt2dataptr;
-	unsigned short* pmt3dataptr;
-	unsigned short* pmt4dataptr;
+
 	static int testcounter=0;
 	long errcode;
 	char* rawfilename;
 //	unsigned long reply;
 //	int i;
 	
-	result = VUPCI_Read_Buffer((unsigned short*)Samplebuffer,bufsize);
+	result = VUPCI_Read_Buffer((unsigned short*)samplebuffer,bufsize);
 	if( result<0){
 				//err
 		//SetPMTState(PMT_ERROR);
@@ -313,15 +317,6 @@ int ReadBuffer(unsigned short int* samplebuffer,int bufsize)
 			result=0;
 		}
 		else{
-			//test data on tokens
-			numshorts=bufsize/2;
-		/*	for (i=0;i<numshorts;i++){
-				if (Samplebuffer[i]>65530){
-					//found a token.. program should'n break here!!
-					break;
-				}
-			}		  */
-	
 			// deinterlace data here
 			numpixels=result/8;  //8 bytes per pixel, result gives number of bytes
 			numshorts=result/2;
@@ -329,14 +324,14 @@ int ReadBuffer(unsigned short int* samplebuffer,int bufsize)
 			
 			
 			//transpose data array
-			TransposeData(Samplebuffer,VAL_SHORT_INTEGER,numshorts,4);
+			TransposeData(samplebuffer,VAL_SHORT_INTEGER,numshorts,4);
 			pmt1dataptr=malloc(ndatapoints*sizeof(unsigned short));
 			pmt2dataptr=malloc(ndatapoints*sizeof(unsigned short)); 
 			pmt3dataptr=malloc(ndatapoints*sizeof(unsigned short)); 
 			pmt4dataptr=malloc(ndatapoints*sizeof(unsigned short)); 
-			memcpy(pmt1dataptr,&Samplebuffer[0],ndatapoints*sizeof(unsigned short));
+		//	memcpy(pmt1dataptr,&Samplebuffer[0],ndatapoints*sizeof(unsigned short));
 		//	memcpy(pmt2dataptr,&Samplebuffer[ndatapoints],ndatapoints*sizeof(unsigned short)); 
-		//	memcpy(pmt3dataptr,&Samplebuffer[2*ndatapoints],ndatapoints*sizeof(unsigned short)); 
+			memcpy(pmt3dataptr,&Samplebuffer[2*ndatapoints],ndatapoints*sizeof(unsigned short)); 
 		//	memcpy(pmt4dataptr,&Samplebuffer[3*ndatapoints],ndatapoints*sizeof(unsigned short)); 
 		  
 			
@@ -344,7 +339,7 @@ int ReadBuffer(unsigned short int* samplebuffer,int bufsize)
 			//test
 			rawfilename=malloc(MAXCHAR*sizeof(char));
 			Fmt (rawfilename, "%s<%srawdata_%i.bin", rawfilepath,iterationnr); 
-			ArrayToFile(rawfilename,pmt1dataptr,VAL_SHORT_INTEGER,ndatapoints,1,VAL_GROUPS_TOGETHER,VAL_GROUPS_AS_COLUMNS,VAL_SEP_BY_TAB,0,VAL_BINARY,VAL_APPEND);
+			ArrayToFile(rawfilename,pmt3dataptr,VAL_SHORT_INTEGER,ndatapoints,1,VAL_GROUPS_TOGETHER,VAL_GROUPS_AS_COLUMNS,VAL_SEP_BY_TAB,0,VAL_BINARY,VAL_APPEND);
 			free(rawfilename);
 			
 			//send datapackets
@@ -625,9 +620,21 @@ void SetNewBuffer(void)
 	int bufsize;
 
 	bufsize=GetPMTBufsize();
-	
 	OKfree(Samplebuffer); 
+	OKfree(Samplebuffer2); 
+	OKfree(pmt1dataptr); 
+	OKfree(pmt2dataptr); 
+	OKfree(pmt3dataptr); 
+	OKfree(pmt4dataptr); 
+	
 	Samplebuffer = malloc(bufsize); 
+	Samplebuffer2 = malloc(bufsize); 
+	
+	pmt1dataptr=malloc(bufsize/4);
+	pmt2dataptr=malloc(bufsize/4); 
+	pmt3dataptr=malloc(bufsize/4); 
+	pmt4dataptr=malloc(bufsize/4);
+	
 	SetPMTnewbufsizeflag(0); 
 }
 
@@ -652,7 +659,9 @@ int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl)
 	
 	//test
 //	VUPCI_Close(); 
-//	errChk(VUPCI_Open());  
+//	errChk(VUPCI_Open()); 
+	
+	readdata=1;   //start reading       
 	
 	controlreg=GetControlreg();  
 	//set app start bit  
@@ -665,8 +674,8 @@ int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl)
 		  ProcessSystemEvents();
 	}
 	
-	VUPCI_Start_DMA();  
-	readdata=1;   //start reading
+//	VUPCI_Start_DMA();  
+
 	
 	
 Error:
@@ -685,7 +694,7 @@ int PMTStopAcq(void)
 	unsigned long controlreg;    
 	
 	readdata=0;  //stop reading  
-	VUPCI_Stop_DMA();
+//	VUPCI_Stop_DMA();
 	
 	controlreg=GetControlreg();  
 	//set app start bit  
@@ -793,7 +802,9 @@ int StartDAQThread(CmtThreadPoolHandle poolHandle)
 	SetAcqBusy(1);   
 	
 	error=CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL);   	   //&PMTThreadFunctionID
-	if (error<0) return error;  
+	if (error<0) return error; 
+	error=CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction2,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL);   	   //&PMTThreadFunctionID
+	if (error<0) return error; 
 	
 	ProcessSystemEvents();  //to start the tread functions      
 	
@@ -863,6 +874,30 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
     //quit
 	SetPMTCommandFlag(0); 
 	
+	return 0;
+}
+
+
+//thread function,
+//run pmt read actions in this separate thread to prevent other daq tasks from underrunning
+int CVICALLBACK PMTThreadFunction2(void *(functionData))
+{
+	int result;
+	int numbytes;
+	
+	PMTThread2ID=CmtGetCurrentThreadID ();  
+	
+//parallel thread requesting data when in movie mode
+	while (GetAcqBusy()==1)     
+	{
+		if (measurementmode !=MEASMODE_FINITE) {
+			numbytes=GetPMTBufsize(); 
+			result=PMTReadActions(Samplebuffer2,numbytes);  
+		}
+		ProcessSystemEvents();
+    }
+    //quit
+
 	return 0;
 }
 

@@ -229,13 +229,23 @@ static int PMTController_ResetFifo(void);
 //-----------------------------------------
 
 static FCallReturn_type*	ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
+
 static void					IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+
+static void 				AbortIterationTC		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
 static FCallReturn_type*	StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
+
 static FCallReturn_type*	DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
 static FCallReturn_type*	StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+
 static FCallReturn_type* 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag);
+
 static void					DimTC					(TaskControl_type* taskControl, BOOL dimmed);
+
 static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg);
+
 static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
 
@@ -267,7 +277,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	initalloc_DAQLabModule(&vupc->baseClass, className, instanceName);
 	
 	// create VUPhotonCtr Task Controller
-	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, IterateTC, StartTC, ResetTC,
+	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
 								DoneTC, StoppedTC, DimTC, NULL, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
 	
@@ -1008,7 +1018,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						sprintf(buff, "Ch. %d", eventData2+1);
 						SetCtrlAttribute(chan->panHndl, VUPCChan_Mode, ATTR_LABEL_TEXT, buff);
 						// register VChan with DAQLab
-						DLRegisterVChan(chan->VChan);
+						DLRegisterVChan((DAQLabModule_type*)chan->vupcInstance, chan->VChan);
 
 						// connect module data and user interface callbackFn to all direct controls in the panel
 						SetCtrlsInPanCBInfo(chan, ((VUPhotonCtr_type*)vupc)->uiCtrlsCB, chan->panHndl);
@@ -1026,7 +1036,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						// get channel pointer
 						srcVChan = vupc->channels[eventData2]->VChan;
 						// unregister VChan from DAQLab framework
-						DLUnregisterVChan(srcVChan);
+						DLUnregisterVChan((DAQLabModule_type*)chan->vupcInstance, srcVChan);
 						// discard channel data
 						discard_Channel_type(&vupc->channels[eventData2]);
 						// update channel list in the settings panel
@@ -1188,6 +1198,12 @@ static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 
 }
 
+static void AbortIterationTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+{
+	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
+	
+}
+
 static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
@@ -1195,7 +1211,7 @@ static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abo
 	//reset hardware iteration counter
 	//ResetDataCounter();
 	//timeout testvalue
-	SetTaskControlIterationTimeout(taskControl,4);
+//	SetTaskControlIterationTimeout(taskControl,4);
 
 	if (vupc->measmode==MEASMODE_CONTINUOUS) {
 		SetTaskControlMode(vupc->taskController, TASK_CONTINUOUS);

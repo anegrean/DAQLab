@@ -22,7 +22,7 @@
 //==============================================================================
 // Include modules
 
-#include "PIStage.h"
+//#include "PIStage.h"
 #include "VUPhotonCtr.h"
 #include "NIDAQmxManager.h"
 #include "LaserScanning.h"
@@ -139,7 +139,7 @@ typedef struct {
 //------------------------------------------------------------------------------------------------
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0}
 	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 }
@@ -209,10 +209,6 @@ static int					DAQLab_SaveXMLDOM							(const char fileName[], CAObjHandle* xmlD
 static UITaskCtrl_type*		DAQLab_AddTaskControllerToUI				(TaskControl_type* taskControl);
 
 static int					DAQLab_RemoveTaskControllerFromUI			(int index);
-
-BOOL						DLAddTaskControllers						(ListType tcList);	// of TaskControl_type* 
-
-BOOL						DLRemoveTaskControllers 					(ListType tcList);	// of TaskControl_type*
 
 static void					DAQLab_RedrawTaskControllerUI				(void);
 
@@ -1350,11 +1346,7 @@ static UITaskCtrl_type* DAQLab_AddTaskControllerToUI (TaskControl_type* taskCont
 	nullChk(ListInsertItem(TasksUI.UItaskCtrls, &newUItaskCtrlPtr, END_OF_LIST) );
 	
 	// add Task Controller to the framework
-	ListType tcList = ListCreate(sizeof(TaskControl_type*));
-	ListInsertItem(tcList, &taskControl, END_OF_LIST);
-	DLAddTaskControllers (tcList);
-	
-	ListDispose(tcList);
+	DLAddTaskController (NULL, taskControl);
 	
 	DAQLab_RedrawTaskControllerUI();
 	
@@ -1387,7 +1379,7 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 	ListInsertItem(tcList, &(*UItaskCtrlPtrPtr)->taskControl, END_OF_LIST);
 	UITaskCtrl_type*	removedUITC;
 	ListRemoveItem(TasksUI.UItaskCtrls, &removedUITC, index);  
-	if (!DLRemoveTaskControllers (tcList))
+	if (!DLRemoveTaskControllers (NULL, tcList))
 		return -1;
 	ListDispose(tcList);
 	
@@ -1400,107 +1392,128 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 
 /// HIFN Removes a list of Task Controllers provided by tcList as TaskControl_type* list elements from the DAQLab framework.
 /// HIRET True if all Task Controllers were removed successfully or if there are no Task Controllers to be removed, False otherwise.
-BOOL DLRemoveTaskControllers (ListType tcList)
+BOOL DLRemoveTaskControllers (DAQLabModule_type* mod, ListType tcList)
 {
-	TaskControl_type** 	tcToBeRemovedPtrPtr;
-	TaskControl_type** 	tcPtrPtr;
-	size_t				nRemoved				= 0;
+	// remove from the module's list of Task Controllers
+	if (mod)
+		if (!RemoveTaskControllersFromList(mod->taskControllers, tcList)) goto Error;
 	
-	size_t n = ListNumItems(tcList);
-	size_t nDAQLabTCs;
-	for (size_t i = 1; i <= n; i++) {
-		tcToBeRemovedPtrPtr = ListGetPtrToItem(tcList, i);
-		nDAQLabTCs = ListNumItems(DAQLabTCs);
-		for (size_t j = 1; j <= nDAQLabTCs; j++) {
-			tcPtrPtr = ListGetPtrToItem(DAQLabTCs, j);
-			if (*tcToBeRemovedPtrPtr == *tcPtrPtr) {
-				ListRemoveItem(DAQLabTCs, 0, j);
-				nRemoved++;
-				break;
-			}
-		}
-	}
+	// remove from the framework list
+	if (!RemoveTaskControllersFromList(DAQLabTCs, tcList)) goto Error;
 	
 	// update Task Tree if it is displayed
 	if (TaskTreeManagerPanHndl)
 		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 	
-	return (nRemoved == n);
+	// update also the Switchboard in case any connections between VChans are broken
+	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
+
+	return TRUE;
+Error:
+	return FALSE;
 }
 
-BOOL DLRemoveTaskController (TaskControl_type* taskController)
+BOOL DLRemoveTaskController (DAQLabModule_type* mod, TaskControl_type* taskController)
 {
-	ListType tcList = ListCreate(sizeof(TaskControl_type*));
-	ListInsertItem(tcList, &taskController, END_OF_LIST);
-	BOOL result = DLRemoveTaskControllers(tcList);
-	ListDispose(tcList);
+	// remove from the module's list of Task Controllers  
+	if (mod)
+		if (!RemoveTaskControllerFromList(mod->taskControllers, taskController)) goto Error;
+	
+	// remove from the framework list
+	if (!RemoveTaskControllerFromList(DAQLabTCs, taskController)) goto Error;
+	
+	// update Task Tree if it is displayed
+	if (TaskTreeManagerPanHndl)
+		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 	
 	// make sure that also the Switchboard is updated in case any connections between VChans are broken
 	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
 	
-	return result;
+	return TRUE;
+Error:
+	return FALSE;
 }
 
 /// HIFN Adds a list of Task Controllers provided by tcList as TaskControl_type* list elements to the DAQLab framework if their names are unique.
 /// HIRET TRUE if successful or if list is empty.
 /// HIRET FALSE if Task Controller names in tcList and the framework are not unique.
-BOOL DLAddTaskControllers (ListType tcList)
+BOOL DLAddTaskControllers (DAQLabModule_type* mod, ListType tcList)
 {
-	ListType 	tcNamesList 	= ListCreate(sizeof(char*));
-	size_t		nTCs			= ListNumItems(tcList);
-	char**		tcNamePtr;
-	size_t		tcNameIdx;
-	
-	// update Task Tree if it is displayed
-	// do this first to display a new module in the UI even if it has no Task Controllers
-	if (TaskTreeManagerPanHndl)
-		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+	ListType 			tcNamesList 	= ListCreate(sizeof(char*));
+	size_t				nTCs			= ListNumItems(tcList);
+	char*				tcName;
+	char**				tcNamePtr;
+	TaskControl_type**  tcPtr;
+	size_t				tcNameIdx;
 	
 	if (!nTCs) return TRUE;
 	
 	//---------------------------------------------------------
-	// check if the Task Controllers provided have unique names
+	// check if the provided Task Controllers have unique names
 	//---------------------------------------------------------
 	
 	// build up list with Task Controller names
 	for (size_t i = 1; i <= nTCs; i++) {
-		tcNamePtr = ListGetPtrToItem(tcList, i);
-		ListInsertItem(tcNamesList, tcNamePtr, END_OF_LIST);
+		tcPtr = ListGetPtrToItem(tcList, i);
+		tcName = GetTaskControlName(*tcPtr);
+		ListInsertItem(tcNamesList, &tcName, END_OF_LIST);
 	}
 	// check if names are unique among themselves
 	if (!DLUniqueStrings(tcNamesList, &tcNameIdx)) {
 		tcNamePtr = ListGetPtrToItem(tcNamesList, tcNameIdx);
 		DAQLab_Msg(DAQLAB_MSG_ERR_NOT_UNIQUE_TASKCONTROLLER_NAME, *tcNamePtr, NULL, NULL, NULL);	
-		ListDispose(tcNamesList);
+		ListDisposePtrList(tcNamesList);
 		return FALSE;	
 	}
-	ListDispose(tcNamesList);
+	
 	// check if names are unique within the framework
 	for (size_t i = 1; i <= nTCs; i++) {
-		tcNamePtr = ListGetPtrToItem(tcList, i);
+		tcNamePtr = ListGetPtrToItem(tcNamesList, i);
 		if (!DLValidTaskControllerName(*tcNamePtr)) {
 			DAQLab_Msg(DAQLAB_MSG_ERR_NOT_UNIQUE_TASKCONTROLLER_NAME, *tcNamePtr, NULL, NULL, NULL);	
 			return FALSE;
 		}
 	}
 	
-	//--------------------------------------
-	// add Task Controllers to the framework
-	//--------------------------------------
+	ListDispose(tcNamesList);  
 	
+	// add Task Controllers to the module's list of Task Controllers if they belong to a module
+	if (mod)
+		ListAppend(mod->taskControllers, tcList);
+	// add Task Controllers to the framework
 	ListAppend(DAQLabTCs, tcList);
+	
+	// update Task Tree if it is displayed
+	if (TaskTreeManagerPanHndl)
+		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 	
 	return TRUE;
 }
 
-BOOL DLAddTaskController (TaskControl_type* taskController)
+/// HIFN Adds a Task Controller to the DAQLab framework if its names is unique among existing Task Controllers.
+/// HIRET TRUE if successful, FALSE if the provided Task Controller name is not unique within the framework.
+BOOL DLAddTaskController (DAQLabModule_type* mod, TaskControl_type* taskController)
 {
-	ListType tcList = ListCreate(sizeof(TaskControl_type*));
-	ListInsertItem(tcList, &taskController, END_OF_LIST);
-	BOOL result = DLAddTaskControllers(tcList);
-	ListDispose(tcList);
+	// check if Task Controller name is unique
+	char* tcName = GetTaskControlName(taskController);
+	if (!DLValidTaskControllerName(tcName)) {
+		DAQLab_Msg(DAQLAB_MSG_ERR_NOT_UNIQUE_TASKCONTROLLER_NAME, tcName, NULL, NULL, NULL);
+		OKfree(tcName);
+		return FALSE;
+	}
+	OKfree(tcName);
 	
-	return result;
+	// add Task Controller to the module's list of Task Controllers if it belongs to a module
+	if (mod)
+		ListInsertItem(mod->taskControllers, &taskController, END_OF_LIST);
+	// add Task Controller to the framework's list of Task Controllers
+	ListInsertItem(DAQLabTCs, &taskController, END_OF_LIST);
+	
+	// update the Task Tree if it is displayed
+	if (TaskTreeManagerPanHndl)
+		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+	
+	return TRUE;
 }
 
 static void	DAQLab_RedrawTaskControllerUI (void)
@@ -1694,11 +1707,15 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					DAQLabModules_InitFunctions[moduleidx].nInstances++;
 					
 					// try to add the Task Controllers to the framework if their names are unique
-					if (!DLAddTaskControllers(newModulePtr->taskControllers)) {
+					if (!DLAddTaskControllers(newModulePtr, newModulePtr->taskControllers)) {
 						// discard module
 						(*newModulePtr->Discard) (&newModulePtr);
 						return 0;
 					}
+					
+					// make sure that the Task Tree is updated even if there are no task Controllers to be added
+					if (TaskTreeManagerPanHndl && !ListNumItems(newModulePtr->taskControllers))
+						DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 					
 					// display module panels if method is defined
 					if (newModulePtr->DisplayPanels)
@@ -1741,7 +1758,7 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 							DAQLabModule_type* removedDAQLabModule;
 							ListRemoveItem(DAQLabModules, &removedDAQLabModule, i);
 							// remove Task Controllers and VChans from the framework
-							DLRemoveTaskControllers(removedDAQLabModule->taskControllers);
+							DLRemoveTaskControllers(removedDAQLabModule, removedDAQLabModule->taskControllers);
 							DLUnregisterModuleVChans(removedDAQLabModule);
 							// call module discard function
 							(*removedDAQLabModule->Discard)	(&removedDAQLabModule);

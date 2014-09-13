@@ -13,7 +13,7 @@
 #include "DAQLabUtility.h"
 #include <ansi_c.h>
 #include <formatio.h> 
-#include "toolbox.h" 
+#include "toolbox.h"
 #include "nivision.h"
 #include "utility.h"
 #include "VChannel.h"
@@ -465,8 +465,8 @@ int ReleaseAllDataPackets (SinkVChan_type* sinkVChan)
 	errChk(CmtReadTSQData(sinkVChanTSQHndl, dataPackets, nPackets, 0, 0));
 		
 	// release data packets
-	for(size_t j = 0; j < nPackets; j++)
-		ReleaseDataPacket(dataPackets+j);
+	for(size_t i = 0; i < nPackets; i++)
+		ReleaseDataPacket(dataPackets+i);
 		
 	free(dataPackets);
 	

@@ -539,6 +539,9 @@ TaskControl_type*		TaskControllerNameExists			(ListType TCList, char TCName[], s
 	// Removes a given task Controller from a list of task Controllers of TaskControl_type*. Returns TRUE if given Task Controller was found and removed.
 BOOL					RemoveTaskControllerFromList		(ListType TCList, TaskControl_type* taskController);
 
+	// Removes a list of Task Controllers from another list of Task Controllers. Returns TRUE if all Task Controllers to be removed were found and removed, FALSE otherwise.
+BOOL					RemoveTaskControllersFromList		(ListType TCList, ListType TCsToBeRemoved);
+
 	// Returns a unique Task Controller name among a given list of Task Controllers. The naming convention uses a given baseTCName and adds a number to the name.
 char* 					GetUniqueTaskControllerName			(ListType TCList, char baseTCName[]);
 

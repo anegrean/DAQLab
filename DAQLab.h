@@ -158,15 +158,15 @@ char*				DLGetUniqueTaskControllerName	(char baseTCName[]);
 
 	// Adds a list of Task Controllers to the DAQLab framework.
 	// tcList of TaskControl_type* 
-BOOL				DLAddTaskControllers			(ListType tcList);
+BOOL				DLAddTaskControllers			(DAQLabModule_type* mod, ListType tcList);
 	// Adds a single Task Controller to the DAQLab framework
-BOOL				DLAddTaskController				(TaskControl_type* taskController);
+BOOL				DLAddTaskController				(DAQLabModule_type* mod, TaskControl_type* taskController);
 
 	// Removes a list of Task Controllers from the DAQLab framework.
 	// tcList of TaskControl_type*   
-BOOL				DLRemoveTaskControllers 		(ListType tcList);
+BOOL				DLRemoveTaskControllers 		(DAQLabModule_type* mod, ListType tcList);
 	// Removes a single Task Controller from the DAQLab framework.
-BOOL				DLRemoveTaskController 			(TaskControl_type* taskController);			
+BOOL				DLRemoveTaskController 			(DAQLabModule_type* mod, TaskControl_type* taskController);			
 
 //-------------------------------------------------------------------------------
 // DAQLab XML management

@@ -883,11 +883,8 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					SetPanelAttribute(newScanEngine->scanSetPanHndl, ATTR_CALLBACK_DATA, newScanEngine);
 				  
 					// add scan engine task controller to the framework
-					ListType tcList = ListCreate(sizeof(TaskControl_type*));
-					ListInsertItem(tcList, &newScanEngine->taskControl, END_OF_LIST);
-					DLAddTaskControllers(tcList);
-					ListDispose(tcList);
-			
+					DLAddTaskController((DAQLabModule_type*)ls, newScanEngine->taskControl);
+					
 					// add scan engine VChans to DAQLab framework
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanFastAxisCom);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanSlowAxisCom);
@@ -1054,10 +1051,8 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							//----------------------------------------
 							// Task Controller and VChans registration
 							//----------------------------------------
-							// add task controller to the laser scanning module
-							ListInsertItem(ls->baseClass.taskControllers, &nrgCal->baseClass.taskController, END_OF_LIST);
 							// register calibration Task Controller with the framework
-							DLAddTaskController(nrgCal->baseClass.taskController);
+							DLAddTaskController((DAQLabModule_type*)ls, nrgCal->baseClass.taskController);
 							// register VChans with framework
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanCom);
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanPos);
@@ -1324,14 +1319,11 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 					DLUnregisterVChan((DAQLabModule_type*)nrgCal->baseClass.lsModule, (VChan_type*)nrgCal->baseClass.VChanCom);
 					DLUnregisterVChan((DAQLabModule_type*)nrgCal->baseClass.lsModule, (VChan_type*)nrgCal->baseClass.VChanPos);
 					
-					// remove task controller from the laser scanning module list of Task Controllers
-					RemoveTaskControllerFromList(nrgCal->baseClass.lsModule->baseClass.taskControllers, calTC);
+					// unregister calibration Task Controller
+					DLRemoveTaskController((DAQLabModule_type*)nrgCal->baseClass.lsModule, calTC);
 					
 					// discard active calibration data structure
 					(*nrgCal->baseClass.Discard) ((ScanAxisCal_type**)&nrgCal);
-					
-					// unregister calibration Task Controller
-					DLRemoveTaskController(calTC);
 					
 					break;
 					
@@ -1770,10 +1762,7 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	// Task controller
 	//----------------------------------
 	if (engine->taskControl) {
-		ListType tcList = ListCreate(sizeof(TaskControl_type*));
-		ListInsertItem(tcList, &engine->taskControl, END_OF_LIST);
-		DLRemoveTaskControllers(tcList); 
-		ListDispose(tcList);
+		DLRemoveTaskController((DAQLabModule_type*)engine->lsModule, engine->taskControl); 
 		discard_TaskControl_type(&engine->taskControl);
 	}
 	
@@ -1966,6 +1955,8 @@ static void	DetVChanDisconnected (VChan_type* self, VChan_type* disconnectedVCha
 static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
 }
 
 static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
@@ -1973,31 +1964,38 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 }
 
-static void	AbortIterationTC_NonResGalvoCal	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void AbortIterationTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+
 }
 
 static FCallReturn_type* StartTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
+	return init_FCallReturn_type(0, "", ""); 
 }
 
 static FCallReturn_type* ResetTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
+	return init_FCallReturn_type(0, "", ""); 
 }
 
 static FCallReturn_type* DoneTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", ""); 
 }
 
 static FCallReturn_type* StoppedTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", ""); 
 }
 
 static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
@@ -2008,11 +2006,15 @@ static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
 }
 
 static FCallReturn_type* ModuleEventHandler_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
 }
 
 static void ErrorTC_NonResGalvoCal (TaskControl_type* taskControl, char* errorMsg)
@@ -2029,6 +2031,7 @@ static FCallReturn_type* ConfigureTC_RectRaster (TaskControl_type* taskControl, 
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	return init_FCallReturn_type(0, "", ""); 
 }
 
 static void	IterateTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
@@ -2037,7 +2040,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, size_t currentI
 	
 }
 
-static void	AbortIterationTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void AbortIterationTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
@@ -2047,24 +2050,28 @@ static FCallReturn_type* StartTC_RectRaster (TaskControl_type* taskControl, BOOL
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	return init_FCallReturn_type(0, "", ""); 
 }
 
 static FCallReturn_type* DoneTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	return init_FCallReturn_type(0, "", "");   
 }
 
 static FCallReturn_type* StoppedTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	return init_FCallReturn_type(0, "", "");   
 }
 
 static FCallReturn_type* ResetTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	return init_FCallReturn_type(0, "", "");   
 }
 
 static void	DimTC_RectRaster (TaskControl_type* taskControl, BOOL dimmed)
@@ -2077,6 +2084,7 @@ static FCallReturn_type* DataReceivedTC_RectRaster (TaskControl_type* taskContro
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	return init_FCallReturn_type(0, "", "");   
 }
 
 static void ErrorTC_RectRaster (TaskControl_type* taskControl, char* errorMsg)
@@ -2089,4 +2097,5 @@ static FCallReturn_type* ModuleEventHandler_RectRaster (TaskControl_type* taskCo
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	return init_FCallReturn_type(0, "", "");
 }

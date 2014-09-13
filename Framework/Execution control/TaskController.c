@@ -1407,11 +1407,11 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 	}
 	
 	
-	if (!fCallResult && fID != TASK_FCALL_ITERATE && fID != TASK_FCALL_ERROR && fID != TASK_FCALL_DIM_UI) 
+	if (!fCallResult && (fID != TASK_FCALL_ITERATE) && (fID != TASK_FCALL_ABORT_ITERATION) && (fID != TASK_FCALL_DIM_UI) && (fID != TASK_FCALL_UITC_ACTIVE) && (fID != TASK_FCALL_ERROR)) 
 		if (functionMissingFlag)
 			return NULL;																				// function not provided
 		else
-			return init_ErrorMsg_type(FunctionCall_Error_OutOfMemory, "FunctionCall", "Out of memory"); // out of memory   
+			return init_ErrorMsg_type(FunctionCall_Error_OutOfMemory, "FunctionCall", "Function return value missing or out of memory");
 	
 	// in case of error, return error message otherwise return NULL
 	return FCallReturnToErrorMsg(&fCallResult, fID);
@@ -1520,6 +1520,21 @@ BOOL RemoveTaskControllerFromList (ListType TCList, TaskControl_type* taskContro
 	}
 	
 	return FALSE;
+}
+
+BOOL RemoveTaskControllersFromList (ListType TCList, ListType TCsToBeRemoved)
+{
+	TaskControl_type**   	TCPtr;  
+	size_t					nTCs 		= ListNumItems(TCsToBeRemoved); 
+	size_t					nRemoved	= 0;
+	
+	for (size_t i = nTCs; i; i--) {
+		TCPtr = ListGetPtrToItem(TCsToBeRemoved, i);
+		if (RemoveTaskControllerFromList(TCList, *TCPtr)) nRemoved++;
+	}
+	
+	if (nRemoved == nTCs) return TRUE;
+	else return FALSE;
 }
 
 char* GetUniqueTaskControllerName (ListType TCList, char baseTCName[])

@@ -154,20 +154,20 @@ CAObjHandle							DAQLabCfg_DOMHndl		= 0;
 ActiveXMLObj_IXMLDOMElement_   		DAQLabCfg_RootElement 	= 0; 
 
 	// UI resources	
-static int				mainPanHndl			= 0;		// Main workspace panel handle
-static int				logPanHndl			= 0;		// Log panel handle
+static int				mainPanHndl				= 0;		// Main workspace panel handle
+static int				logPanHndl				= 0;		// Log panel handle
+static int				DAQLabModulesPanHndl	= 0;
 
-static struct TasksUI_ {								// UI data container for Task Controllers
+static struct TasksUI_ {									// UI data container for Task Controllers
 	
-	int			panHndl;								// Tasks panel handle
-	int			controllerPanHndl;						// Task Controller panel handle
+	int			panHndl;									// Tasks panel handle
+	int			controllerPanHndl;							// Task Controller panel handle
 	int			controllerPanWidth;
 	int			controllerPanHeight;
 	int			menuBarHndl;
 	int			menuID_Manage;
 	int			menuItem_Add;
 	int			menuItem_Delete;
-	int			menuItem_TaskTree;
 	ListType	UItaskCtrls;							// UI Task Controllers of UITaskCtrl_type*   
 	
 } 				TasksUI						= {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -212,7 +212,7 @@ static int					DAQLab_RemoveTaskControllerFromUI			(int index);
 
 static void					DAQLab_RedrawTaskControllerUI				(void);
 
-static void CVICALLBACK 	DAQLab_TaskMenu_CB 							(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+static void CVICALLBACK 	DAQLab_TaskMenu_CB 							(int menuBarHndl, int menuItemID, void *callbackData, int panelHndl);
 
 static void					DAQLab_TaskMenu_AddTaskController 			(void);
 
@@ -259,10 +259,10 @@ static void				 	ErrorUITC 									(TaskControl_type* taskControl, char* errorM
 //==============================================================================
 // Global functions
 
-void CVICALLBACK 			DAQLab_MenuModules_CB					(int menuBar, int menuItem, void *callbackData, int panel);
+void CVICALLBACK 			DAQLab_ModulesMenu_CB						(int menuBarHndl, int menuItem, void *callbackData, int panelHndl);
 
-
-
+void CVICALLBACK 			DAQLab_DisplayTaskManagerMenu_CB 			(int menuBarHndl, int menuItemID, void *callbackData, int panelHndl); 
+						
 
 
 /// HIFN  Main entry point
@@ -367,7 +367,6 @@ static int DAQLab_Load (void)
 	errChk (TasksUI.menuID_Manage		= NewMenu(TasksUI.menuBarHndl, "Manage", -1) );
 	errChk (TasksUI.menuItem_Add 		= NewMenuItem(TasksUI.menuBarHndl, TasksUI.menuID_Manage, "Add", -1, (VAL_MENUKEY_MODIFIER | 'A'), DAQLab_TaskMenu_CB, &TasksUI) );
 	errChk (TasksUI.menuItem_Delete 	= NewMenuItem(TasksUI.menuBarHndl, TasksUI.menuID_Manage, "Delete", -1, (VAL_MENUKEY_MODIFIER | 'D'), DAQLab_TaskMenu_CB, &TasksUI) );
-	errChk (TasksUI.menuItem_TaskTree	= NewMenuItem(TasksUI.menuBarHndl, TasksUI.menuID_Manage, "Task Tree", -1, (VAL_MENUKEY_MODIFIER | 'S'), DAQLab_TaskMenu_CB, &TasksUI) );
 	// get height and width of Task Controller panel
 	GetPanelAttribute(TasksUI.controllerPanHndl, ATTR_HEIGHT, &TasksUI.controllerPanHeight);
 	GetPanelAttribute(TasksUI.controllerPanHndl, ATTR_WIDTH, &TasksUI.controllerPanWidth);
@@ -777,8 +776,10 @@ void DLMsg(const char* text, BOOL beep)
 	if (!DAQLAB_LOG_PANEL) return;
 	
 	SetCtrlVal(logPanHndl, LogPan_LogBox, text);
-	if (beep) Beep();
-	
+	if (beep) {
+		DisplayPanel(logPanHndl); // bring to focus
+		Beep();
+	}
 }
 
 /// HIFN Displays predefined error and warning messages in the main workspace log panel.
@@ -1529,16 +1530,13 @@ static void	DAQLab_RedrawTaskControllerUI (void)
 		SetPanelAttribute(TasksUI.panHndl, ATTR_HEIGHT, TasksUI.controllerPanHeight + 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN + menubarHeight);
 		SetPanelAttribute(TasksUI.panHndl, ATTR_WIDTH, TasksUI.controllerPanWidth + 2 * DAQLAB_TASKCONTROLLERS_PAN_MARGIN); 
 		
-		// dimm delete and task tree menu items since there are no Task Controllers
+		// dimm delete menu item since there are no Task Controllers
 		SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_Delete, ATTR_DIMMED, 1);
-		SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_TaskTree, ATTR_DIMMED, 1);
-		
 		return;
 	}
 	
 	// undim delete and task tree menu items 
 	SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_Delete, ATTR_DIMMED, 0);
-	SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_TaskTree, ATTR_DIMMED, 0);
 	
 	// reposition Task Controller panels and display them
 	for (int i = 1; i <= nControllers; i++) {
@@ -1573,22 +1571,22 @@ static void	DAQLab_RedrawTaskControllerUI (void)
 	
 }
 
-static void CVICALLBACK DAQLab_TaskMenu_CB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
+static void CVICALLBACK DAQLab_TaskMenu_CB (int menuBarHndl, int menuItemID, void *callbackData, int panelHndl)
 {
 	// menu item Add
 	if (menuItemID == TasksUI.menuItem_Add) DAQLab_TaskMenu_AddTaskController();
 		
 	// menu item Delete
 	if (menuItemID == TasksUI.menuItem_Delete ) DAQLab_TaskMenu_DeleteTaskController();
-		
-	// menu item SubTasks
-	if (menuItemID == TasksUI.menuItem_TaskTree) DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
-		
 }
 
-void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbackData, int panel)
+void CVICALLBACK DAQLab_DisplayTaskManagerMenu_CB (int menuBarHndl, int menuItemID, void *callbackData, int panelHndl)
 {
-	int						modulesPanHndl;
+	DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+}
+
+void CVICALLBACK DAQLab_ModulesMenu_CB (int menuBarHndl, int menuItem, void *callbackData, int panelHndl)
+{
 	DAQLabModule_type**		modulePtrPtr;
 	char*					fullModuleName;
 	size_t					nModules;			
@@ -1605,15 +1603,18 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 		DAQLab_Msg(DAQLAB_MSG_ERR_NOT_UNIQUE_CLASS_NAME, DAQLabModules_InitFunctions[idx].className, NULL, NULL, NULL); 
 		return;
 	}
-	
 	ListDispose(moduleClassNames);
 	
-	modulesPanHndl = LoadPanel(mainPanHndl, DAQLAB_UI_DAQLAB, ModulesPan);
+	if (!DAQLabModulesPanHndl)
+		DAQLabModulesPanHndl = LoadPanel(mainPanHndl, DAQLAB_UI_DAQLAB, ModulesPan);
+	else {
+		DisplayPanel(DAQLabModulesPanHndl); // bring to focus
+		return;
+	}
 	
 	// list available modules
-	for (int i = 0; i < nModules; i++) {
-		InsertListItem(modulesPanHndl, ModulesPan_Available, -1, DAQLabModules_InitFunctions[i].className, i);  
-	}
+	for (int i = 0; i < nModules; i++)
+		InsertListItem(DAQLabModulesPanHndl, ModulesPan_Available, -1, DAQLabModules_InitFunctions[i].className, i);  
 	
 	// list installed modules
 	nModules = ListNumItems(DAQLabModules);
@@ -1622,12 +1623,12 @@ void CVICALLBACK DAQLab_MenuModules_CB (int menuBar, int menuItem, void *callbac
 		fullModuleName = StrDup((*modulePtrPtr)->className);
 		AppendString(&fullModuleName, ": ", -1);
 		AppendString(&fullModuleName, (*modulePtrPtr)->instanceName, -1);
-		InsertListItem(modulesPanHndl, ModulesPan_Loaded, -1, fullModuleName, (*modulePtrPtr)->instanceName);
+		InsertListItem(DAQLabModulesPanHndl, ModulesPan_Loaded, -1, fullModuleName, (*modulePtrPtr)->instanceName);
 		OKfree(fullModuleName);
 	} 
 	
 	// display panel
-	DisplayPanel(modulesPanHndl);
+	DisplayPanel(DAQLabModulesPanHndl);
 	
 	return;
 }
@@ -2437,16 +2438,16 @@ static void ErrorUITC (TaskControl_type* taskControl, char* errorMsg)
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
 }
 
-int CVICALLBACK CloseDAQLabModulesPan_CB (int panel, int control, int event,
-		void *callbackData, int eventData1, int eventData2)
+int CVICALLBACK CloseDAQLabModulesPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	switch (event)
 	{
 		case EVENT_COMMIT:
 			
-			DiscardPanel(panel);
-
+			DiscardPanel(DAQLabModulesPanHndl);
+			DAQLabModulesPanHndl = 0;
 			break;
+			
 	}
 	return 0;
 }

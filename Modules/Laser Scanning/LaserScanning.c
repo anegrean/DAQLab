@@ -1120,7 +1120,9 @@ static DetChan_type* init_DetChan_type (char VChanName[])
 	DetChan_type* det = malloc(sizeof(DetChan_type));
 	if (!det) return NULL;
 	
-	det->detVChan = init_SinkVChan_type(VChanName, VChan_Waveform, det, DetVChanConnected, DetVChanDisconnected);
+	Packet_type allowedPacketTypes[] = {WaveformPacket_UShort, WaveformPacket_UInt, WaveformPacket_Double};
+	
+	det->detVChan = init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, DetVChanConnected, DetVChanDisconnected);
 	
 	return det;
 }
@@ -1334,6 +1336,23 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 					SetCtrlVal(panel, NonResGCal_CursorX, plotX);
 					SetCtrlVal(panel, NonResGCal_CursorX, plotY);
 					break;
+					
+				case NonResGCal_TestBTTN: // just for testing on demand AO generation
+					
+					static double 		sign = 1;
+					double*  			dVal;
+					DataPacket_type*	dataPacket;
+					
+					for (int i = 0; i < 100; i++) {
+						dVal	= malloc(sizeof(double));
+						*dVal 	= 2*sign;
+						sign 	*= -1;
+						dataPacket = init_WaveformPacket_type(Waveform_Double, 1, dVal, 0, 1);
+						SendDataPacket(nrgCal->baseClass.VChanCom, dataPacket);
+					}
+					
+					break;
+				
 			}
 
 			break;
@@ -1481,11 +1500,13 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	NonResGalvoCal_type*	cal = malloc(sizeof(NonResGalvoCal_type));
 	if (!cal) return NULL;
 	
+	Packet_type allowedPacketTypes[] = {WaveformPacket_Double};
+	
 	// init parent class
 	initalloc_ScanAxisCal_type(&cal->baseClass);
 	if(!(cal->baseClass.calName		= StrDup(calName))) {free(cal); return NULL;}
-	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, VChan_Waveform, cal, NonResGalvoCal_ComVChan_Connected, NonResGalvoCal_ComVChan_Disconnected);   
-	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, VChan_Waveform, cal, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
+	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, WaveformPacket_Double, cal, NonResGalvoCal_ComVChan_Connected, NonResGalvoCal_ComVChan_Disconnected);   
+	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_NonResGalvoCal_type; // override
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
@@ -1680,13 +1701,15 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 								 char					slowAxisPosVChanName[],
 								 char					imageOutVChanName[])					
 {
+	Packet_type allowedPacketTypes[] = {WaveformPacket_Double};
+	
 	// VChans
 	engine->engineType				= engineType;
-	engine->VChanFastAxisCom		= init_SourceVChan_type(fastAxisComVChanName, VChan_Waveform, engine, FastAxisComVChan_Connected, FastAxisComVChan_Disconnected); 
-	engine->VChanSlowAxisCom		= init_SourceVChan_type(slowAxisComVChanName, VChan_Waveform, engine, SlowAxisComVChan_Connected, SlowAxisComVChan_Disconnected); 
-	engine->VChanFastAxisPos		= init_SinkVChan_type(fastAxisPosVChanName, VChan_Waveform, engine, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected); 
-	engine->VChanSlowAxisPos		= init_SinkVChan_type(slowAxisPosVChanName, VChan_Waveform, engine, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected); 
-	engine->VChanImageOut			= init_SourceVChan_type(imageOutVChanName, VChan_Image, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected); 
+	engine->VChanFastAxisCom		= init_SourceVChan_type(fastAxisComVChanName, WaveformPacket_Double, engine, FastAxisComVChan_Connected, FastAxisComVChan_Disconnected); 
+	engine->VChanSlowAxisCom		= init_SourceVChan_type(slowAxisComVChanName, WaveformPacket_Double, engine, SlowAxisComVChan_Connected, SlowAxisComVChan_Disconnected); 
+	engine->VChanFastAxisPos		= init_SinkVChan_type(fastAxisPosVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), engine, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected); 
+	engine->VChanSlowAxisPos		= init_SinkVChan_type(slowAxisPosVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), engine, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected); 
+	engine->VChanImageOut			= init_SourceVChan_type(imageOutVChanName, ImagePacket_NIVision, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected); 
 	if(!(engine->DetChans			= ListCreate(sizeof(DetChan_type*)))) goto Error;
 	
 	// reference to axis calibration

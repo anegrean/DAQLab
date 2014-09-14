@@ -24,7 +24,7 @@
 #define  AIAOTskSet_Tab                   2       /* control type: tab, callback function: (none) */
 
 #define  DevListPan                       3
-#define  DevListPan_DAQTable              2       /* control type: table, callback function: (none) */
+#define  DevListPan_DAQTable              2       /* control type: table, callback function: ManageDevices_CB */
 #define  DevListPan_DoneBTTN              3       /* control type: command, callback function: ManageDevices_CB */
 #define  DevListPan_AddBTTN               4       /* control type: command, callback function: ManageDevices_CB */
 #define  DevListPan_Plate                 5       /* control type: deco, callback function: (none) */

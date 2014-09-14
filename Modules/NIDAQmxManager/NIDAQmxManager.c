@@ -3491,6 +3491,8 @@ static void CVICALLBACK ManageDevPan_CB (int menuBarHandle, int menuItemID, void
 	DisplayPanel(nidaq->devListPanHndl);
 	
 	// find devices
+	SetCtrlAttribute (nidaq->devListPanHndl, DevListPan_DAQTable, ATTR_LABEL_TEXT,"Searching for devices...");
+	ProcessDrawEvents();
 	errChk(nDev = init_DevList(devList, nidaq->devListPanHndl, DevListPan_DAQTable));
 	
 	if (nDev > 0)
@@ -4508,7 +4510,6 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					char*					newTabName;
 					Dev_type*				newDAQmxDev;
 					DevAttr_type*			newDAQmxDevAttrPtr;
-					ListType				newTCList;
 					int						newDAQmxDevPanHndl;
 					int						newTabPageIdx;
 					int						panHndl;
@@ -4987,7 +4988,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// Create and register VChan
 							//--------------------------
 							
-							newChan->baseClass.srcVChan = init_SourceVChan_type(newVChanName, VChan_Waveform, newChan, VChanConnected, VChanDisconnected);  
+							newChan->baseClass.srcVChan = init_SourceVChan_type(newVChanName, WaveformPacket_Double, newChan, VChanConnected, VChanDisconnected);  
 							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.srcVChan);
 							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_VChanName, newVChanName);
 							OKfree(newVChanName);
@@ -5307,7 +5308,9 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// Create and register VChan with Task Controller and framework
 							//-------------------------------------------------------------
 							
-							newChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, VChan_Waveform, newChan, VChanConnected, VChanDisconnected);  
+							Packet_type allowedPacketTypes[] = {WaveformPacket_Double};
+							
+							newChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newChan, VChanConnected, VChanDisconnected);  
 							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.sinkVChan);
 							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_VChanName, newVChanName);
 							AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, TASK_VCHAN_FUNC_ITERATE); 
@@ -6317,18 +6320,18 @@ DAQmxError:
 FCallReturn_type* WriteAODAQmx (Dev_type* dev) 
 {
 #define WriteAODAQmx_Err_DataUnderflow 		-1
-#define WriteAODAQmx_Err_DataType			-2
-	
-	DataPacket_type 		datapacket; 
+
+	DataPacket_type* 		dataPacket;
+	double*					dataPacketData;
 	WriteAOData_type*    	data            	= dev->AOTaskSet->writeAOData;
 	size_t          		queue_items;
 	size_t          		ncopies;                // number of datapacket copies to fill at least a writeblock size
 	size_t         		 	numwrote;
+	double					nRepeats;
 	int             		error           	= 0;
 	float64*        		tmpbuff;
 	FCallReturn_type*		fCallReturn			= NULL;
-	BOOL					DataTypeErrorFlag	= FALSE;
-
+	
 	// cycle over channels
 	for (int i = 0; i < data->numchan; i++) {
 		CmtTSQHandle	tsqID = GetSinkVChanTSQHndl(data->sinkVChans[i]);
@@ -6353,40 +6356,23 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 				}
 				
 				// get data packet from queue
-				CmtReadTSQData (tsqID, &datapacket,1,0,0);
-				
-				// check if data packet is a double waveform
-				if (datapacket.dataType != VChan_Waveform) 
-					DataTypeErrorFlag = TRUE;
-				else
-					if ((((Waveform_type*)datapacket.data)->waveformType != Waveform_float) || (((Waveform_type*)datapacket.data)->waveformType != Waveform_double))
-						DataTypeErrorFlag = TRUE;
-				
-				if (DataTypeErrorFlag) { 
-					char* VChanName = GetVChanName((VChan_type*)data->sinkVChans[i]);
-					char* errMsg = StrDup("Error: Data from VChan \"");
-					AppendString(&errMsg, VChanName, -1);
-					AppendString(&errMsg, "\" provided for the analog output task is not of a Waveform_double or Waveform_float type", -1);
-					fCallReturn = init_FCallReturn_type(WriteAODAQmx_Err_DataType, "WriteAODAQmx", errMsg);
-					free(errMsg);
-					free(VChanName);
-					goto Error;
-				}
+				CmtReadTSQData (tsqID, &dataPacket,1,0,0);
 				
 				// copy data packet to datain
-				data->datain[i] = malloc (((Waveform_type*)datapacket.data)->n * sizeof(float64));
-				memcpy(data->datain[i], ((Waveform_type*)datapacket.data)->data, ((Waveform_type*)datapacket.data)->n * sizeof(float64));
-				data->datain_size[i] = ((Waveform_type*)datapacket.data)->n;
+				dataPacketData = GetDataPacketDataPtr(dataPacket, &data->datain_size[i]); 
+				data->datain[i] = malloc (data->datain_size[i] * sizeof(float64));
+				memcpy(data->datain[i], dataPacketData, data->datain_size[i] * sizeof(float64));
 				
 				// copy repeats
-				if (((Waveform_type*)datapacket.data)->repeat) {
-					data->datain_repeat[i]    = (size_t) ((Waveform_type*)datapacket.data)->repeat;
-					data->datain_remainder[i] = (size_t) ((((Waveform_type*)datapacket.data)->repeat - (double) data->datain_repeat[i]) * (double) ((Waveform_type*)datapacket.data)->n);
+				nRepeats = GetWaveformPacketRepeat((WaveformPacket_type*)dataPacket); 
+				if (nRepeats) {
+					data->datain_repeat[i]    = (size_t) nRepeats;
+					data->datain_remainder[i] = (size_t) ((nRepeats - (double) data->datain_repeat[i]) * (double) data->datain_size[i]);
 					data->datain_loop[i]      = 0;
 				} else data->datain_loop[i]   = 1;
 				
 				// data packet not needed anymore, release it (data is deleted if there are no other sinks that need it)
-				ReleaseDataPacket(&datapacket); 
+				ReleaseDataPacket(&dataPacket); 
 			}
 			
 			// get number of datain copies needed to fill the rest of databuff
@@ -6844,8 +6830,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet);
 	size_t				chIdx			= 0;
 	double*				waveformData;
-	Waveform_type*		waveform;
-	DataPacket_type		dataPacket;
+	DataPacket_type*	dataPacket;
 	FCallReturn_type*	fCallReturn;
 	for (size_t i = 1; i <= nItems; i++) {
 		chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
@@ -6856,11 +6841,10 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		waveformData = malloc(nSamples * sizeof(double));
 		if (!waveformData) goto MemError;
 		memcpy(waveformData, readBuffer + chIdx * nSamples, nSamples * sizeof(double));
-		waveform = init_Waveform_type(Waveform_double, nSamples, waveformData, *dev->AITaskSet->timing->refSampleRate, 1); 
-		init_DataPacket_type(&dataPacket, VChan_Waveform, waveform, discard_Waveform_type);
+		dataPacket = init_WaveformPacket_type(Waveform_Double, nSamples, waveformData, *dev->AITaskSet->timing->refSampleRate, 1); 
 		
 		// send data packet with waveform
-		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, &dataPacket);
+		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, dataPacket);
 		if (fCallReturn) goto SendDataError;
 		
 		// next AI channel
@@ -6931,8 +6915,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet);
 	size_t				chIdx			= 0;
 	double*				waveformData;
-	Waveform_type*		waveform;
-	DataPacket_type		dataPacket;
+	DataPacket_type*	dataPacket;
 	FCallReturn_type*	fCallReturn;
 	for (size_t i = 1; i <= nItems; i++) {
 		chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
@@ -6943,11 +6926,10 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		waveformData = malloc(nSamples * sizeof(double));
 		if (!waveformData) goto MemError;
 		memcpy(waveformData, readBuffer + chIdx * nSamples, nSamples * sizeof(double));
-		waveform = init_Waveform_type(Waveform_double, nSamples, waveformData, *dev->AITaskSet->timing->refSampleRate, 1); 
-		init_DataPacket_type(&dataPacket, VChan_Waveform, waveform, discard_Waveform_type);
+		dataPacket = init_WaveformPacket_type(Waveform_Double, nSamples, waveformData, *dev->AITaskSet->timing->refSampleRate, 1); 
 		
 		// send data packet with waveform
-		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, &dataPacket);
+		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, dataPacket);
 		if (fCallReturn) goto SendDataError;
 		
 		// next AI channel
@@ -7276,17 +7258,20 @@ static void	ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 #define DataReceivedTC_Err_OutOfMem					-1
+#define DataReceivedTC_Err_OnDemandNElements		-2
 	
 	
 	Dev_type*			dev					= GetTaskControlModuleData(taskControl);
 	ChanSet_type*		chan				= GetPtrToVChanOwner((VChan_type*)sinkVChan);
-	FCallReturn_type	fCallReturn;
+	FCallReturn_type*	fCallReturn			= NULL;
 	unsigned int		nSamples;
 	int					error;
-	DataPacket_type*	dataPackets			= NULL;
+	DataPacket_type**	dataPackets			= NULL;
 	double* 			doubleDataPtr		= NULL;
 	size_t				nPackets;
-	CmtTSQHandle		sinkVChanTSQHndl 	= GetSinkVChanTSQHndl(sinkVChan);
+	size_t				nElem;
+	char*				errMsg				= NULL;
+	char*				VChanName			= GetVChanName((VChan_type*)sinkVChan);
 	
 	switch(taskState) {
 			
@@ -7299,24 +7284,24 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 			
 			if (chan->onDemand) {
 				// for on demand software output
-				TaskHandle						taskHndl;
-				char* 							taskName		= GetTaskControlName(taskControl);
+				TaskHandle						taskHndl		= 0;
 				ChanSet_AIAO_Voltage_type*		aoVoltageChan	= (ChanSet_AIAO_Voltage_type*) chan;
 				ChanSet_AIAO_Current_type*		aoCurrentChan	= (ChanSet_AIAO_Current_type*) chan;
 				
 				// get all available data packets
-				errChk(CmtGetTSQAttribute(sinkVChanTSQHndl, ATTR_TSQ_ITEMS_IN_QUEUE, &nPackets));
+				if ((fCallReturn = GetAllDataPackets(sinkVChan, &dataPackets, &nPackets))) goto Error;
 				
-				// get data packets
-				dataPackets = malloc (nPackets * sizeof(DataPacket_type));
-				if (!dataPackets) {OKfree(taskName); return init_FCallReturn_type(DataReceivedTC_Err_OutOfMem, "DataReceivedTC", "Out of memory");}
-				errChk(CmtReadTSQData(sinkVChanTSQHndl, dataPackets, nPackets, 0, 0));
-				
-				// get data from data packets
+				// check if data packets contain only one element with repeat = 1
 				for (size_t i = 0; i < nPackets; i++) {
-					dataPackets[i]
+					GetDataPacketDataPtr(dataPackets[i], &nElem);
+					if (GetWaveformPacketRepeat((WaveformPacket_type*)dataPackets[i]) != 1 || nElem != 1) {
+						errMsg = StrDup("On demand data generation for ");
+						AppendString(&errMsg, VChanName, -1);
+						AppendString(&errMsg, " is only possible for waveform data packets containing 1 element with 1 repeat.", -1);
+						fCallReturn = init_FCallReturn_type(DataReceivedTC_Err_OnDemandNElements, "DataReceivedTC", errMsg);
+						goto Error;
+					}
 				}
-				
 				
 				// create DAQmx task and channel
 				switch(chan->chanType) {
@@ -7324,19 +7309,17 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 						case Chan_AO_Voltage:
 							
 							// create task
-							AppendString(&taskName, " on demand AO Voltage", -1);
-							DAQmxErrChk(DAQmxCreateTask(taskName, &taskHndl));
+							DAQmxErrChk(DAQmxCreateTask("On demand AO voltage task", &taskHndl));
 							// create DAQmx channel  
-							DAQmxErrChk(DAQmxCreateAOVoltageChan(taskHndl, chan->name, chan->name, aoVoltageChan->Vmin , aoVoltageChan->Vmax, DAQmx_Val_Volts, ""));  
+							DAQmxErrChk(DAQmxCreateAOVoltageChan(taskHndl, chan->name, "", aoVoltageChan->Vmin , aoVoltageChan->Vmax, DAQmx_Val_Volts, ""));  
 							break;
 							
 						case Chan_AO_Current:
 							
 							// create task
-							AppendString(&taskName, " on demand AO Current", -1);
-							DAQmxErrChk(DAQmxCreateTask(taskName, &taskHndl));
+							DAQmxErrChk(DAQmxCreateTask("On demand AO current task", &taskHndl));
 							// create DAQmx channel  
-							DAQmxErrChk(DAQmxCreateAOCurrentChan(taskHndl, chan->name, chan->name, aoCurrentChan->Imin , aoCurrentChan->Imax, DAQmx_Val_Amps, ""));  
+							DAQmxErrChk(DAQmxCreateAOCurrentChan(taskHndl, chan->name, "", aoCurrentChan->Imin , aoCurrentChan->Imax, DAQmx_Val_Amps, ""));  
 							break;
 				}
 				
@@ -7345,23 +7328,19 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 
 				// write one sample at a time
 				switch (chan->chanType) {
+						
 					case Chan_AO_Voltage:
 					case Chan_AO_Current:
 						
-					
 						for (size_t i = 0; i < nPackets; i++) {
-							dataPacket->
-							DAQmxErrChk(DAQmxWriteAnalogF64(taskHndl, 1, 1, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, &doubleData, NULL, NULL)); 
+							doubleDataPtr = GetDataPacketDataPtr(dataPackets[i], 0);
+							DAQmxErrChk(DAQmxWriteAnalogF64(taskHndl, 1, 1, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, doubleDataPtr, NULL, NULL));
+							ReleaseDataPacket(&dataPackets[i]);
 						}
 						break;
 				}
 				
-				// release data packets
-				for(size_t j = 0; j < nPackets; j++) ReleaseDataPacket(dataPackets+j);
-				
 				OKfree(dataPackets);				
-				OKfree(taskName);
-				OKfree(doubleDataPtr);
 				DAQmxClearTask(taskHndl);
 				
 			} else {
@@ -7379,7 +7358,6 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 					}
 				
 			}
-			
 			
 			break;
 		
@@ -7404,14 +7382,18 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
 	fCallReturn = init_FCallReturn_type(error, "DataReceivedTC", errMsg);
-	free(errMsg);
+	OKfree(errMsg);
+	OKfree(VChanName);
 	return fCallReturn;
 	
 Error:
-	return init_FCallReturn_type(error, "DataReceivedTC", "");
+	
+	OKfree(VChanName);
+	OKfree(errMsg);
+	return fCallReturn;
 }
 
 static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)

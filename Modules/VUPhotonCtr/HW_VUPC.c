@@ -74,19 +74,20 @@ typedef struct _PMTregcommand {
 
 //==============================================================================
 // Global variables
-TaskControl_type* gtaskControl;
+TaskControl_type*	gtaskControl;
+Channel_type*		gchannels[MAX_CHANNELS];
 
 //test
 char* rawfilepath="D:\\Rawdata\\";
 
 
 //int              		QuitFlag;
-unsigned short int* 	Samplebuffer	= NULL;
-unsigned short int* 	Samplebuffer2	= NULL;  
-unsigned short* pmt1dataptr;
-unsigned short* pmt2dataptr;
-unsigned short* pmt3dataptr;
-unsigned short* pmt4dataptr;
+//unsigned short int* 	Samplebuffer	= NULL;
+//unsigned short int* 	Samplebuffer2	= NULL;  
+//unsigned short* pmt1dataptr;
+//unsigned short* pmt2dataptr;
+//unsigned short* pmt3dataptr;
+//unsigned short* pmt4dataptr;
 
 int         			measurementmode =MEASMODE_FINITE;  //default
 int 		 			bufsize; 
@@ -279,25 +280,36 @@ int PMTController_Finalize(void)
 }
 
 //called in pmt thread
-int ReadBuffer(unsigned short int* samplebuffer,int bufsize)
+int ReadBuffer(int bufsize)
 {
 //	int err=0;
 	int result;
-//	DataPacket_type  datapacket_pmt1;
+	DataPacket_type  dataPacket;
+	FCallReturn_type* fCallReturn;
+	Waveform_type*    waveform;
+	
 //	DataPacket_type  datapacket_pmt2;
 //	DataPacket_type  datapacket_pmt3;
 //	DataPacket_type  datapacket_pmt4;
+	unsigned short int* 	Samplebuffer	= NULL;   
+	unsigned short* pmt1dataptr;
+	unsigned short* pmt2dataptr;
+	unsigned short* pmt3dataptr;
+	unsigned short* pmt4dataptr;
 	int numpixels;
 	int numshorts;
 	int ndatapoints;
+	int i;
+	double refSamplingRate=1000;
 
 	static int testcounter=0;
 	long errcode;
 	char* rawfilename;
-//	unsigned long reply;
-//	int i;
 	
-	result = VUPCI_Read_Buffer((unsigned short*)samplebuffer,bufsize);
+	Samplebuffer = malloc(bufsize); 
+	
+	result = VUPCI_Read_Buffer(Samplebuffer,bufsize);
+	
 	if( result<0){
 				//err
 		//SetPMTState(PMT_ERROR);
@@ -324,7 +336,7 @@ int ReadBuffer(unsigned short int* samplebuffer,int bufsize)
 			
 			
 			//transpose data array
-			TransposeData(samplebuffer,VAL_SHORT_INTEGER,numshorts,4);
+			TransposeData(Samplebuffer,VAL_SHORT_INTEGER,numshorts,4);
 			pmt1dataptr=malloc(ndatapoints*sizeof(unsigned short));
 			pmt2dataptr=malloc(ndatapoints*sizeof(unsigned short)); 
 			pmt3dataptr=malloc(ndatapoints*sizeof(unsigned short)); 
@@ -339,32 +351,27 @@ int ReadBuffer(unsigned short int* samplebuffer,int bufsize)
 			//test
 			rawfilename=malloc(MAXCHAR*sizeof(char));
 			Fmt (rawfilename, "%s<%srawdata_%i.bin", rawfilepath,iterationnr); 
-			ArrayToFile(rawfilename,pmt3dataptr,VAL_SHORT_INTEGER,ndatapoints,1,VAL_GROUPS_TOGETHER,VAL_GROUPS_AS_COLUMNS,VAL_SEP_BY_TAB,0,VAL_BINARY,VAL_APPEND);
+		//	ArrayToFile(rawfilename,pmt3dataptr,VAL_SHORT_INTEGER,ndatapoints,1,VAL_GROUPS_TOGETHER,VAL_GROUPS_AS_COLUMNS,VAL_SEP_BY_TAB,0,VAL_BINARY,VAL_APPEND);
 			free(rawfilename);
 			
 			//send datapackets
-		//	if(init_DataPacket_type(VData_USHORT_Waveform, sizeof(unsigned short), ndatapoints, pmt1dataptr, NULL, 1, &datapacket_pmt1) < 0) return -1;  //insert saved IDstr and function
-		//	datapacket_pmt1.imagetype=gimagetype;
-		//	datapacket_pmt1.idstr=StrDup(gIDstr);
 			
-//			err=SendData(ActiveTaskIndex, PMT1_SOURCE, &datapacket_pmt1);
-//			if (err<0){
-//				MessagePopup("Error","Sending PMT Data");
-//			}
-			//ProcessSystemEvents();
-			// CHECK HERE IF SendData IS NEGATIVE AND STOP TASKS IF SUCH ERROR OCCURS, THEN RELEASE DATA PACKETS LEFT IN THE QUEUES
-		
-		//	if(init_DataPacket_type(VData_USHORT_Waveform,, sizeof(short), ndatapoints, pmt2dataptr, NULL, 1, &datapacket_pmt2) < 0) return -1;  
-		//	SendData(ActiveTaskIndex, PMT1_SOURCE, &datapacket_pmt2);
-		//	if(init_DataPacket_type(VData_USHORT_Waveform,, sizeof(short), ndatapoints, pmt3dataptr, NULL, 1, &datapacket_pmt3) < 0) return -1;  
-		//	SendData(ActiveTaskIndex, PMT1_SOURCE, &datapacket_pmt3);
-		//	if(init_DataPacket_type(VData_USHORT_Waveform,, sizeof(short), ndatapoints, pmt4dataptr, NULL, 1, &datapacket_pmt4) < 0) return -1;  
-		//	SendData(ActiveTaskIndex, PMT1_SOURCE, &datapacket_pmt4);
+			for (i=0;i<MAX_CHANNELS;i++){
+				if (gchannels[i]!=NULL){
+					if (gchannels[i]->VChan!=NULL){
+					    waveform = init_Waveform_type(Waveform_double, ndatapoints, pmt3dataptr, refSamplingRate, 1);       
+						init_DataPacket_type(&dataPacket, VChan_Waveform,waveform , discard_Waveform_type);
+						// send data packet with waveform
+						fCallReturn = SendDataPacket(gchannels[i]->VChan, &dataPacket);
+					}
+				}
+			}
 	
 			OKfree(pmt1dataptr);
 			OKfree(pmt2dataptr);
 			OKfree(pmt3dataptr);
-			OKfree(pmt4dataptr);	
+			OKfree(pmt4dataptr);
+				  
 		
 			if(measurementmode==MEASMODE_FINITE){		 //need to count samples 
 				//data is in pixels
@@ -385,8 +392,11 @@ int ReadBuffer(unsigned short int* samplebuffer,int bufsize)
 		
 	}
 	
+	OKfree(Samplebuffer);
+	
 	return result;
 }
+
 
 
 int PMT_SetMode (int PMTnr, PMT_Mode_type mode)  
@@ -598,7 +608,7 @@ int PMT_SetTestMode(BOOL testmode)
 }
 
  
-
+/*
 int PMTReadActions(unsigned short int* samplebuffer,int numbytes)
 {
 	//int i;
@@ -611,10 +621,10 @@ int PMTReadActions(unsigned short int* samplebuffer,int numbytes)
 	//read buffer
 	result = ReadBuffer(samplebuffer,numbytes);
 	return result;
-}
+}	   */
 
 
-
+/*
 void SetNewBuffer(void)
 {
 	int bufsize;
@@ -622,31 +632,39 @@ void SetNewBuffer(void)
 	bufsize=GetPMTBufsize();
 	OKfree(Samplebuffer); 
 	OKfree(Samplebuffer2); 
-	OKfree(pmt1dataptr); 
-	OKfree(pmt2dataptr); 
-	OKfree(pmt3dataptr); 
-	OKfree(pmt4dataptr); 
+//	OKfree(pmt1dataptr); 
+//	OKfree(pmt2dataptr); 
+//	OKfree(pmt3dataptr); 
+//	OKfree(pmt4dataptr); 
 	
 	Samplebuffer = malloc(bufsize); 
 	Samplebuffer2 = malloc(bufsize); 
 	
-	pmt1dataptr=malloc(bufsize/4);
-	pmt2dataptr=malloc(bufsize/4); 
-	pmt3dataptr=malloc(bufsize/4); 
-	pmt4dataptr=malloc(bufsize/4);
+//	pmt1dataptr=malloc(bufsize/4);
+//	pmt2dataptr=malloc(bufsize/4); 
+//	pmt3dataptr=malloc(bufsize/4); 
+//	pmt4dataptr=malloc(bufsize/4);
 	
 	SetPMTnewbufsizeflag(0); 
-}
+}	  */
 
 
 /// HIFN  starts the PMT Controller Acquisition
 /// HIRET returns error, no error when 0
-int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl)
+int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl,Channel_type** channels)
 {
 	int error=0;
-	unsigned long controlreg;  
+	unsigned long controlreg;
+	int i;
 	
 	gtaskControl=taskControl;
+	for (i=0;i<MAX_CHANNELS;i++){
+		if (channels[i]!=NULL) {
+			gchannels[i]=malloc(sizeof(Channel_type));
+		 	*gchannels[i]=*channels[i];
+		}
+		else gchannels[i]=NULL;
+	}
 	
 	SetMeasurementMode(mode);
 	SetCurrentIterationnr(iternr); 
@@ -691,7 +709,8 @@ Error:
 int PMTStopAcq(void)
 {
 	int error=0;
-	unsigned long controlreg;    
+	unsigned long controlreg;
+	int i;
 	
 	readdata=0;  //stop reading  
 //	VUPCI_Stop_DMA();
@@ -704,6 +723,10 @@ int PMTStopAcq(void)
 	
 	errChk(StopDAQThread(poolHandle));
 	CmtDiscardThreadPool(poolHandle);
+	
+	for (i=0;i<MAX_CHANNELS;i++){
+		free(gchannels[i]);
+	}
 	
 	
 //	controlreg=GetControlreg();  
@@ -855,12 +878,12 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
 	SetReadyForReading(1);
 	while (GetAcqBusy()==1)
 	{
-		if (GetPMTnewbufsizeflag()==1) {
-			SetNewBuffer();
-			numbytes=GetPMTBufsize();     
-		}
+	//	if (GetPMTnewbufsizeflag()==1) {
+	//		SetNewBuffer();
+	//		numbytes=GetPMTBufsize();     
+	//	}
 		if ((readdata)&&(!readerror)) {
-			result=PMTReadActions(Samplebuffer,numbytes);
+			result=ReadBuffer(GetPMTBufsize());
 		}
 		if (gtaskControl!=NULL) {
 			abort=GetTaskControlAbortIterationFlag(gtaskControl);  
@@ -883,7 +906,6 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
 int CVICALLBACK PMTThreadFunction2(void *(functionData))
 {
 	int result;
-	int numbytes;
 	
 	PMTThread2ID=CmtGetCurrentThreadID ();  
 	
@@ -891,8 +913,7 @@ int CVICALLBACK PMTThreadFunction2(void *(functionData))
 	while (GetAcqBusy()==1)     
 	{
 		if (measurementmode !=MEASMODE_FINITE) {
-			numbytes=GetPMTBufsize(); 
-			result=PMTReadActions(Samplebuffer2,numbytes);  
+			result=ReadBuffer(GetPMTBufsize());     
 		}
 		ProcessSystemEvents();
     }

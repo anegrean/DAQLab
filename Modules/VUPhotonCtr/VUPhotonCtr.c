@@ -68,16 +68,7 @@ const int 		UIPhotonCounterCtrls[] = {
 	CounterPan_BTTN_TestMode
 };
 
-typedef struct {
 
-	VUPhotonCtr_type*	vupcInstance;	// reference to device that owns the channel
-	SourceVChan_type*	VChan;			// virtual channel assigned to this physical channel
-	int					panHndl;		// panel handle to keep track of controls
-	size_t			   	chanIdx;		// 1-based channel index, e.g. PMT 1. idx = 1
-	float				gain;			// gain applied to the detector in [V]
-	float				maxGain;		// maximum gain voltage allowed in [V]
-	float				threshold;		// discriminator threshold in [mV]
-} Channel_type;
 
 
 
@@ -98,7 +89,7 @@ struct VUPhotonCtr {
 		// Task Controller
 		//-------------------------
 		
-	TaskControl_type*	taskController;
+	TaskControl_type*	taskControl;
 
 		//-------------------------
 		// UI
@@ -319,7 +310,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	// Child Level 1: VUPhotonCtr_type
 
 		// DATA
-	vupc->taskController			= tc;
+	vupc->taskControl   			= tc;
 	vupc->mainPanHndl				= 0;
 	vupc->statusPanHndl				= 0;
 	vupc->settingsPanHndl			= 0;
@@ -366,7 +357,7 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	PMTController_Finalize();
 	
 	// discard Task Controller
-	discard_TaskControl_type(&vupc->taskController);
+	discard_TaskControl_type(&vupc->taskControl);
 
 	// discard channel resources
 	for (int i = 0; i < MAX_CHANNELS; i++)
@@ -432,7 +423,7 @@ static void	discard_Channel_type (Channel_type** chan)
 
 void ErrortoTaskController(VUPhotonCtr_type* vupc,int error,char errstring[])
 {
-	if (vupc->taskController!=NULL) AbortTaskControlExecution(vupc->taskController); 
+	if (vupc->taskControl!=NULL) AbortTaskControlExecution(vupc->taskControl); 
 }
 
 static int InitHardware (VUPhotonCtr_type* vupc)
@@ -540,7 +531,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// configure Photoncounter Task Controller
 	//default settings:
 
-	TaskControlEvent(vupc->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+	TaskControlEvent(vupc->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 
 
 	return 0;
@@ -1073,19 +1064,19 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 
 				case VUPCTask_Mode:		  //repeat mode
 					GetCtrlVal(panel,control,&mode);
-					SetTaskControlMode	(vupc->taskController,mode);
+					SetTaskControlMode	(vupc->taskControl,mode);
 					//set Rio module in right mode
 
 					break;
 
 				case VUPCTask_Repeat:
 					GetCtrlVal(panel,control,&repeat);
-					SetTaskControlIterations (vupc->taskController, repeat+1);
+					SetTaskControlIterations (vupc->taskControl, repeat+1);
 					break;
 
 				case VUPCTask_Wait:
 					GetCtrlVal(panel,control,&waitBetweenIterations);
-					SetTaskControlIterationsWait (vupc->taskController,waitBetweenIterations);
+					SetTaskControlIterationsWait (vupc->taskControl,waitBetweenIterations);
 					//prog RIO module
 					break;
 
@@ -1093,7 +1084,7 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 			}
 
 			// (re) configure Photoncounter Task Controller
-			TaskControlEvent(vupc->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+			TaskControlEvent(vupc->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 
 			break;
 	}
@@ -1194,7 +1185,7 @@ static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	
 	Setnrsamples_in_iteration(vupc->measmode,vupc->samplingRate,vupc->nSamples); 
 	
-	PMTStartAcq(vupc->measmode,currentIteration,taskControl);
+	PMTStartAcq(vupc->measmode,currentIteration,vupc->taskControl,vupc->channels);
 
 }
 
@@ -1214,9 +1205,9 @@ static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abo
 //	SetTaskControlIterationTimeout(taskControl,4);
 
 	if (vupc->measmode==MEASMODE_CONTINUOUS) {
-		SetTaskControlMode(vupc->taskController, TASK_CONTINUOUS);
+		SetTaskControlMode(vupc->taskControl, TASK_CONTINUOUS);
 	} else {
-		SetTaskControlMode(vupc->taskController, TASK_FINITE);
+		SetTaskControlMode(vupc->taskControl, TASK_FINITE);
 	}
 
 

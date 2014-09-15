@@ -24,6 +24,8 @@
 // Constants
 
 #define MOD_DataStore_NAME 		"Data Storage"
+		
+#define MAX_DS_CHANNELS			4  //test value
 
 
 
@@ -31,6 +33,13 @@
 // Types
 
 typedef struct DatStore	DataStorage_type;
+
+typedef struct {
+	DataStorage_type*	dsInstance;	    // reference to device that owns the channel
+	SinkVChan_type*		VChan;			// virtual channel assigned to this physical channel
+	int					panHndl;		// panel handle to keep track of controls
+	size_t			   	chanIdx;		// 1-based channel index       
+} DS_Channel_type;
 
 
 //==============================================================================

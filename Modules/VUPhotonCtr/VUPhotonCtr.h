@@ -38,6 +38,17 @@ typedef enum {
 } Measurement_type;
 
 
+typedef struct {
+	VUPhotonCtr_type*	vupcInstance;	// reference to device that owns the channel
+	SourceVChan_type*	VChan;			// virtual channel assigned to this physical channel
+	int					panHndl;		// panel handle to keep track of controls
+	size_t			   	chanIdx;		// 1-based channel index, e.g. PMT 1. idx = 1
+	float				gain;			// gain applied to the detector in [V]
+	float				maxGain;		// maximum gain voltage allowed in [V]
+	float				threshold;		// discriminator threshold in [mV]
+} Channel_type;
+
+
 
 //==============================================================================
 // Global functions

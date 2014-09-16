@@ -62,6 +62,9 @@
 	// DAQmx error macro
 #define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto DAQmxError; else
 
+	// Shared error codes
+#define WriteAODAQmx_Err_DataUnderflow 				-1
+
 //========================================================================================================================================================================================================
 // Types
 typedef struct NIDAQmxManager 	NIDAQmxManager_type; 
@@ -855,8 +858,6 @@ static BOOL							DAQmxTasksDone							(Dev_type* dev);
 	// tasks to trigger the HW-triggered tasks. If all tasks are started successfully, it returns NULL, otherwise returns a negative value with DAQmx error code and error string combined.
 static FCallReturn_type*			StartAllDAQmxTasks						(Dev_type* dev);
 
-static BOOL							OutputBuffersFilled						(Dev_type* dev);
-
 //---------------------
 // DAQmx task callbacks
 //---------------------
@@ -880,7 +881,11 @@ int32 CVICALLBACK 					DODAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 st
 // DAQmx module and VChan data exchange
 //-------------------------------------
 	// AO
-FCallReturn_type* 					WriteAODAQmx 							(Dev_type* dev);  
+FCallReturn_type* 					WriteAODAQmx 							(Dev_type* dev); 
+
+	// Output buffers
+static BOOL							OutputBuffersFilled						(Dev_type* dev);
+static FCallReturn_type* 			FillOutputBuffer						(Dev_type* dev, ChanSet_type* chan); 
 
 //--------------------------------------------
 // Various DAQmx module managemement functions
@@ -5812,7 +5817,7 @@ static FCallReturn_type* ConfigDAQmxAOTask (Dev_type* dev)
 	// disable AO regeneration
 	DAQmxSetWriteAttribute (dev->AOTaskSet->taskHndl, DAQmx_Write_RegenMode, DAQmx_Val_DoNotAllowRegen);
 	
-	// adjust output buffer size to be even multiple of blocksize
+	// adjust output buffer size to be twice (even multiple) the blocksize
 	DAQmxErrChk (DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, 2 * dev->AOTaskSet->timing->blockSize));
 	
 	//----------------------
@@ -6319,7 +6324,6 @@ DAQmxError:
 ///HIRET NULL if there is no error and FCallReturn_type* data in case of error. 
 FCallReturn_type* WriteAODAQmx (Dev_type* dev) 
 {
-#define WriteAODAQmx_Err_DataUnderflow 		-1
 
 	DataPacket_type* 		dataPacket;
 	double*					dataPacketData;
@@ -6805,6 +6809,44 @@ static BOOL	OutputBuffersFilled	(Dev_type* dev)
 	return AOFilledFlag && DOFilledFlag;
 }
 
+static FCallReturn_type* FillOutputBuffer(Dev_type* dev, ChanSet_type* chan) 
+{
+	FCallReturn_type*	fCallReturn		= NULL;
+	unsigned int		nSamples; 		
+	switch(chan->chanType) {
+							
+		case Chan_AO_Voltage:
+		case Chan_AO_Current:
+							
+			DAQmxGetWriteAttribute(dev->AOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);
+			// fill buffer completely, i.e. the buffer has twice the blocksize number of samples
+			while(nSamples) { // if there is space in the buffer
+							
+				fCallReturn = WriteAODAQmx(dev);
+							
+				if (fCallReturn)
+					if (fCallReturn->retVal == WriteAODAQmx_Err_DataUnderflow) {
+						discard_FCallReturn_type(&fCallReturn);
+						break; // there is not enough data available to fill the buffer, exit the while loop
+					}
+					else 
+						return fCallReturn; // another error occured and output buffer could not be filled
+					
+				// check again if buffer is filled
+				DAQmxGetWriteAttribute(dev->AOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);
+								
+			}
+							
+			break;
+							
+		case Chan_DO:
+							
+			break;
+	}
+	
+	return NULL; // no error
+}
+
 int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
 #define AIDAQmxTaskDataAvailable_CB_Err_OutOfMemory		-1 
@@ -7259,12 +7301,12 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 {
 #define DataReceivedTC_Err_OutOfMem					-1
 #define DataReceivedTC_Err_OnDemandNElements		-2
+#define DataReceivedTC_Err_BufferFillFailed			-3
 	
 	
 	Dev_type*			dev					= GetTaskControlModuleData(taskControl);
 	ChanSet_type*		chan				= GetPtrToVChanOwner((VChan_type*)sinkVChan);
 	FCallReturn_type*	fCallReturn			= NULL;
-	unsigned int		nSamples;
 	int					error;
 	DataPacket_type**	dataPackets			= NULL;
 	double* 			doubleDataPtr		= NULL;
@@ -7342,23 +7384,8 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 				
 				OKfree(dataPackets);				
 				DAQmxClearTask(taskHndl);
-				
-			} else {
-				// for hardware timed output, fill output buffers entirely, i.e. twice the number of samples in a writeblock
-				DAQmxGetWriteAttribute(chan->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);
-				if (nSamples)
-					switch(chan->chanType) {
-						
-						case Chan_AO_Voltage:
-						case Chan_AO_Current:
-						
-						
-							break;
-				
-					}
-				
-			}
-			
+			} 
+					
 			break;
 		
 		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
@@ -7366,7 +7393,8 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
 			
 			
-			// OutputBuffersFilled(dev)
+			// OutputBuffersFilled(dev);
+			// FillOutputBuffer(dev, chan);
 			
 			break;
 			

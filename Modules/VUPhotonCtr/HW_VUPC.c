@@ -284,25 +284,20 @@ int ReadBuffer(int bufsize)
 {
 //	int err=0;
 	int result;
-	DataPacket_type  dataPacket;
+	DataPacket_type*  dataPacket;
 	FCallReturn_type* fCallReturn;
-	Waveform_type*    waveform;
 	
 //	DataPacket_type  datapacket_pmt2;
 //	DataPacket_type  datapacket_pmt3;
 //	DataPacket_type  datapacket_pmt4;
 	unsigned short int* 	Samplebuffer	= NULL;   
-	unsigned short* pmt1dataptr;
-	unsigned short* pmt2dataptr;
-	unsigned short* pmt3dataptr;
-	unsigned short* pmt4dataptr;
+	unsigned short** pmtdataptr[MAX_CHANNELS];
 	int numpixels;
 	int numshorts;
 	int ndatapoints;
 	int i;
 	double refSamplingRate=1000;
 
-	static int testcounter=0;
 	long errcode;
 	char* rawfilename;
 	
@@ -337,13 +332,16 @@ int ReadBuffer(int bufsize)
 			
 			//transpose data array
 			TransposeData(Samplebuffer,VAL_SHORT_INTEGER,numshorts,4);
-			pmt1dataptr=malloc(ndatapoints*sizeof(unsigned short));
-			pmt2dataptr=malloc(ndatapoints*sizeof(unsigned short)); 
-			pmt3dataptr=malloc(ndatapoints*sizeof(unsigned short)); 
-			pmt4dataptr=malloc(ndatapoints*sizeof(unsigned short)); 
+			
+			for (i=0;i<MAX_CHANNELS;i++){
+				pmtdataptr[i]=malloc(ndatapoints*sizeof(unsigned short));
+				memcpy(pmtdataptr[i],&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));    
+			}
+			
+		
 		//	memcpy(pmt1dataptr,&Samplebuffer[0],ndatapoints*sizeof(unsigned short));
 		//	memcpy(pmt2dataptr,&Samplebuffer[ndatapoints],ndatapoints*sizeof(unsigned short)); 
-			memcpy(pmt3dataptr,&Samplebuffer[2*ndatapoints],ndatapoints*sizeof(unsigned short)); 
+		//	memcpy(pmt3dataptr,&Samplebuffer[2*ndatapoints],ndatapoints*sizeof(unsigned short)); 
 		//	memcpy(pmt4dataptr,&Samplebuffer[3*ndatapoints],ndatapoints*sizeof(unsigned short)); 
 		  
 			
@@ -359,19 +357,15 @@ int ReadBuffer(int bufsize)
 			for (i=0;i<MAX_CHANNELS;i++){
 				if (gchannels[i]!=NULL){
 					if (gchannels[i]->VChan!=NULL){
-					    waveform = init_Waveform_type(Waveform_double, ndatapoints, pmt3dataptr, refSamplingRate, 1);       
-						init_DataPacket_type(&dataPacket, VChan_Waveform,waveform , discard_Waveform_type);
+					    dataPacket = init_WaveformPacket_type(Waveform_Double, ndatapoints, pmtdataptr[i], refSamplingRate, 1);       
 						// send data packet with waveform
-						fCallReturn = SendDataPacket(gchannels[i]->VChan, &dataPacket);
+						fCallReturn = SendDataPacket(gchannels[i]->VChan, dataPacket);
 					}
 				}
 			}
-	
-			OKfree(pmt1dataptr);
-			OKfree(pmt2dataptr);
-			OKfree(pmt3dataptr);
-			OKfree(pmt4dataptr);
-				  
+			
+			for (i=0;i<MAX_CHANNELS;i++) OKfree(pmtdataptr[i]);
+			
 		
 			if(measurementmode==MEASMODE_FINITE){		 //need to count samples 
 				//data is in pixels
@@ -869,7 +863,6 @@ int StopDAQThread(CmtThreadPoolHandle poolHandle)
 int CVICALLBACK PMTThreadFunction(void *(functionData))
 {
 	int result; 
-	int numbytes=0x100000;  //default
 	int abort=0;
 	
 	PMTThreadID=CmtGetCurrentThreadID ();  

@@ -16,8 +16,8 @@
 
 #define  DSMain                           1
 #define  DSMain_Channels                  2       /* control type: listBox, callback function: (none) */
-#define  DSMain_COMMANDBUTTON_REM         3       /* control type: command, callback function: CB_RemoveChannel */
-#define  DSMain_COMMANDBUTTON_ADD         4       /* control type: command, callback function: CB_AddChannel */
+#define  DSMain_COMMANDBUTTON_REM         3       /* control type: command, callback function: (none) */
+#define  DSMain_COMMANDBUTTON_ADD         4       /* control type: command, callback function: (none) */
 
 
      /* Control Arrays: */
@@ -30,10 +30,7 @@
           /* (no menu bars in the resource file) */
 
 
-     /* Callback Prototypes: */
-
-int  CVICALLBACK CB_AddChannel(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-int  CVICALLBACK CB_RemoveChannel(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+     /* (no callbacks specified in the resource file) */ 
 
 
 #ifdef __cplusplus

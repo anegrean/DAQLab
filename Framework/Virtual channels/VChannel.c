@@ -604,10 +604,10 @@ void* GetDataPacketDataPtr (DataPacket_type* dataPacket, size_t* n)
 BOOL CompatibleVChans (SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan)
 {
 	for (size_t i = 0; i < sinkVChan->nDataTypes; i++)
-		if (srcVChan->dataType != sinkVChan->dataTypes[i])
-			return FALSE;
+		if (srcVChan->dataType == sinkVChan->dataTypes[i])
+			return TRUE;
 			
-	return TRUE;		
+	return FALSE;		
 }
 
 

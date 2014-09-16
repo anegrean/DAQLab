@@ -19,6 +19,7 @@
 #include "DAQLabModule.h"
 #include "TaskController.h"
 
+
 //==============================================================================
 // Include modules
 
@@ -26,6 +27,7 @@
 #include "VUPhotonCtr.h"
 #include "NIDAQmxManager.h"
 #include "LaserScanning.h"
+#include "DataStorage.h"
 
 
 
@@ -141,8 +143,9 @@ AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last para
 																  // counter always to 0
 	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
-	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0}
-	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 }
+	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
+	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }    
 	
 };
 
@@ -262,6 +265,8 @@ static void				 	ErrorUITC 									(TaskControl_type* taskControl, char* errorM
 void CVICALLBACK 			DAQLab_ModulesMenu_CB						(int menuBarHndl, int menuItem, void *callbackData, int panelHndl);
 
 void CVICALLBACK 			DAQLab_DisplayTaskManagerMenu_CB 			(int menuBarHndl, int menuItemID, void *callbackData, int panelHndl); 
+
+int CVICALLBACK 			DAQLab_ManageDAQLabModules_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 						
 
 
@@ -1707,15 +1712,8 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					// increase module instance counter
 					DAQLabModules_InitFunctions[moduleidx].nInstances++;
 					
-					// try to add the Task Controllers to the framework if their names are unique
-					if (!DLAddTaskControllers(newModulePtr, newModulePtr->taskControllers)) {
-						// discard module
-						(*newModulePtr->Discard) (&newModulePtr);
-						return 0;
-					}
-					
-					// make sure that the Task Tree is updated even if there are no task Controllers to be added
-					if (TaskTreeManagerPanHndl && !ListNumItems(newModulePtr->taskControllers))
+					// make sure that the Task Tree is updated
+					if (TaskTreeManagerPanHndl)
 						DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 					
 					// display module panels if method is defined

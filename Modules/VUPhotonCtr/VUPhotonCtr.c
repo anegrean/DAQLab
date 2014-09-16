@@ -276,26 +276,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 
 	//---------------------------
 	// Parent Level 0: DAQLabModule_type
-					
-			// adding Task Controller to module list    
-	ListInsertItem(vupc->baseClass.taskControllers, &tc, END_OF_LIST); 
-	newTCList = ListCreate(sizeof(TaskControl_type*));
-	ListInsertItem(newTCList, &tc, END_OF_LIST);
-	DLAddTaskControllers(newTCList);
-	ListDispose(newTCList);
-						
-					
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
+				
 		// METHODS
 
 		// overriding methods
@@ -319,15 +300,14 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	for (int i = 0; i < MAX_CHANNELS; i++)
 		vupc->channels[i] = NULL;
 
-	vupc->nSamples				= DEFAULT_NSAMPLES;
-	vupc->refNSamples				= &vupc->nSamples;	  // by default point to device set number of samples
-	vupc->samplingRate			= DEFAULT_SAMPLING_RATE;
-	vupc->refSamplingRate				= &vupc->samplingRate; // by default point to device set sampling rate
+	vupc->nSamples					= DEFAULT_NSAMPLES;
+	vupc->refNSamples				= &vupc->nSamples;	  		// by default point to device set number of samples
+	vupc->samplingRate				= DEFAULT_SAMPLING_RATE;
+	vupc->refSamplingRate			= &vupc->samplingRate; 		// by default point to device set sampling rate
 
 	vupc->measmode					= MEASMODE_FINITE;
 
-	//is this correct here? lex
-	SetTaskControlModuleData(tc,vupc);
+	
 		// METHODS
 			// assign default controls callback to UI_VUPhotonCtr.uir panel
 	vupc->uiCtrlsCB					= VUPCChannel_CB;
@@ -393,7 +373,7 @@ static Channel_type* init_Channel_type (VUPhotonCtr_type* vupcInstance, int panH
 	if (!chan) return NULL;
 
 	chan->vupcInstance	= vupcInstance;
-	chan->VChan			= init_SourceVChan_type(VChanName, VChan_Waveform, chan, NULL, NULL);
+	chan->VChan			= init_SourceVChan_type(VChanName, WaveformPacket_UShort, chan, NULL, NULL);
 	chan->chanIdx		= chanIdx;
 	chan->panHndl   	= panHndl;
 	chan->gain			= 0;
@@ -454,6 +434,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// init VU Photon Counting hardware
 
 	if (InitHardware((VUPhotonCtr_type*) mod) < 0) return -1;
+	
+	// add module's task controller to the framework
+	DLAddTaskController(mod, vupc->taskControl);
 
 	// load main panel
 	vupc->mainPanHndl 		= LoadPanel(workspacePanHndl, UI_VUPhotonCtr, VUPCMain);
@@ -532,7 +515,6 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	//default settings:
 
 	TaskControlEvent(vupc->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
-
 
 	return 0;
 

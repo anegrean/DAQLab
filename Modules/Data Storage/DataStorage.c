@@ -49,6 +49,13 @@ struct DatStore {
 
 	int					mainPanHndl;
 	
+		// Callback to install on controls from selected panel in UI_DataStorage.uir
+		// Override: Optional, to change UI panel behavior. 
+	CtrlCallbackPtr		uiCtrlsCB;
+	
+		// Callback to install on the panel from UI_DataStorage.uir
+	PanelCallbackPtr	uiPanelCB;
+	
 		//-------------------------
 		// Channels
 		//-------------------------
@@ -96,7 +103,8 @@ static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg);
 static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
 
-
+static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int Load (DAQLabModule_type* mod, int workspacePanHndl)  ;
 
 //==============================================================================
@@ -137,12 +145,6 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	//---------------------------
 	// Parent Level 0: DAQLabModule_type
 					
-			// adding Task Controller to module list    
-	ListInsertItem(ds->baseClass.taskControllers, &tc, END_OF_LIST); 
-	newTCList = ListCreate(sizeof(TaskControl_type*));
-	ListInsertItem(newTCList, &tc, END_OF_LIST);
-	DLAddTaskControllers(newTCList);
-	ListDispose(newTCList);
 						
 		// METHODS
 
@@ -151,7 +153,14 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	ds->baseClass.Load			= Load;
 	ds->baseClass.LoadCfg		= NULL; //LoadCfg;
 
-	ds->mainPanHndl				= 0;  
+	ds->mainPanHndl				= 0; 
+	
+			// assign default controls callback to UI_DataStorage.uir panel
+	ds->uiCtrlsCB				= UICtrls_CB;
+	
+			// assign default panel callback to UI_DataStorage.uir
+	ds->uiPanelCB				= UIPan_CB;
+	
 	
 		// DATA
 	ds->taskController			= tc;
@@ -203,11 +212,13 @@ void discard_DataStorage (DAQLabModule_type** mod)
 
 static DS_Channel_type* init_DS_Channel_type (DataStorage_type* dsInstance, int panHndl, size_t chanIdx,char VChanName[])
 {
+	Packet_type allowedPacketTypes[] = {WaveformPacket_UShort, WaveformPacket_UInt, WaveformPacket_Double};   
+	
 	DS_Channel_type* chan = malloc (sizeof(DS_Channel_type));
 	if (!chan) return NULL;
 
 	chan->dsInstance	= dsInstance;
-	chan->VChan			= init_SourceVChan_type(VChanName, VChan_Waveform, chan, NULL, NULL);
+	chan->VChan			= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan, NULL, NULL);
 	chan->panHndl   	= panHndl;
 	chan->chanIdx		= chanIdx;   
 
@@ -243,6 +254,14 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 
 	// load main panel
 	ds->mainPanHndl 		= LoadPanel(workspacePanHndl, UI_DataStorage, DSMain);
+	
+	// add module's task controller to the framework
+	DLAddTaskController(ds, ds->taskController);
+	
+		// connect module data and user interface callbackFn to all direct controls in the panel
+	SetCtrlsInPanCBInfo(mod, ((DataStorage_type*)mod)->uiCtrlsCB, ds->mainPanHndl);
+	
+	
 	DisplayPanel(ds->mainPanHndl);
 	//default settings:
 
@@ -334,82 +353,6 @@ static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, Task
 	return init_FCallReturn_type(0, "", "");
 }
 
-int CVICALLBACK CB_AddChannel (int panel, int control, int event,
-							void *callbackData, int eventData1, int eventData2)
-{
-	SinkVChan_type* 	sinkVChan;
-	DS_Channel_type*	chan;
-	char*				vChanName; 
-	char				buff[DAQLAB_MAX_VCHAN_NAME + 50];
-	DataStorage_type* 	ds;
-	int 				numitems;
-	
-	switch (event)
-	{
-		case EVENT_COMMIT:
-				// channel checked, give new VChan name and add channel
-						vChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
-						if (!vChanName) {
-							// uncheck channel
-						//	CheckListItem(panel, control, eventData2, 0);
-							return 0;	// action cancelled
-						}
-						// rename label in settings panel
-						sprintf(buff, "Ch. %d: %s", eventData2+1, vChanName);
-						
-						GetNumListItems(panel, DSMain_Channels,&numitems);
-						InsertListItem(panel, DSMain_Channels, -1, buff, numitems+1);        
-						//ReplaceListItem(panel, control, eventData2, buff, eventData2+1);
-						// create channel
-						chan = init_DS_Channel_type(ds, panel, eventData2+1, vChanName);
-						// rename channel mode label
-				//		sprintf(buff, "Ch. %d", eventData2+1);
-				//		SetCtrlAttribute(chan->panHndl, VUPCChan_Mode, ATTR_LABEL_TEXT, buff);
-						// register VChan with DAQLab
-						DLRegisterVChan((DAQLabModule_type*)chan->dsInstance, chan->VChan);
-
-						// connect module data and user interface callbackFn to all direct controls in the panel
-					//	SetCtrlsInPanCBInfo(chan, ((DataStorage_type*)ds)->uiCtrlsCB, chan->panHndl);
-
-						// update main panel
-						RedrawDSPanel(ds);
-
-			break;
-	}
-	return 0;
-}
-
-int CVICALLBACK CB_RemoveChannel (int panel, int control, int event,
-								  void *callbackData, int eventData1, int eventData2)
-{
-	SinkVChan_type* 	sinkVChan;
-	DS_Channel_type*	chan; 
-	DataStorage_type* 	ds;  
-	char				buff[DAQLAB_MAX_VCHAN_NAME + 50];      
-	
-	switch (event)
-	{
-		case EVENT_COMMIT:
-				// channel unchecked, remove channel
-
-						// get channel pointer
-						sinkVChan = ds->channels[eventData2]->VChan;
-						// unregister VChan from DAQLab framework
-						DLUnregisterVChan((DAQLabModule_type*)chan->dsInstance, sinkVChan);
-						// discard channel data
-						discard_DS_Channel_type(&ds->channels[eventData2]);
-						// update channel list in the settings panel
-						sprintf(buff, "Ch. %d", eventData2+1);
-					//	ReplaceListItem(panel, control, eventData2, buff, eventData2+1);
-					    ClearListCtrl(panel,DSMain_Channels);
-						//add the channels
-						
-						// update main panel
-						RedrawDSPanel(ds);
-			break;
-	}
-	return 0;
-}
 
 
 static void	RedrawDSPanel (DataStorage_type* ds)
@@ -419,11 +362,95 @@ static void	RedrawDSPanel (DataStorage_type* ds)
 	int			chanPanHeight	= 0;
 	int			chanPanWidth	= 0;
 	int			taskPanWidth	= 0;
+	size_t 		i;
 
 	// count the number of channels in use
-	for (size_t i = 0; i < MAX_DS_CHANNELS; i++)
+	for (i= 0; i < MAX_DS_CHANNELS; i++)
 		if (ds->channels[i]) nChannels++;
+	
+	if (nChannels>0) SetCtrlAttribute(ds->mainPanHndl,DSMain_COMMANDBUTTON_REM,ATTR_DIMMED,FALSE);
+	else SetCtrlAttribute(ds->mainPanHndl,DSMain_COMMANDBUTTON_REM,ATTR_DIMMED,TRUE); 
+	
 
-    //do something?
+}
 
+static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int eventData1, int eventData2)
+{
+		DataStorage_type* 	ds 			= callbackData;
+	
+	return 0;
+}
+
+
+static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	DataStorage_type* 	ds 			= callbackData;
+	SinkVChan_type* 	sinkVChan;
+	DS_Channel_type*	chan; 
+	char				buff[DAQLAB_MAX_VCHAN_NAME + 50];  
+	char*				vChanName;
+	int 				numitems;
+	int 				checked;
+	int 				i;
+	int 				channr=0;
+	int					itemIndex;
+	
+	switch (event) {
+			
+		case EVENT_COMMIT:
+			
+			switch (control) {
+					case DSMain_Channels: 
+					break;
+					
+					case DSMain_COMMANDBUTTON_ADD:
+						do {
+							channr++;	
+						}
+						while ((ds->channels[channr-1]!=NULL)&&(channr<MAX_DS_CHANNELS));
+						if (channr==MAX_DS_CHANNELS) return 0;  //no more channels available
+						
+						// channel checked, give new VChan name and add channel
+						vChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
+						if (!vChanName) {
+							return 0;	// action cancelled
+						}
+						// rename label in settings panel
+						sprintf(buff, "%s", vChanName);
+						GetNumListItems(panel, DSMain_Channels,&numitems);
+						InsertListItem(panel, DSMain_Channels, -1, buff,channr);        
+					
+						// create channel
+						chan = init_DS_Channel_type(ds, panel, channr, vChanName);
+		
+						// register VChan with DAQLab
+						DLRegisterVChan((DAQLabModule_type*)chan->dsInstance, (VChan_type*)chan->VChan);  
+
+						// update main panel
+						RedrawDSPanel(ds);
+					break;
+					
+					case DSMain_COMMANDBUTTON_REM:
+						GetNumListItems(panel, DSMain_Channels,&numitems);    
+						for(i=0;i<numitems;i++){
+							IsListItemChecked(panel,DSMain_Channels, i, &checked);      
+							if (checked==1) {
+					   			// get channel pointer
+								sinkVChan = ds->channels[i]->VChan;
+								// unregister VChan from DAQLab framework
+								DLUnregisterVChan((DAQLabModule_type*)ds, (VChan_type*)sinkVChan);
+								// discard channel data
+								GetValueFromIndex (panel, DSMain_Channels, i, &channr);
+								discard_DS_Channel_type(&ds->channels[channr]);
+								// update channel list 
+							//	DeleteListItem(panel,DSMain_Channels ,channr , 1);
+							}
+						}		 
+						// update main panel
+						RedrawDSPanel(ds);
+					break;
+					
+			}
+	}
+	return 0;
 }

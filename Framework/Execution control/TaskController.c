@@ -137,7 +137,7 @@ struct TaskControl {
 	DoneFptr_type				DoneFptr;
 	StoppedFptr_type			StoppedFptr;
 	DimUIFptr_type				DimUIFptr;
-	UITCActiveFptr_type			UITCActiveFptr;
+	SetUITCModeFptr_type		SetUITCModeFptr;
 	DataReceivedFptr_type		DataReceivedFptr;
 	ModuleEventFptr_type		ModuleEventFptr;
 	ErrorFptr_type				ErrorFptr;
@@ -190,7 +190,7 @@ static BOOL						SlaveHWTrigTaskHasParentMaster	(TaskControl_type* taskControl);
 static BOOL						HWTrigSlavesAreArmed			(TaskControl_type* master);
 
 // Reset Armed status of HW Triggered Slaves from the list of a Master HW Triggering Task Controller
-static void						HWTrigSlavesArmedStatusReset	(TaskControl_type* master);
+static void						ResetHWTrigSlavesArmedStatus	(TaskControl_type* master);
 
 // VChan and Task Control binding
 static VChanCallbackData_type*	init_VChanCallbackData_type		(TaskControl_type* taskControl, SinkVChan_type* sinkVChan);
@@ -238,7 +238,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 										DoneFptr_type				DoneFptr,
 										StoppedFptr_type			StoppedFptr,
 										DimUIFptr_type				DimUIFptr,
-										UITCActiveFptr_type			UITCActiveFptr,
+										SetUITCModeFptr_type		SetUITCModeFptr,
 										DataReceivedFptr_type		DataReceivedFptr,
 										ModuleEventFptr_type		ModuleEventFptr,
 										ErrorFptr_type				ErrorFptr)
@@ -299,7 +299,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	a -> DoneFptr				= DoneFptr;
 	a -> StoppedFptr			= StoppedFptr;
 	a -> DimUIFptr				= DimUIFptr;
-	a -> UITCActiveFptr			= UITCActiveFptr;
+	a -> SetUITCModeFptr			= SetUITCModeFptr;
 	a -> DataReceivedFptr		= DataReceivedFptr;
 	a -> ModuleEventFptr		= ModuleEventFptr;
 	a -> ErrorFptr				= ErrorFptr;
@@ -382,11 +382,6 @@ void SetTaskControlName (TaskControl_type* taskControl, char newName[])
 { 
 	OKfree(taskControl->taskName);
 	taskControl->taskName = StrDup(newName);
-}
-
-void SetTaskControlState (TaskControl_type* taskControl, TaskStates_type newState)
-{
-	taskControl->state = newState;
 }
 
 TaskStates_type	GetTaskControlState (TaskControl_type* taskControl)
@@ -522,6 +517,7 @@ int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, Task
 	CmtTSQHandle				tsqID 				= GetSinkVChanTSQHndl(sinkVChan);
 	VChanCallbackData_type*		VChanTSQDataPtr		= init_VChanCallbackData_type(taskControl, sinkVChan);
 	
+	if (!VChanTSQDataPtr) return -1;
 	if (!ListInsertItem(taskControl->dataQs, &VChanTSQDataPtr, END_OF_LIST)) 
 		return -1;
 	
@@ -702,7 +698,7 @@ static BOOL	HWTrigSlavesAreArmed (TaskControl_type* master)
 	return ArmedFlag; 
 }
 
-static void	HWTrigSlavesArmedStatusReset (TaskControl_type* master)
+static void	ResetHWTrigSlavesArmedStatus (TaskControl_type* master)
 {
 	SlaveHWTrigTask_type*   slaveHWTrigPtr; 
 	size_t					nSlaves				= ListNumItems(master->slaveHWTrigTasks);
@@ -909,7 +905,7 @@ static char* EventToString (TaskEvents_type event)
 			
 			return StrDup("Iteration Timeout");
 			
-		case TASK_EVENT_ONE_ITERATION:
+		case TASK_EVENT_ITERATE_ONCE:
 			
 			return StrDup("One Iteration");
 			
@@ -936,10 +932,6 @@ static char* EventToString (TaskEvents_type event)
 		case TASK_EVENT_DATA_RECEIVED:
 			
 			return StrDup("Data received"); 
-			
-		case TASK_EVENT_ERROR_OUT_OF_MEMORY:
-			
-			return StrDup("Out of memory");
 			
 		case TASK_EVENT_CUSTOM_MODULE_EVENT:
 			
@@ -999,9 +991,9 @@ static char* FCallToString (TaskFCall_type fcall)
 			
 			return StrDup("FCall Dim/Undim UI");
 			
-		case TASK_FCALL_UITC_ACTIVE:
+		case TASK_FCALL_SET_UITC_MODE:
 			
-			return StrDup("FCall UITC Active");
+			return StrDup("FCall Set UITC Mode");
 			
 		case TASK_FCALL_DATA_RECEIVED:
 			
@@ -1131,7 +1123,10 @@ void CVICALLBACK TaskDataItemsInQueue (CmtTSQHandle queueHandle, unsigned int ev
 	if (!VChanPtrPtr) {
 		// flush queue
 		CmtFlushTSQ(GetSinkVChanTSQHndl(VChanTSQDataPtr->sinkVChan), TSQ_FLUSH_ALL, NULL);
-		TaskControlEvent(VChanTSQDataPtr->taskControl, TASK_EVENT_ERROR_OUT_OF_MEMORY, NULL, NULL);
+		//TaskControlEvent(VChanTSQDataPtr->taskControl, TASK_EVENT_ERROR_OUT_OF_MEMORY, NULL, NULL);
+		VChanTSQDataPtr->taskControl->errorMsg = init_ErrorMsg_type(-1, VChanTSQDataPtr->taskControl->taskName, "Out of memory");
+		FunctionCall(VChanTSQDataPtr->taskControl, TASK_EVENT_DATA_RECEIVED, TASK_FCALL_ERROR, NULL);
+		ChangeState(VChanTSQDataPtr->taskControl, TASK_EVENT_DATA_RECEIVED, TASK_STATE_ERROR); 
 	} else {
 		*VChanPtrPtr = VChanTSQDataPtr->sinkVChan;
 		// inform Task Controller that data was placed in an otherwise empty data queue
@@ -1377,9 +1372,9 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 			if (taskControl->DimUIFptr) (*taskControl->DimUIFptr)(taskControl, *(BOOL*)fCallData); 
 			break;
 			
-		case TASK_FCALL_UITC_ACTIVE:
+		case TASK_FCALL_SET_UITC_MODE:
 			
-			if (taskControl->UITCActiveFptr) (*taskControl->UITCActiveFptr)(taskControl, *(BOOL*)fCallData);
+			if (taskControl->SetUITCModeFptr) (*taskControl->SetUITCModeFptr)(taskControl, *(BOOL*)fCallData);
 			break;
 			
 		case TASK_FCALL_DATA_RECEIVED:
@@ -1407,7 +1402,7 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 	}
 	
 	
-	if (!fCallResult && (fID != TASK_FCALL_ITERATE) && (fID != TASK_FCALL_ABORT_ITERATION) && (fID != TASK_FCALL_DIM_UI) && (fID != TASK_FCALL_UITC_ACTIVE) && (fID != TASK_FCALL_ERROR)) 
+	if (!fCallResult && (fID != TASK_FCALL_ITERATE) && (fID != TASK_FCALL_ABORT_ITERATION) && (fID != TASK_FCALL_DIM_UI) && (fID != TASK_FCALL_SET_UITC_MODE) && (fID != TASK_FCALL_ERROR)) 
 		if (functionMissingFlag)
 			return NULL;																				// function not provided
 		else
@@ -1442,7 +1437,7 @@ int	AddSubTaskToParent (TaskControl_type* parent, TaskControl_type* child)
 	// call UITC Active function to dim/undim UITC Task Control execution
 	BOOL	UITCFlag = FALSE;
 	if (child->UITCFlag)
-		FunctionCall(child, TASK_EVENT_SUBTASK_ADDED_TO_PARENT, TASK_FCALL_UITC_ACTIVE, &UITCFlag);
+		FunctionCall(child, TASK_EVENT_SUBTASK_ADDED_TO_PARENT, TASK_FCALL_SET_UITC_MODE, &UITCFlag);
 	
 	// insert subtask
 	if (!ListInsertItem(parent->subtasks, &subtaskItem, END_OF_LIST)) return -1;
@@ -1476,7 +1471,7 @@ int	RemoveSubTaskFromParent	(TaskControl_type* child)
 			// call UITC Active function to dim/undim UITC Task Control execution
 			BOOL	UITCFlag = TRUE;
 			if (child->UITCFlag)
-				FunctionCall(child, TASK_EVENT_SUBTASK_REMOVED_FROM_PARENT, TASK_FCALL_UITC_ACTIVE, &UITCFlag);
+				FunctionCall(child, TASK_EVENT_SUBTASK_REMOVED_FROM_PARENT, TASK_FCALL_SET_UITC_MODE, &UITCFlag);
 			
 			return 0; // found and removed
 		}
@@ -1679,10 +1674,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 #define TaskEventHandler_Error_HWTriggeringNotAllowed		-9
 #define TaskEventHandler_Error_HWTriggeringMismatch			-10
 #define TaskEventHandler_Error_HWTriggeringMinRepeat		-11	
-#define TaskEventHandler_Error_NoFunctionality				-12
-#define TaskEventHandler_Error_NoHWTriggerArmedEvent		-13
-#define	TaskEventHandler_Error_SlaveHWTriggeredZeroTimeout  -14
-#define TaskEventHandler_Error_HWTrigSlaveNotArmed			-15
+#define TaskEventHandler_Error_NoHWTriggerArmedEvent		-12
+#define	TaskEventHandler_Error_SlaveHWTriggeredZeroTimeout  -13
+#define TaskEventHandler_Error_HWTrigSlaveNotArmed			-14
 
 	
 	EventPacket_type 		eventpacket;
@@ -1808,7 +1802,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						taskControl->currIterIdx = 0;
 						
 						// reset armed status of Slave HW Triggered Task Controllers, if any
-						HWTrigSlavesArmedStatusReset (taskControl);
+						ResetHWTrigSlavesArmedStatus(taskControl);
 						
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_INITIAL);
 						
@@ -1859,16 +1853,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 							break;
 						}
-					
-					break;
-					
-				case TASK_EVENT_ERROR_OUT_OF_MEMORY:
-					
-					taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_OutOfMemory, taskControl->taskName, "Out of memory");
-					
-					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 					
 					break;
 					
@@ -2036,6 +2020,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						// reset iterations
 						taskControl->currIterIdx = 0;
 						
+						// reset armed status of Slave HW Triggered Task Controllers, if any
+						ResetHWTrigSlavesArmedStatus(taskControl);
+						
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_INITIAL);
 					}
 					
@@ -2053,16 +2040,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 							break;
 						}
-					
-					break;
-					
-				case TASK_EVENT_ERROR_OUT_OF_MEMORY:
-					
-					taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_OutOfMemory, taskControl->taskName, "Out of memory");
-					
-					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 					
 					break;
 					
@@ -2126,7 +2103,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					break;
 					
 				case TASK_EVENT_START:
-				case TASK_EVENT_ONE_ITERATION: 
+				case TASK_EVENT_ITERATE_ONCE: 
 					
 					//--------------------------------------------------------------------------------------------------------------- 
 					// Call Start Task Controller function pointer to inform that task will start
@@ -2145,26 +2122,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//---------------------------------------------------------------------------------------------------------------   
 					// Set flag to iterate once or continue until done or stopped
 					//---------------------------------------------------------------------------------------------------------------   
-					if (eventpacket.event == TASK_EVENT_ONE_ITERATION) 
+					if (eventpacket.event == TASK_EVENT_ITERATE_ONCE) 
 						taskControl->nIterationsFlag = 1;
 					else
 						taskControl->nIterationsFlag = -1;
 					
-					//---------------------------------------------------------------------------------------------------------------
-					// Check if there are no SubTasks and iteration function is not repeated at least once, give error
-					//---------------------------------------------------------------------------------------------------------------
-					
-					if (taskControl->mode == TASK_FINITE && !taskControl->repeat && !ListNumItems(taskControl->subtasks)) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_NoFunctionality, taskControl->taskName, "Task Controller has no functionality");
-										
-						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
-						break;
-					}
 					
 					//---------------------------------------------------------------------------------------------------------------
-					// Switch to RUNNING state and iterate Task Controller
+					// Iterate Task Controller
 					//---------------------------------------------------------------------------------------------------------------
 					
 					if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
@@ -2176,8 +2141,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
-					
 					//-------------------------------------------------------------------------------------------------------------------------
 					// If this is a Root Task Controller, i.e. it doesn't have a parent, then: 
 					// - call dim UI function recursively for its SubTasks
@@ -2188,6 +2151,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ClearTaskTreeBranchVChans(taskControl);
 						DimTaskTreeBranch(taskControl, eventpacket.event, TRUE);
 					}
+					
+					//---------------------------------------------------------------------------------------------------------------
+					// Switch to RUNNING state
+					//---------------------------------------------------------------------------------------------------------------
+					
+					ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);  
 					
 					break;
 					
@@ -2234,16 +2203,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 							break;
 						}
-					
-					break;
-					
-				case TASK_EVENT_ERROR_OUT_OF_MEMORY:
-					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_OutOfMemory, taskControl->taskName, "Out of memory");
-					
-					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 					
 					break;
 					
@@ -2308,7 +2267,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					break;
 					
 				case TASK_EVENT_START:
-				case TASK_EVENT_ONE_ITERATION: 
+				case TASK_EVENT_ITERATE_ONCE: 
 					
 					//--------------------------------------------------------------------------------------------------------------- 
 					// Call Start Task Controller function pointer to inform that task will start
@@ -2327,7 +2286,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//---------------------------------------------------------------------------------------------------------------   
 					// Set flag to iterate once or continue until done or stopped
 					//---------------------------------------------------------------------------------------------------------------   
-					if (eventpacket.event == TASK_EVENT_ONE_ITERATION)
+					if (eventpacket.event == TASK_EVENT_ITERATE_ONCE)
 						taskControl->nIterationsFlag = 1;
 					else
 						taskControl->nIterationsFlag = -1;
@@ -2447,16 +2406,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
-				case TASK_EVENT_ERROR_OUT_OF_MEMORY:
-					
-					taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_OutOfMemory, taskControl->taskName, "Out of memory");
-					
-					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
-					
-					break;
-					
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
@@ -2529,7 +2478,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Slaves are ready to be triggered, reset Slaves armed status
 					//---------------------------------------------------------------------------------------------------------------
 									
-					HWTrigSlavesArmedStatusReset(taskControl);
+					ResetHWTrigSlavesArmedStatus(taskControl);
 									
 					//---------------------------------------------------------------------------------------------------------------
 					// Iterate and fire Master HW Trigger 
@@ -2553,16 +2502,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 						break;
 					}
-					
-					break;
-					
-				case TASK_EVENT_ERROR_OUT_OF_MEMORY:
-					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_OutOfMemory, taskControl->taskName, "Out of memory");
-					
-					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 					
 					break;
 					
@@ -2612,6 +2551,16 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// If current iteration index is smaller than the total number of requested repeats, except if repeat = 0 and
 					// first iteration or if task is continuous.
 					//---------------------------------------------------------------------------------------------------------------
+					
+					// The iterate event is self generated, when it occurs, all child TCs are in an initial or done state
+					// For a Finite TC for both repeat == 0 and repeat == 1 the TC will undergo one iteration, however when 
+					// repeat == 0, its iteration callback function will not be called.
+					// simplified if statement:
+					// 
+					// if ( taskControl->mode == TASK_FINITE  &&  
+					//		(taskControl->currIterIdx >= taskControl->repeat  ||  !taskControl->nIterationsFlag)  &&  
+					//		taskControl->currIterIdx )
+					
 					
 					if (!((taskControl->currIterIdx < taskControl->repeat || (!taskControl->repeat && !taskControl->currIterIdx) || taskControl->mode == TASK_CONTINUOUS) && taskControl->nIterationsFlag))  {
 								
@@ -2725,7 +2674,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// Slaves are ready to be triggered, reset Slaves armed status
 									//---------------------------------------------------------------------------------------------------------------
 									
-									HWTrigSlavesArmedStatusReset(taskControl);
+									ResetHWTrigSlavesArmedStatus(taskControl);
 									
 									//---------------------------------------------------------------------------------------------------------------
 									// Iterate and fire Master HW Trigger 
@@ -2846,7 +2795,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// Slaves are ready to be triggered, reset Slaves armed status
 									//---------------------------------------------------------------------------------------------------------------
 									
-									HWTrigSlavesArmedStatusReset(taskControl);
+									ResetHWTrigSlavesArmedStatus(taskControl);
 									
 									//---------------------------------------------------------------------------------------------------------------
 									// There are no SubTasks, iterate and fire Master HW Trigger 
@@ -2960,7 +2909,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// Slaves are ready to be triggered, reset Slaves armed status
 									//---------------------------------------------------------------------------------------------------------------
 									
-									HWTrigSlavesArmedStatusReset(taskControl);
+									ResetHWTrigSlavesArmedStatus(taskControl);
 									
 									//---------------------------------------------------------------------------------------------------------------
 									// Iterate and fire Master HW Trigger 
@@ -3236,7 +3185,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// Slaves are ready to be triggered, reset Slaves armed status
 									//---------------------------------------------------------------------------------------------------------------
 									
-									HWTrigSlavesArmedStatusReset(taskControl);
+									ResetHWTrigSlavesArmedStatus(taskControl);
 									
 									//---------------------------------------------------------------------------------------------------------------
 									// There are no SubTasks, iterate and fire Master HW Trigger 
@@ -3301,16 +3250,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 							break;
 						}
-					
-					break;
-					
-				case TASK_EVENT_ERROR_OUT_OF_MEMORY:
-					
-					taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_OutOfMemory, taskControl->taskName, "Out of memory");
-					
-					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 					
 					break;
 					
@@ -3755,22 +3694,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
-				case TASK_EVENT_ERROR_OUT_OF_MEMORY:
-					
-					taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_OutOfMemory, taskControl->taskName, "Out of memory");
-					
-					// remove timeout timer
-					if (taskControl->iterationTimerID > 0) {
-						DiscardAsyncTimer(taskControl->iterationTimerID);
-						taskControl->iterationTimerID = 0;
-					}
-					
-					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
-					
-					break;
-					
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
@@ -3969,16 +3892,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 							break;
 						}
-					
-					break;
-					
-				case TASK_EVENT_ERROR_OUT_OF_MEMORY:
-					
-					taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_OutOfMemory, taskControl->taskName, "Out of memory");
-					
-					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 					
 					break;
 					
@@ -4188,16 +4101,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 							break;
 						}
-					
-					break;
-					
-				case TASK_EVENT_ERROR_OUT_OF_MEMORY:
-					
-					taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_OutOfMemory, taskControl->taskName, "Out of memory");
-					
-					FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-					ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 					
 					break;
 					

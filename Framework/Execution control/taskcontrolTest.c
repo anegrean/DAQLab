@@ -71,8 +71,8 @@ int main (int argc, char *argv[])
 	
 	// ZStage
 	ZStage				= init_TaskControl_type ("Z Stage", NULL, NULL, ZStage_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-	SetTaskControlMode(ZStage, TASK_FINITE);
-	SetTaskControlIterations(ZStage, 1);
+	SetTaskControlMode(ZStage, TASK_CONTINUOUS);
+	SetTaskControlIterations(ZStage, 0);
 	SetTaskControlIterationsWait(ZStackTask, 0);
 	SetTaskControlLog(ZStage, TaskExecutionLog);
 	
@@ -154,7 +154,7 @@ int CVICALLBACK CB_TaskController (int panel, int control, int event, void *call
 					
 				case ControlPan_StepBTTN:
 					
-					TaskControlEvent(ZStackTask, TASK_EVENT_ONE_ITERATION, NULL, NULL); 
+					TaskControlEvent(ZStackTask, TASK_EVENT_ITERATE_ONCE, NULL, NULL); 
 					
 					break;
 					

@@ -283,15 +283,14 @@ typedef enum {
 												// by the Task Controller or another thread if the iteration occurs in another thread.
 	TASK_EVENT_ITERATION_DONE,					// Used to signal that an iteration completed if it was not carried out in the same thread as the call to TASK_FCALL_ITERATE.
 	TASK_EVENT_ITERATION_TIMEOUT,				// Generated when TASK_EVENT_ITERATION_DONE is not received after a given timeout. 
-	TASK_EVENT_ONE_ITERATION,					// Performs only one iteration of the Task Controller in an IDLE or DONE state.
+	TASK_EVENT_ITERATE_ONCE,					// Performs only one iteration of the Task Controller in an IDLE or DONE state.
 	TASK_EVENT_RESET,							// Resets iteration index to 0, calls given reset function and brings State Controller 
 												// back to INITIAL state.
 	TASK_EVENT_STOP,							// Stops Task Controller iterations and allows SubTask Controllers to complete their iterations.
 	TASK_EVENT_STOP_CONTINUOUS_TASK,			// Event sent from parent Task Controller to its continuous SubTasks to stop them.
 	TASK_EVENT_SUBTASK_STATE_CHANGED,   		// When one of the SubTask Controllers switches to another state.
 	TASK_EVENT_HWTRIG_SLAVE_ARMED,				// When a Slave HW Trig Task Controller is armed, it informs the Master HW Triggering Task Controller. 
-	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue of a Task Controller.
-	TASK_EVENT_ERROR_OUT_OF_MEMORY,				// To signal that an out of memory event occured.
+	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queueTASK_EVENT_ERROR_OUT_OF_MEMORY,				// To signal that an out of memory event occured.
 	TASK_EVENT_CUSTOM_MODULE_EVENT,				// To signal custom module or device events.
 	TASK_EVENT_SUBTASK_ADDED_TO_PARENT,			// When a SubTask is added to a parent Task Controller
 	TASK_EVENT_SUBTASK_REMOVED_FROM_PARENT		// When a SubTask is disconnected from a parent task Controller
@@ -310,7 +309,7 @@ typedef enum {
 	TASK_FCALL_DONE,					// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
 	TASK_FCALL_STOPPED,					// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
 	TASK_FCALL_DIM_UI,					// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
-	TASK_FCALL_UITC_ACTIVE,				// Called when an UITC has a parent Task Controller attached to or deattached from it.
+	TASK_FCALL_SET_UITC_MODE,				// Called when an UITC has a parent Task Controller attached to or deattached from it.
 	TASK_FCALL_DATA_RECEIVED,			// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
 	TASK_FCALL_ERROR,
 	TASK_FCALL_MODULE_EVENT				// Called for custom module events that are not handled directly by the Task Controller
@@ -406,7 +405,7 @@ typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimm
 // Called when an UITC has a parent Task Controller attached to or detached from it, in the former case the UITC functioning as a simple Task Controller
 // without the possibility for the user to control the Task execution. This function must dim/undim UITC controls that prevent/allow the user to control
 // the task execution.
-typedef void				(*UITCActiveFptr_type)			(TaskControl_type* taskControl, BOOL UITCActive);
+typedef void				(*SetUITCModeFptr_type)			(TaskControl_type* taskControl, BOOL UITCActive);
 
 // Called when Task Controller encounters an error, to continue Task Controller execution, a return from this function is needed.
 typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg);
@@ -440,7 +439,7 @@ TaskControl_type*  	 	init_TaskControl_type				(const char					taskControllerNam
 														 	DoneFptr_type				DoneFptr,
 														 	StoppedFptr_type			StoppedFptr,
 															DimUIFptr_type				DimUIFptr,
-															UITCActiveFptr_type			UITCActiveFptr,
+															SetUITCModeFptr_type		SetUITCModeFptr,
 														 	DataReceivedFptr_type		DataReceivedFptr,
 														 	ModuleEventFptr_type		ModuleEventFptr,
 														 	ErrorFptr_type				ErrorFptr);
@@ -460,8 +459,7 @@ void 					SetTaskControlName 					(TaskControl_type* taskControl, char newName[]
 	// Returns pointer to dynamically allocated Task Controller name (null terminated string) 
 char*					GetTaskControlName					(TaskControl_type* taskControl);
 
-	// Use this function wisely, mostly intended to be used in a custom module event callback
-void					SetTaskControlState					(TaskControl_type* taskControl, TaskStates_type	newState);
+	// Return the state of a Task Controller
 TaskStates_type			GetTaskControlState					(TaskControl_type* taskControl);
 														
 	// repeats = 1 by default

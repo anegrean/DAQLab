@@ -53,7 +53,7 @@ FCallReturn_type* init_FCallReturn_type (int valFCall, const char errorOrigin[],
 		result -> errorInfo	= Msg;
 	} else
 		result -> errorInfo = NULL;
-		
+	free(Msg);   //added Lex	
 	return result;
 }
 

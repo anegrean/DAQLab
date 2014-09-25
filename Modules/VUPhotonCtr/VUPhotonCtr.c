@@ -374,8 +374,8 @@ static Channel_type* init_Channel_type (VUPhotonCtr_type* vupcInstance, int panH
 
 	chan->vupcInstance	= vupcInstance;
 	chan->VChan			= init_SourceVChan_type(VChanName, WaveformPacket_UShort, chan, NULL, NULL);
-	chan->chanIdx		= chanIdx;
 	chan->panHndl   	= panHndl;
+	chan->chanIdx		= chanIdx;
 	chan->gain			= 0;
 	chan->maxGain		= 0;
 	chan->threshold		= 0;
@@ -623,8 +623,8 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 	double zero=0.0;
 
 	for(i=0;i<MAX_CHANNELS;i++)  {
-		if(vupc->channels[i]) {
-			if(vupc->channels[i]->chanIdx==PMT1){
+		if(vupc->channels[i]!=NULL) {
+			if(i==0){
 			//PMT1 is selected
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Fan,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Cooling,0);
@@ -634,7 +634,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, zero);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Gain, zero);
 			}
-			if(vupc->channels[i]->chanIdx==PMT2){
+			if(i==1){
 			//PMT2 is selected
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Fan,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Cooling,0);
@@ -644,7 +644,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, zero);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Gain, zero);
 			}
-			if(vupc->channels[i]->chanIdx==PMT3){
+			if(i==2){
 			//PMT3 is selected
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Fan,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Cooling,0);
@@ -654,7 +654,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, zero);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Gain, zero);
 			}
-			if(vupc->channels[i]->chanIdx==PMT4){
+			if(i==3){
 			//PMT4 is selected
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Fan,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Cooling,0);
@@ -795,7 +795,7 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 
 	for(i=0;i<MAX_CHANNELS;i++)  {
 		if(vupc->channels[i]) {
-			if(vupc->channels[i]->chanIdx==PMT1){
+			if(i==0){
 			//PMT1 is selected
 				HV=controlreg&PMT1HV_BIT;
 				CurrentErr=statreg&PMT1CURR_BIT;
@@ -806,7 +806,7 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT1TEMP_BIT);
 			}
-			if(vupc->channels[i]->chanIdx==PMT2){
+			if(i==1){
 			//PMT2 is selected
 				HV=controlreg&PMT2HV_BIT;
 				CurrentErr=statreg&PMT2CURR_BIT;
@@ -816,7 +816,7 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT2TEMP_BIT);
 			}
-			if(vupc->channels[i]->chanIdx==PMT3){
+			if(i==2){
 			//PMT3 is selected
 				HV=controlreg&PMT3HV_BIT;
 				CurrentErr=statreg&PMT3CURR_BIT;
@@ -826,7 +826,7 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT3TEMP_BIT);
 			}
-			if(vupc->channels[i]->chanIdx==PMT4){
+			if(i==3){
 			//PMT4 is selected
 				HV=controlreg&PMT4HV_BIT;
 				CurrentErr=statreg&PMT4CURR_BIT;
@@ -1203,7 +1203,7 @@ static FCallReturn_type* DoneTC (TaskControl_type* taskControl, size_t currentIt
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
-	//PMTStopAcq(&vupc->controlreg);
+	PMTStopAcq();
 
 	// undim items
 	(*vupc->DimWhenRunning) (vupc, FALSE);

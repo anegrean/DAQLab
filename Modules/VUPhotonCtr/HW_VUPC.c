@@ -285,7 +285,7 @@ int ReadBuffer(int bufsize)
 //	DataPacket_type  datapacket_pmt3;
 //	DataPacket_type  datapacket_pmt4;
 	unsigned short int* 	Samplebuffer	= NULL;   
-	unsigned short int**    pmtdataptr[MAX_CHANNELS];
+	unsigned short int*     pmtdataptr;
 	int numpixels;
 	int numshorts;
 	int ndatapoints;
@@ -294,19 +294,24 @@ int ReadBuffer(int bufsize)
 
 	long errcode;
 	
+	//if(GetAcqBusy()==1){
 	
 	Samplebuffer = malloc(bufsize); 
 	
 	result = VUPCI_Read_Buffer(Samplebuffer,bufsize);
 	
-	if( result<0){
+///	if((result<0)&&(GetAcqBusy()==0)){ //only pass errors when acq is busy  
+//		OKfree(Samplebuffer);  
+//		return 0;
+//	}
+	if (result<0){  
 				//err
 		//SetPMTState(PMT_ERROR);
 		readerror=1;
 		errcode=~result;
 		//error, stop polling
 		//inform task controller
-	//	AbortTaskControlExecution(gtaskControl);
+		//	AbortTaskControlExecution(gtaskControl);
 		TaskControlIterationDone (gtaskControl, -1, "Read Error");   
 		nrsamples=0;
 		//HWError();
@@ -316,6 +321,7 @@ int ReadBuffer(int bufsize)
 		if (result==0){
 			//no data, just a timeout
 			result=0;
+			TaskControlIterationDone (gtaskControl, -2, "Read Timeout");   
 		}
 		else{
 			// deinterlace data here
@@ -326,28 +332,21 @@ int ReadBuffer(int bufsize)
 			
 			//transpose data array
 			TransposeData(Samplebuffer,VAL_SHORT_INTEGER,numshorts,4);
-			
-		//	for (i=0;i<MAX_CHANNELS;i++){
-	//			pmtdataptr[i]=malloc(ndatapoints*sizeof(unsigned short));
-	//			memcpy(pmtdataptr[i],&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));    
-	//		}
-			
-		
-		//	memcpy(pmt1dataptr,&Samplebuffer[0],ndatapoints*sizeof(unsigned short));
-		//	memcpy(pmt2dataptr,&Samplebuffer[ndatapoints],ndatapoints*sizeof(unsigned short)); 
-		//	memcpy(pmt3dataptr,&Samplebuffer[2*ndatapoints],ndatapoints*sizeof(unsigned short)); 
-		//	memcpy(pmt4dataptr,&Samplebuffer[3*ndatapoints],ndatapoints*sizeof(unsigned short)); 
+	
 			
 			//send datapackets
+			//index i is index of active channels; chanIdx contains the PMT channel index
 			
 			for (i=0;i<MAX_CHANNELS;i++){
 				if (gchannels[i]!=NULL){
 					if (gchannels[i]->VChan!=NULL){
-						pmtdataptr[i]=malloc(ndatapoints*sizeof(unsigned short));
-						memcpy(pmtdataptr[i],&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));  
-					    dataPacket = init_WaveformPacket_type(Waveform_Double, ndatapoints, pmtdataptr[i], refSamplingRate, 1);       
+						pmtdataptr=malloc(ndatapoints*sizeof(unsigned short));
+						memcpy(pmtdataptr,&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));  
+					    dataPacket = init_WaveformPacket_type(Waveform_UShort, ndatapoints, pmtdataptr, refSamplingRate, 1);       
 						// send data packet with waveform
 						fCallReturn = SendDataPacket(gchannels[i]->VChan, dataPacket);
+						discard_FCallReturn_type(&fCallReturn);
+						//free(pmtdataptr[index]);
 					}
 				}
 			}
@@ -658,11 +657,6 @@ int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl,C
 	errChk(StartDAQThread(poolHandle));
 	
 	
-	
-	//test
-//	VUPCI_Close(); 
-//	errChk(VUPCI_Open()); 
-	
 	readdata=1;   //start reading       
 	
 	error=ReadPMTReg(CTRL_REG,&controlreg);     
@@ -676,7 +670,6 @@ int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl,C
 		  ProcessSystemEvents();
 	}
 	
-//	VUPCI_Start_DMA();  
 
 	
 	
@@ -697,7 +690,6 @@ int PMTStopAcq(void)
 	int i;
 	
 	readdata=0;  //stop reading  
-//	VUPCI_Stop_DMA();
 	
 	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	//set app start bit  
@@ -827,22 +819,24 @@ Error:
 int StopDAQThread(CmtThreadPoolHandle poolHandle)
 {
 	int error=0;	
-//	int DAQThreadFunctionStatus;
-//	int PMTThreadFunctionStatus;   
-//	int PMTSyncThreadFunctionStatus;   
+	int DAQThreadFunctionStatus;
+	int PMTThreadFunctionStatus;   
+	int PMTSyncThreadFunctionStatus;   
 //	char test[255];
 	
 //	error=PMTController_Finalize();
+	
+	
+	
+
+	//UninitializePMTstate();     
+	
+	SetAcqBusy(0);  //should stop the acq thread 
 	
 //	CmtGetThreadPoolFunctionAttribute(poolHandle,PMTThreadFunctionID,ATTR_TP_FUNCTION_EXECUTION_STATUS,&PMTThreadFunctionStatus);
 //	if(PMTThreadFunctionStatus!=kCmtThreadFunctionComplete) 
 //		CmtWaitForThreadPoolFunctionCompletion(poolHandle,PMTThreadFunctionID,OPT_TP_PROCESS_EVENTS_WHILE_WAITING);
 //	CmtReleaseThreadPoolFunctionID(poolHandle,PMTThreadFunctionID);
-	
-
-	//UninitializePMTstate();     
-	
-	SetAcqBusy(0); 
 	
 	return error;
 }

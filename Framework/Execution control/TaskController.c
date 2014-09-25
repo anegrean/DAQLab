@@ -1109,11 +1109,13 @@ void CVICALLBACK TaskEventItemsInQueue (CmtTSQHandle queueHandle, unsigned int e
 		CmtGetThreadPoolFunctionAttribute(DEFAULT_THREAD_POOL_HANDLE, taskControl->threadFunctionID, 
 									  ATTR_TP_FUNCTION_EXECUTION_STATUS, &ExecutionStatus);
 	
-	if (ExecutionStatus == kCmtThreadFunctionComplete)
+	if (ExecutionStatus == kCmtThreadFunctionComplete) {
+		if (taskControl->threadFunctionID) CmtReleaseThreadPoolFunctionID(DEFAULT_THREAD_POOL_HANDLE, taskControl->threadFunctionID);
 		CmtScheduleThreadPoolFunctionAdv(DEFAULT_THREAD_POOL_HANDLE, ScheduleTaskEventHandler, taskControl, 
 									 	 DEFAULT_THREAD_PRIORITY, TaskEventHandlerExecutionCallback, 
 									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), 
-										 taskControl, taskControl->eventQThreadID, &taskControl->threadFunctionID);
+										 taskControl, taskControl->eventQThreadID, &taskControl->threadFunctionID);	
+	}
 }
 
 void CVICALLBACK TaskDataItemsInQueue (CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData)

@@ -22,6 +22,9 @@
 // Data Storage UI resource
 #define UI_DataStorage			"./Modules/Data Storage/UI_DataStorage.uir"
 
+//test
+char* rawfilepath="D:\\Rawdata\\";
+
 //==============================================================================
 // Types
 
@@ -100,6 +103,8 @@ static void					DimTC					(TaskControl_type* taskControl, BOOL dimmed);
 
 static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg);
 
+static FCallReturn_type*	DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+
 static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
 
@@ -137,7 +142,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	
 	// create Data Storage Task Controller
 	tc = init_TaskControl_type (instanceName, ds, ConfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
-								DoneTC, StoppedTC, DimTC, NULL, NULL, ModuleEventHandler, ErrorTC);
+								DoneTC, StoppedTC, DimTC, NULL, DataReceivedTC, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
 	//------------------------------------------------------------
@@ -212,7 +217,7 @@ void discard_DataStorage (DAQLabModule_type** mod)
 
 static DS_Channel_type* init_DS_Channel_type (DataStorage_type* dsInstance, int panHndl, size_t chanIdx,char VChanName[])
 {
-	Packet_type allowedPacketTypes[] = {WaveformPacket_UShort, WaveformPacket_UInt, WaveformPacket_Double};   
+	Packet_type allowedPacketTypes[] = {WaveformPacket_UShort};   	   //, WaveformPacket_UInt, WaveformPacket_Double
 	
 	DS_Channel_type* chan = malloc (sizeof(DS_Channel_type));
 	if (!chan) return NULL;
@@ -256,7 +261,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	ds->mainPanHndl 		= LoadPanel(workspacePanHndl, UI_DataStorage, DSMain);
 	
 	// add module's task controller to the framework
-	DLAddTaskController(ds, ds->taskController);
+	DLAddTaskController((DAQLabModule_type*)ds, ds->taskController);
 	
 		// connect module data and user interface callbackFn to all direct controls in the panel
 	SetCtrlsInPanCBInfo(mod, ((DataStorage_type*)mod)->uiCtrlsCB, ds->mainPanHndl);
@@ -424,7 +429,8 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 						chan = init_DS_Channel_type(ds, panel, channr, vChanName);
 		
 						// register VChan with DAQLab
-						DLRegisterVChan((DAQLabModule_type*)chan->dsInstance, (VChan_type*)chan->VChan);  
+						DLRegisterVChan((DAQLabModule_type*)ds, (VChan_type*)chan->VChan);
+						AddSinkVChan(ds->taskController, chan->VChan, TASK_VCHAN_FUNC_ITERATE);
 
 						// update main panel
 						RedrawDSPanel(ds);
@@ -453,4 +459,69 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 			}
 	}
 	return 0;
+}
+
+
+static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+{
+	
+	DataStorage_type*	ds					= GetTaskControlModuleData(taskControl);
+	FCallReturn_type*	fCallReturn			= NULL;
+	unsigned int		nSamples;
+	int					error;
+	DataPacket_type**	dataPackets			= NULL;
+	unsigned short int* shortDataPtr		= NULL;
+	size_t				nPackets;
+	size_t				nElem;
+	char*				errMsg				= NULL;
+	char*				VChanName			= GetVChanName((VChan_type*)sinkVChan);
+	char* 				rawfilename; 
+	
+	switch(taskState) {
+			
+		case TASK_STATE_UNCONFIGURED:			
+		case TASK_STATE_CONFIGURED:						
+		case TASK_STATE_INITIAL:							
+		case TASK_STATE_IDLE:
+		case TASK_STATE_STOPPING:
+		case TASK_STATE_DONE:
+		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
+		case TASK_STATE_RUNNING:
+		case TASK_STATE_RUNNING_WAITING_ITERATION:
+			
+			
+			// get all available data packets
+			if ((fCallReturn = GetAllDataPackets(sinkVChan, &dataPackets, &nPackets))) goto Error;
+			
+			rawfilename=malloc(MAXCHAR*sizeof(char));
+			Fmt (rawfilename, "%s<%srawdata.bin", rawfilepath); 
+			
+			for (size_t i = 0; i < nPackets; i++) {
+				shortDataPtr = GetDataPacketDataPtr(dataPackets[i], &nElem);
+				//test
+			
+			//	ArrayToFile(rawfilename,shortDataPtr,VAL_SHORT_INTEGER,nElem,1,VAL_GROUPS_TOGETHER,VAL_GROUPS_AS_COLUMNS,VAL_SEP_BY_TAB,0,VAL_BINARY,VAL_APPEND);
+			
+				ReleaseDataPacket(&dataPackets[i]);
+			}
+			free(rawfilename); 
+			OKfree(dataPackets);				
+			break;
+		
+			
+		case TASK_STATE_ERROR:
+			
+			ReleaseAllDataPackets(sinkVChan);
+			
+			break;
+	}
+	
+	return init_FCallReturn_type(0, "", "");
+	
+	
+Error:
+	
+	OKfree(VChanName);
+	OKfree(errMsg);
+	return fCallReturn;
 }

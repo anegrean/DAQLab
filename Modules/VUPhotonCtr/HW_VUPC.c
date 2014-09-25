@@ -77,9 +77,6 @@ typedef struct _PMTregcommand {
 TaskControl_type*	gtaskControl;
 Channel_type*		gchannels[MAX_CHANNELS];
 
-//test
-char* rawfilepath="D:\\Rawdata\\";
-
 
 //int              		QuitFlag;
 //unsigned short int* 	Samplebuffer	= NULL;
@@ -99,7 +96,6 @@ DefineThreadSafeScalarVar(int,PMTCommandFlag,0);				    //do a PMT controller re
 DefineThreadSafeScalarVar(unsigned long,PMTControllerData,0); 	    // current PMT controller data
 DefineThreadSafeScalarVar(int ,PMTBufsize,0); 	    				// pmt buffer size        
 DefineThreadSafeScalarVar(unsigned int,PMTnewbufsizeflag,0); 	    // newbufsize flag
-DefineThreadSafeScalarVar(unsigned int,Controlreg,0); 	            // controlreg 
 DefineThreadSafeScalarVar(unsigned int,AcqBusy,0); 	            // acquisition is busy 
 DefineThreadSafeScalarVar(unsigned int,ReadyForReading,0); 	            // acquisition thread is ready for reading
 
@@ -113,7 +109,7 @@ int readerror=0;
 int readdata=0;
 
 int 			nrsamples_in_iteration;   //requested amount of samples
-int 			nrsamples;				  //number of samples measured 
+size_t 			nrsamples;				  //number of samples measured 
 int 			iterationnr;              //current iteration number, passed in data
 
 
@@ -201,6 +197,7 @@ int WritePMTReg(unsigned long regaddress,unsigned long regvalue)
 	 if(!VUPCI_Set_Reg(regaddress,regvalue)){ 
 		error=-1;
 	 };
+	 
 
 	 return error;
 }
@@ -231,7 +228,6 @@ int PMTController_Init(void)
 	unsigned long timeout=5000;  //in ms
 	
 	InitializeAcqBusy();
-	InitializeControlreg();
 	InitializePMTCommandFlag();
 	InitializePMTControllerData();
 	InitializePMTBufsize();   
@@ -241,7 +237,6 @@ int PMTController_Init(void)
 	SetPMTCommandFlag(0);
 	SetPMTBufsize(0);   
 	SetPMTnewbufsizeflag(0);
-	SetControlreg(0);     
 	SetAcqBusy(0);
 	SetReadyForReading(0);
 	
@@ -265,7 +260,6 @@ int PMTController_Finalize(void)
 	 
 	 SetAcqBusy(0); 
 	 UninitializeAcqBusy();  
-	 UninitializeControlreg();  
 	 UninitializePMTCommandFlag();
 	 UninitializePMTControllerData();
 	 UninitializePMTBufsize();   
@@ -291,7 +285,7 @@ int ReadBuffer(int bufsize)
 //	DataPacket_type  datapacket_pmt3;
 //	DataPacket_type  datapacket_pmt4;
 	unsigned short int* 	Samplebuffer	= NULL;   
-	unsigned short** pmtdataptr[MAX_CHANNELS];
+	unsigned short int**    pmtdataptr[MAX_CHANNELS];
 	int numpixels;
 	int numshorts;
 	int ndatapoints;
@@ -299,7 +293,7 @@ int ReadBuffer(int bufsize)
 	double refSamplingRate=1000;
 
 	long errcode;
-	char* rawfilename;
+	
 	
 	Samplebuffer = malloc(bufsize); 
 	
@@ -333,30 +327,24 @@ int ReadBuffer(int bufsize)
 			//transpose data array
 			TransposeData(Samplebuffer,VAL_SHORT_INTEGER,numshorts,4);
 			
-			for (i=0;i<MAX_CHANNELS;i++){
-				pmtdataptr[i]=malloc(ndatapoints*sizeof(unsigned short));
-				memcpy(pmtdataptr[i],&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));    
-			}
+		//	for (i=0;i<MAX_CHANNELS;i++){
+	//			pmtdataptr[i]=malloc(ndatapoints*sizeof(unsigned short));
+	//			memcpy(pmtdataptr[i],&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));    
+	//		}
 			
 		
 		//	memcpy(pmt1dataptr,&Samplebuffer[0],ndatapoints*sizeof(unsigned short));
 		//	memcpy(pmt2dataptr,&Samplebuffer[ndatapoints],ndatapoints*sizeof(unsigned short)); 
 		//	memcpy(pmt3dataptr,&Samplebuffer[2*ndatapoints],ndatapoints*sizeof(unsigned short)); 
 		//	memcpy(pmt4dataptr,&Samplebuffer[3*ndatapoints],ndatapoints*sizeof(unsigned short)); 
-		  
-			
-			
-			//test
-			rawfilename=malloc(MAXCHAR*sizeof(char));
-			Fmt (rawfilename, "%s<%srawdata_%i.bin", rawfilepath,iterationnr); 
-		//	ArrayToFile(rawfilename,pmt3dataptr,VAL_SHORT_INTEGER,ndatapoints,1,VAL_GROUPS_TOGETHER,VAL_GROUPS_AS_COLUMNS,VAL_SEP_BY_TAB,0,VAL_BINARY,VAL_APPEND);
-			free(rawfilename);
 			
 			//send datapackets
 			
 			for (i=0;i<MAX_CHANNELS;i++){
 				if (gchannels[i]!=NULL){
 					if (gchannels[i]->VChan!=NULL){
+						pmtdataptr[i]=malloc(ndatapoints*sizeof(unsigned short));
+						memcpy(pmtdataptr[i],&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));  
 					    dataPacket = init_WaveformPacket_type(Waveform_Double, ndatapoints, pmtdataptr[i], refSamplingRate, 1);       
 						// send data packet with waveform
 						fCallReturn = SendDataPacket(gchannels[i]->VChan, dataPacket);
@@ -364,7 +352,7 @@ int ReadBuffer(int bufsize)
 				}
 			}
 			
-			for (i=0;i<MAX_CHANNELS;i++) OKfree(pmtdataptr[i]);
+	//		for (i=0;i<MAX_CHANNELS;i++) OKfree(pmtdataptr[i]);
 			
 		
 			if(measurementmode==MEASMODE_FINITE){		 //need to count samples 
@@ -398,7 +386,8 @@ int PMT_SetMode (int PMTnr, PMT_Mode_type mode)
 	int error = 0;  
 	unsigned long controlreg;
 	
-	controlreg=GetControlreg();
+	error=ReadPMTReg(CTRL_REG,&controlreg);
+	
 	if(mode==PMT_MODE_ON){
 		switch(PMTnr){
 			case PMT1:
@@ -443,7 +432,8 @@ int PMT_SetFan (int PMTnr, BOOL value)
 	int error = 0; 
 	unsigned long controlreg;
 	
-	controlreg=GetControlreg();
+	
+	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	
 	if(value){				//Fan On
 		switch(PMTnr){
@@ -489,7 +479,7 @@ int PMT_SetCooling (int PMTnr, BOOL value)
 	int error = 0; 
 	unsigned long controlreg;
 	
-	controlreg=GetControlreg();
+	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	
 	if(value){			//Peltier ON
 		switch(PMTnr){
@@ -542,7 +532,7 @@ int PMT_SetGainTresh(int PMTnr,unsigned int PMTGain,unsigned int PMTThreshold)
 	unsigned long GAINMASK=0xFFFF0000; 
 	unsigned long controlreg;
 	
-	controlreg=GetControlreg();
+	error=ReadPMTReg(CTRL_REG,&controlreg);    
  
 
 	combinedval=((PMTGain<<16)&GAINMASK)+(PMTThreshold&THMASK);   
@@ -591,7 +581,7 @@ int PMT_SetTestMode(BOOL testmode)
 	int error=0;
 	unsigned long controlreg;
 	
-	controlreg=GetControlreg();
+	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	
 	if (testmode) controlreg=controlreg|TESTMODE0_BIT;  //set bit
 	else controlreg=controlreg&(~TESTMODE0_BIT);  //clear bit 
@@ -662,7 +652,7 @@ int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl,C
 	
 	SetMeasurementMode(mode);
 	SetCurrentIterationnr(iternr); 
-	error=PMTReset();   
+	//error=PMTReset();   
 	
 	errChk(CmtNewThreadPool(NUMTHREADS,&poolHandle)); 
 	errChk(StartDAQThread(poolHandle));
@@ -675,7 +665,7 @@ int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl,C
 	
 	readdata=1;   //start reading       
 	
-	controlreg=GetControlreg();  
+	error=ReadPMTReg(CTRL_REG,&controlreg);     
 	//set app start bit  
 //	controlreg=controlreg|DMASTART_BIT; 
 	controlreg=controlreg|APPSTART_BIT;
@@ -709,7 +699,7 @@ int PMTStopAcq(void)
 	readdata=0;  //stop reading  
 //	VUPCI_Stop_DMA();
 	
-	controlreg=GetControlreg();  
+	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	//set app start bit  
 //	controlreg=controlreg|DMASTART_BIT; 
 	controlreg=controlreg&~APPSTART_BIT; //clear appstart bit
@@ -742,8 +732,8 @@ int PMTReset(void)
 	unsigned long controlreg;
 
 	//error=ReadPMTReg(CTRL_REG,controlreg);
-//	controlreg=0;   //clear control reg 
-	controlreg=GetControlreg();
+	controlreg=0;   //clear control reg 
+//	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	//set reset bit   
 	controlreg=controlreg|RESET_BIT; 
 	error=WritePMTReg(CTRL_REG,controlreg);
@@ -761,7 +751,7 @@ int PMTClearFifo(void)
 	int error=0;
 	unsigned long controlreg;
 	
-	controlreg=GetControlreg();
+	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	//set fifo reset bit
 	controlreg=controlreg|FFRESET_BIT;
 	error=WritePMTReg(CTRL_REG,controlreg);  
@@ -788,7 +778,7 @@ int PMT_ClearControl(int PMTnr)
 	int error=0;
 	unsigned long controlreg;
 	
-	controlreg=GetControlreg();
+	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	
 	switch(PMTnr){
 		case PMT1:

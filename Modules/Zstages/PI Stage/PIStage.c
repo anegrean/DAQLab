@@ -22,7 +22,7 @@
 // Constants
 
 //------------------------------------------------------------------------------
-// Custom PID settings for the servo motion controller
+// Custom PID parameters and settings for the servo motion controller
 //------------------------------------------------------------------------------
 #define PIStage_PPAR				0x01	 	// P parameter list ID, see hardware documentation
 #define PIStage_IPAR				0x02	 	// I parameter list ID
@@ -31,15 +31,22 @@
 #define PIStage_PTERM 				40		 
 #define PIStage_ITERM 				1800
 #define PIStage_DTERM 				3300
-#define	PIStage_USECUSTOMPID		TRUE	 	// overrides factory PID settings
+#define	PIStage_USECUSTOMPID		TRUE	 	// Overrides factory PID settings
+
+//------------------------------------------------------------------------------
+// Soft limits parameters for limiting the travel range of the stage
+//------------------------------------------------------------------------------
+#define PIStage_MAX_TRAVEL_RAGE_POS	0x15		// Maximum stage position in the positive direction
+#define PIStage_MIN_TRAVEL_RAGE_POS	0x30		// Minimum stage position in the negative direction
+												
 
 //------------------------------------------------------------------------------
 // Custom stage settings
 //------------------------------------------------------------------------------
 	
-#define PIStage_VELOCITY			2			// stage movement velocity   
-#define PIStage_SETTLING_PRECISION	0.0001		// positive value, in [mm]
-#define PIStage_SETTLING_TIMEOUT	3			// timeout in [s]
+#define PIStage_VELOCITY			2			// Stage movement velocity   
+#define PIStage_SETTLING_PRECISION	0.0001		// Positive value, in [mm]
+#define PIStage_SETTLING_TIMEOUT	3			// Timeout in [s]
 
 //------------------------------------------------------------------------------
 // USB connection ID
@@ -66,23 +73,27 @@ typedef struct {
 //==============================================================================
 // Static functions
 
-static int						PIStage_Load 						(DAQLabModule_type* mod, int workspacePanHndl);
+static int						Load 								(DAQLabModule_type* mod, int workspacePanHndl);
 
-static int 						PIStage_LoadCfg 					(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+static int 						LoadCfg 							(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
 
-static int						PIStage_Move 						(Zstage_type* zstage, Zstage_move_type moveType, double moveVal);
+static int						Move 								(Zstage_type* zstage, Zstage_move_type moveType, double moveVal);
 
-static FCallReturn_type*		PIStage_TaskControllerMove			(PIStage_type* PIStage, Zstage_move_type moveType, double moveVal); 
+static FCallReturn_type*		TaskControllerMove					(PIStage_type* PIStage, Zstage_move_type moveType, double moveVal); 
 
-static int						PIStage_Stop						(Zstage_type* zstage);
+static int						Stop								(Zstage_type* zstage);
 
-static int						PIStage_InitHardware 				(PIStage_type* PIstage);
+static int						InitHardware 						(PIStage_type* PIstage);
 
-static PIStageCommand_type*		init_PIStageCommand_type			(Zstage_move_type moveType, double moveVal);
+static int						GetHWStageLimits					(Zstage_type* zstage, double* minimumLimit, double* maximumLimit);
 
-static void						discard_PIStageCommand_type			(PIStageCommand_type** a);
+static int						SetHWStageLimits					(Zstage_type* zstage, double minimumLimit, double maximumLimit);
 
-static void						dispose_PIStageCommand_EventInfo	(void* eventInfo);
+static PIStageCommand_type*		init_Command_type					(Zstage_move_type moveType, double moveVal);
+
+static void						discard_Command_type				(PIStageCommand_type** a);
+
+static void						dispose_Command_EventInfo			(void* eventInfo);
 
 
 //-----------------------------------------
@@ -141,8 +152,8 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 	
 		// overriding methods
 	zstage->baseClass.Discard 	= discard_PIStage;
-	zstage->baseClass.Load 		= PIStage_Load;
-	zstage->baseClass.LoadCfg	= NULL; //PIStage_LoadCfg;
+	zstage->baseClass.Load 		= Load;
+	zstage->baseClass.LoadCfg	= NULL; //LoadCfg;
 		
 	
 	//---------------------------
@@ -157,8 +168,10 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 		// METHODS
 	
 		// overriding methods
-	zstage->MoveZ				= PIStage_Move; 
-	zstage->StopZ				= PIStage_Stop;
+	zstage->MoveZ				= Move; 
+	zstage->StopZ				= Stop;
+	zstage->GetHWStageLimits	= GetHWStageLimits;
+	zstage->SetHWStageLimits	= SetHWStageLimits;
 		
 		
 	
@@ -196,7 +209,7 @@ void discard_PIStage (DAQLabModule_type** mod)
 	discard_Zstage (mod);
 }
 
-static PIStageCommand_type*	init_PIStageCommand_type (Zstage_move_type moveType, double moveVal)
+static PIStageCommand_type*	init_Command_type (Zstage_move_type moveType, double moveVal)
 {
 	PIStageCommand_type* a = malloc(sizeof(PIStageCommand_type));
 	if (!a) return NULL;
@@ -207,23 +220,23 @@ static PIStageCommand_type*	init_PIStageCommand_type (Zstage_move_type moveType,
 	return a;
 }
 
-static void	discard_PIStageCommand_type	(PIStageCommand_type** a)
+static void	discard_Command_type	(PIStageCommand_type** a)
 {
 	if (!*a) return;
 	OKfree(*a);
 	return;
 }
 
-static void	dispose_PIStageCommand_EventInfo (void* eventInfo)
+static void	dispose_Command_EventInfo (void* eventInfo)
 {
 	PIStageCommand_type* command = eventInfo;
-	discard_PIStageCommand_type(&command);
+	discard_Command_type(&command);
 }
 
 /// HIFN Loads PIStage motorized stage specific resources. 
-static int PIStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
+static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 {
-	if (PIStage_InitHardware((PIStage_type*) mod) < 0) return -1;
+	if (InitHardware((PIStage_type*) mod) < 0) return -1;
 	
 	// load generic Z stage resources
 	Zstage_Load (mod, workspacePanHndl);
@@ -233,14 +246,14 @@ static int PIStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 }
 
 /// HIFN Moves a motorized stage 
-static int PIStage_Move (Zstage_type* zstage, Zstage_move_type moveType, double moveVal)
+static int Move (Zstage_type* zstage, Zstage_move_type moveType, double moveVal)
 {
 	return TaskControlEvent(zstage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, 
-					 init_PIStageCommand_type(moveType, moveVal), dispose_PIStageCommand_EventInfo); 
+					 init_Command_type(moveType, moveVal), dispose_Command_EventInfo); 
 }
 
 /// HIFN Stops stage motion
-static int PIStage_Stop (Zstage_type* zstage)
+static int Stop (Zstage_type* zstage)
 {
 	PIStage_type* 	PIstage 			= (PIStage_type*) zstage; 
 		
@@ -264,7 +277,7 @@ static int PIStage_Stop (Zstage_type* zstage)
 
 /// HIFN Connects to a PIStage motion controller and adjusts its motion parameters
 /// HIRET 0 if connection was established and -1 for error
-static int PIStage_InitHardware (PIStage_type* PIstage)
+static int InitHardware (PIStage_type* PIstage)
 {
 	BOOL 			ServoONFlag				= TRUE; 
 	BOOL			IsReferencedFlag;
@@ -375,8 +388,6 @@ static int PIStage_InitHardware (PIStage_type* PIstage)
 		return -1;	
 	}
 	
-	
-		
 	// turn servo on for the given axis
 	if (!PI_SVO(ID, PIstage->assignedAxis, &ServoONFlag)) {
 		PIerror = PI_GetError(ID);
@@ -471,11 +482,80 @@ static int PIStage_InitHardware (PIStage_type* PIstage)
 				DLMsg(msg, 1);
 				return -1;
 			}
+			// read stage limits
+			if (!PIstage->baseClass.zMinimumLimit) {
+				PIstage->baseClass.zMinimumLimit = malloc(sizeof(double));
+				if (!PIstage->baseClass.zMinimumLimit) return -1;
+			}
+			
+			if (!PIstage->baseClass.zMaximumLimit) {
+				PIstage->baseClass.zMaximumLimit = malloc(sizeof(double));
+				if (!PIstage->baseClass.zMaximumLimit) return -1;
+			}
+			
+			(*PIstage->baseClass.GetHWStageLimits)	((Zstage_type*)PIstage, PIstage->baseClass.zMinimumLimit, PIstage->baseClass.zMaximumLimit);
+			
 		} else {
 			// referencing failed
 			DLMsg("Failed to reference stage.\n\n", 1);
 			return -1;
 		}
+	}
+	
+	return 0;
+}
+
+static int GetHWStageLimits (Zstage_type* zstage, double* minimumLimit, double* maximumLimit)
+{ 
+	PIStage_type* 		PIStage 		= (PIStage_type*) zstage;
+	int					PIerror;
+	char				buff[10000]		= "";
+	char				msg[10000]		= "";
+	
+	if (!PI_qTMN(PIStage->PIStageID, PIStage->assignedAxis, minimumLimit)) {
+		PIerror = PI_GetError(PIStage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error getting negative position limit. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;	
+	}
+	
+	if (!PI_qTMX(PIStage->PIStageID, PIStage->assignedAxis, maximumLimit)) {
+		PIerror = PI_GetError(PIStage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error getting positive position limit. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;	
+	}
+	
+	return 0;
+}
+
+static int SetHWStageLimits	(Zstage_type* zstage, double minimumLimit, double maximumLimit)
+{
+	PIStage_type* 		PIStage 			= (PIStage_type*) zstage;
+	int					PIerror;
+	char				buff[10000]			= "";
+	char				msg[10000]			= "";
+	unsigned int		limitsParamID[2]	= {PIStage_MAX_TRAVEL_RAGE_POS, PIStage_MIN_TRAVEL_RAGE_POS};
+	char 				szStrings[255]		= "";
+	
+	// set maximum stage position limit
+	if (!PI_SPA(PIStage->PIStageID, PIStage->assignedAxis, limitsParamID, &maximumLimit, szStrings)){
+		PIerror = PI_GetError(PIStage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error setting maximum stage position limit. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;	
+	}
+	
+	// set minimum stage position limit
+	if (!PI_SPA(PIStage->PIStageID, PIStage->assignedAxis, &limitsParamID[1], &minimumLimit, szStrings)){
+		PIerror = PI_GetError(PIStage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error setting minimum stage position limit. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;	
 	}
 	
 	return 0;
@@ -506,15 +586,15 @@ static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	
 	// move to start position for the first iteration
 	if (!currentIteration) {
-		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, PIStage_TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_ABS, *zstage->startAbsPos), dispose_FCallReturn_EventInfo); 
+		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_ABS, *zstage->startAbsPos), dispose_FCallReturn_EventInfo); 
 		return;
 	}
 	
 	// step stage
 	if (zstage->endRelPos > 0)
-		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, PIStage_TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_REL, zstage->stepSize), dispose_FCallReturn_EventInfo);  
+		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_REL, zstage->stepSize), dispose_FCallReturn_EventInfo);  
 	else
-		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, PIStage_TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_REL, -zstage->stepSize), dispose_FCallReturn_EventInfo); 
+		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_REL, -zstage->stepSize), dispose_FCallReturn_EventInfo); 
 	
 }
 
@@ -589,10 +669,10 @@ static FCallReturn_type* EventHandler (TaskControl_type* taskControl, TaskStates
 {
 	PIStageCommand_type*	command 		= eventData;
 	
-	return PIStage_TaskControllerMove (GetTaskControlModuleData(taskControl), command->moveType, command->moveVal); 
+	return TaskControllerMove (GetTaskControlModuleData(taskControl), command->moveType, command->moveVal); 
 }
 
-static FCallReturn_type* PIStage_TaskControllerMove	(PIStage_type* PIStage, Zstage_move_type moveType, double moveVal)
+static FCallReturn_type* TaskControllerMove	(PIStage_type* PIStage, Zstage_move_type moveType, double moveVal)
 {
 	Zstage_type*			zStage			= (Zstage_type*) PIStage; 
 	BOOL					ReadyFlag;
@@ -679,7 +759,7 @@ static FCallReturn_type* PIStage_TaskControllerMove	(PIStage_type* PIStage, Zsta
 }
 
 /*
-static int PIStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement)
+static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement)
 {
 	PIStage_type* 	PIzstage	= (PIStage_type*) mod;
 	

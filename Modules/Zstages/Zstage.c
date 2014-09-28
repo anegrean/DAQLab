@@ -77,7 +77,12 @@ static BOOL 						ValidateRefPosName				(char inputStr[], void* dataPtr);
 
 static int CVICALLBACK 				UICtrls_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
+static int CVICALLBACK 				SettingsCtrls_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 				UIPan_CB 						(int panel, int event, void *callbackData, int eventData1, int eventData2);
+
+static void CVICALLBACK 			SettingsMenu_CB 				(int menuBar, int menuItem, void *callbackData, int panel);
+
 
 
 
@@ -151,6 +156,9 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 		
 	// zstage->taskController		= tc;
 	zstage->controlPanHndl			= 0;
+	zstage->setPanHndl				= 0;
+	zstage->menuBarHndl				= 0;
+	zstage->menuIDSettings			= 0;
 	zstage->zPos					= NULL;
 	zstage->startAbsPos				= NULL;
 	zstage->endRelPos				= 0;
@@ -158,8 +166,8 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	zstage->nZSteps					= 0;
 	zstage->revertDirection			= FALSE;
 	zstage->zRefPos					= ListCreate(sizeof(RefPosition_type*));
-	zstage->zULimPos				= NULL;
-	zstage->zLLimPos				= NULL;
+	zstage->zMaximumLimit			= NULL;
+	zstage->zMinimumLimit			= NULL;
 	
 	
 		// METHODS
@@ -170,13 +178,15 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 			// assign default panel callback to UI_Zstage.uir
 	zstage->uiPanelCB				= UIPan_CB;
 			// no functionality
-	zstage->MoveZ					= NULL;
-	zstage->StopZ					= NULL;
-	zstage->StatusLED				= NULL;		// functionality assigned if Zstage_Load is called
-	zstage->UpdatePositionDisplay	= NULL;		// functionality assigned if Zstage_Load is called
-	zstage->UpdateZSteps 			= NULL;		// functionality assigned if Zstage_Load is called
-	zstage->SetStepCounter			= NULL;		// functionality assigned if Zstage_Load is called
-	zstage->DimWhenRunning			= NULL;		// functionality assigned if Zstage_Load is called
+	zstage->MoveZ					= NULL;		// child class must implement this functionality.
+	zstage->StopZ					= NULL;		// child class must implement this functionality.
+	zstage->GetHWStageLimits		= NULL;		// child class may implement this functionality.
+	zstage->SetHWStageLimits		= NULL;		// child class may implement this functionality.
+	zstage->StatusLED				= NULL;		// functionality assigned if Zstage_Load is called.
+	zstage->UpdatePositionDisplay	= NULL;		// functionality assigned if Zstage_Load is called.
+	zstage->UpdateZSteps 			= NULL;		// functionality assigned if Zstage_Load is called.
+	zstage->SetStepCounter			= NULL;		// functionality assigned if Zstage_Load is called.
+	zstage->DimWhenRunning			= NULL;		// functionality assigned if Zstage_Load is called.
 	
 	
 	//----------------------------------------------------------
@@ -199,8 +209,12 @@ void discard_Zstage (DAQLabModule_type** mod)
 	// discard Zstage_type specific data
 	discard_TaskControl_type(&zstage->taskController);
 	
+	// discard UI resources
 	if (zstage->controlPanHndl)
 		DiscardPanel(zstage->controlPanHndl);
+	if (zstage->setPanHndl)
+		DiscardPanel(zstage->setPanHndl);
+	
 	OKfree(zstage->zPos);
 	OKfree(zstage->startAbsPos);
 	
@@ -210,8 +224,8 @@ void discard_Zstage (DAQLabModule_type** mod)
 	}
 	ListDispose(zstage->zRefPos);
 	
-	OKfree(zstage->zULimPos);
-	OKfree(zstage->zLLimPos);
+	OKfree(zstage->zMaximumLimit);
+	OKfree(zstage->zMinimumLimit);
 
 	// discard DAQLabModule_type specific data
 	discard_DAQLabModule(mod);
@@ -252,6 +266,13 @@ int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	SetPanelAttribute(zstage->controlPanHndl, ATTR_CALLBACK_FUNCTION_POINTER, UIPan_CB);
 	SetPanelAttribute(zstage->controlPanHndl, ATTR_CALLBACK_DATA, mod);
 	
+	// add "Settings" menu bar item, callback data and callback function
+	zstage->menuBarHndl = NewMenuBar(zstage->controlPanHndl);
+	zstage->menuIDSettings = NewMenu(zstage->menuBarHndl, "Settings", -1);
+	SetMenuBarAttribute(zstage->menuBarHndl, 0, ATTR_SHOW_IMMEDIATE_ACTION_SYMBOL, 0);
+	SetMenuBarAttribute(zstage->menuBarHndl, zstage->menuIDSettings, ATTR_CALLBACK_DATA, zstage);
+	SetMenuBarAttribute(zstage->menuBarHndl, zstage->menuIDSettings, ATTR_CALLBACK_FUNCTION_POINTER, SettingsMenu_CB);
+	
 	// change panel title to module instance name
 	SetPanelAttribute(zstage->controlPanHndl, ATTR_TITLE, mod->instanceName);
 	
@@ -284,14 +305,27 @@ int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// add functionality to dim and undim controls when stage is stepping
 	zstage->DimWhenRunning	 = DimWhenRunning;	
 	
-	// update stage absolute position if position has been determined
-	// make visible stepper controls and update them if position has been determined
 	if (zstage->zPos) {
+		// update stage absolute position if position has been determined
+		// make visible stepper controls and update them if position has been determined
 		SetCtrlVal(zstage->controlPanHndl, ZStagePan_ZAbsPos, *zstage->zPos * 1000);	  // convert from [mm] to [um]
 		SetCtrlVal(zstage->controlPanHndl, ZStagePan_StartAbsPos, *zstage->zPos * 1000);  // convert from [mm] to [um]
+		
 		// add start pos data to structure;
 		zstage->startAbsPos = malloc(sizeof(double));
 		*zstage->startAbsPos = *zstage->zPos;
+		
+		// set negative and positive stage limits to be the same as the current stage position if not specified by hardware
+		if (!zstage->zMaximumLimit) {
+			zstage->zMaximumLimit = malloc(sizeof(double));
+			*zstage->zMaximumLimit = *zstage->zPos;
+		}
+		
+		if (!zstage->zMinimumLimit) {
+			zstage->zMinimumLimit = malloc(sizeof(double));
+			*zstage->zMinimumLimit = *zstage->zPos;
+		}
+		
 	} else {
 		DLMsg("Stage position must be determined first. Aborting load operation.", 1);
 		return -1;
@@ -699,11 +733,71 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 	return 0;
 }
 
-static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	Zstage_type* 				zstage 			= callbackData;
+	Zstage_type* 		zstage 	= callbackData;
+	
+	switch (event) {
+		
+		case EVENT_COMMIT:
+			
+			switch (control) {
+					
+				case ZSetPan_OKBTTN:
+					
+					DiscardPanel(zstage->setPanHndl);
+					zstage->setPanHndl = 0;
+					break;
+					
+				case ZSetPan_MinimumLimit:
+				case ZSetPan_MaximumLimit:
+					
+					// update limits in structure data
+					GetCtrlVal(panel, ZSetPan_MinimumLimit, zstage->zMinimumLimit);
+					*zstage->zMinimumLimit *= 0.001; // convert from [um] to [mm]
+					GetCtrlVal(panel, ZSetPan_MaximumLimit, zstage->zMaximumLimit);
+					*zstage->zMaximumLimit *= 0.001; // convert from [um] to [mm]
+					
+					// if given, call hardware specific function to set these limits
+					if (zstage->SetHWStageLimits)
+						(*zstage->SetHWStageLimits)	(zstage, *zstage->zMinimumLimit, *zstage->zMaximumLimit);
+					
+					break;
+					
+					
+			}
+			
+			break;
+	}
 	
 	return 0;
+}
+
+static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int eventData1, int eventData2)
+{
+	Zstage_type* 		zstage 	= callbackData;
+	
+	return 0;
+}
+
+static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
+{
+	Zstage_type* 	zstage 			= callbackData;
+	int				parentPanHndl;
+	
+	GetPanelAttribute(panel, ATTR_PANEL_PARENT, &parentPanHndl);
+	
+	// load settings panel resources if not already loaded
+	if (!zstage->setPanHndl)
+		zstage->setPanHndl = LoadPanel(parentPanHndl, MOD_Zstage_UI_ZStage, ZSetPan);
+	// add callback data and function
+	SetCtrlsInPanCBInfo(zstage, SettingsCtrls_CB, zstage->setPanHndl);
+	
+	// update limits
+	SetCtrlVal(zstage->setPanHndl, ZSetPan_MinimumLimit, *zstage->zMinimumLimit * 1000); // convert from [mm] to [um]
+	SetCtrlVal(zstage->setPanHndl, ZSetPan_MaximumLimit, *zstage->zMaximumLimit * 1000); // convert from [mm] to [um]
+	
+	DisplayPanel(zstage->setPanHndl);
 }
 
 static BOOL ValidateRefPosName (char inputStr[], void* dataPtr)

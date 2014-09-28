@@ -13,7 +13,16 @@
 
      /* Panels and Controls: */
 
-#define  ZStagePan                        1
+#define  ZSetPan                          1
+#define  ZSetPan_Plate                    2       /* control type: deco, callback function: (none) */
+#define  ZSetPan_MaximumLimit             3       /* control type: numeric, callback function: (none) */
+#define  ZSetPan_MinimumLimit             4       /* control type: numeric, callback function: (none) */
+#define  ZSetPan_VelocityHigh             5       /* control type: numeric, callback function: (none) */
+#define  ZSetPan_VelocityMid              6       /* control type: numeric, callback function: (none) */
+#define  ZSetPan_VelocityLow              7       /* control type: numeric, callback function: (none) */
+#define  ZSetPan_OKBTTN                   8       /* control type: command, callback function: (none) */
+
+#define  ZStagePan                        2
 #define  ZStagePan_Plate                  2       /* control type: deco, callback function: (none) */
 #define  ZStagePan_MoveZDown              3       /* control type: pictButton, callback function: (none) */
 #define  ZStagePan_MoveZUp                4       /* control type: pictButton, callback function: (none) */
@@ -38,7 +47,7 @@
      /* Menu Bars, Menus, and Menu Items: */
 
 #define  ZStage                           1
-#define  ZStage_Limits                    2
+#define  ZStage_MENU1                     2
 
 
      /* (no callbacks specified in the resource file) */ 

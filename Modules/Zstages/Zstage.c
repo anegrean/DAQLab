@@ -145,8 +145,8 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	
 			// overriding methods
 	zstage->baseClass.Discard 		= discard_Zstage;
-	zstage->baseClass.Load			= Zstage_Load;
-	zstage->baseClass.LoadCfg		= NULL; //Zstage_LoadCfg;
+	zstage->baseClass.Load			= ZStage_Load;
+	zstage->baseClass.LoadCfg		= ZStage_LoadCfg;
 	zstage->baseClass.DisplayPanels	= DisplayPanels;
 	
 	//---------------------------
@@ -166,8 +166,8 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	zstage->nZSteps					= 0;
 	zstage->revertDirection			= FALSE;
 	zstage->zRefPos					= ListCreate(sizeof(RefPosition_type*));
-	zstage->zMaximumLimit			= NULL;
-	zstage->zMinimumLimit			= NULL;
+	zstage->zMaximumLimit			= NULL;		// if parameter is saved, it will be loaded and applied to the stage
+	zstage->zMinimumLimit			= NULL;		// if parameter is saved, it will be loaded and applied to the stage
 	
 	
 		// METHODS
@@ -182,11 +182,11 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	zstage->StopZ					= NULL;		// child class must implement this functionality.
 	zstage->GetHWStageLimits		= NULL;		// child class may implement this functionality.
 	zstage->SetHWStageLimits		= NULL;		// child class may implement this functionality.
-	zstage->StatusLED				= NULL;		// functionality assigned if Zstage_Load is called.
-	zstage->UpdatePositionDisplay	= NULL;		// functionality assigned if Zstage_Load is called.
-	zstage->UpdateZSteps 			= NULL;		// functionality assigned if Zstage_Load is called.
-	zstage->SetStepCounter			= NULL;		// functionality assigned if Zstage_Load is called.
-	zstage->DimWhenRunning			= NULL;		// functionality assigned if Zstage_Load is called.
+	zstage->StatusLED				= NULL;		// functionality assigned if ZStage_Load is called.
+	zstage->UpdatePositionDisplay	= NULL;		// functionality assigned if ZStage_Load is called.
+	zstage->UpdateZSteps 			= NULL;		// functionality assigned if ZStage_Load is called.
+	zstage->SetStepCounter			= NULL;		// functionality assigned if ZStage_Load is called.
+	zstage->DimWhenRunning			= NULL;		// functionality assigned if ZStage_Load is called.
 	
 	
 	//----------------------------------------------------------
@@ -251,7 +251,7 @@ static void	discard_RefPosition_type	(RefPosition_type** a)
 }
 
 /// HIFN Loads ZStage specific resources. 
-int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl) 
+int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl) 
 {
 	Zstage_type* 	zstage 				= (Zstage_type*) mod;  
 	char			stepsizeName[50];
@@ -336,6 +336,36 @@ int Zstage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 	return 0;
 
+}
+
+int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+{
+	Zstage_type* 		zstage			= (Zstage_type*) mod;
+	
+	// allocate memory to store values
+	// Note: This must be done before initializing the attributes array!
+	zstage->zMinimumLimit = malloc(sizeof(double));
+	zstage->zMaximumLimit = malloc(sizeof(double));
+	
+	// initialize attributes array
+	DAQLabXMLNode 		zStageAttr[] 	= {	{"MinPositionLimit", DL_DOUBLE, zstage->zMinimumLimit},
+								 			{"MaxPositionLimit", DL_DOUBLE, zstage->zMaximumLimit}
+																									};
+																									
+	DLGetXMLElementAttributes(moduleElement, zStageAttr, NumElem(zStageAttr));
+	
+	return 0;
+}
+
+int ZStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement)
+{
+	Zstage_type* 		zstage			= (Zstage_type*) mod;
+	DAQLabXMLNode 		zStageAttr[] 	= {	{"MinPositionLimit", DL_DOUBLE, zstage->zMinimumLimit},
+								 			{"MaxPositionLimit", DL_DOUBLE, zstage->zMaximumLimit}
+																									};  
+	DLAddToXMLElem(xmlDOM, moduleElement, zStageAttr, DL_ATTRIBUTE, NumElem(zStageAttr));
+	
+	return 0;
 }
 
 static int DisplayPanels	(DAQLabModule_type* mod, BOOL visibleFlag)
@@ -873,11 +903,4 @@ static FCallReturn_type* EventHandler (TaskControl_type* taskControl, TaskStates
 	return init_FCallReturn_type(0, "", "");
 }
 
-   /*
-int Zstage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement) 
-{
-	Zstage_type*  	zstage = (Zstage_type*) mod; 
-	
-	return DAQLabModule_LoadCfg(mod, DAQLabCfg_RootElement);
-}
-		  */
+

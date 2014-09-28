@@ -146,11 +146,14 @@ struct Zstage {
 DAQLabModule_type*	initalloc_Zstage 	(DAQLabModule_type* mod, char className[], char instanceName[]);
 void 				discard_Zstage 		(DAQLabModule_type** mod);
 
-	// loads generic Z stage resources
-int					Zstage_Load 		(DAQLabModule_type* mod, int workspacePanHndl);
+	// loads generic Z stage module resources
+int					ZStage_Load 		(DAQLabModule_type* mod, int workspacePanHndl);
 
-	// loads generic Z stage configuration from an XML file  
-//int 				Zstage_LoadCfg 		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+	// saves generic settings for a Z stage
+int					ZStage_SaveCfg		(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement);
+
+	// loads generic settings for a Z stage
+int					ZStage_LoadCfg		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
 #ifdef __cplusplus
     }

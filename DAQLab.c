@@ -39,8 +39,9 @@
 	// name of config file
 #define DAQLAB_CFG_FILE										"DAQLabCfg.xml"
 
-#define DAQLAB_CFG_DOM_ROOT_NAME							"DAQLabConfig"
-#define DAQLAB_UITASKCONTROLLER_XML_TAG						"UITaskController"
+#define DAQLAB_CFG_DOM_ROOT_NAME							"DAQLab_Config"
+#define DAQLAB_UITASKCONTROLLER_XML_TAG						"DAQLab_UITaskController"
+#define DAQLAB_MODULES_XML_TAG								"DAQLab_Modules"
 	// log panel displayed at startup and displays received messages
 #define DAQLAB_LOG_PANEL									TRUE
 
@@ -201,13 +202,15 @@ ListType		TaskTreeNodes				= 0;
 
 static int					DAQLab_Load 								(void);
 
+static int					DAQLab_SaveXMLEnvironmentConfig				(void);
+
+static int 					DAQLab_NewXMLDOM 							(const char fileName[], CAObjHandle* xmlDOM, ActiveXMLObj_IXMLDOMElement_* rootElement);
+
+static int					DAQLab_SaveXMLDOM 							(const char fileName[], CAObjHandle* xmlDOM);
+
 static int 					DAQLab_Close 								(void);
 
 static void 				DAQLab_Msg 									(DAQLabMessageID msgID, void* data1, void* data2, void* data3, void* data4);
-
-static int					DAQLab_NewXMLDOM	   						(const char fileName[], CAObjHandle* xmlDOM, ActiveXMLObj_IXMLDOMElement_* rootElement); 
-
-static int					DAQLab_SaveXMLDOM							(const char fileName[], CAObjHandle* xmlDOM);
 
 static UITaskCtrl_type*		DAQLab_AddTaskControllerToUI				(TaskControl_type* taskControl);
 
@@ -227,7 +230,7 @@ static UITaskCtrl_type*		DAQLab_init_UITaskCtrl_type					(TaskControl_type* task
 
 static void					DAQLab_discard_UITaskCtrl_type				(UITaskCtrl_type** a);
 
-static int					DAQLab_SaveXMLEnvironmentConfig				(void);
+
 
 static int					DAQLab_VariantToType						(VARIANT* variantVal, DAQLabXMLTypes vartype, void* value);
 
@@ -401,10 +404,12 @@ static int DAQLab_Load (void)
 	errChk( SetPanelAttribute(logPanHndl, ATTR_LEFT, logPanLeftPos) );
 	errChk( SetPanelAttribute(logPanHndl, ATTR_TOP, logPanTopPos) );
 	
-	// load UI Task Controller settings
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Load UI Task Controller settings
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(DAQLabCfg_RootElement, &xmlERRINFO, DAQLAB_UITASKCONTROLLER_XML_TAG, &xmlUITaskControlers) );
 	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlUITaskControlers, &xmlERRINFO, &nUITaskControlers) );
-	for (int i = 0; i < nUITaskControlers; i++) {
+	for (size_t i = 0; i < nUITaskControlers; i++) {
 		// get xml Task Controller Node
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlUITaskControlers, &xmlERRINFO, i, &xmlTaskControllerNode) );
 		
@@ -441,6 +446,74 @@ static int DAQLab_Load (void)
 		TaskControlEvent(newTaskControllerPtr, TASK_EVENT_CONFIGURE, NULL, NULL);
 	}
 	
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Load DAQLab Modules and apply saved settings
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	ActiveXMLObj_IXMLDOMNodeList_	xmlNodeList;																
+	ActiveXMLObj_IXMLDOMNodeList_	xmlModulesNodeList;															// Modules installed
+	ActiveXMLObj_IXMLDOMNode_		xmlModulesNode;																// "Modules" node containing module XML elements
+	ActiveXMLObj_IXMLDOMNode_		xmlModuleNode;																// "Modules" node
+	char*							moduleClassName;															// Module class name to be loaded
+	char*							moduleInstanceName;															// module instance name
+																												// DAQLab module element node to be loaded
+	long							nModules;																	// Number of modules to be loaded
+	DAQLabXMLNode					attrModule[] = {	{"ClassName", DL_CSTRING, &moduleClassName},			// Common module attributes to load (same for all modules)
+														{"InstanceName", DL_CSTRING, &moduleInstanceName}		// Note: module specific attributes are managed by the modules
+																									  			
+																										};
+	DAQLabModule_type*				newModule;
+	
+	// get "Modules" named node list
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(DAQLabCfg_RootElement, &xmlERRINFO, DAQLAB_MODULES_XML_TAG, &xmlNodeList) );
+	// get "Modules" node
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlNodeList, &xmlERRINFO, 0, &xmlModulesNode) );
+	// get modules node list contained in the "Modules" node
+	XMLErrChk ( ActiveXML_IXMLDOMNode_GetchildNodes(xmlModulesNode, &xmlERRINFO, &xmlModulesNodeList) );
+	// get number of modules to be loaded
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlModulesNodeList, &xmlERRINFO, &nModules) );
+	// load modules and their settings
+	for (size_t i = 0; i < nModules; i++) {
+		// get DAQLab module node
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlModulesNodeList, &xmlERRINFO, i, &xmlModuleNode) );
+		// get DAQlab module attributes such as class name listed in attrModules
+		DLGetXMLNodeAttributes(xmlModuleNode, attrModule, NumElem(attrModule)); 
+		// get module index from the framework to call its init function 
+		for (size_t j = 0; j < NumElem(DAQLabModules_InitFunctions); j++)
+			if (!strcmp(DAQLabModules_InitFunctions[j].className, moduleClassName)) {
+				// call module init function
+				newModule = (*DAQLabModules_InitFunctions[j].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[j].className, moduleInstanceName);
+				// load module configuration data if specified
+				if (newModule->LoadCfg)
+					(*newModule->LoadCfg)	(newModule, xmlModuleNode);
+				
+				// call module load function
+				if ( (*newModule->Load) 	(newModule, mainPanHndl) < 0) {
+					// dispose of module if not loaded properly
+					(*newModule->Discard) 	(&newModule);
+					return 0;
+				}
+					
+				// insert module to modules list
+				ListInsertItem(DAQLabModules, &newModule, END_OF_LIST);
+				// increase module instance counter
+				DAQLabModules_InitFunctions[j].nInstances++;
+					
+				// make sure that the Task Tree is updated
+				if (TaskTreeManagerPanHndl)
+					DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+					
+				// display module panels if method is defined
+				if (newModule->DisplayPanels)
+					(*newModule->DisplayPanels) (newModule, TRUE);
+			}
+		
+		// discard module class name
+		CA_FreeMemory(moduleClassName);
+		// discard module instance name
+		CA_FreeMemory(moduleInstanceName);
+	}
+	
+	    
 	// discard DOM after loading all settings
 	CA_DiscardObjHandle (DAQLabCfg_DOMHndl);
 	
@@ -491,7 +564,9 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	
 	errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, attr1, DL_ATTRIBUTE, NumElem(attr1)) );
 	
-	// save UI Task Controllers
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Save UI Task Controllers
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	UITaskCtrl_type**				UItaskCtrlPtrPtr;
 	DAQLabXMLNode 					attr2[4];
 	int								niter;
@@ -529,6 +604,52 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (DAQLabCfg_RootElement, &xmlERRINFO, newXMLElement, NULL) );
 		// free attributes memory
 		OKfree(attr2[0].pData);
+	}
+	
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Save DAQLab Modules
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	DAQLabModule_type**					DLModulePtr;
+	size_t								nModules = ListNumItems(DAQLabModules);
+	ActiveXMLObj_IXMLDOMElement_		modulesXMLElement;  
+	ActiveXMLObj_IXMLDOMElement_		moduleXMLElement; 
+	DAQLabXMLNode 						attr3[2];									// Common module attributes managed by the framework.
+																					// Note: module specific attributes must be saved by the module
+	
+	// create "Modules" XML element and add it to the Root
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_MODULES_XML_TAG, &newXMLElement) );
+	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild(DAQLabCfg_RootElement, &xmlERRINFO, newXMLElement, &modulesXMLElement) );
+	CA_DiscardObjHandle(newXMLElement);
+	
+	for (size_t i = 1; i <= nModules; i++) {
+		DLModulePtr = ListGetPtrToItem(DAQLabModules, i);
+		// create "Module" XML element and add it to the "Modules" element
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, "Module", &newXMLElement) );
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild(modulesXMLElement, &xmlERRINFO, newXMLElement, &moduleXMLElement) );
+		CA_DiscardObjHandle(newXMLElement);
+		//-----------------------------------------------------------------------------------
+		// Attributes managed by the framework
+		//-----------------------------------------------------------------------------------
+		// class name
+		attr3[0].tag    = "ClassName";
+		attr3[0].type	= DL_CSTRING;
+		attr3[0].pData	= (*DLModulePtr)->className;
+		// instance name
+		attr3[1].tag    = "InstanceName";
+		attr3[1].type	= DL_CSTRING;
+		attr3[1].pData	= (*DLModulePtr)->instanceName;
+		
+	
+		
+		
+		//--------------
+		
+		// add attributes to the module element
+		errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, moduleXMLElement, attr3, DL_ATTRIBUTE, NumElem(attr3)) );
+		// call module saving method if defined
+		if ((*DLModulePtr)->SaveCfg)
+			(*(*DLModulePtr)->SaveCfg)	(*DLModulePtr, DAQLabCfg_DOMHndl, moduleXMLElement);
+		
 	}
 	
 	
@@ -1016,6 +1137,9 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 	
 	for (int i = 0; i < nNodes; i++) {
 		
+		// ignore elements or attributes that have NULL data
+		if (!childXMLNodes[i].pData) continue;
+			
 		if (nodeType == DL_ELEMENT)
 			// create new element
 			XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, childXMLNodes[i].tag, &newXMLElement) );

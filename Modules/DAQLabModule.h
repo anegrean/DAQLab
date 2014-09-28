@@ -38,8 +38,6 @@ struct DAQLabModule {
 	char*						className;
 		// module instance name
 	char*						instanceName;
-		// module XML node
-	ActiveXMLObj_IXMLDOMNode_	XMLNode;
 		// List of Task Controllers provided by the module to the framework. Of TaskControl_type* 
 	ListType		 			taskControllers;
 		// List of Virtual Channels provided by the module to the framework. Of VChan_type* 
@@ -56,10 +54,10 @@ struct DAQLabModule {
 	int		(* Load)			(DAQLabModule_type* self, int workspacePanHndl);
 	
 		// loads config from XML node
-	int		(* LoadCfg) 		(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+	int		(* LoadCfg) 		(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 	
 		// adds config to XML node
-	int		(* SaveCfg)			(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+	int		(* SaveCfg)			(DAQLabModule_type* self, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 	
 		// if visibleFlag is TRUE, displays or otherwise hides all module panels
 	int		(* DisplayPanels)	(DAQLabModule_type* self, BOOL visibleFlag);
@@ -82,9 +80,6 @@ void 							discard_DAQLabModule 				(DAQLabModule_type** mod);
 
 	// removes modules
 void							DAQLabModule_empty					(ListType* modules);
-
-	// loads generic DAQLab module configuration from an XML file
-//int								DAQLabModule_LoadCfg				(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);			
 
 
 #ifdef __cplusplus

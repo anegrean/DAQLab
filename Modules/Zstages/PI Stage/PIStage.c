@@ -75,7 +75,9 @@ typedef struct {
 
 static int						Load 								(DAQLabModule_type* mod, int workspacePanHndl);
 
-static int 						LoadCfg 							(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement);
+static int						SaveCfg								(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+
+static int 						LoadCfg 							(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
 static int						Move 								(Zstage_type* zstage, Zstage_move_type moveType, double moveVal);
 
@@ -153,8 +155,8 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 		// overriding methods
 	zstage->baseClass.Discard 	= discard_PIStage;
 	zstage->baseClass.Load 		= Load;
-	zstage->baseClass.LoadCfg	= NULL; //LoadCfg;
-		
+	zstage->baseClass.LoadCfg	= LoadCfg;
+	zstage->baseClass.SaveCfg	= SaveCfg;
 	
 	//---------------------------
 	// Child Level 1: Zstage_type 
@@ -239,10 +241,43 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	if (InitHardware((PIStage_type*) mod) < 0) return -1;
 	
 	// load generic Z stage resources
-	Zstage_Load (mod, workspacePanHndl);
+	ZStage_Load (mod, workspacePanHndl);
 	
 	return 0;
 	
+}
+
+static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+{
+	//--------------------------------------------------------
+	// Saving PI Stage specific parameters
+	//--------------------------------------------------------
+	PIStage_type* 	PIStage 	= (PIStage_type*) mod;  
+	
+	
+	//---------------------------------------------------------
+	// Saving Z Stage generic paramenters
+	//---------------------------------------------------------
+	ZStage_SaveCfg (mod, xmlDOM, moduleElement);
+	
+	return 0;
+}
+
+static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+{
+	PIStage_type* 	PIzstage	= (PIStage_type*) mod;
+	
+	//---------------------------------------------------------
+	// Loading PI Stage specific settings
+	//---------------------------------------------------------
+	
+	
+	//---------------------------------------------------------
+	// Loading generic Z Stage settings
+	//---------------------------------------------------------
+	ZStage_LoadCfg(mod, moduleElement); 
+	
+	return 0;
 }
 
 /// HIFN Moves a motorized stage 
@@ -397,6 +432,10 @@ static int InitHardware (PIStage_type* PIstage)
 		return -1;
 	}
 	
+	// set stage limits if available from loaded settings
+	if (PIstage->baseClass.zMinimumLimit && PIstage->baseClass.zMaximumLimit) 
+		(*PIstage->baseClass.SetHWStageLimits)	((Zstage_type*)PIstage, *PIstage->baseClass.zMinimumLimit, *PIstage->baseClass.zMaximumLimit);
+	
 	// check if axis is already referenced
 	if (!PI_qFRF(ID, PIstage->assignedAxis, &IsReferencedFlag)) {   
 		PIerror = PI_GetError(ID);
@@ -482,18 +521,20 @@ static int InitHardware (PIStage_type* PIstage)
 				DLMsg(msg, 1);
 				return -1;
 			}
-			// read stage limits
-			if (!PIstage->baseClass.zMinimumLimit) {
-				PIstage->baseClass.zMinimumLimit = malloc(sizeof(double));
-				if (!PIstage->baseClass.zMinimumLimit) return -1;
-			}
+			// read stage limits if they are not loaded from a file already
+			if (!PIstage->baseClass.zMinimumLimit || !PIstage->baseClass.zMaximumLimit) {
+				if (!PIstage->baseClass.zMinimumLimit) {
+					PIstage->baseClass.zMinimumLimit = malloc(sizeof(double));
+					if (!PIstage->baseClass.zMinimumLimit) return -1;
+				}
 			
-			if (!PIstage->baseClass.zMaximumLimit) {
-				PIstage->baseClass.zMaximumLimit = malloc(sizeof(double));
-				if (!PIstage->baseClass.zMaximumLimit) return -1;
-			}
+				if (!PIstage->baseClass.zMaximumLimit) {
+					PIstage->baseClass.zMaximumLimit = malloc(sizeof(double));
+					if (!PIstage->baseClass.zMaximumLimit) return -1;
+				}
 			
-			(*PIstage->baseClass.GetHWStageLimits)	((Zstage_type*)PIstage, PIstage->baseClass.zMinimumLimit, PIstage->baseClass.zMaximumLimit);
+				(*PIstage->baseClass.GetHWStageLimits)	((Zstage_type*)PIstage, PIstage->baseClass.zMinimumLimit, PIstage->baseClass.zMaximumLimit);
+			}
 			
 		} else {
 			// referencing failed
@@ -539,6 +580,8 @@ static int SetHWStageLimits	(Zstage_type* zstage, double minimumLimit, double ma
 	char				msg[10000]			= "";
 	unsigned int		limitsParamID[2]	= {PIStage_MAX_TRAVEL_RAGE_POS, PIStage_MIN_TRAVEL_RAGE_POS};
 	char 				szStrings[255]		= "";
+	BOOL				HasLimitSwitchesFlag;
+	BOOL				ReadyFlag;
 	
 	// set maximum stage position limit
 	if (!PI_SPA(PIStage->PIStageID, PIStage->assignedAxis, limitsParamID, &maximumLimit, szStrings)){
@@ -557,6 +600,44 @@ static int SetHWStageLimits	(Zstage_type* zstage, double minimumLimit, double ma
 		DLMsg(msg, 1);
 		return -1;	
 	}
+	
+	// reference axis again
+	// check if there are limit switches
+	if (!PI_qLIM(PIStage->PIStageID, PIStage->assignedAxis, &HasLimitSwitchesFlag)) {
+		PIerror = PI_GetError(PIStage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Checking if stage has limit switches failed. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	}
+		 
+	// reference axis
+	if (HasLimitSwitchesFlag) {
+		if (!PI_FPL(PIStage->PIStageID, PIStage->assignedAxis)) {
+			PIerror = PI_GetError(PIStage->PIStageID);
+			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+			Fmt(msg, "Referencing stage failed. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+			DLMsg(msg, 1);
+			return -1;
+	}
+	} else {
+		DLMsg("Stage does not have limit switches and cannot be referenced.\n\n", 1);   
+		return -1;
+	} 
+		
+	// wait until stage motion completes
+	do {
+		Sleep(500);
+		if (!PI_qONT(PIStage->PIStageID, PIStage->assignedAxis, &ReadyFlag)) {
+			PIerror = PI_GetError(PIStage->PIStageID);
+			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+			Fmt(msg, "Could not query if target reached. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+			DLMsg(msg, 1);
+			return -1;
+		}
+	} while (!ReadyFlag);
+		
+	Sleep(PIStage_SETTLING_TIMEOUT * 1000);	// make sure stage settles before reading position
 	
 	return 0;
 }
@@ -659,6 +740,7 @@ static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 	
 	// print error message
 	DLMsg(errorMsg, 1);
+	DLMsg("\n\n", 0);
 	
 	// undim items
 	(*zstage->DimWhenRunning) (zstage, FALSE);
@@ -757,13 +839,4 @@ static FCallReturn_type* TaskControllerMove	(PIStage_type* PIStage, Zstage_move_
 			
 	return init_FCallReturn_type(0, "", "");
 }
-
-/*
-static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  DAQLabCfg_RootElement)
-{
-	PIStage_type* 	PIzstage	= (PIStage_type*) mod;
-	
-	return Zstage_LoadCfg(mod, DAQLabCfg_RootElement); 
-}
-*/
 

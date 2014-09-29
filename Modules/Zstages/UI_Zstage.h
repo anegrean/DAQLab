@@ -17,9 +17,9 @@
 #define  ZSetPan_Plate                    2       /* control type: deco, callback function: (none) */
 #define  ZSetPan_MaximumLimit             3       /* control type: numeric, callback function: (none) */
 #define  ZSetPan_MinimumLimit             4       /* control type: numeric, callback function: (none) */
-#define  ZSetPan_VelocityHigh             5       /* control type: numeric, callback function: (none) */
-#define  ZSetPan_VelocityMid              6       /* control type: numeric, callback function: (none) */
-#define  ZSetPan_VelocityLow              7       /* control type: numeric, callback function: (none) */
+#define  ZSetPan_HighVelocity             5       /* control type: numeric, callback function: (none) */
+#define  ZSetPan_MidVelocity              6       /* control type: numeric, callback function: (none) */
+#define  ZSetPan_LowVelocity              7       /* control type: numeric, callback function: (none) */
 #define  ZSetPan_OKBTTN                   8       /* control type: command, callback function: (none) */
 
 #define  ZStagePan                        2
@@ -37,6 +37,8 @@
 #define  ZStagePan_AddRefPos              13      /* control type: command, callback function: (none) */
 #define  ZStagePan_RefPosList             14      /* control type: listBox, callback function: (none) */
 #define  ZStagePan_Status                 15      /* control type: LED, callback function: (none) */
+#define  ZStagePan_StageVel               16      /* control type: tree, callback function: (none) */
+#define  ZStagePan_Joystick               17      /* control type: radioButton, callback function: (none) */
 
 
      /* Control Arrays: */

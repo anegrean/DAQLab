@@ -1247,10 +1247,6 @@ static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 //	if (vupc->StatusLED)
 //		(*vupc->StatusLED) (zstage, ZSTAGE_LED_ERROR);
 
-	// update position values
-//	if (zstage->UpdatePositionDisplay)
-//	(*zstage->UpdatePositionDisplay) (zstage);
-
 	// print error message
 	DLMsg(errorMsg, 1);
 

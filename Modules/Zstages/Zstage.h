@@ -71,17 +71,26 @@ struct Zstage {
 	int					menuIDSettings;
 	
 		// Current position of Zstage, if NULL, position was not determined.
-	double*				zPos;   		// in [mm]
+	double*				zPos;   			// in [mm]
+	
+		// Current stage velocity. If NULL, this information is not available
+	double*				stageVelocity;
+	
+	double*				lowVelocity;
+	
+	double*				midVelocity;
+	
+	double*				highVelocity;
 	
 		// Absolute position from which to start moving the stage in a stepping mode
 		// if NULL, position was not initialized
-	double*				startAbsPos;	// in [mm]
+	double*				startAbsPos;		// in [mm]
 		// Relative position to which the stage is moved from the absolute start position
 		// if 0, no movement from start position occurs
-	double				endRelPos;		// in [mm]
+	double				endRelPos;			// in [mm]
 		
 		// The Z stage step size
-	double				stepSize;		// in [mm]
+	double				stepSize;			// in [mm]
 	
 		// Number of steps between start and end position with given zStepSize
 	size_t				nZSteps;
@@ -114,6 +123,8 @@ struct Zstage {
 		
 		// moveVal in [mm] same units as zPos
 	int					(* MoveZ) 					(Zstage_type* self, Zstage_move_type moveType, double moveVal);
+		// Activates Z stage joystick control
+	FCallReturn_type*	(* UseJoystick)				(Zstage_type* self, BOOL useJoystick);	
 		// Stops Z stage motion
 	int					(* StopZ)					(Zstage_type* self);
 		// Changes the status of the LED on the Zstage control panel
@@ -127,6 +138,11 @@ struct Zstage {
 		// Sets stage negative and positive limits in [mm] if this functionality is implemented for the specific hardware. This is an extra
 		// safety measure if software set limits zMaximumLimit and zMinimumLimit fail to stop the stage.
 	int					(* SetHWStageLimits)		(Zstage_type* self, double negativeLimit, double positiveLimit);
+	
+		// Gets stage velocity
+	int					(* GetStageVelocity)		(Zstage_type* self, double* velocity);
+		// Sets stage velocity
+	int					(* SetStageVelocity)		(Zstage_type* self, double velocity);
 		// Updates number of steps between an absolute start and relative end position to start position given step size 
 		// and rounds up if necessary the end position such that between the start and end positions there is an integer 
 		// multiple of step sizes. These parameters are written to the structure data.

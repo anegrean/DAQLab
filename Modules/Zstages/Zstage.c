@@ -160,6 +160,10 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	zstage->menuBarHndl				= 0;
 	zstage->menuIDSettings			= 0;
 	zstage->zPos					= NULL;
+	zstage->stageVelocity			= NULL;
+	zstage->lowVelocity				= NULL;
+	zstage->midVelocity				= NULL;
+	zstage->highVelocity			= NULL;
 	zstage->startAbsPos				= NULL;
 	zstage->endRelPos				= 0;
 	zstage->stepSize				= 0;
@@ -179,9 +183,12 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	zstage->uiPanelCB				= UIPan_CB;
 			// no functionality
 	zstage->MoveZ					= NULL;		// child class must implement this functionality.
+	zstage->UseJoystick				= NULL;		// child class may implement this functionality if applicable.
 	zstage->StopZ					= NULL;		// child class must implement this functionality.
 	zstage->GetHWStageLimits		= NULL;		// child class may implement this functionality.
 	zstage->SetHWStageLimits		= NULL;		// child class may implement this functionality.
+	zstage->GetStageVelocity		= NULL;		// child class may implement this functionality.
+	zstage->SetStageVelocity		= NULL;		// child class may implement this functionality.
 	zstage->StatusLED				= NULL;		// functionality assigned if ZStage_Load is called.
 	zstage->UpdatePositionDisplay	= NULL;		// functionality assigned if ZStage_Load is called.
 	zstage->UpdateZSteps 			= NULL;		// functionality assigned if ZStage_Load is called.
@@ -224,8 +231,15 @@ void discard_Zstage (DAQLabModule_type** mod)
 	}
 	ListDispose(zstage->zRefPos);
 	
+	// position limits
 	OKfree(zstage->zMaximumLimit);
 	OKfree(zstage->zMinimumLimit);
+	
+	// velocity and velocity settings
+	OKfree(zstage->stageVelocity);
+	OKfree(zstage->lowVelocity);
+	OKfree(zstage->midVelocity);
+	OKfree(zstage->highVelocity);
 
 	// discard DAQLabModule_type specific data
 	discard_DAQLabModule(mod);
@@ -329,6 +343,41 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	} else {
 		DLMsg("Stage position must be determined first. Aborting load operation.", 1);
 		return -1;
+	}
+	
+	// dim/undim Joystick control box if such functionality is made or not available by the child class
+	if (zstage->UseJoystick)
+		SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_Joystick, ATTR_DIMMED, 0);
+	else
+		SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_Joystick, ATTR_DIMMED, 1);
+	
+	// dim/undim velocity setting if such functionality is made available by the child class
+	if (zstage->SetStageVelocity)
+		SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_StageVel, ATTR_DIMMED, 0);
+	else
+		SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_StageVel, ATTR_DIMMED, 1);
+		
+	// if a stage velocity has been determined (by the child class) and there are no settings loaded for
+	// the different velocities, then make them equal to the current velocity of the stage
+	if (zstage->stageVelocity) {
+		
+		// set low velocity
+		if (!zstage->lowVelocity) {
+			zstage->lowVelocity = malloc(sizeof(double));
+			*zstage->lowVelocity = *zstage->stageVelocity;
+		}
+		
+		// set mid velocity
+		if (!zstage->midVelocity) {
+			zstage->midVelocity = malloc(sizeof(double));
+			*zstage->midVelocity = *zstage->stageVelocity;
+		}
+		
+		// set high velocity
+		if (!zstage->highVelocity) {
+			zstage->highVelocity = malloc(sizeof(double));
+			*zstage->highVelocity = *zstage->stageVelocity;
+		}
 	}
 	
 	// configure Z Stage Task Controller
@@ -497,7 +546,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 {
 	Zstage_type* 				zstage 			= callbackData;
 	int							refPosIdx;						// 0-based index of ref pos selected in the list
-	RefPosition_type**	refPosPtrPtr;
+	RefPosition_type**			refPosPtrPtr;
 	double						stepsize;	  					
 	double 						direction;
 	double 						moveAbsPos;   					
@@ -570,7 +619,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					
 				case ZStagePan_AddRefPos:
 					
-					char* 						newRefPosName		= NULL;
+					char* 				newRefPosName		= NULL;
 					RefPosition_type*	newRefPos			= NULL;
 					
 					newRefPosName = DLGetUINameInput("New Reference Position", MAX_REF_POS_LENGTH, ValidateRefPosName, &zstage->zRefPos); 
@@ -596,6 +645,37 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					discard_RefPosition_type(&newRefPos);
 					DLMsg("Error. Could not add new reference position. Out of memory?\n\n", 1);
 					return 0;
+					
+				case ZStagePan_Joystick:
+					
+					BOOL	useJoystick;
+					
+					if (!zstage->UseJoystick) break; // do nothing if no joystick functionality is implemented
+					
+					GetCtrlVal(panel, control, &useJoystick);
+					
+					(*zstage->UseJoystick)	(zstage, useJoystick);
+					
+					break;
+					
+				case ZStagePan_StageVel:
+					
+					int		velIdx;
+					
+					GetCtrlIndex(panel, control, &velIdx);
+					
+					if (!zstage->SetStageVelocity) break; // do nothing if there is no such functionality implemented by the child class
+					
+					if (velIdx == 0 && zstage->lowVelocity)
+						(*zstage->SetStageVelocity)		(zstage, *zstage->lowVelocity);
+					else
+						if (velIdx == 1 && zstage->midVelocity)
+						(*zstage->SetStageVelocity)		(zstage, *zstage->midVelocity);
+						else
+							if (velIdx == 2 && zstage->highVelocity)
+								(*zstage->SetStageVelocity)		(zstage, *zstage->highVelocity);
+					
+					break;
 					
 			}
 			
@@ -783,17 +863,71 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 				case ZSetPan_MaximumLimit:
 					
 					// update limits in structure data
-					GetCtrlVal(panel, ZSetPan_MinimumLimit, zstage->zMinimumLimit);
-					*zstage->zMinimumLimit *= 0.001; // convert from [um] to [mm]
-					GetCtrlVal(panel, ZSetPan_MaximumLimit, zstage->zMaximumLimit);
-					*zstage->zMaximumLimit *= 0.001; // convert from [um] to [mm]
+					double	newMinLimit;
+					double	newMaxLimit;
+					GetCtrlVal(panel, ZSetPan_MinimumLimit, &newMinLimit);
+					newMinLimit *= 0.001; // convert from [um] to [mm]
+					GetCtrlVal(panel, ZSetPan_MaximumLimit, &newMaxLimit);
+					newMaxLimit *= 0.001; // convert from [um] to [mm]
 					
 					// if given, call hardware specific function to set these limits
 					if (zstage->SetHWStageLimits)
-						(*zstage->SetHWStageLimits)	(zstage, *zstage->zMinimumLimit, *zstage->zMaximumLimit);
+						if ( (*zstage->SetHWStageLimits)	(zstage, newMinLimit, newMaxLimit) < 0) {
+							// error setting new limits, return to old values
+							SetCtrlVal(panel, ZSetPan_MinimumLimit, *zstage->zMinimumLimit * 1000);		// convert from [mm] to [um]
+							SetCtrlVal(panel, ZSetPan_MaximumLimit, *zstage->zMaximumLimit * 1000);		// convert from [mm] to [um]
+						} else {
+							// new limits set succesfully, update structure data with correct limits
+							*zstage->zMinimumLimit = newMinLimit;
+							*zstage->zMaximumLimit = newMaxLimit;
+						}
 					
 					break;
 					
+				case ZSetPan_LowVelocity:
+					
+					// set velocity value in structure data
+					GetCtrlVal(panel, control, zstage->lowVelocity);
+					
+					// if this velocity setting is selected, then set stage velocity
+					{	int		velIdx;	// velocity settings index to be applied to the stage:
+									// 0 - low, 1 - mid, 2 - high.
+						GetCtrlIndex(zstage->controlPanHndl, ZStagePan_StageVel, &velIdx);
+						if (velIdx == 0 && zstage->SetStageVelocity)
+							(*zstage->SetStageVelocity)	(zstage, *zstage->lowVelocity);
+					}
+					
+					break;
+					
+				case ZSetPan_MidVelocity:
+					
+					// set velocity value in structure data
+					GetCtrlVal(panel, control, zstage->midVelocity);
+					
+					// if this velocity setting is selected, then set stage velocity
+					{	int		velIdx;	// velocity settings index to be applied to the stage:
+									// 0 - low, 1 - mid, 2 - high.
+						GetCtrlIndex(zstage->controlPanHndl, ZStagePan_StageVel, &velIdx);
+						if (velIdx == 1 && zstage->SetStageVelocity)
+							(*zstage->SetStageVelocity)	(zstage, *zstage->midVelocity);
+					}
+					
+					break;
+					
+				case ZSetPan_HighVelocity:
+					
+					// set velocity value in structure data
+					GetCtrlVal(panel, control, zstage->highVelocity);
+					
+					// if this velocity setting is selected, then set stage velocity
+					{	int		velIdx;	// velocity settings index to be applied to the stage:
+									// 0 - low, 1 - mid, 2 - high.
+						GetCtrlIndex(zstage->controlPanHndl, ZStagePan_StageVel, &velIdx);
+						if (velIdx == 0 && zstage->SetStageVelocity)
+							(*zstage->SetStageVelocity)	(zstage, *zstage->highVelocity);
+					}
+					
+					break;
 					
 			}
 			
@@ -824,8 +958,30 @@ static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callba
 	SetCtrlsInPanCBInfo(zstage, SettingsCtrls_CB, zstage->setPanHndl);
 	
 	// update limits
-	SetCtrlVal(zstage->setPanHndl, ZSetPan_MinimumLimit, *zstage->zMinimumLimit * 1000); // convert from [mm] to [um]
-	SetCtrlVal(zstage->setPanHndl, ZSetPan_MaximumLimit, *zstage->zMaximumLimit * 1000); // convert from [mm] to [um]
+	SetCtrlVal(zstage->setPanHndl, ZSetPan_MinimumLimit, *zstage->zMinimumLimit * 1000); 	// convert from [mm] to [um]
+	SetCtrlVal(zstage->setPanHndl, ZSetPan_MaximumLimit, *zstage->zMaximumLimit * 1000); 	// convert from [mm] to [um]
+	
+	// update stage low velocity setting
+	if (zstage->lowVelocity) {
+		SetCtrlVal(zstage->setPanHndl, ZSetPan_LowVelocity, *zstage->lowVelocity);			
+		SetCtrlAttribute(zstage->setPanHndl, ZSetPan_LowVelocity, ATTR_DIMMED, 0);
+	} else
+		SetCtrlAttribute(zstage->setPanHndl, ZSetPan_LowVelocity, ATTR_DIMMED, 1);
+	
+	// update stage mid velocity setting
+	if (zstage->midVelocity) {
+		SetCtrlVal(zstage->setPanHndl, ZSetPan_MidVelocity, *zstage->midVelocity);			
+		SetCtrlAttribute(zstage->setPanHndl, ZSetPan_MidVelocity, ATTR_DIMMED, 0);
+	} else
+		SetCtrlAttribute(zstage->setPanHndl, ZSetPan_MidVelocity, ATTR_DIMMED, 1);
+	
+	// update stage high velocity setting
+	if (zstage->highVelocity) {
+		SetCtrlVal(zstage->setPanHndl, ZSetPan_HighVelocity, *zstage->highVelocity);			
+		SetCtrlAttribute(zstage->setPanHndl, ZSetPan_HighVelocity, ATTR_DIMMED, 0);
+	} else
+		SetCtrlAttribute(zstage->setPanHndl, ZSetPan_HighVelocity, ATTR_DIMMED, 1);
+	
 	
 	DisplayPanel(zstage->setPanHndl);
 }

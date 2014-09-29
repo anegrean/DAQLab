@@ -17,6 +17,7 @@
 #include <ansi_c.h> 
 #include "PIStage.h"
 #include "PI_GCS2_DLL.h"	   
+#include "asynctmr.h"
 
 //==============================================================================
 // Constants
@@ -24,39 +25,39 @@
 //------------------------------------------------------------------------------
 // Custom PID parameters and settings for the servo motion controller
 //------------------------------------------------------------------------------
-#define PIStage_PPAR				0x01	 	// P parameter list ID, see hardware documentation
-#define PIStage_IPAR				0x02	 	// I parameter list ID
-#define PIStage_DPAR				0x03	 	// D parameter list ID
+#define PIStage_PPAR						0x01	 	// P parameter list ID, see hardware documentation
+#define PIStage_IPAR						0x02	 	// I parameter list ID
+#define PIStage_DPAR						0x03	 	// D parameter list ID
 
-#define PIStage_PTERM 				40		 
-#define PIStage_ITERM 				1800
-#define PIStage_DTERM 				3300
-#define	PIStage_USECUSTOMPID		TRUE	 	// Overrides factory PID settings
+#define PIStage_PTERM 						40		 
+#define PIStage_ITERM 						1800
+#define PIStage_DTERM 						3300
+#define	PIStage_USECUSTOMPID				TRUE	 	// Overrides factory PID settings
 
 //------------------------------------------------------------------------------
 // Soft limits parameters for limiting the travel range of the stage
 //------------------------------------------------------------------------------
-#define PIStage_MAX_TRAVEL_RAGE_POS	0x15		// Maximum stage position in the positive direction
-#define PIStage_MIN_TRAVEL_RAGE_POS	0x30		// Minimum stage position in the negative direction
+#define PIStage_MAX_TRAVEL_RAGE_POS			0x15		// Maximum stage position in the positive direction
+#define PIStage_MIN_TRAVEL_RAGE_POS			0x30		// Minimum stage position in the negative direction
 												
 
 //------------------------------------------------------------------------------
 // Custom stage settings
 //------------------------------------------------------------------------------
 	
-#define PIStage_VELOCITY			2			// Stage movement velocity   
-#define PIStage_SETTLING_PRECISION	0.0001		// Positive value, in [mm]
-#define PIStage_SETTLING_TIMEOUT	3			// Timeout in [s]
+#define PIStage_SETTLING_PRECISION			0.0001		// Positive value, in [mm]
+#define PIStage_SETTLING_TIMEOUT			3			// Timeout in [s]
+#define PIStage_POSITION_UPDATE_INTERVAL	0.2			// Time intervals in [s] between position updates when using a joystick
 
 //------------------------------------------------------------------------------
 // USB connection ID
 //------------------------------------------------------------------------------
-#define PIStage_ID 					"0115500620"
+#define PIStage_ID 							"0115500620"
 
 //------------------------------------------------------------------------------
 // PI Stage type
 //------------------------------------------------------------------------------
-#define PIStage_STAGE_TYPE 			"M-605.2DD"
+#define PIStage_STAGE_TYPE 					"M-605.2DD"
 
 
 //==============================================================================
@@ -65,52 +66,62 @@
 typedef struct {
 	Zstage_move_type	moveType;
 	double				moveVal;
-} PIStageCommand_type;
+} MoveCommand_type;
 
 //==============================================================================
 // Static global variables
 
+int						positionTrackerTimerID = 0;
+
 //==============================================================================
 // Static functions
 
-static int						Load 								(DAQLabModule_type* mod, int workspacePanHndl);
+static int							Load 								(DAQLabModule_type* mod, int workspacePanHndl);
 
-static int						SaveCfg								(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int							SaveCfg								(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
-static int 						LoadCfg 							(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int 							LoadCfg 							(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
-static int						Move 								(Zstage_type* zstage, Zstage_move_type moveType, double moveVal);
+static int							Move 								(Zstage_type* zstage, Zstage_move_type moveType, double moveVal);
 
-static FCallReturn_type*		TaskControllerMove					(PIStage_type* PIStage, Zstage_move_type moveType, double moveVal); 
+static int							UseJoystick							(Zstage_type* zstage, BOOL useJoystick);
 
-static int						Stop								(Zstage_type* zstage);
+int CVICALLBACK 					TrackStagePosition 					(int reserved, int timerId, int event, void *callbackData, int eventData1, int eventData2);
 
-static int						InitHardware 						(PIStage_type* PIstage);
+static int							SetStageVelocity					(Zstage_type* zstage, double velocity);
 
-static int						GetHWStageLimits					(Zstage_type* zstage, double* minimumLimit, double* maximumLimit);
+static int							GetStageVelocity					(Zstage_type* zstage, double* velocity);
 
-static int						SetHWStageLimits					(Zstage_type* zstage, double minimumLimit, double maximumLimit);
+static FCallReturn_type*			TaskControllerMove					(PIStage_type* PIStage, Zstage_move_type moveType, double moveVal); 
 
-static PIStageCommand_type*		init_Command_type					(Zstage_move_type moveType, double moveVal);
+static int							Stop								(Zstage_type* zstage);
 
-static void						discard_Command_type				(PIStageCommand_type** a);
+static int							InitHardware 						(PIStage_type* PIstage);
 
-static void						dispose_Command_EventInfo			(void* eventInfo);
+static int							GetHWStageLimits					(Zstage_type* zstage, double* minimumLimit, double* maximumLimit);
+
+static int							SetHWStageLimits					(Zstage_type* zstage, double minimumLimit, double maximumLimit);
+//-----------------
+// module commands
+//-----------------
+static MoveCommand_type*			init_MoveCommand_type				(Zstage_move_type moveType, double moveVal);
+static void							discard_MoveCommand_type			(MoveCommand_type** a);
+static void							dispose_MoveCommand_EventInfo		(void* eventInfo);
 
 
 //-----------------------------------------
 // PIStage Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type*		ConfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag);
-static void						IterateTC							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
-static FCallReturn_type*		StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*		DoneTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static FCallReturn_type*		StoppedTC							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static void						DimTC								(TaskControl_type* taskControl, BOOL dimmed);
-static FCallReturn_type* 		ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static void				 		ErrorTC 							(TaskControl_type* taskControl, char* errorMsg);
-static FCallReturn_type*		EventHandler						(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
+static FCallReturn_type*			ConfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag);
+static void							IterateTC							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+static FCallReturn_type*			StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*			DoneTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*			StoppedTC							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void							DimTC								(TaskControl_type* taskControl, BOOL dimmed);
+static FCallReturn_type* 			ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag); 
+static void				 			ErrorTC 							(TaskControl_type* taskControl, char* errorMsg);
+static FCallReturn_type*			ZStageEventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
 
 
 //==============================================================================
@@ -137,7 +148,7 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 	initalloc_Zstage ((DAQLabModule_type*)zstage, className, instanceName);
 	
 	// create PIStage Task Controller
-	tc = init_TaskControl_type (instanceName, PIzstage, ConfigureTC, IterateTC, NULL, StartTC, ResetTC, DoneTC, StoppedTC, DimTC, NULL, NULL, EventHandler, ErrorTC);
+	tc = init_TaskControl_type (instanceName, PIzstage, ConfigureTC, IterateTC, NULL, StartTC, ResetTC, DoneTC, StoppedTC, DimTC, NULL, NULL, ZStageEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&PIzstage); return NULL;}
 	
 	//------------------------------------------------------------
@@ -170,7 +181,10 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 		// METHODS
 	
 		// overriding methods
-	zstage->MoveZ				= Move; 
+	zstage->MoveZ				= Move;
+	zstage->SetStageVelocity	= SetStageVelocity;
+	zstage->GetStageVelocity	= GetStageVelocity;
+	zstage->UseJoystick			= UseJoystick;
 	zstage->StopZ				= Stop;
 	zstage->GetHWStageLimits	= GetHWStageLimits;
 	zstage->SetHWStageLimits	= SetHWStageLimits;
@@ -198,22 +212,25 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 
 void discard_PIStage (DAQLabModule_type** mod)
 {
-	PIStage_type* PIzstage = (PIStage_type*) (*mod);
+	PIStage_type* PIstage = (PIStage_type*) (*mod);
 	
-	if (!PIzstage) return;
+	if (!PIstage) return;
+	
+	// make sure the joystick is not left active
+	UseJoystick (&PIstage->baseClass, FALSE); 
 	
 	// if connection was established and if still connected, close connection otherwise the DLL thread throws an error
-	if (PIzstage->PIStageID != -1)
-		if (PI_IsConnected(PIzstage->PIStageID))
-			PI_CloseConnection(PIzstage->PIStageID);
+	if (PIstage->PIStageID != -1)
+		if (PI_IsConnected(PIstage->PIStageID))
+			PI_CloseConnection(PIstage->PIStageID);
 			
 	// discard Zstage_type specific data
 	discard_Zstage (mod);
 }
 
-static PIStageCommand_type*	init_Command_type (Zstage_move_type moveType, double moveVal)
+static MoveCommand_type*	init_MoveCommand_type (Zstage_move_type moveType, double moveVal)
 {
-	PIStageCommand_type* a = malloc(sizeof(PIStageCommand_type));
+	MoveCommand_type* a = malloc(sizeof(MoveCommand_type));
 	if (!a) return NULL;
 	
 	a -> moveType 	= moveType;
@@ -222,18 +239,19 @@ static PIStageCommand_type*	init_Command_type (Zstage_move_type moveType, double
 	return a;
 }
 
-static void	discard_Command_type	(PIStageCommand_type** a)
+static void	discard_MoveCommand_type	(MoveCommand_type** a)
 {
 	if (!*a) return;
 	OKfree(*a);
 	return;
 }
 
-static void	dispose_Command_EventInfo (void* eventInfo)
+static void	dispose_MoveCommand_EventInfo (void* eventInfo)
 {
-	PIStageCommand_type* command = eventInfo;
-	discard_Command_type(&command);
+	MoveCommand_type* command = eventInfo;
+	discard_MoveCommand_type(&command);
 }
+
 
 /// HIFN Loads PIStage motorized stage specific resources. 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl)
@@ -284,7 +302,114 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 static int Move (Zstage_type* zstage, Zstage_move_type moveType, double moveVal)
 {
 	return TaskControlEvent(zstage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, 
-					 init_Command_type(moveType, moveVal), dispose_Command_EventInfo); 
+					 init_MoveCommand_type(moveType, moveVal), dispose_MoveCommand_EventInfo); 
+}
+
+static int UseJoystick (Zstage_type* zstage, BOOL useJoystick)
+{
+	PIStage_type* 	PIstage				= (PIStage_type*) zstage;
+	int 			PIerror;
+	int				joystickAxis;
+	char			buff[10000]			= ""; 
+	char			msg[10000]			= ""; 
+	
+	
+	Scan(PIstage->assignedAxis, "%s>%d", &joystickAxis);
+	
+	if (!PI_JAX(PIstage->PIStageID, joystickAxis, 1, PIstage->assignedAxis)) {
+		PIerror = PI_GetError(PIstage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	}
+	 
+	if (!PI_JON(PIstage->PIStageID, &joystickAxis, &useJoystick, 1)) {
+		PIerror = PI_GetError(PIstage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	}
+	 
+	// discard position tracker timer if there is any
+	if (positionTrackerTimerID > 0) {
+		DiscardAsyncTimer(positionTrackerTimerID);
+		positionTrackerTimerID = 0;
+	}
+	// create new position tracker async timer
+	if (useJoystick)
+		positionTrackerTimerID = NewAsyncTimer(PIStage_POSITION_UPDATE_INTERVAL, -1, 1, TrackStagePosition, PIstage);
+				   
+	return 0;
+}
+
+int CVICALLBACK TrackStagePosition (int reserved, int timerId, int event, void* callbackData, int eventData1, int eventData2)
+{
+	PIStage_type* 	PIstage		= (PIStage_type*) callbackData;
+	int 			PIerror;
+	char			buff[10000]			= ""; 
+	char			msg[10000]			= ""; 
+	
+	switch (event) {
+			
+		case EVENT_TIMER_TICK:
+			// just make sure that if structure data has been disposed and there are still timer event in the queue, that nothing happens
+			if (!PIstage) return 0;
+			if (!(PIstage->baseClass.zPos)) return 0;
+			
+			if (!PI_qPOS(PIstage->PIStageID, PIstage->assignedAxis, PIstage->baseClass.zPos)) {
+				OKfree(PIstage->baseClass.zPos);
+				PIerror = PI_GetError(PIstage->PIStageID);
+				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+				Fmt(msg, "Error getting stage position. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+				DLMsg(msg, 1);
+				return -1;
+			}
+			
+			// update position in the UI
+			(*PIstage->baseClass.UpdatePositionDisplay)	(&PIstage->baseClass);
+			
+			break;
+	}
+	
+	return 0;
+}
+
+static int SetStageVelocity	(Zstage_type* zstage, double velocity)
+{
+	PIStage_type* 	PIstage				= (PIStage_type*) zstage;
+	int 			PIerror;
+	char			buff[10000]			= ""; 
+	char			msg[10000]			= ""; 
+	
+	if (!PI_VEL(PIstage->PIStageID, PIstage->assignedAxis, &velocity)) {
+		PIerror = PI_GetError(PIstage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	}
+	
+	return 0;
+}
+
+static int GetStageVelocity	(Zstage_type* zstage, double* velocity)
+{
+	PIStage_type* 	PIstage				= (PIStage_type*) zstage;
+	int 			PIerror;
+	char			buff[10000]			= ""; 
+	char			msg[10000]			= ""; 
+	
+	if (!PI_qVEL(PIstage->PIStageID, PIstage->assignedAxis, velocity)) {
+		PIerror = PI_GetError(PIstage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		DLMsg(msg, 1);
+		return -1;
+	}
+	
+	return 0;
 }
 
 /// HIFN Stops stage motion
@@ -322,7 +447,6 @@ static int InitHardware (PIStage_type* PIstage)
 	int				idx;
 	unsigned int	pidParameters[3]		= {PIStage_PPAR, PIStage_IPAR, PIStage_DPAR};  
 	double			pidValues[3]			= {PIStage_PTERM, PIStage_ITERM, PIStage_DTERM};
-	double			velocity				= PIStage_VELOCITY;
 	size_t			nOcurrences;
 	size_t			nchars;
 	char			msg[10000]				="";
@@ -414,13 +538,22 @@ static int InitHardware (PIStage_type* PIstage)
 				return -1;	
 			}
 	
-	// adjust stage velocity
-	if (!PI_VEL(ID, PIstage->assignedAxis, &velocity)){
-		PIerror = PI_GetError(ID);
-		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
-		Fmt(msg, "Error changing stage velocity. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-		DLMsg(msg, 1);
-		return -1;	
+	// if any of the low, mid or high velocities is missing, set them to current stage velocity
+	if (!PIstage->baseClass.lowVelocity) {
+		PIstage->baseClass.lowVelocity = malloc(sizeof(double));
+		GetStageVelocity(&PIstage->baseClass, PIstage->baseClass.lowVelocity);
+	}
+	
+	if (!PIstage->baseClass.midVelocity) {
+		PIstage->baseClass.midVelocity = malloc(sizeof(double));
+		GetStageVelocity(&PIstage->baseClass, PIstage->baseClass.midVelocity);
+	} else
+		// set stage to mid velocity
+		SetStageVelocity(&PIstage->baseClass, *PIstage->baseClass.midVelocity);
+	
+	if (!PIstage->baseClass.highVelocity) {
+		PIstage->baseClass.highVelocity = malloc(sizeof(double));
+		GetStageVelocity(&PIstage->baseClass, PIstage->baseClass.highVelocity);
 	}
 	
 	// turn servo on for the given axis
@@ -435,6 +568,9 @@ static int InitHardware (PIStage_type* PIstage)
 	// set stage limits if available from loaded settings
 	if (PIstage->baseClass.zMinimumLimit && PIstage->baseClass.zMaximumLimit) 
 		(*PIstage->baseClass.SetHWStageLimits)	((Zstage_type*)PIstage, *PIstage->baseClass.zMinimumLimit, *PIstage->baseClass.zMaximumLimit);
+	
+	// make sure the joystick is not active before referencing
+	UseJoystick (&PIstage->baseClass, FALSE); 
 	
 	// check if axis is already referenced
 	if (!PI_qFRF(ID, PIstage->assignedAxis, &IsReferencedFlag)) {   
@@ -747,9 +883,9 @@ static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 	
 }
 
-static FCallReturn_type* EventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
+static FCallReturn_type* ZStageEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
 {
-	PIStageCommand_type*	command 		= eventData;
+	MoveCommand_type*	command 		= eventData;
 	
 	return TaskControllerMove (GetTaskControlModuleData(taskControl), command->moveType, command->moveVal); 
 }
@@ -787,7 +923,7 @@ static FCallReturn_type* TaskControllerMove	(PIStage_type* PIStage, Zstage_move_
 		PIerror = PI_GetError(PIStage->PIStageID);
 		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
 		Fmt(msg, "Moving stage relative to current position failed. PI stage DLL Error ID %d: %s.", PIerror, buff);
-		return init_FCallReturn_type(-1, "EventHandler", msg);
+		return init_FCallReturn_type(-1, "ZStageEventHandler", msg);
 	}
 			
 	// turn on moving LED
@@ -801,7 +937,7 @@ static FCallReturn_type* TaskControllerMove	(PIStage_type* PIStage, Zstage_move_
 			PIerror = PI_GetError(PIStage->PIStageID);
 			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
 			Fmt(msg, "Could not query if target reached. PI stage DLL Error ID %d: %s.", PIerror, buff);
-			return init_FCallReturn_type(-1, "EventHandler", msg);
+			return init_FCallReturn_type(-1, "ZStageEventHandler", msg);
 		}
 	} while (!ReadyFlag);
 	
@@ -813,7 +949,7 @@ static FCallReturn_type* TaskControllerMove	(PIStage_type* PIStage, Zstage_move_
 			PIerror = PI_GetError(PIStage->PIStageID);
 			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
 			Fmt(msg, "Error getting target position. PI stage DLL Error ID %d: %s.", PIerror, buff);
-			return init_FCallReturn_type(-1, "EventHandler", msg);
+			return init_FCallReturn_type(-1, "ZStageEventHandler", msg);
 		}
 		Sleep (100);
 		// get current position
@@ -821,7 +957,7 @@ static FCallReturn_type* TaskControllerMove	(PIStage_type* PIStage, Zstage_move_
 			PIerror = PI_GetError(PIStage->PIStageID);
 			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0;
 			Fmt(msg, "Error getting current position. PI stage DLL Error ID %d: %s.", PIerror, buff);
-			return init_FCallReturn_type(-1, "EventHandler", msg);
+			return init_FCallReturn_type(-1, "ZStageEventHandler", msg);
 		}
 	} while ( (( actualPos > targetPos + PIStage_SETTLING_PRECISION/2.0) ||
 			   ( actualPos < targetPos - PIStage_SETTLING_PRECISION/2.0)) && (Timer() < time + PIStage_SETTLING_TIMEOUT));	// quit loop if after 2 sec positions don't match

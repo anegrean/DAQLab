@@ -734,6 +734,17 @@ static int PMT_Set_GainThresh ( int PMTnr, float gain,float threshold)
 	return error;
 }
 
+int ResetActions(VUPhotonCtr_type* 	vupc)
+{
+	int error;
+	
+	error=PMTReset();
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_BTTN_TestMode, FALSE);
+	PMTController_UpdateDisplay(vupc);
+	
+	return error;
+}
+
 
 static int PMTController_SetTestMode(BOOL testmode)
 {
@@ -748,8 +759,7 @@ static int PMTController_Reset(VUPhotonCtr_type* vupc)
 {
 	int error=0;
 
-	error=PMTReset();
-//	ResetVUPC_UI(vupc);
+	error=ResetActions(vupc);
 
 	return error;
 }
@@ -786,16 +796,14 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_STATUS, statreg);
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_COMMAND, controlreg);
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_RUNNING, statreg&RUNNING_BIT);
-//	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_UNDER, statreg&FFUNDRFL_BIT);
-//	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_EMPTY, statreg&FFEMPTY_BIT);
-//	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_QFULL, statreg&FFQFULL_BIT);
-//	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_AFULL, statreg&FFALMFULL_BIT);
-//	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_OVERFLOW, statreg&FFOVERFLOW_BIT);
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_EMPTY, statreg&FFEMPTY_BIT);
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_FULL, statreg&FFOVERFLOW_BIT);
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_DOOR_OPEN, statreg&DOOROPEN_BIT);
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_COUNTEROVERFLOW, statreg&COVERFLOW_BIT);
 
 	for(i=0;i<MAX_CHANNELS;i++)  {
 		if(vupc->channels[i]) {
-			if(i==0){
+			if(vupc->channels[i]->chanIdx==PMT1){
 			//PMT1 is selected
 				HV=controlreg&PMT1HV_BIT;
 				CurrentErr=statreg&PMT1CURR_BIT;
@@ -806,7 +814,7 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT1TEMP_BIT);
 			}
-			if(i==1){
+			if(vupc->channels[i]->chanIdx==PMT2){
 			//PMT2 is selected
 				HV=controlreg&PMT2HV_BIT;
 				CurrentErr=statreg&PMT2CURR_BIT;
@@ -816,7 +824,7 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT2TEMP_BIT);
 			}
-			if(i==2){
+			if(vupc->channels[i]->chanIdx==PMT3){
 			//PMT3 is selected
 				HV=controlreg&PMT3HV_BIT;
 				CurrentErr=statreg&PMT3CURR_BIT;
@@ -826,7 +834,7 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT3TEMP_BIT);
 			}
-			if(i==3){
+			if(vupc->channels[i]->chanIdx==PMT4){
 			//PMT4 is selected
 				HV=controlreg&PMT4HV_BIT;
 				CurrentErr=statreg&PMT4CURR_BIT;
@@ -1075,6 +1083,8 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 }
 
 
+
+
 static int CVICALLBACK VUPCPhotonCounter_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	VUPhotonCtr_type* 	vupc 	=   callbackData;
@@ -1094,9 +1104,7 @@ static int CVICALLBACK VUPCPhotonCounter_CB (int panel, int control, int event, 
 					break;
 
 				case CounterPan_BTTN_RESET :
-					error=PMTReset();
-				//	ResetVUPC_UI(vupc);
-					PMTController_UpdateDisplay(vupc);
+					error=ResetActions(vupc);
 					break;
 
 				case CounterPan_BTTN_TestMode:
@@ -1204,6 +1212,7 @@ static FCallReturn_type* DoneTC (TaskControl_type* taskControl, size_t currentIt
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
 	PMTStopAcq();
+	PMTController_UpdateDisplay(vupc);   
 
 	// undim items
 	(*vupc->DimWhenRunning) (vupc, FALSE);
@@ -1215,6 +1224,7 @@ static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, size_t curren
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
 	PMTStopAcq();
+	PMTController_UpdateDisplay(vupc);   
 
 	// undim items
 	(*vupc->DimWhenRunning) (vupc, FALSE);
@@ -1240,8 +1250,7 @@ static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	int error=0;
 
-	error=PMTReset();
-//	ResetVUPC_UI(vupc);
+	error=ResetActions(vupc);
 
 		// turn on error LED
 //	if (vupc->StatusLED)

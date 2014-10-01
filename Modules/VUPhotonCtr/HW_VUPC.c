@@ -276,14 +276,11 @@ int PMTController_Finalize(void)
 //called in pmt thread
 int ReadBuffer(int bufsize)
 {
-//	int err=0;
+	int error=0;
 	int result;
 	DataPacket_type*  dataPacket;
 	FCallReturn_type* fCallReturn;
 	
-//	DataPacket_type  datapacket_pmt2;
-//	DataPacket_type  datapacket_pmt3;
-//	DataPacket_type  datapacket_pmt4;
 	unsigned short int* 	Samplebuffer	= NULL;   
 	unsigned short int*     pmtdataptr;
 	int numpixels;
@@ -293,17 +290,26 @@ int ReadBuffer(int bufsize)
 	double refSamplingRate=1000;
 
 	long errcode;
-	
+	unsigned long statreg; 
 	//if(GetAcqBusy()==1){
 	
 	Samplebuffer = malloc(bufsize); 
 	
 	result = VUPCI_Read_Buffer(Samplebuffer,bufsize);
 	
-///	if((result<0)&&(GetAcqBusy()==0)){ //only pass errors when acq is busy  
-//		OKfree(Samplebuffer);  
-//		return 0;
-//	}
+/*	error=ReadPMTReg(STAT_REG,&statreg);
+	if ((statreg&FFOVERFLOW_BIT)==FFOVERFLOW_BIT) {
+		readerror=1;
+		errcode=~result;
+		TaskControlIterationDone (gtaskControl, -1, "Fifo Overflow");   
+		nrsamples=0;
+		return errcode;
+	}	  */
+	
+	if((result<0)&&(GetAcqBusy()==0)){ //only pass errors when acq is busy  
+		OKfree(Samplebuffer);  
+		return 0;
+	}
 	if (result<0){  
 				//err
 		//SetPMTState(PMT_ERROR);
@@ -346,14 +352,11 @@ int ReadBuffer(int bufsize)
 						// send data packet with waveform
 						fCallReturn = SendDataPacket(gchannels[i]->VChan, dataPacket);
 						discard_FCallReturn_type(&fCallReturn);
-						//free(pmtdataptr[index]);
+					
 					}
 				}
 			}
 			
-	//		for (i=0;i<MAX_CHANNELS;i++) OKfree(pmtdataptr[i]);
-			
-		
 			if(measurementmode==MEASMODE_FINITE){		 //need to count samples 
 				//data is in pixels
 				nrsamples=nrsamples+numpixels;
@@ -362,8 +365,9 @@ int ReadBuffer(int bufsize)
 					//iteration is done
 					
 					nrsamples=0;
+					PMTStopAcq();  
 					TaskControlIterationDone (gtaskControl, 0, NULL);   
-					PMTStopAcq();       
+					     
 				}
 			}
 		
@@ -651,7 +655,7 @@ int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl,C
 	
 	SetMeasurementMode(mode);
 	SetCurrentIterationnr(iternr); 
-	//error=PMTReset();   
+	error=PMTClearFifo();   
 	
 	errChk(CmtNewThreadPool(NUMTHREADS,&poolHandle)); 
 	errChk(StartDAQThread(poolHandle));
@@ -691,24 +695,22 @@ int PMTStopAcq(void)
 	
 	readdata=0;  //stop reading  
 	
+
+	
+	errChk(StopDAQThread(poolHandle));
+
+	
+	for (i=0;i<MAX_CHANNELS;i++){
+		OKfree(gchannels[i]);
+	}
+	
+	//tell hardware to stop
 	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	//set app start bit  
 //	controlreg=controlreg|DMASTART_BIT; 
 	controlreg=controlreg&~APPSTART_BIT; //clear appstart bit
 	error=WritePMTReg(CTRL_REG,controlreg);
 	
-	errChk(StopDAQThread(poolHandle));
-	CmtDiscardThreadPool(poolHandle);
-	
-	for (i=0;i<MAX_CHANNELS;i++){
-		free(gchannels[i]);
-	}
-	
-	
-//	controlreg=GetControlreg();  
-//	controlreg=controlreg&~DMASTART_BIT;
-//	controlreg=controlreg&~APPSTART_BIT;
-//	error=WritePMTReg(CTRL_REG,controlreg);
 	
 Error:
 
@@ -873,6 +875,7 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
 	SetReadyForReading(0);
     //quit
 	SetPMTCommandFlag(0); 
+	CmtDiscardThreadPool(poolHandle); 
 	
 	return 0;
 }

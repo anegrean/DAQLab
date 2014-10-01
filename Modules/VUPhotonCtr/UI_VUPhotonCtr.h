@@ -19,7 +19,7 @@
 #define  CounterPan_NUM_STATUS            3       /* control type: numeric, callback function: (none) */
 #define  CounterPan_BTTN_FFRESET          4       /* control type: command, callback function: (none) */
 #define  CounterPan_BTTN_RESET            5       /* control type: command, callback function: (none) */
-#define  CounterPan_LED_TRIGFAIL          6       /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_COUNTEROVERFLOW   6       /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_DOOR_OPEN         7       /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_FIFO_FULL         8       /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_FIFO_EMPTY        9       /* control type: LED, callback function: (none) */

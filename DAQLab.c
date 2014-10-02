@@ -232,7 +232,7 @@ static void					DAQLab_discard_UITaskCtrl_type				(UITaskCtrl_type** a);
 
 
 
-static int					DAQLab_VariantToType						(VARIANT* variantVal, DAQLabXMLTypes vartype, void* value);
+static int					DAQLab_StringToType							(char text[], DAQLabXMLTypes vartype, void* value);
 
 static BOOL					DAQLab_ValidControllerName					(char name[], void* listPtr);
 
@@ -507,10 +507,6 @@ static int DAQLab_Load (void)
 					(*newModule->DisplayPanels) (newModule, TRUE);
 			}
 		
-		// discard module class name
-		CA_FreeMemory(moduleClassName);
-		// discard module instance name
-		CA_FreeMemory(moduleInstanceName);
 	}
 	
 	    
@@ -1255,7 +1251,7 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 	return xmlerror;
 }
 
-static int DAQLab_VariantToType	(VARIANT* varPtr, DAQLabXMLTypes vartype, void* valuePtr)
+static int DAQLab_StringToType	(char text[], DAQLabXMLTypes vartype, void* valuePtr)
 {
 	int	error;
 	
@@ -1266,75 +1262,37 @@ static int DAQLab_VariantToType	(VARIANT* varPtr, DAQLabXMLTypes vartype, void* 
 			break;
 		
 		case DL_BOOL:
-			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_BOOL, valuePtr) ); 
-			break;
-			
 		case DL_CHAR:
-			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_CHAR, valuePtr) ); 
-			break;
-			
 		case DL_UCHAR:
-			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_UCHAR, valuePtr) ); 
-			break;
-			
 		case DL_SHORT:
-			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_SHORT, valuePtr) ); 
-			break;
-			
 		case DL_USHORT:
-			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_USHORT, valuePtr) ); 
-			break;
-		
 		case DL_INT:
-			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_INT, valuePtr) ); 
-			break;
-			
 		case DL_UINT:
-			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_UINT, valuePtr) ); 
-			break;
-			
-		case DL_LONG:
-			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_LONG, valuePtr) ); 
-			break;
-		
-		case DL_ULONG:
-			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_ULONG, valuePtr) ); 
-			break;
-			
+		case DL_LONG:	
+		case DL_ULONG:  
 		case DL_LONGLONG:
-			
-			
-			break;
-			
 		case DL_ULONGLONG:
 			
-			
+			errChk( Scan(text, "%s>%d", valuePtr) );
 			break;
-		
+			
 		case DL_FLOAT:
 			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_FLOAT, valuePtr) ); 
+			double doubleVal;
+			errChk( Scan(text, "%s>%f", &doubleVal) );  
+			*(float*)valuePtr = (float) doubleVal;
 			break;
 		
 		case DL_DOUBLE:
 			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_DOUBLE, valuePtr) ); 
+			errChk( Scan(text, "%s>%f", &doubleVal) );  
+			*(double*)valuePtr = doubleVal;
 			break;
 			
 		case DL_CSTRING:
 			
-			errChk( CA_VariantConvertToType(varPtr, CAVT_CSTRING, valuePtr) ); 
+			*(char**)valuePtr = StrDup(text);
 			break;
-			
 	}
 		
 	return 0;
@@ -1347,19 +1305,21 @@ static int DAQLab_VariantToType	(VARIANT* varPtr, DAQLabXMLTypes vartype, void* 
 
 int DLGetXMLElementAttributes (ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes)
 {
-	int								error;
-	HRESULT							xmlerror;
-	ERRORINFO						xmlERRINFO;
-	VARIANT							xmlVal;
+	int									error;
+	HRESULT								xmlerror;
+	ERRORINFO							xmlERRINFO;
+	ActiveXMLObj_IXMLDOMAttribute_		xmlAttribute;
+	char*								attributeString;	
 	
 	for (int i = 0; i < nAttributes; i++) {
-		
-		// get attribute value
-		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttribute(XMLElement, &xmlERRINFO, Attributes[i].tag, &xmlVal) ); 
-		
-		// convert from variant to values
-		errChk( DAQLab_VariantToType(&xmlVal, Attributes[i].type, Attributes[i].pData) );
-		
+		// get attribute node
+		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttributeNode(XMLElement, &xmlERRINFO, Attributes[i].tag, &xmlAttribute) ); 
+		// get attribute text
+		XMLErrChk ( ActiveXML_IXMLDOMAttribute_Gettext(xmlAttribute, &xmlERRINFO, &attributeString) );
+		CA_DiscardObjHandle(xmlAttribute);
+		// convert string to values
+		errChk( DAQLab_StringToType(attributeString, Attributes[i].type, Attributes[i].pData) );
+		CA_FreeMemory(attributeString);
 	}
 	
 	return 0;
@@ -1381,7 +1341,7 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 	int									error;
 	HRESULT								xmlerror;
 	ERRORINFO							xmlERRINFO;
-	VARIANT								xmlVal;
+	char*								attributeString;
 	ActiveXMLObj_IXMLDOMNamedNodeMap_	xmlNamedNodeMap;	 // list of attributes
 	ActiveXMLObj_IXMLDOMNode_			xmlAttributeNode;	 // selected attribute
 	
@@ -1389,13 +1349,17 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 	XMLErrChk ( ActiveXML_IXMLDOMNode_Getattributes(XMLNode, &xmlERRINFO, &xmlNamedNodeMap) );  
 	
 	for (int i = 0; i < nAttributes; i++) {
-		// get attribute as variant
-		XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlERRINFO, Attributes[i].tag, &xmlAttributeNode) );  
-		XMLErrChk ( ActiveXML_IXMLDOMNode_GetnodeTypedValue(xmlAttributeNode, &xmlERRINFO, &xmlVal) );  
-		// convert from variant to values
-		errChk( DAQLab_VariantToType (&xmlVal, Attributes[i].type, Attributes[i].pData) );
-		
+		// get attribute node
+		XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlERRINFO, Attributes[i].tag, &xmlAttributeNode) );
+		// get attribute node text
+		XMLErrChk ( ActiveXML_IXMLDOMNode_Gettext(xmlAttributeNode, &xmlERRINFO, &attributeString) );
+		CA_DiscardObjHandle(xmlAttributeNode);
+		// convert to values
+		errChk( DAQLab_StringToType (attributeString, Attributes[i].type, Attributes[i].pData) );
+		CA_FreeMemory(attributeString);
 	}
+	
+	CA_DiscardObjHandle(xmlNamedNodeMap); 
 	
 	return 0;
 	

@@ -118,7 +118,7 @@ int 			iterationnr;              //current iteration number, passed in data
 // Global functions
 int CVICALLBACK PMTThreadFunction(void *(functionData));
 int CVICALLBACK PMTThreadFunction2(void *(functionData));    
-int StartDAQThread(CmtThreadPoolHandle poolHandle) ;
+int StartDAQThread(int mode,CmtThreadPoolHandle poolHandle) ;
 int StopDAQThread(CmtThreadPoolHandle poolHandle);
 int PMTReset(void);
 unsigned long ImReadReg(unsigned long regaddress);
@@ -242,9 +242,6 @@ int PMTController_Init(void)
 	
 	errChk(VUPCI_Open());
 	errChk(GetPMTControllerVersion());
-	
-//	errChk(CmtNewThreadPool(NUMTHREADS,&poolHandle)); 
-//	errChk(StartDAQThread(poolHandle)); 
 	
 	error=PMTReset();
 	VUPCI_Set_Read_Timeout(timeout);
@@ -595,45 +592,6 @@ int PMT_SetTestMode(BOOL testmode)
 }
 
  
-/*
-int PMTReadActions(unsigned short int* samplebuffer,int numbytes)
-{
-	//int i;
-//	int err;
-	int result;
-	
-	
-	//prep buffer
-//	for (i=0;i<bufsize;i++) samplebuffer[i]=0;
-	//read buffer
-	result = ReadBuffer(samplebuffer,numbytes);
-	return result;
-}	   */
-
-
-/*
-void SetNewBuffer(void)
-{
-	int bufsize;
-
-	bufsize=GetPMTBufsize();
-	OKfree(Samplebuffer); 
-	OKfree(Samplebuffer2); 
-//	OKfree(pmt1dataptr); 
-//	OKfree(pmt2dataptr); 
-//	OKfree(pmt3dataptr); 
-//	OKfree(pmt4dataptr); 
-	
-	Samplebuffer = malloc(bufsize); 
-	Samplebuffer2 = malloc(bufsize); 
-	
-//	pmt1dataptr=malloc(bufsize/4);
-//	pmt2dataptr=malloc(bufsize/4); 
-//	pmt3dataptr=malloc(bufsize/4); 
-//	pmt4dataptr=malloc(bufsize/4);
-	
-	SetPMTnewbufsizeflag(0); 
-}	  */
 
 
 /// HIFN  starts the PMT Controller Acquisition
@@ -655,17 +613,17 @@ int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl,C
 	
 	SetMeasurementMode(mode);
 	SetCurrentIterationnr(iternr); 
-	error=PMTClearFifo();   
+	error=PMTClearFifo(); 
+	
 	
 	errChk(CmtNewThreadPool(NUMTHREADS,&poolHandle)); 
-	errChk(StartDAQThread(poolHandle));
+	errChk(StartDAQThread(mode,poolHandle));
 	
 	
 	readdata=1;   //start reading       
 	
 	error=ReadPMTReg(CTRL_REG,&controlreg);     
 	//set app start bit  
-//	controlreg=controlreg|DMASTART_BIT; 
 	controlreg=controlreg|APPSTART_BIT;
 	error=WritePMTReg(CTRL_REG,controlreg);
 	
@@ -707,7 +665,6 @@ int PMTStopAcq(void)
 	//tell hardware to stop
 	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	//set app start bit  
-//	controlreg=controlreg|DMASTART_BIT; 
 	controlreg=controlreg&~APPSTART_BIT; //clear appstart bit
 	error=WritePMTReg(CTRL_REG,controlreg);
 	
@@ -743,21 +700,30 @@ int PMTReset(void)
 int PMTClearFifo(void)
 {
 	int error=0;
-	unsigned long controlreg;
+	unsigned long statreg;
 	
-	error=ReadPMTReg(CTRL_REG,&controlreg);    
+//	error=ReadPMTReg(CTRL_REG,&controlreg);    
 	//set fifo reset bit
-	controlreg=controlreg|FFRESET_BIT;
-	error=WritePMTReg(CTRL_REG,controlreg);  
+//	controlreg=controlreg|FFRESET_BIT;
+//	error=WritePMTReg(CTRL_REG,controlreg);  
 	
 	//clear fifo reset bit
-	controlreg=controlreg&~FFRESET_BIT;
-	error=WritePMTReg(CTRL_REG,controlreg);
+//	controlreg=controlreg&~FFRESET_BIT;
+//	error=WritePMTReg(CTRL_REG,controlreg);
 	
 	//reset DMAChannel
 	error=WritePMTReg(USCTRL,0x0200000A);       
 	//  reset fifo's
 	error=WritePMTReg(EBCR_REG,0x0A);    
+	
+
+	error=ReadPMTReg(STAT_REG,&statreg);
+		//clear fifo status bits if set
+	if ((statreg&FFALMFULL_BIT)||(statreg&FFOVERFLOW_BIT)){ 
+			if (statreg&FFALMFULL_BIT) statreg=statreg&~FFALMFULL_BIT;  //clear bit
+			if (statreg&FFOVERFLOW_BIT) statreg=statreg&~FFOVERFLOW_BIT;  //clear bit    
+			error=WritePMTReg(STAT_REG,statreg);    
+	}
 	
 	
 	
@@ -794,19 +760,20 @@ int PMT_ClearControl(int PMTnr)
 }
 
 
-int StartDAQThread(CmtThreadPoolHandle poolHandle)
+int StartDAQThread(int mode,CmtThreadPoolHandle poolHandle)
 {
 	int error=0;
 	
-//	parentThreadID=CmtGetCurrentThreadID (); 
 	
 	SetAcqBusy(1);   
 	
 	error=CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL);   	   //&PMTThreadFunctionID
-	if (error<0) return error; 
-	error=CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction2,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL);   	   //&PMTThreadFunctionID
-	if (error<0) return error; 
-	
+	if (error<0) return error;
+	//only launch second acq thread in movie mode
+	if (mode==MEASMODE_CONTINUOUS){
+		error=CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction2,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL);   	   //&PMTThreadFunctionID
+		if (error<0) return error; 
+	}
 	ProcessSystemEvents();  //to start the tread functions      
 	
 	

@@ -50,23 +50,9 @@
 #endif
 
 //==============================================================================
-// Types
 
-	// controls from UI_VUPhotonCtr.uir that will be dimmed or undimmed when the device is in the RUNNING state
-const int 		UIPhotonCounterCtrls[] = {
-	CounterPan_NUM_COMMAND,
-	CounterPan_NUM_STATUS ,
-	CounterPan_BTTN_FFRESET,
-	CounterPan_BTTN_RESET,
-	CounterPan_LED_DOOR_OPEN,
-//	CounterPan_LED_FIFO_OVERFLOW,
-//	CounterPan_LED_FIFO_AFULL,
-//	CounterPan_LED_FIFO_QFULL,
-//	CounterPan_LED_FIFO_EMPTY,
-//	CounterPan_LED_FIFO_UNDER,
-	CounterPan_LED_RUNNING ,
-	CounterPan_BTTN_TestMode
-};
+
+
 
 
 
@@ -206,7 +192,7 @@ static int PMT_Set_Fan ( int PMTnr, BOOL value);
 static int PMT_Set_Cooling ( int PMTnr, BOOL value);
 static int PMT_Set_GainThresh ( int PMTnr, float gain,float threshold);
 static int PMTController_UpdateDisplay (VUPhotonCtr_type* self);
-void PMTController_DimWhenRunning (VUPhotonCtr_type* self, BOOL dimmed);
+//void PMTController_DimWhenRunning (VUPhotonCtr_type* self, BOOL dimmed);
 static int PMTController_SetTestMode(BOOL testmode);
 static int PMTController_Reset(VUPhotonCtr_type* vupc);
 static int PMTController_ResetFifo(void);
@@ -501,8 +487,6 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	vupc->SetPMT_GainThresh = PMT_Set_GainThresh;
 	// Updates status display of Photon Counter
 	vupc->UpdateVUPhotonCtrDisplay = PMTController_UpdateDisplay;
-		// add functionality to dim and undim controls when controller is running
-	vupc->DimWhenRunning	 = PMTController_DimWhenRunning;
 	//add functionality to set test mode
 	vupc->SetTestMode = PMTController_SetTestMode;
 	//add functionality to reset PMT controller
@@ -796,8 +780,10 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_STATUS, statreg);
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_COMMAND, controlreg);
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_RUNNING, statreg&RUNNING_BIT);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_EMPTY, statreg&FFEMPTY_BIT);
+	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_ALMFULL, statreg&FFALMFULL_BIT);
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_FULL, statreg&FFOVERFLOW_BIT);
+	
+	
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_DOOR_OPEN, statreg&DOOROPEN_BIT);
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_COUNTEROVERFLOW, statreg&COVERFLOW_BIT);
 
@@ -846,22 +832,17 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 			}
 		}
 	}
-
+	
+	//clear fifo bits if set
+	if ((statreg&FFALMFULL_BIT)||(statreg&FFOVERFLOW_BIT)){ 
+			if (statreg&FFALMFULL_BIT) statreg=statreg&~FFALMFULL_BIT;  //clear bit
+			if (statreg&FFOVERFLOW_BIT) statreg=statreg&~FFOVERFLOW_BIT;  //clear bit    
+			error=WritePMTReg(STAT_REG,statreg);    
+	}
 
 	return error;
 }
 
-void PMTController_DimWhenRunning (VUPhotonCtr_type* vupc, BOOL dimmed)
-{
-//	int menubarHndl = GetPanelMenuBar (vupc->counterPanHndl);
-
-//	SetMenuBarAttribute(menubarHndl, 0, ATTR_DIMMED, dimmed);
-
-	for (int i = 0; i < NumElem(UIPhotonCounterCtrls); i++) {
-		SetCtrlAttribute(vupc->counterPanHndl, UIPhotonCounterCtrls[i], ATTR_DIMMED, dimmed);
-	}
-
-}
 
 
 
@@ -1201,9 +1182,6 @@ static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abo
 	}
 
 
-	// dim items
-	(*vupc->DimWhenRunning) (vupc, TRUE);
-
 	return init_FCallReturn_type(0, "", "");
 }
 
@@ -1214,9 +1192,6 @@ static FCallReturn_type* DoneTC (TaskControl_type* taskControl, size_t currentIt
 	PMTStopAcq();
 	PMTController_UpdateDisplay(vupc);   
 
-	// undim items
-	(*vupc->DimWhenRunning) (vupc, FALSE);
-
 	return init_FCallReturn_type(0, "", "");
 }
 static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
@@ -1226,8 +1201,6 @@ static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, size_t curren
 	PMTStopAcq();
 	PMTController_UpdateDisplay(vupc);   
 
-	// undim items
-	(*vupc->DimWhenRunning) (vupc, FALSE);
 
 	return init_FCallReturn_type(0, "", "");
 }
@@ -1241,8 +1214,15 @@ static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abo
 
 static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 {
-	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
+	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);\
 	
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_NUM_COMMAND, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_NUM_STATUS, ATTR_DIMMED, dimmed);
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_FFRESET, ATTR_DIMMED, dimmed);    
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_RESET, ATTR_DIMMED, dimmed);    
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_LED_DOOR_OPEN, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_LED_RUNNING, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_TestMode, ATTR_DIMMED, dimmed); 
 }
 
 static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
@@ -1261,8 +1241,6 @@ static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 
 	PMTController_UpdateDisplay(vupc);
 
-	// undim items
-	(*vupc->DimWhenRunning) (vupc, FALSE);
 
 }
 

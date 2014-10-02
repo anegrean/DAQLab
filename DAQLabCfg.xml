@@ -1,1 +1,1 @@
-<DAQLabConfig TaskPanTopPos="140" TaskPanLeftPos="341" LogPanTopPos="69" LogPanLeftPos="782"><UITaskController Name="test" Iterations="1" Wait="0" Mode="1"/></DAQLabConfig>
+<DAQLab_Config TaskPanTopPos="371" TaskPanLeftPos="653" LogPanTopPos="313" LogPanLeftPos="1053"><DAQLab_UITaskController Name="iyh" Iterations="1000" Wait="0" Mode="1"/><DAQLab_Modules><Module ClassName="VU Photon Counter" InstanceName="VU Photon Counter"/></DAQLab_Modules></DAQLab_Config>

@@ -22,7 +22,7 @@
 #define  CounterPan_LED_COUNTEROVERFLOW   6       /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_DOOR_OPEN         7       /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_FIFO_FULL         8       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_EMPTY        9       /* control type: LED, callback function: (none) */
+#define  CounterPan_LED_FIFO_ALMFULL      9       /* control type: LED, callback function: (none) */
 #define  CounterPan_LED_RUNNING           10      /* control type: LED, callback function: (none) */
 #define  CounterPan_BTTN_TestMode         11      /* control type: textButton, callback function: (none) */
 

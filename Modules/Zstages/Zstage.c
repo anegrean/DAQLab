@@ -383,6 +383,22 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// configure Z Stage Task Controller
 	TaskControlEvent(zstage->taskController, TASK_EVENT_CONFIGURE, NULL, NULL); 
 	
+	// add reference positions if any
+	size_t				nRefPos										= ListNumItems(zstage->zRefPos);
+	char				refPosDisplayItem[MAX_REF_POS_LENGTH + 50]; 
+	RefPosition_type**	refPosPtr;
+	if (nRefPos) {
+		// undim ref pos listbox
+		SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_RefPosList, ATTR_DIMMED, 0);
+		for (size_t i = 1; i <= nRefPos; i++) {
+			refPosPtr = ListGetPtrToItem(zstage->zRefPos, i);
+			// add reference position to listbox
+			Fmt(refPosDisplayItem, "%s @ %f[p*]", (*refPosPtr)->name, POS_DISPLAY_PRECISION, (*refPosPtr)->val*1000);  	// display in [um]
+			InsertListItem(zstage->controlPanHndl, ZStagePan_RefPosList, -1, refPosDisplayItem, (*refPosPtr)->val); 	// store listbox position value in [mm] 
+		}
+	} else
+		SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_RefPosList, ATTR_DIMMED, 1);
+	
 	return 0;
 
 }
@@ -393,28 +409,117 @@ int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	
 	// allocate memory to store values
 	// Note: This must be done before initializing the attributes array!
-	zstage->zMinimumLimit = malloc(sizeof(double));
-	zstage->zMaximumLimit = malloc(sizeof(double));
+	zstage->zMinimumLimit 	= malloc(sizeof(double));
+	zstage->zMaximumLimit 	= malloc(sizeof(double));
+	zstage->lowVelocity		= malloc(sizeof(double));
+	zstage->midVelocity		= malloc(sizeof(double));
+	zstage->highVelocity	= malloc(sizeof(double));
 	
 	// initialize attributes array
 	DAQLabXMLNode 		zStageAttr[] 	= {	{"MinPositionLimit", DL_DOUBLE, zstage->zMinimumLimit},
-								 			{"MaxPositionLimit", DL_DOUBLE, zstage->zMaximumLimit}
+								 			{"MaxPositionLimit", DL_DOUBLE, zstage->zMaximumLimit},
+											{"LowVelocity", DL_DOUBLE, zstage->lowVelocity},
+											{"MidVelocity", DL_DOUBLE, zstage->midVelocity},
+											{"HighVelocity", DL_DOUBLE, zstage->highVelocity}
 																									};
-																									
+	//--------------------------------------------------------------																								};
+	// get safety limits and velocities	
+	//--------------------------------------------------------------
 	DLGetXMLElementAttributes(moduleElement, zStageAttr, NumElem(zStageAttr));
 	
+	//--------------------------------------------------------------
+	// get saved reference positions
+	//--------------------------------------------------------------
+	HRESULT							xmlerror;
+	ERRORINFO						xmlERRINFO;
+	ActiveXMLObj_IXMLDOMNodeList_	xmlRefPositionsNodeList		= 0;
+	ActiveXMLObj_IXMLDOMNode_		xmlRefPositionsNode			= 0;
+	ActiveXMLObj_IXMLDOMNodeList_	xmlRefPosNodeList			= 0;
+	ActiveXMLObj_IXMLDOMNode_		xmlRefPosNode				= 0;
+	long							nXMLElements;
+	long							nRefPos;
+	
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(moduleElement, &xmlERRINFO, "ReferencePositions", &xmlRefPositionsNodeList) );
+	// skip this if there are no positions stored
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlRefPositionsNodeList, &xmlERRINFO, &nXMLElements) );
+	if (!nXMLElements) goto NoReferencePositions;
+	
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPositionsNodeList, &xmlERRINFO, 0, &xmlRefPositionsNode) );
+	// get reference position elements
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(xmlRefPositionsNode, &xmlERRINFO, "RefPos", &xmlRefPosNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlRefPosNodeList, &xmlERRINFO, &nXMLElements) );
+	if (!nXMLElements) goto NoReferencePositions;
+	// load reference positions
+	RefPosition_type*	refPos;
+	char*				refName;
+	double				refVal;
+	DAQLabXMLNode		refPosAttr[2] = { { "Name", DL_CSTRING, &refName }, {"Position", DL_DOUBLE, &refVal} };
+	for (size_t i = 0; i < nXMLElements; i++) {
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPosNodeList, &xmlERRINFO, i, &xmlRefPosNode) );
+		DLGetXMLNodeAttributes(xmlRefPosNode, refPosAttr, NumElem(refPosAttr));
+		CA_DiscardObjHandle(xmlRefPosNode);
+		refPos = init_RefPosition_type(refName, refVal);
+		ListInsertItem(zstage->zRefPos, &refPos, END_OF_LIST);
+	}
+	
+NoReferencePositions:
+	
+	// cleanup
+	if (xmlRefPositionsNodeList) CA_DiscardObjHandle(xmlRefPositionsNodeList); 
+	if (xmlRefPositionsNode) CA_DiscardObjHandle(xmlRefPositionsNode);
+	if (xmlRefPosNodeList) CA_DiscardObjHandle(xmlRefPosNodeList); 
+	
 	return 0;
+	
+	XMLError:   
+	
+	return xmlerror;
 }
 
 int ZStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement)
 {
-	Zstage_type* 		zstage			= (Zstage_type*) mod;
-	DAQLabXMLNode 		zStageAttr[] 	= {	{"MinPositionLimit", DL_DOUBLE, zstage->zMinimumLimit},
-								 			{"MaxPositionLimit", DL_DOUBLE, zstage->zMaximumLimit}
-																									};  
+	Zstage_type* 					zstage			= (Zstage_type*) mod;
+	DAQLabXMLNode 					zStageAttr[] 	= {	{"MinPositionLimit", DL_DOUBLE, zstage->zMinimumLimit},
+								 						{"MaxPositionLimit", DL_DOUBLE, zstage->zMaximumLimit},
+														{"LowVelocity", DL_DOUBLE, zstage->lowVelocity},
+														{"MidVelocity", DL_DOUBLE, zstage->midVelocity},
+														{"HighVelocity", DL_DOUBLE, zstage->highVelocity}
+																												}; 
+	// add safety limits as zStage module attributes
 	DLAddToXMLElem(xmlDOM, moduleElement, zStageAttr, DL_ATTRIBUTE, NumElem(zStageAttr));
 	
+	// add reference positions element to module element
+	HRESULT							xmlerror;
+	ERRORINFO						xmlERRINFO;
+	ActiveXMLObj_IXMLDOMElement_	refPositionsXMLElement;
+	ActiveXMLObj_IXMLDOMElement_	refPosXMLElement;
+	RefPosition_type**				refPosPtr;
+	DAQLabXMLNode 					refPosAttr[2]; 
+	
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ReferencePositions", &refPositionsXMLElement) );
+	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, refPositionsXMLElement, NULL) );
+	// add reference positions
+	size_t	nPositions = ListNumItems(zstage->zRefPos);
+	for (size_t i = 1; i <= nPositions; i++) {
+		refPosPtr = ListGetPtrToItem(zstage->zRefPos, i);
+		// add new reference position element to reference positions element
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "RefPos", &refPosXMLElement) );
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (refPositionsXMLElement, &xmlERRINFO, refPosXMLElement, NULL) );
+		// add attributes to this reference position
+		refPosAttr[0].tag 		= "Name";
+		refPosAttr[0].type		= DL_CSTRING;
+		refPosAttr[0].pData	= (*refPosPtr)->name;
+		refPosAttr[1].tag 		= "Position";
+		refPosAttr[1].type		= DL_DOUBLE;
+		refPosAttr[1].pData	= &(*refPosPtr)->val;
+		DLAddToXMLElem(xmlDOM, refPosXMLElement, refPosAttr, DL_ATTRIBUTE, NumElem(refPosAttr));   
+	}
+	
 	return 0;
+	
+	XMLError:   
+	
+	return xmlerror; 
 }
 
 static int DisplayPanels	(DAQLabModule_type* mod, BOOL visibleFlag)

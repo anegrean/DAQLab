@@ -547,15 +547,16 @@ static int InitHardware (PIStage_type* PIstage)
 	if (!PIstage->baseClass.midVelocity) {
 		PIstage->baseClass.midVelocity = malloc(sizeof(double));
 		GetStageVelocity(&PIstage->baseClass, PIstage->baseClass.midVelocity);
-	} else
-		// set stage to mid velocity
-		SetStageVelocity(&PIstage->baseClass, *PIstage->baseClass.midVelocity);
+	}
 	
 	if (!PIstage->baseClass.highVelocity) {
 		PIstage->baseClass.highVelocity = malloc(sizeof(double));
 		GetStageVelocity(&PIstage->baseClass, PIstage->baseClass.highVelocity);
 	}
 	
+	// set stage to high velocity for speeding up the referencing
+	SetStageVelocity(&PIstage->baseClass, *PIstage->baseClass.highVelocity);
+		
 	// turn servo on for the given axis
 	if (!PI_SVO(ID, PIstage->assignedAxis, &ServoONFlag)) {
 		PIerror = PI_GetError(ID);

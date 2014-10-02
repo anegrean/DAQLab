@@ -98,7 +98,7 @@ struct Zstage {
 		// Flag to revert movement direction, default 0, set to 1 to revert direction
 	BOOL				revertDirection;
 	
-		// Reference positions of Zstage of Zstage_RefPosition_type*
+		// Reference positions of Zstage of RefPosition_type*
 	ListType			zRefPos;
 	
 		// Positive stage position limit (towards increasing values of the stage position variable). If NULL, there is no limit.

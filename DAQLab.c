@@ -23,11 +23,11 @@
 //==============================================================================
 // Include modules
 
-#include "PIStage.h"
+//#include "PIStage.h"
 #include "VUPhotonCtr.h"
 #include "NIDAQmxManager.h"
 #include "LaserScanning.h"
-#include "DataStorage.h"
+//#include "DataStorage.h"
 
 
 
@@ -142,11 +142,11 @@ typedef struct {
 //------------------------------------------------------------------------------------------------
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
-	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
+	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0}
 	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
-	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }    
+	//{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }    
 	
 };
 
@@ -2126,8 +2126,18 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 	TaskTreeNode_type		node;
 	
 	// load UI
-	if (!TaskTreeManagerPanHndl)
-		TaskTreeManagerPanHndl = LoadPanel(parentPanHndl, DAQLAB_UI_DAQLAB, TaskPan); 
+	if (!TaskTreeManagerPanHndl) {
+		TaskTreeManagerPanHndl = LoadPanel(parentPanHndl, DAQLAB_UI_DAQLAB, TaskPan);
+		
+		// populate execution mode ring control
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_ITERATE_BEFORE_SUBTASKS_START, "Before Child Task Controllers Start", TASK_ITERATE_BEFORE_SUBTASKS_START);
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_ITERATE_AFTER_SUBTASKS_COMPLETE, "After Child Task Controllers Complete", TASK_ITERATE_AFTER_SUBTASKS_COMPLETE);
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS, "In parallel with Child Task Controllers", TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS);
+		// set execution mode to TASK_ITERATE_BEFORE_SUBTASKS_START 
+		SetCtrlIndex(TaskTreeManagerPanHndl, TaskPan_ExecMode, 0);
+		// dim execution mode control cause the item with index 0 is the modules node
+		SetCtrlAttribute(TaskTreeManagerPanHndl, TaskPan_ExecMode, ATTR_DIMMED, 1);
+	}
 	
 	// clear previous Task Tree nodes list
 	if (!TaskTreeNodes) TaskTreeNodes = ListCreate(sizeof(TaskTreeNode_type));
@@ -2238,6 +2248,13 @@ static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentId
 
 int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+	static TaskTreeNode_type*	dragTreeNodePtr;
+	static TaskTreeNode_type*   targetTreeNodePtr;
+	static int					relation;
+	int 						nodeListIdx; 
+	int							selectedNodeIdx;
+	TaskTreeNode_type*			selectedTreeNodePtr; 
+				
 	switch (control) {
 			
 		case TaskPan_Close:
@@ -2246,17 +2263,11 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 				DiscardPanel(TaskTreeManagerPanHndl);
 				TaskTreeManagerPanHndl = 0;
 			}
-			
 			break;
 			
 		case TaskPan_TaskTree:
 			
 			switch (event) {
-					
-				static TaskTreeNode_type*	dragTreeNodePtr;
-				static TaskTreeNode_type*   targetTreeNodePtr;
-				static int					relation;
-				int 						nodeListIdx; 
 					
 				case EVENT_DRAG:
 					
@@ -2319,8 +2330,6 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					// continue only if Del key is pressed
 					if (eventData1 != VAL_FWD_DELETE_VKEY) break;
 					
-					TaskTreeNode_type*	selectedTreeNodePtr;
-					int					selectedNodeIdx;
 					GetActiveTreeItem(panel, control, &selectedNodeIdx);
 					GetValueFromIndex(panel, control, selectedNodeIdx, &nodeListIdx);
 					selectedTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
@@ -2337,7 +2346,42 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					
 					break;
 					
+				case EVENT_VAL_CHANGED:
+					
+					if (eventData1 != ACTIVE_ITEM_CHANGE) break;
+					
+					GetActiveTreeItem(panel, control, &selectedNodeIdx);
+					GetValueFromIndex(panel, control, selectedNodeIdx, &nodeListIdx);
+					selectedTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
+					
+					// undim execution mode control ring if selection is a module task controller
+					if (!selectedTreeNodePtr->taskControl || GetTaskControlUITCFlag(selectedTreeNodePtr->taskControl)) {
+						SetCtrlAttribute(panel, TaskPan_ExecMode, ATTR_DIMMED, 1);
+						break;  // stop here
+					} else
+						SetCtrlAttribute(panel, TaskPan_ExecMode, ATTR_DIMMED, 0);
+					
+					// update execution mode ring control
+					SetCtrlIndex(panel, TaskPan_ExecMode, GetTaskControlIterMode(selectedTreeNodePtr->taskControl));
+					
+					break;
+					
 			}
+			break;
+			
+		case TaskPan_ExecMode:
+			
+			// filter only commit events
+			if (event != EVENT_COMMIT) break;
+			
+			GetActiveTreeItem(panel, TaskPan_TaskTree, &selectedNodeIdx);
+			GetValueFromIndex(panel, TaskPan_TaskTree, selectedNodeIdx, &nodeListIdx);
+			selectedTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
+			
+			int 	execMode;
+			GetCtrlVal(panel, control, &execMode);
+			SetTaskControlIterMode(selectedTreeNodePtr->taskControl, (TaskIterMode_type) execMode);
+			
 			break;
 	}
 	

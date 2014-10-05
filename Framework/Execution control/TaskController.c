@@ -2325,34 +2325,39 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 				case TASK_EVENT_RESET:
 					
-					// reset Device or Module to bring it to its INITIAL state with iteration index 0.
-					if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_RESET, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
-						break;
-					}
-						
-					// reset iteration index
-					taskControl->currIterIdx = 0;	
-					
-					// send TASK_EVENT_RESET to all subtasks if there are any
+					// send RESET event to all subtasks
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_RESET, NULL, NULL) < 0) {
 						taskControl->errorMsg =
 						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_RESET posting to SubTasks failed"); 
 						
 						FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 						break;
-					} 
+					}
 					
-					// if there are no subtasks, then make transition here to INITIAL state and inform
-					// parent task, if there is any, that subtask is in INITIAL state
-					if (!ListNumItems(taskControl->subtasks)) 
+					// change state to INITIAL if there are no subtasks and call reset function
+					if (!ListNumItems(taskControl->subtasks)) {
+						
+						// reset device/module
+						if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_RESET, NULL))) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
+						
+						// reset iterations
+						taskControl->currIterIdx = 0;
+						
+						// reset armed status of Slave HW Triggered Task Controllers, if any
+						ResetHWTrigSlavesArmedStatus(taskControl);
+						
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_INITIAL);
+						
+					}
 					
 					break;
 					
@@ -2384,11 +2389,36 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;	
 					}
 					
-					// if subtask is unconfigured, switch to unconfigured
-					if (subtaskPtr->subtaskState == TASK_STATE_UNCONFIGURED) {
-						// insert action to perform
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_UNCONFIGURED);
-						break;	
+					// check states of all subtasks and transition to INITIAL state if all subtasks are in INITIAL state
+					BOOL InitialStateFlag = 1; // assume all subtasks are in INITIAL state
+					nItems = ListNumItems(taskControl->subtasks);
+					for (size_t i = 1; i <= nItems; i++) {
+						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+						if (subtaskPtr->subtaskState != TASK_STATE_INITIAL) {
+							InitialStateFlag = 0;
+							break;
+						}
+					}
+					
+					if (InitialStateFlag) {
+						// reset device/module
+						if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_RESET, NULL))) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+							
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
+						}
+						
+						// reset iterations
+						taskControl->currIterIdx = 0;
+						
+						// reset armed status of Slave HW Triggered Task Controllers, if any
+						ResetHWTrigSlavesArmedStatus(taskControl);
+						
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_INITIAL);
 					}
 					
 					break;
@@ -2562,10 +2592,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// if ( taskControl->mode == TASK_FINITE  &&  
 					//		(taskControl->currIterIdx >= taskControl->repeat  ||  !taskControl->nIterationsFlag)  &&  
 					//		taskControl->currIterIdx )
+					// TEST THIS SIMPLIFIED STATEMENT!
 					
 					
-					if (!((taskControl->currIterIdx < taskControl->repeat || (!taskControl->repeat && !taskControl->currIterIdx) || taskControl->mode == TASK_CONTINUOUS) && taskControl->nIterationsFlag))  {
-								
+				//	if (!((taskControl->currIterIdx < taskControl->repeat || (!taskControl->repeat && !taskControl->currIterIdx) || taskControl->mode == TASK_CONTINUOUS) && taskControl->nIterationsFlag))  {
+					if ( taskControl->mode == TASK_FINITE  && (taskControl->currIterIdx >= taskControl->repeat  ||  !taskControl->nIterationsFlag)  && taskControl->currIterIdx ) {			
 						//---------------------------------------------------------------------------------------------------------------- 	 
 						// Task Controller is finite switch to DONE
 						//---------------------------------------------------------------------------------------------------------------- 	
@@ -2744,10 +2775,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								case TASK_NO_HWTRIGGER:
 									
 									//---------------------------------------------------------------------------------------------------------------
-									// There are no SubTasks, call iteration function
+									// There are no SubTasks, call iteration function if needed
 									//---------------------------------------------------------------------------------------------------------------
 									
-									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL);
+									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
+										FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL);
+									else 
+										if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
+											taskControl->errorMsg =
+											init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
+						
+											FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+											ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+											break;  // stop here
+										}
+									
 									// switch state and wait for iteration to complete
 									ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING_WAITING_ITERATION);  
 									
@@ -2974,6 +3016,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				// Stops iterations and switches to IDLE or DONE states if there are no SubTask Controllers or to STOPPING state and waits for SubTasks to complete their iterations
 					
 					if (!ListNumItems(taskControl->subtasks)) {
+						
+						// undim Task Tree if this is a root Task Controller
+							if(!taskControl->parenttask)
+							DimTaskTreeBranch(taskControl, eventpacket.event, FALSE);
+							
 						// if there are no SubTask Controllers
 						if (taskControl->mode == TASK_CONTINUOUS) {
 							// switch to DONE state if continuous task controller
@@ -2989,28 +3036,35 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
 							
-							// undim Task Tree if this is a root Task Controller
-							if(!taskControl->parenttask)
-								DimTaskTreeBranch(taskControl, eventpacket.event, FALSE);
-							
-						} else {
-							// switch to IDLE state if finite task controller
-							if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_STOPPED, NULL))) {
-								taskControl->errorMsg = 
-								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-								discard_ErrorMsg_type(&errMsg);
+						} else 
+							// switch to IDLE or DONE state if finite task controller
+							if (taskControl->currIterIdx < taskControl->repeat) {
+								if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_STOPPED, NULL))) {
+									taskControl->errorMsg = 
+									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+									discard_ErrorMsg_type(&errMsg);
 						
-								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
-								break;
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+									break;
+								}
+							
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
+									
+							} else {
+								if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DONE, NULL))) {
+									taskControl->errorMsg = 
+									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+									discard_ErrorMsg_type(&errMsg);
+						
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+									break;
+								}
+							
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
 							}
-							
-							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
-							
-							// undim Task Tree if this is a root Task Controller
-							if(!taskControl->parenttask)
-								DimTaskTreeBranch(taskControl, eventpacket.event, FALSE);
-						}
+							  
 					} else {
 						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
 						if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
@@ -3057,8 +3111,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket.eventInfo)->subtaskIdx);
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket.eventInfo)->newSubTaskState; 
 					
-					// if subtask is in an error state or unconfigured, then switch to error state
-					if (subtaskPtr->subtaskState == TASK_STATE_ERROR || subtaskPtr->subtaskState == TASK_STATE_UNCONFIGURED) {
+					// if subtask is in an error state then switch to error state
+					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
 						taskControl->errorMsg =
 						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
 						
@@ -3068,7 +3122,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					}
 					
 					//---------------------------------------------------------------------------------------------------------------- 
-					// If SubTasks are not yet complete, switch to RUNNING state and wait for their completion
+					// If SubTasks are not yet complete, stay in RUNNING state and wait for their completion
 					//---------------------------------------------------------------------------------------------------------------- 
 					
 					// consider only transitions to TASK_STATE_DONE 
@@ -3098,6 +3152,13 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						case TASK_ITERATE_BEFORE_SUBTASKS_START:
 						case TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS:
+							
+							//---------------------------------------------------------------------------------------------------------------
+							// Increment iteration index
+							//---------------------------------------------------------------------------------------------------------------
+							taskControl->currIterIdx++;
+							if (taskControl->nIterationsFlag > 0)
+								taskControl->nIterationsFlag--;
 							
 							//---------------------------------------------------------------------------------------------------------------- 
 							// Ask for another iteration and check later if iteration is needed or possible
@@ -3292,7 +3353,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			break;
 			
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
+			
 			switch (eventpacket.event) {
+				
+				/* 	Just taken out for now cause I don't understand the purpose of this instead of just switching to a RUNNING state and then
+					ask for another iteration.
 				
 				case TASK_EVENT_ITERATE:
 					
@@ -3379,7 +3444,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 					}
 									
-					break;
+					break; */
 				
 				case TASK_EVENT_ITERATION_DONE:
 					
@@ -3392,7 +3457,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					}
 					
 					//---------------------------------------------------------------------------------------------------------------   
-					// Check if error occured during iteration
+					// Check if error occured during iteration 
+					// (which may be also because it was aborted and this caused an error for the TC)
 					//---------------------------------------------------------------------------------------------------------------   
 					if (eventpacket.eventInfo) {
 						ErrorMsg_type* errMsg = eventpacket.eventInfo;
@@ -3400,13 +3466,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						if (errMsg->errorID < 0) {
 							taskControl->errorMsg =
 							init_ErrorMsg_type(TaskEventHandler_Error_IterateExternThread, taskControl->taskName, errMsg->errorInfo); 
-							// abort the entire Nested Task Controller hierarchy
-							AbortTaskControlExecution(taskControl);
 							
 							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
 								
-							break;
+							break;   // stop here
 						}
 					}
 					
@@ -3422,44 +3486,36 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
+					//---------------------------------------------------------------------------------------------------------------
+					// If iteration was aborted , stop iterations and switch to IDLE or DONE state if there are no 
+					// SubTask Controllers, otherwise switch to STOPPING state and wait for SubTasks to complete their iterations
+					//---------------------------------------------------------------------------------------------------------------
 					
-					//---------------------------------------------------------------------------------------------------------------   
-					// If an iteration was performed, increment iteration index 
-					//--------------------------------------------------------------------------------------------------------------- 
-					
-					taskControl->currIterIdx++;
-					if (taskControl->nIterationsFlag > 0)
-						taskControl->nIterationsFlag--;
-					
-					
-					//---------------------------------------------------------------------------------------------------------------   
-					// If iteration was aborted
-					//---------------------------------------------------------------------------------------------------------------   
 					if (taskControl->abortIterationFlag) {
-						// Stops iterations and switches to IDLE or DONE states if there are no SubTask Controllers or to STOPPING state and waits for SubTasks to complete their iterations
-					
-						if (!ListNumItems(taskControl->subtasks)) {
-							// if there are no SubTask Controllers
-							if (taskControl->mode == TASK_CONTINUOUS) {
-								// switch to DONE state if continuous task controller
-								if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DONE, NULL))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
 						
-									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
-									break;
-								}
-							
-								ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
+						if (!ListNumItems(taskControl->subtasks)) {
+							// undim Task Tree if this is a root Task Controller
+							if(!taskControl->parenttask)
+							DimTaskTreeBranch(taskControl, eventpacket.event, FALSE);
 								
-								// undim Task Tree if this is a root Task Controller
-								if(!taskControl->parenttask)
-								DimTaskTreeBranch(taskControl, eventpacket.event, FALSE);
+						// if there are no SubTask Controllers
+						if (taskControl->mode == TASK_CONTINUOUS) {
+							// switch to DONE state if continuous task controller
+							if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DONE, NULL))) {
+								taskControl->errorMsg = 
+								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+								discard_ErrorMsg_type(&errMsg);
+						
+								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+								break;
+							}
 							
-							} else {
-								// switch to IDLE state if finite task controller
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
+								
+						} else 
+							// switch to IDLE or DONE state if finite task controller
+							if (taskControl->currIterIdx < taskControl->repeat) {
 								if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_STOPPED, NULL))) {
 									taskControl->errorMsg = 
 									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
@@ -3471,12 +3527,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								}
 							
 								ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
-								
-								// undim Task Tree if this is a root Task Controller
-								if(!taskControl->parenttask)
-								DimTaskTreeBranch(taskControl, eventpacket.event, FALSE);
-								
+									
+							} else {
+								if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DONE, NULL))) {
+									taskControl->errorMsg = 
+									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+									discard_ErrorMsg_type(&errMsg);
+						
+									FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+									break;
+								}
+							
+								ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
 							}
+						
 						} else {
 							
 							// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
@@ -3492,9 +3557,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, eventpacket.event, TASK_STATE_STOPPING);
 						}
 						
-						break;
+						break; // stop here
 					}
-					
 					
 					//---------------------------------------------------------------------------------------------------------------   
 					// Decide how to switch state
@@ -3530,6 +3594,13 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 						case TASK_ITERATE_AFTER_SUBTASKS_COMPLETE:
 							
+							//---------------------------------------------------------------------------------------------------------------
+							// Increment iteration index
+							//---------------------------------------------------------------------------------------------------------------
+							taskControl->currIterIdx++;
+							if (taskControl->nIterationsFlag > 0)
+								taskControl->nIterationsFlag--;
+							
 							//---------------------------------------------------------------------------------------------------------------- 
 							// Ask for another iteration and check later if iteration is needed or possible
 							//---------------------------------------------------------------------------------------------------------------- 
@@ -3544,7 +3615,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								
 							}
 							
-							// stay in TASK_STATE_RUNNING_WAITING_ITERATION
+							// I don't see why not go into RUNNING STATE and process the new iteration request there. ??
+							// just for testing!!!
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING); 
+							
+							// stay in TASK_STATE_RUNNING_WAITING_ITERATION   ----> not used for now, testing new approach
 										
 							break;
 									
@@ -3554,7 +3629,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							// If SubTasks are not yet complete, switch to RUNNING state and wait for their completion
 							//---------------------------------------------------------------------------------------------------------------- 
 							
-							// assume all subtasks are done 
+							// assume all subtasks are done (even if there are none)
 							BOOL AllDoneFlag = 1;
 							
 							// check SubTasks
@@ -3569,8 +3644,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 							if (!AllDoneFlag) {
 								ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
-								break;
+								break;  // stop here
 							}
+							
+							//---------------------------------------------------------------------------------------------------------------
+							// Increment iteration index
+							//---------------------------------------------------------------------------------------------------------------
+							taskControl->currIterIdx++;
+							if (taskControl->nIterationsFlag > 0)
+								taskControl->nIterationsFlag--;
 							
 							//---------------------------------------------------------------------------------------------------------------- 
 							// Ask for another iteration and check later if iteration is needed or possible
@@ -3586,11 +3668,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								
 							}
 							
-							// stay in TASK_STATE_RUNNING_WAITING_ITERATION
+							// Why not switch to RUNNING STATE and ask for another iteration there ? TESTING!!!
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_RUNNING);
+							
+							// stay in TASK_STATE_RUNNING_WAITING_ITERATION  -> not active, see above testing
 							
 							break;
 					}
-							
+					
 					break;
 					
 				case TASK_EVENT_ITERATION_TIMEOUT:
@@ -3748,6 +3833,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			
 			switch (eventpacket.event) {
 				
+				// testing, there seems to be no purpose to receive a STOP event in this state
+				/*
 				case TASK_EVENT_STOP:
 					
 					// Stops iterations and switches to IDLE or DONE states if there are no SubTask Controllers or stays in STOPPING state and waits for SubTasks to complete their iterations
@@ -3800,8 +3887,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							break;
 						}
 						
-					break;
-					
+					break; */
+				
+				case TASK_EVENT_STOP:
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 					
 					// ignore this command
@@ -3824,61 +3912,35 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;	
 					}
 					
-					// if subtask is unconfigured, switch to unconfigured
-					if (subtaskPtr->subtaskState == TASK_STATE_UNCONFIGURED) {
-						// insert action to perform
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_UNCONFIGURED);
-						break;	
-					}
-					
-					BOOL	IdleOrDoneFlag	= 1;	// assume all subtasks are either IDLE or DONE
+					BOOL	IdleOrDoneFlag	= TRUE;		// assume all subtasks are either IDLE or DONE
 					nItems = ListNumItems(taskControl->subtasks);
+					
 					for (size_t i = 1; i <= nItems; i++) {
 						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
 						if ((subtaskPtr->subtaskState != TASK_STATE_IDLE) && (subtaskPtr->subtaskState != TASK_STATE_DONE)) {
-							IdleOrDoneFlag = 0;
+							IdleOrDoneFlag = FALSE;
 							break;
 						}
 					}
 					
-					// If all subtasks are IDLE or DONE, then stop this Task Controller as well
-					if (IdleOrDoneFlag) 
-						if (taskControl->mode == TASK_CONTINUOUS) {
-							// switch to DONE state if continuous task controller
-							if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_DONE, NULL))) {
-								taskControl->errorMsg = 
-								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-								discard_ErrorMsg_type(&errMsg);
+					// if all SubTasks are IDLE or DONE, switch to IDLE state
+					if (IdleOrDoneFlag) {
+						// undim Task Tree if this is a root Task Controller
+						if(!taskControl->parenttask)
+							DimTaskTreeBranch(taskControl, eventpacket.event, FALSE);
+							
+						if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_STOPPED, NULL))) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
 						
-								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
-								break;
-							}
-							
-							ChangeState(taskControl, eventpacket.event, TASK_STATE_DONE);
-							
-							// undim Task Tree if this is a root Task Controller
-							if(!taskControl->parenttask)
-								DimTaskTreeBranch(taskControl, eventpacket.event, FALSE);
-							
-						} else {
-							// switch to IDLE state if finite task controller
-							if ((errMsg = FunctionCall(taskControl, eventpacket.event, TASK_FCALL_STOPPED, NULL))) {
-								taskControl->errorMsg = 
-								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-								discard_ErrorMsg_type(&errMsg);
-						
-								FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
-								ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
-								break;
-							}
-							
-							ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
-							
-							// undim Task Tree if this is a root Task Controller
-							if(!taskControl->parenttask)
-								DimTaskTreeBranch(taskControl, eventpacket.event, FALSE);
+							FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR);
+							break;
 						}
+							
+						ChangeState(taskControl, eventpacket.event, TASK_STATE_IDLE);
+					}
 						
 					break;
 					
@@ -3969,6 +4031,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// reset iterations
 					taskControl->currIterIdx = 0;
 					
+					// reset armed status of Slave HW Triggered Task Controllers, if any
+					ResetHWTrigSlavesArmedStatus(taskControl);
+					
 					// switch to INITIAL state
 					ChangeState(taskControl, eventpacket.event, TASK_STATE_INITIAL);
 					
@@ -3981,12 +4046,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_ERROR); 
 						break;
 					}
-					
-					break;
-					
-				case TASK_EVENT_ITERATE:
-					
-					// ignore this command
 					
 					break;
 					
@@ -4018,6 +4077,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// reset iterations
 						taskControl->currIterIdx = 0;
+						
+						// reset armed status of Slave HW Triggered Task Controllers, if any
+						ResetHWTrigSlavesArmedStatus(taskControl);
 						
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_INITIAL);
 						
@@ -4053,13 +4115,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;	
 					}
 					
-					// if subtask is unconfigured, switch to unconfigured
-					if (subtaskPtr->subtaskState == TASK_STATE_UNCONFIGURED) {
-						// insert action to perform
-						ChangeState(taskControl, eventpacket.event, TASK_STATE_UNCONFIGURED);
-						break;	
-					}
-					
 					// check states of all subtasks and transition to INITIAL state if all subtasks are in INITIAL state
 					BOOL InitialStateFlag = 1; // assume all subtasks are in INITIAL state
 					nItems = ListNumItems(taskControl->subtasks);
@@ -4085,6 +4140,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// reset iterations
 						taskControl->currIterIdx = 0;
+						
+						// reset armed status of Slave HW Triggered Task Controllers, if any
+						ResetHWTrigSlavesArmedStatus(taskControl);
 						
 						ChangeState(taskControl, eventpacket.event, TASK_STATE_INITIAL);
 					}

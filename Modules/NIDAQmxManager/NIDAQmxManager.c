@@ -3521,8 +3521,6 @@ static void CVICALLBACK DeleteDev_CB (int menuBarHandle, int menuItemID, void *c
 
 	// get selected tab index
 	GetActiveTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, &activeTabIdx);
-	// remove Task Controller from the list of module Task Controllers
-	ListRemoveItem(nidaq->baseClass.taskControllers, 0, activeTabIdx + 1);
 	// get pointer to selected DAQmx device and remove its Task Controller from the framework
 	DAQmxDevPtrPtr = ListGetPtrToItem(nidaq->DAQmxDevices, activeTabIdx + 1);
 	

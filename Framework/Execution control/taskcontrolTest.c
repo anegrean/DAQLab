@@ -72,7 +72,7 @@ int main (int argc, char *argv[])
 	// ZStage
 	ZStage				= init_TaskControl_type ("Z Stage", NULL, NULL, ZStage_Iterate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	SetTaskControlMode(ZStage, TASK_CONTINUOUS);
-	SetTaskControlIterations(ZStage, 0);
+	SetTaskControlIterations(ZStage, 3);
 	SetTaskControlIterationsWait(ZStackTask, 0);
 	SetTaskControlLog(ZStage, TaskExecutionLog);
 	

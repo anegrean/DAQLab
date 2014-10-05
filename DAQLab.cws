@@ -12,22 +12,28 @@ VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
 Number of Projects = 1
 Active Project = 1
 Project 0001 = "DAQLab.prj"
+Project 0001 Folder Modules/Z Stages Collapsed = True
+Project 0001 FolderId 1 Collapsed = True
 Project 0001 Folder Modules/Z Stages/PI Stage Collapsed = True
 Project 0001 FolderId 2 Collapsed = True
 Project 0001 Folder Modules/VU Photon Counter Collapsed = True
 Project 0001 FolderId 4 Collapsed = True
+Project 0001 Folder Modules/Laser Scanning Collapsed = True
+Project 0001 FolderId 6 Collapsed = True
 Project 0001 Folder XML Collapsed = True
 Project 0001 FolderId 7 Collapsed = True
 Project 0001 Folder Instrument Files Collapsed = True
 Project 0001 FolderId 8 Collapsed = True
+Project 0001 Folder Framework/Virtual Channels Collapsed = True
+Project 0001 FolderId 11 Collapsed = True
 Project 0001 Folder Framework/Utility Collapsed = True
 Project 0001 FolderId 12 Collapsed = True
 Drag Bar Left = 271
 Window Top = 40
-Window Left = 26
+Window Left = -942
 Window Bottom = 631
-Window Right = 1058
-Maximized = False
+Window Right = 90
+Maximized = True
 Maximized Children = True
 Max32 Number Of Errors = 20
 Track Include File Dependencies = True
@@ -40,7 +46,7 @@ Save Changes Before Compiling = "Always"
 Hide Windows = False
 Break At First Statement = False
 Sort Type = "File Name"
-Number of Opened Files = 11
+Number of Opened Files = 12
 Window Confinement Region Enabled = True
 MainColumnWidth = 254
 FileDateColumnWidth = 70
@@ -69,6 +75,17 @@ Disk Date = 3485524106
 In Projects = "1,"
 
 [File 0003]
+Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTestUI.uir"
+File Type = "User Interface Resource"
+Disk Date = 3493637379
+In Projects = ""
+Window Top = 32
+Window Left = 10
+Window Height = 336
+Window Width = 627
+Window Z-Order = 6
+
+[File 0004]
 Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.uir"
 File Type = "User Interface Resource"
 Disk Date = 3493637379
@@ -77,113 +94,123 @@ Window Top = 32
 Window Left = 10
 Window Height = 310
 Window Width = 523
-Window Z-Order = 1
+Window Z-Order = 3
 
-[File 0004]
+[File 0005]
 Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/UI_NIDAQmxManager.uir"
 File Type = "User Interface Resource"
-Disk Date = 3493637348
+Disk Date = 3495377946
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Window Height = 349
 Window Width = 683
-Window Z-Order = 5
+Window Z-Order = 2
 
-[File 0005]
+[File 0006]
 Path = "/d/ELE_DAQLab/UI_DAQLab.uir"
 File Type = "User Interface Resource"
-Disk Date = 3493637345
+Disk Date = 3495378872
 In Projects = "1,"
 Window Top = 182
 Window Left = 90
 Window Height = 349
 Window Width = 683
-Window Z-Order = 4
+Window Z-Order = 1
 
-[File 0006]
+[File 0007]
 Path = "/d/ELE_DAQLab/Modules/Zstages/UI_Zstage.uir"
 File Type = "User Interface Resource"
-Disk Date = 3493637346
+Disk Date = 3495368357
 In Projects = "1,"
 Window Top = 152
 Window Left = 66
 Window Height = 349
 Window Width = 659
-Window Z-Order = 11
+Window Z-Order = 4
 
-[File 0007]
+[File 0008]
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/PIStage.h"
 File Type = "Include"
 Disk Date = 3493637346
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
-Window Z-Order = 9
+Window Z-Order = 11
 Source Window State = "1,25,25,25,8,24,24,0,0,70,0,0,0,0,0,25,35,0,60,21,349,603,1,0,"
 
-[File 0008]
+[File 0009]
 Path = "/d/ELE_DAQLab/DAQLab.h"
 File Type = "Include"
 Disk Date = 3493637378
 In Projects = "1,"
 Window Top = 30
-Window Z-Order = 3
+Window Z-Order = 8
 Source Window State = "1,160,160,160,20,40,20,0,0,70,0,0,0,0,0,28,125,0,140,23,400,600,1,0,"
 
-[File 0009]
+[File 0010]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/UI_VUPhotonCtr.uir"
 File Type = "User Interface Resource"
-Disk Date = 3493637347
+Disk Date = 3495268761
 In Projects = "1,"
 Window Top = 62
 Window Left = 18
 Window Height = 297
 Window Width = 643
-Window Z-Order = 8
+Window Z-Order = 10
 
-[File 0010]
+[File 0011]
 Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/NIDAQmxManager.h"
 File Type = "Include"
 Disk Date = 3493637348
 In Projects = "1,"
 Window Top = 62
 Window Left = 26
-Window Z-Order = 7
+Window Z-Order = 9
 Source Window State = "1,25,25,25,8,31,8,0,0,80,0,0,0,0,0,25,13,0,39,27,349,683,1,0,"
 
-[File 0011]
+[File 0012]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/LaserScanning.h"
 File Type = "Include"
 Disk Date = 3493637347
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
-Window Z-Order = 10
+Window Z-Order = 12
 Source Window State = "1,37,38,38,31,32,32,0,0,73,0,0,0,0,0,25,0,0,37,31,349,627,1,0,"
 
-[File 0012]
+[File 0013]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/UI_LaserScanning.uir"
 File Type = "User Interface Resource"
-Disk Date = 3493637347
+Disk Date = 3495368357
 In Projects = "1,"
 Window Top = 92
 Window Left = 42
 Window Height = 349
 Window Width = 683
-Window Z-Order = 6
+Window Z-Order = 5
 
-[File 0013]
+[File 0014]
 Path = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTest.c"
 File Type = "CSource"
-Disk Date = 3493738904
+Disk Date = 3495366973
 In Projects = ""
 Window Top = 32
 Window Left = 10
-Window Z-Order = 2
+Window Z-Order = 7
 Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,25,0,0,0,0,349,683,1,0,"
 
-[File 0014]
+[File 0015]
+Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/NIDAQmxManager.c"
+File Type = "CSource"
+Disk Date = 3495379604
+In Projects = "1,"
+Window Top = 44
+Window Left = 21
+Window Released = True
+Source Window State = "1,3523,3524,3523,4,75,4,0,0,205,0,3189,0,3223,33,70,3494,0,3523,4,958,1605,0,0,"
+
+[File 0016]
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.h"
 File Type = "Include"
 Disk Date = 3493637346
@@ -192,120 +219,109 @@ Window Top = 62
 Window Left = 26
 Source Window State = "1,131,131,131,27,41,27,0,0,0,0,0,0,0,0,0,426,0,126,25,323,683,1,0,"
 
-[File 0015]
+[File 0017]
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.lib"
 File Type = "Library"
 Disk Date = 3493637346
 In Projects = "1,"
 
-[File 0016]
+[File 0018]
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/PIStage.c"
 File Type = "CSource"
-Disk Date = 3493637347
+Disk Date = 3495268760
 In Projects = "1,"
 Window Top = 61
 Window Left = 131
 Window Released = True
-Source Window State = "1,487,487,487,25,36,36,0,3,0,0,0,0,0,0,0,629,0,487,25,845,1461,0,0,"
+Source Window State = "1,432,432,432,45,60,45,0,0,0,0,0,0,0,0,0,132,0,150,81,845,1461,0,0,"
 
-[File 0017]
+[File 0019]
 Path = "/d/ELE_DAQLab/Modules/Zstages/UI_Zstage.h"
 File Type = "Include"
-Disk Date = 3493637346
+Disk Date = 3495268760
 In Projects = "1,"
 Window Top = 152
 Window Left = 74
 Source Window State = "1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,349,683,1,0,"
 
-[File 0018]
+[File 0020]
 Path = "/d/ELE_DAQLab/Modules/Zstages/Zstage.c"
 File Type = "CSource"
-Disk Date = 3493637347
+Disk Date = 3495268760
 In Projects = "1,"
 Window Top = 30
 Window Left = 103
 Window Released = True
-Source Window State = "1,737,737,737,98,107,98,0,0,0,0,1,0,1,0,0,156,0,189,57,934,1301,0,0,"
+Source Window State = "1,693,693,693,21,35,35,0,3,0,0,1,0,1,0,0,660,0,693,21,934,1301,0,0,"
 
-[File 0019]
+[File 0021]
 Path = "/d/ELE_DAQLab/Modules/Zstages/Zstage.h"
 File Type = "Include"
-Disk Date = 3493637346
+Disk Date = 3495268760
 In Projects = "1,"
 Window Top = 152
 Window Left = -1113
 Window Released = True
 Source Window State = "1,58,58,58,24,38,38,0,0,0,0,0,0,0,0,0,90,0,127,20,768,1001,0,0,"
 
-[File 0020]
+[File 0022]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/HW_VUPC.c"
 File Type = "CSource"
-Disk Date = 3493736276
+Disk Date = 3495268761
 In Projects = "1,"
 Window Top = 175
 Window Left = 151
 Window Released = True
 Source Window State = "1,1012,1012,1012,18,50,18,0,0,0,0,0,0,0,0,0,980,0,1018,32,725,1180,0,0,"
 
-[File 0021]
+[File 0023]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/HW_VUPC.h"
 File Type = "Include"
-Disk Date = 3493637347
+Disk Date = 3495268761
 In Projects = "1,"
 Window Top = 152
 Window Left = 74
 Source Window State = "1,20,20,20,0,24,24,0,3,0,0,0,0,0,0,0,0,0,20,0,349,683,1,0,"
 
-[File 0022]
+[File 0024]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/UI_VUPhotonCtr.h"
 File Type = "Include"
-Disk Date = 3493637347
+Disk Date = 3495268761
 In Projects = "1,"
 Window Top = 92
 Window Left = 42
 Source Window State = "1,20,20,20,9,30,30,0,3,0,0,0,0,0,0,0,15,0,20,9,349,683,1,0,"
 
-[File 0023]
+[File 0025]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.c"
 File Type = "CSource"
-Disk Date = 3493736276
+Disk Date = 3495268761
 In Projects = "1,"
 Window Top = 106
 Window Left = 131
 Window Released = True
 Source Window State = "1,231,231,231,121,130,121,0,0,0,0,0,0,0,0,0,951,0,978,99,776,1509,0,0,"
 
-[File 0024]
+[File 0026]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.h"
 File Type = "Include"
-Disk Date = 3493637347
+Disk Date = 3495268761
 In Projects = "1,"
 Window Top = 192
 Window Left = 628
 Window Released = True
 Source Window State = "1,19,19,19,0,20,20,0,0,0,0,0,0,0,0,0,7,0,19,0,747,1004,0,0,"
 
-[File 0025]
-Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/NIDAQmxManager.c"
-File Type = "CSource"
-Disk Date = 3493650747
-In Projects = "1,"
-Window Top = 32
-Window Left = 29
-Window Released = True
-Source Window State Line0001 = "0,7118,7118,7118,12,21,21,0,0,0,0,7111,0,7128,29,0,7371,0,7395,40,958,1605,0,630"
-Source Window State Line0002 = "4,"
-
-[File 0026]
+[File 0027]
 Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/UI_NIDAQmxManager.h"
 File Type = "Include"
-Disk Date = 3493637348
+Disk Date = 3495377946
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Source Window State = "1,86,86,86,17,33,33,0,3,0,0,0,0,0,0,0,68,0,86,17,349,683,1,0,"
 
-[File 0027]
+[File 0028]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/LaserScanning.c"
 File Type = "CSource"
 Disk Date = 3493637347
@@ -316,34 +332,34 @@ Window Released = True
 Source Window State Line0001 = "1,1347,1347,1347,24,54,54,0,0,0,0,1446,0,1481,145,0,1304,0,1345,20,1047,1423,0,0"
 Source Window State Line0002 = ","
 
-[File 0028]
+[File 0029]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/UI_LaserScanning.h"
 File Type = "Include"
 Disk Date = 3493637347
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 
-[File 0029]
+[File 0030]
 Path = "/d/ELE_DAQLab/Modules/DAQLabModule.c"
 File Type = "CSource"
-Disk Date = 3493637347
+Disk Date = 3495268761
 In Projects = "1,"
 Window Top = 90
 Window Left = 115
 Window Released = True
 Source Window State = "1,118,118,118,24,39,24,0,0,0,0,0,0,0,0,0,70,0,118,30,975,1465,0,0,"
 
-[File 0030]
+[File 0031]
 Path = "/d/ELE_DAQLab/Modules/DAQLabModule.h"
 File Type = "Include"
-Disk Date = 3493637346
+Disk Date = 3495268760
 In Projects = "1,"
 Window Top = 49
 Window Left = 154
 Window Released = True
 Source Window State = "1,27,27,27,32,49,32,0,0,0,0,0,0,0,0,0,24,0,32,42,935,1205,0,0,"
 
-[File 0031]
+[File 0032]
 Path = "/d/ELE_DAQLab/MSXML/ActiveXML.h"
 File Type = "Include"
 Disk Date = 3493637345
@@ -352,27 +368,27 @@ Window Top = 94
 Window Left = 42
 Source Window State = "1,183,183,183,20,49,49,0,0,0,0,0,0,0,0,0,0,0,3,0,271,619,1,0,"
 
-[File 0032]
+[File 0033]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.c"
 File Type = "CSource"
-Disk Date = 3493904429
+Disk Date = 3495377385
 In Projects = "1,"
-Window Top = 38
-Window Left = -303
+Window Top = 60
+Window Left = 34
 Window Released = True
-Source Window State = "1,2130,2130,2130,20,133,20,0,0,155,0,66,0,114,31,51,2729,6,2739,83,914,1607,0,0,"
+Source Window State = "1,128,128,128,32,40,32,0,3,196,0,66,0,114,31,64,90,0,128,40,914,1607,0,0,"
 
-[File 0033]
+[File 0034]
 Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 File Type = "Include"
 Disk Date = 3493819550
 In Projects = "1,"
-Window Top = 35
-Window Left = -739
+Window Top = 48
+Window Left = 76
 Window Released = True
-Source Window State = "1,292,293,293,103,4,4,0,0,0,0,0,0,0,0,0,273,0,292,103,986,1730,0,0,"
+Source Window State = "1,512,512,512,24,46,24,0,3,205,0,0,0,0,0,70,454,0,512,46,986,1730,0,0,"
 
-[File 0034]
+[File 0035]
 Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.h"
 File Type = "Include"
 Disk Date = 3493637379
@@ -381,7 +397,7 @@ Window Top = 152
 Window Left = 74
 Source Window State = "1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,310,683,1,0,"
 
-[File 0035]
+[File 0036]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.c"
 File Type = "CSource"
 Disk Date = 3493736276
@@ -391,7 +407,7 @@ Window Left = 360
 Window Released = True
 Source Window State = "0,568,568,568,18,35,35,0,0,0,0,539,0,586,45,0,561,0,570,50,940,1458,0,7720,"
 
-[File 0036]
+[File 0037]
 Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.h"
 File Type = "Include"
 Disk Date = 3493637378
@@ -401,36 +417,37 @@ Window Left = -1245
 Window Released = True
 Source Window State = "1,35,35,35,32,47,47,0,0,0,0,0,0,0,0,0,176,0,43,111,753,1205,0,0,"
 
-[File 0037]
+[File 0038]
 Path = "/d/ELE_DAQLab/Framework/Utility/DAQLabUtility.c"
 File Type = "CSource"
-Disk Date = 3493637378
+Disk Date = 3495268760
 In Projects = "1,"
 Window Top = 152
 Window Left = 74
 Source Window State = "1,37,37,37,18,39,39,0,3,0,0,0,0,0,0,0,30,0,37,18,297,643,1,0,"
 
-[File 0038]
+[File 0039]
 Path = "/d/ELE_DAQLab/Framework/Utility/DAQLabUtility.h"
 File Type = "Include"
 Disk Date = 3493637378
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 
-[File 0039]
+[File 0040]
 Path = "/d/ELE_DAQLab/DAQLab.c"
 File Type = "CSource"
-Disk Date = 3493736276
+Disk Date = 3495380027
 In Projects = "1,"
-Window Top = 56
-Window Left = 52
+Window Top = 44
+Window Left = 104
 Window Released = True
-Source Window State = "1,1969,1969,1969,28,33,33,0,0,0,0,227,0,259,65,0,1962,0,1972,22,925,1558,0,0,"
+Source Window State Line0001 = "1,2357,2357,2357,82,98,82,0,0,190,0,227,0,259,65,65,2323,0,2357,117,925,1558,0,0"
+Source Window State Line0002 = ","
 
-[File 0040]
+[File 0041]
 Path = "/d/ELE_DAQLab/UI_DAQLab.h"
 File Type = "Include"
-Disk Date = 3493736276
+Disk Date = 3495378872
 In Projects = "1,"
 Window Top = 62
 Window Left = -1262
@@ -449,6 +466,7 @@ Tab 0008 = "/d/ELE_DAQLab/Modules/NIDAQmxManager/NIDAQmxManager.h"
 Tab 0009 = "/d/ELE_DAQLab/Modules/Laser Scanning/LaserScanning.h"
 Tab 0010 = "/d/ELE_DAQLab/Modules/Laser Scanning/UI_LaserScanning.uir"
 Tab 0011 = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTest.c"
+Tab 0012 = "/d/ELE_DAQLab/Framework/Execution control/taskcontrolTestUI.uir"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

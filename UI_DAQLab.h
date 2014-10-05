@@ -1,6 +1,5 @@
 /**************************************************************************/
 /* LabWindows/CVI User Interface Resource (UIR) Include File              */
-/* Copyright (c) National Instruments 2014. All Rights Reserved.          */
 /*                                                                        */
 /* WARNING: Do not add to, delete from, or otherwise modify the contents  */
 /*          of this include file.                                         */
@@ -30,6 +29,7 @@
 #define  TaskPan_Plate                    3       /* control type: deco, callback function: (none) */
 #define  TaskPan_TaskTree                 4       /* control type: tree, callback function: TaskTree_CB */
 #define  TaskPan_Close                    5       /* control type: command, callback function: TaskTree_CB */
+#define  TaskPan_ExecMode                 6       /* control type: ring, callback function: TaskTree_CB */
 
 #define  TasksPan                         5
 

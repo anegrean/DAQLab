@@ -424,7 +424,7 @@ static int DAQLab_Load (void)
 		
 		// create new UI Task Controller
 		newTaskControllerPtr = init_TaskControl_type (UITCName, NULL, ConfigureUITC, IterateUITC, NULL, StartUITC, 
-												 	  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, NULL, ErrorUITC); // module data added to the task controller below
+												 	  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 		if (!newTaskControllerPtr) {
 			DLMsg("Error: Task Controller could not be created.\n\n", 1);
 			return -1;
@@ -1950,7 +1950,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	
 	// create new task controller
 	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, ConfigureUITC, IterateUITC, NULL, StartUITC, 
-												  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, NULL, ErrorUITC); // module data added to the task controller below
+												  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 	OKfree(newControllerName);
 	
 	if (!newTaskControllerPtr) {
@@ -2320,8 +2320,11 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						if (relation == VAL_SIBLING && parentTaskController)
 							AddSubTaskToParent(parentTaskController, dragTreeNodePtr->taskControl); 
 					
-					// allow dragged task controller to be deleted
+					// allow dropped task controller to be deleted
 					dragTreeNodePtr->canBeDeleted = TRUE;
+					// allow dropped task controller to accept other task controllers
+					dragTreeNodePtr->acceptsTCChild = TRUE;
+					dragTreeNodePtr->acceptsUITCChild = TRUE;
 							
 					break;
 					

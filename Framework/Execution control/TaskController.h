@@ -440,7 +440,6 @@ TaskControl_type*  	 	init_TaskControl_type				(const char					taskControllerNam
 														 	StoppedFptr_type			StoppedFptr,
 															DimUIFptr_type				DimUIFptr,
 															SetUITCModeFptr_type		SetUITCModeFptr,
-														 	DataReceivedFptr_type		DataReceivedFptr,
 														 	ModuleEventFptr_type		ModuleEventFptr,
 														 	ErrorFptr_type				ErrorFptr);
 
@@ -587,8 +586,8 @@ void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-	// Adds a VChan to the Task Controller that is used to receive incoming data.
-int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, TaskVChanFuncAssign_type VChanFunc); 
+	// Adds a VChan to the Task Controller that is used to receive incoming data and binds it to a given callback when data is received.
+int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, TaskVChanFuncAssign_type VChanFunc); 
 
 	// Removes a Sink VChan assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan.

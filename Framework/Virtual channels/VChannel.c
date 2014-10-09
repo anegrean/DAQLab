@@ -14,9 +14,9 @@
 #include <ansi_c.h>
 #include <formatio.h> 
 #include "toolbox.h"
-#include "nivision.h"
 #include "utility.h"
 #include "VChannel.h"
+#include "DataPacket.h"
 
 //==============================================================================
 // Constants
@@ -34,10 +34,6 @@ typedef void	(* DiscardVChanFptr_type) 			(VChan_type** vchan);
 
 // Disconnect VChan function pointer type
 typedef BOOL	(* DisconnectVChanFptr_type)		(VChan_type* vchan);
-
-// Discard Data Packet function pointer type
-typedef void	(* DiscardDataPacketFptr_type)		(DataPacket_type** dataPacket);
-
 
 
 //==============================================================================
@@ -101,7 +97,7 @@ struct SinkVChan {
 	// Data
 	//-----------------------
 	
-	Packet_type*				dataTypes;				// Array of packet data types of Packet_type that the sink may receive.
+	PacketTypes*				dataTypes;				// Array of packet data types of PacketTypes that the sink may receive.
 	size_t						nDataTypes;				// Number of data types that the Sink VChan supports.
 	SourceVChan_type*			sourceVChan;			// SourceVChan attached to this sink.
 	CmtTSQHandle       			tsqHndl; 				// Thread safe queue handle to receive incoming data.
@@ -125,53 +121,14 @@ struct SourceVChan {
 	// Data
 	//-----------------------
 	
-	Packet_type					dataType;				// Type of data packet which goes through the channel.
+	PacketTypes					dataType;				// Type of data packet which goes through the channel.
 	ListType					sinkVChans;				// Connected Sink VChans. List of SinkVChan_type*
 											
 };
 
-//---------------------------------------------------------------------------------------------------
-// Base Data Packet
-//---------------------------------------------------------------------------------------------------
-struct DataPacket {
-	Packet_type 				dataType; 		// Data type contained in the data packet.
-	size_t		 				n;				// Number of elements in the packet with specified dataType.	
-	void*         				data;     		// Pointer to data array of dataType elements.
-	CmtTSVHandle   				ctr;      		// Data Packet in-use counter. Although there are multiple sinks that can receive a data packet, 
-												// there is only one copy of the data in the memory. To de-allocate memory for the data, each sink must 
-												// call ReleaseDataPacket which in the end frees the memory if ctr reaches 0. 
-	DiscardDataPacketFptr_type 	discardFptr;	// Function pointer which will be called to discard the data pointer when ctr reaches 0.
-};
-
-//---------------------------------------------------------------------------------------------------
-// Waveform Data Packet
-//---------------------------------------------------------------------------------------------------
-struct WaveformPacket {
-	DataPacket_type				baseClass;		// DataPacket_type base class.
-	Waveform_type				waveformType;	// Waveform data type
-	double						rate;			// Sampling rate in [Hz]. If 0, sampling rate is not given.
-	double						nRepeat;		// Number of times the waveform is repeated. If 0, waveform is repeat indefinitely.
-};
-
-//---------------------------------------------------------------------------------------------------
-// Image Data Packet
-//---------------------------------------------------------------------------------------------------
-struct ImagePacket {
-	DataPacket_type				baseClass;		// DataPacket_type base class.
-											// add here more properties that apply
-};
-
-
-
 
 //==============================================================================
 // Static functions
-
-static void 				init_DataPacket_type				(DataPacket_type* dataPacket, Packet_type dataType, size_t n, void* data, DiscardDataPacketFptr_type discardFptr);
-
-static void 				discard_WaveformPacket_type 		(DataPacket_type** waveformPacket);
-
-static void					discard_NIVisionImagePacket_type	(DataPacket_type** imagePacket);
 
 static int CVICALLBACK 		Switchboard_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -307,7 +264,7 @@ static BOOL disconnectSinkVChan (VChan_type* vchan)
 
 
 SourceVChan_type* init_SourceVChan_type	(char 							name[], 
-										 Packet_type 					dataType,
+										 PacketTypes 					dataType,
 										 void* 							VChanOwner,
 										 Connected_CBFptr_type			Connected_CBFptr,
 										 Disconnected_CBFptr_type		Disconnected_CBFptr)
@@ -334,7 +291,7 @@ SourceVChan_type* init_SourceVChan_type	(char 							name[],
 }
 
 SinkVChan_type* init_SinkVChan_type	(char 						name[], 
-									 Packet_type	 			dataTypes[],
+									 PacketTypes	 			dataTypes[],
 									 size_t						nDataTypes,
 									 void* 						VChanOwner,
 									 Connected_CBFptr_type		Connected_CBFptr,
@@ -355,9 +312,9 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 	vchan->sourceVChan 	= NULL;
 	vchan->nDataTypes	= nDataTypes;
 	// copy data types
-	vchan->dataTypes	= malloc(nDataTypes * sizeof(Packet_type));
+	vchan->dataTypes	= malloc(nDataTypes * sizeof(PacketTypes));
 	if (!vchan->dataTypes) goto Error;
-	memcpy(vchan->dataTypes, dataTypes, nDataTypes*sizeof(Packet_type));
+	memcpy(vchan->dataTypes, dataTypes, nDataTypes*sizeof(PacketTypes));
 	
 	// init thread safe queue
 	CmtNewTSQ(DEFAULT_SinkVChan_QueueSize, sizeof(DataPacket_type*), 0, &vchan->tsqHndl); 
@@ -446,42 +403,6 @@ char* GetUniqueVChanName (ListType VChanList, char baseVChanName[])
 //---------------------------------
 // Data Packet management functions
 //---------------------------------
-static void init_DataPacket_type (DataPacket_type* dataPacket, Packet_type dataType, size_t n, void* data, DiscardDataPacketFptr_type discardFptr)
-{
-	dataPacket -> dataType 		= dataType;
-	dataPacket -> n				= n;
-	dataPacket -> data     		= data;
-	dataPacket -> discardFptr   = discardFptr;
-	
-	// create counter to keep track of how many sinks still need this data packet
-	CmtNewTSV(sizeof(int), &dataPacket->ctr);
-	// set counter to 0
-	int* 	ctrTSVptr;
-	
-	CmtGetTSVPtr(dataPacket->ctr, &ctrTSVptr);
-	*ctrTSVptr = 0;
-	CmtReleaseTSVPtr(dataPacket->ctr);
-}
-
-void discard_DataPacket_type(DataPacket_type** dataPacket)
-{
-	if (!*dataPacket) return;
-	
-	(*(*dataPacket)->discardFptr) (dataPacket);
-}
-
-void ReleaseDataPacket (DataPacket_type** dataPacket)
-{
-	int* ctrTSVptr;
-	
-	if (!*dataPacket) return;
-	
-	CmtGetTSVPtr((*dataPacket)->ctr, &ctrTSVptr);
-	if (*ctrTSVptr > 1) {
-		(*ctrTSVptr)--;
-		CmtReleaseTSVPtr((*dataPacket)->ctr);
-	} else {CmtReleaseTSVPtr((*dataPacket)->ctr); discard_DataPacket_type(dataPacket);} 
-}
 
 FCallReturn_type* ReleaseAllDataPackets (SinkVChan_type* sinkVChan)
 {
@@ -511,12 +432,10 @@ FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dat
 	if (!nSinks) {
 		ReleaseDataPacket(&dataPacket);
 		return NULL; 
-	} 
+	}
+	
 	// set sinks counter
-	int* ctrTSVptr;
-	CmtGetTSVPtr(dataPacket->ctr, &ctrTSVptr);
-	*ctrTSVptr = nSinks;
-	CmtReleaseTSVPtr(dataPacket->ctr);
+	SetDataPacketCounter(dataPacket, nSinks);
 	
 	// send data to sinks
 	SinkVChan_type** 	sinkPtrPtr;
@@ -592,13 +511,6 @@ Error:
 	char	errMsg[CMT_MAX_MESSAGE_BUF_SIZE];
 	CmtGetErrorMessage (error, errMsg);
 	return init_FCallReturn_type(error, "GetAllDataPackets", errMsg);
-}
-
-void* GetDataPacketDataPtr (DataPacket_type* dataPacket, size_t* n)  
-{
-	if (n) *n = dataPacket->n;
-	
-	return dataPacket->data;
 }
 
 BOOL CompatibleVChans (SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan)
@@ -733,130 +645,6 @@ void* GetPtrToVChanOwner (VChan_type* VChan)
 	return VChan->VChanOwner;
 }
 
-//==============================================================================
-// VChan data types management
-
-DataPacket_type* init_WaveformPacket_type (Waveform_type waveformType, size_t n, void* waveform, double rate, double nRepeat)
-{
-	WaveformPacket_type* 	packet = malloc (sizeof(WaveformPacket_type));
-	if (!packet) return NULL;
-	
-	// map waveform data type to packet data type
-	Packet_type		packetType;
-	switch (waveformType) {
-		case Waveform_Char:
-			packetType = WaveformPacket_Char;
-			break;
-		
-		case Waveform_UChar:
-			packetType = WaveformPacket_UChar;
-			break;
-			
-		case Waveform_Short:
-			packetType = WaveformPacket_Short;
-			break;
-			
-		case Waveform_UShort:
-			packetType = WaveformPacket_UShort;
-			break;
-			
-		case Waveform_Int:
-			packetType = WaveformPacket_Int;
-			break;
-			
-		case Waveform_UInt:
-			packetType = WaveformPacket_UInt;
-			break;
-			
-		case Waveform_SSize:
-			packetType = WaveformPacket_SSize;
-			break;
-			
-		case Waveform_Size:
-			packetType = WaveformPacket_Size;
-			break;
-			
-		case Waveform_Float:
-			packetType = WaveformPacket_Float;
-			break;
-			
-		case Waveform_Double:
-			packetType = WaveformPacket_Double;
-			break;
-			
-		default:
-			// mapping error
-			free(packet);
-			return NULL;
-	}
-	
-	// init DataPacket base class
-	init_DataPacket_type(&packet->baseClass, packetType, n, waveform, discard_WaveformPacket_type); 
-	
-	// init WaveformPacket
-	
-	packet -> rate		= rate;
-	packet -> nRepeat	= nRepeat;
-	
-	return (DataPacket_type*) packet;
-}
-
-double GetWaveformPacketRepeat (WaveformPacket_type* waveformPacket)
-{
-	return waveformPacket->nRepeat;
-}
-
-static void discard_WaveformPacket_type (DataPacket_type** waveformPacket)
-{
-	if (!*waveformPacket) return;
-	
-	//-----------------------------------
-	// Discard WaveformPacket data
-	//-----------------------------------
-	OKfree((*waveformPacket)->data);
-	
-	//-----------------------------------
-	// Discard DataPacket base class data
-	//-----------------------------------
-	CmtDiscardTSV((*waveformPacket)->ctr);
-	
-	OKfree(*waveformPacket);
-}
-
-DataPacket_type* init_NIVisionImagePacket_type (size_t n, Image* images)
-{
-	ImagePacket_type* imagePacket = malloc (sizeof(ImagePacket_type));
-	if (!imagePacket) return NULL;
-	
-	// init DataPacket base class
-	init_DataPacket_type(&imagePacket->baseClass, ImagePacket_NIVision, n, images, discard_NIVisionImagePacket_type);
-	
-	return (DataPacket_type*) imagePacket;
-}
-
-static void	discard_NIVisionImagePacket_type (DataPacket_type** imagePacket)
-{
-	size_t		nImages 	= (*imagePacket)->n;
-	Image**		images		= (*imagePacket)->data;
-	
-	//-----------------------------------
-	// Discard ImagePacket data
-	//-----------------------------------
-	// discard images
-	for (size_t i = 0; i < nImages; i++) {
-		imaqDispose(images[i]);
-		images[i] = NULL;
-	}
-	// discard array
-	OKfree((*imagePacket)->data);
-			
-	//-----------------------------------
-	// Discard DataPacket base class data
-	//-----------------------------------
-	CmtDiscardTSV((*imagePacket)->ctr);
-	
-	OKfree(*imagePacket);	
-}
 
 /// HIFN Updates a table control with connections between a given list of VChans.
 void UpdateSwitchboard (ListType VChans, int panHandle, int tableControlID)

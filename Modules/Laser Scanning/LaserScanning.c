@@ -21,6 +21,7 @@
 
 //==============================================================================
 // Constants
+#define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto Error; else 
 
 #define MOD_LaserScanning_UI 					"./Modules/Laser Scanning/UI_LaserScanning.uir"
 // Default VChan base names. Default base names must be unique among each other!
@@ -37,6 +38,20 @@
 
 #define Max_NewScanEngine_NameLength	50
 
+// non-resonant galvo calibration parameters
+#define OKfree(ptr) if (ptr) { free(ptr); ptr = NULL; }
+#define CALPOINTS 									50
+#define RELERR 										0.05
+#define AIREADS 									200 		// number of AI samples to read and average for one measurement of the galvo position 
+#define FUNC_Triangle 								0
+#define FUNC_Sawtooth 								1
+#define FIND_MAXSLOPES_AMP_ITER_FACTOR 				0.9
+#define SWITCH_TIMES_AMP_ITER_FACTOR 				0.95 
+#define DYNAMICCAL_SLOPE_ITER_FACTOR 				0.90
+#define DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR 	0.8	 		// for each amplitude, the initial maxslope value is reduced by this factor
+#define MAX_SLOPE_REDUCTION_FACTOR 					0.25		// position lag is measured with quarter the maximum ramp to allow the galvo reach a steady state
+#define VAL_OVLD_ERR -8000
+
 //==============================================================================
 // Types
 
@@ -49,10 +64,10 @@ typedef struct LaserScanning 	LaserScanning_type;
 
 // Scan axis types
 typedef enum {
-	NonResonantGalvo,						// Normal non-resonant deflectors (common galvos).
-	ResonantGalvo,							// Resonant deflectors.
-	AOD,									// Acousto-optic deflector.
-	Translation								// Translation type scanning axis such as a moving stage.
+	NonResonantGalvo,								// Normal non-resonant deflectors (common galvos).
+	ResonantGalvo,									// Resonant deflectors.
+	AOD,											// Acousto-optic deflector.
+	Translation										// Translation type scanning axis such as a moving stage.
 } ScanAxis_type;
 
 // Generic scan axis class
@@ -61,13 +76,13 @@ struct ScanAxisCal {
 	// DATA
 	ScanAxis_type			scanAxisType;
 	char*					calName;
-	TaskControl_type*		taskController;	// Task Controller for the calibration of this scan axis.
-	SourceVChan_type*		VChanCom;   	// VChan used to send command signals to the scan axis (optional, depending on the scan axis type)
-	SinkVChan_type*			VChanPos;		// VChan used to receive position feedback signals from the scan axis (optional, depending on the scan axis type)
-	double*					comSampRate;	// Command sample rate in [Hz] taken from VChanCom when connected.
-	double*					posSampRate;	// Position sample rate in [Hz] taken from VChanPos when connected.
-	int						calPanHndl;		// Panel handle for performing scan axis calibration
-	LaserScanning_type*		lsModule;		// Reference to the laser scanning module to which this calibration belongs.
+	TaskControl_type*		taskController;			// Task Controller for the calibration of this scan axis.
+	SourceVChan_type*		VChanCom;   			// VChan used to send command signals to the scan axis (optional, depending on the scan axis type)
+	SinkVChan_type*			VChanPos;				// VChan used to receive position feedback signals from the scan axis (optional, depending on the scan axis type)
+	double*					comSampRate;			// Command sample rate in [Hz] taken from VChanCom when connected.
+	double*					posSampRate;			// Position sample rate in [Hz] taken from VChanPos when connected.
+	int						calPanHndl;				// Panel handle for performing scan axis calibration
+	LaserScanning_type*		lsModule;				// Reference to the laser scanning module to which this calibration belongs.
 	// METHODS
 	void	(*Discard) (ScanAxisCal_type** scanAxisCal);
 };
@@ -76,46 +91,58 @@ struct ScanAxisCal {
 // Normal non-resonant galvo scanner calibration data
 //---------------------------------------------------
 typedef struct{
-	size_t 					n;				// Number of steps.
-	double* 				stepSize;  		// Amplitude in [V] Pk-Pk of the command signal.
-	double* 				halfSwitch;		// Time to reach 50% of the stepsize voltage in [ms].  
+	size_t 					n;						// Number of steps.
+	double* 				stepSize;  				// Amplitude in [V] Pk-Pk of the command signal.
+	double* 				halfSwitch;				// Time to reach 50% of the stepsize voltage in [ms].  
 } SwitchTimes_type;
 
 typedef struct{
-	size_t 					n;				// Number of amplitudes for whih the slope is measured.
-	double* 				slope; 			// Maximum slope in [V/ms] of the command signal that the galvo can still follow given a certain ramp amplitude.
-	double* 				amplitude;		// Amplitude in [V] Pk-Pk of the command signal.	
+	size_t 					n;						// Number of amplitudes for whih the slope is measured.
+	double* 				slope; 					// Maximum slope in [V/ms] of the command signal that the galvo can still follow given a certain ramp amplitude.
+	double* 				amplitude;				// Amplitude in [V] Pk-Pk of the command signal.	
 } MaxSlopes_type;
 
 typedef struct{
-	size_t 					n;				// Number of triangle waveform amplitudes.
-	double 					deadTime;		// Dead time in [ms] before and at the end of each line scan when the galvo is not moving at constant speed (due to turning around).
-											// This time is about the same for all scan frequencies and amplitudes that the galvo can follow.
-	double* 				commandAmp;		// Amplitude in [V] Pk-Pk of the command signal.
-	double* 				actualAmp;		// Amplitude in [V] Pk-Pk where the galvo motion is constant.
-	double* 				maxFreq;		// For given amplitude, maximum triangle wave frequency that the galvo can still follow for at least 1 sec.
-											// Note: the line scan frequency is twice this frequency
-	double* 				resLag;			// Residual lag in [ms] that must be added to lag to accurately describe overall lag during dynamic scanning.
+	size_t 					n;						// Number of triangle waveform amplitudes.
+	double 					deadTime;				// Dead time in [ms] before and at the end of each line scan when the galvo is not moving at constant speed (due to turning around).
+													// This time is about the same for all scan frequencies and amplitudes that the galvo can follow.
+	double* 				commandAmp;				// Amplitude in [V] Pk-Pk of the command signal.
+	double* 				actualAmp;				// Amplitude in [V] Pk-Pk where the galvo motion is constant.
+	double* 				maxFreq;				// For given amplitude, maximum triangle wave frequency that the galvo can still follow for at least 1 sec.
+													// Note: the line scan frequency is twice this frequency
+	double* 				resLag;					// Residual lag in [ms] that must be added to lag to accurately describe overall lag during dynamic scanning.
 } TriangleCal_type;
 
+typedef enum {
+	
+	NonResGalvoCal_Slope_Offset_Lag,
+	NonResGalvoCal_SwitchTimes,
+	NonResGalvoCal_MaxSlopes,
+	NonResGalvoCal_TriangleWave
+	
+} NonResGalvoCalTypes;
 typedef struct {
-	ScanAxisCal_type		baseClass;			// Base structure describing scan engine calibration. Must be first member of the structure.
-	double					commandVMin;	// Minimum galvo command voltage in [V] for maximal deflection in a given direction.
-	double					commandVMax;	// Maximum galvo command voltage in [V] for maximal deflection in the oposite direction when applying VminOut.
-	double					positionVMin;   // Minimum galvo position feedback signal expected in [V] for maximal deflection when applying VminOut.
-	double					positionVMax;   // Maximum galvo position feedback signal expected in [V] for maximal deflection when applying VmaxOut.
-	double*					slope;			// in [V/V], together with offset, it relates the command and position feedback signal in a linear way when the galvo is still.
-	double*					offset;			// in [V], together with slope, it relates the command and position feedback signal in a linear way when the galvo is still. 
-	double*					posStdDev;		// in [V], measures noise level on the position feedback signal.
-	double*					lag;			// in [ms]
+	ScanAxisCal_type		baseClass;				// Base structure describing scan engine calibration. Must be first member of the structure.
+	size_t					calIterations[4];		// number of Task Controller iterations for each calibration mode: 
+													// 1) Slope, Offset & Lag, 2) Switch Times, 3) Max Slopes, 4) Triangle Wave.
+	NonResGalvoCalTypes		currentCal;				// Index of the current calibration
+	size_t					currIterIdx;			// Current iteration index for each calibration method.
+	double					commandVMin;			// Minimum galvo command voltage in [V] for maximal deflection in a given direction.
+	double					commandVMax;			// Maximum galvo command voltage in [V] for maximal deflection in the oposite direction when applying VminOut.
+	double					positionVMin;   		// Minimum galvo position feedback signal expected in [V] for maximal deflection when applying VminOut.
+	double					positionVMax;   		// Maximum galvo position feedback signal expected in [V] for maximal deflection when applying VmaxOut.
+	double*					slope;					// in [V/V], together with offset, it relates the command and position feedback signal in a linear way when the galvo is still.
+	double*					offset;					// in [V], together with slope, it relates the command and position feedback signal in a linear way when the galvo is still. 
+	double*					posStdDev;				// in [V], measures noise level on the position feedback signal.
+	double*					lag;					// in [ms]
 	SwitchTimes_type*		switchTimes;
 	MaxSlopes_type*			maxSlopes;
 	TriangleCal_type*		triangleCal;
 	struct {
-		double resolution;					// in [V]
-		double minStepSize;					// in [V]
-		double parked;         				// in [V]
-		double scanTime;					// in [s]
+		double resolution;							// in [V]
+		double minStepSize;							// in [V]
+		double parked;         						// in [V]
+		double scanTime;							// in [s]
 	}	 					UISet;
 } NonResGalvoCal_type;
 
@@ -303,7 +330,11 @@ static int CVICALLBACK 				ManageScanAxisCalib_CB					(int panel, int control, i
 
 static int CVICALLBACK 				NewScanAxisCalib_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
+	// galvo response analysis functions
 
+static int 							FindSlope								(double* corrpos, int nsamples, double samplingRate, double signalStdDev, int nrep, double sloperelerr, double* maxslope); 
+static int 							MeasureLag								(double* signal1, double* signal2, int nelem); 
+static int 							GetStepTimes							(double* signal, int nsamples, double lowlevel, double highlevel, double threshold, int* lowidx, int* highidx, int* stepsamples);
 
 	//-----------------------------------------
 	// Non-resonant galvo axis calibration data
@@ -1112,6 +1143,95 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 	return 0;
 }
 
+/// HIFN Finds the maximum slope from a given galvo response.
+/// HIRET Returns 0 if slope cannot be determined given required accuracy (RELERR) and 1 otherwise.
+static int FindSlope(double* corrpos, int nsamples, double samplingRate, double signalStdDev, int nrep, double sloperelerr, double* maxslope)
+{
+	double 	tmpslope;
+	double 	relslope_err;
+	BOOL 	foundmaxslope = 0;
+			
+	for (int nslope_elem = 1; nslope_elem < nsamples; nslope_elem++){  
+			
+		*maxslope = 0;   // in [V/ms]
+		for (int i = 0; i < (nsamples - nslope_elem); i++) {
+			tmpslope = (corrpos[nslope_elem+i] - corrpos[i])/(nslope_elem*1000/samplingRate); // slope in [V/ms]
+			if (tmpslope > *maxslope) *maxslope = tmpslope;
+		}
+		// calculate relative maximum slope error
+		relslope_err = fabs(signalStdDev/sqrt(nrep) * 1.414 / (*maxslope * nslope_elem * 1000/samplingRate));
+		
+		if (relslope_err <= sloperelerr) {
+			foundmaxslope = 1;
+			break;
+		}
+	}
+	
+	return foundmaxslope;
+			
+}
+
+/// HIFN Calculates the lag in samples between signal1 and signal2, signal2 being delayed and similar to signal 1
+/// HIFN In this case signal1 would be the command signal and signal2 the response signal
+static int MeasureLag(double* signal1, double* signal2, int nelem)
+{
+	double newresidual = 0;
+	double oldresidual = 0; 
+	int    delta       = 0; // response lag in terms of clock samples
+	int    dincr       = 1; // number of samples to shift with each iteration
+	BOOL negative      = 0; // if lag of signal2 is negative		
+			
+	for (int i = 0; i < nelem; i++) oldresidual += fabs (signal1[i] - signal2[i]);				   // initial residual
+	for (int i = 0; i < (nelem - dincr); i++) newresidual += fabs(signal1[i+dincr] - signal2[i]); // residual with negative lag of signal2
+	
+	if (newresidual < oldresidual) negative = 1; // change sign of increment if signal2 has a negative lag
+	
+	delta += dincr;
+	while (1) {
+		
+		newresidual = 0;
+		if (negative)
+			for (int i = 0; i < (nelem - delta); i++) newresidual += fabs(signal1[i+delta] - signal2[i]);
+		else
+			for (int i = 0; i < (nelem - delta); i++) newresidual += fabs(signal1[i] - signal2[i+delta]);
+		
+		if (newresidual < oldresidual) delta += dincr;
+		else break;
+		
+		if (delta >= nelem) break;
+		
+		oldresidual = newresidual;
+	};
+	delta -= dincr;
+	if (negative) delta = - delta;
+	
+	return delta;
+}
+
+/// HIFN Analyzes a step response signal to calculate the number of samples it takes to cross a threshold from a low-level and number of samples to reach the high level within given threshold. 
+/// HIFN The 1-based lowidx and highidx are the number of samples from the beginning of the signal where the crossing of the threshold occurs stepsamples is the number of samples needed to cross from lowlevel to highlevel.
+static int GetStepTimes (double* signal, int nsamples, double lowlevel, double highlevel, double threshold, int* lowidx, int* highidx, int* stepsamples)
+{
+	BOOL crossed; // flag showing if threshold was crossed 
+	
+	threshold = fabs(threshold); // make sure it's positive	
+	
+	if (lowlevel > highlevel) { MessagePopup("Error", "Low level must be smaller than High level."); return -1; } 
+	crossed = 0;
+	for (int i = 0; i < nsamples; i++) 
+		if (signal[i] > lowlevel + threshold) { *lowidx = i+1; crossed = 1; break;}
+	if (!crossed) { MessagePopup("Warning", "Could not find low level crossing of signal."); return -1; } 
+	
+	crossed = 0;
+	for (int i = nsamples - 1; i >= 0; i--) 
+		if (signal[i] < highlevel - threshold) { *highidx = i+1; crossed = 1; break;}
+	if (!crossed) { MessagePopup("Warning", "Could not find low level crossing of signal."); return -1; } 
+	
+	*stepsamples= abs(*highidx - *lowidx);
+	
+	return 0;
+}
+
 //-------------------------------------------
 // DetChan_type
 //-------------------------------------------
@@ -1120,7 +1240,7 @@ static DetChan_type* init_DetChan_type (char VChanName[])
 	DetChan_type* det = malloc(sizeof(DetChan_type));
 	if (!det) return NULL;
 	
-	Packet_type allowedPacketTypes[] = {WaveformPacket_UShort, WaveformPacket_UInt, WaveformPacket_Double};
+	PacketTypes allowedPacketTypes[] = {WaveformPacket_UShort, WaveformPacket_UInt, WaveformPacket_Double};
 	
 	det->detVChan = init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, DetVChanConnected, DetVChanDisconnected);
 	
@@ -1317,6 +1437,9 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 				case NonResGCal_Done:
 					
 					TaskControl_type*	calTC = nrgCal->baseClass.taskController; 
+					
+					DisassembleTaskTreeBranch(calTC);
+					
 					// unregister calibration VChans
 					DLUnregisterVChan((DAQLabModule_type*)nrgCal->baseClass.lsModule, (VChan_type*)nrgCal->baseClass.VChanCom);
 					DLUnregisterVChan((DAQLabModule_type*)nrgCal->baseClass.lsModule, (VChan_type*)nrgCal->baseClass.VChanPos);
@@ -1337,22 +1460,6 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 					SetCtrlVal(panel, NonResGCal_CursorX, plotY);
 					break;
 					
-				case NonResGCal_TestBTTN: // just for testing on demand AO generation
-					
-					static double 		sign = 1;
-					double*  			dVal;
-					DataPacket_type*	dataPacket;
-					
-					for (int i = 0; i < 100; i++) {
-						dVal	= malloc(sizeof(double));
-						*dVal 	= 2*sign;
-						sign 	*= -1;
-						dataPacket = init_WaveformPacket_type(Waveform_Double, 1, dVal, 0, 1);
-						SendDataPacket(nrgCal->baseClass.VChanCom, dataPacket);
-					}
-					
-					break;
-				
 			}
 
 			break;
@@ -1500,7 +1607,7 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	NonResGalvoCal_type*	cal = malloc(sizeof(NonResGalvoCal_type));
 	if (!cal) return NULL;
 	
-	Packet_type allowedPacketTypes[] = {WaveformPacket_Double};
+	PacketTypes allowedPacketTypes[] = {WaveformPacket_Double};
 	
 	// init parent class
 	initalloc_ScanAxisCal_type(&cal->baseClass);
@@ -1510,9 +1617,9 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_NonResGalvoCal_type; // override
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
-								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, DataReceivedTC_NonResGalvoCal, ModuleEventHandler_NonResGalvoCal, ErrorTC_NonResGalvoCal);
+								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, ModuleEventHandler_NonResGalvoCal, ErrorTC_NonResGalvoCal);
 	// connect sink VChans (VChanPos) to the Task Controller so that it can process incoming galvo position data
-	AddSinkVChan(cal->baseClass.taskController, cal->baseClass.VChanPos, TASK_VCHAN_FUNC_ITERATE);  
+	AddSinkVChan(cal->baseClass.taskController, cal->baseClass.VChanPos, DataReceivedTC_NonResGalvoCal, TASK_VCHAN_FUNC_ITERATE);  
 	cal->baseClass.lsModule			= lsModule;
 	
 								  
@@ -1521,6 +1628,12 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	cal->commandVMax		= 0;
 	cal->positionVMin		= 0;
 	cal->positionVMax		= 0;
+	cal->calIterations[NonResGalvoCal_Slope_Offset_Lag] 	= 0;
+	cal->calIterations[NonResGalvoCal_SwitchTimes]			= 0;
+	cal->calIterations[NonResGalvoCal_MaxSlopes]			= 0;
+	cal->calIterations[NonResGalvoCal_TriangleWave]			= 0;
+	cal->currentCal											= NonResGalvoCal_Slope_Offset_Lag;
+	cal->currIterIdx										= 0;
 	cal->slope				= NULL;	// i.e. calibration not performed yet
 	cal->offset				= NULL;
 	cal->posStdDev			= NULL;
@@ -1701,7 +1814,7 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 								 char					slowAxisPosVChanName[],
 								 char					imageOutVChanName[])					
 {
-	Packet_type allowedPacketTypes[] = {WaveformPacket_Double};
+	PacketTypes allowedPacketTypes[] = {WaveformPacket_Double};
 	
 	// VChans
 	engine->engineType				= engineType;
@@ -1816,7 +1929,7 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	engine->baseClass.Discard			= discard_RectangleRaster_type;
 	// add task controller
 	engine->baseClass.taskControl		= init_TaskControl_type(engineName, engine, ConfigureTC_RectRaster, IterateTC_RectRaster, AbortIterationTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
-										  DoneTC_RectRaster, StoppedTC_RectRaster, DimTC_RectRaster, NULL, DataReceivedTC_RectRaster, ModuleEventHandler_RectRaster, ErrorTC_RectRaster);
+										  DoneTC_RectRaster, StoppedTC_RectRaster, DimTC_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster);
 	
 	if (!engine->baseClass.taskControl) {discard_RectangleRaster_type((ScanEngine_type**)&engine); return NULL;}
 	
@@ -1979,12 +2092,54 @@ static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskContr
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
+	// number of iterations for each calibration method
+	cal->calIterations[NonResGalvoCal_Slope_Offset_Lag] 	= CALPOINTS;
+	cal->calIterations[NonResGalvoCal_SwitchTimes]			= 0;
+	cal->calIterations[NonResGalvoCal_MaxSlopes]			= 0;
+	cal->calIterations[NonResGalvoCal_TriangleWave]			= 0;
+	
+	// total number of iterations
+	SetTaskControlIterations(taskControl, cal->calIterations[NonResGalvoCal_Slope_Offset_Lag] + cal->calIterations[NonResGalvoCal_SwitchTimes] + 
+							 cal->calIterations[NonResGalvoCal_MaxSlopes] + cal->calIterations[NonResGalvoCal_TriangleWave]);
+	// set starting calibration type
+	cal->currentCal = NonResGalvoCal_Slope_Offset_Lag;
+	// reset iteration index
+	cal->currIterIdx = 0;
+	
 	return init_FCallReturn_type(0, "", "");
 }
 
 static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	switch (cal->currentCal) {
+			
+		case NonResGalvoCal_Slope_Offset_Lag:
+			
+			// just a quick test to send waveforms
+			double*  			dVal = malloc(100 * sizeof(double));	
+			DataPacket_type*	dataPacket;
+					
+			for (int i = 0; i < 100; i++) dVal[i] = i * 0.01;   // create ramp
+			
+			dataPacket = init_WaveformPacket_type(Waveform_Double, 100, dVal, 0, 1);
+			SendDataPacket(cal->baseClass.VChanCom, dataPacket);
+			
+			// end iteration here
+			TaskControlIterationDone(taskControl, 0, "");
+					
+			break;
+			
+		case NonResGalvoCal_SwitchTimes:
+			break;
+			
+		case NonResGalvoCal_MaxSlopes:
+			break;
+			
+		case NonResGalvoCal_TriangleWave:
+			break;
+	}
 }
 
 static void AbortIterationTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
@@ -2029,6 +2184,21 @@ static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	switch (cal->currentCal) {
+			
+		case NonResGalvoCal_Slope_Offset_Lag:
+			break;
+			
+		case NonResGalvoCal_SwitchTimes:
+			break;
+			
+		case NonResGalvoCal_MaxSlopes:
+			break;
+			
+		case NonResGalvoCal_TriangleWave:
+			break;
+	}
 	
 	return init_FCallReturn_type(0, "", "");
 }

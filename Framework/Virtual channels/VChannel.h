@@ -19,8 +19,8 @@
 // Include files
 		
 #include "DAQLabUtility.h"
-#include "nivision.h"
-		
+#include "DataPacket.h"
+
 //==============================================================================
 // Constants
 
@@ -31,11 +31,6 @@
 typedef struct VChan			VChan_type;					// base class
 typedef struct SinkVChan 		SinkVChan_type;
 typedef struct SourceVChan 		SourceVChan_type;
-
-	// Data Packet types
-typedef struct DataPacket		DataPacket_type; 			// base class
-typedef struct WaveformPacket	WaveformPacket_type;
-typedef struct ImagePacket		ImagePacket_type;
 
 //------------------------------------------------------------------------------
 // Virtual channel data flow direction
@@ -57,41 +52,6 @@ typedef void	(* Connected_CBFptr_type) 		(VChan_type* self, VChan_type* connecte
 	// a Source type VChan, this callback will be called for each Sink.
 typedef void	(* Disconnected_CBFptr_type) 	(VChan_type* self, VChan_type* disconnectedVChan);
 
-//------------------------------------------------------------------------------
-// VChan data types
-//------------------------------------------------------------------------------
-typedef enum {
-	
-	Waveform_Char,						// 8 bits	   			 			char
-	Waveform_UChar,						// 8 bits			 				unsigned char
-	Waveform_Short,						// 16 bits							short
-	Waveform_UShort,					// 16 bits							unsigned short
-	Waveform_Int,						// 32 bits							int
-	Waveform_UInt,						// 32 bits							unsigned int
-	Waveform_SSize,						// 32 bits or 64 bits 				ssize_t
-	Waveform_Size,						// 32 bits or 64 bits				size_t			   			
-	Waveform_Float,						// 16 bits							float
-	Waveform_Double,					// 32 bits							double
-	
-} Waveform_type;
-
-typedef enum {
-	
-	WaveformPacket_Char,						
-	WaveformPacket_UChar,						
-	WaveformPacket_Short,						
-	WaveformPacket_UShort,					
-	WaveformPacket_Int,						
-	WaveformPacket_UInt,						
-	WaveformPacket_SSize,						
-	WaveformPacket_Size,						
-	WaveformPacket_Float,						
-	WaveformPacket_Double,
-	ImagePacket_NIVision
-	
-} Packet_type;
-	
-
 
 //==============================================================================
 // Global functions
@@ -101,14 +61,14 @@ typedef enum {
 //------------------------------------------------------------------------------
 
 SourceVChan_type*		init_SourceVChan_type				(char 						name[], 
-										  	  	 	 		Packet_type 				dataType,
+										  	  	 	 		PacketTypes 				dataType,
 										 	  	 			void* 						VChanOwner,
 												 	 		Connected_CBFptr_type		Connected_CBFptr,
 												 	 		Disconnected_CBFptr_type	Disconnected_CBFptr);
 
-	// Creates a Sink VChan which may support multiple data types. Provide an array of dataTypes of Packet_type elements.
+	// Creates a Sink VChan which may support multiple data types. Provide an array of dataTypes of PacketTypes elements.
 SinkVChan_type*			init_SinkVChan_type					(char 						name[], 
-										  	  	 	 		Packet_type					dataTypes[],
+										  	  	 	 		PacketTypes					dataTypes[],
 															size_t						nDataTypes,
 										 	  	 	 		void* 						VChanOwner,
 												 	 		Connected_CBFptr_type		Connected_CBFptr,
@@ -184,21 +144,6 @@ void*					GetPtrToVChanOwner					(VChan_type* VChan);
 // Data Packet Management
 //------------------------------------------------------------------------------
 
- 	// Creates a waveform data packet. Note: the provided waveform must be allocated with malloc.
-DataPacket_type*		init_WaveformPacket_type			(Waveform_type waveformType, size_t n, void* waveform, double rate, double nRepeat);
-
-double					GetWaveformPacketRepeat				(WaveformPacket_type* waveformPacket);
-
-	// Creates an NI Vision image data packet. Note: the image array must be allocated with malloc.
-DataPacket_type*		init_NIVisionImagePacket_type		(size_t n, Image* images);
-
-	// Discards a data packet.
-void					discard_DataPacket_type				(DataPacket_type** dataPacket);
-
-	// Releases a data packet. If it is not needed anymore, it is discarded and dataPacket set to NULL.
-void 					ReleaseDataPacket					(DataPacket_type** dataPacket);
-
-	
 	// Releases all data packets from a Sink VChan. 
 	// If successful, returns NULL, otherwise it returns error information which must be disposed of with discard_FCallReturn_type
 FCallReturn_type*		ReleaseAllDataPackets				(SinkVChan_type* sinkVChan);
@@ -211,13 +156,6 @@ FCallReturn_type* 		SendDataPacket 						(SourceVChan_type* source, DataPacket_t
 	// If an error is encountered, the function returns an FCallReturn_type* with error information and sets dataPackets to NULL and nPackets to 0.
 	// For datapackets pass the address of a DataPacket_type** variable.
 FCallReturn_type*		GetAllDataPackets					(SinkVChan_type* sinkVChan, DataPacket_type*** dataPackets, size_t* nPackets);
-
-	// Returns a pointer to the data packet buffer with n elements of Packet_type contained in the data packet.
-	// If the number of elements is not needed, pass 0 for n.
-void*					GetDataPacketDataPtr				(DataPacket_type* dataPacket, size_t* n);
-
-
-
 
 #ifdef __cplusplus
     }

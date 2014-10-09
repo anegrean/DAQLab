@@ -37,7 +37,6 @@
 #define  NonResGCal_CursorX               5       /* control type: numeric, callback function: (none) */
 #define  NonResGCal_Done                  6       /* control type: command, callback function: (none) */
 #define  NonResGCal_SaveCalib             7       /* control type: command, callback function: (none) */
-#define  NonResGCal_TestBTTN              8       /* control type: command, callback function: (none) */
 
 #define  RectRaster                       5
 #define  RectRaster_PixelSize             2       /* control type: numeric, callback function: (none) */

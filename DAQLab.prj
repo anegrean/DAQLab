@@ -9,7 +9,7 @@ IVI Standard Root Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework Dir = "/C/Program Files/IVI Foundation/VISA/winnt"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
-Number of Files = 39
+Number of Files = 45
 Target Type = "Executable"
 Flags = 2064
 Copied From Locked InstrDrv Directory = False
@@ -54,6 +54,15 @@ FolderEx 11 Parent = 9
 Folder 12 = "Framework/Utility"
 FolderEx 12 = "Utility"
 FolderEx 12 Parent = 9
+Folder 13 = "Framework/Iterators"
+FolderEx 13 = "Iterators"
+FolderEx 13 Parent = 9
+Folder 14 = "Framework/Data Packets"
+FolderEx 14 = "Data Packets"
+FolderEx 14 Parent = 9
+Folder 15 = "Framework/Data Types"
+FolderEx 15 = "Data Types"
+FolderEx 15 Parent = 9
 
 [File 0001]
 File Type = "Include"
@@ -492,6 +501,81 @@ File Type = "CSource"
 Res Id = 36
 Path Is Rel = True
 Path Rel To = "Project"
+Path Rel Path = "Framework/Iterators/Iterator.c"
+Path = "/d/ELE_DAQLab/Framework/Iterators/Iterator.c"
+Exclude = False
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Framework/Iterators"
+Folder Id = 13
+
+[File 0037]
+File Type = "Include"
+Res Id = 37
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Iterators/Iterator.h"
+Path = "/d/ELE_DAQLab/Framework/Iterators/Iterator.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Iterators"
+Folder Id = 13
+
+[File 0038]
+File Type = "CSource"
+Res Id = 38
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data packets/DataPacket.c"
+Path = "/d/ELE_DAQLab/Framework/Data packets/DataPacket.c"
+Exclude = False
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Framework/Data Packets"
+Folder Id = 14
+
+[File 0039]
+File Type = "Include"
+Res Id = 39
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data packets/DataPacket.h"
+Path = "/d/ELE_DAQLab/Framework/Data packets/DataPacket.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Data Packets"
+Folder Id = 14
+
+[File 0040]
+File Type = "CSource"
+Res Id = 40
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data types/DataTypes.c"
+Path = "/d/ELE_DAQLab/Framework/Data types/DataTypes.c"
+Exclude = False
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Framework/Data Types"
+Folder Id = 15
+
+[File 0041]
+File Type = "Include"
+Res Id = 41
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data types/DataTypes.h"
+Path = "/d/ELE_DAQLab/Framework/Data types/DataTypes.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Data Types"
+Folder Id = 15
+
+[File 0042]
+File Type = "CSource"
+Res Id = 42
+Path Is Rel = True
+Path Rel To = "Project"
 Path Rel Path = "DAQLab.c"
 Path = "/d/ELE_DAQLab/DAQLab.c"
 Exclude = False
@@ -499,9 +583,9 @@ Compile Into Object File = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0037]
+[File 0043]
 File Type = "Include"
-Res Id = 37
+Res Id = 43
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.h"
@@ -510,9 +594,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0038]
+[File 0044]
 File Type = "Include"
-Res Id = 38
+Res Id = 44
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.h"
@@ -521,9 +605,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0039]
+[File 0045]
 File Type = "User Interface Resource"
-Res Id = 39
+Res Id = 45
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.uir"

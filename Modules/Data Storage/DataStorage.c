@@ -217,7 +217,7 @@ void discard_DataStorage (DAQLabModule_type** mod)
 
 static DS_Channel_type* init_DS_Channel_type (DataStorage_type* dsInstance, int panHndl, size_t chanIdx,char VChanName[])
 {
-	Packet_type allowedPacketTypes[] = {WaveformPacket_UShort};   	   //, WaveformPacket_UInt, WaveformPacket_Double
+	PacketTypes allowedPacketTypes[] = {WaveformPacket_UShort};   	   //, WaveformPacket_UInt, WaveformPacket_Double
 	
 	DS_Channel_type* chan = malloc (sizeof(DS_Channel_type));
 	if (!chan) return NULL;

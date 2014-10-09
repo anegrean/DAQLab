@@ -87,6 +87,7 @@ struct TaskExecutionLog {
 typedef struct {
 	TaskControl_type* 			taskControl;
 	SinkVChan_type* 			sinkVChan;
+	DataReceivedFptr_type		DataReceivedFptr;
 	CmtTSQCallbackID			itemsInQueueCBID;
 } VChanCallbackData_type;
 
@@ -138,7 +139,6 @@ struct TaskControl {
 	StoppedFptr_type			StoppedFptr;
 	DimUIFptr_type				DimUIFptr;
 	SetUITCModeFptr_type		SetUITCModeFptr;
-	DataReceivedFptr_type		DataReceivedFptr;
 	ModuleEventFptr_type		ModuleEventFptr;
 	ErrorFptr_type				ErrorFptr;
 };
@@ -193,7 +193,7 @@ static BOOL						HWTrigSlavesAreArmed			(TaskControl_type* master);
 static void						ResetHWTrigSlavesArmedStatus	(TaskControl_type* master);
 
 // VChan and Task Control binding
-static VChanCallbackData_type*	init_VChanCallbackData_type		(TaskControl_type* taskControl, SinkVChan_type* sinkVChan);
+static VChanCallbackData_type*	init_VChanCallbackData_type		(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr);
 static void						discard_VChanCallbackData_type	(VChanCallbackData_type** a);
 static void						disposeCmtTSQVChanEventInfo		(void* eventInfo);
 
@@ -239,7 +239,6 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 										StoppedFptr_type			StoppedFptr,
 										DimUIFptr_type				DimUIFptr,
 										SetUITCModeFptr_type		SetUITCModeFptr,
-										DataReceivedFptr_type		DataReceivedFptr,
 										ModuleEventFptr_type		ModuleEventFptr,
 										ErrorFptr_type				ErrorFptr)
 {
@@ -299,8 +298,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	a -> DoneFptr				= DoneFptr;
 	a -> StoppedFptr			= StoppedFptr;
 	a -> DimUIFptr				= DimUIFptr;
-	a -> SetUITCModeFptr			= SetUITCModeFptr;
-	a -> DataReceivedFptr		= DataReceivedFptr;
+	a -> SetUITCModeFptr		= SetUITCModeFptr;
 	a -> ModuleEventFptr		= ModuleEventFptr;
 	a -> ErrorFptr				= ErrorFptr;
 	
@@ -504,7 +502,7 @@ BOOL GetTaskControlAbortIterationFlag (TaskControl_type* taskControl)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, TaskVChanFuncAssign_type VChanFunc)
+int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, TaskVChanFuncAssign_type VChanFunc)
 {
 	// check if Sink VChan is already assigned to the Task Controller
 	VChanCallbackData_type**	VChanTSQDataPtrPtr;
@@ -515,7 +513,7 @@ int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, Task
 	}
 	
 	CmtTSQHandle				tsqID 				= GetSinkVChanTSQHndl(sinkVChan);
-	VChanCallbackData_type*		VChanTSQDataPtr		= init_VChanCallbackData_type(taskControl, sinkVChan);
+	VChanCallbackData_type*		VChanTSQDataPtr		= init_VChanCallbackData_type(taskControl, sinkVChan, DataReceivedFptr);
 	
 	if (!VChanTSQDataPtr) return -1;
 	if (!ListInsertItem(taskControl->dataQs, &VChanTSQDataPtr, END_OF_LIST)) 
@@ -757,16 +755,17 @@ static void	ClearTaskTreeBranchVChans (TaskControl_type* taskControl)
 	}
 }
 
-static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
+static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr)
 {
-	VChanCallbackData_type* a = malloc(sizeof(VChanCallbackData_type));
-	if (!a) return NULL;
+	VChanCallbackData_type* VChanCB= malloc(sizeof(VChanCallbackData_type));
+	if (!VChanCB) return NULL;
 	
-	a->sinkVChan 			= sinkVChan;
-	a->taskControl  		= taskControl;
-	a->itemsInQueueCBID		= 0;
+	VChanCB->sinkVChan 				= sinkVChan;
+	VChanCB->taskControl  			= taskControl;
+	VChanCB->DataReceivedFptr		= DataReceivedFptr;
+	VChanCB->itemsInQueueCBID		= 0;
 	
-	return a;
+	return VChanCB;
 }
 
 static void	discard_VChanCallbackData_type (VChanCallbackData_type** a)
@@ -1120,19 +1119,19 @@ void CVICALLBACK TaskEventItemsInQueue (CmtTSQHandle queueHandle, unsigned int e
 
 void CVICALLBACK TaskDataItemsInQueue (CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData)
 {
-	VChanCallbackData_type*		VChanTSQDataPtr		= callbackData;
-	SinkVChan_type**			VChanPtrPtr			= malloc(sizeof(SinkVChan_type*));
-	if (!VChanPtrPtr) {
+	VChanCallbackData_type*		VChanTSQData		= callbackData;
+	VChanCallbackData_type**	VChanTSQDataPtr		= malloc(sizeof(SinkVChan_type*));
+	if (!VChanTSQDataPtr) {
 		// flush queue
-		CmtFlushTSQ(GetSinkVChanTSQHndl(VChanTSQDataPtr->sinkVChan), TSQ_FLUSH_ALL, NULL);
+		CmtFlushTSQ(GetSinkVChanTSQHndl(VChanTSQData->sinkVChan), TSQ_FLUSH_ALL, NULL);
 		//TaskControlEvent(VChanTSQDataPtr->taskControl, TASK_EVENT_ERROR_OUT_OF_MEMORY, NULL, NULL);
-		VChanTSQDataPtr->taskControl->errorMsg = init_ErrorMsg_type(-1, VChanTSQDataPtr->taskControl->taskName, "Out of memory");
-		FunctionCall(VChanTSQDataPtr->taskControl, TASK_EVENT_DATA_RECEIVED, TASK_FCALL_ERROR, NULL);
-		ChangeState(VChanTSQDataPtr->taskControl, TASK_EVENT_DATA_RECEIVED, TASK_STATE_ERROR); 
+		VChanTSQData->taskControl->errorMsg = init_ErrorMsg_type(-1, VChanTSQData->taskControl->taskName, "Out of memory");
+		FunctionCall(VChanTSQData->taskControl, TASK_EVENT_DATA_RECEIVED, TASK_FCALL_ERROR, NULL);
+		ChangeState(VChanTSQData->taskControl, TASK_EVENT_DATA_RECEIVED, TASK_STATE_ERROR); 
 	} else {
-		*VChanPtrPtr = VChanTSQDataPtr->sinkVChan;
+		*VChanTSQDataPtr = VChanTSQData;
 		// inform Task Controller that data was placed in an otherwise empty data queue
-		TaskControlEvent(VChanTSQDataPtr->taskControl, TASK_EVENT_DATA_RECEIVED, VChanPtrPtr, disposeCmtTSQVChanEventInfo);
+		TaskControlEvent(VChanTSQData->taskControl, TASK_EVENT_DATA_RECEIVED, VChanTSQDataPtr, disposeCmtTSQVChanEventInfo);
 	}
 }
 
@@ -1381,7 +1380,8 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 			
 		case TASK_FCALL_DATA_RECEIVED:
 			
-			if (taskControl->DataReceivedFptr) fCallResult = (*taskControl->DataReceivedFptr)(taskControl, taskControl->state, *(SinkVChan_type**)fCallData, &taskControl->abortFlag);
+			// call data received callback if one was provided
+			if ((*(VChanCallbackData_type**)fCallData)->DataReceivedFptr) fCallResult = (*(*(VChanCallbackData_type**)fCallData)->DataReceivedFptr)(taskControl, taskControl->state, (*(VChanCallbackData_type**)fCallData)->sinkVChan, &taskControl->abortFlag);
 			else functionMissingFlag = 1;
 			break;
 			
@@ -3706,8 +3706,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket.eventInfo)->subtaskIdx);
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket.eventInfo)->newSubTaskState; 
 					
-					// if subtask is in an error state or unconfigured, then switch to error state
-					if (subtaskPtr->subtaskState == TASK_STATE_ERROR || subtaskPtr->subtaskState == TASK_STATE_UNCONFIGURED) {
+					// if subtask is in an error state then switch to error state
+					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
 						taskControl->errorMsg =
 						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
 						

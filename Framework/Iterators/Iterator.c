@@ -113,43 +113,25 @@ size_t GetIteratorSize (Iterator_type* iterator)
 	return ListNumItems(iterator->iterObjects);
 }
 
-void SetIteratorIterations (Iterator_type* iterator, size_t nIterations)
+void SetTotalIterations (Iterator_type* iterator, size_t nIterations)
 {
 	iterator->totalIter = nIterations;
 }
 
-void GetCurrentIterationIndices	(Iterator_type* iterator, size_t currentIterIndex[])
+ListType GetCurrentIteratorSet	(Iterator_type* iterator)
 {
 	Iterator_type**		iterObjectPtr	= &iterator;
-	size_t				idx				= 0;
+	ListType			iteratorSet		= ListCreate(sizeof(Iterator_type*));
 	
-	currentIterIndex[idx] = (*iterObjectPtr)->currentIterIdx; 
+	ListInsertItem(iteratorSet, &iterator, END_OF_LIST); 
 	
 	while ((*iterObjectPtr)->iterType == Iterator_Iterator) {
 		// get next iterator
-		iterObjectPtr = ListGetPtrToItem((*iterObjectPtr)->iterObjects, currentIterIndex[idx]+1); 
-		idx++;
-		// get current iteration index of this iterator
-		currentIterIndex[idx] = (*iterObjectPtr)->currentIterIdx;
-	}
-}
-
-size_t GetIteratorDimensions (Iterator_type* iterator)
-{
-	Iterator_type**		iterObject	= &iterator;
-	size_t				nDim;
-		
-	if (ListNumItems(iterator->iterObjects))
-		nDim = 1;
-	else
-		nDim = 0;
-	
-	while ((*iterObject)->iterType == Iterator_Iterator && ListNumItems((*iterObject)->iterObjects)) {
-		iterObject = ListGetPtrToItem((*iterObject)->iterObjects, 1);
-		nDim++;
+		iterObjectPtr = ListGetPtrToItem((*iterObjectPtr)->iterObjects, (*iterObjectPtr)->currentIterIdx+1); 
+		ListInsertItem(iteratorSet, iterObjectPtr, END_OF_LIST);
 	}
 	
-	return nDim;
+	return iteratorSet;
 }
 
 Iterator_type* GetRootIterator (Iterator_type* iterator)
@@ -213,7 +195,7 @@ int	IteratorAddIterator	(Iterator_type* iterator, Iterator_type* iteratorToAdd)
 	return 0;
 }
 
-void ResetAllIterators (Iterator_type* iterator)
+void ResetIterators (Iterator_type* iterator)
 {
 	size_t 				nObjects 		= ListNumItems(iterator->iterObjects);
 	Iterator_type**		iterObjectPtr;
@@ -222,16 +204,39 @@ void ResetAllIterators (Iterator_type* iterator)
 	if (iterator->iterType == Iterator_Iterator) 
 		for (size_t i = 1; i <= nObjects; i++) {
 			iterObjectPtr = ListGetPtrToItem(iterator->iterObjects, i);
-			ResetAllIterators(*iterObjectPtr);   				
+			ResetIterators(*iterObjectPtr);   				
 		}
 	
 	// reset current iteration index of this iterator (regardless of iterator type)
 	iterator->currentIterIdx = 0;
 }
 
-BOOL AdvanceIterationIndex (Iterator_type* iterator, size_t currentIterIndex[])
+ListType IterateOverIterators (Iterator_type* iterator)
 {
+	Iterator_type**		iteratorPtr			= &iterator;    // start with given iterator
 	
+	// make sure it's not an empty iterator
+	if (iterator->iterType == Iterator_None) return 0;
+	
+	// get to the leaf node
+	while ((*iteratorPtr)->iterType == Iterator_Iterator)
+		iteratorPtr = ListGetPtrToItem((*iteratorPtr)->iterObjects, (*iteratorPtr)->currentIterIdx+1); 
+	
+	// go one level higher if selected iterator type is none
+	if ((*iteratorPtr)->iterType == Iterator_None)
+		iteratorPtr = &(*iteratorPtr)->parent;
+	
+	// try to find an iterator that can be still incremented
+	while ((*iteratorPtr)->currentIterIdx == ListNumItems((*iteratorPtr)->iterObjects) - 1 && *iteratorPtr != iterator)
+			iteratorPtr = &(*iteratorPtr)->parent; 
+		
+	// check if there are iterations left in the iterator set
+	if ((*iteratorPtr == iterator) && ((*iteratorPtr)->currentIterIdx == ListNumItems((*iteratorPtr)->iterObjects) - 1))
+		return 0;
+	else {
+		(*iteratorPtr)->currentIterIdx++;
+		return GetCurrentIteratorSet(iterator);
+	}
 	
 }
 

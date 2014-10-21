@@ -19,6 +19,7 @@
 // Include files
 
 #include "DataTypes.h"
+#include "toolbox.h"
 		
 //==============================================================================
 // Constants
@@ -67,16 +68,11 @@ IterTypes				GetIteratorType				(Iterator_type* iterator);
 size_t					GetIteratorSize				(Iterator_type* iterator);
 
 	// Set total number of iterations for a given iterator
-void					SetIteratorIterations		(Iterator_type* iterator, size_t nIterations);
+void					SetTotalIterations			(Iterator_type* iterator, size_t nIterations);
 
-	// Returns the current 0-based iteration indices of the iterator set. Provide a currentIterIndex buffer with at
-	// least as many elements as obtained from GetIteratorDimensions. Note:To return all indices apply this
-	// function to the root iterator.
-void					GetCurrentIterationIndices	(Iterator_type* iterator, size_t currentIterIndex[]);
-
-	// Returns the dimensionality of the iterator. Note: The dimensionality is calculated by considering its children iterators.
-	// To get the dimensionality of the entire iterator set, apply this function to the root iterator
-size_t					GetIteratorDimensions		(Iterator_type* iterator);
+	// Returns the current iterator set as a list of Iterator_type* elements. The number of iterators in the list determines the dimensionality of the set.
+	// To return all current iterators apply this function to the root iterator. When not needed anymore, dispose of the list using ListDispose().
+ListType				GetCurrentIteratorSet		(Iterator_type* iterator);
 
 	// Returns the root iterator of an iterator set. If this is already a root iterator, it returns the same pointer.
 Iterator_type*			GetRootIterator				(Iterator_type* iterator);
@@ -100,16 +96,16 @@ int						IteratorAddIterator			(Iterator_type* iterator, Iterator_type* iterator
 
 	// Resets the current 0-based iteration index for the given iterator and all its child iterators recursively to 0.
 	// Note: To reset iterations for all the iterators in the interation set, apply this function to the root iterator
-void					ResetAllIterators			(Iterator_type* iterator);
+void					ResetIterators				(Iterator_type* iterator);
 
-	// Advances the iteration of a composite iterator. Valid only for root iterators. Provide currentIterIndex array buffer with at least
-	// as many elements as the iterator dimension obtained by calling GetIteratorDimensions. Returns TRUE if the iterator can be advanced
-	// further, and FALSE if there are no more iterations.
-BOOL					AdvanceIterationIndex		(Iterator_type* iterator, size_t currentIterIndex[]);
-
-
+	// Advances the iteration of an iterator set. Returns the next set of iterators as a list of Iterator_type* elements 
+	// if the iteration was advanced, otherwise the function returns 0. When not needed anymore, dispose of the list using ListDispose().
+	// Note: The iteration indices for each iterator in the set cannot be larger than the number of iterator objects in the set.
+ListType				IterateOverIterators		(Iterator_type* iterator);
 
 
+
+				
 
 #ifdef __cplusplus
     }

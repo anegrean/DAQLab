@@ -21,6 +21,7 @@
 
 //==============================================================================
 // Constants
+#define OKfree(ptr) if (ptr) { free(ptr); ptr = NULL; } 
 #define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto Error; else 
 
 #define MOD_LaserScanning_UI 					"./Modules/Laser Scanning/UI_LaserScanning.uir"
@@ -39,10 +40,11 @@
 #define Max_NewScanEngine_NameLength	50
 
 // non-resonant galvo calibration parameters
-#define OKfree(ptr) if (ptr) { free(ptr); ptr = NULL; }
+
 #define CALPOINTS 									50
+#define SLOPE_OFFSET_DELAY							0.01		// time to wait in [s] after a galvo step is made before estimating slope and offset parameters					
 #define RELERR 										0.05
-#define AIREADS 									200 		// number of AI samples to read and average for one measurement of the galvo position 
+#define POSSAMPLES									200 		// number of AI samples to read and average for one measurement of the galvo position 
 #define FUNC_Triangle 								0
 #define FUNC_Sawtooth 								1
 #define FIND_MAXSLOPES_AMP_ITER_FACTOR 				0.9
@@ -79,8 +81,7 @@ struct ScanAxisCal {
 	TaskControl_type*		taskController;			// Task Controller for the calibration of this scan axis.
 	SourceVChan_type*		VChanCom;   			// VChan used to send command signals to the scan axis (optional, depending on the scan axis type)
 	SinkVChan_type*			VChanPos;				// VChan used to receive position feedback signals from the scan axis (optional, depending on the scan axis type)
-	double*					comSampRate;			// Command sample rate in [Hz] taken from VChanCom when connected.
-	double*					posSampRate;			// Position sample rate in [Hz] taken from VChanPos when connected.
+	double*					comSampRate;			// Command sample rate in [Hz] taken from VChanCom when connected. Same rate is used for the position sampling rate.
 	int						calPanHndl;				// Panel handle for performing scan axis calibration
 	LaserScanning_type*		lsModule;				// Reference to the laser scanning module to which this calibration belongs.
 	// METHODS
@@ -115,7 +116,8 @@ typedef struct{
 
 typedef enum {
 	
-	NonResGalvoCal_Slope_Offset_Lag,
+	NonResGalvoCal_Slope_Offset,
+	NonResGalvoCal_Lag,
 	NonResGalvoCal_SwitchTimes,
 	NonResGalvoCal_MaxSlopes,
 	NonResGalvoCal_TriangleWave
@@ -123,8 +125,8 @@ typedef enum {
 } NonResGalvoCalTypes;
 typedef struct {
 	ScanAxisCal_type		baseClass;				// Base structure describing scan engine calibration. Must be first member of the structure.
-	size_t					calIterations[4];		// number of Task Controller iterations for each calibration mode: 
-													// 1) Slope, Offset & Lag, 2) Switch Times, 3) Max Slopes, 4) Triangle Wave.
+	size_t					calIterations[5];		// number of Task Controller iterations for each calibration mode: 
+													// 1) Slope & Offset, 2) Lag, 3) Switch Times, 4) Max Slopes, 5) Triangle Wave.
 	NonResGalvoCalTypes		currentCal;				// Index of the current calibration
 	size_t					currIterIdx;			// Current iteration index for each calibration method.
 	double					commandVMin;			// Minimum galvo command voltage in [V] for maximal deflection in a given direction.
@@ -144,6 +146,8 @@ typedef struct {
 		double parked;         						// in [V]
 		double scanTime;							// in [s]
 	}	 					UISet;
+	Waveform_type**			calWaveforms;			// Calibration waveforms buffer.
+	size_t					nCalWaveforms;			// Number of waveforms in the buffer.
 } NonResGalvoCal_type;
 
 //---------------------------------------------------
@@ -1554,7 +1558,6 @@ static ScanAxisCal_type* initalloc_ScanAxisCal_type	(ScanAxisCal_type* cal)
 	cal->VChanCom		= NULL;
 	cal->VChanPos		= NULL;
 	cal->comSampRate	= NULL;
-	cal->posSampRate	= NULL;
 	cal->calPanHndl		= 0;
 	cal->Discard		= NULL;
 	
@@ -1568,7 +1571,6 @@ static void discard_ScanAxisCal_type (ScanAxisCal_type** cal)
 	discard_VChan_type((VChan_type**)&(*cal)->VChanCom);
 	discard_VChan_type((VChan_type**)&(*cal)->VChanPos);
 	OKfree((*cal)->comSampRate);
-	OKfree((*cal)->posSampRate);
 	if ((*cal)->calPanHndl) {DiscardPanel((*cal)->calPanHndl); (*cal)->calPanHndl =0;}
 	
 	OKfree(*cal);
@@ -1628,11 +1630,12 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	cal->commandVMax		= 0;
 	cal->positionVMin		= 0;
 	cal->positionVMax		= 0;
-	cal->calIterations[NonResGalvoCal_Slope_Offset_Lag] 	= 0;
+	cal->calIterations[NonResGalvoCal_Slope_Offset] 		= 0;
+	cal->calIterations[NonResGalvoCal_Lag]					= 0;
 	cal->calIterations[NonResGalvoCal_SwitchTimes]			= 0;
 	cal->calIterations[NonResGalvoCal_MaxSlopes]			= 0;
 	cal->calIterations[NonResGalvoCal_TriangleWave]			= 0;
-	cal->currentCal											= NonResGalvoCal_Slope_Offset_Lag;
+	cal->currentCal											= NonResGalvoCal_Slope_Offset;
 	cal->currIterIdx										= 0;
 	cal->slope				= NULL;	// i.e. calibration not performed yet
 	cal->offset				= NULL;
@@ -1641,6 +1644,8 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	cal->switchTimes		= NULL;
 	cal->maxSlopes			= NULL;
 	cal->triangleCal		= NULL;
+	cal->calWaveforms		= NULL;
+	cal->nCalWaveforms		= 0;
 	cal->UISet.resolution  	= 0;
 	cal->UISet.minStepSize 	= 0;
 	cal->UISet.scanTime    	= 2;	// in [s]
@@ -1660,6 +1665,12 @@ static void	discard_NonResGalvoCal_type	(ScanAxisCal_type** cal)
 	OKfree(NRGCal->offset);
 	OKfree(NRGCal->posStdDev);
 	OKfree(NRGCal->lag);
+	
+	// discard calibration waveform buffer
+	for (size_t i = 0; i < NRGCal->nCalWaveforms; i++)
+		discard_Waveform_type(&NRGCal->calWaveforms[i]);
+	OKfree(NRGCal->calWaveforms);
+	
 	discard_SwitchTimes_type(&NRGCal->switchTimes);
 	discard_MaxSlopes_type(&NRGCal->maxSlopes);
 	discard_TriangleCal_type(&NRGCal->triangleCal);
@@ -2093,16 +2104,17 @@ static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskContr
 	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
 	// number of iterations for each calibration method
-	cal->calIterations[NonResGalvoCal_Slope_Offset_Lag] 	= CALPOINTS;
+	cal->calIterations[NonResGalvoCal_Slope_Offset] 		= 1;
+	cal->calIterations[NonResGalvoCal_Lag]					= 1;
 	cal->calIterations[NonResGalvoCal_SwitchTimes]			= 0;
 	cal->calIterations[NonResGalvoCal_MaxSlopes]			= 0;
 	cal->calIterations[NonResGalvoCal_TriangleWave]			= 0;
 	
 	// total number of iterations
-	SetTaskControlIterations(taskControl, cal->calIterations[NonResGalvoCal_Slope_Offset_Lag] + cal->calIterations[NonResGalvoCal_SwitchTimes] + 
-							 cal->calIterations[NonResGalvoCal_MaxSlopes] + cal->calIterations[NonResGalvoCal_TriangleWave]);
+	SetTaskControlIterations(taskControl, cal->calIterations[NonResGalvoCal_Slope_Offset] + cal->calIterations[NonResGalvoCal_Lag] + 
+							 cal->calIterations[NonResGalvoCal_SwitchTimes] + cal->calIterations[NonResGalvoCal_MaxSlopes] + cal->calIterations[NonResGalvoCal_TriangleWave]);
 	// set starting calibration type
-	cal->currentCal = NonResGalvoCal_Slope_Offset_Lag;
+	cal->currentCal = NonResGalvoCal_Slope_Offset;
 	// reset iteration index
 	cal->currIterIdx = 0;
 	
@@ -2115,20 +2127,29 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 	
 	switch (cal->currentCal) {
 			
-		case NonResGalvoCal_Slope_Offset_Lag:
+		case NonResGalvoCal_Slope_Offset:
 			
-			// just a quick test to send waveforms
-			double*  			dVal = malloc(100 * sizeof(double));	
-			DataPacket_type*	dataPacket;
-					
-			for (int i = 0; i < 100; i++) dVal[i] = i * 0.01;   // create ramp
+			// create waveform with galvo steps to measure slope and offset between command and position signals
+			size_t 		nDelaySamples 			= (size_t) (SLOPE_OFFSET_DELAY * *cal->baseClass.comSampRate);
+			size_t		nSamplesPerCalPoint		= nDelaySamples + POSSAMPLES;
+			double*		testSignal 				= malloc (CALPOINTS * nSamplesPerCalPoint * sizeof(double));
+			double		VCommand				= cal->commandVMin;
+				
+			for (size_t i = 0; i < CALPOINTS; i++) {
+				for (size_t j = 0; j < nSamplesPerCalPoint; j++)
+					testSignal[i*nSamplesPerCalPoint+j] = VCommand;
+				VCommand += (cal->commandVMax - cal->commandVMin) / (CALPOINTS - 1); 
+			}
 			
-			dataPacket = init_WaveformPacket_type(Waveform_Double, 100, dVal, 0, 1);
+			// send waveform
+			DataPacket_type*	dataPacket;  
+			dataPacket = init_WaveformPacket_type(Waveform_Double, CALPOINTS * nSamplesPerCalPoint, testSignal, *cal->baseClass.comSampRate, 1);
 			SendDataPacket(cal->baseClass.VChanCom, dataPacket);
 			
-			// end iteration here
-			TaskControlIterationDone(taskControl, 0, "");
-					
+			break;
+			
+		case NonResGalvoCal_Lag:
+			
 			break;
 			
 		case NonResGalvoCal_SwitchTimes:
@@ -2183,20 +2204,41 @@ static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 
 static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	NonResGalvoCal_type* 	cal 			= GetTaskControlModuleData(taskControl);
+	DataPacket_type**		dataPackets		= NULL;
+	size_t					nPackets;
+	
+	GetAllDataPackets (sinkVChan, &dataPackets, &nPackets);
+	for (size_t i = 0; i < nPackets; i++)
+		if (dataPackets[i]) {
+			// get waveform out of data packet
+			//GetDataPacketDataPtr
+		} else
+			
 	
 	switch (cal->currentCal) {
 			
-		case NonResGalvoCal_Slope_Offset_Lag:
+		case NonResGalvoCal_Slope_Offset:
+			
+				
+			
+			TaskControlIterationDone(taskControl, 0, "");
+			break;
+			
+		case NonResGalvoCal_Lag: 
+			
 			break;
 			
 		case NonResGalvoCal_SwitchTimes:
+			
 			break;
 			
 		case NonResGalvoCal_MaxSlopes:
+			
 			break;
 			
 		case NonResGalvoCal_TriangleWave:
+			
 			break;
 	}
 	

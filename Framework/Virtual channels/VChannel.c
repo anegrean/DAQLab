@@ -430,12 +430,12 @@ FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dat
 	
 	// if there are no Sink VChans, then dispose of the data and do nothing
 	if (!nSinks) {
-		ReleaseDataPacket(&dataPacket);
+		if (dataPacket) ReleaseDataPacket(&dataPacket);
 		return NULL; 
 	}
 	
 	// set sinks counter
-	SetDataPacketCounter(dataPacket, nSinks);
+	if (dataPacket) SetDataPacketCounter(dataPacket, nSinks);
 	
 	// send data to sinks
 	SinkVChan_type** 	sinkPtrPtr;

@@ -6949,6 +6949,9 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	uInt32				nAI;
 	int					error			= 0;
 	int					nRead;
+	ChanSet_type**		chanSetPtrPtr;
+	size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet);
+	FCallReturn_type*	fCallReturn; 
 
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
@@ -6957,8 +6960,27 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	// get all read samples from the input buffer 
 	DAQmxGetReadAttribute(taskHandle, DAQmx_Read_AvailSampPerChan, &nSamples); 
 	
-	// if there are no samples left in the buffer, stop here, otherwise read them out
-	if (!nSamples) return 0;
+	// if there are no samples left in the buffer, send NULL data packet and stop here, otherwise read them out
+	if (!nSamples) {
+		for (size_t i = 1; i <= nItems; i++) {
+			chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+			// include only channels for which HW-timing is required
+			if ((*chanSetPtrPtr)->onDemand) continue;
+			
+			// send NULL packet to signal end of data transmission
+			fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL);
+			if (fCallReturn) goto SendDataError;
+		}
+		
+		// Task Controller iteration is complete if all DAQmx Tasks are complete
+		if (DAQmxTasksDone(dev)) {
+			// stop explicitly the Task
+			DAQmxStopTask(taskHandle);
+			TaskControlIterationDone(dev->taskController, 0, "");
+		}
+		
+		return 0;
+	}
 	
 	// allocate memory for samples
 	DAQmxGetTaskAttribute(taskHandle, DAQmx_Task_NumChans, &nAI);
@@ -6969,12 +6991,9 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	DAQmxErrChk(DAQmxReadAnalogF64(taskHandle, -1, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL));
 	
 	// forward data to Source VChans
-	ChanSet_type**		chanSetPtrPtr;
-	size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet);
 	size_t				chIdx			= 0;
 	double*				waveformData;
 	DataPacket_type*	dataPacket;
-	FCallReturn_type*	fCallReturn;
 	for (size_t i = 1; i <= nItems; i++) {
 		chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
@@ -6988,6 +7007,9 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		
 		// send data packet with waveform
 		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, dataPacket);
+		if (fCallReturn) goto SendDataError;
+		// send NULL packet to signal end of data transmission
+		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL);
 		if (fCallReturn) goto SendDataError;
 		
 		// next AI channel
@@ -7158,6 +7180,19 @@ static void AbortIterationTC (TaskControl_type* taskControl, size_t currentItera
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
 	FCallReturn_type*	fCallReturn;
 	fCallReturn = StopDAQmxTasks(dev);
+	
+	// send NULL data packets to AI channels used in the DAQmx task
+	if (dev->AITaskSet) {
+		size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet); 
+		ChanSet_type**		chanSetPtrPtr; 
+		for (size_t i = 1; i <= nItems; i++) { 
+			chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+			// include only channels for which HW-timing is required
+			if ((*chanSetPtrPtr)->onDemand) continue;
+			// send NULL packet to signal end of data transmission
+			SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL);
+		}
+	}
 	
 	TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo); 
 }

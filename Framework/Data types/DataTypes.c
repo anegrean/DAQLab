@@ -26,7 +26,7 @@
 
 struct Waveform {
 	WaveformTypes		dataType;
-	char*				YAxisName;
+	char*				YAxisName;				// Name of signal represented by the waveform. 
 	char*				physicalUnit;			// Physical SI unit such as V, A, Ohm, etc.
 	double				dateTimestamp;			// Number of seconds since midnight, January 1, 1900 in the local time zone.
 	double				samplingRate;			// Sampling rate in [Hz]. If 0, sampling rate is not given.

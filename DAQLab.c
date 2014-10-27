@@ -232,7 +232,7 @@ static void					DAQLab_discard_UITaskCtrl_type				(UITaskCtrl_type** a);
 
 
 
-static int					DAQLab_StringToType							(char text[], DAQLabXMLTypes vartype, void* value);
+static int					DAQLab_StringToType							(char text[], BasicDataTypes vartype, void* value);
 
 static BOOL					DAQLab_ValidControllerName					(char name[], void* listPtr);
 
@@ -327,15 +327,15 @@ static int DAQLab_Load (void)
 	TaskControl_type*				newTaskControllerPtr;
 	UITaskCtrl_type*				UITaskCtrlsPtr;
 									// template to load DAQLab Environment parameters
-	DAQLabXMLNode 					attr1[] = { {"TaskPanTopPos", DL_INT, &taskPanTopPos},
-							 					{"TaskPanLeftPos", DL_INT, &taskPanLeftPos},
-												{"LogPanTopPos", DL_INT, &logPanTopPos},
-												{"LogPanLeftPos", DL_INT, &logPanLeftPos} };
+	DAQLabXMLNode 					attr1[] = { {"TaskPanTopPos", BasicData_Int, &taskPanTopPos},
+							 					{"TaskPanLeftPos", BasicData_Int, &taskPanLeftPos},
+												{"LogPanTopPos", BasicData_Int, &logPanTopPos},
+												{"LogPanLeftPos", BasicData_Int, &logPanLeftPos} };
 									// template to load UI Task Controller parameters			
-	DAQLabXMLNode					attr2[] = {	{"Name", DL_CSTRING, &UITCName},
-												{"Iterations", DL_UINT, &UITCIterations},
-												{"Wait", DL_DOUBLE, &UITCWait}, 
-												{"Mode", DL_BOOL, &UITCMode} };
+	DAQLabXMLNode					attr2[] = {	{"Name", BasicData_CString, &UITCName},
+												{"Iterations", BasicData_UInt, &UITCIterations},
+												{"Wait", BasicData_Double, &UITCWait}, 
+												{"Mode", BasicData_Bool, &UITCMode} };
 										
 	
 	//---------------------------------------------------------------------------------
@@ -457,8 +457,8 @@ static int DAQLab_Load (void)
 	char*							moduleInstanceName;															// module instance name
 																												// DAQLab module element node to be loaded
 	long							nModules;																	// Number of modules to be loaded
-	DAQLabXMLNode					attrModule[] = {	{"ClassName", DL_CSTRING, &moduleClassName},			// Common module attributes to load (same for all modules)
-														{"InstanceName", DL_CSTRING, &moduleInstanceName}		// Note: module specific attributes are managed by the modules
+	DAQLabXMLNode					attrModule[] = {	{"ClassName", BasicData_CString, &moduleClassName},			// Common module attributes to load (same for all modules)
+														{"InstanceName", BasicData_CString, &moduleInstanceName}		// Note: module specific attributes are managed by the modules
 																									  			
 																										};
 	DAQLabModule_type*				newModule;
@@ -548,10 +548,10 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	int								taskPanLeftPos;
 	int								logPanTopPos;
 	int								logPanLeftPos;
-	DAQLabXMLNode 					attr1[] = {	{"TaskPanTopPos", DL_INT, &taskPanTopPos},
-								 				{"TaskPanLeftPos", DL_INT, &taskPanLeftPos},
-												{"LogPanTopPos", DL_INT, &logPanTopPos},
-												{"LogPanLeftPos", DL_INT, &logPanLeftPos}	};  
+	DAQLabXMLNode 					attr1[] = {	{"TaskPanTopPos", BasicData_Int, &taskPanTopPos},
+								 				{"TaskPanLeftPos", BasicData_Int, &taskPanLeftPos},
+												{"LogPanTopPos", BasicData_Int, &logPanTopPos},
+												{"LogPanLeftPos", BasicData_Int, &logPanLeftPos}	};  
 	
 	errChk( GetPanelAttribute(TasksUI.panHndl, ATTR_LEFT, &taskPanLeftPos) );
 	errChk( GetPanelAttribute(TasksUI.panHndl, ATTR_TOP, &taskPanTopPos) );
@@ -576,22 +576,22 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		// initialize attributes
 		// name
 		attr2[0].tag 	= "Name";
-		attr2[0].type 	= DL_CSTRING;
+		attr2[0].type 	= BasicData_CString;
 		attr2[0].pData	= GetTaskControlName((*UItaskCtrlPtrPtr)->taskControl);
 		// iterations
 		niter 			= GetTaskControlIterations((*UItaskCtrlPtrPtr)->taskControl);
 		attr2[1].tag 	= "Iterations";
-		attr2[1].type 	= DL_UINT;
+		attr2[1].type 	= BasicData_UInt;
 		attr2[1].pData	= &niter; 
 		// wait
 		wait 			= GetTaskControlIterationsWait((*UItaskCtrlPtrPtr)->taskControl);
 		attr2[2].tag 	= "Wait";
-		attr2[2].type 	= DL_DOUBLE;
+		attr2[2].type 	= BasicData_Double;
 		attr2[2].pData	= &wait; 
 		// mode (finite = 1, continuous = 0)
 		mode			= GetTaskControlMode((*UItaskCtrlPtrPtr)->taskControl);
 		attr2[3].tag 	= "Mode";
-		attr2[3].type 	= DL_BOOL;
+		attr2[3].type 	= BasicData_Bool;
 		attr2[3].pData	= &mode; 
 		
 		// add attributes to task controller element
@@ -628,11 +628,11 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		//-----------------------------------------------------------------------------------
 		// class name
 		attr3[0].tag    = "ClassName";
-		attr3[0].type	= DL_CSTRING;
+		attr3[0].type	= BasicData_CString;
 		attr3[0].pData	= (*DLModulePtr)->className;
 		// instance name
 		attr3[1].tag    = "InstanceName";
-		attr3[1].type	= DL_CSTRING;
+		attr3[1].type	= BasicData_CString;
 		attr3[1].pData	= (*DLModulePtr)->instanceName;
 		
 	
@@ -1143,77 +1143,77 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 		// convert to variant
 		switch (childXMLNodes[i].type) {
 			
-			case DL_NULL:
+			case BasicData_Null:
 				
 				xmlVal = CA_VariantNULL ();
 				break;
 			
-			case DL_BOOL:
+			case BasicData_Bool:
 				
 				xmlVal = CA_VariantBool ((VBOOL)*(BOOL*)childXMLNodes[i].pData);
 				break;
 				
-			case DL_CHAR:
+			case BasicData_Char:
 				
 				xmlVal = CA_VariantChar(*(char*)childXMLNodes[i].pData);
 				break;
 				
-			case DL_UCHAR:
+			case BasicData_UChar:
 				
 				xmlVal = CA_VariantUChar(*(unsigned char*)childXMLNodes[i].pData);
 				break;
 				
-			case DL_SHORT:
+			case BasicData_Short:
 				
 				xmlVal = CA_VariantShort(*(short*)childXMLNodes[i].pData);
 				break;
 				
-			case DL_USHORT:
+			case BasicData_UShort:
 				
 				xmlVal = CA_VariantUShort(*(unsigned short*)childXMLNodes[i].pData);
 				break;
 			
-			case DL_INT:
+			case BasicData_Int:
 				
 				xmlVal = CA_VariantInt(*(int*)(childXMLNodes[i].pData));
 				break;							   
 				
-			case DL_UINT:
+			case BasicData_UInt:
 				
 				xmlVal = CA_VariantUInt(*(unsigned int*)childXMLNodes[i].pData);
 				break;
 				
-			case DL_LONG:
+			case BasicData_Long:
 				
 				xmlVal = CA_VariantLong(*(long*)childXMLNodes[i].pData);
 				break;
 			
-			case DL_ULONG:
+			case BasicData_ULong:
 				
 				xmlVal = CA_VariantULong(*(unsigned long*)childXMLNodes[i].pData);
 				break;
 				
-			case DL_LONGLONG:
+			case BasicData_LongLong:
 				
 				xmlVal = CA_VariantLongLong(*(long long*)childXMLNodes[i].pData);
 				break;
 				
-			case DL_ULONGLONG:
+			case BasicData_ULongLong:
 				
 				xmlVal = CA_VariantULongLong(*(unsigned long long*)childXMLNodes[i].pData);
 				break;
 			
-			case DL_FLOAT:
+			case BasicData_Float:
 				
 				xmlVal = CA_VariantFloat(*(float*)childXMLNodes[i].pData);
 				break;
 			
-			case DL_DOUBLE:
+			case BasicData_Double:
 				
 				xmlVal = CA_VariantDouble(*(double*)childXMLNodes[i].pData);
 				break;
 				
-			case DL_CSTRING:
+			case BasicData_CString:
 				
 				CA_CStringToBSTR((char*)childXMLNodes[i].pData, &bstrVal); 
 				xmlVal = CA_VariantBSTR(bstrVal);
@@ -1251,45 +1251,45 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 	return xmlerror;
 }
 
-static int DAQLab_StringToType	(char text[], DAQLabXMLTypes vartype, void* valuePtr)
+static int DAQLab_StringToType	(char text[], BasicDataTypes vartype, void* valuePtr)
 {
 	int	error;
 	
 	switch (vartype) {
 		
-		case DL_NULL:
+		case BasicData_Null:
 			
 			break;
 		
-		case DL_BOOL:
-		case DL_CHAR:
-		case DL_UCHAR:
-		case DL_SHORT:
-		case DL_USHORT:
-		case DL_INT:
-		case DL_UINT:
-		case DL_LONG:	
-		case DL_ULONG:  
-		case DL_LONGLONG:
-		case DL_ULONGLONG:
+		case BasicData_Bool:
+		case BasicData_Char:
+		case BasicData_UChar:
+		case BasicData_Short:
+		case BasicData_UShort:
+		case BasicData_Int:
+		case BasicData_UInt:
+		case BasicData_Long:	
+		case BasicData_ULong:  
+		case BasicData_LongLong:
+		case BasicData_ULongLong:
 			
 			errChk( Scan(text, "%s>%d", valuePtr) );
 			break;
 			
-		case DL_FLOAT:
+		case BasicData_Float:
 			
 			double doubleVal;
 			errChk( Scan(text, "%s>%f", &doubleVal) );  
 			*(float*)valuePtr = (float) doubleVal;
 			break;
 		
-		case DL_DOUBLE:
+		case BasicData_Double:
 			
 			errChk( Scan(text, "%s>%f", &doubleVal) );  
 			*(double*)valuePtr = doubleVal;
 			break;
 			
-		case DL_CSTRING:
+		case BasicData_CString:
 			
 			*(char**)valuePtr = StrDup(text);
 			break;

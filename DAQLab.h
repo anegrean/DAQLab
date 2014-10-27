@@ -26,6 +26,7 @@
 #include "VChannel.h"
 #include "TaskController.h"
 #include "DAQLabModule.h"
+#include "DataTypes.h"
 
 //==============================================================================
 // Constants
@@ -49,27 +50,6 @@
 //==============================================================================
 // Types
 
-	// DAQLab XML data types
-typedef enum {
-	
-	DL_NULL,
-	DL_BOOL,
-	DL_CHAR,
-	DL_UCHAR,
-	DL_SHORT,
-	DL_USHORT,
-	DL_INT,
-	DL_UINT,
-	DL_LONG,
-	DL_ULONG,
-	DL_LONGLONG,
-	DL_ULONGLONG,
-	DL_FLOAT,
-	DL_DOUBLE,
-	DL_CSTRING		// null-terminated string
-	
-} DAQLabXMLTypes;
-
 typedef enum {
 	
 	DL_ELEMENT,
@@ -81,7 +61,7 @@ typedef enum {
 typedef struct{
 	
 	char*			tag;	// null-terminated string
-	DAQLabXMLTypes 	type;
+	BasicDataTypes 	type;
 	void*			pData;
 	
 } DAQLabXMLNode;

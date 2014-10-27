@@ -416,11 +416,11 @@ int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	zstage->highVelocity	= malloc(sizeof(double));
 	
 	// initialize attributes array
-	DAQLabXMLNode 		zStageAttr[] 	= {	{"MinPositionLimit", DL_DOUBLE, zstage->zMinimumLimit},
-								 			{"MaxPositionLimit", DL_DOUBLE, zstage->zMaximumLimit},
-											{"LowVelocity", DL_DOUBLE, zstage->lowVelocity},
-											{"MidVelocity", DL_DOUBLE, zstage->midVelocity},
-											{"HighVelocity", DL_DOUBLE, zstage->highVelocity}
+	DAQLabXMLNode 		zStageAttr[] 	= {	{"MinPositionLimit", BasicData_Double, zstage->zMinimumLimit},
+								 			{"MaxPositionLimit", BasicData_Double, zstage->zMaximumLimit},
+											{"LowVelocity", BasicData_Double, zstage->lowVelocity},
+											{"MidVelocity", BasicData_Double, zstage->midVelocity},
+											{"HighVelocity", BasicData_Double, zstage->highVelocity}
 																									};
 	//--------------------------------------------------------------																								};
 	// get safety limits and velocities	
@@ -453,7 +453,7 @@ int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	RefPosition_type*	refPos;
 	char*				refName;
 	double				refVal;
-	DAQLabXMLNode		refPosAttr[2] = { { "Name", DL_CSTRING, &refName }, {"Position", DL_DOUBLE, &refVal} };
+	DAQLabXMLNode		refPosAttr[2] = { { "Name", BasicData_CString, &refName }, {"Position", BasicData_Double, &refVal} };
 	for (size_t i = 0; i < nXMLElements; i++) {
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPosNodeList, &xmlERRINFO, i, &xmlRefPosNode) );
 		DLGetXMLNodeAttributes(xmlRefPosNode, refPosAttr, NumElem(refPosAttr));
@@ -479,11 +479,11 @@ NoReferencePositions:
 int ZStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement)
 {
 	Zstage_type* 					zstage			= (Zstage_type*) mod;
-	DAQLabXMLNode 					zStageAttr[] 	= {	{"MinPositionLimit", DL_DOUBLE, zstage->zMinimumLimit},
-								 						{"MaxPositionLimit", DL_DOUBLE, zstage->zMaximumLimit},
-														{"LowVelocity", DL_DOUBLE, zstage->lowVelocity},
-														{"MidVelocity", DL_DOUBLE, zstage->midVelocity},
-														{"HighVelocity", DL_DOUBLE, zstage->highVelocity}
+	DAQLabXMLNode 					zStageAttr[] 	= {	{"MinPositionLimit", BasicData_Double, zstage->zMinimumLimit},
+								 						{"MaxPositionLimit", BasicData_Double, zstage->zMaximumLimit},
+														{"LowVelocity", BasicData_Double, zstage->lowVelocity},
+														{"MidVelocity", BasicData_Double, zstage->midVelocity},
+														{"HighVelocity", BasicData_Double, zstage->highVelocity}
 																												}; 
 	// add safety limits as zStage module attributes
 	DLAddToXMLElem(xmlDOM, moduleElement, zStageAttr, DL_ATTRIBUTE, NumElem(zStageAttr));
@@ -507,10 +507,10 @@ int ZStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (refPositionsXMLElement, &xmlERRINFO, refPosXMLElement, NULL) );
 		// add attributes to this reference position
 		refPosAttr[0].tag 		= "Name";
-		refPosAttr[0].type		= DL_CSTRING;
+		refPosAttr[0].type		= BasicData_CString;
 		refPosAttr[0].pData	= (*refPosPtr)->name;
 		refPosAttr[1].tag 		= "Position";
-		refPosAttr[1].type		= DL_DOUBLE;
+		refPosAttr[1].type		= BasicData_Double;
 		refPosAttr[1].pData	= &(*refPosPtr)->val;
 		DLAddToXMLElem(xmlDOM, refPosXMLElement, refPosAttr, DL_ATTRIBUTE, NumElem(refPosAttr));   
 	}

@@ -30,18 +30,88 @@ typedef struct Waveform		Waveform_type;
 		
 typedef enum {
 	
-	Waveform_Char,						// 8 bits	   			 			char
-	Waveform_UChar,						// 8 bits			 				unsigned char
-	Waveform_Short,						// 16 bits							short
-	Waveform_UShort,					// 16 bits							unsigned short
-	Waveform_Int,						// 32 bits							int
-	Waveform_UInt,						// 32 bits							unsigned int
-	Waveform_SSize,						// 32 bits or 64 bits 				ssize_t
-	Waveform_Size,						// 32 bits or 64 bits				size_t			   			
-	Waveform_Float,						// 16 bits							float
-	Waveform_Double,					// 32 bits							double
+	Waveform_Char,						
+	Waveform_UChar,						
+	Waveform_Short,						
+	Waveform_UShort,					
+	Waveform_Int,						
+	Waveform_UInt,						
+	Waveform_SSize,						
+	Waveform_Size,								   			
+	Waveform_Float,						
+	Waveform_Double					
 	
 } WaveformTypes;
+
+typedef enum {
+	
+	Image_NIVision
+	
+} ImageTypes;
+
+typedef enum {
+	
+	BasicData_Null,
+	BasicData_Bool,							
+	BasicData_Char,						// 8 bits	   			 			char 
+	BasicData_UChar,					// 8 bits			 				unsigned char
+	BasicData_Short,					// 16 bits							short
+	BasicData_UShort,					// 16 bits							unsigned short 
+	BasicData_Int,						// 32 bits							int    
+	BasicData_UInt,						// 32 bits							unsigned int   							
+	BasicData_Long,
+	BasicData_ULong,
+	BasicData_LongLong,
+	BasicData_ULongLong,
+	BasicData_Float,					// 16 bits							float  
+	BasicData_Double,					// 32 bits							double
+	BasicData_CString					// null-terminated string
+	
+} BasicDataTypes;
+
+
+typedef enum {
+	//------------------
+	// atomic types
+	//------------------
+	DL_Null,
+	DL_Bool,							
+	DL_Char,							// 8 bits	   			 			char 
+	DL_UChar,							// 8 bits			 				unsigned char
+	DL_Short,							// 16 bits							short
+	DL_UShort,							// 16 bits							unsigned short 
+	DL_Int,								// 32 bits							int    
+	DL_UInt,							// 32 bits							unsigned int   							
+	DL_Long,
+	DL_ULong,
+	DL_LongLong,
+	DL_ULongLong,
+	DL_Float,							// 16 bits							float  
+	DL_Double,							// 32 bits							double 
+	
+	//------------------
+	// composite types
+	//------------------
+	// string
+	DL_CString,							// null-terminated string
+	
+	// waveforms
+	DL_Waveform_Char,						
+	DL_Waveform_UChar,						
+	DL_Waveform_Short,						
+	DL_Waveform_UShort,					
+	DL_Waveform_Int,						
+	DL_Waveform_UInt,						
+	DL_Waveform_SSize,						
+	DL_Waveform_Size,								   			
+	DL_Waveform_Float,						
+	DL_Waveform_Double,
+	
+	// images
+	DL_Image_NIVision   
+	
+} DLDataTypes;
+
 
 //==============================================================================
 // External variables

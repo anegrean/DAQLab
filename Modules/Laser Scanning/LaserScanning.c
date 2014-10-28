@@ -1244,7 +1244,7 @@ static DetChan_type* init_DetChan_type (char VChanName[])
 	DetChan_type* det = malloc(sizeof(DetChan_type));
 	if (!det) return NULL;
 	
-	PacketTypes allowedPacketTypes[] = {WaveformPacket_UShort, WaveformPacket_UInt, WaveformPacket_Double};
+	DLDataTypes allowedPacketTypes[] = {DL_Waveform_UShort, DL_Waveform_UInt, DL_Waveform_Double};
 	
 	det->detVChan = init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, DetVChanConnected, DetVChanDisconnected);
 	
@@ -1609,12 +1609,12 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	NonResGalvoCal_type*	cal = malloc(sizeof(NonResGalvoCal_type));
 	if (!cal) return NULL;
 	
-	PacketTypes allowedPacketTypes[] = {WaveformPacket_Double};
+	DLDataTypes allowedPacketTypes[] = {DL_Waveform_Double};
 	
 	// init parent class
 	initalloc_ScanAxisCal_type(&cal->baseClass);
 	if(!(cal->baseClass.calName		= StrDup(calName))) {free(cal); return NULL;}
-	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, WaveformPacket_Double, cal, NonResGalvoCal_ComVChan_Connected, NonResGalvoCal_ComVChan_Disconnected);   
+	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, DL_Waveform_Double, cal, NonResGalvoCal_ComVChan_Connected, NonResGalvoCal_ComVChan_Disconnected);   
 	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_NonResGalvoCal_type; // override
@@ -1825,15 +1825,15 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 								 char					slowAxisPosVChanName[],
 								 char					imageOutVChanName[])					
 {
-	PacketTypes allowedPacketTypes[] = {WaveformPacket_Double};
+	DLDataTypes allowedPacketTypes[] = {DL_Waveform_Double};
 	
 	// VChans
 	engine->engineType				= engineType;
-	engine->VChanFastAxisCom		= init_SourceVChan_type(fastAxisComVChanName, WaveformPacket_Double, engine, FastAxisComVChan_Connected, FastAxisComVChan_Disconnected); 
-	engine->VChanSlowAxisCom		= init_SourceVChan_type(slowAxisComVChanName, WaveformPacket_Double, engine, SlowAxisComVChan_Connected, SlowAxisComVChan_Disconnected); 
+	engine->VChanFastAxisCom		= init_SourceVChan_type(fastAxisComVChanName, DL_Waveform_Double, engine, FastAxisComVChan_Connected, FastAxisComVChan_Disconnected); 
+	engine->VChanSlowAxisCom		= init_SourceVChan_type(slowAxisComVChanName, DL_Waveform_Double, engine, SlowAxisComVChan_Connected, SlowAxisComVChan_Disconnected); 
 	engine->VChanFastAxisPos		= init_SinkVChan_type(fastAxisPosVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), engine, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected); 
 	engine->VChanSlowAxisPos		= init_SinkVChan_type(slowAxisPosVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), engine, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected); 
-	engine->VChanImageOut			= init_SourceVChan_type(imageOutVChanName, ImagePacket_NIVision, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected); 
+	engine->VChanImageOut			= init_SourceVChan_type(imageOutVChanName, DL_Image_NIVision, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected); 
 	if(!(engine->DetChans			= ListCreate(sizeof(DetChan_type*)))) goto Error;
 	
 	// reference to axis calibration
@@ -2142,9 +2142,9 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			}
 			
 			// send waveform
-			DataPacket_type*	dataPacket;  
-			dataPacket = init_WaveformPacket_type(Waveform_Double, CALPOINTS * nSamplesPerCalPoint, testSignal, *cal->baseClass.comSampRate, 1);
-			SendDataPacket(cal->baseClass.VChanCom, dataPacket);
+			Waveform_type*	commandSignal;  
+			commandSignal = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, CALPOINTS * nSamplesPerCalPoint, testSignal);
+			SendDataPacket(cal->baseClass.VChanCom, init_DataPacket_type(DL_Waveform_Double, commandSignal, (DiscardPacketDataFptr_type)discard_Waveform_type));
 			
 			break;
 			

@@ -18,8 +18,6 @@
 //==============================================================================
 // Include files
 
-#include "DAQLabUtility.h"
-#include "nivision.h" 
 #include "DataTypes.h"
 
 //==============================================================================
@@ -29,26 +27,10 @@
 // Types
 
 	// Data Packet types
-typedef struct DataPacket		DataPacket_type; 			// base class
-typedef struct WaveformPacket	WaveformPacket_type;
-typedef struct ImagePacket		ImagePacket_type;
+typedef struct DataPacket 		DataPacket_type;
 
-// Data packet types
-typedef enum {
-	
-	WaveformPacket_Char,						
-	WaveformPacket_UChar,						
-	WaveformPacket_Short,						
-	WaveformPacket_UShort,					
-	WaveformPacket_Int,						
-	WaveformPacket_UInt,						
-	WaveformPacket_SSize,						
-	WaveformPacket_Size,						
-	WaveformPacket_Float,						
-	WaveformPacket_Double,
-	ImagePacket_NIVision
-	
-} PacketTypes;
+	// Function pointer type for discarding data from data packets if other than free()
+typedef void (*DiscardPacketDataFptr_type)	(void** data);
 
 //==============================================================================
 // External variables
@@ -56,26 +38,18 @@ typedef enum {
 //==============================================================================
 // Global functions
 
-	// Creates a waveform data packet. Note: the provided waveform must be allocated with malloc.
-DataPacket_type*		init_WaveformPacket_type			(WaveformTypes waveformType, size_t n, void* waveform, double rate, double nRepeat);
-
-double					GetWaveformPacketRepeat				(WaveformPacket_type* waveformPacket);
-
-	// Creates an NI Vision image data packet. Note: the image array must be allocated with malloc.
-DataPacket_type*		init_NIVisionImagePacket_type		(size_t n, Image* images);
-
+	// Adds data to a data packet. Depending on the instance counter, calling ReleaseDataPacket repeatedly, the dscardPacketDataFptr is called to discard the provided data. 
+	// If data* has been allocated with malloc then for discardPacketDataFptr provide NULL. Otherwise provide the specific data type discard function.
+DataPacket_type* 		init_DataPacket_type 				(DLDataTypes dataType, void* data, DiscardPacketDataFptr_type discardPacketDataFptr);
 	// Discards a data packet.
 void					discard_DataPacket_type				(DataPacket_type** dataPacket);
-
 	// Sets number of times ReleaseDataPacket must be called before the data contained in the data packet is discarded
 void					SetDataPacketCounter				(DataPacket_type* dataPacket, size_t count);
-
 	// Releases a data packet. If it is not needed anymore, it is discarded and dataPacket set to NULL.
 void 					ReleaseDataPacket					(DataPacket_type** dataPacket);
-
-	// Returns a pointer to the data packet buffer with n elements of Packet_type contained in the data packet.
-	// If the number of elements is not needed, pass 0 for n.
-void*					GetDataPacketDataPtr				(DataPacket_type* dataPacket, size_t* n);
+	// Returns a pointer to the data in the packet
+DLDataTypes				GetDataPacketDataType				(DataPacket_type* dataPacket);
+void*					GetDataPacketDataPtr				(DataPacket_type* dataPacket, DLDataTypes* dataType);
 
 
 #ifdef __cplusplus

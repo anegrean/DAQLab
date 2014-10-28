@@ -25,13 +25,21 @@
 // Types
 
 struct Waveform {
-	WaveformTypes		dataType;
-	char*				YAxisName;				// Name of signal represented by the waveform. 
-	char*				physicalUnit;			// Physical SI unit such as V, A, Ohm, etc.
-	double				dateTimestamp;			// Number of seconds since midnight, January 1, 1900 in the local time zone.
-	double				samplingRate;			// Sampling rate in [Hz]. If 0, sampling rate is not given.
-	size_t				nSamples;
-	void*				data;					// Array of dataType elements.
+	WaveformTypes			waveformType;				// Waveform data type.
+	char*					waveformName;				// Name of signal represented by the waveform. 
+	char*					unitName;					// Physical SI unit such as V, A, Ohm, etc.
+	double					dateTimestamp;				// Number of seconds since midnight, January 1, 1900 in the local time zone.
+	double					samplingRate;				// Sampling rate in [Hz]. If 0, sampling rate is not given.
+	size_t					nSamples;					// Number of samples in the waveform.
+	void*					data;						// Array of waveformType elements.
+};
+
+struct RepeatedWaveform {
+	RepeatedWaveformTypes	waveformType;				// Waveform data type.  
+	double					samplingRate;				// Sampling rate in [Hz]. If 0, sampling rate is not given.
+	double					repeat;						// number of times to repeat the waveform.
+	size_t					nSamples;					// Number of samples in the waveform.
+	void*					data;						// Array of waveformType elements. 
 };
 
 //==============================================================================
@@ -46,18 +54,23 @@ struct Waveform {
 //==============================================================================
 // Global functions
 
-Waveform_type* init_Waveform_type (WaveformTypes dataType, char YAxisName[], char physicalUnit[], double dateTimestamp, double samplingRate, size_t nSamples, void* data)
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Waveforms
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Waveform_type* init_Waveform_type (WaveformTypes waveformType, double samplingRate, size_t nSamples, void* waveformData)
 {
 	Waveform_type*	waveform = malloc(sizeof(Waveform_type));
 	if (!waveform) return NULL;
 	
-	waveform->dataType 			= dataType;
+	waveform->waveformType 		= waveformType;
 	waveform->samplingRate 		= samplingRate;
-	waveform->YAxisName			= StrDup(YAxisName);
-	waveform->physicalUnit		= StrDup(physicalUnit);
-	waveform->dateTimestamp		= dateTimestamp;
+	waveform->waveformName		= NULL;
+	waveform->unitName			= NULL;
+	waveform->dateTimestamp		= 0;
 	waveform->nSamples			= nSamples;
-	waveform->data				= data;
+	waveform->data				= waveformData;
 	
 	return waveform;
 }
@@ -66,18 +79,38 @@ void discard_Waveform_type (Waveform_type** waveform)
 {
 	if (!*waveform) return;
 	
-	OKfree((*waveform)->YAxisName);
-	OKfree((*waveform)->physicalUnit);
+	OKfree((*waveform)->waveformName);
+	OKfree((*waveform)->unitName);
 	OKfree((*waveform)->data);
 	
 	OKfree(*waveform);
+}
+
+void SetWaveformName (Waveform_type* waveform, char waveformName[])
+{
+	waveform->waveformName = StrDup(waveformName);
+}
+
+void SetWaveformPhysicalUnit (Waveform_type* waveform, char unitName[])
+{
+	waveform->unitName = StrDup(unitName); 
+}
+
+int AddWaveformDateTimestamp (Waveform_type* waveform)
+{
+	return GetCurrentDateTime(&waveform->dateTimestamp);
+}
+
+double GetWaveformDateTimestamp (Waveform_type* waveform)
+{
+	return waveform->dateTimestamp;
 }
 
 size_t GetWaveformSizeofData (Waveform_type* waveform)
 {
 	size_t dataTypeSize = 0;
 	
-	switch (waveform->dataType) {
+	switch (waveform->waveformType) {
 			
 		case Waveform_Char:
 		case Waveform_UChar:
@@ -116,8 +149,9 @@ size_t GetWaveformNumSamples (Waveform_type* waveform)
 	return waveform->nSamples;
 }
 
-void* GetWaveformDataPtr (Waveform_type* waveform)
+void* GetWaveformDataPtr (Waveform_type* waveform, size_t* nSamples)
 {
+	*nSamples = waveform->nSamples;
 	return waveform->data;
 }
 
@@ -136,17 +170,17 @@ int CopyWaveformData (Waveform_type* waveformToCopyTo, Waveform_type* waveformTo
 	if (waveformToCopyTo->samplingRate != waveformToCopyFrom->samplingRate) return AppendWaveformData_Err_SamplingRatesAreDifferent;
 	
 	// check if data types are the same
-	if (waveformToCopyTo->dataType != waveformToCopyFrom->dataType) return AppendWaveformData_Err_DataTypesAreDifferent;
+	if (waveformToCopyTo->waveformType != waveformToCopyFrom->waveformType) return AppendWaveformData_Err_DataTypesAreDifferent;
 	
 	// check if units are the same
-	if (waveformToCopyTo->physicalUnit && waveformToCopyFrom->physicalUnit)
-	if (strcmp(waveformToCopyTo->physicalUnit, waveformToCopyFrom->physicalUnit)) return AppendWaveformData_Err_UnitsAreDifferent;
+	if (waveformToCopyTo->unitName && waveformToCopyFrom->unitName)
+	if (strcmp(waveformToCopyTo->unitName, waveformToCopyFrom->unitName)) return AppendWaveformData_Err_UnitsAreDifferent;
 	
 	void* newBuffer = realloc(waveformToCopyTo->data, (waveformToCopyTo->nSamples + waveformToCopyFrom->nSamples) * GetWaveformSizeofData(waveformToCopyTo));
 	if (!newBuffer) return AppendWaveformData_Err_OutOfMemory;
 	waveformToCopyTo->data = newBuffer;
 	
-	switch (waveformToCopyTo->dataType) {
+	switch (waveformToCopyTo->waveformType) {
 			
 		case Waveform_Char:
 		case Waveform_UChar:
@@ -188,4 +222,87 @@ int AppendWaveformData (Waveform_type* waveformToAppendTo, Waveform_type** wavef
 	
 	discard_Waveform_type(waveformToAppend);
 	return 0;
+}
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Repeated Waveforms
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+RepeatedWaveform_type* init_RepeatedWaveform_type (RepeatedWaveformTypes waveformType, double samplingRate, size_t nSamples, void* data, double repeat)
+{
+	RepeatedWaveform_type* waveform = malloc (sizeof(RepeatedWaveform_type));
+	if (!waveform) return NULL;
+	
+	waveform->waveformType 		= waveformType;
+	waveform->samplingRate 		= samplingRate;
+	waveform->repeat			= repeat;
+	waveform->nSamples			= nSamples;
+	waveform->data				= data;
+	
+	return waveform;
+}
+
+void discard_RepeatedWaveform_type (RepeatedWaveform_type** waveform)
+{
+	if (!*waveform) return;
+	
+	// discard data
+	OKfree((*waveform)->data);
+	
+	OKfree(*waveform);
+}
+
+void* GetRepeatedWaveformDataPtr (RepeatedWaveform_type* waveform, size_t* nSamples)
+{
+	*nSamples = waveform->nSamples;
+	return waveform->data;
+}
+
+double GetRepeatedWaveformRepeats (RepeatedWaveform_type* waveform)
+{
+	return waveform->repeat;
+}
+
+size_t GetRepeatedWaveformNumSamples (RepeatedWaveform_type* waveform)
+{
+	return waveform->nSamples;
+}
+
+size_t GetRepeatedWaveformSizeofData (RepeatedWaveform_type* waveform)
+{
+	size_t dataTypeSize = 0;
+	
+	switch (waveform->waveformType) {
+			
+		case RepeatedWaveform_Char:
+		case RepeatedWaveform_UChar:
+			dataTypeSize = sizeof(char);
+			break;
+			
+		case RepeatedWaveform_Short:
+		case RepeatedWaveform_UShort:
+			dataTypeSize = sizeof(short);
+			break;
+			
+		case RepeatedWaveform_Int:
+		case RepeatedWaveform_UInt:
+			dataTypeSize = sizeof(int);
+			break;
+			
+		case RepeatedWaveform_SSize:
+		case RepeatedWaveform_Size:
+			dataTypeSize = sizeof(size_t);
+			break;
+			
+		case RepeatedWaveform_Float:
+			dataTypeSize = sizeof(float);
+			break;
+			
+		case RepeatedWaveform_Double:
+			dataTypeSize = sizeof(double);
+			break;	
+	}
+	
+	return dataTypeSize;
+	
 }

@@ -97,7 +97,7 @@ struct SinkVChan {
 	// Data
 	//-----------------------
 	
-	PacketTypes*				dataTypes;				// Array of packet data types of PacketTypes that the sink may receive.
+	DLDataTypes*				dataTypes;				// Array of packet data types of DLDataTypes that the sink may receive.
 	size_t						nDataTypes;				// Number of data types that the Sink VChan supports.
 	SourceVChan_type*			sourceVChan;			// SourceVChan attached to this sink.
 	CmtTSQHandle       			tsqHndl; 				// Thread safe queue handle to receive incoming data.
@@ -121,7 +121,7 @@ struct SourceVChan {
 	// Data
 	//-----------------------
 	
-	PacketTypes					dataType;				// Type of data packet which goes through the channel.
+	DLDataTypes					dataType;				// Type of data packet which goes through the channel.
 	ListType					sinkVChans;				// Connected Sink VChans. List of SinkVChan_type*
 											
 };
@@ -264,7 +264,7 @@ static BOOL disconnectSinkVChan (VChan_type* vchan)
 
 
 SourceVChan_type* init_SourceVChan_type	(char 							name[], 
-										 PacketTypes 					dataType,
+										 DLDataTypes 					dataType,
 										 void* 							VChanOwner,
 										 Connected_CBFptr_type			Connected_CBFptr,
 										 Disconnected_CBFptr_type		Disconnected_CBFptr)
@@ -291,7 +291,7 @@ SourceVChan_type* init_SourceVChan_type	(char 							name[],
 }
 
 SinkVChan_type* init_SinkVChan_type	(char 						name[], 
-									 PacketTypes	 			dataTypes[],
+									 DLDataTypes	 			dataTypes[],
 									 size_t						nDataTypes,
 									 void* 						VChanOwner,
 									 Connected_CBFptr_type		Connected_CBFptr,
@@ -312,9 +312,9 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 	vchan->sourceVChan 	= NULL;
 	vchan->nDataTypes	= nDataTypes;
 	// copy data types
-	vchan->dataTypes	= malloc(nDataTypes * sizeof(PacketTypes));
+	vchan->dataTypes	= malloc(nDataTypes * sizeof(DLDataTypes));
 	if (!vchan->dataTypes) goto Error;
-	memcpy(vchan->dataTypes, dataTypes, nDataTypes*sizeof(PacketTypes));
+	memcpy(vchan->dataTypes, dataTypes, nDataTypes*sizeof(DLDataTypes));
 	
 	// init thread safe queue
 	CmtNewTSQ(DEFAULT_SinkVChan_QueueSize, sizeof(DataPacket_type*), 0, &vchan->tsqHndl); 
@@ -599,6 +599,23 @@ SinkVChan_type*	GetSinkVChan (SourceVChan_type* srcVChan, size_t sinkIdx)
 SourceVChan_type* GetSourceVChan (SinkVChan_type* sinkVChan)
 {
 	return sinkVChan->sourceVChan;
+}
+
+void SetSinkVChanDataTypes (SinkVChan_type* sinkVChan, size_t nDataTypes, DLDataTypes dataTypes[])
+{
+	if (!nDataTypes) return;
+	
+	if (sinkVChan->sourceVChan)
+		for (size_t i = 0; i < nDataTypes; i++)
+			if (dataTypes[i] != sinkVChan->sourceVChan->dataType) {
+				VChan_Disconnect((VChan_type*)sinkVChan);
+				break;
+			}
+	// copy new data types
+	OKfree(sinkVChan->dataTypes);
+	sinkVChan->nDataTypes 	= nDataTypes;
+	sinkVChan->dataTypes	= malloc(nDataTypes * sizeof(DLDataTypes));
+	memcpy(sinkVChan->dataTypes, dataTypes, nDataTypes*sizeof(DLDataTypes));
 }
 
 VChanDataFlow_type GetVChanDataFlowType (VChan_type* VChan)

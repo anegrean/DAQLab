@@ -20,6 +20,7 @@
 		
 #include "DAQLabUtility.h"
 #include "DataPacket.h"
+#include "DataTypes.h"
 
 //==============================================================================
 // Constants
@@ -61,14 +62,14 @@ typedef void	(* Disconnected_CBFptr_type) 	(VChan_type* self, VChan_type* discon
 //------------------------------------------------------------------------------
 
 SourceVChan_type*		init_SourceVChan_type				(char 						name[], 
-										  	  	 	 		PacketTypes 				dataType,
+										  	  	 	 		DLDataTypes 				dataType,
 										 	  	 			void* 						VChanOwner,
 												 	 		Connected_CBFptr_type		Connected_CBFptr,
 												 	 		Disconnected_CBFptr_type	Disconnected_CBFptr);
 
-	// Creates a Sink VChan which may support multiple data types. Provide an array of dataTypes of PacketTypes elements.
+	// Creates a Sink VChan which may support multiple data types. Provide an array of dataTypes of DLDataTypes elements.
 SinkVChan_type*			init_SinkVChan_type					(char 						name[], 
-										  	  	 	 		PacketTypes					dataTypes[],
+										  	  	 	 		DLDataTypes					dataTypes[],
 															size_t						nDataTypes,
 										 	  	 	 		void* 						VChanOwner,
 												 	 		Connected_CBFptr_type		Connected_CBFptr,
@@ -120,6 +121,10 @@ char*					GetSinkVChanName					(SourceVChan_type* srcVChan, size_t sinkIdx);
 SinkVChan_type*			GetSinkVChan						(SourceVChan_type* srcVChan, size_t sinkIdx);
 
 SourceVChan_type*		GetSourceVChan						(SinkVChan_type* sinkVChan);
+
+	// Changes the data types a SinkVChan accepts. If there is a Source VChan attached to the Sink VChan, and the data type
+	// of the Source VChan is incompatible with the provided types, then the Sink VChan is disconnected from the Source VChan.
+void					SetSinkVChanDataTypes				(SinkVChan_type* sinkVChan, size_t nDataTypes, DLDataTypes dataTypes[]);
 
 VChanDataFlow_type		GetVChanDataFlowType				(VChan_type* VChan);
 

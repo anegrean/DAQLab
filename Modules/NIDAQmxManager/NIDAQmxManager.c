@@ -44,6 +44,11 @@
 #define DAQmxDefault_CI_Frequency_Task_MeasMethod	Meas_LowFreq1Ctr
 #define DAQmxDefault_CI_Frequency_Task_MeasTime		0.001			// in [s]
 #define DAQmxDefault_CI_Frequency_Task_Divisor		4
+  	// CO Frequency     
+#define DAQmxDefault_CO_Frequency_Task_hightime		0.0005   		// the time the pulse stays high [s]
+#define DAQmxDefault_CO_Frequency_Task_lowtime     	0.0005			// the time the pulse stays low [s]
+#define DAQmxDefault_CO_Frequency_Task_initialdel 	0			    // initial delay [s]
+#define DAQmxDefault_CO_Frequency_Task_idlestate    0    			// LOW = 0, HIGH = 1 - terminal state at rest, pulses switch this to the oposite state
 
 
 	// DAQmx task settings tab names
@@ -58,6 +63,13 @@
 #define DAQmxAIAOTskSet_SettingsTabIdx				1
 #define DAQmxAIAOTskSet_TimingTabIdx				2
 #define DAQmxAIAOTskSet_TriggerTabIdx				3
+
+	// DAQmx CI and CO task settings tab indices
+
+#define DAQmxCICOTskSet_SettingsTabIdx				0
+#define DAQmxCICOTskSet_TimingTabIdx				1
+#define DAQmxCICOTskSet_ClkTabIdx					2  
+#define DAQmxCICOTskSet_TriggerTabIdx				3
 
 	// DAQmx error macro
 #define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto DAQmxError; else
@@ -431,6 +443,7 @@ typedef struct {
 	BOOL					useRefNSamples;				// The number of samples to be acquired by this module is taken from the connecting VChan.
 	BOOL					useRefSamplingRate;			// The sampling rate used by this module is taken from the connecting VChan.
 } TaskTiming_type;
+
 	
 typedef struct {
 	Trig_type 				trigType;					// Trigger type.
@@ -451,6 +464,8 @@ typedef struct {
 	int						windowTopCtrlID;			// Trigger setting control copy IDs
 	int						windowBottomCtrlID;			// Trigger setting control copy IDs
 } TaskTrig_type;
+
+
 
 typedef struct ChanSet	ChanSet_type;
 typedef void (*DiscardChanSetFptr_type) (ChanSet_type** chanSet);
@@ -616,6 +631,8 @@ typedef struct {
 // CI
 typedef struct {
 	// DAQmx task handles are specified per counter channel within chanTaskSet
+	int						panHndl;					// Panel handle to task settings.
+	TaskHandle				taskHndl;					// DAQmx task handle for hw-timed CI
 	ListType 				chanTaskSet;   				// Channel and task settings. Of ChanSet_type*
 	double        			timeout;       				// Task timeout [s]
 } CITaskSet_type;
@@ -623,6 +640,8 @@ typedef struct {
 // CO
 typedef struct {
 	// DAQmx task handles are specified per counter channel chanTaskSet
+	int						panHndl;					// Panel handle to task settings.
+	TaskHandle				taskHndl;					// DAQmx task handle for hw-timed CO.
 	ListType 				chanTaskSet;     			// Channel and task settings. Of ChanSet_type*
 	double        			timeout;       				// Task timeout [s]
 } COTaskSet_type;
@@ -771,6 +790,9 @@ static void							discard_ChanSet_DIDO_type				(ChanSet_type** a);
 	// CI
 static ChanSet_type* 				init_ChanSet_CI_Frequency_type 			(char physChanName[]);
 static void 						discard_ChanSet_CI_Frequency_type 		(ChanSet_type** a);
+	//CO
+static ChanSet_type* 				init_ChanSet_CO_type 					(char physChanName[]);
+static void 						discard_ChanSet_CO_type 				(ChanSet_type** a);
 
 	// channels & property lists
 static ListType						GetPhysChanPropertyList					(char chanName[], int chanProperty); 
@@ -778,6 +800,8 @@ static void							PopulateChannels						(Dev_type* dev);
 static int							AddDAQmxChannel							(Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type ioMode, int ioType, char chName[]);
 static int 							RemoveDAQmxAIChannel_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int 							RemoveDAQmxAOChannel_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
+static int 							RemoveDAQmxCIChannel_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int 			 				RemoveDAQmxCOChannel_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
 
 	// IO mode/type
 static ListType						GetSupportedIOTypes						(char devName[], int IOType);
@@ -959,7 +983,7 @@ static FCallReturn_type*			DataReceivedTC							(TaskControl_type* taskControl, 
 
 static FCallReturn_type*			ModuleEventHandler						(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);  
 
-
+void GetCO_HiLo(double freq,double dutycycle,double* hightime,double* lowtime);
 
 //========================================================================================================================================================================================================
 // Global variables
@@ -1221,7 +1245,11 @@ static DevAttr_type* copy_DevAttr_type(DevAttr_type* attr)
 	if (!(	a -> AISupportedMeasTypes	= ListCopy(attr->AISupportedMeasTypes)))		goto Error; 
 	if (!(	a -> AOSupportedOutputTypes	= ListCopy(attr->AOSupportedOutputTypes)))		goto Error; 
 	if (!(	a -> CISupportedMeasTypes	= ListCopy(attr->CISupportedMeasTypes)))		goto Error; 
-	if (!(	a -> COSupportedOutputTypes	= ListCopy(attr->COSupportedOutputTypes)))		goto Error;
+	
+	//null check, return with empty list instead of an error
+	if (attr->COSupportedOutputTypes!=NULL)	
+		a -> COSupportedOutputTypes	= ListCopy(attr->COSupportedOutputTypes);		
+	else  a -> COSupportedOutputTypes=ListCreate(sizeof(int));
 	
 	return a;
 	
@@ -2068,6 +2096,61 @@ static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callb
 	return 0;
 }
 
+
+// CI Edge channel UI callback for setting channel properties
+static int ChanSetCIEdge_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	CIEdgeChanSet_type* chSetPtr = callbackData;
+	int mode;
+	
+	if (event != EVENT_COMMIT) return 0;
+	
+	switch(control) {
+			
+	//	case CICOChSet_Mode:
+			
+	//		GetCtrlVal(panel, control,&mode );
+		//	chSetPtr->baseClass.
+	//		break;
+			
+	
+			
+		case SETPAN_VChanName:
+			
+			// fill out action for VChan
+			
+			break;
+	}
+	
+	return 0;
+}
+
+
+// CO channel UI callback for setting properties
+static int ChanSetCO_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	Dev_type*	dev = callbackData;
+	
+	
+	if (event != EVENT_COMMIT) return 0;
+	
+	switch(control) {
+			
+		case SETPAN_Timeout:
+			
+			GetCtrlVal(panel,control,&dev->COTaskSet->timeout);
+			break;
+		
+		case SETPAN_VChanName:
+			
+			// fill out action for VChan
+			
+			break;
+	}
+	
+	return 0;
+}
+
 //------------------------------------------------------------------------------
 // ChanSet_DIDO_type
 //------------------------------------------------------------------------------
@@ -2132,6 +2215,43 @@ static void discard_ChanSet_CI_Frequency_type (ChanSet_type** a)
 	// discard base class
 	discard_ChanSet_type(a);
 }
+
+
+//------------------------------------------------------------------------------
+// ChanSet_CO_type
+//------------------------------------------------------------------------------
+static ChanSet_type* init_ChanSet_CO_type (char physChanName[])
+{
+	COChanSet_type* a = malloc (sizeof(COChanSet_type));
+	if (!a) return NULL;
+	
+	// initialize base class
+	init_ChanSet_type(&a->baseClass, physChanName, Chan_CO_Pulse_Frequency, discard_ChanSet_CO_type); 
+	
+			a ->hightime			= DAQmxDefault_CO_Frequency_Task_hightime;
+			a ->lowtime				= DAQmxDefault_CO_Frequency_Task_lowtime;    
+			a ->initialdel			= DAQmxDefault_CO_Frequency_Task_initialdel;
+			a ->idlestate			= DAQmxDefault_CO_Frequency_Task_idlestate;   
+
+	return (ChanSet_type*)a;
+Error:
+	OKfree(a);
+	return NULL;
+}
+
+static void discard_ChanSet_CO_type (ChanSet_type** a)
+{
+	if (!*a) return; 
+	
+	COChanSet_type* chCOPtr = *(COChanSet_type**) a;
+	
+//	OKfree(chCOPtr->freqInputTerminal);
+//	discard_TaskTiming_type(&chCOPtr->timing);
+	
+	// discard base class
+	discard_ChanSet_type(a);
+}
+
 
 
 //------------------------------------------------------------------------------
@@ -2621,12 +2741,175 @@ static void	discard_CITaskSet_type (CITaskSet_type** a)
 //------------------------------------------------------------------------------
 static COTaskSet_type* init_COTaskSet_type (void)
 {
+	COTaskSet_type* a = malloc (sizeof(COTaskSet_type));
 	
+	if (!a) return NULL;
+	
+	a -> timeout		= DAQmxDefault_Task_Timeout;
+	// init
+	a -> chanTaskSet	= 0;
+	
+	if (!(	a -> chanTaskSet	= ListCreate(sizeof(ChanSet_type*)))) 	goto Error;
+	
+	return a;
+Error:
+	if (a->chanTaskSet) ListDispose(a->chanTaskSet);
+	OKfree(a);
+	return NULL;
 }
 
 static void discard_COTaskSet_type (COTaskSet_type** a)
 {
-	if (!*a) return; 
+	if (!*a) return;
+	
+		// channels and DAQmx tasks
+	if ((*a)->chanTaskSet) {
+		ChanSet_type** 	chanSetPtrPtr;
+		size_t			nItems			= ListNumItems((*a)->chanTaskSet);
+		for (size_t i = 1; i <= nItems; i++) {	
+			chanSetPtrPtr = ListGetPtrToItem((*a)->chanTaskSet, i);
+			(*(*chanSetPtrPtr)->discardFptr)	((ChanSet_type**)chanSetPtrPtr);
+		}
+		ListDispose((*a)->chanTaskSet);
+	}
+	
+	OKfree(*a);
+	
+}
+
+
+static int CO_Timing_TaskSet_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	COChanSet_type* selectedChan = callbackData;
+	int idlestate;
+	double delay;
+	double freq;
+	double dutycycle;
+	
+	if (event != EVENT_COMMIT) return 0;
+	
+	
+	
+	switch (control) { 
+		case TIMPAN_IdleState:
+			GetCtrlVal(panel,control,&idlestate);
+			selectedChan->idlestate=idlestate;
+			break;
+		case TIMPAN_Frequency:
+			  GetCtrlVal(panel,control,&freq); 
+			  GetCtrlVal(panel,TIMPAN_DutyCycle,&dutycycle);
+			  GetCO_HiLo(freq,dutycycle,&selectedChan->hightime,&selectedChan->lowtime);
+			break;
+		case TIMPAN_InitialDelay:
+			  GetCtrlVal(panel,control,&delay);
+			  selectedChan->initialdel=delay;
+			break;
+			
+		case TIMPAN_DutyCycle:
+				GetCtrlVal(panel,control,&dutycycle);
+				GetCtrlVal(panel,TIMPAN_Frequency,&freq);
+				GetCO_HiLo(freq,dutycycle,&selectedChan->hightime,&selectedChan->lowtime);
+				
+			break;
+			
+	
+			
+	}
+	
+	return 0;
+	
+}
+
+static int CO_Clk_TaskSet_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	COChanSet_type* selectedChan = callbackData; 
+	int buffsize = 0; 
+	int intval;
+	
+	if (event != EVENT_COMMIT) return 0;
+	
+	
+	switch (control) { 
+			
+		case  CLKPAN_RefClockSlope: 
+			  	GetCtrlVal(panel, control,&intval);
+				if (intval==TrigSlope_Rising) selectedChan->baseClass.referenceTrig->slope=TrigSlope_Rising;
+				if (intval==TrigSlope_Falling) selectedChan->baseClass.referenceTrig->slope=TrigSlope_Falling; 
+			break;
+ 		case  CLKPAN_RefClockType:  
+				GetCtrlVal(panel, control,&intval); 
+				if (intval==Trig_None) {
+					selectedChan->baseClass.referenceTrig->trigType=Trig_None;
+					SetCtrlAttribute(panel,CLKPAN_RefClockSlope,ATTR_DIMMED,TRUE);
+					SetCtrlAttribute(panel,CLKPAN_RefClkSource,ATTR_DIMMED,TRUE); 
+				}
+				if (intval==Trig_DigitalEdge) {
+					selectedChan->baseClass.referenceTrig->trigType=Trig_DigitalEdge;
+					SetCtrlAttribute(panel,CLKPAN_RefClockSlope,ATTR_DIMMED,FALSE);
+					SetCtrlAttribute(panel,CLKPAN_RefClkSource,ATTR_DIMMED,FALSE); 
+				}
+				
+			break;
+		default:
+				GetCtrlAttribute(panel, CLKPAN_RefClkSource, ATTR_STRING_TEXT_LENGTH, &buffsize);   
+				OKfree(selectedChan->baseClass.referenceTrig->trigSource);
+				selectedChan->baseClass.referenceTrig->trigSource = malloc((buffsize+1) * sizeof(char)); // including ASCII null
+				GetCtrlVal(panel, control, selectedChan->baseClass.referenceTrig->trigSource);
+				SetCtrlVal(panel, CLKPAN_RefClkSource, selectedChan->baseClass.referenceTrig->trigSource);  
+			break;
+			
+	
+			
+	}
+	
+	return 0;
+	
+}
+
+
+static int CO_Trig_TaskSet_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	COChanSet_type* selectedChan = callbackData; 
+	int buffsize = 0; 
+	int intval;
+	
+	if (event != EVENT_COMMIT) return 0;
+	
+	
+	switch (control) { 
+			
+		case  TRIGPAN_Slope: 
+			  	GetCtrlVal(panel, control,&intval);
+				if (intval==TrigSlope_Rising) selectedChan->baseClass.startTrig->slope=TrigSlope_Rising;
+				if (intval==TrigSlope_Falling) selectedChan->baseClass.startTrig->slope=TrigSlope_Falling; 
+			break;
+ 		case  TRIGPAN_TrigType:  
+				GetCtrlVal(panel, control,&intval); 
+				if (intval==Trig_None) {
+					selectedChan->baseClass.referenceTrig->trigType=Trig_None;
+					SetCtrlAttribute(panel,TRIGPAN_Slope,ATTR_DIMMED,TRUE);
+					SetCtrlAttribute(panel,TRIGPAN_Source,ATTR_DIMMED,TRUE); 
+				}
+				if (intval==Trig_DigitalEdge) {
+					selectedChan->baseClass.referenceTrig->trigType=Trig_DigitalEdge;
+					SetCtrlAttribute(panel,TRIGPAN_Slope,ATTR_DIMMED,FALSE);
+					SetCtrlAttribute(panel,TRIGPAN_Source,ATTR_DIMMED,FALSE); 
+				}
+				
+			break;
+		default:
+				GetCtrlAttribute(panel, TRIGPAN_Source, ATTR_STRING_TEXT_LENGTH, &buffsize);   
+				OKfree(selectedChan->baseClass.startTrig->trigSource);
+				selectedChan->baseClass.startTrig->trigSource = malloc((buffsize+1) * sizeof(char)); // including ASCII null
+				GetCtrlVal(panel, control, selectedChan->baseClass.startTrig->trigSource);
+				SetCtrlVal(panel, TRIGPAN_Source, selectedChan->baseClass.startTrig->trigSource);  
+			break;
+			
+	
+			
+	}
+	
+	return 0;
 	
 }
 
@@ -3220,138 +3503,161 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		//------------------------------------------------
 		
 		// 5. AI
-		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_PhysicalChans, NULL));  
-		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_PhysicalChans, *idxstr, buffersize));
-		nAI = 0; 															
-		tmpsubstr = substr (", ", idxstr);										
-		while (tmpsubstr != NULL) {												
-			if (!(newAIChanPtr = init_AIChannel_type())) goto Error;			
-			newAIChanPtr->physChanName 			= tmpsubstr;
-			newAIChanPtr->supportedMeasTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_AI_SupportedMeasTypes);  
-			newAIChanPtr->Vrngs					= GetIORanges(dev_pt, DAQmx_Dev_AI_VoltageRngs);
-			newAIChanPtr->Irngs					= GetIORanges(dev_pt, DAQmx_Dev_AI_CurrentRngs);
-			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_AI_TermCfgs, &newAIChanPtr->terminalCfg); 
-			ListInsertItem (devAttrPtr->AIchan, &newAIChanPtr, END_OF_LIST);						
-			tmpsubstr = substr (", ", idxstr); 									
-			nAI++; 															
-		} 					
+		nAI = 0;
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_PhysicalChans, NULL));
+		if (buffersize){   //process info if available         
+			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_PhysicalChans, *idxstr, buffersize));
+		 															
+			tmpsubstr = substr (", ", idxstr);										
+			while (tmpsubstr != NULL) {												
+				if (!(newAIChanPtr = init_AIChannel_type())) goto Error;			
+				newAIChanPtr->physChanName 			= tmpsubstr;
+				newAIChanPtr->supportedMeasTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_AI_SupportedMeasTypes);  
+				newAIChanPtr->Vrngs					= GetIORanges(dev_pt, DAQmx_Dev_AI_VoltageRngs);
+				newAIChanPtr->Irngs					= GetIORanges(dev_pt, DAQmx_Dev_AI_CurrentRngs);
+				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_AI_TermCfgs, &newAIChanPtr->terminalCfg); 
+				ListInsertItem (devAttrPtr->AIchan, &newAIChanPtr, END_OF_LIST);						
+				tmpsubstr = substr (", ", idxstr); 									
+				nAI++; 															
+			} 	
+		}
 		
 		// 6. AO
+		nAO = 0;
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_PhysicalChans, NULL));  
-		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_PhysicalChans, *idxstr, buffersize));
-		nAO = 0; 															
-		tmpsubstr = substr (", ", idxstr);										
-		while (tmpsubstr != NULL) {												
-			if (!(newAOChanPtr = init_AOChannel_type())) goto Error;			
-			newAOChanPtr->physChanName 			= tmpsubstr;
-			newAOChanPtr->supportedOutputTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_AO_SupportedOutputTypes);  
-			newAOChanPtr->Vrngs					= GetIORanges(dev_pt, DAQmx_Dev_AO_VoltageRngs);
-			newAOChanPtr->Irngs					= GetIORanges(dev_pt, DAQmx_Dev_AO_CurrentRngs);
-			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_AO_TermCfgs, &newAOChanPtr->terminalCfg); 
-			ListInsertItem (devAttrPtr->AOchan, &newAOChanPtr, END_OF_LIST);						
-			tmpsubstr = substr (", ", idxstr); 									
-			nAO++; 															
-		} 	
+		if (buffersize){   //process info if available     
+			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_PhysicalChans, *idxstr, buffersize));
+																
+			tmpsubstr = substr (", ", idxstr);										
+			while (tmpsubstr != NULL) {												
+				if (!(newAOChanPtr = init_AOChannel_type())) goto Error;			
+				newAOChanPtr->physChanName 			= tmpsubstr;
+				newAOChanPtr->supportedOutputTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_AO_SupportedOutputTypes);  
+				newAOChanPtr->Vrngs					= GetIORanges(dev_pt, DAQmx_Dev_AO_VoltageRngs);
+				newAOChanPtr->Irngs					= GetIORanges(dev_pt, DAQmx_Dev_AO_CurrentRngs);
+				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_AO_TermCfgs, &newAOChanPtr->terminalCfg); 
+				ListInsertItem (devAttrPtr->AOchan, &newAOChanPtr, END_OF_LIST);						
+				tmpsubstr = substr (", ", idxstr); 									
+				nAO++; 															
+			}
+		}
 					 
 		// 7. DI lines
+		nDIlines = 0; 
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Lines, NULL));  
-		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Lines, *idxstr, buffersize));
-		nDIlines = 0; 															
-		tmpsubstr = substr (", ", idxstr);										
-		while (tmpsubstr != NULL) {												
-			if (!(newDILineChanPtr = init_DILineChannel_type())) goto Error;			
-			newDILineChanPtr->physChanName 			= tmpsubstr;
-			newDILineChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DI_SampModes);  
-			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_ChangeDetectSupported, &newDILineChanPtr->changeDetectSupported);
-			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_SampClkSupported, &newDILineChanPtr->sampClkSupported);
-			ListInsertItem (devAttrPtr->DIlines, &newDILineChanPtr, END_OF_LIST);						
-			tmpsubstr = substr (", ", idxstr); 									
-			nDIlines++; 															
-		} 	
+		if (buffersize){   //process info if available           
+			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Lines, *idxstr, buffersize));
+			tmpsubstr = substr (", ", idxstr);										
+			while (tmpsubstr != NULL) {												
+				if (!(newDILineChanPtr = init_DILineChannel_type())) goto Error;			
+				newDILineChanPtr->physChanName 			= tmpsubstr;
+				newDILineChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DI_SampModes);  
+				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_ChangeDetectSupported, &newDILineChanPtr->changeDetectSupported);
+				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_SampClkSupported, &newDILineChanPtr->sampClkSupported);
+				ListInsertItem (devAttrPtr->DIlines, &newDILineChanPtr, END_OF_LIST);						
+				tmpsubstr = substr (", ", idxstr); 									
+				nDIlines++; 															
+			} 	
+		}
 		
 		// 8. DI ports
-		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Ports, NULL));  
-		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Ports, *idxstr, buffersize));
-		nDIports = 0; 															
-		tmpsubstr = substr (", ", idxstr);										
-		while (tmpsubstr != NULL) {												
-			if (!(newDIPortChanPtr = init_DIPortChannel_type())) goto Error;			
-			newDIPortChanPtr->physChanName 			= tmpsubstr;
-			newDIPortChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DI_SampModes);  
-			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_ChangeDetectSupported, &newDIPortChanPtr->changeDetectSupported);
-			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_SampClkSupported, &newDIPortChanPtr->sampClkSupported);
-			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_PortWidth, &newDIPortChanPtr->portWidth);
-			ListInsertItem (devAttrPtr->DIports, &newDIPortChanPtr, END_OF_LIST);						
-			tmpsubstr = substr (", ", idxstr); 									
-			nDIports++; 															
-		} 	
+		nDIports = 0; 
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Ports, NULL));
+		if (buffersize){   //process info if available   
+			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Ports, *idxstr, buffersize));
+																	
+			tmpsubstr = substr (", ", idxstr);										
+			while (tmpsubstr != NULL) {												
+				if (!(newDIPortChanPtr = init_DIPortChannel_type())) goto Error;			
+				newDIPortChanPtr->physChanName 			= tmpsubstr;
+				newDIPortChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DI_SampModes);  
+				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_ChangeDetectSupported, &newDIPortChanPtr->changeDetectSupported);
+				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_SampClkSupported, &newDIPortChanPtr->sampClkSupported);
+				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_PortWidth, &newDIPortChanPtr->portWidth);
+				ListInsertItem (devAttrPtr->DIports, &newDIPortChanPtr, END_OF_LIST);						
+				tmpsubstr = substr (", ", idxstr); 									
+				nDIports++; 															
+			} 
+		}
 		
 		// 9. DO lines
+		nDOlines = 0; 
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Lines, NULL));  
-		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Lines, *idxstr, buffersize));
-		nDOlines = 0; 															
-		tmpsubstr = substr (", ", idxstr);										
-		while (tmpsubstr != NULL) {												
-			if (!(newDOLineChanPtr = init_DOLineChannel_type())) goto Error;			
-			newDOLineChanPtr->physChanName 			= tmpsubstr;
-			newDOLineChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DO_SampModes);  
-			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_SampClkSupported, &newDOLineChanPtr->sampClkSupported);
-			ListInsertItem (devAttrPtr->DOlines, &newDOLineChanPtr, END_OF_LIST);						
-			tmpsubstr = substr (", ", idxstr); 									
-			nDOlines++; 															
-		} 	
+		if (buffersize){   //process info if available   
+			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Lines, *idxstr, buffersize));
+																	
+			tmpsubstr = substr (", ", idxstr);										
+			while (tmpsubstr != NULL) {												
+				if (!(newDOLineChanPtr = init_DOLineChannel_type())) goto Error;			
+				newDOLineChanPtr->physChanName 			= tmpsubstr;
+				newDOLineChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DO_SampModes);  
+				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_SampClkSupported, &newDOLineChanPtr->sampClkSupported);
+				ListInsertItem (devAttrPtr->DOlines, &newDOLineChanPtr, END_OF_LIST);						
+				tmpsubstr = substr (", ", idxstr); 									
+				nDOlines++; 															
+			} 
+		}
 		
 		// 10. DO ports
-		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Ports, NULL));  
-		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Ports, *idxstr, buffersize));
-		nDOports = 0; 															
-		tmpsubstr = substr (", ", idxstr);										
-		while (tmpsubstr != NULL) {												
-			if (!(newDOPortChanPtr = init_DOPortChannel_type())) goto Error;			
-			newDOPortChanPtr->physChanName 			= tmpsubstr;
-			newDOPortChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DO_SampModes);  
-			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_SampClkSupported, &newDOPortChanPtr->sampClkSupported);
-			DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_PortWidth, &newDOPortChanPtr->portWidth);  
-			ListInsertItem (devAttrPtr->DOports, &newDOPortChanPtr, END_OF_LIST);						
-			tmpsubstr = substr (", ", idxstr); 									
-			nDOports++; 															
-		} 	
+		nDOports = 0; 
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Ports, NULL));
+		if (buffersize){   //process info if available    
+			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Ports, *idxstr, buffersize));
+																	
+			tmpsubstr = substr (", ", idxstr);										
+			while (tmpsubstr != NULL) {												
+				if (!(newDOPortChanPtr = init_DOPortChannel_type())) goto Error;			
+				newDOPortChanPtr->physChanName 			= tmpsubstr;
+				newDOPortChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DO_SampModes);  
+				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_SampClkSupported, &newDOPortChanPtr->sampClkSupported);
+				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_PortWidth, &newDOPortChanPtr->portWidth);  
+				ListInsertItem (devAttrPtr->DOports, &newDOPortChanPtr, END_OF_LIST);						
+				tmpsubstr = substr (", ", idxstr); 									
+				nDOports++; 															
+			}
+		}
 		
 		// 11. CI 
-		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CI_PhysicalChans, NULL));  
+		nCI = 0;
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CI_PhysicalChans, NULL));
+		if (buffersize){   //process info if available        
 		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CI_PhysicalChans, *idxstr, buffersize));
-		nCI = 0; 															
-		tmpsubstr = substr (", ", idxstr);										
-		while (tmpsubstr != NULL) {												
-			if (!(newCIChanPtr = init_CIChannel_type())) goto Error;			
-			newCIChanPtr->physChanName 			= tmpsubstr;
-			newCIChanPtr->supportedMeasTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_CI_SupportedMeasTypes);  
-			ListInsertItem (devAttrPtr->CIchan, &newCIChanPtr, END_OF_LIST);						
-			tmpsubstr = substr (", ", idxstr); 									
-			nCI++; 															
-		} 	
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CI_PhysicalChans, *idxstr, buffersize));
+																	
+			tmpsubstr = substr (", ", idxstr);										
+			while (tmpsubstr != NULL) {												
+				if (!(newCIChanPtr = init_CIChannel_type())) goto Error;			
+				newCIChanPtr->physChanName 			= tmpsubstr;
+				newCIChanPtr->supportedMeasTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_CI_SupportedMeasTypes);  
+				ListInsertItem (devAttrPtr->CIchan, &newCIChanPtr, END_OF_LIST);						
+				tmpsubstr = substr (", ", idxstr); 									
+				nCI++; 															
+			} 
+		}
 		
 		// 12. CO 
-		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CO_PhysicalChans, NULL));  
-		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CO_PhysicalChans, *idxstr, buffersize));
-		nCO = 0; 															
-		tmpsubstr = substr (", ", idxstr);										
-		while (tmpsubstr != NULL) {												
-			if (!(newCOChanPtr = init_COChannel_type())) goto Error;			
-			newCOChanPtr->physChanName 			= tmpsubstr;
-			newCOChanPtr->supportedOutputTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_CO_SupportedOutputTypes);  
-			ListInsertItem (devAttrPtr->COchan, &newCOChanPtr, END_OF_LIST);						
-			tmpsubstr = substr (", ", idxstr); 									
-			nCO++; 															
-		} 	
+		nCO = 0; 
+		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CO_PhysicalChans, NULL));
+		if (buffersize){   //process info if available
+			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CO_PhysicalChans, *idxstr, buffersize));
+																	
+			tmpsubstr = substr (", ", idxstr);										
+			while (tmpsubstr != NULL) {												
+				if (!(newCOChanPtr = init_COChannel_type())) goto Error;			
+				newCOChanPtr->physChanName 			= tmpsubstr;
+				newCOChanPtr->supportedOutputTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_CO_SupportedOutputTypes);  
+				ListInsertItem (devAttrPtr->COchan, &newCOChanPtr, END_OF_LIST);						
+				tmpsubstr = substr (", ", idxstr); 									
+				nCO++; 															
+			} 
+		}
 		
 		// 13. Single Channel AI max rate
 		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_MaxSingleChanRate, &devAttrPtr->AISCmaxrate)); 	// [Hz]
@@ -3360,13 +3666,13 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		// 15. AI min rate 
 		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_MinRate, &devAttrPtr->AIminrate));  	         	// [Hz] 
 		// 16. AO max rate  
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_MaxRate, &devAttrPtr->AOmaxrate)); 			 	// [Hz]
+//test		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_MaxRate, &devAttrPtr->AOmaxrate)); 			 	// [Hz]
 		// 17. AO min rate  
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_MinRate, &devAttrPtr->AOminrate)); 			 	// [Hz]
+//test		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_MinRate, &devAttrPtr->AOminrate)); 			 	// [Hz]
 		// 18. DI max rate
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_MaxRate, &devAttrPtr->DImaxrate)); 			 	// [Hz]
+//test		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_MaxRate, &devAttrPtr->DImaxrate)); 			 	// [Hz]
 		// 19. DO max rate
-		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_MaxRate, &devAttrPtr->DOmaxrate));    		 		// [Hz]
+//test		errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_MaxRate, &devAttrPtr->DOmaxrate));    		 		// [Hz]
 		
 		// --- Triggering ---
 		
@@ -4510,6 +4816,148 @@ static int RemoveDAQmxAOChannel_CB (int panel, int control, int event, void *cal
 	return 0;
 }
 
+
+static int RemoveDAQmxCIChannel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+		
+		case EVENT_KEYPRESS: 
+			
+			// continue only if Del key is pressed
+			if (eventData1 != VAL_FWD_DELETE_VKEY) break;
+			
+		case EVENT_LEFT_DOUBLE_CLICK:
+			
+			Dev_type*	dev = callbackData; 
+			
+			int tabIdx;
+			GetActiveTabPage(panel, control, &tabIdx);
+			int chanTabPanHndl;
+			GetPanelHandleFromTabPage(panel, control, tabIdx, &chanTabPanHndl);
+			ChanSet_type* ciChanPtr;
+			GetPanelAttribute(chanTabPanHndl, ATTR_CALLBACK_DATA, &ciChanPtr);
+			// if this is the "None" labelled tab stop here
+			if (!ciChanPtr) break;
+				
+			// mark channel as available again
+			CIChannel_type* CIChanAttr 	= GetCIChannel(dev, ciChanPtr->name);
+			CIChanAttr->inUse = FALSE;
+			// remove channel from CI task
+	/*		ChanSet_type** 	chanSetPtrPtr;
+			size_t			nItems			= ListNumItems(dev->CITaskSet->chanSet);
+			size_t			chIdx			= 1;
+			for (size_t i = 1; i <= nItems; i++) {	
+				chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanSet, i);
+				if (*chanSetPtrPtr == ciChanPtr) {
+					// remove from framework
+					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtrPtr)->sinkVChan);
+					// detach from Task Controller										 
+					RemoveSinkVChan(dev->taskController, (*chanSetPtrPtr)->sinkVChan);
+					// discard channel data structure
+					(*(*chanSetPtrPtr)->discardFptr)	(chanSetPtrPtr);
+					ListRemoveItem(dev->CITaskSet->chanSet, 0, chIdx);
+					break;
+				}
+				chIdx++;
+			}		   */
+			
+			// remove channel tab
+			DeleteTabPage(panel, control, tabIdx, 1);
+			int nTabs;
+			GetNumTabPages(panel, control, &nTabs);
+			// if there are no more channels, remove CI task
+			if (!nTabs) {
+				discard_CITaskSet_type(&dev->CITaskSet);
+				int tabIdx;
+				GetActiveTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, &tabIdx);
+				DeleteTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, tabIdx, 1);
+				GetNumTabPages(dev->devPanHndl, TaskSetPan_DAQTasks, &nTabs);
+				// if there are no more tabs, add back the "None" labelled tab
+				if (!nTabs)
+					InsertTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, -1, "None");
+			}
+			
+			// refresh channel list
+			PopulateChannels(dev);
+				
+			break;
+	}
+	
+	return 0;
+}
+
+
+
+static int RemoveDAQmxCOChannel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	switch (event) {
+		
+		case EVENT_KEYPRESS: 
+			
+			// continue only if Del key is pressed
+			if (eventData1 != VAL_FWD_DELETE_VKEY) break;
+			
+		case EVENT_LEFT_DOUBLE_CLICK:
+			
+			Dev_type*	dev = callbackData; 
+			
+			int tabIdx;
+			GetActiveTabPage(panel, control, &tabIdx);
+			int chanTabPanHndl;
+			GetPanelHandleFromTabPage(panel, control, tabIdx, &chanTabPanHndl);
+			ChanSet_type* coChanPtr;
+			GetPanelAttribute(chanTabPanHndl, ATTR_CALLBACK_DATA, &coChanPtr);
+			// if this is the "None" labelled tab stop here
+			if (!coChanPtr) break;
+				
+			// mark channel as available again
+			COChannel_type* COChanAttr 	= GetCOChannel(dev, coChanPtr->name);
+			COChanAttr->inUse = FALSE;
+			// remove channel from CO task
+			ChanSet_type** 	chanSetPtrPtr;
+			size_t			nItems			= ListNumItems(dev->COTaskSet->chanTaskSet);
+			size_t			chIdx			= 1;
+			for (size_t i = 1; i <= nItems; i++) {	
+				chanSetPtrPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+				if (*chanSetPtrPtr == coChanPtr) {
+					// remove from framework
+					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtrPtr)->srcVChan);
+					// detach from Task Controller										 
+				//	RemoveSinkVChan(dev->taskController, (*chanSetPtrPtr)->srcVChan);
+					// discard channel data structure
+					(*(*chanSetPtrPtr)->discardFptr)	(chanSetPtrPtr);
+					ListRemoveItem(dev->COTaskSet->chanTaskSet, 0, chIdx);
+					break;
+				}
+				chIdx++;
+			}		   
+			
+			// remove channel tab
+			DeleteTabPage(panel, control, tabIdx, 1);
+			int nTabs;
+			GetNumTabPages(panel, control, &nTabs);
+			// if there are no more channels, remove CO task
+			if (!nTabs) {
+				discard_COTaskSet_type(&dev->COTaskSet);
+				int tabIdx;
+				GetActiveTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, &tabIdx);
+				DeleteTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, tabIdx, 1);
+				GetNumTabPages(dev->devPanHndl, TaskSetPan_DAQTasks, &nTabs);
+				// if there are no more tabs, add back the "None" labelled tab
+				if (!nTabs)
+					InsertTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, -1, "None");
+			}
+			
+			// refresh channel list
+			PopulateChannels(dev);
+				
+			break;
+	}
+	
+	return 0;
+}		 
+
+
 int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	switch (event)
@@ -4653,6 +5101,20 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 			break;
 	}
 	return 0;
+}
+
+void GetCO_HiLo(double freq,double dutycycle,double* hightime,double* lowtime)
+{
+	double period;
+	if (freq!=0) {
+		period=1/freq;
+		*hightime=(period*dutycycle)/100;
+		*lowtime=period-*hightime;
+	}
+	else {
+		*hightime		= DAQmxDefault_CO_Frequency_Task_hightime;
+		*lowtime		= DAQmxDefault_CO_Frequency_Task_lowtime;    
+	}
 }
 
 
@@ -5013,7 +5475,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							//---------------------------------------
 							ListInsertItem(dev->AITaskSet->chanSet, &newChan, END_OF_LIST);
 							
-							break;
+							 break;
 							//--------------------------------------  
 							// add here more channel cases
 							//--------------------------------------  
@@ -5027,7 +5489,97 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					break;
 			
 				case DAQmxCounter:
+						   			// try to use physical channel name for the VChan name, if it exists, then ask for another name
+						newVChanName= StrDup(chName);
+						if (DLVChanNameExists(newVChanName, NULL)) {
+							OKfree(newVChanName);
+							newVChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
+							if (!newVChanName) return 0;	// action cancelled
+						}
+					
+						//-------------------------------------------------
+						// if there is no CI task then create it and add UI
+						//-------------------------------------------------
+							
+						if(!dev->CITaskSet) {
+							// init CO task structure data
+							dev->CITaskSet = (CITaskSet_type*) init_CITaskSet_type();    
+								
+					
+							 
+							
+							// load UI resources
+							int CICOTaskSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOTskSet);  
+							// insert panel to UI and keep track of the AI task settings panel handle
+							int newTabIdx = InsertPanelAsTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, -1, CICOTaskSetPanHndl); 
+							GetPanelHandleFromTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, newTabIdx, &dev->CITaskSet->panHndl);
+							// change tab title to new Task Controller name
+							SetTabPageAttribute(dev->devPanHndl, TaskSetPan_DAQTasks, newTabIdx, ATTR_LABEL_TEXT, DAQmxCITaskSetTabName);
+							
+								// remove "None" labelled task settings tab (always first tab) if its panel doesn't have callback data attached to it  
+							int 	panHndl;
+							void*   callbackData;
+							GetPanelHandleFromTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, 0, &panHndl);
+							GetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, &callbackData); 
+							if (!callbackData) DeleteTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, 0, 1);
+							// connect AI task settings data to the panel
+							SetPanelAttribute(dev->CITaskSet->panHndl, ATTR_CALLBACK_DATA, dev->CITaskSet);
+								
+								//--------------------------
+							// adjust "Channels" tab
+							//--------------------------
+							// get channels tab panel handle
+							int chanPanHndl;
+					//		GetPanelHandleFromTabPage(dev->CITaskSet->panHndl, CICOTskSet_Tab, DAQmxCICOTskSet_ChanTabIdx, &chanPanHndl);
+							// remove "None" labelled channel tab
+					//		DeleteTabPage(chanPanHndl, Chan_ChanSet, 0, 1);
+							// add callback data and callback function to remove channels
+					//		SetCtrlAttribute(chanPanHndl, Chan_ChanSet,ATTR_CALLBACK_FUNCTION_POINTER, RemoveDAQmxCIChannel_CB);
+					//		SetCtrlAttribute(chanPanHndl, Chan_ChanSet,ATTR_CALLBACK_DATA, dev);
+								
+							//------------------------------------------------
+							// add new channel
+							//------------------------------------------------
+					
+							CIChannel_type* CIchanAttr 	= GetCIChannel(dev, chName);
+				
+							// mark channel as in use
+							CIchanAttr->inUse = TRUE;
+							
+					//		GetPanelHandleFromTabPage(dev->CITaskSet->panHndl, CICOTskSet_Tab, DAQmxCICOTskSet_ChanTabIdx, &chanPanHndl);
+							
+							CIEdgeChanSet_type* newChan 	=  (CIEdgeChanSet_type*) init_ChanSet_CI_Frequency_type(chName);
+							
+							// insert new channel settings tab
+							int chanSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOChSet);  
+							newTabIdx = InsertPanelAsTabPage(chanPanHndl, Chan_ChanSet, -1, chanSetPanHndl); 
+							// change tab title
+							char* shortChanName = strstr(chName, "/") + 1;  
+							SetTabPageAttribute(chanPanHndl, Chan_ChanSet, newTabIdx, ATTR_LABEL_TEXT, shortChanName); 
+							DiscardPanel(chanSetPanHndl); 
+							chanSetPanHndl = 0;
+							GetPanelHandleFromTabPage(chanPanHndl, Chan_ChanSet, newTabIdx, &newChan->baseClass.chanPanHndl);
+							// add callbackdata to the channel panel
+							
+							SetPanelAttribute(newChan->baseClass.chanPanHndl, ATTR_CALLBACK_DATA, newChan);
+							// add callback data to the controls in the panel
+						//	SetCtrlsInPanCBInfo(newChan, ChanSetAIAOVoltage_CB, newChan->baseClass.chanPanHndl);
+						
+							//--------------------------
+							// Create and register VChan
+							//--------------------------
+							
+							newChan->baseClass.srcVChan = init_SourceVChan_type(newVChanName, WaveformPacket_Double, newChan, VChanConnected, VChanDisconnected);  
+							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.srcVChan);
+							SetCtrlVal(newChan->baseClass.chanPanHndl, SETPAN_VChanName, newVChanName);
+							OKfree(newVChanName);
+							
+							//---------------------------------------
+							// Add new CI channel to list of channels
+							//---------------------------------------
+							ListInsertItem(dev->CITaskSet->chanTaskSet, &newChan, END_OF_LIST);
 			
+						}
 					break;
 			
 				case DAQmxTEDS:
@@ -5348,6 +5900,207 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					break;
 			
 				case DAQmxCounter:
+							   			// try to use physical channel name for the VChan name, if it exists, then ask for another name
+						newVChanName= StrDup(chName);
+						if (DLVChanNameExists(newVChanName, NULL)) {
+							OKfree(newVChanName);
+							newVChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
+							if (!newVChanName) return 0;	// action cancelled
+						}
+					
+						//-------------------------------------------------
+						// if there is no CO task then create it and add UI
+						//-------------------------------------------------
+							
+						if(!dev->COTaskSet) {
+							// init CO task structure data
+							dev->COTaskSet = (COTaskSet_type*) init_COTaskSet_type();    
+							
+							// load UI resources
+							int CICOTaskSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOTskSet);  
+							// insert panel to UI and keep track of the AI task settings panel handle
+							int newTabIdx = InsertPanelAsTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, -1, CICOTaskSetPanHndl); 
+							GetPanelHandleFromTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, newTabIdx, &dev->COTaskSet->panHndl);
+							// change tab title to new Task Controller name
+							SetTabPageAttribute(dev->devPanHndl, TaskSetPan_DAQTasks, newTabIdx, ATTR_LABEL_TEXT, DAQmxCOTaskSetTabName);
+				
+								// remove "None" labelled task settings tab (always first tab) if its panel doesn't have callback data attached to it  
+							int 	panHndl;
+							void*   callbackData;
+							GetPanelHandleFromTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, 0, &panHndl);
+							GetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, &callbackData); 
+							if (!callbackData) DeleteTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, 0, 1);
+							// connect CO task settings data to the panel
+							SetPanelAttribute(dev->COTaskSet->panHndl, ATTR_CALLBACK_DATA, dev->COTaskSet);
+							
+								// add callback data and callback function to remove channels
+							SetCtrlAttribute(dev->COTaskSet->panHndl, Chan_ChanSet,ATTR_CALLBACK_FUNCTION_POINTER, RemoveDAQmxCOChannel_CB);
+							SetCtrlAttribute(dev->COTaskSet->panHndl, Chan_ChanSet,ATTR_CALLBACK_DATA, dev);
+							
+								
+						}
+						
+							int 	panHndl;
+							void*   callbackData; 
+							// remove "None" labelled task settings tab (always first tab) if its panel doesn't have callback data attached to it  
+							GetPanelHandleFromTabPage(dev->COTaskSet->panHndl, Chan_ChanSet, 0, &panHndl);
+							GetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, &callbackData); 
+							if (!callbackData) DeleteTabPage(dev->COTaskSet->panHndl, Chan_ChanSet, 0, 1);
+			
+							//------------------------------------------------
+							// add new channel
+							//------------------------------------------------
+					
+							COChannel_type* COchanAttr 	= GetCOChannel(dev, chName);
+				
+							// mark channel as in use
+							COchanAttr->inUse = TRUE;
+							
+						//	GetPanelHandleFromTabPage(dev->COTaskSet->panHndl, CICOTskSet_Tab, DAQmxCICOTskSet_ChanTabIdx, &chanPanHndl);
+							
+							COChanSet_type* newChan 	=  (COChanSet_type*) init_ChanSet_CO_type(chName);
+							
+							// insert new channel tab
+							int chanSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOChSet);  
+							int newTabIdx = InsertPanelAsTabPage(dev->COTaskSet->panHndl, Chan_ChanSet, -1, chanSetPanHndl); 
+							// change tab title
+							char* shortChanName = strstr(chName, "/") + 1;  
+							SetTabPageAttribute(dev->COTaskSet->panHndl, Chan_ChanSet, newTabIdx, ATTR_LABEL_TEXT, shortChanName); 
+							DiscardPanel(chanSetPanHndl); 
+							chanSetPanHndl = 0;
+							GetPanelHandleFromTabPage(dev->COTaskSet->panHndl, Chan_ChanSet, newTabIdx, &newChan->baseClass.chanPanHndl);
+							
+							// add callbackdata to the channel panel
+							SetPanelAttribute(newChan->baseClass.chanPanHndl, ATTR_CALLBACK_DATA, newChan);
+							
+						
+							// add callback data to the controls in the panel
+							//SetCtrlsInPanCBInfo(newChan, ChanSetCO_CB, newChan->baseClass.chanPanHndl);
+						
+						//--------------------------
+						// adjust "Settings" tab
+						//--------------------------
+						int settingsPanHndl;
+						GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_SettingsTabIdx, &settingsPanHndl);
+						GetCtrlVal(settingsPanHndl,SETPAN_Timeout,&dev->COTaskSet->timeout);
+						
+						// add callback to controls in the panel
+						SetCtrlsInPanCBInfo(dev, ChanSetCO_CB, settingsPanHndl);   
+								
+						//--------------------------
+						// adjust "Timing" tab
+						//--------------------------
+						// get timing tab panel handle
+						int timingPanHndl;
+						double freq;
+						double dutycycle;
+						GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
+						
+						GetCtrlVal(timingPanHndl,TIMPAN_IdleState,&newChan->idlestate);
+						GetCtrlVal(timingPanHndl,TIMPAN_InitialDelay,&newChan->initialdel); 
+						GetCtrlVal(timingPanHndl,TIMPAN_Frequency,&freq);  
+						GetCtrlVal(timingPanHndl,TIMPAN_DutyCycle,&dutycycle);  
+						GetCO_HiLo(freq,dutycycle,&newChan->hightime,&newChan->lowtime);
+						
+					
+						// add callback to controls in the panel
+						SetCtrlsInPanCBInfo(newChan, CO_Timing_TaskSet_CB, timingPanHndl);   
+						
+							//--------------------------
+						// adjust "Clk" tab
+						//--------------------------
+						// get timing tab panel handle
+						
+						// add trigger data structure
+						newChan->baseClass.referenceTrig = init_TaskTrig_type(0);	   //? lex
+						
+						int clkPanHndl;
+						GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_ClkTabIdx, &clkPanHndl);
+								
+						// make sure that the host controls are not dimmed before inserting terminal controls!
+						NIDAQmx_NewTerminalCtrl(clkPanHndl, CLKPAN_RefClkSource, 0); // single terminal selection
+					
+								
+						// adjust sample clock terminal control properties
+						NIDAQmx_SetTerminalCtrlAttribute(clkPanHndl, CLKPAN_RefClkSource, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
+						NIDAQmx_SetTerminalCtrlAttribute(clkPanHndl, CLKPAN_RefClkSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+						
+						InsertListItem(clkPanHndl,CLKPAN_RefClockSlope , 0, "Rising", TrigSlope_Rising); 
+						InsertListItem(clkPanHndl,CLKPAN_RefClockSlope , 1, "Falling", TrigSlope_Falling);
+						newChan->baseClass.referenceTrig->slope=TrigSlope_Rising;
+						
+						InsertListItem(clkPanHndl, CLKPAN_RefClockType, -1, "None", Trig_None); 
+						InsertListItem(clkPanHndl, CLKPAN_RefClockType, -1, "Digital Edge", Trig_DigitalEdge); 
+						newChan->baseClass.referenceTrig->trigType=Trig_None;
+						SetCtrlAttribute(clkPanHndl,CLKPAN_RefClockSlope,ATTR_DIMMED,TRUE);
+						SetCtrlAttribute(clkPanHndl,CLKPAN_RefClkSource,ATTR_DIMMED,TRUE); 
+						
+						
+						// set default sample clock source
+						newChan->baseClass.referenceTrig->trigSource = StrDup("OnboardClock");
+						SetCtrlVal(clkPanHndl, CLKPAN_RefClkSource, "OnboardClock");
+			
+						// add callback to controls in the panel
+						SetCtrlsInPanCBInfo(newChan, CO_Clk_TaskSet_CB, clkPanHndl);
+						
+						//--------------------------
+						// adjust "Trigger" tab
+						//--------------------------
+						// get trigger tab panel handle
+						newChan->baseClass.startTrig = init_TaskTrig_type(0);  //? lex  
+						
+						int trigPanHndl;
+						GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TriggerTabIdx, &trigPanHndl);
+								
+							// make sure that the host controls are not dimmed before inserting terminal controls!
+						NIDAQmx_NewTerminalCtrl(trigPanHndl, TRIGPAN_Source, 0); // single terminal selection
+					
+								
+						// adjust sample clock terminal control properties
+						NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TRIGPAN_Source, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
+						NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TRIGPAN_Source, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+						
+							// set default sample clock source
+						//newChan->baseClass.startTrig->trigSource = StrDup("OnboardClock");
+						//SetCtrlVal(clkPanHndl, CLKPAN_RefClkSource, "OnboardClock");
+						
+						
+						// insert trigger type options
+						InsertListItem(trigPanHndl, TRIGPAN_TrigType, -1, "None", Trig_None); 
+						InsertListItem(trigPanHndl, TRIGPAN_TrigType, -1, "Digital Edge", Trig_DigitalEdge); 
+						newChan->baseClass.startTrig->trigType=Trig_None;
+						SetCtrlAttribute(trigPanHndl,TRIGPAN_Slope,ATTR_DIMMED,TRUE);
+						SetCtrlAttribute(trigPanHndl,TRIGPAN_Source,ATTR_DIMMED,TRUE); 									   ;  
+						
+						InsertListItem(trigPanHndl,TRIGPAN_Slope , 0, "Rising", TrigSlope_Rising); 
+						InsertListItem(trigPanHndl,TRIGPAN_Slope , 1, "Falling", TrigSlope_Falling);
+						newChan->baseClass.startTrig->slope=TrigSlope_Rising;
+			
+						// add callback to controls in the panel
+						SetCtrlsInPanCBInfo(newChan, CO_Trig_TaskSet_CB, trigPanHndl);
+						
+							//end insert	
+						
+						
+						
+								//--------------------------
+							// Create and register VChan
+							//--------------------------
+							int settingspanel;
+							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB,DAQmxCICOTskSet_SettingsTabIdx , &settingspanel);    
+							
+							newChan->baseClass.srcVChan = init_SourceVChan_type(newVChanName, WaveformPacket_Double, newChan, VChanConnected, VChanDisconnected);  
+							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.srcVChan);
+							SetCtrlVal(settingspanel, SETPAN_VChanName, newVChanName);
+							OKfree(newVChanName);
+							
+							//---------------------------------------
+							// Add new CO channel to list of channels
+							//---------------------------------------
+							ListInsertItem(dev->COTaskSet->chanTaskSet, &newChan, END_OF_LIST);
+					
+								
+					}	
 			
 					break;
 			
@@ -5355,8 +6108,6 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 			
 					break;
 			}
-			break;
-	}
 	
 	return 0;		
 }

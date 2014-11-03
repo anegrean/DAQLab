@@ -1,1 +1,1 @@
-<DAQLab_Config TaskPanTopPos="366" TaskPanLeftPos="653" LogPanTopPos="210" LogPanLeftPos="850"><DAQLab_Modules><Module ClassName="VU Photon Counter" InstanceName="VU Photon Counter"/></DAQLab_Modules></DAQLab_Config>
+<DAQLab_Config TaskPanTopPos="292" TaskPanLeftPos="443" LogPanTopPos="210" LogPanLeftPos="850"><DAQLab_UITaskController Name="sdf" Iterations="100" Wait="0" Mode="1"/><DAQLab_Modules><Module ClassName="VU Photon Counter" InstanceName="VU Photon Counter"/></DAQLab_Modules></DAQLab_Config>

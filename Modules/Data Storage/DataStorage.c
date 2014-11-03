@@ -23,7 +23,7 @@
 #define UI_DataStorage			"./Modules/Data Storage/UI_DataStorage.uir"
 
 //test
-char* rawfilepath="G:\\Rawdata\\";
+char* rawfilepath="E:\\Rawdata\\";
 
 //==============================================================================
 // Types
@@ -142,7 +142,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	
 	// create Data Storage Task Controller
 	tc = init_TaskControl_type (instanceName, ds, ConfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
-								DoneTC, StoppedTC, DimTC, NULL, DataReceivedTC, ModuleEventHandler, ErrorTC);
+								DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
 	//------------------------------------------------------------
@@ -217,7 +217,7 @@ void discard_DataStorage (DAQLabModule_type** mod)
 
 static DS_Channel_type* init_DS_Channel_type (DataStorage_type* dsInstance, int panHndl, size_t chanIdx,char VChanName[])
 {
-	DLDataTypes allowedPacketTypes[] = {DL_WaveformPacket_UShort};   	   //, WaveformPacket_UInt, WaveformPacket_Double
+	DLDataTypes allowedPacketTypes[] = {DL_Waveform_UShort};   	   //, WaveformPacket_UInt, WaveformPacket_Double
 	
 	DS_Channel_type* chan = malloc (sizeof(DS_Channel_type));
 	if (!chan) return NULL;
@@ -430,7 +430,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 		
 						// register VChan with DAQLab
 						DLRegisterVChan((DAQLabModule_type*)ds, (VChan_type*)chan->VChan);
-						AddSinkVChan(ds->taskController, chan->VChan, TASK_VCHAN_FUNC_ITERATE);
+						AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC,TASK_VCHAN_FUNC_ITERATE);
 
 						// update main panel
 						RedrawDSPanel(ds);
@@ -479,6 +479,8 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 	int 				elementsize=2;
 	char* 				errMsg 				= StrDup("Writing data to ");
 	char				cmtStatusMessage[CMT_MAX_MESSAGE_BUF_SIZE];
+	void*				dataPacketDataPtr;
+	DLDataTypes			dataPacketType;  
 			
 			
 	
@@ -500,33 +502,38 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 			
 			rawfilename=malloc(MAXCHAR*sizeof(char));
 			Fmt (rawfilename, "%s<%srawdata_%s.bin", rawfilepath,VChanName); 
-			
+				
 			for (size_t i = 0; i < nPackets; i++) {
-				shortDataPtr = GetDataPacketDataPtr(dataPackets[i], &nElem);
-				//test
+				dataPacketDataPtr = GetDataPacketDataPtr(dataPackets[i], &dataPacketType);
+				switch (dataPacketType) {
+					case DL_Waveform_UShort:
+						shortDataPtr = GetWaveformDataPtr(dataPacketDataPtr, &nElem);
+						
+								//test
 			
-			//	ArrayToFile(rawfilename,shortDataPtr,VAL_SHORT_INTEGER,nElem,1,VAL_GROUPS_TOGETHER,VAL_GROUPS_AS_COLUMNS,VAL_SEP_BY_TAB,0,VAL_BINARY,VAL_APPEND);
-				filehandle=OpenFile (rawfilename, VAL_WRITE_ONLY, VAL_APPEND, VAL_BINARY);
-				if (filehandle<0) {
-					AppendString(&errMsg, VChanName, -1); 
-					AppendString(&errMsg, " failed. Reason: file open failed", -1); 
-					fCallReturn = init_FCallReturn_type(-1, "DataStorage", errMsg);
+						//	ArrayToFile(rawfilename,shortDataPtr,VAL_SHORT_INTEGER,nElem,1,VAL_GROUPS_TOGETHER,VAL_GROUPS_AS_COLUMNS,VAL_SEP_BY_TAB,0,VAL_BINARY,VAL_APPEND);
+						filehandle=OpenFile (rawfilename, VAL_WRITE_ONLY, VAL_APPEND, VAL_BINARY);
+						if (filehandle<0) {
+							AppendString(&errMsg, VChanName, -1); 
+							AppendString(&errMsg, " failed. Reason: file open failed", -1); 
+							fCallReturn = init_FCallReturn_type(-1, "DataStorage", errMsg);
+						}
+						error=WriteFile (filehandle, shortDataPtr, nElem*elementsize);
+						if (error<0) {
+							AppendString(&errMsg, VChanName, -1); 
+							AppendString(&errMsg, " failed. Reason: file write failed", -1); 
+							fCallReturn = init_FCallReturn_type(-1, "DataStorage", errMsg);
+						}
+						CloseFile(filehandle);
+					break;
 				}
-				error=WriteFile (filehandle, shortDataPtr, nElem*elementsize);
-				if (error<0) {
-					AppendString(&errMsg, VChanName, -1); 
-					AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					fCallReturn = init_FCallReturn_type(-1, "DataStorage", errMsg);
-				}
-				CloseFile(filehandle);
-
-
 				ReleaseDataPacket(&dataPackets[i]);
 			}
+		
 			free(rawfilename); 
 			OKfree(dataPackets);				
 			break;
-		
+				
 			
 		case TASK_STATE_ERROR:
 			

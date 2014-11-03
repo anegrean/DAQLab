@@ -166,7 +166,7 @@ int CVICALLBACK CB_TaskController (int panel, int control, int event, void *call
 					
 				case ControlPan_IterCompleteBTTN:
 					
-					TaskControlIterationDone(ZStage, 0, "");
+					TaskControlIterationDone(ZStage, 0, "", FALSE);
 					
 					break;
 					

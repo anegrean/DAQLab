@@ -7627,7 +7627,7 @@ Error:
 int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
 #define AIDAQmxTaskDataAvailable_CB_Err_OutOfMemory		-1 
-#define AIDAQmxTaskDone_CB_Err_SendDataPacket	-2  
+#define AIDAQmxTaskDone_CB_Err_SendDataPacket			-2  
 	
 	Dev_type*			dev 			= callbackData;
 	float64*    		readBuffer		= NULL;				// temporary buffer to place data into
@@ -7666,7 +7666,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		dataPacket = init_DataPacket_type(DL_Waveform_Double, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type); 
 		
 		// send data packet with waveform
-		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, dataPacket);
+		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, dataPacket, 0);
 		if (fCallReturn) goto SendDataError;
 		
 		// next AI channel
@@ -7680,7 +7680,7 @@ DAQmxError:
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
 	char* errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	TaskControlIterationDone(dev->taskController, error, errMsg);
+	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	free(errMsg);
 	ClearDAQmxTasks(dev); 
 	OKfree(readBuffer); 
@@ -7688,13 +7688,13 @@ DAQmxError:
 	
 MemError:
 	ClearDAQmxTasks(dev);
-	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDataAvailable_CB_Err_OutOfMemory, "Error: Out of memory");  
+	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDataAvailable_CB_Err_OutOfMemory, "Error: Out of memory", FALSE);  
 	OKfree(readBuffer);
 	return 0;
 	
 SendDataError:
 	ClearDAQmxTasks(dev);
-	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDone_CB_Err_SendDataPacket, fCallReturn->errorInfo);  
+	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDone_CB_Err_SendDataPacket, fCallReturn->errorInfo, FALSE);  
 	discard_FCallReturn_type(&fCallReturn);
 	OKfree(readBuffer);
 	return 0;
@@ -7732,7 +7732,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 			if ((*chanSetPtrPtr)->onDemand) continue;
 			
 			// send NULL packet to signal end of data transmission
-			fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL);
+			fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL, 0);
 			if (fCallReturn) goto SendDataError;
 		}
 		
@@ -7740,7 +7740,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		if (DAQmxTasksDone(dev)) {
 			// stop explicitly the Task
 			DAQmxStopTask(taskHandle);
-			TaskControlIterationDone(dev->taskController, 0, "");
+			TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 		}
 		
 		return 0;
@@ -7772,10 +7772,10 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		dataPacket = init_DataPacket_type(DL_Waveform_Double, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type);  
 		
 		// send data packet with waveform
-		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, dataPacket);
+		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, dataPacket, 0);
 		if (fCallReturn) goto SendDataError;
 		// send NULL packet to signal end of data transmission
-		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL);
+		fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL, 0);
 		if (fCallReturn) goto SendDataError;
 		
 		// next AI channel
@@ -7786,7 +7786,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	if (DAQmxTasksDone(dev)) {
 		// stop explicitly the Task
 		DAQmxStopTask(taskHandle);
-		TaskControlIterationDone(dev->taskController, 0, "");
+		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 	}
 	
 	OKfree(readBuffer);
@@ -7796,7 +7796,7 @@ DAQmxError:
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
 	char* errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	TaskControlIterationDone(dev->taskController, error, errMsg);
+	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	free(errMsg);
 	ClearDAQmxTasks(dev); 
 	OKfree(readBuffer); 
@@ -7804,13 +7804,13 @@ DAQmxError:
 	
 MemError:
 	ClearDAQmxTasks(dev);
-	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDone_CB_Err_OutOfMemory, "Error: Out of memory");  
+	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDone_CB_Err_OutOfMemory, "Error: Out of memory", FALSE);  
 	OKfree(readBuffer);
 	return 0;
 	
 SendDataError:
 	ClearDAQmxTasks(dev);
-	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDone_CB_Err_SendDataPacket, fCallReturn->errorInfo);  
+	TaskControlIterationDone(dev->taskController, AIDAQmxTaskDone_CB_Err_SendDataPacket, fCallReturn->errorInfo, FALSE);  
 	discard_FCallReturn_type(&fCallReturn);
 	OKfree(readBuffer);
 	return 0;
@@ -7824,7 +7824,7 @@ int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyN
 	fCallReturn = WriteAODAQmx(dev);
 		
 	if (fCallReturn) { 
-		TaskControlIterationDone(dev->taskController, fCallReturn->retVal, fCallReturn->errorInfo);
+		TaskControlIterationDone(dev->taskController, fCallReturn->retVal, fCallReturn->errorInfo, FALSE);
 		discard_FCallReturn_type(&fCallReturn);
 	}
 		
@@ -7842,7 +7842,7 @@ int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
 	if (DAQmxTasksDone(dev))
-		TaskControlIterationDone(dev->taskController, 0, "");
+		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 		
 	return 0;
 DAQmxError:
@@ -7850,7 +7850,7 @@ DAQmxError:
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
 	char* errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	TaskControlIterationDone(dev->taskController, status, errMsg);
+	TaskControlIterationDone(dev->taskController, status, errMsg, FALSE);
 	free(errMsg);
 	ClearDAQmxTasks(dev); 
 	return 0;
@@ -7933,7 +7933,7 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	
 	// start all DAQmx tasks if output tasks have their buffers filled with data
 	if (OutputBuffersFilled(dev)) {
-		if ((fCallReturn = StartAllDAQmxTasks(dev))) TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo);
+		if ((fCallReturn = StartAllDAQmxTasks(dev))) TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo, FALSE);
 		// if any of the DAQmx Tasks require a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
 		if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
 			TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);
@@ -7956,11 +7956,11 @@ static void AbortIterationTC (TaskControl_type* taskControl, size_t currentItera
 			// include only channels for which HW-timing is required
 			if ((*chanSetPtrPtr)->onDemand) continue;
 			// send NULL packet to signal end of data transmission
-			SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL);
+			SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL, 0);
 		}
 	}
 	
-	TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo); 
+	TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo, FALSE); 
 }
 
 static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abortFlag)
@@ -8227,7 +8227,7 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 				
 			// start all DAQmx tasks if output tasks have their buffers filled with data
 			if (OutputBuffersFilled(dev)) {
-				if ((fCallReturn = StartAllDAQmxTasks(dev))) TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo);
+				if ((fCallReturn = StartAllDAQmxTasks(dev))) TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo, FALSE);
 				// if any of the DAQmx Tasks require a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
 				if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
 					TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);

@@ -1181,12 +1181,14 @@ int TaskControlEvent (TaskControl_type* RecipientTaskControl, TaskEvents_type ev
 	else return -1;
 }
 
-int	TaskControlIterationDone (TaskControl_type* taskControl, int errorID, char errorInfo[])
+int	TaskControlIterationDone (TaskControl_type* taskControl, int errorID, char errorInfo[], BOOL doAnotherIteration)
 {
 	if (errorID)
 		return TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, init_ErrorMsg_type(errorID, "External Task Control Iteration", errorInfo), disposeTCIterDoneInfo);
-	else
+	else {
+		if (doAnotherIteration) taskControl->repeat++;
 		return TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
+	}
 }
 
 static void disposeTCIterDoneInfo (void* eventInfo) 

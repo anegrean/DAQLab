@@ -564,8 +564,9 @@ int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TaskEvent
 
 	// Used to signal the Task Controller that an iteration is done.
 	// Pass to errorInfo an empty string as "", if there is no error and the iteration completed succesfully. Otherwise,
-	// pass an error message string. Pass 0 to errorID if there is no error, otherwise pass an error code.
-int						TaskControlIterationDone			(TaskControl_type* taskControl, int errorID, char errorInfo[]);
+	// pass an error message string. Pass 0 to errorID if there is no error, otherwise pass an error code. If another iteration is asked besides the already set number of
+	// iterations in case of a Finite Task Controller, then pass doAnotherIteration = TRUE. Like so, a finite number of iterations can be performed conditionally.
+int						TaskControlIterationDone			(TaskControl_type* taskControl, int errorID, char errorInfo[], BOOL doAnotherIteration);
 
 
 int						TaskControlEventToSubTasks  		(TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventInfo, 

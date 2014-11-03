@@ -422,7 +422,7 @@ FCallReturn_type* ReleaseAllDataPackets (SinkVChan_type* sinkVChan)
 	return NULL;
 }
 
-FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dataPacket)
+FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dataPacket, BOOL sourceNeedsPacket)
 {
 #define SendDataPacket_Err_TSQWrite		-1
 	
@@ -435,7 +435,12 @@ FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dat
 	}
 	
 	// set sinks counter
-	if (dataPacket) SetDataPacketCounter(dataPacket, nSinks);
+	if (dataPacket)
+		if (sourceNeedsPacket)
+			SetDataPacketCounter(dataPacket, nSinks+1);
+		else
+			SetDataPacketCounter(dataPacket, nSinks);
+			
 	
 	// send data to sinks
 	SinkVChan_type** 	sinkPtrPtr;

@@ -153,8 +153,9 @@ void*					GetPtrToVChanOwner					(VChan_type* VChan);
 	// If successful, returns NULL, otherwise it returns error information which must be disposed of with discard_FCallReturn_type
 FCallReturn_type*		ReleaseAllDataPackets				(SinkVChan_type* sinkVChan);
 
-	// Sends a data packet from a Source VChan to its Sink VChans.
-FCallReturn_type* 		SendDataPacket 						(SourceVChan_type* source, DataPacket_type* dataPacket);
+	// Sends a data packet from a Source VChan to its Sink VChans. If the Source VChan also needs to use the data packet after it was sent
+	// then set sourceNeedsPacket = TRUE. This prevents the release of the data packet by the sinks alone.
+FCallReturn_type* 		SendDataPacket 						(SourceVChan_type* source, DataPacket_type* dataPacket, BOOL sourceNeedsPacket);
 
 	// Gets all data packets from a Sink VChan. The function allocates dynamically a data packet array with nPackets elements of DataPacket_type*
 	// If there are no data packets in the Sink VChan, dataPackets = NULL, nPackets = 0 and the function returns NULL (success).

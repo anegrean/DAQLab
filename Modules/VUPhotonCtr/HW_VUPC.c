@@ -347,7 +347,7 @@ int ReadBuffer(int bufsize)
 						memcpy(pmtdataptr,&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));  
 					    dataPacket = init_WaveformPacket_type(Waveform_UShort, ndatapoints, pmtdataptr, refSamplingRate, 1);       
 						// send data packet with waveform
-						fCallReturn = SendDataPacket(gchannels[i]->VChan, dataPacket);
+						fCallReturn = SendDataPacket(gchannels[i]->VChan, dataPacket, 0);
 						discard_FCallReturn_type(&fCallReturn);
 					
 					}

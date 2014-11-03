@@ -288,6 +288,9 @@ int ReadBuffer(int bufsize)
 
 	long errcode;
 	unsigned long statreg; 
+	Waveform_type* waveform;
+	
+	
 	//if(GetAcqBusy()==1){
 	
 	Samplebuffer = malloc(bufsize); 
@@ -315,7 +318,7 @@ int ReadBuffer(int bufsize)
 		//error, stop polling
 		//inform task controller
 		//	AbortTaskControlExecution(gtaskControl);
-		TaskControlIterationDone (gtaskControl, -1, "Read Error");   
+		TaskControlIterationDone (gtaskControl, -1, "Read Error",FALSE);   
 		nrsamples=0;
 		//HWError();
 		
@@ -324,7 +327,7 @@ int ReadBuffer(int bufsize)
 		if (result==0){
 			//no data, just a timeout
 			result=0;
-			TaskControlIterationDone (gtaskControl, -2, "Read Timeout");   
+			TaskControlIterationDone (gtaskControl, -2, "Read Timeout",FALSE);   
 		}
 		else{
 			// deinterlace data here
@@ -344,8 +347,9 @@ int ReadBuffer(int bufsize)
 				if (gchannels[i]!=NULL){
 					if (gchannels[i]->VChan!=NULL){
 						pmtdataptr=malloc(ndatapoints*sizeof(unsigned short));
-						memcpy(pmtdataptr,&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));  
-					    dataPacket = init_WaveformPacket_type(Waveform_UShort, ndatapoints, pmtdataptr, refSamplingRate, 1);       
+						memcpy(pmtdataptr,&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));
+						waveform = init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, pmtdataptr);  
+					    dataPacket = init_DataPacket_type(DL_Waveform_UShort, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type);       
 						// send data packet with waveform
 						fCallReturn = SendDataPacket(gchannels[i]->VChan, dataPacket, 0);
 						discard_FCallReturn_type(&fCallReturn);
@@ -363,7 +367,7 @@ int ReadBuffer(int bufsize)
 					
 					nrsamples=0;
 					PMTStopAcq();  
-					TaskControlIterationDone (gtaskControl, 0, NULL);   
+					TaskControlIterationDone (gtaskControl, 0, NULL,FALSE);   
 					     
 				}
 			}
@@ -834,7 +838,7 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
 		if (gtaskControl!=NULL) {
 			abort=GetTaskControlAbortIterationFlag(gtaskControl);  
 			if (abort) {
-				TaskControlIterationDone (gtaskControl, 0,NULL);
+				TaskControlIterationDone (gtaskControl, 0,NULL,FALSE);
 				SetAcqBusy(0);
 			}
 		}

@@ -1,0 +1,99 @@
+;
+; VU_PCIe.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=Sample ; TODO: edit Class
+ClassGuid={78A1C341-4539-11d3-B88D-00C04FAD5171} ; TODO: edit ClassGuid
+Provider=%ManufacturerName%
+CatalogFile=VU_PCIe.cat
+DriverVer=10/16/2014,11.40.42.329
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+; ================= Class section =====================
+
+[ClassInstall32]
+Addreg=SampleClassReg
+
+[SampleClassReg]
+HKR,,,0,%ClassName%
+HKR,,Icon,,-5
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+VU_PCIe.sys  = 1,,
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName%=Standard,NTx86
+
+[Standard.NTx86]
+%VU_PCIe.DeviceDesc%=VU_PCIe_Device, Root\VU_PCIe ; TODO: edit hw-id
+%PDA4.DeviceDesc%=     VU_PCIe_Device,     PCI\VEN_10ee&DEV_5050
+%PCM.DeviceDesc%=      VU_PCIe_Device,     PCI\VEN_10ee&DEV_5051
+%MCT.DeviceDesc%=      VU_PCIe_Device,     PCI\VEN_10ee&DEV_5052
+
+[VU_PCIe_Device.NT]
+CopyFiles=Drivers_Dir
+
+[Drivers_Dir]
+VU_PCIe.sys
+
+;-------------- Service installation
+[VU_PCIe_Device.NT.Services]
+AddService = VU_PCIe,%SPSVCINST_ASSOCSERVICE%, VU_PCIe_Service_Inst
+
+; -------------- VU_PCIe driver install sections
+[VU_PCIe_Service_Inst]
+DisplayName    = %VU_PCIe.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_BOOT_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %12%\VU_PCIe.sys
+LoadOrderGroup = Extended Base
+
+;
+;--- VU_PCIe_Device Coinstaller installation ------
+;
+
+[DestinationDirs]
+VU_PCIe_Device_CoInstaller_CopyFiles = 11
+
+[VU_PCIe_Device.NT.CoInstallers]
+AddReg=VU_PCIe_Device_CoInstaller_AddReg
+CopyFiles=VU_PCIe_Device_CoInstaller_CopyFiles
+
+[VU_PCIe_Device_CoInstaller_AddReg]
+HKR,,CoInstallers32,0x00010000, "WdfCoInstaller01011.dll,WdfCoInstaller"
+
+[VU_PCIe_Device_CoInstaller_CopyFiles]
+WdfCoInstaller01011.dll
+
+[SourceDisksFiles]
+WdfCoInstaller01011.dll=1 ; make sure the number matches with SourceDisksNames
+
+[VU_PCIe_Device.NT.Wdf]
+KmdfService =  VU_PCIe, VU_PCIe_wdfsect
+[VU_PCIe_wdfsect]
+KmdfLibraryVersion = 1.11
+
+[Strings]
+SPSVCINST_ASSOCSERVICE= 0x00000002
+ManufacturerName="VU Vrije Universiteit" ; TODO: add ManufacturerName
+ClassName="Samples" ; TODO: edit ClassName
+DiskName = "VU_PCIe Installation Disk"
+VU_PCIe.DeviceDesc = "VU_PCIe Device"
+VU_PCIe.SVCDESC = "VU_PCIe Service"
+PDA4.DeviceDesc = "PDA4 PCIe device"
+PCM.DeviceDesc = "Photon Counting PCIe device"
+MCT.DeviceDesc = "MCT Detector"
+
+

@@ -5569,7 +5569,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// Create and register VChan
 							//--------------------------
 							
-							newChan->baseClass.srcVChan = init_SourceVChan_type(newVChanName, WaveformPacket_Double, newChan, VChanConnected, VChanDisconnected);  
+							newChan->baseClass.srcVChan = init_SourceVChan_type(newVChanName, DL_Waveform_Double, newChan, VChanConnected, VChanDisconnected);  
 							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.srcVChan);
 							SetCtrlVal(newChan->baseClass.chanPanHndl, SETPAN_VChanName, newVChanName);
 							OKfree(newVChanName);
@@ -6089,7 +6089,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							int settingspanel;
 							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB,DAQmxCICOTskSet_SettingsTabIdx , &settingspanel);    
 							
-							newChan->baseClass.srcVChan = init_SourceVChan_type(newVChanName, WaveformPacket_Double, newChan, VChanConnected, VChanDisconnected);  
+							newChan->baseClass.srcVChan = init_SourceVChan_type(newVChanName, DL_Waveform_Double, newChan, VChanConnected, VChanDisconnected);  
 							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.srcVChan);
 							SetCtrlVal(settingspanel, SETPAN_VChanName, newVChanName);
 							OKfree(newVChanName);

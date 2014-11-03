@@ -2244,7 +2244,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			
 			// generate command signal
 			double		phase	 		= -90;
-			TriangleWave(nSamples, funcAmp/2, ((double)(nCycles+2*preCycles))/nSamples, &phase, commandSignal)))
+			TriangleWave(nSamples, funcAmp/2, ((double)(nCycles+2*preCycles))/nSamples, &phase, commandSignal)));
 						
 			// send waveform
 			commandSignal = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nSamples, commandSignal);

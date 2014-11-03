@@ -255,7 +255,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	
 	// create VUPhotonCtr Task Controller
 	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
-								DoneTC, StoppedTC, DimTC, NULL, NULL, ModuleEventHandler, ErrorTC);
+								DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
 	
 	//------------------------------------------------------------
@@ -359,7 +359,7 @@ static Channel_type* init_Channel_type (VUPhotonCtr_type* vupcInstance, int panH
 	if (!chan) return NULL;
 
 	chan->vupcInstance	= vupcInstance;
-	chan->VChan			= init_SourceVChan_type(VChanName, WaveformPacket_UShort, chan, NULL, NULL);
+	chan->VChan			= init_SourceVChan_type(VChanName, DL_Waveform_UShort, chan, NULL, NULL);
 	chan->panHndl   	= panHndl;
 	chan->chanIdx		= chanIdx;
 	chan->gain			= 0;
@@ -1109,7 +1109,7 @@ static BOOL ValidTaskControllerName	(char name[], void* dataPtr)
 void HWIterationDone(TaskControl_type* taskControl,int errorID, char errorInfo[])
 {
 	//hardware informs that the current iteration is done	
-	TaskControlIterationDone (taskControl, errorID, errorInfo);
+	TaskControlIterationDone (taskControl, errorID, errorInfo,TRUE);	//?
 }
 
 void HWError(void)

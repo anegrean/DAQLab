@@ -144,9 +144,9 @@ AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last para
 																  // counter always to 0
 	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
-	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0}
-	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
-	//{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }    
+	//{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0}
+	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+//	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }    
 	
 };
 

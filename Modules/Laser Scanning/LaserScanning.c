@@ -129,6 +129,7 @@ typedef struct {
 	ScanAxisCal_type		baseClass;				// Base structure describing scan engine calibration. Must be first member of the structure.
 	NonResGalvoCalTypes		currentCal;				// Index of the current calibration
 	size_t					currIterIdx;			// Current iteration index for each calibration method.
+	double					targetSlope;			// Used for triangle waveform calibration, in [V/ms]. 
 	double					commandVMin;			// Minimum galvo command voltage in [V] for maximal deflection in a given direction.
 	double					commandVMax;			// Maximum galvo command voltage in [V] for maximal deflection in the oposite direction when applying VminOut.
 	double					positionVMin;   		// Minimum galvo position feedback signal expected in [V] for maximal deflection when applying VminOut.
@@ -138,7 +139,6 @@ typedef struct {
 	double*					offset;					// in [V], together with slope, it relates the command and position feedback signal in a linear way when the galvo is still. 
 	double*					posStdDev;				// in [V], measures noise level on the position feedback signal.
 	double*					lag;					// in [ms]
-	double*					deadTime;				// Used to calculate average deadtime for the galvo turn around.
 	size_t					nRepeat;				// Number of times to repeat a command signal.
 	size_t					nRampSamples;			// Number of samples within a ramp command signal.
 	BOOL					lastRun;				// marks the last run for lag measurement
@@ -1160,10 +1160,10 @@ static int FindSlope(double* signal, int nsamples, double samplingRate, double s
 	double 	relslope_err;
 	BOOL 	foundmaxslope = 0;
 			
-	for (int nslope_elem = 1; nslope_elem < nsamples; nslope_elem++){  
+	for (size_t nslope_elem = 1; nslope_elem < nsamples; nslope_elem++){  
 			
 		*maxslope = 0;   // in [V/ms]
-		for (int i = 0; i < (nsamples - nslope_elem); i++) {
+		for (size_t i = 0; i < (nsamples - nslope_elem); i++) {
 			tmpslope = (signal[nslope_elem+i] - signal[i])/(nslope_elem*1000/samplingRate); // slope in [V/ms]
 			if (tmpslope > *maxslope) *maxslope = tmpslope;
 		}
@@ -1642,8 +1642,8 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	cal->slope				= NULL;	// i.e. calibration not performed yet
 	cal->offset				= NULL;
 	cal->posStdDev			= NULL;
+	cal->targetSlope		= 0;
 	cal->extraRuns			= 0;
-	cal->deadTime			= NULL;
 	cal->lag				= NULL;
 	cal->nRepeat			= 0;
 	cal->lastRun			= FALSE;
@@ -1671,7 +1671,6 @@ static void	discard_NonResGalvoCal_type	(ScanAxisCal_type** cal)
 	OKfree(NRGCal->slope);
 	OKfree(NRGCal->offset);
 	OKfree(NRGCal->posStdDev);
-	OKfree(NRGCal->deadTime);
 	OKfree(NRGCal->lag);
 	
 	// discard calibration waveforms
@@ -2077,12 +2076,12 @@ static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskContr
 
 static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
-	Waveform_type*			commandSignal;      
+	NonResGalvoCal_type* 	cal 				= GetTaskControlModuleData(taskControl);
+	Waveform_type*			commandWaveform;      
 	
 	// add empty galvo response waveform 
 	discard_Waveform_type(&cal->positionSignal);
-	init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, 0, NULL);
+	cal->positionSignal = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, 0, NULL);
 	
 	switch (cal->currentCal) {
 			
@@ -2097,14 +2096,19 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			// create waveform with galvo steps to measure slope and offset between command and position signals
 			size_t 		nDelaySamples 			= (size_t) (SLOPE_OFFSET_DELAY * *cal->baseClass.comSampRate);
 			size_t		nSamplesPerCalPoint		= nDelaySamples + POSSAMPLES;
-			double*		testSignal 				= malloc (CALPOINTS * nSamplesPerCalPoint * sizeof(double));
+			double*		commandSignal 			= malloc (CALPOINTS * nSamplesPerCalPoint * sizeof(double));
 			double		VCommand				= cal->commandVMin;
-				
+			
 			for (size_t i = 0; i < CALPOINTS; i++) {
 				for (size_t j = 0; j < nSamplesPerCalPoint; j++)
-					testSignal[i*nSamplesPerCalPoint+j] = VCommand;
+					commandSignal[i*nSamplesPerCalPoint+j] = VCommand;
 				VCommand += (cal->commandVMax - cal->commandVMin) / (CALPOINTS - 1); 
 			}
+			
+			// send waveform
+			commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, CALPOINTS * nSamplesPerCalPoint, commandSignal);
+			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandSignal, (DiscardPacketDataFptr_type)discard_Waveform_type);
+			SendDataPacket(cal->baseClass.VChanCom, cal->commandPacket, 1);
 		}
 			
 			break;
@@ -2118,6 +2122,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				// determine how many times to apply the ramp such that the relative error in the position is less than RELERR
 				cal->nRepeat = ceil(pow(*cal->posStdDev * 1.414 /(RELERR * (cal->commandVMax - cal->commandVMin)), 2)); 
 				cal->nRampSamples = 2;
+				cal->lastRun = FALSE; 
 			}
 			
 			size_t 	postRampSamples = (size_t) floor(POSTRAMPTIME * 0.001 * *cal->baseClass.comSampRate) + 1;
@@ -2130,14 +2135,15 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			// generate ramp
 			Ramp(cal->nRampSamples, cal->commandVMin, cal->commandVMax, rampSignal + flybackSamples);
 			// pad with postrampsamples
-			for (size_t i = flybackSamples + cal->nRampSamples; i < (flybackSamples + cal->nRampSamples + postRampSamples); i++) rampSignal[i] = rampSignal[flybackSamples + cal->nRampSamples - 1];
-			// apply signal nRepeat times
+			for (size_t i = flybackSamples + cal->nRampSamples; i < (flybackSamples + cal->nRampSamples + postRampSamples); i++) 
+				rampSignal[i] = cal->commandVMax;
+			// extend signal to nRepeat times
 			for (size_t i = 1; i < cal->nRepeat; i++)
 				memcpy(rampSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), rampSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
 			
 			// send waveform
-			commandSignal = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, rampSignal);
-			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandSignal, (DiscardPacketDataFptr_type)discard_Waveform_type);
+			commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, rampSignal);
+			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandWaveform, (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, cal->commandPacket, 1);
 			
 		}
@@ -2147,10 +2153,21 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 		case NonResGalvoCal_SwitchTimes:
 		{
 			
-			// delete previous measurements
+			// delete previous measurements and adjust plotting area
 			if (!cal->currIterIdx) {
 				discard_SwitchTimes_type(&cal->switchTimes);
 				cal->switchTimes = init_SwitchTimes_type();
+				
+				DeleteGraphPlot(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, -1 , VAL_IMMEDIATE_DRAW);
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_MANUAL, 0, cal->commandVMax - cal->commandVMin);
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_LEFT_YAXIS, VAL_AUTOSCALE, 0, 0);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XLABEL_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YLABEL_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XGRID_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YGRID_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_LABEL_TEXT, "Halfswitch time vs. ramp amplitude");   
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XNAME, "Ramp amplitude (V)");
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YNAME, "Time (µs)");
 			}
 			
 			size_t 	postStepSamples = (size_t) floor(POSTRAMPTIME * 0.001 * *cal->baseClass.comSampRate) + 1;
@@ -2172,8 +2189,8 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				memcpy(stepSignal + i * (flybackSamples + postStepSamples), stepSignal, (flybackSamples + postStepSamples) * sizeof(double));
 			
 			// send waveform
-			commandSignal = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + postStepSamples) * cal->nRepeat, stepSignal);
-			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandSignal, (DiscardPacketDataFptr_type)discard_Waveform_type);
+			commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + postStepSamples) * cal->nRepeat, stepSignal);
+			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandWaveform, (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, cal->commandPacket, 1);
 			
 		}
@@ -2187,6 +2204,18 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				cal->maxSlopes = init_MaxSlopes_type();
 				// determine how many times to apply the ramp such that the relative error in the position is less than RELERR
 				cal->nRampSamples = 2;
+				
+				// adjust plotting
+				DeleteGraphPlot(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, -1 , VAL_IMMEDIATE_DRAW);
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_MANUAL, 0, cal->commandVMax - cal->commandVMin);
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_LEFT_YAXIS, VAL_AUTOSCALE, 0, 0);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XLABEL_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YLABEL_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XGRID_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YGRID_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_LABEL_TEXT, "Maximum slope vs. ramp amplitude");   
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XNAME, "Ramp amplitude (V)");
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YNAME, "Max slope (V/ms)");
 			}
 			
 			size_t 	postRampSamples = (size_t) floor(POSTRAMPTIME * 0.001 * *cal->baseClass.comSampRate) + 1;
@@ -2209,8 +2238,8 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				memcpy(rampSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), rampSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
 			
 			// send waveform
-			commandSignal = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, rampSignal);
-			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandSignal, (DiscardPacketDataFptr_type)discard_Waveform_type);
+			commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, rampSignal);
+			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandWaveform, (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, cal->commandPacket, 1);
 			
 		}
@@ -2220,35 +2249,43 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 		{
 			if (!cal->currIterIdx) {
 				discard_TriangleCal_type(&cal->triangleCal);
-				cal->triangleCal = init_TriangleCal_type();
-				OKfree(cal->deadTime);
-				cal->deadTime = malloc(cal->maxSlopes->n * sizeof(double));
-				cal->extraRuns = 0;
+				cal->triangleCal 		= init_TriangleCal_type();
+				// initialize target slope
+				cal->targetSlope		= cal->maxSlopes->slope[0] * DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR;
+				cal->extraRuns 			= 0;
 				// delete previous plot
 				DeleteGraphPlot(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, -1, VAL_IMMEDIATE_DRAW); 
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_MANUAL, 0, cal->commandVMax - cal->commandVMin);
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_LEFT_YAXIS, VAL_AUTOSCALE, 0, 0);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XLABEL_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YLABEL_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XGRID_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YGRID_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_LABEL_TEXT, "Maximum scan frequency vs. amplitude");   
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XNAME, "Amplitude (V)");
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YNAME, "Max triangle frequency (Hz)");
 			}
 			
-			double 		funcAmp 		= cal->maxSlopes->amplitude[cal->currIterIdx];
+			double 		funcAmp 		= cal->maxSlopes->amplitude[cal->currIterIdx]; 											// in [V] Pk-Pk
 			// apply scan function with slope equal to max slope measured previously at a certain amplitude
-			double 		targetSlope 	= cal->maxSlopes->slope[cal->currIterIdx] * DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR;
-			double		funcFreq 		= targetSlope /(2 * funcAmp * 0.001);		
+			double		funcFreq 		= cal->targetSlope * 1000/(2 * funcAmp);			   											// in [Hz]
 			size_t 		nCycles 		= ceil(cal->UISet.scanTime * funcFreq); 
 			size_t 		cycleSamples 	= (size_t) floor (1/funcFreq * *cal->baseClass.comSampRate);
 			// calculate number of cycles, precycles and samples
 			size_t		preCycles 		= (size_t) ceil (*cal->lag /1000 * funcFreq);
-			size_t 		nSamples 		= (nCycles + 2*preCycles) * cycleSamples;
-			size_t		skipSamples 	= preCycles * cycleSamples;
+			size_t 		nSamples 		= (nCycles + preCycles) * cycleSamples;
 			
+		  
 			// create ramp
 			double*		commandSignal 	= malloc (nSamples * sizeof(double));
 			
 			// generate command signal
 			double		phase	 		= -90;
-			TriangleWave(nSamples, funcAmp/2, ((double)(nCycles+2*preCycles))/nSamples, &phase, commandSignal)));
+			TriangleWave(nSamples, funcAmp/2, 1.0/cycleSamples, &phase, commandSignal);
 						
 			// send waveform
-			commandSignal = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nSamples, commandSignal);
-			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandSignal, (DiscardPacketDataFptr_type)discard_Waveform_type);
+			commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nSamples, commandSignal);
+			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandWaveform, (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, cal->commandPacket, 1);
 		}
 			break;
@@ -2299,9 +2336,12 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 {
 	NonResGalvoCal_type* 	cal 					= GetTaskControlModuleData(taskControl);
 	DataPacket_type**		dataPackets				= NULL;
-	Waveform_type*			waveform				= NULL;
-	double*					waveformData;
-	size_t					nWaveformSamples; 
+	Waveform_type*			commandWaveform			= NULL;
+	Waveform_type*			positionWaveform		= NULL;
+	double*					positionSignal;
+	size_t					nPositionSignalSamples; 
+	double*					commandSignal;
+	size_t					nCommandSignalSamples;
 	size_t					nPackets;
 	DLDataTypes 			dataPacketType;
 	BOOL					waveformCompleteFlag	= FALSE;
@@ -2311,9 +2351,9 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 	for (size_t i = 0; i < nPackets; i++)
 		if (dataPackets[i]) {
 			// get waveform out of data packet
-			waveform = GetDataPacketDataPtr(dataPackets[i], &dataPacketType);
+			positionWaveform = GetDataPacketDataPtr(dataPackets[i], &dataPacketType);
 			// collect waveforms that belong to a single galvo response
-			AppendWaveformData(cal->positionSignal, &waveform);
+			AppendWaveformData(cal->positionSignal, &positionWaveform);
 			ReleaseDataPacket(&dataPackets[i]);
 		} else {
 			waveformCompleteFlag = TRUE;
@@ -2322,6 +2362,14 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 		}
 			
 	if (waveformCompleteFlag){
+		// get pointer to galvo command signal
+		commandWaveform	= GetDataPacketDataPtr (cal->commandPacket, &dataPacketType);
+		commandSignal	= GetWaveformDataPtr(commandWaveform, &nCommandSignalSamples);
+		
+		//get pointer to galvo position signal
+		positionSignal = GetWaveformDataPtr (cal->positionSignal, &nPositionSignalSamples);  
+		
+		// process galvo position signal
 		switch (cal->currentCal) {
 			
 			case NonResGalvoCal_Slope_Offset:
@@ -2335,22 +2383,18 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				double  	LinFitResult[CALPOINTS];
 				double  	meanSquaredError;
 			
-				
-				waveformData = GetWaveformDataPtr (cal->positionSignal, &nWaveformSamples);
-				
-				// check if number of samples in the waveform is correct
-				
 				// analyze galvo response  
 				for (size_t i = 0; i < CALPOINTS; i++) {
 					// get average position and signal StdDev
-					StdDev(waveformData + i*nSamplesPerCalPoint + nDelaySamples, POSSAMPLES, &Pos[i], &PosStdDev[i]);
+					StdDev(positionSignal + i*nSamplesPerCalPoint + nDelaySamples, POSSAMPLES, &Pos[i], &PosStdDev[i]);
 					Comm[i] = (cal->commandVMax - cal->commandVMin) * i /(CALPOINTS - 1) + cal->commandVMin; 
 				}
+				
 				// calculate average of standard deviations to better estimate noise on position signal
 				if (!cal->posStdDev) cal->posStdDev = malloc (sizeof(double));
 				Mean(PosStdDev, CALPOINTS, cal->posStdDev);
 			
-				//determine slope and offset for linear cal curves for X and Y
+				// determine slope and offset for linear cal curves for X and Y
 				if (!cal->slope) cal->slope = malloc (sizeof(double));
 				if (!cal->offset) cal->offset = malloc (sizeof(double));
 				LinFit (Pos, Comm, CALPOINTS, LinFitResult, cal->slope , cal->offset, &meanSquaredError);	
@@ -2372,7 +2416,6 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				// proceed to next calibration method
 				cal->currentCal++;
 				cal->currIterIdx = 0;
-				cal->lastRun = FALSE;
 				ReleaseDataPacket(&cal->commandPacket);
 				TaskControlIterationDone(taskControl, 0, "", TRUE);
 			}
@@ -2382,18 +2425,22 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 			{
 				
 				// average galvo ramp responses, use only ramp and post ramp time to analyze the data
-				waveformData = GetWaveformDataPtr (cal->positionSignal, &nWaveformSamples); 
 				
-				size_t 	postRampSamples = (size_t) floor(POSTRAMPTIME * 0.001 * *cal->baseClass.comSampRate) + 1;
-				size_t 	flybackSamples 	= (size_t) floor(MAXFLYBACKTIME * 0.001 * *cal->baseClass.comSampRate) + 1;
+				size_t 		postRampSamples = (size_t) floor(POSTRAMPTIME * 0.001 * *cal->baseClass.comSampRate) + 1;
+				size_t 		flybackSamples 	= (size_t) floor(MAXFLYBACKTIME * 0.001 * *cal->baseClass.comSampRate) + 1;
 				
 				double*		averageResponse = calloc (cal->nRampSamples + postRampSamples, sizeof(double));
+				
 				// sum up ramp responses
 				for (size_t i = 0; i < cal->nRepeat; i++)
 					for (size_t j = 0; j < cal->nRampSamples + postRampSamples; j++)
-						averageResponse[j] += waveformData[i*(flybackSamples + cal->nRampSamples + postRampSamples)+flybackSamples+j];
+						averageResponse[j] += positionSignal[i*(flybackSamples + cal->nRampSamples + postRampSamples)+flybackSamples+j];
+				
 				// average ramp responses
 				for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] /= cal->nRepeat;
+				
+				// calculate corrected position signal based on scaling and offset
+				for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] = *cal->slope * averageResponse[i] + *cal->offset;
 				
 				// calculate response slope
 				double rampSlope;
@@ -2408,10 +2455,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 					cal->currIterIdx = 0;
 					cal->currentCal++; 
 					cal->lastRun = FALSE;
-					DLDataTypes	dataPacketType;
-					waveform 		= GetDataPacketDataPtr (cal->commandPacket, &dataPacketType);
-					waveformData	= GetWaveformDataPtr(waveform, &nWaveformSamples);
-					*cal->lag = MeasureLag(waveformData + flybackSamples, averageResponse, cal->nRampSamples + postRampSamples) * 1000/ *cal->baseClass.comSampRate; // response lag in [ms]
+					*cal->lag = MeasureLag(commandSignal+flybackSamples, averageResponse, cal->nRampSamples + postRampSamples) * 1000/ *cal->baseClass.comSampRate; // response lag in [ms]
 				
 				} else {
 					if (rampSlope < targetSlope * 0.98) {
@@ -2426,16 +2470,38 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 					cal->currIterIdx++;
 				}
 				
+				// plot the command and response signals
+				DeleteGraphPlot(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, -1, VAL_IMMEDIATE_DRAW); 
+				// adjust plot time axis ranges
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_AUTOSCALE, 0, 0);
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_LEFT_YAXIS, VAL_AUTOSCALE, 0, 0);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XLABEL_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YLABEL_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XGRID_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YGRID_VISIBLE, 1);
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_LABEL_TEXT, "Galvo command and response");   
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XNAME, "Time (ms)");
+				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YNAME, "Galvo signals (V)");
+				// plot waveforms
+				PlotWaveform(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, commandSignal, cal->nRampSamples + postRampSamples, VAL_DOUBLE, 1.0, 0, 0, 1000/ *cal->baseClass.comSampRate, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, VAL_BLUE);
+				PlotWaveform(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, averageResponse, cal->nRampSamples + postRampSamples, VAL_DOUBLE, 1.0, 0, 0, 1000/ *cal->baseClass.comSampRate, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, VAL_RED);
+			
+				double x, y;
+			
+				GetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, &x, &y);
+				SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, x);
+				SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, y);
+				
 				OKfree(averageResponse);
 				ReleaseDataPacket(&cal->commandPacket);
 				TaskControlIterationDone(taskControl, 0, "", TRUE);
+			
 			}
 				break;
 			
 			case NonResGalvoCal_SwitchTimes:
 			{
 				// average galvo ramp responses, use only ramp and post ramp time to analyze the data
-				waveformData = GetWaveformDataPtr (cal->positionSignal, &nWaveformSamples); 
 				
 				size_t 		postStepSamples = (size_t) floor(POSTRAMPTIME * 0.001 * *cal->baseClass.comSampRate) + 1;
 				size_t 		flybackSamples 	= (size_t) floor(MAXFLYBACKTIME * 0.001 * *cal->baseClass.comSampRate) + 1; 
@@ -2445,9 +2511,12 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				// sum up step responses
 				for (size_t i = 0; i < cal->nRepeat; i++)
 					for (size_t j = 0; j < postStepSamples; j++)
-						averageResponse[j] += waveformData[i * (flybackSamples + postStepSamples) + flybackSamples + j];
+						averageResponse[j] += positionSignal[i * (flybackSamples + postStepSamples) + flybackSamples + j];
 				// average ramp responses
 				for (size_t i = 0; i < postStepSamples; i++) averageResponse[i] /= cal->nRepeat;
+				
+				// calculate corrected position signal based on scaling and offset
+				for (size_t i = 0; i < postStepSamples; i++) averageResponse[i] = *cal->slope * averageResponse[i] + *cal->offset;
 				
 				// find 50% crossing point where response is halfway between the applied step
 				for (int i = 0; i < postStepSamples; i++) 
@@ -2457,6 +2526,14 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 						cal->switchTimes->stepSize[cal->switchTimes->n - 1] = (cal->commandVMax - cal->commandVMin) * amplitudeFactor;
 						cal->switchTimes->halfSwitch = realloc (cal->switchTimes->halfSwitch, cal->switchTimes->n * sizeof(double));
 						cal->switchTimes->halfSwitch[cal->switchTimes->n - 1] = i / *cal->baseClass.comSampRate * 1000;
+						
+						// plot switching time
+						double x, y;
+						PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, (cal->commandVMax - cal->commandVMin)*amplitudeFactor, cal->switchTimes->halfSwitch[cal->switchTimes->n - 1]  * 1000 , VAL_ASTERISK, VAL_BLUE);
+						GetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, &x, &y);
+						SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, x);
+						SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, y);
+						
 						break;
 					}
 				
@@ -2477,7 +2554,6 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 			case NonResGalvoCal_MaxSlopes:
 			{
 				// average galvo ramp responses, use only ramp and post ramp time to analyze the data
-				waveformData = GetWaveformDataPtr (cal->positionSignal, &nWaveformSamples); 
 				
 				size_t 		postRampSamples = (size_t) floor(POSTRAMPTIME * 0.001 * *cal->baseClass.comSampRate) + 1;
 				size_t 		flybackSamples 	= (size_t) floor(MAXFLYBACKTIME * 0.001 * *cal->baseClass.comSampRate) + 1; 
@@ -2487,20 +2563,23 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				// sum up ramp responses
 				for (size_t i = 0; i < cal->nRepeat; i++)
 					for (size_t j = 0; j < cal->nRampSamples + postRampSamples; j++)
-						averageResponse[j] += waveformData[i * (flybackSamples + cal->nRampSamples + postRampSamples) + flybackSamples + j];
+						averageResponse[j] += positionSignal[i * (flybackSamples + cal->nRampSamples + postRampSamples) + flybackSamples + j];
 				// average ramp responses
 				for (size_t i = 0; i <  cal->nRampSamples + postRampSamples; i++) averageResponse[i] /= cal->nRepeat;
 				
-				// calculate ramp slope
-				double maxSlope;
-				double rampSlope = fabs(cal->commandVMax - cal->commandVMin)*amplitudeFactor / ((cal->nRampSamples - 1) * 1000/ *cal->baseClass.comSampRate); 
+				// calculate corrected position signal based on scaling and offset
+				for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] = *cal->slope * averageResponse[i] + *cal->offset;
 				
-				FindSlope(averageResponse, cal->nRampSamples + postRampSamples, *cal->baseClass.comSampRate, *cal->posStdDev, cal->nRepeat, RELERR, &maxSlope);  
+				// calculate ramp slope
+				double responseSlope;
+				double commandSlope = fabs(cal->commandVMax - cal->commandVMin)*amplitudeFactor / ((cal->nRampSamples - 1) * 1000/ *cal->baseClass.comSampRate); 
+				
+				FindSlope(averageResponse, cal->nRampSamples + postRampSamples, *cal->baseClass.comSampRate, *cal->posStdDev, cal->nRepeat, RELERR, &responseSlope);  
 				
 				if ((cal->commandVMax - cal->commandVMin) * amplitudeFactor >= cal->UISet.minStepSize * FIND_MAXSLOPES_AMP_ITER_FACTOR) 
-					if (maxSlope < rampSlope * 0.98)
+					if (responseSlope < commandSlope * 0.98)
 						// calculate ramp that has maxslope
-						cal->nRampSamples = (size_t) floor(fabs(cal->commandVMax - cal->commandVMin) * amplitudeFactor / maxSlope * *cal->baseClass.comSampRate * 0.001);
+						cal->nRampSamples = (size_t) floor(fabs(cal->commandVMax - cal->commandVMin) * amplitudeFactor / responseSlope * *cal->baseClass.comSampRate * 0.001);
 					else {
 						// store slope value
 						cal->currIterIdx++;  
@@ -2508,7 +2587,13 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 						cal->maxSlopes->amplitude = realloc (cal->maxSlopes->amplitude, cal->maxSlopes->n * sizeof(double));
 						cal->maxSlopes->amplitude[cal->maxSlopes->n - 1] = (cal->commandVMax - cal->commandVMin) * amplitudeFactor;
 						cal->maxSlopes->slope = realloc (cal->maxSlopes->slope, cal->maxSlopes->n * sizeof(double)); 
-						cal->maxSlopes->slope[cal->maxSlopes->n] = maxSlope;
+						cal->maxSlopes->slope[cal->maxSlopes->n] = responseSlope;
+						// plot slope
+						double x, y;
+						PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, (cal->commandVMax - cal->commandVMin) * amplitudeFactor, responseSlope, VAL_ASTERISK, VAL_BLUE);
+						GetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, &x, &y);
+						SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, x);
+						SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, y);
 					}
 				else {
 					cal->currIterIdx = 0;
@@ -2524,34 +2609,112 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 			
 			case NonResGalvoCal_TriangleWave:
 			{	
-				double 		funcAmp 		= cal->maxSlopes->amplitude[cal->currIterIdx];
+				double 		funcAmp 		= cal->maxSlopes->amplitude[cal->currIterIdx];												// in [V] Pk-Pk
 				// apply scan function with slope equal to max slope measured previously at a certain amplitude
-				double 		targetSlope 	= cal->maxSlopes->slope[cal->currIterIdx] * DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR;
-				double		funcFreq 		= targetSlope /(2 * funcAmp * 0.001);		
+				double		funcFreq 		= cal->targetSlope * 1000/(2 * funcAmp);													// in [Hz]	
 				size_t 		nCycles 		= ceil(cal->UISet.scanTime * funcFreq); 
 				size_t 		cycleSamples 	= (size_t) floor (1/funcFreq * *cal->baseClass.comSampRate);
 				// calculate number of cycles, precycles and samples
 				size_t		preCycles 		= (size_t) ceil (*cal->lag /1000 * funcFreq);
-				size_t 		nSamples 		= (nCycles + 2*preCycles) * cycleSamples;
-				size_t		skipSamples 	= preCycles * cycleSamples;
-				
-				cal->triangleCal->commandAmp[cal->currIterIdx] = cal->maxSlopes->amplitude[cal->currIterIdx];
+				size_t 		nSamples 		= (nCycles + preCycles) * cycleSamples;
+				BOOL		overloadFlag	= FALSE;
+				double* 	averageResponse = NULL;
 				
 				// check if there is overload
 				for (int i = 0; i < nSamples; i++) 
-					if ((corrpos[i] < - funcamp/2 * 1.1 - 5 * (*galvocalGlobal->posStdDev)) || (corrpos[i] > funcamp/2 * 1.1 + 5 * (*galvocalGlobal->posStdDev))) {
-						if (ovldmsg) MessagePopup("Warning", "Galvo overload detected. Slope cannot be estimated.");
-						SetCtrlVal(galvocalUIPanHandle,GalvoCal_MeasMaxScanSlope, 0.0);
-						err = VAL_OVLD_ERR;
-						Delay(0.5);
+					if ((positionSignal[i] < - funcAmp/2 * 1.1 - 5 * *cal->posStdDev) || (positionSignal[i] > funcAmp/2 * 1.1 + 5 * *cal->posStdDev)) {
+						overloadFlag = TRUE;
+						break;
 					}
 				
-			
-				break;
+				cal->targetSlope 	*= DYNAMICCAL_SLOPE_ITER_FACTOR;
+				// in case of overload, reduce slope and repeat until there is no overload
+				if (overloadFlag)
+					cal->extraRuns	= 0;
+				else {
+					
+					// calculate lag between position signal and command signal in number of samples
+					size_t delta = (size_t) (*cal->lag * *cal->baseClass.comSampRate/1000);
+					// average position signal triangle waveforms
+					averageResponse = calloc (cycleSamples, sizeof(double));   
+					// sum up triangle wave response taking into account the lag between command and response
+					for (size_t i = 0; i < nCycles; i++)
+						for (size_t j = 0; j < cycleSamples; j++)
+							averageResponse[j] += positionSignal[i * cycleSamples + delta + j];
+					// average ramp responses
+					for (size_t i = 0; i < cycleSamples; i++) averageResponse[i] /= nCycles;
+				
+					// calculate corrected position signal based on scaling and offset
+					for (size_t i = 0; i < cycleSamples; i++) averageResponse[i] = *cal->slope * averageResponse[i] + *cal->offset;
+					
+					double 	maxSlope, maxVal, minVal;
+					ssize_t maxIdx, minIdx;
+					FindSlope(averageResponse, cycleSamples, *cal->baseClass.comSampRate, *cal->posStdDev, nCycles, 0.05, &maxSlope);
+					MaxMin1D(averageResponse, cycleSamples, &maxVal, &maxIdx, &minVal, &minIdx);  
+					
+					if (maxSlope > cal->targetSlope * 0.95) cal->extraRuns++;
+					
+					if (cal->extraRuns == 2) {
+						// measure deadtime for galvo turn-around before and after a line scan, i.e. the duration during which the galvo response is not linear with the galvo command
+						// iterate a few times to converge
+						size_t 	nTotalSamplesDelay = 0;
+						double  fVal = funcAmp/2;
+						for (int i = 0; i < 3; i++){
+							// check if there is sufficient SNR to continue the estimation
+							if (1.141 * *cal->posStdDev / sqrt(nCycles) / fabs(fVal - maxVal) > 0.05) break;
+							if (fVal - maxVal < 0) break; 	// assumes the response is smaller in amplitude than the command
+							nTotalSamplesDelay += (size_t) floor( (fVal - maxVal) / (funcAmp * 2 * funcFreq) * *cal->baseClass.comSampRate ) ;
+							fVal = maxVal;
+							maxVal = averageResponse[maxIdx - nTotalSamplesDelay];
+						}
+						
+						// measure residual lag that may depend somewhat on the scan frequency and amplitude
+						cal->triangleCal->n++;
+						cal->triangleCal->commandAmp = realloc(cal->triangleCal->commandAmp, cal->triangleCal->n * sizeof(double)); 
+						cal->triangleCal->commandAmp[cal->currIterIdx] = cal->maxSlopes->amplitude[cal->currIterIdx];
+						cal->triangleCal->maxFreq[cal->currIterIdx] = maxSlope * 1000/(2 * funcAmp);  // maximum triangle function frequency! 
+						cal->triangleCal->resLag[cal->currIterIdx] = MeasureLag(commandSignal, averageResponse, cycleSamples) * 1000/ *cal->baseClass.comSampRate;
+						cal->triangleCal->deadTime += nTotalSamplesDelay / *cal->baseClass.comSampRate * 1000 ; // delay in ms 
+						
+						// plot
+						PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, funcAmp, cal->triangleCal->maxFreq[cal->triangleCal->n-1], VAL_ASTERISK, VAL_BLUE);
+						SetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, funcAmp, cal->triangleCal->maxFreq[cal->triangleCal->n-1]);
+						SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, funcAmp);
+						SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, cal->triangleCal->maxFreq[cal->triangleCal->n-1]);
+						
+						// continue with next maximum slope
+						cal->extraRuns = 0;
+						cal->currIterIdx++;
+						
+						// init next target slope
+						if (cal->currIterIdx < cal->maxSlopes->n) 
+							cal->targetSlope = cal->maxSlopes->slope[cal->currIterIdx] * DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR;
+					}
+				}
+				
+				OKfree(averageResponse);
+				ReleaseDataPacket(&cal->commandPacket); 
+				
+				if (cal->currIterIdx < cal->maxSlopes->n) {
+					TaskControlIterationDone(taskControl, 0, "", TRUE); 
+				}
+				else {
+					// calculate average dead time
+					cal->triangleCal->deadTime /= cal->maxSlopes->n;
+					// calculate actual triangle waveform amplitude
+					for (size_t i = 0; i < cal->maxSlopes->n; i++)
+						cal->triangleCal->actualAmp[i] = cal->triangleCal->commandAmp[i] * (1 - 4 * cal->triangleCal->maxFreq[i] * cal->triangleCal->deadTime * 0.001);  
+					
+					// end task controller iterations
+					TaskControlIterationDone(taskControl, 0, "", FALSE);
+				}
+					
+				
 			}
 		
 		
 		}
+	}
 		
 	discard_Waveform_type(&cal->positionSignal); 
 	

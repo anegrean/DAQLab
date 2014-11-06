@@ -44,7 +44,7 @@ struct DAQLabModule {
 	ListType					VChans;
 		// module configuration panel; one panel per module
 	int							cfgPanHndl;									
-	
+
 	// METHODS
 		
 		// discards module-specific data  

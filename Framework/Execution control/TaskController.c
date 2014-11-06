@@ -16,6 +16,7 @@
 #include <formatio.h>
 #include "TaskController.h"
 #include "VChannel.h"
+#include "DAQLab.h"
 
 //==============================================================================
 // Constants
@@ -42,6 +43,7 @@ typedef struct {
 	TaskEvents_type 			event;						// Task Control Event.
 	void*						eventInfo;					// Extra information per event allocated dynamically
 	DisposeEventInfoFptr_type   disposeEventInfoFptr;   	// Function pointer to dispose of the eventInfo
+	double						sendtime;					// test lex
 } EventPacket_type;
 
 typedef struct {
@@ -1175,7 +1177,7 @@ void CVICALLBACK TaskEventHandlerExecutionCallback (CmtThreadPoolHandle poolHand
 int TaskControlEvent (TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventInfo,
 					  DisposeEventInfoFptr_type disposeEventInfoFptr)
 {
-	EventPacket_type eventpacket = {event, eventInfo, disposeEventInfoFptr};
+	EventPacket_type eventpacket = {event, eventInfo, disposeEventInfoFptr,Timer()};    //added timer test lex
 	
 	if (CmtWriteTSQData(RecipientTaskControl->eventQ, &eventpacket, 1, 0, NULL)) return 0;
 	else return -1;
@@ -1692,11 +1694,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 	char*					stateStr;
 	size_t					nchars;
 	size_t					nItems;
+	double					delay;
+	char*					buf[100]; 
+	
+	//test lex
+	CVIProfSetCurrentThreadProfiling(TRUE);
 	
 	// get Task Controler event 
 	// (since this function was called, there should be at least one event in the queue)
 	if (CmtReadTSQData(taskControl->eventQ, &eventpacket, 1, 0, 0) <= 0) 
 		return; // in case there are no items or there is an error
+	
+	//test lex
+		delay=Timer()-eventpacket.sendtime; //test
+		Fmt(buf,"%s<%f\n",delay*1000);
+	//	DLMsg(buf,0);
 	
 	// reset abort flag
 	taskControl->abortFlag = FALSE;
@@ -2643,11 +2655,13 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								case TASK_NO_HWTRIGGER:
 									
 									//---------------------------------------------------------------------------------------------------------------
-									// Call iteration function if needed
+									// Call iteration function if needed	 
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
+									
 										FunctionCall(taskControl, eventpacket.event, TASK_FCALL_ITERATE, NULL);
+								        
 									else 
 										if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
 											taskControl->errorMsg =

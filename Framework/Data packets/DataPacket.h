@@ -29,6 +29,8 @@
 	// Data Packet types
 typedef struct DataPacket 		DataPacket_type;
 
+typedef struct PulsTrainPacket 	PulsTrainPacket_type; 
+
 	// Function pointer type for discarding data from data packets if other than free()
 typedef void (*DiscardPacketDataFptr_type)	(void** data);
 
@@ -37,6 +39,11 @@ typedef void (*DiscardPacketDataFptr_type)	(void** data);
 
 //==============================================================================
 // Global functions
+
+//initializes a pulstrai packet
+PulsTrainPacket_type* init_PulsTrainPacket_type (DLDataTypes dataType, void* data, DiscardPacketDataFptr_type discardPacketDataFptr);
+// Discards a pulstrain packet.        
+void discard_PulsTrainPacket_type_type (PulsTrainPacket_type** dataPacket);
 
 	// Adds data to a data packet. Depending on the instance counter, calling ReleaseDataPacket repeatedly, the dscardPacketDataFptr is called to discard the provided data. 
 	// If data* has been allocated with malloc then for discardPacketDataFptr provide NULL. Otherwise provide the specific data type discard function.

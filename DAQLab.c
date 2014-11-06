@@ -136,6 +136,7 @@ typedef struct {
 
 //==============================================================================
 // Static global variables
+double Ttaskstart;   
 
 //------------------------------------------------------------------------------------------------
 //                              AVAILABLE DAQLab MODULES
@@ -2064,6 +2065,10 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 					
 				case TCPan1_StartStop:
 					
+					//test lex
+					CVIProfSetCurrentThreadProfiling (TRUE);
+					Ttaskstart=Timer();     
+					
 					GetCtrlVal(panel,control,&starttask);
 					if (starttask) {
 						// dim controls
@@ -2444,7 +2449,8 @@ static FCallReturn_type* StartUITC (TaskControl_type* taskControl, BOOL const* a
 	
 	// change Task Controller name background color from gray (0x00F0F0F0) to green (0x002BD22F)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x002BD22F);
-	ProcessSystemEvents();	// required to update the background color
+	//test lex
+//	ProcessSystemEvents();	// required to update the background color
 	
 	return init_FCallReturn_type(0, "", "");
 }
@@ -2453,6 +2459,13 @@ static FCallReturn_type* DoneUITC  (TaskControl_type* taskControl, size_t curren
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	BOOL				taskControllerMode;
+	char*				buf[100];
+	double 				TotalTime;
+	
+	//test lex
+	TotalTime=Timer()-Ttaskstart;
+	Fmt(buf, "%s<Total Time:%f[p2]\n", TotalTime);    
+	DLMsg(buf,0);
 	
 	// change Task Controller name background color from green (0x002BD22F) to gray (0x00F0F0F0)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);

@@ -41,8 +41,9 @@
 
 // non-resonant galvo calibration parameters
 
+#define MAX_CAL_NAME_LENGTH							50			// Maximum name for non-resonant galvo scan axis calibration data.
 #define CALPOINTS 									50
-#define SLOPE_OFFSET_DELAY							0.01		// time to wait in [s] after a galvo step is made before estimating slope and offset parameters					
+#define SLOPE_OFFSET_DELAY							0.01		// Time to wait in [s] after a galvo step is made before estimating slope and offset parameters					
 #define RELERR 										0.05
 #define POSSAMPLES									200 		// number of AI samples to read and average for one measurement of the galvo position
 #define POSTRAMPTIME								20.0		// recording time in [ms] after a ramp signal is applied
@@ -74,10 +75,10 @@ typedef enum {
 	Translation										// Translation type scanning axis such as a moving stage.
 } ScanAxis_type;
 
-// Generic scan axis class
-typedef struct ScanAxisCal ScanAxisCal_type;
-struct ScanAxisCal {
-	// DATA
+// Generic active scan axis calibration class
+typedef struct ActiveScanAxisCal ActiveScanAxisCal_type;
+struct ActiveScanAxisCal {
+		// DATA
 	ScanAxis_type			scanAxisType;
 	char*					calName;
 	TaskControl_type*		taskController;			// Task Controller for the calibration of this scan axis.
@@ -86,9 +87,20 @@ struct ScanAxisCal {
 	double*					comSampRate;			// Command sample rate in [Hz] taken from VChanCom when connected. Same rate is used for the position sampling rate.
 	int						calPanHndl;				// Panel handle for performing scan axis calibration
 	LaserScanning_type*		lsModule;				// Reference to the laser scanning module to which this calibration belongs.
-	// METHODS
-	void	(*Discard) (ScanAxisCal_type** scanAxisCal);
+		// METHODS
+	void	(*Discard) (ActiveScanAxisCal_type** scanAxisCal);
 };
+
+// Generic scan axis calibration data class
+typedef struct ScanAxisCal	ScanAxisCal_type;
+struct ScanAxisCal {
+		// DATA 
+	ScanAxis_type			scanAxisType;
+	char*					calName; 
+	LaserScanning_type*		lsModule;
+		// METHODS
+	void	(*Discard) (ScanAxisCal_type** scanAxisCal); 	
+};	 
 
 //---------------------------------------------------
 // Normal non-resonant galvo scanner calibration data
@@ -116,6 +128,7 @@ typedef struct{
 	double* 				resLag;					// Residual lag in [ms] that must be added to lag to accurately describe overall lag during dynamic scanning.
 } TriangleCal_type;
 
+// Non-resonant galvo calibration types
 typedef enum {
 	
 	NonResGalvoCal_Slope_Offset,
@@ -125,15 +138,15 @@ typedef enum {
 	NonResGalvoCal_TriangleWave
 	
 } NonResGalvoCalTypes;
+
+// Non-resonant active galvo calibration data structure
 typedef struct {
-	ScanAxisCal_type		baseClass;				// Base structure describing scan engine calibration. Must be first member of the structure.
+	ActiveScanAxisCal_type	baseClass;				// Base structure describing scan engine calibration. Must be first member of the structure.
 	NonResGalvoCalTypes		currentCal;				// Index of the current calibration
 	size_t					currIterIdx;			// Current iteration index for each calibration method.
 	double					targetSlope;			// Used for triangle waveform calibration, in [V/ms]. 
 	double					commandVMin;			// Minimum galvo command voltage in [V] for maximal deflection in a given direction.
-	double					commandVMax;			// Maximum galvo command voltage in [V] for maximal deflection in the oposite direction when applying VminOut.
-	double					positionVMin;   		// Minimum galvo position feedback signal expected in [V] for maximal deflection when applying VminOut.
-	double					positionVMax;   		// Maximum galvo position feedback signal expected in [V] for maximal deflection when applying VmaxOut.
+	double					commandVMax;			// Maximum galvo command voltage in [V] for maximal deflection in the oposite direction.
 	double					extraRuns;				// Number of extra runs for triangle waveform calibration.
 	double*					slope;					// in [V/V], together with offset, it relates the command and position feedback signal in a linear way when the galvo is still.
 	double*					offset;					// in [V], together with slope, it relates the command and position feedback signal in a linear way when the galvo is still. 
@@ -141,19 +154,34 @@ typedef struct {
 	double*					lag;					// in [ms]
 	size_t					nRepeat;				// Number of times to repeat a command signal.
 	size_t					nRampSamples;			// Number of samples within a ramp command signal.
-	BOOL					lastRun;				// marks the last run for lag measurement
-	SwitchTimes_type*		switchTimes;
-	MaxSlopes_type*			maxSlopes;
-	TriangleCal_type*		triangleCal;
-	struct {
-		double resolution;							// in [V]
-		double minStepSize;							// in [V]
-		double parked;         						// in [V]
-		double scanTime;							// in [s]
-	}	 					UISet;
+	BOOL					lastRun;				// Marks the last run for lag measurement.
+	SwitchTimes_type*		switchTimes;			// Calibration data for jumping between two voltages.
+	MaxSlopes_type*			maxSlopes;				// Calibration data for maximum scan speeds.
+	TriangleCal_type*		triangleCal;			// Calibration data for triangle waveforms.
+	double 					resolution;				// in [V]
+	double 					minStepSize;			// in [V]
+	double 					parked;         		// Value of command signal to be applied to the galvo when parked, in [V].
+	double 					scanTime;				// Time to apply a triangle waveform to estimate galvo response and maximum scan speed in [s].
 	DataPacket_type*		commandPacket;			// Used to send command waveforms.
 	Waveform_type*			positionSignal;			// Calibration waveforms buffer.
-} NonResGalvoCal_type;
+} ActiveNonResGalvoCal_type;
+
+// Non-resonant galvo scan axis calibration data
+typedef struct {
+	ScanAxisCal_type		baseClass;
+	double					commandVMin;			// Minimum galvo command voltage in [V] for maximal deflection in a given direction.   
+	double					commandVMax;			// Maximum galvo command voltage in [V] for maximal deflection in the oposite direction.
+	double					slope;					// in [V/V], together with offset, it relates the command and position feedback signal in a linear way when the galvo is still.
+	double					offset;					// in [V], together with slope, it relates the command and position feedback signal in a linear way when the galvo is still. 
+	double					posStdDev;				// in [V], measures noise level on the position feedback signal.
+	double					lag;					// in [ms]
+	SwitchTimes_type*		switchTimes;			// Calibration data for jumping between two voltages.
+	MaxSlopes_type*			maxSlopes;				// Calibration data for maximum scan speeds.
+	TriangleCal_type*		triangleCal;			// Calibration data for triangle waveforms.
+	double 					resolution;				// in [V]
+	double 					minStepSize;			// in [V]
+	double 					parked;         		// Value of command signal to be applied to the galvo when parked, in [V].
+}NonResGalvoCal_type;
 
 //---------------------------------------------------
 // Resonant galvo scanner calibration data
@@ -246,6 +274,7 @@ struct ScanEngine {
 	//-----------------------------------
 	// Methods
 	//-----------------------------------
+		// discard method to be overridden by child class
 	void	(*Discard) (ScanEngine_type** scanEngine);
 		
 };
@@ -283,7 +312,7 @@ struct LaserScanning {
 	
 		// Available calibration data per scan axis. Of ScanAxisCal_type* which can be casted to various child classes such as GalvoCal_type*
 	ListType				availableCals;
-		// Active calibrations that are in progress. Of ScanAxisCal_type* which can be casted to various child classes such as GalvoCal_type*
+		// Active calibrations that are in progress. Of ActiveScanAxisCal_type* which can be casted to various child classes such as GalvoCal_type*
 	ListType				activeCal;
 		// Scan engines of ScanEngine_type* base class which can be casted to specific scan engines. 
 	ListType				scanEngines;
@@ -325,15 +354,22 @@ static void							DetVChanDisconnected					(VChan_type* self, VChan_type* discon
 //----------------------
 // Scan axis calibration
 //----------------------
-	// generic scan axis calibration data 
+	// generic active scan axis calibration data 
 
+static ActiveScanAxisCal_type*		initalloc_ActiveScanAxisCal_type		(ActiveScanAxisCal_type* cal);
+
+static void							discard_ActiveScanAxisCal_type			(ActiveScanAxisCal_type** cal);
+
+	// generic scan axis calibration data
 static ScanAxisCal_type*			initalloc_ScanAxisCal_type				(ScanAxisCal_type* cal);
 
 static void							discard_ScanAxisCal_type				(ScanAxisCal_type** cal);
 
 void CVICALLBACK 					ScanAxisCalibrationMenu_CB				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 
-static void							UpdateAvailableCalibrations				(ScanEngine_type* scanEngine, ScanAxis_type axisType);
+static void							UpdateScanEngineCalibrations			(ScanEngine_type* scanEngine);
+
+static void 						UpdateAvailableCalibrations 			(LaserScanning_type* lsModule); 
 
 static int CVICALLBACK 				ManageScanAxisCalib_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -349,26 +385,42 @@ static int 							GetStepTimes							(double* signal, int nsamples, double lowle
 	// Non-resonant galvo axis calibration data
 	//-----------------------------------------
 
-static NonResGalvoCal_type* 		init_NonResGalvoCal_type 				(LaserScanning_type* lsModule, char calName[], char commandVChanName[], char positionVChanName[]);
+static ActiveNonResGalvoCal_type* 	init_ActiveNonResGalvoCal_type 			(LaserScanning_type* lsModule, char calName[], char commandVChanName[], char positionVChanName[]);
 
-static void							discard_NonResGalvoCal_type				(ScanAxisCal_type** cal);
+static void							discard_ActiveNonResGalvoCal_type		(ActiveScanAxisCal_type** cal);
 
+static NonResGalvoCal_type*			init_NonResGalvoCal_type				(char calName[], LaserScanning_type* lsModule, double commandVMin, 
+																			 double commandVMax, double slope, double offset, double posStdDev, 
+																			 double lag, SwitchTimes_type* switchTimes, MaxSlopes_type* maxSlopes,
+																			 TriangleCal_type* triangleCal, double resolution, double minStepSize, double parked);
+
+static void							discard_NonResGalvoCal_type				(NonResGalvoCal_type** cal);
+
+	// validation for new scan axis calibration name
+static BOOL 						ValidateNewScanAxisCal					(char inputStr[], void* dataPtr); 
 	// switch times data
 static SwitchTimes_type* 			init_SwitchTimes_type					(void);
 
 static void 						discard_SwitchTimes_type 				(SwitchTimes_type** a);
+
+	// copies switch times data
+static SwitchTimes_type*			copy_SwitchTimes_type					(SwitchTimes_type* switchTimes);
 
 	// max slopes data
 
 static MaxSlopes_type* 				init_MaxSlopes_type 					(void);
 
 static void 						discard_MaxSlopes_type 					(MaxSlopes_type** a);
+	// copies max slopes data
+static MaxSlopes_type* 				copy_MaxSlopes_type 					(MaxSlopes_type* maxSlopes);
 
 	// triangle wave calibration data
 
 static TriangleCal_type* 			init_TriangleCal_type					(void);
 
 static void 						discard_TriangleCal_type 				(TriangleCal_type** a);
+	// copies triangle waveform calibration data
+static TriangleCal_type* 			copy_TriangleCal_type 					(TriangleCal_type* triangleCal);  
 
 	// command VChan
 static void							NonResGalvoCal_ComVChan_Connected		(VChan_type* self, VChan_type* connectedVChan);
@@ -565,7 +617,7 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 	ls->scanEngines					= 0;
 		
 	if (!(ls->availableCals			= ListCreate(sizeof(ScanAxisCal_type*))))	goto Error;
-	if (!(ls->activeCal				= ListCreate(sizeof(ScanAxisCal_type*))))	goto Error;
+	if (!(ls->activeCal				= ListCreate(sizeof(ActiveScanAxisCal_type*))))	goto Error;
 	if (!(ls->scanEngines			= ListCreate(sizeof(ScanEngine_type*))))	goto Error;
 			
 		//---
@@ -615,7 +667,7 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	
 	if (ls->activeCal) {
 		size_t 				nItems = ListNumItems(ls->activeCal);
-		ScanAxisCal_type**  calPtr;
+		ActiveScanAxisCal_type**  calPtr;
 		for (size_t i = 1; i <= nItems; i++) {
 			calPtr = ListGetPtrToItem(ls->activeCal, i);
 			(*(*calPtr)->Discard)	(calPtr); 
@@ -699,7 +751,7 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 	size_t					nActiveCals		= ListNumItems(ls->activeCal);
 	size_t					nAvailableCals	= ListNumItems(ls->availableCals);
 	ScanEngine_type**		enginePtr;
-	ScanAxisCal_type**		calPtr;
+	ActiveScanAxisCal_type**		calPtr;
 	
 	
 	// laser scanning module panels
@@ -822,7 +874,7 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	//----------------------------------------------------------
 	// populate by default NonResonantGalvo type of calibrations
 	//----------------------------------------------------------
-	UpdateAvailableCalibrations	(engine, NonResonantGalvo);
+	UpdateScanEngineCalibrations (engine);
 	
 	
 	
@@ -965,12 +1017,19 @@ static BOOL	ValidScanEngineName (char name[], void* dataPtr)
 	return DLValidTaskControllerName(name);
 }
 
-static void	UpdateAvailableCalibrations	(ScanEngine_type* scanEngine, ScanAxis_type axisType)
+static void	UpdateScanEngineCalibrations (ScanEngine_type* scanEngine)
 {
 	size_t					nCal 		= ListNumItems(scanEngine->lsModule->availableCals);
 	ScanAxisCal_type**		calPtr;
+	unsigned int 			fastAxisType;
+	unsigned int			slowAxisType;
+					
+	
+	if (!scanEngine->engineSetPanHndl) return; // do nothing if there is no pannel
 	
 	// empty lists, insert empty selection and select by default
+	GetCtrlVal(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisType, &fastAxisType);
+	GetCtrlVal(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisType, &slowAxisType);  
 	DeleteListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, 0, -1);
 	DeleteListItem(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, 0, -1);
 	InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, -1,"", 0);  
@@ -981,18 +1040,35 @@ static void	UpdateAvailableCalibrations	(ScanEngine_type* scanEngine, ScanAxis_t
 	for (size_t i = 1; i <= nCal; i++) {
 		calPtr = ListGetPtrToItem(scanEngine->lsModule->availableCals, i);
 		// fast axis calibration list
-		if (((*calPtr)->scanAxisType == axisType) && (*calPtr != scanEngine->slowAxisCal)) 
+		if (((*calPtr)->scanAxisType == fastAxisType) && (*calPtr != scanEngine->slowAxisCal)) 
 			InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, -1, (*calPtr)->calName, i);
 		// select fast axis list item if calibration is assigned to the scan engine
 		if (scanEngine->fastAxisCal == *calPtr)
 			SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, i);
 		// slow axis calibration list
-		if (((*calPtr)->scanAxisType == axisType) && (*calPtr != scanEngine->fastAxisCal)) 
+		if (((*calPtr)->scanAxisType == slowAxisType) && (*calPtr != scanEngine->fastAxisCal)) 
 			InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, -1, (*calPtr)->calName, i);
 		// select fast axis list item if calibration is assigned to the scan engine
 		if (scanEngine->slowAxisCal == *calPtr)
 			SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, i);
 	} 
+}
+
+static void UpdateAvailableCalibrations (LaserScanning_type* lsModule)
+{
+	size_t					nCal 		= ListNumItems(lsModule->availableCals);
+	ScanAxisCal_type**		calPtr;
+	
+	if (!lsModule->manageAxisCalPanHndl) return; // do nothing if there is no panel
+	
+	// empty listbox
+	DeleteListItem(lsModule->manageAxisCalPanHndl, ManageAxis_AxisCalibList, 0, -1);
+	
+	// list available calibrations
+	for (size_t i = 1; i <= nCal; i++) {
+		calPtr = ListGetPtrToItem(lsModule->availableCals, i);
+		InsertListItem(lsModule->manageAxisCalPanHndl, ManageAxis_AxisCalibList, -1, (*calPtr)->calName, i);
+	}
 }
 
 static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -1086,7 +1162,7 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							AppendString(&positionVChanName,": Position", -1);
 							
 							// init structure for galvo calibration
-							NonResGalvoCal_type* 	nrgCal = init_NonResGalvoCal_type(ls, calTCName, commandVChanName, positionVChanName);
+							ActiveNonResGalvoCal_type* 	nrgCal = init_ActiveNonResGalvoCal_type(ls, calTCName, commandVChanName, positionVChanName);
 							
 							//----------------------------------------
 							// Task Controller and VChans registration
@@ -1326,19 +1402,9 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					break;
 					
 				case ScanSetPan_FastAxisType:
-					
-					unsigned int 	fastAxisType;
-					GetCtrlVal(panel, control, &fastAxisType);
-					
-					UpdateAvailableCalibrations(engine, fastAxisType); 
-					break;
-					
 				case ScanSetPan_SlowAxisType:
 					
-					unsigned int 	slowAxisType;
-					GetCtrlVal(panel, control, &slowAxisType);
-					
-					UpdateAvailableCalibrations(engine, slowAxisType); 
+					UpdateScanEngineCalibrations(engine); 
 					break;
 					
 				case ScanSetPan_FastAxisCal:
@@ -1431,7 +1497,7 @@ static int CVICALLBACK ScanEnginesTab_CB (int panel, int control, int event, voi
 
 static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	NonResGalvoCal_type*		nrgCal = callbackData;
+	ActiveNonResGalvoCal_type*		activeNRGCal = callbackData;
 	
 	switch (event)
 	{
@@ -1441,23 +1507,59 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 					
 				case NonResGCal_SaveCalib:
 					
+					char*	calName = DLGetUINameInput("New Calibration Name", MAX_CAL_NAME_LENGTH, ValidateNewScanAxisCal, activeNRGCal);  
+					
+					if (!calName) return 0; // do nothing if operation is cancelled or invalid
+					
+					NonResGalvoCal_type*	nrgCal = init_NonResGalvoCal_type(calName, activeNRGCal->baseClass.lsModule, activeNRGCal->commandVMin, 
+													 activeNRGCal->commandVMax, *activeNRGCal->slope, *activeNRGCal->offset, *activeNRGCal->posStdDev,
+													 *activeNRGCal->lag, copy_SwitchTimes_type(activeNRGCal->switchTimes), copy_MaxSlopes_type(activeNRGCal->maxSlopes),
+													 copy_TriangleCal_type(activeNRGCal->triangleCal), activeNRGCal->resolution, activeNRGCal->minStepSize, activeNRGCal->parked);
+					// save calibration
+					ListInsertItem(activeNRGCal->baseClass.lsModule->availableCals, &nrgCal, END_OF_LIST);
+					// update scan axis calibrations UI list
+					UpdateAvailableCalibrations(activeNRGCal->baseClass.lsModule);
+					// update scan engines
+					unsigned int 		fastAxisType;
+					ScanEngine_type**	scanEnginePtr;
+					size_t				nScanEngines = ListNumItems(activeNRGCal->baseClass.lsModule->scanEngines);
+					for (size_t i = 1; i <= nScanEngines; i++) {
+						scanEnginePtr = ListGetPtrToItem(activeNRGCal->baseClass.lsModule->scanEngines, i);
+						GetCtrlVal(panel, control, &fastAxisType);   
+						UpdateScanEngineCalibrations(*scanEnginePtr); 
+					}
+					
+					
 					break;
 					
 				case NonResGCal_Done:
 					
-					TaskControl_type*	calTC = nrgCal->baseClass.taskController; 
+					TaskControl_type*	calTC = activeNRGCal->baseClass.taskController; 
 					
 					DisassembleTaskTreeBranch(calTC);
 					
 					// unregister calibration VChans
-					DLUnregisterVChan((DAQLabModule_type*)nrgCal->baseClass.lsModule, (VChan_type*)nrgCal->baseClass.VChanCom);
-					DLUnregisterVChan((DAQLabModule_type*)nrgCal->baseClass.lsModule, (VChan_type*)nrgCal->baseClass.VChanPos);
+					DLUnregisterVChan((DAQLabModule_type*)activeNRGCal->baseClass.lsModule, (VChan_type*)activeNRGCal->baseClass.VChanCom);
+					DLUnregisterVChan((DAQLabModule_type*)activeNRGCal->baseClass.lsModule, (VChan_type*)activeNRGCal->baseClass.VChanPos);
 					
 					// unregister calibration Task Controller
-					DLRemoveTaskController((DAQLabModule_type*)nrgCal->baseClass.lsModule, calTC);
+					DLRemoveTaskController((DAQLabModule_type*)activeNRGCal->baseClass.lsModule, calTC);
 					
-					// discard active calibration data structure
-					(*nrgCal->baseClass.Discard) ((ScanAxisCal_type**)&nrgCal);
+					// remove calibration data structure from module list of active calibrations and also discard calibration data
+					size_t							nActiveCal = ListNumItems(activeNRGCal->baseClass.lsModule->activeCal);
+					ActiveScanAxisCal_type**		activeCalPtr;
+					
+					for (size_t i = 1; i <= nActiveCal; i++) {
+						activeCalPtr = ListGetPtrToItem(activeNRGCal->baseClass.lsModule->activeCal, i);
+						if (*activeCalPtr == activeNRGCal) {
+							// remove list item
+							ListRemoveItem(activeNRGCal->baseClass.lsModule->activeCal, 0, i);
+							// discard active calibration data structure
+							(*activeNRGCal->baseClass.Discard) ((ActiveScanAxisCal_type**)&activeNRGCal);
+							break;
+						}
+					}
+					
 					
 					break;
 					
@@ -1478,7 +1580,7 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 
 static int CVICALLBACK NonResGalvoCal_CalPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	NonResGalvoCal_type* nrgCal = callbackData;
+	ActiveNonResGalvoCal_type* nrgCal = callbackData;
 	
 	switch (event)
 	{
@@ -1496,36 +1598,26 @@ static int CVICALLBACK NonResGalvoCal_CalPan_CB (int panel, int control, int eve
 					GetCtrlVal(panel, control, &nrgCal->commandVMax);
 					break;
 					
-				case Cal_PosMinV:
-					
-					GetCtrlVal(panel, control, &nrgCal->positionVMin);
-					break;
-					
-				case Cal_PosMaxV:
-					
-					GetCtrlVal(panel, control, &nrgCal->positionVMax);
-					break;
-					
 				case Cal_ParkedV:
 					
-					GetCtrlVal(panel, control, &nrgCal->UISet.parked);
+					GetCtrlVal(panel, control, &nrgCal->parked);
 					break;
 					
 				case Cal_ScanTime:
 					
-					GetCtrlVal(panel, control, &nrgCal->UISet.scanTime);	// read in [s]
+					GetCtrlVal(panel, control, &nrgCal->scanTime);		// read in [s]
 					break;
 					
 				case Cal_MinStep:
 					
-					GetCtrlVal(panel, control, &nrgCal->UISet.minStepSize); // read in [mV]
-					nrgCal->UISet.minStepSize *= 0.001;						// convert to [V]
+					GetCtrlVal(panel, control, &nrgCal->minStepSize); 	// read in [mV]
+					nrgCal->minStepSize *= 0.001;						// convert to [V]
 					break;
 					
 				case Cal_Resolution:
 					
-					GetCtrlVal(panel, control, &nrgCal->UISet.resolution);  // read in [mV]
-					nrgCal->UISet.resolution *= 0.001;						// convert to [V]
+					GetCtrlVal(panel, control, &nrgCal->resolution);  	// read in [mV]
+					nrgCal->resolution *= 0.001;						// convert to [V]
 					break;
 			}
 
@@ -1536,7 +1628,7 @@ static int CVICALLBACK NonResGalvoCal_CalPan_CB (int panel, int control, int eve
 
 static int CVICALLBACK NonResGalvoCal_TestPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	NonResGalvoCal_type*	nrgCal = callbackData;
+	ActiveNonResGalvoCal_type*	nrgCal = callbackData;
 	
 	switch (event)
 	{
@@ -1551,11 +1643,11 @@ static int CVICALLBACK NonResGalvoCal_TestPan_CB (int panel, int control, int ev
 	return 0;
 }
 
-static ScanAxisCal_type* initalloc_ScanAxisCal_type	(ScanAxisCal_type* cal)
+static ActiveScanAxisCal_type* initalloc_ActiveScanAxisCal_type	(ActiveScanAxisCal_type* cal)
 {
 	// if NULL, allocate memory, otherwise just use the provided address
 	if (!cal) {
-		cal = malloc (sizeof(ScanAxisCal_type));
+		cal = malloc (sizeof(ActiveScanAxisCal_type));
 		if (!cal) return NULL;
 	}
 	
@@ -1566,6 +1658,35 @@ static ScanAxisCal_type* initalloc_ScanAxisCal_type	(ScanAxisCal_type* cal)
 	cal->VChanPos		= NULL;
 	cal->comSampRate	= NULL;
 	cal->calPanHndl		= 0;
+	cal->lsModule		= NULL;
+	cal->Discard		= NULL;
+	
+	return cal;	
+}
+
+static void discard_ActiveScanAxisCal_type (ActiveScanAxisCal_type** cal)
+{
+	OKfree((*cal)->calName); 
+	discard_TaskControl_type(&(*cal)->taskController);
+	discard_VChan_type((VChan_type**)&(*cal)->VChanCom);
+	discard_VChan_type((VChan_type**)&(*cal)->VChanPos);
+	OKfree((*cal)->comSampRate);
+	if ((*cal)->calPanHndl) {DiscardPanel((*cal)->calPanHndl); (*cal)->calPanHndl =0;}
+	
+	OKfree(*cal);
+}
+
+static ScanAxisCal_type* initalloc_ScanAxisCal_type	(ScanAxisCal_type* cal)
+{
+	// if NULL, allocate memory, otherwise just use the provided address
+	if (!cal) {
+		cal = malloc (sizeof(ScanAxisCal_type));
+		if (!cal) return NULL;
+	}
+	
+	cal->scanAxisType	= NonResonantGalvo; 
+	cal->calName 		= NULL;
+	cal->lsModule		= NULL;     
 	cal->Discard		= NULL;
 	
 	return cal;	
@@ -1574,11 +1695,6 @@ static ScanAxisCal_type* initalloc_ScanAxisCal_type	(ScanAxisCal_type* cal)
 static void discard_ScanAxisCal_type (ScanAxisCal_type** cal)
 {
 	OKfree((*cal)->calName); 
-	discard_TaskControl_type(&(*cal)->taskController);
-	discard_VChan_type((VChan_type**)&(*cal)->VChanCom);
-	discard_VChan_type((VChan_type**)&(*cal)->VChanPos);
-	OKfree((*cal)->comSampRate);
-	if ((*cal)->calPanHndl) {DiscardPanel((*cal)->calPanHndl); (*cal)->calPanHndl =0;}
 	
 	OKfree(*cal);
 }
@@ -1611,20 +1727,20 @@ void CVICALLBACK ScanAxisCalibrationMenu_CB	(int menuBarHandle, int menuItemID, 
 	DisplayPanel(ls->manageAxisCalPanHndl);
 }
 
-static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModule, char calName[], char commandVChanName[], char positionVChanName[])
+static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_type* lsModule, char calName[], char commandVChanName[], char positionVChanName[])
 {
-	NonResGalvoCal_type*	cal = malloc(sizeof(NonResGalvoCal_type));
+	ActiveNonResGalvoCal_type*	cal = malloc(sizeof(ActiveNonResGalvoCal_type));
 	if (!cal) return NULL;
 	
 	DLDataTypes allowedPacketTypes[] = {DL_Waveform_Double};
 	
 	// init parent class
-	initalloc_ScanAxisCal_type(&cal->baseClass);
+	initalloc_ActiveScanAxisCal_type(&cal->baseClass);
 	if(!(cal->baseClass.calName		= StrDup(calName))) {free(cal); return NULL;}
 	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, DL_Waveform_Double, cal, NonResGalvoCal_ComVChan_Connected, NonResGalvoCal_ComVChan_Disconnected);   
 	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
-	cal->baseClass.Discard			= discard_NonResGalvoCal_type; // override
+	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
 								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, ModuleEventHandler_NonResGalvoCal, ErrorTC_NonResGalvoCal);
 	// connect sink VChans (VChanPos) to the Task Controller so that it can process incoming galvo position data
@@ -1632,13 +1748,11 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	cal->baseClass.lsModule			= lsModule;
 	
 								  
-	// init NonResGalvoCal_type
+	// init ActiveNonResGalvoCal_type
 	cal->commandVMin		= 0;
 	cal->commandVMax		= 0;
-	cal->positionVMin		= 0;
-	cal->positionVMax		= 0;
-	cal->currentCal											= NonResGalvoCal_Slope_Offset;
-	cal->currIterIdx										= 0;
+	cal->currentCal			= NonResGalvoCal_Slope_Offset;
+	cal->currIterIdx		= 0;
 	cal->slope				= NULL;	// i.e. calibration not performed yet
 	cal->offset				= NULL;
 	cal->posStdDev			= NULL;
@@ -1653,21 +1767,21 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (LaserScanning_type* lsModu
 	cal->triangleCal		= NULL;
 	cal->positionSignal		= NULL;
 	cal->commandPacket		= NULL;
-	cal->UISet.resolution  	= 0;
-	cal->UISet.minStepSize 	= 0;
-	cal->UISet.scanTime    	= 2;	// in [s]
-	cal->UISet.parked		= 0;
+	cal->resolution  		= 0;
+	cal->minStepSize 		= 0;
+	cal->scanTime    		= 2;	// in [s]
+	cal->parked				= 0;
 	
 	return cal;
 }
 
-static void	discard_NonResGalvoCal_type	(ScanAxisCal_type** cal)
+static void	discard_ActiveNonResGalvoCal_type	(ActiveScanAxisCal_type** cal)
 {
 	if (!*cal) return;
 	
-	NonResGalvoCal_type*	NRGCal = (NonResGalvoCal_type*) *cal;
+	ActiveNonResGalvoCal_type*	NRGCal = (ActiveNonResGalvoCal_type*) *cal;
 	
-	// discard NonResGalvoCal_type specific data
+	// discard ActiveNonResGalvoCal_type specific data
 	OKfree(NRGCal->slope);
 	OKfree(NRGCal->offset);
 	OKfree(NRGCal->posStdDev);
@@ -1681,9 +1795,68 @@ static void	discard_NonResGalvoCal_type	(ScanAxisCal_type** cal)
 	discard_MaxSlopes_type(&NRGCal->maxSlopes);
 	discard_TriangleCal_type(&NRGCal->triangleCal);
 	
-	// discard ScanAxisCal_type base class data
-	discard_ScanAxisCal_type(cal);
+	// discard ActiveScanAxisCal_type base class data
+	discard_ActiveScanAxisCal_type(cal);
 }
+
+static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], LaserScanning_type* lsModule, double commandVMin, 
+													  double commandVMax, double slope, double offset, double posStdDev, 
+													  double lag, SwitchTimes_type* switchTimes, MaxSlopes_type* maxSlopes,
+													  TriangleCal_type* triangleCal, double resolution, double minStepSize, double parked)
+{
+	NonResGalvoCal_type*	cal = malloc (sizeof(NonResGalvoCal_type));
+	if (!cal) return NULL;
+	
+	// base class
+	cal->baseClass.calName 			= StrDup(calName);
+	cal->baseClass.lsModule			= lsModule;
+	cal->baseClass.scanAxisType		= NonResonantGalvo;
+	cal->baseClass.Discard			= discard_NonResGalvoCal_type;
+	
+	// child class
+	cal->commandVMin				= commandVMin;
+	cal->commandVMax				= commandVMax;
+	cal->slope						= slope;
+	cal->offset						= offset;
+	cal->posStdDev					= posStdDev;
+	cal->lag						= lag;
+	cal->switchTimes				= switchTimes;
+	cal->maxSlopes					= maxSlopes;
+	cal->triangleCal				= triangleCal;
+	cal->resolution					= resolution;
+	cal->minStepSize				= minStepSize;
+	cal->parked						= parked;
+	
+	return cal;
+}
+
+static void discard_NonResGalvoCal_type (NonResGalvoCal_type** cal)
+{
+	if (!*cal) return;
+	
+	OKfree((*cal)->baseClass.calName);
+	
+	discard_SwitchTimes_type(&(*cal)->switchTimes);
+	discard_MaxSlopes_type(&(*cal)->maxSlopes);
+	discard_TriangleCal_type(&(*cal)->triangleCal);
+	
+	OKfree(*cal);
+}
+
+static BOOL ValidateNewScanAxisCal (char inputStr[], void* dataPtr)
+{
+	ActiveNonResGalvoCal_type*		activeNRGCal = dataPtr; 
+	// check if there is another galvo calibration with the same name
+	size_t 					nCalibrations = ListNumItems(activeNRGCal->baseClass.lsModule->availableCals);
+	NonResGalvoCal_type**	calPtr;
+	for (size_t i = 1; i <= nCalibrations; i++) {
+		calPtr = ListGetPtrToItem(activeNRGCal->baseClass.lsModule->availableCals, i);
+		if (!strcmp((*calPtr)->baseClass.calName, inputStr))
+			return FALSE;
+	}
+	
+	return TRUE; // valid entry 
+}   
 
 static SwitchTimes_type* init_SwitchTimes_type(void)
 {
@@ -1704,6 +1877,119 @@ static void discard_SwitchTimes_type (SwitchTimes_type** a)
 	OKfree((*a)->stepSize);
 	OKfree((*a)->halfSwitch);
 	OKfree(*a);
+}
+
+static SwitchTimes_type* copy_SwitchTimes_type (SwitchTimes_type* switchTimes)
+{
+	SwitchTimes_type*	switchTimesCopy = malloc(sizeof(SwitchTimes_type));
+	if (!switchTimesCopy) return NULL;
+	
+	// init
+	switchTimesCopy->n 				= switchTimes->n;
+	switchTimesCopy->halfSwitch		= NULL;
+	switchTimesCopy->stepSize		= NULL;
+	
+	
+	//----------- 
+	// copy
+	//----------- 
+	if (!switchTimesCopy->n) return switchTimesCopy; 
+		// halfSwitch
+	switchTimesCopy->halfSwitch 	= malloc(switchTimes->n * sizeof(double));
+	if (!switchTimesCopy->halfSwitch) goto Error;
+	memcpy(switchTimesCopy->halfSwitch, switchTimes->halfSwitch, switchTimes->n * sizeof(double));
+		// stepSize
+	switchTimesCopy->stepSize 		= malloc(switchTimes->n * sizeof(double));
+	if (!switchTimesCopy->stepSize) goto Error;
+	memcpy(switchTimesCopy->stepSize, switchTimes->stepSize, switchTimes->n * sizeof(double));
+	
+	return switchTimesCopy;
+	
+Error:
+	
+	OKfree(switchTimesCopy->halfSwitch);
+	OKfree(switchTimesCopy->stepSize);
+	OKfree(switchTimesCopy);
+	return NULL;
+}
+
+static MaxSlopes_type* copy_MaxSlopes_type (MaxSlopes_type* maxSlopes)
+{
+	MaxSlopes_type*	maxSlopesCopy = malloc(sizeof(MaxSlopes_type));
+	if (!maxSlopesCopy) return NULL;
+	
+	// init
+	maxSlopesCopy->n 				= maxSlopes->n;
+	maxSlopesCopy->slope			= NULL;
+	maxSlopesCopy->amplitude		= NULL;
+	
+	//----------- 
+	// copy
+	//----------- 
+	if (!maxSlopesCopy->n) return maxSlopesCopy;
+		// slope
+	maxSlopesCopy->slope 			= malloc(maxSlopes->n * sizeof(double));
+	if (!maxSlopesCopy->slope) goto Error;
+	memcpy(maxSlopesCopy->slope, maxSlopes->slope, maxSlopes->n * sizeof(double));
+		// amplitude
+	maxSlopesCopy->amplitude 		= malloc(maxSlopes->n * sizeof(double));
+	if (!maxSlopesCopy->amplitude) goto Error;
+	memcpy(maxSlopesCopy->amplitude, maxSlopes->amplitude, maxSlopes->n * sizeof(double));
+	
+	return maxSlopesCopy;
+	
+Error:
+	
+	OKfree(maxSlopesCopy->slope);
+	OKfree(maxSlopesCopy->amplitude);
+	OKfree(maxSlopesCopy);
+	return NULL;
+}
+
+static TriangleCal_type* copy_TriangleCal_type (TriangleCal_type* triangleCal)
+{
+	TriangleCal_type* triangleCalCopy = malloc(sizeof(TriangleCal_type));
+	if (!triangleCalCopy) return NULL;
+	
+	// init
+	triangleCalCopy->n 			= triangleCal->n;
+	triangleCalCopy->deadTime 	= triangleCal->deadTime;
+	triangleCalCopy->commandAmp	= NULL;
+	triangleCalCopy->actualAmp	= NULL;
+	triangleCalCopy->maxFreq	= NULL;
+	triangleCalCopy->resLag		= NULL;
+	
+	//-----------
+	// copy
+	//-----------
+	if (!triangleCalCopy->n) return triangleCalCopy;
+		// commandAmp
+	triangleCalCopy->commandAmp	= malloc(triangleCal->n * sizeof(double));
+	if (!triangleCalCopy->commandAmp) goto Error;
+	memcpy(triangleCalCopy->commandAmp, triangleCal->commandAmp, triangleCal->n * sizeof(double)); 
+		// actualAmp
+	triangleCalCopy->actualAmp	= malloc(triangleCal->n * sizeof(double));
+	if (!triangleCalCopy->actualAmp) goto Error;
+	memcpy(triangleCalCopy->actualAmp, triangleCal->actualAmp, triangleCal->n * sizeof(double)); 
+		// maxFreq
+	triangleCalCopy->maxFreq	= malloc(triangleCal->n * sizeof(double));
+	if (!triangleCalCopy->maxFreq) goto Error;
+	memcpy(triangleCalCopy->maxFreq, triangleCal->maxFreq, triangleCal->n * sizeof(double));
+		// resLag
+	triangleCalCopy->resLag		= malloc(triangleCal->n * sizeof(double));
+	if (!triangleCalCopy->resLag) goto Error;
+	memcpy(triangleCalCopy->resLag, triangleCal->resLag, triangleCal->n * sizeof(double));
+		
+	return triangleCalCopy;
+	
+Error:
+	
+	OKfree(triangleCalCopy->commandAmp);
+	OKfree(triangleCalCopy->actualAmp);
+	OKfree(triangleCalCopy->maxFreq);
+	OKfree(triangleCalCopy->resLag);
+	OKfree(triangleCalCopy);
+	return NULL;
 }
 
 static MaxSlopes_type* init_MaxSlopes_type (void)
@@ -2062,7 +2348,7 @@ static void	DetVChanDisconnected (VChan_type* self, VChan_type* disconnectedVCha
 
 static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
 	// total number of iterations to start with
 	SetTaskControlIterations(taskControl, 1);
@@ -2076,7 +2362,7 @@ static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskContr
 
 static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
-	NonResGalvoCal_type* 	cal 				= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 				= GetTaskControlModuleData(taskControl);
 	Waveform_type*			commandWaveform;      
 	
 	// add empty galvo response waveform 
@@ -2269,7 +2555,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			double 		funcAmp 		= cal->maxSlopes->amplitude[cal->currIterIdx]; 											// in [V] Pk-Pk
 			// apply scan function with slope equal to max slope measured previously at a certain amplitude
 			double		funcFreq 		= cal->targetSlope * 1000/(2 * funcAmp);			   											// in [Hz]
-			size_t 		nCycles 		= ceil(cal->UISet.scanTime * funcFreq); 
+			size_t 		nCycles 		= ceil(cal->scanTime * funcFreq); 
 			size_t 		cycleSamples 	= (size_t) floor (1/funcFreq * *cal->baseClass.comSampRate);
 			// calculate number of cycles, precycles and samples
 			size_t		preCycles 		= (size_t) ceil (*cal->lag /1000 * funcFreq);
@@ -2295,46 +2581,66 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 
 static void AbortIterationTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 
 }
 
 static FCallReturn_type* StartTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	// dim Save calibration
+	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 1);    
 	
 	return init_FCallReturn_type(0, "", ""); 
 }
 
 static FCallReturn_type* ResetTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", ""); 
 }
 
 static FCallReturn_type* DoneTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	// calibration complete, undim Save calibration
+	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 0);
 	
 	return init_FCallReturn_type(0, "", ""); 
 }
 
 static FCallReturn_type* StoppedTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	// dim Save calibration since calibration is incomplete
+	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 1);  
 	
 	return init_FCallReturn_type(0, "", ""); 
 }
 
 static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	
+	// dim/undim controls
+	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_Done, ATTR_DIMMED, dimmed);
+    int calSetPanHndl;
+	GetPanelHandleFromTabPage(cal->baseClass.calPanHndl, NonResGCal_Tab, 0, &calSetPanHndl);
+	SetCtrlAttribute(calSetPanHndl, Cal_CommMinV, ATTR_DIMMED, dimmed);  
+	SetCtrlAttribute(calSetPanHndl, Cal_CommMaxV, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(calSetPanHndl, Cal_ParkedV, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(calSetPanHndl, Cal_ScanTime, ATTR_DIMMED, dimmed);
+	SetCtrlAttribute(calSetPanHndl, Cal_MinStep, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(calSetPanHndl, Cal_Resolution, ATTR_DIMMED, dimmed); 
 }
 
 static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
-	NonResGalvoCal_type* 	cal 					= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 					= GetTaskControlModuleData(taskControl);
 	DataPacket_type**		dataPackets				= NULL;
 	Waveform_type*			commandWaveform			= NULL;
 	Waveform_type*			positionWaveform		= NULL;
@@ -2537,7 +2843,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 						break;
 					}
 				
-				if ((cal->commandVMax - cal->commandVMin) * amplitudeFactor >= cal->UISet.resolution * SWITCH_TIMES_AMP_ITER_FACTOR)
+				if ((cal->commandVMax - cal->commandVMin) * amplitudeFactor >= cal->resolution * SWITCH_TIMES_AMP_ITER_FACTOR)
 				  cal->currIterIdx++;
 				else {
 					
@@ -2576,7 +2882,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				
 				FindSlope(averageResponse, cal->nRampSamples + postRampSamples, *cal->baseClass.comSampRate, *cal->posStdDev, cal->nRepeat, RELERR, &responseSlope);  
 				
-				if ((cal->commandVMax - cal->commandVMin) * amplitudeFactor >= cal->UISet.minStepSize * FIND_MAXSLOPES_AMP_ITER_FACTOR) 
+				if ((cal->commandVMax - cal->commandVMin) * amplitudeFactor >= cal->minStepSize * FIND_MAXSLOPES_AMP_ITER_FACTOR) 
 					if (responseSlope < commandSlope * 0.98)
 						// calculate ramp that has maxslope
 						cal->nRampSamples = (size_t) floor(fabs(cal->commandVMax - cal->commandVMin) * amplitudeFactor / responseSlope * *cal->baseClass.comSampRate * 0.001);
@@ -2612,7 +2918,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				double 		funcAmp 		= cal->maxSlopes->amplitude[cal->currIterIdx];												// in [V] Pk-Pk
 				// apply scan function with slope equal to max slope measured previously at a certain amplitude
 				double		funcFreq 		= cal->targetSlope * 1000/(2 * funcAmp);													// in [Hz]	
-				size_t 		nCycles 		= ceil(cal->UISet.scanTime * funcFreq); 
+				size_t 		nCycles 		= ceil(cal->scanTime * funcFreq); 
 				size_t 		cycleSamples 	= (size_t) floor (1/funcFreq * *cal->baseClass.comSampRate);
 				// calculate number of cycles, precycles and samples
 				size_t		preCycles 		= (size_t) ceil (*cal->lag /1000 * funcFreq);
@@ -2725,14 +3031,14 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 
 static FCallReturn_type* ModuleEventHandler_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
 	return init_FCallReturn_type(0, "", "");
 }
 
 static void ErrorTC_NonResGalvoCal (TaskControl_type* taskControl, char* errorMsg)
 {
-	NonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
+	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 }
 
 

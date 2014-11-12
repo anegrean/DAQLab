@@ -79,17 +79,15 @@
 #define  Cal_ScanTime                     4       /* control type: numeric, callback function: (none) */
 #define  Cal_MinStep                      5       /* control type: numeric, callback function: (none) */
 #define  Cal_TEXTMSG                      6       /* control type: textMsg, callback function: (none) */
-#define  Cal_PosMaxV                      7       /* control type: numeric, callback function: (none) */
-#define  Cal_PosStdDev                    8       /* control type: numeric, callback function: (none) */
-#define  Cal_Offset_b                     9       /* control type: numeric, callback function: (none) */
-#define  Cal_Slope_a                      10      /* control type: numeric, callback function: (none) */
-#define  Cal_ParkedV                      11      /* control type: numeric, callback function: (none) */
-#define  Cal_PosMinV                      12      /* control type: numeric, callback function: (none) */
-#define  Cal_CommMinV                     13      /* control type: numeric, callback function: (none) */
-#define  Cal_CalStatus                    14      /* control type: listBox, callback function: (none) */
-#define  Cal_Plate_2                      15      /* control type: deco, callback function: (none) */
-#define  Cal_Plate                        16      /* control type: deco, callback function: (none) */
-#define  Cal_Resolution                   17      /* control type: numeric, callback function: (none) */
+#define  Cal_PosStdDev                    7       /* control type: numeric, callback function: (none) */
+#define  Cal_Offset_b                     8       /* control type: numeric, callback function: (none) */
+#define  Cal_Slope_a                      9       /* control type: numeric, callback function: (none) */
+#define  Cal_ParkedV                      10      /* control type: numeric, callback function: (none) */
+#define  Cal_CommMinV                     11      /* control type: numeric, callback function: (none) */
+#define  Cal_CalStatus                    12      /* control type: listBox, callback function: (none) */
+#define  Cal_Plate_2                      13      /* control type: deco, callback function: (none) */
+#define  Cal_Plate                        14      /* control type: deco, callback function: (none) */
+#define  Cal_Resolution                   15      /* control type: numeric, callback function: (none) */
 
 
      /* Control Arrays: */

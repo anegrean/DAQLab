@@ -91,6 +91,7 @@ typedef enum _DAQLabMessageID{
 	DAQLAB_MSG_ERR_ACTIVEXML,						// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0
 	DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, 		// HRESULT* error code, 0, 0, 0
 	DAQLAB_MSG_ERR_LOADING_MODULE,					// char* module instance name, char* error description
+	DAQLAB_MSG_ERR_LOADING_MODULE_CONFIG,			// char* module instance name
 	DAQLAB_MSG_ERR_VCHAN_NOT_FOUND,					// VChan_type*, 0, 0, 0
 	DAQLAB_MSG_ERR_NOT_UNIQUE_CLASS_NAME,			// char* class name, 0, 0, 0
 	DAQLAB_MSG_ERR_NOT_UNIQUE_INSTANCE_NAME,		// char* instance name, 0, 0, 0
@@ -145,8 +146,8 @@ AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last para
 																  // counter always to 0
 	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
-	//{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0}
-	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
+//	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
 	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }    
 	
 };
@@ -485,13 +486,19 @@ static int DAQLab_Load (void)
 				newModule = (*DAQLabModules_InitFunctions[j].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[j].className, moduleInstanceName);
 				// load module configuration data if specified
 				if (newModule->LoadCfg)
-					(*newModule->LoadCfg)	(newModule, xmlModuleNode);
+					if( (*newModule->LoadCfg)	(newModule, xmlModuleNode) < 0) {
+						DAQLab_Msg(DAQLAB_MSG_ERR_LOADING_MODULE_CONFIG, moduleInstanceName, NULL, NULL, NULL);
+						// dispose of module if not loaded properly
+						(*newModule->Discard) 	(&newModule);
+						continue;
+					}
 				
 				// call module load function
 				if ( (*newModule->Load) 	(newModule, mainPanHndl) < 0) {
+					DAQLab_Msg(DAQLAB_MSG_ERR_LOADING_MODULE, moduleInstanceName, NULL, NULL, NULL); 
 					// dispose of module if not loaded properly
 					(*newModule->Discard) 	(&newModule);
-					return 0;
+					continue;
 				}
 					
 				// insert module to modules list
@@ -966,7 +973,19 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 				DLMsg(" Reason:\n\t", 0);
 				DLMsg((char*)data2, 0); // error description
 				DLMsg("\n\n", 0);
-			}
+			} else
+				DLMsg("\n", 0);
+			break;
+			
+		case DAQLAB_MSG_ERR_LOADING_MODULE_CONFIG:
+			DLMsg("Error: Could not load configuration for module ", 1);
+			DLMsg((char*)data1, 0);	// module name 
+			if (data2) {
+				DLMsg(" Reason:\n\t", 0);
+				DLMsg((char*)data2, 0); // error description
+				DLMsg("\n\n", 0);
+			} else
+				DLMsg("\n", 0);
 			break;
 			
 		case DAQLAB_MSG_ERR_VCHAN_NOT_FOUND:
@@ -1229,6 +1248,8 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 				XMLErrChk ( ActiveXML_IXMLDOMElement_SetnodeTypedValue(newXMLElement, &xmlERRINFO, xmlVal) );
 				// add new element as child
 				XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, &xmlERRINFO, newXMLElement, NULL) );
+				// cleanup
+				CA_DiscardObjHandle(newXMLElement);
 				
 				break;
 				
@@ -1259,39 +1280,50 @@ static int DAQLab_StringToType	(char text[], BasicDataTypes vartype, void* value
 	switch (vartype) {
 		
 		case BasicData_Null:
-			
 			break;
-		
 		case BasicData_Bool:
-		case BasicData_Char:
-		case BasicData_UChar:
-		case BasicData_Short:
-		case BasicData_UShort:
-		case BasicData_Int:
-		case BasicData_UInt:
-		case BasicData_Long:	
-		case BasicData_ULong:  
-		case BasicData_LongLong:
-		case BasicData_ULongLong:
-			
-			errChk( Scan(text, "%s>%d", valuePtr) );
+			errChk( Scan(text, "%s>%d", (BOOL*)valuePtr) );
 			break;
-			
+		case BasicData_Char:
+			errChk( Scan(text, "%s>%d", (char*)valuePtr) );
+			break;
+		case BasicData_UChar:
+			errChk( Scan(text, "%s>%d", (unsigned char*)valuePtr) );
+			break;
+		case BasicData_Short:
+			errChk( Scan(text, "%s>%d", (short*)valuePtr) );
+			break;
+		case BasicData_UShort:
+			errChk( Scan(text, "%s>%d", (unsigned short*)valuePtr) );
+			break;
+		case BasicData_Int:
+			errChk( Scan(text, "%s>%d", (int*)valuePtr) );
+			break;
+		case BasicData_UInt:
+			errChk( Scan(text, "%s>%d", (unsigned int*)valuePtr) );
+			break;
+		case BasicData_Long:
+			errChk( Scan(text, "%s>%d", (long*)valuePtr) );
+			break;
+		case BasicData_ULong:
+			errChk( Scan(text, "%s>%d", (unsigned long*)valuePtr) );
+			break;
+		case BasicData_LongLong:
+			errChk( Scan(text, "%s>%d", (long long*)valuePtr) );
+			break;
+		case BasicData_ULongLong:
+			errChk( Scan(text, "%s>%d", (unsigned long long*)valuePtr) );
+			break;
 		case BasicData_Float:
-			
 			double doubleVal;
 			errChk( Scan(text, "%s>%f", &doubleVal) );  
 			*(float*)valuePtr = (float) doubleVal;
 			break;
-		
 		case BasicData_Double:
-			
 			errChk( Scan(text, "%s>%f", &doubleVal) );  
 			*(double*)valuePtr = doubleVal;
 			break;
-			
 		case BasicData_CString:
-			
 			*(char**)valuePtr = StrDup(text);
 			break;
 	}
@@ -1374,6 +1406,41 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 	
 	return error;
 	
+}
+
+int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElement, char elementName[], ActiveXMLObj_IXMLDOMElement_* childXMLElement)
+{
+#define DLGetSingleXMLElementFromElement_Err_NotASingleElement		-1
+	HRESULT								xmlerror;
+	ERRORINFO							xmlERRINFO;
+	ActiveXMLObj_IXMLDOMNodeList_		xmlNodeList		= 0;
+	ActiveXMLObj_IXMLDOMNode_			xmlNode			= 0; 
+	long								nXMLElements;
+
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(parentXMLElement, &xmlERRINFO, elementName, &xmlNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlNodeList, &xmlERRINFO, &nXMLElements) );
+	// if there are no elements stop here
+	if (nXMLElements != 1) {
+		*childXMLElement = 0;
+		return DLGetSingleXMLElementFromElement_Err_NotASingleElement;
+	}
+	
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlNodeList, &xmlERRINFO, 0, &xmlNode) );
+	
+	// cleanup
+	if (xmlNodeList) CA_DiscardObjHandle(xmlNodeList);
+	
+	*childXMLElement = (ActiveXMLObj_IXMLDOMElement_) xmlNode;
+	
+	return 0;
+	
+XMLError: 
+	
+	// cleanup
+	if (xmlNodeList) CA_DiscardObjHandle(xmlNodeList);
+	if (xmlNode) CA_DiscardObjHandle(xmlNode); 
+	
+	return xmlerror;
 }
 
 static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskControl)
@@ -2459,7 +2526,7 @@ static FCallReturn_type* DoneUITC  (TaskControl_type* taskControl, size_t curren
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	BOOL				taskControllerMode;
-	char*				buf[100];
+	char				buf[100];
 	double 				TotalTime;
 	
 	//test lex

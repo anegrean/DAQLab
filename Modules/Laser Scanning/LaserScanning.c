@@ -11,7 +11,9 @@
 
 //==============================================================================
 // Include files
+
 #include "DAQLab.h" 		// include this first   
+#include <formatio.h>  
 #include "LaserScanning.h"
 #include <userint.h>
 #include <analysis.h>   
@@ -23,24 +25,28 @@
 // Constants
 #define OKfree(ptr) if (ptr) { free(ptr); ptr = NULL; } 
 #define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto Error; else 
+	// maximum number of characters to represent a double precision number
+#define MAX_DOUBLE_NCHARS						30
 
-#define MOD_LaserScanning_UI 					"./Modules/Laser Scanning/UI_LaserScanning.uir"
+#define MOD_LaserScanning_UI 						"./Modules/Laser Scanning/UI_LaserScanning.uir"
 // Default VChan base names. Default base names must be unique among each other!
-#define VChan_Default_FastAxis_Command			"Fast Axis Command"
-#define VChan_Default_FastAxis_Position			"Fast Axis Position" 
-#define VChan_Default_SlowAxis_Command			"Slow Axis Command"
-#define VChan_Default_SlowAxis_Position			"Slow Axis Position"
-#define VChan_Default_ImageOut					"Image"
-#define VChan_Default_DetectionChan				"Detector"
-#define AxisCal_Default_TaskController_Name		"Scan Axis Calibration"
-#define AxisCal_Default_NewCalibration_Name		"Calibration"
+#define VChan_Default_FastAxis_Command				"Fast Axis Command"
+#define VChan_Default_FastAxis_Position				"Fast Axis Position" 
+#define VChan_Default_SlowAxis_Command				"Slow Axis Command"
+#define VChan_Default_SlowAxis_Position				"Slow Axis Position"
+#define VChan_Default_ImageOut						"Image"
+#define VChan_Default_DetectionChan					"Detector"
+#define AxisCal_Default_TaskController_Name			"Scan Axis Calibration"
+#define AxisCal_Default_NewCalibration_Name			"Calibration"
 
 // scan engine settings
 
-#define Max_NewScanEngine_NameLength	50
+#define Max_NewScanEngine_NameLength				50
+#define Allowed_Detector_Data_Types					{DL_Waveform_Char, DL_Waveform_Double, DL_Waveform_Float, DL_Waveform_Int, DL_Waveform_Short, DL_Waveform_UChar, DL_Waveform_UInt, DL_Waveform_UShort}
 
 // non-resonant galvo calibration parameters
-
+#define	CALIBRATION_DATA_TO_STRING					"%s<%*f[e6j1] "
+#define STRING_TO_CALIBRATION_DATA					"%s>%*f[j1] "
 #define MAX_CAL_NAME_LENGTH							50			// Maximum name for non-resonant galvo scan axis calibration data.
 #define CALPOINTS 									50
 #define SLOPE_OFFSET_DELAY							0.01		// Time to wait in [s] after a galvo step is made before estimating slope and offset parameters					
@@ -61,7 +67,10 @@
 // Types
 
 	// forward declared
-typedef struct LaserScanning 	LaserScanning_type; 
+typedef struct LaserScanning 		LaserScanning_type; 
+typedef struct ScanEngine 			ScanEngine_type; 
+typedef struct ScanAxisCal			ScanAxisCal_type; 
+typedef struct ActiveScanAxisCal 	ActiveScanAxisCal_type; 
 
 //------------------------------
 // Generic scan axis calibration
@@ -76,7 +85,7 @@ typedef enum {
 } ScanAxis_type;
 
 // Generic active scan axis calibration class
-typedef struct ActiveScanAxisCal ActiveScanAxisCal_type;
+
 struct ActiveScanAxisCal {
 		// DATA
 	ScanAxis_type			scanAxisType;
@@ -92,7 +101,7 @@ struct ActiveScanAxisCal {
 };
 
 // Generic scan axis calibration data class
-typedef struct ScanAxisCal	ScanAxisCal_type;
+
 struct ScanAxisCal {
 		// DATA 
 	ScanAxis_type			scanAxisType;
@@ -217,7 +226,8 @@ typedef struct {
 
 
 typedef struct {
-	SinkVChan_type*			detVChan;
+	SinkVChan_type*			detVChan;				// Sink VChan for receiving pixel data
+	ScanEngine_type*		scanEngine;				// Reference to scan engine to which this detection channel belongs
 } DetChan_type;
 
 //------------------
@@ -228,7 +238,6 @@ typedef enum {
 	ScanEngine_RectRaster
 } ScanEngineEnum_type;
 
-typedef struct ScanEngine ScanEngine_type;
 struct ScanEngine {
 	//-----------------------------------
 	// Scan engine type
@@ -261,7 +270,7 @@ struct ScanEngine {
 	SinkVChan_type*			VChanFastAxisPos;
 	SinkVChan_type*			VChanSlowAxisPos;
 		// Scan Engine output
-	SourceVChan_type*		VChanImageOut;
+	SourceVChan_type*		VChanScanOut;
 		// Detector input channels of DetChan_type* with incoming fluorescence pixel stream 
 	ListType				DetChans; 
 	
@@ -295,7 +304,6 @@ typedef struct {
 	size_t					width;					// Image width in [pix].
 	size_t					widthOffset;			// Image width offset in [pix].
 	double					pixSize;				// Image pixel size in [um]. 
-	double					fps;					// Actual frames per second. Upper limit determined by image size, pixel dwell time, etc.
 } RectangleRaster_type;
 
 
@@ -322,6 +330,8 @@ struct LaserScanning {
 		//-------------------------
 	
 	int						mainPanHndl;	  			// Main panel for the laser scanning module.
+	int*					mainPanLeftPos;				// Main panel left position to be applied when module is loaded.
+	int*					mainPanTopPos;				// Main panel top position to be applied when module is loaded. 
 	int						enginesPanHndl;   			// List of available scan engine types.
 	int						manageAxisCalPanHndl;		// Panel handle where axis calibrations are managed.
 	int						newAxisCalTypePanHndl;		// Panel handle to select different calibrations for various axis types.
@@ -339,7 +349,7 @@ struct LaserScanning {
 //-------------------
 // Detection channels
 //-------------------
-static DetChan_type*				init_DetChan_type						(char VChanName[]);
+static DetChan_type*				init_DetChan_type						(ScanEngine_type* scanEngine, char VChanName[]);
 
 static void							discard_DetChan_type					(DetChan_type** a);
 
@@ -347,9 +357,9 @@ static void							discard_DetChan_type					(DetChan_type** a);
 // VChan management callbacks
 //---------------------------
 	// detection VChans
-static void							DetVChanConnected						(VChan_type* self, VChan_type* connectedVChan);
+static void							DetVChan_Connected						(VChan_type* self, VChan_type* connectedVChan);
 
-static void							DetVChanDisconnected					(VChan_type* self, VChan_type* disconnectedVChan); 
+static void							DetVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan); 
 
 //----------------------
 // Scan axis calibration
@@ -420,7 +430,10 @@ static TriangleCal_type* 			init_TriangleCal_type					(void);
 
 static void 						discard_TriangleCal_type 				(TriangleCal_type** a);
 	// copies triangle waveform calibration data
-static TriangleCal_type* 			copy_TriangleCal_type 					(TriangleCal_type* triangleCal);  
+static TriangleCal_type* 			copy_TriangleCal_type 					(TriangleCal_type* triangleCal);
+	// saves non resonant galvo scan axis calibration data to XML
+static int 							SaveNonResGalvoCalToXML					(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  axisCalibrationsElement);
+static int 							LoadNonResGalvoCalFromXML 				(LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement);    
 
 	// command VChan
 static void							NonResGalvoCal_ComVChan_Connected		(VChan_type* self, VChan_type* connectedVChan);
@@ -446,7 +459,8 @@ static int 							init_ScanEngine_type 					(ScanEngine_type* 		engine,
 								 											 char 					slowAxisComVChanName[], 
 								 											 char					fastAxisPosVChanName[],
 								 											 char					slowAxisPosVChanName[],
-								 											 char					imageOutVChanName[]);
+								 											 char					imageOutVChanName[],
+																			 char					detectorVChanName[]);
 
 static void							discard_ScanEngine_type 				(ScanEngine_type** engine);
 
@@ -458,7 +472,8 @@ static RectangleRaster_type*		init_RectangleRaster_type				(LaserScanning_type*	
 								 											 char 					slowAxisComVChanName[], 
 								 											 char					fastAxisPosVChanName[],
 								 											 char					slowAxisPosVChanName[],
-								 											 char					imageOutVChanName[]);
+								 											 char					imageOutVChanName[],
+																			 char					detectorVChanName[]);
 
 static void							discard_RectangleRaster_type			(ScanEngine_type** engine);
 
@@ -469,6 +484,10 @@ static int CVICALLBACK 				RectangleRasterScan_CB 					(int panel, int control, 
 //------------------
 
 static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
+
+static int 							LoadCfg 								(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+
+static int 							SaveCfg 								(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
 static int 							DisplayPanels							(DAQLabModule_type* mod, BOOL visibleFlag); 
 
@@ -601,10 +620,10 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 		
 			// overriding methods
 	ls->baseClass.Discard 			= discard_LaserScanning;
-			
 	ls->baseClass.Load				= Load; 
-	
 	ls->baseClass.DisplayPanels		= DisplayPanels;
+	ls->baseClass.LoadCfg			= LoadCfg;
+	ls->baseClass.SaveCfg			= SaveCfg;
 			
 	//---------------------------
 	// Child Level 1: LaserScanning_type
@@ -624,6 +643,8 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 		// UI
 		//---
 	ls->mainPanHndl					= 0;
+	ls->mainPanLeftPos				= NULL;
+	ls->mainPanTopPos				= NULL;
 	ls->enginesPanHndl				= 0;
 	ls->newAxisCalTypePanHndl		= 0;
 	ls->manageAxisCalPanHndl		= 0;		
@@ -690,6 +711,8 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		//----------------------------------
 		// UI
 		//----------------------------------
+	OKfree(ls->mainPanLeftPos);
+	OKfree(ls->mainPanTopPos);
 	if (ls->mainPanHndl) {DiscardPanel(ls->mainPanHndl); ls->mainPanHndl = 0;}
 	if (ls->enginesPanHndl) {DiscardPanel(ls->enginesPanHndl); ls->enginesPanHndl = 0;}
 	if (ls->manageAxisCalPanHndl) {DiscardPanel(ls->manageAxisCalPanHndl); ls->manageAxisCalPanHndl = 0;}
@@ -711,6 +734,17 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 	// load main panel
 	errChk(ls->mainPanHndl 		= LoadPanel(workspacePanHndl, MOD_LaserScanning_UI, ScanPan));
+	// set main panel position
+	if (ls->mainPanLeftPos)
+		SetPanelAttribute(ls->mainPanHndl, ATTR_LEFT, *ls->mainPanLeftPos);
+	else
+		SetPanelAttribute(ls->mainPanHndl, ATTR_LEFT, VAL_AUTO_CENTER); 
+		
+	if (ls->mainPanTopPos)
+		SetPanelAttribute(ls->mainPanHndl, ATTR_TOP, *ls->mainPanTopPos);
+	else
+		SetPanelAttribute(ls->mainPanHndl, ATTR_TOP, VAL_AUTO_CENTER); 
+	
 	
 	// add menu bar to scan panel and link it to module data
 	ls->menuBarHndl 			= NewMenuBar(ls->mainPanHndl);
@@ -741,6 +775,612 @@ Error:
 	if (ls->mainPanHndl) {DiscardPanel(ls->mainPanHndl); ls->mainPanHndl = 0;}
 	
 	return error;
+}
+
+static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+{
+	LaserScanning_type*				ls 				= (LaserScanning_type*) mod;
+	int								error			= 0;
+	int								lsPanTopPos;
+	int								lsPanLeftPos;
+	HRESULT							xmlerror;
+	ERRORINFO						xmlERRINFO;
+	DAQLabXMLNode 					lsAttr[] 		= {{"PanTopPos", BasicData_Int, &lsPanTopPos},
+											  		   {"PanLeftPos", BasicData_Int, &lsPanLeftPos}};
+	
+	//--------------------------------------------------------------------------
+	// Save laser scanning module main panel position
+	//--------------------------------------------------------------------------
+	
+	errChk( GetPanelAttribute(ls->mainPanHndl, ATTR_LEFT, &lsPanLeftPos) );
+	errChk( GetPanelAttribute(ls->mainPanHndl, ATTR_TOP, &lsPanTopPos) );
+	DLAddToXMLElem(xmlDOM, moduleElement, lsAttr, DL_ATTRIBUTE, NumElem(lsAttr)); 
+	
+	//--------------------------------------------------------------------------
+	// Save scan axis calibrations
+	//--------------------------------------------------------------------------
+	ActiveXMLObj_IXMLDOMElement_	scanAxisCalibrationsXMLElement;   	// element containing multiple scan axis calibrations
+	ActiveXMLObj_IXMLDOMElement_	scanAxisCalXMLElement;  		  	// element containing calibration data
+	
+	// create scan axis calibration element
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanAxisCalibrations", &scanAxisCalibrationsXMLElement) );
+	
+	
+	size_t					nAxisCals 			= ListNumItems(ls->availableCals);
+	ScanAxisCal_type**		axisCalPtr;
+	DAQLabXMLNode 			scanAxisCalAttr[2];
+	unsigned int			scanAxisType;
+	for (size_t i = 1; i <= nAxisCals; i++) {
+		axisCalPtr = ListGetPtrToItem(ls->availableCals, i);
+		// create new axis calibration element
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "AxisCalibration", &scanAxisCalXMLElement) );
+		// initialize generic scan axis calibration attributes
+		scanAxisCalAttr[0].tag 		= "Name";
+		scanAxisCalAttr[0].type 	= BasicData_CString;
+		scanAxisCalAttr[0].pData	= (*axisCalPtr)->calName;
+		scanAxisCalAttr[1].tag 		= "AxisType";
+		scanAxisType 				= (unsigned int)(*axisCalPtr)->scanAxisType;
+		scanAxisCalAttr[1].type 	= BasicData_UInt;
+		scanAxisCalAttr[1].pData	= &scanAxisType;
+		// save attributes
+		DLAddToXMLElem(xmlDOM, scanAxisCalXMLElement, scanAxisCalAttr, DL_ATTRIBUTE, NumElem(scanAxisCalAttr));  
+		// add scan axis specific calibration data
+		switch((*axisCalPtr)->scanAxisType) {
+				
+			case NonResonantGalvo:
+				SaveNonResGalvoCalToXML((NonResGalvoCal_type*) *axisCalPtr, xmlDOM, scanAxisCalXMLElement);
+				break;
+				
+			case ResonantGalvo:
+				break;
+				
+			case AOD:
+				break;
+				
+			case Translation:
+				break;
+	
+		}
+		
+		// add new axis calibration element
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanAxisCalibrationsXMLElement, &xmlERRINFO, scanAxisCalXMLElement, NULL) );  
+		CA_DiscardObjHandle(scanAxisCalXMLElement);  
+	}
+	
+	// add scan axis calibrations element to module element
+	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, scanAxisCalibrationsXMLElement, NULL) );
+	CA_DiscardObjHandle(scanAxisCalibrationsXMLElement); 
+	
+	//--------------------------------------------------------------------------
+	// Save scan engines and VChans
+	//--------------------------------------------------------------------------
+	ActiveXMLObj_IXMLDOMElement_	scanEnginesXMLElement; 			  	// element containing multiple scan engines
+	ActiveXMLObj_IXMLDOMElement_	scanEngineXMLElement; 			  	// scan engine element
+	ActiveXMLObj_IXMLDOMElement_	VChanNamesXMLElement;	 			// VChan names element      
+	
+	// create scan engines element
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanEngines", &scanEnginesXMLElement) );
+	
+	size_t					nScanEngines 				= ListNumItems(ls->scanEngines);
+	ScanEngine_type**		scanEnginePtr;
+	DAQLabXMLNode 			scanEngineAttr[4];
+	DAQLabXMLNode			rectangleRasterAttr[5];
+	unsigned int			scanEngineType;
+	unsigned long long		imgHeight, imgWidth, imgHeightOffset, imgWidthOffset;
+	char* 					fastAxisCommandVChanName	= NULL;
+	char* 					slowAxisCommandVChanName	= NULL;
+	char* 					fastAxisPositionVChanName	= NULL;
+	char* 					slowAxisPositionVChanName	= NULL;
+	char* 					scanEngineOutVChanName		= NULL;
+	DAQLabXMLNode			scanEngineVChansAttr[5];
+	DAQLabXMLNode			detectorVChanAttr;
+	size_t					nDetectionChans;
+	DetChan_type**			detChanPtr;
+	
+	
+	for (size_t i = 1; i <= nScanEngines; i++) {
+		scanEnginePtr = ListGetPtrToItem(ls->scanEngines, i);
+		// create new scan engine element
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanEngine", &scanEngineXMLElement) );
+		// create new VChan element with all the VChan names for the Scan Engine
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "VChannels", &VChanNamesXMLElement) );
+		// initialize generic scan engine attributes
+		scanEngineAttr[0].tag 		= "Name";
+		scanEngineAttr[0].type 		= BasicData_CString;
+		scanEngineAttr[0].pData		= GetTaskControlName((*scanEnginePtr)->taskControl);
+		
+		scanEngineAttr[1].tag 		= "ScanEngineType";
+		scanEngineType 				= (unsigned int)(*scanEnginePtr)->engineType;
+		scanEngineAttr[1].type 		= BasicData_UInt;
+		scanEngineAttr[1].pData		= &scanEngineType;
+		
+		scanEngineAttr[2].tag		= "FastAxisCalibrationName";
+		scanEngineAttr[2].type 		= BasicData_CString;
+		if ((*scanEnginePtr)->fastAxisCal)
+			scanEngineAttr[2].pData	= (*scanEnginePtr)->fastAxisCal->calName;
+		else
+			scanEngineAttr[2].pData = "";
+		
+		scanEngineAttr[3].tag		= "SlowAxisCalibrationName";
+		scanEngineAttr[3].type 		= BasicData_CString;
+		if ((*scanEnginePtr)->slowAxisCal)
+			scanEngineAttr[3].pData		= (*scanEnginePtr)->slowAxisCal->calName;
+		else
+			scanEngineAttr[3].pData		= ""; 
+			
+		// save attributes
+		DLAddToXMLElem(xmlDOM, scanEngineXMLElement, scanEngineAttr, DL_ATTRIBUTE, NumElem(scanEngineAttr));
+		OKfree(scanEngineAttr[0].pData);
+		
+		// save generic scan engine VChans:scan axis & scan engine out 
+		fastAxisCommandVChanName 	= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanFastAxisCom);
+		slowAxisCommandVChanName 	= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanSlowAxisCom);
+		fastAxisPositionVChanName 	= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanFastAxisPos);
+		slowAxisPositionVChanName 	= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanSlowAxisPos);
+		scanEngineOutVChanName		= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanScanOut);
+				
+		scanEngineVChansAttr[0].tag 	= "FastAxisCommand";
+		scanEngineVChansAttr[0].type   = BasicData_CString;
+		scanEngineVChansAttr[0].pData	= fastAxisCommandVChanName;
+		scanEngineVChansAttr[1].tag 	= "SlowAxisCommand";
+		scanEngineVChansAttr[1].type   = BasicData_CString;
+		scanEngineVChansAttr[1].pData	= slowAxisCommandVChanName;
+		scanEngineVChansAttr[2].tag 	= "FastAxisPosition";
+		scanEngineVChansAttr[2].type   = BasicData_CString;
+		scanEngineVChansAttr[2].pData	= fastAxisPositionVChanName;
+		scanEngineVChansAttr[3].tag 	= "SlowAxisPosition";
+		scanEngineVChansAttr[3].type   = BasicData_CString;
+		scanEngineVChansAttr[3].pData	= slowAxisPositionVChanName;
+		scanEngineVChansAttr[4].tag 	= "ScanEngineOut";
+		scanEngineVChansAttr[4].type   = BasicData_CString;
+		scanEngineVChansAttr[4].pData	= scanEngineOutVChanName;
+														 	
+		DLAddToXMLElem(xmlDOM, VChanNamesXMLElement, scanEngineVChansAttr, DL_ATTRIBUTE, NumElem(scanEngineVChansAttr));
+				
+		OKfree(fastAxisCommandVChanName);
+		OKfree(slowAxisCommandVChanName);
+		OKfree(fastAxisPositionVChanName);
+		OKfree(slowAxisPositionVChanName);
+		OKfree(scanEngineOutVChanName);
+		
+		// save detector VChans
+		nDetectionChans = ListNumItems((*scanEnginePtr)->DetChans);
+		for (size_t j = 0; j < nDetectionChans; j++) {
+			detChanPtr = ListGetPtrToItem((*scanEnginePtr)->DetChans, j+1);
+			detectorVChanAttr.tag 		= "DetectorChannel";
+			detectorVChanAttr.type   	= BasicData_CString;
+			detectorVChanAttr.pData		= GetVChanName((VChan_type*)(*detChanPtr)->detVChan);
+			DLAddToXMLElem(xmlDOM, VChanNamesXMLElement, &detectorVChanAttr, DL_ELEMENT, 1);
+			OKfree(detectorVChanAttr.pData);
+		}
+		
+		// add scan engine specific data
+		switch((*scanEnginePtr)->engineType) {
+				
+			case ScanEngine_RectRaster:
+				
+				// initialize raster scan attributes
+				imgHeight 						= ((RectangleRaster_type*) *scanEnginePtr)->height;
+				imgWidth 						= ((RectangleRaster_type*) *scanEnginePtr)->width;
+				imgHeightOffset 				= ((RectangleRaster_type*) *scanEnginePtr)->heightOffset;
+				imgWidthOffset					= ((RectangleRaster_type*) *scanEnginePtr)->widthOffset;
+				
+				rectangleRasterAttr[0].tag		= "ImageHeight";
+				rectangleRasterAttr[0].type		= BasicData_ULongLong;
+				rectangleRasterAttr[0].pData	= &imgHeight;
+				rectangleRasterAttr[1].tag		= "ImageWidth";
+				rectangleRasterAttr[1].type		= BasicData_ULongLong;
+				rectangleRasterAttr[1].pData	= &imgWidth;
+				rectangleRasterAttr[2].tag		= "ImageHeightOffset";
+				rectangleRasterAttr[2].type		= BasicData_ULongLong;
+				rectangleRasterAttr[2].pData	= &imgHeightOffset;
+				rectangleRasterAttr[3].tag		= "ImageWidthOffset";
+				rectangleRasterAttr[3].type		= BasicData_ULongLong;
+				rectangleRasterAttr[3].pData	= &imgWidthOffset;
+				rectangleRasterAttr[4].tag		= "PixelSize";
+				rectangleRasterAttr[4].type		= BasicData_Double;
+				rectangleRasterAttr[4].pData	= &((RectangleRaster_type*) *scanEnginePtr)->pixSize;
+				
+				// save scan engine attributes
+				DLAddToXMLElem(xmlDOM, scanEngineXMLElement, rectangleRasterAttr, DL_ATTRIBUTE, NumElem(rectangleRasterAttr));
+				
+				
+				
+				break;
+		}
+		// add VChan Names element to scan engine element
+		// add new scan engine element
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, VChanNamesXMLElement, NULL) ); 
+		CA_DiscardObjHandle(VChanNamesXMLElement);   
+		
+		// add new scan engine element
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEnginesXMLElement, &xmlERRINFO, scanEngineXMLElement, NULL) );  
+		CA_DiscardObjHandle(scanEngineXMLElement); 
+	}
+	
+	// add scan engines element to module element
+	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, scanEnginesXMLElement, NULL) );
+	CA_DiscardObjHandle(scanEnginesXMLElement); 
+	
+	return 0;
+	
+Error:
+	
+	return error;
+	
+XMLError:   
+	
+	return xmlerror;
+}
+
+static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+{
+	LaserScanning_type*				ls 								= (LaserScanning_type*) mod;
+	int 							error 							= 0;
+	HRESULT							xmlerror						= 0;
+	ERRORINFO						xmlERRINFO;
+	ls->mainPanTopPos												= malloc(sizeof(int));
+	ls->mainPanLeftPos												= malloc(sizeof(int));
+	DAQLabXMLNode 					lsAttr[] 						= { {"PanTopPos", BasicData_Int, ls->mainPanTopPos},
+											  		   					{"PanLeftPos", BasicData_Int, ls->mainPanLeftPos}};
+													   
+	ActiveXMLObj_IXMLDOMElement_	scanAxisCalibrationsXMLElement 	= 0;   			// element containing multiple scan axis calibrations
+	ActiveXMLObj_IXMLDOMElement_	scanAxisCalXMLElement			= 0;  		  	// element containing calibration data 
+	ActiveXMLObj_IXMLDOMNodeList_	axisCalibrationNodeList			= 0;
+	
+	// load main panel position 
+	errChk( DLGetXMLElementAttributes(moduleElement, lsAttr, NumElem(lsAttr)) ); 
+	
+	//--------------------------------------------------------------------------
+	// Load scan axis calibrations
+	//--------------------------------------------------------------------------
+
+	ActiveXMLObj_IXMLDOMNode_		axisCalibrationNode				= 0;      
+	long							nAxisCalibrations;
+	unsigned int					axisCalibrationType;
+	DAQLabXMLNode					axisCalibrationGenericAttr[] = {{"AxisType", BasicData_UInt, &axisCalibrationType}};
+																	 
+	errChk( DLGetSingleXMLElementFromElement(moduleElement, "ScanAxisCalibrations", &scanAxisCalibrationsXMLElement) );
+	
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(scanAxisCalibrationsXMLElement, &xmlERRINFO, "AxisCalibration", &axisCalibrationNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(axisCalibrationNodeList, &xmlERRINFO, &nAxisCalibrations) );
+	
+	for (long i = 0; i < nAxisCalibrations; i++) {
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(axisCalibrationNodeList, &xmlERRINFO, i, &axisCalibrationNode) );
+		
+		errChk( DLGetXMLNodeAttributes(axisCalibrationNode, axisCalibrationGenericAttr, NumElem(axisCalibrationGenericAttr)) ); 
+		
+		switch (axisCalibrationType) {
+				
+			case NonResonantGalvo:
+				LoadNonResGalvoCalFromXML(ls, (ActiveXMLObj_IXMLDOMElement_)axisCalibrationNode);   
+				break;
+				
+			case ResonantGalvo:
+				break;
+				
+			case AOD:
+				break;
+				
+			case Translation:
+				break;
+		}
+		
+	}
+	
+	//--------------------------------------------------------------------------
+	// Load scan engines
+	//--------------------------------------------------------------------------
+	ActiveXMLObj_IXMLDOMElement_	scanEnginesXMLElement 	= 0;   			// element containing multiple scan engines
+	ActiveXMLObj_IXMLDOMElement_	scanEngineXMLElement	= 0;  		  	// element containing scan engine data 
+	ActiveXMLObj_IXMLDOMNodeList_	scanEngineNodeList		= 0;
+	ActiveXMLObj_IXMLDOMNode_		scanEngineNode			= 0;    
+	long							nScanEngines;
+	unsigned int					scanEngineType;
+	char*							scanEngineName			= NULL;
+	char*							fastAxisCalibrationName	= NULL;
+	char*							slowAxisCalibrationName	= NULL;
+	ScanEngine_type*				scanEngine				= NULL;
+	DAQLabXMLNode					scanEngineGenericAttr[] = {	{"Name", BasicData_CString, &scanEngineName},
+																{"ScanEngineType", BasicData_UInt, &scanEngineType},
+																{"FastAxisCalibrationName", BasicData_CString, &fastAxisCalibrationName},
+																{"SlowAxisCalibrationName", BasicData_CString, &slowAxisCalibrationName} }; 			
+		
+	errChk( DLGetSingleXMLElementFromElement(moduleElement, "ScanEngines", &scanEnginesXMLElement) );
+	
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(scanEnginesXMLElement, &xmlERRINFO, "ScanEngine", &scanEngineNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(scanEngineNodeList, &xmlERRINFO, &nScanEngines) );
+	
+	for (long i = 0; i < nScanEngines; i++) {
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(scanEngineNodeList, &xmlERRINFO, i, &scanEngineNode) );
+		
+		errChk( DLGetXMLNodeAttributes(scanEngineNode, scanEngineGenericAttr, NumElem(scanEngineGenericAttr)) ); 
+		
+		switch (scanEngineType) {
+				
+			case ScanEngine_RectRaster:
+				
+				scanEngine = init_RectangleRaster_type((LaserScanning_type*)mod, scanEngineName, 
+				break;
+			
+		}
+	}
+	
+	
+XMLError:
+	
+	error = xmlerror;
+	
+Error:
+	
+	if (scanAxisCalibrationsXMLElement) CA_DiscardObjHandle(scanAxisCalibrationsXMLElement);
+	if (scanAxisCalXMLElement) CA_DiscardObjHandle(scanAxisCalXMLElement); 
+	if (axisCalibrationNodeList) CA_DiscardObjHandle(axisCalibrationNodeList); 
+	
+	return error;	
+}
+
+static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  axisCalibrationsElement)
+{
+#define SaveNonResGalvoCalToXML_Err_OutOfMemory		-1
+	int								error 				= 0;
+	HRESULT							xmlerror;
+	ERRORINFO						xmlERRINFO;
+	ActiveXMLObj_IXMLDOMElement_	switchTimesXMLElement; 			  
+	ActiveXMLObj_IXMLDOMElement_	maxSlopesXMLElement;   		
+	ActiveXMLObj_IXMLDOMElement_	triangleCalXMLElement;
+	DAQLabXMLNode 					nrgCalAttr[] 		= {	{"CommandVMin", BasicData_Double, &nrgCal->commandVMin},
+											  		   		{"CommandVMax", BasicData_Double, &nrgCal->commandVMax},
+															{"CommandAsFunctionOfPositionLinFitSlope", BasicData_Double, &nrgCal->slope},
+															{"CommandAsFunctionOfPositionLinFitOffset", BasicData_Double, &nrgCal->offset},
+															{"PositionStdDev", BasicData_Double, &nrgCal->posStdDev},
+															{"ResponseLag", BasicData_Double, &nrgCal->lag},
+															{"Resolution", BasicData_Double, &nrgCal->resolution},
+															{"MinStepSize", BasicData_Double, &nrgCal->minStepSize},
+															{"ParkedCommandV", BasicData_Double, &nrgCal->parked} };
+	
+	// Save calibration attributes
+	DLAddToXMLElem(xmlDOM, axisCalibrationsElement, nrgCalAttr, DL_ATTRIBUTE, NumElem(nrgCalAttr)); 
+	
+	// create calibration elements
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "SwitchTimes", &switchTimesXMLElement) );
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "MaxSlopes", &maxSlopesXMLElement) );
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "TriangleWaveform", &triangleCalXMLElement) );
+	
+	char*	switchTimesStepSizeStr 				= NULL;
+	char*	switchTimesHalfSwitchStr			= NULL;
+	char*	maxSlopesSlopeStr					= NULL;
+	char*	maxSlopesAmplitudeStr				= NULL;
+	char*	triangleCalCommandAmplitudeStr		= NULL;
+	char*	triangleCalActualAmplitudeStr		= NULL;
+	char*	triangleCalMaxFreqStr				= NULL;
+	char*	triangleCalResiduaLagStr			= NULL;
+	
+	// convert switch times calibration data to string
+	switchTimesStepSizeStr = malloc (nrgCal->switchTimes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
+	if (!switchTimesStepSizeStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;}
+	switchTimesHalfSwitchStr = malloc (nrgCal->switchTimes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
+	if (!switchTimesHalfSwitchStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;} 
+	
+	Fmt(switchTimesStepSizeStr, CALIBRATION_DATA_TO_STRING, nrgCal->switchTimes->n, nrgCal->switchTimes->stepSize); 
+	Fmt(switchTimesHalfSwitchStr, CALIBRATION_DATA_TO_STRING, nrgCal->switchTimes->n, nrgCal->switchTimes->halfSwitch);
+	
+	// convert max slopes calibration data to string
+	maxSlopesSlopeStr = malloc (nrgCal->maxSlopes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
+	if (!maxSlopesSlopeStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;}   
+	maxSlopesAmplitudeStr = malloc (nrgCal->maxSlopes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
+	if (!maxSlopesAmplitudeStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;} 
+	
+	Fmt(maxSlopesSlopeStr, CALIBRATION_DATA_TO_STRING, nrgCal->maxSlopes->n, nrgCal->maxSlopes->slope); 
+	Fmt(maxSlopesAmplitudeStr, CALIBRATION_DATA_TO_STRING, nrgCal->maxSlopes->n, nrgCal->maxSlopes->amplitude);
+	
+	// convert triangle waveform calibration data to string
+	triangleCalCommandAmplitudeStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
+	if (!triangleCalCommandAmplitudeStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;}  
+	triangleCalActualAmplitudeStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
+	if (!triangleCalActualAmplitudeStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;} 
+	triangleCalMaxFreqStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
+	if (!triangleCalMaxFreqStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;} 
+	triangleCalResiduaLagStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
+	if (!triangleCalResiduaLagStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;} 
+	
+	Fmt(triangleCalCommandAmplitudeStr, CALIBRATION_DATA_TO_STRING, nrgCal->triangleCal->n, nrgCal->triangleCal->commandAmp); 
+	Fmt(triangleCalActualAmplitudeStr, CALIBRATION_DATA_TO_STRING, nrgCal->triangleCal->n, nrgCal->triangleCal->actualAmp);
+	Fmt(triangleCalMaxFreqStr, CALIBRATION_DATA_TO_STRING, nrgCal->triangleCal->n, nrgCal->triangleCal->maxFreq); 
+	Fmt(triangleCalResiduaLagStr, CALIBRATION_DATA_TO_STRING, nrgCal->triangleCal->n, nrgCal->triangleCal->resLag);
+	
+	// add calibration data to XML elements
+	DAQLabXMLNode 			switchTimesAttr[] 		= {	{"StepSize", BasicData_CString, switchTimesStepSizeStr},
+														{"HalfSwitchTime", BasicData_CString, switchTimesHalfSwitchStr} };
+														
+	DAQLabXMLNode 			maxSlopesAttr[] 		= {	{"Slope", BasicData_CString, maxSlopesSlopeStr},
+														{"Amplitude", BasicData_CString, maxSlopesAmplitudeStr} };
+														
+	DAQLabXMLNode 			triangleCalAttr[] 		= {	{"DeadTime", BasicData_Double, &nrgCal->triangleCal->deadTime},
+														{"CommandAmplitude", BasicData_CString, triangleCalCommandAmplitudeStr},
+														{"ActualAmplitude", BasicData_CString, triangleCalActualAmplitudeStr},
+														{"MaxFrequency", BasicData_CString, triangleCalMaxFreqStr},
+														{"ResidualLag", BasicData_CString, triangleCalResiduaLagStr} };
+	
+	DLAddToXMLElem(xmlDOM, switchTimesXMLElement, switchTimesAttr, DL_ATTRIBUTE, NumElem(switchTimesAttr));
+	DLAddToXMLElem(xmlDOM, maxSlopesXMLElement, maxSlopesAttr, DL_ATTRIBUTE, NumElem(maxSlopesAttr));
+	DLAddToXMLElem(xmlDOM, triangleCalXMLElement, triangleCalAttr, DL_ATTRIBUTE, NumElem(triangleCalAttr));
+								
+	// add calibration elements to scan axis calibration element
+	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, switchTimesXMLElement, NULL) );
+	CA_DiscardObjHandle(switchTimesXMLElement); 
+	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, maxSlopesXMLElement, NULL) );
+	CA_DiscardObjHandle(maxSlopesXMLElement);
+	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, triangleCalXMLElement, NULL) );
+	CA_DiscardObjHandle(triangleCalXMLElement); 
+	
+	OKfree(switchTimesStepSizeStr);
+	OKfree(switchTimesHalfSwitchStr);
+	OKfree(maxSlopesSlopeStr);
+	OKfree(maxSlopesAmplitudeStr);
+	OKfree(triangleCalCommandAmplitudeStr);
+	OKfree(triangleCalActualAmplitudeStr);
+	
+	return 0;
+	
+Error:
+	
+	OKfree(switchTimesStepSizeStr);
+	OKfree(switchTimesHalfSwitchStr);
+	OKfree(maxSlopesSlopeStr);
+	OKfree(maxSlopesAmplitudeStr);
+	OKfree(triangleCalCommandAmplitudeStr);
+	OKfree(triangleCalActualAmplitudeStr);
+	
+	return error;
+	
+XMLError:   
+	
+	return xmlerror;
+	
+}
+
+static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement)
+{
+#define SaveNonResGalvoCalToXML_Err_OutOfMemory		-1 
+	int 							error 							= 0;
+	HRESULT							xmlerror						= 0;
+	ERRORINFO						xmlERRINFO;
+	char*							axisCalibrationName				= NULL;
+	double							commandVMin;
+	double							commandVMax;
+	double							slope;
+	double							offset;
+	double							posStdDev;
+	double							lag;
+	double							resolution;
+	double							minStepSize;
+	double							parked;
+	ActiveXMLObj_IXMLDOMElement_	switchTimesXMLElement			= 0; 			  
+	ActiveXMLObj_IXMLDOMElement_	maxSlopesXMLElement				= 0;   		
+	ActiveXMLObj_IXMLDOMElement_	triangleCalXMLElement			= 0;
+	DAQLabXMLNode					axisCalibrationAttr[] 			= { {"Name", BasicData_CString, &axisCalibrationName},
+																		{"CommandVMin", BasicData_Double, &commandVMin},
+											  		   					{"CommandVMax", BasicData_Double, &commandVMax},
+																		{"CommandAsFunctionOfPositionLinFitSlope", BasicData_Double, &slope},
+																		{"CommandAsFunctionOfPositionLinFitOffset", BasicData_Double, &offset},
+																		{"PositionStdDev", BasicData_Double, &posStdDev},
+																		{"ResponseLag", BasicData_Double, &lag},
+																		{"Resolution", BasicData_Double, &resolution},
+																		{"MinStepSize", BasicData_Double, &minStepSize},
+																		{"ParkedCommandV", BasicData_Double, &parked} };
+	
+	errChk( DLGetXMLElementAttributes(axisCalibrationElement, axisCalibrationAttr, NumElem(axisCalibrationAttr)) ); 
+	
+	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "SwitchTimes", &switchTimesXMLElement) ); 
+	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "MaxSlopes", &maxSlopesXMLElement) );
+	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "TriangleWaveform", &triangleCalXMLElement) );
+	
+	char*							switchTimesStepSizeStr 			= NULL;
+	char*							switchTimesHalfSwitchStr		= NULL;
+	unsigned int					nSwitchTimes;
+	char*							maxSlopesSlopeStr				= NULL;
+	char*							maxSlopesAmplitudeStr			= NULL;
+	unsigned int					nMaxSlopes;
+	char*							triangleCalCommandAmplitudeStr	= NULL;
+	char*							triangleCalActualAmplitudeStr	= NULL;
+	char*							triangleCalMaxFreqStr			= NULL;
+	char*							triangleCalResiduaLagStr		= NULL;
+	unsigned int					nTriangleCal;
+	double							deadTime;
+	
+	// get calibration data from XML elements
+	DAQLabXMLNode 					switchTimesAttr[] 				= {	{"NElements", BasicData_UInt, &nSwitchTimes},
+																		{"StepSize", BasicData_CString, &switchTimesStepSizeStr},
+																		{"HalfSwitchTime", BasicData_CString, &switchTimesHalfSwitchStr} };
+														
+	DAQLabXMLNode 					maxSlopesAttr[] 				= {	{"NElements", BasicData_UInt, &nMaxSlopes},
+																		{"Slope", BasicData_CString, &maxSlopesSlopeStr},
+																		{"Amplitude", BasicData_CString, &maxSlopesAmplitudeStr} };
+														
+	DAQLabXMLNode 					triangleCalAttr[] 				= {	{"NElements", BasicData_UInt, &nTriangleCal}, 
+																		{"DeadTime", BasicData_Double, &deadTime},
+																		{"CommandAmplitude", BasicData_CString, &triangleCalCommandAmplitudeStr},
+																		{"ActualAmplitude", BasicData_CString, &triangleCalActualAmplitudeStr},
+																		{"MaxFrequency", BasicData_CString, &triangleCalMaxFreqStr},
+																		{"ResidualLag", BasicData_CString, &triangleCalResiduaLagStr} };
+	
+	// switch times
+	errChk( DLGetXMLElementAttributes(switchTimesXMLElement, switchTimesAttr, NumElem(switchTimesAttr)) );
+	CA_DiscardObjHandle(switchTimesXMLElement);
+	
+	SwitchTimes_type*	switchTimes = init_SwitchTimes_type();
+	
+	switchTimes->n 				= nSwitchTimes;
+	switchTimes->halfSwitch		= malloc(nSwitchTimes * sizeof(double));
+	switchTimes->stepSize		= malloc(nSwitchTimes * sizeof(double));
+	
+	Scan(switchTimesStepSizeStr, STRING_TO_CALIBRATION_DATA, switchTimes->n, switchTimes->stepSize);
+	Scan(switchTimesHalfSwitchStr, STRING_TO_CALIBRATION_DATA, switchTimes->n, switchTimes->halfSwitch);  
+	
+	// max slopes
+	errChk( DLGetXMLElementAttributes(maxSlopesXMLElement, maxSlopesAttr, NumElem(maxSlopesAttr)) );
+	CA_DiscardObjHandle(maxSlopesXMLElement);
+	
+	MaxSlopes_type*		maxSlopes = init_MaxSlopes_type();
+	
+	maxSlopes->n 				= nMaxSlopes;
+	maxSlopes->amplitude		= malloc(nMaxSlopes * sizeof(double));
+	maxSlopes->slope			= malloc(nMaxSlopes * sizeof(double));
+	
+	Scan(maxSlopesSlopeStr, STRING_TO_CALIBRATION_DATA, maxSlopes->n , maxSlopes->slope);
+	Scan(maxSlopesAmplitudeStr, STRING_TO_CALIBRATION_DATA, maxSlopes->n , maxSlopes->amplitude);  
+	
+	// triangle waveform calibration
+	errChk( DLGetXMLElementAttributes(triangleCalXMLElement, triangleCalAttr, NumElem(triangleCalAttr)) );
+	CA_DiscardObjHandle(triangleCalXMLElement);
+	
+	TriangleCal_type*	triangleCal = init_TriangleCal_type();
+	
+	triangleCal->n				= nTriangleCal;
+	triangleCal->actualAmp		= malloc(triangleCal->n * sizeof(double));
+	triangleCal->commandAmp		= malloc(triangleCal->n * sizeof(double));
+	triangleCal->maxFreq		= malloc(triangleCal->n * sizeof(double));
+	triangleCal->resLag			= malloc(triangleCal->n * sizeof(double));
+	triangleCal->deadTime		= deadTime;
+	
+	Scan(triangleCalCommandAmplitudeStr, STRING_TO_CALIBRATION_DATA, triangleCal->n, triangleCal->commandAmp);
+	Scan(triangleCalActualAmplitudeStr, STRING_TO_CALIBRATION_DATA, triangleCal->n, triangleCal->actualAmp);
+	Scan(triangleCalMaxFreqStr, STRING_TO_CALIBRATION_DATA, triangleCal->n, triangleCal->maxFreq);
+	Scan(triangleCalResiduaLagStr, STRING_TO_CALIBRATION_DATA, triangleCal->n, triangleCal->resLag);  
+	
+	
+	// collect calibration data																	
+	NonResGalvoCal_type*		nrgCal = init_NonResGalvoCal_type(axisCalibrationName, lsModule, commandVMin, commandVMax, slope, offset,
+									     posStdDev, lag, switchTimes, maxSlopes, triangleCal, resolution, minStepSize, parked);  
+	
+	// add calibration data to module
+	ListInsertItem(lsModule->availableCals, &nrgCal, END_OF_LIST);
+	
+	
+	
+XMLError:
+	
+	error = xmlerror;
+	
+Error:
+	
+	// clean up
+	OKfree(axisCalibrationName);
+	OKfree(switchTimesStepSizeStr);
+	OKfree(switchTimesHalfSwitchStr);
+	OKfree(maxSlopesSlopeStr);
+	OKfree(maxSlopesAmplitudeStr);
+	OKfree(triangleCalCommandAmplitudeStr);
+	OKfree(triangleCalActualAmplitudeStr);
+	OKfree(triangleCalMaxFreqStr);
+	OKfree(triangleCalResiduaLagStr);
+	
+	if (switchTimesXMLElement) CA_DiscardObjHandle(switchTimesXMLElement);
+	if (maxSlopesXMLElement) CA_DiscardObjHandle(maxSlopesXMLElement); 
+	if (triangleCalXMLElement) CA_DiscardObjHandle(triangleCalXMLElement);   
+	
+	return error;	
 }
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
@@ -821,7 +1461,7 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	char* VChanSlowAxisComName 	= GetVChanName((VChan_type*)engine->VChanSlowAxisCom);
 	char* VChanFastAxisPosName 	= GetVChanName((VChan_type*)engine->VChanFastAxisPos);
 	char* VChanSlowAxisPosName 	= GetVChanName((VChan_type*)engine->VChanSlowAxisPos);
-	char* VChanImageOutName 	= GetVChanName((VChan_type*)engine->VChanImageOut); 
+	char* VChanScanOutName 		= GetVChanName((VChan_type*)engine->VChanScanOut); 
 	
 	// update VChans from data structure
 	if (engine->VChanFastAxisCom)
@@ -836,8 +1476,8 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	if (engine->VChanSlowAxisPos)
 		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_SlowAxisPosition, VChanSlowAxisPosName);
 		
-	if (engine->VChanImageOut)
-		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ImageOut, VChanImageOutName);
+	if (engine->VChanScanOut)
+		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ImageOut, VChanScanOutName);
 	
 	size_t 				nImgChans 		= ListNumItems(engine->DetChans);
 	DetChan_type** 		detChanPtrPtr;
@@ -945,21 +1585,22 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					
 						case ScanEngine_RectRaster:
 					
-						// initialize raster scan engine
+							// initialize raster scan engine
 							char*	fastAxisComVChanName 	= DLGetUniqueVChanName(VChan_Default_FastAxis_Command);
 							char*	slowAxisComVChanName 	= DLGetUniqueVChanName(VChan_Default_SlowAxis_Command);
 							char*	fastAxisPosVChanName 	= DLGetUniqueVChanName(VChan_Default_FastAxis_Position);
 							char*	slowAxisPosVChanName	= DLGetUniqueVChanName(VChan_Default_SlowAxis_Position);
 							char*	imageOutVChanName		= DLGetUniqueVChanName(VChan_Default_ImageOut);
+							char*	detectionVChanName		= DLGetUniqueVChanName(VChan_Default_DetectionChan);
 					
 							newScanEngine = (ScanEngine_type*) init_RectangleRaster_type(ls, engineName, fastAxisComVChanName, slowAxisComVChanName,
-														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName);
+														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectionVChanName);
 					
 							scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster); 
 							newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl); 
 					
 							break;
-						// add below more cases	
+							// add below more cases	
 					}
 					//------------------------------------------------------------------------------------------------------------------
 			
@@ -982,7 +1623,9 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanSlowAxisCom);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanFastAxisPos);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanSlowAxisPos);
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanImageOut);
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanScanOut);
+					DetChan_type**	detPtr = ListGetPtrToItem(newScanEngine->DetChans, 1);
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan);   
 					
 					// add new scan engine to laser scanning module list of scan engines
 					ListInsertItem(ls->scanEngines, &newScanEngine, END_OF_LIST);
@@ -1320,14 +1963,15 @@ static int GetStepTimes (double* signal, int nsamples, double lowlevel, double h
 //-------------------------------------------
 // DetChan_type
 //-------------------------------------------
-static DetChan_type* init_DetChan_type (char VChanName[])
+static DetChan_type* init_DetChan_type (ScanEngine_type* scanEngine, char VChanName[])
 {
 	DetChan_type* det = malloc(sizeof(DetChan_type));
 	if (!det) return NULL;
 	
-	DLDataTypes allowedPacketTypes[] = {DL_Waveform_UShort, DL_Waveform_UInt, DL_Waveform_Double};
+	DLDataTypes allowedPacketTypes[] = Allowed_Detector_Data_Types;
 	
-	det->detVChan = init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, DetVChanConnected, DetVChanDisconnected);
+	det->detVChan 	= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, DetVChan_Connected, DetVChan_Disconnected);
+	det->scanEngine = scanEngine;
 	
 	return det;
 }
@@ -1381,14 +2025,14 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 				case ScanSetPan_ImageOut:
 					
 					newName = GetStringFromControl (panel, control);
-					SetVChanName((VChan_type*)engine->VChanImageOut, newName);
+					SetVChanName((VChan_type*)engine->VChanScanOut, newName);
 					break;
 					
 				case ScanSetPan_AddImgChan:
 					
 					// create new VChan with a predefined base name
 					newName = DLGetUniqueVChanName(VChan_Default_DetectionChan);
-					DetChan_type* detChan = init_DetChan_type(newName);
+					DetChan_type* detChan = init_DetChan_type(engine, newName);
 					// insert new VChan to list control, engine list and register with framework
 					InsertListItem(panel, ScanSetPan_ImgChans, -1, newName, newName);
 					ListInsertItem(engine->DetChans, &detChan, END_OF_LIST);
@@ -2070,18 +2714,26 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 								 char 					slowAxisComVChanName[], 
 								 char					fastAxisPosVChanName[],
 								 char					slowAxisPosVChanName[],
-								 char					imageOutVChanName[])					
+								 char					imageOutVChanName[],
+								 char					detectorVChanName[])					
 {
-	DLDataTypes allowedPacketTypes[] = {DL_Waveform_Double};
+	DLDataTypes 	allowedScanAxisPacketTypes[] = {DL_Waveform_Double};
+	DLDataTypes		allowedDetectorPacketTypes[] = Allowed_Detector_Data_Types;    
+	
 	
 	// VChans
 	engine->engineType				= engineType;
 	engine->VChanFastAxisCom		= init_SourceVChan_type(fastAxisComVChanName, DL_Waveform_Double, engine, FastAxisComVChan_Connected, FastAxisComVChan_Disconnected); 
 	engine->VChanSlowAxisCom		= init_SourceVChan_type(slowAxisComVChanName, DL_Waveform_Double, engine, SlowAxisComVChan_Connected, SlowAxisComVChan_Disconnected); 
-	engine->VChanFastAxisPos		= init_SinkVChan_type(fastAxisPosVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), engine, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected); 
-	engine->VChanSlowAxisPos		= init_SinkVChan_type(slowAxisPosVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), engine, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected); 
-	engine->VChanImageOut			= init_SourceVChan_type(imageOutVChanName, DL_Image_NIVision, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected); 
+	engine->VChanFastAxisPos		= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected); 
+	engine->VChanSlowAxisPos		= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected); 
+	engine->VChanScanOut			= init_SourceVChan_type(imageOutVChanName, DL_Image_NIVision, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected); 
 	if(!(engine->DetChans			= ListCreate(sizeof(DetChan_type*)))) goto Error;
+	// add one detection channel to the scan engine if required
+	if (detectorVChanName) {
+		DetChan_type* detChan 			= init_DetChan_type(engine, detectorVChanName); 
+		ListInsertItem(engine->DetChans, &detChan, END_OF_LIST);
+	}
 	
 	// reference to axis calibration
 	engine->fastAxisCal				= NULL;
@@ -2137,9 +2789,9 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	}
 	
 	// scan engine image output
-	if (engine->VChanImageOut) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanImageOut);
-		discard_VChan_type((VChan_type**)&engine->VChanImageOut);
+	if (engine->VChanScanOut) {
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanScanOut);
+		discard_VChan_type((VChan_type**)&engine->VChanScanOut);
 	}
 	
 	// detection channels
@@ -2174,7 +2826,8 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 														char 					slowAxisComVChanName[], 
 														char					fastAxisPosVChanName[],
 														char					slowAxisPosVChanName[],
-														char					imageOutVChanName[])
+														char					imageOutVChanName[],
+														char					detectorVChanName[])
 {
 	RectangleRaster_type*	engine = malloc (sizeof(RectangleRaster_type));
 	if (!engine) return NULL;
@@ -2182,7 +2835,7 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	//--------------------------------------------------------
 	// init base scan engine class
 	//--------------------------------------------------------
-	init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster, fastAxisComVChanName, slowAxisComVChanName, fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName);
+	init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster, fastAxisComVChanName, slowAxisComVChanName, fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectorVChanName);
 	// override discard method
 	engine->baseClass.Discard			= discard_RectangleRaster_type;
 	// add task controller
@@ -2201,8 +2854,7 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	engine->width					= 0;
 	engine->widthOffset				= 0;
 	engine->pixSize					= 0;
-	engine->fps						= 0;
-	
+
 	return engine;
 }
 
@@ -2332,12 +2984,12 @@ static void ImageOutVChan_Disconnected (VChan_type* self, VChan_type* disconnect
 }
 
 // Detection VChans
-static void	DetVChanConnected (VChan_type* self, VChan_type* connectedVChan)
+static void	DetVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
 {
 	
 }
 
-static void	DetVChanDisconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	DetVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
 {
 	
 }

@@ -8,7 +8,7 @@ Class=Sample ; TODO: edit Class
 ClassGuid={78A1C341-4539-11d3-B88D-00C04FAD5171} ; TODO: edit ClassGuid
 Provider=%ManufacturerName%
 CatalogFile=VU_PCIe.cat
-DriverVer=11/24/2014,9.11.9.382
+DriverVer=11/24/2014,12.27.54.735
 
 [DestinationDirs]
 DefaultDestDir = 12
@@ -88,7 +88,7 @@ KmdfLibraryVersion = 1.11
 [Strings]
 SPSVCINST_ASSOCSERVICE= 0x00000002
 ManufacturerName="VU Vrije Universiteit" ; TODO: add ManufacturerName
-ClassName="Samples" ; TODO: edit ClassName
+ClassName="Sample Device" ; TODO: edit ClassName
 DiskName = "VU_PCIe Installation Disk"
 VU_PCIe.DeviceDesc = "VU_PCIe Device"
 VU_PCIe.SVCDESC = "VU_PCIe Service"

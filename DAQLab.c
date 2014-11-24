@@ -130,6 +130,8 @@ typedef struct {
 	BOOL				acceptsTCChild;		// If True, this node accepts a Task Controller child node
 	BOOL				acceptsUITCChild;   // If True, this node accepts a user interface type Task Controller
 	BOOL				canBeDeleted;		// If True, node can be deleted from its current position in the tree
+	HWTrigger_type		hwtrigtype;			// Task controller's hardware trigger type 
+	char*				treeNameHWTrig;		// tree entry Hardware Trigger relations suffix                 
 } TaskTreeNode_type;
 	
 
@@ -2181,6 +2183,8 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 	node.acceptsUITCChild   	= FALSE;
 	node.acceptsTCChild			= FALSE;
 	node.canBeDeleted			= FALSE;
+	node.treeNameHWTrig			= NULL; 
+	node.hwtrigtype				= TASK_NO_HWTRIGGER;       
 	ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
 	parentIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_SIBLING, 0, VAL_LAST, TaskTreeManager_Modules_Label, NULL, NULL, ListNumItems(TaskTreeNodes));
 	
@@ -2425,10 +2429,9 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					// update execution mode ring control
 					SetCtrlIndex(panel, TaskPan_ExecMode, GetTaskControlIterMode(selectedTreeNodePtr->taskControl));
 					// update HW Trig ring control
-					HWTrigger_type trigmode= GetTaskControlHWTrigType(selectedTreeNodePtr->taskControl);
-					SetCtrlIndex(panel, TaskPan_HWTrigMode,trigmode);
+					SetCtrlIndex(panel, TaskPan_HWTrigMode,selectedTreeNodePtr->hwtrigtype);
 					//update Master selection dimming
-					switch (trigmode){
+					switch (selectedTreeNodePtr->hwtrigtype){
 						case TASK_MASTER_HWTRIGGER:
 						case TASK_NO_HWTRIGGER:   
 						//dim master selection control 
@@ -2484,14 +2487,14 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					//dim master selection control 
 					SetCtrlAttribute(panel,TaskPan_HWMasterSel,ATTR_DIMMED,TRUE);
 					
-					if(GetTaskControlHWTrigType(selectedTreeNodePtr->taskControl)==TASK_MASTER_HWTRIGGER) {
+					if(selectedTreeNodePtr->hwtrigtype==TASK_MASTER_HWTRIGGER) {
 						//already selected as master
 					
 						
 					}
 					else{
 						//new master selected
-						SetTaskControlHWTrigType(selectedTreeNodePtr->taskControl,TASK_MASTER_HWTRIGGER);  
+						selectedTreeNodePtr->hwtrigtype=TASK_MASTER_HWTRIGGER;  
 						buf=GetTaskControlName(selectedTreeNodePtr->taskControl);
 						dupStr 		= StrDup (buf);
 						//add to list of available HW trig masters
@@ -2505,7 +2508,8 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						}
 						
 						treenamesuffix=" (->)";
-						SetTaskControltreeNameHWTrig(selectedTreeNodePtr->taskControl,treenamesuffix);
+						OKfree(selectedTreeNodePtr->treeNameHWTrig);   
+						selectedTreeNodePtr->treeNameHWTrig=StrDup(treenamesuffix);
 						AppendString(&buf,treenamesuffix,-1);
 						SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf);
 						free(buf);
@@ -2516,7 +2520,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 				case TASK_SLAVE_HWTRIGGER:
 					
 					//remove from list of available HW trig masters if member  
-					if( GetTaskControlHWTrigType(selectedTreeNodePtr->taskControl)==TASK_MASTER_HWTRIGGER) {
+					if( selectedTreeNodePtr->hwtrigtype==TASK_MASTER_HWTRIGGER) {
 						for (int i=0;i<ListNumItems(HWTrigMasters);i++){
 						 	sel=ListGetPtrToItem  (HWTrigMasters, i+1);
 							if (strcmp(*sel,GetTaskControlName(selectedTreeNodePtr->taskControl))==0)		//strings are equal
@@ -2533,18 +2537,19 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						 InsertListItem(panel,TaskPan_HWMasterSel,i,*sel,0);
 					}
 					
-					if(GetTaskControlHWTrigType(selectedTreeNodePtr->taskControl)==TASK_SLAVE_HWTRIGGER){  
+					if(selectedTreeNodePtr->hwtrigtype==TASK_SLAVE_HWTRIGGER){  
 						//already selected as slave
 						
 					}
 					else{
 						//new slave selected
-						SetTaskControlHWTrigType(selectedTreeNodePtr->taskControl,TASK_SLAVE_HWTRIGGER);
+						selectedTreeNodePtr->hwtrigtype=TASK_SLAVE_HWTRIGGER;
 					}
 				
 					buf=GetTaskControlName(selectedTreeNodePtr->taskControl);          
 					treenamesuffix=" (<-)";
-					SetTaskControltreeNameHWTrig(selectedTreeNodePtr->taskControl,treenamesuffix);
+					OKfree(selectedTreeNodePtr->treeNameHWTrig);
+					selectedTreeNodePtr->treeNameHWTrig=StrDup(treenamesuffix);  
 					AppendString(&buf,treenamesuffix,-1);
 					SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf);
 					free(buf);
@@ -2554,7 +2559,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						//dim master selection control 
 						SetCtrlAttribute(panel,TaskPan_HWMasterSel,ATTR_DIMMED,TRUE);
 						//remove from list of available HW trig masters if member  
-						if( GetTaskControlHWTrigType(selectedTreeNodePtr->taskControl)==TASK_MASTER_HWTRIGGER) {
+						if( selectedTreeNodePtr->hwtrigtype==TASK_MASTER_HWTRIGGER) {
 							for (int i=0;i<ListNumItems(HWTrigMasters);i++){
 						 		sel=ListGetPtrToItem  (HWTrigMasters, i+1);
 								if (strcmp(*sel,GetTaskControlName(selectedTreeNodePtr->taskControl))==0)		//strings are equal
@@ -2578,14 +2583,15 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						
 						
 						//deselect taskcontrol
-						SetTaskControlHWTrigType(selectedTreeNodePtr->taskControl,TASK_NO_HWTRIGGER);
+						selectedTreeNodePtr->hwtrigtype=TASK_NO_HWTRIGGER;
 						
-						buf=GetTaskControlName(selectedTreeNodePtr->taskControl);          
-						SetTaskControltreeNameHWTrig(selectedTreeNodePtr->taskControl,NULL);
+						buf=GetTaskControlName(selectedTreeNodePtr->taskControl);
+						OKfree(selectedTreeNodePtr->treeNameHWTrig);   
+						selectedTreeNodePtr->treeNameHWTrig=StrDup("");  
 						SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf); 
 					break;
 			}
-			SetTaskControlHWTrigger(selectedTreeNodePtr->taskControl, (HWTrigger_type) hwTrigMode);
+			selectedTreeNodePtr->hwtrigtype=hwTrigMode;
 			
 			break;
 			
@@ -2640,7 +2646,8 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			treenamesuffix=StrDup(" (<- ");
 			AppendString(&treenamesuffix,mastername,-1);
 			AppendString(&treenamesuffix,")",-1);
-			SetTaskControltreeNameHWTrig(selectedTreeNodePtr->taskControl,treenamesuffix);
+			OKfree(selectedTreeNodePtr->treeNameHWTrig);
+			selectedTreeNodePtr->treeNameHWTrig=StrDup(treenamesuffix);  
 			AppendString(&buf,treenamesuffix,-1);
 			SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf);
 			
@@ -2649,7 +2656,8 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			treenamesuffix=StrDup(" (-> ");
 			AppendString(&treenamesuffix,buf,-1);
 			AppendString(&treenamesuffix,")",-1);
-			SetTaskControltreeNameHWTrig(targetTreeNodePtr->taskControl,treenamesuffix);
+			OKfree(selectedTreeNodePtr->treeNameHWTrig);
+			selectedTreeNodePtr->treeNameHWTrig=StrDup(treenamesuffix);  
 			AppendString(&mastername,treenamesuffix,-1);
 			SetTreeItemAttribute (panel, TaskPan_TaskTree, masterindex, ATTR_LABEL_TEXT, mastername);
 			

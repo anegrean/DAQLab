@@ -96,6 +96,7 @@ typedef struct {
 struct TaskControl {
 	// Task control data
 	char*						taskName;					// Name of Task Controller
+	char*						treeNameHWTrig;				// tree entry Hardware Trigger relations suffix   
 	size_t						subtaskIdx;					// 1-based index of subtask from parent Task subtasks list. If task doesn't have a parent task then index is 0.
 	size_t						slaveHWTrigIdx;				// 1-based index of Slave HW Trig from Master HW Trig Slave list. If Task Controller is not a HW Trig Slave, then index is 0.
 	CmtTSQHandle				eventQ;						// Event queue to which the state machine reacts.
@@ -117,6 +118,7 @@ struct TaskControl {
 	TaskControl_type*			parenttask;					// Pointer to parent task that own this subtask. 
 															// If this is the main task, it has no parent and this is NULL. 
 	ListType					subtasks;					// List of subtasks of SubTask_type.
+	HWTrigger_type				hwtrigtype;					// Task controller's hardware trigger type    
 	TaskControl_type*			masterHWTrigTask;			// If this is a Slave HW Triggered Task Controller, then masterHWTrigTask is a Task Controller 
 	ListType					slaveHWTrigTasks;			// If this is a Master HW Triggered Task Controller then slaveHWTrigTasks is a list of SlaveHWTrigTask_type
 															// HW Triggered Slave Task Controllers.
@@ -274,6 +276,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	if (!a->slaveHWTrigTasks) goto Error;
 	
 	a -> taskName 				= StrDup(taskControllerName);
+	a -> treeNameHWTrig			= NULL;      
 	a -> moduleData				= moduleData;
 	a -> subtaskIdx				= 0;
 	a -> slaveHWTrigIdx			= 0;
@@ -307,6 +310,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	a -> SetUITCModeFptr		= SetUITCModeFptr;
 	a -> ModuleEventFptr		= ModuleEventFptr;
 	a -> ErrorFptr				= ErrorFptr;
+	a -> hwtrigtype				= TASK_NO_HWTRIGGER;       
 	
 	return a;
 	
@@ -463,6 +467,23 @@ void SetTaskControlLog (TaskControl_type* taskControl, TaskExecutionLog_type* lo
 	taskControl->logPtr = logPtr;
 }
 
+void SetTaskControlHWTrigger (TaskControl_type* taskControl,HWTrigger_type hwtrigtype) 
+{
+	switch (hwtrigtype){
+		case TASK_MASTER_HWTRIGGER:
+			//set parent as master trigger 
+		
+			break;
+		case TASK_SLAVE_HWTRIGGER:
+			//set parent as master trigger 
+	// 		AddHWSlaveTrigToMaster(master, slave);
+			break;
+		case TASK_NO_HWTRIGGER:
+			
+			break;
+	}
+}
+
 HWTrigger_type GetTaskControlHWTrigger (TaskControl_type* taskControl)
 {
 	if (!taskControl->masterHWTrigTask && ListNumItems(taskControl->slaveHWTrigTasks ))
@@ -509,6 +530,31 @@ BOOL GetTaskControlAbortIterationFlag (TaskControl_type* taskControl)
 {
 	return taskControl->abortIterationFlag;
 }
+
+
+
+HWTrigger_type GetTaskControlHWTrigType	(TaskControl_type* taskControl)
+{
+	return taskControl->hwtrigtype; 
+}
+
+void SetTaskControlHWTrigType	(TaskControl_type* taskControl, HWTrigger_type hwtrigtype)
+{
+	taskControl->hwtrigtype = hwtrigtype; 
+}
+
+
+char* GetTaskControltreeNameHWTrig	(TaskControl_type* taskControl)
+{
+	return taskControl->treeNameHWTrig; 
+}
+
+void SetTaskControltreeNameHWTrig	(TaskControl_type* taskControl, char* treeNameHWTrig)
+{
+	taskControl->treeNameHWTrig = treeNameHWTrig; 
+}
+
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------

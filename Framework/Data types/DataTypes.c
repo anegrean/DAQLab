@@ -14,12 +14,30 @@
 #include "DataTypes.h" 
 #include <ansi_c.h>
 #include "toolbox.h"
+#include <nidaqmx.h>
+
+
+
 
 
 //==============================================================================
 // Constants
 
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}   
+
+ 	// CO Frequency 
+#define DAQmxDefault_CO_Frequency_Task_freq			10000000   		// frequency
+#define DAQmxDefault_CO_Frequency_Task_dutycycle    50.0			// duty cycle
+#define DAQmxDefault_CO_Frequency_Task_hightime		0.0005   		// the time the pulse stays high [s]
+#define DAQmxDefault_CO_Frequency_Task_lowtime     	0.0005			// the time the pulse stays low [s]
+#define DAQmxDefault_CO_Frequency_Task_highticks	10   			// the ticks the pulse stays high [s]
+#define DAQmxDefault_CO_Frequency_Task_lowticks     2				// the ticks the pulse stays low [s]	
+#define DAQmxDefault_CO_Frequency_Task_initialdel 	0.0			    // initial delay [s]
+#define DAQmxDefault_CO_Frequency_Task_idlestate    DAQmx_Val_Low   // terminal state at rest, pulses switch this to the oposite state
+#define DAQmxDefault_CO_Frequency_Task_timeout      10.0            // timeout  
+#define DAQmxDefault_CO_Frequency_Task_npulses      1000            // number of finite pulses     	
+
+
 
 //==============================================================================
 // Types
@@ -42,6 +60,9 @@ struct RepeatedWaveform {
 	void*					data;						// Array of waveformType elements. 
 };
 
+
+
+
 //==============================================================================
 // Static global variables
 
@@ -53,6 +74,70 @@ struct RepeatedWaveform {
 
 //==============================================================================
 // Global functions
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Pulsetrains
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+PulseTrain_type* init_PulseTrain (PulseTrainTimingTypes type,int mode) 
+{
+		
+	
+	PulseTrainFreqTiming_type* freqtiming;
+	PulseTrainTimeTiming_type* timetiming;
+	PulseTrainTickTiming_type* ticktiming;
+	
+	PulseTrain_type* pulsetrain = malloc (sizeof(PulseTrain_type));
+	
+	pulsetrain->type=type;
+	
+	switch (type){
+		case PulseTrain_Freq:
+			freqtiming=malloc(sizeof(PulseTrainFreqTiming_type));
+			freqtiming->frequency		= DAQmxDefault_CO_Frequency_Task_freq;
+			freqtiming->dutycycle		= DAQmxDefault_CO_Frequency_Task_dutycycle;
+			pulsetrain->timing=freqtiming;
+			break;
+		case PulseTrain_Time:
+			timetiming=malloc(sizeof(PulseTrainTimeTiming_type));  
+			timetiming->hightime		= DAQmxDefault_CO_Frequency_Task_hightime;
+			timetiming->lowtime			= DAQmxDefault_CO_Frequency_Task_lowtime;
+			pulsetrain->timing=timetiming; 
+			break;
+		case PulseTrain_Ticks:
+			ticktiming=malloc(sizeof(PulseTrainTickTiming_type));   
+			ticktiming->highticks		= DAQmxDefault_CO_Frequency_Task_highticks;
+			ticktiming->lowticks		= DAQmxDefault_CO_Frequency_Task_lowticks; 
+			pulsetrain->timing=ticktiming; 
+			break;
+	}
+	pulsetrain -> chanName			= NULL;
+	pulsetrain -> refclk_source		= NULL;
+	pulsetrain -> trigger_source	= NULL;
+	pulsetrain -> idlestate			= DAQmxDefault_CO_Frequency_Task_idlestate;
+	pulsetrain -> initialdelay		= DAQmxDefault_CO_Frequency_Task_initialdel;
+	pulsetrain -> timeout			= DAQmxDefault_CO_Frequency_Task_timeout;
+	pulsetrain -> mode				= mode;    
+	pulsetrain -> npulses			= DAQmxDefault_CO_Frequency_Task_npulses; 
+	pulsetrain -> refclk_slope		= 0;
+	pulsetrain -> trigger_slope		= 0;
+	
+	return pulsetrain;
+}
+
+
+void discard_PulseTrain (PulseTrain_type* pulsetrain)
+{
+	if (!pulsetrain) return;
+	
+	OKfree((pulsetrain)-> chanName);     
+	OKfree((pulsetrain)-> refclk_source);     
+	OKfree((pulsetrain)-> trigger_source);  
+//	OKfree((pulsetrain)-> timing);   
+	
+	// discard pulsetrain
+	OKfree(pulsetrain);
+}
 
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------

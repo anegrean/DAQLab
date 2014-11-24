@@ -44,6 +44,8 @@
 	// Maximum visible channels in the main photon counter panel
 #define MAX_VISIBLE_CHANNELS	4
 
+#define ITER_TIMEOUT 			10
+
 #ifndef errChk
 #define errChk(fCall) if (error = (fCall), error < 0) \
 {goto Error;} else
@@ -1157,6 +1159,10 @@ static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	Setnrsamples_in_iteration(vupc->measmode,vupc->samplingRate,vupc->nSamples); 
 	
 	PMTStartAcq(vupc->measmode,currentIteration,vupc->taskControl,vupc->channels);
+	
+	// if  the VUPhotonCtr Task requires a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
+	if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
+			TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);
 
 }
 
@@ -1173,7 +1179,7 @@ static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abo
 	//reset hardware iteration counter
 	//ResetDataCounter();
 	//timeout testvalue
-//	SetTaskControlIterationTimeout(taskControl,4);
+	SetTaskControlIterationTimeout(taskControl,ITER_TIMEOUT);
 
 	if (vupc->measmode==MEASMODE_CONTINUOUS) {
 		SetTaskControlMode(vupc->taskControl, TASK_CONTINUOUS);

@@ -19,6 +19,7 @@
 // Include files
 
 #include "cvidef.h"
+
 //==============================================================================
 // Constants
 
@@ -100,6 +101,62 @@ typedef enum {
 	
 } ImageTypes;
 
+	//----------------------------------------------------------------------------------------------
+	// Pulse train types
+	//----------------------------------------------------------------------------------------------
+
+typedef struct PulseTrain PulseTrain_type; 
+
+typedef struct PulseTrainFreqTiming	PulseTrainFreqTiming_type;
+
+struct PulseTrainFreqTiming {
+	double 					frequency;   				// 
+	double 					dutycycle;   
+} ;
+
+typedef struct PulseTrainTimeTiming	PulseTrainTimeTiming_type;  
+
+struct PulseTrainTimeTiming {
+	double 					hightime;   				// the time the pulse stays high [s]
+	double 					lowtime;    				// the time the pulse stays low [s]
+};
+
+typedef struct PulseTrainTickTiming	PulseTrainTickTiming_type;  
+
+struct PulseTrainTickTiming {
+	int 					highticks;
+	int 					lowticks;
+};
+
+typedef enum {
+	PulseTrain_Freq,
+	PulseTrain_Time,
+	PulseTrain_Ticks
+	
+} PulseTrainTimingTypes;
+
+
+struct PulseTrain {
+	char*						chanName;
+	double						timeout;
+	int							idlestate;
+	double						initialdelay;
+	PulseTrainTimingTypes		type;				// timing type. 
+	void*						timing;   			//pointer to PulseTrainFreqTiming_type,PulseTrainTimeTiming_type or PulseTrainTickTiming_type
+	int							mode;				// measurement mode
+	size_t						npulses;			// number of pulses
+	char*						refclk_source;
+	int							refclk_slope;
+	char*						trigger_source;
+	int							trigger_slope;
+};
+
+	
+
+
+
+
+
 	
 	//----------------------------------------------------------------------------------------------
 	// All types
@@ -164,7 +221,12 @@ typedef enum {
 	//---------------------
 	// Images
 	//---------------------
-	DL_Image_NIVision   
+	DL_Image_NIVision,
+	
+	//---------------------
+	// Pulse Train
+	//---------------------
+	DL_PulseTrain			 
 	
 } DLDataTypes;
 
@@ -218,6 +280,13 @@ size_t					GetRepeatedWaveformNumSamples			(RepeatedWaveform_type* waveform);
 	// Returns number of bytes per repeated waveform element.
 size_t					GetRepeatedWaveformSizeofData			(RepeatedWaveform_type* waveform);
 
+//---------------------------------------------------------------------------------------------------------  
+// Pulse Trains     
+//--------------------------------------------------------------------------------------------------------- 
+ //initializes a pulsetrain 
+PulseTrain_type* init_PulseTrain (PulseTrainTimingTypes type,int mode);
+// Discards pulsetrain        
+void discard_PulseTrain (PulseTrain_type* pulsetrain);
 
 #ifdef __cplusplus
     }

@@ -498,6 +498,7 @@ void					SetTaskControlLog					(TaskControl_type* taskControl, TaskExecutionLog_
 
 	// Task Controller HW Trigger types based on how the Task Controller is connected using AddHWSlaveTrigToMaster and RemoveHWSlaveTrigFromMaster 
 HWTrigger_type          GetTaskControlHWTrigger				(TaskControl_type* taskControl);
+void 					SetTaskControlHWTrigger 			(TaskControl_type* taskControl,HWTrigger_type hwtrigtype);  
 
 	// Returns the parent Task Controller, given a Task Controller. If none, returns NULL.
 TaskControl_type*		GetTaskControlParent				(TaskControl_type* taskControl);
@@ -551,6 +552,14 @@ int						AddHWSlaveTrigToMaster				(TaskControl_type* master, TaskControl_type* 
 int						RemoveHWSlaveTrigFromMaster			(TaskControl_type* slave);
 
 int 					RemoveAllHWSlaveTrigsFromMaster		(TaskControl_type* master);
+
+HWTrigger_type 			GetTaskControlHWTrigType			(TaskControl_type* taskControl);
+
+void 					SetTaskControlHWTrigType			(TaskControl_type* taskControl, HWTrigger_type hwtrigtype);
+
+char* 					GetTaskControltreeNameHWTrig		(TaskControl_type* taskControl);
+
+void 					SetTaskControltreeNameHWTrig		(TaskControl_type* taskControl, char* treeNameHWTrig);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller event posting and execution control functions

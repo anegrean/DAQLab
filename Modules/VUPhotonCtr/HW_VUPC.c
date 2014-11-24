@@ -318,16 +318,21 @@ int ReadBuffer(int bufsize)
 		//error, stop polling
 		//inform task controller
 		//	AbortTaskControlExecution(gtaskControl);
-		TaskControlIterationDone (gtaskControl, -1, "Read Error",FALSE);   
-		nrsamples=0;
+	//	TaskControlIterationDone (gtaskControl, -1, "Read Error",FALSE);   
+	//	nrsamples=0;
 		//HWError();
+		
+		result=0;
+		//timeout occured, skip this read
+		//TaskControlIterationDone (gtaskControl, -2, "Read Timeout",FALSE);  
 		
 	}
 	else {
 		if (result==0){
 			//no data, just a timeout
 			result=0;
-			TaskControlIterationDone (gtaskControl, -2, "Read Timeout",FALSE);   
+			//skip this read
+		//	TaskControlIterationDone (gtaskControl, -2, "Read Timeout",FALSE);   
 		}
 		else{
 			// deinterlace data here
@@ -632,7 +637,7 @@ int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl,C
 	error=WritePMTReg(CTRL_REG,controlreg);
 	
 	while (GetReadyForReading()==0) {
-		  //wait
+		  //wait until thread has started
 		  ProcessSystemEvents();
 	}
 	

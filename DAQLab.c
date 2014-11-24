@@ -10,7 +10,8 @@
 
 //==============================================================================
 // Include files
-#include "DAQLab.h"			// include this first 
+#include "DAQLab.h"			// include this first
+
 #include <formatio.h>
 #include <userint.h>
 #include <toolbox.h>
@@ -91,7 +92,6 @@ typedef enum _DAQLabMessageID{
 	DAQLAB_MSG_ERR_ACTIVEXML,						// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info, 0
 	DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, 		// HRESULT* error code, 0, 0, 0
 	DAQLAB_MSG_ERR_LOADING_MODULE,					// char* module instance name, char* error description
-	DAQLAB_MSG_ERR_LOADING_MODULE_CONFIG,			// char* module instance name
 	DAQLAB_MSG_ERR_VCHAN_NOT_FOUND,					// VChan_type*, 0, 0, 0
 	DAQLAB_MSG_ERR_NOT_UNIQUE_CLASS_NAME,			// char* class name, 0, 0, 0
 	DAQLAB_MSG_ERR_NOT_UNIQUE_INSTANCE_NAME,		// char* instance name, 0, 0, 0
@@ -132,11 +132,13 @@ typedef struct {
 	BOOL				canBeDeleted;		// If True, node can be deleted from its current position in the tree
 } TaskTreeNode_type;
 	
+
 	
 	
 
 //==============================================================================
 // Static global variables
+//test lex
 double Ttaskstart;   
 
 //------------------------------------------------------------------------------------------------
@@ -146,8 +148,8 @@ AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last para
 																  // counter always to 0
 	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
-	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
-//	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+	//{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0}
+	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
 	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }    
 	
 };
@@ -195,6 +197,13 @@ int				TaskTreeManagerPanHndl		= 0;
 
 	// List of Task Tree nodes of TaskTreeNode_type needed to operate the Task Tree Manager 
 ListType		TaskTreeNodes				= 0;
+
+	// List of all available HW trig master names
+ListType		HWTrigMasters				= 0; 
+
+
+
+ 
 
 
 
@@ -358,7 +367,11 @@ static int DAQLab_Load (void)
 	nullChk ( DAQLabTCs					= ListCreate(sizeof(TaskControl_type*)) );	// list with loaded Task Controllers
 	nullChk ( VChannels		   			= ListCreate(sizeof(VChan_type*)) );		// list with Virtual Channels
 	
-	
+	//test lex
+	nullChk ( HWTrigMasters		   		= ListCreate(sizeof(char*)) );		// list with HW Trig masters
+	char* none="None";
+	ListInsertItem(HWTrigMasters,&none,-1);  
+
 	//---------------------------------------------------------------------------------
 	// Adjust Panels
 	//---------------------------------------------------------------------------------
@@ -486,19 +499,13 @@ static int DAQLab_Load (void)
 				newModule = (*DAQLabModules_InitFunctions[j].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[j].className, moduleInstanceName);
 				// load module configuration data if specified
 				if (newModule->LoadCfg)
-					if( (*newModule->LoadCfg)	(newModule, xmlModuleNode) < 0) {
-						DAQLab_Msg(DAQLAB_MSG_ERR_LOADING_MODULE_CONFIG, moduleInstanceName, NULL, NULL, NULL);
-						// dispose of module if not loaded properly
-						(*newModule->Discard) 	(&newModule);
-						continue;
-					}
+					(*newModule->LoadCfg)	(newModule, xmlModuleNode);
 				
 				// call module load function
 				if ( (*newModule->Load) 	(newModule, mainPanHndl) < 0) {
-					DAQLab_Msg(DAQLAB_MSG_ERR_LOADING_MODULE, moduleInstanceName, NULL, NULL, NULL); 
 					// dispose of module if not loaded properly
 					(*newModule->Discard) 	(&newModule);
-					continue;
+					return 0;
 				}
 					
 				// insert module to modules list
@@ -973,19 +980,7 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 				DLMsg(" Reason:\n\t", 0);
 				DLMsg((char*)data2, 0); // error description
 				DLMsg("\n\n", 0);
-			} else
-				DLMsg("\n", 0);
-			break;
-			
-		case DAQLAB_MSG_ERR_LOADING_MODULE_CONFIG:
-			DLMsg("Error: Could not load configuration for module ", 1);
-			DLMsg((char*)data1, 0);	// module name 
-			if (data2) {
-				DLMsg(" Reason:\n\t", 0);
-				DLMsg((char*)data2, 0); // error description
-				DLMsg("\n\n", 0);
-			} else
-				DLMsg("\n", 0);
+			}
 			break;
 			
 		case DAQLAB_MSG_ERR_VCHAN_NOT_FOUND:
@@ -1248,8 +1243,6 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 				XMLErrChk ( ActiveXML_IXMLDOMElement_SetnodeTypedValue(newXMLElement, &xmlERRINFO, xmlVal) );
 				// add new element as child
 				XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, &xmlERRINFO, newXMLElement, NULL) );
-				// cleanup
-				CA_DiscardObjHandle(newXMLElement);
 				
 				break;
 				
@@ -1280,50 +1273,39 @@ static int DAQLab_StringToType	(char text[], BasicDataTypes vartype, void* value
 	switch (vartype) {
 		
 		case BasicData_Null:
+			
 			break;
+		
 		case BasicData_Bool:
-			errChk( Scan(text, "%s>%d", (BOOL*)valuePtr) );
-			break;
 		case BasicData_Char:
-			errChk( Scan(text, "%s>%d", (char*)valuePtr) );
-			break;
 		case BasicData_UChar:
-			errChk( Scan(text, "%s>%d", (unsigned char*)valuePtr) );
-			break;
 		case BasicData_Short:
-			errChk( Scan(text, "%s>%d", (short*)valuePtr) );
-			break;
 		case BasicData_UShort:
-			errChk( Scan(text, "%s>%d", (unsigned short*)valuePtr) );
-			break;
 		case BasicData_Int:
-			errChk( Scan(text, "%s>%d", (int*)valuePtr) );
-			break;
 		case BasicData_UInt:
-			errChk( Scan(text, "%s>%d", (unsigned int*)valuePtr) );
-			break;
-		case BasicData_Long:
-			errChk( Scan(text, "%s>%d", (long*)valuePtr) );
-			break;
-		case BasicData_ULong:
-			errChk( Scan(text, "%s>%d", (unsigned long*)valuePtr) );
-			break;
+		case BasicData_Long:	
+		case BasicData_ULong:  
 		case BasicData_LongLong:
-			errChk( Scan(text, "%s>%d", (long long*)valuePtr) );
-			break;
 		case BasicData_ULongLong:
-			errChk( Scan(text, "%s>%d", (unsigned long long*)valuePtr) );
+			
+			errChk( Scan(text, "%s>%d", valuePtr) );
 			break;
+			
 		case BasicData_Float:
+			
 			double doubleVal;
 			errChk( Scan(text, "%s>%f", &doubleVal) );  
 			*(float*)valuePtr = (float) doubleVal;
 			break;
+		
 		case BasicData_Double:
+			
 			errChk( Scan(text, "%s>%f", &doubleVal) );  
 			*(double*)valuePtr = doubleVal;
 			break;
+			
 		case BasicData_CString:
+			
 			*(char**)valuePtr = StrDup(text);
 			break;
 	}
@@ -1406,41 +1388,6 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 	
 	return error;
 	
-}
-
-int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElement, char elementName[], ActiveXMLObj_IXMLDOMElement_* childXMLElement)
-{
-#define DLGetSingleXMLElementFromElement_Err_NotASingleElement		-1
-	HRESULT								xmlerror;
-	ERRORINFO							xmlERRINFO;
-	ActiveXMLObj_IXMLDOMNodeList_		xmlNodeList		= 0;
-	ActiveXMLObj_IXMLDOMNode_			xmlNode			= 0; 
-	long								nXMLElements;
-
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(parentXMLElement, &xmlERRINFO, elementName, &xmlNodeList) );
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlNodeList, &xmlERRINFO, &nXMLElements) );
-	// if there are no elements stop here
-	if (nXMLElements != 1) {
-		*childXMLElement = 0;
-		return DLGetSingleXMLElementFromElement_Err_NotASingleElement;
-	}
-	
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlNodeList, &xmlERRINFO, 0, &xmlNode) );
-	
-	// cleanup
-	if (xmlNodeList) CA_DiscardObjHandle(xmlNodeList);
-	
-	*childXMLElement = (ActiveXMLObj_IXMLDOMElement_) xmlNode;
-	
-	return 0;
-	
-XMLError: 
-	
-	// cleanup
-	if (xmlNodeList) CA_DiscardObjHandle(xmlNodeList);
-	if (xmlNode) CA_DiscardObjHandle(xmlNode); 
-	
-	return xmlerror;
 }
 
 static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskControl)
@@ -2209,6 +2156,16 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 		SetCtrlIndex(TaskTreeManagerPanHndl, TaskPan_ExecMode, 0);
 		// dim execution mode control cause the item with index 0 is the modules node
 		SetCtrlAttribute(TaskTreeManagerPanHndl, TaskPan_ExecMode, ATTR_DIMMED, 1);
+		
+		// populate HWTrig mode ring control
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_HWTrigMode, TASK_NO_HWTRIGGER, "None", TASK_NO_HWTRIGGER);
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_HWTrigMode, TASK_MASTER_HWTRIGGER, "Master ", TASK_MASTER_HWTRIGGER);
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_HWTrigMode, TASK_SLAVE_HWTRIGGER, "Slave", TASK_SLAVE_HWTRIGGER);
+		// set HW trigger mode to No Hardware trigger  
+		SetCtrlIndex(TaskTreeManagerPanHndl, TaskPan_HWTrigMode, 0);
+		// dim execution mode control cause the item with index 0 is the modules node
+		SetCtrlAttribute(TaskTreeManagerPanHndl, TaskPan_HWTrigMode, ATTR_DIMMED, 1);
+		
 	}
 	
 	// clear previous Task Tree nodes list
@@ -2318,6 +2275,30 @@ static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentId
 	ListDispose(SubTasks);
 }
 
+
+BOOL TreeElementsAreRelated(TaskControl_type* elem1,TaskControl_type* elem2)
+{
+	BOOL elements_related=FALSE;
+	TaskControl_type* branch1;
+	TaskControl_type* branch2; 
+	
+	branch2=elem2;
+	while (branch2!=NULL) {  
+		branch1=GetTaskControlParent(elem1);   
+		while (branch1!=NULL) {
+			if (branch1==branch2){
+				 elements_related=TRUE;
+				 break;
+			}
+			branch1=GetTaskControlParent(branch1);
+		}
+		branch2=GetTaskControlParent(branch2);
+	}
+	
+	return elements_related;
+}
+
+
 int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	static TaskTreeNode_type*	dragTreeNodePtr;
@@ -2326,6 +2307,8 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 	int 						nodeListIdx; 
 	int							selectedNodeIdx;
 	TaskTreeNode_type*			selectedTreeNodePtr; 
+	TaskControl_type*   		master;
+	TaskControl_type*   		slave; 
 				
 	switch (control) {
 			
@@ -2432,13 +2415,30 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					// undim execution mode control ring if selection is a module task controller
 					if (!selectedTreeNodePtr->taskControl || GetTaskControlUITCFlag(selectedTreeNodePtr->taskControl)) {
 						SetCtrlAttribute(panel, TaskPan_ExecMode, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, TaskPan_HWTrigMode, ATTR_DIMMED, 1); 
 						break;  // stop here
-					} else
+					} else {
 						SetCtrlAttribute(panel, TaskPan_ExecMode, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, TaskPan_HWTrigMode, ATTR_DIMMED, 0); 
+					}
 					
 					// update execution mode ring control
 					SetCtrlIndex(panel, TaskPan_ExecMode, GetTaskControlIterMode(selectedTreeNodePtr->taskControl));
-					
+					// update HW Trig ring control
+					HWTrigger_type trigmode= GetTaskControlHWTrigType(selectedTreeNodePtr->taskControl);
+					SetCtrlIndex(panel, TaskPan_HWTrigMode,trigmode);
+					//update Master selection dimming
+					switch (trigmode){
+						case TASK_MASTER_HWTRIGGER:
+						case TASK_NO_HWTRIGGER:   
+						//dim master selection control 
+							SetCtrlAttribute(panel,TaskPan_HWMasterSel,ATTR_DIMMED,TRUE);
+							break;
+						case TASK_SLAVE_HWTRIGGER:   
+						//dim master selection control 
+							SetCtrlAttribute(panel,TaskPan_HWMasterSel,ATTR_DIMMED,FALSE);
+							break;
+					}
 					break;
 					
 			}
@@ -2458,9 +2458,209 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			SetTaskControlIterMode(selectedTreeNodePtr->taskControl, (TaskIterMode_type) execMode);
 			
 			break;
+			
+		case TaskPan_HWTrigMode:
+			
+			char* buf;
+			char* mastername;  
+			char* treenamesuffix;
+			char** sel;
+			int i;
+			char* dupStr;
+
+			
+			// filter only commit events
+			if (event != EVENT_COMMIT) break;
+			
+			
+			GetActiveTreeItem(panel, TaskPan_TaskTree, &selectedNodeIdx);
+			GetValueFromIndex(panel, TaskPan_TaskTree, selectedNodeIdx, &nodeListIdx);
+			selectedTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
+			
+			int 	hwTrigMode;
+			GetCtrlVal(panel, control, &hwTrigMode);
+			switch (hwTrigMode){
+				case TASK_MASTER_HWTRIGGER:
+					//dim master selection control 
+					SetCtrlAttribute(panel,TaskPan_HWMasterSel,ATTR_DIMMED,TRUE);
+					
+					if(GetTaskControlHWTrigType(selectedTreeNodePtr->taskControl)==TASK_MASTER_HWTRIGGER) {
+						//already selected as master
+					
+						
+					}
+					else{
+						//new master selected
+						SetTaskControlHWTrigType(selectedTreeNodePtr->taskControl,TASK_MASTER_HWTRIGGER);  
+						buf=GetTaskControlName(selectedTreeNodePtr->taskControl);
+						dupStr 		= StrDup (buf);
+						//add to list of available HW trig masters
+						ListInsertItem(HWTrigMasters,&dupStr,END_OF_LIST);
+						//populate control with available HW Trig Masters
+						ClearListCtrl (panel, TaskPan_HWMasterSel);
+						
+						for (i=0;i<ListNumItems(HWTrigMasters);i++){
+						 	sel=ListGetPtrToItem  (HWTrigMasters, i+1);
+						 	InsertListItem(panel,TaskPan_HWMasterSel,i,*sel,0);
+						}
+						
+						treenamesuffix=" (->)";
+						SetTaskControltreeNameHWTrig(selectedTreeNodePtr->taskControl,treenamesuffix);
+						AppendString(&buf,treenamesuffix,-1);
+						SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf);
+						free(buf);
+					
+						
+					}
+					break;
+				case TASK_SLAVE_HWTRIGGER:
+					
+					//remove from list of available HW trig masters if member  
+					if( GetTaskControlHWTrigType(selectedTreeNodePtr->taskControl)==TASK_MASTER_HWTRIGGER) {
+						for (int i=0;i<ListNumItems(HWTrigMasters);i++){
+						 	sel=ListGetPtrToItem  (HWTrigMasters, i+1);
+							if (strcmp(*sel,GetTaskControlName(selectedTreeNodePtr->taskControl))==0)		//strings are equal
+								ListRemoveItem (HWTrigMasters, 0, i+1);
+						}	
+					}
+					
+					//undim master selection control
+					SetCtrlAttribute(panel,TaskPan_HWMasterSel,ATTR_DIMMED,FALSE); 
+					//populate control with available HW Trig Masters
+					ClearListCtrl (panel, TaskPan_HWMasterSel);
+					for (i=0;i<ListNumItems(HWTrigMasters);i++){
+						 sel=ListGetPtrToItem  (HWTrigMasters, i+1);
+						 InsertListItem(panel,TaskPan_HWMasterSel,i,*sel,0);
+					}
+					
+					if(GetTaskControlHWTrigType(selectedTreeNodePtr->taskControl)==TASK_SLAVE_HWTRIGGER){  
+						//already selected as slave
+						
+					}
+					else{
+						//new slave selected
+						SetTaskControlHWTrigType(selectedTreeNodePtr->taskControl,TASK_SLAVE_HWTRIGGER);
+					}
+				
+					buf=GetTaskControlName(selectedTreeNodePtr->taskControl);          
+					treenamesuffix=" (<-)";
+					SetTaskControltreeNameHWTrig(selectedTreeNodePtr->taskControl,treenamesuffix);
+					AppendString(&buf,treenamesuffix,-1);
+					SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf);
+					free(buf);
+					
+					break;
+				case TASK_NO_HWTRIGGER:
+						//dim master selection control 
+						SetCtrlAttribute(panel,TaskPan_HWMasterSel,ATTR_DIMMED,TRUE);
+						//remove from list of available HW trig masters if member  
+						if( GetTaskControlHWTrigType(selectedTreeNodePtr->taskControl)==TASK_MASTER_HWTRIGGER) {
+							for (int i=0;i<ListNumItems(HWTrigMasters);i++){
+						 		sel=ListGetPtrToItem  (HWTrigMasters, i+1);
+								if (strcmp(*sel,GetTaskControlName(selectedTreeNodePtr->taskControl))==0)		//strings are equal
+									ListRemoveItem (HWTrigMasters, 0, i+1);
+								    
+							}	
+						}
+						
+						//populate control with available HW Trig Masters
+						ClearListCtrl (panel, TaskPan_HWMasterSel);
+						for (i=0;i<ListNumItems(HWTrigMasters);i++){
+						 	sel=ListGetPtrToItem  (HWTrigMasters, i+1);
+						 	InsertListItem(panel,TaskPan_HWMasterSel,i,*sel,0);
+						}
+						
+						//if this was a slave tied to a master, remove it
+						if (RemoveHWSlaveTrigFromMaster(selectedTreeNodePtr->taskControl)==0){
+						//update suffix name for master and slave
+							
+						}
+						
+						
+						//deselect taskcontrol
+						SetTaskControlHWTrigType(selectedTreeNodePtr->taskControl,TASK_NO_HWTRIGGER);
+						
+						buf=GetTaskControlName(selectedTreeNodePtr->taskControl);          
+						SetTaskControltreeNameHWTrig(selectedTreeNodePtr->taskControl,NULL);
+						SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf); 
+					break;
+			}
+			SetTaskControlHWTrigger(selectedTreeNodePtr->taskControl, (HWTrigger_type) hwTrigMode);
+			
+			break;
+			
+		case TaskPan_HWMasterSel:
+			
+			// filter only commit events
+			if (event != EVENT_COMMIT) break;
+			
+			int index;
+			char itemlabel[100];
+			int masterindex;
+			int numtree_elem;
+			
+			
+				//get selected slave
+			GetActiveTreeItem(panel, TaskPan_TaskTree, &selectedNodeIdx);
+			GetValueFromIndex(panel, TaskPan_TaskTree, selectedNodeIdx, &nodeListIdx);
+			selectedTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
+			slave=selectedTreeNodePtr->taskControl;
+			
+			GetCtrlIndex(panel,control,&index);
+			GetLabelFromIndex(panel,control,index,&itemlabel);
+			//get selected master from itemlabel
+			master=NULL;
+			GetNumListItems (panel, TaskPan_TaskTree, &numtree_elem);
+			for (int i=0;i<numtree_elem;i++){
+				//if subtaskIdx
+				GetValueFromIndex(panel, TaskPan_TaskTree, i, &nodeListIdx);  
+				targetTreeNodePtr=ListGetPtrToItem  (TaskTreeNodes, nodeListIdx);
+				if (targetTreeNodePtr!=NULL) {
+					if (targetTreeNodePtr->taskControl!=NULL){
+						mastername=GetTaskControlName(targetTreeNodePtr->taskControl);  
+						if (strcmp(itemlabel,mastername)==0) {		//strings are equal
+							//check if found master and selected slave have a common parent tree element
+							master=targetTreeNodePtr->taskControl;  
+							if (TreeElementsAreRelated(master,slave))
+							    masterindex=i;
+							break;
+						}
+						
+						
+					}
+				}
+			}	
+			
+			if (master==NULL) break;
+			
+		
+			
+			//add master name to slave suffix
+			buf=GetTaskControlName(selectedTreeNodePtr->taskControl);          
+			treenamesuffix=StrDup(" (<- ");
+			AppendString(&treenamesuffix,mastername,-1);
+			AppendString(&treenamesuffix,")",-1);
+			SetTaskControltreeNameHWTrig(selectedTreeNodePtr->taskControl,treenamesuffix);
+			AppendString(&buf,treenamesuffix,-1);
+			SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf);
+			
+			//add slave name to master suffix
+			buf=GetTaskControlName(selectedTreeNodePtr->taskControl);  // is slave        
+			treenamesuffix=StrDup(" (-> ");
+			AppendString(&treenamesuffix,buf,-1);
+			AppendString(&treenamesuffix,")",-1);
+			SetTaskControltreeNameHWTrig(targetTreeNodePtr->taskControl,treenamesuffix);
+			AppendString(&mastername,treenamesuffix,-1);
+			SetTreeItemAttribute (panel, TaskPan_TaskTree, masterindex, ATTR_LABEL_TEXT, mastername);
+			
+			AddHWSlaveTrigToMaster (master,slave); 
+			
+			free(buf);
+			free(mastername);
+			break;
 	}
 	
-	return 0;
+	  return 0;
 }
 
 //-----------------------------------------
@@ -2526,7 +2726,7 @@ static FCallReturn_type* DoneUITC  (TaskControl_type* taskControl, size_t curren
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	BOOL				taskControllerMode;
-	char				buf[100];
+	char*				buf[100];
 	double 				TotalTime;
 	
 	//test lex

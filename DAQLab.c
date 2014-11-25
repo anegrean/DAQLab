@@ -2240,6 +2240,9 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 		node.canBeDeleted			= TRUE;
 		ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
 		name = GetTaskControlName(tcPtr);
+		//add HW trigger relation info
+		AppendString(&name,node.treeNameHWTrig,-1);
+		
 		childIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, name, NULL, NULL, ListNumItems(TaskTreeNodes));   
 		OKfree(name);
 		AddRecursiveTaskTreeItems(TaskTreeManagerPanHndl, TaskPan_TaskTree, childIdx, tcPtr);

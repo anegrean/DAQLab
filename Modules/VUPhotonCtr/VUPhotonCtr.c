@@ -1241,7 +1241,7 @@ static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 		// turn on error LED
 //	if (vupc->StatusLED)
 //		(*vupc->StatusLED) (zstage, ZSTAGE_LED_ERROR);
-
+	PMTStopAcq();    
 	// print error message
 	DLMsg(errorMsg, 1);
 

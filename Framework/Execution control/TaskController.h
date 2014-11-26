@@ -356,6 +356,7 @@ typedef enum {
 } HWTrigger_type;
 
 typedef struct TaskControl 			TaskControl_type;
+typedef struct SlaveHWTrigTask		SlaveHWTrigTask_type;
 typedef struct TaskExecutionLog		TaskExecutionLog_type;
 
 //--------------------------------------------------------------------------------
@@ -556,9 +557,13 @@ HWTrigger_type 			GetTaskControlHWTrigType			(TaskControl_type* taskControl);
 
 void 					SetTaskControlHWTrigType			(TaskControl_type* taskControl, HWTrigger_type hwtrigtype);
 
-//char* 					GetTaskControltreeNameHWTrig		(TaskControl_type* taskControl);
+TaskControl_type* 		GetTaskControlMasterHWTrigTask 		(TaskControl_type* taskControl);
 
-//void 					SetTaskControltreeNameHWTrig		(TaskControl_type* taskControl, char* treeNameHWTrig);
+ListType 				GetTaskControlSlaveHWTrigTasks 		(TaskControl_type* taskControl);
+
+TaskControl_type* 		GetSlaveHWTrigTask 					(SlaveHWTrigTask_type* tasktype);
+
+
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller event posting and execution control functions

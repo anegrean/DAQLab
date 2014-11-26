@@ -51,10 +51,10 @@ typedef struct {
 	TaskControl_type*			subtask;					// Pointer to Subtask Controller.
 } SubTask_type;
 
-typedef struct {
+struct SlaveHWTrigTask{
 	BOOL						armed;						// TRUE if a Slave HW Triggered Task Controller is ready to be triggered by its Master
 	TaskControl_type*			slaveHWTrigTask;			// pointer to Slave HW Triggered Task Controller.
-} SlaveHWTrigTask_type;
+} ;
 
 typedef enum {
 	TASK_CONTROL_STATE_CHANGE,
@@ -513,29 +513,33 @@ BOOL GetTaskControlAbortIterationFlag (TaskControl_type* taskControl)
 	return taskControl->abortIterationFlag;
 }
 
-
-/*
-HWTrigger_type GetTaskControlHWTrigType	(TaskControl_type* taskControl)
+TaskControl_type* GetTaskControlMasterHWTrigTask (TaskControl_type* taskControl)
 {
-	return taskControl->hwtrigtype; 
+	return taskControl->masterHWTrigTask;
 }
 
-void SetTaskControlHWTrigType	(TaskControl_type* taskControl, HWTrigger_type hwtrigtype)
+TaskControl_type* GetSlaveHWTrigTask (SlaveHWTrigTask_type* tasktype)
 {
-	taskControl->hwtrigtype = hwtrigtype; 
+	return tasktype->slaveHWTrigTask;
 }
 
-
-char* GetTaskControltreeNameHWTrig	(TaskControl_type* taskControl)
+ListType GetTaskControlSlaveHWTrigTasks (TaskControl_type* taskControl)
 {
-	return taskControl->treeNameHWTrig; 
+	size_t	nSlaves = ListNumItems(taskControl->slaveHWTrigTasks);
+	
+	ListType Slaves = ListCreate(sizeof(SlaveHWTrigTask_type*));
+	if (!Slaves) return 0;
+	
+	SlaveHWTrigTask_type*	slavetrigtaskPtr;
+	for (size_t i = 1; i <= nSlaves; i++) {
+		slavetrigtaskPtr = ListGetPtrToItem (taskControl->slaveHWTrigTasks, i);
+		ListInsertItem(Slaves, &slavetrigtaskPtr, END_OF_LIST);
+	}
+	
+	return Slaves;
 }
 
-void SetTaskControltreeNameHWTrig	(TaskControl_type* taskControl, char* treeNameHWTrig)
-{
-	taskControl->treeNameHWTrig = treeNameHWTrig; 
-}
-*/
+ 
 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -130,8 +130,8 @@ typedef struct {
 	BOOL				acceptsTCChild;		// If True, this node accepts a Task Controller child node
 	BOOL				acceptsUITCChild;   // If True, this node accepts a user interface type Task Controller
 	BOOL				canBeDeleted;		// If True, node can be deleted from its current position in the tree
-	HWTrigger_type		hwtrigtype;			// Task controller's hardware trigger type 
-	char*				treeNameHWTrig;		// tree entry Hardware Trigger relations suffix                 
+	//HWTrigger_type		hwtrigtype;			// Task controller's hardware trigger type 
+            
 } TaskTreeNode_type;
 	
 
@@ -203,6 +203,8 @@ ListType		TaskTreeNodes				= 0;
 	// List of all available HW trig master names
 ListType		HWTrigMasters				= 0; 
 
+	// List of all available HW trig slave names
+ListType		HWTrigSlaves				= 0; 
 
 
  
@@ -371,6 +373,8 @@ static int DAQLab_Load (void)
 	
 	//test lex
 	nullChk ( HWTrigMasters		   		= ListCreate(sizeof(char*)) );		// list with HW Trig masters
+	nullChk ( HWTrigSlaves		   		= ListCreate(sizeof(char*)) );		// list with HW Trig slaves 
+	
 	char* none="None";
 	ListInsertItem(HWTrigMasters,&none,-1);  
 
@@ -2127,6 +2131,72 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 	return 0;
 }
 
+
+//creates the tree name suffix based on the taskcontrol HW trigger relations 
+char* GetHWtrigTreeNameSuffix(TaskControl_type* tc)
+{
+	char* 					treeNameHWTrig=NULL;
+	TaskControl_type*		masterHWTrigTC;
+	int						nSlaves;
+	int 					sli;      			//slave index
+	SlaveHWTrigTask_type**  slPtrPtr;
+	SlaveHWTrigTask_type*   slPtr; 
+	ListType				slaveHWTrigTasks;
+	TaskControl_type*		slaveHWTrigTC;
+	char*					mastername;
+	char*					slavename;
+	char** 					sel;
+	
+		masterHWTrigTC=GetTaskControlMasterHWTrigTask(tc);
+		if (masterHWTrigTC!=NULL){
+			   //this is a slave
+			   treeNameHWTrig=StrDup(" ( <- ");
+			   mastername = GetTaskControlName(masterHWTrigTC); 
+			   AppendString(&treeNameHWTrig,mastername,-1); 
+			   AppendString(&treeNameHWTrig," )",-1);    
+			   return treeNameHWTrig;
+		}
+		
+		slaveHWTrigTasks=GetTaskControlSlaveHWTrigTasks(tc);
+		nSlaves = ListNumItems(slaveHWTrigTasks);    
+		if (nSlaves>0){
+			//this is a master
+			treeNameHWTrig=StrDup(" ( -> ");
+			for (sli=0;sli<nSlaves;sli++){
+			   slPtrPtr = ListGetPtrToItem(slaveHWTrigTasks, sli);
+			   slPtr = *slPtrPtr; 
+			   slaveHWTrigTC=GetSlaveHWTrigTask(slPtr);
+			   slavename = GetTaskControlName(slaveHWTrigTC); 
+			   AppendString(&treeNameHWTrig,slavename,-1);
+			   if (sli==nSlaves-1) AppendString(&treeNameHWTrig," ",-1);
+			   else AppendString(&treeNameHWTrig,", ",-1);  
+			  
+			}
+			AppendString(&treeNameHWTrig,")",-1);           
+			return treeNameHWTrig;
+		}
+		//check if tc is selected as master, but has no slaves yet
+		for (int i=0;i<ListNumItems(HWTrigMasters);i++){
+			sel=ListGetPtrToItem  (HWTrigMasters, i+1);
+			if (strcmp(*sel,GetTaskControlName(tc))==0)	{	//strings are equal, tc is in the list
+				treeNameHWTrig=StrDup(" ( -> )");
+			    return treeNameHWTrig;  
+			}
+		}	
+	
+		//check if tc is selected as a slave, but has no masters yet 
+		//check if tc is selected as master, but has no slaves yet
+		for (int i=0;i<ListNumItems(HWTrigSlaves);i++){
+			sel=ListGetPtrToItem  (HWTrigSlaves, i+1);
+			if (strcmp(*sel,GetTaskControlName(tc))==0)	{	//strings are equal, tc is in the list
+				treeNameHWTrig=StrDup(" ( <- )");
+			    return treeNameHWTrig;  
+			}
+		}	
+		
+	return treeNameHWTrig;
+}
+
 /// HIFN Provides GUI for assembling Task Control trees from Module provided Task Controllers and User Interface Task Controllers (UITCs).
 /// HIPAR parentPanHndl/ Panel handle in which to display the Task Tree Manager. If 0, the UI is displayed as a main panel.
 /// HIPAR UITCList/ Provide a list of User Interface Task Controllers (UITCs) of UITaskCtrl_type* type that allow the user to control the execution of each Task Tree.
@@ -2145,6 +2215,9 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 	int						childIdx;
 	char*					name;
 	TaskTreeNode_type		node;
+	char*					treeNameHWTrig;		// tree entry Hardware Trigger relations suffix  
+	
+	
 	
 	// load UI
 	if (!TaskTreeManagerPanHndl) {
@@ -2183,8 +2256,6 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 	node.acceptsUITCChild   	= FALSE;
 	node.acceptsTCChild			= FALSE;
 	node.canBeDeleted			= FALSE;
-	node.treeNameHWTrig			= NULL; 
-	node.hwtrigtype				= TASK_NO_HWTRIGGER;       
 	ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
 	parentIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_SIBLING, 0, VAL_LAST, TaskTreeManager_Modules_Label, NULL, NULL, ListNumItems(TaskTreeNodes));
 	
@@ -2197,6 +2268,7 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 		node.acceptsUITCChild   	= FALSE;
 		node.acceptsTCChild			= FALSE;
 		node.canBeDeleted			= FALSE;
+		
 		ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
 		childIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, modulePtr->instanceName, NULL, NULL, ListNumItems(TaskTreeNodes));
 		
@@ -2240,8 +2312,9 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 		node.canBeDeleted			= TRUE;
 		ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
 		name = GetTaskControlName(tcPtr);
-		//add HW trigger relation info
-		AppendString(&name,node.treeNameHWTrig,-1);
+		
+		treeNameHWTrig=GetHWtrigTreeNameSuffix(tcPtr);
+		AppendString(&name,treeNameHWTrig,-1); 
 		
 		childIdx = InsertTreeItem(TaskTreeManagerPanHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, name, NULL, NULL, ListNumItems(TaskTreeNodes));   
 		OKfree(name);
@@ -2261,7 +2334,8 @@ static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentId
 	int						childIdx;
 	TaskControl_type**		tcPtrPtr;
 	char*					name;
-	TaskTreeNode_type		node; 
+	TaskTreeNode_type		node;
+	char*					treeNameHWTrig;		// tree entry Hardware Trigger relations suffix  
 	
 	for (size_t i = 1; i <= nSubTaskTCs; i++) {
 		tcPtrPtr = ListGetPtrToItem(SubTasks, i);
@@ -2273,6 +2347,10 @@ static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentId
 		node.canBeDeleted			= TRUE;
 		ListInsertItem(TaskTreeNodes, &node, END_OF_LIST);
 		name = GetTaskControlName(*tcPtrPtr);
+		
+		treeNameHWTrig=GetHWtrigTreeNameSuffix(*tcPtrPtr);
+		AppendString(&name,treeNameHWTrig,-1); 
+		
 		childIdx = InsertTreeItem(panHndl, TaskPan_TaskTree, VAL_CHILD, parentIdx, VAL_LAST, name, NULL, NULL, ListNumItems(TaskTreeNodes)); 
 		OKfree(name);
 		
@@ -2306,6 +2384,29 @@ BOOL TreeElementsAreRelated(TaskControl_type* elem1,TaskControl_type* elem2)
 }
 
 
+HWTrigger_type GetTaskControlTreeHWTrigger(TaskControl_type* taskControl)
+{
+	HWTrigger_type	hwtrigtype=TASK_NO_HWTRIGGER;
+	char**			sel;
+	
+	
+	//check if taskControl was selected as master
+	for (int i=0;i<ListNumItems(HWTrigMasters);i++){
+		sel=ListGetPtrToItem  (HWTrigMasters, i+1);
+		if (strcmp(*sel,GetTaskControlName(taskControl))==0)		//strings are equal
+			return TASK_MASTER_HWTRIGGER;
+	}
+	//check if taskControl was selected as slave
+	for (int i=0;i<ListNumItems(HWTrigSlaves);i++){
+		sel=ListGetPtrToItem  (HWTrigSlaves, i+1);
+		if (strcmp(*sel,GetTaskControlName(taskControl))==0)		//strings are equal
+			return TASK_SLAVE_HWTRIGGER;
+	}	
+	
+	return hwtrigtype; 
+}
+
+
 int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	static TaskTreeNode_type*	dragTreeNodePtr;
@@ -2316,6 +2417,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 	TaskTreeNode_type*			selectedTreeNodePtr; 
 	TaskControl_type*   		master;
 	TaskControl_type*   		slave; 
+	HWTrigger_type				hwtrigtype;
 				
 	switch (control) {
 			
@@ -2373,6 +2475,15 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					else
 						parentTaskController = NULL;
 					
+					 //check relations between parent and current dragged taskcontroller
+					if (TreeElementsAreRelated(dragTreeNodePtr->taskControl,targetTreeNodePtr->taskControl)==0){
+						//remove HWTrig relations from dragged taskcontroller
+						//if this was a slave tied to a master, remove it
+						RemoveHWSlaveTrigFromMaster(dragTreeNodePtr->taskControl);
+						//if this was a master tied to any slaves, remove them  
+						RemoveAllHWSlaveTrigsFromMaster(dragTreeNodePtr->taskControl); 
+					}
+					
 					// disconnect Task Controller that was dragged from its parent
 					RemoveSubTaskFromParent(dragTreeNodePtr->taskControl);
 					
@@ -2387,6 +2498,9 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					// allow dropped task controller to accept other task controllers
 					dragTreeNodePtr->acceptsTCChild = TRUE;
 					dragTreeNodePtr->acceptsUITCChild = TRUE;
+					
+					// refresh Task Tree
+					DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 							
 					break;
 					
@@ -2432,9 +2546,10 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					// update execution mode ring control
 					SetCtrlIndex(panel, TaskPan_ExecMode, GetTaskControlIterMode(selectedTreeNodePtr->taskControl));
 					// update HW Trig ring control
-					SetCtrlIndex(panel, TaskPan_HWTrigMode,selectedTreeNodePtr->hwtrigtype);
+					hwtrigtype=GetTaskControlTreeHWTrigger(selectedTreeNodePtr->taskControl);
+					SetCtrlIndex(panel, TaskPan_HWTrigMode,hwtrigtype);
 					//update Master selection dimming
-					switch (selectedTreeNodePtr->hwtrigtype){
+					switch (hwtrigtype){
 						case TASK_MASTER_HWTRIGGER:
 						case TASK_NO_HWTRIGGER:   
 						//dim master selection control 
@@ -2469,7 +2584,6 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			
 			char* buf;
 			char* mastername;  
-			char* treenamesuffix;
 			char** sel;
 			int i;
 			char* dupStr;
@@ -2483,6 +2597,10 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			GetValueFromIndex(panel, TaskPan_TaskTree, selectedNodeIdx, &nodeListIdx);
 			selectedTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
 			
+			if (selectedTreeNodePtr->taskControl==NULL) break; 
+	
+			
+			hwtrigtype=GetTaskControlTreeHWTrigger(selectedTreeNodePtr->taskControl);  
 			int 	hwTrigMode;
 			GetCtrlVal(panel, control, &hwTrigMode);
 			switch (hwTrigMode){
@@ -2490,14 +2608,21 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					//dim master selection control 
 					SetCtrlAttribute(panel,TaskPan_HWMasterSel,ATTR_DIMMED,TRUE);
 					
-					if(selectedTreeNodePtr->hwtrigtype==TASK_MASTER_HWTRIGGER) {
+					//remove from list of available HW trig slaves if member  
+					for (int i=0;i<ListNumItems(HWTrigSlaves);i++){
+						sel=ListGetPtrToItem  (HWTrigSlaves, i+1);
+						if (strcmp(*sel,GetTaskControlName(selectedTreeNodePtr->taskControl))==0)		//strings are equal
+							ListRemoveItem (HWTrigSlaves, 0, i+1);
+					}	
+					
+					if(hwtrigtype==TASK_MASTER_HWTRIGGER) {
 						//already selected as master
 					
 						
 					}
 					else{
 						//new master selected
-						selectedTreeNodePtr->hwtrigtype=TASK_MASTER_HWTRIGGER;  
+						hwtrigtype=TASK_MASTER_HWTRIGGER;  
 						buf=GetTaskControlName(selectedTreeNodePtr->taskControl);
 						dupStr 		= StrDup (buf);
 						//add to list of available HW trig masters
@@ -2510,10 +2635,6 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						 	InsertListItem(panel,TaskPan_HWMasterSel,i,*sel,0);
 						}
 						
-						treenamesuffix=" (->)";
-						OKfree(selectedTreeNodePtr->treeNameHWTrig);   
-						selectedTreeNodePtr->treeNameHWTrig=StrDup(treenamesuffix);
-						AppendString(&buf,treenamesuffix,-1);
 						SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf);
 						free(buf);
 					
@@ -2523,13 +2644,15 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 				case TASK_SLAVE_HWTRIGGER:
 					
 					//remove from list of available HW trig masters if member  
-					if( selectedTreeNodePtr->hwtrigtype==TASK_MASTER_HWTRIGGER) {
+					if( hwtrigtype==TASK_MASTER_HWTRIGGER) {
 						for (int i=0;i<ListNumItems(HWTrigMasters);i++){
 						 	sel=ListGetPtrToItem  (HWTrigMasters, i+1);
 							if (strcmp(*sel,GetTaskControlName(selectedTreeNodePtr->taskControl))==0)		//strings are equal
 								ListRemoveItem (HWTrigMasters, 0, i+1);
 						}	
 					}
+					
+					
 					
 					//undim master selection control
 					SetCtrlAttribute(panel,TaskPan_HWMasterSel,ATTR_DIMMED,FALSE); 
@@ -2540,20 +2663,21 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						 InsertListItem(panel,TaskPan_HWMasterSel,i,*sel,0);
 					}
 					
-					if(selectedTreeNodePtr->hwtrigtype==TASK_SLAVE_HWTRIGGER){  
+					if(hwtrigtype==TASK_SLAVE_HWTRIGGER){  
 						//already selected as slave
 						
 					}
 					else{
 						//new slave selected
-						selectedTreeNodePtr->hwtrigtype=TASK_SLAVE_HWTRIGGER;
+						hwtrigtype=TASK_SLAVE_HWTRIGGER;
+						buf=GetTaskControlName(selectedTreeNodePtr->taskControl);
+						dupStr 		= StrDup (buf);
+						//add to list of available HW trig slaves
+						ListInsertItem(HWTrigSlaves,&dupStr,END_OF_LIST);  
 					}
 				
 					buf=GetTaskControlName(selectedTreeNodePtr->taskControl);          
-					treenamesuffix=" (<-)";
-					OKfree(selectedTreeNodePtr->treeNameHWTrig);
-					selectedTreeNodePtr->treeNameHWTrig=StrDup(treenamesuffix);  
-					AppendString(&buf,treenamesuffix,-1);
+			
 					SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf);
 					free(buf);
 					
@@ -2561,8 +2685,9 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 				case TASK_NO_HWTRIGGER:
 						//dim master selection control 
 						SetCtrlAttribute(panel,TaskPan_HWMasterSel,ATTR_DIMMED,TRUE);
+						
 						//remove from list of available HW trig masters if member  
-						if( selectedTreeNodePtr->hwtrigtype==TASK_MASTER_HWTRIGGER) {
+						if( hwtrigtype==TASK_MASTER_HWTRIGGER) {
 							for (int i=0;i<ListNumItems(HWTrigMasters);i++){
 						 		sel=ListGetPtrToItem  (HWTrigMasters, i+1);
 								if (strcmp(*sel,GetTaskControlName(selectedTreeNodePtr->taskControl))==0)		//strings are equal
@@ -2571,30 +2696,40 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 							}	
 						}
 						
+						//remove from list of available HW trig slaves if member  
+						if( hwtrigtype==TASK_SLAVE_HWTRIGGER) {
+							for (int i=0;i<ListNumItems(HWTrigSlaves);i++){
+								sel=ListGetPtrToItem  (HWTrigSlaves, i+1);
+								if (strcmp(*sel,GetTaskControlName(selectedTreeNodePtr->taskControl))==0)		//strings are equal
+									ListRemoveItem (HWTrigSlaves, 0, i+1);
+							}
+						}
+						
 						//populate control with available HW Trig Masters
 						ClearListCtrl (panel, TaskPan_HWMasterSel);
 						for (i=0;i<ListNumItems(HWTrigMasters);i++){
 						 	sel=ListGetPtrToItem  (HWTrigMasters, i+1);
 						 	InsertListItem(panel,TaskPan_HWMasterSel,i,*sel,0);
 						}
-						
+										    
 						//if this was a slave tied to a master, remove it
-						if (RemoveHWSlaveTrigFromMaster(selectedTreeNodePtr->taskControl)==0){
-						//update suffix name for master and slave
-							
-						}
+						RemoveHWSlaveTrigFromMaster(selectedTreeNodePtr->taskControl);
+						//if this was a master tied to any slaves, remove them  
+						RemoveAllHWSlaveTrigsFromMaster(selectedTreeNodePtr->taskControl); 
 						
 						
 						//deselect taskcontrol
-						selectedTreeNodePtr->hwtrigtype=TASK_NO_HWTRIGGER;
+						hwtrigtype=TASK_NO_HWTRIGGER;
 						
 						buf=GetTaskControlName(selectedTreeNodePtr->taskControl);
-						OKfree(selectedTreeNodePtr->treeNameHWTrig);   
-						selectedTreeNodePtr->treeNameHWTrig=StrDup("");  
 						SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf); 
+						free(buf);
 					break;
 			}
-			selectedTreeNodePtr->hwtrigtype=hwTrigMode;
+			hwtrigtype=hwTrigMode;
+			
+			// refresh Task Tree
+			DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 			
 			break;
 			
@@ -2605,7 +2740,6 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			
 			int index;
 			char itemlabel[100];
-			int masterindex;
 			int numtree_elem;
 			
 			
@@ -2630,8 +2764,6 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						if (strcmp(itemlabel,mastername)==0) {		//strings are equal
 							//check if found master and selected slave have a common parent tree element
 							master=targetTreeNodePtr->taskControl;  
-							if (TreeElementsAreRelated(master,slave))
-							    masterindex=i;
 							break;
 						}
 						
@@ -2642,36 +2774,16 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			
 			if (master==NULL) break;
 			
-		
+			if (TreeElementsAreRelated(master,slave)) AddHWSlaveTrigToMaster (master,slave);
 			
-			//add master name to slave suffix
-			buf=GetTaskControlName(selectedTreeNodePtr->taskControl);          
-			treenamesuffix=StrDup(" (<- ");
-			AppendString(&treenamesuffix,mastername,-1);
-			AppendString(&treenamesuffix,")",-1);
-			OKfree(selectedTreeNodePtr->treeNameHWTrig);
-			selectedTreeNodePtr->treeNameHWTrig=StrDup(treenamesuffix);  
-			AppendString(&buf,treenamesuffix,-1);
-			SetTreeItemAttribute (panel, TaskPan_TaskTree, selectedNodeIdx, ATTR_LABEL_TEXT, buf);
-			
-			//add slave name to master suffix
-			buf=GetTaskControlName(selectedTreeNodePtr->taskControl);  // is slave        
-			treenamesuffix=StrDup(" (-> ");
-			AppendString(&treenamesuffix,buf,-1);
-			AppendString(&treenamesuffix,")",-1);
-			OKfree(selectedTreeNodePtr->treeNameHWTrig);
-			selectedTreeNodePtr->treeNameHWTrig=StrDup(treenamesuffix);  
-			AppendString(&mastername,treenamesuffix,-1);
-			SetTreeItemAttribute (panel, TaskPan_TaskTree, masterindex, ATTR_LABEL_TEXT, mastername);
-			
-			AddHWSlaveTrigToMaster (master,slave); 
-			
-			free(buf);
+			// refresh Task Tree
+			DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+	
 			free(mastername);
 			break;
 	}
 	
-	  return 0;
+	return 0;
 }
 
 //-----------------------------------------

@@ -7514,16 +7514,16 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 				CmtReadTSQData (tsqID, &dataPacket,1,0,0);
 				
 				// copy data packet to datain
-				dataPacketData = GetDataPacketDataPtr(dataPacket, &dataPacketType);
+				dataPacketData = GetDataPacketPtrToData (dataPacket, &dataPacketType);
 				switch (dataPacketType) {
 					case DL_Waveform_Double:
-						waveformData = GetWaveformDataPtr(dataPacketData, &data->datain_size[i]);
+						waveformData = GetWaveformDataPtr(*(Waveform_type**)dataPacketData, &data->datain_size[i]);
 						nRepeats = 1;
 						break;
 						
 					case DL_RepeatedWaveform_Double:
-						waveformData = GetRepeatedWaveformDataPtr(dataPacketData, &data->datain_size[i]);
-						nRepeats = GetRepeatedWaveformRepeats(dataPacketData);
+						waveformData = GetRepeatedWaveformDataPtr(*(RepeatedWaveform_type**)dataPacketData, &data->datain_size[i]);
+						nRepeats = GetRepeatedWaveformRepeats(*(RepeatedWaveform_type**)dataPacketData);
 						break;
 				}
 				data->datain[i] = malloc (data->datain_size[i] * sizeof(float64));
@@ -8673,10 +8673,10 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 						float*				floatDataPtr;
 						double				doubleData;
 						for (size_t i = 0; i < nPackets; i++) {
-							dataPacketDataPtr = GetDataPacketDataPtr(dataPackets[i], &dataPacketType);
+							dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);
 							switch (dataPacketType) {
 								case DL_Waveform_Double:
-									doubleDataPtr = GetWaveformDataPtr(dataPacketDataPtr, &nElem);
+									doubleDataPtr = GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
 									for (size_t j = 0; j < nElem; j++) {							  // update AO one sample at a time from the provided waveform
 										DAQmxErrChk(DAQmxWriteAnalogF64(taskHndl, 1, 1, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, &doubleDataPtr[j], NULL, NULL));
 										if (*abortFlag) break;
@@ -8684,12 +8684,12 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 									break;
 									
 								case DL_Float:
-									doubleData = (double)(*(float*)dataPacketDataPtr);
+									doubleData = (double)(**(float**)dataPacketDataPtr);
 									DAQmxErrChk(DAQmxWriteAnalogF64(taskHndl, 1, 1, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, &doubleData, NULL, NULL));
 									break;
 									
 								case DL_Double:
-									DAQmxErrChk(DAQmxWriteAnalogF64(taskHndl, 1, 1, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, (float64*)dataPacketDataPtr, NULL, NULL));
+									DAQmxErrChk(DAQmxWriteAnalogF64(taskHndl, 1, 1, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, *(float64**)dataPacketDataPtr, NULL, NULL));
 									break;
 							}
 							

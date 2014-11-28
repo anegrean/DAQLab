@@ -504,10 +504,10 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 			Fmt (rawfilename, "%s<%srawdata_%s.bin", rawfilepath,VChanName); 
 				
 			for (size_t i = 0; i < nPackets; i++) {
-				dataPacketDataPtr = GetDataPacketDataPtr(dataPackets[i], &dataPacketType);
+				dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);
 				switch (dataPacketType) {
 					case DL_Waveform_UShort:
-						shortDataPtr = GetWaveformDataPtr(dataPacketDataPtr, &nElem);
+						shortDataPtr = GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
 						
 								//test
 			

@@ -167,6 +167,7 @@ void discard_Waveform_type (Waveform_type** waveform)
 	OKfree((*waveform)->waveformName);
 	OKfree((*waveform)->unitName);
 	OKfree((*waveform)->data);
+	(*waveform)->nSamples = 0;
 	
 	OKfree(*waveform);
 }
@@ -240,72 +241,77 @@ void* GetWaveformDataPtr (Waveform_type* waveform, size_t* nSamples)
 	return waveform->data;
 }
 
-int CopyWaveformData (Waveform_type* waveformToCopyTo, Waveform_type* waveformToCopyFrom) 
+Waveform_type* CopyWaveform (Waveform_type* waveform)
+{
+	Waveform_type*	waveformCopy = init_Waveform_type(waveform->waveformType, waveform->samplingRate, 0, NULL);
+	if (!waveformCopy) return NULL;
+	
+	if (AppendWaveform(waveformCopy, waveform) < 0) {
+		discard_Waveform_type(&waveformCopy);
+		return NULL;
+	}
+	
+	return waveformCopy;
+}
+
+int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformToAppend)
 {
 #define AppendWaveformData_Err_SamplingRatesAreDifferent		-1
 #define AppendWaveformData_Err_DataTypesAreDifferent			-2
 #define AppendWaveformData_Err_UnitsAreDifferent				-3  
 #define AppendWaveformData_Err_OutOfMemory						-4
 	
-	
 	// do nothing if there is nothing to be copied
-	if (!waveformToCopyFrom) return 0;
-	if (!waveformToCopyFrom->nSamples) return 0;
+	if (!waveformToAppend) return 0;
+	if (!waveformToAppend->nSamples) return 0;
 	// check if sampling rates are the same
-	if (waveformToCopyTo->samplingRate != waveformToCopyFrom->samplingRate) return AppendWaveformData_Err_SamplingRatesAreDifferent;
+	if (waveformToAppendTo->samplingRate != waveformToAppend->samplingRate) return AppendWaveformData_Err_SamplingRatesAreDifferent;
 	
 	// check if data types are the same
-	if (waveformToCopyTo->waveformType != waveformToCopyFrom->waveformType) return AppendWaveformData_Err_DataTypesAreDifferent;
+	if (waveformToAppendTo->waveformType != waveformToAppend->waveformType) return AppendWaveformData_Err_DataTypesAreDifferent;
 	
 	// check if units are the same
-	if (waveformToCopyTo->unitName && waveformToCopyFrom->unitName)
-	if (strcmp(waveformToCopyTo->unitName, waveformToCopyFrom->unitName)) return AppendWaveformData_Err_UnitsAreDifferent;
+	if (waveformToAppendTo->unitName && waveformToAppend->unitName)
+	if (strcmp(waveformToAppendTo->unitName, waveformToAppend->unitName)) return AppendWaveformData_Err_UnitsAreDifferent;
 	
-	void* newBuffer = realloc(waveformToCopyTo->data, (waveformToCopyTo->nSamples + waveformToCopyFrom->nSamples) * GetWaveformSizeofData(waveformToCopyTo));
-	if (!newBuffer) return AppendWaveformData_Err_OutOfMemory;
-	waveformToCopyTo->data = newBuffer;
 	
-	switch (waveformToCopyTo->waveformType) {
+	void* dataBuffer = realloc(waveformToAppendTo->data, (waveformToAppendTo->nSamples + waveformToAppend->nSamples) * GetWaveformSizeofData(waveformToAppendTo));
+	if (!dataBuffer) return AppendWaveformData_Err_OutOfMemory;
+	
+	switch (waveformToAppendTo->waveformType) {
 			
 		case Waveform_Char:
 		case Waveform_UChar:
-			memcpy(((char*)waveformToCopyTo->data) + waveformToCopyTo->nSamples, waveformToCopyFrom->data, waveformToCopyFrom->nSamples * sizeof(char)); 
+			memcpy(((char*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(char)); 
 			break;
 			
 		case Waveform_Short:
 		case Waveform_UShort:
-			memcpy(((short*)waveformToCopyTo->data) + waveformToCopyTo->nSamples, waveformToCopyFrom->data, waveformToCopyFrom->nSamples * sizeof(short)); 
+			memcpy(((short*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(short)); 
 			break;
 			
 		case Waveform_Int:
 		case Waveform_UInt:
-			memcpy(((int*)waveformToCopyTo->data) + waveformToCopyTo->nSamples, waveformToCopyFrom->data, waveformToCopyFrom->nSamples * sizeof(int)); 
+			memcpy(((int*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(int)); 
 			break;
 			
 		case Waveform_SSize:
 		case Waveform_Size:
-			memcpy(((size_t*)waveformToCopyTo->data) + waveformToCopyTo->nSamples, waveformToCopyFrom->data, waveformToCopyFrom->nSamples * sizeof(size_t)); 
+			memcpy(((size_t*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(size_t)); 
 			break;
 			
 		case Waveform_Float:
-			memcpy(((float*)waveformToCopyTo->data) + waveformToCopyTo->nSamples, waveformToCopyFrom->data, waveformToCopyFrom->nSamples * sizeof(float)); 
+			memcpy(((float*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(float)); 
 			break;
 			
 		case Waveform_Double:
-			memcpy(((double*)waveformToCopyTo->data) + waveformToCopyTo->nSamples, waveformToCopyFrom->data, waveformToCopyFrom->nSamples * sizeof(double)); 
+			memcpy(((double*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(double)); 
 			break;	
 	}
 	
-	return 0;
-}
-
-int AppendWaveformData (Waveform_type* waveformToAppendTo, Waveform_type** waveformToAppend)
-{
-	int error;
+	waveformToAppendTo->data = dataBuffer; 
+	waveformToAppendTo->nSamples += waveformToAppend->nSamples;
 	
-	if ((error = CopyWaveformData(waveformToAppendTo, *waveformToAppend)) < 0) return error;
-	
-	discard_Waveform_type(waveformToAppend);
 	return 0;
 }
 

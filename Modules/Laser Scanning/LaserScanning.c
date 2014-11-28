@@ -16,6 +16,7 @@
 #include <formatio.h>  
 #include "LaserScanning.h"
 #include <userint.h>
+#include "combobox.h" 
 #include <analysis.h>   
 #include "UI_LaserScanning.h"
 
@@ -40,29 +41,33 @@
 #define AxisCal_Default_NewCalibration_Name			"Calibration"
 
 // scan engine settings
-
 #define Max_NewScanEngine_NameLength				50
 #define Allowed_Detector_Data_Types					{DL_Waveform_Char, DL_Waveform_Double, DL_Waveform_Float, DL_Waveform_Int, DL_Waveform_Short, DL_Waveform_UChar, DL_Waveform_UInt, DL_Waveform_UShort}
 
 // non-resonant galvo calibration parameters
-#define	CALIBRATION_DATA_TO_STRING					"%s<%*f[e6j1] "
+#define	CALIBRATION_DATA_TO_STRING					"%s<%*f[j1] "
 #define STRING_TO_CALIBRATION_DATA					"%s>%*f[j1] "
 #define MAX_CAL_NAME_LENGTH							50			// Maximum name for non-resonant galvo scan axis calibration data.
 #define CALPOINTS 									50
 #define SLOPE_OFFSET_DELAY							0.01		// Time to wait in [s] after a galvo step is made before estimating slope and offset parameters					
 #define RELERR 										0.05
-#define POSSAMPLES									200 		// number of AI samples to read and average for one measurement of the galvo position
-#define POSTRAMPTIME								20.0		// recording time in [ms] after a ramp signal is applied
-#define MAXFLYBACKTIME								20.0		// maximum expected galvo flyback time in [ms]
+#define POSSAMPLES									200 		// Number of AI samples to read and average for one measurement of the galvo position
+#define POSTRAMPTIME								20.0		// Recording time in [ms] after a ramp signal is applied
+#define MAXFLYBACKTIME								20.0		// Maximum expected galvo flyback time in [ms].
 #define FUNC_Triangle 								0
 #define FUNC_Sawtooth 								1
 #define FIND_MAXSLOPES_AMP_ITER_FACTOR 				0.9
 #define SWITCH_TIMES_AMP_ITER_FACTOR 				0.95 
 #define DYNAMICCAL_SLOPE_ITER_FACTOR 				0.90
-#define DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR 	0.8	 		// for each amplitude, the initial maxslope value is reduced by this factor
-#define MAX_SLOPE_REDUCTION_FACTOR 					0.25		// position lag is measured with quarter the maximum ramp to allow the galvo reach a steady state
+#define DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR 	0.8	 		// For each amplitude, the initial maxslope value is reduced by this factor.
+#define MAX_SLOPE_REDUCTION_FACTOR 					0.25		// Position lag is measured with quarter the maximum ramp to allow the galvo reach a steady state.
 #define VAL_OVLD_ERR -8000
 
+#define NonResGalvoScan_MaxPixelDwellTime			1000.0		// Maximum pixel dwell time in [us] , should be defined better from info either from the task or the hardware!
+#define NonResGalvoScan_MinPixelDwellTime 			0.125		// in [us], depends on hardware and fluorescence integration mode, using photon counting, there is a 25 ns dead time
+																// within each pixel. If the min pix dwell time is 0.125 us then it means that 20% of fluorescence is lost which 
+																// may be still an acceptable situation if speed is important
+#define Default_ScanAxisCal_SampleRate				1e5			// Default sampling rate for galvo command and position in [Hz]
 //==============================================================================
 // Types
 
@@ -93,7 +98,8 @@ struct ActiveScanAxisCal {
 	TaskControl_type*		taskController;			// Task Controller for the calibration of this scan axis.
 	SourceVChan_type*		VChanCom;   			// VChan used to send command signals to the scan axis (optional, depending on the scan axis type)
 	SinkVChan_type*			VChanPos;				// VChan used to receive position feedback signals from the scan axis (optional, depending on the scan axis type)
-	double*					comSampRate;			// Command sample rate in [Hz] taken from VChanCom when connected. Same rate is used for the position sampling rate.
+	double					samplingRate;			// Galvo calibration sampling rate that can be taken as reference by comSampRate.
+	double*					comSampRate;			// Command sample rate in [Hz] taken from VChanCom when connected or from the calibration module. Same rate is used for the position sampling rate.
 	int						calPanHndl;				// Panel handle for performing scan axis calibration
 	LaserScanning_type*		lsModule;				// Reference to the laser scanning module to which this calibration belongs.
 		// METHODS
@@ -106,9 +112,11 @@ struct ScanAxisCal {
 		// DATA 
 	ScanAxis_type			scanAxisType;
 	char*					calName; 
-	LaserScanning_type*		lsModule;
+	LaserScanning_type*		lsModule;				// Reference to the laser scanning module that owns this scan axis
+	ScanEngine_type*		scanEngine;				// Reference to the scan engine that owns this scan axis
 		// METHODS
-	void	(*Discard) (ScanAxisCal_type** scanAxisCal); 	
+	void (*Discard) (ScanAxisCal_type** scanAxisCal);
+	void (*UpdateOptics) (ScanAxisCal_type* scanAxisCal); // Called by the assigned scan engine when optical settings have been updated.
 };	 
 
 //---------------------------------------------------
@@ -154,7 +162,6 @@ typedef struct {
 	NonResGalvoCalTypes		currentCal;				// Index of the current calibration
 	size_t					currIterIdx;			// Current iteration index for each calibration method.
 	double					targetSlope;			// Used for triangle waveform calibration, in [V/ms]. 
-	double					commandVMin;			// Minimum galvo command voltage in [V] for maximal deflection in a given direction.
 	double					commandVMax;			// Maximum galvo command voltage in [V] for maximal deflection in the oposite direction.
 	double					extraRuns;				// Number of extra runs for triangle waveform calibration.
 	double*					slope;					// in [V/V], together with offset, it relates the command and position feedback signal in a linear way when the galvo is still.
@@ -170,16 +177,16 @@ typedef struct {
 	double 					resolution;				// in [V]
 	double 					minStepSize;			// in [V]
 	double 					parked;         		// Value of command signal to be applied to the galvo when parked, in [V].
+	double					mechanicalResponse;		// Galvo mechanical response in [deg/V].
 	double 					scanTime;				// Time to apply a triangle waveform to estimate galvo response and maximum scan speed in [s].
-	DataPacket_type*		commandPacket;			// Used to send command waveforms.
-	Waveform_type*			positionSignal;			// Calibration waveforms buffer.
+	Waveform_type*			commandWaveform;		// Command waveform applied to the galvo with each task controller iteration.
+	Waveform_type*			positionWaveform;		// Calibration waveforms buffer.
 } ActiveNonResGalvoCal_type;
 
 // Non-resonant galvo scan axis calibration data
 typedef struct {
 	ScanAxisCal_type		baseClass;
-	double					commandVMin;			// Minimum galvo command voltage in [V] for maximal deflection in a given direction.   
-	double					commandVMax;			// Maximum galvo command voltage in [V] for maximal deflection in the oposite direction.
+	double					commandVMax;			// Maximum galvo command voltage in [V] for maximal deflection.
 	double					slope;					// in [V/V], together with offset, it relates the command and position feedback signal in a linear way when the galvo is still.
 	double					offset;					// in [V], together with slope, it relates the command and position feedback signal in a linear way when the galvo is still. 
 	double					posStdDev;				// in [V], measures noise level on the position feedback signal.
@@ -190,6 +197,8 @@ typedef struct {
 	double 					resolution;				// in [V]
 	double 					minStepSize;			// in [V]
 	double 					parked;         		// Value of command signal to be applied to the galvo when parked, in [V].
+	double					mechanicalResponse;		// Galvo mechanical response in [deg/V].
+	double					sampleDisplacement;		// Displacement factor in sample space [um] depending on applied voltage [V] and chosen scan engine optics. The unit of this factor is [um/V].
 }NonResGalvoCal_type;
 
 //---------------------------------------------------
@@ -235,8 +244,13 @@ typedef struct {
 //------------------
 // scan engine child classes
 typedef enum {
-	ScanEngine_RectRaster
+	ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis
 } ScanEngineEnum_type;
+
+typedef struct {
+	char*					objectiveName;			// Objective name.
+	double					objectiveFL;			// Objective focal length in [mm].
+} Objective_type;
 
 struct ScanEngine {
 	//-----------------------------------
@@ -272,11 +286,25 @@ struct ScanEngine {
 		// Scan Engine output
 	SourceVChan_type*		VChanScanOut;
 		// Detector input channels of DetChan_type* with incoming fluorescence pixel stream 
-	ListType				DetChans; 
+	ListType				DetChans;
+	
+	//-----------------------------------
+	// Scan Settings
+	//-----------------------------------
+	double*					pixelClockRate;			// Pixel clock rate in [Hz] for incoming fluorescence data from all detector channels.
+													// Note: This is not to be confused with the pixel dwell time, which is a multiple of 1/pixelClockRate.
+	//-----------------------------------
+	// Optics
+	//-----------------------------------
+	double					scanLensFL;				// Scan lens focal length in [mm]
+	double					tubeLensFL;				// Tube lens focal length in [mm]
+	Objective_type*			objectiveLens;			// Chosen objective lens
+	ListType				objectives;				// List of microscope objectives of Objective_type* elements;
 	
 	//-----------------------------------
 	// UI
 	//-----------------------------------
+	int						newObjectivePanHndl;
 	int						scanSetPanHndl;			// Panel handle for adjusting scan settings such as pixel size, etc...
 	int						engineSetPanHndl;		// Panel handle for scan engine settings such as VChans and scan axis types.
 	
@@ -292,18 +320,18 @@ struct ScanEngine {
 // Rectangular raster scan
 //------------------------
 typedef struct {
-	ScanEngine_type			baseClass;					// Base class, must be first structure member.
+	ScanEngine_type			baseClass;				// Base class, must be first structure member.
 	
 	//----------------
 	// Scan parameters
 	//----------------
-	double*					fastAxisSamplingRate;   // Pointer to fast axis waveform sampling rate in [Hz]. Value taken from VChanFastAxisCom
-	double*					slowAxisSamplingRate;	// Pointer to slow axis waveform sampling rate in [Hz]. Value taken from VChanSlowAxisCom
+	double*					galvoSamplingRate;   	// Pointer to fast and slow axis waveform sampling rate in [Hz]. Value must be the same for VChanFastAxisCom and VChanSlowAxisCom
 	size_t					height;					// Image height in [pix].
 	size_t					heightOffset;			// Image height offset from center in [pix].
 	size_t					width;					// Image width in [pix].
 	size_t					widthOffset;			// Image width offset in [pix].
 	double					pixSize;				// Image pixel size in [um]. 
+	double					pixelDwellTime;			// Pixel dwell time in [us].
 } RectangleRaster_type;
 
 
@@ -349,188 +377,235 @@ struct LaserScanning {
 //-------------------
 // Detection channels
 //-------------------
-static DetChan_type*				init_DetChan_type						(ScanEngine_type* scanEngine, char VChanName[]);
+static DetChan_type*				init_DetChan_type							(ScanEngine_type* scanEngine, char VChanName[]);
 
-static void							discard_DetChan_type					(DetChan_type** a);
+static void							discard_DetChan_type						(DetChan_type** a);
 
 //---------------------------
 // VChan management callbacks
 //---------------------------
 	// detection VChans
-static void							DetVChan_Connected						(VChan_type* self, VChan_type* connectedVChan);
+static void							DetVChan_Connected							(VChan_type* self, VChan_type* connectedVChan);
 
-static void							DetVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan); 
+static void							DetVChan_Disconnected						(VChan_type* self, VChan_type* disconnectedVChan); 
 
 //----------------------
 // Scan axis calibration
 //----------------------
 	// generic active scan axis calibration data 
 
-static ActiveScanAxisCal_type*		initalloc_ActiveScanAxisCal_type		(ActiveScanAxisCal_type* cal);
+static ActiveScanAxisCal_type*		initalloc_ActiveScanAxisCal_type			(ActiveScanAxisCal_type* cal);
 
-static void							discard_ActiveScanAxisCal_type			(ActiveScanAxisCal_type** cal);
+static void							discard_ActiveScanAxisCal_type				(ActiveScanAxisCal_type** cal);
 
 	// generic scan axis calibration data
-static ScanAxisCal_type*			initalloc_ScanAxisCal_type				(ScanAxisCal_type* cal);
+static ScanAxisCal_type*			initalloc_ScanAxisCal_type					(ScanAxisCal_type* cal);
 
-static void							discard_ScanAxisCal_type				(ScanAxisCal_type** cal);
+static void							discard_ScanAxisCal_type					(ScanAxisCal_type** cal);
 
-void CVICALLBACK 					ScanAxisCalibrationMenu_CB				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+void CVICALLBACK 					ScanAxisCalibrationMenu_CB					(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 
-static void							UpdateScanEngineCalibrations			(ScanEngine_type* scanEngine);
+static void							UpdateScanEngineCalibrations				(ScanEngine_type* scanEngine);
 
-static void 						UpdateAvailableCalibrations 			(LaserScanning_type* lsModule); 
+static void 						UpdateAvailableCalibrations 				(LaserScanning_type* lsModule); 
 
-static int CVICALLBACK 				ManageScanAxisCalib_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				ManageScanAxisCalib_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int CVICALLBACK 				NewScanAxisCalib_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NewScanAxisCalib_CB							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 	// galvo response analysis functions
 
-static int 							FindSlope								(double* signal, int nsamples, double samplingRate, double signalStdDev, int nRep, double sloperelerr, double* maxslope); 
-static int 							MeasureLag								(double* signal1, double* signal2, int nelem); 
-static int 							GetStepTimes							(double* signal, int nsamples, double lowlevel, double highlevel, double threshold, int* lowidx, int* highidx, int* stepsamples);
+static int 							FindSlope									(double* signal, int nsamples, double samplingRate, double signalStdDev, int nRep, double sloperelerr, double* maxslope); 
+static int 							MeasureLag									(double* signal1, double* signal2, int nelem); 
+static int 							GetStepTimes								(double* signal, int nsamples, double lowlevel, double highlevel, double threshold, int* lowidx, int* highidx, int* stepsamples);
 
 	//-----------------------------------------
 	// Non-resonant galvo axis calibration data
 	//-----------------------------------------
 
-static ActiveNonResGalvoCal_type* 	init_ActiveNonResGalvoCal_type 			(LaserScanning_type* lsModule, char calName[], char commandVChanName[], char positionVChanName[]);
+static ActiveNonResGalvoCal_type* 	init_ActiveNonResGalvoCal_type 				(LaserScanning_type* lsModule, char calName[], char commandVChanName[], char positionVChanName[]);
 
-static void							discard_ActiveNonResGalvoCal_type		(ActiveScanAxisCal_type** cal);
+static void							discard_ActiveNonResGalvoCal_type			(ActiveScanAxisCal_type** cal);
 
-static NonResGalvoCal_type*			init_NonResGalvoCal_type				(char calName[], LaserScanning_type* lsModule, double commandVMin, 
-																			 double commandVMax, double slope, double offset, double posStdDev, 
-																			 double lag, SwitchTimes_type* switchTimes, MaxSlopes_type* maxSlopes,
-																			 TriangleCal_type* triangleCal, double resolution, double minStepSize, double parked);
+static NonResGalvoCal_type*			init_NonResGalvoCal_type					(char calName[], LaserScanning_type* lsModule, double commandVMax, double slope, double offset, double posStdDev, 
+																			 	double lag, SwitchTimes_type* switchTimes, MaxSlopes_type* maxSlopes,
+																			 	TriangleCal_type* triangleCal, double resolution, double minStepSize, double parked, double mechanicalResponse);
 
-static void							discard_NonResGalvoCal_type				(NonResGalvoCal_type** cal);
+static void							discard_NonResGalvoCal_type					(NonResGalvoCal_type** cal);
+
+	// updates optical settings
+void								NonResGalvoCal_UpdateOptics					(NonResGalvoCal_type* cal);
 
 	// validation for new scan axis calibration name
-static BOOL 						ValidateNewScanAxisCal					(char inputStr[], void* dataPtr); 
+static BOOL 						ValidateNewScanAxisCal						(char inputStr[], void* dataPtr); 
 	// switch times data
-static SwitchTimes_type* 			init_SwitchTimes_type					(void);
+static SwitchTimes_type* 			init_SwitchTimes_type						(void);
 
-static void 						discard_SwitchTimes_type 				(SwitchTimes_type** a);
+static void 						discard_SwitchTimes_type 					(SwitchTimes_type** a);
 
 	// copies switch times data
-static SwitchTimes_type*			copy_SwitchTimes_type					(SwitchTimes_type* switchTimes);
+static SwitchTimes_type*			copy_SwitchTimes_type						(SwitchTimes_type* switchTimes);
 
 	// max slopes data
 
-static MaxSlopes_type* 				init_MaxSlopes_type 					(void);
+static MaxSlopes_type* 				init_MaxSlopes_type 						(void);
 
-static void 						discard_MaxSlopes_type 					(MaxSlopes_type** a);
+static void 						discard_MaxSlopes_type 						(MaxSlopes_type** a);
 	// copies max slopes data
-static MaxSlopes_type* 				copy_MaxSlopes_type 					(MaxSlopes_type* maxSlopes);
+static MaxSlopes_type* 				copy_MaxSlopes_type 						(MaxSlopes_type* maxSlopes);
 
 	// triangle wave calibration data
 
-static TriangleCal_type* 			init_TriangleCal_type					(void);
+static TriangleCal_type* 			init_TriangleCal_type						(void);
 
-static void 						discard_TriangleCal_type 				(TriangleCal_type** a);
+static void 						discard_TriangleCal_type 					(TriangleCal_type** a);
 	// copies triangle waveform calibration data
-static TriangleCal_type* 			copy_TriangleCal_type 					(TriangleCal_type* triangleCal);
+static TriangleCal_type* 			copy_TriangleCal_type 						(TriangleCal_type* triangleCal);
 	// saves non resonant galvo scan axis calibration data to XML
-static int 							SaveNonResGalvoCalToXML					(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  axisCalibrationsElement);
-static int 							LoadNonResGalvoCalFromXML 				(LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement);    
+static int 							SaveNonResGalvoCalToXML						(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  axisCalibrationsElement);
+static int 							LoadNonResGalvoCalFromXML 					(LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement);    
 
 	// command VChan
-static void							NonResGalvoCal_ComVChan_Connected		(VChan_type* self, VChan_type* connectedVChan);
-static void							NonResGalvoCal_ComVChan_Disconnected	(VChan_type* self, VChan_type* disconnectedVChan);
+static void							NonResGalvoCal_ComVChan_Connected			(VChan_type* self, VChan_type* connectedVChan);
+static void							NonResGalvoCal_ComVChan_Disconnected		(VChan_type* self, VChan_type* disconnectedVChan);
 
 	// position VChan
-static void							NonResGalvoCal_PosVChan_Connected		(VChan_type* self, VChan_type* connectedVChan);
-static void							NonResGalvoCal_PosVChan_Disconnected	(VChan_type* self, VChan_type* disconnectedVChan);
+static void							NonResGalvoCal_PosVChan_Connected			(VChan_type* self, VChan_type* connectedVChan);
+static void							NonResGalvoCal_PosVChan_Disconnected		(VChan_type* self, VChan_type* disconnectedVChan);
 
 	// galvo calibration
-static int CVICALLBACK 				NonResGalvoCal_MainPan_CB				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-static int CVICALLBACK 				NonResGalvoCal_CalPan_CB				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-static int CVICALLBACK 				NonResGalvoCal_TestPan_CB				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResGalvoCal_MainPan_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResGalvoCal_CalPan_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResGalvoCal_TestPan_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+	// determines maximum frequency for a triangle waveform with given amplitude, taking into account the calibration data of the galvo
+void								MaxTriangleWaveformScan						(NonResGalvoCal_type* cal, double targetAmplitude, double* maxTriangleWaveFrequency); 
+
+	// Moves the galvo between two positions given by startVoltage and endVoltage in [V] given a sampleRate in [Hz] and calibration data.
+	// The command signal is a ramp such that the galvo lags behind the command signal with a constant lag
+static Waveform_type* 				NonResGalvoMoveBetweenPoints				(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage);
 
 //-------------
 // Scan Engines
 //-------------
 	// parent class
-static int 							init_ScanEngine_type 					(ScanEngine_type* 		engine,
-																			 LaserScanning_type*	lsModule,
-																			 ScanEngineEnum_type 	engineType,
-																			 char 					fastAxisComVChanName[], 
-								 											 char 					slowAxisComVChanName[], 
-								 											 char					fastAxisPosVChanName[],
-								 											 char					slowAxisPosVChanName[],
-								 											 char					imageOutVChanName[],
-																			 char					detectorVChanName[]);
+static int 							init_ScanEngine_type 						(ScanEngine_type* 		engine,
+																			 	 LaserScanning_type*	lsModule,
+																			 	 ScanEngineEnum_type 	engineType,
+																			 	 char 					fastAxisComVChanName[], 
+								 											 	 char 					slowAxisComVChanName[], 
+								 											 	 char					fastAxisPosVChanName[],
+								 											 	 char					slowAxisPosVChanName[],
+								 											 	 char					imageOutVChanName[],
+																				 char					detectorVChanName[]);
 
-static void							discard_ScanEngine_type 				(ScanEngine_type** engine);
+static void							discard_ScanEngine_type 					(ScanEngine_type** engine);
+	
+	//--------------------------------------
+	// Non-Resonant Rectangle Raster Scan
+	//--------------------------------------
 
-	// rectangle raster scan
+static RectangleRaster_type*		init_RectangleRaster_type					(LaserScanning_type*	lsModule, 
+																			 	 char 					engineName[],
+														   					 	 char 					fastAxisComVChanName[], 
+								 											 	 char 					slowAxisComVChanName[], 
+								 											 	 char					fastAxisPosVChanName[],
+								 											 	 char					slowAxisPosVChanName[],
+								 											 	 char					imageOutVChanName[],
+																			 	 char					detectorVChanName[],
+																				 size_t					scanHeight,
+																				 size_t					scanHeightOffset,
+																				 size_t					scanWidth,
+																				 size_t					scanWidthOffset,
+																			  	 double					pixelSize,
+																				 double					pixelDwellTime		   	);
 
-static RectangleRaster_type*		init_RectangleRaster_type				(LaserScanning_type*	lsModule, 
-																			 char 					engineName[],
-														   					 char 					fastAxisComVChanName[], 
-								 											 char 					slowAxisComVChanName[], 
-								 											 char					fastAxisPosVChanName[],
-								 											 char					slowAxisPosVChanName[],
-								 											 char					imageOutVChanName[],
-																			 char					detectorVChanName[]);
+static void							discard_RectangleRaster_type				(ScanEngine_type** engine);
 
-static void							discard_RectangleRaster_type			(ScanEngine_type** engine);
+static int CVICALLBACK 				NonResRectangleRasterScan_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int CVICALLBACK 				RectangleRasterScan_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
+void 								NonResRectangleRasterScan_ScanHeights		(RectangleRaster_type* scanEngine, double pixelDwellTime);
+
+void								NonResRectangleRasterScan_PixelDwellTimes	(RectangleRaster_type* scanEngine);
+
+	// determines whether a given rectangular ROI falls within a circular perimeter
+static BOOL 						ValidROI									(double ROIHeight, double ROIWidth, double HeightOffset, double WidthOffset, double FOVRadius);
+
+	// evaluates whether the current scan engine configuration is valid, i.e. it has both scan axes assigned, objective, pixel sampling rate, etc.
+static BOOL							NonResRectangleRasterScan_ValidScanConfig	(RectangleRaster_type* scanEngine);
+
+//---------------------------------------------------------
+// determines scan axis types based on the scan engine type
+//---------------------------------------------------------
+static void							GetScanAxisTypes							(ScanEngine_type* scanEngine, ScanAxis_type* fastAxisType, ScanAxis_type* slowAxisType); 
+
+//-------------------------
+// Objectives for scanning
+//-------------------------
+static Objective_type*				init_Objective_type							(char objectiveName[], double objectiveFL);
+
+static void							discard_Objective_type						(Objective_type** objective);
+
+static int CVICALLBACK 				NewObjective_CB								(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+//---------------------------------------------------------
+// Waveforms
+//---------------------------------------------------------
+
+static Waveform_type* 				StaircaseWaveform							(BOOL symmetricStaircase, double sampleRate, size_t nSamplesPerStep, size_t nSteps, double startVoltage, double stepVoltage); 
 
 //------------------
 // Module management
 //------------------
 
-static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
+static int							Load 										(DAQLabModule_type* mod, int workspacePanHndl);
 
-static int 							LoadCfg 								(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int 							LoadCfg 									(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
-static int 							SaveCfg 								(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int 							SaveCfg 									(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
-static int 							DisplayPanels							(DAQLabModule_type* mod, BOOL visibleFlag); 
+static int 							DisplayPanels								(DAQLabModule_type* mod, BOOL visibleFlag); 
 
-static int CVICALLBACK 				ScanEngineSettings_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				ScanEngineSettings_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int CVICALLBACK 				ScanEnginesTab_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				ScanEnginesTab_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-void CVICALLBACK 					ScanEngineSettingsMenu_CB				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+void CVICALLBACK 					ScanEngineSettingsMenu_CB					(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 
 
-static void CVICALLBACK 			NewScanEngineMenu_CB					(int menuBar, int menuItem, void *callbackData, int panel);
+static void CVICALLBACK 			NewScanEngineMenu_CB						(int menuBar, int menuItem, void *callbackData, int panel);
 
-static int CVICALLBACK 				NewScanEngine_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NewScanEngine_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static BOOL							ValidScanEngineName						(char name[], void* dataPtr);
+static BOOL							ValidScanEngineName							(char name[], void* dataPtr);
 
 //-----------------------------------------
 // Scan Engine VChan management
 //-----------------------------------------
 
 	// Fast Axis Command VChan
-static void							FastAxisComVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
-static void							FastAxisComVChan_Disconnected			(VChan_type* self, VChan_type* disconnectedVChan);
+static void							FastAxisComVChan_Connected					(VChan_type* self, VChan_type* connectedVChan);
+static void							FastAxisComVChan_Disconnected				(VChan_type* self, VChan_type* disconnectedVChan);
 
 	// Slow Axis Command VChan
-static void							SlowAxisComVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
-static void							SlowAxisComVChan_Disconnected			(VChan_type* self, VChan_type* disconnectedVChan);
+static void							SlowAxisComVChan_Connected					(VChan_type* self, VChan_type* connectedVChan);
+static void							SlowAxisComVChan_Disconnected				(VChan_type* self, VChan_type* disconnectedVChan);
 
 	// Fast Axis Position VChan
-static void							FastAxisPosVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
-static void							FastAxisPosVChan_Disconnected			(VChan_type* self, VChan_type* disconnectedVChan);
+static void							FastAxisPosVChan_Connected					(VChan_type* self, VChan_type* connectedVChan);
+static void							FastAxisPosVChan_Disconnected				(VChan_type* self, VChan_type* disconnectedVChan);
 
 	// Slow Axis Position VChan
-static void							SlowAxisPosVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
-static void							SlowAxisPosVChan_Disconnected			(VChan_type* self, VChan_type* disconnectedVChan);
+static void							SlowAxisPosVChan_Connected					(VChan_type* self, VChan_type* connectedVChan);
+static void							SlowAxisPosVChan_Disconnected				(VChan_type* self, VChan_type* disconnectedVChan);
 
 	// Image Out VChan
-static void							ImageOutVChan_Connected					(VChan_type* self, VChan_type* connectedVChan);
-static void							ImageOutVChan_Disconnected				(VChan_type* self, VChan_type* disconnectedVChan);
+static void							ImageOutVChan_Connected						(VChan_type* self, VChan_type* connectedVChan);
+static void							ImageOutVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan);
 
 	// Detection VChan
-static void							detVChan_Connected						(VChan_type* self, VChan_type* connectedVChan);
-static void							detVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan);
+static void							detVChan_Connected							(VChan_type* self, VChan_type* connectedVChan);
+static void							detVChan_Disconnected						(VChan_type* self, VChan_type* disconnectedVChan);
 
 
 //-----------------------------------------
@@ -538,50 +613,50 @@ static void							detVChan_Disconnected					(VChan_type* self, VChan_type* disco
 //-----------------------------------------
 
 	// for Non Resonant Galvo scan axis calibration and testing
-static FCallReturn_type*			ConfigureTC_NonResGalvoCal				(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*			ConfigureTC_NonResGalvoCal					(TaskControl_type* taskControl, BOOL const* abortFlag);
 
-static void							IterateTC_NonResGalvoCal				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+static void							IterateTC_NonResGalvoCal					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
-static void							AbortIterationTC_NonResGalvoCal			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void							AbortIterationTC_NonResGalvoCal				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
-static FCallReturn_type*			StartTC_NonResGalvoCal					(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*			StartTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag);
 
-static FCallReturn_type*			DoneTC_NonResGalvoCal					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*			DoneTC_NonResGalvoCal						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
-static FCallReturn_type*			StoppedTC_NonResGalvoCal				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*			StoppedTC_NonResGalvoCal					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
-static FCallReturn_type* 			ResetTC_NonResGalvoCal 					(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type* 			ResetTC_NonResGalvoCal 						(TaskControl_type* taskControl, BOOL const* abortFlag);
 
-static void							DimTC_NonResGalvoCal					(TaskControl_type* taskControl, BOOL dimmed);
+static void							DimTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL dimmed);
 
-static FCallReturn_type* 			DataReceivedTC_NonResGalvoCal 			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+static FCallReturn_type* 			DataReceivedTC_NonResGalvoCal 				(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
-static void 						ErrorTC_NonResGalvoCal 					(TaskControl_type* taskControl, char* errorMsg);
+static void 						ErrorTC_NonResGalvoCal 						(TaskControl_type* taskControl, char* errorMsg);
 
-static FCallReturn_type*			ModuleEventHandler_NonResGalvoCal		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
+static FCallReturn_type*			ModuleEventHandler_NonResGalvoCal			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 	
 	// for RectangleRaster_type scanning
-static FCallReturn_type*			ConfigureTC_RectRaster					(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*			ConfigureTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag);
 
-static void							IterateTC_RectRaster					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+static void							IterateTC_RectRaster						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
-static void							AbortIterationTC_RectRaster				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void							AbortIterationTC_RectRaster					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
-static FCallReturn_type*			StartTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*			StartTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag);
 
-static FCallReturn_type*			DoneTC_RectRaster						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*			DoneTC_RectRaster							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
-static FCallReturn_type*			StoppedTC_RectRaster					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static FCallReturn_type*			StoppedTC_RectRaster						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
-static FCallReturn_type* 			ResetTC_RectRaster 						(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type* 			ResetTC_RectRaster 							(TaskControl_type* taskControl, BOOL const* abortFlag);
 
-static void							DimTC_RectRaster						(TaskControl_type* taskControl, BOOL dimmed);
+static void							DimTC_RectRaster							(TaskControl_type* taskControl, BOOL dimmed);
 
-static FCallReturn_type* 			DataReceivedTC_RectRaster 				(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+static FCallReturn_type* 			DataReceivedTC_RectRaster 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
-static void 						ErrorTC_RectRaster 						(TaskControl_type* taskControl, char* errorMsg);
+static void 						ErrorTC_RectRaster 							(TaskControl_type* taskControl, char* errorMsg);
 
-static FCallReturn_type*			ModuleEventHandler_RectRaster			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
+static FCallReturn_type*			ModuleEventHandler_RectRaster				(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
 	// add below more task controller callbacks for different scan engine types
 
@@ -769,6 +844,108 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// change main module panel title to module instance name
 	SetPanelAttribute(ls->mainPanHndl, ATTR_TITLE, mod->instanceName);
 	
+	//----------------------------------------------------------------------
+	// load scan engines
+	//----------------------------------------------------------------------
+	ScanEngine_type**	scanEnginePtr;
+	size_t				nScanEngines 		= ListNumItems(ls->scanEngines);
+	size_t				nDetectorVChans;
+	int					scanPanHndl			= 0;
+	int					newTabIdx			= 0; 
+	char*				scanEngineName		= NULL;
+	DetChan_type**		detPtr;
+	size_t				nObjectives;
+	Objective_type**	objectivePtr;
+	
+	
+	for (size_t i = 1; i <= nScanEngines; i++) {
+		scanEnginePtr = ListGetPtrToItem(ls->scanEngines, i);
+		nObjectives = ListNumItems((*scanEnginePtr)->objectives);
+		// load scan pannel depending on scan engine type
+		switch ((*scanEnginePtr)->engineType) {
+				
+			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
+				
+				// load panel
+				scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
+				
+				// populate objectives
+				for (size_t j = 1; j <= nObjectives; j++) {
+					objectivePtr = ListGetPtrToItem((*scanEnginePtr)->objectives, j);
+					InsertListItem(scanPanHndl, RectRaster_Objective, -1, (*objectivePtr)->objectiveName, (*objectivePtr)->objectiveFL);
+					// select assigned objective
+					if (!strcmp((*objectivePtr)->objectiveName, (*scanEnginePtr)->objectiveLens->objectiveName))
+						SetCtrlIndex(scanPanHndl, RectRaster_Objective, j-1);
+				}
+				
+				// make Height string control into combo box
+				errChk( Combo_NewComboBox(scanPanHndl, RectRaster_Height) );
+				Combo_SetComboAttribute(scanPanHndl, RectRaster_Height, ATTR_COMBO_MAX_LENGTH, 10);
+				// make Pixel Dwell time string control into combo box
+				errChk( Combo_NewComboBox(scanPanHndl, RectRaster_PixelDwell) );
+				Combo_SetComboAttribute(scanPanHndl, RectRaster_PixelDwell, ATTR_COMBO_MAX_LENGTH, 10);
+				
+				// undim/dim scan control panel if there are no objectives or either scan axis calibration is missing
+				if (NonResRectangleRasterScan_ValidScanConfig((RectangleRaster_type*)*scanEnginePtr))
+					SetCtrlAttribute(scanPanHndl, RectRaster_Objective, ATTR_DIMMED, 0);
+				else
+					SetCtrlAttribute(scanPanHndl, RectRaster_Objective, ATTR_DIMMED, 1);
+				
+				break;
+				
+			// insert here more scan engine types
+		}
+		
+		newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl);
+		DiscardPanel(scanPanHndl);
+		scanPanHndl = 0;
+		GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &(*scanEnginePtr)->scanSetPanHndl);
+		
+		// change new scan engine tab title
+		scanEngineName = GetTaskControlName((*scanEnginePtr)->taskControl); 
+		SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, scanEngineName);
+		OKfree(scanEngineName);
+		
+		// add pannel callback data
+		SetPanelAttribute((*scanEnginePtr)->scanSetPanHndl, ATTR_CALLBACK_DATA, *scanEnginePtr);
+		
+		// add callback function and data to scan engine controls
+		switch ((*scanEnginePtr)->engineType) {
+				
+			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
+				
+				SetCtrlsInPanCBInfo(*scanEnginePtr, NonResRectangleRasterScan_CB, (*scanEnginePtr)->scanSetPanHndl);
+				
+				break;
+				
+			// insert here more scan engine types
+		}
+		
+		// add scan engine task controller to DAQLab framework
+		DLAddTaskController((DAQLabModule_type*)ls, (*scanEnginePtr)->taskControl);
+		
+		// add scan engine VChans to DAQLab framework
+		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanFastAxisCom);
+		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanSlowAxisCom);
+		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanFastAxisPos);
+		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanSlowAxisPos);
+		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanScanOut);
+		nDetectorVChans = ListNumItems((*scanEnginePtr)->DetChans);
+		for (size_t j = 1; j <= nDetectorVChans; j++) {
+			detPtr = ListGetPtrToItem((*scanEnginePtr)->DetChans, j);
+			DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan); 
+		}
+		
+	}
+	
+	if (nScanEngines) {
+		// undim scan engine "Settings" menu item if there is at least one scan engine   
+		SetMenuBarAttribute(ls->menuBarHndl, ls->engineSettingsMenuItemHndl, ATTR_DIMMED, 0);
+		// remove empty "None" tab page  
+		DeleteTabPage(ls->mainPanHndl, ScanPan_ScanEngines, 0, 1); 
+	}
+	
+	
 	return 0;
 Error:
 	
@@ -844,29 +1021,31 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		
 		// add new axis calibration element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanAxisCalibrationsXMLElement, &xmlERRINFO, scanAxisCalXMLElement, NULL) );  
-		CA_DiscardObjHandle(scanAxisCalXMLElement);  
+		CA_OKfree(scanAxisCalXMLElement);  
 	}
 	
 	// add scan axis calibrations element to module element
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, scanAxisCalibrationsXMLElement, NULL) );
-	CA_DiscardObjHandle(scanAxisCalibrationsXMLElement); 
+	CA_OKfree(scanAxisCalibrationsXMLElement); 
 	
 	//--------------------------------------------------------------------------
 	// Save scan engines and VChans
 	//--------------------------------------------------------------------------
 	ActiveXMLObj_IXMLDOMElement_	scanEnginesXMLElement; 			  	// element containing multiple scan engines
 	ActiveXMLObj_IXMLDOMElement_	scanEngineXMLElement; 			  	// scan engine element
-	ActiveXMLObj_IXMLDOMElement_	VChanNamesXMLElement;	 			// VChan names element      
+	ActiveXMLObj_IXMLDOMElement_	VChanNamesXMLElement;	 			// VChan names element 
+	ActiveXMLObj_IXMLDOMElement_	scanInfoXMLElement;					// Contains scan engine info;
+	ActiveXMLObj_IXMLDOMElement_	objectivesXMLElement;				// Objectives element containing multiple scan engine objectives
+	ActiveXMLObj_IXMLDOMElement_	objectiveXMLElement;				// Objectives element
 	
 	// create scan engines element
 	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanEngines", &scanEnginesXMLElement) );
 	
 	size_t					nScanEngines 				= ListNumItems(ls->scanEngines);
 	ScanEngine_type**		scanEnginePtr;
-	DAQLabXMLNode 			scanEngineAttr[4];
-	DAQLabXMLNode			rectangleRasterAttr[5];
+	DAQLabXMLNode 			scanEngineAttr[7];
+	DAQLabXMLNode			objectivesAttr[2];	
 	unsigned int			scanEngineType;
-	unsigned long long		imgHeight, imgWidth, imgHeightOffset, imgWidthOffset;
 	char* 					fastAxisCommandVChanName	= NULL;
 	char* 					slowAxisCommandVChanName	= NULL;
 	char* 					fastAxisPositionVChanName	= NULL;
@@ -875,15 +1054,21 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	DAQLabXMLNode			scanEngineVChansAttr[5];
 	DAQLabXMLNode			detectorVChanAttr;
 	size_t					nDetectionChans;
+	size_t					nObjectives;
 	DetChan_type**			detChanPtr;
+	Objective_type**		objectivePtr;
 	
 	
 	for (size_t i = 1; i <= nScanEngines; i++) {
 		scanEnginePtr = ListGetPtrToItem(ls->scanEngines, i);
 		// create new scan engine element
 		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanEngine", &scanEngineXMLElement) );
+		// create new scan info element
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanInfo", &scanInfoXMLElement) );   
 		// create new VChan element with all the VChan names for the Scan Engine
 		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "VChannels", &VChanNamesXMLElement) );
+		// create new objectives element
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Objectives", &objectivesXMLElement) );
 		// initialize generic scan engine attributes
 		scanEngineAttr[0].tag 		= "Name";
 		scanEngineAttr[0].type 		= BasicData_CString;
@@ -907,6 +1092,20 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 			scanEngineAttr[3].pData		= (*scanEnginePtr)->slowAxisCal->calName;
 		else
 			scanEngineAttr[3].pData		= ""; 
+		
+		// save optics
+		scanEngineAttr[4].tag 		= "ScanLensFL";
+		scanEngineAttr[4].type 		= BasicData_Double;
+		scanEngineAttr[4].pData		= &(*scanEnginePtr)->scanLensFL;
+		scanEngineAttr[5].tag 		= "TubeLensFL";
+		scanEngineAttr[5].type 		= BasicData_Double;
+		scanEngineAttr[5].pData		= &(*scanEnginePtr)->tubeLensFL;
+		scanEngineAttr[6].tag 		= "Objective";
+		scanEngineAttr[6].type 		= BasicData_CString;
+		if ((*scanEnginePtr)->objectiveLens)
+			scanEngineAttr[6].pData	= (*scanEnginePtr)->objectiveLens->objectiveName;
+		else
+			scanEngineAttr[6].pData = "";
 			
 		// save attributes
 		DLAddToXMLElem(xmlDOM, scanEngineXMLElement, scanEngineAttr, DL_ATTRIBUTE, NumElem(scanEngineAttr));
@@ -920,19 +1119,19 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		scanEngineOutVChanName		= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanScanOut);
 				
 		scanEngineVChansAttr[0].tag 	= "FastAxisCommand";
-		scanEngineVChansAttr[0].type   = BasicData_CString;
+		scanEngineVChansAttr[0].type   	= BasicData_CString;
 		scanEngineVChansAttr[0].pData	= fastAxisCommandVChanName;
 		scanEngineVChansAttr[1].tag 	= "SlowAxisCommand";
-		scanEngineVChansAttr[1].type   = BasicData_CString;
+		scanEngineVChansAttr[1].type   	= BasicData_CString;
 		scanEngineVChansAttr[1].pData	= slowAxisCommandVChanName;
 		scanEngineVChansAttr[2].tag 	= "FastAxisPosition";
-		scanEngineVChansAttr[2].type   = BasicData_CString;
+		scanEngineVChansAttr[2].type   	= BasicData_CString;
 		scanEngineVChansAttr[2].pData	= fastAxisPositionVChanName;
 		scanEngineVChansAttr[3].tag 	= "SlowAxisPosition";
-		scanEngineVChansAttr[3].type   = BasicData_CString;
+		scanEngineVChansAttr[3].type   	= BasicData_CString;
 		scanEngineVChansAttr[3].pData	= slowAxisPositionVChanName;
 		scanEngineVChansAttr[4].tag 	= "ScanEngineOut";
-		scanEngineVChansAttr[4].type   = BasicData_CString;
+		scanEngineVChansAttr[4].type   	= BasicData_CString;
 		scanEngineVChansAttr[4].pData	= scanEngineOutVChanName;
 														 	
 		DLAddToXMLElem(xmlDOM, VChanNamesXMLElement, scanEngineVChansAttr, DL_ATTRIBUTE, NumElem(scanEngineVChansAttr));
@@ -954,53 +1153,69 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 			OKfree(detectorVChanAttr.pData);
 		}
 		
+		// save objectives to objectives XML element
+		nObjectives = ListNumItems((*scanEnginePtr)->objectives);
+		for (size_t j = 0; j < nObjectives; j++) {
+			objectivePtr = ListGetPtrToItem((*scanEnginePtr)->objectives, j);
+			objectivesAttr[0].tag		= "Name";
+			objectivesAttr[0].type		= BasicData_CString;
+			objectivesAttr[0].pData		= (*objectivePtr)->objectiveName;
+			objectivesAttr[1].tag		= "FL";
+			objectivesAttr[1].type		= BasicData_Double;
+			objectivesAttr[1].pData		= &(*objectivePtr)->objectiveFL;
+			
+			XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Objective", &objectiveXMLElement) );
+			DLAddToXMLElem(xmlDOM, objectiveXMLElement, objectivesAttr, DL_ATTRIBUTE, NumElem(objectivesAttr)); 
+			XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (objectivesXMLElement, &xmlERRINFO, objectiveXMLElement, NULL) ); 
+			CA_OKfree(objectiveXMLElement);   
+		}
+		
 		// add scan engine specific data
 		switch((*scanEnginePtr)->engineType) {
 				
-			case ScanEngine_RectRaster:
+			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
 				// initialize raster scan attributes
-				imgHeight 						= ((RectangleRaster_type*) *scanEnginePtr)->height;
-				imgWidth 						= ((RectangleRaster_type*) *scanEnginePtr)->width;
-				imgHeightOffset 				= ((RectangleRaster_type*) *scanEnginePtr)->heightOffset;
-				imgWidthOffset					= ((RectangleRaster_type*) *scanEnginePtr)->widthOffset;
-				
-				rectangleRasterAttr[0].tag		= "ImageHeight";
-				rectangleRasterAttr[0].type		= BasicData_ULongLong;
-				rectangleRasterAttr[0].pData	= &imgHeight;
-				rectangleRasterAttr[1].tag		= "ImageWidth";
-				rectangleRasterAttr[1].type		= BasicData_ULongLong;
-				rectangleRasterAttr[1].pData	= &imgWidth;
-				rectangleRasterAttr[2].tag		= "ImageHeightOffset";
-				rectangleRasterAttr[2].type		= BasicData_ULongLong;
-				rectangleRasterAttr[2].pData	= &imgHeightOffset;
-				rectangleRasterAttr[3].tag		= "ImageWidthOffset";
-				rectangleRasterAttr[3].type		= BasicData_ULongLong;
-				rectangleRasterAttr[3].pData	= &imgWidthOffset;
-				rectangleRasterAttr[4].tag		= "PixelSize";
-				rectangleRasterAttr[4].type		= BasicData_Double;
-				rectangleRasterAttr[4].pData	= &((RectangleRaster_type*) *scanEnginePtr)->pixSize;
+				unsigned int			height					= ((RectangleRaster_type*) *scanEnginePtr)->height;  
+				unsigned int			width					= ((RectangleRaster_type*) *scanEnginePtr)->width;  
+				unsigned int			heightOffset			= ((RectangleRaster_type*) *scanEnginePtr)->heightOffset;  
+				unsigned int			widthOffset				= ((RectangleRaster_type*) *scanEnginePtr)->widthOffset; 
+				double					pixelSize				= ((RectangleRaster_type*) *scanEnginePtr)->pixSize;
+				double					pixelDwellTime			= ((RectangleRaster_type*) *scanEnginePtr)->pixelDwellTime;
+						
+				DAQLabXMLNode			rectangleRasterAttr[] 	= { {"ImageHeight", BasicData_UInt, &height},
+																	{"ImageWidth",  BasicData_UInt, &width},
+																	{"ImageHeightOffset", BasicData_UInt, &heightOffset},
+																	{"ImageWidthOffset", BasicData_UInt, &widthOffset},
+																	{"PixelSize", BasicData_Double, &pixelSize},
+																	{"PixelDwellTime", BasicData_Double, &pixelDwellTime} }; 				
 				
 				// save scan engine attributes
-				DLAddToXMLElem(xmlDOM, scanEngineXMLElement, rectangleRasterAttr, DL_ATTRIBUTE, NumElem(rectangleRasterAttr));
-				
-				
+				DLAddToXMLElem(xmlDOM, scanInfoXMLElement, rectangleRasterAttr, DL_ATTRIBUTE, NumElem(rectangleRasterAttr));
 				
 				break;
 		}
 		// add VChan Names element to scan engine element
 		// add new scan engine element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, VChanNamesXMLElement, NULL) ); 
-		CA_DiscardObjHandle(VChanNamesXMLElement);   
+		CA_OKfree(VChanNamesXMLElement); 
+		
+		// add scan info element to scan engine element
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, scanInfoXMLElement, NULL) ); 
+		CA_OKfree(scanInfoXMLElement); 
+		
+		// add objectives to scan engine element
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, objectivesXMLElement, NULL) );    
+		CA_OKfree(objectivesXMLElement);
 		
 		// add new scan engine element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEnginesXMLElement, &xmlERRINFO, scanEngineXMLElement, NULL) );  
-		CA_DiscardObjHandle(scanEngineXMLElement); 
+		CA_OKfree(scanEngineXMLElement); 
 	}
 	
 	// add scan engines element to module element
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, scanEnginesXMLElement, NULL) );
-	CA_DiscardObjHandle(scanEnginesXMLElement); 
+	CA_OKfree(scanEnginesXMLElement); 
 	
 	return 0;
 	
@@ -1071,20 +1286,53 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	//--------------------------------------------------------------------------
 	// Load scan engines
 	//--------------------------------------------------------------------------
-	ActiveXMLObj_IXMLDOMElement_	scanEnginesXMLElement 	= 0;   			// element containing multiple scan engines
-	ActiveXMLObj_IXMLDOMElement_	scanEngineXMLElement	= 0;  		  	// element containing scan engine data 
-	ActiveXMLObj_IXMLDOMNodeList_	scanEngineNodeList		= 0;
-	ActiveXMLObj_IXMLDOMNode_		scanEngineNode			= 0;    
+	ActiveXMLObj_IXMLDOMElement_	scanEnginesXMLElement 		= 0;   			// element containing multiple scan engines
+	ActiveXMLObj_IXMLDOMElement_	VChansXMLElement			= 0;
+	ActiveXMLObj_IXMLDOMElement_	scanInfoXMLElement			= 0;
+	ActiveXMLObj_IXMLDOMElement_	objectivesXMLElement		= 0;
+	ActiveXMLObj_IXMLDOMNodeList_	scanEngineNodeList			= 0;
+	ActiveXMLObj_IXMLDOMNodeList_	objectivesNodeList			= 0;
+	ActiveXMLObj_IXMLDOMNodeList_	detectorVChanNodeList		= 0;
+	ActiveXMLObj_IXMLDOMNode_		scanEngineNode				= 0;
+	ActiveXMLObj_IXMLDOMNode_		objectiveNode				= 0;
+	ActiveXMLObj_IXMLDOMNode_		detectorVChanNode			= 0;
 	long							nScanEngines;
+	long							nObjectives;
+	long							nDetectorVChans;
 	unsigned int					scanEngineType;
-	char*							scanEngineName			= NULL;
-	char*							fastAxisCalibrationName	= NULL;
-	char*							slowAxisCalibrationName	= NULL;
-	ScanEngine_type*				scanEngine				= NULL;
-	DAQLabXMLNode					scanEngineGenericAttr[] = {	{"Name", BasicData_CString, &scanEngineName},
-																{"ScanEngineType", BasicData_UInt, &scanEngineType},
-																{"FastAxisCalibrationName", BasicData_CString, &fastAxisCalibrationName},
-																{"SlowAxisCalibrationName", BasicData_CString, &slowAxisCalibrationName} }; 			
+	char*							scanEngineName				= NULL;
+	char*							fastAxisCalibrationName		= NULL;
+	char*							slowAxisCalibrationName		= NULL;
+	char*							fastAxisCommandVChanName	= NULL;
+	char*							slowAxisCommandVChanName	= NULL;
+	char*							fastAxisPositionVChanName	= NULL;
+	char*							slowAxisPositionVChanName	= NULL;
+	char*							scanEngineOutVChanName		= NULL;
+	char*							detectorVChanName			= NULL;
+	double							scanLensFL;
+	double							tubeLensFL;
+	double							objectiveFL;
+	char*							assignedObjectiveName		= NULL;
+	char*							objectiveName				= NULL;
+	DetChan_type*					detChan						= NULL;
+	ScanEngine_type*				scanEngine					= NULL;
+	Objective_type*					objective					= NULL;
+	DAQLabXMLNode					scanEngineGenericAttr[] 	= {	{"Name", BasicData_CString, &scanEngineName},
+																	{"ScanEngineType", BasicData_UInt, &scanEngineType},
+																	{"FastAxisCalibrationName", BasicData_CString, &fastAxisCalibrationName},
+																	{"SlowAxisCalibrationName", BasicData_CString, &slowAxisCalibrationName},
+																	{"ScanLensFL", BasicData_Double, &scanLensFL},
+																	{"TubeLensFL", BasicData_Double, &tubeLensFL},
+																	{"Objective", BasicData_CString, &assignedObjectiveName}};
+																	
+	DAQLabXMLNode					scanEngineVChansAttr[]		= {	{"FastAxisCommand", BasicData_CString, &fastAxisCommandVChanName},
+																	{"SlowAxisCommand", BasicData_CString, &slowAxisCommandVChanName},
+																	{"FastAxisPosition", BasicData_CString, &fastAxisPositionVChanName},
+																	{"SlowAxisPosition", BasicData_CString, &slowAxisPositionVChanName},
+																	{"ScanEngineOut", BasicData_CString, &scanEngineOutVChanName} };
+																	
+	DAQLabXMLNode					objectiveAttr[]				= { {"Name", BasicData_CString, &objectiveName},
+																	{"FL", BasicData_Double, &objectiveFL} };
 		
 	errChk( DLGetSingleXMLElementFromElement(moduleElement, "ScanEngines", &scanEnginesXMLElement) );
 	
@@ -1093,17 +1341,124 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	
 	for (long i = 0; i < nScanEngines; i++) {
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(scanEngineNodeList, &xmlERRINFO, i, &scanEngineNode) );
-		
-		errChk( DLGetXMLNodeAttributes(scanEngineNode, scanEngineGenericAttr, NumElem(scanEngineGenericAttr)) ); 
+		// get generic scan engine attributes
+		errChk( DLGetXMLNodeAttributes(scanEngineNode, scanEngineGenericAttr, NumElem(scanEngineGenericAttr)) );
+		// get scan engine VChans element
+		errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, "VChannels", &VChansXMLElement) );
+		// get scan info element
+		errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, "ScanInfo", &scanInfoXMLElement) );
+		// get scan engine VChan attributes
+		errChk( DLGetXMLElementAttributes(VChansXMLElement, scanEngineVChansAttr, NumElem(scanEngineVChansAttr)) ); 
+		// get objectives XML element
+		errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, "Objectives", &objectivesXMLElement ) );  
 		
 		switch (scanEngineType) {
 				
-			case ScanEngine_RectRaster:
+			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
-				scanEngine = init_RectangleRaster_type((LaserScanning_type*)mod, scanEngineName, 
+				unsigned int		height;
+				unsigned int		heightOffset;
+				unsigned int		width;
+				unsigned int		widthOffset;
+				double				pixelSize;
+				double				pixelDwellTime;
+				
+				DAQLabXMLNode		scanInfoAttr[]	= { {"ImageHeight", BasicData_UInt, &height},
+														{"ImageHeightOffset", BasicData_UInt, &heightOffset},
+														{"ImageWidth", BasicData_UInt, &width},
+														{"ImageWidthOffset", BasicData_UInt, &widthOffset},
+														{"PixelSize", BasicData_Double, &pixelSize},
+														{"PixelDwellTime", BasicData_Double, &pixelDwellTime}};
+														
+				// get scan info attributes
+				errChk( DLGetXMLElementAttributes(scanInfoXMLElement, scanInfoAttr, NumElem(scanInfoAttr)) );
+				
+				scanEngine = (ScanEngine_type*)init_RectangleRaster_type((LaserScanning_type*)mod, scanEngineName, fastAxisCommandVChanName, slowAxisCommandVChanName, fastAxisPositionVChanName,
+													  slowAxisPositionVChanName, scanEngineOutVChanName, NULL, height, heightOffset, width, widthOffset, pixelSize, pixelDwellTime); 
 				break;
 			
 		}
+		
+		// load detector VChans
+		XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(VChansXMLElement, &xmlERRINFO, "DetectorChannel", &detectorVChanNodeList) );
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(detectorVChanNodeList, &xmlERRINFO, &nDetectorVChans) );
+		
+		for (long j = 0; j < nDetectorVChans; j++) {
+			XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(detectorVChanNodeList, &xmlERRINFO, j, &detectorVChanNode) );
+			XMLErrChk ( ActiveXML_IXMLDOMNode_Gettext(detectorVChanNode, &xmlERRINFO, &detectorVChanName) );
+			detChan = init_DetChan_type(scanEngine, detectorVChanName);
+			CA_FreeMemory(detectorVChanName);
+			// add detector channel to scan engine
+			ListInsertItem(scanEngine->DetChans, &detChan, END_OF_LIST);
+			CA_OKfree(detectorVChanNode);
+		}
+		
+		// load objectives
+		XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(objectivesXMLElement, &xmlERRINFO, "Objective", &objectivesNodeList) );
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(objectivesNodeList, &xmlERRINFO, &nObjectives) );
+		
+		for (long j = 0; j < nObjectives; j++) {
+			XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(objectivesNodeList, &xmlERRINFO, j, &objectiveNode) );
+			errChk( DLGetXMLNodeAttributes(objectiveNode, objectiveAttr, NumElem(objectiveAttr)) );    
+			objective = init_Objective_type(objectiveName, objectiveFL);
+			// assign objective to scan engine
+			if (!strcmp(objectiveName, assignedObjectiveName)) {
+				scanEngine->objectiveLens = objective;
+				// MAKE SURE THIS IS DONE AFTER READING IS TUBE LENS AND SCAN LENS FL AND SCAN AXIS SETTINGS
+				// update both scan axes
+				if (scanEngine->fastAxisCal)
+					(*scanEngine->fastAxisCal->UpdateOptics) (scanEngine->fastAxisCal);
+				
+				if (scanEngine->slowAxisCal)
+					(*scanEngine->slowAxisCal->UpdateOptics) (scanEngine->slowAxisCal);
+				
+			}
+			OKfree(objectiveName);
+			// add objective to scan engine
+			ListInsertItem(scanEngine->objectives, &objective, END_OF_LIST);
+			CA_OKfree(objectiveNode);
+		}
+		
+		// assign fast scan axis to scan engine
+		ScanAxisCal_type**	scanAxisPtr;
+		for (size_t i = 1; i <= nAxisCalibrations; i++) {
+			scanAxisPtr = ListGetPtrToItem(ls->availableCals, i);
+			if (!strcmp(fastAxisCalibrationName, (*scanAxisPtr)->calName)) {
+				scanEngine->fastAxisCal = *scanAxisPtr;
+				(*scanAxisPtr)->scanEngine = scanEngine;
+				break;
+			}
+		}
+		
+		// assign slow scan axis to scan engine
+		for (size_t i = 1; i <= nAxisCalibrations; i++) {
+			scanAxisPtr = ListGetPtrToItem(ls->availableCals, i);
+			if (!strcmp(slowAxisCalibrationName, (*scanAxisPtr)->calName)) {
+				scanEngine->slowAxisCal = *scanAxisPtr;
+				(*scanAxisPtr)->scanEngine = scanEngine;
+				break;
+			}
+		}
+		
+		// add scan engine to laser scanning module
+		ListInsertItem(ls->scanEngines, &scanEngine, END_OF_LIST);
+		
+		// cleanup
+		CA_OKfree(scanEngineNode);
+		CA_OKfree(VChansXMLElement);
+		CA_OKfree(scanInfoXMLElement);
+		CA_OKfree(detectorVChanNodeList);
+		CA_OKfree(objectivesXMLElement);
+		CA_OKfree(objectivesNodeList);
+		OKfree(scanEngineName);
+		OKfree(assignedObjectiveName);
+		OKfree(fastAxisCalibrationName);
+		OKfree(slowAxisCalibrationName);
+		OKfree(fastAxisCommandVChanName);
+		OKfree(slowAxisCommandVChanName);
+		OKfree(fastAxisPositionVChanName);
+		OKfree(slowAxisPositionVChanName);
+		OKfree(scanEngineOutVChanName);
 	}
 	
 	
@@ -1113,10 +1468,14 @@ XMLError:
 	
 Error:
 	
-	if (scanAxisCalibrationsXMLElement) CA_DiscardObjHandle(scanAxisCalibrationsXMLElement);
-	if (scanAxisCalXMLElement) CA_DiscardObjHandle(scanAxisCalXMLElement); 
-	if (axisCalibrationNodeList) CA_DiscardObjHandle(axisCalibrationNodeList); 
-	
+	CA_OKfree(scanEngineNodeList); 
+	CA_OKfree(scanEnginesXMLElement);
+	CA_OKfree(scanEngineNode); 
+	CA_OKfree(scanAxisCalibrationsXMLElement); 
+	CA_OKfree(scanAxisCalXMLElement); 
+	CA_OKfree(axisCalibrationNodeList);
+	CA_OKfree(VChansXMLElement);
+
 	return error;	
 }
 
@@ -1129,15 +1488,15 @@ static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xml
 	ActiveXMLObj_IXMLDOMElement_	switchTimesXMLElement; 			  
 	ActiveXMLObj_IXMLDOMElement_	maxSlopesXMLElement;   		
 	ActiveXMLObj_IXMLDOMElement_	triangleCalXMLElement;
-	DAQLabXMLNode 					nrgCalAttr[] 		= {	{"CommandVMin", BasicData_Double, &nrgCal->commandVMin},
-											  		   		{"CommandVMax", BasicData_Double, &nrgCal->commandVMax},
+	DAQLabXMLNode 					nrgCalAttr[] 		= {	{"CommandVMax", BasicData_Double, &nrgCal->commandVMax},
 															{"CommandAsFunctionOfPositionLinFitSlope", BasicData_Double, &nrgCal->slope},
 															{"CommandAsFunctionOfPositionLinFitOffset", BasicData_Double, &nrgCal->offset},
 															{"PositionStdDev", BasicData_Double, &nrgCal->posStdDev},
 															{"ResponseLag", BasicData_Double, &nrgCal->lag},
 															{"Resolution", BasicData_Double, &nrgCal->resolution},
 															{"MinStepSize", BasicData_Double, &nrgCal->minStepSize},
-															{"ParkedCommandV", BasicData_Double, &nrgCal->parked} };
+															{"ParkedCommandV", BasicData_Double, &nrgCal->parked},
+															{"MechanicalResponse", BasicData_Double, &nrgCal->mechanicalResponse}};
 	
 	// Save calibration attributes
 	DLAddToXMLElem(xmlDOM, axisCalibrationsElement, nrgCalAttr, DL_ATTRIBUTE, NumElem(nrgCalAttr)); 
@@ -1190,13 +1549,16 @@ static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xml
 	Fmt(triangleCalResiduaLagStr, CALIBRATION_DATA_TO_STRING, nrgCal->triangleCal->n, nrgCal->triangleCal->resLag);
 	
 	// add calibration data to XML elements
-	DAQLabXMLNode 			switchTimesAttr[] 		= {	{"StepSize", BasicData_CString, switchTimesStepSizeStr},
+	DAQLabXMLNode 			switchTimesAttr[] 		= {	{"NElements", BasicData_UInt, &nrgCal->switchTimes->n},
+														{"StepSize", BasicData_CString, switchTimesStepSizeStr},
 														{"HalfSwitchTime", BasicData_CString, switchTimesHalfSwitchStr} };
 														
-	DAQLabXMLNode 			maxSlopesAttr[] 		= {	{"Slope", BasicData_CString, maxSlopesSlopeStr},
+	DAQLabXMLNode 			maxSlopesAttr[] 		= {	{"NElements", BasicData_UInt, &nrgCal->maxSlopes->n},
+														{"Slope", BasicData_CString, maxSlopesSlopeStr},
 														{"Amplitude", BasicData_CString, maxSlopesAmplitudeStr} };
 														
-	DAQLabXMLNode 			triangleCalAttr[] 		= {	{"DeadTime", BasicData_Double, &nrgCal->triangleCal->deadTime},
+	DAQLabXMLNode 			triangleCalAttr[] 		= {	{"NElements", BasicData_UInt, &nrgCal->triangleCal->n},
+														{"DeadTime", BasicData_Double, &nrgCal->triangleCal->deadTime},
 														{"CommandAmplitude", BasicData_CString, triangleCalCommandAmplitudeStr},
 														{"ActualAmplitude", BasicData_CString, triangleCalActualAmplitudeStr},
 														{"MaxFrequency", BasicData_CString, triangleCalMaxFreqStr},
@@ -1208,11 +1570,11 @@ static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xml
 								
 	// add calibration elements to scan axis calibration element
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, switchTimesXMLElement, NULL) );
-	CA_DiscardObjHandle(switchTimesXMLElement); 
+	CA_OKfree(switchTimesXMLElement); 
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, maxSlopesXMLElement, NULL) );
-	CA_DiscardObjHandle(maxSlopesXMLElement);
+	CA_OKfree(maxSlopesXMLElement);
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, triangleCalXMLElement, NULL) );
-	CA_DiscardObjHandle(triangleCalXMLElement); 
+	CA_OKfree(triangleCalXMLElement); 
 	
 	OKfree(switchTimesStepSizeStr);
 	OKfree(switchTimesHalfSwitchStr);
@@ -1242,12 +1604,10 @@ XMLError:
 
 static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement)
 {
-#define SaveNonResGalvoCalToXML_Err_OutOfMemory		-1 
 	int 							error 							= 0;
 	HRESULT							xmlerror						= 0;
 	ERRORINFO						xmlERRINFO;
 	char*							axisCalibrationName				= NULL;
-	double							commandVMin;
 	double							commandVMax;
 	double							slope;
 	double							offset;
@@ -1256,11 +1616,11 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	double							resolution;
 	double							minStepSize;
 	double							parked;
+	double							mechanicalResponse;
 	ActiveXMLObj_IXMLDOMElement_	switchTimesXMLElement			= 0; 			  
 	ActiveXMLObj_IXMLDOMElement_	maxSlopesXMLElement				= 0;   		
 	ActiveXMLObj_IXMLDOMElement_	triangleCalXMLElement			= 0;
 	DAQLabXMLNode					axisCalibrationAttr[] 			= { {"Name", BasicData_CString, &axisCalibrationName},
-																		{"CommandVMin", BasicData_Double, &commandVMin},
 											  		   					{"CommandVMax", BasicData_Double, &commandVMax},
 																		{"CommandAsFunctionOfPositionLinFitSlope", BasicData_Double, &slope},
 																		{"CommandAsFunctionOfPositionLinFitOffset", BasicData_Double, &offset},
@@ -1268,7 +1628,8 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 																		{"ResponseLag", BasicData_Double, &lag},
 																		{"Resolution", BasicData_Double, &resolution},
 																		{"MinStepSize", BasicData_Double, &minStepSize},
-																		{"ParkedCommandV", BasicData_Double, &parked} };
+																		{"ParkedCommandV", BasicData_Double, &parked},
+																		{"MechanicalResponse", BasicData_Double, &mechanicalResponse}};
 	
 	errChk( DLGetXMLElementAttributes(axisCalibrationElement, axisCalibrationAttr, NumElem(axisCalibrationAttr)) ); 
 	
@@ -1307,7 +1668,7 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	// switch times
 	errChk( DLGetXMLElementAttributes(switchTimesXMLElement, switchTimesAttr, NumElem(switchTimesAttr)) );
-	CA_DiscardObjHandle(switchTimesXMLElement);
+	CA_OKfree(switchTimesXMLElement);
 	
 	SwitchTimes_type*	switchTimes = init_SwitchTimes_type();
 	
@@ -1320,7 +1681,7 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	// max slopes
 	errChk( DLGetXMLElementAttributes(maxSlopesXMLElement, maxSlopesAttr, NumElem(maxSlopesAttr)) );
-	CA_DiscardObjHandle(maxSlopesXMLElement);
+	CA_OKfree(maxSlopesXMLElement);
 	
 	MaxSlopes_type*		maxSlopes = init_MaxSlopes_type();
 	
@@ -1333,7 +1694,7 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	// triangle waveform calibration
 	errChk( DLGetXMLElementAttributes(triangleCalXMLElement, triangleCalAttr, NumElem(triangleCalAttr)) );
-	CA_DiscardObjHandle(triangleCalXMLElement);
+	CA_OKfree(triangleCalXMLElement);
 	
 	TriangleCal_type*	triangleCal = init_TriangleCal_type();
 	
@@ -1351,8 +1712,8 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	
 	// collect calibration data																	
-	NonResGalvoCal_type*		nrgCal = init_NonResGalvoCal_type(axisCalibrationName, lsModule, commandVMin, commandVMax, slope, offset,
-									     posStdDev, lag, switchTimes, maxSlopes, triangleCal, resolution, minStepSize, parked);  
+	NonResGalvoCal_type*		nrgCal = init_NonResGalvoCal_type(axisCalibrationName, lsModule, commandVMax, slope, offset,
+									     posStdDev, lag, switchTimes, maxSlopes, triangleCal, resolution, minStepSize, parked, mechanicalResponse);  
 	
 	// add calibration data to module
 	ListInsertItem(lsModule->availableCals, &nrgCal, END_OF_LIST);
@@ -1376,22 +1737,22 @@ Error:
 	OKfree(triangleCalMaxFreqStr);
 	OKfree(triangleCalResiduaLagStr);
 	
-	if (switchTimesXMLElement) CA_DiscardObjHandle(switchTimesXMLElement);
-	if (maxSlopesXMLElement) CA_DiscardObjHandle(maxSlopesXMLElement); 
-	if (triangleCalXMLElement) CA_DiscardObjHandle(triangleCalXMLElement);   
+	if (switchTimesXMLElement) CA_OKfree(switchTimesXMLElement);
+	if (maxSlopesXMLElement) CA_OKfree(maxSlopesXMLElement); 
+	if (triangleCalXMLElement) CA_OKfree(triangleCalXMLElement);   
 	
 	return error;	
 }
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 {
-	LaserScanning_type*		ls				= (LaserScanning_type*) mod;
-	int						error			= 0;
-	size_t					nEngines		= ListNumItems(ls->scanEngines);
-	size_t					nActiveCals		= ListNumItems(ls->activeCal);
-	size_t					nAvailableCals	= ListNumItems(ls->availableCals);
-	ScanEngine_type**		enginePtr;
-	ActiveScanAxisCal_type**		calPtr;
+	LaserScanning_type*			ls				= (LaserScanning_type*) mod;
+	int							error			= 0;
+	size_t						nEngines		= ListNumItems(ls->scanEngines);
+	size_t						nActiveCals		= ListNumItems(ls->activeCal);
+	size_t						nAvailableCals	= ListNumItems(ls->availableCals);
+	ScanEngine_type**			enginePtr;
+	ActiveScanAxisCal_type**	activeCalPtr;
 	
 	
 	// laser scanning module panels
@@ -1404,6 +1765,10 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 	if (ls->manageAxisCalPanHndl)
 		errChk(SetPanelAttribute(ls->manageAxisCalPanHndl, ATTR_VISIBLE, visibleFlag));
 	
+	if (ls->newAxisCalTypePanHndl)
+		errChk(SetPanelAttribute(ls->newAxisCalTypePanHndl, ATTR_VISIBLE, visibleFlag));  
+		
+	
 	// scan engine settings panels
 	for(size_t i = 1; i <= nEngines; i++) {
 		enginePtr = ListGetPtrToItem(ls->scanEngines, i);
@@ -1414,20 +1779,11 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 	
 	// active scan axis calibration panels
 	for(size_t i = 1; i <= nActiveCals; i++) {
-		calPtr = ListGetPtrToItem(ls->activeCal, i);
+		activeCalPtr = ListGetPtrToItem(ls->activeCal, i);
 		
-		if ((*calPtr)->calPanHndl)
-			errChk(SetPanelAttribute((*calPtr)->calPanHndl, ATTR_VISIBLE, visibleFlag));
+		if ((*activeCalPtr)->calPanHndl)
+			errChk(SetPanelAttribute((*activeCalPtr)->calPanHndl, ATTR_VISIBLE, visibleFlag));
 	}
-	
-	// available scan axis calibration panels
-	for(size_t i = 1; i <= nAvailableCals; i++) {
-		calPtr = ListGetPtrToItem(ls->availableCals, i);
-		
-		if ((*calPtr)->calPanHndl)
-			errChk(SetPanelAttribute((*calPtr)->calPanHndl, ATTR_VISIBLE, visibleFlag));
-	}
-	
 	
 Error:
 	return error;	
@@ -1492,31 +1848,27 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	// add callback to all controls in the panel
 	SetCtrlsInPanCBInfo(engine, ScanEngineSettings_CB, engine->engineSetPanHndl); 
 	
-	//-------------------------------
-	// populate fast axis scan types
-	//-------------------------------
-	InsertListItem(engine->engineSetPanHndl, ScanSetPan_FastAxisType, -1, "Non-resonant galvo", NonResonantGalvo);
-	InsertListItem(engine->engineSetPanHndl, ScanSetPan_FastAxisType, -1, "Resonant galvo", ResonantGalvo);
-	InsertListItem(engine->engineSetPanHndl, ScanSetPan_FastAxisType, -1, "Acousto-optic deflector", AOD);
-	InsertListItem(engine->engineSetPanHndl, ScanSetPan_FastAxisType, -1, "Translation stage", Translation);
-	// select by default NonResonantGalvo
-	SetCtrlIndex(engine->engineSetPanHndl, ScanSetPan_FastAxisType, 0);
-	//-------------------------------
-	// populate slow axis scan types
-	//-------------------------------
-	InsertListItem(engine->engineSetPanHndl, ScanSetPan_SlowAxisType, -1, "Non-resonant galvo", NonResonantGalvo);
-	InsertListItem(engine->engineSetPanHndl, ScanSetPan_SlowAxisType, -1, "Resonant galvo", ResonantGalvo);
-	InsertListItem(engine->engineSetPanHndl, ScanSetPan_SlowAxisType, -1, "Acousto-optic deflector", AOD);
-	InsertListItem(engine->engineSetPanHndl, ScanSetPan_SlowAxisType, -1, "Translation stage", Translation);
-	// select by default NonResonantGalvo
-	SetCtrlIndex(engine->engineSetPanHndl, ScanSetPan_SlowAxisType, 0);
-	
-	//----------------------------------------------------------
 	// populate by default NonResonantGalvo type of calibrations
-	//----------------------------------------------------------
-	UpdateScanEngineCalibrations (engine);
+	UpdateScanEngineCalibrations(engine);
 	
+	// update optics
+	// objective
+	size_t 				nObjectives 		= ListNumItems(engine->objectives);
+	Objective_type**	objectivePtr		= NULL;
+	char				objFLString[30];
+	char*				extendedObjName		= NULL; 
+	for (size_t i = 1; i <= nObjectives; i++) {
+		objectivePtr = ListGetPtrToItem(engine->objectives, i);
+		extendedObjName = StrDup((*objectivePtr)->objectiveName);
+		Fmt(objFLString, "%s< (%f[p3] mm FL)", (*objectivePtr)->objectiveFL);
+		AppendString(&extendedObjName, objFLString, -1);
+		InsertListItem(engine->engineSetPanHndl, ScanSetPan_Objectives, -1, extendedObjName, 0); 
+		OKfree(extendedObjName);
+	}
 	
+	// scan and tube lens FL
+	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ScanLensFL, engine->scanLensFL);
+	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ScanLensFL, engine->tubeLensFL);
 	
 	
 	DisplayPanel(engine->engineSetPanHndl);
@@ -1539,7 +1891,7 @@ static void CVICALLBACK NewScanEngineMenu_CB (int menuBar, int menuItem, void *c
 	//------------------------------------------------------------------------------------------------------------------
 	// Insert scan engine types here
 	//------------------------------------------------------------------------------------------------------------------
-	InsertListItem(ls->enginesPanHndl, EnginesPan_ScanTypes, -1, "Rectangular raster scan", ScanEngine_RectRaster);
+	InsertListItem(ls->enginesPanHndl, EnginesPan_ScanTypes, -1, "Rectangular raster scan: Non-resonant galvos", ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis);
 	
 	
 	//------------------------------------------------------------------------------------------------------------------
@@ -1583,7 +1935,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					//------------------------------------------------------------------------------------------------------------------
 					switch (engineType) {
 					
-						case ScanEngine_RectRaster:
+						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 					
 							// initialize raster scan engine
 							char*	fastAxisComVChanName 	= DLGetUniqueVChanName(VChan_Default_FastAxis_Command);
@@ -1594,25 +1946,25 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 							char*	detectionVChanName		= DLGetUniqueVChanName(VChan_Default_DetectionChan);
 					
 							newScanEngine = (ScanEngine_type*) init_RectangleRaster_type(ls, engineName, fastAxisComVChanName, slowAxisComVChanName,
-														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectionVChanName);
+														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectionVChanName, 0, 0, 0, 0, 0, 0);
 					
 							scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster); 
-							newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl); 
-					
+							
 							break;
 							// add below more cases	
 					}
 					//------------------------------------------------------------------------------------------------------------------
-			
+					newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl);  
 					// discard loaded panel and add scan control panel handle to scan engine
-					DiscardPanel(scanPanHndl);
+					DiscardPanel(scanPanHndl); 
+					scanPanHndl = 0;
 					GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &newScanEngine->scanSetPanHndl);
 			
 					// change new scan engine tab title
 					SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, engineName);  
 			
 					// add callback function and data to the new tab page panel and controls from the panel
-					SetCtrlsInPanCBInfo(newScanEngine, RectangleRasterScan_CB, newScanEngine->scanSetPanHndl);  
+					SetCtrlsInPanCBInfo(newScanEngine, NonResRectangleRasterScan_CB, newScanEngine->scanSetPanHndl);  
 					SetPanelAttribute(newScanEngine->scanSetPanHndl, ATTR_CALLBACK_DATA, newScanEngine);
 				  
 					// add scan engine task controller to the framework
@@ -1664,15 +2016,16 @@ static void	UpdateScanEngineCalibrations (ScanEngine_type* scanEngine)
 {
 	size_t					nCal 		= ListNumItems(scanEngine->lsModule->availableCals);
 	ScanAxisCal_type**		calPtr;
-	unsigned int 			fastAxisType;
-	unsigned int			slowAxisType;
+	ScanAxis_type 			fastAxisType;
+	ScanAxis_type			slowAxisType;
 					
 	
 	if (!scanEngine->engineSetPanHndl) return; // do nothing if there is no pannel
 	
+	// determine scan axis types based on scan engine type
+	GetScanAxisTypes(scanEngine, &fastAxisType, &slowAxisType);
+	
 	// empty lists, insert empty selection and select by default
-	GetCtrlVal(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisType, &fastAxisType);
-	GetCtrlVal(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisType, &slowAxisType);  
 	DeleteListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, 0, -1);
 	DeleteListItem(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, 0, -1);
 	InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, -1,"", 0);  
@@ -1680,20 +2033,29 @@ static void	UpdateScanEngineCalibrations (ScanEngine_type* scanEngine)
 	SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, 0);
 	SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, 0);
 	
+	int nListItems;
 	for (size_t i = 1; i <= nCal; i++) {
 		calPtr = ListGetPtrToItem(scanEngine->lsModule->availableCals, i);
 		// fast axis calibration list
-		if (((*calPtr)->scanAxisType == fastAxisType) && (*calPtr != scanEngine->slowAxisCal)) 
+		if (((*calPtr)->scanAxisType == fastAxisType) && (*calPtr != scanEngine->slowAxisCal)) {
 			InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, -1, (*calPtr)->calName, i);
-		// select fast axis list item if calibration is assigned to the scan engine
-		if (scanEngine->fastAxisCal == *calPtr)
-			SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, i);
+			// select fast axis list item if calibration is assigned to the scan engine
+			if (scanEngine->fastAxisCal == *calPtr) {
+				GetNumListItems(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, &nListItems);
+				SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_FastAxisCal, nListItems - 1);
+			}
+		}
+		
 		// slow axis calibration list
-		if (((*calPtr)->scanAxisType == slowAxisType) && (*calPtr != scanEngine->fastAxisCal)) 
+		if (((*calPtr)->scanAxisType == slowAxisType) && (*calPtr != scanEngine->fastAxisCal)) {
 			InsertListItem(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, -1, (*calPtr)->calName, i);
-		// select fast axis list item if calibration is assigned to the scan engine
-		if (scanEngine->slowAxisCal == *calPtr)
-			SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, i);
+			// select fast axis list item if calibration is assigned to the scan engine
+			if (scanEngine->slowAxisCal == *calPtr) {
+				GetNumListItems(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, &nListItems);
+				SetCtrlIndex(scanEngine->engineSetPanHndl, ScanSetPan_SlowAxisCal, nListItems - 1);
+			}
+		}
+		
 	} 
 }
 
@@ -1812,6 +2174,8 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							//----------------------------------------
 							// register calibration Task Controller with the framework
 							DLAddTaskController((DAQLabModule_type*)ls, nrgCal->baseClass.taskController);
+							// configure Task Controller
+							TaskControlEvent(nrgCal->baseClass.taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
 							// register VChans with framework
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanCom);
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanPos);
@@ -1987,13 +2351,14 @@ static void	discard_DetChan_type (DetChan_type** a)
 
 static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	ScanEngine_type*	engine		= callbackData;
-	char*				newName		= NULL;
-	int					listItemIdx; 
-	DetChan_type** 		detChanPtr; 
+	ScanEngine_type*		engine		= callbackData;
+	ScanAxisCal_type**		scanAxisPtr;
+	char*					newName		= NULL;
+	int						listItemIdx; 
+	int						workspacePanHndl;
 	
-	switch (event)
-	{
+	switch (event) {
+			
 		case EVENT_COMMIT:
 			
 			switch (control) {
@@ -2039,26 +2404,71 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)detChan->detVChan);
 					break;
 					
+				case ScanSetPan_AddObjective:
+					
+					if (engine->newObjectivePanHndl) {
+						DisplayPanel(engine->newObjectivePanHndl);
+						return 0;   // just highlight panel if already loaded
+					}
+					
+					GetPanelAttribute(engine->engineSetPanHndl, ATTR_PANEL_PARENT, &workspacePanHndl);
+					engine->newObjectivePanHndl = LoadPanel(workspacePanHndl, MOD_LaserScanning_UI, NewObjPan);
+					SetCtrlsInPanCBInfo(engine, NewObjective_CB, engine->newObjectivePanHndl); 
+					DisplayPanel(engine->newObjectivePanHndl);  
+					break;
+					
+				case ScanSetPan_ScanLensFL:
+					
+					GetCtrlVal(panel, control, &engine->scanLensFL);
+					// update scan axes if any
+					if (engine->fastAxisCal)
+						(*engine->fastAxisCal->UpdateOptics) (engine->fastAxisCal);
+					
+					if (engine->slowAxisCal)
+						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
+					
+					break;
+					
+				case ScanSetPan_TubeLensFL:
+					
+					GetCtrlVal(panel, control, &engine->tubeLensFL);
+					// update scan axes if any
+					if (engine->fastAxisCal)
+						(*engine->fastAxisCal->UpdateOptics) (engine->fastAxisCal);
+					
+					if (engine->slowAxisCal)
+						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
+					
+					break;
+					
 				case ScanSetPan_Close:
 					
 					DiscardPanel(engine->engineSetPanHndl);
 					engine->engineSetPanHndl = 0;
 					break;
 					
-				case ScanSetPan_FastAxisType:
-				case ScanSetPan_SlowAxisType:
-					
-					UpdateScanEngineCalibrations(engine); 
-					break;
-					
 				case ScanSetPan_FastAxisCal:
 					
 					unsigned int	fastAxisCalIdx;
 					GetCtrlVal(panel, control, &fastAxisCalIdx);
-					if (fastAxisCalIdx)
-						engine->fastAxisCal = ListGetPtrToItem(engine->lsModule->availableCals, fastAxisCalIdx); 
-					else
+					if (fastAxisCalIdx) {
+						scanAxisPtr = ListGetPtrToItem(engine->lsModule->availableCals, fastAxisCalIdx);
+						engine->fastAxisCal = *scanAxisPtr;
+						(*scanAxisPtr)->scanEngine = engine;
+						// update both scan axes
+						if (engine->fastAxisCal)
+							(*engine->fastAxisCal->UpdateOptics) (engine->fastAxisCal);
+				
+						if (engine->slowAxisCal)
+							(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
+					}
+					else {
+						engine->fastAxisCal->scanEngine = NULL;
 						engine->fastAxisCal = NULL;
+					}
+					
+					// update scan engine calibrations UI
+					UpdateScanEngineCalibrations(engine);
 					
 					break;
 					
@@ -2066,10 +2476,24 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					
 					unsigned int	slowAxisCalIdx;
 					GetCtrlVal(panel, control, &slowAxisCalIdx);
-					if (slowAxisCalIdx)
-						engine->slowAxisCal = ListGetPtrToItem(engine->lsModule->availableCals, slowAxisCalIdx); 
-					else
+					if (slowAxisCalIdx) {
+						scanAxisPtr = ListGetPtrToItem(engine->lsModule->availableCals, slowAxisCalIdx);
+						engine->slowAxisCal = *scanAxisPtr;
+						(*scanAxisPtr)->scanEngine = engine;
+						// update both scan axes
+						if (engine->fastAxisCal)
+							(*engine->fastAxisCal->UpdateOptics) (engine->fastAxisCal);
+				
+						if (engine->slowAxisCal)
+							(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
+					}
+					else {
+						engine->slowAxisCal->scanEngine = NULL;
 						engine->slowAxisCal = NULL;
+					}
+					
+					// update scan engine calibrations UI
+					UpdateScanEngineCalibrations(engine);
 					
 					break;
 					
@@ -2077,27 +2501,70 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 			break;
 			
 		case EVENT_KEYPRESS:
-			// discard detection channel		
-			// continue only if Del key is pressed and the image channels control is active
-			if (eventData1 != VAL_FWD_DELETE_VKEY || control != ScanSetPan_ImgChans) break;
-			GetCtrlIndex(panel, ScanSetPan_ImgChans, &listItemIdx);
-			if (listItemIdx < 0) break; // stop here if list is empty
+					
+			// continue only if Del key is pressed
+			if (eventData1 != VAL_FWD_DELETE_VKEY) break;
 			
-			detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
-			DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtr)->detVChan);
-			discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
-			DeleteListItem(panel, ScanSetPan_ImgChans, listItemIdx, 1);  
+			switch (control) {
+				
+				// discard detection channel
+				case ScanSetPan_ImgChans:
+					
+					GetCtrlIndex(panel, control, &listItemIdx);
+					if (listItemIdx < 0) break; // stop here if list is empty
+					
+					DetChan_type** 	detChanPtr; 
+					detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
+					DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtr)->detVChan);
+					discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
+					DeleteListItem(panel, ScanSetPan_ImgChans, listItemIdx, 1);  
+					break;
+				
+				// discard objective
+				case ScanSetPan_Objectives:
+					
+					GetCtrlIndex(panel, control, &listItemIdx);
+					if (listItemIdx < 0) break; // stop here if list is empty
+					
+					Objective_type** objectivePtr;
+					objectivePtr = ListGetPtrToItem(engine->objectives, listItemIdx+1);
+					// remove objective from scan engine structure
+					discard_Objective_type(objectivePtr);
+					ListRemoveItem(engine->objectives, 0, listItemIdx+1);
+					// remove objective from scan engine settings UI 
+					DeleteListItem(panel, control, listItemIdx, 1);  
+					// remove objective from scan control UI
+					DeleteListItem(engine->scanSetPanHndl, RectRaster_Objective, listItemIdx, 1);
+					
+					// update chosen objective in scan engine structure
+					GetCtrlIndex(engine->scanSetPanHndl, RectRaster_Objective, &listItemIdx);
+					if (listItemIdx >= 0) {
+						objectivePtr = ListGetPtrToItem(engine->objectives, listItemIdx+1); 
+						engine->objectiveLens = *objectivePtr;
+					} 
+					
+					break;
+			}
+			
 			break;
 			
 		case EVENT_LEFT_DOUBLE_CLICK:
 			
-			newName = DLGetUINameInput("Rename VChan", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
-			if (!newName) return 0; // user cancelled, do nothing
+			switch (control) {
+					
+				case ScanSetPan_ImgChans:
+					
+					newName = DLGetUINameInput("Rename VChan", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
+					if (!newName) return 0; // user cancelled, do nothing
 			
-			GetCtrlIndex(panel, ScanSetPan_ImgChans, &listItemIdx); 
-			detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
-			SetVChanName((VChan_type*)(*detChanPtr)->detVChan, newName);
-			ReplaceListItem(panel, ScanSetPan_ImgChans, listItemIdx, newName, newName);  
+					DetChan_type** 	detChanPtr; 
+					GetCtrlIndex(panel, control, &listItemIdx); 
+					detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
+					SetVChanName((VChan_type*)(*detChanPtr)->detVChan, newName);
+					ReplaceListItem(panel, control, listItemIdx, newName, newName);  
+					break;
+			}
+			
 			break;
 	}
 	
@@ -2155,10 +2622,9 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 					
 					if (!calName) return 0; // do nothing if operation is cancelled or invalid
 					
-					NonResGalvoCal_type*	nrgCal = init_NonResGalvoCal_type(calName, activeNRGCal->baseClass.lsModule, activeNRGCal->commandVMin, 
-													 activeNRGCal->commandVMax, *activeNRGCal->slope, *activeNRGCal->offset, *activeNRGCal->posStdDev,
+					NonResGalvoCal_type*	nrgCal = init_NonResGalvoCal_type(calName, activeNRGCal->baseClass.lsModule, activeNRGCal->commandVMax, *activeNRGCal->slope, *activeNRGCal->offset, *activeNRGCal->posStdDev,
 													 *activeNRGCal->lag, copy_SwitchTimes_type(activeNRGCal->switchTimes), copy_MaxSlopes_type(activeNRGCal->maxSlopes),
-													 copy_TriangleCal_type(activeNRGCal->triangleCal), activeNRGCal->resolution, activeNRGCal->minStepSize, activeNRGCal->parked);
+													 copy_TriangleCal_type(activeNRGCal->triangleCal), activeNRGCal->resolution, activeNRGCal->minStepSize, activeNRGCal->parked, activeNRGCal->mechanicalResponse);
 					// save calibration
 					ListInsertItem(activeNRGCal->baseClass.lsModule->availableCals, &nrgCal, END_OF_LIST);
 					// update scan axis calibrations UI list
@@ -2232,14 +2698,14 @@ static int CVICALLBACK NonResGalvoCal_CalPan_CB (int panel, int control, int eve
 			
 			switch (control) {
 					
-				case Cal_CommMinV:
-					
-					GetCtrlVal(panel, control, &nrgCal->commandVMin);
-					break;
-					
 				case Cal_CommMaxV:
 					
-					GetCtrlVal(panel, control, &nrgCal->commandVMax);
+					GetCtrlVal(panel, control, &nrgCal->commandVMax);   // read in [V]
+					break;
+					
+				case Cal_MechanicalResponse:
+					
+					GetCtrlVal(panel, control, &nrgCal->mechanicalResponse);
 					break;
 					
 				case Cal_ParkedV:
@@ -2287,6 +2753,120 @@ static int CVICALLBACK NonResGalvoCal_TestPan_CB (int panel, int control, int ev
 	return 0;
 }
 
+void MaxTriangleWaveformScan (NonResGalvoCal_type* cal, double targetAmplitude, double* maxTriangleWaveFrequency)
+{
+	if (!cal->triangleCal->n) {
+		*maxTriangleWaveFrequency = 0;
+		return;
+	}
+	
+	double* secondDerivative = malloc(cal->triangleCal->n * sizeof(double));
+	
+	// interpolate frequency vs. amplitude measurements
+	Spline(cal->triangleCal->actualAmp, cal->triangleCal->maxFreq, cal->triangleCal->n, 0, 0, secondDerivative);
+	SpInterp(cal->triangleCal->actualAmp, cal->triangleCal->maxFreq, secondDerivative, cal->triangleCal->n, targetAmplitude, maxTriangleWaveFrequency);
+	
+	OKfree(secondDerivative);
+}
+
+/* 
+Generates a ramp waveform with maximum slope obtained from galvo calibration for given voltage jump starting from startVoltage and ending with finalVoltage. 
+The ramp starts with an additional number of samples nsampledelay with fixed value startV.
+
+startV _
+		 \
+		   \
+		     \
+			   \
+			     \ _ endV 
+				     
+*/
+// samprate in [Hz], startV and endV in [V], nsampdelay is the number of samples of startV appended to the ramp
+static Waveform_type* NonResGalvoMoveBetweenPoints (NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage)
+{
+	double 			maxSlope;
+	double 			amplitude			= fabs(startVoltage - endVoltage);;
+	double 			min;
+	double 			max;
+	int    			minIdx;
+	int    			maxIdx;
+	size_t 			nElemRamp;
+	double*			waveformData		= NULL;
+	double* 		secondDerivatives	= NULL;
+	Waveform_type* 	waveform			= NULL; 
+	
+	// check if jump amplitude is within calibration range   
+	MaxMin1D(cal->maxSlopes->amplitude, cal->maxSlopes->n, &max, &maxIdx, &min, &minIdx);
+	if ((amplitude < min) || (amplitude > max)) 
+		return NULL;
+	
+	secondDerivatives = malloc(cal->maxSlopes->n * sizeof(double));
+	if (!secondDerivatives) goto Error;
+	
+	// interpolate frequency vs. amplitude measurements
+	Spline(cal->maxSlopes->amplitude, cal->maxSlopes->slope, cal->maxSlopes->n, 0, 0, secondDerivatives);
+	SpInterp(cal->maxSlopes->amplitude, cal->maxSlopes->slope, secondDerivatives,  cal->maxSlopes->n, amplitude, &maxSlope);
+	OKfree(secondDerivatives);
+	
+	nElemRamp = floor(sampleRate * amplitude * 1e-3/maxSlope);
+	
+	waveformData = malloc (nElemRamp * sizeof(double));
+	if (!waveformData) goto Error; 
+	
+	Ramp(nElemRamp, startVoltage, endVoltage, waveformData);
+	
+	waveform = init_Waveform_type(Waveform_Double, sampleRate, nElemRamp, waveformData); 
+    if (!waveform) goto Error;
+	
+	// cleanup
+	OKfree(secondDerivatives);
+	
+	return waveform;
+	
+Error:
+	
+	OKfree(waveformData);
+	OKfree(secondDerivatives);
+	discard_Waveform_type(&waveform);
+	
+	return NULL;
+}
+
+//returns -1 on error,0 if scan speed out of range, 1 if desiredspeed is within range
+// scanSize in [um], pixelDwellTime in [us], pixelSize in [um]
+int CheckNonResGalvoScanFreq (NonResGalvoCal_type* cal, double pixelSize, double pixelDwellTime, double scanSize)
+{
+	int    		frequencyOK          = 0;
+	double 		targetAmplitude;
+	double 		maxTriangleWaveformFrequency;
+	double 		desiredFrequency;
+	double 		desiredSpeed;
+	
+	// check input values
+	if (pixelDwellTime == 0.0 || !cal->triangleCal->n)
+		return -1;
+	
+	// calculate the requested speed (slope)
+	desiredSpeed = pixelSize/pixelDwellTime;   //in um/us, or m/s
+
+	//convert um to Volts
+	targetAmplitude = scanSize/cal->sampleDisplacement;  //convert um to voltages   
+	//get the max speed for the desired scansize 
+	
+	MaxTriangleWaveformScan(cal, targetAmplitude, &maxTriangleWaveformFrequency);
+	// Note: Lines per second is twice maxtrianglefreq
+	desiredFrequency = desiredSpeed/(2*scanSize*1e-6);   //in um/us  is m/s
+	
+	if (desiredFrequency > maxTriangleWaveformFrequency) 
+		frequencyOK=0;  //out of range
+	else 
+		frequencyOK=1;
+	
+	
+	return frequencyOK;
+}
+
+
 static ActiveScanAxisCal_type* initalloc_ActiveScanAxisCal_type	(ActiveScanAxisCal_type* cal)
 {
 	// if NULL, allocate memory, otherwise just use the provided address
@@ -2300,7 +2880,8 @@ static ActiveScanAxisCal_type* initalloc_ActiveScanAxisCal_type	(ActiveScanAxisC
 	cal->taskController	= NULL;
 	cal->VChanCom		= NULL;
 	cal->VChanPos		= NULL;
-	cal->comSampRate	= NULL;
+	cal->comSampRate	= &cal->samplingRate;
+	cal->samplingRate	= Default_ScanAxisCal_SampleRate;
 	cal->calPanHndl		= 0;
 	cal->lsModule		= NULL;
 	cal->Discard		= NULL;
@@ -2314,7 +2895,6 @@ static void discard_ActiveScanAxisCal_type (ActiveScanAxisCal_type** cal)
 	discard_TaskControl_type(&(*cal)->taskController);
 	discard_VChan_type((VChan_type**)&(*cal)->VChanCom);
 	discard_VChan_type((VChan_type**)&(*cal)->VChanPos);
-	OKfree((*cal)->comSampRate);
 	if ((*cal)->calPanHndl) {DiscardPanel((*cal)->calPanHndl); (*cal)->calPanHndl =0;}
 	
 	OKfree(*cal);
@@ -2330,8 +2910,10 @@ static ScanAxisCal_type* initalloc_ScanAxisCal_type	(ScanAxisCal_type* cal)
 	
 	cal->scanAxisType	= NonResonantGalvo; 
 	cal->calName 		= NULL;
-	cal->lsModule		= NULL;     
+	cal->lsModule		= NULL; 
+	cal->scanEngine		= NULL;
 	cal->Discard		= NULL;
+	cal->UpdateOptics	= NULL;
 	
 	return cal;	
 }
@@ -2393,7 +2975,6 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	
 								  
 	// init ActiveNonResGalvoCal_type
-	cal->commandVMin		= 0;
 	cal->commandVMax		= 0;
 	cal->currentCal			= NonResGalvoCal_Slope_Offset;
 	cal->currIterIdx		= 0;
@@ -2409,12 +2990,13 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	cal->switchTimes		= NULL;
 	cal->maxSlopes			= NULL;
 	cal->triangleCal		= NULL;
-	cal->positionSignal		= NULL;
-	cal->commandPacket		= NULL;
+	cal->positionWaveform	= NULL;
+	cal->commandWaveform	= NULL;
 	cal->resolution  		= 0;
 	cal->minStepSize 		= 0;
 	cal->scanTime    		= 2;	// in [s]
 	cal->parked				= 0;
+	cal->mechanicalResponse	= 1;
 	
 	return cal;
 }
@@ -2431,9 +3013,9 @@ static void	discard_ActiveNonResGalvoCal_type	(ActiveScanAxisCal_type** cal)
 	OKfree(NRGCal->posStdDev);
 	OKfree(NRGCal->lag);
 	
-	// discard calibration waveforms
-	ReleaseDataPacket(&NRGCal->commandPacket);
-	discard_Waveform_type(&NRGCal->positionSignal);
+	// discard waveforms
+	discard_Waveform_type(&NRGCal->commandWaveform);
+	discard_Waveform_type(&NRGCal->positionWaveform);
 	
 	discard_SwitchTimes_type(&NRGCal->switchTimes);
 	discard_MaxSlopes_type(&NRGCal->maxSlopes);
@@ -2443,10 +3025,9 @@ static void	discard_ActiveNonResGalvoCal_type	(ActiveScanAxisCal_type** cal)
 	discard_ActiveScanAxisCal_type(cal);
 }
 
-static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], LaserScanning_type* lsModule, double commandVMin, 
-													  double commandVMax, double slope, double offset, double posStdDev, 
+static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], LaserScanning_type* lsModule, double commandVMax, double slope, double offset, double posStdDev, 
 													  double lag, SwitchTimes_type* switchTimes, MaxSlopes_type* maxSlopes,
-													  TriangleCal_type* triangleCal, double resolution, double minStepSize, double parked)
+													  TriangleCal_type* triangleCal, double resolution, double minStepSize, double parked, double mechanicalResponse)
 {
 	NonResGalvoCal_type*	cal = malloc (sizeof(NonResGalvoCal_type));
 	if (!cal) return NULL;
@@ -2454,11 +3035,12 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], LaserScann
 	// base class
 	cal->baseClass.calName 			= StrDup(calName);
 	cal->baseClass.lsModule			= lsModule;
+	cal->baseClass.scanEngine		= NULL;
 	cal->baseClass.scanAxisType		= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_NonResGalvoCal_type;
+	cal->baseClass.UpdateOptics		= NonResGalvoCal_UpdateOptics;
 	
 	// child class
-	cal->commandVMin				= commandVMin;
 	cal->commandVMax				= commandVMax;
 	cal->slope						= slope;
 	cal->offset						= offset;
@@ -2470,6 +3052,8 @@ static NonResGalvoCal_type* init_NonResGalvoCal_type (char calName[], LaserScann
 	cal->resolution					= resolution;
 	cal->minStepSize				= minStepSize;
 	cal->parked						= parked;
+	cal->mechanicalResponse			= mechanicalResponse;
+	cal->sampleDisplacement			= 0;
 	
 	return cal;
 }
@@ -2485,6 +3069,22 @@ static void discard_NonResGalvoCal_type (NonResGalvoCal_type** cal)
 	discard_TriangleCal_type(&(*cal)->triangleCal);
 	
 	OKfree(*cal);
+}
+
+void NonResGalvoCal_UpdateOptics (NonResGalvoCal_type* cal)
+{
+	if (!cal->baseClass.scanEngine) {
+		cal->sampleDisplacement = 0;
+		return;	   // no scan engine
+	}
+	
+	if (!cal->baseClass.scanEngine->objectiveLens) {
+		cal->sampleDisplacement = 0;
+		return;	   // no objective
+	}
+	
+	cal->sampleDisplacement = 1000 * cal->mechanicalResponse * Pi()/180.0 * 2 * cal->baseClass.scanEngine->scanLensFL * 
+							  cal->baseClass.scanEngine->objectiveLens->objectiveFL/cal->baseClass.scanEngine->tubeLensFL;  
 }
 
 static BOOL ValidateNewScanAxisCal (char inputStr[], void* dataPtr)
@@ -2717,9 +3317,11 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 								 char					imageOutVChanName[],
 								 char					detectorVChanName[])					
 {
-	DLDataTypes 	allowedScanAxisPacketTypes[] = {DL_Waveform_Double};
-	DLDataTypes		allowedDetectorPacketTypes[] = Allowed_Detector_Data_Types;    
+	// init lists
+	engine->DetChans 				= 0;
+	engine->objectives				= 0;
 	
+	DLDataTypes 	allowedScanAxisPacketTypes[] = {DL_Waveform_Double};
 	
 	// VChans
 	engine->engineType				= engineType;
@@ -2735,6 +3337,13 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 		ListInsertItem(engine->DetChans, &detChan, END_OF_LIST);
 	}
 	
+	engine->pixelClockRate			= NULL;
+	// optics
+	engine->scanLensFL				= 1;
+	engine->tubeLensFL				= 1;
+	engine->objectiveLens			= NULL;
+	if(!(engine->objectives			= ListCreate(sizeof(Objective_type*)))) goto Error;     
+	
 	// reference to axis calibration
 	engine->fastAxisCal				= NULL;
 	engine->slowAxisCal				= NULL;
@@ -2744,6 +3353,8 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	// task controller
 	engine->taskControl				= NULL; 	// initialized by derived scan engine classes
 	
+	// new objective panel handle
+	engine->newObjectivePanHndl		= 0;
 	// scan settings panel handle
 	engine->scanSetPanHndl			= 0;
 	// scan engine settings panel handle
@@ -2753,7 +3364,11 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	engine->Discard					= NULL;	   // overriden by derived scan engine classes
 	
 	return 0;
+	
 Error:
+	
+	if (engine->DetChans) ListDispose(engine->DetChans);
+	if (engine->objectives) ListDispose(engine->objectives);
 	return -1;
 }
 
@@ -2796,13 +3411,23 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	
 	// detection channels
 	size_t	nDet = ListNumItems(engine->DetChans);
-	DetChan_type** detChanPtrPtr;
+	DetChan_type** detChanPtr;
 	for (size_t i = 1; i <= nDet; i++) {
-		detChanPtrPtr = ListGetPtrToItem(engine->DetChans, i);
+		detChanPtr = ListGetPtrToItem(engine->DetChans, i);
 		// remove VChan from framework
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtrPtr)->detVChan);
-		discard_DetChan_type(detChanPtrPtr);
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtr)->detVChan);
+		discard_DetChan_type(detChanPtr);
 	}
+	ListDispose(engine->DetChans);
+	
+	// objectives
+	size_t nObjectives = ListNumItems(engine->objectives);
+	Objective_type** objectivesPtr;
+	for (size_t i = 1; i <= nObjectives; i++) {
+		objectivesPtr = ListGetPtrToItem(engine->objectives, i);
+		discard_Objective_type(objectivesPtr);
+	}
+	ListDispose(engine->objectives);
 	
 	//----------------------------------
 	// Task controller
@@ -2827,7 +3452,13 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 														char					fastAxisPosVChanName[],
 														char					slowAxisPosVChanName[],
 														char					imageOutVChanName[],
-														char					detectorVChanName[])
+														char					detectorVChanName[],
+														size_t					scanHeight,
+														size_t					scanHeightOffset,
+														size_t					scanWidth,
+														size_t					scanWidthOffset,
+														double					pixelSize,
+														double					pixelDwellTime		   	)
 {
 	RectangleRaster_type*	engine = malloc (sizeof(RectangleRaster_type));
 	if (!engine) return NULL;
@@ -2835,7 +3466,7 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	//--------------------------------------------------------
 	// init base scan engine class
 	//--------------------------------------------------------
-	init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster, fastAxisComVChanName, slowAxisComVChanName, fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectorVChanName);
+	init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, fastAxisComVChanName, slowAxisComVChanName, fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectorVChanName);
 	// override discard method
 	engine->baseClass.Discard			= discard_RectangleRaster_type;
 	// add task controller
@@ -2847,13 +3478,13 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	//--------------------------------------------------------
 	// init RectangleRaster_type
 	//--------------------------------------------------------
-	engine->fastAxisSamplingRate 	= NULL;
-	engine->slowAxisSamplingRate	= NULL;
-	engine->height					= 0;
-	engine->heightOffset			= 0;
-	engine->width					= 0;
-	engine->widthOffset				= 0;
-	engine->pixSize					= 0;
+	engine->galvoSamplingRate		= NULL;
+	engine->height					= scanHeight;
+	engine->heightOffset			= scanHeightOffset;
+	engine->width					= scanWidth;
+	engine->widthOffset				= scanWidthOffset;
+	engine->pixSize					= pixelSize;
+	engine->pixelDwellTime			= pixelDwellTime;
 
 	return engine;
 }
@@ -2869,14 +3500,28 @@ static void	discard_RectangleRaster_type (ScanEngine_type** engine)
 	discard_ScanEngine_type(engine);
 }
 
-static int CVICALLBACK RectangleRasterScan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+	RectangleRaster_type*	scanEngine		= callbackData;
+	int						listItemIdx;
+	double 					width;
+	double					heightOffset;
+	double					widthOffset;
+	
 	switch (event)
 	{
 		case EVENT_COMMIT:
 			
 			switch (control) {
 			
+				case RectRaster_Objective:
+					
+					Objective_type**	objectivePtr;
+					GetCtrlIndex(panel, control, &listItemIdx);
+					objectivePtr = ListGetPtrToItem(scanEngine->baseClass.objectives, listItemIdx+1);
+					scanEngine->baseClass.objectiveLens = *objectivePtr;
+					break;
+					
 				case RectRaster_Mode:
 					
 					break;
@@ -2887,18 +3532,70 @@ static int CVICALLBACK RectangleRasterScan_CB (int panel, int control, int event
 				
 				case RectRaster_Height:
 					
+					char   		heightString[11];
+					double		height;
+					
+					// get image height
+					GetCtrlVal(panel, control, heightString);
+					if (Scan(heightString, "%s>%f", &height) <= 0) {
+						// invalid entry, display previous value
+						Fmt(heightString, "%s<%f[p1]", scanEngine->height);
+						SetCtrlVal(panel, control, heightString);
+						return 0;
+					}
+					
+					// no negative or zero value for height
+					if (height <= 0){
+						Fmt(heightString, "%s<%f[p1]", scanEngine->height);
+						SetCtrlVal(panel, control, heightString);
+						return 0;
+					}
+					
+					NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
+					NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
+					double					ROIRadius 		= sqrt(pow(fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 2) + pow(slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement, 2));
+					
+					// make sure height is a multiple of the pixel size
+					height = floor(height/scanEngine->pixSize) * scanEngine->pixSize;
+					Fmt(heightString, "%s<%f[p1]", height);
+					SetCtrlVal(panel, control, heightString);
+					
+					// check if requested image falls within ROI
+					if(!ValidROI(height, scanEngine->width, scanEngine->heightOffset, scanEngine->widthOffset, ROIRadius)) {
+						DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
+						char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
+						DLMsg(scanEngineName, 0);
+						OKfree(scanEngineName);
+						DLMsg(".\n\n", 0);
+						Fmt(heightString, "%s<%f[p1]", scanEngine->height);
+						SetCtrlVal(panel, control, heightString);
+						return 0;
+					}
+					
+					// update height
+					scanEngine->height = height;
+					
+					// update pixel dwell times
+					NonResRectangleRasterScan_PixelDwellTimes(scanEngine); 
+					
 					break;
 					
 				case RectRaster_Width:
 					
+					
+					GetCtrlVal(panel, control, &width);
+					scanEngine->width = (size_t) ceil(width/scanEngine->pixSize);
+					SetCtrlVal(panel, control, scanEngine->width * scanEngine->pixSize);
 					break;
 					
 				case RectRaster_HeightOffset:
 					
+					GetCtrlVal(panel, control, &heightOffset);  
 					break;
 					
 				case RectRaster_WidthOffset:
 					
+					GetCtrlVal(panel, control, &widthOffset); 
 					break;
 					
 				case RectRaster_PixelDwell:
@@ -2909,12 +3606,12 @@ static int CVICALLBACK RectangleRasterScan_CB (int panel, int control, int event
 					
 					break;
 					
-				case RectRaster_PSF_FWHM:
-					
-					break;
-					
 				case RectRaster_PixelSize:
 					
+					GetCtrlVal(panel, control, &scanEngine->pixSize);
+					// adjust width to be multiple of new pixel size
+					scanEngine->width = (size_t) ceil(width/scanEngine->pixSize);
+					SetCtrlVal(panel, control, scanEngine->width * scanEngine->pixSize);
 					break;
 				
 			}
@@ -2922,6 +3619,370 @@ static int CVICALLBACK RectangleRasterScan_CB (int panel, int control, int event
 			break;
 	}
 	return 0;
+}
+
+void NonResRectangleRasterScan_ScanHeights (RectangleRaster_type* scanEngine, double pixelDwellTime)
+{  
+	size_t   				blank;
+	size_t   				deadTimePixels;
+	BOOL     				inFOVFlag             	= 1; 
+	size_t   				i                     	= 1;					 	// counts how many galvo samples of 1/galvoSampleRate duration fit in a line scan
+	char     				text[11];  
+	double   				pixelsPerLine;
+	size_t   				intPixelsPerLine;
+	double   				rem;
+	double   				desiredSpeed;
+	char     				dwellTimeString[11];
+	ListType 				Heights               	= ListCreate(sizeof(double));
+	double					ROIHeight;
+	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
+	NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
+	double					ROIRadius 		= sqrt(pow(fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 2) + pow(slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement, 2));
+	
+	// enforce pixeldwelltime to be an integer multiple of 1/pixelClockRate
+	// make sure pixeldwelltime is in [us] and pixelClockRate in [Hz] 
+	scanEngine->pixelDwellTime = floor(pixelDwellTime * *scanEngine->baseClass.pixelClockRate) / *scanEngine->baseClass.pixelClockRate; // result in [us]
+	Fmt(dwellTimeString,"%s<%f[p3]", scanEngine->pixelDwellTime);
+	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, scanEngine->pixelDwellTime);// in [us]
+	
+	// empty list of preferred heights
+	Combo_DeleteComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, 0, -1);
+	
+	// empty value for Height, if the calculated list contains at least one item, then it will be filled out
+	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, ""); 
+	
+	//---Calculation of prefered heights---
+	//deadtime in [ms], scanEngine->pixelDwellTime in [us]
+	blank = (size_t)ceil(fastAxisCal->triangleCal->deadTime * 1e+3 /scanEngine->pixelDwellTime);  
+	// the sum of unused pixels at the beginning and end of each line
+	deadTimePixels = 2 * blank; 
+	
+	while (inFOVFlag == TRUE){
+		// this condition ensures that at the end of each line, the pixels remain in sync with the galvo samples
+		// this allows for freedom in choosing the pixel dwell time (and implicitly the scan speed)
+		pixelsPerLine = floor(i/(*scanEngine->galvoSamplingRate * scanEngine->pixelDwellTime * 1e-6));
+		rem = i/(*scanEngine->galvoSamplingRate * scanEngine->pixelDwellTime * 1e-6) - pixelsPerLine;
+		
+		ROIHeight = ((size_t)pixelsPerLine - deadTimePixels) * scanEngine->pixSize;
+		if ((rem == 0) && (pixelsPerLine > deadTimePixels)){ 
+			inFOVFlag = ValidROI(ROIHeight, scanEngine->width * scanEngine->pixSize, 
+							 scanEngine->heightOffset * scanEngine->pixSize, scanEngine->widthOffset * scanEngine->pixSize, ROIRadius);
+			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->pixSize, scanEngine->pixelDwellTime, ROIHeight + deadTimePixels * scanEngine->pixSize) && inFOVFlag) {
+				// add to list if scan frequency is valid
+				Fmt(text,"%s<%f[p1]", ROIHeight);
+				Combo_InsertComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, -1, text);
+				ListInsertItem(Heights, &ROIHeight, END_OF_LIST);
+			}
+			 
+		}
+		if (ROIHeight > 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement) inFOVFlag = FALSE;
+		i++;
+	}
+	
+	// select value from the list that is closest to the old height value
+	size_t 		nElem = ListNumItems(Heights);
+	double   	diffOld;
+	double   	diffNew;
+	double   	heightItem; 
+	size_t     	itemPos;
+	if (nElem) {
+		ListGetItem(Heights, &heightItem, 1);
+		diffOld = fabs(heightItem - scanEngine->height);
+		itemPos = 1;
+		for (size_t i = 2; i <= nElem; i++) {
+			ListGetItem(Heights, &heightItem, i);
+			diffNew = fabs(heightItem - scanEngine->height);
+			if (diffNew < diffOld) {
+				diffOld = diffNew; 
+				itemPos = i;
+			}
+		}
+		ListGetItem(Heights, &heightItem, itemPos);
+		// update scan control UI
+		Fmt(text,"%s<%f[p1]", heightItem);
+		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, text);
+		// update scan engine structure
+		scanEngine->height = heightItem;
+	} else
+		// update scan engine structure
+		scanEngine->height = 0;
+	
+	ListDispose(Heights); 
+}
+
+void NonResRectangleRasterScan_PixelDwellTimes (RectangleRaster_type* scanEngine)
+{
+	
+	int       				deadTimePixels;
+	double    				pixelSize;
+	size_t      			heightPixels;											   						// Number of desired pixels in the height direction of the image
+	char      				imageHeightString[11];
+	double    				maxPixelDwellTime           = NonResGalvoScan_MaxPixelDwellTime;				// in [us].
+	double    				pixelDwell                  = 0;
+	double    				pixelDwellOld;
+	double    				oldDwellTime;
+	int       				k                           = 1;                            					// Counts how many galvo samples of 1/galvo_sample_rate duration fit in a line scan
+	int       				n; 							                               						// Counts how many pixel dwell times fit in the deadtime, note that the total dead time per line is twice this value
+	double    				rem;
+	ListType  				DwellTimes				  	= ListCreate(sizeof(double));
+	char      				text[11];
+	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;    
+	
+	// make sure that image height is a multiple of the pixel size in [um]
+	heightPixels = floor(scanEngine->height/scanEngine->pixSize); 
+	scanEngine->height = heightPixels * scanEngine->pixSize;   // in [um]
+	Fmt(imageHeightString,"%s<%f[p1]", scanEngine->height);						 
+	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, imageHeightString); 	// in [um]
+	
+	// empty list of preferred dwell times
+	Combo_DeleteComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, 0, -1);
+	
+	// empty value for Dwell Time, if the calculated list contains at least one item, then it will be filled out
+	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, ""); 
+	
+	// make sure that pixelDwell is a multiple of 1/pix_clock_rate      
+	pixelDwell 	= ceil (NonResGalvoScan_MinPixelDwellTime * (*scanEngine->baseClass.pixelClockRate/1e6)) * (1e6/ *scanEngine->baseClass.pixelClockRate);
+	n 		 	= ceil (fastAxisCal->triangleCal->deadTime * (1e3/pixelDwell));           		// dead time pixels at the beginning and end of each line
+	k		 	= ceil (pixelDwell * (*scanEngine->galvoSamplingRate/1e6) * (heightPixels + 2*n));
+	while (pixelDwell <= NonResGalvoScan_MaxPixelDwellTime) {
+		
+		pixelDwellOld = 0;
+		while (pixelDwellOld != pixelDwell) {
+			pixelDwellOld = pixelDwell;
+			n 		 = ceil (fastAxisCal->triangleCal->deadTime * (1e3/pixelDwell));   			// dead time pixels at the beginning and end of each line
+			pixelDwell = k/(*scanEngine->galvoSamplingRate * (heightPixels + 2*n)) * 1e6;       // in [us]
+		}
+	
+		// check if the pixel dwell time is a multiple of 1/pixelClockRate 
+		rem = pixelDwell * (*scanEngine->baseClass.pixelClockRate/1e6) - floor(pixelDwell * (*scanEngine->baseClass.pixelClockRate/1e6));
+		if (rem == 0)
+			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->pixSize, pixelDwell, scanEngine->height + 2*n*scanEngine->pixSize)) {
+				// add to list
+				Fmt(text,"%s<%f[p3]", pixelDwell);
+				Combo_InsertComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, -1, text);
+				ListInsertItem(DwellTimes, &pixelDwell, END_OF_LIST);
+			}
+		
+		k++;
+	}
+	
+	// select value from the list that is closest to the old_dwelltime value
+	int       	nElem;
+	int       	itemPos;
+	double    	dwellTimeItem;
+	double    	diffOld;
+	double    	diffNew;
+	
+	nElem = ListNumItems(DwellTimes);		  
+	if (nElem) {
+		ListGetItem(DwellTimes, &dwellTimeItem, 1);
+		diffOld = fabs(dwellTimeItem - scanEngine->pixelDwellTime);
+		itemPos = 1;
+		for (size_t i = 2; i <= nElem; i++) {
+			ListGetItem(DwellTimes, &dwellTimeItem, i);
+			diffNew = fabs(dwellTimeItem - scanEngine->pixelDwellTime);
+			if (diffNew < diffOld) {diffOld = diffNew; itemPos = i;}
+		}
+		
+		ListGetItem(DwellTimes, &dwellTimeItem, itemPos);
+		// update scan control UI
+		Fmt(text,"%s<%f[p3]", dwellTimeItem);
+		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, text);
+		// update scan engine structure
+		scanEngine->pixelDwellTime = dwellTimeItem;
+	} else
+		scanEngine->pixelDwellTime = 0;
+	
+	ListDispose(DwellTimes);
+}
+
+// Calculates whether a given rectangular ROI with given Width and Height as well as offsets is falling within a circular region with given Diameter
+// 0 - Rectangle ROI is outside the circular FOV, 1 - otherwise.
+static BOOL ValidROI(double ROIHeight, double ROIWidth, double HeightOffset, double WidthOffset, double FOVRadius)
+{
+	BOOL ok = TRUE;
+	
+	if (sqrt(pow((HeightOffset-ROIHeight/2),2)+pow((WidthOffset+ROIWidth/2),2)) > fabs(FOVRadius)) ok = FALSE;
+	if (sqrt(pow((HeightOffset+ROIHeight/2),2)+pow((WidthOffset+ROIWidth/2),2)) > fabs(FOVRadius)) ok = FALSE;
+	if (sqrt(pow((HeightOffset-ROIHeight/2),2)+pow((WidthOffset-ROIWidth/2),2)) > fabs(FOVRadius)) ok = FALSE;
+	if (sqrt(pow((HeightOffset+ROIHeight/2),2)+pow((WidthOffset-ROIWidth/2),2)) > fabs(FOVRadius)) ok = FALSE;
+	
+	return ok;
+}
+
+/// HIFN Evaluates whether the scan engine settings are valid
+/// HIRET True, if scan engine settings are valid and False otherwise
+static BOOL	NonResRectangleRasterScan_ValidScanConfig (RectangleRaster_type* scanEngine)
+{
+	return scanEngine->baseClass.fastAxisCal && scanEngine->baseClass.fastAxisCal && scanEngine->baseClass.objectiveLens &&
+		   scanEngine->baseClass.pixelClockRate && scanEngine->galvoSamplingRate;
+}
+
+static void	GetScanAxisTypes (ScanEngine_type* scanEngine, ScanAxis_type* fastAxisType, ScanAxis_type* slowAxisType)
+{
+	switch (scanEngine->engineType) {
+			
+		case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
+			
+			*fastAxisType = NonResonantGalvo;
+			*slowAxisType = NonResonantGalvo;
+			break;
+	}
+}
+
+static Objective_type* init_Objective_type (char objectiveName[], double objectiveFL)
+{
+	Objective_type*		objective = malloc(sizeof(Objective_type));
+	if (!objective) return NULL;
+	
+	objective->objectiveName 	= StrDup(objectiveName);
+	objective->objectiveFL		= objectiveFL;
+	
+	return objective;
+}
+
+static void discard_Objective_type (Objective_type** objective)
+{
+	if (!*objective) return;
+	
+	OKfree((*objective)->objectiveName);
+	OKfree(*objective);
+}
+
+static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	ScanEngine_type*	engine				= callbackData;
+	char*				newObjectiveName	= NULL;
+	
+	if (event != EVENT_COMMIT) return 0; // do nothing if event is not commit
+	
+	switch (control) {
+			
+		case NewObjPan_OK:
+			
+			newObjectiveName = GetStringFromControl(panel, NewObjPan_Name);
+			
+			// do nothing if there is no name
+			if (!newObjectiveName[0]) {
+				OKfree(newObjectiveName);
+				return 0;
+			}
+			
+			// make sure name is unique
+			size_t				nObjectives			= ListNumItems(engine->objectives);
+			BOOL				uniqueFlag			= TRUE;
+			Objective_type**	objectivePtr;
+			for (size_t i = 1; i <= nObjectives; i++) {
+				objectivePtr = ListGetPtrToItem(engine->objectives, i);
+				if (!strcmp(newObjectiveName, (*objectivePtr)->objectiveName)) {
+					uniqueFlag = FALSE;
+					break;
+				}
+			}
+			
+			// stop here if objective name already exists
+			if (!uniqueFlag) {
+				OKfree(newObjectiveName);
+				SetCtrlVal(panel, NewObjPan_Name, ""); 
+				return 0;
+			}
+			
+			// add objective to scan engine structure
+			double				objectiveFL;
+			GetCtrlVal(panel, NewObjPan_ObjectiveLensFL, &objectiveFL);
+			Objective_type*		objective = init_Objective_type(newObjectiveName, objectiveFL);
+			
+			ListInsertItem(engine->objectives, &objective, END_OF_LIST);
+			
+			// add FL info to objective name
+			char	objFLString[30];
+			char*	extendedObjName = StrDup(newObjectiveName);
+			Fmt(objFLString, "%s< (%f[p3] mm FL)", objectiveFL);
+			AppendString(&extendedObjName, objFLString, -1);
+				
+			// update engine settings UI
+			if (engine->engineSetPanHndl)
+				InsertListItem(engine->engineSetPanHndl, ScanSetPan_Objectives, -1, extendedObjName, 0); 
+			OKfree(extendedObjName);
+			
+			// update rectangular raster scan UI
+			if (engine->scanSetPanHndl) {
+				// if there were no objectives previously, then assign this FL by default
+				if (!nObjectives)
+					engine->objectiveLens = objective;
+				
+				// update both scan axes
+				if (engine->fastAxisCal)
+						(*engine->fastAxisCal->UpdateOptics) (engine->fastAxisCal);
+					
+				if (engine->slowAxisCal)
+						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
+				
+				// inserts new objective and selects it if there were no other objectives previously
+				InsertListItem(engine->scanSetPanHndl, RectRaster_Objective, -1, newObjectiveName, objectiveFL);
+			}
+			OKfree(newObjectiveName);
+			
+			// cleanup, discard panel
+			DiscardPanel(engine->newObjectivePanHndl);
+			engine->newObjectivePanHndl = 0;
+			break;
+			
+		case NewObjPan_Cancel:
+			
+			DiscardPanel(engine->newObjectivePanHndl);
+			engine->newObjectivePanHndl = 0;
+			break;
+	}
+	
+	return 0;
+}
+
+/*
+Generates a staircase waveform that either goes up or up and down like this:
+        	 __			 ____
+		  __|  		  __|    |__
+	   __|		   __|          |__
+	__|			__|                |__
+
+sampleRate 			= Sampling rate in [Hz].
+nSamplesPerStep		= Number of samples per staircase step.
+nSteps				= Number of steps in the staircase.
+startVoltage		= Start voltage at the bottom of the staircase [V].
+stepVoltage    		= Increase in voltage with each step in [V], except for the symmetric staircase where at the peak are two consecutive lines at the same voltage.
+*/
+static Waveform_type* StaircaseWaveform (BOOL symmetricStaircase, double sampleRate, size_t nSamplesPerStep, size_t nSteps, double startVoltage, double stepVoltage)
+{
+	double*				waveformData	= NULL;
+	size_t				nSamples;
+    
+	if (symmetricStaircase)
+		nSamples = 2 * nSteps * nSamplesPerStep; 
+	else 
+		nSamples = nSteps * nSamplesPerStep;    
+		
+    waveformData = malloc(nSamples * sizeof(double));
+    if (!waveformData) goto Error;
+
+    // build first half of the staircase
+    for (size_t i = 0; i < nSteps; i++)
+        for (size_t j = 0; j < nSamplesPerStep; j++)
+                waveformData[i*nSamplesPerStep+j] = startVoltage + stepVoltage*i;
+	
+	
+    // if neccessary, build second half which is the mirror image of the first half
+	if (symmetricStaircase)
+    	for (size_t i = nSteps * nSamplesPerStep; i < 2 * nSteps * nSamplesPerStep; i++)
+        	waveformData[i] = waveformData[2 * nSteps * nSamplesPerStep - i - 1];
+	
+    return init_Waveform_type(Waveform_Double, sampleRate, nSamples, waveformData);
+	
+Error:
+	
+	OKfree(waveformData);
+	
+	return NULL;
+	
 }
 
 //-----------------------------------------
@@ -3015,11 +4076,12 @@ static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskContr
 static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
 	ActiveNonResGalvoCal_type* 	cal 				= GetTaskControlModuleData(taskControl);
-	Waveform_type*			commandWaveform;      
+	DataPacket_type*			commandPacket		= NULL;
+	
 	
 	// add empty galvo response waveform 
-	discard_Waveform_type(&cal->positionSignal);
-	cal->positionSignal = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, 0, NULL);
+	discard_Waveform_type(&cal->positionWaveform);
+	cal->positionWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, 0, NULL);
 	
 	switch (cal->currentCal) {
 			
@@ -3035,18 +4097,19 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			size_t 		nDelaySamples 			= (size_t) (SLOPE_OFFSET_DELAY * *cal->baseClass.comSampRate);
 			size_t		nSamplesPerCalPoint		= nDelaySamples + POSSAMPLES;
 			double*		commandSignal 			= malloc (CALPOINTS * nSamplesPerCalPoint * sizeof(double));
-			double		VCommand				= cal->commandVMin;
+			double		VCommand				= -cal->commandVMax;
 			
 			for (size_t i = 0; i < CALPOINTS; i++) {
 				for (size_t j = 0; j < nSamplesPerCalPoint; j++)
 					commandSignal[i*nSamplesPerCalPoint+j] = VCommand;
-				VCommand += (cal->commandVMax - cal->commandVMin) / (CALPOINTS - 1); 
+				VCommand += 2*cal->commandVMax / (CALPOINTS - 1); 
 			}
 			
 			// send waveform
-			commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, CALPOINTS * nSamplesPerCalPoint, commandSignal);
-			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandSignal, (DiscardPacketDataFptr_type)discard_Waveform_type);
-			SendDataPacket(cal->baseClass.VChanCom, cal->commandPacket, 1);
+			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, CALPOINTS * nSamplesPerCalPoint, commandSignal);
+			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
+			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
+			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
 		}
 			
 			break;
@@ -3058,9 +4121,9 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			if (!cal->currIterIdx) {
 				OKfree(cal->lag);
 				// determine how many times to apply the ramp such that the relative error in the position is less than RELERR
-				cal->nRepeat = ceil(pow(*cal->posStdDev * 1.414 /(RELERR * (cal->commandVMax - cal->commandVMin)), 2)); 
-				cal->nRampSamples = 2;
-				cal->lastRun = FALSE; 
+				cal->nRepeat 		= ceil(pow(*cal->posStdDev * 1.414 /(RELERR * 2 * cal->commandVMax), 2)); 
+				cal->nRampSamples 	= 2;
+				cal->lastRun 		= FALSE; 
 			}
 			
 			size_t 	postRampSamples = (size_t) floor(POSTRAMPTIME * 0.001 * *cal->baseClass.comSampRate) + 1;
@@ -3069,9 +4132,9 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			// create ramp
 			double*	rampSignal = malloc ((flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat * sizeof(double));
 			// pad with flyback samples
-			for (size_t i = 0; i < flybackSamples; i++) rampSignal[i] = cal->commandVMin;
+			for (size_t i = 0; i < flybackSamples; i++) rampSignal[i] = -cal->commandVMax;
 			// generate ramp
-			Ramp(cal->nRampSamples, cal->commandVMin, cal->commandVMax, rampSignal + flybackSamples);
+			Ramp(cal->nRampSamples, -cal->commandVMax, cal->commandVMax, rampSignal + flybackSamples);
 			// pad with postrampsamples
 			for (size_t i = flybackSamples + cal->nRampSamples; i < (flybackSamples + cal->nRampSamples + postRampSamples); i++) 
 				rampSignal[i] = cal->commandVMax;
@@ -3080,9 +4143,10 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				memcpy(rampSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), rampSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
 			
 			// send waveform
-			commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, rampSignal);
-			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandWaveform, (DiscardPacketDataFptr_type)discard_Waveform_type);
-			SendDataPacket(cal->baseClass.VChanCom, cal->commandPacket, 1);
+			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, rampSignal);
+			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
+			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
+			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
 			
 		}
 			
@@ -3097,7 +4161,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				cal->switchTimes = init_SwitchTimes_type();
 				
 				DeleteGraphPlot(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, -1 , VAL_IMMEDIATE_DRAW);
-				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_MANUAL, 0, cal->commandVMax - cal->commandVMin);
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_MANUAL, 0, 2*cal->commandVMax);
 				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_LEFT_YAXIS, VAL_AUTOSCALE, 0, 0);
 				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XLABEL_VISIBLE, 1);
 				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YLABEL_VISIBLE, 1);
@@ -3113,13 +4177,13 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			double	amplitudeFactor = pow(SWITCH_TIMES_AMP_ITER_FACTOR, (double)cal->currIterIdx);
 			
 			// determine how many times to apply the step such that the relative error in the position is less than RELERR   
-			cal->nRepeat = ceil(pow(*cal->posStdDev * 1.414 /(RELERR * (cal->commandVMax - cal->commandVMin) * amplitudeFactor), 2));
+			cal->nRepeat = ceil(pow(*cal->posStdDev * 1.414 /(RELERR * 2*cal->commandVMax * amplitudeFactor), 2));
 			
 			// create step signal
 			double*	stepSignal = malloc ((flybackSamples + postStepSamples) * cal->nRepeat * sizeof(double));
 			
 			// pad flyback samples
-			for (size_t i = 0; i < flybackSamples; i++) stepSignal[i] = cal->commandVMin * amplitudeFactor;
+			for (size_t i = 0; i < flybackSamples; i++) stepSignal[i] = -cal->commandVMax * amplitudeFactor;
 			// pad post step samples
 			for (size_t i = flybackSamples; i < (flybackSamples + postStepSamples); i++) stepSignal[i] = cal->commandVMax * amplitudeFactor;
 			// apply signal nRepeat times
@@ -3127,9 +4191,10 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				memcpy(stepSignal + i * (flybackSamples + postStepSamples), stepSignal, (flybackSamples + postStepSamples) * sizeof(double));
 			
 			// send waveform
-			commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + postStepSamples) * cal->nRepeat, stepSignal);
-			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandWaveform, (DiscardPacketDataFptr_type)discard_Waveform_type);
-			SendDataPacket(cal->baseClass.VChanCom, cal->commandPacket, 1);
+			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + postStepSamples) * cal->nRepeat, stepSignal);
+			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
+			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
+			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
 			
 		}
 			break;
@@ -3145,7 +4210,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				
 				// adjust plotting
 				DeleteGraphPlot(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, -1 , VAL_IMMEDIATE_DRAW);
-				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_MANUAL, 0, cal->commandVMax - cal->commandVMin);
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_MANUAL, 0, 2*cal->commandVMax);
 				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_LEFT_YAXIS, VAL_AUTOSCALE, 0, 0);
 				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XLABEL_VISIBLE, 1);
 				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YLABEL_VISIBLE, 1);
@@ -3161,14 +4226,14 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			double	amplitudeFactor = pow(FIND_MAXSLOPES_AMP_ITER_FACTOR, (double)cal->currIterIdx);
 			
 			// determine how many times to apply the step such that the relative error in the position is less than RELERR   
-			cal->nRepeat = ceil(pow(*cal->posStdDev * 1.414 /(RELERR * (cal->commandVMax - cal->commandVMin) * amplitudeFactor), 2));
+			cal->nRepeat = ceil(pow(*cal->posStdDev * 1.414 /(RELERR * 2*cal->commandVMax * amplitudeFactor), 2));
 			
 			// create ramp
 			double*	rampSignal = malloc ((flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat * sizeof(double));
 			// pad with flyback samples
-			for (size_t i = 0; i < flybackSamples; i++) rampSignal[i] = cal->commandVMin * amplitudeFactor;
+			for (size_t i = 0; i < flybackSamples; i++) rampSignal[i] = -cal->commandVMax * amplitudeFactor;
 			// generate ramp
-			Ramp(cal->nRampSamples, cal->commandVMin * amplitudeFactor, cal->commandVMax * amplitudeFactor, rampSignal + flybackSamples);
+			Ramp(cal->nRampSamples, -cal->commandVMax * amplitudeFactor, cal->commandVMax * amplitudeFactor, rampSignal + flybackSamples);
 			// pad with postrampsamples
 			for (size_t i = flybackSamples + cal->nRampSamples; i < (flybackSamples + cal->nRampSamples + postRampSamples); i++) rampSignal[i] = cal->commandVMax * amplitudeFactor;
 			// apply signal nRepeat times
@@ -3176,24 +4241,24 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				memcpy(rampSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), rampSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
 			
 			// send waveform
-			commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, rampSignal);
-			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandWaveform, (DiscardPacketDataFptr_type)discard_Waveform_type);
-			SendDataPacket(cal->baseClass.VChanCom, cal->commandPacket, 1);
+			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, rampSignal);
+			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
+			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
+			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
 			
 		}
 			break;
 			
 		case NonResGalvoCal_TriangleWave:
 		{
-			if (!cal->currIterIdx) {
+			if (!cal->currIterIdx && !cal->extraRuns) {
 				discard_TriangleCal_type(&cal->triangleCal);
 				cal->triangleCal 		= init_TriangleCal_type();
-				// initialize target slope
-				cal->targetSlope		= cal->maxSlopes->slope[0] * DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR;
-				cal->extraRuns 			= 0;
+				// initialize target slope 
+				cal->targetSlope		= cal->maxSlopes->slope[0] * DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR;    
 				// delete previous plot
 				DeleteGraphPlot(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, -1, VAL_IMMEDIATE_DRAW); 
-				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_MANUAL, 0, cal->commandVMax - cal->commandVMin);
+				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_MANUAL, 0, 2*cal->commandVMax);
 				SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_LEFT_YAXIS, VAL_AUTOSCALE, 0, 0);
 				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XLABEL_VISIBLE, 1);
 				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YLABEL_VISIBLE, 1);
@@ -3206,7 +4271,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			
 			double 		funcAmp 		= cal->maxSlopes->amplitude[cal->currIterIdx]; 											// in [V] Pk-Pk
 			// apply scan function with slope equal to max slope measured previously at a certain amplitude
-			double		funcFreq 		= cal->targetSlope * 1000/(2 * funcAmp);			   											// in [Hz]
+			double		funcFreq 		= cal->targetSlope * 1000/(2 * funcAmp);			   									// in [Hz]
 			size_t 		nCycles 		= ceil(cal->scanTime * funcFreq); 
 			size_t 		cycleSamples 	= (size_t) floor (1/funcFreq * *cal->baseClass.comSampRate);
 			// calculate number of cycles, precycles and samples
@@ -3222,9 +4287,10 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			TriangleWave(nSamples, funcAmp/2, 1.0/cycleSamples, &phase, commandSignal);
 						
 			// send waveform
-			commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nSamples, commandSignal);
-			cal->commandPacket = init_DataPacket_type(DL_Waveform_Double, commandWaveform, (DiscardPacketDataFptr_type)discard_Waveform_type);
-			SendDataPacket(cal->baseClass.VChanCom, cal->commandPacket, 1);
+			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nSamples, commandSignal);
+			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
+			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
+			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
 		}
 			break;
 	}
@@ -3239,10 +4305,29 @@ static void AbortIterationTC_NonResGalvoCal (TaskControl_type* taskControl, size
 
 static FCallReturn_type* StartTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
+#define StartTC_NonResGalvoCal_Err_InvalidParameter		-1
+	
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
 	// dim Save calibration
-	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 1);    
+	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 1);  
+	
+	// check if settings are correct
+	if (cal->commandVMax == 0.0)
+		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Maximum command voltage cannot be 0");
+	
+	if (cal->minStepSize == 0.0)
+		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Minimum step size voltage cannot be 0");
+	
+	if (cal->resolution == 0.0)
+		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Minimum resolution voltage cannot be 0"); 
+			
+	if (cal->mechanicalResponse == 0.0)
+		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Mechanical response cannot be 0"); 
+	
+	if (cal->scanTime == 0.0)
+		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Scan time cannot be 0"); 
+	
 	
 	return init_FCallReturn_type(0, "", ""); 
 }
@@ -3282,7 +4367,6 @@ static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_Done, ATTR_DIMMED, dimmed);
     int calSetPanHndl;
 	GetPanelHandleFromTabPage(cal->baseClass.calPanHndl, NonResGCal_Tab, 0, &calSetPanHndl);
-	SetCtrlAttribute(calSetPanHndl, Cal_CommMinV, ATTR_DIMMED, dimmed);  
 	SetCtrlAttribute(calSetPanHndl, Cal_CommMaxV, ATTR_DIMMED, dimmed); 
 	SetCtrlAttribute(calSetPanHndl, Cal_ParkedV, ATTR_DIMMED, dimmed); 
 	SetCtrlAttribute(calSetPanHndl, Cal_ScanTime, ATTR_DIMMED, dimmed);
@@ -3293,39 +4377,36 @@ static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	ActiveNonResGalvoCal_type* 	cal 					= GetTaskControlModuleData(taskControl);
-	DataPacket_type**		dataPackets				= NULL;
-	Waveform_type*			commandWaveform			= NULL;
-	Waveform_type*			positionWaveform		= NULL;
-	double*					positionSignal;
-	size_t					nPositionSignalSamples; 
-	double*					commandSignal;
-	size_t					nCommandSignalSamples;
-	size_t					nPackets;
-	DLDataTypes 			dataPacketType;
-	BOOL					waveformCompleteFlag	= FALSE;
+	DataPacket_type**			dataPackets				= NULL;
+	Waveform_type**				waveformBufferPtr		= NULL;
+	double*						positionSignal;
+	size_t						nPositionSignalSamples; 
+	double*						commandSignal;
+	size_t						nCommandSignalSamples;
+	size_t						nPackets;
+	DLDataTypes 				dataPacketType;
+	BOOL						waveformCompleteFlag	= FALSE;
 	
 	// collect data packets and assemble galvo response waveform
 	GetAllDataPackets (sinkVChan, &dataPackets, &nPackets);
 	for (size_t i = 0; i < nPackets; i++)
 		if (dataPackets[i]) {
 			// get waveform out of data packet
-			positionWaveform = GetDataPacketDataPtr(dataPackets[i], &dataPacketType);
+			waveformBufferPtr = GetDataPacketPtrToData (dataPackets[i], &dataPacketType);
 			// collect waveforms that belong to a single galvo response
-			AppendWaveformData(cal->positionSignal, &positionWaveform);
+			AppendWaveform(cal->positionWaveform, *waveformBufferPtr);
 			ReleaseDataPacket(&dataPackets[i]);
 		} else {
 			waveformCompleteFlag = TRUE;
-			ReleaseDataPacket(&dataPackets[i]);
 			break;
 		}
 			
 	if (waveformCompleteFlag){
 		// get pointer to galvo command signal
-		commandWaveform	= GetDataPacketDataPtr (cal->commandPacket, &dataPacketType);
-		commandSignal	= GetWaveformDataPtr(commandWaveform, &nCommandSignalSamples);
+		commandSignal = GetWaveformDataPtr(cal->commandWaveform, &nCommandSignalSamples);
 		
 		//get pointer to galvo position signal
-		positionSignal = GetWaveformDataPtr (cal->positionSignal, &nPositionSignalSamples);  
+		positionSignal = GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples);  
 		
 		// process galvo position signal
 		switch (cal->currentCal) {
@@ -3345,7 +4426,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				for (size_t i = 0; i < CALPOINTS; i++) {
 					// get average position and signal StdDev
 					StdDev(positionSignal + i*nSamplesPerCalPoint + nDelaySamples, POSSAMPLES, &Pos[i], &PosStdDev[i]);
-					Comm[i] = (cal->commandVMax - cal->commandVMin) * i /(CALPOINTS - 1) + cal->commandVMin; 
+					Comm[i] = 2*cal->commandVMax * i /(CALPOINTS - 1) - cal->commandVMax; 
 				}
 				
 				// calculate average of standard deviations to better estimate noise on position signal
@@ -3374,7 +4455,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				// proceed to next calibration method
 				cal->currentCal++;
 				cal->currIterIdx = 0;
-				ReleaseDataPacket(&cal->commandPacket);
+				discard_Waveform_type(&cal->commandWaveform);
 				TaskControlIterationDone(taskControl, 0, "", TRUE);
 			}
 				break;
@@ -3404,29 +4485,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				double rampSlope;
 				FindSlope(averageResponse, cal->nRampSamples + postRampSamples, *cal->baseClass.comSampRate, *cal->posStdDev, cal->nRepeat, RELERR, &rampSlope);   
 				// calculate command ramp slope
-				double targetSlope = fabs(cal->commandVMax - cal->commandVMin) / ((cal->nRampSamples - 1) * 1000/ *cal->baseClass.comSampRate);  // ramp slope in [V/ms]
-				
-				// if this was the last run, calculate lag
-				if (cal->lastRun) {
-					
-					cal->lag = malloc(sizeof(double));
-					cal->currIterIdx = 0;
-					cal->currentCal++; 
-					cal->lastRun = FALSE;
-					*cal->lag = MeasureLag(commandSignal+flybackSamples, averageResponse, cal->nRampSamples + postRampSamples) * 1000/ *cal->baseClass.comSampRate; // response lag in [ms]
-				
-				} else {
-					if (rampSlope < targetSlope * 0.98) {
-						// calculate ramp that has maxslope
-						cal->nRampSamples = (size_t) floor(fabs(cal->commandVMax - cal->commandVMin) / rampSlope * *cal->baseClass.comSampRate * 0.001);
-						cal->lastRun = FALSE;
-					}
-					else { 
-						cal->nRampSamples = (size_t) floor(fabs(cal->commandVMax - cal->commandVMin) / (rampSlope * MAX_SLOPE_REDUCTION_FACTOR) * *cal->baseClass.comSampRate * 0.001); 
-						cal->lastRun = TRUE;
-					}
-					cal->currIterIdx++;
-				}
+				double targetSlope = 2*cal->commandVMax / ((cal->nRampSamples - 1) * 1000/ *cal->baseClass.comSampRate);  // ramp slope in [V/ms]
 				
 				// plot the command and response signals
 				DeleteGraphPlot(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, -1, VAL_IMMEDIATE_DRAW); 
@@ -3450,8 +4509,38 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, x);
 				SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, y);
 				
+				// if this was the last run, calculate lag
+				if (cal->lastRun) {
+					
+					cal->lag = malloc(sizeof(double));
+					cal->currIterIdx = 0;
+					cal->currentCal++; 
+					cal->lastRun = FALSE;
+					*cal->lag = MeasureLag(commandSignal+flybackSamples, averageResponse, cal->nRampSamples + postRampSamples) * 1000/ *cal->baseClass.comSampRate; // response lag in [ms]
+					// update results
+					int calibPanHndl;
+					GetPanelHandleFromTabPage(cal->baseClass.calPanHndl, NonResGCal_Tab, 0, &calibPanHndl);
+				
+					// slope
+					SetCtrlVal(calibPanHndl, Cal_ResponseLag, *cal->lag);
+					SetCtrlAttribute(calibPanHndl, Cal_ResponseLag, ATTR_DIMMED, 0);
+				
+				} else {
+					if (rampSlope < targetSlope * 0.98) {
+						// calculate ramp that has maxslope
+						cal->nRampSamples = (size_t) floor(2*cal->commandVMax / rampSlope * *cal->baseClass.comSampRate * 0.001);
+						cal->lastRun = FALSE;
+					}
+					else {
+						// reduce slope
+						cal->nRampSamples = (size_t) floor(2*cal->commandVMax / (rampSlope * MAX_SLOPE_REDUCTION_FACTOR) * *cal->baseClass.comSampRate * 0.001); 
+						cal->lastRun = TRUE;
+					}
+					cal->currIterIdx++;
+				}
+				
 				OKfree(averageResponse);
-				ReleaseDataPacket(&cal->commandPacket);
+				discard_Waveform_type(&cal->commandWaveform);  
 				TaskControlIterationDone(taskControl, 0, "", TRUE);
 			
 			}
@@ -3478,16 +4567,16 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				
 				// find 50% crossing point where response is halfway between the applied step
 				for (int i = 0; i < postStepSamples; i++) 
-					if (averageResponse[i] > (cal->commandVMax + cal->commandVMin) * amplitudeFactor/2) { 
+					if (averageResponse[i] > 0) { 
 						cal->switchTimes->n++;
 						cal->switchTimes->stepSize = realloc (cal->switchTimes->stepSize, cal->switchTimes->n * sizeof(double));
-						cal->switchTimes->stepSize[cal->switchTimes->n - 1] = (cal->commandVMax - cal->commandVMin) * amplitudeFactor;
+						cal->switchTimes->stepSize[cal->switchTimes->n - 1] = 2*cal->commandVMax * amplitudeFactor;
 						cal->switchTimes->halfSwitch = realloc (cal->switchTimes->halfSwitch, cal->switchTimes->n * sizeof(double));
 						cal->switchTimes->halfSwitch[cal->switchTimes->n - 1] = i / *cal->baseClass.comSampRate * 1000;
 						
 						// plot switching time
 						double x, y;
-						PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, (cal->commandVMax - cal->commandVMin)*amplitudeFactor, cal->switchTimes->halfSwitch[cal->switchTimes->n - 1]  * 1000 , VAL_ASTERISK, VAL_BLUE);
+						PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 2 * cal->commandVMax * amplitudeFactor, cal->switchTimes->halfSwitch[cal->switchTimes->n - 1]  * 1000 , VAL_ASTERISK, VAL_BLUE);
 						GetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, &x, &y);
 						SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, x);
 						SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, y);
@@ -3495,7 +4584,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 						break;
 					}
 				
-				if ((cal->commandVMax - cal->commandVMin) * amplitudeFactor >= cal->resolution * SWITCH_TIMES_AMP_ITER_FACTOR)
+				if (2 * cal->commandVMax * amplitudeFactor >= cal->resolution * SWITCH_TIMES_AMP_ITER_FACTOR)
 				  cal->currIterIdx++;
 				else {
 					
@@ -3504,7 +4593,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				}
 				
 				OKfree(averageResponse);
-				ReleaseDataPacket(&cal->commandPacket); 
+				discard_Waveform_type(&cal->commandWaveform);   
 				TaskControlIterationDone(taskControl, 0, "", TRUE);   
 			}
 				break;
@@ -3518,48 +4607,50 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				double		amplitudeFactor = pow(FIND_MAXSLOPES_AMP_ITER_FACTOR, (double)cal->currIterIdx);
 				
 				double*		averageResponse = calloc (cal->nRampSamples + postRampSamples, sizeof(double));
+				
 				// sum up ramp responses
 				for (size_t i = 0; i < cal->nRepeat; i++)
 					for (size_t j = 0; j < cal->nRampSamples + postRampSamples; j++)
 						averageResponse[j] += positionSignal[i * (flybackSamples + cal->nRampSamples + postRampSamples) + flybackSamples + j];
 				// average ramp responses
-				for (size_t i = 0; i <  cal->nRampSamples + postRampSamples; i++) averageResponse[i] /= cal->nRepeat;
+				for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] /= cal->nRepeat;
 				
 				// calculate corrected position signal based on scaling and offset
 				for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] = *cal->slope * averageResponse[i] + *cal->offset;
 				
 				// calculate ramp slope
 				double responseSlope;
-				double commandSlope = fabs(cal->commandVMax - cal->commandVMin)*amplitudeFactor / ((cal->nRampSamples - 1) * 1000/ *cal->baseClass.comSampRate); 
+				double commandSlope = 2 * cal->commandVMax * amplitudeFactor / ((cal->nRampSamples - 1) * 1000/ *cal->baseClass.comSampRate); 
 				
-				FindSlope(averageResponse, cal->nRampSamples + postRampSamples, *cal->baseClass.comSampRate, *cal->posStdDev, cal->nRepeat, RELERR, &responseSlope);  
-				
-				if ((cal->commandVMax - cal->commandVMin) * amplitudeFactor >= cal->minStepSize * FIND_MAXSLOPES_AMP_ITER_FACTOR) 
+				FindSlope(averageResponse, cal->nRampSamples + postRampSamples, *cal->baseClass.comSampRate, *cal->posStdDev, cal->nRepeat, RELERR, &responseSlope); 
+			
+				if (2 * cal->commandVMax * amplitudeFactor >= cal->minStepSize * FIND_MAXSLOPES_AMP_ITER_FACTOR) 
 					if (responseSlope < commandSlope * 0.98)
 						// calculate ramp that has maxslope
-						cal->nRampSamples = (size_t) floor(fabs(cal->commandVMax - cal->commandVMin) * amplitudeFactor / responseSlope * *cal->baseClass.comSampRate * 0.001);
+						cal->nRampSamples = (size_t) floor(2 * cal->commandVMax * amplitudeFactor / responseSlope * *cal->baseClass.comSampRate * 0.001);
 					else {
 						// store slope value
 						cal->currIterIdx++;  
 						cal->maxSlopes->n++;
 						cal->maxSlopes->amplitude = realloc (cal->maxSlopes->amplitude, cal->maxSlopes->n * sizeof(double));
-						cal->maxSlopes->amplitude[cal->maxSlopes->n - 1] = (cal->commandVMax - cal->commandVMin) * amplitudeFactor;
+						cal->maxSlopes->amplitude[cal->maxSlopes->n - 1] = 2 * cal->commandVMax * amplitudeFactor;
 						cal->maxSlopes->slope = realloc (cal->maxSlopes->slope, cal->maxSlopes->n * sizeof(double)); 
-						cal->maxSlopes->slope[cal->maxSlopes->n] = responseSlope;
+						cal->maxSlopes->slope[cal->maxSlopes->n - 1] = responseSlope;
 						// plot slope
 						double x, y;
-						PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, (cal->commandVMax - cal->commandVMin) * amplitudeFactor, responseSlope, VAL_ASTERISK, VAL_BLUE);
+						PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 2 * cal->commandVMax * amplitudeFactor, responseSlope, VAL_ASTERISK, VAL_BLUE);
 						GetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, &x, &y);
 						SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, x);
 						SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, y);
 					}
 				else {
-					cal->currIterIdx = 0;
+					cal->currIterIdx	= 0;
+					cal->extraRuns 		= 0;  
 					cal->currentCal++; 
 				}
 				
 				OKfree(averageResponse);
-				ReleaseDataPacket(&cal->commandPacket); 
+				discard_Waveform_type(&cal->commandWaveform); 
 				TaskControlIterationDone(taskControl, 0, "", TRUE); 	
 			}	
 				
@@ -3585,7 +4676,6 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 						break;
 					}
 				
-				cal->targetSlope 	*= DYNAMICCAL_SLOPE_ITER_FACTOR;
 				// in case of overload, reduce slope and repeat until there is no overload
 				if (overloadFlag)
 					cal->extraRuns	= 0;
@@ -3630,7 +4720,9 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 						cal->triangleCal->n++;
 						cal->triangleCal->commandAmp = realloc(cal->triangleCal->commandAmp, cal->triangleCal->n * sizeof(double)); 
 						cal->triangleCal->commandAmp[cal->currIterIdx] = cal->maxSlopes->amplitude[cal->currIterIdx];
+						cal->triangleCal->maxFreq = realloc(cal->triangleCal->maxFreq, cal->triangleCal->n * sizeof(double));   
 						cal->triangleCal->maxFreq[cal->currIterIdx] = maxSlope * 1000/(2 * funcAmp);  // maximum triangle function frequency! 
+						cal->triangleCal->resLag = realloc(cal->triangleCal->resLag, cal->triangleCal->n * sizeof(double));  
 						cal->triangleCal->resLag[cal->currIterIdx] = MeasureLag(commandSignal, averageResponse, cycleSamples) * 1000/ *cal->baseClass.comSampRate;
 						cal->triangleCal->deadTime += nTotalSamplesDelay / *cal->baseClass.comSampRate * 1000 ; // delay in ms 
 						
@@ -3650,8 +4742,11 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 					}
 				}
 				
+				// reduce slope
+				cal->targetSlope 	*= DYNAMICCAL_SLOPE_ITER_FACTOR;    
+					
 				OKfree(averageResponse);
-				ReleaseDataPacket(&cal->commandPacket); 
+				discard_Waveform_type(&cal->commandWaveform);   
 				
 				if (cal->currIterIdx < cal->maxSlopes->n) {
 					TaskControlIterationDone(taskControl, 0, "", TRUE); 
@@ -3660,6 +4755,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 					// calculate average dead time
 					cal->triangleCal->deadTime /= cal->maxSlopes->n;
 					// calculate actual triangle waveform amplitude
+					cal->triangleCal->actualAmp = malloc(cal->maxSlopes->n * sizeof(double));
 					for (size_t i = 0; i < cal->maxSlopes->n; i++)
 						cal->triangleCal->actualAmp[i] = cal->triangleCal->commandAmp[i] * (1 - 4 * cal->triangleCal->maxFreq[i] * cal->triangleCal->deadTime * 0.001);  
 					
@@ -3674,7 +4770,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 		}
 	}
 		
-	discard_Waveform_type(&cal->positionSignal); 
+	discard_Waveform_type(&cal->positionWaveform); 
 	
 	OKfree(dataPackets);
 	

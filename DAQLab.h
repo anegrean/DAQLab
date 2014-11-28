@@ -41,6 +41,7 @@
 // Macros
 
 #define OKfree(ptr) 				if (ptr) {free(ptr); ptr = NULL;}
+#define CA_OKfree(objHandle)		if (objHandle) {CA_DiscardObjHandle(objHandle); objHandle = 0;}
 
 #define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to 
 													 // get the number of elements in an array passed as an argument!

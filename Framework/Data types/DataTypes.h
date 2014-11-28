@@ -259,10 +259,10 @@ size_t					GetWaveformSizeofData					(Waveform_type* waveform);
 size_t					GetWaveformNumSamples					(Waveform_type* waveform);
 	// Returns pointer to waveform data.
 void* 					GetWaveformDataPtr 						(Waveform_type* waveform, size_t* nSamples);
-	// Copies samples from one waveform to another. Sampling rate, data type and physical unit must be the same. YAxisName and dateTimestamp of waveformToCopyTo are unchanged.
-int						CopyWaveformData						(Waveform_type* waveformToCopyTo, Waveform_type* waveformToCopyFrom);
-	// Appends data from one waveform to another and discards the appended waveform. Sampling rate, data type and physical unit must be the same.
-int						AppendWaveformData						(Waveform_type* waveformToAppendTo, Waveform_type** waveformToAppend); 
+	// Makes a waveform copy
+Waveform_type*			CopyWaveform							(Waveform_type* waveform);
+	// Appends data from one waveform to another. Sampling rate, data type and physical unit must be the same.
+int 					AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_type* waveformToAppend); 
 
 //---------------------------------------------------------------------------------------------------------  
 // Repeated Waveform 

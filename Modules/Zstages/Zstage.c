@@ -457,7 +457,7 @@ int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	for (size_t i = 0; i < nXMLElements; i++) {
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPosNodeList, &xmlERRINFO, i, &xmlRefPosNode) );
 		DLGetXMLNodeAttributes(xmlRefPosNode, refPosAttr, NumElem(refPosAttr));
-		CA_DiscardObjHandle(xmlRefPosNode);
+		CA_OKfree(xmlRefPosNode);
 		refPos = init_RefPosition_type(refName, refVal);
 		ListInsertItem(zstage->zRefPos, &refPos, END_OF_LIST);
 	}
@@ -465,9 +465,9 @@ int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 NoReferencePositions:
 	
 	// cleanup
-	if (xmlRefPositionsNodeList) CA_DiscardObjHandle(xmlRefPositionsNodeList); 
-	if (xmlRefPositionsNode) CA_DiscardObjHandle(xmlRefPositionsNode);
-	if (xmlRefPosNodeList) CA_DiscardObjHandle(xmlRefPosNodeList); 
+	if (xmlRefPositionsNodeList) CA_OKfree(xmlRefPositionsNodeList); 
+	if (xmlRefPositionsNode) CA_OKfree(xmlRefPositionsNode);
+	if (xmlRefPosNodeList) CA_OKfree(xmlRefPosNodeList); 
 	
 	return 0;
 	

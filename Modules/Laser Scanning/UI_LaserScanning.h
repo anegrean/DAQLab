@@ -30,7 +30,14 @@
 #define  ManageAxis_Close                 4       /* control type: command, callback function: (none) */
 #define  ManageAxis_New                   5       /* control type: command, callback function: (none) */
 
-#define  NonResGCal                       4
+#define  NewObjPan                        4
+#define  NewObjPan_Cancel                 2       /* control type: command, callback function: (none) */
+#define  NewObjPan_OK                     3       /* control type: command, callback function: (none) */
+#define  NewObjPan_Name                   4       /* control type: string, callback function: (none) */
+#define  NewObjPan_ObjectiveLensFL        5       /* control type: numeric, callback function: (none) */
+#define  NewObjPan_Plate                  6       /* control type: deco, callback function: (none) */
+
+#define  NonResGCal                       5
 #define  NonResGCal_Tab                   2       /* control type: tab, callback function: (none) */
 #define  NonResGCal_GalvoPlot             3       /* control type: graph, callback function: (none) */
 #define  NonResGCal_CursorY               4       /* control type: numeric, callback function: (none) */
@@ -38,7 +45,7 @@
 #define  NonResGCal_Done                  6       /* control type: command, callback function: (none) */
 #define  NonResGCal_SaveCalib             7       /* control type: command, callback function: (none) */
 
-#define  RectRaster                       5
+#define  RectRaster                       6
 #define  RectRaster_PixelSize             2       /* control type: numeric, callback function: (none) */
 #define  RectRaster_Plate_3               3       /* control type: deco, callback function: (none) */
 #define  RectRaster_Duration              4       /* control type: numeric, callback function: (none) */
@@ -48,42 +55,44 @@
 #define  RectRaster_HeightOffset          8       /* control type: numeric, callback function: (none) */
 #define  RectRaster_WidthOffset           9       /* control type: numeric, callback function: (none) */
 #define  RectRaster_Width                 10      /* control type: numeric, callback function: (none) */
-#define  RectRaster_PSF_FWHM              11      /* control type: numeric, callback function: (none) */
-#define  RectRaster_PixelDwell            12      /* control type: string, callback function: (none) */
-#define  RectRaster_Height                13      /* control type: string, callback function: (none) */
+#define  RectRaster_PixelDwell            11      /* control type: string, callback function: (none) */
+#define  RectRaster_Height                12      /* control type: string, callback function: (none) */
+#define  RectRaster_Objective             13      /* control type: ring, callback function: (none) */
 #define  RectRaster_Mode                  14      /* control type: ring, callback function: (none) */
 #define  RectRaster_Averages              15      /* control type: numeric, callback function: (none) */
 
-#define  ScanPan                          6
+#define  ScanPan                          7
 #define  ScanPan_Plate                    2       /* control type: deco, callback function: (none) */
 #define  ScanPan_ScanEngines              3       /* control type: tab, callback function: (none) */
 
-#define  ScanSetPan                       7
-#define  ScanSetPan_AddImgChan            2       /* control type: command, callback function: (none) */
-#define  ScanSetPan_Close                 3       /* control type: command, callback function: (none) */
-#define  ScanSetPan_Plate                 4       /* control type: deco, callback function: (none) */
-#define  ScanSetPan_FastAxisPosition      5       /* control type: string, callback function: (none) */
-#define  ScanSetPan_FastAxisCommand       6       /* control type: string, callback function: (none) */
-#define  ScanSetPan_SlowAxisPosition      7       /* control type: string, callback function: (none) */
-#define  ScanSetPan_SlowAxisCommand       8       /* control type: string, callback function: (none) */
-#define  ScanSetPan_ImageOut              9       /* control type: string, callback function: (none) */
-#define  ScanSetPan_ImgChans              10      /* control type: listBox, callback function: (none) */
-#define  ScanSetPan_SlowAxisType          11      /* control type: ring, callback function: (none) */
-#define  ScanSetPan_SlowAxisCal           12      /* control type: ring, callback function: (none) */
-#define  ScanSetPan_FastAxisCal           13      /* control type: ring, callback function: (none) */
-#define  ScanSetPan_FastAxisType          14      /* control type: ring, callback function: (none) */
+#define  ScanSetPan                       8
+#define  ScanSetPan_AddObjective          2       /* control type: command, callback function: (none) */
+#define  ScanSetPan_AddImgChan            3       /* control type: command, callback function: (none) */
+#define  ScanSetPan_Close                 4       /* control type: command, callback function: (none) */
+#define  ScanSetPan_TubeLensFL            5       /* control type: numeric, callback function: (none) */
+#define  ScanSetPan_ScanLensFL            6       /* control type: numeric, callback function: (none) */
+#define  ScanSetPan_Plate                 7       /* control type: deco, callback function: (none) */
+#define  ScanSetPan_FastAxisPosition      8       /* control type: string, callback function: (none) */
+#define  ScanSetPan_FastAxisCommand       9       /* control type: string, callback function: (none) */
+#define  ScanSetPan_SlowAxisPosition      10      /* control type: string, callback function: (none) */
+#define  ScanSetPan_SlowAxisCommand       11      /* control type: string, callback function: (none) */
+#define  ScanSetPan_ImageOut              12      /* control type: string, callback function: (none) */
+#define  ScanSetPan_Objectives            13      /* control type: listBox, callback function: (none) */
+#define  ScanSetPan_ImgChans              14      /* control type: listBox, callback function: (none) */
+#define  ScanSetPan_SlowAxisCal           15      /* control type: ring, callback function: (none) */
+#define  ScanSetPan_FastAxisCal           16      /* control type: ring, callback function: (none) */
 
      /* tab page panel controls */
-#define  Cal_CommMaxV                     2       /* control type: numeric, callback function: (none) */
-#define  Cal_ResponseLag                  3       /* control type: numeric, callback function: (none) */
-#define  Cal_ScanTime                     4       /* control type: numeric, callback function: (none) */
-#define  Cal_MinStep                      5       /* control type: numeric, callback function: (none) */
-#define  Cal_TEXTMSG                      6       /* control type: textMsg, callback function: (none) */
-#define  Cal_PosStdDev                    7       /* control type: numeric, callback function: (none) */
-#define  Cal_Offset_b                     8       /* control type: numeric, callback function: (none) */
-#define  Cal_Slope_a                      9       /* control type: numeric, callback function: (none) */
-#define  Cal_ParkedV                      10      /* control type: numeric, callback function: (none) */
-#define  Cal_CommMinV                     11      /* control type: numeric, callback function: (none) */
+#define  Cal_MechanicalResponse           2       /* control type: numeric, callback function: (none) */
+#define  Cal_CommMaxV                     3       /* control type: numeric, callback function: (none) */
+#define  Cal_ResponseLag                  4       /* control type: numeric, callback function: (none) */
+#define  Cal_ScanTime                     5       /* control type: numeric, callback function: (none) */
+#define  Cal_MinStep                      6       /* control type: numeric, callback function: (none) */
+#define  Cal_TEXTMSG                      7       /* control type: textMsg, callback function: (none) */
+#define  Cal_PosStdDev                    8       /* control type: numeric, callback function: (none) */
+#define  Cal_Offset_b                     9       /* control type: numeric, callback function: (none) */
+#define  Cal_Slope_a                      10      /* control type: numeric, callback function: (none) */
+#define  Cal_ParkedV                      11      /* control type: numeric, callback function: (none) */
 #define  Cal_CalStatus                    12      /* control type: listBox, callback function: (none) */
 #define  Cal_Plate_2                      13      /* control type: deco, callback function: (none) */
 #define  Cal_Plate                        14      /* control type: deco, callback function: (none) */

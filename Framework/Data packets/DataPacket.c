@@ -28,7 +28,7 @@
 //---------------------------------------------------------------------------------------------------
 struct DataPacket {
 	DLDataTypes 				dataType; 				// Data type contained in the data packet.
-	void*         				data;     				// Pointer to data array of dataType elements.
+	void*         				data;     				// Pointer to data of dataType elements.
 	CmtTSVHandle   				ctr;      				// Data Packet in-use counter. Although there are multiple sinks that can receive a data packet, 
 														// there is only one copy of the data in the memory. To de-allocate memory for the data, each sink must 
 														// call ReleaseDataPacket which in the end frees the memory if ctr reaches 0. 
@@ -181,9 +181,9 @@ DLDataTypes	GetDataPacketDataType (DataPacket_type* dataPacket)
 	return dataPacket->dataType;
 }
 
-void* GetDataPacketDataPtr (DataPacket_type* dataPacket, DLDataTypes* dataType)  
+void* GetDataPacketPtrToData (DataPacket_type* dataPacket, DLDataTypes* dataType)  
 {
 	*dataType = dataPacket->dataType;
-	return dataPacket->data;
+	return &dataPacket->data;
 }
 

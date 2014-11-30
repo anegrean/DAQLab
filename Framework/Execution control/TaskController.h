@@ -274,7 +274,8 @@ typedef enum {
 // Task Controller Events
 //----------------------------------------
 typedef enum {
-	TASK_EVENT_CONFIGURE,
+	TASK_EVENT_CONFIGURE,						// Configures the Task Controller and its children for execution.
+	TASK_EVENT_UNCONFIGURE,						// Unconfigures the Task Controller, in which case it cannot be executed.
 	TASK_EVENT_START,							// Starts a Task Controller that is in an IDLE or PAUSED state. 
 												// In case of an IDLE state, the Task Controller returns the module or
 												// device to its initial state (iteration index = 0). In case of a PAUSED
@@ -290,7 +291,7 @@ typedef enum {
 	TASK_EVENT_STOP_CONTINUOUS_TASK,			// Event sent from parent Task Controller to its continuous SubTasks to stop them.
 	TASK_EVENT_SUBTASK_STATE_CHANGED,   		// When one of the SubTask Controllers switches to another state.
 	TASK_EVENT_HWTRIG_SLAVE_ARMED,				// When a Slave HW Trig Task Controller is armed, it informs the Master HW Triggering Task Controller. 
-	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queueTASK_EVENT_ERROR_OUT_OF_MEMORY,				// To signal that an out of memory event occured.
+	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue.
 	TASK_EVENT_CUSTOM_MODULE_EVENT,				// To signal custom module or device events.
 	TASK_EVENT_SUBTASK_ADDED_TO_PARENT,			// When a SubTask is added to a parent Task Controller
 	TASK_EVENT_SUBTASK_REMOVED_FROM_PARENT		// When a SubTask is disconnected from a parent task Controller
@@ -302,6 +303,7 @@ typedef enum {
 typedef enum {
 	TASK_FCALL_NONE,
 	TASK_FCALL_CONFIGURE,
+	TASK_FCALL_UNCONFIGURE,
 	TASK_FCALL_ITERATE,
 	TASK_FCALL_ABORT_ITERATION,
 	TASK_FCALL_START,
@@ -377,6 +379,9 @@ typedef struct TaskExecutionLog		TaskExecutionLog_type;
 // Called when a Task Controller needs to be configured based on module or device settings. 
 typedef FCallReturn_type* 	(*ConfigureFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag);
 
+// Called when a Task Controller needs to be switched to an unconfigured state which prevents it from being executed.
+typedef FCallReturn_type* 	(*UnconfigureFptr_type) 		(TaskControl_type* taskControl, BOOL const* abortFlag); 
+
 // Called each time a Task Controller performs an iteration of a device or module
 // This function is called in a separate thread from the Task Controller thread. The iteration can be completed either within this function call
 // or even in another thread. In either case, to signal back to the Task Controller that the iteration function is complete, send a
@@ -433,6 +438,7 @@ typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
 TaskControl_type*  	 	init_TaskControl_type				(const char					taskControllerName[],
 															void*						moduleData,
 												 	 	 	ConfigureFptr_type 			ConfigureFptr,
+															UnconfigureFptr_type		UnconfigureFptr,
 												 	 		IterateFptr_type			IterateFptr,
 															AbortIterationFptr_type		AbortIterationFptr,
 												 		 	StartFptr_type				StartFptr,

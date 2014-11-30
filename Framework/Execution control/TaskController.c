@@ -43,7 +43,6 @@ typedef struct {
 	TaskEvents_type 			event;						// Task Control Event.
 	void*						eventInfo;					// Extra information per event allocated dynamically
 	DisposeEventInfoFptr_type   disposeEventInfoFptr;   	// Function pointer to dispose of the eventInfo
-	double						sendtime;					// test lex
 } EventPacket_type;
 
 typedef struct {
@@ -134,6 +133,7 @@ struct TaskControl {
 	
 	// Event handler function pointers
 	ConfigureFptr_type			ConfigureFptr;
+	UnconfigureFptr_type		UnconfigureFptr;
 	IterateFptr_type			IterateFptr;
 	AbortIterationFptr_type		AbortIterationFptr;
 	StartFptr_type				StartFptr;
@@ -222,7 +222,7 @@ int 	CVICALLBACK ScheduleTaskEventHandler 			(void* functionData);
 
 int 	CVICALLBACK ScheduleIterateFunction 			(void* functionData); 
 
-void 	CVICALLBACK TaskEventHandlerExecutionCallback 	(CmtThreadPoolHandle poolHandle, CmtThreadFunctionID functionID, unsigned int event, int value, void *callbackData);
+//void 	CVICALLBACK TaskEventHandlerExecutionCallback 	(CmtThreadPoolHandle poolHandle, CmtThreadFunctionID functionID, unsigned int event, int value, void *callbackData);
 
 int 	CVICALLBACK TaskControlIterTimeout 				(int reserved, int timerId, int event, void *callbackData, int eventData1, int eventData2); 
 
@@ -234,6 +234,7 @@ int 	CVICALLBACK TaskControlIterTimeout 				(int reserved, int timerId, int even
 TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 										void*						moduleData,
 										ConfigureFptr_type 			ConfigureFptr,
+										UnconfigureFptr_type		UnconfigureFptr,
 										IterateFptr_type			IterateFptr,
 										AbortIterationFptr_type		AbortIterationFptr,
 										StartFptr_type				StartFptr,
@@ -297,6 +298,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	
 	// task controller function pointers
 	a -> ConfigureFptr 			= ConfigureFptr;
+	a -> UnconfigureFptr		= UnconfigureFptr;
 	a -> IterateFptr			= IterateFptr;
 	a -> AbortIterationFptr		= AbortIterationFptr;
 	a -> StartFptr				= StartFptr;
@@ -1004,6 +1006,10 @@ static char* FCallToString (TaskFCall_type fcall)
 		case TASK_FCALL_CONFIGURE:
 			
 			return StrDup("FCall Configure");
+			
+		case TASK_FCALL_UNCONFIGURE:
+			
+			return StrDup("FCall Unconfigure");
 		
 		case TASK_FCALL_ITERATE:
 			
@@ -1154,9 +1160,9 @@ void CVICALLBACK TaskEventItemsInQueue (CmtTSQHandle queueHandle, unsigned int e
 	if (ExecutionStatus == kCmtThreadFunctionComplete) {
 		if (taskControl->threadFunctionID) CmtReleaseThreadPoolFunctionID(DEFAULT_THREAD_POOL_HANDLE, taskControl->threadFunctionID);
 		CmtScheduleThreadPoolFunctionAdv(DEFAULT_THREAD_POOL_HANDLE, ScheduleTaskEventHandler, taskControl, 
-									 	 DEFAULT_THREAD_PRIORITY, TaskEventHandlerExecutionCallback, 
+									 	 DEFAULT_THREAD_PRIORITY, NULL, 
 									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), 
-										 taskControl, taskControl->eventQThreadID, &taskControl->threadFunctionID);	
+										 taskControl, RUN_IN_SCHEDULED_THREAD, &taskControl->threadFunctionID);	
 	}
 }
 
@@ -1167,7 +1173,6 @@ void CVICALLBACK TaskDataItemsInQueue (CmtTSQHandle queueHandle, unsigned int ev
 	if (!VChanTSQDataPtr) {
 		// flush queue
 		CmtFlushTSQ(GetSinkVChanTSQHndl(VChanTSQData->sinkVChan), TSQ_FLUSH_ALL, NULL);
-		//TaskControlEvent(VChanTSQDataPtr->taskControl, TASK_EVENT_ERROR_OUT_OF_MEMORY, NULL, NULL);
 		VChanTSQData->taskControl->errorMsg = init_ErrorMsg_type(-1, VChanTSQData->taskControl->taskName, "Out of memory");
 		FunctionCall(VChanTSQData->taskControl, TASK_EVENT_DATA_RECEIVED, TASK_FCALL_ERROR, NULL);
 		ChangeState(VChanTSQData->taskControl, TASK_EVENT_DATA_RECEIVED, TASK_STATE_ERROR); 
@@ -1182,11 +1187,15 @@ int CVICALLBACK ScheduleTaskEventHandler (void* functionData)
 {
 	TaskControl_type* 	taskControl = functionData;
 	
+	// set thread sleep policy
+	SetSleepPolicy(VAL_SLEEP_SOME);
 	// dispatch event
 	TaskEventHandler(taskControl);
 	return 0;
 }
 
+
+/*  doesn't seem to be neccessary anymore since checking for more events is done in TaskEventHandler   
 void CVICALLBACK TaskEventHandlerExecutionCallback (CmtThreadPoolHandle poolHandle, CmtThreadFunctionID functionID, 
 													unsigned int event, int value, void *callbackData)
 {
@@ -1209,16 +1218,17 @@ void CVICALLBACK TaskEventHandlerExecutionCallback (CmtThreadPoolHandle poolHand
 			CmtGetTSQAttribute(taskControl->eventQ, ATTR_TSQ_ITEMS_IN_QUEUE, &nItems);
 			if (nItems)
 				TaskEventItemsInQueue(taskControl->eventQ, EVENT_TSQ_ITEMS_IN_QUEUE, 0, taskControl);
-				
+			
 			break;
 	}
 	
 }
+*/
 
 int TaskControlEvent (TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventInfo,
 					  DisposeEventInfoFptr_type disposeEventInfoFptr)
 {
-	EventPacket_type eventpacket = {event, eventInfo, disposeEventInfoFptr, Timer()};    //added timer test lex
+	EventPacket_type eventpacket = {event, eventInfo, disposeEventInfoFptr};
 	
 	int 	lockObtainedFlag;
 	int 	error;
@@ -1366,6 +1376,12 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 		case TASK_FCALL_CONFIGURE:
 			
 			if (taskControl->ConfigureFptr) fCallResult = (*taskControl->ConfigureFptr)(taskControl, &taskControl->abortFlag);
+			else functionMissingFlag = 1;
+			break;
+			
+		case TASK_FCALL_UNCONFIGURE:
+			
+			if (taskControl->UnconfigureFptr) fCallResult = (*taskControl->UnconfigureFptr)(taskControl, &taskControl->abortFlag);
 			else functionMissingFlag = 1;
 			break;
 			
@@ -1750,19 +1766,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 	double					delay;
 	char*					buf[100]; 
 	
-	//test lex
-	CVIProfSetCurrentThreadProfiling(TRUE);
-	
 	// get all Task Controller events in the queue
 	while ((nEventItems = CmtReadTSQData(taskControl->eventQ, eventpacket, EVENT_BUFFER_SIZE, 0, 0)) > 0) {
 		
 	for (int i = 0; i < nEventItems; i++) {
 		
-	
-	//test lex
-		delay=Timer()-eventpacket[i].sendtime; //test
-	//	Fmt(buf,"%s<%f\n",delay*1000);
-	//	DLMsg(buf,0);
 	
 	// reset abort flag
 	taskControl->abortFlag = FALSE;
@@ -1770,64 +1778,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 	switch (taskControl->state) {
 		
 		case TASK_STATE_UNCONFIGURED:
-		/* 
-		Possible Task and SubTask Controller state combinations:
 		
-		Task in UNCONFIGURED + SubTasks in any of UNCONFIGURED, CONFIGURED, INITIAL or ERROR. Initially all Task Controllers start in the UNCONFIGURED state.
-		
-		Possible state transitions:
-		
-			--------------------------
-			UNCONFIGURED -> CONFIGURED
-			--------------------------
-				TASK_EVENT_CONFIGURE
-				
-					IF  	TASK_FCALL_CONFIGURE is successful 
-									
-					AND 	Task Controller has SubTask Controllers
-									
-					THEN 	Switch state to CONFIGURED.
-							Feed forward action: send TASK_EVENT_CONFIGURE to SubTasks.
-						 	Feedback action: inform parent Task (if any) of state change to CONFIGURED.
-												
-			--------------------------
-			UNCONFIGURED -> INITIAL	
-			--------------------------
-				TASK_EVENT_CONFIGURE
-				
-					IF 		TASK_FCALL_CONFIGURE is successful 
-									
-					AND	 	Task Controller does not have SubTask Controllers 
-					AND		TASK_FCALL_RESET is successful 
-									
-					THEN	Switch state to INITIAL.
-							Feedback action: inform parent Task (if any) of state change to INITIAL.
-				
-			--------------------------
-			UNCONFIGURED -> ERROR
-			--------------------------
-				TASK_EVENT_CONFIGURE 
-				
-					IF 		TASK_FCALL_CONFIGURE failed
-									
-					OR 		sending TASK_EVENT_CONFIGURE to SubTasks failed
-					OR		TASK_FCALL_RESET failed 
-									
-					THEN	Switch state to ERROR.
-							Feedback action: inform parent Task (if any) of state change to ERROR.
-											
-				TASK_EVENT_SUBTASK_STATE_CHANGED
-				
-					IF 		SubTask in Error state
-					
-					THEN 	Feedback action: inform parent Task (if any) of state change to ERROR.   
-		
-												
-				OTHER EVENTS (that are not handled explicitely)
-				
-							Switch to ERROR state.
-		
-		*/	
 			switch (eventpacket[i].event) {
 				
 				case TASK_EVENT_CONFIGURE:
@@ -1882,6 +1833,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					break;
 					
 				case TASK_EVENT_STOP:
+					
+					// ignore this command
+					
+					break;
+					
+				case TASK_EVENT_UNCONFIGURE:
 					
 					// ignore this command
 					
@@ -1962,63 +1919,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			break;
 			
 		case TASK_STATE_CONFIGURED:
-		/* 
-		Possible Task and SubTask Controller state combinations:
 		
-		Task in CONFIGURED + SubTasks in any of UNCONFIGURED, CONFIGURED, INITIAL or ERROR.
-		
-		Possible state transitions:
-		
-			--------------------------
-			CONFIGURED -> UNCONFIGURED
-			--------------------------
-				TASK_EVENT_CONFIGURE 
-				
-							Feedback action: switch to UNCONFIGURED state
-							Send CONFIGURE command to self
-												
-			--------------------------
-			CONFIGURED -> INITIAL	
-			--------------------------
-				TASK_EVENT_SUBTASK_STATE_CHANGED
-				
-					IF 		All SubTasks in INITIAL state
-					
-					AND		TASK_FCALL_RESET is successful
-					
-					THEN	Switch to INITIAL state
-							Feedback action: inform parent Task (if any) of state change to INITIAL.
-									
-			--------------------------
-			CONFIGURED -> ERROR
-			--------------------------
-				TASK_EVENT_CONFIGURE 
-				
-					IF		Sending TASK_EVENT_CONFIGURE to self failed
-					THEN	Switch to ERROR state.
-							Feedback action: inform parent Task (if any) of state change to ERROR.
-											
-											
-				TASK_EVENT_SUBTASK_STATE_CHANGED
-				
-					IF		SubTask in Error state
-					
-					THEN	Switch to ERROR state.
-							Feedback action: inform parent Task (if any) of state change to ERROR.
-						
-					IF 		All SubTasks in INITIAL state
-					AND		TASK_FCALL_RESET failed
-					
-					THEN	Switch to ERROR state.
-							Feedback action: inform parent Task (if any) of state change to ERROR.
-		
-												
-				OTHER EVENTS (that are not handled explicitely)
-				
-							Switch to ERROR state.
-		
-		*/	
-			
 			switch (eventpacket[i].event) { 
 				
 				case TASK_EVENT_CONFIGURE: 
@@ -2039,6 +1940,23 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_STOP:
 					
 					// ignore this command
+					
+					break;
+					
+				case TASK_EVENT_UNCONFIGURE:
+					
+					// unconfigure
+					if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_UNCONFIGURE, NULL))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+						
+						FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
+						break;
+					}
+					
+					ChangeState(taskControl, eventpacket[i].event, TASK_STATE_UNCONFIGURED);
 					
 					break;
 					
@@ -2149,11 +2067,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			break;
 			
 		case TASK_STATE_INITIAL:
-		// Possible state transitions:
-		// INITIAL -> UNCONFIGURED
-		// INITIAL -> RUNNING
-		// INITIAL -> ERROR
-			
+		
 			switch (eventpacket[i].event) {
 				
 				case TASK_EVENT_CONFIGURE:
@@ -2258,6 +2172,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;	
 					}
 					
+					// if subtask is unconfigured then switch to unconfigured state
+					if (subtaskPtr->subtaskState == TASK_STATE_UNCONFIGURED)
+						if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_UNCONFIGURE, NULL))) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+						
+							FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
+							break;
+						} else {
+							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_UNCONFIGURED);
+							break;
+						}
+					
 					break;
 					
 			
@@ -2312,12 +2241,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			break;
 			
 		case TASK_STATE_IDLE:
-		// Possible state transitions:
-		// IDLE -> UNCONFIGURED
-		// IDLE -> WAITING
-		// IDLE -> RUNNING	
-		// IDLE -> ERROR
-		
+	
 			switch (eventpacket[i].event) {
 				
 				case TASK_EVENT_CONFIGURE:
@@ -2331,6 +2255,24 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
 						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR); 
+						break;
+					}
+					
+					break;
+					
+				case TASK_EVENT_UNCONFIGURE:
+					
+					// call unconfigure function and switch to unconfigured state
+					if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_UNCONFIGURE, NULL))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+						
+						FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
+						break;
+					} else {
+						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_UNCONFIGURED);
 						break;
 					}
 					
@@ -2456,6 +2398,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
 						break;	
 					}
+					
+					// if subtask is unconfigured then switch to unconfigured state
+					if (subtaskPtr->subtaskState == TASK_STATE_UNCONFIGURED)
+						if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_UNCONFIGURE, NULL))) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+						
+							FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
+							break;
+						} else {
+							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_UNCONFIGURED);
+							break;
+						}
 					
 					// check states of all subtasks and transition to INITIAL state if all subtasks are in INITIAL state
 					BOOL InitialStateFlag = 1; // assume all subtasks are in INITIAL state
@@ -2655,15 +2612,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// The iterate event is self generated, when it occurs, all child TCs are in an initial or done state
 					// For a Finite TC for both repeat == 0 and repeat == 1 the TC will undergo one iteration, however when 
 					// repeat == 0, its iteration callback function will not be called.
-					// simplified if statement:
-					// 
-					// if ( taskControl->mode == TASK_FINITE  &&  
-					//		(taskControl->currIterIdx >= taskControl->repeat  ||  !taskControl->nIterationsFlag)  &&  
-					//		taskControl->currIterIdx )
-					// TEST THIS SIMPLIFIED STATEMENT!
 					
-					
-				//	if (!((taskControl->currIterIdx < taskControl->repeat || (!taskControl->repeat && !taskControl->currIterIdx) || taskControl->mode == TASK_CONTINUOUS) && taskControl->nIterationsFlag))  {
 					if ( taskControl->mode == TASK_FINITE  && (taskControl->currIterIdx >= taskControl->repeat  ||  !taskControl->nIterationsFlag)  && taskControl->currIterIdx ) {			
 						//---------------------------------------------------------------------------------------------------------------- 	 
 						// Task Controller is finite switch to DONE
@@ -3426,96 +3375,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			
 			switch (eventpacket[i].event) {
 				
-				/* 	Just taken out for now cause I don't understand the purpose of this instead of just switching to a RUNNING state and then
-					ask for another iteration.
-				
-				case TASK_EVENT_ITERATE:
-					
-					//---------------------------------------------------------------------------------------------------------------- 	
-					// There are no SubTasks or SubTasks are done, ask for another iteration if more are needed 
-					//---------------------------------------------------------------------------------------------------------------- 
-									
-					if ((taskControl->currIterIdx < taskControl->repeat || (!taskControl->repeat && !taskControl->currIterIdx) || taskControl->mode == TASK_CONTINUOUS) && taskControl->nIterationsFlag && !taskControl->abortIterationFlag) {
-								
-						// ask for another iteration
-						if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) { 	// post to self ITERATE event
-							taskControl->errorMsg =
-							init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE self posting failed"); 
-								
-							FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR); 
-							break;
-						}
-							
-						// switch to RUNNING state
-						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_RUNNING);
-						
-					} else {
-						
-						//---------------------------------------------------------------------------------------------------------------- 	 
-						// If Task Controller is continuous and only one iteration was requested, switch to IDLE state
-						//---------------------------------------------------------------------------------------------------------------- 	 
-								
-						if (taskControl->mode == TASK_CONTINUOUS) {
-							if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_STOPPED, NULL))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
-						
-									FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
-									ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
-									break;
-								}
-							
-							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_IDLE);
-							// undim Task Tree if this is a Root Task Controller
-							if(!taskControl->parenttask) 
-								DimTaskTreeBranch(taskControl, eventpacket[i].event, FALSE);
-							break; // stop here
-						}
-								
-						//---------------------------------------------------------------------------------------------------------------- 	 
-						// If Task Controller is finite switch to DONE or IDLE state depending whether more iterations are needed
-						//---------------------------------------------------------------------------------------------------------------- 	
-										
-						if (taskControl->currIterIdx < taskControl->repeat) {
-							if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_STOPPED, NULL))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
-						
-									FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
-									ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
-									break;
-								}
-							
-							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_IDLE);
-							// undim Task Tree if this is a Root Task Controller
-							if(!taskControl->parenttask) 
-								DimTaskTreeBranch(taskControl, eventpacket[i].event, FALSE);
-						}
-						else {
-							// call done function
-							if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_DONE, NULL))) {
-								taskControl->errorMsg = 
-								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-								discard_ErrorMsg_type(&errMsg);
-						
-								FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
-								ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR); 
-								break;
-							}
-								
-							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_DONE);
-							
-							// undim Task Tree if this is a Root Task Controller
-							if(!taskControl->parenttask) 
-								DimTaskTreeBranch(taskControl, eventpacket[i].event, FALSE);
-						}
-					}
-									
-					break; */
-				
 				case TASK_EVENT_ITERATION_DONE:
 					
 					//---------------------------------------------------------------------------------------------------------------   
@@ -3685,12 +3544,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								
 							}
 							
-							// I don't see why not go into RUNNING STATE and process the new iteration request there. ??
-							// just for testing!!!
 							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_RUNNING); 
 							
-							// stay in TASK_STATE_RUNNING_WAITING_ITERATION   ----> not used for now, testing new approach
-										
 							break;
 									
 						case TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS:
@@ -3738,10 +3593,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								
 							}
 							
-							// Why not switch to RUNNING STATE and ask for another iteration there ? TESTING!!!
 							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_RUNNING);
-							
-							// stay in TASK_STATE_RUNNING_WAITING_ITERATION  -> not active, see above testing
 							
 							break;
 					}
@@ -3903,62 +3755,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			
 			switch (eventpacket[i].event) {
 				
-				// testing, there seems to be no purpose to receive a STOP event in this state
-				/*
-				case TASK_EVENT_STOP:
-					
-					// Stops iterations and switches to IDLE or DONE states if there are no SubTask Controllers or stays in STOPPING state and waits for SubTasks to complete their iterations
-					
-					if (!ListNumItems(taskControl->subtasks)) {
-						// if there are no SubTask Controllers
-						if (taskControl->mode == TASK_CONTINUOUS) {
-							// switch to DONE state if continuous task controller
-							if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_DONE, NULL))) {
-								taskControl->errorMsg = 
-								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-								discard_ErrorMsg_type(&errMsg);
-						
-								FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
-								ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
-								break;
-							}
-							
-							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_DONE);
-							// undim Task Tree if this is a root Task Controller
-							if(!taskControl->parenttask)
-								DimTaskTreeBranch(taskControl, eventpacket[i].event, FALSE);
-							
-						} else {
-							// switch to IDLE state if finite task controller
-							if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_STOPPED, NULL))) {
-								taskControl->errorMsg = 
-								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-								discard_ErrorMsg_type(&errMsg);
-						
-								FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
-								ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
-								break;
-							}
-							
-							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_IDLE);
-							
-							// undim Task Tree if this is a root Task Controller
-							if(!taskControl->parenttask)
-								DimTaskTreeBranch(taskControl, eventpacket[i].event, FALSE);
-						}
-					} else 
-						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
-						if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
-							taskControl->errorMsg =
-							init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
-						
-							FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
-							break;
-						}
-						
-					break; */
-				
 				case TASK_EVENT_STOP:
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 					
@@ -4085,6 +3881,24 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
+				case TASK_EVENT_UNCONFIGURE:
+					
+					// call unconfigure function and switch to unconfigured state
+					if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_UNCONFIGURE, NULL))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+						
+						FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
+						break;
+					} else {
+						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_UNCONFIGURED);
+						break;
+					}
+					
+					break;
+					
 				case TASK_EVENT_START:
 					
 					// reset device/module
@@ -4184,6 +3998,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
 						break;	
 					}
+					
+					// if subtask is unconfigured then switch to unconfigured state
+					if (subtaskPtr->subtaskState == TASK_STATE_UNCONFIGURED)
+						if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_UNCONFIGURE, NULL))) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+						
+							FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
+							break;
+						} else {
+							ChangeState(taskControl, eventpacket[i].event, TASK_STATE_UNCONFIGURED);
+							break;
+						}
 					
 					// check states of all subtasks and transition to INITIAL state if all subtasks are in INITIAL state
 					BOOL InitialStateFlag = 1; // assume all subtasks are in INITIAL state
@@ -4289,6 +4118,25 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// clear error
 					discard_ErrorMsg_type(&taskControl->errorMsg);
+					break;
+					
+				case TASK_EVENT_UNCONFIGURE:
+					
+					// clear error
+					discard_ErrorMsg_type(&taskControl->errorMsg);
+					// unconfigure
+					if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_UNCONFIGURE, NULL))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+						
+						FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
+						break;
+					}
+					
+					ChangeState(taskControl, eventpacket[i].event, TASK_STATE_UNCONFIGURED);
+					
 					break;
 					
 				case TASK_EVENT_START:

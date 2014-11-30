@@ -87,6 +87,8 @@ static void	RedrawDSPanel (DataStorage_type* ds);
 
 static FCallReturn_type*	ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
 
+static FCallReturn_type*	UnconfigureTC			(TaskControl_type* taskControl, BOOL const* abortFlag);
+
 static void					IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
 static void 				AbortIterationTC		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
@@ -141,7 +143,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	initalloc_DAQLabModule(&ds->baseClass, className, instanceName);
 	
 	// create Data Storage Task Controller
-	tc = init_TaskControl_type (instanceName, ds, ConfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
+	tc = init_TaskControl_type (instanceName, ds, ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
 								DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
@@ -286,6 +288,13 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 //-----------------------------------------
 
 static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", "");
+}
+
+static FCallReturn_type* UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	
@@ -509,7 +518,7 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 					case DL_Waveform_UShort:
 						shortDataPtr = GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
 						
-								//test
+						//test
 			
 						//	ArrayToFile(rawfilename,shortDataPtr,VAL_SHORT_INTEGER,nElem,1,VAL_GROUPS_TOGETHER,VAL_GROUPS_AS_COLUMNS,VAL_SEP_BY_TAB,0,VAL_BINARY,VAL_APPEND);
 						filehandle=OpenFile (rawfilename, VAL_WRITE_ONLY, VAL_APPEND, VAL_BINARY);

@@ -615,6 +615,8 @@ static void							detVChan_Disconnected						(VChan_type* self, VChan_type* disc
 	// for Non Resonant Galvo scan axis calibration and testing
 static FCallReturn_type*			ConfigureTC_NonResGalvoCal					(TaskControl_type* taskControl, BOOL const* abortFlag);
 
+static FCallReturn_type*			UncofigureTC_NonResGalvoCal					(TaskControl_type* taskControl, BOOL const* abortFlag);
+
 static void							IterateTC_NonResGalvoCal					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
 static void							AbortIterationTC_NonResGalvoCal				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
@@ -637,6 +639,8 @@ static FCallReturn_type*			ModuleEventHandler_NonResGalvoCal			(TaskControl_type
 	
 	// for RectangleRaster_type scanning
 static FCallReturn_type*			ConfigureTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag);
+
+static FCallReturn_type*			UnconfigureTC_RectRaster					(TaskControl_type* taskControl, BOOL const* abortFlag);
 
 static void							IterateTC_RectRaster						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
@@ -2967,7 +2971,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
-	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
+	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
 								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, ModuleEventHandler_NonResGalvoCal, ErrorTC_NonResGalvoCal);
 	// connect sink VChans (VChanPos) to the Task Controller so that it can process incoming galvo position data
 	AddSinkVChan(cal->baseClass.taskController, cal->baseClass.VChanPos, DataReceivedTC_NonResGalvoCal, TASK_VCHAN_FUNC_ITERATE);  
@@ -3470,7 +3474,7 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	// override discard method
 	engine->baseClass.Discard			= discard_RectangleRaster_type;
 	// add task controller
-	engine->baseClass.taskControl		= init_TaskControl_type(engineName, engine, ConfigureTC_RectRaster, IterateTC_RectRaster, AbortIterationTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
+	engine->baseClass.taskControl		= init_TaskControl_type(engineName, engine, ConfigureTC_RectRaster, UnconfigureTC_RectRaster, IterateTC_RectRaster, AbortIterationTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
 										  DoneTC_RectRaster, StoppedTC_RectRaster, DimTC_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster);
 	
 	if (!engine->baseClass.taskControl) {discard_RectangleRaster_type((ScanEngine_type**)&engine); return NULL;}
@@ -4069,6 +4073,13 @@ static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskContr
 	cal->currentCal = NonResGalvoCal_Slope_Offset;
 	// reset iteration index
 	cal->currIterIdx = 0;
+	
+	return init_FCallReturn_type(0, "", "");
+}
+
+static FCallReturn_type* UncofigureTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);  
 	
 	return init_FCallReturn_type(0, "", "");
 }
@@ -4795,6 +4806,13 @@ static void ErrorTC_NonResGalvoCal (TaskControl_type* taskControl, char* errorMs
 //-----------------------------------------
 
 static FCallReturn_type* ConfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+	return init_FCallReturn_type(0, "", ""); 
+}
+
+static FCallReturn_type* UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	

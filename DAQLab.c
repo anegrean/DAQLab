@@ -264,6 +264,7 @@ int 						CVICALLBACK TaskTree_CB 					(int panel, int control, int event, void 
 //-----------------------------------------
 
 static FCallReturn_type*	ConfigureUITC								(TaskControl_type* taskControl, BOOL const* abortFlag);
+static FCallReturn_type*	UnconfigureUITC								(TaskControl_type* taskControl, BOOL const* abortFlag);
 static void					IterateUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 static FCallReturn_type*	StartUITC									(TaskControl_type* taskControl, BOOL const* abortFlag);
 static FCallReturn_type*	DoneUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
@@ -444,7 +445,7 @@ static int DAQLab_Load (void)
 		}
 		
 		// create new UI Task Controller
-		newTaskControllerPtr = init_TaskControl_type (UITCName, NULL, ConfigureUITC, IterateUITC, NULL, StartUITC, 
+		newTaskControllerPtr = init_TaskControl_type (UITCName, NULL, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
 												 	  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 		if (!newTaskControllerPtr) {
 			DLMsg("Error: Task Controller could not be created.\n\n", 1);
@@ -2036,7 +2037,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	if (!newControllerName) return; // operation cancelled, do nothing
 	
 	// create new task controller
-	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, ConfigureUITC, IterateUITC, NULL, StartUITC, 
+	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
 												  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 	OKfree(newControllerName);
 	
@@ -2804,30 +2805,33 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			// filter only commit events
 			if (event != EVENT_COMMIT) break;
 			
-			int index;
-			char itemlabel[100];
-			int numtree_elem;
+			int 	index;
+			char* 	itemLabel		= NULL;
+			int		nChars;
+			int 	numtree_elem;
 			
 			
-				//get selected slave
+			//get selected slave
 			GetActiveTreeItem(panel, TaskPan_TaskTree, &selectedNodeIdx);
 			GetValueFromIndex(panel, TaskPan_TaskTree, selectedNodeIdx, &nodeListIdx);
 			selectedTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
 			slave=selectedTreeNodePtr->taskControl;
 			
 			GetCtrlIndex(panel,control,&index);
-			GetLabelFromIndex(panel,control,index,&itemlabel);
-			//get selected master from itemlabel
-			master=NULL;
+			GetLabelLengthFromIndex(panel, control, index, &nChars);
+			itemLabel = malloc ((nChars+1)*sizeof(char));
+			GetLabelFromIndex(panel, control, index, itemLabel);
+			//get selected master from itemLabel
+			master = NULL;
 			GetNumListItems (panel, TaskPan_TaskTree, &numtree_elem);
-			for (int i=0;i<numtree_elem;i++){
+			for (int i = 0; i < numtree_elem; i++){
 				//if subtaskIdx
 				GetValueFromIndex(panel, TaskPan_TaskTree, i, &nodeListIdx);  
 				targetTreeNodePtr=ListGetPtrToItem  (TaskTreeNodes, nodeListIdx);
-				if (targetTreeNodePtr!=NULL) {
-					if (targetTreeNodePtr->taskControl!=NULL){
+				if (targetTreeNodePtr != NULL) {
+					if (targetTreeNodePtr->taskControl != NULL){
 						mastername=GetTaskControlName(targetTreeNodePtr->taskControl);  
-						if (strcmp(itemlabel,mastername)==0) {		//strings are equal
+						if (strcmp(itemLabel,mastername)==0) {		//strings are equal
 							//check if found master and selected slave have a common parent tree element
 							master=targetTreeNodePtr->taskControl;  
 							break;
@@ -2836,7 +2840,9 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						
 					}
 				}
-			}	
+			}
+			
+			OKfree(itemLabel);
 			
 			if (master==NULL) break;
 			
@@ -2889,6 +2895,22 @@ static FCallReturn_type* ConfigureUITC (TaskControl_type* taskControl, BOOL cons
 	return init_FCallReturn_type(0, "", "");
 }
 
+static FCallReturn_type* UnconfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
+	
+	// change Task Controller name background color to gray (0x00F0F0F0)
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
+	// dim Mode button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 1);
+	// dim Iteration Wait button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 1); 
+	// dim Start button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 1);
+	
+	return init_FCallReturn_type(0, "", "");
+}
+
 static void IterateUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
@@ -2905,8 +2927,6 @@ static FCallReturn_type* StartUITC (TaskControl_type* taskControl, BOOL const* a
 	
 	// change Task Controller name background color from gray (0x00F0F0F0) to green (0x002BD22F)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x002BD22F);
-	//test lex
-//	ProcessSystemEvents();	// required to update the background color
 	
 	return init_FCallReturn_type(0, "", "");
 }
@@ -2915,7 +2935,7 @@ static FCallReturn_type* DoneUITC  (TaskControl_type* taskControl, size_t curren
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	BOOL				taskControllerMode;
-	char*				buf[100];
+	char				buf[100];
 	double 				TotalTime;
 	
 	//test lex

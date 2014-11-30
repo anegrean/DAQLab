@@ -971,6 +971,8 @@ static int 							DAQmxDevTaskSet_CB 						(int panel, int control, int event, v
 
 static FCallReturn_type*			ConfigureTC								(TaskControl_type* taskControl, BOOL const* abortFlag);
 
+static FCallReturn_type*			UnconfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag);
+
 static void							IterateTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
 static void							AbortIterationTC						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
@@ -3441,7 +3443,7 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type**
 	//-------------------------------------------------------------------------------------------------
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
-	dev -> taskController = init_TaskControl_type (taskControllerName, dev, ConfigureTC, IterateTC, AbortIterationTC, StartTC, 
+	dev -> taskController = init_TaskControl_type (taskControllerName, dev, ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, 
 						  ResetTC, DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
 	if (!dev->taskController) {discard_DevAttr_type(attr); free(dev); return NULL;}
 	
@@ -8393,6 +8395,13 @@ static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const*
 	
 	
 	return init_FCallReturn_type(0, "", "");
+}
+
+static FCallReturn_type* UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	Dev_type*	dev	= GetTaskControlModuleData(taskControl); 
+	
+	return init_FCallReturn_type(0, "", ""); 
 }
 
 static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)

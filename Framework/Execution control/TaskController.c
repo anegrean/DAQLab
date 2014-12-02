@@ -1840,7 +1840,16 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 				case TASK_EVENT_UNCONFIGURE:
 					
-					// ignore this command
+					// unconfigure
+					if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_UNCONFIGURE, NULL))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+						
+						FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
@@ -2083,6 +2092,22 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR); 
 						break;
 					}
+					break;
+					
+				case TASK_EVENT_UNCONFIGURE:
+					
+					// unconfigure
+					if ((errMsg = FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_UNCONFIGURE, NULL))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+						
+						FunctionCall(taskControl, eventpacket[i].event, TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, eventpacket[i].event, TASK_STATE_ERROR);
+						break;
+					}
+					
+					ChangeState(taskControl, eventpacket[i].event, TASK_STATE_UNCONFIGURED);
 					
 					break;
 					

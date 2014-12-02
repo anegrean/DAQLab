@@ -1576,12 +1576,12 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 /// HIRET True if all Task Controllers were removed successfully or if there are no Task Controllers to be removed, False otherwise.
 BOOL DLRemoveTaskControllers (DAQLabModule_type* mod, ListType tcList)
 {
+	// remove from the framework list
+	RemoveTaskControllersFromList(DAQLabTCs, tcList);
+	
 	// remove from the module's list of Task Controllers
 	if (mod)
-		if (!RemoveTaskControllersFromList(mod->taskControllers, tcList)) goto Error;
-	
-	// remove from the framework list
-	if (!RemoveTaskControllersFromList(DAQLabTCs, tcList)) goto Error;
+		RemoveTaskControllersFromList(mod->taskControllers, tcList);
 	
 	// update Task Tree if it is displayed
 	if (TaskTreeManagerPanHndl)
@@ -1599,10 +1599,10 @@ BOOL DLRemoveTaskController (DAQLabModule_type* mod, TaskControl_type* taskContr
 {
 	// remove from the module's list of Task Controllers  
 	if (mod)
-		if (!RemoveTaskControllerFromList(mod->taskControllers, taskController)) goto Error;
+		RemoveTaskControllerFromList(mod->taskControllers, taskController);
 	
 	// remove from the framework list
-	if (!RemoveTaskControllerFromList(DAQLabTCs, taskController)) goto Error;
+	RemoveTaskControllerFromList(DAQLabTCs, taskController);
 	
 	// update Task Tree if it is displayed
 	if (TaskTreeManagerPanHndl)

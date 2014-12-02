@@ -162,10 +162,10 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 
 	ds->mainPanHndl				= 0; 
 	
-			// assign default controls callback to UI_DataStorage.uir panel
+		// assign default controls callback to UI_DataStorage.uir panel
 	ds->uiCtrlsCB				= UICtrls_CB;
 	
-			// assign default panel callback to UI_DataStorage.uir
+		// assign default panel callback to UI_DataStorage.uir
 	ds->uiPanelCB				= UIPan_CB;
 	
 	
@@ -176,8 +176,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 		ds->channels[i] = NULL;
 
 
-	//is this correct here? lex
-	SetTaskControlModuleData(tc,ds);
+	
 		// METHODS
 	
 
@@ -190,7 +189,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 
 }
 
-/// HIFN Discards VUPhotonCtr_type data but does not free the structure memory.
+/// HIFN Discards DataStorage data but does not free the structure memory.
 void discard_DataStorage (DAQLabModule_type** mod)
 {
 	DataStorage_type* 		ds 			= (DataStorage_type*) (*mod);
@@ -200,13 +199,14 @@ void discard_DataStorage (DAQLabModule_type** mod)
 	//---------------------------------------
 	// discard DataStorage specific data
 	//---------------------------------------
-		// main panel and panels loaded into it (channels and task control)
+	// main panel and panels loaded into it (channels and task control)
 	if (ds->mainPanHndl) {
 		DiscardPanel(ds->mainPanHndl);
 		ds->mainPanHndl = 0;
 	}
-
+	
 	// discard Task Controller
+	DLRemoveTaskController((DAQLabModule_type*)ds, ds->taskController);
 	discard_TaskControl_type(&ds->taskController);
 
 	//----------------------------------------
@@ -256,16 +256,16 @@ static void	discard_DS_Channel_type (DS_Channel_type** chan)
 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 {
-	DataStorage_type* 	ds 				= (DataStorage_type*) mod;
-	int error=0; 
+	DataStorage_type* 	ds 			= (DataStorage_type*) mod;
+	int 				error		= 0; 
 
 	// load main panel
-	ds->mainPanHndl 		= LoadPanel(workspacePanHndl, UI_DataStorage, DSMain);
+	ds->mainPanHndl = LoadPanel(workspacePanHndl, UI_DataStorage, DSMain);
 	
 	// add module's task controller to the framework
 	DLAddTaskController((DAQLabModule_type*)ds, ds->taskController);
 	
-		// connect module data and user interface callbackFn to all direct controls in the panel
+	// connect module data and user interface callbackFn to all direct controls in the panel
 	SetCtrlsInPanCBInfo(mod, ((DataStorage_type*)mod)->uiCtrlsCB, ds->mainPanHndl);
 	
 	

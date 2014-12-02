@@ -37,37 +37,46 @@
 #define VChan_Default_SlowAxis_Position				"Slow Axis Position"
 #define VChan_Default_ImageOut						"Image"
 #define VChan_Default_DetectionChan					"Detector"
+#define VChan_Default_Shutter_Command				"Shutter"
+#define VChan_Default_Pixel_Settings				"Pixel Settings"
 #define AxisCal_Default_TaskController_Name			"Scan Axis Calibration"
 #define AxisCal_Default_NewCalibration_Name			"Calibration"
 
-// scan engine settings
+// Scan engine settings
 #define Max_NewScanEngine_NameLength				50
 #define Allowed_Detector_Data_Types					{DL_Waveform_Char, DL_Waveform_Double, DL_Waveform_Float, DL_Waveform_Int, DL_Waveform_Short, DL_Waveform_UChar, DL_Waveform_UInt, DL_Waveform_UShort}
 
-// non-resonant galvo calibration parameters
-#define	CALIBRATION_DATA_TO_STRING					"%s<%*f[j1] "
-#define STRING_TO_CALIBRATION_DATA					"%s>%*f[j1] "
-#define MAX_CAL_NAME_LENGTH							50			// Maximum name for non-resonant galvo scan axis calibration data.
-#define CALPOINTS 									50
-#define SLOPE_OFFSET_DELAY							0.01		// Time to wait in [s] after a galvo step is made before estimating slope and offset parameters					
-#define RELERR 										0.05
-#define POSSAMPLES									200 		// Number of AI samples to read and average for one measurement of the galvo position
-#define POSTRAMPTIME								20.0		// Recording time in [ms] after a ramp signal is applied
-#define MAXFLYBACKTIME								20.0		// Maximum expected galvo flyback time in [ms].
-#define FUNC_Triangle 								0
-#define FUNC_Sawtooth 								1
-#define FIND_MAXSLOPES_AMP_ITER_FACTOR 				0.9
-#define SWITCH_TIMES_AMP_ITER_FACTOR 				0.95 
-#define DYNAMICCAL_SLOPE_ITER_FACTOR 				0.90
-#define DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR 	0.8	 		// For each amplitude, the initial maxslope value is reduced by this factor.
-#define MAX_SLOPE_REDUCTION_FACTOR 					0.25		// Position lag is measured with quarter the maximum ramp to allow the galvo reach a steady state.
+// Non-resonant galvo calibration parameters
+#define	CALIBRATION_DATA_TO_STRING							"%s<%*f[j1] "
+#define STRING_TO_CALIBRATION_DATA							"%s>%*f[j1] "
+#define MAX_CAL_NAME_LENGTH									50			// Maximum name for non-resonant galvo scan axis calibration data.
+#define CALPOINTS 											50
+#define SLOPE_OFFSET_DELAY									0.01		// Time to wait in [s] after a galvo step is made before estimating slope and offset parameters					
+#define RELERR 												0.05
+#define POSSAMPLES											200 		// Number of AI samples to read and average for one measurement of the galvo position
+#define POSTRAMPTIME										20.0		// Recording time in [ms] after a ramp signal is applied
+#define MAXFLYBACKTIME										20.0		// Maximum expected galvo flyback time in [ms].
+#define FIND_MAXSLOPES_AMP_ITER_FACTOR 						0.9
+#define SWITCH_TIMES_AMP_ITER_FACTOR 						0.95 
+#define DYNAMICCAL_SLOPE_ITER_FACTOR 						0.90
+#define DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR 			0.8	 		// For each amplitude, the initial maxslope value is reduced by this factor.
+#define MAX_SLOPE_REDUCTION_FACTOR 							0.25		// Position lag is measured with quarter the maximum ramp to allow the galvo reach a steady state.
 #define VAL_OVLD_ERR -8000
 
-#define NonResGalvoScan_MaxPixelDwellTime			1000.0		// Maximum pixel dwell time in [us] , should be defined better from info either from the task or the hardware!
-#define NonResGalvoScan_MinPixelDwellTime 			0.125		// in [us], depends on hardware and fluorescence integration mode, using photon counting, there is a 25 ns dead time
-																// within each pixel. If the min pix dwell time is 0.125 us then it means that 20% of fluorescence is lost which 
-																// may be still an acceptable situation if speed is important
-#define Default_ScanAxisCal_SampleRate				1e5			// Default sampling rate for galvo command and position in [Hz]
+#define NonResGalvoScan_MaxPixelDwellTime					100.0		// Maximum pixel dwell time in [us] , should be defined better from info either from the task or the hardware!
+#define NonResGalvoScan_MinPixelDwellTime 					0.125		// in [us], depends on hardware and fluorescence integration mode, using photon counting, there is a 25 ns dead time
+																		// within each pixel. If the min pix dwell time is 0.125 us then it means that 20% of fluorescence is lost which 
+																		// may be still an acceptable situation if speed is important
+#define Default_ScanAxisCal_SampleRate						1e5			// Default sampling rate for galvo command and position in [Hz]
+
+// Non-resonant galvo raster scan default settings
+#define NonResGalvoRasterScan_Max_ComboboxEntryLength		20			// Maximum number of characters that can be entered in the combobox controls.
+#define NonResGalvoRasterScan_Default_PixelClockRate		40e6		// Default pixel clock frequency in [Hz].
+#define NonResGalvoRasterScan_Default_GalvoSamplingRate		1e5			// Default galvo sampling for command and position signals in [Hz].
+#define NonResGalvoRasterScan_Default_PixelDwellTime		1.0			// Default pixel dwell time in [us].
+#define	NonResGalvoRasterScan_Default_PixelSize				1.0			// Default pixel size in [um].
+
+
 //==============================================================================
 // Types
 
@@ -285,14 +294,19 @@ struct ScanEngine {
 	SinkVChan_type*			VChanSlowAxisPos;
 		// Scan Engine output
 	SourceVChan_type*		VChanScanOut;
+		// Mechanical shutter command
+	SourceVChan_type*		VChanShutter;
+		// Pixel info settings
+	SourceVChan_type*		VChanPixelSettings;
 		// Detector input channels of DetChan_type* with incoming fluorescence pixel stream 
 	ListType				DetChans;
 	
 	//-----------------------------------
 	// Scan Settings
 	//-----------------------------------
-	double*					pixelClockRate;			// Pixel clock rate in [Hz] for incoming fluorescence data from all detector channels.
+	double					pixelClockRate;			// Pixel clock rate in [Hz] for incoming fluorescence data from all detector channels.
 													// Note: This is not to be confused with the pixel dwell time, which is a multiple of 1/pixelClockRate.
+	double					pixSize;				// Image pixel size in [um].   
 	//-----------------------------------
 	// Optics
 	//-----------------------------------
@@ -325,12 +339,12 @@ typedef struct {
 	//----------------
 	// Scan parameters
 	//----------------
-	double*					galvoSamplingRate;   	// Pointer to fast and slow axis waveform sampling rate in [Hz]. Value must be the same for VChanFastAxisCom and VChanSlowAxisCom
+	double*					refGalvoSamplingRate;   // Pointer to fast and slow axis waveform sampling rate in [Hz]. Value must be the same for VChanFastAxisCom and VChanSlowAxisCom
+	double					galvoSamplingRate;		// Default galvo sampling rate set by the scan engine.
 	size_t					height;					// Image height in [pix].
 	size_t					heightOffset;			// Image height offset from center in [pix].
 	size_t					width;					// Image width in [pix].
 	size_t					widthOffset;			// Image width offset in [pix].
-	double					pixSize;				// Image pixel size in [um]. 
 	double					pixelDwellTime;			// Pixel dwell time in [us].
 } RectangleRaster_type;
 
@@ -380,14 +394,6 @@ struct LaserScanning {
 static DetChan_type*				init_DetChan_type							(ScanEngine_type* scanEngine, char VChanName[]);
 
 static void							discard_DetChan_type						(DetChan_type** a);
-
-//---------------------------
-// VChan management callbacks
-//---------------------------
-	// detection VChans
-static void							DetVChan_Connected							(VChan_type* self, VChan_type* connectedVChan);
-
-static void							DetVChan_Disconnected						(VChan_type* self, VChan_type* disconnectedVChan); 
 
 //----------------------
 // Scan axis calibration
@@ -497,7 +503,13 @@ static int 							init_ScanEngine_type 						(ScanEngine_type* 		engine,
 								 											 	 char					fastAxisPosVChanName[],
 								 											 	 char					slowAxisPosVChanName[],
 								 											 	 char					imageOutVChanName[],
-																				 char					detectorVChanName[]);
+																				 char					detectorVChanName[],
+																				 char					shutterVChanName[],
+																				 char					pixelSettingsVChanName[],
+																				 double					pixelClockRate,
+																				 double					pixelSize,
+																				 double					scanLensFL,
+																				 double					tubeLensFL);
 
 static void							discard_ScanEngine_type 					(ScanEngine_type** engine);
 	
@@ -513,26 +525,36 @@ static RectangleRaster_type*		init_RectangleRaster_type					(LaserScanning_type*
 								 											 	 char					slowAxisPosVChanName[],
 								 											 	 char					imageOutVChanName[],
 																			 	 char					detectorVChanName[],
+																				 char					shutterVChanName[],
+																				 char					pixelSettingsVChanName[],
+																				 double					galvoSamplingRate,
+																				 double					pixelClockRate,
 																				 size_t					scanHeight,
 																				 size_t					scanHeightOffset,
 																				 size_t					scanWidth,
 																				 size_t					scanWidthOffset,
 																			  	 double					pixelSize,
-																				 double					pixelDwellTime		   	);
+																				 double					pixelDwellTime,
+																				 double					scanLensFL,
+																				 double					tubeLensFL);
 
 static void							discard_RectangleRaster_type				(ScanEngine_type** engine);
 
 static int CVICALLBACK 				NonResRectangleRasterScan_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-void 								NonResRectangleRasterScan_ScanHeights		(RectangleRaster_type* scanEngine, double pixelDwellTime);
+void 								NonResRectangleRasterScan_ScanHeights		(RectangleRaster_type* scanEngine);
 
 void								NonResRectangleRasterScan_PixelDwellTimes	(RectangleRaster_type* scanEngine);
 
-	// determines whether a given rectangular ROI falls within a circular perimeter
-static BOOL 						ValidROI									(double ROIHeight, double ROIWidth, double HeightOffset, double WidthOffset, double FOVRadius);
+	// determines whether a given rectangular ROI falls within a circular perimeter with radius
+static BOOL 						RectangleROIInsideCircle					(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double circleRadius);
+	// determines whether a given rectangular ROI falls within another rectangle of size maxHeight and maxWidth
+static BOOL							RectangleROIInsideRectangle					(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double maxHeight, double maxWidth);
 
-	// evaluates whether the current scan engine configuration is valid, i.e. it has both scan axes assigned, objective, pixel sampling rate, etc.
-static BOOL							NonResRectangleRasterScan_ValidScanConfig	(RectangleRaster_type* scanEngine);
+	// evaluates whether the scan engine configuration is valid, i.e. it has both scan axes assigned, objective, pixel sampling rate, etc.
+static BOOL							NonResRectangleRasterScan_ValidConfig		(RectangleRaster_type* scanEngine);
+	// evaluates whether the scan engine is ready to scan
+static BOOL 						NonResRectangleRasterScan_ReadyToScan		(RectangleRaster_type* scanEngine);
 
 //---------------------------------------------------------
 // determines scan axis types based on the scan engine type
@@ -604,8 +626,18 @@ static void							ImageOutVChan_Connected						(VChan_type* self, VChan_type* co
 static void							ImageOutVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan);
 
 	// Detection VChan
-static void							detVChan_Connected							(VChan_type* self, VChan_type* connectedVChan);
-static void							detVChan_Disconnected						(VChan_type* self, VChan_type* disconnectedVChan);
+static void							DetVChan_Connected							(VChan_type* self, VChan_type* connectedVChan);
+static void							DetVChan_Disconnected						(VChan_type* self, VChan_type* disconnectedVChan); 
+
+	// Shutter VChan
+static void							ShutterVChan_Connected						(VChan_type* self, VChan_type* connectedVChan);
+static void							ShutterVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan);
+
+	// Pixel settings VChan
+static void							PixelSettingsVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
+static void							PixelSettingsVChan_Disconnected				(VChan_type* self, VChan_type* disconnectedVChan);
+
+
 
 
 //-----------------------------------------
@@ -656,7 +688,7 @@ static FCallReturn_type* 			ResetTC_RectRaster 							(TaskControl_type* taskCon
 
 static void							DimTC_RectRaster							(TaskControl_type* taskControl, BOOL dimmed);
 
-static FCallReturn_type* 			DataReceivedTC_RectRaster 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+static FCallReturn_type* 			DataReceivedTC_RectRaster					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
 static void 						ErrorTC_RectRaster 							(TaskControl_type* taskControl, char* errorMsg);
 
@@ -867,10 +899,13 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 		nObjectives = ListNumItems((*scanEnginePtr)->objectives);
 		// load scan pannel depending on scan engine type
 		switch ((*scanEnginePtr)->engineType) {
-				
+			//------------------------------------------------------------------------------------------------------------------------------------------------------
+			// ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis
+			//------------------------------------------------------------------------------------------------------------------------------------------------------ 
 			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
-				// load panel
+				RectangleRaster_type*	rectRasterScanEngine = (RectangleRaster_type*) *scanEnginePtr;
+				
 				scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
 				
 				// populate objectives
@@ -882,18 +917,15 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 						SetCtrlIndex(scanPanHndl, RectRaster_Objective, j-1);
 				}
 				
-				// make Height string control into combo box
-				errChk( Combo_NewComboBox(scanPanHndl, RectRaster_Height) );
-				Combo_SetComboAttribute(scanPanHndl, RectRaster_Height, ATTR_COMBO_MAX_LENGTH, 10);
-				// make Pixel Dwell time string control into combo box
-				errChk( Combo_NewComboBox(scanPanHndl, RectRaster_PixelDwell) );
-				Combo_SetComboAttribute(scanPanHndl, RectRaster_PixelDwell, ATTR_COMBO_MAX_LENGTH, 10);
+				// update width
+				SetCtrlVal(scanPanHndl, RectRaster_Width, rectRasterScanEngine->width * rectRasterScanEngine->baseClass.pixSize);
 				
-				// undim/dim scan control panel if there are no objectives or either scan axis calibration is missing
-				if (NonResRectangleRasterScan_ValidScanConfig((RectangleRaster_type*)*scanEnginePtr))
-					SetCtrlAttribute(scanPanHndl, RectRaster_Objective, ATTR_DIMMED, 0);
-				else
-					SetCtrlAttribute(scanPanHndl, RectRaster_Objective, ATTR_DIMMED, 1);
+				// update height and width offsets
+				SetCtrlVal(scanPanHndl, RectRaster_WidthOffset, rectRasterScanEngine->widthOffset * rectRasterScanEngine->baseClass.pixSize); 
+				SetCtrlVal(scanPanHndl, RectRaster_HeightOffset, rectRasterScanEngine->heightOffset * rectRasterScanEngine->baseClass.pixSize);
+				
+				// update pixel size
+				SetCtrlVal(scanPanHndl, RectRaster_PixelSize, (*scanEnginePtr)->pixSize);
 				
 				break;
 				
@@ -918,7 +950,49 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 				
 			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
+				RectangleRaster_type*	rectRasterScanEngine = (RectangleRaster_type*) *scanEnginePtr;  
+				
 				SetCtrlsInPanCBInfo(*scanEnginePtr, NonResRectangleRasterScan_CB, (*scanEnginePtr)->scanSetPanHndl);
+				
+				// make Height string control into combo box
+				// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted
+				errChk( Combo_NewComboBox((*scanEnginePtr)->scanSetPanHndl, RectRaster_Height) );
+				errChk( Combo_SetComboAttribute((*scanEnginePtr)->scanSetPanHndl, RectRaster_Height, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
+				
+				// update height
+				char heightString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+				Fmt(heightString, "%s<%f[p1]", rectRasterScanEngine->height * rectRasterScanEngine->baseClass.pixSize);
+				if (rectRasterScanEngine->height)
+					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_Height, heightString); 
+				else
+					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_Height, ""); 
+				
+				// make Pixel Dwell time string control into combo box
+				// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted  
+				errChk( Combo_NewComboBox((*scanEnginePtr)->scanSetPanHndl, RectRaster_PixelDwell) );
+				errChk( Combo_SetComboAttribute((*scanEnginePtr)->scanSetPanHndl, RectRaster_PixelDwell, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
+				
+				// update pixel dwell time
+				char pixelDwellString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+				Fmt(pixelDwellString, "%s<%f[p1]", rectRasterScanEngine->pixelDwellTime);
+				if (rectRasterScanEngine->pixelDwellTime != 0.0)
+					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_PixelDwell, pixelDwellString);
+				else
+					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_PixelDwell, "");
+				
+				// configure/unconfigure scan engine
+				// do this after adding combo boxes!
+				if (NonResRectangleRasterScan_ValidConfig(rectRasterScanEngine)) {
+				
+					NonResRectangleRasterScan_ScanHeights(rectRasterScanEngine);
+					NonResRectangleRasterScan_PixelDwellTimes(rectRasterScanEngine);
+					
+					if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)*scanEnginePtr))
+						TaskControlEvent((*scanEnginePtr)->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+					else
+						TaskControlEvent((*scanEnginePtr)->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+				} else
+					TaskControlEvent((*scanEnginePtr)->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
 				
 				break;
 				
@@ -934,6 +1008,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanFastAxisPos);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanSlowAxisPos);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanScanOut);
+		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanShutter);
+		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanPixelSettings); 
 		nDetectorVChans = ListNumItems((*scanEnginePtr)->DetChans);
 		for (size_t j = 1; j <= nDetectorVChans; j++) {
 			detPtr = ListGetPtrToItem((*scanEnginePtr)->DetChans, j);
@@ -1047,7 +1123,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	
 	size_t					nScanEngines 				= ListNumItems(ls->scanEngines);
 	ScanEngine_type**		scanEnginePtr;
-	DAQLabXMLNode 			scanEngineAttr[7];
+	DAQLabXMLNode 			scanEngineAttr[8];
 	DAQLabXMLNode			objectivesAttr[2];	
 	unsigned int			scanEngineType;
 	char* 					fastAxisCommandVChanName	= NULL;
@@ -1055,7 +1131,9 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	char* 					fastAxisPositionVChanName	= NULL;
 	char* 					slowAxisPositionVChanName	= NULL;
 	char* 					scanEngineOutVChanName		= NULL;
-	DAQLabXMLNode			scanEngineVChansAttr[5];
+	char*					shutterVChanName			= NULL;
+	char*					pixelSettingsVChanName		= NULL;
+	DAQLabXMLNode			scanEngineVChansAttr[7];
 	DAQLabXMLNode			detectorVChanAttr;
 	size_t					nDetectionChans;
 	size_t					nObjectives;
@@ -1110,6 +1188,10 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 			scanEngineAttr[6].pData	= (*scanEnginePtr)->objectiveLens->objectiveName;
 		else
 			scanEngineAttr[6].pData = "";
+		// save scan settings
+		scanEngineAttr[7].tag 		= "PixelClockRate";
+		scanEngineAttr[7].type 		= BasicData_Double;
+		scanEngineAttr[7].pData		= &(*scanEnginePtr)->pixelClockRate;
 			
 		// save attributes
 		DLAddToXMLElem(xmlDOM, scanEngineXMLElement, scanEngineAttr, DL_ATTRIBUTE, NumElem(scanEngineAttr));
@@ -1121,6 +1203,8 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		fastAxisPositionVChanName 	= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanFastAxisPos);
 		slowAxisPositionVChanName 	= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanSlowAxisPos);
 		scanEngineOutVChanName		= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanScanOut);
+		shutterVChanName			= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanShutter);
+		pixelSettingsVChanName		= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanPixelSettings); 
 				
 		scanEngineVChansAttr[0].tag 	= "FastAxisCommand";
 		scanEngineVChansAttr[0].type   	= BasicData_CString;
@@ -1137,6 +1221,12 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		scanEngineVChansAttr[4].tag 	= "ScanEngineOut";
 		scanEngineVChansAttr[4].type   	= BasicData_CString;
 		scanEngineVChansAttr[4].pData	= scanEngineOutVChanName;
+		scanEngineVChansAttr[5].tag 	= "Shutter";
+		scanEngineVChansAttr[5].type   	= BasicData_CString;
+		scanEngineVChansAttr[5].pData	= shutterVChanName;
+		scanEngineVChansAttr[6].tag 	= "PixelSettings";
+		scanEngineVChansAttr[6].type   	= BasicData_CString;
+		scanEngineVChansAttr[6].pData	= pixelSettingsVChanName;
 														 	
 		DLAddToXMLElem(xmlDOM, VChanNamesXMLElement, scanEngineVChansAttr, DL_ATTRIBUTE, NumElem(scanEngineVChansAttr));
 				
@@ -1145,6 +1235,8 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		OKfree(fastAxisPositionVChanName);
 		OKfree(slowAxisPositionVChanName);
 		OKfree(scanEngineOutVChanName);
+		OKfree(shutterVChanName);
+		OKfree(pixelSettingsVChanName);
 		
 		// save detector VChans
 		nDetectionChans = ListNumItems((*scanEnginePtr)->DetChans);
@@ -1184,15 +1276,17 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 				unsigned int			width					= ((RectangleRaster_type*) *scanEnginePtr)->width;  
 				unsigned int			heightOffset			= ((RectangleRaster_type*) *scanEnginePtr)->heightOffset;  
 				unsigned int			widthOffset				= ((RectangleRaster_type*) *scanEnginePtr)->widthOffset; 
-				double					pixelSize				= ((RectangleRaster_type*) *scanEnginePtr)->pixSize;
+				double					pixelSize				= (*scanEnginePtr)->pixSize;
 				double					pixelDwellTime			= ((RectangleRaster_type*) *scanEnginePtr)->pixelDwellTime;
+				double					galvoSamplingRate		= ((RectangleRaster_type*) *scanEnginePtr)->galvoSamplingRate;
 						
 				DAQLabXMLNode			rectangleRasterAttr[] 	= { {"ImageHeight", BasicData_UInt, &height},
 																	{"ImageWidth",  BasicData_UInt, &width},
 																	{"ImageHeightOffset", BasicData_UInt, &heightOffset},
 																	{"ImageWidthOffset", BasicData_UInt, &widthOffset},
 																	{"PixelSize", BasicData_Double, &pixelSize},
-																	{"PixelDwellTime", BasicData_Double, &pixelDwellTime} }; 				
+																	{"PixelDwellTime", BasicData_Double, &pixelDwellTime},
+																	{"GalvoSamplingRate", BasicData_Double, &galvoSamplingRate}}; 				
 				
 				// save scan engine attributes
 				DLAddToXMLElem(xmlDOM, scanInfoXMLElement, rectangleRasterAttr, DL_ATTRIBUTE, NumElem(rectangleRasterAttr));
@@ -1313,9 +1407,12 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	char*							slowAxisPositionVChanName	= NULL;
 	char*							scanEngineOutVChanName		= NULL;
 	char*							detectorVChanName			= NULL;
+	char*							shutterVChanName			= NULL;
+	char*							pixelSettingsVChanName		= NULL;
 	double							scanLensFL;
 	double							tubeLensFL;
 	double							objectiveFL;
+	double							pixelClockRate;
 	char*							assignedObjectiveName		= NULL;
 	char*							objectiveName				= NULL;
 	DetChan_type*					detChan						= NULL;
@@ -1327,13 +1424,16 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 																	{"SlowAxisCalibrationName", BasicData_CString, &slowAxisCalibrationName},
 																	{"ScanLensFL", BasicData_Double, &scanLensFL},
 																	{"TubeLensFL", BasicData_Double, &tubeLensFL},
-																	{"Objective", BasicData_CString, &assignedObjectiveName}};
+																	{"Objective", BasicData_CString, &assignedObjectiveName},
+																	{"PixelClockRate", BasicData_Double, &pixelClockRate}};
 																	
 	DAQLabXMLNode					scanEngineVChansAttr[]		= {	{"FastAxisCommand", BasicData_CString, &fastAxisCommandVChanName},
 																	{"SlowAxisCommand", BasicData_CString, &slowAxisCommandVChanName},
 																	{"FastAxisPosition", BasicData_CString, &fastAxisPositionVChanName},
 																	{"SlowAxisPosition", BasicData_CString, &slowAxisPositionVChanName},
-																	{"ScanEngineOut", BasicData_CString, &scanEngineOutVChanName} };
+																	{"ScanEngineOut", BasicData_CString, &scanEngineOutVChanName},
+																	{"Shutter", BasicData_CString, &shutterVChanName},
+																	{"PixelSettings", BasicData_CString, &pixelSettingsVChanName}};
 																	
 	DAQLabXMLNode					objectiveAttr[]				= { {"Name", BasicData_CString, &objectiveName},
 																	{"FL", BasicData_Double, &objectiveFL} };
@@ -1366,19 +1466,22 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 				unsigned int		widthOffset;
 				double				pixelSize;
 				double				pixelDwellTime;
+				double				galvoSamplingRate;
 				
 				DAQLabXMLNode		scanInfoAttr[]	= { {"ImageHeight", BasicData_UInt, &height},
 														{"ImageHeightOffset", BasicData_UInt, &heightOffset},
 														{"ImageWidth", BasicData_UInt, &width},
 														{"ImageWidthOffset", BasicData_UInt, &widthOffset},
 														{"PixelSize", BasicData_Double, &pixelSize},
-														{"PixelDwellTime", BasicData_Double, &pixelDwellTime}};
+														{"PixelDwellTime", BasicData_Double, &pixelDwellTime},
+														{"GalvoSamplingRate", BasicData_Double, &galvoSamplingRate}};
 														
 				// get scan info attributes
 				errChk( DLGetXMLElementAttributes(scanInfoXMLElement, scanInfoAttr, NumElem(scanInfoAttr)) );
 				
 				scanEngine = (ScanEngine_type*)init_RectangleRaster_type((LaserScanning_type*)mod, scanEngineName, fastAxisCommandVChanName, slowAxisCommandVChanName, fastAxisPositionVChanName,
-													  slowAxisPositionVChanName, scanEngineOutVChanName, NULL, height, heightOffset, width, widthOffset, pixelSize, pixelDwellTime); 
+													  slowAxisPositionVChanName, scanEngineOutVChanName, NULL, shutterVChanName, pixelSettingsVChanName, galvoSamplingRate, pixelClockRate, height, heightOffset, width, widthOffset, 
+													  pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
 				break;
 			
 		}
@@ -1395,6 +1498,29 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 			// add detector channel to scan engine
 			ListInsertItem(scanEngine->DetChans, &detChan, END_OF_LIST);
 			CA_OKfree(detectorVChanNode);
+		}
+		
+		// assign fast scan axis to scan engine
+		// do this before loading the objective and updating optics
+		ScanAxisCal_type**	scanAxisPtr;
+		for (size_t i = 1; i <= nAxisCalibrations; i++) {
+			scanAxisPtr = ListGetPtrToItem(ls->availableCals, i);
+			if (!strcmp(fastAxisCalibrationName, (*scanAxisPtr)->calName)) {
+				scanEngine->fastAxisCal = *scanAxisPtr;
+				(*scanAxisPtr)->scanEngine = scanEngine;
+				break;
+			}
+		}
+		
+		// assign slow scan axis to scan engine
+		// do this before loading the objective and updating optics 
+		for (size_t i = 1; i <= nAxisCalibrations; i++) {
+			scanAxisPtr = ListGetPtrToItem(ls->availableCals, i);
+			if (!strcmp(slowAxisCalibrationName, (*scanAxisPtr)->calName)) {
+				scanEngine->slowAxisCal = *scanAxisPtr;
+				(*scanAxisPtr)->scanEngine = scanEngine;
+				break;
+			}
 		}
 		
 		// load objectives
@@ -1423,27 +1549,6 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 			CA_OKfree(objectiveNode);
 		}
 		
-		// assign fast scan axis to scan engine
-		ScanAxisCal_type**	scanAxisPtr;
-		for (size_t i = 1; i <= nAxisCalibrations; i++) {
-			scanAxisPtr = ListGetPtrToItem(ls->availableCals, i);
-			if (!strcmp(fastAxisCalibrationName, (*scanAxisPtr)->calName)) {
-				scanEngine->fastAxisCal = *scanAxisPtr;
-				(*scanAxisPtr)->scanEngine = scanEngine;
-				break;
-			}
-		}
-		
-		// assign slow scan axis to scan engine
-		for (size_t i = 1; i <= nAxisCalibrations; i++) {
-			scanAxisPtr = ListGetPtrToItem(ls->availableCals, i);
-			if (!strcmp(slowAxisCalibrationName, (*scanAxisPtr)->calName)) {
-				scanEngine->slowAxisCal = *scanAxisPtr;
-				(*scanAxisPtr)->scanEngine = scanEngine;
-				break;
-			}
-		}
-		
 		// add scan engine to laser scanning module
 		ListInsertItem(ls->scanEngines, &scanEngine, END_OF_LIST);
 		
@@ -1463,6 +1568,8 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 		OKfree(fastAxisPositionVChanName);
 		OKfree(slowAxisPositionVChanName);
 		OKfree(scanEngineOutVChanName);
+		OKfree(shutterVChanName);
+		OKfree(pixelSettingsVChanName);
 	}
 	
 	
@@ -1817,11 +1924,13 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	SetPanelAttribute(engine->engineSetPanHndl, ATTR_TITLE, panTitle);
 	OKfree(panTitle);
 	
-	char* VChanFastAxisComName 	= GetVChanName((VChan_type*)engine->VChanFastAxisCom);
-	char* VChanSlowAxisComName 	= GetVChanName((VChan_type*)engine->VChanSlowAxisCom);
-	char* VChanFastAxisPosName 	= GetVChanName((VChan_type*)engine->VChanFastAxisPos);
-	char* VChanSlowAxisPosName 	= GetVChanName((VChan_type*)engine->VChanSlowAxisPos);
-	char* VChanScanOutName 		= GetVChanName((VChan_type*)engine->VChanScanOut); 
+	char* VChanFastAxisComName 		= GetVChanName((VChan_type*)engine->VChanFastAxisCom);
+	char* VChanSlowAxisComName 		= GetVChanName((VChan_type*)engine->VChanSlowAxisCom);
+	char* VChanFastAxisPosName 		= GetVChanName((VChan_type*)engine->VChanFastAxisPos);
+	char* VChanSlowAxisPosName 		= GetVChanName((VChan_type*)engine->VChanSlowAxisPos);
+	char* VChanScanOutName 			= GetVChanName((VChan_type*)engine->VChanScanOut); 
+	char* VChanShutterName			= GetVChanName((VChan_type*)engine->VChanShutter);   
+	char* VChanPixelSettingsName	= GetVChanName((VChan_type*)engine->VChanPixelSettings);   
 	
 	// update VChans from data structure
 	if (engine->VChanFastAxisCom)
@@ -1838,6 +1947,14 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 		
 	if (engine->VChanScanOut)
 		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ImageOut, VChanScanOutName);
+	
+	if (engine->VChanShutter)
+		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ShutterCommand, VChanShutterName);
+	
+	if (engine->VChanPixelSettings)
+		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelSettings, VChanPixelSettingsName); 
+		
+		
 	
 	size_t 				nImgChans 		= ListNumItems(engine->DetChans);
 	DetChan_type** 		detChanPtrPtr;
@@ -1872,7 +1989,11 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	
 	// scan and tube lens FL
 	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ScanLensFL, engine->scanLensFL);
-	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ScanLensFL, engine->tubeLensFL);
+	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_TubeLensFL, engine->tubeLensFL);
+	
+	// update galvo and pixel sampling rates
+	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_GalvoSamplingRate, *((RectangleRaster_type*)engine)->refGalvoSamplingRate/1e3); // convert from [Hz] to [kHz]
+	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelClockFrequency, engine->pixelClockRate/1e6);								// convert from [Hz] to [MHz] 
 	
 	
 	DisplayPanel(engine->engineSetPanHndl);
@@ -1905,7 +2026,8 @@ static void CVICALLBACK NewScanEngineMenu_CB (int menuBar, int menuItem, void *c
 
 static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	LaserScanning_type*		ls 	= callbackData;
+	LaserScanning_type*		ls 		= callbackData;
+	int						error 	= 0;
 	
 	switch (event) {
 			
@@ -1937,22 +2059,40 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					//------------------------------------------------------------------------------------------------------------------
 					// Load here panels and resources for all scan engine types
 					//------------------------------------------------------------------------------------------------------------------
+					
+					// initialize raster scan engine
+					char*	fastAxisComVChanName 	= DLGetUniqueVChanName(VChan_Default_FastAxis_Command);
+					char*	slowAxisComVChanName 	= DLGetUniqueVChanName(VChan_Default_SlowAxis_Command);
+					char*	fastAxisPosVChanName 	= DLGetUniqueVChanName(VChan_Default_FastAxis_Position);
+					char*	slowAxisPosVChanName	= DLGetUniqueVChanName(VChan_Default_SlowAxis_Position);
+					char*	imageOutVChanName		= DLGetUniqueVChanName(VChan_Default_ImageOut);
+					char*	detectionVChanName		= DLGetUniqueVChanName(VChan_Default_DetectionChan);
+					char*	shutterVChanName		= DLGetUniqueVChanName(VChan_Default_Shutter_Command);
+					char*	pixelSettingsVChanName	= DLGetUniqueVChanName(VChan_Default_Pixel_Settings);  
+							
 					switch (engineType) {
 					
 						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 					
-							// initialize raster scan engine
-							char*	fastAxisComVChanName 	= DLGetUniqueVChanName(VChan_Default_FastAxis_Command);
-							char*	slowAxisComVChanName 	= DLGetUniqueVChanName(VChan_Default_SlowAxis_Command);
-							char*	fastAxisPosVChanName 	= DLGetUniqueVChanName(VChan_Default_FastAxis_Position);
-							char*	slowAxisPosVChanName	= DLGetUniqueVChanName(VChan_Default_SlowAxis_Position);
-							char*	imageOutVChanName		= DLGetUniqueVChanName(VChan_Default_ImageOut);
-							char*	detectionVChanName		= DLGetUniqueVChanName(VChan_Default_DetectionChan);
-					
 							newScanEngine = (ScanEngine_type*) init_RectangleRaster_type(ls, engineName, fastAxisComVChanName, slowAxisComVChanName,
-														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectionVChanName, 0, 0, 0, 0, 0, 0);
-					
-							scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster); 
+														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectionVChanName, shutterVChanName, 
+														pixelSettingsVChanName, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
+							
+							RectangleRaster_type*	rectRasterScanEngine = (RectangleRaster_type*) newScanEngine;   
+							
+							scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
+							// dim panel since the scan engine is not configured
+							SetPanelAttribute(scanPanHndl, ATTR_DIMMED, 1);
+							
+							// update width
+							SetCtrlVal(scanPanHndl, RectRaster_Width, rectRasterScanEngine->width * rectRasterScanEngine->baseClass.pixSize);
+				
+							// update height and width offsets
+							SetCtrlVal(scanPanHndl, RectRaster_WidthOffset, rectRasterScanEngine->widthOffset * rectRasterScanEngine->baseClass.pixSize); 
+							SetCtrlVal(scanPanHndl, RectRaster_HeightOffset, rectRasterScanEngine->heightOffset * rectRasterScanEngine->baseClass.pixSize);
+				
+							// update pixel size
+							SetCtrlVal(scanPanHndl, RectRaster_PixelSize, newScanEngine->pixSize);
 							
 							break;
 							// add below more cases	
@@ -1967,10 +2107,63 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					// change new scan engine tab title
 					SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, engineName);  
 			
-					// add callback function and data to the new tab page panel and controls from the panel
-					SetCtrlsInPanCBInfo(newScanEngine, NonResRectangleRasterScan_CB, newScanEngine->scanSetPanHndl);  
-					SetPanelAttribute(newScanEngine->scanSetPanHndl, ATTR_CALLBACK_DATA, newScanEngine);
-				  
+					// add panel callback data
+					SetPanelAttribute(newScanEngine->scanSetPanHndl, ATTR_CALLBACK_DATA, newScanEngine); 
+					
+					// add callback function and data to scan engine controls
+					switch (newScanEngine->engineType) {
+				
+						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
+				
+							RectangleRaster_type*	rectRasterScanEngine = (RectangleRaster_type*) newScanEngine;  
+				
+							SetCtrlsInPanCBInfo(newScanEngine, NonResRectangleRasterScan_CB, newScanEngine->scanSetPanHndl);
+				
+							// make Height string control into combo box
+							// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted
+							errChk( Combo_NewComboBox(newScanEngine->scanSetPanHndl, RectRaster_Height) );
+							errChk( Combo_SetComboAttribute(newScanEngine->scanSetPanHndl, RectRaster_Height, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
+				
+							// update height
+							char heightString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+							Fmt(heightString, "%s<%f[p1]", rectRasterScanEngine->height * rectRasterScanEngine->baseClass.pixSize);
+							if (rectRasterScanEngine->height)
+								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_Height, heightString); 
+							else
+								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_Height, ""); 
+				
+							// make Pixel Dwell time string control into combo box
+							// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted  
+							errChk( Combo_NewComboBox(newScanEngine->scanSetPanHndl, RectRaster_PixelDwell) );
+							errChk( Combo_SetComboAttribute(newScanEngine->scanSetPanHndl, RectRaster_PixelDwell, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
+				
+							// update pixel dwell time
+							char pixelDwellString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+							Fmt(pixelDwellString, "%s<%f[p1]", rectRasterScanEngine->pixelDwellTime);
+							if (rectRasterScanEngine->pixelDwellTime != 0.0)
+								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_PixelDwell, pixelDwellString);
+							else
+								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_PixelDwell, "");
+				
+							// configure/unconfigure scan engine
+							// do this after adding combo boxes!
+							if (NonResRectangleRasterScan_ValidConfig(rectRasterScanEngine)) {
+				
+								NonResRectangleRasterScan_ScanHeights(rectRasterScanEngine);
+								NonResRectangleRasterScan_PixelDwellTimes(rectRasterScanEngine);
+					
+								if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)newScanEngine))
+									TaskControlEvent(newScanEngine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+								else
+									TaskControlEvent(newScanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+							} else
+								TaskControlEvent(newScanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+				
+							break;
+				
+							// insert here more scan engine types
+					}
+					
 					// add scan engine task controller to the framework
 					DLAddTaskController((DAQLabModule_type*)ls, newScanEngine->taskControl);
 					
@@ -1980,6 +2173,8 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanFastAxisPos);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanSlowAxisPos);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanScanOut);
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanShutter);     
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanPixelSettings);     
 					DetChan_type**	detPtr = ListGetPtrToItem(newScanEngine->DetChans, 1);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan);   
 					
@@ -2007,6 +2202,11 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 			break;
 	}
 	
+	return 0;
+	
+Error:
+	
+	DLMsg("Error: Could not load new scan engine.\n\n", 1);
 	
 	return 0;
 }
@@ -2397,6 +2597,18 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					SetVChanName((VChan_type*)engine->VChanScanOut, newName);
 					break;
 					
+				case ScanSetPan_ShutterCommand:
+					
+					newName = GetStringFromControl (panel, control);
+					SetVChanName((VChan_type*)engine->VChanShutter, newName);
+					break;
+					
+				case ScanSetPan_PixelSettings:
+					
+					newName = GetStringFromControl (panel, control);
+					SetVChanName((VChan_type*)engine->VChanPixelSettings, newName);
+					break;
+					
 				case ScanSetPan_AddImgChan:
 					
 					// create new VChan with a predefined base name
@@ -2431,6 +2643,19 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					if (engine->slowAxisCal)
 						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
 					
+					// configure/unconfigure scan engine
+					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+				
+						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
+						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+					
+						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						else
+							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+					} else
+						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+					
 					break;
 					
 				case ScanSetPan_TubeLensFL:
@@ -2442,6 +2667,19 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					
 					if (engine->slowAxisCal)
 						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
+					
+					// configure/unconfigure scan engine
+					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+				
+						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
+						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+					
+						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						else
+							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+					} else
+						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
 					
 					break;
 					
@@ -2465,14 +2703,26 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 				
 						if (engine->slowAxisCal)
 							(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
-					}
-					else {
+					} else {
 						engine->fastAxisCal->scanEngine = NULL;
 						engine->fastAxisCal = NULL;
 					}
 					
 					// update scan engine calibrations UI
 					UpdateScanEngineCalibrations(engine);
+					
+					// configure/unconfigure scan engine
+					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+				
+						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
+						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+					
+						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						else
+							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+					} else
+						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
 					
 					break;
 					
@@ -2499,6 +2749,55 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// update scan engine calibrations UI
 					UpdateScanEngineCalibrations(engine);
 					
+					// configure/unconfigure scan engine
+					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+				
+						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
+						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+					
+						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						else
+							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+					} else
+						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+					
+					break;
+					
+				case ScanSetPan_PixelClockFrequency:
+					
+					GetCtrlVal(panel, control, &engine->pixelClockRate);								// read in [MHz]
+					engine->pixelClockRate *= 1e6;														// convert to [Hz]
+					// configure/unconfigure scan engine
+					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+				
+						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
+						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+					
+						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						else
+							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+					} else
+						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+					break;
+					
+				case ScanSetPan_GalvoSamplingRate:
+					
+					GetCtrlVal(panel, control, &((RectangleRaster_type*) engine)->galvoSamplingRate);	// read in [kHz]
+					((RectangleRaster_type*) engine)->galvoSamplingRate *= 1e3;							// convert to [Hz]
+					// configure/unconfigure scan engine
+					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+				
+						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
+						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+					
+						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						else
+							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+					} else
+						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
 					break;
 					
 			}
@@ -2521,7 +2820,14 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
 					DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtr)->detVChan);
 					discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
-					DeleteListItem(panel, ScanSetPan_ImgChans, listItemIdx, 1);  
+					DeleteListItem(panel, ScanSetPan_ImgChans, listItemIdx, 1);
+					
+					// configure / unconfigure
+					if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+						TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+					else
+						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 
+						
 					break;
 				
 				// discard objective
@@ -2545,7 +2851,14 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					if (listItemIdx >= 0) {
 						objectivePtr = ListGetPtrToItem(engine->objectives, listItemIdx+1); 
 						engine->objectiveLens = *objectivePtr;
-					} 
+					} else
+						engine->objectiveLens = NULL;
+					
+					// configure / unconfigure
+					if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+						TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+					else
+						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
 					
 					break;
 			}
@@ -3319,7 +3632,13 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 								 char					fastAxisPosVChanName[],
 								 char					slowAxisPosVChanName[],
 								 char					imageOutVChanName[],
-								 char					detectorVChanName[])					
+								 char					detectorVChanName[],
+								 char					shutterVChanName[],
+								 char					pixelSettingsVChanName[],
+								 double					pixelClockRate,
+								 double					pixelSize,
+								 double					scanLensFL,
+								 double					tubeLensFL)					
 {
 	// init lists
 	engine->DetChans 				= 0;
@@ -3334,6 +3653,8 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	engine->VChanFastAxisPos		= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected); 
 	engine->VChanSlowAxisPos		= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected); 
 	engine->VChanScanOut			= init_SourceVChan_type(imageOutVChanName, DL_Image_NIVision, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected); 
+	engine->VChanShutter			= init_SourceVChan_type(shutterVChanName, DL_Waveform_UChar, engine, ShutterVChan_Connected, ShutterVChan_Disconnected); 
+	engine->VChanPixelSettings		= init_SourceVChan_type(pixelSettingsVChanName, DL_PulseTrain, engine, PixelSettingsVChan_Connected, PixelSettingsVChan_Connected); 	
 	if(!(engine->DetChans			= ListCreate(sizeof(DetChan_type*)))) goto Error;
 	// add one detection channel to the scan engine if required
 	if (detectorVChanName) {
@@ -3341,10 +3662,11 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 		ListInsertItem(engine->DetChans, &detChan, END_OF_LIST);
 	}
 	
-	engine->pixelClockRate			= NULL;
+	engine->pixelClockRate			= pixelClockRate;
+	engine->pixSize					= pixelSize;
 	// optics
-	engine->scanLensFL				= 1;
-	engine->tubeLensFL				= 1;
+	engine->scanLensFL				= scanLensFL;
+	engine->tubeLensFL				= tubeLensFL;
 	engine->objectiveLens			= NULL;
 	if(!(engine->objectives			= ListCreate(sizeof(Objective_type*)))) goto Error;     
 	
@@ -3413,6 +3735,18 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 		discard_VChan_type((VChan_type**)&engine->VChanScanOut);
 	}
 	
+	// shutter command
+	if (engine->VChanShutter) {
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanShutter);
+		discard_VChan_type((VChan_type**)&engine->VChanShutter);
+	}
+	
+	// pixel settings 
+	if (engine->VChanPixelSettings) {
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelSettings);
+		discard_VChan_type((VChan_type**)&engine->VChanPixelSettings);
+	}
+	
 	// detection channels
 	size_t	nDet = ListNumItems(engine->DetChans);
 	DetChan_type** detChanPtr;
@@ -3457,12 +3791,18 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 														char					slowAxisPosVChanName[],
 														char					imageOutVChanName[],
 														char					detectorVChanName[],
+														char					shutterVChanName[],
+														char					pixelSettingsVChanName[],
+														double					galvoSamplingRate,
+														double					pixelClockRate,
 														size_t					scanHeight,
 														size_t					scanHeightOffset,
 														size_t					scanWidth,
 														size_t					scanWidthOffset,
 														double					pixelSize,
-														double					pixelDwellTime		   	)
+														double					pixelDwellTime,
+														double					scanLensFL,
+														double					tubeLensFL)
 {
 	RectangleRaster_type*	engine = malloc (sizeof(RectangleRaster_type));
 	if (!engine) return NULL;
@@ -3470,7 +3810,8 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	//--------------------------------------------------------
 	// init base scan engine class
 	//--------------------------------------------------------
-	init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, fastAxisComVChanName, slowAxisComVChanName, fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectorVChanName);
+	init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, fastAxisComVChanName, slowAxisComVChanName, fastAxisPosVChanName, 
+						 slowAxisPosVChanName, imageOutVChanName, detectorVChanName, shutterVChanName, pixelSettingsVChanName, pixelClockRate, pixelSize, scanLensFL, tubeLensFL);
 	// override discard method
 	engine->baseClass.Discard			= discard_RectangleRaster_type;
 	// add task controller
@@ -3482,12 +3823,12 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	//--------------------------------------------------------
 	// init RectangleRaster_type
 	//--------------------------------------------------------
-	engine->galvoSamplingRate		= NULL;
+	engine->refGalvoSamplingRate	= &engine->galvoSamplingRate;
+	engine->galvoSamplingRate		= galvoSamplingRate;
 	engine->height					= scanHeight;
 	engine->heightOffset			= scanHeightOffset;
 	engine->width					= scanWidth;
 	engine->widthOffset				= scanWidthOffset;
-	engine->pixSize					= pixelSize;
 	engine->pixelDwellTime			= pixelDwellTime;
 
 	return engine;
@@ -3507,11 +3848,10 @@ static void	discard_RectangleRaster_type (ScanEngine_type** engine)
 static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	RectangleRaster_type*	scanEngine		= callbackData;
+	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
+	NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
 	int						listItemIdx;
-	double 					width;
-	double					heightOffset;
-	double					widthOffset;
-	
+
 	switch (event)
 	{
 		case EVENT_COMMIT:
@@ -3524,6 +3864,19 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					GetCtrlIndex(panel, control, &listItemIdx);
 					objectivePtr = ListGetPtrToItem(scanEngine->baseClass.objectives, listItemIdx+1);
 					scanEngine->baseClass.objectiveLens = *objectivePtr;
+					
+					// configure/unconfigure scan engine
+					if (NonResRectangleRasterScan_ValidConfig(scanEngine)) {
+				
+						NonResRectangleRasterScan_ScanHeights(scanEngine);
+						NonResRectangleRasterScan_PixelDwellTimes(scanEngine);
+					
+						if (NonResRectangleRasterScan_ReadyToScan(scanEngine))
+							TaskControlEvent(scanEngine->baseClass.taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						else
+							TaskControlEvent(scanEngine->baseClass.taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+					} else
+						TaskControlEvent(scanEngine->baseClass.taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
 					break;
 					
 				case RectRaster_Mode:
@@ -3536,49 +3889,50 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 				
 				case RectRaster_Height:
 					
-					char   		heightString[11];
+					char   		heightString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 					double		height;
+					size_t		heightPix;
 					
 					// get image height
 					GetCtrlVal(panel, control, heightString);
 					if (Scan(heightString, "%s>%f", &height) <= 0) {
 						// invalid entry, display previous value
-						Fmt(heightString, "%s<%f[p1]", scanEngine->height);
+						Fmt(heightString, "%s<%f[p1]", scanEngine->height * scanEngine->baseClass.pixSize);
 						SetCtrlVal(panel, control, heightString);
 						return 0;
 					}
 					
 					// no negative or zero value for height
 					if (height <= 0){
-						Fmt(heightString, "%s<%f[p1]", scanEngine->height);
+						Fmt(heightString, "%s<%f[p1]", scanEngine->height * scanEngine->baseClass.pixSize);
 						SetCtrlVal(panel, control, heightString);
 						return 0;
 					}
 					
-					NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
-					NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
-					double					ROIRadius 		= sqrt(pow(fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 2) + pow(slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement, 2));
-					
 					// make sure height is a multiple of the pixel size
-					height = floor(height/scanEngine->pixSize) * scanEngine->pixSize;
+					heightPix = (size_t) ceil(height/scanEngine->baseClass.pixSize);
+					height = heightPix * scanEngine->baseClass.pixSize;
 					Fmt(heightString, "%s<%f[p1]", height);
 					SetCtrlVal(panel, control, heightString);
 					
 					// check if requested image falls within ROI
-					if(!ValidROI(height, scanEngine->width, scanEngine->heightOffset, scanEngine->widthOffset, ROIRadius)) {
+					if(!RectangleROIInsideRectangle (height, scanEngine->width * scanEngine->baseClass.pixSize, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
+												 scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement,
+												2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
 						DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
 						char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
 						DLMsg(scanEngineName, 0);
 						OKfree(scanEngineName);
 						DLMsg(".\n\n", 0);
-						Fmt(heightString, "%s<%f[p1]", scanEngine->height);
+						Fmt(heightString, "%s<%f[p1]", scanEngine->height * scanEngine->baseClass.pixSize);
 						SetCtrlVal(panel, control, heightString);
 						return 0;
 					}
 					
 					// update height
-					scanEngine->height = height;
-					
+					scanEngine->height = heightPix;
+					Fmt(heightString, "%s<%f[p1]", scanEngine->height * scanEngine->baseClass.pixSize);  
+					SetCtrlVal(panel, control, heightString); 
 					// update pixel dwell times
 					NonResRectangleRasterScan_PixelDwellTimes(scanEngine); 
 					
@@ -3586,23 +3940,114 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					
 				case RectRaster_Width:
 					
-					
+					double		width;					// in [um]
+					size_t		widthPix;				// in [pix]
 					GetCtrlVal(panel, control, &width);
-					scanEngine->width = (size_t) ceil(width/scanEngine->pixSize);
-					SetCtrlVal(panel, control, scanEngine->width * scanEngine->pixSize);
+					// adjust heightOffset to be a multiple of pixel size
+					widthPix 	= (size_t) ceil(width/scanEngine->baseClass.pixSize);
+					width 		= widthPix * scanEngine->baseClass.pixSize;
+					
+					if (!RectangleROIInsideRectangle(scanEngine->height * scanEngine->baseClass.pixSize, width, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
+						scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 
+						2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
+							// return to previous value
+							SetCtrlVal(panel, control, scanEngine->width * scanEngine->baseClass.pixSize);
+							DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
+							char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
+							DLMsg(scanEngineName, 0);
+							OKfree(scanEngineName);
+							DLMsg(".\n\n", 0);
+							return 0; // stop here
+						}
+						
+					// update width
+					scanEngine->width = widthPix;  // in [pix]
+					SetCtrlVal(panel, control, scanEngine->width * scanEngine->baseClass.pixSize); 
 					break;
 					
 				case RectRaster_HeightOffset:
 					
-					GetCtrlVal(panel, control, &heightOffset);  
+					double		heightOffset;					// in [um]
+					size_t		heightOffsetPix;				// in [pix]
+					GetCtrlVal(panel, control, &heightOffset);  // in [um]
+					// adjust heightOffset to be a multiple of pixel size
+					heightOffsetPix		= (size_t) floor(heightOffset/scanEngine->baseClass.pixSize);
+					heightOffset 		= heightOffsetPix * scanEngine->baseClass.pixSize;
+					
+					if (!RectangleROIInsideRectangle(scanEngine->height * scanEngine->baseClass.pixSize, scanEngine->width * scanEngine->baseClass.pixSize, heightOffset, 
+						scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement,
+						2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
+							// return to previous value
+							SetCtrlVal(panel, control, scanEngine->heightOffset * scanEngine->baseClass.pixSize);
+							DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
+							char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
+							DLMsg(scanEngineName, 0);
+							OKfree(scanEngineName);
+							DLMsg(".\n\n", 0);
+							return 0; // stop here
+					}
+							
+					// update height offset
+					scanEngine->heightOffset = heightOffsetPix;  // in [pix]
+					SetCtrlVal(panel, control, scanEngine->heightOffset * scanEngine->baseClass.pixSize);
 					break;
 					
 				case RectRaster_WidthOffset:
 					
-					GetCtrlVal(panel, control, &widthOffset); 
+					double		widthOffset;					// in [um]
+					size_t		widthOffsetPix;					// in [pix]
+					GetCtrlVal(panel, control, &widthOffset);
+					// adjust heightOffset to be a multiple of pixel size
+					widthOffsetPix 		= (size_t) floor(widthOffset/scanEngine->baseClass.pixSize);
+					widthOffset 		= widthOffsetPix * scanEngine->baseClass.pixSize;
+					
+					if (!RectangleROIInsideRectangle(scanEngine->height * scanEngine->baseClass.pixSize, scanEngine->width * scanEngine->baseClass.pixSize, 
+						scanEngine->heightOffset * scanEngine->baseClass.pixSize, widthOffset, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 
+						2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
+							// return to previous value
+							SetCtrlVal(panel, control, scanEngine->widthOffset * scanEngine->baseClass.pixSize);
+							DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
+							char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
+							DLMsg(scanEngineName, 0);
+							OKfree(scanEngineName);
+							DLMsg(".\n\n", 0);
+							return 0; // stop here
+						}
+						
+					// update width offset
+					scanEngine->widthOffset = widthOffsetPix;  // in [pix]
+					SetCtrlVal(panel, control, scanEngine->widthOffset * scanEngine->baseClass.pixSize); 
 					break;
 					
 				case RectRaster_PixelDwell:
+					
+					char   		dwellTimeString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+					double		dwellTime;
+					
+					// get dwell time string
+					GetCtrlVal(panel, control, dwellTimeString);
+					if (Scan(dwellTimeString, "%s>%f", &dwellTime) <= 0) {
+						// invalid entry, display previous value
+						Fmt(dwellTimeString, "%s<%f[p1]", scanEngine->pixelDwellTime);
+						SetCtrlVal(panel, control, dwellTimeString);
+						return 0;
+					}
+					
+					// dwell time must be within bounds
+					if ((dwellTime < NonResGalvoScan_MinPixelDwellTime) || (dwellTime > NonResGalvoScan_MaxPixelDwellTime)){
+						Fmt(dwellTimeString, "%s<%f[p1]", scanEngine->pixelDwellTime);
+						SetCtrlVal(panel, control, dwellTimeString);
+						return 0;
+					}
+					
+					// make sure dwell time is a multiple of the pixel clock rate
+					dwellTime =  ceil(dwellTime * scanEngine->baseClass.pixelClockRate) /scanEngine->baseClass.pixelClockRate;
+					Fmt(dwellTimeString, "%s<%f[p1]", dwellTime);
+					SetCtrlVal(panel, control, dwellTimeString);
+					
+					scanEngine->pixelDwellTime = dwellTime;
+					// update preferred heights
+					NonResRectangleRasterScan_ScanHeights(scanEngine);
 					
 					break;
 					
@@ -3612,10 +4057,10 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					
 				case RectRaster_PixelSize:
 					
-					GetCtrlVal(panel, control, &scanEngine->pixSize);
+					GetCtrlVal(panel, control, &scanEngine->baseClass.pixSize);
 					// adjust width to be multiple of new pixel size
-					scanEngine->width = (size_t) ceil(width/scanEngine->pixSize);
-					SetCtrlVal(panel, control, scanEngine->width * scanEngine->pixSize);
+					scanEngine->width = (size_t) ceil(width/scanEngine->baseClass.pixSize);
+					SetCtrlVal(panel, control, scanEngine->width * scanEngine->baseClass.pixSize);
 					break;
 				
 			}
@@ -3625,32 +4070,32 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 	return 0;
 }
 
-void NonResRectangleRasterScan_ScanHeights (RectangleRaster_type* scanEngine, double pixelDwellTime)
+void NonResRectangleRasterScan_ScanHeights (RectangleRaster_type* scanEngine)
 {  
+	int						error 					= 0;
 	size_t   				blank;
 	size_t   				deadTimePixels;
 	BOOL     				inFOVFlag             	= 1; 
-	size_t   				i                     	= 1;					 	// counts how many galvo samples of 1/galvoSampleRate duration fit in a line scan
-	char     				text[11];  
+	size_t   				i                     	= 1;	// counts how many galvo samples of 1/galvoSampleRate duration fit in a line scan
 	double   				pixelsPerLine;
 	size_t   				intPixelsPerLine;
 	double   				rem;
 	double   				desiredSpeed;
-	char     				dwellTimeString[11];
+	char     				dwellTimeString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+	char					heightString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 	ListType 				Heights               	= ListCreate(sizeof(double));
 	double					ROIHeight;
-	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
-	NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
-	double					ROIRadius 		= sqrt(pow(fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 2) + pow(slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement, 2));
-	
+	NonResGalvoCal_type*	fastAxisCal				= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
+	NonResGalvoCal_type*	slowAxisCal				= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
+
 	// enforce pixeldwelltime to be an integer multiple of 1/pixelClockRate
 	// make sure pixeldwelltime is in [us] and pixelClockRate in [Hz] 
-	scanEngine->pixelDwellTime = floor(pixelDwellTime * *scanEngine->baseClass.pixelClockRate) / *scanEngine->baseClass.pixelClockRate; // result in [us]
+	scanEngine->pixelDwellTime = floor(scanEngine->pixelDwellTime * scanEngine->baseClass.pixelClockRate) / scanEngine->baseClass.pixelClockRate; // result in [us]
 	Fmt(dwellTimeString,"%s<%f[p3]", scanEngine->pixelDwellTime);
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, scanEngine->pixelDwellTime);// in [us]
+	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, dwellTimeString);	// in [us]
 	
 	// empty list of preferred heights
-	Combo_DeleteComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, 0, -1);
+	errChk( Combo_DeleteComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, 0, -1) );
 	
 	// empty value for Height, if the calculated list contains at least one item, then it will be filled out
 	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, ""); 
@@ -3664,17 +4109,18 @@ void NonResRectangleRasterScan_ScanHeights (RectangleRaster_type* scanEngine, do
 	while (inFOVFlag == TRUE){
 		// this condition ensures that at the end of each line, the pixels remain in sync with the galvo samples
 		// this allows for freedom in choosing the pixel dwell time (and implicitly the scan speed)
-		pixelsPerLine = floor(i/(*scanEngine->galvoSamplingRate * scanEngine->pixelDwellTime * 1e-6));
-		rem = i/(*scanEngine->galvoSamplingRate * scanEngine->pixelDwellTime * 1e-6) - pixelsPerLine;
+		pixelsPerLine = floor(i/(*scanEngine->refGalvoSamplingRate * scanEngine->pixelDwellTime * 1e-6));
+		rem = i/(*scanEngine->refGalvoSamplingRate * scanEngine->pixelDwellTime * 1e-6) - pixelsPerLine;
 		
-		ROIHeight = ((size_t)pixelsPerLine - deadTimePixels) * scanEngine->pixSize;
+		ROIHeight = ((size_t)pixelsPerLine - deadTimePixels) * scanEngine->baseClass.pixSize;
 		if ((rem == 0) && (pixelsPerLine > deadTimePixels)){ 
-			inFOVFlag = ValidROI(ROIHeight, scanEngine->width * scanEngine->pixSize, 
-							 scanEngine->heightOffset * scanEngine->pixSize, scanEngine->widthOffset * scanEngine->pixSize, ROIRadius);
-			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->pixSize, scanEngine->pixelDwellTime, ROIHeight + deadTimePixels * scanEngine->pixSize) && inFOVFlag) {
+			inFOVFlag = RectangleROIInsideRectangle(ROIHeight, scanEngine->width * scanEngine->baseClass.pixSize, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
+						scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement);
+			
+			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->baseClass.pixSize, scanEngine->pixelDwellTime, ROIHeight + deadTimePixels * scanEngine->baseClass.pixSize) && inFOVFlag) {
 				// add to list if scan frequency is valid
-				Fmt(text,"%s<%f[p1]", ROIHeight);
-				Combo_InsertComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, -1, text);
+				Fmt(heightString,"%s<%f[p1]", ROIHeight);
+				errChk( Combo_InsertComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, -1, heightString) );
 				ListInsertItem(Heights, &ROIHeight, END_OF_LIST);
 			}
 			 
@@ -3687,7 +4133,7 @@ void NonResRectangleRasterScan_ScanHeights (RectangleRaster_type* scanEngine, do
 	size_t 		nElem = ListNumItems(Heights);
 	double   	diffOld;
 	double   	diffNew;
-	double   	heightItem; 
+	double   	heightItem; // in [um]
 	size_t     	itemPos;
 	if (nElem) {
 		ListGetItem(Heights, &heightItem, 1);
@@ -3703,68 +4149,71 @@ void NonResRectangleRasterScan_ScanHeights (RectangleRaster_type* scanEngine, do
 		}
 		ListGetItem(Heights, &heightItem, itemPos);
 		// update scan control UI
-		Fmt(text,"%s<%f[p1]", heightItem);
-		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, text);
+		Fmt(heightString,"%s<%f[p1]", heightItem);
+		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, heightString);
 		// update scan engine structure
-		scanEngine->height = heightItem;
+		scanEngine->height = (size_t) heightItem/scanEngine->baseClass.pixSize;	// in [pix]
 	} else
 		// update scan engine structure
-		scanEngine->height = 0;
+		scanEngine->height = 0;													// in [pix]
 	
-	ListDispose(Heights); 
+	ListDispose(Heights);
+	
+Error:
+	return;
 }
 
 void NonResRectangleRasterScan_PixelDwellTimes (RectangleRaster_type* scanEngine)
 {
-	
+	int						error						= 0;
 	int       				deadTimePixels;
 	double    				pixelSize;
-	size_t      			heightPixels;											   						// Number of desired pixels in the height direction of the image
-	char      				imageHeightString[11];
+	char      				imageHeightString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+	char					dwellTimeString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 	double    				maxPixelDwellTime           = NonResGalvoScan_MaxPixelDwellTime;				// in [us].
 	double    				pixelDwell                  = 0;
 	double    				pixelDwellOld;
 	double    				oldDwellTime;
-	int       				k                           = 1;                            					// Counts how many galvo samples of 1/galvo_sample_rate duration fit in a line scan
-	int       				n; 							                               						// Counts how many pixel dwell times fit in the deadtime, note that the total dead time per line is twice this value
+	int       				k                           = 1;  // Counts how many galvo samples of 1/galvo_sample_rate duration fit in a line scan
+	int       				n; 							      // Counts how many pixel dwell times fit in the deadtime, note that the total dead time per line is twice this value
 	double    				rem;
-	ListType  				DwellTimes				  	= ListCreate(sizeof(double));
-	char      				text[11];
-	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;    
-	
-	// make sure that image height is a multiple of the pixel size in [um]
-	heightPixels = floor(scanEngine->height/scanEngine->pixSize); 
-	scanEngine->height = heightPixels * scanEngine->pixSize;   // in [um]
-	Fmt(imageHeightString,"%s<%f[p1]", scanEngine->height);						 
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, imageHeightString); 	// in [um]
+	ListType  				dwellTimes				  	= ListCreate(sizeof(double));
+	NonResGalvoCal_type*	fastAxisCal					= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;    
 	
 	// empty list of preferred dwell times
-	Combo_DeleteComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, 0, -1);
+	errChk( Combo_DeleteComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, 0, -1) );
 	
 	// empty value for Dwell Time, if the calculated list contains at least one item, then it will be filled out
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, ""); 
+	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, "");
+	
+	// stop here if scan height is 0
+	if (!scanEngine->height) {
+		scanEngine->pixelDwellTime = 0;
+		ListDispose(dwellTimes);
+		return;
+	}
 	
 	// make sure that pixelDwell is a multiple of 1/pix_clock_rate      
-	pixelDwell 	= ceil (NonResGalvoScan_MinPixelDwellTime * (*scanEngine->baseClass.pixelClockRate/1e6)) * (1e6/ *scanEngine->baseClass.pixelClockRate);
+	pixelDwell 	= ceil (NonResGalvoScan_MinPixelDwellTime * (scanEngine->baseClass.pixelClockRate/1e6)) * (1e6/scanEngine->baseClass.pixelClockRate);
 	n 		 	= ceil (fastAxisCal->triangleCal->deadTime * (1e3/pixelDwell));           		// dead time pixels at the beginning and end of each line
-	k		 	= ceil (pixelDwell * (*scanEngine->galvoSamplingRate/1e6) * (heightPixels + 2*n));
+	k		 	= ceil (pixelDwell * (*scanEngine->refGalvoSamplingRate/1e6) * (scanEngine->height + 2*n));
 	while (pixelDwell <= NonResGalvoScan_MaxPixelDwellTime) {
 		
 		pixelDwellOld = 0;
 		while (pixelDwellOld != pixelDwell) {
 			pixelDwellOld = pixelDwell;
 			n 		 = ceil (fastAxisCal->triangleCal->deadTime * (1e3/pixelDwell));   			// dead time pixels at the beginning and end of each line
-			pixelDwell = k/(*scanEngine->galvoSamplingRate * (heightPixels + 2*n)) * 1e6;       // in [us]
+			pixelDwell = k/(*scanEngine->refGalvoSamplingRate * (scanEngine->height + 2*n)) * 1e6;       // in [us]
 		}
 	
 		// check if the pixel dwell time is a multiple of 1/pixelClockRate 
-		rem = pixelDwell * (*scanEngine->baseClass.pixelClockRate/1e6) - floor(pixelDwell * (*scanEngine->baseClass.pixelClockRate/1e6));
+		rem = pixelDwell * (scanEngine->baseClass.pixelClockRate/1e6) - floor(pixelDwell * (scanEngine->baseClass.pixelClockRate/1e6));
 		if (rem == 0)
-			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->pixSize, pixelDwell, scanEngine->height + 2*n*scanEngine->pixSize)) {
+			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->baseClass.pixSize, pixelDwell, scanEngine->height * scanEngine->baseClass.pixSize + 2 * n * scanEngine->baseClass.pixSize)) {
 				// add to list
-				Fmt(text,"%s<%f[p3]", pixelDwell);
-				Combo_InsertComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, -1, text);
-				ListInsertItem(DwellTimes, &pixelDwell, END_OF_LIST);
+				Fmt(dwellTimeString,"%s<%f[p3]", pixelDwell);
+				errChk( Combo_InsertComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, -1, dwellTimeString) );
+				ListInsertItem(dwellTimes, &pixelDwell, END_OF_LIST);
 			}
 		
 		k++;
@@ -3777,49 +4226,120 @@ void NonResRectangleRasterScan_PixelDwellTimes (RectangleRaster_type* scanEngine
 	double    	diffOld;
 	double    	diffNew;
 	
-	nElem = ListNumItems(DwellTimes);		  
+	nElem = ListNumItems(dwellTimes);		  
 	if (nElem) {
-		ListGetItem(DwellTimes, &dwellTimeItem, 1);
+		ListGetItem(dwellTimes, &dwellTimeItem, 1);
 		diffOld = fabs(dwellTimeItem - scanEngine->pixelDwellTime);
 		itemPos = 1;
 		for (size_t i = 2; i <= nElem; i++) {
-			ListGetItem(DwellTimes, &dwellTimeItem, i);
+			ListGetItem(dwellTimes, &dwellTimeItem, i);
 			diffNew = fabs(dwellTimeItem - scanEngine->pixelDwellTime);
 			if (diffNew < diffOld) {diffOld = diffNew; itemPos = i;}
 		}
 		
-		ListGetItem(DwellTimes, &dwellTimeItem, itemPos);
+		ListGetItem(dwellTimes, &dwellTimeItem, itemPos);
 		// update scan control UI
-		Fmt(text,"%s<%f[p3]", dwellTimeItem);
-		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, text);
+		Fmt(dwellTimeString,"%s<%f[p3]", dwellTimeItem);
+		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, dwellTimeString);
 		// update scan engine structure
 		scanEngine->pixelDwellTime = dwellTimeItem;
 	} else
 		scanEngine->pixelDwellTime = 0;
 	
-	ListDispose(DwellTimes);
+	ListDispose(dwellTimes);
+	
+Error:
+	
+	return;
 }
-
-// Calculates whether a given rectangular ROI with given Width and Height as well as offsets is falling within a circular region with given Diameter
-// 0 - Rectangle ROI is outside the circular FOV, 1 - otherwise.
-static BOOL ValidROI(double ROIHeight, double ROIWidth, double HeightOffset, double WidthOffset, double FOVRadius)
+																	
+// Determines whether a given rectangular ROI with given width and height as well as offsets is falling within a circular region with given radius.
+// 0 - Rectangle ROI is outside the circular perimeter, 1 - otherwise.
+static BOOL RectangleROIInsideCircle (double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double circleRadius)
 {
 	BOOL ok = TRUE;
 	
-	if (sqrt(pow((HeightOffset-ROIHeight/2),2)+pow((WidthOffset+ROIWidth/2),2)) > fabs(FOVRadius)) ok = FALSE;
-	if (sqrt(pow((HeightOffset+ROIHeight/2),2)+pow((WidthOffset+ROIWidth/2),2)) > fabs(FOVRadius)) ok = FALSE;
-	if (sqrt(pow((HeightOffset-ROIHeight/2),2)+pow((WidthOffset-ROIWidth/2),2)) > fabs(FOVRadius)) ok = FALSE;
-	if (sqrt(pow((HeightOffset+ROIHeight/2),2)+pow((WidthOffset-ROIWidth/2),2)) > fabs(FOVRadius)) ok = FALSE;
+	if (sqrt(pow((ROIHeightOffset-ROIHeight/2),2)+pow((ROIWidthOffset+ROIWidth/2),2)) > fabs(circleRadius)) ok = FALSE;
+	if (sqrt(pow((ROIHeightOffset+ROIHeight/2),2)+pow((ROIWidthOffset+ROIWidth/2),2)) > fabs(circleRadius)) ok = FALSE;
+	if (sqrt(pow((ROIHeightOffset-ROIHeight/2),2)+pow((ROIWidthOffset-ROIWidth/2),2)) > fabs(circleRadius)) ok = FALSE;
+	if (sqrt(pow((ROIHeightOffset+ROIHeight/2),2)+pow((ROIWidthOffset-ROIWidth/2),2)) > fabs(circleRadius)) ok = FALSE;
 	
 	return ok;
 }
 
-/// HIFN Evaluates whether the scan engine settings are valid
-/// HIRET True, if scan engine settings are valid and False otherwise
-static BOOL	NonResRectangleRasterScan_ValidScanConfig (RectangleRaster_type* scanEngine)
+static BOOL RectangleROIInsideRectangle (double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double maxHeight, double maxWidth)
 {
-	return scanEngine->baseClass.fastAxisCal && scanEngine->baseClass.fastAxisCal && scanEngine->baseClass.objectiveLens &&
-		   scanEngine->baseClass.pixelClockRate && scanEngine->galvoSamplingRate;
+	return (2*fabs(ROIHeightOffset)+fabs(ROIHeight) <= fabs(maxHeight)) && (2*fabs(ROIWidthOffset)+fabs(ROIWidth) <= fabs(maxWidth));
+}
+
+/// HIFN Evaluates whether the scan engine has a valid configuration
+/// HIRET True, if scan engine configuration is valid and False otherwise.
+static BOOL	NonResRectangleRasterScan_ValidConfig (RectangleRaster_type* scanEngine)
+{
+	// check if scan engine configuration is valid
+	BOOL	validFlag = scanEngine->baseClass.fastAxisCal && scanEngine->baseClass.slowAxisCal && scanEngine->baseClass.objectiveLens &&
+		   				(scanEngine->baseClass.pixelClockRate != 0.0) && scanEngine->refGalvoSamplingRate && (scanEngine->baseClass.pixSize != 0.0) && 
+						ListNumItems(scanEngine->baseClass.DetChans);
+	if (validFlag)
+		validFlag = (*scanEngine->refGalvoSamplingRate != 0.0) && (scanEngine->baseClass.scanLensFL != 0.0) && (scanEngine->baseClass.tubeLensFL != 0.0) &&
+					(scanEngine->baseClass.objectiveLens->objectiveFL != 0.0);
+	
+	// check if fast scan axis configuration is valid
+	if (validFlag)
+		switch (scanEngine->baseClass.fastAxisCal->scanAxisType) {
+				
+			case NonResonantGalvo:
+				
+				NonResGalvoCal_type* nrgCal = (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;
+				
+				validFlag = (nrgCal->commandVMax != 0.0) && (nrgCal->mechanicalResponse != 0.0) && (nrgCal->sampleDisplacement != 0.0);
+				
+				break;
+				
+			case ResonantGalvo:
+				
+				break;
+				
+			case AOD:
+				
+				break;
+				
+			case Translation:
+				
+				break;
+		}
+	
+	// check if slow scan axis configuration is valid
+	if (validFlag)
+		switch (scanEngine->baseClass.slowAxisCal->scanAxisType) {
+				
+			case NonResonantGalvo:
+				
+				NonResGalvoCal_type* nrgCal = (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
+				
+				validFlag = (nrgCal->commandVMax != 0.0) && (nrgCal->mechanicalResponse != 0.0) && (nrgCal->sampleDisplacement != 0.0);
+				
+				break;
+				
+			case ResonantGalvo:
+				
+				break;
+				
+			case AOD:
+				
+				break;
+				
+			case Translation:
+				
+				break;
+		}
+	
+	return validFlag;
+}
+
+static BOOL NonResRectangleRasterScan_ReadyToScan(RectangleRaster_type* scanEngine)
+{
+	return NonResRectangleRasterScan_ValidConfig(scanEngine) && (scanEngine->height != 0.0) && (scanEngine->width != 0.0);
 }
 
 static void	GetScanAxisTypes (ScanEngine_type* scanEngine, ScanAxis_type* fastAxisType, ScanAxis_type* slowAxisType)
@@ -3926,6 +4446,19 @@ static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void 
 				InsertListItem(engine->scanSetPanHndl, RectRaster_Objective, -1, newObjectiveName, objectiveFL);
 			}
 			OKfree(newObjectiveName);
+			
+			// configure/unconfigure scan engine
+			if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+				
+				NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
+				NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+					
+				if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+					TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+				else
+					TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+			} else
+				TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
 			
 			// cleanup, discard panel
 			DiscardPanel(engine->newObjectivePanHndl);
@@ -4055,6 +4588,28 @@ static void	DetVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
 }
 
 static void	DetVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
+}
+
+// Shutter VChan
+static void	ShutterVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
+
+static void	ShutterVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
+}
+
+// Pixel settings VChan
+static void	PixelSettingsVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
+
+static void	PixelSettingsVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
 {
 	
 }
@@ -4339,6 +4894,12 @@ static FCallReturn_type* StartTC_NonResGalvoCal (TaskControl_type* taskControl, 
 	if (cal->scanTime == 0.0)
 		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Scan time cannot be 0"); 
 	
+	// total number of iterations to start with
+	SetTaskControlIterations(taskControl, 1);
+	// set starting calibration type
+	cal->currentCal = NonResGalvoCal_Slope_Offset;
+	// reset iteration index
+	cal->currIterIdx = 0;
 	
 	return init_FCallReturn_type(0, "", ""); 
 }
@@ -4809,12 +5370,18 @@ static FCallReturn_type* ConfigureTC_RectRaster (TaskControl_type* taskControl, 
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	// undim scan control panel
+	SetPanelAttribute(engine->baseClass.scanSetPanHndl, ATTR_DIMMED, 0);
+	
 	return init_FCallReturn_type(0, "", ""); 
 }
 
 static FCallReturn_type* UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+	// dim scan control panel
+	SetPanelAttribute(engine->baseClass.scanSetPanHndl, ATTR_DIMMED, 1);
 	
 	return init_FCallReturn_type(0, "", ""); 
 }
@@ -4835,12 +5402,34 @@ static FCallReturn_type* StartTC_RectRaster (TaskControl_type* taskControl, BOOL
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// open shutter
+	//-------------------------------------------------------------------------------------------------------------------------------
+	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
+	*shutterCommand	= 1;
+	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, shutterCommand);
+	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
+	
+	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
+	
+	
+	
 	return init_FCallReturn_type(0, "", ""); 
 }
 
 static FCallReturn_type* DoneTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// close shutter
+	//-------------------------------------------------------------------------------------------------------------------------------
+	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
+	*shutterCommand	= 0;
+	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, shutterCommand);
+	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
+	
+	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
 	
 	return init_FCallReturn_type(0, "", "");   
 }
@@ -4849,12 +5438,32 @@ static FCallReturn_type* StoppedTC_RectRaster (TaskControl_type* taskControl, si
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// close shutter
+	//-------------------------------------------------------------------------------------------------------------------------------
+	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
+	*shutterCommand	= 0;
+	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, shutterCommand);
+	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
+	
+	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
+	
 	return init_FCallReturn_type(0, "", "");   
 }
 
 static FCallReturn_type* ResetTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// close shutter
+	//-------------------------------------------------------------------------------------------------------------------------------
+	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
+	*shutterCommand	= 0;
+	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, shutterCommand);
+	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
+	
+	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
 	
 	return init_FCallReturn_type(0, "", "");   
 }

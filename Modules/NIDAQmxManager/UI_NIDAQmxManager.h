@@ -56,14 +56,35 @@
 #define  DevListPan_AddBTTN               4       /* control type: command, callback function: ManageDevices_CB */
 #define  DevListPan_Plate                 5       /* control type: deco, callback function: (none) */
 
-#define  DIDOChSet                        9
-#define  DIDOChSet_Plate                  2       /* control type: deco, callback function: (none) */
+#define  DIDOLChSet                       9
+#define  DIDOLChSet_Plate                 2       /* control type: deco, callback function: (none) */
+#define  DIDOLChSet_VChanName             3       /* control type: string, callback function: (none) */
+#define  DIDOLChSet_CHECKBOX              4       /* control type: radioButton, callback function: (none) */
+#define  DIDOLChSet_RADIOBUTTON           5       /* control type: radioButton, callback function: (none) */
+#define  DIDOLChSet_OnDemand              6       /* control type: radioButton, callback function: (none) */
 
-#define  NIDAQmxPan                       10
+#define  DIDOPChSet                       10
+#define  DIDOPChSet_Plate                 2       /* control type: deco, callback function: (none) */
+#define  DIDOPChSet_VChanName             3       /* control type: string, callback function: (none) */
+#define  DIDOPChSet_CHECKBOX              4       /* control type: radioButton, callback function: (none) */
+#define  DIDOPChSet_RADIOBUTTON_7         5       /* control type: radioButton, callback function: (none) */
+#define  DIDOPChSet_OnDemand              6       /* control type: radioButton, callback function: (none) */
+#define  DIDOPChSet_RADIOBUTTON_6         7       /* control type: radioButton, callback function: (none) */
+#define  DIDOPChSet_RADIOBUTTON_5         8       /* control type: radioButton, callback function: (none) */
+#define  DIDOPChSet_RADIOBUTTON_4         9       /* control type: radioButton, callback function: (none) */
+#define  DIDOPChSet_RADIOBUTTON_3         10      /* control type: radioButton, callback function: (none) */
+#define  DIDOPChSet_RADIOBUTTON_2         11      /* control type: radioButton, callback function: (none) */
+#define  DIDOPChSet_RADIOBUTTON_1         12      /* control type: radioButton, callback function: (none) */
+#define  DIDOPChSet_RADIOBUTTON_0         13      /* control type: radioButton, callback function: (none) */
+
+#define  DIDOTskSet                       11
+#define  DIDOTskSet_Tab                   2       /* control type: tab, callback function: (none) */
+
+#define  NIDAQmxPan                       12
 #define  NIDAQmxPan_Plate                 2       /* control type: deco, callback function: (none) */
 #define  NIDAQmxPan_Devices               3       /* control type: tab, callback function: (none) */
 
-#define  RefTrig1                         11
+#define  RefTrig1                         13
 #define  RefTrig1_Plate                   2       /* control type: deco, callback function: (none) */
 #define  RefTrig1_Slope                   3       /* control type: ring, callback function: (none) */
 #define  RefTrig1_TrigType                4       /* control type: ring, callback function: (none) */
@@ -71,13 +92,13 @@
 #define  RefTrig1_NSamples                6       /* control type: numeric, callback function: (none) */
 #define  RefTrig1_Source                  7       /* control type: string, callback function: (none) */
 
-#define  RefTrig2                         12
+#define  RefTrig2                         14
 #define  RefTrig2_Plate                   2       /* control type: deco, callback function: (none) */
 #define  RefTrig2_TrigType                3       /* control type: ring, callback function: (none) */
 #define  RefTrig2_NSamples                4       /* control type: numeric, callback function: (none) */
 #define  RefTrig2_Duration                5       /* control type: numeric, callback function: (none) */
 
-#define  RefTrig3                         13
+#define  RefTrig3                         15
 #define  RefTrig3_Plate                   2       /* control type: deco, callback function: (none) */
 #define  RefTrig3_Slope                   3       /* control type: ring, callback function: (none) */
 #define  RefTrig3_Source                  4       /* control type: string, callback function: (none) */
@@ -86,7 +107,7 @@
 #define  RefTrig3_Level                   7       /* control type: numeric, callback function: (none) */
 #define  RefTrig3_TrigType                8       /* control type: ring, callback function: (none) */
 
-#define  RefTrig4                         14
+#define  RefTrig4                         16
 #define  RefTrig4_Plate                   2       /* control type: deco, callback function: (none) */
 #define  RefTrig4_Source                  3       /* control type: string, callback function: (none) */
 #define  RefTrig4_NSamples                4       /* control type: numeric, callback function: (none) */
@@ -96,24 +117,24 @@
 #define  RefTrig4_TrigWndTop              8       /* control type: numeric, callback function: (none) */
 #define  RefTrig4_TrigWndBttm             9       /* control type: numeric, callback function: (none) */
 
-#define  StartTrig1                       15
+#define  StartTrig1                       17
 #define  StartTrig1_Plate                 2       /* control type: deco, callback function: (none) */
 #define  StartTrig1_Slope                 3       /* control type: ring, callback function: (none) */
 #define  StartTrig1_Source                4       /* control type: string, callback function: (none) */
 #define  StartTrig1_TrigType              5       /* control type: ring, callback function: (none) */
 
-#define  StartTrig2                       16
+#define  StartTrig2                       18
 #define  StartTrig2_Plate                 2       /* control type: deco, callback function: (none) */
 #define  StartTrig2_TrigType              3       /* control type: ring, callback function: (none) */
 
-#define  StartTrig3                       17
+#define  StartTrig3                       19
 #define  StartTrig3_Plate                 2       /* control type: deco, callback function: (none) */
 #define  StartTrig3_Slope                 3       /* control type: ring, callback function: (none) */
 #define  StartTrig3_Source                4       /* control type: string, callback function: (none) */
 #define  StartTrig3_Level                 5       /* control type: numeric, callback function: (none) */
 #define  StartTrig3_TrigType              6       /* control type: ring, callback function: (none) */
 
-#define  StartTrig4                       18
+#define  StartTrig4                       20
 #define  StartTrig4_Plate                 2       /* control type: deco, callback function: (none) */
 #define  StartTrig4_Source                3       /* control type: string, callback function: (none) */
 #define  StartTrig4_TrigType              4       /* control type: ring, callback function: (none) */
@@ -121,7 +142,7 @@
 #define  StartTrig4_TrigWndTop            6       /* control type: numeric, callback function: (none) */
 #define  StartTrig4_TrigWndBttm           7       /* control type: numeric, callback function: (none) */
 
-#define  TaskSetPan                       19
+#define  TaskSetPan                       21
 #define  TaskSetPan_DAQTasks              2       /* control type: tab, callback function: (none) */
 #define  TaskSetPan_Wait                  3       /* control type: numeric, callback function: (none) */
 #define  TaskSetPan_Plate                 4       /* control type: deco, callback function: (none) */
@@ -141,6 +162,19 @@
 #define  CLKPAN_RefClockSlope             3       /* control type: ring, callback function: (none) */
 #define  CLKPAN_RefClockType              4       /* control type: ring, callback function: (none) */
 #define  CLKPAN_RefClkSource              5       /* control type: string, callback function: (none) */
+
+     /* tab page panel controls */
+#define  DIDOChan_ChanSet                 2       /* control type: tab, callback function: (none) */
+
+     /* tab page panel controls */
+#define  DIDOTiming_Plate                 2       /* control type: deco, callback function: (none) */
+#define  DIDOTiming_SampleClockSlope      3       /* control type: ring, callback function: (none) */
+#define  DIDOTiming_SampClockType         4       /* control type: ring, callback function: (none) */
+#define  DIDOTiming_SampClkSource         5       /* control type: string, callback function: (none) */
+#define  DIDOTiming_Timeout               6       /* control type: numeric, callback function: (none) */
+
+     /* tab page panel controls */
+#define  DIDOTrig_TrigSet                 2       /* control type: tab, callback function: (none) */
 
      /* tab page panel controls */
 #define  Set_BlockSize                    2       /* control type: numeric, callback function: (none) */

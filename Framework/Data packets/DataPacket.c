@@ -36,22 +36,7 @@ struct DataPacket {
 };
 
 
-//---------------------------------------------------------------------------------------------------
-// PulsTrain Data Packet
-//---------------------------------------------------------------------------------------------------
-struct PulsTrainPacket {
-	DataPacket_type				baseClass;		// DataPacket_type base class.
-	char*						chanName;
-	double						timeout;
-	int							idlestate;
-	double						initialdelay;
-	int 						highticks;
-	int 						lowticks;
-	char*						refclk_source;
-	int							refclk_slope;
-	char*						trigger_source;
-	int							trigger_slope;
-};
+
 
   
 
@@ -66,56 +51,6 @@ struct PulsTrainPacket {
 
 //==============================================================================
 // Global functions
-
-PulsTrainPacket_type* init_PulsTrainPacket_type (DLDataTypes dataType, void* data, DiscardPacketDataFptr_type discardPacketDataFptr) 
-{
-	PulsTrainPacket_type* dataPacket = malloc (sizeof(PulsTrainPacket_type));
-	if (!dataPacket) return NULL;
-	
-	dataPacket -> baseClass.dataType 					= dataType;
-	dataPacket -> baseClass.data     					= data;
-	dataPacket -> baseClass.discardPacketDataFptr   	= discardPacketDataFptr;
-	
-	dataPacket -> chanName								= NULL;
-	dataPacket -> refclk_source							= NULL;
-	dataPacket -> trigger_source						= NULL;
-	
-	
-	// create counter to keep track of how many sinks still need this data packet
-	CmtNewTSV(sizeof(int), &dataPacket->baseClass.ctr);
-	// set counter to 1
-	int* 	ctrTSVptr;
-	
-	CmtGetTSVPtr(dataPacket->baseClass.ctr, &ctrTSVptr);
-	*ctrTSVptr = 1;
-	CmtReleaseTSVPtr(dataPacket->baseClass.ctr);
-	
-	return dataPacket;
-}
-
-
-void discard_PulsTrainPacket_type_type (PulsTrainPacket_type** dataPacket)
-{
-	if (!*dataPacket) return;
-	
-	// discard data
-	if ((*dataPacket)->baseClass.discardPacketDataFptr)
-		(*(*dataPacket)->baseClass.discardPacketDataFptr) (&(*dataPacket)->baseClass.data);
-	else
-		OKfree((*dataPacket)->baseClass.data);
-	
-	OKfree((*dataPacket)-> chanName);     
-	OKfree((*dataPacket)-> refclk_source);     
-	OKfree((*dataPacket)-> trigger_source);     
-	
-	// discard instance counter
-	CmtDiscardTSV((*dataPacket)->baseClass.ctr);
-	
-	// discard data packet
-	OKfree(*dataPacket);
-}
-
-
 
 DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void* data, DiscardPacketDataFptr_type discardPacketDataFptr) 
 {

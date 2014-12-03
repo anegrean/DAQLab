@@ -144,6 +144,10 @@ double					GetSinkVChanWriteTimeout			(SinkVChan_type* sinkVChan);
 
 void*					GetPtrToVChanOwner					(VChan_type* VChan);
 
+void SetVChanUseAsReference (VChan_type* VChan, BOOL useAsReference);
+
+BOOL GetVChanUseAsReference (VChan_type* VChan);
+
 								
 //------------------------------------------------------------------------------
 // Data Packet Management

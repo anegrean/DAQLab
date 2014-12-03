@@ -46,6 +46,9 @@
 
 #define ITER_TIMEOUT 			10
 
+#define VChan_Default_PulseTrainSinkChan		"VUPC Pulsetrain Sink"    
+
+
 #ifndef errChk
 #define errChk(fCall) if (error = (fCall), error < 0) \
 {goto Error;} else
@@ -104,6 +107,9 @@ struct VUPhotonCtr {
 		// hardware channel index. If a channel is not in use, its value in the array is NULL.
 
 	Channel_type*		channels[MAX_CHANNELS];
+	
+	//	virtual channel to receive pulsetrain settings
+	SinkVChan_type*		pulsetrainVchan;
 
 		//-------------------------
 		// Device IO settings
@@ -189,6 +195,12 @@ static int CVICALLBACK 				VUPCPhotonCounter_CB 			(int panel, int control, int 
 
 static BOOL 						ValidTaskControllerName			(char name[], void* dataPtr);
 
+// pulsetrain command VChan connected callback
+static void	PulseTrainVChan_Connected (VChan_type* self, VChan_type* connectedVChan);
+// pulsetrain command VChan disconnected callback
+static void	PulseTrainVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan);
+
+
 static int PMT_Set_Mode ( int PMTnr, PMT_Mode_type mode);
 static int PMT_Set_Fan ( int PMTnr, BOOL value);
 static int PMT_Set_Cooling ( int PMTnr, BOOL value);
@@ -208,6 +220,8 @@ static int PMTController_ResetFifo(void);
 //-----------------------------------------
 
 static FCallReturn_type*	ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
+
+static FCallReturn_type*	UnConfigureTC			(TaskControl_type* taskControl, BOOL const* abortFlag);      
 
 static void					IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
@@ -256,7 +270,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	initalloc_DAQLabModule(&vupc->baseClass, className, instanceName);
 	
 	// create VUPhotonCtr Task Controller
-	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
+	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, UnConfigureTC,IterateTC, AbortIterationTC, StartTC, ResetTC,
 								DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
 	
@@ -294,7 +308,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	vupc->refSamplingRate			= &vupc->samplingRate; 		// by default point to device set sampling rate
 
 	vupc->measmode					= MEASMODE_FINITE;
-
+	vupc->pulsetrainVchan			= NULL;
 	
 		// METHODS
 			// assign default controls callback to UI_VUPhotonCtr.uir panel
@@ -347,6 +361,9 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 
 	if (vupc->counterPanHndl)
 		DiscardPanel(vupc->counterPanHndl);
+	
+	// discard pulsetrain SinkVChan   
+	if (vupc->pulsetrainVchan) discard_VChan_type(vupc->pulsetrainVchan);
 
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
@@ -499,6 +516,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 
 	// configure Photoncounter Task Controller
 	//default settings:
+	
+		
+	
 
 	TaskControlEvent(vupc->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 
@@ -920,7 +940,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 
 				case VUPCSet_MeasMode:
 					GetCtrlIndex(panel,VUPCSet_MeasMode,&vupc->measmode);
-					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate);  
+					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate );  
 					GetCtrlVal(panel,VUPCSet_NSamples,vupc->refNSamples);   
 					Setnrsamples_in_iteration(vupc->measmode,*vupc->refSamplingRate,*vupc->refNSamples);
 					break;
@@ -983,9 +1003,19 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						SetCtrlAttribute(chan->panHndl, VUPCChan_Mode, ATTR_LABEL_TEXT, buff);
 						// register VChan with DAQLab
 						DLRegisterVChan((DAQLabModule_type*)chan->vupcInstance, chan->VChan);
-
+						
+						
 						// connect module data and user interface callbackFn to all direct controls in the panel
 						SetCtrlsInPanCBInfo(chan, ((VUPhotonCtr_type*)vupc)->uiCtrlsCB, chan->panHndl);
+						
+						//add sink to receive pulsetrain settings
+						if (vupc->pulsetrainVchan==NULL){
+							char*	pulsetrainVChanName		= DLGetUniqueVChanName(VChan_Default_PulseTrainSinkChan);
+							DLDataTypes allowedPacketTypes[] = {DL_PulseTrain} ;
+							vupc->pulsetrainVchan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
+							// register VChan with DAQLab
+							DLRegisterVChan((DAQLabModule_type*)chan->vupcInstance, vupc->pulsetrainVchan);			
+						}
 
 						// update main panel
 						RedrawMainPanel(vupc);
@@ -1147,6 +1177,16 @@ static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const*
 	return init_FCallReturn_type(0, "", "");
 }
 
+
+static FCallReturn_type* UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+{
+	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
+	
+	
+
+	return init_FCallReturn_type(0, "", "");
+}
+
 static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
@@ -1257,3 +1297,16 @@ static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, Task
 	return init_FCallReturn_type(0, "", "");
 }
 
+
+// pulsetrain command VChan connected callback
+static void	PulseTrainVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
+
+// pulsetrain command VChan disconnected callback
+static void	PulseTrainVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
+}
+ 

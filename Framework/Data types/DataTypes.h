@@ -267,9 +267,9 @@ int   GetPulseTrainNPulses(PulseTrain_type* pulsetrain);
 //sets the pulsetrain mode
 void   SetPulseTrainMode(PulseTrain_type* pulsetrain,int mode);
 ////gets the pulsetrain type
-//int   GetPulseTrainType(PulseTrain_type* pulsetrain)
+int   GetPulseTrainType(PulseTrain_type* pulsetrain);
 //sets the pulsetrain type
-//void   SetPulseTrainType(PulseTrain_type* pulsetrain,int type)
+void   SetPulseTrainType(PulseTrain_type* pulsetrain,int type);
 //gets the pulsetrain mode
 int   GetPulseTrainMode(PulseTrain_type* pulsetrain);
 

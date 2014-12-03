@@ -26,7 +26,7 @@
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}   
 
  	// CO Frequency 
-#define DAQmxDefault_CO_Frequency_Task_freq				10000000   		// frequency
+#define DAQmxDefault_CO_Frequency_Task_freq				1000000   		// frequency
 #define DAQmxDefault_CO_Frequency_Task_dutycycle    	50.0			// duty cycle
 #define DAQmxDefault_CO_Frequency_Task_hightime			0.0005   		// the time the pulse stays high [s]
 #define DAQmxDefault_CO_Frequency_Task_lowtime     		0.0005			// the time the pulse stays low [s]
@@ -206,16 +206,16 @@ void   SetPulseTrainMode(PulseTrain_type* pulsetrain,int mode)
 }
 
 ////gets the pulsetrain type
-//int   GetPulseTrainType(PulseTrain_type* pulsetrain)
-//{
-//	return pulsetrain->type;	
-//}
+int   GetPulseTrainType(PulseTrain_type* pulsetrain)
+{
+	return pulsetrain->type;	
+}
 
 //sets the pulsetrain type
-//void   SetPulseTrainType(PulseTrain_type* pulsetrain,int type)
-//{
-//	pulsetrain->type=type;	
-//}
+void   SetPulseTrainType(PulseTrain_type* pulsetrain,int type)
+{
+	pulsetrain->type=type;	
+}
 
 //gets the pulsetrain mode
 int   GetPulseTrainMode(PulseTrain_type* pulsetrain)

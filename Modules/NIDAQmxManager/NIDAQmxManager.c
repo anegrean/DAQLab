@@ -79,6 +79,9 @@
 	// Shared error codes
 #define WriteAODAQmx_Err_DataUnderflow 				-1
 
+#define VChan_Default_DAQmxPulseTrainSourceChan		"DAQmx Pulsetrain Src"  
+#define VChan_Default_DAQmxPulseTrainSinkChan		"DAQmx Pulsetrain Sink"   
+
 //========================================================================================================================================================================================================
 // Types
 typedef struct NIDAQmxManager 	NIDAQmxManager_type; 
@@ -573,8 +576,9 @@ typedef struct {
 typedef struct {
 	ChanSet_type			baseClass;					// Channel settings common to all channel types.
 	PulseTrain_type*		pulsetrain;
-	TaskTiming_type*		tasktiming;						// Task timing info. 
-	
+	TaskTiming_type*		tasktiming;						// Task timing info.
+	SourceVChan_type*		pulsetrain_sourceVchan;		//
+	SinkVChan_type*			pulsetrain_sinkVchan;
 } ChanSet_CO_type;
 
 
@@ -973,6 +977,13 @@ static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
 static char* 						substr									(const char* token, char** idxstart);
 
 static BOOL							ValidTaskControllerName					(char name[], void* dataPtr);
+
+// pulsetrain command VChan connected callback
+static void	PulseTrainDAQmxVChan_Connected (VChan_type* self, VChan_type* connectedVChan);
+
+// pulsetrain command VChan disconnected callback
+static void	PulseTrainDAQmxVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan);
+
 
 //---------------------------
 // DAQmx module UI management
@@ -2478,6 +2489,7 @@ static void discard_ChanSet_CI_Frequency_type (ChanSet_type** a)
 //------------------------------------------------------------------------------
 static ChanSet_type* init_ChanSet_CO_type (char physChanName[],Channel_type chanType,PulseTrainTimingTypes type)
 {
+	char*	pulsetrainVChanName;
 	ChanSet_CO_type* a = malloc (sizeof(ChanSet_CO_type));
 	if (!a) return NULL;
 	
@@ -2486,6 +2498,8 @@ static ChanSet_type* init_ChanSet_CO_type (char physChanName[],Channel_type chan
 	
 	//initialize pulsetrain
 	a->pulsetrain=init_PulseTrain (type,MeasFinite); 
+	a->pulsetrain_sinkVchan=NULL;
+	a->pulsetrain_sourceVchan=NULL; 
 	
 	if (!(  a -> tasktiming				= init_TaskTiming_type()))	goto Error;      
 	
@@ -3264,16 +3278,46 @@ static int CVICALLBACK CO_Duty_TaskSet_CB (int panel, int control, int event, vo
 static int CVICALLBACK CO_InitDelay_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	ChanSet_CO_type* selectedChan = callbackData;
-	PulseTrainFreqTiming_type* freqtiming;    
+	PulseTrainFreqTiming_type* freqtiming; 
+	PulseTrainTimeTiming_type* timetiming;  
 	double delay_in_ms; 
 	double delay_in_s;  
+	int pulsetraintype;
 	
 	switch (event) {
 		case EVENT_COMMIT:
 			 GetCtrlVal(panel,control,&delay_in_ms);
-			 delay_in_s=delay_in_ms/1000;   //convert to sec        
-			 freqtiming=(PulseTrainFreqTiming_type*) GetPulseTrainTiming(selectedChan->pulsetrain); 
-			 SetPulseTrainDelay(freqtiming,delay_in_s); 
+			 delay_in_s=delay_in_ms/1000;   //convert to sec 
+			 pulsetraintype=GetPulseTrainType(selectedChan->pulsetrain);
+			 switch (pulsetraintype){
+				 case PulseTrain_Freq:
+					 freqtiming=(PulseTrainFreqTiming_type*) GetPulseTrainTiming(selectedChan->pulsetrain); 
+			 		 SetPulseTrainDelay(freqtiming,delay_in_s); 
+					 break;
+				 case PulseTrain_Time:
+					 timetiming=(PulseTrainTimeTiming_type*) GetPulseTrainTiming(selectedChan->pulsetrain); 
+			 		 SetPulseTrainDelay(timetiming,delay_in_s); 
+					 break;
+			 }
+			 
+			break;
+	}
+	
+	return 0;
+}
+
+
+static int CVICALLBACK CO_InitDelayTicks_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	ChanSet_CO_type* selectedChan = callbackData;
+	PulseTrainTickTiming_type* ticktiming;    
+	int delay_in_ticks; 
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			 GetCtrlVal(panel,control,&delay_in_ticks);
+			 ticktiming=(PulseTrainTickTiming_type*) GetPulseTrainTiming(selectedChan->pulsetrain); 
+			 SetPulseTrainDelay(ticktiming,delay_in_ticks); 
 			break;
 	}
 	
@@ -7048,7 +7092,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 									
 									newChan->tasktiming->initdelayCtrlID = DuplicateCtrl(CO_TimPanHndl, COTICKPAN_InitialDelay, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
 									SetCtrlAttribute(timingPanHndl, newChan->tasktiming->initdelayCtrlID, ATTR_CALLBACK_DATA, newChan);
-									SetCtrlAttribute(timingPanHndl, newChan->tasktiming->initdelayCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_InitDelay_TaskSet_CB);
+									SetCtrlAttribute(timingPanHndl, newChan->tasktiming->initdelayCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_InitDelayTicks_TaskSet_CB);
 									SetCtrlVal(timingPanHndl,newChan->tasktiming->initdelayCtrlID,GetPulseTrainDelayTicks(ticktiming));   
 									
 									newChan->tasktiming->idlestateCtrlID = DuplicateCtrl(CO_TimPanHndl, COTICKPAN_IdleState, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
@@ -7170,6 +7214,22 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.srcVChan);
 							SetCtrlVal(settingspanel, SETPAN_VChanName, newVChanName);
 							OKfree(newVChanName);
+							
+							//add a source and a sink VChan to send/receive pulsetrain settings
+							DLDataTypes allowedpulsetrainpacket[] = {DL_PulseTrain};   	 
+							char* pulsetrainsourceVChanName	= DLGetUniqueVChanName(VChan_Default_DAQmxPulseTrainSourceChan);
+							newChan->pulsetrain_sourceVchan= init_SourceVChan_type(pulsetrainsourceVChanName, DL_PulseTrain, newChan, PulseTrainDAQmxVChan_Connected, PulseTrainDAQmxVChan_Disconnected); 
+							// register VChan with DAQLab
+							//newChan->pulsetrain_sourceVchan->baseClass.useAsReference=TRUE;
+							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, newChan->pulsetrain_sourceVchan);	
+							
+							char* pulsetrainsinkVChanName		= DLGetUniqueVChanName(VChan_Default_DAQmxPulseTrainSinkChan);
+							  
+							newChan->pulsetrain_sinkVchan= init_SinkVChan_type(pulsetrainsinkVChanName, allowedpulsetrainpacket, NumElem(allowedpulsetrainpacket), newChan, PulseTrainDAQmxVChan_Connected, PulseTrainDAQmxVChan_Disconnected); 
+							// register VChan with DAQLab
+							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, newChan->pulsetrain_sinkVchan);	
+	
+	
 							
 							//---------------------------------------
 							// Add new CO channel to list of channels
@@ -8972,11 +9032,11 @@ SkipDOTask:
 	}
 	
 		//test lex
-	taskStartTime=Timer();
-	char buf[100];
+//	taskStartTime=Timer();
+//	char buf[100];
 	
-	Fmt(buf,"%s<DAQmsStart:%f\n",(taskStartTime-DAQmxtaskStartTime)*1000);
-	DLMsg(buf,0);
+//	Fmt(buf,"%s<DAQmsStart:%f\n",(taskStartTime-DAQmxtaskStartTime)*1000);
+//	DLMsg(buf,0);
 	
 
 	
@@ -9374,9 +9434,9 @@ int32 CVICALLBACK CODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	char				buf[100];
 	
 		//test Lex
-		taskEndTime=Timer();
-		Fmt(buf,"%s<Task Time:%f\n",(taskEndTime-taskStartTime)*1000);
-		DLMsg(buf,0);
+	//	taskEndTime=Timer();
+//		Fmt(buf,"%s<Task Time:%f\n",(taskEndTime-taskStartTime)*1000);
+//		DLMsg(buf,0);
 
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
@@ -9391,10 +9451,10 @@ int32 CVICALLBACK CODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 	
 			//test Lex
-		IterEndTime=Timer();
+	//	IterEndTime=Timer();
 			//test lex
-		Fmt(buf,"%s<DAQmsStop:%f\n",(IterEndTime-taskEndTime)*1000);
-		DLMsg(buf,0);
+//		Fmt(buf,"%s<DAQmsStop:%f\n",(IterEndTime-taskEndTime)*1000);
+//		DLMsg(buf,0);
 		
 		
 	}
@@ -9472,13 +9532,13 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	FCallReturn_type*   fCallReturn;
 	
 	//test lex
-	IterStartTime=Timer();
+//	IterStartTime=Timer();
 	
-	if (IterEndTime>0) {
-		char buf[100];
-		Fmt(buf,"%s<Time between Iterations:%f\n",(IterStartTime-IterEndTime)*1000);
-		DLMsg(buf,0);
-	}
+//	if (IterEndTime>0) {
+//		char buf[100];
+//		Fmt(buf,"%s<Time between Iterations:%f\n",(IterStartTime-IterEndTime)*1000);
+//		DLMsg(buf,0);
+//	}
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
@@ -9670,7 +9730,7 @@ static void	ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 {
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	
-	DLMsg(errorMsg, 1);
+	 DLMsg(errorMsg, 1);
 	
 }
 
@@ -9827,6 +9887,16 @@ static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, Task
 }
 
 
+// pulsetrain command VChan connected callback
+static void	PulseTrainDAQmxVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	
+}
 
+// pulsetrain command VChan disconnected callback
+static void	PulseTrainDAQmxVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+{
+	
+}
 
  

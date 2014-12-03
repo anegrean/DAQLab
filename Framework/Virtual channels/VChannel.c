@@ -583,6 +583,16 @@ char* GetVChanName (VChan_type* VChan)
 {
 	return StrDup(VChan->name);
 }
+ /*
+void SetVChanUseAsReference (VChan_type* VChan, BOOL useAsReference)
+{ 
+	VChan->useAsReference=useAsReference;
+}
+ 
+BOOL GetVChanUseAsReference (VChan_type* VChan)
+{
+	return VChan->useAsReference;
+}   */
 
 /// HIFN Given a Source VChan, the function returns the name of the Sink VChan attached to the source having the 1-based index sinkIdx. If index is out of range it returns NULL.
 char* GetSinkVChanName (SourceVChan_type* srcVChan, size_t sinkIdx)

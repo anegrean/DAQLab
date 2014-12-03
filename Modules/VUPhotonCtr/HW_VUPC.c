@@ -371,7 +371,13 @@ int ReadBuffer(int bufsize)
 					//iteration is done
 					
 					nrsamples=0;
-					PMTStopAcq();  
+					PMTStopAcq(); 
+					
+					//send null packet
+					fCallReturn = SendDataPacket(gchannels[i]->VChan, NULL, 0);
+					discard_FCallReturn_type(&fCallReturn);
+					
+					
 					TaskControlIterationDone (gtaskControl, 0, NULL,FALSE);   
 					     
 				}

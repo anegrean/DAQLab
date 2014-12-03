@@ -54,7 +54,10 @@ struct Waveform {
 };
 
 struct RepeatedWaveform {
-	RepeatedWaveformTypes	waveformType;				// Waveform data type.  
+	RepeatedWaveformTypes	waveformType;				// Waveform data type. 
+	char*					waveformName;				// Name of signal represented by the waveform.
+	char*					unitName;					// Physical SI unit such as V, A, Ohm, etc.
+	double					dateTimestamp;				// Number of seconds since midnight, January 1, 1900 in the local time zone.  
 	double					samplingRate;				// Sampling rate in [Hz]. If 0, sampling rate is not given.
 	double					repeat;						// number of times to repeat the waveform.
 	size_t					nSamples;					// Number of samples in the waveform.
@@ -523,6 +526,9 @@ RepeatedWaveform_type* init_RepeatedWaveform_type (RepeatedWaveformTypes wavefor
 	if (!waveform) return NULL;
 	
 	waveform->waveformType 		= waveformType;
+	waveform->waveformName		= NULL;
+	waveform->unitName			= NULL;
+	waveform->dateTimestamp		= 0;
 	waveform->samplingRate 		= samplingRate;
 	waveform->repeat			= repeat;
 	waveform->nSamples			= nSamples;
@@ -531,12 +537,77 @@ RepeatedWaveform_type* init_RepeatedWaveform_type (RepeatedWaveformTypes wavefor
 	return waveform;
 }
 
+RepeatedWaveform_type* ConvertWaveformToRepeatedWaveformType (Waveform_type** waveform, double repeat)
+{
+	RepeatedWaveformTypes	repWaveformType		= Waveform_Char;
+	
+	switch ((*waveform)->waveformType) {
+			
+		case Waveform_Char:
+			repWaveformType = RepeatedWaveform_Char;
+			break;
+			
+		case Waveform_UChar:
+			repWaveformType = RepeatedWaveform_UChar; 
+			break;
+			
+		case Waveform_Short:
+			repWaveformType = RepeatedWaveform_Short; 
+			break;
+			
+		case Waveform_UShort:
+			repWaveformType = RepeatedWaveform_UShort;
+			break;
+			
+		case Waveform_Int:
+			repWaveformType = RepeatedWaveform_Int;
+			break;
+			
+		case Waveform_UInt:
+			repWaveformType = RepeatedWaveform_UInt;
+			break;
+			
+		case Waveform_SSize:
+			repWaveformType = RepeatedWaveform_SSize;
+			break;
+			
+		case Waveform_Size:
+			repWaveformType = RepeatedWaveform_Size;
+			break;
+			
+		case Waveform_Float:
+			repWaveformType = RepeatedWaveform_Float;
+			break;
+			
+		case Waveform_Double:
+			repWaveformType = RepeatedWaveform_Double; 
+			break;
+	}
+	
+	RepeatedWaveform_type* repWaveform = init_RepeatedWaveform_type(repWaveformType, (*waveform)->samplingRate, (*waveform)->nSamples, (*waveform)->data, repeat);
+	if (!repWaveform) return NULL;
+	// transfer info from waveform to repeated waveform
+	(*waveform)->data 			= NULL;
+	repWaveform->waveformName 	= (*waveform)->waveformName;
+	(*waveform)->waveformName 	= NULL;
+	repWaveform->unitName 		= (*waveform)->unitName;
+	(*waveform)->waveformName 	= NULL;
+	repWaveform->dateTimestamp 	= (*waveform)->dateTimestamp;
+	
+	// discard waveform data structure
+	discard_Waveform_type(waveform);
+	
+	return repWaveform;
+}
+
 void discard_RepeatedWaveform_type (RepeatedWaveform_type** waveform)
 {
 	if (!*waveform) return;
 	
 	// discard data
 	OKfree((*waveform)->data);
+	OKfree((*waveform)->waveformName);
+	OKfree((*waveform)->unitName);
 	
 	OKfree(*waveform);
 }

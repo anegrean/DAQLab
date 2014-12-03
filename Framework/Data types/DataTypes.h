@@ -236,6 +236,8 @@ int 					AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_type
 //--------------------------------------------------------------------------------------------------------- 
 	// Creates a waveform that must be repeated repeat times. data* must be allocated with malloc and be of a basic data type
 RepeatedWaveform_type*	init_RepeatedWaveform_type				(RepeatedWaveformTypes waveformType, double samplingRate, size_t nSamples, void* data, double repeat);
+	// Converts a Waveform_type to a RepeatedWaveform_type
+RepeatedWaveform_type*	ConvertWaveformToRepeatedWaveformType	(Waveform_type** waveform, double repeat);	
 	// Discards a repeated waveform contained and its waveform data that was allocated with malloc.
 void					discard_RepeatedWaveform_type			(RepeatedWaveform_type** waveform);
 	// Returns pointer to repeated waveform data (for one repeat)

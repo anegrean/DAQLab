@@ -60,6 +60,7 @@
 #define  RectRaster_Objective             13      /* control type: ring, callback function: (none) */
 #define  RectRaster_Mode                  14      /* control type: ring, callback function: (none) */
 #define  RectRaster_Averages              15      /* control type: numeric, callback function: (none) */
+#define  RectRaster_ExecutionMode         16      /* control type: radioButton, callback function: (none) */
 
 #define  ScanPan                          7
 #define  ScanPan_Plate                    2       /* control type: deco, callback function: (none) */

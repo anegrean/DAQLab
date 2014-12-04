@@ -31,13 +31,6 @@
 
 typedef struct VUPhotonCtr	VUPhotonCtr_type;
 
-// Operation mode of photon counter.
-//typedef enum {
-//	MEASMODE_FINITE,
-//	MEASMODE_CONTINUOUS
-//} Measurement_type;
-
-
 typedef struct {
 	VUPhotonCtr_type*	vupcInstance;	// reference to device that owns the channel
 	SourceVChan_type*	VChan;			// virtual channel assigned to this physical channel

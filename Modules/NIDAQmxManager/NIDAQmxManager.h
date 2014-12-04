@@ -26,18 +26,9 @@
 
 #define MOD_NIDAQmxManager_NAME 	"NI DAQmx Manager" 
 		
-  
 
 //==============================================================================
 // Types
-		
-// Measurement mode
-typedef enum{
-	MeasFinite				= DAQmx_Val_FiniteSamps,
-	MeasCont				= DAQmx_Val_ContSamps
-} MeasMode_type; 
-		
-
 
 //==============================================================================
 // External variables

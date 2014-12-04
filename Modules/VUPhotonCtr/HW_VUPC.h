@@ -109,6 +109,13 @@ typedef enum {
 	PMT_MODE_ON_ACQ
 } PMT_Mode_type;
 
+
+typedef enum{
+	MeasFinite,
+	MeasCont
+} MeasMode_type;
+
+
 //==============================================================================
 // External variables
 

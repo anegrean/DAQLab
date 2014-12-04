@@ -3722,7 +3722,7 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	engine->VChanSlowAxisPos		= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected); 
 	engine->VChanScanOut			= init_SourceVChan_type(imageOutVChanName, DL_Image_NIVision, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected); 
 	engine->VChanShutter			= init_SourceVChan_type(shutterVChanName, DL_Waveform_UChar, engine, ShutterVChan_Connected, ShutterVChan_Disconnected); 
-	engine->VChanPixelSettings		= init_SourceVChan_type(pixelSettingsVChanName, DL_PulseTrain, engine, PixelSettingsVChan_Connected, PixelSettingsVChan_Connected); 	
+	engine->VChanPixelSettings		= init_SourceVChan_type(pixelSettingsVChanName, DL_PulseTrain_Ticks, engine, PixelSettingsVChan_Connected, PixelSettingsVChan_Connected); 	
 	if(!(engine->DetChans			= ListCreate(sizeof(DetChan_type*)))) goto Error;
 	// add one detection channel to the scan engine if required
 	if (detectorVChanName) {
@@ -4440,7 +4440,8 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	RepeatedWaveform_type*		slowAxisScan_RepWaveform					= NULL; 
 	DataPacket_type*			galvoCommandPacket							= NULL; 
 	FCallReturn_type*			fCallReturn									= NULL;
-	FCallReturn_type*			fCallReturn_out								= NULL;    
+	FCallReturn_type*			fCallReturn_out								= NULL; 
+	PulseTrain_type*			pixelInfo									= NULL;
 	
 //============================================================================================================================================================================================
 //                          					   	Preparation of Scan Waveforms for X-axis Galvo (fast axis, triangular waveform scan)
@@ -4625,6 +4626,13 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, parkedRepeatedWaveform, discard_RepeatedWaveform_type) ); 
 		if ( (fCallReturn = SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, galvoCommandPacket, FALSE)) ) goto Error;    
 	}
+	
+	//---------------------------------------------------------------------------------------------------------------------------
+	// 													Pixel timing info
+	//---------------------------------------------------------------------------------------------------------------------------
+	
+	//pixelInfo = init_PulseTrain_type_type
+	
 	
 	return NULL; // no error
 				  

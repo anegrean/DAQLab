@@ -25,21 +25,6 @@
 
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}   
 
- 	// CO Frequency 
-#define DAQmxDefault_CO_Frequency_Task_freq				1000000   		// frequency
-#define DAQmxDefault_CO_Frequency_Task_dutycycle    	50.0			// duty cycle
-#define DAQmxDefault_CO_Frequency_Task_hightime			0.0005   		// the time the pulse stays high [s]
-#define DAQmxDefault_CO_Frequency_Task_lowtime     		0.0005			// the time the pulse stays low [s]
-#define DAQmxDefault_CO_Frequency_Task_highticks		10   			// the ticks the pulse stays high [s]
-#define DAQmxDefault_CO_Frequency_Task_lowticks     	2				// the ticks the pulse stays low [s]	
-#define DAQmxDefault_CO_Frequency_Task_initdelay 		0.0			    // initial delay [s]
-#define DAQmxDefault_CO_Frequency_Task_initdelayticks 	0			    // initial delay [ticks]  
-#define DAQmxDefault_CO_Frequency_Task_idlestate    	DAQmx_Val_Low   // terminal state at rest, pulses switch this to the oposite state
-#define DAQmxDefault_CO_Frequency_Task_timeout      	10.0            // timeout  
-#define DAQmxDefault_CO_Frequency_Task_npulses      	1000            // number of finite pulses     	
-
-
-
 //==============================================================================
 // Types
 
@@ -80,261 +65,252 @@ struct RepeatedWaveform {
 // Global functions
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-// Pulsetrains
+// Pulse trains
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-
-
-struct PulseTrainFreqTiming {
-	double 					frequency;   				// 
-	double 					dutycycle;   
-	double					initialdelay;    		   // initial delay [s] 
-} ;
-
-
-
-struct PulseTrainTimeTiming {
-	double 					hightime;   				// the time the pulse stays high [s]
-	double 					lowtime;    				// the time the pulse stays low [s]
-	double					initialdelay;    		    // initial delay [s]
-};
-
-
-
-struct PulseTrainTickTiming {
-	int 					highticks;
-	int 					lowticks;
-	int 					delayticks;
-};
-
-
-
-
+// parent class
 struct PulseTrain {
-	int							idlestate;
-	PulseTrainTimingTypes		type;				// timing type. 
-	void*						timing;   			//pointer to PulseTrainFreqTiming_type,PulseTrainTimeTiming_type or PulseTrainTickTiming_type
-	int							mode;				// measurement mode
-	size_t						npulses;			// number of pulses
+	PulseTrainTimingTypes		pulseType;					// timing type.  
+	PulseTrainIdleStates		idleState;					// counter output idle state
+	PulseTrainModes				mode;						// measurement mode
+	size_t						nPulses;					// number of pulses
 };
 
+// pulse train defined by frequency
+struct PulseTrainFreqTiming {
+	PulseTrain_type				baseClass;
+	double 						frequency;   				 
+	double 						dutyCycle;   
+	double						initialDelay;    		   	// initial delay [s] 
+};
 
-PulseTrain_type* init_PulseTrain (PulseTrainTimingTypes type,int mode) 
+// pulse train defined by pulse duration
+struct PulseTrainTimeTiming {
+	PulseTrain_type				baseClass; 
+	double 						highTime;   				// the time the pulse stays high [s]
+	double 						lowTime;    				// the time the pulse stays low [s]
+	double						initialDelay;    		    // initial delay [s]
+};
+
+// pulse train defined by number of ticks
+struct PulseTrainTickTiming {
+	PulseTrain_type				baseClass; 
+	size_t 						highTicks;
+	size_t 						lowTicks;
+	size_t 						delayTicks;
+};
+
+static void init_PulseTrain_type (PulseTrain_type* pulseTrain, PulseTrainTimingTypes pulseType, PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses) 
 {
-		
+	pulseTrain->pulseType		= pulseType;
+	pulseTrain->mode			= mode;
+	pulseTrain->nPulses			= nPulses;
+	pulseTrain->idleState		= idleState;
+}
+
+PulseTrainFreqTiming_type* init_PulseTrainFreqTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses, double dutyCycle, double frequency, double initialDelay)
+{
+	PulseTrainFreqTiming_type*	pulseTrain = malloc (sizeof(PulseTrainFreqTiming_type));
+	if (!pulseTrain) return NULL;
 	
-	PulseTrainFreqTiming_type* freqtiming;
-	PulseTrainTimeTiming_type* timetiming;
-	PulseTrainTickTiming_type* ticktiming;
+	// init base class
+	init_PulseTrain_type(&pulseTrain->baseClass, PulseTrain_Freq, mode, idleState, nPulses);
 	
-	PulseTrain_type* pulsetrain = malloc (sizeof(PulseTrain_type));
+	// init PulseTrainFreqTiming child class
+	pulseTrain->dutyCycle		= dutyCycle;
+	pulseTrain->frequency		= frequency;  
+	pulseTrain->initialDelay	= initialDelay;
 	
-	pulsetrain->type=type;
+	return pulseTrain;
+}
+
+PulseTrainTimeTiming_type* init_PulseTrainTimeTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses, double highTime, double lowTime, double initialDelay)
+{
+	PulseTrainTimeTiming_type* pulseTrain = malloc (sizeof(PulseTrainTimeTiming_type));
+	if (!pulseTrain) return NULL;
 	
-	switch (type){
-		case PulseTrain_Freq:
-			freqtiming=malloc(sizeof(PulseTrainFreqTiming_type));
-			freqtiming->frequency		= DAQmxDefault_CO_Frequency_Task_freq;
-			freqtiming->dutycycle		= DAQmxDefault_CO_Frequency_Task_dutycycle;
-			freqtiming -> initialdelay		= DAQmxDefault_CO_Frequency_Task_initdelay;      
-			pulsetrain->timing=freqtiming;
-			break;
-		case PulseTrain_Time:
-			timetiming=malloc(sizeof(PulseTrainTimeTiming_type));  
-			timetiming->hightime		= DAQmxDefault_CO_Frequency_Task_hightime;
-			timetiming->lowtime			= DAQmxDefault_CO_Frequency_Task_lowtime;
-			timetiming -> initialdelay		= DAQmxDefault_CO_Frequency_Task_initdelay;      
-			pulsetrain->timing=timetiming; 
-			break;
-		case PulseTrain_Ticks:
-			ticktiming=malloc(sizeof(PulseTrainTickTiming_type));   
-			ticktiming->highticks		= DAQmxDefault_CO_Frequency_Task_highticks;
-			ticktiming->lowticks		= DAQmxDefault_CO_Frequency_Task_lowticks; 
-			ticktiming -> delayticks	= DAQmxDefault_CO_Frequency_Task_initdelayticks;      
-			pulsetrain->timing=ticktiming; 
-			break;
-	}
+	// init base class
+	init_PulseTrain_type(&pulseTrain->baseClass, PulseTrain_Time, mode, idleState, nPulses);
 	
-	pulsetrain -> idlestate			= DAQmxDefault_CO_Frequency_Task_idlestate;
-	pulsetrain -> mode				= mode;    
-	pulsetrain -> npulses			= DAQmxDefault_CO_Frequency_Task_npulses; 
-
-	return pulsetrain;
-}
-
-
-
-void discard_PulseTrain (PulseTrain_type* pulsetrain)
-{
-	if (!pulsetrain) return;
+	// init PulseTrainTimeTiming
+	pulseTrain->highTime		= highTime;
+	pulseTrain->lowTime			= lowTime;
+	pulseTrain->initialDelay	= initialDelay;   
 	
-	// discard pulsetrain
-	OKfree(pulsetrain);
+	return pulseTrain;
 }
 
-void* GetPulseTrainTiming(PulseTrain_type* pulsetrain) 
+PulseTrainTickTiming_type* init_PulseTrainTickTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses, size_t highTicks, size_t lowTicks, size_t delayTicks)
 {
-	 return pulsetrain->timing;
+	PulseTrainTickTiming_type* pulseTrain = malloc (sizeof(PulseTrainTickTiming_type));
+	if (!pulseTrain) return NULL;
+	
+	// init base class
+	init_PulseTrain_type(&pulseTrain->baseClass, PulseTrain_Ticks, mode, idleState, nPulses);
+	
+	// init PulseTrainTickTiming
+	pulseTrain->highTicks		= highTicks;  
+	pulseTrain->lowTicks		= lowTicks;  
+	pulseTrain->delayTicks		= delayTicks;  
+	
+	return pulseTrain;
 }
 
-//sets the pulsetrain idle state
-void   SetPulseTrainIdleState(PulseTrain_type* pulsetrain,int idlestate)
+void discard_PulseTrain_type (PulseTrain_type** pulseTrain)
 {
-	pulsetrain->idlestate=idlestate;
+	if (!*pulseTrain) return;
+	
+	OKfree(*pulseTrain);
 }
 
-//gets the pulsetrain idle state
-int   GetPulseTrainIdleState(PulseTrain_type* pulsetrain)
+// sets the pulsetrain idle state
+void SetPulseTrainIdleState (PulseTrain_type* pulseTrain, PulseTrainIdleStates idleState)
 {
-	return pulsetrain->idlestate;
+	pulseTrain->idleState = idleState;
 }
 
-//sets the pulsetrain amount of pulses
-void   SetPulseTrainNPulses(PulseTrain_type* pulsetrain,int npulses)
+// gets the pulsetrain idle state
+PulseTrainIdleStates GetPulseTrainIdleState (PulseTrain_type* pulseTrain)
 {
-	pulsetrain->npulses=npulses;	
+	return pulseTrain->idleState;
 }
 
-//gets the pulsetrain amount of pulses
-int   GetPulseTrainNPulses(PulseTrain_type* pulsetrain)
+// sets the pulsetrain amount of pulses
+void SetPulseTrainNPulses (PulseTrain_type* pulseTrain, size_t nPulses)
 {
-	return pulsetrain->npulses;	
+	pulseTrain->nPulses = nPulses;	
 }
 
-//sets the pulsetrain mode
-void   SetPulseTrainMode(PulseTrain_type* pulsetrain,int mode)
+// gets the pulsetrain amount of pulses
+size_t GetPulseTrainNPulses (PulseTrain_type* pulseTrain)
 {
-	pulsetrain->mode=mode;	
+	return pulseTrain->nPulses;	
 }
 
-////gets the pulsetrain type
-int   GetPulseTrainType(PulseTrain_type* pulsetrain)
+// sets the pulsetrain mode
+void SetPulseTrainMode (PulseTrain_type* pulseTrain, PulseTrainModes mode)
 {
-	return pulsetrain->type;	
+	pulseTrain->mode = mode;	
 }
 
-//sets the pulsetrain type
-void   SetPulseTrainType(PulseTrain_type* pulsetrain,int type)
+// gets the pulsetrain mode
+PulseTrainModes GetPulseTrainMode (PulseTrain_type* pulseTrain)
 {
-	pulsetrain->type=type;	
+	return pulseTrain->mode;	
 }
 
-//gets the pulsetrain mode
-int   GetPulseTrainMode(PulseTrain_type* pulsetrain)
+// gets the pulsetrain type
+PulseTrainTimingTypes GetPulseTrainType (PulseTrain_type* pulseTrain)
 {
-	return pulsetrain->mode;	
-}
-
-
-//gets the pulsetrain frequency
-double GetPulseTrainFreq(PulseTrainFreqTiming_type* freqtiming)
-{
-	  return freqtiming->frequency;
+	return pulseTrain->pulseType;	
 }
 
 //sets the pulsetrain frequency
-void   SetPulseTrainFreq(PulseTrainFreqTiming_type* freqtiming,double freq)
+void SetPulseTrainFreqTimingFreq (PulseTrainFreqTiming_type* pulseTrain, double frequency)
 {
-	freqtiming->frequency=freq;
+	pulseTrain->frequency = frequency;
 }
 
-//sets the pulsetrain duty cycle
-void   SetPulseTrainDutyCycle(PulseTrainFreqTiming_type* freqtiming,double dutycycle)
+// gets the pulsetrain frequency
+double GetPulseTrainFreqTimingFreq (PulseTrainFreqTiming_type* pulseTrain)
 {
-	freqtiming->dutycycle=dutycycle;
+	  return pulseTrain->frequency;
 }
 
-//sets the pulsetrain duty cycle
-double   GetPulseTrainDutyCycle(PulseTrainFreqTiming_type* freqtiming)
+// sets the pulsetrain duty cycle
+void SetPulseTrainFreqTimingDutyCycle (PulseTrainFreqTiming_type* pulseTrain, double dutyCycle)
 {
-	return freqtiming->dutycycle;
+	pulseTrain->dutyCycle = dutyCycle;
 }
 
-
-
-//sets the pulsetrain duty cycle
-void   SetPulseTrainDelay(PulseTrainFreqTiming_type* freqtiming,double delay)
+// gets the pulsetrain duty cycle
+double GetPulseTrainFreqTimingDutyCycle (PulseTrainFreqTiming_type* pulseTrain)
 {
-	freqtiming->initialdelay=delay;
+	return pulseTrain->dutyCycle;
 }
 
-//gets the pulsetrain initial delay 
-double GetPulseTrainDelay(PulseTrainFreqTiming_type* freqtiming)
+// sets the pulsetrain duty cycle
+void SetPulseTrainFreqTimingInitialDelay (PulseTrainFreqTiming_type* pulseTrain, double initialDelay)
 {
-	 return freqtiming->initialdelay;
+	pulseTrain->initialDelay = initialDelay;
 }
 
-//sets the pulsetrain highticks
-void   SetPulseTrainHighTicks(PulseTrainTickTiming_type* ticktiming,int ticks)
+// gets the pulsetrain initial delay 
+double GetPulseTrainFreqTimingInitialDelay (PulseTrainFreqTiming_type* pulseTrain)
 {
-	ticktiming->highticks=ticks;
+	 return pulseTrain->initialDelay;
 }
 
-//gets the pulsetrain highticks
-int   GetPulseTrainHighTicks(PulseTrainTickTiming_type* ticktiming)
+// sets the pulsetrain highticks
+void SetPulseTrainTickTimingHighTicks (PulseTrainTickTiming_type* pulseTrain, size_t highTicks)
 {
-	 return ticktiming->highticks;
+	pulseTrain->highTicks = highTicks;
 }
 
-//sets the pulsetrain lowticks
-void   SetPulseTrainLowTicks(PulseTrainTickTiming_type* ticktiming,int ticks)
+// gets the pulsetrain highticks
+size_t GetPulseTrainTickTimingHighTicks (PulseTrainTickTiming_type* pulseTrain)
 {
-	ticktiming->lowticks=ticks;
+	 return pulseTrain->highTicks;
 }
 
-//gets the pulsetrain lowticks
-int   GetPulseTrainLowTicks(PulseTrainTickTiming_type* ticktiming)
+// sets the pulsetrain lowticks
+void SetPulseTrainTickTimingLowTicks (PulseTrainTickTiming_type* pulseTrain, size_t lowTicks)
 {
-	return ticktiming->lowticks;
+	pulseTrain->lowTicks=lowTicks;
 }
 
-//sets the pulsetrain delayticks
-void   SetPulseTrainDelayTicks(PulseTrainTickTiming_type* ticktiming,int ticks)
+// gets the pulsetrain lowticks
+size_t GetPulseTrainTickTimingLowTicks (PulseTrainTickTiming_type* pulseTrain)
 {
-	ticktiming->delayticks=ticks;
+	return pulseTrain->lowTicks;
 }
 
-//gets the pulsetrain delayticks
-int   GetPulseTrainDelayTicks(PulseTrainTickTiming_type* ticktiming)
+// sets the pulsetrain delayticks
+void SetPulseTrainTickTimingDelayTicks (PulseTrainTickTiming_type* pulseTrain, size_t delayTicks)
 {
-		return ticktiming->delayticks;
+	pulseTrain->delayTicks = delayTicks;
 }
 
-//sets the pulsetrain hightime
-void   SetPulseTrainHighTime(PulseTrainTimeTiming_type* timetiming,double time)
+// gets the pulsetrain delay ticks
+size_t GetPulseTrainTickTimingDelayTicks (PulseTrainTickTiming_type* pulseTrain)
 {
-	timetiming->hightime=time;
+	return pulseTrain->delayTicks;
 }
 
-//gets the pulsetrain hightime
-double   GetPulseTrainHighTime(PulseTrainTimeTiming_type* timetiming)
+// sets the pulsetrain high time
+void SetPulseTrainTimeTimingHighTime (PulseTrainTimeTiming_type* pulseTrain, double highTime)
 {
-	 return timetiming->hightime;
+	pulseTrain->highTime = highTime;
 }
 
-//sets the pulsetrain lowtime
-void   SetPulseTrainLowTime(PulseTrainTimeTiming_type* timetiming,double time)
+// gets the pulsetrain high time
+double GetPulseTrainTimeTimingHighTime (PulseTrainTimeTiming_type* pulseTrain)
 {
-	timetiming->lowtime=time;
+	 return pulseTrain->highTime;
 }
 
-//gets the pulsetrain hightime
-double   GetPulseTrainLowTime(PulseTrainTimeTiming_type* timetiming)
+// sets the pulsetrain low time
+void SetPulseTrainTimeTimingLowTime (PulseTrainTimeTiming_type* pulseTrain, double lowTime)
 {
-	 return timetiming->lowtime;
+	pulseTrain->lowTime = lowTime;
 }
 
-//sets the pulsetrain initialdelay
-void   SetPulseTrainDelayTime(PulseTrainTimeTiming_type* timetiming,double time)
+// gets the pulsetrain low time
+double GetPulseTrainTimeTimingLowTime (PulseTrainTimeTiming_type* pulseTrain)
 {
-	timetiming->initialdelay=time;
+	 return pulseTrain->lowTime;
 }
 
-//gets the pulsetrain delaytime
-double   GetPulseTrainDelayTime(PulseTrainTimeTiming_type* timetiming)
+//sets the pulsetrain initial delay
+void SetPulseTrainTimeTimingInitialDelay (PulseTrainTimeTiming_type* pulseTrain, double delayTime)
 {
-	return timetiming->initialdelay;	
+	pulseTrain->initialDelay = delayTime;
+}
+
+//gets the pulsetrain delay time
+double GetPulseTrainTimeTimingInitialDelay (PulseTrainTimeTiming_type* pulseTrain)
+{
+	return pulseTrain->initialDelay;
 }
 
 
@@ -342,8 +318,6 @@ void discard_Pulsetrain_type (PulseTrain_type** pulsetrain)
 {
 	if (!*pulsetrain) return;
 	
-	OKfree((*pulsetrain)->timing);
-
 	OKfree(*pulsetrain);
 }
 

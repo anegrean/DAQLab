@@ -345,7 +345,7 @@ double   GetPulseTrainDelayTime(PulseTrainTimeTiming_type* timetiming)
 // Waveforms
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-Waveform_type* init_Waveform_type (WaveformTypes waveformType, double samplingRate, size_t nSamples, void* waveformData)
+Waveform_type* init_Waveform_type (WaveformTypes waveformType, double samplingRate, size_t nSamples, void** ptrToData)
 {
 	Waveform_type*	waveform = malloc(sizeof(Waveform_type));
 	if (!waveform) return NULL;
@@ -356,7 +356,8 @@ Waveform_type* init_Waveform_type (WaveformTypes waveformType, double samplingRa
 	waveform->unitName			= NULL;
 	waveform->dateTimestamp		= 0;
 	waveform->nSamples			= nSamples;
-	waveform->data				= waveformData;
+	waveform->data				= *ptrToData;
+	*ptrToData					= NULL;
 	
 	return waveform;
 }
@@ -444,7 +445,8 @@ void* GetWaveformDataPtr (Waveform_type* waveform, size_t* nSamples)
 
 Waveform_type* CopyWaveform (Waveform_type* waveform)
 {
-	Waveform_type*	waveformCopy = init_Waveform_type(waveform->waveformType, waveform->samplingRate, 0, NULL);
+	void*	nullData	= NULL;
+	Waveform_type*	waveformCopy = init_Waveform_type(waveform->waveformType, waveform->samplingRate, 0, &nullData);
 	if (!waveformCopy) return NULL;
 	
 	if (AppendWaveform(waveformCopy, waveform) < 0) {

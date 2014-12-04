@@ -3157,7 +3157,7 @@ startV ___
 // sampleRate in [Hz], startVoltage and endVoltage in [V], startDelay and endDelay in [s]
 static Waveform_type* NonResGalvoMoveBetweenPoints (NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double startDelay, double endVoltage, double endDelay)
 {
-	double 			maxSlope;
+	double 			maxSlope;			// in [V/ms]
 	double 			amplitude			= fabs(startVoltage - endVoltage);;
 	double 			min;
 	double 			max;
@@ -3184,6 +3184,7 @@ static Waveform_type* NonResGalvoMoveBetweenPoints (NonResGalvoCal_type* cal, do
 	OKfree(secondDerivatives);
 	
 	nElemRamp 			= floor(sampleRate * amplitude * 1e-3/maxSlope);
+	if (nElemRamp < 2) nElemRamp = 2;
 	nElemStartDelay		= floor(sampleRate * startDelay);
 	nElemEndDelay		= floor(sampleRate * endDelay);
 	
@@ -3196,7 +3197,7 @@ static Waveform_type* NonResGalvoMoveBetweenPoints (NonResGalvoCal_type* cal, do
 	if (nElemEndDelay)
 		Set1D(waveformData+nElemStartDelay+nElemRamp, nElemEndDelay, endVoltage);
 	
-	waveform = init_Waveform_type(Waveform_Double, sampleRate, nElemStartDelay + nElemRamp + nElemEndDelay, waveformData); 
+	waveform = init_Waveform_type(Waveform_Double, sampleRate, nElemStartDelay + nElemRamp + nElemEndDelay, &waveformData); 
     if (!waveform) goto Error;
 	
 	// cleanup
@@ -4424,18 +4425,22 @@ static BOOL NonResRectangleRasterScan_ReadyToScan (RectangleRaster_type* scanEng
 static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* scanEngine)
 {
 	// init dynamically allocated signals
-	double*						fastAxisCommandSignal					= NULL;
-	Waveform_type* 				fastAxisScan_Waveform					= NULL;
-	Waveform_type*				fastAxisMoveFromParkedWaveform			= NULL;
-	Waveform_type*				slowAxisScan_Waveform					= NULL;
-	Waveform_type*				slowAxisMoveFromParkedWaveform  		= NULL;
-	RepeatedWaveform_type*		fastAxisMoveFromParked_RepWaveform		= NULL;
-	RepeatedWaveform_type*		slowAxisMoveFromParked_RepWaveform		= NULL;
-	RepeatedWaveform_type*		fastAxisScan_RepWaveform				= NULL;
-	RepeatedWaveform_type*		slowAxisScan_RepWaveform				= NULL; 
-	DataPacket_type*			galvoCommandPacket						= NULL; 
-	FCallReturn_type*			fCallReturn								= NULL;
-	FCallReturn_type*			fCallReturn_out							= NULL;    
+	double*						fastAxisCommandSignal						= NULL;
+	double*						fastAxisCompensationSignal					= NULL;
+	double*						slowAxisCompensationSignal					= NULL; 
+	Waveform_type* 				fastAxisScan_Waveform						= NULL;
+	Waveform_type*				fastAxisMoveFromParkedWaveform				= NULL;
+	Waveform_type*				fastAxisMoveFromParkedCompensatedWaveform   = NULL;
+	Waveform_type*				slowAxisScan_Waveform						= NULL;
+	Waveform_type*				slowAxisMoveFromParkedWaveform  			= NULL;
+	Waveform_type*				slowAxisMoveFromParkedCompensatedWaveform   = NULL; 
+	RepeatedWaveform_type*		fastAxisMoveFromParked_RepWaveform			= NULL;
+	RepeatedWaveform_type*		slowAxisMoveFromParked_RepWaveform			= NULL;
+	RepeatedWaveform_type*		fastAxisScan_RepWaveform					= NULL;
+	RepeatedWaveform_type*		slowAxisScan_RepWaveform					= NULL; 
+	DataPacket_type*			galvoCommandPacket							= NULL; 
+	FCallReturn_type*			fCallReturn									= NULL;
+	FCallReturn_type*			fCallReturn_out								= NULL;    
 	
 //============================================================================================================================================================================================
 //                          					   	Preparation of Scan Waveforms for X-axis Galvo (fast axis, triangular waveform scan)
@@ -4469,7 +4474,11 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 		fastAxisCommandSignal[i] += fastAxisCommandOffset;
 	
 	// generate bidirectional raster scan waveform 
-	nullChk( fastAxisScan_Waveform = init_Waveform_type(Waveform_Double, *scanEngine->refGalvoSamplingRate, 2 * nGalvoSamplesPerLine, fastAxisCommandSignal) );
+	nullChk( fastAxisScan_Waveform = init_Waveform_type(Waveform_Double, *scanEngine->refGalvoSamplingRate, 2 * nGalvoSamplesPerLine, &fastAxisCommandSignal) );
+	
+	// generate fast axis fly-in waveform from parked position
+	nullChk( fastAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal, *scanEngine->refGalvoSamplingRate, 
+	((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked, 0, - fastAxisCommandAmplitude/2 + fastAxisCommandOffset, 0) );
 	
 //============================================================================================================================================================================================
 //                             						Preparation of Scan Waveforms for Y-axis Galvo (slow axis, staircase waveform scan)
@@ -4484,7 +4493,11 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	slowAxisAmplitude 		= scanEngine->width * slowAxisStepVoltage;
 	slowAxisStartVoltage 	= scanEngine->widthOffset * scanEngine->baseClass.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement - slowAxisAmplitude/2;
 	
-	nullChk( slowAxisScan_Waveform = StaircaseWaveform(TRUE, *scanEngine->refGalvoSamplingRate, nGalvoSamplesPerLine, scanEngine->width, slowAxisStartVoltage, slowAxisStepVoltage) );   
+	nullChk( slowAxisScan_Waveform = StaircaseWaveform(TRUE, *scanEngine->refGalvoSamplingRate, nGalvoSamplesPerLine, scanEngine->width, slowAxisStartVoltage, slowAxisStepVoltage) );  
+	
+	// generate slow axis fly-in waveform from parked position
+	nullChk( slowAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal, *scanEngine->refGalvoSamplingRate, 
+	((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked, 0, slowAxisStartVoltage, 0) ); 
 	
 //============================================================================================================================================================================================
 //                             						Compensate delay between X and Y galvo response and fly-in from parked position
@@ -4525,12 +4538,23 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	
 	
 	// generate compensated fast axis fly-in waveform from parked position
-	nullChk( fastAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal, *scanEngine->refGalvoSamplingRate, 
-	((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked, nGalvoSamplesFastAxisCompensation / *scanEngine->refGalvoSamplingRate, - fastAxisCommandAmplitude/2 + fastAxisCommandOffset, 0) );
+	if (nGalvoSamplesFastAxisCompensation) {
+		nullChk( fastAxisCompensationSignal = malloc(nGalvoSamplesFastAxisCompensation * sizeof(double)) );
+		errChk( Set1D(fastAxisCompensationSignal, nGalvoSamplesFastAxisCompensation, ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked) ); 
+		nullChk( fastAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double,  *scanEngine->refGalvoSamplingRate, nGalvoSamplesFastAxisCompensation, &fastAxisCompensationSignal) );
+		errChk( AppendWaveform(fastAxisMoveFromParkedCompensatedWaveform, fastAxisMoveFromParkedWaveform) );
+		discard_Waveform_type(&fastAxisMoveFromParkedWaveform);
+	}
 	
 	// generate compensated slow axis fly-in waveform from parked position
-	nullChk( slowAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal, *scanEngine->refGalvoSamplingRate, 
-	((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked, nGalvoSamplesSlowAxisCompensation / *scanEngine->refGalvoSamplingRate, slowAxisStartVoltage, 0) ); 
+	if (nGalvoSamplesSlowAxisCompensation) {
+		nullChk( slowAxisCompensationSignal = malloc(nGalvoSamplesSlowAxisCompensation * sizeof(double)) );
+		errChk( Set1D(slowAxisCompensationSignal, nGalvoSamplesSlowAxisCompensation, ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked) ); 
+		nullChk( slowAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double,  *scanEngine->refGalvoSamplingRate, nGalvoSamplesSlowAxisCompensation, &slowAxisCompensationSignal) );
+		errChk( AppendWaveform(slowAxisMoveFromParkedCompensatedWaveform, slowAxisMoveFromParkedWaveform) );
+		discard_Waveform_type(&slowAxisMoveFromParkedWaveform);
+	}
+	
 	
 //============================================================================================================================================================================================
 //                             											Send command waveforms to the scan axes VChans
@@ -4542,7 +4566,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	
 	// move from parked position
 	// convert waveform to repeated waveform
-	nullChk( fastAxisMoveFromParked_RepWaveform = ConvertWaveformToRepeatedWaveformType(&fastAxisMoveFromParkedWaveform, 1) );
+	nullChk( fastAxisMoveFromParked_RepWaveform = ConvertWaveformToRepeatedWaveformType(&fastAxisMoveFromParkedCompensatedWaveform, 1) );
 	
 	// send data 
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, fastAxisMoveFromParked_RepWaveform, discard_RepeatedWaveform_type) );
@@ -4575,7 +4599,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	
 	// move from parked position
 	// convert waveform to repeated waveform
-	nullChk( slowAxisMoveFromParked_RepWaveform = ConvertWaveformToRepeatedWaveformType(&slowAxisMoveFromParkedWaveform, 1) );
+	nullChk( slowAxisMoveFromParked_RepWaveform = ConvertWaveformToRepeatedWaveformType(&slowAxisMoveFromParkedCompensatedWaveform, 1) );
 	
 	// send data 
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, slowAxisMoveFromParked_RepWaveform, discard_RepeatedWaveform_type) );
@@ -4607,10 +4631,14 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 Error:
 	
 	OKfree(fastAxisCommandSignal);
+	OKfree(fastAxisCompensationSignal);
+	OKfree(slowAxisCompensationSignal);
 	discard_Waveform_type(&fastAxisScan_Waveform);
-	discard_Waveform_type(&fastAxisMoveFromParkedWaveform);  
+	discard_Waveform_type(&fastAxisMoveFromParkedWaveform);
+	discard_Waveform_type(&fastAxisMoveFromParkedCompensatedWaveform); 
 	discard_Waveform_type(&slowAxisScan_Waveform);
 	discard_Waveform_type(&slowAxisMoveFromParkedWaveform);
+	discard_Waveform_type(&slowAxisMoveFromParkedCompensatedWaveform);
 	discard_RepeatedWaveform_type(&fastAxisMoveFromParked_RepWaveform);
 	discard_RepeatedWaveform_type(&slowAxisMoveFromParked_RepWaveform); 
 	discard_RepeatedWaveform_type(&fastAxisScan_RepWaveform);
@@ -4796,7 +4824,7 @@ static Waveform_type* StaircaseWaveform (BOOL symmetricStaircase, double sampleR
     	for (size_t i = nSteps * nSamplesPerStep; i < 2 * nSteps * nSamplesPerStep; i++)
         	waveformData[i] = waveformData[2 * nSteps * nSamplesPerStep - i - 1];
 	
-    return init_Waveform_type(Waveform_Double, sampleRate, nSamples, waveformData);
+    return init_Waveform_type(Waveform_Double, sampleRate, nSamples, &waveformData);
 	
 Error:
 	
@@ -4931,7 +4959,8 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 	
 	// add empty galvo response waveform 
 	discard_Waveform_type(&cal->positionWaveform);
-	cal->positionWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, 0, NULL);
+	void*	nullData	= NULL;
+	cal->positionWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, 0, &nullData);
 	
 	switch (cal->currentCal) {
 			
@@ -4956,7 +4985,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			}
 			
 			// send waveform
-			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, CALPOINTS * nSamplesPerCalPoint, commandSignal);
+			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, CALPOINTS * nSamplesPerCalPoint, &commandSignal);
 			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
@@ -4993,7 +5022,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				memcpy(rampSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), rampSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
 			
 			// send waveform
-			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, rampSignal);
+			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, &rampSignal);
 			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
@@ -5041,7 +5070,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				memcpy(stepSignal + i * (flybackSamples + postStepSamples), stepSignal, (flybackSamples + postStepSamples) * sizeof(double));
 			
 			// send waveform
-			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + postStepSamples) * cal->nRepeat, stepSignal);
+			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + postStepSamples) * cal->nRepeat, &stepSignal);
 			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
@@ -5091,7 +5120,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				memcpy(rampSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), rampSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
 			
 			// send waveform
-			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, rampSignal);
+			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, &rampSignal);
 			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
@@ -5137,7 +5166,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			TriangleWave(nSamples, funcAmp/2, 1.0/cycleSamples, &phase, commandSignal);
 						
 			// send waveform
-			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nSamples, commandSignal);
+			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nSamples, &commandSignal);
 			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
@@ -5674,6 +5703,8 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, size_t currentI
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
+	TaskControlIterationDone(taskControl, 0, "", FALSE);	// test
+	
 }
 
 static void AbortIterationTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
@@ -5692,7 +5723,7 @@ static FCallReturn_type* StartTC_RectRaster (TaskControl_type* taskControl, BOOL
 	//-------------------------------------------------------------------------------------------------------------------------------
 	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
 	*shutterCommand	= 1;
-	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, shutterCommand);
+	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, &shutterCommand);
 	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
 	
 	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
@@ -5718,7 +5749,7 @@ static FCallReturn_type* DoneTC_RectRaster (TaskControl_type* taskControl, size_
 	//-------------------------------------------------------------------------------------------------------------------------------
 	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
 	*shutterCommand	= 0;
-	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, shutterCommand);
+	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, &shutterCommand);
 	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
 	
 	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
@@ -5735,7 +5766,7 @@ static FCallReturn_type* StoppedTC_RectRaster (TaskControl_type* taskControl, si
 	//-------------------------------------------------------------------------------------------------------------------------------
 	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
 	*shutterCommand	= 0;
-	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, shutterCommand);
+	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, &shutterCommand);
 	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
 	
 	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
@@ -5752,7 +5783,7 @@ static FCallReturn_type* ResetTC_RectRaster (TaskControl_type* taskControl, BOOL
 	//-------------------------------------------------------------------------------------------------------------------------------
 	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
 	*shutterCommand	= 0;
-	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, shutterCommand);
+	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, &shutterCommand);
 	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
 	
 	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);

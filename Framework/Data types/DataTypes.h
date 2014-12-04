@@ -208,7 +208,7 @@ typedef enum {
 // Waveform
 //---------------------------------------------------------------------------------------------------------  
 	// Creates a waveform container for void* basic data allocated with malloc.
-Waveform_type*			init_Waveform_type						(WaveformTypes waveformType, double samplingRate, size_t nSamples, void* data);
+Waveform_type*			init_Waveform_type						(WaveformTypes waveformType, double samplingRate, size_t nSamples, void** ptrToData);
 	// Discards the waveform container and its data allocated with malloc.
 void 					discard_Waveform_type 					(Waveform_type** waveform);
 	// Sets waveform name

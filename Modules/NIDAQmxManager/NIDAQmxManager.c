@@ -9194,7 +9194,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		waveformData = malloc(nSamples * sizeof(double));
 		if (!waveformData) goto MemError;
 		memcpy(waveformData, readBuffer + chIdx * nSamples, nSamples * sizeof(double));
-		waveform = init_Waveform_type(Waveform_Double, *dev->AITaskSet->timing->refSampleRate, nSamples, waveformData);
+		waveform = init_Waveform_type(Waveform_Double, *dev->AITaskSet->timing->refSampleRate, nSamples, &waveformData);
 		dataPacket = init_DataPacket_type(DL_Waveform_Double, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type); 
 		
 		// send data packet with waveform
@@ -9300,7 +9300,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		waveformData = malloc(nSamples * sizeof(double));
 		if (!waveformData) goto MemError;
 		memcpy(waveformData, readBuffer + chIdx * nSamples, nSamples * sizeof(double));
-		waveform = init_Waveform_type(Waveform_Double, *dev->AITaskSet->timing->refSampleRate, nSamples, waveformData);
+		waveform = init_Waveform_type(Waveform_Double, *dev->AITaskSet->timing->refSampleRate, nSamples, &waveformData);
 		dataPacket = init_DataPacket_type(DL_Waveform_Double, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type);  
 		
 		// send data packet with waveform

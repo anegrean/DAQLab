@@ -315,6 +315,8 @@ double   GetPulseTrainLowTime(PulseTrainTimeTiming_type* timetiming);
 void   SetPulseTrainDelayTime(PulseTrainTimeTiming_type* timetiming,double time);
 //gets the pulsetrain delaytime
 double   GetPulseTrainDelayTime(PulseTrainTimeTiming_type* timetiming);
+//discards a pulse train
+void discard_Pulsetrain_type (PulseTrain_type** pulsetrain);
 
 
 #ifdef __cplusplus

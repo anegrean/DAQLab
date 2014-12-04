@@ -19,6 +19,8 @@
 // Include files
 
 #include "VUPhotonCtr.h"
+#include "NIDAQmxManager.h" 
+		
 
 //==============================================================================
 // Constants
@@ -128,7 +130,7 @@ int PMT_ClearControl(int PMTnr);
 void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples);
 void ResetDataCounter(void);
 int GetDataCounter(void);
-int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl,Channel_type** channels);
+int PMTStartAcq(MeasMode_type mode,int iternr,TaskControl_type* taskControl,Channel_type** channels);
 int PMTStopAcq(void);
 
 

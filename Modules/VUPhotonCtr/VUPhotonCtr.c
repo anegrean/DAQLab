@@ -19,6 +19,7 @@
 #include "UI_VUPhotonCtr.h"
 #include "VChannel.h"
 #include "HW_VUPC.h"
+#include "NIDAQmxManager.h"
 
 
 //==============================================================================
@@ -126,7 +127,7 @@ struct VUPhotonCtr {
 		// By default it points to the device sampling rate samplingRate. In [Hz]
 	double*				refSamplingRate;
 		// Finite number of samples or continuous measurement
-	Measurement_type	measmode;        
+	MeasMode_type		measmode;        
 
 
 
@@ -241,7 +242,7 @@ static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg);
 
 static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
-
+static FCallReturn_type*    DataReceivedTC	        (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 //==============================================================================
 // Global variables
 
@@ -307,7 +308,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	vupc->samplingRate				= DEFAULT_SAMPLING_RATE;
 	vupc->refSamplingRate			= &vupc->samplingRate; 		// by default point to device set sampling rate
 
-	vupc->measmode					= MEASMODE_FINITE;
+	vupc->measmode					= MeasFinite;
 	vupc->pulsetrainVchan			= NULL;
 	
 		// METHODS
@@ -486,8 +487,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	}
 
 	// populate measurement mode ring and select Finite measurement mode
-	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Finite", MEASMODE_FINITE);
-	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Continuous", MEASMODE_CONTINUOUS);
+	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Finite", MeasFinite);
+	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Continuous", MeasCont);
 	SetCtrlIndex(vupc->settingsPanHndl, VUPCSet_MeasMode, 0);
 
 	// update acquisition settings display from structure data
@@ -514,9 +515,17 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// redraw main panel
 	RedrawMainPanel(vupc);
 
-	// configure Photoncounter Task Controller
-	//default settings:
+
 	
+	//add sink to receive pulsetrain settings
+	if (vupc->pulsetrainVchan==NULL){
+		char*	pulsetrainVChanName		= DLGetUniqueVChanName(VChan_Default_PulseTrainSinkChan);
+		DLDataTypes allowedPacketTypes[] = {DL_PulseTrain} ;
+		vupc->pulsetrainVchan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), vupc, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
+		// register VChan with DAQLab
+		DLRegisterVChan((DAQLabModule_type*)vupc, vupc->pulsetrainVchan);	
+		AddSinkVChan(vupc->taskControl, vupc->pulsetrainVchan, DataReceivedTC,TASK_VCHAN_FUNC_ITERATE);  
+	}
 		
 	
 
@@ -930,7 +939,6 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 	char*				vChanName;
 	char				buff[DAQLAB_MAX_VCHAN_NAME + 50];
 	double duration;
-	int nsamples;
 
 	switch (event) {
 
@@ -1007,15 +1015,6 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						
 						// connect module data and user interface callbackFn to all direct controls in the panel
 						SetCtrlsInPanCBInfo(chan, ((VUPhotonCtr_type*)vupc)->uiCtrlsCB, chan->panHndl);
-						
-						//add sink to receive pulsetrain settings
-						if (vupc->pulsetrainVchan==NULL){
-							char*	pulsetrainVChanName		= DLGetUniqueVChanName(VChan_Default_PulseTrainSinkChan);
-							DLDataTypes allowedPacketTypes[] = {DL_PulseTrain} ;
-							vupc->pulsetrainVchan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
-							// register VChan with DAQLab
-							DLRegisterVChan((DAQLabModule_type*)chan->vupcInstance, vupc->pulsetrainVchan);			
-						}
 
 						// update main panel
 						RedrawMainPanel(vupc);
@@ -1190,9 +1189,6 @@ static FCallReturn_type* UnConfigureTC (TaskControl_type* taskControl, BOOL cons
 static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
-	double timeout=3.0;
-	double delaystep=0.1;
-	int mode;
 
 	VUPC_SetStepCounter(vupc,currentIteration);
 	
@@ -1221,7 +1217,7 @@ static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abo
 	//timeout testvalue
 	SetTaskControlIterationTimeout(taskControl,ITER_TIMEOUT);
 
-	if (vupc->measmode==MEASMODE_CONTINUOUS) {
+	if (vupc->measmode==MeasCont) {
 		SetTaskControlMode(vupc->taskControl, TASK_CONTINUOUS);
 	} else {
 		SetTaskControlMode(vupc->taskControl, TASK_FINITE);
@@ -1309,4 +1305,82 @@ static void	PulseTrainVChan_Disconnected (VChan_type* self, VChan_type* disconne
 {
 	
 }
+
+
+
+static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+{
+	
+	VUPhotonCtr_type*	vupc				= GetTaskControlModuleData(taskControl);
+	FCallReturn_type*	fCallReturn			= NULL;
+	unsigned int		nSamples;
+	int					error;
+	DataPacket_type**	dataPackets			= NULL;
+	size_t				nPackets;
+	size_t				nElem;
+	void*				dataPacketDataPtr;
+	DLDataTypes			dataPacketType;  
+	PulseTrain_type*    pulsetrain;
+			
+			
+	
+	switch(taskState) {
+			
+		case TASK_STATE_UNCONFIGURED:			
+		case TASK_STATE_CONFIGURED:						
+		case TASK_STATE_INITIAL:							
+		case TASK_STATE_IDLE:
+		case TASK_STATE_STOPPING:
+		case TASK_STATE_DONE:
+		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
+		case TASK_STATE_RUNNING:
+		case TASK_STATE_RUNNING_WAITING_ITERATION:
+			
+			
+			// get all available data packets
+			if ((fCallReturn = GetAllDataPackets(sinkVChan, &dataPackets, &nPackets))) goto Error;
+			
+			for (size_t i = 0; i < nPackets; i++) {
+				dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);
+				switch (dataPacketType) {
+					case DL_PulseTrain:
+						pulsetrain=*(PulseTrain_type**)dataPacketDataPtr;
+						//get the npulses and measurement mode out of the pulsetrain packet
+						vupc->nSamples=GetPulseTrainNPulses(pulsetrain); 
+						*vupc->refNSamples=GetPulseTrainNPulses(pulsetrain);  
+						vupc->measmode=GetPulseTrainMode(pulsetrain);
+						//update UI
+						SetCtrlVal(vupc->settingsPanHndl,VUPCSet_NSamples,vupc->nSamples);
+						switch (vupc->measmode){
+							case MeasFinite:
+								SetCtrlIndex(vupc->settingsPanHndl, VUPCSet_MeasMode,0 );   
+								break;
+							case MeasCont:
+								SetCtrlIndex(vupc->settingsPanHndl, VUPCSet_MeasMode,1 );   
+								break;	
+						}
+					//	   
+					break;
+				}
+				ReleaseDataPacket(&dataPackets[i]);
+			}
+		
+			OKfree(dataPackets);				
+			break;
+				
+			
+		case TASK_STATE_ERROR:
+			
+			ReleaseAllDataPackets(sinkVChan);
+			
+			break;
+	}
+	
+	return init_FCallReturn_type(0, "", "");
+	
+Error:
+
+	return fCallReturn;
+}
+
  

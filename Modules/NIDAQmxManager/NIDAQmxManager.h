@@ -19,7 +19,7 @@
 // Include files
 
 #include "DAQLabModule.h"
- 
+#include <nidaqmx.h>  
 
 //==============================================================================
 // Constants
@@ -30,6 +30,12 @@
 
 //==============================================================================
 // Types
+		
+// Measurement mode
+typedef enum{
+	MeasFinite				= DAQmx_Val_FiniteSamps,
+	MeasCont				= DAQmx_Val_ContSamps
+} MeasMode_type; 
 		
 
 

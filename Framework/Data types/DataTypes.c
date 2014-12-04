@@ -338,7 +338,14 @@ double   GetPulseTrainDelayTime(PulseTrainTimeTiming_type* timetiming)
 }
 
 
+void discard_Pulsetrain_type (PulseTrain_type** pulsetrain)
+{
+	if (!*pulsetrain) return;
+	
+	OKfree((*pulsetrain)->timing);
 
+	OKfree(*pulsetrain);
+}
 
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------

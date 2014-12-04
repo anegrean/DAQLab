@@ -426,7 +426,7 @@ FCallReturn_type* SendDataPacket (SourceVChan_type* source, DataPacket_type* dat
 {
 #define SendDataPacket_Err_TSQWrite		-1
 	
-	int		nSinks	= ListNumItems(source->sinkVChans);
+	int		nSinks	=  ListNumItems(source->sinkVChans);
 	
 	// if there are no Sink VChans, then dispose of the data and do nothing
 	if (!nSinks) {

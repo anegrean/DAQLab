@@ -19,6 +19,7 @@
 #include "VUPCIkernel_dma.h"
 #include "HW_VUPC.h"
 #include "VUPhotonCtr.h"
+#include "NIDAQmxManager.h"
 
 //==============================================================================
 // Constants
@@ -86,7 +87,7 @@ Channel_type*		gchannels[MAX_CHANNELS];
 //unsigned short* pmt3dataptr;
 //unsigned short* pmt4dataptr;
 
-int         			measurementmode =MEASMODE_FINITE;  //default
+int         			measurementmode =MeasFinite;  //default
 int 		 			bufsize; 
 CmtThreadPoolHandle 	poolHandle		= 0;
 
@@ -363,7 +364,7 @@ int ReadBuffer(int bufsize)
 				}
 			}
 			
-			if(measurementmode==MEASMODE_FINITE){		 //need to count samples 
+			if(measurementmode==MeasFinite){		 //need to count samples 
 				//data is in pixels
 				nrsamples=nrsamples+numpixels;
 				//determine if iteration has completed
@@ -371,12 +372,18 @@ int ReadBuffer(int bufsize)
 					//iteration is done
 					
 					nrsamples=0;
+					
+					//send null packet(s)
+					for (i=0;i<MAX_CHANNELS;i++){   
+						if (gchannels[i]!=NULL){
+							if (gchannels[i]->VChan!=NULL){
+							fCallReturn = SendDataPacket(gchannels[i]->VChan, NULL, 0);
+							discard_FCallReturn_type(&fCallReturn);
+							}
+						}
+					}
+					
 					PMTStopAcq(); 
-					
-					//send null packet
-					fCallReturn = SendDataPacket(gchannels[i]->VChan, NULL, 0);
-					discard_FCallReturn_type(&fCallReturn);
-					
 					
 					TaskControlIterationDone (gtaskControl, 0, NULL,FALSE);   
 					     
@@ -611,13 +618,13 @@ int PMT_SetTestMode(BOOL testmode)
 
 /// HIFN  starts the PMT Controller Acquisition
 /// HIRET returns error, no error when 0
-int PMTStartAcq(Measurement_type mode,int iternr,TaskControl_type* taskControl,Channel_type** channels)
+int PMTStartAcq(MeasMode_type mode,int iternr,TaskControl_type* taskControl,Channel_type** channels)
 {
 	int error=0;
 	unsigned long controlreg;
 	int i;
 	
-	gtaskControl=taskControl;
+	gtaskControl=taskControl;		  
 	for (i=0;i<MAX_CHANNELS;i++){
 		if (channels[i]!=NULL) {
 			gchannels[i]=malloc(sizeof(Channel_type));
@@ -785,7 +792,7 @@ int StartDAQThread(int mode,CmtThreadPoolHandle poolHandle)
 	error=CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL);   	   //&PMTThreadFunctionID
 	if (error<0) return error;
 	//only launch second acq thread in movie mode
-	if (mode==MEASMODE_CONTINUOUS){
+	if (mode==MeasCont){
 		error=CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction2,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL);   	   //&PMTThreadFunctionID
 		if (error<0) return error; 
 	}
@@ -874,7 +881,7 @@ int CVICALLBACK PMTThreadFunction2(void *(functionData))
 //parallel thread requesting data when in movie mode
 	while (GetAcqBusy()==1)     
 	{
-		if (measurementmode !=MEASMODE_FINITE) {
+		if (measurementmode !=MeasFinite) {
 			result=ReadBuffer(GetPMTBufsize());     
 		}
 		ProcessSystemEvents();

@@ -431,11 +431,7 @@ typedef enum {
 	SampClockEdge_Falling   =  DAQmx_Val_Falling
 } SampClockEdge_type;								// Sampling clock active edge.
 
-// Measurement mode
-typedef enum{
-	MeasFinite				= DAQmx_Val_FiniteSamps,
-	MeasCont				= DAQmx_Val_ContSamps
-} MeasMode_type; 
+
 
 typedef struct {
 	MeasMode_type 			measMode;      				// Measurement mode: finite or continuous.
@@ -979,10 +975,15 @@ static char* 						substr									(const char* token, char** idxstart);
 static BOOL							ValidTaskControllerName					(char name[], void* dataPtr);
 
 // pulsetrain command VChan connected callback
-static void	PulseTrainDAQmxVChan_Connected (VChan_type* self, VChan_type* connectedVChan);
-
+static void	PulseTrainDAQmxSourceVChan_Connected (VChan_type* self, VChan_type* connectedVChan);
 // pulsetrain command VChan disconnected callback
-static void	PulseTrainDAQmxVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan);
+static void	PulseTrainDAQmxSourceVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan);
+// pulsetrain command VChan connected callback
+static void	PulseTrainDAQmxSinkVChan_Connected (VChan_type* self, VChan_type* connectedVChan);
+// pulsetrain command VChan disconnected callback
+static void	PulseTrainDAQmxSinkVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan);
+//pulse train data received callback 
+static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
 
 //---------------------------
@@ -3472,6 +3473,10 @@ static int CO_Trig_TaskSet_CB	(int panel, int control, int event, void *callback
 	int buffsize = 0; 
 	int intval;
 	char buf[100];  //temp string hlder to determine string size
+	BOOL sendnewpulsetrain=FALSE;
+	PulseTrain_type* sendpulsetrain;
+	DataPacket_type*  dataPacket;
+	FCallReturn_type* fCallReturn;
 	
 	if (event != EVENT_COMMIT) return 0;
 	
@@ -3501,11 +3506,12 @@ static int CO_Trig_TaskSet_CB	(int panel, int control, int event, void *callback
 				GetCtrlVal(panel, control,&intval);
 				if (intval==MeasFinite) selectedChan->tasktiming->measMode=MeasFinite;
 				if (intval==MeasCont) selectedChan->tasktiming->measMode=MeasCont; 
+				sendnewpulsetrain=TRUE;
 			break;
 		case TRIGPAN_NSamples:
 				GetCtrlVal(panel, control,&selectedChan->tasktiming->nSamples);
-				//sets the pulsetrain number of pulses
-				SetPulseTrainNPulses(selectedChan->pulsetrain,selectedChan->tasktiming->nSamples);
+				
+				sendnewpulsetrain=TRUE;
 			break;	
 		default:
 				OKfree(selectedChan->baseClass.startTrig->trigSource);
@@ -3515,9 +3521,21 @@ static int CO_Trig_TaskSet_CB	(int panel, int control, int event, void *callback
 				GetCtrlVal(panel, control, selectedChan->baseClass.startTrig->trigSource);
 				SetCtrlVal(panel, TRIGPAN_Source, selectedChan->baseClass.startTrig->trigSource);  
 			break;
-			
+	}
 	
-			
+	if (sendnewpulsetrain){
+		//sets the pulsetrain mode
+		SetPulseTrainMode(selectedChan->pulsetrain,selectedChan->tasktiming->measMode); 
+		//sets the pulsetrain number of pulses
+		SetPulseTrainNPulses(selectedChan->pulsetrain,selectedChan->tasktiming->nSamples);
+		//need to fill in only mode and number of samples
+		sendpulsetrain=init_PulseTrain (PulseTrain_Freq,selectedChan->tasktiming->measMode);
+		SetPulseTrainMode(sendpulsetrain,selectedChan->tasktiming->measMode);  
+		SetPulseTrainNPulses(sendpulsetrain,selectedChan->tasktiming->nSamples); 
+		dataPacket = init_DataPacket_type(DL_PulseTrain, sendpulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);       
+		// send data packet with pulsetrain
+		fCallReturn = SendDataPacket(selectedChan->pulsetrain_sourceVchan, dataPacket, 0);
+		discard_FCallReturn_type(&fCallReturn);	
 	}
 	
 	return 0;
@@ -7218,17 +7236,17 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							//add a source and a sink VChan to send/receive pulsetrain settings
 							DLDataTypes allowedpulsetrainpacket[] = {DL_PulseTrain};   	 
 							char* pulsetrainsourceVChanName	= DLGetUniqueVChanName(VChan_Default_DAQmxPulseTrainSourceChan);
-							newChan->pulsetrain_sourceVchan= init_SourceVChan_type(pulsetrainsourceVChanName, DL_PulseTrain, newChan, PulseTrainDAQmxVChan_Connected, PulseTrainDAQmxVChan_Disconnected); 
+							newChan->pulsetrain_sourceVchan= init_SourceVChan_type(pulsetrainsourceVChanName, DL_PulseTrain, newChan, PulseTrainDAQmxSourceVChan_Connected, PulseTrainDAQmxSourceVChan_Disconnected); 
 							// register VChan with DAQLab
 							//newChan->pulsetrain_sourceVchan->baseClass.useAsReference=TRUE;
 							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, newChan->pulsetrain_sourceVchan);	
 							
 							char* pulsetrainsinkVChanName		= DLGetUniqueVChanName(VChan_Default_DAQmxPulseTrainSinkChan);
 							  
-							newChan->pulsetrain_sinkVchan= init_SinkVChan_type(pulsetrainsinkVChanName, allowedpulsetrainpacket, NumElem(allowedpulsetrainpacket), newChan, PulseTrainDAQmxVChan_Connected, PulseTrainDAQmxVChan_Disconnected); 
+							newChan->pulsetrain_sinkVchan= init_SinkVChan_type(pulsetrainsinkVChanName, allowedpulsetrainpacket, NumElem(allowedpulsetrainpacket), newChan, PulseTrainDAQmxSinkVChan_Connected, PulseTrainDAQmxSinkVChan_Disconnected); 
 							// register VChan with DAQLab
 							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, newChan->pulsetrain_sinkVchan);	
-	
+							AddSinkVChan(dev->niDAQModule, newChan->pulsetrain_sinkVchan, PulseTrainDataReceivedTC,TASK_VCHAN_FUNC_ITERATE);       
 	
 							
 							//---------------------------------------
@@ -9887,16 +9905,117 @@ static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, Task
 }
 
 
-// pulsetrain command VChan connected callback
-static void	PulseTrainDAQmxVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+// pulsetrain command source VChan connected callback
+static void	PulseTrainDAQmxSourceVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	//construct pulse train packet with default settings and send it
+	PulseTrain_type* pulsetrain;
+	DataPacket_type*  dataPacket;
+	FCallReturn_type* fCallReturn;
+	
+	pulsetrain=init_PulseTrain (PulseTrain_Freq,MeasFinite);
+	dataPacket = init_DataPacket_type(DL_PulseTrain, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);       
+	// send data packet with pulsetrain
+	fCallReturn = SendDataPacket(self, dataPacket, 0);
+	discard_FCallReturn_type(&fCallReturn);
+	
+	
+	
+}
+
+// pulsetrain command source VChan disconnected callback
+static void	PulseTrainDAQmxSourceVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
 {
 	
 }
 
-// pulsetrain command VChan disconnected callback
-static void	PulseTrainDAQmxVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+// pulsetrain command sink VChan connected callback
+static void	PulseTrainDAQmxSinkVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+{
+	//construct pulse train packet with default settings and send it
+	PulseTrain_type* pulsetrain;
+	DataPacket_type*  dataPacket;
+	FCallReturn_type* fCallReturn;
+	
+//	pulsetrain=init_PulseTrain (PulseTrain_Freq,MeasFinite);
+//	dataPacket = init_DataPacket_type(DL_PulseTrain, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);       
+	// send data packet with pulsetrain
+//	fCallReturn = SendDataPacket(self, dataPacket, 0);
+//	discard_FCallReturn_type(&fCallReturn);
+	
+	
+	
+}
+
+// pulsetrain command sink VChan disconnected callback
+static void	PulseTrainDAQmxSinkVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
 {
 	
 }
 
+
+
+static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+{
+	
+	Dev_type*			dev				= GetTaskControlModuleData(taskControl);
+	FCallReturn_type*	fCallReturn			= NULL;
+	unsigned int		nSamples;
+	int					error;
+	DataPacket_type**	dataPackets			= NULL;
+	size_t				nPackets;
+	size_t				nElem;
+	void*				dataPacketDataPtr;
+	DLDataTypes			dataPacketType;  
+	PulseTrain_type*    pulsetrain;
+			
+	
+	switch(taskState) {
+			
+		case TASK_STATE_UNCONFIGURED:			
+		case TASK_STATE_CONFIGURED:						
+		case TASK_STATE_INITIAL:							
+		case TASK_STATE_IDLE:
+		case TASK_STATE_STOPPING:
+		case TASK_STATE_DONE:
+		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
+		case TASK_STATE_RUNNING:
+		case TASK_STATE_RUNNING_WAITING_ITERATION:
+			
+			
+			// get all available data packets
+			if ((fCallReturn = GetAllDataPackets(sinkVChan, &dataPackets, &nPackets))) goto Error;
+			
+			for (size_t i = 0; i < nPackets; i++) {
+				dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);
+				switch (dataPacketType) {
+					case DL_PulseTrain:
+						pulsetrain=*(PulseTrain_type**)dataPacketDataPtr;
+						
+						//update UI
+						
+						}
+					//	   
+					break;
+				}
+				ReleaseDataPacket(&dataPackets[i]);
+			}
+		
+			OKfree(dataPackets);				
+			break;
+				
+			
+		case TASK_STATE_ERROR:
+			
+			ReleaseAllDataPackets(sinkVChan);
+			
+			break;
+	}
+	
+	return init_FCallReturn_type(0, "", "");
+	
+Error:
+
+	return fCallReturn;
+}
  

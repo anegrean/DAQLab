@@ -32,10 +32,10 @@
 typedef struct VUPhotonCtr	VUPhotonCtr_type;
 
 // Operation mode of photon counter.
-typedef enum {
-	MEASMODE_FINITE,
-	MEASMODE_CONTINUOUS
-} Measurement_type;
+//typedef enum {
+//	MEASMODE_FINITE,
+//	MEASMODE_CONTINUOUS
+//} Measurement_type;
 
 
 typedef struct {

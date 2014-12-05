@@ -47,6 +47,7 @@ typedef struct {
 
 typedef struct {
 	TaskStates_type				subtaskState;				// Updated by parent task when informed by subtask that a state change occured.
+	TaskStates_type				previousSubTaskState;		// Previous Subtask state used for logging and debuging.
 	TaskControl_type*			subtask;					// Pointer to Subtask Controller.
 } SubTask_type;
 
@@ -1058,10 +1059,10 @@ static char* FCallToString (TaskFCall_type fcall)
 static char* ExecutionLogEntry (TaskControlLog_type* logItem)
 {
 	SubTask_type*	subtaskPtr;
-	char* 			output = StrDup("");
-	char*			eventName;
-	char*			stateName;
-	char*			fcallName;
+	char* 			output 			= StrDup("");
+	char*			eventName		= NULL;
+	char*			stateName		= NULL;
+	char*			fcallName		= NULL;
 	char    		buf[50];
 	
 	// Task Controller Name
@@ -1069,7 +1070,13 @@ static char* ExecutionLogEntry (TaskControlLog_type* logItem)
 		AppendString(&output, logItem->taskControl->taskName, -1);
 	else
 		AppendString(&output, "No name", -1);
-		
+	
+	// Task Controller state
+	AppendString(&output, " (", -1);
+	AppendString(&output, (stateName = StateToString(logItem->taskControl->state)), -1);
+	AppendString(&output, ")", -1);
+	OKfree(stateName);
+	
 	// Event Name
 	AppendString(&output, ",  ", -1);
 	eventName = EventToString(logItem->event);
@@ -1077,24 +1084,54 @@ static char* ExecutionLogEntry (TaskControlLog_type* logItem)
 	OKfree(eventName);
 	
 	// SubTask Controller States
-	AppendString(&output, ",  {", -1);
-	size_t	nSubTasks	= ListNumItems(logItem->subtasks);
-	for (size_t i = 1; i <= nSubTasks; i++) {
-		subtaskPtr = ListGetPtrToItem(logItem->subtasks, i);
-		AppendString(&output, "(", -1);
-		// Task Controller Name
-		if (subtaskPtr->subtask->taskName)
-			AppendString(&output, subtaskPtr->subtask->taskName, -1);
-		else
-			AppendString(&output, "No name", -1);
+	if (logItem->event != TASK_EVENT_SUBTASK_STATE_CHANGED) {
 		
-		AppendString(&output, ", ", -1);
-		stateName = StateToString(subtaskPtr->subtaskState);
-		AppendString(&output, stateName, -1);
-		OKfree(stateName);
-		AppendString(&output, ")", -1);
-		if (i < nSubTasks)
+		AppendString(&output, ",  {", -1);
+		size_t	nSubTasks	= ListNumItems(logItem->subtasks);
+		for (size_t i = 1; i <= nSubTasks; i++) {
+			subtaskPtr = ListGetPtrToItem(logItem->subtasks, i);
+			AppendString(&output, "(", -1);
+			// Task Controller Name
+			if (subtaskPtr->subtask->taskName)
+				AppendString(&output, subtaskPtr->subtask->taskName, -1);
+			else
+				AppendString(&output, "No name", -1);
+		
 			AppendString(&output, ", ", -1);
+			stateName = StateToString(subtaskPtr->subtaskState);
+			AppendString(&output, stateName, -1);
+			OKfree(stateName);
+			AppendString(&output, ")", -1);
+			if (i < nSubTasks)
+				AppendString(&output, ", ", -1);
+		}
+		
+	} else {
+		// if subtask state change event occurs, print also previous state of subtask
+		AppendString(&output, ",  {", -1);
+		size_t	nSubTasks	= ListNumItems(logItem->subtasks);
+		for (size_t i = 1; i <= nSubTasks; i++) {
+			subtaskPtr = ListGetPtrToItem(logItem->subtasks, i);
+			AppendString(&output, "(", -1);
+			// Task Controller Name
+			if (subtaskPtr->subtask->taskName)
+				AppendString(&output, subtaskPtr->subtask->taskName, -1);
+			else
+				AppendString(&output, "No name", -1);
+		
+			AppendString(&output, ", ", -1);
+			stateName = StateToString(subtaskPtr->previousSubTaskState);
+			AppendString(&output, stateName, -1);
+			OKfree(stateName);
+			AppendString(&output, "->", -1);
+			stateName = StateToString(subtaskPtr->subtaskState);
+			AppendString(&output, stateName, -1);
+			OKfree(stateName);
+			AppendString(&output, ")", -1);
+			if (i < nSubTasks)
+				AppendString(&output, ", ", -1);
+		}
+		
 	}
 	
 	// Iteration index
@@ -1491,8 +1528,9 @@ int	AddSubTaskToParent (TaskControl_type* parent, TaskControl_type* child)
 	SubTask_type	subtaskItem;
 	if (!parent || !child) return -1;
 	
-	subtaskItem.subtask			= child;
-	subtaskItem.subtaskState	= child->state;
+	subtaskItem.subtask					= child;
+	subtaskItem.subtaskState			= child->state;
+	subtaskItem.previousSubTaskState	= child->state;
 	
 	// call UITC Active function to dim/undim UITC Task Control execution
 	BOOL	UITCFlag = FALSE;
@@ -1849,6 +1887,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					
 					// if subtask is in an error state, then switch to error state
@@ -1965,6 +2004,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					
 					// if subtask is in an error state, then switch to error state
@@ -2171,6 +2211,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					
 					// if subtask is in an error state, then switch to error state
@@ -2398,6 +2439,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					
 					// if subtask is in an error state, then switch to error state
@@ -2518,6 +2560,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					
 					// if subtask is in an error state, then switch to error state
@@ -3139,6 +3182,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					
 					// if subtask is in an error state then switch to error state
@@ -3637,6 +3681,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					
 					// if subtask is in an error state then switch to error state
@@ -3777,6 +3822,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					
 					// if subtask is in an error state, then switch to error state
@@ -3998,6 +4044,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					
 					// if subtask is in an error state, then switch to error state
@@ -4165,6 +4212,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					
 					break;

@@ -638,8 +638,8 @@ int PMTStartAcq(MeasMode_type mode,int iternr,TaskControl_type* taskControl,Chan
 	error=PMTClearFifo(); 
 	
 	
-	errChk(CmtNewThreadPool(NUMTHREADS,&poolHandle)); 
-	errChk(StartDAQThread(mode,poolHandle));
+	//errChk(CmtNewThreadPool(NUMTHREADS,&poolHandle)); 
+	errChk(StartDAQThread(mode,DEFAULT_THREAD_POOL_HANDLE));
 	
 	
 	readdata=1;   //start reading       

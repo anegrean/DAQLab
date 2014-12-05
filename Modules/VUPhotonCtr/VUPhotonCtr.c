@@ -191,6 +191,8 @@ static void	PulseTrainVChan_Connected (VChan_type* self, VChan_type* connectedVC
 // pulsetrain command VChan disconnected callback
 static void	PulseTrainVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan);
 
+static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+
 
 static int PMT_Set_Mode ( int PMTnr, PMT_Mode_type mode);
 static int PMT_Set_Fan ( int PMTnr, BOOL value);
@@ -298,7 +300,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	vupc->samplingRate				= DEFAULT_SAMPLING_RATE;
 	vupc->refSamplingRate			= &vupc->samplingRate; 		// by default point to device set sampling rate
 
-	vupc->measmode					= MEASMODE_FINITE;
+	vupc->measmode					= MeasFinite;
 	vupc->pulseTrainVchan			= NULL;
 	
 		// METHODS
@@ -477,8 +479,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	}
 
 	// populate measurement mode ring and select Finite measurement mode
-	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Finite", MEASMODE_FINITE);
-	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Continuous", MEASMODE_CONTINUOUS);
+	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Finite", MeasFinite);
+	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Continuous", MeasCont);
 	SetCtrlIndex(vupc->settingsPanHndl, VUPCSet_MeasMode, 0);
 
 	// update acquisition settings display from structure data
@@ -1005,9 +1007,9 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 							DLDataTypes allowedPacketTypes[] = {DL_PulseTrain_Freq, DL_PulseTrain_Ticks, DL_PulseTrain_Time};
 							vupc->pulseTrainVchan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
 							// register VChan with DAQLab
-							DLRegisterVChan((DAQLabModule_type*)chan->vupcInstance, vupc->pulseTrainVchan);			
+							DLRegisterVChan(vupc, vupc->pulseTrainVchan);	
+							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVchan, PulseTrainDataReceivedTC, TASK_VCHAN_FUNC_NONE);  //?     
 						}
-
 						// update main panel
 						RedrawMainPanel(vupc);
 
@@ -1299,5 +1301,92 @@ static void	PulseTrainVChan_Connected (VChan_type* self, VChan_type* connectedVC
 static void	PulseTrainVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
 {
 	
+}
+
+static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+{
+	
+	VUPhotonCtr_type* 	vupc				= GetTaskControlModuleData(taskControl);
+	FCallReturn_type*	fCallReturn			= NULL;
+	unsigned int		nSamples;
+	int					error;
+	DataPacket_type**	dataPackets			= NULL;
+	size_t				nPackets;
+	size_t				nElem;
+	void*				dataPacketDataPtr;
+	DLDataTypes			dataPacketType;  
+	PulseTrain_type*    pulsetrain;
+	size_t 				i;
+	PulseTrainModes		pulsetrainmode;
+			
+/*	
+	switch(taskState) {
+			
+		case TASK_STATE_UNCONFIGURED:			
+		case TASK_STATE_CONFIGURED:						
+		case TASK_STATE_INITIAL:							
+		case TASK_STATE_IDLE:
+		case TASK_STATE_STOPPING:
+		case TASK_STATE_DONE:
+		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
+		case TASK_STATE_RUNNING:
+		case TASK_STATE_RUNNING_WAITING_ITERATION:
+			
+			
+			// get all available data packets
+			if ((fCallReturn = GetAllDataPackets(sinkVChan, &dataPackets, &nPackets))) goto Error;
+			
+			for (i = 0; i < nPackets; i++) {
+				
+				dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);
+				pulsetrain=*(PulseTrain_type**)dataPacketDataPtr;
+				vupc->nSamples=GetPulseTrainNPulses(pulsetrain);
+				vupc->refNSamples=vupc->nSamples;  //?
+				pulsetrainmode=GetPulseTrainMode(pulsetrain); 
+				switch (pulsetrainmode){
+					case PulseTrain_Finite:
+						vupc->measmode=MeasFinite;
+						break;
+					case PulseTrain_Continuous:
+						vupc->measmode=MeasCont;
+						break;
+				}
+				switch (dataPacketType) {
+				case DL_PulseTrain_Freq:
+					vupc->samplingRate=GetPulseTrainFreqTimingFreq(pulsetrain);
+					break;
+				case DL_PulseTrain_Time:
+					vupc->samplingRate=GetPulseTrainFreqTimingFreq(pulsetrain); 
+					break;
+				case DL_PulseTrain_Ticks:
+					break;
+				} 	
+						
+					//update UI
+				SetCtrlVal(vupc->settingsPanHndl,VUPCSet_NSamples,vupc->nSamples);
+				SetCtrlIndex(vupc->settingsPanHndl,VUPCSet_MeasMode,vupc->measmode);     
+						
+				//	   
+				break;
+				}
+				ReleaseDataPacket(&dataPackets[i]);
+			}
+		
+			OKfree(dataPackets);				
+			break;
+				
+			
+		case TASK_STATE_ERROR:
+			
+			ReleaseAllDataPackets(sinkVChan);
+			
+			break;
+	}
+	
+	return init_FCallReturn_type(0, "", "");
+	
+Error:	   */
+				
+	return fCallReturn;
 }
  

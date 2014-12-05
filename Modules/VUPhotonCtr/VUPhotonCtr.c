@@ -934,14 +934,16 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 				case VUPCSet_MeasMode:
 					GetCtrlIndex(panel,VUPCSet_MeasMode,&vupc->measmode);
 					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate );  
-					GetCtrlVal(panel,VUPCSet_NSamples,vupc->refNSamples);   
+					GetCtrlVal(panel,VUPCSet_NSamples,&nsamples);   
+					*vupc->refNSamples=nsamples;
 					Setnrsamples_in_iteration(vupc->measmode,*vupc->refSamplingRate,*vupc->refNSamples);
 					break;
 
 				case VUPCSet_SamplingRate:
 					GetCtrlIndex(panel,VUPCSet_MeasMode,&vupc->measmode);
 					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate);  
-					GetCtrlVal(panel,VUPCSet_NSamples,vupc->refNSamples);   
+					GetCtrlVal(panel,VUPCSet_NSamples,&nsamples);   
+					*vupc->refNSamples=nsamples;
 					Setnrsamples_in_iteration(vupc->measmode,*vupc->refSamplingRate,*vupc->refNSamples);
 					
 					break;
@@ -1319,7 +1321,7 @@ static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl
 	size_t 				i;
 	PulseTrainModes		pulsetrainmode;
 			
-/*	
+	
 	switch(taskState) {
 			
 		case TASK_STATE_UNCONFIGURED:			
@@ -1350,25 +1352,25 @@ static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl
 					case PulseTrain_Continuous:
 						vupc->measmode=MeasCont;
 						break;
-				}
+				}								   
+				//only pass frew info  in DL_PulseTrain_Freq  and DL_PulseTrain_Time mode
 				switch (dataPacketType) {
-				case DL_PulseTrain_Freq:
-					vupc->samplingRate=GetPulseTrainFreqTimingFreq(pulsetrain);
-					break;
-				case DL_PulseTrain_Time:
-					vupc->samplingRate=GetPulseTrainFreqTimingFreq(pulsetrain); 
-					break;
-				case DL_PulseTrain_Ticks:
-					break;
+					case DL_PulseTrain_Freq:
+						vupc->samplingRate=GetPulseTrainFreqTimingFreq(pulsetrain);
+						SetCtrlVal(vupc->settingsPanHndl,VUPCSet_SamplingRate,vupc->samplingRate/1000);  //in khz
+						break;
+					case DL_PulseTrain_Time:
+						vupc->samplingRate=GetPulseTrainFreqTimingFreq(pulsetrain);
+						SetCtrlVal(vupc->settingsPanHndl,VUPCSet_SamplingRate,vupc->samplingRate/1000);     //in khz  
+						break;
+					case DL_PulseTrain_Ticks:
+						break;
 				} 	
 						
 					//update UI
 				SetCtrlVal(vupc->settingsPanHndl,VUPCSet_NSamples,vupc->nSamples);
 				SetCtrlIndex(vupc->settingsPanHndl,VUPCSet_MeasMode,vupc->measmode);     
 						
-				//	   
-				break;
-				}
 				ReleaseDataPacket(&dataPackets[i]);
 			}
 		
@@ -1385,8 +1387,10 @@ static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl
 	
 	return init_FCallReturn_type(0, "", "");
 	
-Error:	   */
+Error:	   
 				
 	return fCallReturn;
 }
  
+
+

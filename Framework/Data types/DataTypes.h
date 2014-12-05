@@ -381,7 +381,8 @@ void   						SetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* pu
 
 	// gets the pulsetrain iniial delay time
 double   					GetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* pulseTrain);
-
+	//returns a copy of the pulsetrain 
+PulseTrain_type* 			GetPulsetrainCopy						(PulseTrain_type* pulsetrain);
 
 #ifdef __cplusplus
     }

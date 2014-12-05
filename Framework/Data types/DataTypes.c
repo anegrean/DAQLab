@@ -321,6 +321,32 @@ void discard_Pulsetrain_type (PulseTrain_type** pulsetrain)
 	OKfree(*pulsetrain);
 }
 
+PulseTrain_type* GetPulsetrainCopy(PulseTrain_type* pulsetrain)
+{
+	PulseTrain_type* newpulsetrain;
+	PulseTrainTimingTypes pulseTrainType;
+	
+	pulseTrainType=GetPulseTrainType(pulsetrain);
+	switch (pulseTrainType) {
+		case PulseTrain_Freq:
+			newpulsetrain   = (PulseTrain_type*) init_PulseTrainFreqTiming_type(GetPulseTrainMode(pulsetrain), GetPulseTrainIdleState(pulsetrain), GetPulseTrainNPulses(pulsetrain), 
+									  GetPulseTrainFreqTimingDutyCycle(pulsetrain), GetPulseTrainFreqTimingFreq(pulsetrain), GetPulseTrainFreqTimingDutyCycle(pulsetrain)); 
+			break;
+			
+		case PulseTrain_Time:
+			newpulsetrain   = (PulseTrain_type*) init_PulseTrainTimeTiming_type(GetPulseTrainMode(pulsetrain), GetPulseTrainIdleState(pulsetrain), GetPulseTrainNPulses(pulsetrain), 
+									  GetPulseTrainTimeTimingHighTime(pulsetrain), GetPulseTrainTimeTimingLowTime(pulsetrain), GetPulseTrainFreqTimingDutyCycle(pulsetrain)); 
+			break;
+			
+		case PulseTrain_Ticks:
+			newpulsetrain   = (PulseTrain_type*) init_PulseTrainTickTiming_type(GetPulseTrainMode(pulsetrain), GetPulseTrainIdleState(pulsetrain), GetPulseTrainNPulses(pulsetrain),
+									  GetPulseTrainTickTimingHighTicks(pulsetrain), GetPulseTrainTickTimingLowTicks(pulsetrain), GetPulseTrainTickTimingDelayTicks(pulsetrain));  
+			break;
+	}
+	
+	return newpulsetrain;
+}
+
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Waveforms

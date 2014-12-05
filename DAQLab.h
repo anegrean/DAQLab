@@ -98,6 +98,8 @@ char*				DLGetUniqueVChanName				(char baseVChanName[]);
 	// To Validate a new VChan name, pass this function as a parameter when calling DLGetUINameInput.
 BOOL				DLValidateVChanName					(char newVChanName[], void* null);
 
+BOOL				DLRenameVChan						(VChan_type* VChan, char newName[]);
+
 //-------------------------------------------------------------------------------
 // DAQLab handy programmer's tools
 //-------------------------------------------------------------------------------

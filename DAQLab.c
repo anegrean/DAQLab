@@ -921,6 +921,22 @@ BOOL DLValidateVChanName (char newVChanName[], void* null)
 		return TRUE;
 }
 
+/// HIFN Renames a VChan in the DAQLab framework.
+/// HIRET True if renaming was successful, False otherwise.
+BOOL DLRenameVChan (VChan_type* VChan, char newName[])
+{
+	// validate new VChan name
+	if (!DLValidateVChanName(newName, NULL)) return FALSE;
+	
+	// assign new name
+	SetVChanName(VChan, newName);
+	
+	// update UI
+	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
+	
+	return TRUE;
+}
+
 void DLMsg(const char* text, BOOL beep)
 {
 	if (!DAQLAB_LOG_PANEL) return;

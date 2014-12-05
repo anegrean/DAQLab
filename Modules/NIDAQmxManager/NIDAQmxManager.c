@@ -2189,12 +2189,24 @@ static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callb
 			
 		case AIAOChSet_Terminal:
 			
-			GetCtrlVal(panel, control, &chSetPtr->terminal);
+			int terminalType;
+			GetCtrlVal(panel, control, &terminalType);
+			chSetPtr->terminal = (Terminal_type) terminalType;
 			break;
 			
 		case AIAOChSet_VChanName:
 			
-			// fill out action for VChan
+			char*	newName = NULL;
+			newName = GetStringFromControl (panel, control);
+			if (chSetPtr->aiChanAttr) 
+				// analong input channel type
+				DLRenameVChan((VChan_type*)chSetPtr->baseClass.srcVChan, newName);
+			else
+				// analog output channel type
+				DLRenameVChan((VChan_type*)chSetPtr->baseClass.sinkVChan, newName);
+			
+			OKfree(newName);
+			break;
 			
 			break;
 	}
@@ -2354,7 +2366,12 @@ static int ChanSetLineDO_CB (int panel, int control, int event, void *callbackDa
 		
 			
 		case DIDOLChSet_VChanName:
-			// fill out action for VChan   
+			
+			char*	newName = NULL;
+			newName = GetStringFromControl (panel, control);
+			DLRenameVChan((VChan_type*)chanset->baseClass.sinkVChan, newName); 
+			OKfree(newName); 
+		
 			break;
 		case DIDOLChSet_CHECKBOX:
 			//invert
@@ -2400,11 +2417,17 @@ static int ChanSetPortDO_CB (int panel, int control, int event, void *callbackDa
 	switch(control) {
 			
 		case DIDOPChSet_VChanName:
-			// fill out action for VChan   
+			
+			char*	newName = NULL;
+			newName = GetStringFromControl (panel, control);
+			DLRenameVChan((VChan_type*)chanset->baseClass.sinkVChan, newName); 
+			OKfree(newName);    
 			break;
+			
 		case DIDOPChSet_CHECKBOX:
 			//invert
 			break;
+			
 		case DIDOPChSet_RADIOBUTTON_0:
 		case DIDOPChSet_RADIOBUTTON_1: 	
 		case DIDOPChSet_RADIOBUTTON_2: 	

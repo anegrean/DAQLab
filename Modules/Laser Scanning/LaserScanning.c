@@ -2606,43 +2606,43 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 				case ScanSetPan_FastAxisCommand:
 					
 					newName = GetStringFromControl (panel, control);
-					SetVChanName((VChan_type*)engine->VChanFastAxisCom, newName);
+					DLRenameVChan((VChan_type*)engine->VChanFastAxisCom, newName);
 					break;
 					
 				case ScanSetPan_SlowAxisCommand:
 					
 					newName = GetStringFromControl (panel, control);
-					SetVChanName((VChan_type*)engine->VChanSlowAxisCom, newName);
+					DLRenameVChan((VChan_type*)engine->VChanSlowAxisCom, newName);
 					break;
 					
 				case ScanSetPan_FastAxisPosition:
 					
 					newName = GetStringFromControl (panel, control);
-					SetVChanName((VChan_type*)engine->VChanFastAxisPos, newName);
+					DLRenameVChan((VChan_type*)engine->VChanFastAxisPos, newName); 
 					break;
 					
 				case ScanSetPan_SlowAxisPosition:
 					
 					newName = GetStringFromControl (panel, control);
-					SetVChanName((VChan_type*)engine->VChanSlowAxisPos, newName);
+					DLRenameVChan((VChan_type*)engine->VChanSlowAxisPos, newName); 
 					break;
 					
 				case ScanSetPan_ImageOut:
 					
 					newName = GetStringFromControl (panel, control);
-					SetVChanName((VChan_type*)engine->VChanScanOut, newName);
+					DLRenameVChan((VChan_type*)engine->VChanScanOut, newName);
 					break;
 					
 				case ScanSetPan_ShutterCommand:
 					
 					newName = GetStringFromControl (panel, control);
-					SetVChanName((VChan_type*)engine->VChanShutter, newName);
+					DLRenameVChan((VChan_type*)engine->VChanShutter, newName); 
 					break;
 					
 				case ScanSetPan_PixelSettings:
 					
 					newName = GetStringFromControl (panel, control);
-					SetVChanName((VChan_type*)engine->VChanPixelSettings, newName);
+					DLRenameVChan((VChan_type*)engine->VChanPixelSettings, newName);  
 					break;
 					
 				case ScanSetPan_AddImgChan:
@@ -2913,7 +2913,7 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					DetChan_type** 	detChanPtr; 
 					GetCtrlIndex(panel, control, &listItemIdx); 
 					detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
-					SetVChanName((VChan_type*)(*detChanPtr)->detVChan, newName);
+					DLRenameVChan((VChan_type*)(*detChanPtr)->detVChan, newName);
 					ReplaceListItem(panel, control, listItemIdx, newName, newName);  
 					break;
 			}
@@ -4631,7 +4631,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	// 													Pixel timing info
 	//---------------------------------------------------------------------------------------------------------------------------
 	
-	//pixelInfo = init_PulseTrain_type_type
+	//pixelInfo = init_PulseTrainTimeTiming_type
 	
 	
 	return NULL; // no error
@@ -4651,6 +4651,7 @@ Error:
 	discard_RepeatedWaveform_type(&slowAxisMoveFromParked_RepWaveform); 
 	discard_RepeatedWaveform_type(&fastAxisScan_RepWaveform);
 	discard_RepeatedWaveform_type(&slowAxisScan_RepWaveform);
+	discard_PulseTrain_type(&pixelInfo);
 	ReleaseDataPacket(&galvoCommandPacket);
 	
 	if (fCallReturn) {

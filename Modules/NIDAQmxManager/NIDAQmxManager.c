@@ -1096,6 +1096,8 @@ double IterStartTime;
 double IterEndTime=0;
 double taskStartTime;
 double taskEndTime;
+// adrian test
+extern TaskExecutionLog_type* TaskExecutionLog;
 
 //========================================================================================================================================================================================================
 // Global functions
@@ -4063,6 +4065,9 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type**
 	dev -> taskController = init_TaskControl_type (taskControllerName, dev, ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, 
 						  ResetTC, DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
 	if (!dev->taskController) {discard_DevAttr_type(attr); free(dev); return NULL;}
+	
+	// test adrian
+	SetTaskControlLog(dev->taskController, TaskExecutionLog);
 	
 	//--------------------------
 	// DAQmx task settings

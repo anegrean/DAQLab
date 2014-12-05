@@ -87,7 +87,7 @@ Channel_type*		gchannels[MAX_CHANNELS];
 //unsigned short* pmt3dataptr;
 //unsigned short* pmt4dataptr;
 
-int         			measurementmode =MeasFinite;  //default
+int         			measurementmode =TASK_FINITE;  //default
 int 		 			bufsize; 
 CmtThreadPoolHandle 	poolHandle		= 0;
 
@@ -146,7 +146,7 @@ void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples)
 {
 	 int bufsize;
 	 
-	 if (mode==1) {   //continuous mode, bufsize based on sample freq
+	 if (mode==TASK_CONTINUOUS) {   //continuous mode, bufsize based on sample freq
 		 if (samplerate_in_khz>500) {
 			 bufsize=0x200000;  
 		 }
@@ -364,7 +364,7 @@ int ReadBuffer(int bufsize)
 				}
 			}
 			
-			if(measurementmode==MeasFinite){		 //need to count samples 
+			if(measurementmode==TASK_FINITE){		 //need to count samples 
 				//data is in pixels
 				nrsamples=nrsamples+numpixels;
 				//determine if iteration has completed
@@ -618,7 +618,7 @@ int PMT_SetTestMode(BOOL testmode)
 
 /// HIFN  starts the PMT Controller Acquisition
 /// HIRET returns error, no error when 0
-int PMTStartAcq(MeasMode_type mode,int iternr,TaskControl_type* taskControl,Channel_type** channels)
+int PMTStartAcq(TaskMode_type mode,int iternr,TaskControl_type* taskControl,Channel_type** channels)
 {
 	int error=0;
 	unsigned long controlreg;
@@ -792,7 +792,7 @@ int StartDAQThread(int mode,CmtThreadPoolHandle poolHandle)
 	error=CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL);   	   //&PMTThreadFunctionID
 	if (error<0) return error;
 	//only launch second acq thread in movie mode
-	if (mode==MeasCont){
+	if (mode==TASK_CONTINUOUS){
 		error=CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction2,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL);   	   //&PMTThreadFunctionID
 		if (error<0) return error; 
 	}
@@ -881,7 +881,7 @@ int CVICALLBACK PMTThreadFunction2(void *(functionData))
 //parallel thread requesting data when in movie mode
 	while (GetAcqBusy()==1)     
 	{
-		if (measurementmode !=MeasFinite) {
+		if (measurementmode !=TASK_FINITE) {
 			result=ReadBuffer(GetPMTBufsize());     
 		}
 		ProcessSystemEvents();

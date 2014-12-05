@@ -53,8 +53,8 @@ typedef struct {
 struct SlaveHWTrigTask{
 	BOOL						armed;						// TRUE if a Slave HW Triggered Task Controller is ready to be triggered by its Master
 	TaskControl_type*			slaveHWTrigTask;			// pointer to Slave HW Triggered Task Controller.
-} ;
-
+};
+							
 typedef enum {
 	TASK_CONTROL_STATE_CHANGE,
 	TASK_CONTROL_FUNCTION_CALL
@@ -67,7 +67,6 @@ typedef struct {
 
 typedef struct TaskControlLog {
 	TaskControl_type*			taskControl;				// Pointer to Task Controller for which this record is made.
-	double						timestamp;					// Timestamp at which the record was created.
 	TaskEvents_type				event;						// Event that triggered the action
 	ListType					subtasks;					// SubTask states when the event occured. List of SubTask_type
 	size_t						IterIdx;					// Current iteration index when event occured.
@@ -104,13 +103,8 @@ struct TaskControl {
 	CmtThreadFunctionID			threadFunctionID;			// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
 	TaskStates_type 			state;						// Module execution state.
 	size_t						repeat;						// Total number of repeats. If repeat is 0, then the iteration function is not called. 
-	int							iterTimeout;				// 0, Task Controller iteration block is complete and execution continues with return from
-															// the iteration function call. 1..N > 0, Task Controller iteration block is not yet complete
-															// and TASK_EVENT_ITERATION_DONE must be received (from another thread) to consider the iteration block complete.
-															// If TASK_EVENT_ITERATION_DONE is not received after iterTimeout seconds then the Task Controller execution will time out 
-															// and genrate an error. For values -N..-1, Task Controller iteration block does not time out and waits for TASK_EVENT_ITERATION_DONE. 
-															// to signal that iteration block is complete.
-	TaskIterMode_type			iterMode;					// Determies how the iteration block of a Task Controller is executed with respect to its subtasks if any.
+	int							iterTimeout;				// Timeout in [s] until when TaskControlIterationDone can be called. 
+	TaskIterMode_type			iterMode;					// Determines how the iteration block of a Task Controller is executed with respect to its subtasks if any.
 	TaskMode_type				mode;						// Finite or continuous type of task controller
 	size_t						currIterIdx;    			// 1-based task execution iteration index  
 	TaskControl_type*			parenttask;					// Pointer to parent task that own this subtask. 
@@ -1076,12 +1070,6 @@ static char* ExecutionLogEntry (TaskControlLog_type* logItem)
 	else
 		AppendString(&output, "No name", -1);
 		
-	
-	// Timestamp
-	AppendString(&output, ",  ", -1); 
-	Fmt(buf, "%s<%f[e3]", logItem->timestamp);
-	AppendString(&output, buf, -1);
-	
 	// Event Name
 	AppendString(&output, ",  ", -1);
 	eventName = EventToString(logItem->event);
@@ -1266,7 +1254,6 @@ static int ChangeState (TaskControl_type* taskControl, TaskEvents_type event, Ta
 	// if logging enabled, record state change
 	if (taskControl->logPtr) {
 		TaskControlLog_type logItem = {taskControl, 
-									   Timer(),
 									   event,
 									   ListCopy(taskControl->subtasks),
 									   taskControl->currIterIdx,
@@ -1341,7 +1328,6 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 	// if logging enabled, record function call action
 	if (taskControl->logPtr) {
 		TaskControlLog_type logItem = {taskControl, 
-									   Timer(),
 									   event,
 									   ListCopy(taskControl->subtasks),
 									   taskControl->currIterIdx,

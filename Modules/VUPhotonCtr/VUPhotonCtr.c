@@ -117,8 +117,7 @@ struct VUPhotonCtr {
 		// Points to either device set sampling rate or virtual channel set sampling rate.
 		// By default it points to the device sampling rate samplingRate. In [Hz]
 	double*				refSamplingRate;
-		// Finite number of samples or continuous measurement
-	MeasMode_type		measmode;        
+
 
 
 	// METHODS
@@ -238,6 +237,8 @@ static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, Tas
 //==============================================================================
 // Global variables
 
+extern TaskExecutionLog_type* TaskExecutionLog;
+
 //==============================================================================
 // Global functions for module data management
 
@@ -266,6 +267,9 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, UnConfigureTC,IterateTC, AbortIterationTC, StartTC, ResetTC,
 								DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
+	
+	// test adrian
+	SetTaskControlLog(tc, TaskExecutionLog);
 	
 	//------------------------------------------------------------
 
@@ -300,7 +304,6 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	vupc->samplingRate				= DEFAULT_SAMPLING_RATE;
 	vupc->refSamplingRate			= &vupc->samplingRate; 		// by default point to device set sampling rate
 
-	vupc->measmode					= MeasFinite;
 	vupc->pulseTrainVchan			= NULL;
 	
 		// METHODS
@@ -479,8 +482,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	}
 
 	// populate measurement mode ring and select Finite measurement mode
-	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Finite", MeasFinite);
-	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Continuous", MeasCont);
+	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Finite", TASK_FINITE);
+	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Continuous",TASK_CONTINUOUS );
 	SetCtrlIndex(vupc->settingsPanHndl, VUPCSet_MeasMode, 0);
 
 	// update acquisition settings display from structure data
@@ -924,6 +927,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 	char				buff[DAQLAB_MAX_VCHAN_NAME + 50];
 	double duration;
 	int nsamples;
+	int mode;
 
 	switch (event) {
 
@@ -932,19 +936,21 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 			switch (control) {
 
 				case VUPCSet_MeasMode:
-					GetCtrlIndex(panel,VUPCSet_MeasMode,&vupc->measmode);
+					GetCtrlIndex(panel,VUPCSet_MeasMode,&mode);
+					SetTaskControlMode(vupc->taskControl,mode);
 					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate );  
 					GetCtrlVal(panel,VUPCSet_NSamples,&nsamples);   
 					*vupc->refNSamples=nsamples;
-					Setnrsamples_in_iteration(vupc->measmode,*vupc->refSamplingRate,*vupc->refNSamples);
+					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->refSamplingRate,*vupc->refNSamples);
 					break;
 
 				case VUPCSet_SamplingRate:
-					GetCtrlIndex(panel,VUPCSet_MeasMode,&vupc->measmode);
+					GetCtrlIndex(panel,VUPCSet_MeasMode,&mode);
+					SetTaskControlMode(vupc->taskControl,mode);    
 					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate);  
 					GetCtrlVal(panel,VUPCSet_NSamples,&nsamples);   
 					*vupc->refNSamples=nsamples;
-					Setnrsamples_in_iteration(vupc->measmode,*vupc->refSamplingRate,*vupc->refNSamples);
+					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->refSamplingRate,*vupc->refNSamples);
 					
 					break;
 
@@ -953,10 +959,11 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 					break;
 
 				case VUPCSet_NSamples:
-					GetCtrlIndex(panel,VUPCSet_MeasMode,&vupc->measmode);
+					GetCtrlIndex(panel,VUPCSet_MeasMode,&mode);
+					SetTaskControlMode(vupc->taskControl,mode);    
 					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate);  
 					GetCtrlVal(panel,VUPCSet_NSamples,vupc->refNSamples);   
-					Setnrsamples_in_iteration(vupc->measmode,*vupc->refSamplingRate,*vupc->refNSamples);
+					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->refSamplingRate,*vupc->refNSamples);
 					break;
 
 				case VUPCSet_Close:
@@ -1191,9 +1198,9 @@ static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 
 	VUPC_SetStepCounter(vupc,currentIteration);
 	
-	Setnrsamples_in_iteration(vupc->measmode,vupc->samplingRate,vupc->nSamples); 
+	Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),vupc->samplingRate,vupc->nSamples); 
 	
-	PMTStartAcq(vupc->measmode,currentIteration,vupc->taskControl,vupc->channels);
+	PMTStartAcq(GetTaskControlMode(vupc->taskControl),currentIteration,vupc->taskControl,vupc->channels);
 	
 	// if  the VUPhotonCtr Task requires a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
 	if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
@@ -1215,13 +1222,6 @@ static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abo
 	//ResetDataCounter();
 	//timeout testvalue
 	SetTaskControlIterationTimeout(taskControl,ITER_TIMEOUT);
-
-	if (vupc->measmode == MeasFinite) {
-		SetTaskControlMode(vupc->taskControl, TASK_CONTINUOUS);
-	} else {
-		SetTaskControlMode(vupc->taskControl, TASK_FINITE);
-	}
-
 
 	return init_FCallReturn_type(0, "", "");
 }
@@ -1347,10 +1347,10 @@ static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl
 				pulsetrainmode=GetPulseTrainMode(pulsetrain); 
 				switch (pulsetrainmode){
 					case PulseTrain_Finite:
-						vupc->measmode=MeasFinite;
+						SetTaskControlMode(vupc->taskControl,TASK_FINITE);
 						break;
 					case PulseTrain_Continuous:
-						vupc->measmode=MeasCont;
+						SetTaskControlMode(vupc->taskControl,TASK_CONTINUOUS);
 						break;
 				}								   
 				//only pass frew info  in DL_PulseTrain_Freq  and DL_PulseTrain_Time mode
@@ -1369,7 +1369,7 @@ static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl
 						
 					//update UI
 				SetCtrlVal(vupc->settingsPanHndl,VUPCSet_NSamples,vupc->nSamples);
-				SetCtrlIndex(vupc->settingsPanHndl,VUPCSet_MeasMode,vupc->measmode);     
+				SetCtrlIndex(vupc->settingsPanHndl,VUPCSet_MeasMode,GetTaskControlMode(vupc->taskControl));     
 						
 				ReleaseDataPacket(&dataPackets[i]);
 			}

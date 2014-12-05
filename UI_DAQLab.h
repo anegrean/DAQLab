@@ -17,6 +17,7 @@
 #define  LogPan_LogBox                    2       /* control type: textBox, callback function: (none) */
 
 #define  MainPan                          2       /* callback function: CB_DAQLab_MainPan */
+#define  MainPan_LogBox                   2       /* control type: textBox, callback function: (none) */
 
 #define  ModulesPan                       3
 #define  ModulesPan_Plate                 2       /* control type: deco, callback function: (none) */

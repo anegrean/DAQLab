@@ -140,8 +140,11 @@ typedef struct {
 
 //==============================================================================
 // Static global variables
-//test lex
-double Ttaskstart;   
+// test lex
+double Ttaskstart; 
+
+// test to check TC execution
+TaskExecutionLog_type* 	TaskExecutionLog;
 
 //------------------------------------------------------------------------------------------------
 //                              AVAILABLE DAQLab MODULES
@@ -304,7 +307,7 @@ int main (int argc, char *argv[])
 	SetSleepPolicy(VAL_SLEEP_SOME);
 	
 	// load DAQLab environment resources
-
+	
 	DAQLab_Load(); 
 	
 	// run GUI
@@ -372,9 +375,14 @@ static int DAQLab_Load (void)
 	nullChk ( DAQLabTCs					= ListCreate(sizeof(TaskControl_type*)) );	// list with loaded Task Controllers
 	nullChk ( VChannels		   			= ListCreate(sizeof(VChan_type*)) );		// list with Virtual Channels
 	
+	//----------------------
 	//test lex
 	nullChk ( HWTrigMasters		   		= ListCreate(sizeof(char*)) );		// list with HW Trig masters
 	nullChk ( HWTrigSlaves		   		= ListCreate(sizeof(char*)) );		// list with HW Trig slaves 
+	
+	// test TC execution
+	TaskExecutionLog = init_TaskExecutionLog_type (mainPanHndl, MainPan_LogBox);
+	//--------------------------------------------
 	
 	char* none="None";
 	ListInsertItem(HWTrigMasters,&none,-1);  
@@ -447,6 +455,9 @@ static int DAQLab_Load (void)
 		// create new UI Task Controller
 		newTaskControllerPtr = init_TaskControl_type (UITCName, NULL, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
 												 	  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
+		// test
+		SetTaskControlLog(newTaskControllerPtr, TaskExecutionLog);
+		
 		if (!newTaskControllerPtr) {
 			DLMsg("Error: Task Controller could not be created.\n\n", 1);
 			return -1;
@@ -2055,6 +2066,9 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	// create new task controller
 	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
 												  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
+	// test
+	SetTaskControlLog(newTaskControllerPtr, TaskExecutionLog);
+	
 	OKfree(newControllerName);
 	
 	if (!newTaskControllerPtr) {

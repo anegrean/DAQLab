@@ -359,7 +359,6 @@ typedef enum {
 
 typedef struct TaskControl 			TaskControl_type;
 typedef struct SlaveHWTrigTask		SlaveHWTrigTask_type;
-typedef struct TaskExecutionLog		TaskExecutionLog_type;
 
 //--------------------------------------------------------------------------------
 // Task Controller Function Pointer Types
@@ -461,6 +460,11 @@ void					discard_TaskTreeBranch				(TaskControl_type** taskController);
 // Task Controller set/get functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
+	// Sets UI resources for Task Controller logging. Multiple Task Controllers may share the same UI logging resources. 
+void					SetTaskControlUILoggingInfo			(TaskControl_type* taskControl, int logPanHandle, int logBoxControlID);
+
+void					EnableTaskControlLogging			(TaskControl_type* taskControl, BOOL enableLogging);
+
 void 					SetTaskControlName 					(TaskControl_type* taskControl, char newName[]);
 	// Returns pointer to dynamically allocated Task Controller name (null terminated string) 
 char*					GetTaskControlName					(TaskControl_type* taskControl);
@@ -498,10 +502,6 @@ double					GetTaskControlIterationsWait		(TaskControl_type* taskControl);
 	// moduleData = NULL by default
 void					SetTaskControlModuleData			(TaskControl_type* taskControl, void* moduleData);
 void*					GetTaskControlModuleData			(TaskControl_type* taskControl);
-
-	// Logs Task Controller activity. Multiple Task Controllers may share the same log.
-	// logPtr = NULL by default
-void					SetTaskControlLog					(TaskControl_type* taskControl, TaskExecutionLog_type*	logPtr); 
 
 	// Task Controller HW Trigger types based on how the Task Controller is connected using AddHWSlaveTrigToMaster and RemoveHWSlaveTrigFromMaster 
 HWTrigger_type          GetTaskControlHWTrigger				(TaskControl_type* taskControl);
@@ -622,20 +622,6 @@ void					DisconnectAllSinkVChans				(TaskControl_type* taskControl);
 
 	// Clears all data packets from all the Sink VChans of a Task Controller
 void					ClearAllSinkVChans					(TaskControl_type* taskControl);
-
-//------------------------------------------------------------------------------------------------------------------------------------------------------
-// Task Controller logging functions
-//------------------------------------------------------------------------------------------------------------------------------------------------------
-
-	// Pass panel handle and text box control IDs if any to display task controller execution.
-	// Pass 0 for both if this is not required.
-TaskExecutionLog_type*	init_TaskExecutionLog_type			(int logBoxPanHandle, int logBoxControl); 
-
-void					discard_TaskExecutionLog_type		(TaskExecutionLog_type** a);
-
-	
-
-
 
 
 #ifdef __cplusplus

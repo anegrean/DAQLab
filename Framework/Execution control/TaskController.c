@@ -77,13 +77,6 @@ typedef struct TaskControlLog {
 	TaskFCall_type				fcallID;					// In case of function call: the ID of function which is called.
 } TaskControlLog_type;
 
-struct TaskExecutionLog {
-	ListType					log;						// Keeps record of Task Controller events, state changes and actions. List of TaskControlLog_type.
-	CmtThreadLockHandle			lock;						// Prevents multiple threads to add at the same time elements to the list
-	int							logBoxPanHandle;
-	int							logBoxControl;
-};
-
 // Structure binding Task Controller and VChan data for passing to TSQ callback	
 typedef struct {
 	TaskControl_type* 			taskControl;
@@ -116,7 +109,9 @@ struct TaskControl {
 															// HW Triggered Slave Task Controllers.
 	void*						moduleData;					// Reference to module specific data that is 
 															// controlled by the task.
-	TaskExecutionLog_type*		logPtr;						// Pointer to logging structure. NULL if logging is not enabled.
+	int							logPanHandle;				// Panel handle in which there is a box control for printing Task Controller execution info useful for debugging. If not used, it is set to 0
+	int							logBoxControlID;			// Box control ID for printing Task Controller execution info useful for debugging. If not used, it is set to 0.  
+	BOOL						loggingEnabled;				// If True, logging info is printed to the provided Box control.
 	ErrorMsg_type*				errorMsg;					// When switching to an error state, additional error info is written here
 	double						waitBetweenIterations;		// During a RUNNING state, waits specified ammount in seconds between iterations
 	BOOL						abortFlag;					// When set to TRUE, it signals the provided function pointers that they must abort running processes.
@@ -281,7 +276,9 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	a -> currIterIdx			= 0;
 	a -> parenttask				= NULL;
 	a -> masterHWTrigTask		= NULL;
-	a -> logPtr					= NULL;
+	a -> logPanHandle			= 0;
+	a -> logBoxControlID		= 0;
+	a -> loggingEnabled			= FALSE;
 	a -> errorMsg				= NULL;
 	a -> waitBetweenIterations	= 0;
 	a -> abortFlag				= 0;
@@ -375,6 +372,17 @@ void discard_TaskTreeBranch (TaskControl_type** taskController)
 	discard_TaskControl_type(taskController);
 }
 
+void EnableTaskControlLogging (TaskControl_type* taskControl, BOOL enableLogging)
+{
+	taskControl->loggingEnabled =  enableLogging;
+}
+
+void SetTaskControlUILoggingInfo (TaskControl_type* taskControl, int logPanHandle, int logBoxControlID)
+{
+	taskControl->logPanHandle 		= logPanHandle;
+	taskControl->logBoxControlID	= logBoxControlID;
+}
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller set/get functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -455,12 +463,6 @@ void* GetTaskControlModuleData (TaskControl_type* taskControl)
 {
 	return taskControl->moduleData; 
 }
-
-void SetTaskControlLog (TaskControl_type* taskControl, TaskExecutionLog_type* logPtr)
-{
-	taskControl->logPtr = logPtr;
-}
-  
 
 HWTrigger_type GetTaskControlHWTrigger (TaskControl_type* taskControl)
 {
@@ -609,47 +611,6 @@ void DisconnectAllSinkVChans (TaskControl_type* taskControl)
 		// disconnect Sink from Source
 		VChan_Disconnect((VChan_type*)(*VChanTSQDataPtrPtr)->sinkVChan);
 	}
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------------------
-// Task Controller logging functions
-//------------------------------------------------------------------------------------------------------------------------------------------------------
-
-TaskExecutionLog_type* init_TaskExecutionLog_type (int logBoxPanHandle, int logBoxControl)
-{
-	TaskExecutionLog_type* a = malloc(sizeof(TaskExecutionLog_type));
-	if (!log) return NULL;
-	
-	a -> logBoxPanHandle 	= logBoxPanHandle;
-	a -> logBoxControl		= logBoxControl;
-	// create log list
-	a -> log = ListCreate(sizeof(TaskControlLog_type));
-	if (!a->log) {free(a); return NULL;}
-	
-	// create a thread lock
-	if (CmtNewLock(NULL, 0, &a->lock) < 0)
-	{ListDispose(a->log); free(a); return NULL;}
-	
-	return a;
-}
-
-void discard_TaskExecutionLog_type (TaskExecutionLog_type** a)
-{
-	if (!a) return;
-	if (!*a) return;
-	
-	size_t 					nLogItems = ListNumItems((*a)->log);
-	TaskControlLog_type*	logptr;
-	
-	for (size_t i = 1; i <= nLogItems; i++) {
-		logptr = ListGetPtrToItem((*a)->log, i);
-		ListDispose(logptr->subtasks);
-	}
-	
-	ListDispose((*a)->log);
-	CmtDiscardLock((*a)->lock);
-	
-	OKfree(*a);
 }
 
 static SubTaskEventInfo_type* init_SubTaskEventInfo_type (size_t subtaskIdx, TaskStates_type state)
@@ -1107,7 +1068,7 @@ static char* ExecutionLogEntry (TaskControlLog_type* logItem)
 		}
 		
 	} else {
-		// if subtask state change event occurs, print also previous state of subtask
+		// if subtask state change event occurs, print also previous state of the subtask that changed
 		AppendString(&output, ",  {", -1);
 		size_t	nSubTasks	= ListNumItems(logItem->subtasks);
 		for (size_t i = 1; i <= nSubTasks; i++) {
@@ -1288,27 +1249,21 @@ static void disposeTCIterDoneInfo (void* eventInfo)
 static int ChangeState (TaskControl_type* taskControl, TaskEvents_type event, TaskStates_type newState)
 {
 	int error;
+	
 	// if logging enabled, record state change
-	if (taskControl->logPtr) {
-		TaskControlLog_type logItem = {taskControl, 
-									   event,
-									   ListCopy(taskControl->subtasks),
-									   taskControl->currIterIdx,
-									   TASK_CONTROL_STATE_CHANGE,
-									   taskControl->state,
-									   newState,
-									   TASK_FCALL_NONE};
+	if (taskControl->loggingEnabled) {
+		TaskControlLog_type logItem		= {taskControl, 
+									   		event,
+									   		taskControl->subtasks,
+									   		taskControl->currIterIdx,
+									  	 	TASK_CONTROL_STATE_CHANGE,
+									   		taskControl->state,
+									   		newState,
+									   		TASK_FCALL_NONE};
 		
-		CmtGetLock(taskControl->logPtr->lock);
-		
-			ListInsertItem(taskControl->logPtr->log, &logItem, END_OF_LIST);
-			if (taskControl->logPtr->logBoxPanHandle && taskControl->logPtr->logBoxControl) {
-				char* logEntry	= ExecutionLogEntry(&logItem);
-				SetCtrlVal(taskControl->logPtr->logBoxPanHandle, taskControl->logPtr->logBoxControl, logEntry);
-				OKfree(logEntry);
-			}
-		
-		CmtReleaseLock(taskControl->logPtr->lock);
+		char* 				logEntry	= ExecutionLogEntry(&logItem);
+		SetCtrlVal(taskControl->logPanHandle, taskControl->logBoxControlID, logEntry);
+		OKfree(logEntry);
 	}
 	
 	taskControl->state = newState;
@@ -1363,26 +1318,20 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, TaskEvents_ty
 #define FunctionCall_Error_FCall_Error			-4
 
 	// if logging enabled, record function call action
-	if (taskControl->logPtr) {
-		TaskControlLog_type logItem = {taskControl, 
-									   event,
-									   ListCopy(taskControl->subtasks),
-									   taskControl->currIterIdx,
-									   TASK_CONTROL_FUNCTION_CALL,
-									   taskControl->state,
-									   taskControl->state,
-									   fID};
+	if (taskControl->loggingEnabled) {
+		TaskControlLog_type logItem 	= {	taskControl, 
+									   	   	event,
+									   	   	taskControl->subtasks,
+									   	   	taskControl->currIterIdx,
+									  	   	TASK_CONTROL_FUNCTION_CALL,
+									   	   	taskControl->state,
+									   	   	taskControl->state,
+									   	   	fID };
 		
-		CmtGetLock(taskControl->logPtr->lock);
-		
-			ListInsertItem(taskControl->logPtr->log, &logItem, END_OF_LIST);
-			if (taskControl->logPtr->logBoxPanHandle && taskControl->logPtr->logBoxControl) {
-				char* logEntry	= ExecutionLogEntry(&logItem);
-				SetCtrlVal(taskControl->logPtr->logBoxPanHandle, taskControl->logPtr->logBoxControl, logEntry);
-				OKfree(logEntry);
-			}
 			
-		CmtReleaseLock(taskControl->logPtr->lock);
+		char* 				logEntry	= ExecutionLogEntry(&logItem);
+		SetCtrlVal(taskControl->logPanHandle, taskControl->logBoxControlID, logEntry);
+		OKfree(logEntry);
 	}
 	
 	// call function

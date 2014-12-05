@@ -143,8 +143,6 @@ typedef struct {
 // test lex
 double Ttaskstart; 
 
-// test to check TC execution
-TaskExecutionLog_type* 	TaskExecutionLog;
 
 //------------------------------------------------------------------------------------------------
 //                              AVAILABLE DAQLab MODULES
@@ -154,7 +152,7 @@ AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last para
 	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
-	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
 	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }    
 	
 };
@@ -169,7 +167,8 @@ ActiveXMLObj_IXMLDOMElement_   		DAQLabCfg_RootElement 	= 0;
 	// UI resources	
 static int				mainPanHndl				= 0;		// Main workspace panel handle
 static int				logPanHndl				= 0;		// Log panel handle
-static int				DAQLabModulesPanHndl	= 0;
+static int				DAQLabModulesPanHndl	= 0;		// Modules list panel handle
+static int				taskLogPanHndl			= 0;		// Log panel for task controller execution
 
 static struct TasksUI_ {									// UI data container for Task Controllers
 	
@@ -237,6 +236,12 @@ static int					DAQLab_RemoveTaskControllerFromUI			(int index);
 static void					DAQLab_RedrawTaskControllerUI				(void);
 
 static void CVICALLBACK 	DAQLab_TaskMenu_CB 							(int menuBarHndl, int menuItemID, void *callbackData, int panelHndl);
+
+	// Displays log panel to debug task execution for all active task controllers. This slows down the TCs execution considerably.
+void CVICALLBACK 			LogPanTaskLogMenu_CB						(int menuBar, int menuItem, void *callbackData, int panel);
+
+	// Closes Task log panel and stops logging of active Task Controllers.
+void CVICALLBACK 			TaskLogMenuClose_CB 						(int menuBar, int menuItem, void *callbackData, int panel); 
 
 static void					DAQLab_TaskMenu_AddTaskController 			(void);
 
@@ -375,13 +380,14 @@ static int DAQLab_Load (void)
 	nullChk ( DAQLabTCs					= ListCreate(sizeof(TaskControl_type*)) );	// list with loaded Task Controllers
 	nullChk ( VChannels		   			= ListCreate(sizeof(VChan_type*)) );		// list with Virtual Channels
 	
+		// Log panel for task controller execution
+	errChk ( taskLogPanHndl = LoadPanel (mainPanHndl, DAQLAB_UI_DAQLAB, TaskLogPan) );  
+	
 	//----------------------
 	//test lex
 	nullChk ( HWTrigMasters		   		= ListCreate(sizeof(char*)) );		// list with HW Trig masters
 	nullChk ( HWTrigSlaves		   		= ListCreate(sizeof(char*)) );		// list with HW Trig slaves 
 	
-	// test TC execution
-	TaskExecutionLog = init_TaskExecutionLog_type (mainPanHndl, MainPan_LogBox);
 	//--------------------------------------------
 	
 	char* none="None";
@@ -394,11 +400,15 @@ static int DAQLab_Load (void)
 	// maximize main panel by default
 	SetPanelAttribute(mainPanHndl, ATTR_WINDOW_ZOOM, VAL_MAXIMIZE);
 	
-	// center Tasks panel and Log panel by default (their positions will be overriden if a valid XML config is found)
+	// center Tasks panel, Log panel by default (their positions will be overriden if a valid XML config is found)
 	SetPanelAttribute(TasksUI.panHndl, ATTR_LEFT, VAL_AUTO_CENTER);
 	SetPanelAttribute(TasksUI.panHndl, ATTR_TOP, VAL_AUTO_CENTER);
 	SetPanelAttribute(logPanHndl, ATTR_LEFT, VAL_AUTO_CENTER);
 	SetPanelAttribute(logPanHndl, ATTR_TOP, VAL_AUTO_CENTER);
+	
+	// also center task execution log panel
+	SetPanelAttribute(taskLogPanHndl, ATTR_LEFT, VAL_AUTO_CENTER);
+	SetPanelAttribute(taskLogPanHndl, ATTR_TOP, VAL_AUTO_CENTER);
 	
 	// add menu bar to Tasks panel
 	errChk (TasksUI.menuBarHndl			= NewMenuBar(TasksUI.panHndl) );
@@ -455,8 +465,6 @@ static int DAQLab_Load (void)
 		// create new UI Task Controller
 		newTaskControllerPtr = init_TaskControl_type (UITCName, NULL, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
 												 	  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
-		// test
-		SetTaskControlLog(newTaskControllerPtr, TaskExecutionLog);
 		
 		if (!newTaskControllerPtr) {
 			DLMsg("Error: Task Controller could not be created.\n\n", 1);
@@ -550,7 +558,7 @@ static int DAQLab_Load (void)
 	
 	    
 	// discard DOM after loading all settings
-	CA_OKfree(DAQLabCfg_DOMHndl);
+	OKFreeCAHandle(DAQLabCfg_DOMHndl);
 	
 	DAQLabNoSettings:
 	
@@ -654,14 +662,14 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	// create "Modules" XML element and add it to the Root
 	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_MODULES_XML_TAG, &newXMLElement) );
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild(DAQLabCfg_RootElement, &xmlERRINFO, newXMLElement, &modulesXMLElement) );
-	CA_OKfree(newXMLElement);
+	OKFreeCAHandle(newXMLElement);
 	
 	for (size_t i = 1; i <= nModules; i++) {
 		DLModulePtr = ListGetPtrToItem(DAQLabModules, i);
 		// create "Module" XML element and add it to the "Modules" element
 		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, "Module", &newXMLElement) );
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild(modulesXMLElement, &xmlERRINFO, newXMLElement, &moduleXMLElement) );
-		CA_OKfree(newXMLElement);
+		OKFreeCAHandle(newXMLElement);
 		//-----------------------------------------------------------------------------------
 		// Attributes managed by the framework
 		//-----------------------------------------------------------------------------------
@@ -727,7 +735,7 @@ static int DAQLab_Close (void)
 	errChk( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) ); 
 	
 	// discard DOM after saving all settings
-	CA_OKfree(DAQLabCfg_DOMHndl);
+	OKFreeCAHandle(DAQLabCfg_DOMHndl);
 	
 	
 	
@@ -1296,7 +1304,7 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 				// add new element as child
 				XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, &xmlERRINFO, newXMLElement, NULL) );
 				// cleanup
-				CA_OKfree(newXMLElement);
+				OKFreeCAHandle(newXMLElement);
 				
 				break;
 				
@@ -1396,7 +1404,7 @@ int DLGetXMLElementAttributes (ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXM
 		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttributeNode(XMLElement, &xmlERRINFO, Attributes[i].tag, &xmlAttribute) ); 
 		// get attribute text
 		XMLErrChk ( ActiveXML_IXMLDOMAttribute_Gettext(xmlAttribute, &xmlERRINFO, &attributeString) );
-		CA_OKfree(xmlAttribute);
+		OKFreeCAHandle(xmlAttribute);
 		// convert string to values
 		errChk( DAQLab_StringToType(attributeString, Attributes[i].type, Attributes[i].pData) );
 		CA_FreeMemory(attributeString);
@@ -1433,13 +1441,13 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 		XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlERRINFO, Attributes[i].tag, &xmlAttributeNode) );
 		// get attribute node text
 		XMLErrChk ( ActiveXML_IXMLDOMNode_Gettext(xmlAttributeNode, &xmlERRINFO, &attributeString) );
-		CA_OKfree(xmlAttributeNode);
+		OKFreeCAHandle(xmlAttributeNode);
 		// convert to values
 		errChk( DAQLab_StringToType (attributeString, Attributes[i].type, Attributes[i].pData) );
 		CA_FreeMemory(attributeString);
 	}
 	
-	CA_OKfree(xmlNamedNodeMap); 
+	OKFreeCAHandle(xmlNamedNodeMap); 
 	
 	return 0;
 	
@@ -1475,7 +1483,7 @@ int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlNodeList, &xmlERRINFO, 0, &xmlNode) );
 	
 	// cleanup
-	if (xmlNodeList) CA_OKfree(xmlNodeList);
+	if (xmlNodeList) OKFreeCAHandle(xmlNodeList);
 	
 	*childXMLElement = (ActiveXMLObj_IXMLDOMElement_) xmlNode;
 	
@@ -1484,8 +1492,8 @@ int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 XMLError: 
 	
 	// cleanup
-	if (xmlNodeList) CA_OKfree(xmlNodeList);
-	if (xmlNode) CA_OKfree(xmlNode); 
+	if (xmlNodeList) OKFreeCAHandle(xmlNodeList);
+	if (xmlNode) OKFreeCAHandle(xmlNode); 
 	
 	return xmlerror;
 }
@@ -1692,6 +1700,12 @@ BOOL DLAddTaskControllers (DAQLabModule_type* mod, ListType tcList)
 	// add Task Controllers to the framework
 	ListAppend(DAQLabTCs, tcList);
 	
+	// add UI resources for task controller execution logging
+	for (size_t i = 1; i <= nTCs; i++) {
+		tcPtr = ListGetPtrToItem(tcList, i);
+		SetTaskControlUILoggingInfo(*tcPtr, taskLogPanHndl, TaskLogPan_LogBox);
+	}
+	
 	// update Task Tree if it is displayed
 	if (TaskTreeManagerPanHndl)
 		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
@@ -1717,6 +1731,9 @@ BOOL DLAddTaskController (DAQLabModule_type* mod, TaskControl_type* taskControll
 		ListInsertItem(mod->taskControllers, &taskController, END_OF_LIST);
 	// add Task Controller to the framework's list of Task Controllers
 	ListInsertItem(DAQLabTCs, &taskController, END_OF_LIST);
+	
+	// add UI resources for task controller execution logging     
+	SetTaskControlUILoggingInfo(taskController, taskLogPanHndl, TaskLogPan_LogBox);  
 	
 	// update the Task Tree if it is displayed
 	if (TaskTreeManagerPanHndl)
@@ -2066,8 +2083,6 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	// create new task controller
 	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
 												  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
-	// test
-	SetTaskControlLog(newTaskControllerPtr, TaskExecutionLog);
 	
 	OKfree(newControllerName);
 	
@@ -3104,3 +3119,36 @@ int CVICALLBACK CloseDAQLabModulesPan_CB (int panel, int control, int event, voi
 	return 0;
 }
 
+void CVICALLBACK LogPanTaskLogMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
+{
+	// clear log box
+	DeleteTextBoxLines(taskLogPanHndl, TaskLogPan_LogBox, 0, -1);
+	
+	// display log panel
+	DisplayPanel(taskLogPanHndl);
+	
+	// enable logging for all task controllers
+	size_t					nTCs = ListNumItems(DAQLabTCs);
+	TaskControl_type**   	tcPtr;
+	for (size_t i = 1; i <= nTCs; i++) {
+		tcPtr = ListGetPtrToItem(DAQLabTCs, i);
+		EnableTaskControlLogging(*tcPtr, TRUE);
+	}
+}
+
+void CVICALLBACK TaskLogMenuClose_CB (int menuBar, int menuItem, void *callbackData, int panel)
+{
+	// disable logging for all task controllers
+	size_t					nTCs = ListNumItems(DAQLabTCs);
+	TaskControl_type**   	tcPtr;
+	for (size_t i = 1; i <= nTCs; i++) {
+		tcPtr = ListGetPtrToItem(DAQLabTCs, i);
+		EnableTaskControlLogging(*tcPtr, FALSE);
+	}
+	
+	// clear log box
+	DeleteTextBoxLines(taskLogPanHndl, TaskLogPan_LogBox, 0, -1);
+	
+	// hide log panel
+	HidePanel(taskLogPanHndl);
+}

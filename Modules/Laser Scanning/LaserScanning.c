@@ -1132,12 +1132,12 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		
 		// add new axis calibration element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanAxisCalibrationsXMLElement, &xmlERRINFO, scanAxisCalXMLElement, NULL) );  
-		CA_OKfree(scanAxisCalXMLElement);  
+		OKFreeCAHandle(scanAxisCalXMLElement);  
 	}
 	
 	// add scan axis calibrations element to module element
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, scanAxisCalibrationsXMLElement, NULL) );
-	CA_OKfree(scanAxisCalibrationsXMLElement); 
+	OKFreeCAHandle(scanAxisCalibrationsXMLElement); 
 	
 	//--------------------------------------------------------------------------
 	// Save scan engines and VChans
@@ -1294,7 +1294,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 			XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Objective", &objectiveXMLElement) );
 			DLAddToXMLElem(xmlDOM, objectiveXMLElement, objectivesAttr, DL_ATTRIBUTE, NumElem(objectivesAttr)); 
 			XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (objectivesXMLElement, &xmlERRINFO, objectiveXMLElement, NULL) ); 
-			CA_OKfree(objectiveXMLElement);   
+			OKFreeCAHandle(objectiveXMLElement);   
 		}
 		
 		// add scan engine specific data
@@ -1327,24 +1327,24 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		// add VChan Names element to scan engine element
 		// add new scan engine element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, VChanNamesXMLElement, NULL) ); 
-		CA_OKfree(VChanNamesXMLElement); 
+		OKFreeCAHandle(VChanNamesXMLElement); 
 		
 		// add scan info element to scan engine element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, scanInfoXMLElement, NULL) ); 
-		CA_OKfree(scanInfoXMLElement); 
+		OKFreeCAHandle(scanInfoXMLElement); 
 		
 		// add objectives to scan engine element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, objectivesXMLElement, NULL) );    
-		CA_OKfree(objectivesXMLElement);
+		OKFreeCAHandle(objectivesXMLElement);
 		
 		// add new scan engine element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEnginesXMLElement, &xmlERRINFO, scanEngineXMLElement, NULL) );  
-		CA_OKfree(scanEngineXMLElement); 
+		OKFreeCAHandle(scanEngineXMLElement); 
 	}
 	
 	// add scan engines element to module element
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, scanEnginesXMLElement, NULL) );
-	CA_OKfree(scanEnginesXMLElement); 
+	OKFreeCAHandle(scanEnginesXMLElement); 
 	
 	return 0;
 	
@@ -1528,7 +1528,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 			CA_FreeMemory(detectorVChanName);
 			// add detector channel to scan engine
 			ListInsertItem(scanEngine->DetChans, &detChan, END_OF_LIST);
-			CA_OKfree(detectorVChanNode);
+			OKFreeCAHandle(detectorVChanNode);
 		}
 		
 		// assign fast scan axis to scan engine
@@ -1577,19 +1577,19 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 			OKfree(objectiveName);
 			// add objective to scan engine
 			ListInsertItem(scanEngine->objectives, &objective, END_OF_LIST);
-			CA_OKfree(objectiveNode);
+			OKFreeCAHandle(objectiveNode);
 		}
 		
 		// add scan engine to laser scanning module
 		ListInsertItem(ls->scanEngines, &scanEngine, END_OF_LIST);
 		
 		// cleanup
-		CA_OKfree(scanEngineNode);
-		CA_OKfree(VChansXMLElement);
-		CA_OKfree(scanInfoXMLElement);
-		CA_OKfree(detectorVChanNodeList);
-		CA_OKfree(objectivesXMLElement);
-		CA_OKfree(objectivesNodeList);
+		OKFreeCAHandle(scanEngineNode);
+		OKFreeCAHandle(VChansXMLElement);
+		OKFreeCAHandle(scanInfoXMLElement);
+		OKFreeCAHandle(detectorVChanNodeList);
+		OKFreeCAHandle(objectivesXMLElement);
+		OKFreeCAHandle(objectivesNodeList);
 		OKfree(scanEngineName);
 		OKfree(assignedObjectiveName);
 		OKfree(fastAxisCalibrationName);
@@ -1610,13 +1610,13 @@ XMLError:
 	
 Error:
 	
-	CA_OKfree(scanEngineNodeList); 
-	CA_OKfree(scanEnginesXMLElement);
-	CA_OKfree(scanEngineNode); 
-	CA_OKfree(scanAxisCalibrationsXMLElement); 
-	CA_OKfree(scanAxisCalXMLElement); 
-	CA_OKfree(axisCalibrationNodeList);
-	CA_OKfree(VChansXMLElement);
+	OKFreeCAHandle(scanEngineNodeList); 
+	OKFreeCAHandle(scanEnginesXMLElement);
+	OKFreeCAHandle(scanEngineNode); 
+	OKFreeCAHandle(scanAxisCalibrationsXMLElement); 
+	OKFreeCAHandle(scanAxisCalXMLElement); 
+	OKFreeCAHandle(axisCalibrationNodeList);
+	OKFreeCAHandle(VChansXMLElement);
 
 	return error;	
 }
@@ -1712,11 +1712,11 @@ static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xml
 								
 	// add calibration elements to scan axis calibration element
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, switchTimesXMLElement, NULL) );
-	CA_OKfree(switchTimesXMLElement); 
+	OKFreeCAHandle(switchTimesXMLElement); 
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, maxSlopesXMLElement, NULL) );
-	CA_OKfree(maxSlopesXMLElement);
+	OKFreeCAHandle(maxSlopesXMLElement);
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, triangleCalXMLElement, NULL) );
-	CA_OKfree(triangleCalXMLElement); 
+	OKFreeCAHandle(triangleCalXMLElement); 
 	
 	OKfree(switchTimesStepSizeStr);
 	OKfree(switchTimesHalfSwitchStr);
@@ -1810,7 +1810,7 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	// switch times
 	errChk( DLGetXMLElementAttributes(switchTimesXMLElement, switchTimesAttr, NumElem(switchTimesAttr)) );
-	CA_OKfree(switchTimesXMLElement);
+	OKFreeCAHandle(switchTimesXMLElement);
 	
 	SwitchTimes_type*	switchTimes = init_SwitchTimes_type();
 	
@@ -1823,7 +1823,7 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	// max slopes
 	errChk( DLGetXMLElementAttributes(maxSlopesXMLElement, maxSlopesAttr, NumElem(maxSlopesAttr)) );
-	CA_OKfree(maxSlopesXMLElement);
+	OKFreeCAHandle(maxSlopesXMLElement);
 	
 	MaxSlopes_type*		maxSlopes = init_MaxSlopes_type();
 	
@@ -1836,7 +1836,7 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	// triangle waveform calibration
 	errChk( DLGetXMLElementAttributes(triangleCalXMLElement, triangleCalAttr, NumElem(triangleCalAttr)) );
-	CA_OKfree(triangleCalXMLElement);
+	OKFreeCAHandle(triangleCalXMLElement);
 	
 	TriangleCal_type*	triangleCal = init_TriangleCal_type();
 	
@@ -1879,9 +1879,9 @@ Error:
 	OKfree(triangleCalMaxFreqStr);
 	OKfree(triangleCalResiduaLagStr);
 	
-	if (switchTimesXMLElement) CA_OKfree(switchTimesXMLElement);
-	if (maxSlopesXMLElement) CA_OKfree(maxSlopesXMLElement); 
-	if (triangleCalXMLElement) CA_OKfree(triangleCalXMLElement);   
+	if (switchTimesXMLElement) OKFreeCAHandle(switchTimesXMLElement);
+	if (maxSlopesXMLElement) OKFreeCAHandle(maxSlopesXMLElement); 
+	if (triangleCalXMLElement) OKFreeCAHandle(triangleCalXMLElement);   
 	
 	return error;	
 }

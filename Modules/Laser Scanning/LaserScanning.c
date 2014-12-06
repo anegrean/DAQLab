@@ -492,12 +492,12 @@ static int 							SaveNonResGalvoCalToXML							(NonResGalvoCal_type* nrgCal, CA
 static int 							LoadNonResGalvoCalFromXML 						(LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement);    
 
 	// command VChan
-static void							NonResGalvoCal_ComVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
-static void							NonResGalvoCal_ComVChan_Disconnected			(VChan_type* self, VChan_type* disconnectedVChan);
+static void							NonResGalvoCal_ComVChan_Connected				(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							NonResGalvoCal_ComVChan_Disconnected			(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// position VChan
-static void							NonResGalvoCal_PosVChan_Connected				(VChan_type* self, VChan_type* connectedVChan);
-static void							NonResGalvoCal_PosVChan_Disconnected			(VChan_type* self, VChan_type* disconnectedVChan);
+static void							NonResGalvoCal_PosVChan_Connected				(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							NonResGalvoCal_PosVChan_Disconnected			(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// galvo calibration
 static int CVICALLBACK 				NonResGalvoCal_MainPan_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
@@ -632,36 +632,36 @@ static BOOL							ValidScanEngineName								(char name[], void* dataPtr);
 //-----------------------------------------
 
 	// Fast Axis Command VChan
-static void							FastAxisComVChan_Connected						(VChan_type* self, VChan_type* connectedVChan);
-static void							FastAxisComVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan);
+static void							FastAxisComVChan_Connected						(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							FastAxisComVChan_Disconnected					(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Slow Axis Command VChan
-static void							SlowAxisComVChan_Connected						(VChan_type* self, VChan_type* connectedVChan);
-static void							SlowAxisComVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan);
+static void							SlowAxisComVChan_Connected						(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							SlowAxisComVChan_Disconnected					(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Fast Axis Position VChan
-static void							FastAxisPosVChan_Connected						(VChan_type* self, VChan_type* connectedVChan);
-static void							FastAxisPosVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan);
+static void							FastAxisPosVChan_Connected						(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							FastAxisPosVChan_Disconnected					(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Slow Axis Position VChan
-static void							SlowAxisPosVChan_Connected						(VChan_type* self, VChan_type* connectedVChan);
-static void							SlowAxisPosVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan);
+static void							SlowAxisPosVChan_Connected						(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							SlowAxisPosVChan_Disconnected					(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Image Out VChan
-static void							ImageOutVChan_Connected							(VChan_type* self, VChan_type* connectedVChan);
-static void							ImageOutVChan_Disconnected						(VChan_type* self, VChan_type* disconnectedVChan);
+static void							ImageOutVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							ImageOutVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Detection VChan
-static void							DetVChan_Connected								(VChan_type* self, VChan_type* connectedVChan);
-static void							DetVChan_Disconnected							(VChan_type* self, VChan_type* disconnectedVChan); 
+static void							DetVChan_Connected								(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							DetVChan_Disconnected							(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan); 
 
 	// Shutter VChan
-static void							ShutterVChan_Connected							(VChan_type* self, VChan_type* connectedVChan);
-static void							ShutterVChan_Disconnected						(VChan_type* self, VChan_type* disconnectedVChan);
+static void							ShutterVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							ShutterVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Pixel settings VChan
-static void							PixelSettingsVChan_Connected					(VChan_type* self, VChan_type* connectedVChan);
-static void							PixelSettingsVChan_Disconnected					(VChan_type* self, VChan_type* disconnectedVChan);
+static void							PixelSettingsVChan_Connected					(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							PixelSettingsVChan_Disconnected					(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 
 
@@ -3666,25 +3666,25 @@ static void discard_TriangleCal_type (TriangleCal_type** a)
 }
 
 // calibration command VChan connected callback
-static void	NonResGalvoCal_ComVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void	NonResGalvoCal_ComVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
 // calibration command VChan disconnected callback
-static void	NonResGalvoCal_ComVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	NonResGalvoCal_ComVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
 
 // calibration position VChan connected callback
-static void	NonResGalvoCal_PosVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void	NonResGalvoCal_PosVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
 // calibration position VChan disconnected callback
-static void	NonResGalvoCal_PosVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	NonResGalvoCal_PosVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
@@ -4848,89 +4848,89 @@ Error:
 //-----------------------------------------
 
 // Fast Axis Command VChan
-static void	FastAxisComVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void	FastAxisComVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
-static void	FastAxisComVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	FastAxisComVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
 
 // Slow Axis Command VChan
-static void	SlowAxisComVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void	SlowAxisComVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
-static void	SlowAxisComVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	SlowAxisComVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
 
 // Fast Axis Position VChan
-static void FastAxisPosVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void FastAxisPosVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
-static void	FastAxisPosVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	FastAxisPosVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
 
 // Slow Axis Position VChan
-static void SlowAxisPosVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void SlowAxisPosVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
-static void	SlowAxisPosVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	SlowAxisPosVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
 
 // Image Out VChan
-static void	ImageOutVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void	ImageOutVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
-static void ImageOutVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void ImageOutVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
 
 // Detection VChans
-static void	DetVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void	DetVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
-static void	DetVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	DetVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
 
 // Shutter VChan
-static void	ShutterVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void	ShutterVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
-static void	ShutterVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	ShutterVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
 
 // Pixel settings VChan
-static void	PixelSettingsVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void	PixelSettingsVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
-static void	PixelSettingsVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	PixelSettingsVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }

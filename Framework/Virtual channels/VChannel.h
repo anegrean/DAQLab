@@ -47,11 +47,11 @@ typedef enum {
 //------------------------------------------------------------------------------
 
 	// Callback when a VChan connection is established between a Source and Sink
-typedef void	(* Connected_CBFptr_type) 		(VChan_type* self, VChan_type* connectedVChan);
+typedef void	(* Connected_CBFptr_type) 		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
 
 	// Callback when a VChan connection is broken by calling VChan_Disconnect. When disconnecting
 	// a Source type VChan, this callback will be called for each Sink.
-typedef void	(* Disconnected_CBFptr_type) 	(VChan_type* self, VChan_type* disconnectedVChan);
+typedef void	(* Disconnected_CBFptr_type) 	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 
 //==============================================================================
@@ -142,13 +142,8 @@ size_t					GetSinkVChanTSQSize					(SinkVChan_type* sinkVChan);
 void					SetSinkVChanWriteTimeout			(SinkVChan_type* sinkVChan, double time);	
 double					GetSinkVChanWriteTimeout			(SinkVChan_type* sinkVChan);
 
-void*					GetPtrToVChanOwner					(VChan_type* VChan);
+void*					GetVChanOwner						(VChan_type* VChan);
 
-void SetVChanUseAsReference (VChan_type* VChan, BOOL useAsReference);
-
-BOOL GetVChanUseAsReference (VChan_type* VChan);
-
-								
 //------------------------------------------------------------------------------
 // Data Packet Management
 //------------------------------------------------------------------------------

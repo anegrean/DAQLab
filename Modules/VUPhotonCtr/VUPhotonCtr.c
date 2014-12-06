@@ -185,25 +185,23 @@ static int CVICALLBACK 				VUPCPhotonCounter_CB 			(int panel, int control, int 
 
 static BOOL 						ValidTaskControllerName			(char name[], void* dataPtr);
 
-// pulsetrain command VChan connected callback
-static void	PulseTrainVChan_Connected (VChan_type* self, VChan_type* connectedVChan);
-// pulsetrain command VChan disconnected callback
-static void	PulseTrainVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan);
+	// pulsetrain command VChan connected callback
+static void							PulseTrainVChan_Connected 		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+	// pulsetrain command VChan disconnected callback
+static void							PulseTrainVChan_Disconnected 	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
-static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
-
-
-static int PMT_Set_Mode ( int PMTnr, PMT_Mode_type mode);
-static int PMT_Set_Fan ( int PMTnr, BOOL value);
-static int PMT_Set_Cooling ( int PMTnr, BOOL value);
-static int PMT_Set_GainThresh ( int PMTnr, float gain,float threshold);
-static int PMTController_UpdateDisplay (VUPhotonCtr_type* self);
-//void PMTController_DimWhenRunning (VUPhotonCtr_type* self, BOOL dimmed);
-static int PMTController_SetTestMode(BOOL testmode);
-static int PMTController_Reset(VUPhotonCtr_type* vupc);
-static int PMTController_ResetFifo(void);
+static FCallReturn_type* 			PulseTrainDataReceivedTC		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
 
+static int 							PMT_Set_Mode 					(int PMTnr, PMT_Mode_type mode);
+static int 							PMT_Set_Fan 					(int PMTnr, BOOL value);
+static int 							PMT_Set_Cooling 				(int PMTnr, BOOL value);
+static int 							PMT_Set_GainThresh 				(int PMTnr, float gain,float threshold);
+static int 							PMTController_UpdateDisplay 	(VUPhotonCtr_type* self);
+//void 								PMTController_DimWhenRunning 	(VUPhotonCtr_type* self, BOOL dimmed);
+static int 							PMTController_SetTestMode		(BOOL testmode);
+static int 							PMTController_Reset				(VUPhotonCtr_type* vupc);
+static int 							PMTController_ResetFifo			(void);
 
 
 
@@ -1294,18 +1292,18 @@ static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, Task
 
 
 // pulsetrain command VChan connected callback
-static void	PulseTrainVChan_Connected (VChan_type* self, VChan_type* connectedVChan)
+static void	PulseTrainVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
 
 // pulsetrain command VChan disconnected callback
-static void	PulseTrainVChan_Disconnected (VChan_type* self, VChan_type* disconnectedVChan)
+static void	PulseTrainVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
 
-static FCallReturn_type* PulseTrainDataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	
 	VUPhotonCtr_type* 	vupc				= GetTaskControlModuleData(taskControl);

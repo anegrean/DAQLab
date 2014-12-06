@@ -273,9 +273,9 @@ size_t						GetRepeatedWaveformSizeofData			(RepeatedWaveform_type* waveform);
 // Pulse Trains     
 //--------------------------------------------------------------------------------------------------------- 
 
-	//-------------------------
+	//-------------------------------------
 	// Init/Discard
-	//-------------------------
+	//-------------------------------------
 
 	// Frequency defined pulse train
 PulseTrainFreqTiming_type* 	init_PulseTrainFreqTiming_type 			(PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses, double dutyCycle, 
@@ -288,6 +288,13 @@ PulseTrainTickTiming_type* 	init_PulseTrainTickTiming_type 			(PulseTrainModes m
 																	 size_t lowTicks, size_t delayTicks);
 	// Discards all pulse train types       
 void 						discard_PulseTrain_type 				(PulseTrain_type** pulseTrain);
+
+	//-------------------------------------
+	// General pulse train functions
+	//-------------------------------------
+	
+		//returns a copy of the pulsetrain 
+PulseTrain_type* 			CopyPulseTrain							(PulseTrain_type* pulsetrain);
 
 	//-------------------------------------
 	// Set/Get All pulse train types
@@ -381,8 +388,7 @@ void   						SetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* pu
 
 	// gets the pulsetrain iniial delay time
 double   					GetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* pulseTrain);
-	//returns a copy of the pulsetrain 
-PulseTrain_type* 			GetPulsetrainCopy						(PulseTrain_type* pulsetrain);
+
 
 #ifdef __cplusplus
     }

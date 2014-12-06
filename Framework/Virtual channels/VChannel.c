@@ -214,11 +214,11 @@ static BOOL disconnectSourceVChan (VChan_type* vchan)
 		(*sinkPtrPtr)->sourceVChan = NULL;
 		// call sink disconnected callbacks
 		if ((*sinkPtrPtr)->baseClass.Disconnected_CBFptr)
-			(*(*sinkPtrPtr)->baseClass.Disconnected_CBFptr)	((VChan_type*)(*sinkPtrPtr), (VChan_type*) src);
+			(*(*sinkPtrPtr)->baseClass.Disconnected_CBFptr)	((VChan_type*)(*sinkPtrPtr), (*sinkPtrPtr)->baseClass.VChanOwner, (VChan_type*) src);
 		
 		// call source disconnected callback
 		if (src->baseClass.Disconnected_CBFptr)
-			(*src->baseClass.Disconnected_CBFptr)	((VChan_type*)src, (VChan_type*)(*sinkPtrPtr));
+			(*src->baseClass.Disconnected_CBFptr)	((VChan_type*)src, src->baseClass.VChanOwner, (VChan_type*)(*sinkPtrPtr));
 	}
 	
 	ListClear(src->sinkVChans);
@@ -238,7 +238,7 @@ static BOOL disconnectSinkVChan (VChan_type* vchan)
 	
 	// call sink disconnected callback
 	if (sink->baseClass.Disconnected_CBFptr)
-			(*sink->baseClass.Disconnected_CBFptr)	((VChan_type*)sink, (VChan_type*) src);
+			(*sink->baseClass.Disconnected_CBFptr)	((VChan_type*)sink, sink->baseClass.VChanOwner, (VChan_type*) src);
 	
 	// remove sink from source's sink list
 	for (int i = 1; i <= ListNumItems(src->sinkVChans); i++) {
@@ -247,7 +247,7 @@ static BOOL disconnectSinkVChan (VChan_type* vchan)
 			ListRemoveItem(src->sinkVChans, 0, i);
 			// call source disconnected callback
 			if (src->baseClass.Disconnected_CBFptr)
-				(*src->baseClass.Disconnected_CBFptr)	((VChan_type*)src, (VChan_type*)(*sinkPtrPtr));
+				(*src->baseClass.Disconnected_CBFptr)	((VChan_type*)src, src->baseClass.VChanOwner, (VChan_type*)(*sinkPtrPtr));
 			return TRUE;
 		}
 	}
@@ -552,10 +552,10 @@ BOOL VChan_Connect (SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan)
 	
 	// call source and sink connect callbacks if provided
 	if (srcVChan->baseClass.Connected_CBFptr)
-		(*srcVChan->baseClass.Connected_CBFptr)	((VChan_type*)srcVChan, (VChan_type*)sinkVChan);
+		(*srcVChan->baseClass.Connected_CBFptr)	((VChan_type*)srcVChan, srcVChan->baseClass.VChanOwner, (VChan_type*)sinkVChan);
 	
 	if (sinkVChan->baseClass.Connected_CBFptr)
-		(*sinkVChan->baseClass.Connected_CBFptr)	((VChan_type*)sinkVChan, (VChan_type*)srcVChan);
+		(*sinkVChan->baseClass.Connected_CBFptr)	((VChan_type*)sinkVChan, sinkVChan->baseClass.VChanOwner, (VChan_type*)srcVChan);
 	
 	return TRUE;	
 }
@@ -583,16 +583,6 @@ char* GetVChanName (VChan_type* VChan)
 {
 	return StrDup(VChan->name);
 }
- /*
-void SetVChanUseAsReference (VChan_type* VChan, BOOL useAsReference)
-{ 
-	VChan->useAsReference=useAsReference;
-}
- 
-BOOL GetVChanUseAsReference (VChan_type* VChan)
-{
-	return VChan->useAsReference;
-}   */
 
 /// HIFN Given a Source VChan, the function returns the name of the Sink VChan attached to the source having the 1-based index sinkIdx. If index is out of range it returns NULL.
 char* GetSinkVChanName (SourceVChan_type* srcVChan, size_t sinkIdx)
@@ -672,7 +662,7 @@ double GetSinkVChanWriteTimeout	(SinkVChan_type* sinkVChan)
 	return sinkVChan->writeTimeout;
 }
 
-void* GetPtrToVChanOwner (VChan_type* VChan)
+void* GetVChanOwner (VChan_type* VChan)
 {
 	return VChan->VChanOwner;
 }

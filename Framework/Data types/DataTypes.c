@@ -321,7 +321,7 @@ void discard_Pulsetrain_type (PulseTrain_type** pulsetrain)
 	OKfree(*pulsetrain);
 }
 
-PulseTrain_type* GetPulsetrainCopy(PulseTrain_type* pulsetrain)
+PulseTrain_type* CopyPulseTrain(PulseTrain_type* pulsetrain)
 {
 	PulseTrain_type* newpulsetrain;
 	PulseTrainTimingTypes pulseTrainType;

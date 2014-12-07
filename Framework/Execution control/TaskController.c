@@ -46,9 +46,9 @@ typedef struct {
 } EventPacket_type;
 
 typedef struct {
+	TaskControl_type*			subtask;							// Pointer to Subtask Controller.   
 	TaskStates_type				subtaskState;						// Updated by parent task when informed by subtask that a state change occured.
 	TaskStates_type				previousSubTaskState;				// Previous Subtask state used for logging and debuging.
-	TaskControl_type*			subtask;							// Pointer to Subtask Controller.
 } SubTask_type;
 
 struct SlaveHWTrigTask{
@@ -1019,6 +1019,10 @@ static char* StateToString (TaskStates_type state)
 			
 			return StrDup("Initial");
 			
+		case TASK_STATE_STARTING_WAITING_FOR_DATA:
+			
+			return StrDup("Starting and Waiting For Data");
+			
 		case TASK_STATE_IDLE:
 			
 			return StrDup("Idle");
@@ -1611,15 +1615,41 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, EventPacket_t
 int	TaskControlEventToSubTasks  (TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventInfo,
 								 DisposeEventInfoFptr_type disposeEventInfoFptr)
 {
-	SubTask_type* 	subtaskPtr;
-	// dispatch event to all subtasks
-	size_t	nSubTasks = ListNumItems(SenderTaskControl->subtasks);
+	SubTask_type* 		subtaskPtr;
+	size_t				nSubTasks 			= ListNumItems(SenderTaskControl->subtasks);
+	int			 		lockObtainedFlag	= 0;
+	int					error				= 0;
+	EventPacket_type 	eventpacket 		= {event, eventInfo, disposeEventInfoFptr}; 
+	
+	// get all subtask eventQ thread locks to place event in all queues before other events can be placed by other threads
 	for (size_t i = 1; i <= nSubTasks; i++) { 
 		subtaskPtr = ListGetPtrToItem(SenderTaskControl->subtasks, i);
-		if (TaskControlEvent(subtaskPtr->subtask, event, eventInfo, disposeEventInfoFptr) < 0) return -1;
+		CmtGetLockEx(subtaskPtr->subtask->eventQThreadLock, 0, CMT_WAIT_FOREVER, &lockObtainedFlag);
 	}
 	
+	// dispatch event to all subtasks
+	for (size_t i = 1; i <= nSubTasks; i++) { 
+		subtaskPtr = ListGetPtrToItem(SenderTaskControl->subtasks, i);
+		errChk(CmtWriteTSQData(subtaskPtr->subtask->eventQ, &eventpacket, 1, 0, NULL));
+	}
+	
+	// release all subtask eventQ thread locks
+	for (size_t i = 1; i <= nSubTasks; i++) { 
+		subtaskPtr = ListGetPtrToItem(SenderTaskControl->subtasks, i);
+		CmtReleaseLock(subtaskPtr->subtask->eventQThreadLock);  
+	}
+	 
 	return 0;
+	
+Error:
+	
+	// release all subtask eventQ thread locks
+	for (size_t i = 1; i <= nSubTasks; i++) { 
+		subtaskPtr = ListGetPtrToItem(SenderTaskControl->subtasks, i);
+		CmtReleaseLock(subtaskPtr->subtask->eventQThreadLock);  
+	}
+	
+	return error;
 }
 
 int	AddSubTaskToParent (TaskControl_type* parent, TaskControl_type* child)
@@ -2242,27 +2272,54 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_START:
 				case TASK_EVENT_ITERATE_ONCE: 
 					
-					//--------------------------------------------------------------------------------------------------------------- 
-					// Call Start Task Controller function pointer to inform that task will start
-					//--------------------------------------------------------------------------------------------------------------- 
 					
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					}
+					//---------------------------------------------------------------------------------------------------------------
+					// Reset number of Sink VChans that must receive data before Start Fptr is called
+					//---------------------------------------------------------------------------------------------------------------
+					
+					taskControl->nSinksWaitingForDataToStart = taskControl->nSinksAttachedToStart;
 					
 					//---------------------------------------------------------------------------------------------------------------   
 					// Set flag to iterate once or continue until done or stopped
-					//---------------------------------------------------------------------------------------------------------------   
+					//--------------------------------------------------------------------------------------------------------------- 
+					
 					if (eventpacket[i].event == TASK_EVENT_ITERATE_ONCE) 
 						taskControl->nIterationsFlag = 1;
 					else
 						taskControl->nIterationsFlag = -1;
+					
+					//-------------------------------------------------------------------------------------------------------------------------
+					// If this is a Root Task Controller, i.e. it doesn't have a parent, then: 
+					// - call dim UI function recursively for its SubTasks
+					// - clear data packets from SubTask Sink VChans recursively
+					//-------------------------------------------------------------------------------------------------------------------------
+					
+					if(!taskControl->parenttask) {
+						ClearTaskTreeBranchVChans(taskControl);
+						DimTaskTreeBranch(taskControl, &eventpacket[i], TRUE);
+					}
+					
+					//--------------------------------------------------------------------------------------------------------------- 
+					// Call Start Task Controller function pointer to inform that task will start if all data is available
+					//--------------------------------------------------------------------------------------------------------------- 
+					
+					if (!taskControl->nSinksWaitingForDataToStart) {
+						// if there are no Sink VChans attached, then call Start Fptr
+						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL))) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+						
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
+						
+					} else {
+						// switch to TASK_STATE_STARTING_WAITING_FOR_DATA and wait for data to be available
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_STARTING_WAITING_FOR_DATA);
+						break; // stop here
+					}
 					
 					
 					//---------------------------------------------------------------------------------------------------------------
@@ -2276,17 +2333,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
-					}
-					
-					//-------------------------------------------------------------------------------------------------------------------------
-					// If this is a Root Task Controller, i.e. it doesn't have a parent, then: 
-					// - call dim UI function recursively for its SubTasks
-					// - clear data packets from SubTask Sink VChans recursively
-					//-------------------------------------------------------------------------------------------------------------------------
-					
-					if(!taskControl->parenttask) {
-						ClearTaskTreeBranchVChans(taskControl);
-						DimTaskTreeBranch(taskControl, &eventpacket[i], TRUE);
 					}
 					
 					//---------------------------------------------------------------------------------------------------------------
@@ -2353,14 +2399,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// call custom module event function
 					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+						
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
@@ -2381,7 +2427,130 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 			}
+			break;
 			
+		case TASK_STATE_STARTING_WAITING_FOR_DATA:
+			
+			switch (eventpacket[i].event) {
+					
+				case TASK_EVENT_DATA_RECEIVED:
+					
+					//---------------------------------------------------------------------------------------------------------------        
+					// Call data received event function
+					//---------------------------------------------------------------------------------------------------------------        
+					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+							
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
+					
+					//---------------------------------------------------------------------------------------------------------------  
+					//  Check if data is sufficient
+					//---------------------------------------------------------------------------------------------------------------  
+					
+					if (taskControl->nSinksWaitingForDataToStart) break; // stop here if not all Sink VChans received all their data
+					
+					//--------------------------------------------------------------------------------------------------------------- 
+					// Call Start Task Controller function pointer to inform that task will start
+					//--------------------------------------------------------------------------------------------------------------- 
+					
+					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+					
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
+					
+					//---------------------------------------------------------------------------------------------------------------
+					// Iterate Task Controller
+					//---------------------------------------------------------------------------------------------------------------
+					
+					if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
+						taskControl->errorMsg =
+						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed"); 
+						
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
+					
+					//---------------------------------------------------------------------------------------------------------------
+					// Switch to RUNNING state
+					//---------------------------------------------------------------------------------------------------------------
+					
+					ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING);  
+					
+					
+					break;
+					
+				case TASK_EVENT_STOP:
+				case TASK_EVENT_STOP_CONTINUOUS_TASK:
+					
+					// switch back to INITIAL state
+					ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
+					
+					break;
+					
+				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+					
+					// update subtask state
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
+					
+					// if subtask is in an error state, then switch to error state
+					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
+						taskControl->errorMsg =
+						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
+						
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;	
+					}
+					
+					break;
+					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+						
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
+					
+					break;
+					
+				default:
+					
+					eventStr = EventToString(eventpacket[i].event);
+					stateStr = StateToString(taskControl->state);	 	
+					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
+					buff = malloc ((nchars+1)*sizeof(char));
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
+					OKfree(eventStr);
+					OKfree(stateStr);
+					
+					taskControl->errorMsg =
+					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					OKfree(buff);
+					
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
+					
+			}
 			break;
 			
 		case TASK_STATE_IDLE:
@@ -2425,19 +2594,13 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_START:
 				case TASK_EVENT_ITERATE_ONCE: 
 					
-					//--------------------------------------------------------------------------------------------------------------- 
-					// Call Start Task Controller function pointer to inform that task will start
-					//--------------------------------------------------------------------------------------------------------------- 
 					
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					}
+					//---------------------------------------------------------------------------------------------------------------
+					// Reset number of Sink VChans that must receive data before Start Fptr is called
+					//---------------------------------------------------------------------------------------------------------------
+					
+					taskControl->nSinksWaitingForDataToStart = taskControl->nSinksAttachedToStart;
+					
 					
 					//---------------------------------------------------------------------------------------------------------------   
 					// Set flag to iterate once or continue until done or stopped
@@ -2447,8 +2610,38 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					else
 						taskControl->nIterationsFlag = -1;
 					
+					//-------------------------------------------------------------------------------------------------------------------------
+					// If this is a Root Task Controller, i.e. it doesn't have a parent, then call dim UI function recursively for its SubTasks
+					//---------------------------------------------------------------------------------------------------------------------
+					
+					if(taskControl->parenttask) break; // stop here
+					DimTaskTreeBranch(taskControl, &eventpacket[i], TRUE);
+					
+					
+					//--------------------------------------------------------------------------------------------------------------- 
+					// Call Start Task Controller function pointer to inform that task will start if all data is available
+					//--------------------------------------------------------------------------------------------------------------- 
+					
+					if (!taskControl->nSinksWaitingForDataToStart) {
+						// if there are no Sink VChans attached, then call Start Fptr
+						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL))) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+						
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
+						
+					} else {
+						// switch to TASK_STATE_STARTING_WAITING_FOR_DATA and wait for data to be available
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_STARTING_WAITING_FOR_DATA);
+						break; // stop here
+					}
+					
 					//---------------------------------------------------------------------------------------------------------------
-					// Switch to RUNNING state and iterate Task Controller
+					// Iterate Task Controller
 					//---------------------------------------------------------------------------------------------------------------
 					
 					if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
@@ -2460,14 +2653,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
+					//---------------------------------------------------------------------------------------------------------------
+					// Switch to RUNNING state
+					//---------------------------------------------------------------------------------------------------------------
+					
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING);
-					
-					//-------------------------------------------------------------------------------------------------------------------------
-					// If this is a Root Task Controller, i.e. it doesn't have a parent, then call dim UI function recursively for its SubTasks
-					//---------------------------------------------------------------------------------------------------------------------
-					
-					if(taskControl->parenttask) break; // stop here
-					DimTaskTreeBranch(taskControl, &eventpacket[i], TRUE);
 					
 					break;
 					

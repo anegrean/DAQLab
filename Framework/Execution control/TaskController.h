@@ -260,6 +260,8 @@ typedef enum {
 	TASK_STATE_UNCONFIGURED,					// Task Controller is not configured.
 	TASK_STATE_CONFIGURED,						// Task Controller is configured.
 	TASK_STATE_INITIAL,							// Initial state of Task Controller before any iterations are performed.
+	TASK_STATE_STARTING_WAITING_FOR_DATA,		// Waiting for Sink VChan data before calling Start Fptr. Each Sink VChan must signal that it received the required data
+												// in order to proceed further to calling the Start Fptr.
 	TASK_STATE_IDLE,							// Task Controller is configured.
 	TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES,   // A HW Master Trigger Task Controller is waiting for HW Slave Trigger Task Controllers to be armed.
 	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped.
@@ -308,13 +310,13 @@ typedef enum {
 	TASK_FCALL_ABORT_ITERATION,
 	TASK_FCALL_START,
 	TASK_FCALL_RESET,
-	TASK_FCALL_DONE,					// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
-	TASK_FCALL_STOPPED,					// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
-	TASK_FCALL_DIM_UI,					// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
-	TASK_FCALL_SET_UITC_MODE,				// Called when an UITC has a parent Task Controller attached to or deattached from it.
-	TASK_FCALL_DATA_RECEIVED,			// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
+	TASK_FCALL_DONE,							// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
+	TASK_FCALL_STOPPED,							// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
+	TASK_FCALL_DIM_UI,							// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
+	TASK_FCALL_SET_UITC_MODE,					// Called when an UITC has a parent Task Controller attached to or deattached from it.
+	TASK_FCALL_DATA_RECEIVED,					// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
 	TASK_FCALL_ERROR,
-	TASK_FCALL_MODULE_EVENT				// Called for custom module events that are not handled directly by the Task Controller
+	TASK_FCALL_MODULE_EVENT						// Called for custom module events that are not handled directly by the Task Controller
 } TaskFCall_type;
 
 //---------------------------------------------------------------
@@ -329,12 +331,12 @@ typedef enum {
 // Task Controller Iteration Execution Mode
 //---------------------------------------------------------------
 typedef enum {
-	TASK_ITERATE_BEFORE_SUBTASKS_START,		// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
-											// IterateFptr is called and completes before sending TASK_EVENT_START to all SubTasks.
-	TASK_ITERATE_AFTER_SUBTASKS_COMPLETE,	// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
-											// IterateFptr is called after all SubTasks reach TASK_STATE_DONE.
-	TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS  // The iteration block of the Task Controller is still running after a call to IterateFptr and after a TASK_EVENT_START 
-											// is sent to all SubTasks. The iteration block is carried out in parallel with the execution of the SubTasks.
+	TASK_ITERATE_BEFORE_SUBTASKS_START,			// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
+												// IterateFptr is called and completes before sending TASK_EVENT_START to all SubTasks.
+	TASK_ITERATE_AFTER_SUBTASKS_COMPLETE,		// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
+												// IterateFptr is called after all SubTasks reach TASK_STATE_DONE.
+	TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS 	 	// The iteration block of the Task Controller is still running after a call to IterateFptr and after a TASK_EVENT_START 
+												// is sent to all SubTasks. The iteration block is carried out in parallel with the execution of the SubTasks.
 } TaskIterMode_type;
 
 //---------------------------------------------------------------

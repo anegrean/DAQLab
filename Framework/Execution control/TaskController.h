@@ -249,7 +249,7 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 #include "VChannel.h"
 
 #define TASKCONTROLLER_UI		"./Framework/Execution control/UI_TaskController.uir" 
-#define N_TASK_EVENT_QITEMS		1000		// Number of events waiting to be processed by the state machine.
+#define N_TASK_EVENT_QITEMS		1000			// Number of events waiting to be processed by the state machine.
 
 // Handy return type for functions that produce error descriptions
 
@@ -265,9 +265,11 @@ typedef enum {
 	TASK_STATE_IDLE,							// Task Controller is configured.
 	TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES,   // A HW Master Trigger Task Controller is waiting for HW Slave Trigger Task Controllers to be armed.
 	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped.
+	TASK_STATE_RUNNING_WAITING_ITERATION_DATA,  // Waiting for Sink VChan data before calling Iterate Fptr. Each Sink VChan must signal that it received the required data.
 	TASK_STATE_RUNNING_WAITING_ITERATION,		// Task Controller is iterating but the iteration (possibly occuring in another thread) is not yet complete.
 												// Iteration is complete when a TASK_EVENT_ITERATION_DONE is received in this state.
 	TASK_STATE_STOPPING,						// Task Controller received a STOP event and waits for SubTasks to complete their iterations.
+	TASK_STATE_STOPPING_WAITING_DONE_DATA,		// Waiting for Sink VChan data before calling Done Fptr. Each Sink VChan must signal that it received the required data.
 	TASK_STATE_DONE,							// Task Controller finished required iterations if operation was finite
 	TASK_STATE_ERROR
 } TaskStates_type;

@@ -6502,7 +6502,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						// register VChan with the framework
 						DLRegisterVChan(dev->niDAQModule, dev->AITaskSet->timing->nSamplesSinkVChan);
 						// register VChan with the DAQmx task controller
-						AddSinkVChan(dev->taskController, dev->AITaskSet->timing->nSamplesSinkVChan, AInSamples_DataReceivedTC, TASK_VCHAN_FUNC_ITERATE);
+						AddSinkVChan(dev->taskController, dev->AITaskSet->timing->nSamplesSinkVChan, AInSamples_DataReceivedTC, TASK_VCHAN_FUNC_NONE);
 						
 						//-------------------------------------------------------------------------
 						// add samplingRate VChan to pick-up sampling rate
@@ -6520,7 +6520,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						// register VChan with the framework
 						DLRegisterVChan(dev->niDAQModule, dev->AITaskSet->timing->samplingRateSinkVChan);
 						// register VChan with the DAQmx task controller
-						AddSinkVChan(dev->taskController, dev->AITaskSet->timing->samplingRateSinkVChan, AISamplingRate_DataReceivedTC, TASK_VCHAN_FUNC_ITERATE);
+						AddSinkVChan(dev->taskController, dev->AITaskSet->timing->samplingRateSinkVChan, AISamplingRate_DataReceivedTC, TASK_VCHAN_FUNC_NONE);
 								
 					}
 							
@@ -6946,7 +6946,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						// register VChan with the framework
 						DLRegisterVChan(dev->niDAQModule, dev->AOTaskSet->timing->nSamplesSinkVChan);
 						// register VChan with the DAQmx task controller
-						AddSinkVChan(dev->taskController, dev->AOTaskSet->timing->nSamplesSinkVChan, AOnSamples_DataReceivedTC, TASK_VCHAN_FUNC_ITERATE);
+						AddSinkVChan(dev->taskController, dev->AOTaskSet->timing->nSamplesSinkVChan, AOnSamples_DataReceivedTC, TASK_VCHAN_FUNC_NONE);
 						
 						//-------------------------------------------------------------------------
 						// add samplingRate VChan to pick-up sampling rate
@@ -6964,7 +6964,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						// register VChan with the framework
 						DLRegisterVChan(dev->niDAQModule, dev->AOTaskSet->timing->samplingRateSinkVChan);
 						// register VChan with the DAQmx task controller
-						AddSinkVChan(dev->taskController, dev->AOTaskSet->timing->samplingRateSinkVChan, AOSamplingRate_DataReceivedTC, TASK_VCHAN_FUNC_ITERATE);
+						AddSinkVChan(dev->taskController, dev->AOTaskSet->timing->samplingRateSinkVChan, AOSamplingRate_DataReceivedTC, TASK_VCHAN_FUNC_NONE);
 								
 					}
 							
@@ -7049,7 +7049,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							newChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newChan, VChanConnected, VChanDisconnected);  
 							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.sinkVChan);
 							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_VChanName, newVChanName);
-							AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, AO_DataReceivedTC, TASK_VCHAN_FUNC_ITERATE); 
+							AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, AO_DataReceivedTC, TASK_VCHAN_FUNC_NONE); 
 							OKfree(newVChanName);
 							
 							//---------------------------------------
@@ -7356,7 +7356,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					newDOChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newDOChan, VChanConnected, VChanDisconnected);  
 					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newDOChan->baseClass.sinkVChan);
 					
-					AddSinkVChan(dev->taskController, newDOChan->baseClass.sinkVChan, DO_DataReceivedTC, TASK_VCHAN_FUNC_ITERATE); 
+					AddSinkVChan(dev->taskController, newDOChan->baseClass.sinkVChan, DO_DataReceivedTC, TASK_VCHAN_FUNC_NONE); 
 					OKfree(newVChanName);
 							
 					//---------------------------------------

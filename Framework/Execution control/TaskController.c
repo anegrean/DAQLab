@@ -1021,7 +1021,7 @@ static char* StateToString (TaskStates_type state)
 			
 		case TASK_STATE_STARTING_WAITING_FOR_DATA:
 			
-			return StrDup("Starting and Waiting For Data");
+			return StrDup("Waiting For Data To Call Start Function");
 			
 		case TASK_STATE_IDLE:
 			
@@ -1035,13 +1035,21 @@ static char* StateToString (TaskStates_type state)
 			
 			return StrDup("Running");
 			
+		case TASK_STATE_RUNNING_WAITING_ITERATION_DATA:
+			
+			return StrDup("Waiting For Data To Call Iterate Function");
+			
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
 			
-			return StrDup("Running and Waiting For Iteration Completion");
+			return StrDup("Running And Waiting For Iteration Completion");
 			
 		case TASK_STATE_STOPPING:
 			
 			return StrDup("Stopping");
+			
+		case TASK_STATE_STOPPING_WAITING_DONE_DATA:
+			
+			return StrDup("Waiting For Data To Call Done Function");
 			
 		case TASK_STATE_DONE:
 			
@@ -1924,8 +1932,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 	while ((nEventItems = CmtReadTSQData(taskControl->eventQ, eventpacket, EVENT_BUFFER_SIZE, 0, 0)) > 0) {
 		
 	for (int i = 0; i < nEventItems; i++) {
-		
-	
+
 	// reset abort flag
 	taskControl->abortFlag = FALSE;
 	
@@ -2274,10 +2281,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					
 					//---------------------------------------------------------------------------------------------------------------
-					// Reset number of Sink VChans that must receive data before Start Fptr is called
+					// Reset number of Sink VChans that must receive data before Start/Iterate/Done Fptr are called
 					//---------------------------------------------------------------------------------------------------------------
 					
-					taskControl->nSinksWaitingForDataToStart = taskControl->nSinksAttachedToStart;
+					taskControl->nSinksWaitingForDataToStart 	= taskControl->nSinksAttachedToStart;
+					taskControl->nSinksWaitingForDataToIterate  = taskControl->nSinksAttachedToIterate;
+					taskControl->nSinksWaitingForDataToBeDone	= taskControl->nSinksAttachedToDone;
 					
 					//---------------------------------------------------------------------------------------------------------------   
 					// Set flag to iterate once or continue until done or stopped
@@ -2487,7 +2496,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING);  
 					
-					
 					break;
 					
 				case TASK_EVENT_STOP:
@@ -2599,7 +2607,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Reset number of Sink VChans that must receive data before Start Fptr is called
 					//---------------------------------------------------------------------------------------------------------------
 					
-					taskControl->nSinksWaitingForDataToStart = taskControl->nSinksAttachedToStart;
+					taskControl->nSinksWaitingForDataToStart 	= taskControl->nSinksAttachedToStart;
+					taskControl->nSinksWaitingForDataToIterate  = taskControl->nSinksAttachedToIterate;
+					taskControl->nSinksWaitingForDataToBeDone	= taskControl->nSinksAttachedToDone;
 					
 					
 					//---------------------------------------------------------------------------------------------------------------   
@@ -2868,21 +2878,20 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					if (!HWTrigSlavesAreArmed(taskControl))
 						break; // stop here, not all Slaves are armed 
 					
-									
-					//---------------------------------------------------------------------------------------------------------------
-					// Slaves are ready to be triggered, reset Slaves armed status
-					//---------------------------------------------------------------------------------------------------------------
-									
-					ResetHWTrigSlavesArmedStatus(taskControl);
-									
 					//---------------------------------------------------------------------------------------------------------------
 					// Iterate and fire Master HW Trigger 
 					//---------------------------------------------------------------------------------------------------------------
-									
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-					// switch state and wait for iteration to complete
-					ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
 					
+					if (!taskControl->nSinksWaitingForDataToIterate) {
+						// slaves are ready to be triggered, reset Slaves armed status
+						ResetHWTrigSlavesArmedStatus(taskControl); 
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+						// switch state and wait for iteration to complete
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+					} else
+						// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA);
+						  
 					break;
 					
 				case TASK_EVENT_DATA_RECEIVED:
@@ -2935,6 +2944,143 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			
 			break;
 			
+		case TASK_STATE_RUNNING_WAITING_ITERATION_DATA:
+			
+			switch (eventpacket[i].event) {
+				
+				case TASK_EVENT_DATA_RECEIVED:
+					
+					//---------------------------------------------------------------------------------------------------------------        
+					// Call data received event function
+					//---------------------------------------------------------------------------------------------------------------        
+					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+							
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
+					
+					//---------------------------------------------------------------------------------------------------------------  
+					//  Check if data is sufficient
+					//---------------------------------------------------------------------------------------------------------------  
+					
+					if (taskControl->nSinksWaitingForDataToIterate) break; // stop here if not all Sink VChans received all their data
+					
+					//---------------------------------------------------------------------------------------------------------------  
+					//  Reset Sink VChan data counter
+					//---------------------------------------------------------------------------------------------------------------
+					
+					taskControl->nSinksWaitingForDataToIterate = taskControl->nSinksAttachedToIterate;
+					
+					//---------------------------------------------------------------------------------------------------------------
+					// Reset HW trig slaves if any 
+					//---------------------------------------------------------------------------------------------------------------
+					
+					ResetHWTrigSlavesArmedStatus(taskControl);  
+				
+					//--------------------------------------------------------------------------------------------------------------- 
+					// Call Task Controller Iterate function pointer to inform that task will start
+					//--------------------------------------------------------------------------------------------------------------- 
+					
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+					
+					//---------------------------------------------------------------------------------------------------------------
+					// Switch to TASK_STATE_RUNNING_WAITING_ITERATION state
+					//---------------------------------------------------------------------------------------------------------------
+				
+					ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+					
+					break;
+					
+				case TASK_EVENT_STOP:
+				case TASK_EVENT_STOP_CONTINUOUS_TASK:
+					
+					// switch to IDLE state if there are no subtasks
+					if (!ListNumItems(taskControl->subtasks)) {
+						// undim Task Tree if this is a root Task Controller
+						if(!taskControl->parenttask)
+						DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+						
+						// change state
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
+						
+					} else {
+						
+						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
+						if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
+							taskControl->errorMsg =
+							init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
+						
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
+						
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_STOPPING);
+						
+					}
+					
+					break;
+					
+				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+					
+					// update subtask state
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
+					
+					// if subtask is in an error state, then switch to error state
+					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
+						taskControl->errorMsg =
+						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
+						
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;	
+					}
+					
+					break;
+					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+						
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
+					
+					break;
+					
+				default:
+					
+					eventStr = EventToString(eventpacket[i].event);
+					stateStr = StateToString(taskControl->state);	 	
+					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
+					buff = malloc ((nchars+1)*sizeof(char));
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
+					OKfree(eventStr);
+					OKfree(stateStr);
+					
+					taskControl->errorMsg =
+					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					OKfree(buff);
+					
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
+					
+			}
+			break;	
+				
+			
 		case TASK_STATE_RUNNING:
 		 
 			switch (eventpacket[i].event) {
@@ -2956,22 +3102,26 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						// Task Controller is finite switch to DONE
 						//---------------------------------------------------------------------------------------------------------------- 	
 										
-						// call done function
-						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
+						// call done function if all data is available
+						if (!taskControl->nSinksWaitingForDataToBeDone) {
+							if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
+								taskControl->errorMsg = 
+								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+								discard_ErrorMsg_type(&errMsg);
 						
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-							break;
-						}
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
+								break;
+							}
 								
-						ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
 						
-						// undim Task Tree if this is a Root Task Controller
-						if(!taskControl->parenttask) 
-						DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+							// undim Task Tree if this is a Root Task Controller
+							if(!taskControl->parenttask) 
+							DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+						} else
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_STOPPING_WAITING_DONE_DATA);       
+							
 						
 						break; // stop here
 					}
@@ -2999,24 +3149,23 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// Call iteration function if needed	 
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-									
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-								        
-									else 
+									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS) {
+										if (!taskControl->nSinksWaitingForDataToIterate) {
+											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+											// switch state and wait for iteration to complete
+											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+										} else
+											// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA);
+									} else 
 										if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
 											taskControl->errorMsg =
 											init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
 						
 											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
 											ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-											break;  // stop here
 										}
 										
-									
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
-									
 									break;
 									
 								case TASK_MASTER_HWTRIGGER:
@@ -3061,18 +3210,18 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									}
 									
 									//---------------------------------------------------------------------------------------------------------------
-									// Slaves are ready to be triggered, reset Slaves armed status
-									//---------------------------------------------------------------------------------------------------------------
-									
-									ResetHWTrigSlavesArmedStatus(taskControl);
-									
-									//---------------------------------------------------------------------------------------------------------------
 									// Iterate and fire Master HW Trigger 
 									//---------------------------------------------------------------------------------------------------------------
 									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
+									if (!taskControl->nSinksWaitingForDataToIterate) {
+										// slaves are ready to be triggered, reset Slaves armed status
+										ResetHWTrigSlavesArmedStatus(taskControl); 
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+										// switch state and wait for iteration to complete
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+									} else
+										// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA);
 									
 									break;
 									
@@ -3098,9 +3247,13 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
 									//---------------------------------------------------------------------------------------------------------------
 									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-										
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 
+									if (!taskControl->nSinksWaitingForDataToIterate) {
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+										// switch state and wait for iteration to complete
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+									} else
+										// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA);
 									
 									break;
 							}
@@ -3135,9 +3288,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// There are no SubTasks, call iteration function if needed
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									else 
+									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS) {
+										if (!taskControl->nSinksWaitingForDataToIterate) {
+											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+											// switch state and wait for iteration to complete
+											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+										} else
+											// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA);
+									} else 
 										if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
 											taskControl->errorMsg =
 											init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
@@ -3146,9 +3305,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 											ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 											break;  // stop here
 										}
-									
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
 									
 									break;
 									
@@ -3193,18 +3349,18 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									}
 									
 									//---------------------------------------------------------------------------------------------------------------
-									// Slaves are ready to be triggered, reset Slaves armed status
-									//---------------------------------------------------------------------------------------------------------------
-									
-									ResetHWTrigSlavesArmedStatus(taskControl);
-									
-									//---------------------------------------------------------------------------------------------------------------
 									// There are no SubTasks, iterate and fire Master HW Trigger 
 									//---------------------------------------------------------------------------------------------------------------
 									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
+									if (!taskControl->nSinksWaitingForDataToIterate) {
+										// slaves are ready to be triggered, reset Slaves armed status
+										ResetHWTrigSlavesArmedStatus(taskControl); 
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+										// switch state and wait for iteration to complete
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+									} else
+										// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA);
 									
 									break;
 									
@@ -3230,9 +3386,13 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
 									//---------------------------------------------------------------------------------------------------------------
 									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-										
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 
+									if (!taskControl->nSinksWaitingForDataToIterate) {
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+										// switch state and wait for iteration to complete
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+									} else
+										// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA); 
 										
 									break;
 							}
@@ -3264,9 +3424,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// Call iteration function if needed
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									else 
+									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS) {
+										if (!taskControl->nSinksWaitingForDataToIterate) {
+											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+											// switch state and wait for iteration to complete
+											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+										} else
+											// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA);
+									} else 
 										if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
 											taskControl->errorMsg =
 											init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
@@ -3276,9 +3442,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 											break;
 										}
 										
-									// switch state and wait for iteration and SubTasks if there are any to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
-									
 									break;
 									
 								case TASK_MASTER_HWTRIGGER:
@@ -3307,18 +3470,18 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									}
 									
 									//---------------------------------------------------------------------------------------------------------------
-									// Slaves are ready to be triggered, reset Slaves armed status
-									//---------------------------------------------------------------------------------------------------------------
-									
-									ResetHWTrigSlavesArmedStatus(taskControl);
-									
-									//---------------------------------------------------------------------------------------------------------------
 									// Iterate and fire Master HW Trigger 
 									//---------------------------------------------------------------------------------------------------------------
 									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
+									if (!taskControl->nSinksWaitingForDataToIterate) {
+										// slaves are ready to be triggered, reset Slaves armed status
+										ResetHWTrigSlavesArmedStatus(taskControl); 
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+										// switch state and wait for iteration to complete
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+									} else
+										// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA);  
 										
 									break;
 									
@@ -3357,9 +3520,13 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
 									//---------------------------------------------------------------------------------------------------------------
 									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-										
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 
+									if (!taskControl->nSinksWaitingForDataToIterate) {
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+										// switch state and wait for iteration to complete
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+									} else
+										// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA); 
 									
 									break;
 							}
@@ -3374,24 +3541,27 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					if (!ListNumItems(taskControl->subtasks)) {
 						
-						// undim Task Tree if this is a root Task Controller
-							if(!taskControl->parenttask)
-							DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
-							
 						// if there are no SubTask Controllers
 						if (taskControl->mode == TASK_CONTINUOUS) {
-							// switch to DONE state if continuous task controller
-							if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
-								taskControl->errorMsg = 
-								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-								discard_ErrorMsg_type(&errMsg);
+							// switch to DONE state if continuous task controller and all required VChan data is available
+							if (!taskControl->nSinksWaitingForDataToBeDone) {
+								if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
+									taskControl->errorMsg = 
+									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+									discard_ErrorMsg_type(&errMsg);
 						
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-								break;
-							}
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+									break;
+								}
 							
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
+								ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
+							
+								// undim Task Tree if this is a root Task Controller
+								if(!taskControl->parenttask)
+								DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+							} else
+								ChangeState(taskControl, &eventpacket[i], TASK_STATE_STOPPING_WAITING_DONE_DATA); 
 							
 						} else 
 							// switch to IDLE or DONE state if finite task controller
@@ -3407,19 +3577,31 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								}
 							
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
+								
+								// undim Task Tree if this is a root Task Controller
+								if(!taskControl->parenttask)
+								DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
 									
 							} else {
-								if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
+								// switch to DONE state if all required VChan data is available  
+								if (!taskControl->nSinksWaitingForDataToBeDone) { 
+									if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
+										taskControl->errorMsg = 
+										init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+										discard_ErrorMsg_type(&errMsg);
 						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-									break;
-								}
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+										break;
+									}
 							
-								ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
+								
+									// undim Task Tree if this is a root Task Controller
+									if(!taskControl->parenttask)
+									DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+								} else
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_STOPPING_WAITING_DONE_DATA);
 							}
 							  
 					} else {
@@ -3547,9 +3729,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// SubTasks are complete, call iteration function
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									else 
+									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS) {
+										if (!taskControl->nSinksWaitingForDataToIterate) {
+											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+											// switch state and wait for iteration to complete
+											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+										} else
+											// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA);
+									} else 
 										if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
 											taskControl->errorMsg =
 											init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
@@ -3558,8 +3746,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 											ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 											break;
 										}
-									
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 	
 									
 									break;
 									
@@ -3604,18 +3790,18 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									}
 									
 									//---------------------------------------------------------------------------------------------------------------
-									// Slaves are ready to be triggered, reset Slaves armed status
-									//---------------------------------------------------------------------------------------------------------------
-									
-									ResetHWTrigSlavesArmedStatus(taskControl);
-									
-									//---------------------------------------------------------------------------------------------------------------
 									// There are no SubTasks, iterate and fire Master HW Trigger 
 									//---------------------------------------------------------------------------------------------------------------
 									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
+									if (!taskControl->nSinksWaitingForDataToIterate) {
+										// slaves are ready to be triggered, reset Slaves armed status
+										ResetHWTrigSlavesArmedStatus(taskControl); 
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+										// switch state and wait for iteration to complete
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+									} else
+										// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA);  
 									
 									break;
 									
@@ -3640,9 +3826,13 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
 									//---------------------------------------------------------------------------------------------------------------
 									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-										
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 
+									if (!taskControl->nSinksWaitingForDataToIterate) {
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+										// switch state and wait for iteration to complete
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
+									} else
+										// switch to TASK_STATE_RUNNING_WAITING_ITERATION_DATA and wait for data to be available
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION_DATA); 
 										
 									break;
 							}
@@ -3763,53 +3953,72 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					if (taskControl->abortIterationFlag) {
 						
 						if (!ListNumItems(taskControl->subtasks)) {
-							// undim Task Tree if this is a root Task Controller
-							if(!taskControl->parenttask)
-							DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
-								
-						// if there are no SubTask Controllers
-						if (taskControl->mode == TASK_CONTINUOUS) {
-							// switch to DONE state if continuous task controller
-							if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
-								taskControl->errorMsg = 
-								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-								discard_ErrorMsg_type(&errMsg);
-						
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-								break;
-							}
 							
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
-								
-						} else 
-							// switch to IDLE or DONE state if finite task controller
-							if (taskControl->currIterIdx < taskControl->repeat) {
-								if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
+							// if there are no SubTask Controllers
+							if (taskControl->mode == TASK_CONTINUOUS) {
+								// switch to DONE state if continuous task controller and data from all VChans is available
+								if (!taskControl->nSinksWaitingForDataToBeDone) { 
+									if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
+										taskControl->errorMsg = 
+										init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+										discard_ErrorMsg_type(&errMsg);
 						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-									break;
-								}
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+										break;
+									}
 							
-								ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
 									
-							} else {
-								if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
+									// undim Task Tree if this is a root Task Controller
+									if(!taskControl->parenttask)
+									DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+								
+								} else
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_STOPPING_WAITING_DONE_DATA);  
+								
+							} else 
+								// switch to IDLE or DONE state if finite task controller
+								if (taskControl->currIterIdx < taskControl->repeat) {
+									if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL))) {
+										taskControl->errorMsg = 
+										init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+										discard_ErrorMsg_type(&errMsg);
 						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-									break;
-								}
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+										break;
+									}
 							
-								ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
-							}
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
+									
+									// undim Task Tree if this is a root Task Controller
+									if(!taskControl->parenttask)
+									DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+									
+								} else {
+									// switch to DONE state if data from all VChans is available    
+									if (!taskControl->nSinksWaitingForDataToBeDone) {  
+										if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
+											taskControl->errorMsg = 
+											init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+											discard_ErrorMsg_type(&errMsg);
+						
+											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+											ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+											break;
+										}
+							
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
+										
+										// undim Task Tree if this is a root Task Controller
+										if(!taskControl->parenttask)
+										DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+										
+									} else
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_STOPPING_WAITING_DONE_DATA); 
+										
+								}
 						
 						} else {
 							
@@ -4204,6 +4413,142 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			
 			break;
 			
+		case TASK_STATE_STOPPING_WAITING_DONE_DATA:
+			
+			switch (eventpacket[i].event) { 
+				
+				case TASK_EVENT_DATA_RECEIVED:
+					
+					//---------------------------------------------------------------------------------------------------------------        
+					// Call data received event function
+					//---------------------------------------------------------------------------------------------------------------        
+					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+							
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
+					
+					//---------------------------------------------------------------------------------------------------------------  
+					//  Check if data is sufficient
+					//---------------------------------------------------------------------------------------------------------------  
+					
+					if (taskControl->nSinksWaitingForDataToBeDone) break; // stop here if not all Sink VChans received all their data
+					
+					//---------------------------------------------------------------------------------------------------------------  
+					//  Reset Sink VChan data counter
+					//---------------------------------------------------------------------------------------------------------------
+					
+					taskControl->nSinksWaitingForDataToBeDone = taskControl->nSinksAttachedToDone;
+					
+					//---------------------------------------------------------------------------------------------------------------        
+					// Call DONE event function
+					//---------------------------------------------------------------------------------------------------------------        
+					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, eventpacket[i].eventInfo))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+							
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
+					
+					// undim Task Tree if this is a root Task Controller
+					if(!taskControl->parenttask)
+					DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+					
+					break;
+					
+				case TASK_EVENT_STOP:
+				case TASK_EVENT_STOP_CONTINUOUS_TASK:
+					
+					// switch to IDLE state if there are no subtasks
+					if (!ListNumItems(taskControl->subtasks)) {
+						// undim Task Tree if this is a root Task Controller
+						if(!taskControl->parenttask)
+						DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+						
+						// change state
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
+						
+					} else {
+						
+						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
+						if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
+							taskControl->errorMsg =
+							init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
+						
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
+						
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_STOPPING);
+						
+					}
+					
+					break;
+					
+				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+					
+					// update subtask state
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
+					
+					// if subtask is in an error state, then switch to error state
+					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
+						taskControl->errorMsg =
+						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
+						
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;	
+					}
+					
+					break;
+					
+				case TASK_EVENT_CUSTOM_MODULE_EVENT:
+					
+					// call custom module event function
+					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
+						taskControl->errorMsg = 
+						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+						discard_ErrorMsg_type(&errMsg);
+						
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
+					
+					break;
+					
+				default:
+					
+					eventStr = EventToString(eventpacket[i].event);
+					stateStr = StateToString(taskControl->state);	 	
+					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
+					buff = malloc ((nchars+1)*sizeof(char));
+					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
+					OKfree(eventStr);
+					OKfree(stateStr);
+					
+					taskControl->errorMsg =
+					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					OKfree(buff);
+					
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
+					
+			}
+			break;	
+				
+		
 		case TASK_STATE_DONE:
 		// This state can be reached only if all SubTask Controllers are in a DONE state
 			

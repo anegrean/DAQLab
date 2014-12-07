@@ -3352,7 +3352,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
 								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, ModuleEventHandler_NonResGalvoCal, ErrorTC_NonResGalvoCal);
 	// connect sink VChans (VChanPos) to the Task Controller so that it can process incoming galvo position data
-	AddSinkVChan(cal->baseClass.taskController, cal->baseClass.VChanPos, DataReceivedTC_NonResGalvoCal, TASK_VCHAN_FUNC_ITERATE);  
+	AddSinkVChan(cal->baseClass.taskController, cal->baseClass.VChanPos, DataReceivedTC_NonResGalvoCal, TASK_VCHAN_FUNC_NONE);  
 	cal->baseClass.lsModule			= lsModule;
 	
 								  

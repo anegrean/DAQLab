@@ -439,7 +439,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 		
 						// register VChan with DAQLab
 						DLRegisterVChan((DAQLabModule_type*)ds, (VChan_type*)chan->VChan);
-						AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC,TASK_VCHAN_FUNC_ITERATE);
+						AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC, TASK_VCHAN_FUNC_NONE);
 
 						// update main panel
 						RedrawDSPanel(ds);

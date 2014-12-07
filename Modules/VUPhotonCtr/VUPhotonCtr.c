@@ -1015,7 +1015,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 							vupc->pulseTrainVchan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
 							// register VChan with DAQLab
 							DLRegisterVChan(vupc, vupc->pulseTrainVchan);	
-							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVchan, PulseTrainDataReceivedTC, TASK_VCHAN_FUNC_NONE);  //?     
+							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVchan, PulseTrainDataReceivedTC, TASK_VCHAN_FUNC_NONE);  
 						}
 						// update main panel
 						RedrawMainPanel(vupc);

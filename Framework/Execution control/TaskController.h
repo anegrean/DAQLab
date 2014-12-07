@@ -345,7 +345,7 @@ typedef enum {
 	TASK_VCHAN_FUNC_START,
 	TASK_VCHAN_FUNC_ITERATE,
 	TASK_VCHAN_FUNC_DONE
-} TaskVChanFuncAssign_type;
+} VChanTCFPtrAssignments;
 	
 
 //---------------------------------------------------------------
@@ -607,7 +607,10 @@ void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Adds a VChan to the Task Controller that is used to receive incoming data and binds it to a given callback when data is received.
-int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, TaskVChanFuncAssign_type VChanFunc); 
+int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, VChanTCFPtrAssignments fPtrAssignment); 
+
+	// Changes Sink VChan assignment to Task Controller Fptr.
+int						ChangeSinkVChanTCFptrAssignment		(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments newFPtrAssignment);
 
 	// Removes a Sink VChan assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan.
@@ -615,7 +618,7 @@ int						RemoveSinkVChan 					(TaskControl_type* taskControl, SinkVChan_type* si
 
 	// Removes all Sink VChans assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan. 
-void 					RemoveAllSinkVChans 				(TaskControl_type* taskControl);
+int 					RemoveAllSinkVChans 				(TaskControl_type* taskControl);
 
 	// Disconnects Source VChans from all Sink VChans assigned to the Task Controller but does not remove the Sink VChans from the Task Controller.
 void					DisconnectAllSinkVChans				(TaskControl_type* taskControl);

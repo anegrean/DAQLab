@@ -21,39 +21,39 @@
 //==============================================================================
 // Constants
 
-#define EVENT_BUFFER_SIZE 10								// Number of maximum events read at once from the Task Controller TSQs
+#define EVENT_BUFFER_SIZE 10										// Number of maximum events read at once from the Task Controller TSQs
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}
 
 //==============================================================================
 // Types
 
 typedef struct {
-	size_t						subtaskIdx;					// For a TASK_EVENT_SUBTASK_STATE_CHANGED event this is a
-															// 1-based index of subtask (from subtasks list) which generated
-															// the event.
-	TaskStates_type				newSubTaskState;			// For a TASK_EVENT_SUBTASK_STATE_CHANGED event this is the new state
-															// of the subtask
+	size_t						subtaskIdx;							// For a TASK_EVENT_SUBTASK_STATE_CHANGED event this is a
+																	// 1-based index of subtask (from subtasks list) which generated
+																	// the event.
+	TaskStates_type				newSubTaskState;					// For a TASK_EVENT_SUBTASK_STATE_CHANGED event this is the new state
+																	// of the subtask
 } SubTaskEventInfo_type;
 
-typedef struct {											// For a TASK_EVENT_HWTRIG_SLAVE_ARMED event
-	size_t						slaveHWTrigIdx;				// 1-based index of Slave HW Triggered Task Controller from the Master HW Trigerring Slave list.
+typedef struct {													// For a TASK_EVENT_HWTRIG_SLAVE_ARMED event
+	size_t						slaveHWTrigIdx;						// 1-based index of Slave HW Triggered Task Controller from the Master HW Trigerring Slave list.
 } SlaveHWTrigTaskEventInfo_type;
 
 typedef struct {
-	TaskEvents_type 			event;						// Task Control Event.
-	void*						eventInfo;					// Extra information per event allocated dynamically
-	DisposeEventInfoFptr_type   disposeEventInfoFptr;   	// Function pointer to dispose of the eventInfo
+	TaskEvents_type 			event;								// Task Control Event.
+	void*						eventInfo;							// Extra information per event allocated dynamically
+	DisposeEventInfoFptr_type   disposeEventInfoFptr;   			// Function pointer to dispose of the eventInfo
 } EventPacket_type;
 
 typedef struct {
-	TaskStates_type				subtaskState;				// Updated by parent task when informed by subtask that a state change occured.
-	TaskStates_type				previousSubTaskState;		// Previous Subtask state used for logging and debuging.
-	TaskControl_type*			subtask;					// Pointer to Subtask Controller.
+	TaskStates_type				subtaskState;						// Updated by parent task when informed by subtask that a state change occured.
+	TaskStates_type				previousSubTaskState;				// Previous Subtask state used for logging and debuging.
+	TaskControl_type*			subtask;							// Pointer to Subtask Controller.
 } SubTask_type;
 
 struct SlaveHWTrigTask{
-	BOOL						armed;						// TRUE if a Slave HW Triggered Task Controller is ready to be triggered by its Master
-	TaskControl_type*			slaveHWTrigTask;			// pointer to Slave HW Triggered Task Controller.
+	BOOL						armed;								// TRUE if a Slave HW Triggered Task Controller is ready to be triggered by its Master
+	TaskControl_type*			slaveHWTrigTask;					// pointer to Slave HW Triggered Task Controller.
 };
 							
 typedef enum {
@@ -71,46 +71,56 @@ typedef struct {
 typedef struct {
 	TaskControl_type* 			taskControl;
 	SinkVChan_type* 			sinkVChan;
+	VChanTCFPtrAssignments		fPtrAssignment;
 	DataReceivedFptr_type		DataReceivedFptr;
 	CmtTSQCallbackID			itemsInQueueCBID;
 } VChanCallbackData_type;
 
 struct TaskControl {
 	// Task control data
-	char*						taskName;					// Name of Task Controller
-	size_t						subtaskIdx;					// 1-based index of subtask from parent Task subtasks list. If task doesn't have a parent task then index is 0.
-	size_t						slaveHWTrigIdx;				// 1-based index of Slave HW Trig from Master HW Trig Slave list. If Task Controller is not a HW Trig Slave, then index is 0.
-	CmtTSQHandle				eventQ;						// Event queue to which the state machine reacts.
-	CmtThreadLockHandle			eventQThreadLock;			// Thread lock used to coordinate multiple writing threads sending events to the queue.
-	ListType					dataQs;						// Incoming data queues, list of VChanCallbackData_type*.
-	unsigned int				eventQThreadID;				// Thread ID in which queue events are processed.
-	CmtThreadFunctionID			threadFunctionID;			// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
-	TaskStates_type 			state;						// Task Controller state.
-	TaskStates_type 			oldState;					// Previous Task Controller state used for logging.
-	size_t						repeat;						// Total number of repeats. If repeat is 0, then the iteration function is not called. 
-	int							iterTimeout;				// Timeout in [s] until when TaskControlIterationDone can be called. 
-	TaskIterMode_type			iterMode;					// Determines how the iteration block of a Task Controller is executed with respect to its subtasks if any.
-	TaskMode_type				mode;						// Finite or continuous type of task controller
-	size_t						currIterIdx;    			// 1-based task execution iteration index  
-	TaskControl_type*			parenttask;					// Pointer to parent task that own this subtask. 
-															// If this is the main task, it has no parent and this is NULL. 
-	ListType					subtasks;					// List of subtasks of SubTask_type.
-	TaskControl_type*			masterHWTrigTask;			// If this is a Slave HW Triggered Task Controller, then masterHWTrigTask is a Task Controller 
-	ListType					slaveHWTrigTasks;			// If this is a Master HW Triggered Task Controller then slaveHWTrigTasks is a list of SlaveHWTrigTask_type
-															// HW Triggered Slave Task Controllers.
-	void*						moduleData;					// Reference to module specific data that is 
-															// controlled by the task.
-	int							logPanHandle;				// Panel handle in which there is a box control for printing Task Controller execution info useful for debugging. If not used, it is set to 0
-	int							logBoxControlID;			// Box control ID for printing Task Controller execution info useful for debugging. If not used, it is set to 0.  
-	BOOL						loggingEnabled;				// If True, logging info is printed to the provided Box control.
-	ErrorMsg_type*				errorMsg;					// When switching to an error state, additional error info is written here
-	double						waitBetweenIterations;		// During a RUNNING state, waits specified ammount in seconds between iterations
-	BOOL						abortFlag;					// When set to TRUE, it signals the provided function pointers that they must abort running processes.
-	BOOL						abortIterationFlag;			// When set to TRUE, it signals the external thread running the iteration that it must finish.
-	BOOL						slaveArmedFlag;				// TRUE when HW Triggering is enabled for the Task Controller and Slave has been armed before sending TASK_EVENT_ITERATION_DONE.
-	int							nIterationsFlag;			// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
-	int							iterationTimerID;			// Keeps track of the timeout timer when iteration is performed in another thread.
-	BOOL						UITCFlag;					// If TRUE, the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
+	char*						taskName;							// Name of Task Controller
+	size_t						subtaskIdx;							// 1-based index of subtask from parent Task subtasks list. If task doesn't have a parent task then index is 0.
+	size_t						slaveHWTrigIdx;						// 1-based index of Slave HW Trig from Master HW Trig Slave list. If Task Controller is not a HW Trig Slave, then index is 0.
+	CmtTSQHandle				eventQ;								// Event queue to which the state machine reacts.
+	CmtThreadLockHandle			eventQThreadLock;					// Thread lock used to coordinate multiple writing threads sending events to the queue.
+	ListType					dataQs;								// Incoming data queues, list of VChanCallbackData_type*.
+	unsigned int				eventQThreadID;						// Thread ID in which queue events are processed.
+	CmtThreadFunctionID			threadFunctionID;					// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
+	TaskStates_type 			state;								// Task Controller state.
+	TaskStates_type 			oldState;							// Previous Task Controller state used for logging.
+	size_t						repeat;								// Total number of repeats. If repeat is 0, then the iteration function is not called. 
+	int							iterTimeout;						// Timeout in [s] until when TaskControlIterationDone can be called. 
+	TaskIterMode_type			iterMode;							// Determines how the iteration block of a Task Controller is executed with respect to its subtasks if any.
+	TaskMode_type				mode;								// Finite or continuous type of task controller
+	size_t						currIterIdx;    					// 1-based task execution iteration index  
+	TaskControl_type*			parenttask;							// Pointer to parent task that own this subtask. 
+																	// If this is the main task, it has no parent and this is NULL. 
+	ListType					subtasks;							// List of subtasks of SubTask_type.
+	TaskControl_type*			masterHWTrigTask;					// If this is a Slave HW Triggered Task Controller, then masterHWTrigTask is a Task Controller 
+	ListType					slaveHWTrigTasks;					// If this is a Master HW Triggered Task Controller then slaveHWTrigTasks is a list of SlaveHWTrigTask_type
+																	// HW Triggered Slave Task Controllers.
+	void*						moduleData;							// Reference to module specific data that is 
+																	// controlled by the task.
+	int							logPanHandle;						// Panel handle in which there is a box control for printing Task Controller execution info useful for debugging. If not used, it is set to 0
+	int							logBoxControlID;					// Box control ID for printing Task Controller execution info useful for debugging. If not used, it is set to 0.  
+	BOOL						loggingEnabled;						// If True, logging info is printed to the provided Box control.
+	ErrorMsg_type*				errorMsg;							// When switching to an error state, additional error info is written here
+	double						waitBetweenIterations;				// During a RUNNING state, waits specified ammount in seconds between iterations
+	BOOL						abortFlag;							// When set to TRUE, it signals the provided function pointers that they must abort running processes.
+	BOOL						abortIterationFlag;					// When set to TRUE, it signals the external thread running the iteration that it must finish.
+	BOOL						slaveArmedFlag;						// TRUE when HW Triggering is enabled for the Task Controller and Slave has been armed before sending TASK_EVENT_ITERATION_DONE.
+	int							nIterationsFlag;					// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
+	int							iterationTimerID;					// Keeps track of the timeout timer when iteration is performed in another thread.
+	BOOL						UITCFlag;							// If TRUE, the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
+	
+	// Data flow control
+	size_t						nSinksAttachedToStart;				// Number of Sink VChans attached to the Start Task Controller function that NEED TO receive data before the Start function is called each time the TC is executed.
+	size_t						nSinksWaitingForDataToStart;	   	// Number of Sink VChans attached to the Start Task Controller function that STILL NEED TO receive data before the Start function is called.
+	size_t						nSinksAttachedToIterate;			// Number of Sink VChans attached to the Iterate Task Controller function that NEED TO receive data with each iteration before the Iterate function is called.
+	size_t						nSinksWaitingForDataToIterate;   	// Number of Sink VChans attached to the Iterate Task Controller function that STILL NEED TO receive data before the Iterate function is called.
+	size_t						nSinksAttachedToDone;				// Number of Sink VChans attached to the Done Task Controller function that NEED TO receive data before the Done function is called each time the TC is executed.
+	size_t						nSinksWaitingForDataToBeDone;	   	// Number of Sink VChans attached to the Done Task Controller function that STILL NEED TO receive data before the Done function is called.
+	
 	
 	// Event handler function pointers
 	ConfigureFptr_type			ConfigureFptr;
@@ -133,59 +143,59 @@ struct TaskControl {
 //==============================================================================
 // Static functions
 
-static void 					TaskEventHandler 				(TaskControl_type* taskControl); 
+static void 								TaskEventHandler 						(TaskControl_type* taskControl); 
 
 // Use this function to change the state of a Task Controller
-static int 						ChangeState 					(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState);
+static int 									ChangeState 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState);
 // Use this function to carry out a Task Controller action using provided function pointers
-static ErrorMsg_type*			FunctionCall 					(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskFCall_type fID, void* fCallData); 
+static ErrorMsg_type*						FunctionCall 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskFCall_type fID, void* fCallData); 
 
 // Formats a Task Controller log entry based on the action taken
-static void						ExecutionLogEntry				(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskControllerActions action, void* info);
+static void									ExecutionLogEntry						(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskControllerActions action, void* info);
 
 // Error formatting functions
-static ErrorMsg_type* 			init_ErrorMsg_type 				(int errorID, const char errorOrigin[], const char errorDescription[]);
-static void						discard_ErrorMsg_type 			(ErrorMsg_type** a);
-static ErrorMsg_type*			FCallReturnToErrorMsg			(FCallReturn_type** fCallReturn, TaskFCall_type fID);
+static ErrorMsg_type* 						init_ErrorMsg_type 						(int errorID, const char errorOrigin[], const char errorDescription[]);
+static void									discard_ErrorMsg_type 					(ErrorMsg_type** a);
+static ErrorMsg_type*						FCallReturnToErrorMsg					(FCallReturn_type** fCallReturn, TaskFCall_type fID);
 
 // Task Controller iteration done return info when performing iteration in another thread
-static void						disposeTCIterDoneInfo 			(void* eventInfo);
+static void									disposeTCIterDoneInfo 					(void* eventInfo);
 
 
-static char*					StateToString					(TaskStates_type state);
-static char*					EventToString					(TaskEvents_type event);
-static char*					FCallToString					(TaskFCall_type fcall);
+static char*								StateToString							(TaskStates_type state);
+static char*								EventToString							(TaskEvents_type event);
+static char*								FCallToString							(TaskFCall_type fcall);
 
 // SubTask eventInfo functions
-static SubTaskEventInfo_type* 	init_SubTaskEventInfo_type 		(size_t subtaskIdx, TaskStates_type state);
-static void						discard_SubTaskEventInfo_type 	(SubTaskEventInfo_type** a);
-static void						disposeSubTaskEventInfo			(void* eventInfo);
+static SubTaskEventInfo_type* 				init_SubTaskEventInfo_type 				(size_t subtaskIdx, TaskStates_type state);
+static void									discard_SubTaskEventInfo_type 			(SubTaskEventInfo_type** a);
+static void									disposeSubTaskEventInfo					(void* eventInfo);
 
 // HW Trigger eventInfo functions
-static SlaveHWTrigTaskEventInfo_type* 	init_SlaveHWTrigTaskEventInfo_type 		(size_t slaveHWTrigIdx);
-static void								discard_SlaveHWTrigTaskEventInfo_type	(SlaveHWTrigTaskEventInfo_type** a);
-static void								disposeSlaveHWTrigTaskEventInfo			(void* eventInfo);
+static SlaveHWTrigTaskEventInfo_type* 		init_SlaveHWTrigTaskEventInfo_type 		(size_t slaveHWTrigIdx);
+static void									discard_SlaveHWTrigTaskEventInfo_type	(SlaveHWTrigTaskEventInfo_type** a);
+static void									disposeSlaveHWTrigTaskEventInfo			(void* eventInfo);
 
 // Determine type of Master and Slave HW Trigger Task Controller
-static BOOL						MasterHWTrigTaskHasChildSlaves	(TaskControl_type* taskControl);
-static BOOL						SlaveHWTrigTaskHasParentMaster	(TaskControl_type* taskControl); 
+static BOOL									MasterHWTrigTaskHasChildSlaves			(TaskControl_type* taskControl);
+static BOOL									SlaveHWTrigTaskHasParentMaster			(TaskControl_type* taskControl); 
 
 // Determine if HW Triggered Slaves from a HW Triggering Master are Armed
-static BOOL						HWTrigSlavesAreArmed			(TaskControl_type* master);
+static BOOL									HWTrigSlavesAreArmed					(TaskControl_type* master);
 
 // Reset Armed status of HW Triggered Slaves from the list of a Master HW Triggering Task Controller
-static void						ResetHWTrigSlavesArmedStatus	(TaskControl_type* master);
+static void									ResetHWTrigSlavesArmedStatus			(TaskControl_type* master);
 
 // VChan and Task Control binding
-static VChanCallbackData_type*	init_VChanCallbackData_type		(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr);
-static void						discard_VChanCallbackData_type	(VChanCallbackData_type** a);
-static void						disposeCmtTSQVChanEventInfo		(void* eventInfo);
+static VChanCallbackData_type*				init_VChanCallbackData_type				(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments fPtrAssignment, DataReceivedFptr_type DataReceivedFptr);
+static void									discard_VChanCallbackData_type			(VChanCallbackData_type** a);
+static void									disposeCmtTSQVChanEventInfo				(void* eventInfo);
 
 // Dims and undims recursively a Task Controller and all its SubTasks by calling the provided function pointer (i.e. dims/undims an entire Task Tree branch)
-static void						DimTaskTreeBranch 				(TaskControl_type* taskControl, EventPacket_type* eventPacket, BOOL dimmed);
+static void									DimTaskTreeBranch 						(TaskControl_type* taskControl, EventPacket_type* eventPacket, BOOL dimmed);
 
 // Clears recursively all data packets from the Sink VChans of all Task Controllers in a Task Tree Branch starting with the given Task Controller.
-static void						ClearTaskTreeBranchVChans		(TaskControl_type* taskControl);
+static void									ClearTaskTreeBranchVChans				(TaskControl_type* taskControl);
 
 //==============================================================================
 // Global variables
@@ -195,17 +205,17 @@ int 	mainThreadID;			// Main thread ID where UI callbacks are processed
 //==============================================================================
 // Global functions
 
-void 	CVICALLBACK TaskEventItemsInQueue 				(CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData);
+void CVICALLBACK 							TaskEventItemsInQueue 					(CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData);
 
-void 	CVICALLBACK TaskDataItemsInQueue 				(CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData);
+void CVICALLBACK 							TaskDataItemsInQueue 					(CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData);
 
-int 	CVICALLBACK ScheduleTaskEventHandler 			(void* functionData);
+int CVICALLBACK 							ScheduleTaskEventHandler 				(void* functionData);
 
-int 	CVICALLBACK ScheduleIterateFunction 			(void* functionData); 
+int CVICALLBACK 							ScheduleIterateFunction 				(void* functionData); 
 
-//void 	CVICALLBACK TaskEventHandlerExecutionCallback 	(CmtThreadPoolHandle poolHandle, CmtThreadFunctionID functionID, unsigned int event, int value, void *callbackData);
+//void CVICALLBACK 							TaskEventHandlerExecutionCallback 		(CmtThreadPoolHandle poolHandle, CmtThreadFunctionID functionID, unsigned int event, int value, void *callbackData);
 
-int 	CVICALLBACK TaskControlIterTimeout 				(int reserved, int timerId, int event, void *callbackData, int eventData1, int eventData2); 
+int CVICALLBACK 							TaskControlIterTimeout 					(int reserved, int timerId, int event, void *callbackData, int eventData1, int eventData2); 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller creation / destruction functions
@@ -227,84 +237,92 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 										ModuleEventFptr_type		ModuleEventFptr,
 										ErrorFptr_type				ErrorFptr)
 {
-	TaskControl_type* a = malloc (sizeof(TaskControl_type));
-	if (!a) return NULL;
+	TaskControl_type* tc = malloc (sizeof(TaskControl_type));
+	if (!tc) return NULL;
 	
-	a -> eventQ				= 0;
-	a -> eventQThreadLock	= 0;
-	a -> dataQs				= 0;
-	a -> subtasks			= 0;
-	a -> slaveHWTrigTasks	= 0;
+	tc -> eventQ							= 0;
+	tc -> eventQThreadLock					= 0;
+	tc -> dataQs							= 0;
+	tc -> subtasks							= 0;
+	tc -> slaveHWTrigTasks					= 0;
 	
-	if (CmtNewTSQ(N_TASK_EVENT_QITEMS, sizeof(EventPacket_type), 0, &a->eventQ) < 0)
+	if (CmtNewTSQ(N_TASK_EVENT_QITEMS, sizeof(EventPacket_type), 0, &tc->eventQ) < 0)
 		goto Error;
-	if (CmtNewLock(NULL, 0, &a->eventQThreadLock) < 0)
+	if (CmtNewLock(NULL, 0, &tc->eventQThreadLock) < 0)
 		goto Error;
 	
-	a -> dataQs				= ListCreate(sizeof(VChanCallbackData_type*));	
-	if (!a->dataQs) goto Error;
+	tc -> dataQs							= ListCreate(sizeof(VChanCallbackData_type*));	
+	if (!tc->dataQs) goto Error;
 		
-	a -> eventQThreadID		= CmtGetCurrentThreadID ();
-	a -> threadFunctionID	= 0;
+	tc -> eventQThreadID					= CmtGetCurrentThreadID ();
+	tc -> threadFunctionID					= 0;
 	// process items in queue events in the same thread that is used to initialize the task control (generally main thread)
-	CmtInstallTSQCallback(a->eventQ, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskEventItemsInQueue, a, a -> eventQThreadID, NULL); 
+	CmtInstallTSQCallback(tc->eventQ, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskEventItemsInQueue, tc, tc->eventQThreadID, NULL); 
 	
-	a -> subtasks			= ListCreate(sizeof(SubTask_type));
-	if (!a->subtasks) goto Error;
+	tc -> subtasks							= ListCreate(sizeof(SubTask_type));
+	if (!tc->subtasks) goto Error;
 	
-	a -> slaveHWTrigTasks	= ListCreate(sizeof(SlaveHWTrigTask_type));
-	if (!a->slaveHWTrigTasks) goto Error;
+	tc -> slaveHWTrigTasks					= ListCreate(sizeof(SlaveHWTrigTask_type));
+	if (!tc->slaveHWTrigTasks) goto Error;
 	
-	a -> taskName 				= StrDup(taskControllerName);
-	a -> moduleData				= moduleData;
-	a -> subtaskIdx				= 0;
-	a -> slaveHWTrigIdx			= 0;
-	a -> state					= TASK_STATE_UNCONFIGURED;
-	a -> oldState				= TASK_STATE_UNCONFIGURED;
-	a -> repeat					= 1;
-	a -> iterTimeout			= 0;								
-	a -> iterMode				= TASK_ITERATE_BEFORE_SUBTASKS_START;
-	a -> mode					= TASK_FINITE;
-	a -> currIterIdx			= 0;
-	a -> parenttask				= NULL;
-	a -> masterHWTrigTask		= NULL;
-	a -> logPanHandle			= 0;
-	a -> logBoxControlID		= 0;
-	a -> loggingEnabled			= FALSE;
-	a -> errorMsg				= NULL;
-	a -> waitBetweenIterations	= 0;
-	a -> abortFlag				= 0;
-	a -> abortIterationFlag		= FALSE;
-	a -> slaveArmedFlag			= FALSE;
-	a -> nIterationsFlag		= -1;
-	a -> iterationTimerID		= 0;
-	a -> UITCFlag				= FALSE;
+	tc -> taskName 							= StrDup(taskControllerName);
+	tc -> moduleData						= moduleData;
+	tc -> subtaskIdx						= 0;
+	tc -> slaveHWTrigIdx					= 0;
+	tc -> state								= TASK_STATE_UNCONFIGURED;
+	tc -> oldState							= TASK_STATE_UNCONFIGURED;
+	tc -> repeat							= 1;
+	tc -> iterTimeout						= 0;								
+	tc -> iterMode							= TASK_ITERATE_BEFORE_SUBTASKS_START;
+	tc -> mode								= TASK_FINITE;
+	tc -> currIterIdx						= 0;
+	tc -> parenttask						= NULL;
+	tc -> masterHWTrigTask					= NULL;
+	tc -> logPanHandle						= 0;
+	tc -> logBoxControlID					= 0;
+	tc -> loggingEnabled					= FALSE;
+	tc -> errorMsg							= NULL;
+	tc -> waitBetweenIterations				= 0;
+	tc -> abortFlag							= 0;
+	tc -> abortIterationFlag				= FALSE;
+	tc -> slaveArmedFlag					= FALSE;
+	tc -> nIterationsFlag					= -1;
+	tc -> iterationTimerID					= 0;
+	tc -> UITCFlag							= FALSE;
+	
+	// Data flow control
+	tc -> nSinksAttachedToStart				= 0;			
+	tc -> nSinksWaitingForDataToStart		= 0;	   	
+	tc -> nSinksAttachedToIterate			= 0;			
+	tc -> nSinksWaitingForDataToIterate		= 0;   	
+	tc -> nSinksAttachedToDone 				= 0;				
+	tc -> nSinksWaitingForDataToBeDone		= 0;	   	
 	
 	// task controller function pointers
-	a -> ConfigureFptr 			= ConfigureFptr;
-	a -> UnconfigureFptr		= UnconfigureFptr;
-	a -> IterateFptr			= IterateFptr;
-	a -> AbortIterationFptr		= AbortIterationFptr;
-	a -> StartFptr				= StartFptr;
-	a -> ResetFptr				= ResetFptr;
-	a -> DoneFptr				= DoneFptr;
-	a -> StoppedFptr			= StoppedFptr;
-	a -> DimUIFptr				= DimUIFptr;
-	a -> SetUITCModeFptr		= SetUITCModeFptr;
-	a -> ModuleEventFptr		= ModuleEventFptr;
-	a -> ErrorFptr				= ErrorFptr;
+	tc -> ConfigureFptr 					= ConfigureFptr;
+	tc -> UnconfigureFptr					= UnconfigureFptr;
+	tc -> IterateFptr						= IterateFptr;
+	tc -> AbortIterationFptr				= AbortIterationFptr;
+	tc -> StartFptr							= StartFptr;
+	tc -> ResetFptr							= ResetFptr;
+	tc -> DoneFptr							= DoneFptr;
+	tc -> StoppedFptr						= StoppedFptr;
+	tc -> DimUIFptr							= DimUIFptr;
+	tc -> SetUITCModeFptr					= SetUITCModeFptr;
+	tc -> ModuleEventFptr					= ModuleEventFptr;
+	tc -> ErrorFptr							= ErrorFptr;
 	      
 	
-	return a;
+	return tc;
 	
 	Error:
 	
-	if (a->eventQ) 				CmtDiscardTSQ(a->eventQ);
-	if (a->eventQThreadLock)	CmtDiscardLock(a->eventQThreadLock);
-	if (a->dataQs)	 			ListDispose(a->dataQs);
-	if (a->subtasks)    		ListDispose(a->subtasks);
-	if (a->slaveHWTrigTasks)	ListDispose(a->slaveHWTrigTasks);
-	OKfree(a);
+	if (tc->eventQ) 				CmtDiscardTSQ(tc->eventQ);
+	if (tc->eventQThreadLock)		CmtDiscardLock(tc->eventQThreadLock);
+	if (tc->dataQs)	 				ListDispose(tc->dataQs);
+	if (tc->subtasks)    			ListDispose(tc->subtasks);
+	if (tc->slaveHWTrigTasks)		ListDispose(tc->slaveHWTrigTasks);
+	OKfree(tc);
 	
 	return NULL;
 }
@@ -536,72 +554,232 @@ ListType GetTaskControlSlaveHWTrigTasks (TaskControl_type* taskControl)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, TaskVChanFuncAssign_type VChanFunc)
+int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, VChanTCFPtrAssignments fPtrAssignment)
 {
+#define 	AddSinkVChan_Err_OutOfMemory				-1
+#define		AddSinkVChan_Err_SinkAlreadyAssigned		-2
+#define		AddSinkVChan_Err_TaskControllerIsActive		-3				// Task Controller must not be executing when a Sink VChan is added to it
 	// check if Sink VChan is already assigned to the Task Controller
-	VChanCallbackData_type**	VChanTSQDataPtrPtr;
+	VChanCallbackData_type**	VChanTSQDataPtr;
 	size_t 						nItems = ListNumItems(taskControl->dataQs);
 	for (size_t i = 1; i <= nItems; i++) {
-		VChanTSQDataPtrPtr = ListGetPtrToItem(taskControl->dataQs, i);
-		if ((*VChanTSQDataPtrPtr)->sinkVChan == sinkVChan) return -2;
+		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
+		if ((*VChanTSQDataPtr)->sinkVChan == sinkVChan) return AddSinkVChan_Err_SinkAlreadyAssigned;
 	}
 	
-	CmtTSQHandle				tsqID 				= GetSinkVChanTSQHndl(sinkVChan);
-	VChanCallbackData_type*		VChanTSQDataPtr		= init_VChanCallbackData_type(taskControl, sinkVChan, DataReceivedFptr);
+	// check if Task Controller is currently executing
+	if (!(taskControl->state == TASK_STATE_UNCONFIGURED || taskControl->state == TASK_STATE_CONFIGURED || 
+		  taskControl->state == TASK_STATE_INITIAL || taskControl->state == TASK_STATE_DONE || taskControl->state == TASK_STATE_ERROR))
+		return AddSinkVChan_Err_TaskControllerIsActive;
 	
-	if (!VChanTSQDataPtr) return -1;
-	if (!ListInsertItem(taskControl->dataQs, &VChanTSQDataPtr, END_OF_LIST)) 
-		return -1;
+	CmtTSQHandle				tsqID 				= GetSinkVChanTSQHndl(sinkVChan);
+	VChanCallbackData_type*		VChanTSQData		= init_VChanCallbackData_type(taskControl, sinkVChan, fPtrAssignment, DataReceivedFptr);
+	
+	if (!VChanTSQData) return AddSinkVChan_Err_OutOfMemory;
+	if (!ListInsertItem(taskControl->dataQs, &VChanTSQData, END_OF_LIST)) 
+		return AddSinkVChan_Err_OutOfMemory;
 	
 	// add callback
 	// process items in queue events in the same thread that is used to initialize the task control (generally main thread)
-	CmtInstallTSQCallback(tsqID, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskDataItemsInQueue, VChanTSQDataPtr, taskControl -> eventQThreadID, &VChanTSQDataPtr->itemsInQueueCBID); 
+	CmtInstallTSQCallback(tsqID, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskDataItemsInQueue, VChanTSQData, taskControl -> eventQThreadID, &VChanTSQData->itemsInQueueCBID);
+	
+	// attach Sink to Task Controller function pointer, i.e. the execution of the function pointer depends on the required data to arrive to the sink
+	switch (fPtrAssignment) {
+			
+		case TASK_VCHAN_FUNC_NONE:
+			// do nothing
+			break;
+			
+		case TASK_VCHAN_FUNC_START:
+			taskControl->nSinksAttachedToStart++;
+			break;
+			
+		case TASK_VCHAN_FUNC_ITERATE:
+			taskControl->nSinksAttachedToIterate++;
+			break;
+			
+		case TASK_VCHAN_FUNC_DONE:
+			taskControl->nSinksAttachedToDone++;
+			break;
+	}
 	
 	return 0;
 }
 
+int ChangeSinkVChanTCFptrAssignment (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments newFPtrAssignment)
+{
+#define		ChangeSinkVChanTCFptrAssignment_Err_TaskControllerIsActive		-1
+#define		ChangeSinkVChanTCFptrAssignment_Err_SinkNotFound				-2
+	
+	// check if Task Controller is currently executing
+	if (!(taskControl->state == TASK_STATE_UNCONFIGURED || taskControl->state == TASK_STATE_CONFIGURED || 
+		  taskControl->state == TASK_STATE_INITIAL || taskControl->state == TASK_STATE_DONE || taskControl->state == TASK_STATE_ERROR))
+		return ChangeSinkVChanTCFptrAssignment_Err_TaskControllerIsActive;
+	
+	VChanCallbackData_type**	VChanTSQDataPtr;
+	size_t						nDataQs					= ListNumItems(taskControl->dataQs);
+	
+	for (size_t i = 1; i <= nDataQs; i++) {
+		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
+		if ((*VChanTSQDataPtr)->sinkVChan == sinkVChan) {
+			
+			// remove old Fptr assignment
+			switch ((*VChanTSQDataPtr)->fPtrAssignment) {
+			
+				case TASK_VCHAN_FUNC_NONE:
+					// do nothing
+					break;
+			
+				case TASK_VCHAN_FUNC_START:
+					taskControl->nSinksAttachedToStart--;
+					break;
+			
+				case TASK_VCHAN_FUNC_ITERATE:
+					taskControl->nSinksAttachedToIterate--;
+					break;
+			
+				case TASK_VCHAN_FUNC_DONE:
+					taskControl->nSinksAttachedToDone--;
+					break;
+			}
+			
+			// add new Fptr assignment
+			(*VChanTSQDataPtr)->fPtrAssignment = newFPtrAssignment;
+			switch (newFPtrAssignment) {
+			
+				case TASK_VCHAN_FUNC_NONE:
+					// do nothing
+					break;
+			
+				case TASK_VCHAN_FUNC_START:
+					taskControl->nSinksAttachedToStart++;
+					break;
+			
+				case TASK_VCHAN_FUNC_ITERATE:
+					taskControl->nSinksAttachedToIterate++;
+					break;
+			
+				case TASK_VCHAN_FUNC_DONE:
+					taskControl->nSinksAttachedToDone++;
+					break;
+			}
+		
+			return 0;
+		}
+		
+	}
+	
+	
+	return ChangeSinkVChanTCFptrAssignment_Err_SinkNotFound;  // Sink VChan not found
+}
+
 int	RemoveSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
 {
-	VChanCallbackData_type**	VChanTSQDataPtrPtr;
-	size_t						nDataQs				= ListNumItems(taskControl->dataQs);
+#define		RemoveSinkVChan_Err_SinkNotFound				-1
+#define		RemoveSinkVChan_Err_TaskControllerIsActive		-2
+	
+	VChanCallbackData_type**	VChanTSQDataPtr;
+	size_t						nDataQs					= ListNumItems(taskControl->dataQs);
+	
+	
+	// check if Task Controller is active
+	if (!(taskControl->state == TASK_STATE_UNCONFIGURED || taskControl->state == TASK_STATE_CONFIGURED || 
+		  taskControl->state == TASK_STATE_INITIAL || taskControl->state == TASK_STATE_DONE || taskControl->state == TASK_STATE_ERROR))
+		return RemoveSinkVChan_Err_TaskControllerIsActive;
+	
 	for (size_t i = 1; i <= nDataQs; i++) {
-		VChanTSQDataPtrPtr = ListGetPtrToItem(taskControl->dataQs, i);
-		if ((*VChanTSQDataPtrPtr)->sinkVChan == sinkVChan) {
+		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
+		if ((*VChanTSQDataPtr)->sinkVChan == sinkVChan) {
 			// remove queue Task Controller callback
-			CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtrPtr)->sinkVChan), (*VChanTSQDataPtrPtr)->itemsInQueueCBID);
+			CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtr)->sinkVChan), (*VChanTSQDataPtr)->itemsInQueueCBID);
+			
+			// disconnect VChan from Task Controller callbacks
+			switch((*VChanTSQDataPtr)->fPtrAssignment) {
+				
+					case TASK_VCHAN_FUNC_NONE:
+						// do nothing
+						break;
+			
+					case TASK_VCHAN_FUNC_START:
+						taskControl->nSinksAttachedToStart--;
+						break;
+			
+					case TASK_VCHAN_FUNC_ITERATE:
+						taskControl->nSinksAttachedToIterate--;
+						break;
+			
+					case TASK_VCHAN_FUNC_DONE:
+						taskControl->nSinksAttachedToDone--;
+						break;
+					
+			}
+			
 			// free memory for queue item
-			discard_VChanCallbackData_type(VChanTSQDataPtrPtr);
+			discard_VChanCallbackData_type(VChanTSQDataPtr);
 			// and remove from queue
 			ListRemoveItem(taskControl->dataQs, 0, i);
 			return 0; 	// Sink VChan found and removed
 		}
 	}
 	
-	return -1;			// Sink VChan not found
+	return RemoveSinkVChan_Err_SinkNotFound;			// Sink VChan not found
 }
 
-void RemoveAllSinkVChans (TaskControl_type* taskControl)
+int RemoveAllSinkVChans (TaskControl_type* taskControl)
 {
-	VChanCallbackData_type** 	VChanTSQDataPtrPtr;
+#define		RemoveAllSinkVChans_Err_TaskControllerIsActive		-1
+	
+	// check if Task Controller is active
+	if (!(taskControl->state == TASK_STATE_UNCONFIGURED || taskControl->state == TASK_STATE_CONFIGURED || 
+		  taskControl->state == TASK_STATE_INITIAL || taskControl->state == TASK_STATE_DONE || taskControl->state == TASK_STATE_ERROR))
+		return RemoveAllSinkVChans_Err_TaskControllerIsActive;
+	
+	VChanCallbackData_type** 	VChanTSQDataPtr;
 	size_t 						nItems = ListNumItems(taskControl->dataQs);
+	
 	for (size_t i = 1; i <= nItems; i++) {
-		VChanTSQDataPtrPtr = ListGetPtrToItem(taskControl->dataQs, i);
+		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
 		// remove queue Task Controller callback
-		CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtrPtr)->sinkVChan), (*VChanTSQDataPtrPtr)->itemsInQueueCBID);
+		CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtr)->sinkVChan), (*VChanTSQDataPtr)->itemsInQueueCBID);
+		
+		// disconnect VChan from Task Controller callbacks
+		switch((*VChanTSQDataPtr)->fPtrAssignment) {
+			
+				case TASK_VCHAN_FUNC_NONE:
+					// do nothing
+					break;
+		
+				case TASK_VCHAN_FUNC_START:
+					taskControl->nSinksAttachedToStart--;
+					break;
+		
+				case TASK_VCHAN_FUNC_ITERATE:
+					taskControl->nSinksAttachedToIterate--;
+					break;
+		
+				case TASK_VCHAN_FUNC_DONE:
+					taskControl->nSinksAttachedToDone--;
+					break;
+				
+		}
+			
 		// free memory for queue item
-		discard_VChanCallbackData_type(VChanTSQDataPtrPtr);
+		discard_VChanCallbackData_type(VChanTSQDataPtr);
 	}
+	
 	ListClear(taskControl->dataQs);
+	
+	return 0;
 }
 
 void DisconnectAllSinkVChans (TaskControl_type* taskControl)
 {
-	VChanCallbackData_type** 	VChanTSQDataPtrPtr;
+	VChanCallbackData_type** 	VChanTSQDataPtr;
 	size_t 						nItems = ListNumItems(taskControl->dataQs);
 	for (size_t i = 1; i <= nItems; i++) {
-		VChanTSQDataPtrPtr = ListGetPtrToItem(taskControl->dataQs, i);
+		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
 		// disconnect Sink from Source
-		VChan_Disconnect((VChan_type*)(*VChanTSQDataPtrPtr)->sinkVChan);
+		VChan_Disconnect((VChan_type*)(*VChanTSQDataPtr)->sinkVChan);
 	}
 }
 
@@ -748,13 +926,14 @@ static void	ClearTaskTreeBranchVChans (TaskControl_type* taskControl)
 	}
 }
 
-static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr)
+static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments fPtrAssignment, DataReceivedFptr_type DataReceivedFptr)
 {
-	VChanCallbackData_type* VChanCB= malloc(sizeof(VChanCallbackData_type));
+	VChanCallbackData_type* VChanCB = malloc(sizeof(VChanCallbackData_type));
 	if (!VChanCB) return NULL;
 	
 	VChanCB->sinkVChan 				= sinkVChan;
 	VChanCB->taskControl  			= taskControl;
+	VChanCB->fPtrAssignment			= fPtrAssignment;
 	VChanCB->DataReceivedFptr		= DataReceivedFptr;
 	VChanCB->itemsInQueueCBID		= 0;
 	

@@ -40,7 +40,7 @@ typedef BOOL	(* DisconnectVChanFptr_type)		(VChan_type* vchan);
 // Globals
 
 	// local global list of VChans linking UpdateSwitchboard to Switchboard_CB
-ListType						SwitchboardVChanList	= 0;  
+ListType							SwitchboardVChanList	= 0;  
 
 //---------------------------------------------------------------------------------------------------
 // Base VChan
@@ -52,32 +52,32 @@ struct VChan {
 	// Identification
 	//-----------------------
 	
-	char*						name;					// Name of virtual chanel. 
-	VChanDataFlow_type 			dataFlow;   			// Direction of data flow into or out of the channel.
-	BOOL						useAsReference;			// If TRUE and VChan is a Source type, then all Sinks pick up additional VChan properties from this VChan.
-														// If TRUE and VChan is Sink type, a connected Source and all its Sinks pick up additional properties from this VChan.
-														// If FALSE (default), this VChan can pick up additional properties from other VChans. 
+	char*							name;					// Name of virtual chanel. 
+	VChanDataFlow_type 				dataFlow;   			// Direction of data flow into or out of the channel.
+	BOOL							useAsReference;			// If TRUE and VChan is a Source type, then all Sinks pick up additional VChan properties from this VChan.
+															// If TRUE and VChan is Sink type, a connected Source and all its Sinks pick up additional properties from this VChan.
+															// If FALSE (default), this VChan can pick up additional properties from other VChans. 
 														
 	//-----------------------	
 	// Source code connection
 	//-----------------------
-	void*						VChanOwner;				// Reference to object that owns the VChan.
+	void*							VChanOwner;				// Reference to object that owns the VChan.
 	
 	//-----------------------
 	// Methods
 	//-----------------------
 	
-	DiscardVChanFptr_type		DiscardFptr;			// Discards VChan type-specific data. 
+	DiscardVChanFptr_type			DiscardFptr;			// Discards VChan type-specific data. 
 	
-	DisconnectVChanFptr_type	DisconnectFptr;			// Disconnects a VChan.
+	DisconnectVChanFptr_type		DisconnectFptr;			// Disconnects a VChan.
 	
 	//-----------------------
 	// Callbacks
 	//-----------------------
 	
-	Connected_CBFptr_type		Connected_CBFptr;		// Callback when another VChan has been connected to this one.
+	Connected_CBFptr_type			Connected_CBFptr;		// Callback when another VChan has been connected to this one.
 	
-	Disconnected_CBFptr_type	Disconnected_CBFptr;   	// Callback when another VChan has been disconnected from this one.
+	Disconnected_CBFptr_type		Disconnected_CBFptr;   	// Callback when another VChan has been disconnected from this one.
 	
 };
 
@@ -91,17 +91,17 @@ struct SinkVChan {
 	// Base class
 	//-----------------------
 	
-	VChan_type					baseClass;				// Must be first member to allow inheritance from parent
+	VChan_type						baseClass;				// Must be first member to allow inheritance from parent
 	
 	//-----------------------	
 	// Data
 	//-----------------------
 	
-	DLDataTypes*				dataTypes;				// Array of packet data types of DLDataTypes that the sink may receive.
-	size_t						nDataTypes;				// Number of data types that the Sink VChan supports.
-	SourceVChan_type*			sourceVChan;			// SourceVChan attached to this sink.
-	CmtTSQHandle       			tsqHndl; 				// Thread safe queue handle to receive incoming data.
-	double						writeTimeout;
+	DLDataTypes*					dataTypes;				// Array of packet data types of DLDataTypes that the sink may receive.
+	size_t							nDataTypes;				// Number of data types that the Sink VChan supports.
+	SourceVChan_type*				sourceVChan;			// SourceVChan attached to this sink.
+	CmtTSQHandle       				tsqHndl; 				// Thread safe queue handle to receive incoming data.
+	double							writeTimeout;
 	
 };
 
@@ -115,14 +115,14 @@ struct SourceVChan {
 	// Base class
 	//-----------------------
 	
-	VChan_type					baseClass;				// Must be first member to allow inheritance from parent
+	VChan_type						baseClass;				// Must be first member to allow inheritance from parent
 	
 	//-----------------------	
 	// Data
 	//-----------------------
 	
-	DLDataTypes					dataType;				// Type of data packet which goes through the channel.
-	ListType					sinkVChans;				// Connected Sink VChans. List of SinkVChan_type*
+	DLDataTypes						dataType;				// Type of data packet which goes through the channel.
+	ListType						sinkVChans;				// Connected Sink VChans. List of SinkVChan_type*
 											
 };
 
@@ -297,11 +297,11 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 									 Connected_CBFptr_type		Connected_CBFptr,
 									 Disconnected_CBFptr_type	Disconnected_CBFptr)
 {
-	SinkVChan_type*	vchan = malloc(sizeof(SinkVChan_type));
+	SinkVChan_type*	vchan 	= malloc(sizeof(SinkVChan_type));
 	if (!vchan) return NULL;
 	
 	// init
-	vchan->dataTypes	= NULL;
+	vchan->dataTypes		= NULL;
 	
 	// init base VChan type
 	if (init_VChan_type ((VChan_type*) vchan, name, VChan_Sink, VChanOwner, 
@@ -309,17 +309,17 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 	
 		// INIT DATA
 		
-	vchan->sourceVChan 	= NULL;
-	vchan->nDataTypes	= nDataTypes;
+	vchan->sourceVChan 		= NULL;
+	vchan->nDataTypes		= nDataTypes;
 	// copy data types
-	vchan->dataTypes	= malloc(nDataTypes * sizeof(DLDataTypes));
+	vchan->dataTypes		= malloc(nDataTypes * sizeof(DLDataTypes));
 	if (!vchan->dataTypes) goto Error;
 	memcpy(vchan->dataTypes, dataTypes, nDataTypes*sizeof(DLDataTypes));
 	
 	// init thread safe queue
 	CmtNewTSQ(DEFAULT_SinkVChan_QueueSize, sizeof(DataPacket_type*), 0, &vchan->tsqHndl); 
 	// init write timeout (time to keep on trying to write a data packet to the queue)
-	vchan->writeTimeout = DEFAULT_SinkVChan_QueueWriteTimeout;
+	vchan->writeTimeout 	= DEFAULT_SinkVChan_QueueWriteTimeout;
 	
 	return vchan;
 	Error:

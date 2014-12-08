@@ -105,7 +105,7 @@ static void					DimTC					(TaskControl_type* taskControl, BOOL dimmed);
 
 static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg);
 
-static FCallReturn_type*	DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+static FCallReturn_type*	DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
 
 static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
@@ -471,7 +471,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 }
 
 
-static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
 {
 	
 	DataStorage_type*	ds					= GetTaskControlModuleData(taskControl);

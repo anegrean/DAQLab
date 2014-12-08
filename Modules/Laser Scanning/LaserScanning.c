@@ -689,7 +689,7 @@ static FCallReturn_type* 			ResetTC_NonResGalvoCal 							(TaskControl_type* tas
 
 static void							DimTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL dimmed);
 
-static FCallReturn_type* 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+static FCallReturn_type* 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
 
 static void 						ErrorTC_NonResGalvoCal 							(TaskControl_type* taskControl, char* errorMsg);
 
@@ -714,7 +714,7 @@ static FCallReturn_type* 			ResetTC_RectRaster 								(TaskControl_type* taskCo
 
 static void							DimTC_RectRaster								(TaskControl_type* taskControl, BOOL dimmed);
 
-static FCallReturn_type* 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+static FCallReturn_type* 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
 
 static void 						ErrorTC_RectRaster 								(TaskControl_type* taskControl, char* errorMsg);
 
@@ -5268,7 +5268,7 @@ static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 	SetCtrlAttribute(calSetPanHndl, Cal_Resolution, ATTR_DIMMED, dimmed); 
 }
 
-static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
 {
 	ActiveNonResGalvoCal_type* 	cal 					= GetTaskControlModuleData(taskControl);
 	DataPacket_type**			dataPackets				= NULL;
@@ -5806,7 +5806,7 @@ static void	DimTC_RectRaster (TaskControl_type* taskControl, BOOL dimmed)
 	
 }
 
-static FCallReturn_type* DataReceivedTC_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+static FCallReturn_type* DataReceivedTC_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	

@@ -330,17 +330,20 @@ PulseTrain_type* CopyPulseTrain(PulseTrain_type* pulsetrain)
 	switch (pulseTrainType) {
 		case PulseTrain_Freq:
 			newpulsetrain   = (PulseTrain_type*) init_PulseTrainFreqTiming_type(GetPulseTrainMode(pulsetrain), GetPulseTrainIdleState(pulsetrain), GetPulseTrainNPulses(pulsetrain), 
-									  GetPulseTrainFreqTimingDutyCycle(pulsetrain), GetPulseTrainFreqTimingFreq(pulsetrain), GetPulseTrainFreqTimingDutyCycle(pulsetrain)); 
+									  GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)pulsetrain), GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)pulsetrain), 
+									  GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)pulsetrain)); 
 			break;
 			
 		case PulseTrain_Time:
 			newpulsetrain   = (PulseTrain_type*) init_PulseTrainTimeTiming_type(GetPulseTrainMode(pulsetrain), GetPulseTrainIdleState(pulsetrain), GetPulseTrainNPulses(pulsetrain), 
-									  GetPulseTrainTimeTimingHighTime(pulsetrain), GetPulseTrainTimeTimingLowTime(pulsetrain), GetPulseTrainFreqTimingDutyCycle(pulsetrain)); 
+									  GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)pulsetrain), GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)pulsetrain), 
+									  GetPulseTrainFreqTimingDutyCycle((PulseTrainTimeTiming_type*)pulsetrain)); 
 			break;
 			
 		case PulseTrain_Ticks:
 			newpulsetrain   = (PulseTrain_type*) init_PulseTrainTickTiming_type(GetPulseTrainMode(pulsetrain), GetPulseTrainIdleState(pulsetrain), GetPulseTrainNPulses(pulsetrain),
-									  GetPulseTrainTickTimingHighTicks(pulsetrain), GetPulseTrainTickTimingLowTicks(pulsetrain), GetPulseTrainTickTimingDelayTicks(pulsetrain));  
+									  GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)pulsetrain), GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)pulsetrain), 
+									  GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)pulsetrain));  
 			break;
 	}
 	

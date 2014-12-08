@@ -131,23 +131,23 @@ struct VUPhotonCtr {
 		// Override: Required, provides hardware specific operation of VUPhotonCtr.
 			
 		// Sets the Mode of the Selected PMT
-	int					(* SetPMT_Mode) 			(VUPhotonCtr_type* self, int PMTnr, PMT_Mode_type mode);
+	int					(* SetPMT_Mode) 				(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
 		// Sets the Fan of the Selected PMT ON or OFF
-	int					(* SetPMT_Fan) 				(VUPhotonCtr_type* self, int PMTnr, BOOL value);
+	int					(* SetPMT_Fan) 					(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
 		// Sets the Cooling of the Selected PMT ON or OFF
-	int					(* SetPMT_Cooling) 			(VUPhotonCtr_type* self, int PMTnr, BOOL value);
+	int					(* SetPMT_Cooling) 				(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
 		// Sets the Gain and Threshold of the Selected PMT
-	int					(* SetPMT_GainThresh) 		(VUPhotonCtr_type* self, int PMTnr, double gain,double threshold);
+	int					(* SetPMT_GainThresh) 			(VUPhotonCtr_type* vupc, int PMTnr, double gain, double threshold);
 		// Updates status display of Photon Counter from structure data
-	int					(* UpdateVUPhotonCtrDisplay) (VUPhotonCtr_type* self);
+	int					(* UpdateVUPhotonCtrDisplay) 	(VUPhotonCtr_type* vupc);
 
-	void				(* DimWhenRunning)			(VUPhotonCtr_type* self, BOOL dimmed);
+	void				(* DimWhenRunning)				(VUPhotonCtr_type* vupc, BOOL dimmed);
 		// Sets the Test Mode of the PMT Controller
-	int					(* SetTestMode) 			(VUPhotonCtr_type* self, BOOL value);
+	int					(* SetTestMode) 				(VUPhotonCtr_type* vupc, BOOL value);
 		// Resets the PMT Controller
-	int					(* ResetController) 		(VUPhotonCtr_type* self);
+	int					(* ResetController) 			(VUPhotonCtr_type* vupc);
 		 // Resets the Fifo of thePMT Controller
-	int					(* ResetFifo) 		        (VUPhotonCtr_type* self);
+	int					(* ResetFifo) 		        	(VUPhotonCtr_type* vupc);
 };
 
 //==============================================================================
@@ -190,18 +190,18 @@ static void							PulseTrainVChan_Connected 		(VChan_type* self, void* VChanOwne
 	// pulsetrain command VChan disconnected callback
 static void							PulseTrainVChan_Disconnected 	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
-static FCallReturn_type* 			PulseTrainDataReceivedTC		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+static FCallReturn_type* 			PulseTrainDataReceivedTC		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
 
 
-static int 							PMT_Set_Mode 					(int PMTnr, PMT_Mode_type mode);
-static int 							PMT_Set_Fan 					(int PMTnr, BOOL value);
-static int 							PMT_Set_Cooling 				(int PMTnr, BOOL value);
-static int 							PMT_Set_GainThresh 				(int PMTnr, float gain,float threshold);
-static int 							PMTController_UpdateDisplay 	(VUPhotonCtr_type* self);
-//void 								PMTController_DimWhenRunning 	(VUPhotonCtr_type* self, BOOL dimmed);
-static int 							PMTController_SetTestMode		(BOOL testmode);
+static int 							PMT_Set_Mode 					(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
+static int 							PMT_Set_Fan 					(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
+static int 							PMT_Set_Cooling 				(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
+static int 							PMT_Set_GainThresh 				(VUPhotonCtr_type* vupc, int PMTnr, double gain, double threshold);
+static int 							PMTController_UpdateDisplay 	(VUPhotonCtr_type* vupc);
+//void 								PMTController_DimWhenRunning 	(VUPhotonCtr_type* vupc, BOOL dimmed);
+static int 							PMTController_SetTestMode		(VUPhotonCtr_type* vupc, BOOL testmode);
 static int 							PMTController_Reset				(VUPhotonCtr_type* vupc);
-static int 							PMTController_ResetFifo			(void);
+static int 							PMTController_ResetFifo			(VUPhotonCtr_type* vupc);
 
 
 
@@ -235,7 +235,6 @@ static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, Tas
 //==============================================================================
 // Global variables
 
-extern TaskExecutionLog_type* TaskExecutionLog;
 
 //==============================================================================
 // Global functions for module data management
@@ -265,9 +264,6 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, UnConfigureTC,IterateTC, AbortIterationTC, StartTC, ResetTC,
 								DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
-	
-	// test adrian
-	SetTaskControlLog(tc, TaskExecutionLog);
 	
 	//------------------------------------------------------------
 
@@ -357,7 +353,7 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 		DiscardPanel(vupc->counterPanHndl);
 	
 	// discard pulsetrain SinkVChan   
-	if (vupc->pulseTrainVchan) discard_VChan_type(vupc->pulseTrainVchan);
+	if (vupc->pulseTrainVchan) discard_VChan_type((VChan_type**)&vupc->pulseTrainVchan);
 
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
@@ -670,7 +666,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 
 
 
-static int PMT_Set_Mode (int PMTnr, PMT_Mode_type mode)
+static int PMT_Set_Mode (VUPhotonCtr_type* self, int PMTnr, PMT_Mode_type mode)
 {
 	int error = 0;
 
@@ -680,7 +676,7 @@ static int PMT_Set_Mode (int PMTnr, PMT_Mode_type mode)
 }
 
 
-static int PMT_Set_Fan (int PMTnr, BOOL value)
+static int PMT_Set_Fan (VUPhotonCtr_type* self, int PMTnr, BOOL value)
 {
 	int error = 0;
 
@@ -689,7 +685,7 @@ static int PMT_Set_Fan (int PMTnr, BOOL value)
 	return error;
 }
 
-static int PMT_Set_Cooling (int PMTnr, BOOL value)
+static int PMT_Set_Cooling (VUPhotonCtr_type* self, int PMTnr, BOOL value)
 {
 	int error = 0;
 
@@ -721,7 +717,7 @@ int ConvertVoltsToBits(float value_in_volts)
 }
 
 
-static int PMT_Set_GainThresh ( int PMTnr, float gain,float threshold)
+static int PMT_Set_GainThresh (VUPhotonCtr_type* self, int PMTnr, double gain, double threshold)
 {
 	int error = 0;
 	unsigned int gain_in_bits;
@@ -746,7 +742,7 @@ int ResetActions(VUPhotonCtr_type* 	vupc)
 }
 
 
-static int PMTController_SetTestMode(BOOL testmode)
+static int PMTController_SetTestMode (VUPhotonCtr_type* vupc, BOOL testmode)
 {
 	int error=0;
 
@@ -755,7 +751,7 @@ static int PMTController_SetTestMode(BOOL testmode)
 	return error;
 }
 
-static int PMTController_Reset(VUPhotonCtr_type* vupc)
+static int PMTController_Reset (VUPhotonCtr_type* vupc)
 {
 	int error=0;
 
@@ -765,7 +761,7 @@ static int PMTController_Reset(VUPhotonCtr_type* vupc)
 }
 
 
-static int PMTController_ResetFifo(void)
+static int PMTController_ResetFifo (VUPhotonCtr_type* vupc)
 {
 	int error=0;
 
@@ -879,7 +875,7 @@ static int CVICALLBACK VUPCChannel_CB (int panel, int control, int event, void *
 
 				case VUPCChan_Mode:
 					GetCtrlVal(panel,control,&intval);
-					error=PMT_Set_Mode ( chan->chanIdx,intval);
+					error=PMT_Set_Mode (chan->vupcInstance, chan->chanIdx,intval);
 					break;
 
 				case VUPCChan_Gain:
@@ -888,7 +884,7 @@ static int CVICALLBACK VUPCChannel_CB (int panel, int control, int event, void *
 					//get threshold value
 					GetCtrlVal(panel,control-1,&thresh_mV);  //relies on threshold control being 1 lower than gain control (Lex; nasty but works)
 					thresh=thresh_mV/1000;	   				 //convert to volts
-					error=PMT_Set_GainThresh ( chan->chanIdx,gain,thresh);
+					error=PMT_Set_GainThresh (chan->vupcInstance, chan->chanIdx,gain,thresh);
 					break;
 
 				case VUPCChan_Threshold:
@@ -898,17 +894,17 @@ static int CVICALLBACK VUPCChannel_CB (int panel, int control, int event, void *
 					//get gain value
 					GetCtrlVal(panel,control+1,&gain);      //relies on threshold control being 1 lower than gain control (Lex; nasty but works)
 
-					error=PMT_Set_GainThresh (chan->chanIdx,gain,thresh);
+					error=PMT_Set_GainThresh (chan->vupcInstance, chan->chanIdx,gain,thresh);
 					break;
 
 				case VUPCChan_Cooling:
 					GetCtrlVal(panel,control,&intval);
-					error=PMT_Set_Cooling (chan->chanIdx,intval);
+					error=PMT_Set_Cooling (chan->vupcInstance, chan->chanIdx,intval);
 					break;
 
 				case VUPCChan_Fan:
 					GetCtrlVal(panel,control,&intval);
-					error=PMT_Set_Fan (chan->chanIdx,intval);
+					error=PMT_Set_Fan (chan->vupcInstance, chan->chanIdx,intval);
 					break;
 			}
 			PMTController_UpdateDisplay(chan->vupcInstance);
@@ -1002,7 +998,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						sprintf(buff, "Ch. %d", eventData2+1);
 						SetCtrlAttribute(chan->panHndl, VUPCChan_Mode, ATTR_LABEL_TEXT, buff);
 						// register VChan with DAQLab
-						DLRegisterVChan((DAQLabModule_type*)chan->vupcInstance, chan->VChan);
+						DLRegisterVChan((DAQLabModule_type*)chan->vupcInstance, (VChan_type*)chan->VChan);
 						
 						
 						// connect module data and user interface callbackFn to all direct controls in the panel
@@ -1014,7 +1010,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 							DLDataTypes allowedPacketTypes[] = {DL_PulseTrain_Freq, DL_PulseTrain_Ticks, DL_PulseTrain_Time};
 							vupc->pulseTrainVchan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
 							// register VChan with DAQLab
-							DLRegisterVChan(vupc, vupc->pulseTrainVchan);	
+							DLRegisterVChan((DAQLabModule_type*)vupc, (VChan_type*)vupc->pulseTrainVchan);	
 							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVchan, PulseTrainDataReceivedTC, TASK_VCHAN_FUNC_NONE);  
 						}
 						// update main panel
@@ -1030,7 +1026,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						// get channel pointer
 						srcVChan = vupc->channels[eventData2]->VChan;
 						// unregister VChan from DAQLab framework
-						DLUnregisterVChan((DAQLabModule_type*)chan->vupcInstance, srcVChan);
+						DLUnregisterVChan((DAQLabModule_type*)chan->vupcInstance, (VChan_type*)srcVChan);
 						// discard channel data
 						discard_Channel_type(&vupc->channels[eventData2]);
 						// update channel list in the settings panel
@@ -1303,7 +1299,7 @@ static void	PulseTrainVChan_Disconnected (VChan_type* self, void* VChanOwner, VC
 	
 }
 
-static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
 {
 	
 	VUPhotonCtr_type* 	vupc				= GetTaskControlModuleData(taskControl);
@@ -1341,7 +1337,7 @@ static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl
 				dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);
 				pulsetrain=*(PulseTrain_type**)dataPacketDataPtr;
 				vupc->nSamples=GetPulseTrainNPulses(pulsetrain);
-				vupc->refNSamples=vupc->nSamples;  //?
+				*vupc->refNSamples = vupc->nSamples;  // changed by adrian, originally it was vupc->refNSamples = vupc->nSamples
 				pulsetrainmode=GetPulseTrainMode(pulsetrain); 
 				switch (pulsetrainmode){
 					case PulseTrain_Finite:

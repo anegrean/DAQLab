@@ -420,7 +420,7 @@ typedef void				(*SetUITCModeFptr_type)			(TaskControl_type* taskControl, BOOL U
 typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg);
 
 // Called when data is placed in a Task Controller Sink VChan.
-typedef FCallReturn_type*	(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+typedef FCallReturn_type*	(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
 
 // Called for passing custom module or device events that are not handled directly by the Task Controller.
 typedef FCallReturn_type*	(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);

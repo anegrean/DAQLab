@@ -71,7 +71,8 @@ typedef struct {
 typedef struct {
 	TaskControl_type* 			taskControl;
 	SinkVChan_type* 			sinkVChan;
-	VChanTCFPtrAssignments		fPtrAssignment;
+	VChanTCFPtrAssignments		fPtrAssignment;						// Task Controller Fptr assignment for which data must be received before it is executed.
+	BOOL						dataReceivedFlag;					// True if the VChan received the required data for proceeding with execution of the Start, Iterate or Done Fptrs.
 	DataReceivedFptr_type		DataReceivedFptr;
 	CmtTSQCallbackID			itemsInQueueCBID;
 } VChanCallbackData_type;
@@ -115,12 +116,8 @@ struct TaskControl {
 	
 	// Data flow control
 	size_t						nSinksAttachedToStart;				// Number of Sink VChans attached to the Start Task Controller function that NEED TO receive data before the Start function is called each time the TC is executed.
-	size_t						nSinksWaitingForDataToStart;	   	// Number of Sink VChans attached to the Start Task Controller function that STILL NEED TO receive data before the Start function is called.
 	size_t						nSinksAttachedToIterate;			// Number of Sink VChans attached to the Iterate Task Controller function that NEED TO receive data with each iteration before the Iterate function is called.
-	size_t						nSinksWaitingForDataToIterate;   	// Number of Sink VChans attached to the Iterate Task Controller function that STILL NEED TO receive data before the Iterate function is called.
 	size_t						nSinksAttachedToDone;				// Number of Sink VChans attached to the Done Task Controller function that NEED TO receive data before the Done function is called each time the TC is executed.
-	size_t						nSinksWaitingForDataToBeDone;	   	// Number of Sink VChans attached to the Done Task Controller function that STILL NEED TO receive data before the Done function is called.
-	
 	
 	// Event handler function pointers
 	ConfigureFptr_type			ConfigureFptr;
@@ -145,20 +142,20 @@ struct TaskControl {
 
 static void 								TaskEventHandler 						(TaskControl_type* taskControl); 
 
-// Use this function to change the state of a Task Controller
+	// Use this function to change the state of a Task Controller
 static int 									ChangeState 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState);
-// Use this function to carry out a Task Controller action using provided function pointers
+	// Use this function to carry out a Task Controller action using provided function pointers
 static ErrorMsg_type*						FunctionCall 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskFCall_type fID, void* fCallData); 
 
-// Formats a Task Controller log entry based on the action taken
+	// Formats a Task Controller log entry based on the action taken
 static void									ExecutionLogEntry						(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskControllerActions action, void* info);
 
-// Error formatting functions
+	// Error formatting functions
 static ErrorMsg_type* 						init_ErrorMsg_type 						(int errorID, const char errorOrigin[], const char errorDescription[]);
 static void									discard_ErrorMsg_type 					(ErrorMsg_type** a);
 static ErrorMsg_type*						FCallReturnToErrorMsg					(FCallReturn_type** fCallReturn, TaskFCall_type fID);
 
-// Task Controller iteration done return info when performing iteration in another thread
+	// Task Controller iteration done return info when performing iteration in another thread
 static void									disposeTCIterDoneInfo 					(void* eventInfo);
 
 
@@ -166,35 +163,38 @@ static char*								StateToString							(TaskStates_type state);
 static char*								EventToString							(TaskEvents_type event);
 static char*								FCallToString							(TaskFCall_type fcall);
 
-// SubTask eventInfo functions
+	// SubTask eventInfo functions
 static SubTaskEventInfo_type* 				init_SubTaskEventInfo_type 				(size_t subtaskIdx, TaskStates_type state);
 static void									discard_SubTaskEventInfo_type 			(SubTaskEventInfo_type** a);
 static void									disposeSubTaskEventInfo					(void* eventInfo);
 
-// HW Trigger eventInfo functions
+	// HW Trigger eventInfo functions
 static SlaveHWTrigTaskEventInfo_type* 		init_SlaveHWTrigTaskEventInfo_type 		(size_t slaveHWTrigIdx);
 static void									discard_SlaveHWTrigTaskEventInfo_type	(SlaveHWTrigTaskEventInfo_type** a);
 static void									disposeSlaveHWTrigTaskEventInfo			(void* eventInfo);
 
-// Determine type of Master and Slave HW Trigger Task Controller
+	// Determine type of Master and Slave HW Trigger Task Controller
 static BOOL									MasterHWTrigTaskHasChildSlaves			(TaskControl_type* taskControl);
 static BOOL									SlaveHWTrigTaskHasParentMaster			(TaskControl_type* taskControl); 
 
-// Determine if HW Triggered Slaves from a HW Triggering Master are Armed
+	// Determine if HW Triggered Slaves from a HW Triggering Master are Armed
 static BOOL									HWTrigSlavesAreArmed					(TaskControl_type* master);
 
-// Reset Armed status of HW Triggered Slaves from the list of a Master HW Triggering Task Controller
+	// Reset Armed status of HW Triggered Slaves from the list of a Master HW Triggering Task Controller
 static void									ResetHWTrigSlavesArmedStatus			(TaskControl_type* master);
 
-// VChan and Task Control binding
-static VChanCallbackData_type*				init_VChanCallbackData_type				(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments fPtrAssignment, DataReceivedFptr_type DataReceivedFptr);
-static void									discard_VChanCallbackData_type			(VChanCallbackData_type** a);
+	// VChan and Task Control binding
+static VChanCallbackData_type*				init_VChanCallbackData_type				(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments fPtrAssignment, DataReceivedFptr_type DataReceivedFptr, BOOL dataReceivedFlag);
+static void									discard_VChanCallbackData_type			(VChanCallbackData_type** VChanCBDataPtr);
 static void									disposeCmtTSQVChanEventInfo				(void* eventInfo);
 
-// Dims and undims recursively a Task Controller and all its SubTasks by calling the provided function pointer (i.e. dims/undims an entire Task Tree branch)
+	// Determines whether all Sink VChans attached to Start, Iterate or Done Fptrs have received the required data
+static BOOL									SinkVChansDataReceived					(TaskControl_type* taskControl, VChanTCFPtrAssignments fPtrAssignment);	
+
+	// Dims and undims recursively a Task Controller and all its SubTasks by calling the provided function pointer (i.e. dims/undims an entire Task Tree branch)
 static void									DimTaskTreeBranch 						(TaskControl_type* taskControl, EventPacket_type* eventPacket, BOOL dimmed);
 
-// Clears recursively all data packets from the Sink VChans of all Task Controllers in a Task Tree Branch starting with the given Task Controller.
+	// Clears recursively all data packets from the Sink VChans of all Task Controllers in a Task Tree Branch starting with the given Task Controller.
 static void									ClearTaskTreeBranchVChans				(TaskControl_type* taskControl);
 
 //==============================================================================
@@ -292,11 +292,8 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	
 	// Data flow control
 	tc -> nSinksAttachedToStart				= 0;			
-	tc -> nSinksWaitingForDataToStart		= 0;	   	
 	tc -> nSinksAttachedToIterate			= 0;			
-	tc -> nSinksWaitingForDataToIterate		= 0;   	
 	tc -> nSinksAttachedToDone 				= 0;				
-	tc -> nSinksWaitingForDataToBeDone		= 0;	   	
 	
 	// task controller function pointers
 	tc -> ConfigureFptr 					= ConfigureFptr;
@@ -573,7 +570,7 @@ int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, Data
 		return AddSinkVChan_Err_TaskControllerIsActive;
 	
 	CmtTSQHandle				tsqID 				= GetSinkVChanTSQHndl(sinkVChan);
-	VChanCallbackData_type*		VChanTSQData		= init_VChanCallbackData_type(taskControl, sinkVChan, fPtrAssignment, DataReceivedFptr);
+	VChanCallbackData_type*		VChanTSQData		= init_VChanCallbackData_type(taskControl, sinkVChan, fPtrAssignment, DataReceivedFptr, FALSE);
 	
 	if (!VChanTSQData) return AddSinkVChan_Err_OutOfMemory;
 	if (!ListInsertItem(taskControl->dataQs, &VChanTSQData, END_OF_LIST)) 
@@ -884,6 +881,48 @@ static void	disposeCmtTSQVChanEventInfo (void* eventInfo)
 	free(eventInfo);
 }
 
+static BOOL SinkVChansDataReceived (TaskControl_type* taskControl, VChanTCFPtrAssignments fPtrAssignment)
+{
+	size_t						nSinks 			= ListNumItems(taskControl->dataQs);
+	VChanCallbackData_type**	VChanCBPtr;
+	size_t						nDataReceived 	= 0;	// number of Sinks of a certain fPtrAssignment that have already received their required data
+	
+	for (size_t i = 1; i <= nSinks; i++) {
+		VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, i);
+		if ((*VChanCBPtr)->fPtrAssignment == fPtrAssignment && (*VChanCBPtr)->dataReceivedFlag)
+			nDataReceived++;
+	}
+	
+	switch (fPtrAssignment) {
+			
+		case TASK_VCHAN_FUNC_NONE:
+			
+			return TRUE;	// since no Sinks need to receive data, all required data has been received.
+			
+		case TASK_VCHAN_FUNC_START:
+			
+			if (taskControl->nSinksAttachedToStart == nDataReceived)
+				return TRUE;
+			else
+				return FALSE;
+			
+		case TASK_VCHAN_FUNC_ITERATE:
+			
+			if (taskControl->nSinksAttachedToIterate == nDataReceived)
+				return TRUE;
+			else
+				return FALSE;
+			
+		case TASK_VCHAN_FUNC_DONE:
+			
+			if (taskControl->nSinksAttachedToDone == nDataReceived)
+				return TRUE;
+			else
+				return FALSE;
+			
+	}
+}
+
 static void	DimTaskTreeBranch (TaskControl_type* taskControl, EventPacket_type* eventPacket, BOOL dimmed)
 {
 	if (!taskControl) return;
@@ -926,12 +965,13 @@ static void	ClearTaskTreeBranchVChans (TaskControl_type* taskControl)
 	}
 }
 
-static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments fPtrAssignment, DataReceivedFptr_type DataReceivedFptr)
+static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments fPtrAssignment, DataReceivedFptr_type DataReceivedFptr, BOOL dataReceivedFlag)
 {
 	VChanCallbackData_type* VChanCB = malloc(sizeof(VChanCallbackData_type));
 	if (!VChanCB) return NULL;
 	
 	VChanCB->sinkVChan 				= sinkVChan;
+	VChanCB->dataReceivedFlag		= dataReceivedFlag;
 	VChanCB->taskControl  			= taskControl;
 	VChanCB->fPtrAssignment			= fPtrAssignment;
 	VChanCB->DataReceivedFptr		= DataReceivedFptr;
@@ -940,11 +980,11 @@ static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* ta
 	return VChanCB;
 }
 
-static void	discard_VChanCallbackData_type (VChanCallbackData_type** a)
+static void	discard_VChanCallbackData_type (VChanCallbackData_type** VChanCBDataPtr)
 {
-	if (!*a) return;
+	if (!*VChanCBDataPtr) return;
 	
-	OKfree(*a);
+	OKfree(*VChanCBDataPtr);
 }
 
 static ErrorMsg_type* init_ErrorMsg_type (int errorID, const char errorOrigin[], const char errorDescription[])
@@ -1340,7 +1380,7 @@ void CVICALLBACK TaskEventItemsInQueue (CmtTSQHandle queueHandle, unsigned int e
 void CVICALLBACK TaskDataItemsInQueue (CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData)
 {
 	VChanCallbackData_type*		VChanTSQData		= callbackData;
-	VChanCallbackData_type**	VChanTSQDataPtr		= malloc(sizeof(SinkVChan_type*));
+	VChanCallbackData_type**	VChanTSQDataPtr		= malloc(sizeof(VChanCallbackData_type*)); ;
 	EventPacket_type			eventPacket			= {TASK_EVENT_DATA_RECEIVED, NULL, NULL};
 	if (!VChanTSQDataPtr) {
 		// flush queue
@@ -1587,7 +1627,7 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, EventPacket_t
 		case TASK_FCALL_DATA_RECEIVED:
 			
 			// call data received callback if one was provided
-			if ((*(VChanCallbackData_type**)fCallData)->DataReceivedFptr) fCallResult = (*(*(VChanCallbackData_type**)fCallData)->DataReceivedFptr)(taskControl, taskControl->state, (*(VChanCallbackData_type**)fCallData)->sinkVChan, &taskControl->abortFlag);
+			if ((*(VChanCallbackData_type**)fCallData)->DataReceivedFptr) fCallResult = (*(*(VChanCallbackData_type**)fCallData)->DataReceivedFptr)(taskControl, taskControl->state, (*(VChanCallbackData_type**)fCallData)->sinkVChan, &(*(VChanCallbackData_type**)fCallData)->dataReceivedFlag, &taskControl->abortFlag);
 			else functionMissingFlag = 1;
 			break;
 			
@@ -2281,12 +2321,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					
 					//---------------------------------------------------------------------------------------------------------------
-					// Reset number of Sink VChans that must receive data before Start/Iterate/Done Fptr are called
+					// Reset Sink VChans dataReceivedFlags before Start/Iterate/Done Fptr are called
 					//---------------------------------------------------------------------------------------------------------------
 					
-					taskControl->nSinksWaitingForDataToStart 	= taskControl->nSinksAttachedToStart;
-					taskControl->nSinksWaitingForDataToIterate  = taskControl->nSinksAttachedToIterate;
-					taskControl->nSinksWaitingForDataToBeDone	= taskControl->nSinksAttachedToDone;
+					size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+					VChanCallbackData_type**	VChanCBPtr;
+					for (size_t j = 1; j <= nSinkVChans; j++) {
+						VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+						(*VChanCBPtr)->dataReceivedFlag = FALSE;
+					}
 					
 					//---------------------------------------------------------------------------------------------------------------   
 					// Set flag to iterate once or continue until done or stopped
@@ -2312,7 +2355,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Call Start Task Controller function pointer to inform that task will start if all data is available
 					//--------------------------------------------------------------------------------------------------------------- 
 					
-					if (!taskControl->nSinksWaitingForDataToStart) {
+					if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_START)) {
 						// if there are no Sink VChans attached, then call Start Fptr
 						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL))) {
 							taskControl->errorMsg = 
@@ -2461,7 +2504,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//  Check if data is sufficient
 					//---------------------------------------------------------------------------------------------------------------  
 					
-					if (taskControl->nSinksWaitingForDataToStart) break; // stop here if not all Sink VChans received all their data
+					if (!SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_START)) break; // stop here if not all Sink VChans received all their data
 					
 					//--------------------------------------------------------------------------------------------------------------- 
 					// Call Start Task Controller function pointer to inform that task will start
@@ -2591,12 +2634,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					} else {
+					} else 
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
-						break;
-					}
-					
+						
 					break;
 					
 				case TASK_EVENT_START:
@@ -2607,9 +2647,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Reset number of Sink VChans that must receive data before Start Fptr is called
 					//---------------------------------------------------------------------------------------------------------------
 					
-					taskControl->nSinksWaitingForDataToStart 	= taskControl->nSinksAttachedToStart;
-					taskControl->nSinksWaitingForDataToIterate  = taskControl->nSinksAttachedToIterate;
-					taskControl->nSinksWaitingForDataToBeDone	= taskControl->nSinksAttachedToDone;
+					size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+					VChanCallbackData_type**	VChanCBPtr;
+					for (size_t j = 1; j <= nSinkVChans; j++) {
+						VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+						(*VChanCBPtr)->dataReceivedFlag = FALSE;
+					}
 					
 					
 					//---------------------------------------------------------------------------------------------------------------   
@@ -2632,8 +2675,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Call Start Task Controller function pointer to inform that task will start if all data is available
 					//--------------------------------------------------------------------------------------------------------------- 
 					
-					if (!taskControl->nSinksWaitingForDataToStart) {
-						// if there are no Sink VChans attached, then call Start Fptr
+					if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_START)) {
 						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL))) {
 							taskControl->errorMsg = 
 							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
@@ -2882,7 +2924,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Iterate and fire Master HW Trigger 
 					//---------------------------------------------------------------------------------------------------------------
 					
-					if (!taskControl->nSinksWaitingForDataToIterate) {
+					if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 						// slaves are ready to be triggered, reset Slaves armed status
 						ResetHWTrigSlavesArmedStatus(taskControl); 
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
@@ -2967,13 +3009,19 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//  Check if data is sufficient
 					//---------------------------------------------------------------------------------------------------------------  
 					
-					if (taskControl->nSinksWaitingForDataToIterate) break; // stop here if not all Sink VChans received all their data
+					if (!SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) break; // stop here if not all Sink VChans received all their data
 					
 					//---------------------------------------------------------------------------------------------------------------  
 					//  Reset Sink VChan data counter
 					//---------------------------------------------------------------------------------------------------------------
 					
-					taskControl->nSinksWaitingForDataToIterate = taskControl->nSinksAttachedToIterate;
+					size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+					VChanCallbackData_type**	VChanCBPtr;
+					for (size_t j = 1; j <= nSinkVChans; j++) {
+						VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+						if ((*VChanCBPtr)->fPtrAssignment == TASK_VCHAN_FUNC_ITERATE) (*VChanCBPtr)->dataReceivedFlag = FALSE;
+					}
+					
 					
 					//---------------------------------------------------------------------------------------------------------------
 					// Reset HW trig slaves if any 
@@ -3103,7 +3151,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						//---------------------------------------------------------------------------------------------------------------- 	
 										
 						// call done function if all data is available
-						if (!taskControl->nSinksWaitingForDataToBeDone) {
+						if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_DONE)) {
 							if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
 								taskControl->errorMsg = 
 								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
@@ -3150,7 +3198,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS) {
-										if (!taskControl->nSinksWaitingForDataToIterate) {
+										if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
 											// switch state and wait for iteration to complete
 											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
@@ -3213,7 +3261,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// Iterate and fire Master HW Trigger 
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (!taskControl->nSinksWaitingForDataToIterate) {
+									if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 										// slaves are ready to be triggered, reset Slaves armed status
 										ResetHWTrigSlavesArmedStatus(taskControl); 
 										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
@@ -3247,7 +3295,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (!taskControl->nSinksWaitingForDataToIterate) {
+									if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
 										// switch state and wait for iteration to complete
 										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
@@ -3289,7 +3337,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS) {
-										if (!taskControl->nSinksWaitingForDataToIterate) {
+										if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
 											// switch state and wait for iteration to complete
 											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
@@ -3352,7 +3400,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// There are no SubTasks, iterate and fire Master HW Trigger 
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (!taskControl->nSinksWaitingForDataToIterate) {
+									if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 										// slaves are ready to be triggered, reset Slaves armed status
 										ResetHWTrigSlavesArmedStatus(taskControl); 
 										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
@@ -3386,7 +3434,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (!taskControl->nSinksWaitingForDataToIterate) {
+									if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
 										// switch state and wait for iteration to complete
 										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
@@ -3425,7 +3473,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS) {
-										if (!taskControl->nSinksWaitingForDataToIterate) {
+										if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
 											// switch state and wait for iteration to complete
 											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
@@ -3473,7 +3521,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// Iterate and fire Master HW Trigger 
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (!taskControl->nSinksWaitingForDataToIterate) {
+									if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 										// slaves are ready to be triggered, reset Slaves armed status
 										ResetHWTrigSlavesArmedStatus(taskControl); 
 										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
@@ -3520,7 +3568,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (!taskControl->nSinksWaitingForDataToIterate) {
+									if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
 										// switch state and wait for iteration to complete
 										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
@@ -3544,7 +3592,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						// if there are no SubTask Controllers
 						if (taskControl->mode == TASK_CONTINUOUS) {
 							// switch to DONE state if continuous task controller and all required VChan data is available
-							if (!taskControl->nSinksWaitingForDataToBeDone) {
+							if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_DONE)) {
 								if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
 									taskControl->errorMsg = 
 									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
@@ -3584,7 +3632,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									
 							} else {
 								// switch to DONE state if all required VChan data is available  
-								if (!taskControl->nSinksWaitingForDataToBeDone) { 
+								if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_DONE)) { 
 									if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
 										taskControl->errorMsg = 
 										init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
@@ -3730,7 +3778,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS) {
-										if (!taskControl->nSinksWaitingForDataToIterate) {
+										if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
 											// switch state and wait for iteration to complete
 											ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
@@ -3793,7 +3841,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// There are no SubTasks, iterate and fire Master HW Trigger 
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (!taskControl->nSinksWaitingForDataToIterate) {
+									if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 										// slaves are ready to be triggered, reset Slaves armed status
 										ResetHWTrigSlavesArmedStatus(taskControl); 
 										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
@@ -3826,7 +3874,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
 									//---------------------------------------------------------------------------------------------------------------
 									
-									if (!taskControl->nSinksWaitingForDataToIterate) {
+									if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_ITERATE)) {
 										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
 										// switch state and wait for iteration to complete
 										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
@@ -3957,7 +4005,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							// if there are no SubTask Controllers
 							if (taskControl->mode == TASK_CONTINUOUS) {
 								// switch to DONE state if continuous task controller and data from all VChans is available
-								if (!taskControl->nSinksWaitingForDataToBeDone) { 
+								if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_DONE)) { 
 									if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
 										taskControl->errorMsg = 
 										init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
@@ -3998,7 +4046,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									
 								} else {
 									// switch to DONE state if data from all VChans is available    
-									if (!taskControl->nSinksWaitingForDataToBeDone) {  
+									if (SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_DONE)) {  
 										if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
 											taskControl->errorMsg = 
 											init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
@@ -4436,13 +4484,18 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//  Check if data is sufficient
 					//---------------------------------------------------------------------------------------------------------------  
 					
-					if (taskControl->nSinksWaitingForDataToBeDone) break; // stop here if not all Sink VChans received all their data
+					if (!SinkVChansDataReceived(taskControl, TASK_VCHAN_FUNC_DONE)) break; // stop here if not all Sink VChans received all their data
 					
 					//---------------------------------------------------------------------------------------------------------------  
 					//  Reset Sink VChan data counter
 					//---------------------------------------------------------------------------------------------------------------
 					
-					taskControl->nSinksWaitingForDataToBeDone = taskControl->nSinksAttachedToDone;
+					size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+					VChanCallbackData_type**	VChanCBPtr;
+					for (size_t j = 1; j <= nSinkVChans; j++) {
+						VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+						if ((*VChanCBPtr)->fPtrAssignment == TASK_VCHAN_FUNC_DONE) (*VChanCBPtr)->dataReceivedFlag = FALSE;
+					}
 					
 					//---------------------------------------------------------------------------------------------------------------        
 					// Call DONE event function
@@ -4580,11 +4633,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					} else {
+					} else 
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
-						break;
-					}
 					
 					break;
 					

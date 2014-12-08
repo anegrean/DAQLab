@@ -41,7 +41,7 @@ typedef struct FCallReturn {
 // Used to return extended error info in case of error.
 FCallReturn_type*	init_FCallReturn_type			(int valFCall, const char errorOrigin[], const char errorDescription[]);
 
-void				discard_FCallReturn_type		(FCallReturn_type** a);
+void				discard_FCallReturn_type		(FCallReturn_type** fCallReturnPtr);
 
 #ifdef __cplusplus
     }

@@ -183,8 +183,6 @@
 #define  Set_Duration                     5       /* control type: numeric, callback function: (none) */
 #define  Set_NSamples                     6       /* control type: numeric, callback function: (none) */
 #define  Set_MeasMode                     7       /* control type: ring, callback function: (none) */
-#define  Set_PickupSampRate               8       /* control type: radioButton, callback function: (none) */
-#define  Set_PickupNSamples               9       /* control type: radioButton, callback function: (none) */
 
      /* tab page panel controls */
 #define  SETPAN_Plate                     2       /* control type: deco, callback function: (none) */

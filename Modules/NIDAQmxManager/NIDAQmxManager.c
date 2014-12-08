@@ -444,12 +444,8 @@ typedef enum{
 // timing structure for ADC/DAC sampling tasks
 typedef struct {
 	MeasMode_type 				measMode;      				// Measurement mode: finite or continuous.
-	double       				sampleRate;    				// Sampling rate in [Hz] if device task settings is used as reference.
-	size_t        				nSamples;	    			// Total number of samples to be acquired in case of a finite recording if device task settings is used as reference.
-	size_t*						refNSamples;				// Points to either device or VChan-based number of samples to acquire. By default points to device.
-	double*						refSampleRate;				// Points to either device or VChan-based sampling rate. By default points to device.
-	BOOL						useRefNSamples;				// The number of samples to be acquired by this module is taken from the connecting VChan.
-	BOOL						useRefSamplingRate;			// The sampling rate used by this module is taken from the connecting VChan.
+	double       				sampleRate;    				// Sampling rate in [Hz].
+	size_t        				nSamples;	    			// Total number of samples to be acquired in case of a finite recording.
 	SinkVChan_type*				nSamplesSinkVChan;			// Used for receiving number of samples to be generated/received with each iteration of the DAQmx task controller.
 	SinkVChan_type*				samplingRateSinkVChan;		// Used for receiving sampling rate info with each iteration of the DAQmx task controller.  
 	size_t        				blockSize;     				// Number of samples for reading after which callbacks are called.
@@ -1094,12 +1090,12 @@ static void							AISamplingRateVChan_Connected			(VChan_type* self, void* VChan
 static void							AISamplingRateVChan_Disconnected		(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// number of AO samples
-static void							AOnSamplesVChan_Connected				(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
-static void							AOnSamplesVChan_Disconnected			(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							AOnSamplesSinkVChan_Connected			(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							AOnSamplesSinkVChan_Disconnected		(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// AO sampling rate
-static void							AOSamplingRateVChan_Connected			(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
-static void							AOSamplingRateVChan_Disconnected		(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							AOSamplingRateSinkVChan_Connected		(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							AOSamplingRateSinkVChan_Disconnected	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// counter pulse train info
 static void							PulseTrainVChan_Connected 				(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
@@ -2745,9 +2741,7 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 		case Set_NSamples:
 			
 			GetCtrlVal(panel, control, &dev->AITaskSet->timing->nSamples);
-			// update duration
-			//SetCtrlVal(panel, Set_Duration, *dev->AITaskSet->timing->refSampleRate STILL A MESS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			// Decide on how to update various controls based on what is chosen as a reference, such as sampling rate
+			
 			break;
 			
 		case Set_Duration:
@@ -2756,7 +2750,7 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			GetCtrlVal(panel, control, &duration);
 			
 			// calculate number of samples
-			dev->AITaskSet->timing->nSamples = (size_t)(*dev->AITaskSet->timing->refSampleRate * duration);
+			dev->AITaskSet->timing->nSamples = (size_t)(dev->AITaskSet->timing->sampleRate * duration);
 			// update display of number of samples
 			SetCtrlVal(panel, Set_NSamples, dev->AITaskSet->timing->nSamples); 
 			
@@ -2765,14 +2759,6 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 		case Set_BlockSize:
 			
 			GetCtrlVal(panel, control, &dev->AITaskSet->timing->blockSize);
-			break;
-			
-		case Set_PickupSampRate:
-			
-			break;
-			
-		case Set_PickupNSamples:
-			
 			break;
 			
 		case Set_MeasMode:
@@ -2856,23 +2842,15 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			GetCtrlVal(panel, control, &duration);
 			
 			// calculate number of samples
-			*dev->AOTaskSet->timing->refNSamples = (size_t)(*dev->AOTaskSet->timing->refSampleRate * duration);		// STILL A MESS
+			dev->AOTaskSet->timing->nSamples = (size_t)(dev->AOTaskSet->timing->sampleRate * duration);
 			// update display of number of samples
-			SetCtrlVal(panel, Set_NSamples, *dev->AOTaskSet->timing->refNSamples); 
+			SetCtrlVal(panel, Set_NSamples, dev->AOTaskSet->timing->nSamples); 
 			
 			break;
 			
 		case Set_BlockSize:
 			
 			GetCtrlVal(panel, control, &dev->AOTaskSet->timing->blockSize);
-			break;
-			
-		case Set_PickupSampRate:
-			
-			break;
-			
-		case Set_PickupNSamples:
-			
 			break;
 			
 		case Set_MeasMode:
@@ -3753,14 +3731,10 @@ static TaskTiming_type*	init_TaskTiming_type (void)
 	taskTiming -> sampleRate				= DAQmxDefault_Task_SampleRate;
 	taskTiming -> nSamples					= DAQmxDefault_Task_NSamples;
 	taskTiming -> blockSize					= DAQmxDefault_Task_BlockSize;
-	taskTiming -> refNSamples				= &taskTiming->nSamples;
-	taskTiming -> refSampleRate				= &taskTiming->sampleRate;
 	taskTiming -> sampClkSource				= NULL;   								// use onboard clock for sampling
 	taskTiming -> sampClkEdge				= SampClockEdge_Rising;
 	taskTiming -> refClkSource				= NULL;									// onboard clock has no external reference to sync to
 	taskTiming -> refClkFreq				= DAQmxDefault_Task_RefClkFreq;
-	taskTiming -> useRefNSamples			= FALSE;
-	taskTiming -> useRefSamplingRate 		= FALSE;
 	taskTiming -> nSamplesSinkVChan			= NULL;
 	taskTiming -> samplingRateSinkVChan		= NULL;
 	
@@ -3876,64 +3850,142 @@ static void VChanDisconnected (VChan_type* self, void* VChanOwner, VChan_type* d
 
 static void AInSamplesVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
-	Dev_type* 		dev	= VChanOwner;
+	Dev_type* 			dev				= VChanOwner;
 	
-	// undim nSamples pick-up control
-	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_PickupNSamples, ATTR_DIMMED, 0);
+	FCallReturn_type*   fCallReturn		= NULL;
 	
+	// require each iteration the number of samples to be generated to be available
+	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
+	
+	return;
+	
+Error:
+	
+	DLMsg(fCallReturn->errorInfo, 1);
+	discard_FCallReturn_type(&fCallReturn);
 }
 
 static void	AInSamplesVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
-	Dev_type* 		dev	= VChanOwner;
+	Dev_type* 			dev				= VChanOwner;
 	
-	// dim nSamples pick-up control and deselect
-	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_PickupNSamples, ATTR_DIMMED, 1);
-	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_PickupNSamples, 0);
+	FCallReturn_type*   fCallReturn		= NULL;
+	
+	// AI nSamples is not required with each iteration, instead device AI nSamples is used
+	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+	
+	return;
+	
+Error:
+	
+	DLMsg(fCallReturn->errorInfo, 1);
+	discard_FCallReturn_type(&fCallReturn);
 	
 }
 
 static void AISamplingRateVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
-	Dev_type* 		dev	= VChanOwner;
+	Dev_type* 			dev				= VChanOwner;
 	
-	// undim sample rate pick-up control
-	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_PickupSampRate, ATTR_DIMMED, 0);
+	FCallReturn_type*   fCallReturn		= NULL;
 	
+	// require each iteration AI sampling rate to be available
+	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
+	
+	return;
+	
+Error:
+	
+	DLMsg(fCallReturn->errorInfo, 1);
+	discard_FCallReturn_type(&fCallReturn);
 }
 
 static void AISamplingRateVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
-	Dev_type* 		dev	= VChanOwner;
+	Dev_type* 			dev				= VChanOwner;
 	
-	// dim sample rate pick-up control and deselect
-	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_PickupSampRate, ATTR_DIMMED, 1);
-	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_PickupSampRate, 0);
+	FCallReturn_type*   fCallReturn		= NULL;
+	
+	// AI sampling rate not required with each iteration
+	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+	
+	return;
+	
+Error:
+	
+	DLMsg(fCallReturn->errorInfo, 1);
+	discard_FCallReturn_type(&fCallReturn);
 	
 }
 
-static void	AOnSamplesVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
+static void	AOnSamplesSinkVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
-	Dev_type* 		dev	= VChanOwner;
+	Dev_type* 			dev				= VChanOwner;
 	
+	FCallReturn_type*   fCallReturn		= NULL;
+	
+	// require each iteration the number of samples to be generated to be available
+	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
+	
+	return;
+	
+Error:
+	
+	DLMsg(fCallReturn->errorInfo, 1);
+	discard_FCallReturn_type(&fCallReturn);
 }
 
-static void AOnSamplesVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
+static void AOnSamplesSinkVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
-	Dev_type* 		dev	= VChanOwner;
+	Dev_type* 			dev				= VChanOwner;
+	
+	FCallReturn_type*   fCallReturn		= NULL;
+	
+	// number of samples with each iteration to be generated not required anymore
+	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+	
+	return;
+	
+Error:
+	
+	DLMsg(fCallReturn->errorInfo, 1);
+	discard_FCallReturn_type(&fCallReturn);
 	
 }
 						  
-static void	AOSamplingRateVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
+static void	AOSamplingRateSinkVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
-	Dev_type* 		dev	= VChanOwner;
+	Dev_type* 			dev				= VChanOwner;
+	
+	FCallReturn_type*   fCallReturn		= NULL;
+	
+	// require each iteration AO sampling rate to be available
+	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
+	
+	return;
+	
+Error:
+	
+	DLMsg(fCallReturn->errorInfo, 1);
+	discard_FCallReturn_type(&fCallReturn);
 	
 }
 
-static void	AOSamplingRateVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
+static void	AOSamplingRateSinkVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
-	Dev_type* 		dev	= VChanOwner;
+	Dev_type* 			dev				= VChanOwner;
 	
+	FCallReturn_type*   fCallReturn		= NULL;
+	
+	// AO sampling rate not required with each iteration
+	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+	
+	return;
+	
+Error:
+	
+	DLMsg(fCallReturn->errorInfo, 1);
+	discard_FCallReturn_type(&fCallReturn);
 }
 
 // pulsetrain command VChan connected callback
@@ -6403,8 +6455,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// load resources
 							int start_DigEdgeTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig1);
 							// add trigger data structure
-							dev->AITaskSet->startTrig = init_TaskTrig_type(dev->AITaskSet->timing->refSampleRate);
-									
+							dev->AITaskSet->startTrig = init_TaskTrig_type(&dev->AITaskSet->timing->sampleRate);
 							// add start trigger panel
 							int newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Start");
 							// get start trigger tab panel handle
@@ -6439,8 +6490,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// load resources
 							int reference_DigEdgeTrig_PanHndl	= LoadPanel(0, MOD_NIDAQmxManager_UI, RefTrig1);
 							// add trigger data structure
-							dev->AITaskSet->referenceTrig = init_TaskTrig_type(dev->AITaskSet->timing->refSampleRate);
-									
+							dev->AITaskSet->referenceTrig = init_TaskTrig_type(&dev->AITaskSet->timing->sampleRate);
 							// add reference trigger panel
 							int newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Reference");
 							// get reference trigger tab panel handle
@@ -6847,8 +6897,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// load resources
 							int start_DigEdgeTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig1);
 							// add trigger data structure
-							dev->AOTaskSet->startTrig = init_TaskTrig_type(dev->AOTaskSet->timing->refSampleRate);
-									
+							dev->AOTaskSet->startTrig = init_TaskTrig_type(&dev->AOTaskSet->timing->sampleRate);
 							// add start trigger panel
 							int newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Start");
 							// get start trigger tab panel handle
@@ -6883,8 +6932,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// load resources
 							int reference_DigEdgeTrig_PanHndl	= LoadPanel(0, MOD_NIDAQmxManager_UI, RefTrig1);
 							// add trigger data structure
-							dev->AOTaskSet->referenceTrig = init_TaskTrig_type(dev->AOTaskSet->timing->refSampleRate);
-									
+							dev->AOTaskSet->referenceTrig = init_TaskTrig_type(&dev->AOTaskSet->timing->sampleRate);
 							// add reference trigger panel
 							int newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Reference");
 							// get reference trigger tab panel handle
@@ -6941,7 +6989,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						DLDataTypes		nSamplesVChanAllowedDataTypes[] = {DL_Bool, DL_UChar, DL_UShort, DL_UInt, DL_ULong, DL_ULongLong};
 						
 						dev->AOTaskSet->timing->nSamplesSinkVChan	= init_SinkVChan_type(nSamplesSinkVChanName, nSamplesVChanAllowedDataTypes, NumElem(nSamplesVChanAllowedDataTypes),
-								dev, AOnSamplesVChan_Connected, AOnSamplesVChan_Disconnected);
+								dev, AOnSamplesSinkVChan_Connected, AOnSamplesSinkVChan_Disconnected);
 						OKfree(nSamplesSinkVChanName);
 						// register VChan with the framework
 						DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)dev->AOTaskSet->timing->nSamplesSinkVChan);
@@ -6959,7 +7007,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						DLDataTypes		samplingRateVChanAllowedDataTypes[] = {DL_Double, DL_Float};
 						
 						dev->AOTaskSet->timing->samplingRateSinkVChan	= init_SinkVChan_type(samplingRateSinkVChanName, samplingRateVChanAllowedDataTypes, NumElem(samplingRateVChanAllowedDataTypes),
-								dev, AOSamplingRateVChan_Connected, AOSamplingRateVChan_Disconnected);
+								dev, AOSamplingRateSinkVChan_Connected, AOSamplingRateSinkVChan_Disconnected);
 						OKfree(samplingRateSinkVChanName);
 						// register VChan with the framework
 						DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)dev->AOTaskSet->timing->samplingRateSinkVChan);
@@ -7174,8 +7222,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// load resources
 							int start_DigEdgeTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig1);
 							// add trigger data structure
-							dev->DOTaskSet->startTrig = init_TaskTrig_type(dev->DOTaskSet->timing->refSampleRate);
-									
+							dev->DOTaskSet->startTrig = init_TaskTrig_type(&dev->DOTaskSet->timing->sampleRate);
 							// add start trigger panel
 							newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Start");
 							// get start trigger tab panel handle
@@ -7215,8 +7262,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// load resources
 							int reference_DigEdgeTrig_PanHndl	= LoadPanel(0, MOD_NIDAQmxManager_UI, RefTrig1);
 							// add trigger data structure
-							dev->DOTaskSet->referenceTrig = init_TaskTrig_type(dev->DOTaskSet->timing->refSampleRate);
-									
+							dev->DOTaskSet->referenceTrig = init_TaskTrig_type(&dev->DOTaskSet->timing->sampleRate);
 							// add reference trigger panel
 							newTabIdx = InsertTabPage(trigPanHndl, Trig_TrigSet, -1, "Reference");
 							// get reference trigger tab panel handle
@@ -8003,7 +8049,7 @@ static FCallReturn_type* ConfigDAQmxAITask (Dev_type* dev)
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AITaskSet->timing->sampClkEdge));
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, *dev->AITaskSet->timing->refSampleRate));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate));
 	
 	// set operation mode: finite, continuous
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AITaskSet->timing->measMode));
@@ -8028,8 +8074,8 @@ static FCallReturn_type* ConfigDAQmxAITask (Dev_type* dev)
 		case MeasFinite:
 			
 			// set number of samples per channel
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *dev->AITaskSet->timing->refNSamples));
-			quot = *dev->AITaskSet->timing->refNSamples  / dev->AITaskSet->timing->blockSize; 
+			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->AITaskSet->timing->nSamples));
+			quot = dev->AITaskSet->timing->nSamples  / dev->AITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
 			if (!quot) quot = 1;
 			DAQmxErrChk(DAQmxCfgInputBuffer (dev->AITaskSet->taskHndl, dev->AITaskSet->timing->blockSize * quot));
@@ -8203,7 +8249,7 @@ static FCallReturn_type* ConfigDAQmxAOTask (Dev_type* dev)
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AOTaskSet->timing->sampClkEdge));
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, *dev->AOTaskSet->timing->refSampleRate));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AOTaskSet->timing->sampleRate));
 	
 	// set operation mode: finite, continuous
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AOTaskSet->timing->measMode));
@@ -8213,7 +8259,7 @@ static FCallReturn_type* ConfigDAQmxAOTask (Dev_type* dev)
 	
 	// set number of samples per channel for finite generation
 	if (dev->AOTaskSet->timing->measMode == MeasFinite)
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *dev->AOTaskSet->timing->refNSamples));
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->AOTaskSet->timing->nSamples));
 	
 	// if a reference clock is given, use it to synchronize the internal clock
 	if (dev->AOTaskSet->timing->refClkSource) {
@@ -8351,7 +8397,7 @@ static FCallReturn_type* ConfigDAQmxDITask (Dev_type* dev)
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DITaskSet->timing->sampClkEdge));
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Rate, *dev->DITaskSet->timing->refSampleRate));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->DITaskSet->timing->sampleRate));
 	
 	// set operation mode: finite, continuous
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DITaskSet->timing->measMode));
@@ -8376,8 +8422,8 @@ static FCallReturn_type* ConfigDAQmxDITask (Dev_type* dev)
 		case MeasFinite:
 			
 			// set number of samples per channel read within one call of the read function, i.e. blocksize
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *dev->DITaskSet->timing->refNSamples));
-			quot = *dev->DITaskSet->timing->refNSamples  / dev->DITaskSet->timing->blockSize; 
+			DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->DITaskSet->timing->nSamples));
+			quot = dev->DITaskSet->timing->nSamples  / dev->DITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
 			DAQmxErrChk(DAQmxCfgInputBuffer (dev->DITaskSet->taskHndl, dev->DITaskSet->timing->blockSize * quot));
 			break;
@@ -8517,7 +8563,7 @@ static FCallReturn_type* ConfigDAQmxDOTask (Dev_type* dev)
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DOTaskSet->timing->sampClkEdge));
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Rate, *dev->DOTaskSet->timing->refSampleRate));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->DOTaskSet->timing->sampleRate));
 	
 	// set operation mode: finite, continuous
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DOTaskSet->timing->measMode));
@@ -8533,7 +8579,7 @@ static FCallReturn_type* ConfigDAQmxDOTask (Dev_type* dev)
 	
 	// set number of samples per channel for finite acquisition
 	if (dev->DOTaskSet->timing->measMode == MeasFinite)
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *dev->DOTaskSet->timing->refNSamples));
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->DOTaskSet->timing->nSamples));
 	
 	// disable DO regeneration
 	DAQmxSetWriteAttribute (dev->DOTaskSet->taskHndl, DAQmx_Write_RegenMode, DAQmx_Val_DoNotAllowRegen);
@@ -9507,10 +9553,6 @@ SkipDOTask:
 		}
 	}
 	
-		//test lex
-	double DAQmxtaskStartTime=Timer();
-
-	
 	//----------------------
 	// Start Triggered Tasks
 	//----------------------
@@ -9519,8 +9561,6 @@ SkipDOTask:
 	nItems = ListNumItems(TriggeredTasks);
 	for (size_t i = 1; i <= nItems; i++) {
 		taskHndlPtr = ListGetPtrToItem(TriggeredTasks, i);
-	//	DAQmxErrChk(DAQmxStartTask(*taskHndlPtr));
-	//test lex
 		DAQmxErrChk(DAQmxTaskControl (*taskHndlPtr, DAQmx_Val_Task_Start));
 		
 	}
@@ -9531,19 +9571,8 @@ SkipDOTask:
 	nItems = ListNumItems(NonTriggeredTasks);
 	for (size_t i = 1; i <= nItems; i++) {
 		taskHndlPtr = ListGetPtrToItem(NonTriggeredTasks, i);
-		//DAQmxErrChk(DAQmxStartTask(*taskHndlPtr));
-		//test lex
 		DAQmxErrChk(DAQmxTaskControl (*taskHndlPtr, DAQmx_Val_Task_Start));     
 	}
-	
-		//test lex
-//	taskStartTime=Timer();
-//	char buf[100];
-	
-//	Fmt(buf,"%s<DAQmsStart:%f\n",(taskStartTime-DAQmxtaskStartTime)*1000);
-//	DLMsg(buf,0);
-	
-
 	
 	// cleanup
 	ListDispose(NonTriggeredTasks);
@@ -9598,7 +9627,7 @@ static BOOL	OutputBuffersFilled	(Dev_type* dev)
 		else 
 			if (dev->AOTaskSet->timing->measMode == MeasCont) AOFilledFlag = FALSE;			 // if continuous mode and there is space in the buffer, then buffer is not filled
 				else
-					if (*dev->AOTaskSet->timing->refNSamples == 2*dev->AOTaskSet->timing->blockSize - nSamples)  AOFilledFlag = TRUE; // otherwise if finite and the number of samples is exactly as requested, then buffer is considered filled.
+					if (dev->AOTaskSet->timing->nSamples == 2*dev->AOTaskSet->timing->blockSize - nSamples)  AOFilledFlag = TRUE; // otherwise if finite and the number of samples is exactly as requested, then buffer is considered filled.
 						else AOFilledFlag = FALSE;
 	} else
 		AOFilledFlag = TRUE;   // buffer considered filled if there is no AO task.
@@ -9699,7 +9728,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		waveformData = malloc(nSamples * sizeof(double));
 		if (!waveformData) goto MemError;
 		memcpy(waveformData, readBuffer + chIdx * nSamples, nSamples * sizeof(double));
-		waveform = init_Waveform_type(Waveform_Double, *dev->AITaskSet->timing->refSampleRate, nSamples, &waveformData);
+		waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nSamples, &waveformData);
 		dataPacket = init_DataPacket_type(DL_Waveform_Double, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type); 
 		
 		// send data packet with waveform
@@ -9805,7 +9834,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		waveformData = malloc(nSamples * sizeof(double));
 		if (!waveformData) goto MemError;
 		memcpy(waveformData, readBuffer + chIdx * nSamples, nSamples * sizeof(double));
-		waveform = init_Waveform_type(Waveform_Double, *dev->AITaskSet->timing->refSampleRate, nSamples, &waveformData);
+		waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nSamples, &waveformData);
 		dataPacket = init_DataPacket_type(DL_Waveform_Double, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type);  
 		
 		// send data packet with waveform
@@ -10035,15 +10064,6 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 {
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
 	FCallReturn_type*   fCallReturn;
-	
-	//test lex
-//	IterStartTime=Timer();
-	
-//	if (IterEndTime>0) {
-//		char buf[100];
-//		Fmt(buf,"%s<Time between Iterations:%f\n",(IterStartTime-IterEndTime)*1000);
-//		DLMsg(buf,0);
-//	}
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);

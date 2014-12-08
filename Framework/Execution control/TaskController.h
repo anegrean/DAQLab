@@ -614,7 +614,7 @@ void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, VChanTCFPtrAssignments fPtrAssignment); 
 
 	// Changes Sink VChan assignment to Task Controller Fptr.
-int						ChangeSinkVChanTCFptrAssignment		(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments newFPtrAssignment);
+FCallReturn_type*		ChangeSinkVChanTCFptrAssignment		(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments newFPtrAssignment);
 
 	// Removes a Sink VChan assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan.

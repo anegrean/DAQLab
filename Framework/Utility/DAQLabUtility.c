@@ -58,10 +58,10 @@ FCallReturn_type* init_FCallReturn_type (int valFCall, const char errorOrigin[],
 }
 
 ///HIFN Discards an FCallReturn_type data structure.
-void discard_FCallReturn_type (FCallReturn_type** a)
+void discard_FCallReturn_type (FCallReturn_type** fCallReturnPtr)
 {
-	if (!*a) return;
+	if (!*fCallReturnPtr) return;
 	
-	OKfree((*a)->errorInfo);
-	OKfree(*a);
+	OKfree((*fCallReturnPtr)->errorInfo);
+	OKfree(*fCallReturnPtr);
 }

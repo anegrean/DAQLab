@@ -603,7 +603,7 @@ int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, Data
 	return 0;
 }
 
-int ChangeSinkVChanTCFptrAssignment (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments newFPtrAssignment)
+FCallReturn_type* ChangeSinkVChanTCFptrAssignment (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments newFPtrAssignment)
 {
 #define		ChangeSinkVChanTCFptrAssignment_Err_TaskControllerIsActive		-1
 #define		ChangeSinkVChanTCFptrAssignment_Err_SinkNotFound				-2
@@ -611,7 +611,8 @@ int ChangeSinkVChanTCFptrAssignment (TaskControl_type* taskControl, SinkVChan_ty
 	// check if Task Controller is currently executing
 	if (!(taskControl->state == TASK_STATE_UNCONFIGURED || taskControl->state == TASK_STATE_CONFIGURED || 
 		  taskControl->state == TASK_STATE_INITIAL || taskControl->state == TASK_STATE_DONE || taskControl->state == TASK_STATE_ERROR))
-		return ChangeSinkVChanTCFptrAssignment_Err_TaskControllerIsActive;
+		return init_FCallReturn_type(ChangeSinkVChanTCFptrAssignment_Err_TaskControllerIsActive, "ChangeSinkVChanTCFptrAssignment", 
+									 "Error: Cannot change Sink VChan Task Controller function assignment while task controller is active.");
 	
 	VChanCallbackData_type**	VChanTSQDataPtr;
 	size_t						nDataQs					= ListNumItems(taskControl->dataQs);
@@ -661,13 +662,14 @@ int ChangeSinkVChanTCFptrAssignment (TaskControl_type* taskControl, SinkVChan_ty
 					break;
 			}
 		
-			return 0;
+			return NULL; // no error
 		}
 		
 	}
 	
 	
-	return ChangeSinkVChanTCFptrAssignment_Err_SinkNotFound;  // Sink VChan not found
+	return init_FCallReturn_type(ChangeSinkVChanTCFptrAssignment_Err_SinkNotFound, "ChangeSinkVChanTCFptrAssignment", 
+								"Error: Task Controller does not contain Sink VChan.");  // Sink VChan not found
 }
 
 int	RemoveSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan)

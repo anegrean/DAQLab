@@ -106,6 +106,7 @@ struct ActiveScanAxisCal {
 	char*					calName;
 	TaskControl_type*		taskController;			// Task Controller for the calibration of this scan axis.
 	SourceVChan_type*		VChanCom;   			// VChan used to send command signals to the scan axis (optional, depending on the scan axis type)
+	SourceVChan_type*		VChanComNSamples;		// Number of samples per command waveform sent each iteration.
 	SinkVChan_type*			VChanPos;				// VChan used to receive position feedback signals from the scan axis (optional, depending on the scan axis type)
 	double					samplingRate;			// Galvo calibration sampling rate that can be taken as reference by comSampRate.
 	double*					comSampRate;			// Command sample rate in [Hz] taken from VChanCom when connected or from the calibration module. Same rate is used for the position sampling rate.
@@ -449,7 +450,7 @@ static int 							GetStepTimes									(double* signal, int nsamples, double low
 	// Non-resonant galvo axis calibration data
 	//-----------------------------------------
 
-static ActiveNonResGalvoCal_type* 	init_ActiveNonResGalvoCal_type 					(LaserScanning_type* lsModule, char calName[], char commandVChanName[], char positionVChanName[]);
+static ActiveNonResGalvoCal_type* 	init_ActiveNonResGalvoCal_type 					(LaserScanning_type* lsModule, char calName[], char commandVChanName[], char commandNSamplesVChanName[], char positionVChanName[]);
 
 static void							discard_ActiveNonResGalvoCal_type				(ActiveScanAxisCal_type** cal);
 
@@ -494,6 +495,10 @@ static int 							LoadNonResGalvoCalFromXML 						(LaserScanning_type* lsModule,
 	// command VChan
 static void							NonResGalvoCal_ComVChan_Connected				(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
 static void							NonResGalvoCal_ComVChan_Disconnected			(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+
+	// number of samples in calibration command waveform
+static void							NonResGalvoCal_ComNSamplesVChan_Connected		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							NonResGalvoCal_ComNSamplesVChan_Disconnected	(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
 
 	// position VChan
 static void							NonResGalvoCal_PosVChan_Connected				(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
@@ -2400,14 +2405,18 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							
 							// get unique name for command signal VChan
 							char* commandVChanName = StrDup(calTCName);
-							AppendString(&commandVChanName,": Command", -1);
+							AppendString(&commandVChanName,": command", -1);
+							
+							// get unique name for command signal nSamples vChan
+							char* commandNSamplesVChanName = StrDup(calTCName);
+							AppendString(&commandNSamplesVChanName,": command n samples", -1);
 							
 							// get unique name for position feedback signal VChan 
 							char* positionVChanName = StrDup(calTCName);
-							AppendString(&positionVChanName,": Position", -1);
+							AppendString(&positionVChanName,": position", -1);
 							
 							// init structure for galvo calibration
-							ActiveNonResGalvoCal_type* 	nrgCal = init_ActiveNonResGalvoCal_type(ls, calTCName, commandVChanName, positionVChanName);
+							ActiveNonResGalvoCal_type* 	nrgCal = init_ActiveNonResGalvoCal_type(ls, calTCName, commandVChanName, commandNSamplesVChanName, positionVChanName);
 							
 							//----------------------------------------
 							// Task Controller and VChans registration
@@ -2418,6 +2427,7 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							TaskControlEvent(nrgCal->baseClass.taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
 							// register VChans with framework
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanCom);
+							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanComNSamples);
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanPos);
 							// add new galvo calibration to laser scanning module list
 							ListInsertItem(ls->activeCal, &nrgCal, END_OF_LIST);
@@ -3276,6 +3286,7 @@ static void discard_ActiveScanAxisCal_type (ActiveScanAxisCal_type** cal)
 	OKfree((*cal)->calName); 
 	discard_TaskControl_type(&(*cal)->taskController);
 	discard_VChan_type((VChan_type**)&(*cal)->VChanCom);
+	discard_VChan_type((VChan_type**)&(*cal)->VChanComNSamples);
 	discard_VChan_type((VChan_type**)&(*cal)->VChanPos);
 	if ((*cal)->calPanHndl) {DiscardPanel((*cal)->calPanHndl); (*cal)->calPanHndl =0;}
 	
@@ -3335,7 +3346,7 @@ void CVICALLBACK ScanAxisCalibrationMenu_CB	(int menuBarHandle, int menuItemID, 
 	DisplayPanel(ls->manageAxisCalPanHndl);
 }
 
-static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_type* lsModule, char calName[], char commandVChanName[], char positionVChanName[])
+static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_type* lsModule, char calName[], char commandVChanName[], char commandNSamplesVChanName[], char positionVChanName[])
 {
 	ActiveNonResGalvoCal_type*	cal = malloc(sizeof(ActiveNonResGalvoCal_type));
 	if (!cal) return NULL;
@@ -3346,6 +3357,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	initalloc_ActiveScanAxisCal_type(&cal->baseClass);
 	if(!(cal->baseClass.calName		= StrDup(calName))) {free(cal); return NULL;}
 	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, DL_Waveform_Double, cal, NonResGalvoCal_ComVChan_Connected, NonResGalvoCal_ComVChan_Disconnected);   
+	cal->baseClass.VChanComNSamples	= init_SourceVChan_type(commandNSamplesVChanName, DL_ULongLong, cal, NonResGalvoCal_ComNSamplesVChan_Connected, NonResGalvoCal_ComNSamplesVChan_Disconnected);   
 	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
@@ -3673,6 +3685,17 @@ static void	NonResGalvoCal_ComVChan_Connected (VChan_type* self, void* VChanOwne
 
 // calibration command VChan disconnected callback
 static void	NonResGalvoCal_ComVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
+{
+	
+}
+
+// used to exchange number of calibration samples in the waveform
+static void NonResGalvoCal_ComNSamplesVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
+{
+	
+}
+
+static void NonResGalvoCal_ComNSamplesVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
 }
@@ -4975,7 +4998,6 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			
 		case NonResGalvoCal_Slope_Offset:
 		{
-			
 			// discard previous measurements
 			OKfree(cal->slope);
 			OKfree(cal->offset);
@@ -4993,11 +5015,17 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				VCommand += 2*cal->commandVMax / (CALPOINTS - 1); 
 			}
 			
-			// send waveform
+			// send command waveform
 			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, CALPOINTS * nSamplesPerCalPoint, &commandSignal);
 			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
-			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
+			SendDataPacket(cal->baseClass.VChanCom, NULL, 0);
+			
+			// send number of samples in waveform
+			unsigned long long*	nCommandWaveformSamplesPtr = malloc (sizeof(unsigned long long));
+			*nCommandWaveformSamplesPtr = CALPOINTS * nSamplesPerCalPoint;
+			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
+			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
 		}
 			
 			break;
@@ -5030,11 +5058,17 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			for (size_t i = 1; i < cal->nRepeat; i++)
 				memcpy(rampSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), rampSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
 			
-			// send waveform
+			// send command waveform
 			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, &rampSignal);
 			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
+			
+			// send number of samples in waveform
+			unsigned long long*	nCommandWaveformSamplesPtr = malloc (sizeof(unsigned long long));
+			*nCommandWaveformSamplesPtr = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
+			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
+			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
 			
 		}
 			
@@ -5078,11 +5112,17 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			for (size_t i = 1; i < cal->nRepeat; i++)
 				memcpy(stepSignal + i * (flybackSamples + postStepSamples), stepSignal, (flybackSamples + postStepSamples) * sizeof(double));
 			
-			// send waveform
+			// send command waveform
 			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + postStepSamples) * cal->nRepeat, &stepSignal);
 			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
-			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
+			SendDataPacket(cal->baseClass.VChanCom, NULL, 0);
+			
+			// send number of samples in waveform
+			unsigned long long*	nCommandWaveformSamplesPtr = malloc (sizeof(unsigned long long));
+			*nCommandWaveformSamplesPtr = (flybackSamples + postStepSamples) * cal->nRepeat;
+			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
+			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
 			
 		}
 			break;
@@ -5128,11 +5168,17 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			for (size_t i = 1; i < cal->nRepeat; i++)
 				memcpy(rampSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), rampSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
 			
-			// send waveform
+			// send command waveform
 			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, &rampSignal);
 			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
+			
+			// send number of samples in waveform
+			unsigned long long*	nCommandWaveformSamplesPtr = malloc (sizeof(unsigned long long));
+			*nCommandWaveformSamplesPtr = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
+			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
+			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
 			
 		}
 			break;
@@ -5174,11 +5220,17 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			double		phase	 		= -90;
 			TriangleWave(nSamples, funcAmp/2, 1.0/cycleSamples, &phase, commandSignal);
 						
-			// send waveform
+			// send command waveform
 			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nSamples, &commandSignal);
 			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
 			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
-			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
+			SendDataPacket(cal->baseClass.VChanCom, NULL, 0);
+			
+			// send number of samples in waveform
+			unsigned long long*	nCommandWaveformSamplesPtr = malloc (sizeof(unsigned long long));
+			*nCommandWaveformSamplesPtr = nSamples;
+			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
+			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
 		}
 			break;
 	}

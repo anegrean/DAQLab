@@ -122,3 +122,4 @@ void* GetDataPacketPtrToData (DataPacket_type* dataPacket, DLDataTypes* dataType
 	return &dataPacket->data;
 }
 
+				  

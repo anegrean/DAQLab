@@ -20,7 +20,7 @@
 #include <nidaqmx.h>
 #include "daqmxioctrl.h"
 #include "DataTypes.h"
-										 		 
+
 //========================================================================================================================================================================================================
 // Constants
 
@@ -84,6 +84,8 @@
 #define DAQmxCICOTskSet_TriggerTabIdx					3
 	// DAQmx error macro
 #define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto DAQmxError; else
+	// Cmt library error macro
+#define CmtErrChk(functionCall) if( (error=(functionCall)) < 0 ) goto CmtError; else
 	// Shared error codes
 #define WriteAODAQmx_Err_DataUnderflow 					-1
 
@@ -1049,6 +1051,8 @@ static void CVICALLBACK 			ManageDevPan_CB 						(int menuBarHandle, int menuIte
 
 static void CVICALLBACK 			DeleteDev_CB 							(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 
+static void 						UnregisterDeviceFromFramework 			(Dev_type* dev);
+
 	// trigger settings callbacks
 static int CVICALLBACK 				TaskStartTrigType_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -1152,7 +1156,7 @@ static FCallReturn_type*			ModuleEventHandler						(TaskControl_type* taskContro
 //========================================================================================================================================================================================================
 // Global variables
 
-ListType					devList			= 0;		// List of DAQ devices available of DevAttr_type. This will be updated every time init_DevList(ListType) is executed.
+ListType	devList			= 0;		// List of DAQ devices available of DevAttr_type. This will be updated every time init_DevList(ListType) is executed.
 
 
 //lex test
@@ -1233,7 +1237,7 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 {
 	NIDAQmxManager_type* 	nidaq 		= (NIDAQmxManager_type*) (*mod);
 	size_t					nDAQDevs	= ListNumItems(nidaq->DAQmxDevices);
-	Dev_type**				DAQDevPtrPtr;
+	Dev_type**				DAQDevPtr	= NULL;
 	
 	if (!nidaq) return;
 	
@@ -1243,9 +1247,11 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 	
 	// discard DAQmx device data
 	for (size_t i = nDAQDevs; i ; i--) {
-		DAQDevPtrPtr = ListGetPtrToItem(nidaq->DAQmxDevices, i);
-		discard_Dev_type(DAQDevPtrPtr);
+		DAQDevPtr = ListGetPtrToItem(nidaq->DAQmxDevices, i);
+		UnregisterDeviceFromFramework(*DAQDevPtr); 
+		discard_Dev_type(DAQDevPtr);
 	}
+	
 	ListDispose(nidaq->DAQmxDevices);
 	
 	// discard UI
@@ -2182,7 +2188,11 @@ static void	discard_ChanSet_type (ChanSet_type** a)
 	discard_VChan_type((VChan_type**)&(*a)->sinkVChan);
 	
 	// discard DAQmx task if any
-	if ((*a)->taskHndl) {DAQmxClearTask ((*a)->taskHndl); (*a)->taskHndl = 0;}
+	if ((*a)->taskHndl) {
+		DAQmxTaskControl((*a)->taskHndl, DAQmx_Val_Task_Unreserve);
+		DAQmxClearTask ((*a)->taskHndl); 
+		(*a)->taskHndl = 0;
+	}
 	
 	// discard triggers if any
 	discard_TaskTrig_type(&(*a)->startTrig);
@@ -2795,7 +2805,12 @@ static void	discard_AIAOTaskSet_type (AIAOTaskSet_type** taskSetPtr)
 	if (!*taskSetPtr) return;
 	
 	// DAQmx task
-	if ((*taskSetPtr)->taskHndl) {DAQmxClearTask ((*taskSetPtr)->taskHndl); (*taskSetPtr)->taskHndl = 0;}
+	if ((*taskSetPtr)->taskHndl) {
+		DAQmxTaskControl((*taskSetPtr)->taskHndl, DAQmx_Val_Task_Unreserve);
+		DAQmxClearTask ((*taskSetPtr)->taskHndl); 
+		(*taskSetPtr)->taskHndl = 0;
+	}
+	
 	// channels
 	if ((*taskSetPtr)->chanSet) {
 		ChanSet_type** 		chanSetPtrPtr;
@@ -3413,7 +3428,11 @@ static void	discard_DIDOTaskSet_type (DIDOTaskSet_type** a)
 	if (!*a) return;
 	
 	// DAQmx task
-	if ((*a)->taskHndl) {DAQmxClearTask ((*a)->taskHndl); (*a)->taskHndl = 0;}
+	if ((*a)->taskHndl) {
+		DAQmxTaskControl((*a)->taskHndl, DAQmx_Val_Task_Unreserve);
+		DAQmxClearTask ((*a)->taskHndl); 
+		(*a)->taskHndl = 0;
+	}
 	// channels
 	if ((*a)->chanSet) {
 		ChanSet_type** 	chanSetPtrPtr;
@@ -4124,6 +4143,10 @@ static void AInSamplesVChan_Connected (VChan_type* self, void* VChanOwner, VChan
 	// require each iteration the number of samples to be generated to be available
 	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
 	
+	// dim number of samples controls and duration
+	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 1);
+	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 1);
+	
 	return;
 	
 Error:
@@ -4140,6 +4163,10 @@ static void	AInSamplesVChan_Disconnected (VChan_type* self, void* VChanOwner, VC
 	
 	// AI nSamples is not required with each iteration, instead device AI nSamples is used
 	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+	
+	// undim number of samples controls and duration
+	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 0);
+	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 0);
 	
 	return;
 	
@@ -4159,6 +4186,9 @@ static void AISamplingRateVChan_Connected (VChan_type* self, void* VChanOwner, V
 	// require each iteration AI sampling rate to be available
 	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
 	
+	// dim sampling rate control
+	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 1);
+	
 	return;
 	
 Error:
@@ -4175,6 +4205,9 @@ static void AISamplingRateVChan_Disconnected (VChan_type* self, void* VChanOwner
 	
 	// AI sampling rate not required with each iteration
 	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+	
+	// undim sampling rate control
+	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 0);
 	
 	return;
 	
@@ -4194,6 +4227,10 @@ static void	AOnSamplesSinkVChan_Connected (VChan_type* self, void* VChanOwner, V
 	// require each iteration the number of samples to be generated to be available
 	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
 	
+	// dim number of samples controls and duration
+	SetCtrlAttribute(dev->AOTaskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 1);
+	SetCtrlAttribute(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 1);
+	
 	return;
 	
 Error:
@@ -4210,6 +4247,10 @@ static void AOnSamplesSinkVChan_Disconnected (VChan_type* self, void* VChanOwner
 	
 	// number of samples with each iteration to be generated not required anymore
 	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+	
+	// undim number of samples controls and duration
+	SetCtrlAttribute(dev->AOTaskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 0);
+	SetCtrlAttribute(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 0);
 	
 	return;
 	
@@ -4229,6 +4270,9 @@ static void	AOSamplingRateSinkVChan_Connected (VChan_type* self, void* VChanOwne
 	// require each iteration AO sampling rate to be available
 	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
 	
+	// dim sampling rate control
+	SetCtrlAttribute(dev->AOTaskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 1);
+	
 	return;
 	
 Error:
@@ -4246,6 +4290,9 @@ static void	AOSamplingRateSinkVChan_Disconnected (VChan_type* self, void* VChanO
 	
 	// AO sampling rate not required with each iteration
 	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+	
+	// undim sampling rate control
+	SetCtrlAttribute(dev->AOTaskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 0);
 	
 	return;
 	
@@ -4301,7 +4348,69 @@ static void	PulseTrainVChan_Disconnected (VChan_type* self, void* VChanOwner, VC
 /// HIFN Receives AI number of samples acquired per task controller iteration.
 static FCallReturn_type* AInSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
 {
+#define		AInSamples_DataReceivedTC_Err_OnePacketAtATime		-1
+#define		AInSamples_DataReceivedTC_Err_AITaskMustBeFinite	-2
+	Dev_type*				dev 			= GetTaskControlModuleData(taskControl);
+	FCallReturn_type*		fCallReturn		= NULL;
+	int						error			= 0;
+	DataPacket_type**		dataPackets		= NULL;
+	size_t					nDataPackets	= 0;
+	uInt64**				nSamplesPtrPtr	= NULL;
+	DLDataTypes				dataPacketType;
 	
+	GetAllDataPackets(sinkVChan, &dataPackets, &nDataPackets);
+	
+	// for now, make sure that there is only one packet at a time that is received
+	if (nDataPackets != 1) {
+		// release all packets
+		for (size_t i = 0; i < nDataPackets; i++)
+			ReleaseDataPacket(&dataPackets[i]);
+		
+		OKfree(dataPackets);
+		return init_FCallReturn_type(AInSamples_DataReceivedTC_Err_OnePacketAtATime, "AInSamples_DataReceivedTC", "Cannot receive more than one value within one iteration cycle");
+	}
+	
+	// make sure the AI task is finite, otherwise give error (cannot specify number of samples for a continuous task
+	if (dev->AITaskSet->timing->measMode == MeasCont) {
+		// release all packets
+		for (size_t i = 0; i < nDataPackets; i++)
+			ReleaseDataPacket(&dataPackets[i]);
+		
+		OKfree(dataPackets);
+		return init_FCallReturn_type(AInSamples_DataReceivedTC_Err_AITaskMustBeFinite, "AInSamples_DataReceivedTC", "Number of samples cannot be specified for continuous AI tasks");
+		
+	}
+	
+	// get number of samples, data type of uInt64 (unsigned long long)
+	nSamplesPtrPtr = GetDataPacketPtrToData(dataPackets[0], &dataPacketType);
+	dev->AITaskSet->timing->nSamples = **nSamplesPtrPtr;
+	
+	// release data packet
+	ReleaseDataPacket(&dataPackets[0]);
+	// cleanup
+	OKfree(dataPackets);
+	
+	// update number of samples in dev structure
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->AITaskSet->timing->nSamples));
+	// update number of samples in UI
+	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_NSamples, dev->AITaskSet->timing->nSamples);
+	// update duration in UI
+	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
+	
+	// set data received flag
+	*dataReceivedFlag = TRUE;
+	
+	return init_FCallReturn_type(0, "", "");
+	
+DAQmxError:
+	
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "AInSamples_DataReceivedTC", errMsg);
+	free(errMsg);
+	return fCallReturn;
+
 }
 
 /// HIFN Receives AI sampling rate used for acquisition per task controller iteration.
@@ -4313,7 +4422,67 @@ static FCallReturn_type* AISamplingRate_DataReceivedTC (TaskControl_type* taskCo
 /// HIFN Receives AO number of samples acquired per task controller iteration.
 static FCallReturn_type* AOnSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
 {
+#define		AOnSamples_DataReceivedTC_Err_OnePacketAtATime		-1
+#define		AOnSamples_DataReceivedTC_Err_AOTaskMustBeFinite	-2
+	Dev_type*				dev 			= GetTaskControlModuleData(taskControl);
+	FCallReturn_type*		fCallReturn		= NULL;
+	int						error			= 0;
+	DataPacket_type**		dataPackets		= NULL;
+	size_t					nDataPackets	= 0;
+	uInt64**				nSamplesPtrPtr	= NULL;
+	DLDataTypes				dataPacketType;
 	
+	GetAllDataPackets(sinkVChan, &dataPackets, &nDataPackets);
+	
+	// for now, make sure that there is only one packet at a time that is received
+	if (nDataPackets != 1) {
+		// release all packets
+		for (size_t i = 0; i < nDataPackets; i++)
+			ReleaseDataPacket(&dataPackets[i]);
+		
+		OKfree(dataPackets);
+		return init_FCallReturn_type(AOnSamples_DataReceivedTC_Err_OnePacketAtATime, "AOnSamples_DataReceivedTC", "Cannot receive more than one value within one iteration cycle");
+	}
+	
+	// make sure the AO task is finite, otherwise give error (cannot specify number of samples for a continuous task
+	if (dev->AOTaskSet->timing->measMode == MeasCont) {
+		// release all packets
+		for (size_t i = 0; i < nDataPackets; i++)
+			ReleaseDataPacket(&dataPackets[i]);
+		
+		OKfree(dataPackets);
+		return init_FCallReturn_type(AOnSamples_DataReceivedTC_Err_AOTaskMustBeFinite, "AOnSamples_DataReceivedTC", "Number of samples cannot be specified for continuous AO tasks");
+		
+	}
+	
+	// get number of samples, data type of uInt64 (unsigned long long)
+	nSamplesPtrPtr = GetDataPacketPtrToData(dataPackets[0], &dataPacketType);
+	dev->AOTaskSet->timing->nSamples = **nSamplesPtrPtr;
+	
+	// release data packet
+	ReleaseDataPacket(&dataPackets[0]);
+	// cleanup
+	OKfree(dataPackets);
+	
+	// update number of samples in dev structure
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->AOTaskSet->timing->nSamples));
+	// update number of samples in UI
+	SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_NSamples, dev->AOTaskSet->timing->nSamples);
+	// update duration in UI
+	SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
+	
+	// set data received flag
+	*dataReceivedFlag = TRUE;
+	
+	return init_FCallReturn_type(0, "", "");
+	
+DAQmxError:
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "AOnSamples_DataReceivedTC", errMsg);
+	free(errMsg);
+	return fCallReturn;
 }
 
 /// HIFN Receives AO sampling rate used for acquisition per task controller iteration
@@ -5124,19 +5293,20 @@ Error:
 static void CVICALLBACK DeleteDev_CB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
 {
 	NIDAQmxManager_type* 	nidaq 			= (NIDAQmxManager_type*) callbackData;
-	Dev_type**				DAQmxDevPtrPtr;
+	Dev_type**				DAQmxDevPtr		= NULL;
 	int						activeTabIdx;		// 0-based index
 	int						nTabPages;
 
 	// get selected tab index
 	GetActiveTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, &activeTabIdx);
 	// get pointer to selected DAQmx device and remove its Task Controller from the framework
-	DAQmxDevPtrPtr = ListGetPtrToItem(nidaq->DAQmxDevices, activeTabIdx + 1);
+	DAQmxDevPtr = ListGetPtrToItem(nidaq->DAQmxDevices, activeTabIdx + 1);
 	
-	// remove from framework
-	DLRemoveTaskController((DAQLabModule_type*)nidaq, (*DAQmxDevPtrPtr)->taskController); 
+	// unregister device from framework
+	UnregisterDeviceFromFramework(*DAQmxDevPtr);
+	
 	// discard DAQmx device data
-	discard_Dev_type(DAQmxDevPtrPtr);
+	discard_Dev_type(DAQmxDevPtr);
 	ListRemoveItem(nidaq->DAQmxDevices, 0, activeTabIdx + 1);
 	
 	// remove Tab and add an empty "None" tab page if there are no more tabs
@@ -5146,6 +5316,127 @@ static void CVICALLBACK DeleteDev_CB (int menuBarHandle, int menuItemID, void *c
 		InsertTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, 0, "None");
 		// dim "Delete" menu item
 		SetMenuBarAttribute(nidaq->menuBarHndl, nidaq->deleteDevMenuItemID, ATTR_DIMMED, 1);
+	}
+	
+}
+
+static void UnregisterDeviceFromFramework (Dev_type* dev)
+{
+	ChanSet_type**			chanSetPtr		= NULL;
+	size_t					nChans			= 0;
+	
+	//--------------------------------------------
+	// Remove task controller from framework
+	//--------------------------------------------
+	
+	DLRemoveTaskController((DAQLabModule_type*)dev->niDAQModule, dev->taskController);
+	
+	//--------------------------------------------
+	// Remove VChans from framework
+	//--------------------------------------------
+	
+	//-----------
+	// AI Task
+	//-----------
+	
+	if (dev->AITaskSet) {
+		// n samples    
+		DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) dev->AITaskSet->timing->nSamplesSinkVChan);
+		// sampling rate
+		DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) dev->AITaskSet->timing->samplingRateSinkVChan);
+		// AI channels
+		nChans = ListNumItems(dev->AITaskSet->chanSet);
+		for (size_t i = 1; i <= nChans; i++) {
+			chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+			DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) (*chanSetPtr)->srcVChan);
+		}
+	}
+	
+	//-----------
+	// AO Task
+	//-----------
+	
+	if (dev->AOTaskSet) {
+		// n samples 
+		DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) dev->AOTaskSet->timing->nSamplesSinkVChan);
+		// sampling rate
+		DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) dev->AOTaskSet->timing->samplingRateSinkVChan);
+		// AO channels
+		nChans = ListNumItems(dev->AOTaskSet->chanSet);
+		for (size_t i = 1; i <= nChans; i++) {
+			chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+			DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule , (VChan_type*) (*chanSetPtr)->sinkVChan);
+		}
+	}
+	
+	//-----------
+	// DI Task
+	//-----------
+	
+	if (dev->DITaskSet) {
+		// n samples
+		DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule , (VChan_type*) dev->DITaskSet->timing->nSamplesSinkVChan);
+		// sampling rate
+		DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule , (VChan_type*) dev->DITaskSet->timing->samplingRateSinkVChan);
+		// DI channels
+		nChans = ListNumItems(dev->DITaskSet->chanSet);
+		for (size_t i = 1; i <= nChans; i++) {
+			chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
+			DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule , (VChan_type*) (*chanSetPtr)->srcVChan);
+		}
+	}
+	
+	//-----------
+	// DO Task
+	//-----------
+	
+	if (dev->DOTaskSet) {
+		// n samples
+		DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule , (VChan_type*) dev->DOTaskSet->timing->nSamplesSinkVChan);
+		// sampling rate
+		DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule , (VChan_type*) dev->DOTaskSet->timing->samplingRateSinkVChan);
+		// DO channels
+		nChans = ListNumItems(dev->DOTaskSet->chanSet);
+		for (size_t i = 1; i <= nChans; i++) {
+			chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+			DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) (*chanSetPtr)->sinkVChan);
+		}
+	}
+	
+	//----------- 
+	// CI Task
+	//-----------
+	
+	if (dev->CITaskSet) {
+		// CI channels
+		nChans = ListNumItems(dev->CITaskSet->chanTaskSet); 
+		for (size_t i = 1; i <= nChans; i++) {  
+			chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+		
+			if ((*chanSetPtr)->srcVChan)
+				DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) (*chanSetPtr)->srcVChan);   
+		
+			if ((*chanSetPtr)->sinkVChan) 
+				DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) (*chanSetPtr)->sinkVChan);   
+		}
+	}
+	
+	//----------- 
+	// CO Task
+	//-----------
+	
+	if (dev->COTaskSet) {
+		// CO channels
+		nChans = ListNumItems(dev->COTaskSet->chanTaskSet); 
+		for (size_t i = 1; i <= nChans; i++) {  
+			chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+		
+			if ((*chanSetPtr)->srcVChan)
+				DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) (*chanSetPtr)->srcVChan);   
+		
+			if ((*chanSetPtr)->sinkVChan) 
+				DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) (*chanSetPtr)->sinkVChan);   
+		}
 	}
 	
 }
@@ -8254,6 +8545,9 @@ static int ClearDAQmxTasks (Dev_type* dev)
 		}
 	}
 	
+	// signal that device is not configured
+	TaskControlEvent(dev->taskController, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+	
 	return 0;
 	
 Error:
@@ -8319,10 +8613,10 @@ Error:
 
 static FCallReturn_type* ConfigDAQmxDevice (Dev_type* dev)
 {
-#define StartAllDAQmxTasks_Err_NULLDev		-1
+#define ConfigDAQmxDevice_Err_NULLDev		-1
 	
 	FCallReturn_type*	fCallReturn	= NULL;
-	if (!dev) return init_FCallReturn_type(StartAllDAQmxTasks_Err_NULLDev, "ConfigDAQmxDevice", "No reference to device");
+	if (!dev) return init_FCallReturn_type(ConfigDAQmxDevice_Err_NULLDev, "ConfigDAQmxDevice", "No reference to device");
 	
 	// Configure AI DAQmx Task
 	if ((fCallReturn = ConfigDAQmxAITask(dev)))		goto Error;
@@ -8343,7 +8637,7 @@ static FCallReturn_type* ConfigDAQmxDevice (Dev_type* dev)
 	if ((fCallReturn = ConfigDAQmxCOTask(dev)))		goto Error;
 	
 	
-	return init_FCallReturn_type(0, "", "");
+	return NULL;
 	
 Error:
 	ClearDAQmxTasks(dev);
@@ -8477,19 +8771,23 @@ static FCallReturn_type* ConfigDAQmxAITask (Dev_type* dev)
 	if (dev->AITaskSet->startTrig)
 		switch (dev->AITaskSet->startTrig->trigType) {
 			case Trig_None:
+				DAQmxErrChk (DAQmxDisableStartTrig(dev->AITaskSet->taskHndl));
 				break;
 			
 			case Trig_AnalogEdge:
-				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope, dev->AITaskSet->startTrig->level));  
+				if (dev->AITaskSet->startTrig->trigSource)
+					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope, dev->AITaskSet->startTrig->level));  
 				break;
 			
 			case Trig_AnalogWindow:
-				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->wndTrigCond, 
+				if (dev->AITaskSet->startTrig->trigSource)
+					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->wndTrigCond, 
 							 dev->AITaskSet->startTrig->wndTop, dev->AITaskSet->startTrig->wndBttm));  
 				break;
 			
 			case Trig_DigitalEdge:
-				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope));  
+				if (dev->AITaskSet->startTrig->trigSource)
+					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope));  
 				break;
 			
 			case Trig_DigitalPattern:
@@ -8500,18 +8798,22 @@ static FCallReturn_type* ConfigDAQmxAITask (Dev_type* dev)
 	if (dev->AITaskSet->referenceTrig)
 		switch (dev->AITaskSet->referenceTrig->trigType) {
 			case Trig_None:
+				DAQmxErrChk (DAQmxDisableRefTrig(dev->AITaskSet->taskHndl));
 				break;
 			
 			case Trig_AnalogEdge:
-				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->level));  
+				if (dev->AITaskSet->referenceTrig->trigSource)
+					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->level));  
 				break;
 			
 			case Trig_AnalogWindow:
+				if (dev->AITaskSet->referenceTrig->trigSource)
 				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->wndTrigCond, 
 							 dev->AITaskSet->referenceTrig->wndTop, dev->AITaskSet->referenceTrig->wndBttm));  
 				break;
 			
 			case Trig_DigitalEdge:
+				if (dev->AITaskSet->referenceTrig->trigSource)
 				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope));  
 				break;
 			
@@ -8670,19 +8972,23 @@ static FCallReturn_type* ConfigDAQmxAOTask (Dev_type* dev)
 	if (dev->AOTaskSet->startTrig)
 		switch (dev->AOTaskSet->startTrig->trigType) {
 			case Trig_None:
+				DAQmxErrChk (DAQmxDisableStartTrig(dev->AOTaskSet->taskHndl));   
 				break;
 			
 			case Trig_AnalogEdge:
-				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope, dev->AOTaskSet->startTrig->level));  
+				if (dev->AOTaskSet->startTrig->trigSource)
+					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope, dev->AOTaskSet->startTrig->level));  
 				break;
 			
 			case Trig_AnalogWindow:
-				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->wndTrigCond, 
+				if (dev->AOTaskSet->startTrig->trigSource) 
+					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->wndTrigCond, 
 							 dev->AOTaskSet->startTrig->wndTop, dev->AOTaskSet->startTrig->wndBttm));  
 				break;
 			
 			case Trig_DigitalEdge:
-				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope));  
+				if (dev->AOTaskSet->startTrig->trigSource) 
+					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope));  
 				break;
 			
 			case Trig_DigitalPattern:
@@ -8693,19 +8999,23 @@ static FCallReturn_type* ConfigDAQmxAOTask (Dev_type* dev)
 	if (dev->AOTaskSet->referenceTrig)
 		switch (dev->AOTaskSet->referenceTrig->trigType) {
 			case Trig_None:
+				DAQmxErrChk (DAQmxDisableRefTrig(dev->AOTaskSet->taskHndl));   
 				break;
 			
 			case Trig_AnalogEdge:
-				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, dev->AOTaskSet->referenceTrig->level));  
+				if (dev->AOTaskSet->referenceTrig->trigSource)
+					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, dev->AOTaskSet->referenceTrig->level));  
 				break;
 			
 			case Trig_AnalogWindow:
-				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->wndTrigCond, 
+				if (dev->AOTaskSet->referenceTrig->trigSource)
+					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->wndTrigCond, 
 							 dev->AOTaskSet->referenceTrig->wndTop, dev->AOTaskSet->referenceTrig->wndBttm));  
 				break;
 			
 			case Trig_DigitalEdge:
-				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope));  
+				if (dev->AOTaskSet->referenceTrig->trigSource)
+					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope));  
 				break;
 			
 			case Trig_DigitalPattern:
@@ -8845,19 +9155,23 @@ static FCallReturn_type* ConfigDAQmxDITask (Dev_type* dev)
 	// configure start trigger
 	switch (dev->DITaskSet->startTrig->trigType) {
 		case Trig_None:
+			DAQmxErrChk (DAQmxDisableStartTrig(dev->DITaskSet->taskHndl));
 			break;
 			
 		case Trig_AnalogEdge:
-			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope, dev->DITaskSet->startTrig->level));  
+			if (dev->DITaskSet->startTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope, dev->DITaskSet->startTrig->level));  
 			break;
 			
 		case Trig_AnalogWindow:
-			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->wndTrigCond, 
-						 dev->DITaskSet->startTrig->wndTop, dev->DITaskSet->startTrig->wndBttm));  
+			if (dev->DITaskSet->startTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->wndTrigCond, 
+						 	dev->DITaskSet->startTrig->wndTop, dev->DITaskSet->startTrig->wndBttm));  
 			break;
 			
 		case Trig_DigitalEdge:
-			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope));  
+			if (dev->DITaskSet->startTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope));  
 			break;
 			
 		case Trig_DigitalPattern:
@@ -8867,19 +9181,23 @@ static FCallReturn_type* ConfigDAQmxDITask (Dev_type* dev)
 	// configure reference trigger
 	switch (dev->DITaskSet->referenceTrig->trigType) {
 		case Trig_None:
+			DAQmxErrChk (DAQmxDisableRefTrig(dev->DITaskSet->taskHndl)); 
 			break;
 			
 		case Trig_AnalogEdge:
-			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, dev->DITaskSet->referenceTrig->level));  
+			if (dev->DITaskSet->referenceTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, dev->DITaskSet->referenceTrig->level));  
 			break;
 			
 		case Trig_AnalogWindow:
-			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->wndTrigCond, 
-						 dev->DITaskSet->referenceTrig->wndTop, dev->DITaskSet->referenceTrig->wndBttm));  
+			if (dev->DITaskSet->referenceTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->wndTrigCond, 
+							 dev->DITaskSet->referenceTrig->wndTop, dev->DITaskSet->referenceTrig->wndBttm));  
 			break;
 			
 		case Trig_DigitalEdge:
-			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope));  
+			if (dev->DITaskSet->referenceTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope));  
 			break;
 			
 		case Trig_DigitalPattern:
@@ -9007,19 +9325,23 @@ static FCallReturn_type* ConfigDAQmxDOTask (Dev_type* dev)
 	// configure start trigger
 	switch (dev->DOTaskSet->startTrig->trigType) {
 		case Trig_None:
+			DAQmxErrChk (DAQmxDisableStartTrig(dev->DOTaskSet->taskHndl));  
 			break;
 			
 		case Trig_AnalogEdge:
-			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope, dev->DOTaskSet->startTrig->level));  
+			if (dev->DOTaskSet->startTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope, dev->DOTaskSet->startTrig->level));  
 			break;
 			
 		case Trig_AnalogWindow:
-			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->wndTrigCond, 
-						 dev->DOTaskSet->startTrig->wndTop, dev->DOTaskSet->startTrig->wndBttm));  
+			if (dev->DOTaskSet->startTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->wndTrigCond, 
+						 	dev->DOTaskSet->startTrig->wndTop, dev->DOTaskSet->startTrig->wndBttm));  
 			break;
 			
 		case Trig_DigitalEdge:
-			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope));  
+			if (dev->DOTaskSet->startTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope));  
 			break;
 			
 		case Trig_DigitalPattern:
@@ -9029,19 +9351,23 @@ static FCallReturn_type* ConfigDAQmxDOTask (Dev_type* dev)
 	// configure reference trigger
 	switch (dev->DOTaskSet->referenceTrig->trigType) {
 		case Trig_None:
+			DAQmxErrChk (DAQmxDisableRefTrig(dev->DOTaskSet->taskHndl));     
 			break;
 			
 		case Trig_AnalogEdge:
-			DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, dev->DOTaskSet->referenceTrig->level));  
+			if (dev->DOTaskSet->referenceTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, dev->DOTaskSet->referenceTrig->level));  
 			break;
 			
 		case Trig_AnalogWindow:
-			DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->wndTrigCond, 
-						 dev->DOTaskSet->referenceTrig->wndTop, dev->DOTaskSet->referenceTrig->wndBttm));  
+			if (dev->DOTaskSet->referenceTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->wndTrigCond, 
+						 	dev->DOTaskSet->referenceTrig->wndTop, dev->DOTaskSet->referenceTrig->wndBttm));  
 			break;
 			
 		case Trig_DigitalEdge:
-			DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope));  
+			if (dev->DOTaskSet->referenceTrig->trigSource)
+				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope));  
 			break;
 			
 		case Trig_DigitalPattern:
@@ -9290,11 +9616,11 @@ static FCallReturn_type* ConfigDAQmxCOTask (Dev_type* dev)
 	
 			
 				// trigger 	
-				if (chCOPtr->baseClass.startTrig->trigType==DAQmx_Val_DigEdge){
-				//	DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_StartTrig_Type,DAQmx_Val_DigEdge));
-				//	DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_DigEdge_StartTrig_Src,chCOFreqPtr->baseClass.startTrig->trigSource));
-				//	DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_DigEdge_StartTrig_Edge,chCOFreqPtr->baseClass.startTrig->slope));
-					DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtrPtr)->taskHndl,chCOPtr->baseClass.startTrig->trigSource,chCOPtr->baseClass.startTrig->slope) );  
+				if (chCOPtr->baseClass.startTrig->trigType == DAQmx_Val_DigEdge){
+					if (chCOPtr->baseClass.startTrig->trigSource)
+						DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtrPtr)->taskHndl, chCOPtr->baseClass.startTrig->trigSource,chCOPtr->baseClass.startTrig->slope) );  
+					else
+						DAQmxErrChk ( DAQmxDisableStartTrig((*chanSetPtrPtr)->taskHndl) );
 				}
 			//	else 
 			//		DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_ArmStartTrig_Type,DAQmx_Val_None));  
@@ -9319,13 +9645,11 @@ static FCallReturn_type* ConfigDAQmxCOTask (Dev_type* dev)
 	
 				// trigger 	
 				if (chCOPtr->baseClass.startTrig->trigType==DAQmx_Val_DigEdge){
-				//	DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_StartTrig_Type,DAQmx_Val_DigEdge));
-			//		DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_DigEdge_StartTrig_Src,chCOFreqPtr->baseClass.startTrig->trigSource));
-			//		DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_DigEdge_StartTrig_Edge,chCOFreqPtr->baseClass.startTrig->slope));
-					DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtrPtr)->taskHndl,chCOPtr->baseClass.startTrig->trigSource,chCOPtr->baseClass.startTrig->slope) );  
+					if (chCOPtr->baseClass.startTrig->trigSource)
+						DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtrPtr)->taskHndl, chCOPtr->baseClass.startTrig->trigSource, chCOPtr->baseClass.startTrig->slope) );  
+					else
+						DAQmxErrChk ( DAQmxDisableStartTrig((*chanSetPtrPtr)->taskHndl) );
 				}
-			//	else 
-			//		DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_ArmStartTrig_Type,DAQmx_Val_None));  
 			
 				DAQmxErrChk ( DAQmxCfgImplicitTiming((*chanSetPtrPtr)->taskHndl, GetPulseTrainMode(chCOPtr->pulseTrain), GetPulseTrainNPulses(chCOPtr->pulseTrain)) ); 
 				DAQmxErrChk ( DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_StartTrig_Retriggerable, TRUE) );    
@@ -9349,13 +9673,11 @@ static FCallReturn_type* ConfigDAQmxCOTask (Dev_type* dev)
 			
 				// trigger 	
 				if (chCOPtr->baseClass.startTrig->trigType==DAQmx_Val_DigEdge){
-				//	DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_StartTrig_Type,DAQmx_Val_DigEdge));
-			//		DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_DigEdge_StartTrig_Src,chCOFreqPtr->baseClass.startTrig->trigSource));
-			//		DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_DigEdge_StartTrig_Edge,chCOFreqPtr->baseClass.startTrig->slope));
-					DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtrPtr)->taskHndl, chCOPtr->baseClass.startTrig->trigSource, chCOPtr->baseClass.startTrig->slope) );  
+					if (chCOPtr->baseClass.startTrig->trigSource)
+						DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtrPtr)->taskHndl, chCOPtr->baseClass.startTrig->trigSource, chCOPtr->baseClass.startTrig->slope) );  
+					else
+						DAQmxErrChk ( DAQmxDisableStartTrig((*chanSetPtrPtr)->taskHndl) ); 	
 				}
-			//	else 
-			//		DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_ArmStartTrig_Type,DAQmx_Val_None));  
 			
 				DAQmxErrChk ( DAQmxCfgImplicitTiming((*chanSetPtrPtr)->taskHndl, GetPulseTrainMode(chCOPtr->pulseTrain), GetPulseTrainNPulses(chCOPtr->pulseTrain)) );    
 				DAQmxErrChk ( DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_StartTrig_Retriggerable, TRUE) );      
@@ -9398,41 +9720,44 @@ DAQmxError:
 ///HIRET NULL if there is no error and FCallReturn_type* data in case of error. 
 FCallReturn_type* WriteAODAQmx (Dev_type* dev) 
 {
-
 	DataPacket_type* 		dataPacket;
 	DLDataTypes				dataPacketType;
 	void*					dataPacketData;
-	double*					waveformData			= NULL;
-	WriteAOData_type*    	data            		= dev->AOTaskSet->writeAOData;
+	double*					waveformData								= NULL;
+	WriteAOData_type*    	data            							= dev->AOTaskSet->writeAOData;
 	size_t          		queue_items;
-	size_t          		ncopies;                			// number of datapacket copies to fill at least a writeblock size
+	size_t          		ncopies;                								// number of datapacket copies to fill at least a writeblock size
+	int						itemsRead;
 	size_t         		 	numwrote;
-	double					nRepeats				= 1;
-	int             		error           		= 0;
+	double					nRepeats									= 1;
+	int             		error           							= 0;
 	float64*        		tmpbuff;
-	FCallReturn_type*		fCallReturn				= NULL;
-	BOOL					writeBuffersFilledFlag	= TRUE;  	// assume that each output channel has at least data->writeblock elements 
+	FCallReturn_type*		fCallReturn									= NULL;
+	BOOL					writeBuffersFilledFlag						= TRUE;  	// assume that each output channel has at least data->writeblock elements 
 	size_t					nSamples;
+	CmtTSQHandle			tsqID;
+	char* 					DAQmxErrMsg									= NULL;
+	char					CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
+	int 					buffsize;
 	
 	// cycle over channels
 	for (int i = 0; i < data->numchan; i++) {
-		CmtTSQHandle	tsqID = GetSinkVChanTSQHndl(data->sinkVChans[i]);
+		tsqID = GetSinkVChanTSQHndl(data->sinkVChans[i]);
 		while (data->databuff_size[i] < data->writeblock) {
 			
 			// if datain[i] is empty, get data packet from queue
 			if (!data->datain_size[i]) {
 				
-				// check if there are any data packets in the queue
-				CmtGetTSQAttribute(tsqID, ATTR_TSQ_ITEMS_IN_QUEUE, &queue_items);
+				// try to get a non-NULL data packet from queue 
+				do { 
+					CmtErrChk( itemsRead = CmtReadTSQData (tsqID, &dataPacket, 1, 0, 0) );
+				} while (!dataPacket && itemsRead);
 				
 				// if there are no more data packets, then skip this channel
-				if (!queue_items) {
+				if (!itemsRead) {
 					writeBuffersFilledFlag = FALSE;				// there is not enough data for this channel 
 					break;
 				}
-				
-				// get data packet from queue
-				CmtReadTSQData (tsqID, &dataPacket,1,0,0);
 				
 				// copy data packet to datain
 				dataPacketData = GetDataPacketPtrToData (dataPacket, &dataPacketType);
@@ -9481,7 +9806,7 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 					data->datain_repeat[i] -= ncopies;
 				else {
 					// if repeats is infinite, check if there is another data packet waiting in the queue
-					CmtGetTSQAttribute(tsqID, ATTR_TSQ_ITEMS_IN_QUEUE, &queue_items);
+					CmtErrChk ( CmtGetTSQAttribute(tsqID, ATTR_TSQ_ITEMS_IN_QUEUE, &queue_items) );
 					
 					// if there is another data packet in the queue, then switch to the new packet by freeing datain[i]
 					if (queue_items) {
@@ -9556,18 +9881,22 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 	
 	DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, nSamples, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &numwrote, NULL));
 	 
-	return NULL; 
+	return NULL; // no error
 	
 DAQmxError:
 	
-	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	fCallReturn = init_FCallReturn_type(error, "WriteAODAQmx", errMsg);
-	free(errMsg);
+	buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	DAQmxErrMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(DAQmxErrMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "WriteAODAQmx", DAQmxErrMsg);
+	OKfree(DAQmxErrMsg);
+	ClearDAQmxTasks(dev);
+	return fCallReturn;
 	
-Error:
+CmtError:
 	
+	CmtGetErrorMessage (error, CmtErrMsgBuffer);
+	fCallReturn = init_FCallReturn_type(error, "WriteAODAQmx", CmtErrMsgBuffer);   
 	ClearDAQmxTasks(dev);
 	return fCallReturn;
 }
@@ -9582,37 +9911,41 @@ FCallReturn_type*   WriteDODAQmx(Dev_type* dev)
 	DataPacket_type* 		dataPacket;
 	DLDataTypes				dataPacketType;
 	void*					dataPacketData;
-	double*					waveformData			= NULL;
-	WriteDOData_type*    	data            		= dev->DOTaskSet->writeDOData;
+	double*					waveformData								= NULL;
+	WriteDOData_type*    	data            							= dev->DOTaskSet->writeDOData;
 	size_t          		queue_items;
-	size_t          		ncopies;                			// number of datapacket copies to fill at least a writeblock size
+	size_t          		ncopies;                								// number of datapacket copies to fill at least a writeblock size
+	int						itemsRead;
 	size_t         		 	numwrote; 
-	double					nRepeats				= 1;
-	int             		error           		= 0;
+	double					nRepeats									= 1;
+	int             		error           							= 0;
 	uInt32*        			tmpbuff;
-	FCallReturn_type*		fCallReturn				= NULL;
-	BOOL					writeBuffersFilledFlag	= TRUE;  	// assume that each output channel has at least data->writeblock elements 
+	FCallReturn_type*		fCallReturn									= NULL;
+	BOOL					writeBuffersFilledFlag						= TRUE;  	// assume that each output channel has at least data->writeblock elements 
 	size_t					nSamples;
+	CmtTSQHandle			tsqID;
+	char* 					DAQmxErrMsg									= NULL;
+	char					CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
+	int 					buffsize;
 	
 	// cycle over channels
 	for (int i = 0; i < data->numchan; i++) {
-		CmtTSQHandle	tsqID = GetSinkVChanTSQHndl(data->sinkVChans[i]);
+		tsqID = GetSinkVChanTSQHndl(data->sinkVChans[i]);
 		while (data->databuff_size[i] < data->writeblock) {
 			
 			// if datain[i] is empty, get data packet from queue
 			if (!data->datain_size[i]) {
 				
-				// check if there are any data packets in the queue
-				CmtGetTSQAttribute(tsqID, ATTR_TSQ_ITEMS_IN_QUEUE, &queue_items);
+				// try to get a non-NULL data packet from queue 
+				do { 
+					CmtErrChk ( itemsRead = CmtReadTSQData (tsqID, &dataPacket, 1, 0, 0) );
+				} while (!dataPacket || !itemsRead);
 				
 				// if there are no more data packets, then skip this channel
-				if (!queue_items) {
+				if (!itemsRead) {
 					writeBuffersFilledFlag = FALSE;				// there is not enough data for this channel 
 					break;
 				}
-				
-				// get data packet from queue
-				CmtReadTSQData (tsqID, &dataPacket,1,0,0);
 				
 				// copy data packet to datain
 				dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
@@ -9672,7 +10005,7 @@ FCallReturn_type*   WriteDODAQmx(Dev_type* dev)
 					data->datain_repeat[i] -= ncopies;
 				else {
 					// if repeats is infinite, check if there is another data packet waiting in the queue
-					CmtGetTSQAttribute(tsqID, ATTR_TSQ_ITEMS_IN_QUEUE, &queue_items);
+					CmtErrChk( CmtGetTSQAttribute(tsqID, ATTR_TSQ_ITEMS_IN_QUEUE, &queue_items) );
 					
 					// if there is another data packet in the queue, then switch to the new packet by freeing datain[i]
 					if (queue_items) {
@@ -9751,14 +10084,17 @@ FCallReturn_type*   WriteDODAQmx(Dev_type* dev)
 	
 DAQmxError:
 	
-	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	fCallReturn = init_FCallReturn_type(error, "WriteDODAQmx", errMsg);
-	free(errMsg);
+	buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	DAQmxErrMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(DAQmxErrMsg, buffsize+1);
+	fCallReturn = init_FCallReturn_type(error, "WriteDODAQmx", DAQmxErrMsg);
+	free(DAQmxErrMsg);
+	return fCallReturn;
 	
-Error:
+CmtError:
 	
+	CmtGetErrorMessage (error, CmtErrMsgBuffer);
+	fCallReturn = init_FCallReturn_type(error, "WriteDODAQmx", CmtErrMsgBuffer);   
 	ClearDAQmxTasks(dev);
 	return fCallReturn;
 }	 
@@ -9775,7 +10111,8 @@ static BOOL	DAQmxTasksDone(Dev_type* dev)
 	if (dev->AITaskSet)
 	if (dev->AITaskSet->taskHndl) {
 		DAQmxGetTaskAttribute(dev->AITaskSet->taskHndl, DAQmx_Task_Complete, &taskDoneFlag);
-		if (!taskDoneFlag) return FALSE;
+		if (!taskDoneFlag) 
+			return FALSE;
 	}
 	
 	// AO task
@@ -10109,18 +10446,18 @@ static FCallReturn_type* FillOutputBuffer(Dev_type* dev)
 	FCallReturn_type*	fCallReturn		= NULL;
 	unsigned int		nSamples;
 	
-	// NOTE: make sure that AO and Do tasks are reserved at this point
+	// NOTE: make sure that AO and DO tasks are reserved at this point
 	
 	if (!dev->AOTaskSet || !dev->AOTaskSet->taskHndl) goto SkipAOBuffers; // no analog output buffers  
 	
 	DAQmxGetWriteAttribute(dev->AOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);
 	// try to fill buffer completely, i.e. the buffer has twice the blocksize number of samples
 	if(nSamples) // if there is space in the buffer
-		if (WriteAODAQmx(dev)) goto Error;
+		if ((fCallReturn = WriteAODAQmx(dev))) goto Error;
 	// check again if buffer is filled
 	DAQmxGetWriteAttribute(dev->AOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);					
 	if(nSamples) // if there is space in the buffer
-		if (WriteAODAQmx(dev)) goto Error;
+		if ((fCallReturn = WriteAODAQmx(dev))) goto Error;
 					
 SkipAOBuffers:
 	
@@ -10129,11 +10466,11 @@ SkipAOBuffers:
 	DAQmxGetWriteAttribute(dev->DOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);
 	// try to fill buffer completely, i.e. the buffer has twice the blocksize number of samples
 	if(nSamples) // if there is space in the buffer
-		if (WriteDODAQmx(dev)) goto Error;
+		if ((fCallReturn = WriteDODAQmx(dev))) goto Error;
 	// check again if buffer is filled
 	DAQmxGetWriteAttribute(dev->DOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);					
 	if(nSamples) // if there is space in the buffer
-		if (WriteDODAQmx(dev)) goto Error;
+		if ((fCallReturn = WriteDODAQmx(dev))) goto Error;
 					
 SkipDOBuffers:
 							
@@ -10355,22 +10692,27 @@ int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyN
 // It is not called if task stops after calling DAQmxClearTask or DAQmxStopTask.
 int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
-	Dev_type*	dev = callbackData;
+	Dev_type*	dev 		= callbackData;
+	int			error		= 0;
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
-	if (status < 0) goto DAQmxError;
+	DAQmxErrChk(status);
+	
+	// stop task explicitly
+	DAQmxErrChk(DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop));
 	
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
 	if (DAQmxTasksDone(dev))
 		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 		
 	return 0;
+	
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
 	char* errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	TaskControlIterationDone(dev->taskController, status, errMsg, FALSE);
+	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	free(errMsg);
 	ClearDAQmxTasks(dev); 
 	return 0;
@@ -10461,7 +10803,8 @@ SendDataError:
 
 static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
+	Dev_type*			dev				= GetTaskControlModuleData(taskControl);
+	FCallReturn_type*	fCallReturn		= NULL;
 	
 	// set finite/continuous Mode and dim number of repeats if neccessary
 	BOOL	continuousFlag;
@@ -10487,8 +10830,14 @@ static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const*
 	// reset current iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, 0);
 	
+	// configure device again
+	if ((fCallReturn = ConfigDAQmxDevice(dev))) goto Error;
 	
 	return init_FCallReturn_type(0, "", "");
+	
+Error:
+	
+	return fCallReturn;
 }
 
 static FCallReturn_type* UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
@@ -10500,25 +10849,31 @@ static FCallReturn_type* UnconfigureTC (TaskControl_type* taskControl, BOOL cons
 
 static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
-	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
-	FCallReturn_type*   fCallReturn;
+	Dev_type*			dev				= GetTaskControlModuleData(taskControl);
+	FCallReturn_type*   fCallReturn		= NULL;
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
 	
 	// fill output buffers if any
-	FillOutputBuffer(dev);
+	if ((fCallReturn = FillOutputBuffer(dev))) goto Error;
 	
 	// start all DAQmx tasks if output tasks have their buffers filled with data
 	if (OutputBuffersFilled(dev)) {
-		if ((fCallReturn = StartAllDAQmxTasks(dev))) {
-			TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo, FALSE);
-		}
+		if ((fCallReturn = StartAllDAQmxTasks(dev))) goto Error;
+		
 		// if any of the DAQmx Tasks require a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
 		if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
 			TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);
 	}
 	// otherwise do this check again whenever data is placed in the Sink VChans and start all DAQmx tasks
+	
+	return; // no error
+	
+Error:
+	
+	TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo, FALSE);
+	discard_FCallReturn_type(&fCallReturn);
 }
 
 static void AbortIterationTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
@@ -10799,11 +11154,11 @@ static FCallReturn_type* AO_DataReceivedTC	(TaskControl_type* taskControl, TaskS
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
 			
 			// write data to output buffers
-			FillOutputBuffer(dev);
+			if ((fCallReturn = FillOutputBuffer(dev))) goto Error;
 				
 			// start all DAQmx tasks if output tasks have their buffers filled with data
 			if (OutputBuffersFilled(dev)) {
-				if ((fCallReturn = StartAllDAQmxTasks(dev))) TaskControlIterationDone(taskControl, fCallReturn->retVal, fCallReturn->errorInfo, FALSE);
+				if ((fCallReturn = StartAllDAQmxTasks(dev))) goto Error;
 				// if any of the DAQmx Tasks require a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
 				if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
 					TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);
@@ -10837,7 +11192,6 @@ DAQmxError:
 Error:
 	
 	OKfree(VChanName);
-	OKfree(errMsg);
 	return fCallReturn;
 }
 

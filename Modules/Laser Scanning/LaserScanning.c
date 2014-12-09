@@ -5022,7 +5022,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0);
 			
 			// send number of samples in waveform
-			unsigned long long*	nCommandWaveformSamplesPtr = malloc (sizeof(unsigned long long));
+			uInt64*	nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
 			*nCommandWaveformSamplesPtr = CALPOINTS * nSamplesPerCalPoint;
 			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
 			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
@@ -5065,7 +5065,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
 			
 			// send number of samples in waveform
-			unsigned long long*	nCommandWaveformSamplesPtr = malloc (sizeof(unsigned long long));
+			uInt64*	nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
 			*nCommandWaveformSamplesPtr = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
 			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
 			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
@@ -5119,7 +5119,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0);
 			
 			// send number of samples in waveform
-			unsigned long long*	nCommandWaveformSamplesPtr = malloc (sizeof(unsigned long long));
+			uInt64*	nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
 			*nCommandWaveformSamplesPtr = (flybackSamples + postStepSamples) * cal->nRepeat;
 			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
 			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
@@ -5175,7 +5175,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
 			
 			// send number of samples in waveform
-			unsigned long long*	nCommandWaveformSamplesPtr = malloc (sizeof(unsigned long long));
+			uInt64*	nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
 			*nCommandWaveformSamplesPtr = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
 			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
 			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
@@ -5227,7 +5227,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			SendDataPacket(cal->baseClass.VChanCom, NULL, 0);
 			
 			// send number of samples in waveform
-			unsigned long long*	nCommandWaveformSamplesPtr = malloc (sizeof(unsigned long long));
+			uInt64*	nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
 			*nCommandWaveformSamplesPtr = nSamples;
 			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
 			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
@@ -5292,6 +5292,9 @@ static FCallReturn_type* DoneTC_NonResGalvoCal (TaskControl_type* taskControl, s
 	// calibration complete, undim Save calibration
 	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 0);
 	
+	// cleanup
+	discard_Waveform_type(&cal->positionWaveform);
+	
 	return init_FCallReturn_type(0, "", ""); 
 }
 
@@ -5300,7 +5303,9 @@ static FCallReturn_type* StoppedTC_NonResGalvoCal (TaskControl_type* taskControl
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
 	// dim Save calibration since calibration is incomplete
-	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 1);  
+	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 1);
+	
+	// cleanup
 	
 	return init_FCallReturn_type(0, "", ""); 
 }
@@ -5716,8 +5721,6 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 		}
 	}
 		
-	discard_Waveform_type(&cal->positionWaveform); 
-	
 	OKfree(dataPackets);
 	
 	return init_FCallReturn_type(0, "", "");

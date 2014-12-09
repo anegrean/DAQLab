@@ -4839,6 +4839,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CONFIGURE:
 					// Reconfigures Task Controller
 					
+					// clear error
+					discard_ErrorMsg_type(&taskControl->errorMsg);
+					
 					// configure again only this task control
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
 					if (TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
@@ -4856,8 +4859,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 				case TASK_EVENT_UNCONFIGURE:
 					
-					// clear error
-					discard_ErrorMsg_type(&taskControl->errorMsg);
 					// unconfigure
 					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL))) {
 						taskControl->errorMsg = 

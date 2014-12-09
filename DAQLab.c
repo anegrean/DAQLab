@@ -2198,7 +2198,7 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 				case TCPan1_StartStop:
 					
 					//test lex
-					CVIProfSetCurrentThreadProfiling (TRUE);
+					//CVIProfSetCurrentThreadProfiling (TRUE);
 					Ttaskstart=Timer();     
 					
 					GetCtrlVal(panel,control,&starttask);

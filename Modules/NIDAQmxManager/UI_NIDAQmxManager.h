@@ -59,14 +59,14 @@
 #define  DIDOLChSet                       9
 #define  DIDOLChSet_Plate                 2       /* control type: deco, callback function: (none) */
 #define  DIDOLChSet_VChanName             3       /* control type: string, callback function: (none) */
-#define  DIDOLChSet_CHECKBOX              4       /* control type: radioButton, callback function: (none) */
-#define  DIDOLChSet_RADIOBUTTON           5       /* control type: radioButton, callback function: (none) */
+#define  DIDOLChSet_Invert                4       /* control type: radioButton, callback function: (none) */
+#define  DIDOLChSet_OutputBTTN            5       /* control type: radioButton, callback function: (none) */
 #define  DIDOLChSet_OnDemand              6       /* control type: radioButton, callback function: (none) */
 
 #define  DIDOPChSet                       10
 #define  DIDOPChSet_Plate                 2       /* control type: deco, callback function: (none) */
 #define  DIDOPChSet_VChanName             3       /* control type: string, callback function: (none) */
-#define  DIDOPChSet_CHECKBOX              4       /* control type: radioButton, callback function: (none) */
+#define  DIDOPChSet_Invert                4       /* control type: radioButton, callback function: (none) */
 #define  DIDOPChSet_RADIOBUTTON_7         5       /* control type: radioButton, callback function: (none) */
 #define  DIDOPChSet_OnDemand              6       /* control type: radioButton, callback function: (none) */
 #define  DIDOPChSet_RADIOBUTTON_6         7       /* control type: radioButton, callback function: (none) */
@@ -186,8 +186,9 @@
 
      /* tab page panel controls */
 #define  SETPAN_Plate                     2       /* control type: deco, callback function: (none) */
-#define  SETPAN_VChanName                 3       /* control type: string, callback function: (none) */
-#define  SETPAN_Timeout                   4       /* control type: numeric, callback function: (none) */
+#define  SETPAN_SinkVChanName             3       /* control type: string, callback function: (none) */
+#define  SETPAN_SrcVChanName              4       /* control type: string, callback function: (none) */
+#define  SETPAN_Timeout                   5       /* control type: numeric, callback function: (none) */
 
      /* tab page panel controls */
 #define  Timing_RefClkSource              2       /* control type: string, callback function: (none) */

@@ -1,3 +1,5 @@
+#include "nivision.h"
+#include "pathctrl.h"
 #include "UI_DataStorage.h"
 
 //==============================================================================
@@ -21,9 +23,12 @@
 // Constants
 // Data Storage UI resource
 #define UI_DataStorage			"./Modules/Data Storage/UI_DataStorage.uir"
+#define MAXBASEFILEPATH			MAX_PATHNAME_LEN
 
 //test
 char* rawfilepath="E:\\Rawdata\\";
+int					iterationnr=0;    //needs to be cleaned up,only for testing purposes
+
 
 //==============================================================================
 // Types
@@ -52,6 +57,8 @@ struct DatStore {
 
 	int					mainPanHndl;
 	
+	char*				basefilepath;
+	
 		// Callback to install on controls from selected panel in UI_DataStorage.uir
 		// Override: Optional, to change UI panel behavior. 
 	CtrlCallbackPtr		uiCtrlsCB;
@@ -67,6 +74,7 @@ struct DatStore {
 		// hardware channel index. If a channel is not in use, its value in the array is NULL.
 
 	DS_Channel_type*	channels[MAX_DS_CHANNELS];
+	
 
 };
 
@@ -141,6 +149,8 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 
 	// initialize base class
 	initalloc_DAQLabModule(&ds->baseClass, className, instanceName);
+	
+	ds->basefilepath=malloc(MAXBASEFILEPATH*sizeof(char));
 	
 	// create Data Storage Task Controller
 	tc = init_TaskControl_type (instanceName, ds, ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
@@ -219,7 +229,7 @@ void discard_DataStorage (DAQLabModule_type** mod)
 
 static DS_Channel_type* init_DS_Channel_type (DataStorage_type* dsInstance, int panHndl, size_t chanIdx,char VChanName[])
 {
-	DLDataTypes allowedPacketTypes[] = {DL_Waveform_UShort};   	   //, WaveformPacket_UInt, WaveformPacket_Double
+	DLDataTypes allowedPacketTypes[] = {DL_Waveform_UShort,DL_Image_NIVision};   	   //, WaveformPacket_UInt, WaveformPacket_Double
 	
 	DS_Channel_type* chan = malloc (sizeof(DS_Channel_type));
 	if (!chan) return NULL;
@@ -258,6 +268,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 {
 	DataStorage_type* 	ds 			= (DataStorage_type*) mod;
 	int 				error		= 0; 
+	int 				numListLines=5;
 
 	// load main panel
 	ds->mainPanHndl = LoadPanel(workspacePanHndl, UI_DataStorage, DSMain);
@@ -268,6 +279,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// connect module data and user interface callbackFn to all direct controls in the panel
 	SetCtrlsInPanCBInfo(mod, ((DataStorage_type*)mod)->uiCtrlsCB, ds->mainPanHndl);
 	
+	SetCtrlVal(ds->mainPanHndl,DSMain_STRING,rawfilepath);
 	
 	DisplayPanel(ds->mainPanHndl);
 	//default settings:
@@ -408,6 +420,8 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 	int 				i;
 	int 				channr=0;
 	int					itemIndex;
+	int 				reply;
+	char*				currentbasepath;
 	
 	switch (event) {
 			
@@ -465,9 +479,44 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 						RedrawDSPanel(ds);
 					break;
 					
+					case DSMain_Change:
+						currentbasepath=malloc(MAX_PATHNAME_LEN*sizeof(char));
+						GetCtrlVal(ds->mainPanHndl,DSMain_STRING,currentbasepath);
+						reply=DirSelectPopup (currentbasepath, "Select Base File Folder:", 1, 1, ds->basefilepath);
+						if (reply) SetCtrlVal(ds->mainPanHndl,DSMain_STRING,ds->basefilepath);
+						free(currentbasepath);
+						break;
+					case DSMain_STRING: 
+						 //indicator only
+					break;
+					
 			}
 	}
 	return 0;
+}
+
+
+int SaveImage(Image* image,DataStorage_type* ds,char* vChanname,int iterationnr)
+{
+	int err=0;
+	TIFFFileOptions options;
+	char *fileName;
+	char buf[MAX_PATHNAME_LEN];   
+	
+	Fmt (buf, "%s<%s#%i[w4p0]",vChanname,iterationnr);    
+	//append iteration number to file name
+	fileName=StrDup(ds->basefilepath);
+	AppendString(&fileName, buf, -1);	//create file name
+	AppendString(&fileName, ".tif", -1);		 
+
+	options.photoInterp=IMAQ_BLACK_IS_ZERO;
+	options.compressionType=IMAQ_NO_COMPRESSION;
+ 	err=imaqWriteTIFFFile(image,fileName, &options, NULL); 
+	
+	free(fileName);
+	
+	return err;
+
 }
 
 
@@ -489,7 +538,9 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 	char* 				errMsg 				= StrDup("Writing data to ");
 	char				cmtStatusMessage[CMT_MAX_MESSAGE_BUF_SIZE];
 	void*				dataPacketDataPtr;
-	DLDataTypes			dataPacketType;  
+	DLDataTypes			dataPacketType; 
+	Image*				image;
+	
 			
 			
 	
@@ -534,6 +585,14 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 							fCallReturn = init_FCallReturn_type(-1, "DataStorage", errMsg);
 						}
 						CloseFile(filehandle);
+					break;
+					case DL_Image_NIVision:
+						//get the image
+					//	GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
+						SaveImage(image,ds,VChanName,iterationnr++);
+						
+					
+						
 					break;
 				}
 				ReleaseDataPacket(&dataPackets[i]);

@@ -476,9 +476,10 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	}
 
 	// populate measurement mode ring and select Finite measurement mode
+	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Continuous",TASK_CONTINUOUS );  
 	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Finite", TASK_FINITE);
-	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Continuous",TASK_CONTINUOUS );
-	SetCtrlIndex(vupc->settingsPanHndl, VUPCSet_MeasMode, 0);
+	
+	SetCtrlIndex(vupc->settingsPanHndl, VUPCSet_MeasMode, TASK_FINITE);
 
 	// update acquisition settings display from structure data
 	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_NSamples, *vupc->refNSamples);
@@ -1314,6 +1315,7 @@ static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl
 	PulseTrain_type*    pulsetrain;
 	size_t 				i;
 	PulseTrainModes		pulsetrainmode;
+	double 				hightime,lowtime;
 			
 	
 	switch(taskState) {
@@ -1354,7 +1356,9 @@ static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl
 						SetCtrlVal(vupc->settingsPanHndl,VUPCSet_SamplingRate,vupc->samplingRate/1000);  //in khz
 						break;
 					case DL_PulseTrain_Time:
-						vupc->samplingRate=GetPulseTrainFreqTimingFreq(pulsetrain);
+						hightime=GetPulseTrainTimeTimingHighTime(pulsetrain);
+						lowtime=GetPulseTrainTimeTimingLowTime(pulsetrain); 
+						vupc->samplingRate=1/(hightime+lowtime);
 						SetCtrlVal(vupc->settingsPanHndl,VUPCSet_SamplingRate,vupc->samplingRate/1000);     //in khz  
 						break;
 					case DL_PulseTrain_Ticks:

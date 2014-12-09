@@ -469,9 +469,9 @@ typedef struct {
 	size_t*						refNSamples;				// Points to either device or VChan-based number of samples to acquire. By default points to device. 
 	double       				sampleRate;    				// Sampling rate in [Hz] if device task settings is used as reference. 
 	double*						refSampleRate;				// Points to either device or VChan-based sampling rate. By default points to device.    
-	char*         				sampClkSource; 				// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
-	SampClockEdge_type 			sampClkEdge;   				// Sample clock active edge.
-	char*         				refClkSource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
+//	char*         				sampClkSource; 				// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
+//	SampClockEdge_type 			sampClkEdge;   				// Sample clock active edge.
+//	char*         				refClkSource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
 	double        				refClkFreq;    				// Reference clock frequency if such a clock is used.
 	
 	//------------------------------------
@@ -968,6 +968,8 @@ static int CVICALLBACK 				CO_TicksLow_TaskSet_CB 					(int panel, int control, 
 static int CVICALLBACK 				CO_Clk_TaskSet_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static int CVICALLBACK 				CO_Trig_TaskSet_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+void 								SendPulseTrainPacket					(SourceVChan_type* source,PulseTrain_type* pulsetrain);
 
 //---------------------------------------------------------------------- to be cleaned up
 
@@ -3522,11 +3524,16 @@ static int CVICALLBACK CO_Freq_TaskSet_CB (int panel, int control, int event, vo
 	ChanSet_CO_type* 	selectedChan 	= callbackData;
 	FCallReturn_type*	fCallReturn		= NULL;
 	double 				frequency; 
+	PulseTrain_type* 	pulsetrain;
 	
 	if (event != EVENT_COMMIT) return 0;
 			
 	GetCtrlVal(panel, control, &frequency);
 	SetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)selectedChan->pulseTrain, frequency);
+	
+	//send pulsetrain on freq change
+	pulsetrain	= CopyPulseTrain(GetCOChanPulseTrain(selectedChan));   
+	SendPulseTrainPacket(selectedChan->baseClass.srcVChan,pulsetrain);  
 	
 	// configure CO task
 	if ( (fCallReturn = ConfigDAQmxCOTask(selectedChan->baseClass.device)) ) goto Error;   
@@ -3660,12 +3667,17 @@ static int CVICALLBACK CO_THigh_TaskSet_CB (int panel, int control, int event, v
 	ChanSet_CO_type* 	selectedChan 	= callbackData;
 	FCallReturn_type*	fCallReturn		= NULL; 
     double 				time;
+	PulseTrain_type* 	pulsetrain;
 	
 	if (event != EVENT_COMMIT) return 0;   
 	
 	GetCtrlVal(panel, control, &time);		// read in [ms]
 	time *= 1e-3;							// convert to [s]
 	SetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*) selectedChan->pulseTrain, time);
+	
+		//send pulsetrain on freq change
+	pulsetrain	= CopyPulseTrain(GetCOChanPulseTrain(selectedChan));   
+	SendPulseTrainPacket(selectedChan->baseClass.srcVChan,pulsetrain);  
 	
 	// configure CO task
 	if ( (fCallReturn = ConfigDAQmxCOTask(selectedChan->baseClass.device)) ) goto Error;
@@ -3686,12 +3698,17 @@ static int CVICALLBACK CO_TLow_TaskSet_CB (int panel, int control, int event, vo
 	ChanSet_CO_type* 	selectedChan 	= callbackData;
 	FCallReturn_type*	fCallReturn		= NULL;   
 	double 				time;
+	PulseTrain_type* 	pulsetrain;         
 	
 	if (event != EVENT_COMMIT) return 0; 
 	
 	GetCtrlVal(panel, control, &time);		// read in [ms]
 	time *= 1e-3;							// convert to [s] 
-	SetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*) selectedChan->pulseTrain, time);    
+	SetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*) selectedChan->pulseTrain, time);  
+	
+		//send pulsetrain on freq change
+	pulsetrain	= CopyPulseTrain(GetCOChanPulseTrain(selectedChan));   
+	SendPulseTrainPacket(selectedChan->baseClass.srcVChan,pulsetrain);  
 	
 	// configure CO task
 	if ( (fCallReturn = ConfigDAQmxCOTask(selectedChan->baseClass.device)) ) goto Error;
@@ -3814,6 +3831,35 @@ Error:
 	return 0;
 }
 
+void SendPulseTrainPacket(SourceVChan_type* source,PulseTrain_type* pulsetrain)
+{
+	DataPacket_type*  			dataPacket			= NULL;
+	FCallReturn_type* 			fCallReturn			= NULL;
+	PulseTrainTimingTypes 		pulsetype;
+	
+		
+		pulsetype	= GetPulseTrainType(pulsetrain);
+		switch(pulsetype){
+				
+			case PulseTrain_Freq:
+				dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);  
+				break;
+				
+			case PulseTrain_Time:
+				dataPacket = init_DataPacket_type(DL_PulseTrain_Time, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);  
+				break;
+				
+			case PulseTrain_Ticks: 
+				dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);  
+				break;
+		}
+		
+		// send data packet with pulsetrain
+		fCallReturn = SendDataPacket(source, dataPacket, 0);
+		discard_FCallReturn_type(&fCallReturn);
+	
+}
+
 
 static int CVICALLBACK CO_Trig_TaskSet_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
@@ -3823,14 +3869,13 @@ static int CVICALLBACK CO_Trig_TaskSet_CB	(int panel, int control, int event, vo
 	char 						buf[100];  			// temp string hlder to determine string size
 	int 						sendPulseTrain		= FALSE;
 	PulseTrain_type* 			pulsetrain;
-	DataPacket_type*  			dataPacket			= NULL;
 	FCallReturn_type* 			fCallReturn			= NULL;
-	PulseTrainTimingTypes 		pulsetype;
+	
 	
 	if (event != EVENT_COMMIT) return 0;
 	
 	
-	switch (control) { 
+	switch (control) { 							  
 			
 		case TRIGPAN_Slope:
 			
@@ -3887,29 +3932,8 @@ static int CVICALLBACK CO_Trig_TaskSet_CB	(int panel, int control, int event, vo
 			
 	}
 	
-	if (sendPulseTrain) {
-		pulsetrain	= CopyPulseTrain(GetCOChanPulseTrain(selectedChan));
-		pulsetype	= GetPulseTrainType(pulsetrain);
-		switch(pulsetype){
-				
-			case PulseTrain_Freq:
-				dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);  
-				break;
-				
-			case PulseTrain_Time:
-				dataPacket = init_DataPacket_type(DL_PulseTrain_Time, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);  
-				break;
-				
-			case PulseTrain_Ticks: 
-				dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);  
-				break;
-		}
-		
-		// send data packet with pulsetrain
-		fCallReturn = SendDataPacket(selectedChan->baseClass.srcVChan, dataPacket, 0);
-		discard_FCallReturn_type(&fCallReturn);
-		
-	}
+	pulsetrain	= CopyPulseTrain(GetCOChanPulseTrain(selectedChan));   
+	if (sendPulseTrain) SendPulseTrainPacket(selectedChan->baseClass.srcVChan,pulsetrain);  
 	
 	// configure CO task
 	if ( (fCallReturn = ConfigDAQmxCOTask(selectedChan->baseClass.device)) ) goto Error;
@@ -4013,9 +4037,9 @@ static CounterTaskTiming_type* init_CounterTaskTiming_type (void)
 	taskTiming -> refNSamples			= &taskTiming->nSamples;
 	taskTiming -> sampleRate			= DAQmxDefault_Task_SampleRate;
 	taskTiming -> refSampleRate			= &taskTiming->sampleRate;
-	taskTiming -> sampClkSource			= NULL;
-	taskTiming -> sampClkEdge			= SampClockEdge_Rising;
-	taskTiming -> refClkSource			= NULL;									// onboard clock has no external reference to sync to
+//	taskTiming -> sampClkSource			= NULL;
+//	taskTiming -> sampClkEdge			= SampClockEdge_Rising;
+//	taskTiming -> refClkSource			= NULL;									// onboard clock has no external reference to sync to
 	taskTiming -> refClkFreq			= DAQmxDefault_Task_RefClkFreq;
 	
 	// UI
@@ -4035,8 +4059,8 @@ static void discard_CounterTaskTiming_type (TaskTiming_type** taskTimingPtr)
 {
 	if (!*taskTimingPtr) return;
 	
-	OKfree((*taskTimingPtr)->sampClkSource);
-	OKfree((*taskTimingPtr)->refClkSource);
+//	OKfree((*taskTimingPtr)->sampClkSource);
+//	OKfree((*taskTimingPtr)->refClkSource);	    
 	
 	OKfree(*taskTimingPtr);
 }
@@ -7998,6 +8022,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					// add trigger data structure
 						
 					newChan->baseClass.referenceTrig = init_TaskTrig_type(dev, 0);	   //? lex
+					
 						
 					int clkPanHndl;
 					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_ClkTabIdx, &clkPanHndl);
@@ -8019,7 +8044,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					SetCtrlAttribute(clkPanHndl,CLKPAN_RefClockSlope,ATTR_DIMMED,TRUE);
 					SetCtrlAttribute(clkPanHndl,CLKPAN_RefClkSource,ATTR_DIMMED,TRUE); 
 						
-					// set default sample clock source
+					// set default reference clock source
 					newChan->baseClass.referenceTrig->trigSource = StrDup("OnboardClock");
 					SetCtrlVal(clkPanHndl, CLKPAN_RefClkSource, "OnboardClock");
 		
@@ -9061,6 +9086,8 @@ static FCallReturn_type* ConfigDAQmxCITask (Dev_type* dev)
 	ChanSet_type** 		chanSetPtrPtr;
 	size_t				nCIChan;
 	FCallReturn_type*	fCallReturn		= NULL;
+	char*				refclksource;
+	char*				sampleclksource;
 	
 	if (!dev->CITaskSet) return NULL;	// do nothing
 	
@@ -9109,6 +9136,9 @@ static FCallReturn_type* ConfigDAQmxCITask (Dev_type* dev)
 				
 				ChanSet_CI_Frequency_type*	chCIFreqPtr = *(ChanSet_CI_Frequency_type**)chanSetPtrPtr;
 				
+				sampleclksource=chCIFreqPtr->baseClass.startTrig->trigSource;
+				refclksource=chCIFreqPtr->baseClass.referenceTrig->trigSource;
+				
 				DAQmxErrChk (DAQmxCreateCIFreqChan((*chanSetPtrPtr)->taskHndl, (*chanSetPtrPtr)->name, "", chCIFreqPtr->freqMin, chCIFreqPtr->freqMax, DAQmx_Val_Hz, 
 												   chCIFreqPtr->edgeType, chCIFreqPtr->measMethod, chCIFreqPtr->measTime, chCIFreqPtr->divisor, NULL));
 				
@@ -9118,13 +9148,13 @@ static FCallReturn_type* ConfigDAQmxCITask (Dev_type* dev)
 				
 				// sample clock source
 				// if no sample clock is given, then use OnboardClock by default
-				if (!chCIFreqPtr->taskTiming->sampClkSource) 
+				if (!sampleclksource)  //chCIFreqPtr->taskTiming->sampClkSource
 					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
 				else
-					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_Src, chCIFreqPtr->taskTiming->sampClkSource));
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_Src, sampleclksource));   //chCIFreqPtr->taskTiming->sampClkSource
 	
 				// sample clock edge
-				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreqPtr->taskTiming->sampClkEdge));
+				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreqPtr->baseClass.startTrig->slope));  //chCIFreqPtr->taskTiming->sampClkEdge
 	
 				// sampling rate
 				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_Rate, *chCIFreqPtr->taskTiming->refSampleRate));
@@ -9136,8 +9166,8 @@ static FCallReturn_type* ConfigDAQmxCITask (Dev_type* dev)
 				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
 	
 				// if a reference clock is given, use it to synchronize the internal clock
-				if (chCIFreqPtr->taskTiming->refClkSource) {
-					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Src, chCIFreqPtr->taskTiming->refClkSource));
+				if (refclksource) {  //chCIFreqPtr->taskTiming->refClkSource
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Src,refclksource ));	  //chCIFreqPtr->taskTiming->refClkSource
 					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Rate, chCIFreqPtr->taskTiming->refClkFreq));
 				}
 	

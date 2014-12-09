@@ -1,6 +1,5 @@
 /**************************************************************************/
 /* LabWindows/CVI User Interface Resource (UIR) Include File              */
-/* Copyright (c) National Instruments 2014. All Rights Reserved.          */
 /*                                                                        */
 /* WARNING: Do not add to, delete from, or otherwise modify the contents  */
 /*          of this include file.                                         */
@@ -18,6 +17,8 @@
 #define  DSMain_Channels                  2       /* control type: listBox, callback function: (none) */
 #define  DSMain_COMMANDBUTTON_REM         3       /* control type: command, callback function: (none) */
 #define  DSMain_COMMANDBUTTON_ADD         4       /* control type: command, callback function: (none) */
+#define  DSMain_STRING                    5       /* control type: string, callback function: (none) */
+#define  DSMain_Change                    6       /* control type: command, callback function: (none) */
 
 
      /* Control Arrays: */

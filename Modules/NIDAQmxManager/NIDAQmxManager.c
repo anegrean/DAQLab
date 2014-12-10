@@ -10695,6 +10695,7 @@ int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	Dev_type*	dev 		= callbackData;
 	int			error		= 0;
 	
+	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
 	DAQmxErrChk(status);
 	

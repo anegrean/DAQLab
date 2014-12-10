@@ -26,7 +26,7 @@
 #define MAXBASEFILEPATH			MAX_PATHNAME_LEN
 
 //test
-char* rawfilepath="E:\\Rawdata\\";
+char* rawfilepath="D:\\Rawdata\\";
 int					iterationnr=0;    //needs to be cleaned up,only for testing purposes
 
 
@@ -564,6 +564,8 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 			Fmt (rawfilename, "%s<%srawdata_%s.bin", rawfilepath,VChanName); 
 				
 			for (size_t i = 0; i < nPackets; i++) {
+				if (!dataPackets[i]) continue;
+				
 				dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);
 				switch (dataPacketType) {
 					case DL_Waveform_UShort:

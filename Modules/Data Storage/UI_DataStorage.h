@@ -19,6 +19,7 @@
 #define  DSMain_COMMANDBUTTON_ADD         4       /* control type: command, callback function: (none) */
 #define  DSMain_STRING                    5       /* control type: string, callback function: (none) */
 #define  DSMain_Change                    6       /* control type: command, callback function: (none) */
+#define  DSMain_CHECKBOX_OVERWRITE        7       /* control type: radioButton, callback function: (none) */
 
 
      /* Control Arrays: */

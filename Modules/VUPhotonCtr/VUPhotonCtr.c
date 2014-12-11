@@ -623,13 +623,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 		if(vupc->channels[i]!=NULL) {
 			if(i==0){
 			//PMT1 is selected
-				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Fan,0);
-				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Cooling,0);
-				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Mode,0);
-				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,0);
-				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, 0);
-				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, zero);
-				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Gain, zero);
+			 
 			}
 			if(i==1){
 			//PMT2 is selected
@@ -737,6 +731,7 @@ int ResetActions(VUPhotonCtr_type* 	vupc)
 	
 	error=PMTReset();
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_BTTN_TestMode, FALSE);
+	ResetVUPC_UI(vupc);
 	PMTController_UpdateDisplay(vupc);
 	
 	return error;
@@ -812,6 +807,7 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,HV||CurrentErr);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, statreg&PMT1TEMP_BIT);
+				
 			}
 			if(vupc->channels[i]->chanIdx==PMT2){
 			//PMT2 is selected

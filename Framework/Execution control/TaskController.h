@@ -480,6 +480,7 @@ TaskStates_type			GetTaskControlState					(TaskControl_type* taskControl);
 	// repeats = 1 by default
 void					SetTaskControlIterations			(TaskControl_type* taskControl, size_t repeat);
 size_t					GetTaskControlIterations			(TaskControl_type* taskControl);
+size_t 					GetTaskControlCurrentIterIdx		(TaskControl_type* taskControl);
 
 	// Task Controller Iteration block completion timeout
 	// default timeout = 0, Iteration block complete after calling IterateFptr. Otherwise iteration will complete

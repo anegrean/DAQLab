@@ -36,9 +36,10 @@ typedef struct DatStore	DataStorage_type;
 
 typedef struct {
 	DataStorage_type*	dsInstance;	    // reference to device that owns the channel
-	SinkVChan_type*		VChan;			// virtual channel assigned to this physical channel
+	SinkVChan_type*		VChan;			// virtual channel assigned to this module
 	int					panHndl;		// panel handle to keep track of controls
-	size_t			   	chanIdx;		// 1-based channel index       
+	size_t			   	chanIdx;		// 1-based channel index 
+	size_t				iterationnr;	//test, to keep track of number of iterations 
 } DS_Channel_type;
 
 

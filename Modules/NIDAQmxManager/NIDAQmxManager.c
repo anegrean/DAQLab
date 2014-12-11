@@ -7431,13 +7431,13 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						//--------------------------
 						// get channels tab panel handle
 					int chanPanHndl;
-						// GetPanelHandleFromTabPage(dev->CITaskSet->panHndl, CICOTskSet_Tab, DAQmxCICOTskSet_ChanTabIdx, &chanPanHndl);
+						 //GetPanelHandleFromTabPage(dev->CITaskSet->panHndl, CICOTskSet_Tab, DAQmxCICOTskSet_ChanTabIdx, &chanPanHndl);
 						// remove "None" labelled channel tab
 						// DeleteTabPage(chanPanHndl, Chan_ChanSet, 0, 1);
 						// add callback data and callback function to remove channels
-						// SetCtrlAttribute(chanPanHndl, Chan_ChanSet,ATTR_CALLBACK_FUNCTION_POINTER, RemoveDAQmxCIChannel_CB);
-						// SetCtrlAttribute(chanPanHndl, Chan_ChanSet,ATTR_CALLBACK_DATA, dev);
-							
+						 //SetCtrlAttribute(chanPanHndl, Chan_ChanSet,ATTR_CALLBACK_FUNCTION_POINTER, RemoveDAQmxCIChannel_CB);
+						 //SetCtrlAttribute(chanPanHndl, Chan_ChanSet,ATTR_CALLBACK_DATA, dev);
+							    
 						//------------------------------------------------
 						// add new channel
 						//------------------------------------------------

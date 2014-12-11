@@ -420,6 +420,11 @@ size_t GetTaskControlIterations	(TaskControl_type* taskControl)
 	return taskControl->repeat;
 }
 
+size_t GetTaskControlCurrentIterIdx	(TaskControl_type* taskControl)
+{
+	return taskControl->currIterIdx;
+}
+
 void SetTaskControlIterationTimeout	(TaskControl_type* taskControl, int timeout)
 {
 	taskControl->iterTimeout = timeout;

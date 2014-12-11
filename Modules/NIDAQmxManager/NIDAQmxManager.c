@@ -20,6 +20,7 @@
 #include <nidaqmx.h>
 #include "daqmxioctrl.h"
 #include "DataTypes.h"
+#include "utility.h"
 
 //========================================================================================================================================================================================================
 // Constants
@@ -736,6 +737,7 @@ struct Device {
 	DIDOTaskSet_type*			DOTaskSet;					// DO task settings
 	CITaskSet_type*				CITaskSet;					// CI task settings
 	COTaskSet_type*				COTaskSet;					// CO task settings
+	CmtTSVHandle				nActiveTasks;				// thread safe variable with the sum of all active tasks on the DAQ device, variable of int type
 };
 
 //========================================================================================================================================================================================================
@@ -774,7 +776,7 @@ static int	 currDev = -1;        // currently selected device from the DAQ table
 //========================================================================================================================================================================================================
 // Static functions
 
-static Dev_type* 					init_Dev_type 							(NIDAQmxManager_type* niDAQModule, DevAttr_type** attr, char taskControllerName[]);
+static Dev_type* 					init_Dev_type 							(NIDAQmxManager_type* niDAQModule, DevAttr_type* attr, char taskControllerName[]);
 static void 						discard_Dev_type						(Dev_type** a);
 
 static int 							init_DevList 							(ListType devlist, int panHndl, int tableCtrl);
@@ -991,7 +993,7 @@ static int 							ClearDAQmxTasks 						(Dev_type* dev);
 	// Stops all DAQmx Tasks defined for the device
 static FCallReturn_type*			StopDAQmxTasks 							(Dev_type* dev); 
 	// Checks if all DAQmx Tasks are done
-static BOOL							DAQmxTasksDone							(Dev_type* dev);
+//static BOOL						DAQmxTasksDone							(Dev_type* dev);
 	// Starts all DAQmx Tasks defined for the device
 	// Note: Tasks that have a HW-trigger defined will start before tasks that do not have any HW-trigger defined. This allows the later type of
 	// tasks to trigger the HW-triggered tasks. If all tasks are started successfully, it returns NULL, otherwise returns a negative value with DAQmx error code and error string combined.
@@ -1023,11 +1025,13 @@ int32 CVICALLBACK 					CODAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 st
 // DAQmx module and VChan data exchange
 //-------------------------------------
 	// AO
-FCallReturn_type* 					WriteAODAQmx 							(Dev_type* dev); 
+FCallReturn_type* 					WriteAODAQmx 							(Dev_type* dev, BOOL* writeBlockFilledFlag, size_t* nSamplesWritten); 
 
 	// Output buffers
-static BOOL							OutputBuffersFilled						(Dev_type* dev);
-static FCallReturn_type* 			FillOutputBuffer						(Dev_type* dev); 
+//static BOOL						AOOutputBufferFilled					(Dev_type* dev);
+static BOOL							DOOutputBufferFilled					(Dev_type* dev);
+//static FCallReturn_type* 			FillAOOutputBuffer						(Dev_type* dev);
+static FCallReturn_type* 			FillDOOutputBuffer						(Dev_type* dev);
 
 //--------------------------------------------
 // Various DAQmx module managemement functions
@@ -1351,14 +1355,45 @@ static void discard_DevAttr_type(DevAttr_type** a)
 	OKfree((*a)->type);
 	
 	// discard channel lists and free pointers within lists.
-	if ((*a)->AIchan) 	ListApplyToEachEx ((*a)->AIchan, 1, DisposeAIChannelList, NULL); ListDispose((*a)->AIchan); 
-	if ((*a)->AOchan) 	ListApplyToEachEx ((*a)->AOchan, 1, DisposeAOChannelList, NULL); ListDispose((*a)->AOchan);	  
-	if ((*a)->DIlines) 	ListApplyToEachEx ((*a)->DIlines, 1, DisposeDILineChannelList, NULL); ListDispose((*a)->DIlines);  
-	if ((*a)->DIports)	ListApplyToEachEx ((*a)->DIports, 1, DisposeDIPortChannelList, NULL); ListDispose((*a)->DIports);  
-	if ((*a)->DOlines)	ListApplyToEachEx ((*a)->DOlines, 1, DisposeDOLineChannelList, NULL); ListDispose((*a)->DOlines);  
-	if ((*a)->DOports)	ListApplyToEachEx ((*a)->DOports, 1, DisposeDOPortChannelList, NULL); ListDispose((*a)->DOports);  
-	if ((*a)->CIchan)	ListApplyToEachEx ((*a)->CIchan, 1, DisposeCIChannelList, NULL); ListDispose((*a)->CIchan);   
-	if ((*a)->COchan)	ListApplyToEachEx ((*a)->COchan, 1, DisposeCOChannelList, NULL); ListDispose((*a)->COchan);
+	if ((*a)->AIchan) { 	
+		ListApplyToEachEx ((*a)->AIchan, 1, DisposeAIChannelList, NULL); 
+		ListDispose((*a)->AIchan); 
+	}
+	
+	if ((*a)->AOchan) {
+		ListApplyToEachEx ((*a)->AOchan, 1, DisposeAOChannelList, NULL); 
+		ListDispose((*a)->AOchan);	  
+	}
+	
+	if ((*a)->DIlines) {
+		ListApplyToEachEx ((*a)->DIlines, 1, DisposeDILineChannelList, NULL); 
+		ListDispose((*a)->DIlines);  
+	}
+	
+	if ((*a)->DIports) {
+		ListApplyToEachEx ((*a)->DIports, 1, DisposeDIPortChannelList, NULL); 
+		ListDispose((*a)->DIports);  
+	}
+	
+	if ((*a)->DOlines) {
+		ListApplyToEachEx ((*a)->DOlines, 1, DisposeDOLineChannelList, NULL); 
+		ListDispose((*a)->DOlines);
+	}
+	
+	if ((*a)->DOports) {
+		ListApplyToEachEx ((*a)->DOports, 1, DisposeDOPortChannelList, NULL); 
+		ListDispose((*a)->DOports);  
+	}
+	
+	if ((*a)->CIchan) {
+		ListApplyToEachEx ((*a)->CIchan, 1, DisposeCIChannelList, NULL); 
+		ListDispose((*a)->CIchan);
+	}
+	
+	if ((*a)->COchan) {
+		ListApplyToEachEx ((*a)->COchan, 1, DisposeCOChannelList, NULL); 
+		ListDispose((*a)->COchan);
+	}
 	
 	// discard supported IO type lists
 	if ((*a)->AISupportedMeasTypes)		ListDispose((*a)->AISupportedMeasTypes);
@@ -3245,6 +3280,26 @@ Error:
 }
 
 
+static void	discard_WriteAOData_type (WriteAOData_type** a)
+{
+	if (!*a) return;
+	
+	for (size_t i = 0; i < (*a)->numchan; i++) {
+		OKfree((*a)->datain[i]);
+		OKfree((*a)->databuff[i]);
+	}
+	
+	OKfree((*a)->dataout);
+	OKfree((*a)->sinkVChans);
+	OKfree((*a)->datain_size);
+	OKfree((*a)->databuff_size);
+	OKfree((*a)->idx);
+	OKfree((*a)->datain_repeat);
+	OKfree((*a)->datain_remainder);
+	OKfree((*a)->datain_loop);
+	
+	OKfree(*a);
+}
 
 
 //------------------------------------------------------------------------------
@@ -3349,28 +3404,6 @@ Error:
 	
 	OKfree(a);
 	return NULL;
-}
-
-
-static void	discard_WriteAOData_type (WriteAOData_type** a)
-{
-	if (!*a) return;
-	
-	for (size_t i = 0; i < (*a)->numchan; i++) {
-		OKfree((*a)->datain[i]);
-		OKfree((*a)->databuff[i]);
-	}
-	
-	OKfree((*a)->dataout);
-	OKfree((*a)->sinkVChans);
-	OKfree((*a)->datain_size);
-	OKfree((*a)->databuff_size);
-	OKfree((*a)->idx);
-	OKfree((*a)->datain_repeat);
-	OKfree((*a)->datain_remainder);
-	OKfree((*a)->datain_loop);
-	
-	OKfree(*a);
 }
 
 static void	discard_WriteDOData_type (WriteDOData_type** a)
@@ -4781,21 +4814,25 @@ Error:
 // Dev_type
 //------------------------------------------------------------------------------
 
-static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type** attr, char taskControllerName[])
+static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type* attr, char taskControllerName[])
 {
 	Dev_type* dev = malloc (sizeof(Dev_type));
 	if (!dev) return NULL;
 	
-	dev -> niDAQModule			= niDAQModule;
-	dev -> devPanHndl			= 0;
-	dev -> attr					= *attr;
+	// init
+	dev -> nActiveTasks			= 0;
+	dev -> taskController		= NULL;
 	
 	//-------------------------------------------------------------------------------------------------
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
 	dev -> taskController = init_TaskControl_type (taskControllerName, dev, ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, 
 						  ResetTC, DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
-	if (!dev->taskController) {discard_DevAttr_type(attr); free(dev); return NULL;}
+	if (!dev->taskController) goto Error;
+	
+	dev -> niDAQModule			= niDAQModule;
+	dev -> attr					= attr;  
+	dev -> devPanHndl			= 0;
 	
 	//--------------------------
 	// DAQmx task settings
@@ -4808,28 +4845,45 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type**
 	dev -> CITaskSet			= NULL;
 	dev -> COTaskSet			= NULL;	
 	
+	//----------------------------------------
+	// Active DAQmx tasks thread safe variable
+	//----------------------------------------
+	
+	if (CmtNewTSV(sizeof(int), &dev->nActiveTasks) < 0) goto Error;
+	
+	
 	return dev;
+	
+Error:
+	
+	discard_TaskControl_type(&dev->taskController);
+	OKfree(dev);
+	return NULL;
 }
 
-static void discard_Dev_type(Dev_type** a)
+static void discard_Dev_type(Dev_type** devPtr)
 {
-	if (!(*a)) return;
+	if (!*devPtr) return;
 	
 	// device properties
-	discard_DevAttr_type(&(*a)->attr);
+	discard_DevAttr_type(&(*devPtr)->attr);
 	
 	// task controller for this device
-	discard_TaskControl_type(&(*a)->taskController);
+	discard_TaskControl_type(&(*devPtr)->taskController);
+	
+	// active tasks thread safe variable
+	if ((*devPtr)->nActiveTasks)
+		CmtDiscardTSV((*devPtr)->nActiveTasks);
 	
 	// DAQmx task settings
-	discard_AIAOTaskSet_type(&(*a)->AITaskSet);
-	discard_AIAOTaskSet_type(&(*a)->AOTaskSet);
-	discard_DIDOTaskSet_type(&(*a)->DITaskSet);
-	discard_DIDOTaskSet_type(&(*a)->DOTaskSet);
-	discard_CITaskSet_type(&(*a)->CITaskSet);
-	discard_COTaskSet_type(&(*a)->COTaskSet);
+	discard_AIAOTaskSet_type(&(*devPtr)->AITaskSet);
+	discard_AIAOTaskSet_type(&(*devPtr)->AOTaskSet);
+	discard_DIDOTaskSet_type(&(*devPtr)->DITaskSet);
+	discard_DIDOTaskSet_type(&(*devPtr)->DOTaskSet);
+	discard_CITaskSet_type(&(*devPtr)->CITaskSet);
+	discard_COTaskSet_type(&(*devPtr)->COTaskSet);
 	
-	OKfree(*a);
+	OKfree(*devPtr);
 }
 
 //===============================================================================================================
@@ -6787,7 +6841,13 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					// copy device attributes
 					newDAQmxDevAttrPtr = copy_DevAttr_type(*(DevAttr_type**)ListGetPtrToItem(devList, currDev));
 					// add new DAQmx device to module list and framework
-					newDAQmxDev = init_Dev_type(nidaq, &newDAQmxDevAttrPtr, newTCName);
+					if (!(newDAQmxDev = init_Dev_type(nidaq, newDAQmxDevAttrPtr, newTCName))) {
+						discard_DevAttr_type(&newDAQmxDevAttrPtr);
+						OKfree(newTCName);
+						DLMsg(OutOfMemoryMsg, 1);
+						return 0;
+					}
+					
 					ListInsertItem(nidaq->DAQmxDevices, &newDAQmxDev, END_OF_LIST);
 					DLAddTaskController((DAQLabModule_type*)nidaq, newDAQmxDev->taskController);
 					
@@ -7764,7 +7824,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							newChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newChan, VChanConnected, VChanDisconnected);  
 							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.sinkVChan);
 							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_VChanName, newVChanName);
-							AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, AO_DataReceivedTC, TASK_VCHAN_FUNC_NONE); 
+							AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, AO_DataReceivedTC, TASK_VCHAN_FUNC_ITERATE); 
 							OKfree(newVChanName);
 							
 							//---------------------------------------
@@ -8057,7 +8117,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					newDOChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newDOChan, VChanConnected, VChanDisconnected);  
 					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newDOChan->baseClass.sinkVChan);
 					
-					AddSinkVChan(dev->taskController, newDOChan->baseClass.sinkVChan, DO_DataReceivedTC, TASK_VCHAN_FUNC_NONE); 
+					AddSinkVChan(dev->taskController, newDOChan->baseClass.sinkVChan, DO_DataReceivedTC, TASK_VCHAN_FUNC_ITERATE); 
 					OKfree(newVChanName);
 							
 					//---------------------------------------
@@ -9716,9 +9776,10 @@ DAQmxError:
 	return fCallReturn;
 }
 
-///HIFN Writes data continuously to a DAQmx AO.
-///HIRET NULL if there is no error and FCallReturn_type* data in case of error. 
-FCallReturn_type* WriteAODAQmx (Dev_type* dev) 
+/// HIFN Attempts to write a writeblock number of samples to the AO task. If there are fewer samples to write than writeblock they are written to the buffer and writeBlockFilledFlag is False.
+/// HIFN If there are enough samples than writeblockFilledFlag is set to True.
+/// HIRET NULL if there is no error and FCallReturn_type* data in case of error. 
+FCallReturn_type* WriteAODAQmx (Dev_type* dev, BOOL* writeBlockFilledFlag, size_t* nSamplesWritten) 
 {
 	DataPacket_type* 		dataPacket;
 	DLDataTypes				dataPacketType;
@@ -9728,17 +9789,19 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 	size_t          		queue_items;
 	size_t          		ncopies;                								// number of datapacket copies to fill at least a writeblock size
 	int						itemsRead;
-	size_t         		 	numwrote;
 	double					nRepeats									= 1;
 	int             		error           							= 0;
 	float64*        		tmpbuff;
 	FCallReturn_type*		fCallReturn									= NULL;
-	BOOL					writeBuffersFilledFlag						= TRUE;  	// assume that each output channel has at least data->writeblock elements 
 	size_t					nSamples;
 	CmtTSQHandle			tsqID;
 	char* 					DAQmxErrMsg									= NULL;
 	char					CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
 	int 					buffsize;
+	
+	// assume that each output channel has at least data->writeblock elements
+	*writeBlockFilledFlag 	= TRUE;
+	*nSamplesWritten 		= 0;
 	
 	// cycle over channels
 	for (int i = 0; i < data->numchan; i++) {
@@ -9755,7 +9818,7 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 				
 				// if there are no more data packets, then skip this channel
 				if (!itemsRead) {
-					writeBuffersFilledFlag = FALSE;				// there is not enough data for this channel 
+					*writeBlockFilledFlag = FALSE;				// there is not enough data for this channel 
 					break;
 				}
 				
@@ -9854,7 +9917,7 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 	}
 	
 	
-	if (writeBuffersFilledFlag) nSamples = data->writeblock;
+	if (*writeBlockFilledFlag) nSamples = data->writeblock;
 	else {
 		// determine the minimum number of samples available for all channels that can be written
 		nSamples = data->databuff_size[0];
@@ -9879,7 +9942,12 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev)
 		data->databuff_size[i] -= nSamples;
 	}
 	
-	DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, nSamples, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &numwrote, NULL));
+	if (dev->AOTaskSet->taskHndl)
+		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, nSamples, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, nSamplesWritten, NULL));
+	else {
+		*nSamplesWritten 		= 0;
+		*writeBlockFilledFlag   = 0;
+	}
 	 
 	return NULL; // no error
 	
@@ -9921,7 +9989,7 @@ FCallReturn_type*   WriteDODAQmx(Dev_type* dev)
 	int             		error           							= 0;
 	uInt32*        			tmpbuff;
 	FCallReturn_type*		fCallReturn									= NULL;
-	BOOL					writeBuffersFilledFlag						= TRUE;  	// assume that each output channel has at least data->writeblock elements 
+	BOOL					writeBlockFilledFlag						= TRUE;  	// assume that each output channel has at least data->writeblock elements 
 	size_t					nSamples;
 	CmtTSQHandle			tsqID;
 	char* 					DAQmxErrMsg									= NULL;
@@ -9943,7 +10011,7 @@ FCallReturn_type*   WriteDODAQmx(Dev_type* dev)
 				
 				// if there are no more data packets, then skip this channel
 				if (!itemsRead) {
-					writeBuffersFilledFlag = FALSE;				// there is not enough data for this channel 
+					writeBlockFilledFlag = FALSE;				// there is not enough data for this channel 
 					break;
 				}
 				
@@ -10053,7 +10121,7 @@ FCallReturn_type*   WriteDODAQmx(Dev_type* dev)
 	}
 	
 	
-	if (writeBuffersFilledFlag) nSamples = data->writeblock;
+	if (writeBlockFilledFlag) nSamples = data->writeblock;
 	else {
 		// determine the minimum number of samples available for all channels that can be written
 		nSamples = data->databuff_size[0];
@@ -10099,10 +10167,7 @@ CmtError:
 	return fCallReturn;
 }	 
 
-
-
-
-
+/*
 static BOOL	DAQmxTasksDone(Dev_type* dev)
 {
 	BOOL taskDoneFlag;
@@ -10164,6 +10229,7 @@ static BOOL	DAQmxTasksDone(Dev_type* dev)
 	
 	return TRUE;
 }
+*/
 
 static FCallReturn_type* StartAllDAQmxTasks (Dev_type* dev)
 {
@@ -10352,12 +10418,21 @@ SkipDOTask:
 	// Start Triggered Tasks
 	//----------------------
 	TaskHandle* 	taskHndlPtr;
+	int*			nActiveTasksPtr	= NULL;
+	if ((error=CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr)) < 0) {
+		fCallReturn = init_FCallReturn_type(error, "StartAllDAQmxTasks", "Could not obtain TSV handle");
+		goto Error;
+	}
+	
+	// reset active tasks counter
+	*nActiveTasksPtr = 0;
 	
 	nItems = ListNumItems(TriggeredTasks);
 	for (size_t i = 1; i <= nItems; i++) {
 		taskHndlPtr = ListGetPtrToItem(TriggeredTasks, i);
 		DAQmxErrChk(DAQmxTaskControl (*taskHndlPtr, DAQmx_Val_Task_Start));
-		
+		// count active tasks
+		(*nActiveTasksPtr)++;
 	}
 	
 	//--------------------------
@@ -10366,7 +10441,14 @@ SkipDOTask:
 	nItems = ListNumItems(NonTriggeredTasks);
 	for (size_t i = 1; i <= nItems; i++) {
 		taskHndlPtr = ListGetPtrToItem(NonTriggeredTasks, i);
-		DAQmxErrChk(DAQmxTaskControl (*taskHndlPtr, DAQmx_Val_Task_Start));     
+		DAQmxErrChk(DAQmxTaskControl (*taskHndlPtr, DAQmx_Val_Task_Start));
+		// count active tasks
+		(*nActiveTasksPtr)++;
+	}
+	
+	if ((error=CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
+		fCallReturn = init_FCallReturn_type(error, "StartAllDAQmxTasks", "Could not release TSV handle"); 
+		goto Error;
 	}
 	
 	// cleanup
@@ -10376,11 +10458,14 @@ SkipDOTask:
 	return NULL;
 	
 MemError:
+	
 	if (NonTriggeredTasks) ListDispose(NonTriggeredTasks);
 	if (TriggeredTasks) ListDispose(TriggeredTasks);
 	return init_FCallReturn_type(StartAllDAQmxTasks_Err_OutOfMem, "StartAllDAQmxTasks","Out of memory");
 	
-DAQmxError:  
+DAQmxError:
+	
+	CmtReleaseTSVPtr(dev->nActiveTasks);
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
 	char* errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
@@ -10407,15 +10492,12 @@ Error:
 	
 }
 
-static BOOL	OutputBuffersFilled	(Dev_type* dev)
+/*   wrong approach
+static BOOL	AOOutputBufferFilled (Dev_type* dev)
 {
 	BOOL				AOFilledFlag;
-	BOOL				DOFilledFlag;
 	unsigned int		nSamples;
 	
-	//--------------------------------------------
-	// AO task
-	//--------------------------------------------
 	if (dev->AOTaskSet) {
 		DAQmxGetWriteAttribute(dev->AOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples); 
 		if (!nSamples) AOFilledFlag = TRUE;													 // no more space in the buffer, buffer filled
@@ -10427,9 +10509,15 @@ static BOOL	OutputBuffersFilled	(Dev_type* dev)
 	} else
 		AOFilledFlag = TRUE;   // buffer considered filled if there is no AO task.
 	
-	//--------------------------------------------
-	// DO task
-	//--------------------------------------------
+ 	return AOFilledFlag;
+}
+
+*/
+static BOOL	DOOutputBufferFilled (Dev_type* dev)
+{
+	BOOL				DOFilledFlag;
+	unsigned int		nSamples;
+	
 	if (dev->DOTaskSet) {
 		DAQmxGetWriteAttribute(dev->DOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples); 
 		if (!nSamples) 
@@ -10438,17 +10526,18 @@ static BOOL	OutputBuffersFilled	(Dev_type* dev)
 	} else
 		DOFilledFlag = TRUE;
 	
- 	return AOFilledFlag && DOFilledFlag;
+ 	return DOFilledFlag;
 }
 
-static FCallReturn_type* FillOutputBuffer(Dev_type* dev) 
+/* wrong approach
+static FCallReturn_type* FillAOOutputBuffer(Dev_type* dev) 
 {
 	FCallReturn_type*	fCallReturn		= NULL;
 	unsigned int		nSamples;
 	
-	// NOTE: make sure that AO and DO tasks are reserved at this point
+	// NOTE: make sure that AO task is reserved at this point
 	
-	if (!dev->AOTaskSet || !dev->AOTaskSet->taskHndl) goto SkipAOBuffers; // no analog output buffers  
+	if (!dev->AOTaskSet || !dev->AOTaskSet->taskHndl) return NULL; // no analog output buffers  
 	
 	DAQmxGetWriteAttribute(dev->AOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);
 	// try to fill buffer completely, i.e. the buffer has twice the blocksize number of samples
@@ -10459,9 +10548,20 @@ static FCallReturn_type* FillOutputBuffer(Dev_type* dev)
 	if(nSamples) // if there is space in the buffer
 		if ((fCallReturn = WriteAODAQmx(dev))) goto Error;
 					
-SkipAOBuffers:
+	return NULL; // no error
 	
-	if (!dev->DOTaskSet || !dev->DOTaskSet->taskHndl) goto SkipDOBuffers; // no analog output buffers  
+Error:
+	
+	return fCallReturn;
+}
+*/
+
+static FCallReturn_type* FillDOOutputBuffer(Dev_type* dev) 
+{
+	FCallReturn_type*	fCallReturn		= NULL;
+	unsigned int		nSamples;
+	
+	if (!dev->DOTaskSet || !dev->DOTaskSet->taskHndl) return NULL; // no analog output buffers  
 	
 	DAQmxGetWriteAttribute(dev->DOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);
 	// try to fill buffer completely, i.e. the buffer has twice the blocksize number of samples
@@ -10472,8 +10572,6 @@ SkipAOBuffers:
 	if(nSamples) // if there is space in the buffer
 		if ((fCallReturn = WriteDODAQmx(dev))) goto Error;
 					
-SkipDOBuffers:
-							
 	return NULL; // no error
 	
 Error:
@@ -10573,6 +10671,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	ChanSet_type**		chanSetPtrPtr;
 	size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet);
 	FCallReturn_type*	fCallReturn; 
+	int*				nActiveTasksPtr;
 
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
@@ -10592,14 +10691,18 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 			fCallReturn = SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL, 0);
 			if (fCallReturn) goto SendDataError;
 		}
+		// stop the Task
+		DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop);
 		
 		// Task Controller iteration is complete if all DAQmx Tasks are complete
-		if (DAQmxTasksDone(dev)) {
-			// stop the Task
-			DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop);
-			TaskControlIterationDone(dev->taskController, 0, "", FALSE);
-		}
+		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+		(*nActiveTasksPtr)--;
 		
+		if (!*nActiveTasksPtr)
+			TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+		
+		CmtReleaseTSVPtr(dev->nActiveTasks);
+	
 		return 0;
 	}
 	
@@ -10639,12 +10742,17 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		chIdx++;
 	}
 	
+	// stop the Task
+	DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop);
+		
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
-	if (DAQmxTasksDone(dev)) {
-		// stop the Task
-		DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop);
+	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+	(*nActiveTasksPtr)--;
+		
+	if (!*nActiveTasksPtr)
 		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
-	}
+		
+	CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	OKfree(readBuffer);
 	return 0;
@@ -10675,10 +10783,13 @@ SendDataError:
 
 int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
-	Dev_type*			dev 			= callbackData;
-	FCallReturn_type*	fCallReturn		= NULL; 
+	Dev_type*			dev 					= callbackData;
+	FCallReturn_type*	fCallReturn				= NULL; 
+	BOOL				writeBlockFilledFlag;
+	size_t				nSamplesWritten;
 	
-	fCallReturn = WriteAODAQmx(dev);
+	// this is called back every number of samples that is set, even if write WriteAODAQmx is called whenever data is available 
+	fCallReturn = WriteAODAQmx(dev, &writeBlockFilledFlag, &nSamplesWritten);
 		
 	if (fCallReturn) { 
 		TaskControlIterationDone(dev->taskController, fCallReturn->retVal, fCallReturn->errorInfo, FALSE);
@@ -10692,19 +10803,29 @@ int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyN
 // It is not called if task stops after calling DAQmxClearTask or DAQmxStopTask.
 int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
-	Dev_type*	dev 		= callbackData;
-	int			error		= 0;
+	Dev_type*	dev 			= callbackData;
+	int			error			= 0;
+	int*		nActiveTasksPtr;
 	
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
 	DAQmxErrChk(status);
 	
 	// stop task explicitly
-	DAQmxErrChk(DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop));
+	DAQmxErrChk(DAQmxStopTask(taskHandle));
+	// clear and init writeAOData used for continuous streaming
+	discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
+	dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
+	if (!dev->AOTaskSet->writeAOData) goto MemError;
 	
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
-	if (DAQmxTasksDone(dev))
+	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+	(*nActiveTasksPtr)--;
+		
+	if (!*nActiveTasksPtr)
 		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+		
+	CmtReleaseTSVPtr(dev->nActiveTasks);
 		
 	return 0;
 	
@@ -10715,6 +10836,12 @@ DAQmxError:
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
 	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	free(errMsg);
+	ClearDAQmxTasks(dev); 
+	return 0;
+	
+MemError:
+	
+	TaskControlIterationDone(dev->taskController, -1, "Out of memory", FALSE);
 	ClearDAQmxTasks(dev); 
 	return 0;
 }
@@ -10760,20 +10887,25 @@ int32 CVICALLBACK CODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	int					error			= 0;
 	int					nRead;
 	ChanSet_type**		chanSetPtrPtr;
-	FCallReturn_type*	fCallReturn; 
+	FCallReturn_type*	fCallReturn;
+	int*				nActiveTasksPtr;
 	
 	char				buf[100];
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
 	if (status < 0) goto DAQmxError;
 	
+	// stop the Task
+	DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop);
+		
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
-	if (DAQmxTasksDone(dev)) {
-		DAQmxTaskControl(taskHandle,DAQmx_Val_Task_Stop);
+	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+	(*nActiveTasksPtr)--;
+		
+	if (!*nActiveTasksPtr)
 		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
-	
-	}
-	
+		
+	CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	return 0;
 	
@@ -10856,18 +10988,12 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
 	
-	// fill output buffers if any
-	if ((fCallReturn = FillOutputBuffer(dev))) goto Error;
-	
-	// start all DAQmx tasks if output tasks have their buffers filled with data
-	if (OutputBuffersFilled(dev)) {
-		if ((fCallReturn = StartAllDAQmxTasks(dev))) goto Error;
+	// start all DAQmx tasks (at this point, output tasks have their buffers filled with data)
+	if ((fCallReturn = StartAllDAQmxTasks(dev))) goto Error;
 		
-		// if any of the DAQmx Tasks require a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
-		if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
-			TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);
-	}
-	// otherwise do this check again whenever data is placed in the Sink VChans and start all DAQmx tasks
+	// if any of the DAQmx Tasks require a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
+	if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
+		TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);
 	
 	return; // no error
 	
@@ -10923,7 +11049,19 @@ static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, size_t curren
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
 	
+	// AO task
+	if (dev->AOTaskSet) {
+		// clear and init writeAOData used for continuous streaming
+		discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
+		dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
+		if (!dev->AOTaskSet->writeAOData) goto MemError;
+	}
+	
 	return init_FCallReturn_type(0, "", "");
+	
+MemError:
+	
+	return init_FCallReturn_type(-1, "StoppedTC", "Out of memory");  
 }
 
 static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
@@ -11119,6 +11257,9 @@ static FCallReturn_type* AO_DataReceivedTC	(TaskControl_type* taskControl, TaskS
 						float*				floatDataPtr;
 						double				doubleData;
 						for (size_t i = 0; i < nPackets; i++) {
+							// skip NULL packets
+							if (!dataPackets[i]) continue;
+							
 							dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);
 							switch (dataPacketType) {
 								case DL_Waveform_Double:
@@ -11144,28 +11285,48 @@ static FCallReturn_type* AO_DataReceivedTC	(TaskControl_type* taskControl, TaskS
 						break;
 				}
 				
-				OKfree(dataPackets);				
 				DAQmxClearTask(taskHndl);
+				
+				OKfree(dataPackets); 
+				
+			} else {
+						   /*   Not good
+				// write data to output buffer if it is not filled
+				if (!AOOutputBufferFilled(dev))
+					if ((fCallReturn = FillAOOutputBuffer(dev))) goto Error;
+				
+				// set data received flag if AO task has its buffer filled with data
+				if (AOOutputBufferFilled(dev)) *dataReceivedFlag = TRUE;
+						   */
+						   
+						   // testing for now just finite AO
+				BOOL	writeBlockFilled;
+				size_t  nSamplesWritten;
+				WriteAODAQmx(dev, &writeBlockFilled, &nSamplesWritten);
+				*dataReceivedFlag = TRUE;
 			}
-			
+				
 			break;
 		
-		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
 		case TASK_STATE_RUNNING:
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
+		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
+		case TASK_STATE_RUNNING_WAITING_ITERATION_DATA:
 			
-			// write data to output buffers
-			if ((fCallReturn = FillOutputBuffer(dev))) goto Error;
+			/*  not good
+			if (!AOOutputBufferFilled(dev))
+				if ((fCallReturn = FillAOOutputBuffer(dev))) goto Error;
 				
-			// start all DAQmx tasks if output tasks have their buffers filled with data
-			if (OutputBuffersFilled(dev)) {
-				if ((fCallReturn = StartAllDAQmxTasks(dev))) goto Error;
-				// if any of the DAQmx Tasks require a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
-				if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
-					TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);
-			}
-				
-				
+			// set data received flag if AO task has its buffer filled with data
+			if (AOOutputBufferFilled(dev)) *dataReceivedFlag = TRUE;
+			*/
+			
+			// should work for finite mode for now
+			BOOL	writeBlockFilled;
+			size_t  nSamplesWritten;
+			WriteAODAQmx(dev, &writeBlockFilled, &nSamplesWritten);
+			*dataReceivedFlag = TRUE;
+			
 			break;
 			
 		case TASK_STATE_ERROR:

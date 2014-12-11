@@ -696,10 +696,6 @@ static void							DimTC_NonResGalvoCal							(TaskControl_type* taskControl, BOO
 
 static FCallReturn_type* 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
 
-static void 						ErrorTC_NonResGalvoCal 							(TaskControl_type* taskControl, char* errorMsg);
-
-static FCallReturn_type*			ModuleEventHandler_NonResGalvoCal				(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
-	
 	// for RectangleRaster_type scanning
 static FCallReturn_type*			ConfigureTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag);
 
@@ -3362,7 +3358,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
-								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, ModuleEventHandler_NonResGalvoCal, ErrorTC_NonResGalvoCal);
+								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, NULL, NULL);
 	// connect sink VChans (VChanPos) to the Task Controller so that it can process incoming galvo position data
 	AddSinkVChan(cal->baseClass.taskController, cal->baseClass.VChanPos, DataReceivedTC_NonResGalvoCal, TASK_VCHAN_FUNC_NONE);  
 	cal->baseClass.lsModule			= lsModule;
@@ -5038,7 +5034,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 				OKfree(cal->lag);
 				// determine how many times to apply the ramp such that the relative error in the position is less than RELERR
 				cal->nRepeat 		= ceil(pow(*cal->posStdDev * 1.414 /(RELERR * 2 * cal->commandVMax), 2)); 
-				cal->nRampSamples 	= 2;
+				cal->nRampSamples 	= 2;	 // must be at least 2 otherwise the Ramp function doesn't work
 				cal->lastRun 		= FALSE; 
 			}
 			
@@ -5240,7 +5236,12 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 static void AbortIterationTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
-
+	
+	// cleanup
+	discard_Waveform_type(&cal->positionWaveform);
+	discard_Waveform_type(&cal->commandWaveform); 
+	
+	TaskControlIterationDone(taskControl, 0, "", "");
 }
 
 static FCallReturn_type* StartTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
@@ -5282,6 +5283,13 @@ static FCallReturn_type* ResetTC_NonResGalvoCal (TaskControl_type* taskControl, 
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
+	// dim Save calibration
+	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 1);
+	// set starting calibration type
+	cal->currentCal = NonResGalvoCal_Slope_Offset;
+	// reset iteration index
+	cal->currIterIdx = 0;
+	
 	return init_FCallReturn_type(0, "", ""); 
 }
 
@@ -5305,7 +5313,6 @@ static FCallReturn_type* StoppedTC_NonResGalvoCal (TaskControl_type* taskControl
 	// dim Save calibration since calibration is incomplete
 	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 1);
 	
-	// cleanup
 	
 	return init_FCallReturn_type(0, "", ""); 
 }
@@ -5322,7 +5329,8 @@ static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 	SetCtrlAttribute(calSetPanHndl, Cal_ParkedV, ATTR_DIMMED, dimmed); 
 	SetCtrlAttribute(calSetPanHndl, Cal_ScanTime, ATTR_DIMMED, dimmed);
 	SetCtrlAttribute(calSetPanHndl, Cal_MinStep, ATTR_DIMMED, dimmed); 
-	SetCtrlAttribute(calSetPanHndl, Cal_Resolution, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(calSetPanHndl, Cal_Resolution, ATTR_DIMMED, dimmed);
+	SetCtrlAttribute(calSetPanHndl, Cal_MechanicalResponse, ATTR_DIMMED, dimmed);
 }
 
 static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
@@ -5451,7 +5459,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XNAME, "Time (ms)");
 				SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YNAME, "Galvo signals (V)");
 				// plot waveforms
-				PlotWaveform(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, commandSignal, cal->nRampSamples + postRampSamples, VAL_DOUBLE, 1.0, 0, 0, 1000/ *cal->baseClass.comSampRate, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, VAL_BLUE);
+				PlotWaveform(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, commandSignal+flybackSamples, cal->nRampSamples + postRampSamples, VAL_DOUBLE, 1.0, 0, 0, 1000/ *cal->baseClass.comSampRate, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, VAL_BLUE);
 				PlotWaveform(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, averageResponse, cal->nRampSamples + postRampSamples, VAL_DOUBLE, 1.0, 0, 0, 1000/ *cal->baseClass.comSampRate, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, VAL_RED);
 			
 				double x, y;
@@ -5487,6 +5495,7 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 						cal->nRampSamples = (size_t) floor(2*cal->commandVMax / (rampSlope * MAX_SLOPE_REDUCTION_FACTOR) * *cal->baseClass.comSampRate * 0.001); 
 						cal->lastRun = TRUE;
 					}
+					if (cal->nRampSamples < 2) cal->nRampSamples = 2;  // make sure that the ramp generating function has at least 2 samples
 					cal->currIterIdx++;
 				}
 				
@@ -5725,19 +5734,6 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 	
 	return init_FCallReturn_type(0, "", "");
 }
-
-static FCallReturn_type* ModuleEventHandler_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
-{
-	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
-	
-	return init_FCallReturn_type(0, "", "");
-}
-
-static void ErrorTC_NonResGalvoCal (TaskControl_type* taskControl, char* errorMsg)
-{
-	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
-}
-
 
 //-----------------------------------------
 // LaserScanning Task Controller Callbacks

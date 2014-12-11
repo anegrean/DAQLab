@@ -609,10 +609,22 @@ FCallReturn_type* ChangeSinkVChanTCFptrAssignment (TaskControl_type* taskControl
 #define		ChangeSinkVChanTCFptrAssignment_Err_SinkNotFound				-2
 	
 	// check if Task Controller is currently executing
-	if (!(taskControl->state == TASK_STATE_UNCONFIGURED || taskControl->state == TASK_STATE_CONFIGURED || 
-		  taskControl->state == TASK_STATE_INITIAL || taskControl->state == TASK_STATE_DONE || taskControl->state == TASK_STATE_ERROR))
-		return init_FCallReturn_type(ChangeSinkVChanTCFptrAssignment_Err_TaskControllerIsActive, "ChangeSinkVChanTCFptrAssignment", 
-									 "Error: Cannot change Sink VChan Task Controller function assignment while task controller is active.");
+	if (!(taskControl->state == TASK_STATE_UNCONFIGURED || taskControl->state == TASK_STATE_CONFIGURED || taskControl->state == TASK_STATE_INITIAL || taskControl->state == TASK_STATE_DONE || taskControl->state == TASK_STATE_ERROR)) {
+		
+		char* 				errorMsg 	= StrDup("Cannot change Sink VChan function assignment for Task Controller ");
+		char*				tcStateName	= NULL;
+		FCallReturn_type*	fCallReturn = NULL;
+		AppendString(&errorMsg, taskControl->taskName, -1);
+		AppendString(&errorMsg, " while it is in ", -1);
+		AppendString(&errorMsg,  (tcStateName = StateToString(taskControl->state)), -1);
+		OKfree(tcStateName);
+		AppendString(&errorMsg,  " state\n\n", -1);    
+		
+		fCallReturn = init_FCallReturn_type(ChangeSinkVChanTCFptrAssignment_Err_TaskControllerIsActive, "ChangeSinkVChanTCFptrAssignment", 
+									 errorMsg);
+		OKfree(errorMsg);
+		return fCallReturn;
+	}
 	
 	VChanCallbackData_type**	VChanTSQDataPtr;
 	size_t						nDataQs					= ListNumItems(taskControl->dataQs);
@@ -2008,6 +2020,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					} 
 					
+					
 					// If there are no subtasks, then reset device/module and make transition here to 
 					// INITIAL state and inform parent task if there is any
 					if (!ListNumItems(taskControl->subtasks)) {
@@ -2024,6 +2037,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// reset iterations
 						taskControl->currIterIdx = 0;
+						
+						// reset Sink VChans dataReceivedFlags
+						size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+						VChanCallbackData_type**	VChanCBPtr;
+						for (size_t j = 1; j <= nSinkVChans; j++) {
+							VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+							(*VChanCBPtr)->dataReceivedFlag = FALSE;
+						}
 						
 						// reset armed status of Slave HW Triggered Task Controllers, if any
 						ResetHWTrigSlavesArmedStatus(taskControl);
@@ -2224,6 +2245,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						// reset iterations
 						taskControl->currIterIdx = 0;
 						
+						// Reset Sink VChans dataReceivedFlags before Start/Iterate/Done Fptr are called
+						
+						size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+						VChanCallbackData_type**	VChanCBPtr;
+						for (size_t j = 1; j <= nSinkVChans; j++) {
+							VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+							(*VChanCBPtr)->dataReceivedFlag = FALSE;
+						}
+						
 						// reset armed status of Slave HW Triggered Task Controllers, if any
 						ResetHWTrigSlavesArmedStatus(taskControl);
 						
@@ -2322,17 +2352,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_ITERATE_ONCE: 
 					
 					
-					//---------------------------------------------------------------------------------------------------------------
-					// Reset Sink VChans dataReceivedFlags before Start/Iterate/Done Fptr are called
-					//---------------------------------------------------------------------------------------------------------------
-					
-					size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
-					VChanCallbackData_type**	VChanCBPtr;
-					for (size_t j = 1; j <= nSinkVChans; j++) {
-						VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
-						(*VChanCBPtr)->dataReceivedFlag = FALSE;
-					}
-					
 					//---------------------------------------------------------------------------------------------------------------   
 					// Set flag to iterate once or continue until done or stopped
 					//--------------------------------------------------------------------------------------------------------------- 
@@ -2398,14 +2417,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					break;
 					
 				case TASK_EVENT_STOP:  
-					
-					//ignore this command 
-					
-					break;
-					
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 					
-					// ignore this command
+					// just inform the parent that the current state is INITIAL
+					ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 					
 					break;
 					
@@ -2669,9 +2684,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// If this is a Root Task Controller, i.e. it doesn't have a parent, then call dim UI function recursively for its SubTasks
 					//---------------------------------------------------------------------------------------------------------------------
 					
-					if(taskControl->parenttask) break; // stop here
-					DimTaskTreeBranch(taskControl, &eventpacket[i], TRUE);
-					
+					if(!taskControl->parenttask)
+						DimTaskTreeBranch(taskControl, &eventpacket[i], TRUE);
 					
 					//--------------------------------------------------------------------------------------------------------------- 
 					// Call Start Task Controller function pointer to inform that task will start if all data is available
@@ -2750,6 +2764,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						// reset iterations
 						taskControl->currIterIdx = 0;
 						
+						// reset Sink VChans dataReceivedFlags
+						size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+						VChanCallbackData_type**	VChanCBPtr;
+						for (size_t j = 1; j <= nSinkVChans; j++) {
+							VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+							(*VChanCBPtr)->dataReceivedFlag = FALSE;
+						}
+						
 						// reset armed status of Slave HW Triggered Task Controllers, if any
 						ResetHWTrigSlavesArmedStatus(taskControl);
 						
@@ -2760,14 +2782,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					break;
 					
 				case TASK_EVENT_STOP:  
-					
-					ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);  // just inform parent
-					
-					break;
-					
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 					
-					ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);  // just inform parent
+					// just inform parent  
+					ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);  
 					
 					break;
 					
@@ -2829,6 +2847,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// reset iterations
 						taskControl->currIterIdx = 0;
+						
+						// reset Sink VChans dataReceivedFlags
+						size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+						VChanCallbackData_type**	VChanCBPtr;
+						for (size_t j = 1; j <= nSinkVChans; j++) {
+							VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+							(*VChanCBPtr)->dataReceivedFlag = FALSE;
+						}
 						
 						// reset armed status of Slave HW Triggered Task Controllers, if any
 						ResetHWTrigSlavesArmedStatus(taskControl);
@@ -3721,14 +3747,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break; // stop here
 					
 					// assume all subtasks are done 
-					BOOL AllDoneFlag = 1;
+					BOOL AllDoneFlag = TRUE;
 							
 					// check SubTasks
 					nItems = ListNumItems(taskControl->subtasks);
 					for (size_t i = 1; i <= nItems; i++) {
 						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
 						if (subtaskPtr->subtaskState != TASK_STATE_DONE) {
-							AllDoneFlag = 0;
+							AllDoneFlag = FALSE;
 							break;
 						}
 					}
@@ -4154,14 +4180,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------- 
 							
 							// assume all subtasks are done (even if there are none)
-							BOOL AllDoneFlag = 1;
+							BOOL AllDoneFlag = TRUE;
 							
 							// check SubTasks
 							nItems = ListNumItems(taskControl->subtasks);
 							for (size_t i = 1; i <= nItems; i++) {
 								subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
 								if (subtaskPtr->subtaskState != TASK_STATE_DONE) {
-									AllDoneFlag = 0;
+									AllDoneFlag = FALSE;
 									break;
 								}
 							}
@@ -4386,13 +4412,24 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					for (size_t i = 1; i <= nItems; i++) {
 						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
-						if ((subtaskPtr->subtaskState != TASK_STATE_IDLE) && (subtaskPtr->subtaskState != TASK_STATE_DONE)) {
+						if (!((subtaskPtr->subtaskState == TASK_STATE_IDLE) || (subtaskPtr->subtaskState == TASK_STATE_DONE))) {
 							IdleOrDoneFlag = FALSE;
 							break;
 						}
 					}
 					
-					// if all SubTasks are IDLE or DONE, switch to IDLE state
+					/* taken out for now because it makes the tc unstable
+					BOOL	InitialFlag		= TRUE;		// assume all subtasks are in an INITIAL state
+					for (size_t i = 1; i <= nItems; i++) {
+						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+						if (subtaskPtr->subtaskState != TASK_STATE_INITIAL) {
+							InitialFlag = FALSE;
+							break;
+						}
+					}
+					*/
+					
+					// if all SubTasks are IDLE or DONE, switch to IDLE state and inform that task controller was stopped
 					if (IdleOrDoneFlag) {
 						// undim Task Tree if this is a root Task Controller
 						if(!taskControl->parenttask)
@@ -4409,7 +4446,55 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 							
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
+						break;
 					}
+					
+					/*   this makes the tc unstable because it can just jump back to initial state although it has performed several iterations
+					so more correctly it would be to end up in an IDLE state.
+					// if all SubTasks are in an INITIAL state, then switch to INITIAL
+					if (InitialFlag) {
+						// undim Task Tree if this is a root Task Controller
+						if(!taskControl->parenttask)
+							DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+						
+						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL))) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+						
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
+						
+						// reset device/module
+						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL))) {
+							taskControl->errorMsg = 
+							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
+							discard_ErrorMsg_type(&errMsg);
+						
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
+						
+						// reset iterations
+						taskControl->currIterIdx = 0;
+						
+						// reset Sink VChans dataReceivedFlags
+						size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+						VChanCallbackData_type**	VChanCBPtr;
+						for (size_t j = 1; j <= nSinkVChans; j++) {
+							VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+							(*VChanCBPtr)->dataReceivedFlag = FALSE;
+						}
+					
+						// reset armed status of Slave HW Triggered Task Controllers, if any
+						ResetHWTrigSlavesArmedStatus(taskControl);
+						
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
+						break;
+					}  */
 						
 					break;
 					
@@ -4659,6 +4744,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// reset armed status of Slave HW Triggered Task Controllers, if any
 					ResetHWTrigSlavesArmedStatus(taskControl);
 					
+					// reset Sink VChans dataReceivedFlags before Start/Iterate/Done Fptr are called
+					size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+					VChanCallbackData_type**	VChanCBPtr;
+					for (size_t j = 1; j <= nSinkVChans; j++) {
+						VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+						(*VChanCBPtr)->dataReceivedFlag = FALSE;
+					}
+					
 					// switch to INITIAL state
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 					
@@ -4705,6 +4798,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// reset armed status of Slave HW Triggered Task Controllers, if any
 						ResetHWTrigSlavesArmedStatus(taskControl);
+						
+						// reset Sink VChans dataReceivedFlags 
+						size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+						VChanCallbackData_type**	VChanCBPtr;
+						for (size_t j = 1; j <= nSinkVChans; j++) {
+							VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+							(*VChanCBPtr)->dataReceivedFlag = FALSE;
+						}
 						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 						
@@ -4773,6 +4874,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// reset iterations
 						taskControl->currIterIdx = 0;
+						
+						// Reset Sink VChans dataReceivedFlags
+						
+						size_t 						nSinkVChans = ListNumItems(taskControl->dataQs);
+						VChanCallbackData_type**	VChanCBPtr;
+						for (size_t j = 1; j <= nSinkVChans; j++) {
+							VChanCBPtr = ListGetPtrToItem(taskControl->dataQs, j);
+							(*VChanCBPtr)->dataReceivedFlag = FALSE;
+						}
 						
 						// reset armed status of Slave HW Triggered Task Controllers, if any
 						ResetHWTrigSlavesArmedStatus(taskControl);

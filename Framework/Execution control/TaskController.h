@@ -393,7 +393,8 @@ typedef FCallReturn_type* 	(*UnconfigureFptr_type) 		(TaskControl_type* taskCont
 typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
 // Called when an iteration must be aborted. This is similar to the use of GetTaskControlAbortIterationFlag except that this function is called back, instead
-// of polling a flag during the iteration.
+// of polling a flag during the iteration. After the module/device is aborted in this function, call TaskControlIterationDone to signal the task controller that
+// the iteration was finished by passing a return value. Negative error values mean that the abort operation cause an error and the iteration did not complete successfuly.
 typedef void				(*AbortIterationFptr_type)		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
 // Called before the first iteration starts from an INITIAL state.

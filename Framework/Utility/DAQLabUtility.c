@@ -44,7 +44,7 @@ FCallReturn_type* init_FCallReturn_type (int valFCall, const char errorOrigin[],
 	if (!result) return NULL;
 	
 	result -> retVal 	= valFCall;
-	if (errorDescription) {
+	if (errorDescription[0]) {
 		
 		nchars 	= snprintf(Msg, 0, "<%s Error ID %d. Reason: %s>", errorOrigin, valFCall, errorDescription);
 		Msg		= malloc((nchars+1)*sizeof(char));

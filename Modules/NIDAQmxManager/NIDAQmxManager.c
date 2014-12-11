@@ -1117,19 +1117,19 @@ static void							PulseTrainVChan_Disconnected 			(VChan_type* self, void* VChan
 	//-----------------------------------
 
 	// AI number of samples acquired per task controller iteration
-static FCallReturn_type*			AInSamples_DataReceivedTC				(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type*			AInSamples_DataReceivedTC				(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 	// AI sampling rate used for acquisition per task controller iteration
-static FCallReturn_type*			AISamplingRate_DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type*			AISamplingRate_DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 	// AO number of samples acquired per task controller iteration
-static FCallReturn_type*			AOnSamples_DataReceivedTC				(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type*			AOnSamples_DataReceivedTC				(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 	// AO sampling rate used for acquisition per task controller iteration
-static FCallReturn_type*			AOSamplingRate_DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type*			AOSamplingRate_DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 	// AO data
-static FCallReturn_type*			AO_DataReceivedTC						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type*			AO_DataReceivedTC						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 	// DO data
-static FCallReturn_type*			DO_DataReceivedTC						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type*			DO_DataReceivedTC						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 	// pulse train data
-static FCallReturn_type* 			PulseTrainDAQmxVChan_DataReceivedTC		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type* 			PulseTrainDAQmxVChan_DataReceivedTC		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
 //---------------------------------------------------- 
 // NIDAQmx Device Task Controller Callbacks
@@ -4174,7 +4174,7 @@ static void AInSamplesVChan_Connected (VChan_type* self, void* VChanOwner, VChan
 	FCallReturn_type*   fCallReturn		= NULL;
 	
 	// require each iteration the number of samples to be generated to be available
-	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
+	
 	
 	// dim number of samples controls and duration
 	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 1);
@@ -4195,7 +4195,7 @@ static void	AInSamplesVChan_Disconnected (VChan_type* self, void* VChanOwner, VC
 	FCallReturn_type*   fCallReturn		= NULL;
 	
 	// AI nSamples is not required with each iteration, instead device AI nSamples is used
-	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+	
 	
 	// undim number of samples controls and duration
 	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 0);
@@ -4217,7 +4217,7 @@ static void AISamplingRateVChan_Connected (VChan_type* self, void* VChanOwner, V
 	FCallReturn_type*   fCallReturn		= NULL;
 	
 	// require each iteration AI sampling rate to be available
-	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
+	
 	
 	// dim sampling rate control
 	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 1);
@@ -4237,7 +4237,7 @@ static void AISamplingRateVChan_Disconnected (VChan_type* self, void* VChanOwner
 	FCallReturn_type*   fCallReturn		= NULL;
 	
 	// AI sampling rate not required with each iteration
-	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+	
 	
 	// undim sampling rate control
 	SetCtrlAttribute(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 0);
@@ -4258,7 +4258,7 @@ static void	AOnSamplesSinkVChan_Connected (VChan_type* self, void* VChanOwner, V
 	FCallReturn_type*   fCallReturn		= NULL;
 	
 	// require each iteration the number of samples to be generated to be available
-	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
+	
 	
 	// dim number of samples controls and duration
 	SetCtrlAttribute(dev->AOTaskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 1);
@@ -4279,7 +4279,7 @@ static void AOnSamplesSinkVChan_Disconnected (VChan_type* self, void* VChanOwner
 	FCallReturn_type*   fCallReturn		= NULL;
 	
 	// number of samples with each iteration to be generated not required anymore
-	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+
 	
 	// undim number of samples controls and duration
 	SetCtrlAttribute(dev->AOTaskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 0);
@@ -4301,7 +4301,7 @@ static void	AOSamplingRateSinkVChan_Connected (VChan_type* self, void* VChanOwne
 	FCallReturn_type*   fCallReturn		= NULL;
 	
 	// require each iteration AO sampling rate to be available
-	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_ITERATE) )) goto Error;
+	
 	
 	// dim sampling rate control
 	SetCtrlAttribute(dev->AOTaskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 1);
@@ -4322,7 +4322,7 @@ static void	AOSamplingRateSinkVChan_Disconnected (VChan_type* self, void* VChanO
 	FCallReturn_type*   fCallReturn		= NULL;
 	
 	// AO sampling rate not required with each iteration
-	if ((fCallReturn = ChangeSinkVChanTCFptrAssignment(dev->taskController, self, TASK_VCHAN_FUNC_NONE) )) goto Error;
+
 	
 	// undim sampling rate control
 	SetCtrlAttribute(dev->AOTaskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 0);
@@ -4379,7 +4379,7 @@ static void	PulseTrainVChan_Disconnected (VChan_type* self, void* VChanOwner, VC
 }
 
 /// HIFN Receives AI number of samples acquired per task controller iteration.
-static FCallReturn_type* AInSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* AInSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 #define		AInSamples_DataReceivedTC_Err_OnePacketAtATime		-1
 #define		AInSamples_DataReceivedTC_Err_AITaskMustBeFinite	-2
@@ -4416,7 +4416,7 @@ static FCallReturn_type* AInSamples_DataReceivedTC (TaskControl_type* taskContro
 	
 	// get number of samples, data type of uInt64 (unsigned long long)
 	nSamplesPtrPtr = GetDataPacketPtrToData(dataPackets[0], &dataPacketType);
-	dev->AITaskSet->timing->nSamples = **nSamplesPtrPtr;
+	dev->AITaskSet->timing->nSamples = (size_t)**nSamplesPtrPtr;
 	
 	// release data packet
 	ReleaseDataPacket(&dataPackets[0]);
@@ -4430,8 +4430,6 @@ static FCallReturn_type* AInSamples_DataReceivedTC (TaskControl_type* taskContro
 	// update duration in UI
 	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
 	
-	// set data received flag
-	*dataReceivedFlag = TRUE;
 	
 	return init_FCallReturn_type(0, "", "");
 	
@@ -4447,13 +4445,13 @@ DAQmxError:
 }
 
 /// HIFN Receives AI sampling rate used for acquisition per task controller iteration.
-static FCallReturn_type* AISamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* AISamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	
 }
 
 /// HIFN Receives AO number of samples acquired per task controller iteration.
-static FCallReturn_type* AOnSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* AOnSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 #define		AOnSamples_DataReceivedTC_Err_OnePacketAtATime		-1
 #define		AOnSamples_DataReceivedTC_Err_AOTaskMustBeFinite	-2
@@ -4490,7 +4488,7 @@ static FCallReturn_type* AOnSamples_DataReceivedTC (TaskControl_type* taskContro
 	
 	// get number of samples, data type of uInt64 (unsigned long long)
 	nSamplesPtrPtr = GetDataPacketPtrToData(dataPackets[0], &dataPacketType);
-	dev->AOTaskSet->timing->nSamples = **nSamplesPtrPtr;
+	dev->AOTaskSet->timing->nSamples = (size_t)**nSamplesPtrPtr;
 	
 	// release data packet
 	ReleaseDataPacket(&dataPackets[0]);
@@ -4504,9 +4502,6 @@ static FCallReturn_type* AOnSamples_DataReceivedTC (TaskControl_type* taskContro
 	// update duration in UI
 	SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
 	
-	// set data received flag
-	*dataReceivedFlag = TRUE;
-	
 	return init_FCallReturn_type(0, "", "");
 	
 DAQmxError:
@@ -4519,7 +4514,7 @@ DAQmxError:
 }
 
 /// HIFN Receives AO sampling rate used for acquisition per task controller iteration
-static FCallReturn_type* AOSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* AOSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	
 }
@@ -7255,7 +7250,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						// register VChan with the framework
 						DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)dev->AITaskSet->timing->nSamplesSinkVChan);
 						// register VChan with the DAQmx task controller
-						AddSinkVChan(dev->taskController, dev->AITaskSet->timing->nSamplesSinkVChan, AInSamples_DataReceivedTC, TASK_VCHAN_FUNC_NONE);
+						AddSinkVChan(dev->taskController, dev->AITaskSet->timing->nSamplesSinkVChan, AInSamples_DataReceivedTC);
 						
 						//-------------------------------------------------------------------------
 						// add samplingRate VChan to pick-up sampling rate
@@ -7273,7 +7268,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						// register VChan with the framework
 						DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)dev->AITaskSet->timing->samplingRateSinkVChan);
 						// register VChan with the DAQmx task controller
-						AddSinkVChan(dev->taskController, dev->AITaskSet->timing->samplingRateSinkVChan, AISamplingRate_DataReceivedTC, TASK_VCHAN_FUNC_NONE);
+						AddSinkVChan(dev->taskController, dev->AITaskSet->timing->samplingRateSinkVChan, AISamplingRate_DataReceivedTC);
 								
 					}
 							
@@ -7721,7 +7716,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						// register VChan with the framework
 						DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)dev->AOTaskSet->timing->nSamplesSinkVChan);
 						// register VChan with the DAQmx task controller
-						AddSinkVChan(dev->taskController, dev->AOTaskSet->timing->nSamplesSinkVChan, AOnSamples_DataReceivedTC, TASK_VCHAN_FUNC_NONE);
+						AddSinkVChan(dev->taskController, dev->AOTaskSet->timing->nSamplesSinkVChan, AOnSamples_DataReceivedTC);
 						
 						//-------------------------------------------------------------------------
 						// add samplingRate VChan to pick-up sampling rate
@@ -7739,7 +7734,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						// register VChan with the framework
 						DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)dev->AOTaskSet->timing->samplingRateSinkVChan);
 						// register VChan with the DAQmx task controller
-						AddSinkVChan(dev->taskController, dev->AOTaskSet->timing->samplingRateSinkVChan, AOSamplingRate_DataReceivedTC, TASK_VCHAN_FUNC_NONE);
+						AddSinkVChan(dev->taskController, dev->AOTaskSet->timing->samplingRateSinkVChan, AOSamplingRate_DataReceivedTC);
 								
 					}
 							
@@ -7824,7 +7819,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							newChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newChan, VChanConnected, VChanDisconnected);  
 							DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.sinkVChan);
 							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_VChanName, newVChanName);
-							AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, AO_DataReceivedTC, TASK_VCHAN_FUNC_ITERATE); 
+							AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, AO_DataReceivedTC); 
 							OKfree(newVChanName);
 							
 							//---------------------------------------
@@ -8117,7 +8112,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					newDOChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newDOChan, VChanConnected, VChanDisconnected);  
 					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newDOChan->baseClass.sinkVChan);
 					
-					AddSinkVChan(dev->taskController, newDOChan->baseClass.sinkVChan, DO_DataReceivedTC, TASK_VCHAN_FUNC_ITERATE); 
+					AddSinkVChan(dev->taskController, newDOChan->baseClass.sinkVChan, DO_DataReceivedTC); 
 					OKfree(newVChanName);
 							
 					//---------------------------------------
@@ -8503,7 +8498,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					SetCtrlVal(settingspanel, SETPAN_SinkVChanName, pulseTrainSinkVChanName);  
 					// register VChan with DAQLab
 					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) newChan->baseClass.sinkVChan);	
-					AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, PulseTrainDAQmxVChan_DataReceivedTC, TASK_VCHAN_FUNC_NONE); 
+					AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, PulseTrainDAQmxVChan_DataReceivedTC); 
 					
 					// cleanup
 					OKfree(pulseTrainSinkVChanName);
@@ -11191,7 +11186,7 @@ static void	ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 	
 }
 
-static FCallReturn_type* AO_DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* AO_DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 
 	Dev_type*			dev					= GetTaskControlModuleData(taskControl);
@@ -11303,7 +11298,6 @@ static FCallReturn_type* AO_DataReceivedTC	(TaskControl_type* taskControl, TaskS
 				BOOL	writeBlockFilled;
 				size_t  nSamplesWritten;
 				WriteAODAQmx(dev, &writeBlockFilled, &nSamplesWritten);
-				*dataReceivedFlag = TRUE;
 			}
 				
 			break;
@@ -11311,7 +11305,6 @@ static FCallReturn_type* AO_DataReceivedTC	(TaskControl_type* taskControl, TaskS
 		case TASK_STATE_RUNNING:
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
 		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
-		case TASK_STATE_RUNNING_WAITING_ITERATION_DATA:
 			
 			/*  not good
 			if (!AOOutputBufferFilled(dev))
@@ -11325,8 +11318,7 @@ static FCallReturn_type* AO_DataReceivedTC	(TaskControl_type* taskControl, TaskS
 			BOOL	writeBlockFilled;
 			size_t  nSamplesWritten;
 			WriteAODAQmx(dev, &writeBlockFilled, &nSamplesWritten);
-			*dataReceivedFlag = TRUE;
-			
+		
 			break;
 			
 		case TASK_STATE_ERROR:
@@ -11357,7 +11349,7 @@ Error:
 	return fCallReturn;
 }
 
-static FCallReturn_type* DO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* DO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	return init_FCallReturn_type(0, "DO_DataReceivedTC", "Functionality not implemented"); // implement functionality
 }
@@ -11370,7 +11362,7 @@ static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, Task
 }
 
 
-static FCallReturn_type* PulseTrainDAQmxVChan_DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* PulseTrainDAQmxVChan_DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	
 	Dev_type*			dev					= GetTaskControlModuleData(taskControl);

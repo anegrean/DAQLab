@@ -249,7 +249,7 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 #include "VChannel.h"
 
 #define TASKCONTROLLER_UI		"./Framework/Execution control/UI_TaskController.uir" 
-#define N_TASK_EVENT_QITEMS		1000			// Number of events waiting to be processed by the state machine.
+#define N_TASK_EVENT_QITEMS		1000		// Number of events waiting to be processed by the state machine.
 
 // Handy return type for functions that produce error descriptions
 
@@ -260,16 +260,12 @@ typedef enum {
 	TASK_STATE_UNCONFIGURED,					// Task Controller is not configured.
 	TASK_STATE_CONFIGURED,						// Task Controller is configured.
 	TASK_STATE_INITIAL,							// Initial state of Task Controller before any iterations are performed.
-	TASK_STATE_STARTING_WAITING_FOR_DATA,		// Waiting for Sink VChan data before calling Start Fptr. Each Sink VChan must signal that it received the required data
-												// in order to proceed further to calling the Start Fptr.
 	TASK_STATE_IDLE,							// Task Controller is configured.
 	TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES,   // A HW Master Trigger Task Controller is waiting for HW Slave Trigger Task Controllers to be armed.
 	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped.
-	TASK_STATE_RUNNING_WAITING_ITERATION_DATA,  // Waiting for Sink VChan data before calling Iterate Fptr. Each Sink VChan must signal that it received the required data.
 	TASK_STATE_RUNNING_WAITING_ITERATION,		// Task Controller is iterating but the iteration (possibly occuring in another thread) is not yet complete.
 												// Iteration is complete when a TASK_EVENT_ITERATION_DONE is received in this state.
 	TASK_STATE_STOPPING,						// Task Controller received a STOP event and waits for SubTasks to complete their iterations.
-	TASK_STATE_STOPPING_WAITING_DONE_DATA,		// Waiting for Sink VChan data before calling Done Fptr. Each Sink VChan must signal that it received the required data.
 	TASK_STATE_DONE,							// Task Controller finished required iterations if operation was finite
 	TASK_STATE_ERROR
 } TaskStates_type;
@@ -312,13 +308,13 @@ typedef enum {
 	TASK_FCALL_ABORT_ITERATION,
 	TASK_FCALL_START,
 	TASK_FCALL_RESET,
-	TASK_FCALL_DONE,							// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
-	TASK_FCALL_STOPPED,							// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
-	TASK_FCALL_DIM_UI,							// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
-	TASK_FCALL_SET_UITC_MODE,					// Called when an UITC has a parent Task Controller attached to or deattached from it.
-	TASK_FCALL_DATA_RECEIVED,					// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
+	TASK_FCALL_DONE,					// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
+	TASK_FCALL_STOPPED,					// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
+	TASK_FCALL_DIM_UI,					// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
+	TASK_FCALL_SET_UITC_MODE,				// Called when an UITC has a parent Task Controller attached to or deattached from it.
+	TASK_FCALL_DATA_RECEIVED,			// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
 	TASK_FCALL_ERROR,
-	TASK_FCALL_MODULE_EVENT						// Called for custom module events that are not handled directly by the Task Controller
+	TASK_FCALL_MODULE_EVENT				// Called for custom module events that are not handled directly by the Task Controller
 } TaskFCall_type;
 
 //---------------------------------------------------------------
@@ -333,24 +329,14 @@ typedef enum {
 // Task Controller Iteration Execution Mode
 //---------------------------------------------------------------
 typedef enum {
-	TASK_ITERATE_BEFORE_SUBTASKS_START,			// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
-												// IterateFptr is called and completes before sending TASK_EVENT_START to all SubTasks.
-	TASK_ITERATE_AFTER_SUBTASKS_COMPLETE,		// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
-												// IterateFptr is called after all SubTasks reach TASK_STATE_DONE.
-	TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS 	 	// The iteration block of the Task Controller is still running after a call to IterateFptr and after a TASK_EVENT_START 
-												// is sent to all SubTasks. The iteration block is carried out in parallel with the execution of the SubTasks.
+	TASK_ITERATE_BEFORE_SUBTASKS_START,		// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
+											// IterateFptr is called and completes before sending TASK_EVENT_START to all SubTasks.
+	TASK_ITERATE_AFTER_SUBTASKS_COMPLETE,	// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
+											// IterateFptr is called after all SubTasks reach TASK_STATE_DONE.
+	TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS  // The iteration block of the Task Controller is still running after a call to IterateFptr and after a TASK_EVENT_START 
+											// is sent to all SubTasks. The iteration block is carried out in parallel with the execution of the SubTasks.
 } TaskIterMode_type;
 
-//---------------------------------------------------------------
-// Task Controller Virtual Channel Function Assignment
-//---------------------------------------------------------------
-typedef enum {
-	TASK_VCHAN_FUNC_NONE,
-	TASK_VCHAN_FUNC_START,
-	TASK_VCHAN_FUNC_ITERATE,
-	TASK_VCHAN_FUNC_DONE
-} VChanTCFPtrAssignments;
-	
 
 //---------------------------------------------------------------
 // Task Controller HW Triggerring (for both Slaves and Masters)
@@ -393,8 +379,7 @@ typedef FCallReturn_type* 	(*UnconfigureFptr_type) 		(TaskControl_type* taskCont
 typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
 // Called when an iteration must be aborted. This is similar to the use of GetTaskControlAbortIterationFlag except that this function is called back, instead
-// of polling a flag during the iteration. After the module/device is aborted in this function, call TaskControlIterationDone to signal the task controller that
-// the iteration was finished by passing a return value. Negative error values mean that the abort operation cause an error and the iteration did not complete successfuly.
+// of polling a flag during the iteration.
 typedef void				(*AbortIterationFptr_type)		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
 // Called before the first iteration starts from an INITIAL state.
@@ -421,7 +406,7 @@ typedef void				(*SetUITCModeFptr_type)			(TaskControl_type* taskControl, BOOL U
 typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg);
 
 // Called when data is placed in a Task Controller Sink VChan.
-typedef FCallReturn_type*	(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+typedef FCallReturn_type*	(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
 // Called for passing custom module or device events that are not handled directly by the Task Controller.
 typedef FCallReturn_type*	(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
@@ -613,10 +598,7 @@ void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Adds a VChan to the Task Controller that is used to receive incoming data and binds it to a given callback when data is received.
-int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, VChanTCFPtrAssignments fPtrAssignment); 
-
-	// Changes Sink VChan assignment to Task Controller Fptr.
-FCallReturn_type*		ChangeSinkVChanTCFptrAssignment		(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, VChanTCFPtrAssignments newFPtrAssignment);
+int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr); 
 
 	// Removes a Sink VChan assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan.

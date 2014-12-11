@@ -190,7 +190,7 @@ static void							PulseTrainVChan_Connected 		(VChan_type* self, void* VChanOwne
 	// pulsetrain command VChan disconnected callback
 static void							PulseTrainVChan_Disconnected 	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
-static FCallReturn_type* 			PulseTrainDataReceivedTC		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type* 			PulseTrainDataReceivedTC		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
 
 static int 							PMT_Set_Mode 					(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
@@ -1008,7 +1008,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 							vupc->pulseTrainVchan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
 							// register VChan with DAQLab
 							DLRegisterVChan((DAQLabModule_type*)vupc, (VChan_type*)vupc->pulseTrainVchan);	
-							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVchan, PulseTrainDataReceivedTC, TASK_VCHAN_FUNC_NONE);  
+							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVchan, PulseTrainDataReceivedTC);  
 						}
 						// update main panel
 						RedrawMainPanel(vupc);
@@ -1296,7 +1296,7 @@ static void	PulseTrainVChan_Disconnected (VChan_type* self, void* VChanOwner, VC
 	
 }
 
-static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	
 	VUPhotonCtr_type* 	vupc				= GetTaskControlModuleData(taskControl);

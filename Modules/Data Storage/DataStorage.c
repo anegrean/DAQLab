@@ -116,7 +116,7 @@ static void					DimTC					(TaskControl_type* taskControl, BOOL dimmed);
 
 static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg);
 
-static FCallReturn_type*	DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type*	DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
 static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
@@ -609,7 +609,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 		
 						// register VChan with DAQLab
 						DLRegisterVChan((DAQLabModule_type*)ds, (VChan_type*)chan->VChan);
-						AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC, TASK_VCHAN_FUNC_NONE);
+						AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC);
 
 						// update main panel
 						RedrawDSPanel(ds);
@@ -681,7 +681,7 @@ int SaveImage(Image* image,DataStorage_type* ds,char* vChanname,int iterationnr)
 }
 
 
-static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	
 	DataStorage_type*	ds					= GetTaskControlModuleData(taskControl);

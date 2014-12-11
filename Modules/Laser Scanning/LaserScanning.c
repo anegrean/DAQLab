@@ -694,7 +694,7 @@ static FCallReturn_type* 			ResetTC_NonResGalvoCal 							(TaskControl_type* tas
 
 static void							DimTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL dimmed);
 
-static FCallReturn_type* 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type* 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
 	// for RectangleRaster_type scanning
 static FCallReturn_type*			ConfigureTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag);
@@ -715,7 +715,7 @@ static FCallReturn_type* 			ResetTC_RectRaster 								(TaskControl_type* taskCo
 
 static void							DimTC_RectRaster								(TaskControl_type* taskControl, BOOL dimmed);
 
-static FCallReturn_type* 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag);
+static FCallReturn_type* 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
 static void 						ErrorTC_RectRaster 								(TaskControl_type* taskControl, char* errorMsg);
 
@@ -3360,7 +3360,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
 								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, NULL, NULL);
 	// connect sink VChans (VChanPos) to the Task Controller so that it can process incoming galvo position data
-	AddSinkVChan(cal->baseClass.taskController, cal->baseClass.VChanPos, DataReceivedTC_NonResGalvoCal, TASK_VCHAN_FUNC_NONE);  
+	AddSinkVChan(cal->baseClass.taskController, cal->baseClass.VChanPos, DataReceivedTC_NonResGalvoCal);  
 	cal->baseClass.lsModule			= lsModule;
 	
 								  
@@ -5333,7 +5333,7 @@ static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 	SetCtrlAttribute(calSetPanHndl, Cal_MechanicalResponse, ATTR_DIMMED, dimmed);
 }
 
-static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	ActiveNonResGalvoCal_type* 	cal 					= GetTaskControlModuleData(taskControl);
 	DataPacket_type**			dataPackets				= NULL;
@@ -5857,7 +5857,7 @@ static void	DimTC_RectRaster (TaskControl_type* taskControl, BOOL dimmed)
 	
 }
 
-static FCallReturn_type* DataReceivedTC_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL* dataReceivedFlag, BOOL const* abortFlag)
+static FCallReturn_type* DataReceivedTC_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	

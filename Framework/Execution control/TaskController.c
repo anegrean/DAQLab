@@ -35,10 +35,6 @@ typedef struct {
 																	// of the subtask
 } SubTaskEventInfo_type;
 
-typedef struct {													// For a TASK_EVENT_HWTRIG_SLAVE_ARMED event
-	size_t						slaveHWTrigIdx;						// 1-based index of Slave HW Triggered Task Controller from the Master HW Trigerring Slave list.
-} SlaveHWTrigTaskEventInfo_type;
-
 typedef struct {
 	TaskEvents_type 			event;								// Task Control Event.
 	void*						eventInfo;							// Extra information per event allocated dynamically
@@ -51,11 +47,6 @@ typedef struct {
 	TaskControl_type*			subtask;							// Pointer to Subtask Controller.
 } SubTask_type;
 
-struct SlaveHWTrigTask{
-	BOOL						armed;								// TRUE if a Slave HW Triggered Task Controller is ready to be triggered by its Master
-	TaskControl_type*			slaveHWTrigTask;					// pointer to Slave HW Triggered Task Controller.
-};
-							
 typedef enum {
 	STATE_CHANGE,
 	FUNCTION_CALL,
@@ -79,7 +70,6 @@ struct TaskControl {
 	// Task control data
 	char*						taskName;							// Name of Task Controller
 	size_t						subtaskIdx;							// 1-based index of subtask from parent Task subtasks list. If task doesn't have a parent task then index is 0.
-	size_t						slaveHWTrigIdx;						// 1-based index of Slave HW Trig from Master HW Trig Slave list. If Task Controller is not a HW Trig Slave, then index is 0.
 	CmtTSQHandle				eventQ;								// Event queue to which the state machine reacts.
 	CmtThreadLockHandle			eventQThreadLock;					// Thread lock used to coordinate multiple writing threads sending events to the queue.
 	ListType					dataQs;								// Incoming data queues, list of VChanCallbackData_type*.
@@ -95,11 +85,7 @@ struct TaskControl {
 	TaskControl_type*			parenttask;							// Pointer to parent task that own this subtask. 
 																	// If this is the main task, it has no parent and this is NULL. 
 	ListType					subtasks;							// List of subtasks of SubTask_type.
-	TaskControl_type*			masterHWTrigTask;					// If this is a Slave HW Triggered Task Controller, then masterHWTrigTask is a Task Controller 
-	ListType					slaveHWTrigTasks;					// If this is a Master HW Triggered Task Controller then slaveHWTrigTasks is a list of SlaveHWTrigTask_type
-																	// HW Triggered Slave Task Controllers.
-	void*						moduleData;							// Reference to module specific data that is 
-																	// controlled by the task.
+	void*						moduleData;							// Reference to module specific data that is controlled by the task.
 	int							logPanHandle;						// Panel handle in which there is a box control for printing Task Controller execution info useful for debugging. If not used, it is set to 0
 	int							logBoxControlID;					// Box control ID for printing Task Controller execution info useful for debugging. If not used, it is set to 0.  
 	BOOL						loggingEnabled;						// If True, logging info is printed to the provided Box control.
@@ -107,7 +93,6 @@ struct TaskControl {
 	double						waitBetweenIterations;				// During a RUNNING state, waits specified ammount in seconds between iterations
 	BOOL						abortFlag;							// When set to TRUE, it signals the provided function pointers that they must abort running processes.
 	BOOL						abortIterationFlag;					// When set to TRUE, it signals the external thread running the iteration that it must finish.
-	BOOL						slaveArmedFlag;						// TRUE when HW Triggering is enabled for the Task Controller and Slave has been armed before sending TASK_EVENT_ITERATION_DONE.
 	int							nIterationsFlag;					// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
 	int							iterationTimerID;					// Keeps track of the timeout timer when iteration is performed in another thread.
 	BOOL						UITCFlag;							// If TRUE, the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
@@ -160,21 +145,6 @@ static char*								FCallToString							(TaskFCall_type fcall);
 static SubTaskEventInfo_type* 				init_SubTaskEventInfo_type 				(size_t subtaskIdx, TaskStates_type state);
 static void									discard_SubTaskEventInfo_type 			(SubTaskEventInfo_type** a);
 static void									disposeSubTaskEventInfo					(void* eventInfo);
-
-// HW Trigger eventInfo functions
-static SlaveHWTrigTaskEventInfo_type* 		init_SlaveHWTrigTaskEventInfo_type 		(size_t slaveHWTrigIdx);
-static void									discard_SlaveHWTrigTaskEventInfo_type	(SlaveHWTrigTaskEventInfo_type** a);
-static void									disposeSlaveHWTrigTaskEventInfo			(void* eventInfo);
-
-// Determine type of Master and Slave HW Trigger Task Controller
-static BOOL									MasterHWTrigTaskHasChildSlaves			(TaskControl_type* taskControl);
-static BOOL									SlaveHWTrigTaskHasParentMaster			(TaskControl_type* taskControl); 
-
-// Determine if HW Triggered Slaves from a HW Triggering Master are Armed
-static BOOL									HWTrigSlavesAreArmed					(TaskControl_type* master);
-
-// Reset Armed status of HW Triggered Slaves from the list of a Master HW Triggering Task Controller
-static void									ResetHWTrigSlavesArmedStatus			(TaskControl_type* master);
 
 // VChan and Task Control binding
 static VChanCallbackData_type*				init_VChanCallbackData_type				(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr);
@@ -234,7 +204,6 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	tc -> eventQThreadLock					= 0;
 	tc -> dataQs							= 0;
 	tc -> subtasks							= 0;
-	tc -> slaveHWTrigTasks					= 0;
 	
 	if (CmtNewTSQ(N_TASK_EVENT_QITEMS, sizeof(EventPacket_type), 0, &tc->eventQ) < 0)
 		goto Error;
@@ -252,13 +221,9 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	tc -> subtasks							= ListCreate(sizeof(SubTask_type));
 	if (!tc->subtasks) goto Error;
 	
-	tc -> slaveHWTrigTasks					= ListCreate(sizeof(SlaveHWTrigTask_type));
-	if (!tc->slaveHWTrigTasks) goto Error;
-	
 	tc -> taskName 							= StrDup(taskControllerName);
 	tc -> moduleData						= moduleData;
 	tc -> subtaskIdx						= 0;
-	tc -> slaveHWTrigIdx					= 0;
 	tc -> state								= TASK_STATE_UNCONFIGURED;
 	tc -> oldState							= TASK_STATE_UNCONFIGURED;
 	tc -> repeat							= 1;
@@ -267,7 +232,6 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	tc -> mode								= TASK_FINITE;
 	tc -> currIterIdx						= 0;
 	tc -> parenttask						= NULL;
-	tc -> masterHWTrigTask					= NULL;
 	tc -> logPanHandle						= 0;
 	tc -> logBoxControlID					= 0;
 	tc -> loggingEnabled					= FALSE;
@@ -275,7 +239,6 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	tc -> waitBetweenIterations				= 0;
 	tc -> abortFlag							= 0;
 	tc -> abortIterationFlag				= FALSE;
-	tc -> slaveArmedFlag					= FALSE;
 	tc -> nIterationsFlag					= -1;
 	tc -> iterationTimerID					= 0;
 	tc -> UITCFlag							= FALSE;
@@ -303,7 +266,6 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	if (tc->eventQThreadLock)		CmtDiscardLock(tc->eventQThreadLock);
 	if (tc->dataQs)	 				ListDispose(tc->dataQs);
 	if (tc->subtasks)    			ListDispose(tc->subtasks);
-	if (tc->slaveHWTrigTasks)		ListDispose(tc->slaveHWTrigTasks);
 	OKfree(tc);
 	
 	return NULL;
@@ -461,18 +423,6 @@ void* GetTaskControlModuleData (TaskControl_type* taskControl)
 	return taskControl->moduleData; 
 }
 
-HWTrigger_type GetTaskControlHWTrigger (TaskControl_type* taskControl)
-{
-	if (!taskControl->masterHWTrigTask && ListNumItems(taskControl->slaveHWTrigTasks ))
-		return TASK_MASTER_HWTRIGGER;
-	else
-		if (taskControl->masterHWTrigTask && !ListNumItems(taskControl->slaveHWTrigTasks ))
-			return TASK_SLAVE_HWTRIGGER;
-		else
-			return TASK_NO_HWTRIGGER; 
-}
-  
-
 TaskControl_type* GetTaskControlParent (TaskControl_type* taskControl)
 {
 	return taskControl->parenttask;
@@ -508,34 +458,6 @@ BOOL GetTaskControlAbortIterationFlag (TaskControl_type* taskControl)
 {
 	return taskControl->abortIterationFlag;
 }
-
-TaskControl_type* GetTaskControlMasterHWTrigTask (TaskControl_type* taskControl)
-{
-	return taskControl->masterHWTrigTask;
-}
-
-TaskControl_type* GetSlaveHWTrigTask (SlaveHWTrigTask_type* tasktype)
-{
-	return tasktype->slaveHWTrigTask;
-}
-
-ListType GetTaskControlSlaveHWTrigTasks (TaskControl_type* taskControl)
-{
-	size_t	nSlaves = ListNumItems(taskControl->slaveHWTrigTasks);
-	
-	ListType Slaves = ListCreate(sizeof(SlaveHWTrigTask_type*));
-	if (!Slaves) return 0;
-	
-	SlaveHWTrigTask_type*	slavetrigtaskPtr;
-	for (size_t i = 1; i <= nSlaves; i++) {
-		slavetrigtaskPtr = ListGetPtrToItem (taskControl->slaveHWTrigTasks, i);
-		ListInsertItem(Slaves, &slavetrigtaskPtr, END_OF_LIST);
-	}
-	
-	return Slaves;
-}
-
- 
 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -663,77 +585,6 @@ static void	disposeSubTaskEventInfo	(void* eventInfo)
 	
 	discard_SubTaskEventInfo_type(&eventInfoPtr);
 }
-
-static SlaveHWTrigTaskEventInfo_type* init_SlaveHWTrigTaskEventInfo_type (size_t slaveHWTrigIdx)
-{
-	SlaveHWTrigTaskEventInfo_type* a = malloc(sizeof(SlaveHWTrigTaskEventInfo_type));
-	if (!a) return NULL;
-	
-	a -> slaveHWTrigIdx 		= slaveHWTrigIdx;
-	
-	return a;
-}
-
-static void	discard_SlaveHWTrigTaskEventInfo_type (SlaveHWTrigTaskEventInfo_type** a)
-{
-	if (!*a) return;
-	OKfree(*a);
-}
-
-static void	disposeSlaveHWTrigTaskEventInfo	(void* eventInfo)
-{
-	SlaveHWTrigTaskEventInfo_type* slaveInfo = eventInfo;
-	
-	discard_SlaveHWTrigTaskEventInfo_type (&slaveInfo);
-}
-
-static BOOL	MasterHWTrigTaskHasChildSlaves	(TaskControl_type* taskControl)
-{
-	SubTask_type*   subtaskPtr; 
-	BOOL 			flag			= 0;	// assume all Slave HW Triggered Task Controllers are not a SubTask of taskControl
-	size_t			nSubTasks		= ListNumItems(taskControl->subtasks);
-	for (size_t i = 1; i <= nSubTasks; i++) {
-		subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
-		if (subtaskPtr->subtask->masterHWTrigTask == taskControl) {
-			flag = 1;
-			break;
-		}
-	}
-	
-	return flag;
-}
-
-static BOOL	SlaveHWTrigTaskHasParentMaster	(TaskControl_type* taskControl)
-{
-	return taskControl->parenttask == taskControl->masterHWTrigTask;
-}
-
-static BOOL	HWTrigSlavesAreArmed (TaskControl_type* master)
-{
-	BOOL 					ArmedFlag			= 1;	// assume all Slave HW Triggered Task Controllers are armed
-	SlaveHWTrigTask_type*   slaveHWTrigPtr; 
-	size_t					nSlaves				= ListNumItems(master->slaveHWTrigTasks);
-	for (size_t i = 1; i <= nSlaves; i++) {
-		slaveHWTrigPtr = ListGetPtrToItem(master->slaveHWTrigTasks, i);
-		if (!slaveHWTrigPtr->armed) {
-			ArmedFlag = 0;
-			break;
-		}
-	}
-	
-	return ArmedFlag; 
-}
-
-static void	ResetHWTrigSlavesArmedStatus (TaskControl_type* master)
-{
-	SlaveHWTrigTask_type*   slaveHWTrigPtr; 
-	size_t					nSlaves				= ListNumItems(master->slaveHWTrigTasks);
-	for (size_t i = 1; i <= nSlaves; i++) {
-		slaveHWTrigPtr = ListGetPtrToItem(master->slaveHWTrigTasks, i);
-		slaveHWTrigPtr->armed = FALSE;
-	}
-}
-
 
 static void	disposeCmtTSQVChanEventInfo (void* eventInfo)
 {
@@ -879,10 +730,6 @@ static char* StateToString (TaskStates_type state)
 			
 			return StrDup("Idle");
 			
-		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
-			
-			return StrDup("Running and Waiting For HW Trig Slaves");
-			
 		case TASK_STATE_RUNNING:
 			
 			return StrDup("Running");
@@ -953,10 +800,6 @@ static char* EventToString (TaskEvents_type event)
 		case TASK_EVENT_SUBTASK_STATE_CHANGED:
 			
 			return StrDup("SubTask State Changed");
-			
-		case TASK_EVENT_HWTRIG_SLAVE_ARMED:
-			
-			return StrDup("Slave HW Triggered Task Controller is Armed"); 
 			
 		case TASK_EVENT_DATA_RECEIVED:
 			
@@ -1374,9 +1217,6 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, EventPacket_t
 			// reset abort iteration flag
 			taskControl->abortIterationFlag = FALSE;
 			
-			// reset Slave armed flag
-			taskControl->slaveArmedFlag		= FALSE;
-			
 			// call iteration function and set timeout if required to complete the iteration
 			if (taskControl->iterTimeout) {  
 				// set an iteration timeout async timer until which a TASK_EVENT_ITERATION_DONE must be received 
@@ -1634,90 +1474,12 @@ char* GetUniqueTaskControllerName (ListType TCList, char baseTCName[])
 	return name;
 }
 
-int	AddHWSlaveTrigToMaster (TaskControl_type* master, TaskControl_type* slave)
-{
-	SlaveHWTrigTask_type newSlave;
-	if (!master || !slave) return -1; 
-	
-	if (slave->masterHWTrigTask) 
-		return -2; // slave already assigned
-	
-	if (ListNumItems(slave->slaveHWTrigTasks))
-		return -3; // Task Controller is not of Slave HW Trig type
-	
-	if (master->masterHWTrigTask)
-		return -4; // task Controller is not of a Master HW Trig type
-	
-	// assign master to slave
-	slave->masterHWTrigTask = master;
-	
-	// assign slave to master
-	newSlave.slaveHWTrigTask 	= slave;
-	newSlave.armed				= FALSE;
-	
-	// insert subtask
-	if (!ListInsertItem(master->slaveHWTrigTasks, &newSlave, END_OF_LIST)) return -1;
-	
-	// update Slave HW Trig index within Master HW Trig Slave list
-	slave->slaveHWTrigIdx = ListNumItems(master->slaveHWTrigTasks);
-	
-	return 0;
-}
-
-int RemoveHWSlaveTrigFromMaster (TaskControl_type* slave)
-{
-	SlaveHWTrigTask_type* slavePtr; 
-	
-	if (!slave || !slave->masterHWTrigTask) return -1;
-	
-	size_t	nSlaves = ListNumItems(slave->masterHWTrigTask->slaveHWTrigTasks);
-	for (size_t i = 1; i <= nSlaves; i++) {
-		slavePtr = ListGetPtrToItem(slave->masterHWTrigTask->slaveHWTrigTasks, i);
-		if (slave == slavePtr->slaveHWTrigTask) {
-			ListRemoveItem(slave->masterHWTrigTask->slaveHWTrigTasks, 0, i);
-			// update slave indices from master list
-			nSlaves = ListNumItems(slave->masterHWTrigTask->slaveHWTrigTasks);
-			for (size_t i = 1; i <= nSlaves; i++) {
-				slavePtr = ListGetPtrToItem(slave->masterHWTrigTask->slaveHWTrigTasks, i);
-				slavePtr->slaveHWTrigTask->slaveHWTrigIdx = i;
-			}
-			slave->slaveHWTrigIdx 	= 0;
-			slave->masterHWTrigTask = NULL;
-			
-			return 0; // found and removed
-		}
-		
-	}
-	
-	return -2; // not found
-}
-
-int RemoveAllHWSlaveTrigsFromMaster	(TaskControl_type* master)
-{
-	if (!master) return -1;
-	SlaveHWTrigTask_type* 	slavePtr; 
-	size_t					nSlaves = ListNumItems(master->slaveHWTrigTasks);
-	
-	for (size_t i = 1; i <= nSlaves; i++) {
-		slavePtr = ListGetPtrToItem(master->slaveHWTrigTasks, i);
-		slavePtr->slaveHWTrigTask->slaveHWTrigIdx 	= 0;
-		slavePtr->slaveHWTrigTask->masterHWTrigTask	= NULL;
-	}
-	ListClear(master->slaveHWTrigTasks);
-	
-	return 0;
-}
-
 int	DisassembleTaskTreeBranch (TaskControl_type* taskControlNode)
 {
 	if (!taskControlNode) return -1;
 	
 	// disconnect from parent if any
 	RemoveSubTaskFromParent(taskControlNode);
-	
-	// disconnect HW triggering
-	RemoveHWSlaveTrigFromMaster(taskControlNode);
-	RemoveAllHWSlaveTrigsFromMaster(taskControlNode);
 	
 	// disconnect incoming Source VChans from the Sink VChans assigned to this Task Controller
 	DisconnectAllSinkVChans(taskControlNode);
@@ -1753,17 +1515,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 #define TaskEventHandler_Error_InvalidEventInState			-6
 #define TaskEventHandler_Error_IterateFCallTmeout			-7
 #define	TaskEventHandler_Error_IterateExternThread			-8
-#define TaskEventHandler_Error_HWTriggeringNotAllowed		-9
-#define TaskEventHandler_Error_HWTriggeringMismatch			-10
-#define TaskEventHandler_Error_HWTriggeringMinRepeat		-11	
-#define TaskEventHandler_Error_NoHWTriggerArmedEvent		-12
-#define	TaskEventHandler_Error_SlaveHWTriggeredZeroTimeout  -13
-#define TaskEventHandler_Error_HWTrigSlaveNotArmed			-14
 
-	
 	EventPacket_type 		eventpacket[EVENT_BUFFER_SIZE];
 	SubTask_type* 			subtaskPtr; 
-	SlaveHWTrigTask_type*   slaveHWTrigPtr;
 	ErrorMsg_type*			errMsg			= NULL;
 	char*					buff			= NULL;
 	char*					eventStr;
@@ -1827,9 +1581,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// reset iterations
 						taskControl->currIterIdx = 0;
-						
-						// reset armed status of Slave HW Triggered Task Controllers, if any
-						ResetHWTrigSlavesArmedStatus(taskControl);
 						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 						
@@ -2026,9 +1777,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// reset iterations
 						taskControl->currIterIdx = 0;
-						
-						// reset armed status of Slave HW Triggered Task Controllers, if any
-						ResetHWTrigSlavesArmedStatus(taskControl);
 						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 					}
@@ -2384,9 +2132,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						// reset iterations
 						taskControl->currIterIdx = 0;
 						
-						// reset armed status of Slave HW Triggered Task Controllers, if any
-						ResetHWTrigSlavesArmedStatus(taskControl);
-						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 						
 					}
@@ -2459,9 +2204,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						// reset iterations
 						taskControl->currIterIdx = 0;
 						
-						// reset armed status of Slave HW Triggered Task Controllers, if any
-						ResetHWTrigSlavesArmedStatus(taskControl);
-						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 					}
 					
@@ -2514,106 +2256,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 					
-			}
-			
-			break;
-			
-		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
-			
-			switch (eventpacket[i].event) {
-				
-				case TASK_EVENT_SUBTASK_STATE_CHANGED: 
-					
-					// update subtask state
-					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
-					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
-					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
-					
-					// if subtask is in an error state, then switch to error state
-					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;	
-					}
-					
-					break;
-					
-				case TASK_EVENT_HWTRIG_SLAVE_ARMED:
-					
-					// update Slave HW Trig Task Controller armed flag in master list
-					slaveHWTrigPtr = ListGetPtrToItem(taskControl->slaveHWTrigTasks, ((SlaveHWTrigTaskEventInfo_type*)eventpacket[i].eventInfo)->slaveHWTrigIdx);
-					slaveHWTrigPtr->armed = TRUE; 
-					
-					if (!HWTrigSlavesAreArmed(taskControl))
-						break; // stop here, not all Slaves are armed 
-					
-									
-					//---------------------------------------------------------------------------------------------------------------
-					// Slaves are ready to be triggered, reset Slaves armed status
-					//---------------------------------------------------------------------------------------------------------------
-									
-					ResetHWTrigSlavesArmedStatus(taskControl);
-									
-					//---------------------------------------------------------------------------------------------------------------
-					// Iterate and fire Master HW Trigger 
-					//---------------------------------------------------------------------------------------------------------------
-									
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-					// switch state and wait for iteration to complete
-					ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
-					
-					break;
-					
-				case TASK_EVENT_DATA_RECEIVED:
-					
-					// call data received event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-							
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					}
-					
-					break;
-					
-				case TASK_EVENT_CUSTOM_MODULE_EVENT:
-					
-					// call custom module event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-							
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					}
-					
-					break;
-					
-				default:
-					
-					eventStr = EventToString(eventpacket[i].event);
-					stateStr = StateToString(taskControl->state);	 	
-					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
-					buff = malloc ((nchars+1)*sizeof(char));
-					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
-					OKfree(eventStr);
-					OKfree(stateStr);
-					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
-					OKfree(buff);
-					
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 			}
 			
 			break;
@@ -2674,120 +2316,26 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						case TASK_ITERATE_BEFORE_SUBTASKS_START:
 							
-							switch (GetTaskControlHWTrigger(taskControl)) {
-								
-								case TASK_NO_HWTRIGGER:
+							//---------------------------------------------------------------------------------------------------------------
+							// Call iteration function if needed	 
+							//---------------------------------------------------------------------------------------------------------------
 									
-									//---------------------------------------------------------------------------------------------------------------
-									// Call iteration function if needed	 
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-									
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-								        
-									else 
-										if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
-											taskControl->errorMsg =
-											init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
+							if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+							else 
+								if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
+									taskControl->errorMsg =
+									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
 						
-											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-											ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-											break;  // stop here
-										}
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+									break;  // stop here
+								}
 										
+								
+							// switch state and wait for iteration to complete
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
 									
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);
-									
-									break;
-									
-								case TASK_MASTER_HWTRIGGER:
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Check if HW triggering is enabled, Task Controller has at least one iteration
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!taskControl->repeat && taskControl->mode == TASK_FINITE) {
-										
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_HWTriggeringMinRepeat, taskControl->taskName, "When HW Triggering is enabled, the Task Controller should iterate at least once");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break;
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Check if triggering is consistent. Do not allow child Task Controllers to be HW Triggered Slaves
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (MasterHWTrigTaskHasChildSlaves	(taskControl)) {
-										
-										// Not allowed because the slaves cannot be put in an armed state waiting for the trigger. They don't receive a TASK_EVENT_START
-										// until the iteration doesn't finish.
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_HWTriggeringNotAllowed, taskControl->taskName, "A Master HW Trigger Task Control cannot have a Slave HW Triggered Task Control as a child SubTask which is armed after the Master sends its trigger");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break;
-									}
-										
-									//---------------------------------------------------------------------------------------------------------------
-									// If Slaves are not ready, wait until they are ready
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!HWTrigSlavesAreArmed(taskControl)) {
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES);
-										break; // stop here
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Slaves are ready to be triggered, reset Slaves armed status
-									//---------------------------------------------------------------------------------------------------------------
-									
-									ResetHWTrigSlavesArmedStatus(taskControl);
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Iterate and fire Master HW Trigger 
-									//---------------------------------------------------------------------------------------------------------------
-									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
-									
-									break;
-									
-								case TASK_SLAVE_HWTRIGGER:
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Check if trigger settings are valid
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (SlaveHWTrigTaskHasParentMaster(taskControl) && (taskControl->repeat != 1 || taskControl->mode == TASK_CONTINUOUS)) {
-										
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_HWTriggeringMismatch, taskControl->taskName, "If a Slave HW Triggered Task Controller has a Master HW Triggering Task Controller as its parent task, then the Slave HW Triggered Task Controller must have only one iteration");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break; // stop here
-										
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Call the iteration function and arm the Slave HWT Task Controller. Inform the Task Controller that it is armed
-									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
-									//---------------------------------------------------------------------------------------------------------------
-									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-										
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 
-									
-									break;
-							}
-							
 							break;
 							
 						case TASK_ITERATE_AFTER_SUBTASKS_COMPLETE:
@@ -2810,118 +2358,27 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								break; // stop here
 							}	
 							
-							switch (GetTaskControlHWTrigger(taskControl)) {
-								
-								case TASK_NO_HWTRIGGER:
+							//---------------------------------------------------------------------------------------------------------------
+							// There are no SubTasks, call iteration function if needed
+							//---------------------------------------------------------------------------------------------------------------
 									
-									//---------------------------------------------------------------------------------------------------------------
-									// There are no SubTasks, call iteration function if needed
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									else 
-										if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
-											taskControl->errorMsg =
-											init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
+							if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+							else 
+								if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
+									taskControl->errorMsg =
+									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
 						
-											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-											ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-											break;  // stop here
-										}
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+									break;  // stop here
+								}
 									
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
+							// switch state and wait for iteration to complete
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
 									
-									break;
-									
-								case TASK_MASTER_HWTRIGGER:
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Check if HW Triggering is enabled, Task Controller has at least one iteration
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!taskControl->repeat && taskControl->mode == TASK_FINITE) {
-										
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_HWTriggeringMinRepeat, taskControl->taskName, "When HW Triggering is enabled, the Task Controller should iterate at least once");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break;
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Check if triggering is consistent. Do not allow child Task Controllers to be HW Triggered Slaves
-									//---------------------------------------------------------------------------------------------------------------
-									if (MasterHWTrigTaskHasChildSlaves	(taskControl)) {
-										
-										// Not allowed because the slaves cannot be put in an armed state waiting for the trigger. They don't receive a TASK_EVENT_START
-										// until the iteration doesn't finish.
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_HWTriggeringNotAllowed, taskControl->taskName, "A Master HW Trigger Task Control cannot have a Slave HW Triggered Task Control as a child SubTask that must terminate before it can be triggered");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break;
-									}	
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// If Slaves are not ready, wait until they are ready
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!HWTrigSlavesAreArmed(taskControl)) {
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES);
-										break; // stop here, Slaves are not ready
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Slaves are ready to be triggered, reset Slaves armed status
-									//---------------------------------------------------------------------------------------------------------------
-									
-									ResetHWTrigSlavesArmedStatus(taskControl);
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// There are no SubTasks, iterate and fire Master HW Trigger 
-									//---------------------------------------------------------------------------------------------------------------
-									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
-									
-									break;
-									
-								case TASK_SLAVE_HWTRIGGER:
-									
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Check if iteration timeout setting is valid
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!taskControl->iterTimeout) {
-										
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_SlaveHWTriggeredZeroTimeout, taskControl->taskName, "A Slave HW Triggered Task Controller cannot have 0 timeout");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break; // stop here
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Call the iteration function and arm the Slave HWT Task Controller. Inform the Task Controller that it is armed
-									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
-									//---------------------------------------------------------------------------------------------------------------
-									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-										
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 
-										
-									break;
-							}
-							
 							break;
-							
+									
 						case TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS:
 							
 							//---------------------------------------------------------------------------------------------------------------
@@ -2939,115 +2396,27 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									break;
 								}
 							
-							switch (GetTaskControlHWTrigger(taskControl)) {
-								
-								case TASK_NO_HWTRIGGER:
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Call iteration function if needed
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									else 
-										if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
-											taskControl->errorMsg =
-											init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
-						
-											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-											ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-											break;
-										}
-										
-									// switch state and wait for iteration and SubTasks if there are any to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
-									
-									break;
-									
-								case TASK_MASTER_HWTRIGGER:
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Make sure that when HW Triggering is enabled, Task Controller has at least one iteration
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!taskControl->repeat && taskControl->mode == TASK_FINITE) {
-										
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_HWTriggeringMinRepeat, taskControl->taskName, "When HW Triggering is enabled, the Task Controller should iterate at least once");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break;
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// If Slaves are not ready, wait until they are ready
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!HWTrigSlavesAreArmed(taskControl)) {
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES);
-										break; // stop here, Slaves are not ready
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Slaves are ready to be triggered, reset Slaves armed status
-									//---------------------------------------------------------------------------------------------------------------
-									
-									ResetHWTrigSlavesArmedStatus(taskControl);
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Iterate and fire Master HW Trigger 
-									//---------------------------------------------------------------------------------------------------------------
-									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
-										
-									break;
-									
-								case TASK_SLAVE_HWTRIGGER:
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Make sure that when HW Triggering is enabled, Task Controller has at least one iteration
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!taskControl->repeat && taskControl->mode == TASK_FINITE) {
-										
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_HWTriggeringMinRepeat, taskControl->taskName, "When HW Triggering is enabled, the Task Controller should iterate at least once");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break;
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Check if iteration timeout setting is valid
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!taskControl->iterTimeout) {
-										
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_SlaveHWTriggeredZeroTimeout, taskControl->taskName, "A Slave HW Triggered Task Controller cannot have 0 timeout");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break; // stop here
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Call the iteration function and arm the Slave HWT Task Controller. Inform the Task Controller that it is armed
-									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
-									//---------------------------------------------------------------------------------------------------------------
-									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-										
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 
-									
-									break;
-							}
+							//---------------------------------------------------------------------------------------------------------------
+							// Call iteration function if needed
+							//---------------------------------------------------------------------------------------------------------------
 							
+							if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+							else 
+								if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
+									taskControl->errorMsg =
+									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
+						
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+									break;
+								}
+										
+							// switch state and wait for iteration and SubTasks if there are any to complete
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
+									
 							break;
+									
 					}
 					
 					break;
@@ -3222,124 +2591,27 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 						case TASK_ITERATE_AFTER_SUBTASKS_COMPLETE:
 						
-							switch (GetTaskControlHWTrigger(taskControl)) {
-								
-								case TASK_NO_HWTRIGGER:
+							//---------------------------------------------------------------------------------------------------------------
+							// SubTasks are complete, call iteration function
+							//---------------------------------------------------------------------------------------------------------------
 									
-									//---------------------------------------------------------------------------------------------------------------
-									// SubTasks are complete, call iteration function
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									else 
-										if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
-											taskControl->errorMsg =
-											init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
+							if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+							else 
+								if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
+									taskControl->errorMsg =
+									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
 						
-											FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-											ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-											break;
-										}
-									
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 	
-									
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;
+								}
 									
-								case TASK_MASTER_HWTRIGGER:
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Check if HW Triggering is enabled, Task Controller has at least one iteration
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!taskControl->repeat && taskControl->mode == TASK_FINITE) {
-										
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_HWTriggeringMinRepeat, taskControl->taskName, "When HW Triggering is enabled, the Task Controller should iterate at least once");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break;
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Check if triggering is consistent. Do not allow child Task Controllers to be HW Triggered Slaves
-									//---------------------------------------------------------------------------------------------------------------
-									if (MasterHWTrigTaskHasChildSlaves	(taskControl)) {
-										
-										// Not allowed because the slaves cannot be put in an armed state waiting for the trigger. They don't receive a TASK_EVENT_START
-										// until the iteration doesn't finish.
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_HWTriggeringNotAllowed, taskControl->taskName, "A Master HW Trigger Task Control cannot have a Slave HW Triggered Task Control as a child SubTask that must terminate before it can be triggered");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break;
-									}	
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// If Slaves are not ready, wait until they are ready
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!HWTrigSlavesAreArmed(taskControl)) {
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES);
-										break; // stop here, Slaves are not ready
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Slaves are ready to be triggered, reset Slaves armed status
-									//---------------------------------------------------------------------------------------------------------------
-									
-									ResetHWTrigSlavesArmedStatus(taskControl);
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// There are no SubTasks, iterate and fire Master HW Trigger 
-									//---------------------------------------------------------------------------------------------------------------
-									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION);  
-									
-									break;
-									
-								case TASK_SLAVE_HWTRIGGER:
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Check if iteration timeout setting is valid
-									//---------------------------------------------------------------------------------------------------------------
-									
-									if (!taskControl->iterTimeout) {
-										
-										taskControl->errorMsg = 
-										init_ErrorMsg_type(TaskEventHandler_Error_SlaveHWTriggeredZeroTimeout, taskControl->taskName, "A Slave HW Triggered Task Controller cannot have 0 timeout");
-										
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-										break; // stop here
-									}
-									
-									//---------------------------------------------------------------------------------------------------------------
-									// Call the iteration function and arm the Slave HWT Task Controller. Inform the Task Controller that it is armed
-									// by sending a TASK_EVENT_HWTRIG_SLAVE_ARMED to self with no additional parameters before terminating the iteration
-									//---------------------------------------------------------------------------------------------------------------
-									
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
-										
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 
-										
-									break;
-							}
-							
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING_WAITING_ITERATION); 	
+								
 							break;
+							
 					}
-					
-					break;
-					
-				case TASK_EVENT_HWTRIG_SLAVE_ARMED:
-					
-					// update Slave HW Trig Task Controller armed flag
-					slaveHWTrigPtr = ListGetPtrToItem(taskControl->slaveHWTrigTasks, ((SlaveHWTrigTaskEventInfo_type*)eventpacket[i].eventInfo)->slaveHWTrigIdx);
-					slaveHWTrigPtr->armed = TRUE; 
 					
 					break;
 					
@@ -3424,18 +2696,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								
 							break;   // stop here
 						}
-					}
-					
-					//---------------------------------------------------------------------------------------------------------------   
-					// Check if Task Controller is a Slave, that it has been armed before completing the iteration
-					//---------------------------------------------------------------------------------------------------------------   
-					if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER && !taskControl->slaveArmedFlag) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_HWTrigSlaveNotArmed, taskControl->taskName, "A Slave HW Triggered Task Controller must be armed by TASK_EVENT_HWTRIG_SLAVE_ARMED before completing the call to its iteration function");
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
 					}
 					
 					//---------------------------------------------------------------------------------------------------------------
@@ -3667,43 +2927,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;	
-					}
-					
-					break;
-					
-				case TASK_EVENT_HWTRIG_SLAVE_ARMED:
-					
-					switch (GetTaskControlHWTrigger(taskControl)) {  
-						
-						case TASK_NO_HWTRIGGER:
-							
-							// not allowed, generate error
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_NoHWTriggerArmedEvent, taskControl->taskName, "Slave Task Controller Armed event received but no HW triggering enabled for this Task Controller");
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							
-							break;
-							
-						case TASK_MASTER_HWTRIGGER:
-							
-							// update Slave HW Trig Task Controller armed flag
-							slaveHWTrigPtr = ListGetPtrToItem(taskControl->slaveHWTrigTasks, ((SlaveHWTrigTaskEventInfo_type*)eventpacket[i].eventInfo)->slaveHWTrigIdx);
-							slaveHWTrigPtr->armed = TRUE; 
-							
-							break;
-							
-						case TASK_SLAVE_HWTRIGGER:
-							
-							// mark Slave as armed
-							taskControl->slaveArmedFlag = TRUE;
-							
-							// inform Master Task Controller that Slave is armed
-							TaskControlEvent(taskControl->masterHWTrigTask, TASK_EVENT_HWTRIG_SLAVE_ARMED, 
-								init_SlaveHWTrigTaskEventInfo_type(taskControl->slaveHWTrigIdx), disposeSlaveHWTrigTaskEventInfo);
-							
-							break;
 					}
 					
 					break;
@@ -3942,9 +3165,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// reset iterations
 					taskControl->currIterIdx = 0;
 					
-					// reset armed status of Slave HW Triggered Task Controllers, if any
-					ResetHWTrigSlavesArmedStatus(taskControl);
-					
 					// switch to INITIAL state
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 					
@@ -3988,9 +3208,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// reset iterations
 						taskControl->currIterIdx = 0;
-						
-						// reset armed status of Slave HW Triggered Task Controllers, if any
-						ResetHWTrigSlavesArmedStatus(taskControl);
 						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 						
@@ -4059,9 +3276,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// reset iterations
 						taskControl->currIterIdx = 0;
-						
-						// reset armed status of Slave HW Triggered Task Controllers, if any
-						ResetHWTrigSlavesArmedStatus(taskControl);
 						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 					}

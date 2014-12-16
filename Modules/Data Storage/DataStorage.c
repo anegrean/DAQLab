@@ -716,7 +716,6 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 		case TASK_STATE_IDLE:
 		case TASK_STATE_STOPPING:
 		case TASK_STATE_DONE:
-		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
 		case TASK_STATE_RUNNING:
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
 			

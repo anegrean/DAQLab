@@ -261,7 +261,6 @@ typedef enum {
 	TASK_STATE_CONFIGURED,						// Task Controller is configured.
 	TASK_STATE_INITIAL,							// Initial state of Task Controller before any iterations are performed.
 	TASK_STATE_IDLE,							// Task Controller is configured.
-	TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES,   // A HW Master Trigger Task Controller is waiting for HW Slave Trigger Task Controllers to be armed.
 	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped.
 	TASK_STATE_RUNNING_WAITING_ITERATION,		// Task Controller is iterating but the iteration (possibly occuring in another thread) is not yet complete.
 												// Iteration is complete when a TASK_EVENT_ITERATION_DONE is received in this state.
@@ -290,7 +289,6 @@ typedef enum {
 	TASK_EVENT_STOP,							// Stops Task Controller iterations and allows SubTask Controllers to complete their iterations.
 	TASK_EVENT_STOP_CONTINUOUS_TASK,			// Event sent from parent Task Controller to its continuous SubTasks to stop them.
 	TASK_EVENT_SUBTASK_STATE_CHANGED,   		// When one of the SubTask Controllers switches to another state.
-	TASK_EVENT_HWTRIG_SLAVE_ARMED,				// When a Slave HW Trig Task Controller is armed, it informs the Master HW Triggering Task Controller. 
 	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue.
 	TASK_EVENT_CUSTOM_MODULE_EVENT,				// To signal custom module or device events.
 	TASK_EVENT_SUBTASK_ADDED_TO_PARENT,			// When a SubTask is added to a parent Task Controller
@@ -338,17 +336,7 @@ typedef enum {
 } TaskIterMode_type;
 
 
-//---------------------------------------------------------------
-// Task Controller HW Triggerring (for both Slaves and Masters)
-//---------------------------------------------------------------
-typedef enum {
-	TASK_NO_HWTRIGGER,
-	TASK_MASTER_HWTRIGGER,
-	TASK_SLAVE_HWTRIGGER
-} HWTrigger_type;
-
 typedef struct TaskControl 			TaskControl_type;
-typedef struct SlaveHWTrigTask		SlaveHWTrigTask_type;
 
 //--------------------------------------------------------------------------------
 // Task Controller Function Pointer Types
@@ -494,9 +482,6 @@ double					GetTaskControlIterationsWait		(TaskControl_type* taskControl);
 void					SetTaskControlModuleData			(TaskControl_type* taskControl, void* moduleData);
 void*					GetTaskControlModuleData			(TaskControl_type* taskControl);
 
-	// Task Controller HW Trigger types based on how the Task Controller is connected using AddHWSlaveTrigToMaster and RemoveHWSlaveTrigFromMaster 
-HWTrigger_type          GetTaskControlHWTrigger				(TaskControl_type* taskControl);
-
 	// Returns the parent Task Controller, given a Task Controller. If none, returns NULL.
 TaskControl_type*		GetTaskControlParent				(TaskControl_type* taskControl);
 
@@ -543,23 +528,6 @@ char* 					GetUniqueTaskControllerName			(ListType TCList, char baseTCName[]);
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // HW trigger dependencies
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-
-int						AddHWSlaveTrigToMaster				(TaskControl_type* master, TaskControl_type* slave);
-		
-int						RemoveHWSlaveTrigFromMaster			(TaskControl_type* slave);
-
-int 					RemoveAllHWSlaveTrigsFromMaster		(TaskControl_type* master);
-
-HWTrigger_type 			GetTaskControlHWTrigType			(TaskControl_type* taskControl);
-
-void 					SetTaskControlHWTrigType			(TaskControl_type* taskControl, HWTrigger_type hwtrigtype);
-
-TaskControl_type* 		GetTaskControlMasterHWTrigTask 		(TaskControl_type* taskControl);
-
-ListType 				GetTaskControlSlaveHWTrigTasks 		(TaskControl_type* taskControl);
-
-TaskControl_type* 		GetSlaveHWTrigTask 					(SlaveHWTrigTask_type* tasktype);
-
 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------

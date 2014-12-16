@@ -10986,10 +10986,6 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	// start all DAQmx tasks (at this point, output tasks have their buffers filled with data)
 	if ((fCallReturn = StartAllDAQmxTasks(dev))) goto Error;
 		
-	// if any of the DAQmx Tasks require a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
-	if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
-		TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);
-	
 	return; // no error
 	
 Error:
@@ -11304,8 +11300,7 @@ static FCallReturn_type* AO_DataReceivedTC	(TaskControl_type* taskControl, TaskS
 		
 		case TASK_STATE_RUNNING:
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
-		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
-			
+	
 			/*  not good
 			if (!AOOutputBufferFilled(dev))
 				if ((fCallReturn = FillAOOutputBuffer(dev))) goto Error;
@@ -11387,7 +11382,6 @@ static FCallReturn_type* PulseTrainDAQmxVChan_DataReceivedTC	(TaskControl_type* 
 		case TASK_STATE_IDLE:
 		case TASK_STATE_STOPPING:
 		case TASK_STATE_DONE:
-		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
 		case TASK_STATE_RUNNING:
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
 			

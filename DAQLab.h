@@ -26,6 +26,7 @@
 #include "VChannel.h"
 #include "TaskController.h"
 #include "DAQLabModule.h"
+#include "HWTriggering.h"
 #include "DataTypes.h"
 
 //==============================================================================
@@ -100,6 +101,30 @@ char*				DLGetUniqueVChanName				(char baseVChanName[]);
 BOOL				DLValidateVChanName					(char newVChanName[], void* null);
 
 BOOL				DLRenameVChan						(VChan_type* VChan, char newName[]);
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// HW trigger dependencies
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+
+	//--------------------
+	// HW Masters
+	//--------------------
+	
+	// Registers a Master HW-trigger with the framework
+BOOL				DLRegisterHWTrigMaster				(HWTrigMaster_type* master);
+
+	// Unregisters a Master HW-trigger from the framework
+BOOL				DLUnregisterHWTrigMaster			(HWTrigMaster_type* master);
+
+	//--------------------
+	// HW Slaves
+	//--------------------
+	
+	// Registers a Slave HW-trigger with the framework
+BOOL				DLRegisterHWTrigSlave				(HWTrigSlave_type* slave);
+
+	// Unregisters a Slave HW-trigger from the framework
+BOOL				DLUnregisterHWTrigSlave				(HWTrigSlave_type* slave);
 
 //-------------------------------------------------------------------------------
 // DAQLab handy programmer's tools

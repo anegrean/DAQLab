@@ -12,6 +12,7 @@
 // Include files
 
 #include "DataTypes.h" 
+#include "DAQLabUtility.h"
 #include <ansi_c.h>
 #include "toolbox.h"
 #include <nidaqmx.h>
@@ -337,7 +338,7 @@ PulseTrain_type* CopyPulseTrain(PulseTrain_type* pulsetrain)
 		case PulseTrain_Time:
 			newpulsetrain   = (PulseTrain_type*) init_PulseTrainTimeTiming_type(GetPulseTrainMode(pulsetrain), GetPulseTrainIdleState(pulsetrain), GetPulseTrainNPulses(pulsetrain), 
 									  GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)pulsetrain), GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)pulsetrain), 
-									  GetPulseTrainFreqTimingDutyCycle((PulseTrainTimeTiming_type*)pulsetrain)); 
+									  GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)pulsetrain)); 
 			break;
 			
 		case PulseTrain_Ticks:
@@ -366,8 +367,8 @@ Waveform_type* init_Waveform_type (WaveformTypes waveformType, double samplingRa
 	waveform->unitName			= NULL;
 	waveform->dateTimestamp		= 0;
 	waveform->nSamples			= nSamples;
-	waveform->data				= *ptrToData;
-	*ptrToData					= NULL;
+	waveform->data				= *ptrToData;  // assign data
+	*ptrToData					= NULL;		   // consume data
 	
 	return waveform;
 }
@@ -453,21 +454,44 @@ void* GetWaveformDataPtr (Waveform_type* waveform, size_t* nSamples)
 	return waveform->data;
 }
 
-Waveform_type* CopyWaveform (Waveform_type* waveform)
+WaveformTypes GetWaveformDataType (Waveform_type* waveform)
 {
-	void*	nullData	= NULL;
-	Waveform_type*	waveformCopy = init_Waveform_type(waveform->waveformType, waveform->samplingRate, 0, &nullData);
-	if (!waveformCopy) return NULL;
-	
-	if (AppendWaveform(waveformCopy, waveform) < 0) {
-		discard_Waveform_type(&waveformCopy);
-		return NULL;
-	}
-	
-	return waveformCopy;
+	return waveform->waveformType;
 }
 
-int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformToAppend)
+int CopyWaveform (Waveform_type** waveformCopy, Waveform_type* waveform, char** errorInfo)
+{
+#define CopyWaveform_Err_OutOfMemory	-1
+
+	void*	nullData	= NULL;
+	int		error		= 0;
+	char*	errMsg		= NULL;
+	
+	*waveformCopy = init_Waveform_type(waveform->waveformType, waveform->samplingRate, 0, &nullData);
+	if (!*waveformCopy) {
+		*errorInfo = FormatMsg(CopyWaveform_Err_OutOfMemory, "CopyWaveform", "Out of memory");
+		return CopyWaveform_Err_OutOfMemory;
+	}
+	
+	// copy waveform attributes
+	(*waveformCopy)->waveformName 	= StrDup(waveform->waveformName);
+	(*waveformCopy)->unitName		= StrDup(waveform->unitName);
+	(*waveformCopy)->dateTimestamp	= waveform->dateTimestamp;
+	
+	errChk( AppendWaveform(*waveformCopy, waveform, &errMsg) );
+	
+	return 0;
+	
+Error:
+	
+	discard_Waveform_type(waveformCopy);
+	
+	*errorInfo = FormatMsg(error, "CopyWaveform", errMsg);	// chain error
+	OKfree(errMsg);
+	return error;
+}
+
+int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformToAppend, char** errorInfo) 
 {
 #define AppendWaveformData_Err_SamplingRatesAreDifferent		-1
 #define AppendWaveformData_Err_DataTypesAreDifferent			-2
@@ -478,18 +502,35 @@ int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformTo
 	if (!waveformToAppend) return 0;
 	if (!waveformToAppend->nSamples) return 0;
 	// check if sampling rates are the same
-	if (waveformToAppendTo->samplingRate != waveformToAppend->samplingRate) return AppendWaveformData_Err_SamplingRatesAreDifferent;
+	if (waveformToAppendTo->samplingRate != waveformToAppend->samplingRate) {
+		*errorInfo = FormatMsg(AppendWaveformData_Err_SamplingRatesAreDifferent, "AppendWaveform", "Waveform sampling rates are different");
+		return AppendWaveformData_Err_SamplingRatesAreDifferent;	
+	}
 	
 	// check if data types are the same
-	if (waveformToAppendTo->waveformType != waveformToAppend->waveformType) return AppendWaveformData_Err_DataTypesAreDifferent;
+	if (waveformToAppendTo->waveformType != waveformToAppend->waveformType) {
+		*errorInfo = FormatMsg(AppendWaveformData_Err_DataTypesAreDifferent, "AppendWaveform", "Waveform data types are different");
+		return AppendWaveformData_Err_DataTypesAreDifferent;
+	}
 	
 	// check if units are the same
 	if (waveformToAppendTo->unitName && waveformToAppend->unitName)
-	if (strcmp(waveformToAppendTo->unitName, waveformToAppend->unitName)) return AppendWaveformData_Err_UnitsAreDifferent;
+		if (strcmp(waveformToAppendTo->unitName, waveformToAppend->unitName)) {
+			*errorInfo = FormatMsg(AppendWaveformData_Err_UnitsAreDifferent, "AppendWaveform", "Waveform units must be the same");
+			return AppendWaveformData_Err_UnitsAreDifferent;
+		}
+	
+	if (waveformToAppendTo->unitName || waveformToAppend->unitName) {
+		*errorInfo = FormatMsg(AppendWaveformData_Err_UnitsAreDifferent, "AppendWaveform", "Waveform units must be the same");
+		return AppendWaveformData_Err_UnitsAreDifferent;
+	}
 	
 	
 	void* dataBuffer = realloc(waveformToAppendTo->data, (waveformToAppendTo->nSamples + waveformToAppend->nSamples) * GetWaveformSizeofData(waveformToAppendTo));
-	if (!dataBuffer) return AppendWaveformData_Err_OutOfMemory;
+	if (!dataBuffer) {
+		*errorInfo = FormatMsg(AppendWaveformData_Err_OutOfMemory, "AppendWaveform", "Out of memory");
+		return AppendWaveformData_Err_OutOfMemory;
+	}
 	
 	switch (waveformToAppendTo->waveformType) {
 			

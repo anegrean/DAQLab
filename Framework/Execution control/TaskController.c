@@ -17,6 +17,7 @@
 #include "TaskController.h"
 #include "VChannel.h"
 #include "DAQLab.h"
+#include "HWTriggering.h"
 
 //==============================================================================
 // Constants
@@ -53,11 +54,6 @@ typedef enum {
 	CHILD_TASK_STATE_CHANGE
 } TaskControllerActions;
 
-typedef struct {
-	int							errorID;
-	char*						errorInfo;
-} ErrorMsg_type;
-
 // Structure binding Task Controller and VChan data for passing to TSQ callback	
 typedef struct {
 	TaskControl_type* 			taskControl;
@@ -89,14 +85,15 @@ struct TaskControl {
 	int							logPanHandle;						// Panel handle in which there is a box control for printing Task Controller execution info useful for debugging. If not used, it is set to 0
 	int							logBoxControlID;					// Box control ID for printing Task Controller execution info useful for debugging. If not used, it is set to 0.  
 	BOOL						loggingEnabled;						// If True, logging info is printed to the provided Box control.
-	ErrorMsg_type*				errorMsg;							// When switching to an error state, additional error info is written here
+	char*						errorInfo;							// When switching to an error state, additional error info is written here.
+	int							errorID;							// Error code encountered when switching to an error state.
 	double						waitBetweenIterations;				// During a RUNNING state, waits specified ammount in seconds between iterations
 	BOOL						abortFlag;							// When set to TRUE, it signals the provided function pointers that they must abort running processes.
 	BOOL						abortIterationFlag;					// When set to TRUE, it signals the external thread running the iteration that it must finish.
 	int							nIterationsFlag;					// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
 	int							iterationTimerID;					// Keeps track of the timeout timer when iteration is performed in another thread.
 	BOOL						UITCFlag;							// If TRUE, the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
-
+	
 	// Event handler function pointers
 	ConfigureFptr_type			ConfigureFptr;
 	UnconfigureFptr_type		UnconfigureFptr;
@@ -123,15 +120,10 @@ static void 								TaskEventHandler 						(TaskControl_type* taskControl);
 // Use this function to change the state of a Task Controller
 static int 									ChangeState 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState);
 // Use this function to carry out a Task Controller action using provided function pointers
-static ErrorMsg_type*						FunctionCall 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskFCall_type fID, void* fCallData); 
+static int									FunctionCall 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskFCall_type fID, void* fCallData, char** errorInfo); 
 
 // Formats a Task Controller log entry based on the action taken
 static void									ExecutionLogEntry						(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskControllerActions action, void* info);
-
-// Error formatting functions
-static ErrorMsg_type* 						init_ErrorMsg_type 						(int errorID, const char errorOrigin[], const char errorDescription[]);
-static void									discard_ErrorMsg_type 					(ErrorMsg_type** a);
-static ErrorMsg_type*						FCallReturnToErrorMsg					(FCallReturn_type** fCallReturn, TaskFCall_type fID);
 
 // Task Controller iteration done return info when performing iteration in another thread
 static void									disposeTCIterDoneInfo 					(void* eventInfo);
@@ -155,7 +147,7 @@ static void									disposeCmtTSQVChanEventInfo				(void* eventInfo);
 static void									DimTaskTreeBranch 						(TaskControl_type* taskControl, EventPacket_type* eventPacket, BOOL dimmed);
 
 // Clears recursively all data packets from the Sink VChans of all Task Controllers in a Task Tree Branch starting with the given Task Controller.
-static void									ClearTaskTreeBranchVChans				(TaskControl_type* taskControl);
+static int									ClearTaskTreeBranchVChans				(TaskControl_type* taskControl, char** errorInfo);
 
 //==============================================================================
 // Global variables
@@ -197,29 +189,27 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 										ModuleEventFptr_type		ModuleEventFptr,
 										ErrorFptr_type				ErrorFptr)
 {
+	int		error = 0;
 	TaskControl_type* tc = malloc (sizeof(TaskControl_type));
 	if (!tc) return NULL;
 	
+	// init
 	tc -> eventQ							= 0;
 	tc -> eventQThreadLock					= 0;
 	tc -> dataQs							= 0;
 	tc -> subtasks							= 0;
 	
-	if (CmtNewTSQ(N_TASK_EVENT_QITEMS, sizeof(EventPacket_type), 0, &tc->eventQ) < 0)
-		goto Error;
-	if (CmtNewLock(NULL, 0, &tc->eventQThreadLock) < 0)
-		goto Error;
+	if (CmtNewTSQ(N_TASK_EVENT_QITEMS, sizeof(EventPacket_type), 0, &tc->eventQ) < 0) goto Error;
+	if (CmtNewLock(NULL, 0, &tc->eventQThreadLock) < 0) goto Error;
 	
-	tc -> dataQs							= ListCreate(sizeof(VChanCallbackData_type*));	
-	if (!tc->dataQs) goto Error;
-		
+	nullChk( tc -> dataQs					= ListCreate(sizeof(VChanCallbackData_type*)) );
+	
 	tc -> eventQThreadID					= CmtGetCurrentThreadID ();
 	tc -> threadFunctionID					= 0;
 	// process items in queue events in the same thread that is used to initialize the task control (generally main thread)
 	CmtInstallTSQCallback(tc->eventQ, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskEventItemsInQueue, tc, tc->eventQThreadID, NULL); 
 	
-	tc -> subtasks							= ListCreate(sizeof(SubTask_type));
-	if (!tc->subtasks) goto Error;
+	nullChk( tc -> subtasks					= ListCreate(sizeof(SubTask_type)) );
 	
 	tc -> taskName 							= StrDup(taskControllerName);
 	tc -> moduleData						= moduleData;
@@ -235,7 +225,8 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	tc -> logPanHandle						= 0;
 	tc -> logBoxControlID					= 0;
 	tc -> loggingEnabled					= FALSE;
-	tc -> errorMsg							= NULL;
+	tc -> errorInfo							= NULL;
+	tc -> errorID							= 0;
 	tc -> waitBetweenIterations				= 0;
 	tc -> abortFlag							= 0;
 	tc -> abortIterationFlag				= FALSE;
@@ -266,6 +257,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	if (tc->eventQThreadLock)		CmtDiscardLock(tc->eventQThreadLock);
 	if (tc->dataQs)	 				ListDispose(tc->dataQs);
 	if (tc->subtasks)    			ListDispose(tc->subtasks);
+	
 	OKfree(tc);
 	
 	return NULL;
@@ -296,23 +288,17 @@ void discard_TaskControl_type(TaskControl_type** taskController)
 	
 	// incoming data queues (does not free the queue itself!)
 	RemoveAllSinkVChans(*taskController);
+	ListDispose((*taskController)->dataQs);
 	
 	// error message storage 
-	discard_ErrorMsg_type(&(*taskController)->errorMsg);
-	
+	OKfree((*taskController)->errorInfo);
+
 	// child Task Controllers list
 	ListDispose((*taskController)->subtasks);
 	
 	// free Task Controller memory
 	OKfree(*taskController);
-	/*
-	// discard all subtasks recursively
-	SubTask_type* subtaskPtr;
-	nItems = ListNumItems((*a)->subtasks);
-	for (size_t i = 1; i <= nItems; i++) {
-		subtaskPtr = ListGetPtrToItem((*a)->subtasks, i);
-		discard_TaskControl_type(&subtaskPtr->subtask);
-	} */
+	
 }
 
 void discard_TaskTreeBranch (TaskControl_type** taskController)
@@ -489,7 +475,7 @@ int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, Data
 		return AddSinkVChan_Err_OutOfMemory;
 	
 	// add callback
-	// process items in queue events in the same thread that is used to initialize the task control (generally main thread)
+	// process queue events in the same thread that is used to initialize the task control (generally main thread)
 	CmtInstallTSQCallback(tsqID, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskDataItemsInQueue, VChanTSQData, taskControl -> eventQThreadID, &VChanTSQData->itemsInQueueCBID);
 	
 	return 0;
@@ -597,7 +583,7 @@ static void	DimTaskTreeBranch (TaskControl_type* taskControl, EventPacket_type* 
 	if (!taskControl) return;
 	
 	// dim/undim
-	FunctionCall(taskControl, eventPacket, TASK_FCALL_DIM_UI, &dimmed); 
+	FunctionCall(taskControl, eventPacket, TASK_FCALL_DIM_UI, &dimmed, NULL); 
 	
 	size_t			nSubTasks = ListNumItems(taskControl->subtasks);
 	SubTask_type*	subTaskPtr;
@@ -608,30 +594,45 @@ static void	DimTaskTreeBranch (TaskControl_type* taskControl, EventPacket_type* 
 	}
 }
 
-void ClearAllSinkVChans	(TaskControl_type* taskControl)
+int ClearAllSinkVChans	(TaskControl_type* taskControl, char** errorInfo)
 {
-	size_t						nVChans		= ListNumItems(taskControl->dataQs);
+	size_t						nVChans			= ListNumItems(taskControl->dataQs);
 	VChanCallbackData_type**	VChanCBDataPtr;
+	int							error			= 0;
 	
 	for (size_t i = nVChans; i; i--) {
 		VChanCBDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
-		ReleaseAllDataPackets((*VChanCBDataPtr)->sinkVChan);
+		errChk( ReleaseAllDataPackets((*VChanCBDataPtr)->sinkVChan, errorInfo) );
 	}
+	
+	return 0;
+	
+Error:
+	
+	return error;
 }
 
-static void	ClearTaskTreeBranchVChans (TaskControl_type* taskControl)
+static int ClearTaskTreeBranchVChans (TaskControl_type* taskControl, char** errorInfo)
 {
-	if (!taskControl) return;
+	int		error 	= 0;
 	
-	ClearAllSinkVChans(taskControl);
+	if (!taskControl) return 0;  // do nothing
+	
+	errChk( ClearAllSinkVChans(taskControl, errorInfo) );
 	
 	size_t			nSubTasks	 = ListNumItems(taskControl->subtasks);
 	SubTask_type*	subTaskPtr;
 	
 	for (size_t i = nSubTasks; i; i--) {
 		subTaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
-		ClearTaskTreeBranchVChans(subTaskPtr->subtask);
+		errChk( ClearTaskTreeBranchVChans(subTaskPtr->subtask, errorInfo) );
 	}
+	
+	return 0;
+	
+Error:
+	
+	return error;
 }
 
 static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr)
@@ -652,55 +653,6 @@ static void	discard_VChanCallbackData_type (VChanCallbackData_type** a)
 	if (!*a) return;
 	
 	OKfree(*a);
-}
-
-static ErrorMsg_type* init_ErrorMsg_type (int errorID, const char errorOrigin[], const char errorDescription[])
-{
-	size_t	nchars;
-	
-	ErrorMsg_type* a = malloc (sizeof(ErrorMsg_type));
-	if (!a) return NULL;
-	
-	a -> errorID = errorID;
-	
-	nchars 			= snprintf(a->errorInfo, 0, "<%s Error ID: %d, Reason:\n\t %s>", errorOrigin, errorID, errorDescription); 
-	a->errorInfo 	= malloc((nchars+1) * sizeof(char));
-	if (!a->errorInfo) {free(a); return NULL;}
-	snprintf(a->errorInfo, nchars+1, "<%s Error ID: %d, Reason:\n\t %s>", errorOrigin, errorID, errorDescription); 
-	
-	return a;
-}
-
-static void discard_ErrorMsg_type (ErrorMsg_type** a)
-{
-	if (!*a) return;
-	
-	OKfree((*a)->errorInfo);
-	OKfree(*a);
-}
-
-static ErrorMsg_type* FCallReturnToErrorMsg	(FCallReturn_type** fCallReturn, TaskFCall_type fID)
-{
-	size_t	nchars;
-	
-	if (!*fCallReturn) return NULL;
-	if ((*fCallReturn)->retVal >= 0) return NULL;		// no error
-	
-	ErrorMsg_type* a = malloc(sizeof(ErrorMsg_type));
-	if (!a) return NULL;
-	
-	a -> errorID 	= (*fCallReturn)->retVal;
-	
-	nchars = snprintf(a -> errorInfo, 0, "<%s Error ID: %d, Reason:\n\t %s>", 
-					  FCallToString(fID), (*fCallReturn)->retVal, (*fCallReturn)->errorInfo); 
-	a -> errorInfo	= malloc ((nchars+1)*sizeof(char));
-	if (!a->errorInfo) {free(a); return NULL;}
-	snprintf(a -> errorInfo, nchars+1, "<%s Error ID: %d, Reason:\n\t %s>", 
-					  FCallToString(fID), (*fCallReturn)->retVal, (*fCallReturn)->errorInfo); 
-	
-	discard_FCallReturn_type(fCallReturn);
-	
-	return a;
 }
 
 void dispose_FCallReturn_EventInfo (void* eventInfo)
@@ -1026,14 +978,17 @@ void CVICALLBACK TaskEventItemsInQueue (CmtTSQHandle queueHandle, unsigned int e
 
 void CVICALLBACK TaskDataItemsInQueue (CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData)
 {
+#define TaskDataItemsInQueue_Err_OutOfMemory	-1
+	
 	VChanCallbackData_type*		VChanTSQData		= callbackData;
 	VChanCallbackData_type**	VChanTSQDataPtr		= malloc(sizeof(SinkVChan_type*));
 	EventPacket_type			eventPacket			= {TASK_EVENT_DATA_RECEIVED, NULL, NULL};
 	if (!VChanTSQDataPtr) {
 		// flush queue
 		CmtFlushTSQ(GetSinkVChanTSQHndl(VChanTSQData->sinkVChan), TSQ_FLUSH_ALL, NULL);
-		VChanTSQData->taskControl->errorMsg = init_ErrorMsg_type(-1, VChanTSQData->taskControl->taskName, "Out of memory");
-		FunctionCall(VChanTSQData->taskControl, &eventPacket, TASK_FCALL_ERROR, NULL);
+		VChanTSQData->taskControl->errorInfo 	= FormatMsg(TaskDataItemsInQueue_Err_OutOfMemory, VChanTSQData->taskControl->taskName, "Out of memory");
+		VChanTSQData->taskControl->errorID		= TaskDataItemsInQueue_Err_OutOfMemory;
+		FunctionCall(VChanTSQData->taskControl, &eventPacket, TASK_FCALL_ERROR, NULL, NULL);
 		ChangeState(VChanTSQData->taskControl, &eventPacket, TASK_STATE_ERROR); 
 	} else {
 		*VChanTSQDataPtr = VChanTSQData;
@@ -1053,36 +1008,12 @@ int CVICALLBACK ScheduleTaskEventHandler (void* functionData)
 	return 0;
 }
 
-
-/*  doesn't seem to be neccessary anymore since checking for more events is done in TaskEventHandler   
-void CVICALLBACK TaskEventHandlerExecutionCallback (CmtThreadPoolHandle poolHandle, CmtThreadFunctionID functionID, 
+void CVICALLBACK IterationFunctionThreadCallback (CmtThreadPoolHandle poolHandle, CmtThreadFunctionID functionID, 
 													unsigned int event, int value, void *callbackData)
 {
-	// assigned to main thread which the same as the thread in which the Task Controller
-	// state machine was created
-	
-	TaskControl_type* 	taskControl = callbackData;
-	size_t				nItems;
-	
-	switch (event) {
-		
-		case EVENT_TP_THREAD_FUNCTION_BEGIN:
-			
-			break;
-			
-		case EVENT_TP_THREAD_FUNCTION_END:
-			
-			// Restart manually this function if there are more event items in the queue.
-			// If there are no more items, execution continues processing other events
-			CmtGetTSQAttribute(taskControl->eventQ, ATTR_TSQ_ITEMS_IN_QUEUE, &nItems);
-			if (nItems)
-				TaskEventItemsInQueue(taskControl->eventQ, EVENT_TSQ_ITEMS_IN_QUEUE, 0, taskControl);
-			
-			break;
-	}
-	
+	// change the default thread sleep from more to some, thisgives optimal performance
+	SetSleepPolicy(VAL_SLEEP_SOME);
 }
-*/
 
 int TaskControlEvent (TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventInfo,
 					  DisposeEventInfoFptr_type disposeEventInfoFptr)
@@ -1107,7 +1038,7 @@ int TaskControlEvent (TaskControl_type* RecipientTaskControl, TaskEvents_type ev
 int	TaskControlIterationDone (TaskControl_type* taskControl, int errorID, char errorInfo[], BOOL doAnotherIteration)
 {
 	if (errorID)
-		return TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, init_ErrorMsg_type(errorID, "External Task Control Iteration", errorInfo), disposeTCIterDoneInfo);
+		return TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, init_FCallReturn_type(errorID, "External Task Control Iteration", errorInfo), disposeTCIterDoneInfo);
 	else {
 		if (doAnotherIteration) taskControl->repeat++;
 		return TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
@@ -1116,7 +1047,7 @@ int	TaskControlIterationDone (TaskControl_type* taskControl, int errorID, char e
 
 static void disposeTCIterDoneInfo (void* eventInfo) 
 {
-	discard_ErrorMsg_type((ErrorMsg_type**)&eventInfo);
+	discard_FCallReturn_type((FCallReturn_type**)&eventInfo);
 }
 
 static int ChangeState (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState)
@@ -1173,16 +1104,37 @@ int CVICALLBACK ScheduleIterateFunction (void* functionData)
 
 
 
-static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskFCall_type fID, void* fCallData)
+static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskFCall_type fID, void* fCallData, char** errorInfo)
 {
-#define FunctionCall_Error_OutOfMemory			-1
-#define FunctionCall_Error_Invalid_fID 			-2
-#define FunctionCall_Error_FCall_Timeout 		-3
-#define FunctionCall_Error_FCall_Error			-4
+#define FunctionCall_Error_Invalid_fID 						-1
+#define FunctionCall_Error_FCall_Error						-2
+#define FunctionCall_Error_IterationFunctionNotExecuted		-3
 
 	// call function
-	FCallReturn_type* 	fCallResult 			= NULL;
-	BOOL				functionMissingFlag		= 0;		// function pointer not provided
+	int		fCallError 								= 0;
+	char*	fCallErrorMsg							= NULL;
+	char	CmtErrorMsg[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
+	BOOL	taskActive								= FALSE;
+	
+	// determine if task is active or not
+	switch (taskControl->state) {
+		case TASK_STATE_UNCONFIGURED:
+		case TASK_STATE_CONFIGURED:
+		case TASK_STATE_INITIAL:
+		case TASK_STATE_IDLE:
+		case TASK_STATE_DONE:
+		case TASK_STATE_ERROR:
+			
+			taskActive = FALSE;
+			break;
+			
+		case TASK_STATE_RUNNING:
+		case TASK_STATE_RUNNING_WAITING_ITERATION:
+		case TASK_STATE_STOPPING:
+			
+			taskActive = TRUE;
+			break;
+	}
 	
 	// add log entry if enabled
 	ExecutionLogEntry(taskControl, eventPacket, FUNCTION_CALL, &fID);
@@ -1190,28 +1142,37 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, EventPacket_t
 	switch (fID) {
 		
 		case TASK_FCALL_NONE:
-				
-			return init_ErrorMsg_type(FunctionCall_Error_Invalid_fID, 
-				"FunctionCall", "Not a valid function ID"); // not a valid fID, error
+			
+			if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_Invalid_fID, "FCall", "Not a valid function ID");
+			return FunctionCall_Error_Invalid_fID;			// not a valid fID, error
 			
 		case TASK_FCALL_CONFIGURE:
 			
-			if (taskControl->ConfigureFptr) fCallResult = (*taskControl->ConfigureFptr)(taskControl, &taskControl->abortFlag);
-			else functionMissingFlag = 1;
-			break;
+			if (!taskControl->ConfigureFptr) return 0;		// function not provided
+				
+			if ( (fCallError = (*taskControl->ConfigureFptr)(taskControl, &taskControl->abortFlag, &fCallErrorMsg)) < 0 ) {
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Configure", fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+				return FunctionCall_Error_FCall_Error;
+			}
+			return 0;  										// success
 			
 		case TASK_FCALL_UNCONFIGURE:
 			
-			if (taskControl->UnconfigureFptr) fCallResult = (*taskControl->UnconfigureFptr)(taskControl, &taskControl->abortFlag);
-			else functionMissingFlag = 1;
-			break;
+			if (!taskControl->UnconfigureFptr) return 0;	// function not provided 
 			
+			if ( (fCallError = (*taskControl->UnconfigureFptr)(taskControl, &taskControl->abortFlag, &fCallErrorMsg)) < 0 ) {
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Unconfigure", fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+				return FunctionCall_Error_FCall_Error;
+			}
+			return 0;										// success		
+					
 		case TASK_FCALL_ITERATE:
 			
 			if (!taskControl->IterateFptr) { 
-				functionMissingFlag = 1;
 				TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
-				break; // stop here
+				return 0;  									// function not provided 
 			}
 			
 			// reset abort iteration flag
@@ -1225,61 +1186,105 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, EventPacket_t
 			}
 			
 			// launch provided iteration function pointer in a separate thread
-			CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, ScheduleIterateFunction, taskControl, NULL);
+			if ( (fCallError = CmtScheduleThreadPoolFunctionAdv(DEFAULT_THREAD_POOL_HANDLE, ScheduleIterateFunction, taskControl, DEFAULT_THREAD_PRIORITY,
+					IterationFunctionThreadCallback, EVENT_TP_THREAD_FUNCTION_BEGIN, taskControl, RUN_IN_SCHEDULED_THREAD, NULL)) < 0) {
+						
+				CmtGetErrorMessage(fCallError, CmtErrorMsg);
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_IterationFunctionNotExecuted, "FCall Iterate", CmtErrorMsg);
+				return FunctionCall_Error_IterationFunctionNotExecuted;
+			}	
 			
-			break;
+			
+			return 0;										// success
 			
 		case TASK_FCALL_ABORT_ITERATION:
 			
-			if (taskControl->AbortIterationFptr) (*taskControl->AbortIterationFptr)(taskControl, taskControl->currIterIdx, &taskControl->abortFlag);
-			break;
+			if (!taskControl->AbortIterationFptr) return 0;	// function not provided
+			
+			(*taskControl->AbortIterationFptr)(taskControl, taskControl->currIterIdx, &taskControl->abortFlag);
+			return 0;										// success
 			
 		case TASK_FCALL_START:
 			
-			if (taskControl->StartFptr) fCallResult = (*taskControl->StartFptr)(taskControl, &taskControl->abortFlag);
-			else functionMissingFlag = 1;
-			break;
+			if (!taskControl->StartFptr) return 0;			// function not provided
+				
+			if ( (fCallError = (*taskControl->StartFptr)(taskControl, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Start", fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+				return FunctionCall_Error_FCall_Error;
+			}
+			return 0;										// success
 				
 		case TASK_FCALL_RESET:
 		
-			if (taskControl->ResetFptr) fCallResult = (*taskControl->ResetFptr)(taskControl, &taskControl->abortFlag);
-			else functionMissingFlag = 1;
-			break;
+			if (!taskControl->ResetFptr) return 0;			// function not provided
+			
+			if ( (fCallError = (*taskControl->ResetFptr)(taskControl, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Reset", fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+				return FunctionCall_Error_FCall_Error;
+			}
+			return 0;										// success
 			
 		case TASK_FCALL_DONE:
 			
-			if (taskControl->DoneFptr) fCallResult = (*taskControl->DoneFptr)(taskControl, taskControl->currIterIdx, &taskControl->abortFlag);
-			else functionMissingFlag = 1;
-			break;
+			if (!taskControl->DoneFptr) return 0;			// function not provided
+			
+			if ( (fCallError = (*taskControl->DoneFptr)(taskControl, taskControl->currIterIdx, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Done", fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+				return FunctionCall_Error_FCall_Error;
+			}
+			return 0;										// success
 			
 		case TASK_FCALL_STOPPED:
 			
-			if (taskControl->StoppedFptr) fCallResult = (*taskControl->StoppedFptr)(taskControl, taskControl->currIterIdx, &taskControl->abortFlag);
-			else functionMissingFlag = 1;
-			break;
+			if (!taskControl->StoppedFptr) return 0;		// function not provided		 
+				
+			if ( (fCallError = (*taskControl->StoppedFptr)(taskControl, taskControl->currIterIdx, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Stopped", fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+				return FunctionCall_Error_FCall_Error;
+			}
+			return 0;										// success
 			
 		case TASK_FCALL_DIM_UI:
 			
-			if (taskControl->DimUIFptr) (*taskControl->DimUIFptr)(taskControl, *(BOOL*)fCallData); 
-			break;
+			if (!taskControl->DimUIFptr) return 0;			// function not provided
+				
+			(*taskControl->DimUIFptr)(taskControl, *(BOOL*)fCallData); 
+			return 0;										// success
 			
 		case TASK_FCALL_SET_UITC_MODE:
 			
-			if (taskControl->SetUITCModeFptr) (*taskControl->SetUITCModeFptr)(taskControl, *(BOOL*)fCallData);
-			break;
+			if (!taskControl->SetUITCModeFptr) return 0; 
+				
+			(*taskControl->SetUITCModeFptr)(taskControl, *(BOOL*)fCallData);
+			return 0;
 			
 		case TASK_FCALL_DATA_RECEIVED:
 			
 			// call data received callback if one was provided
-			if ((*(VChanCallbackData_type**)fCallData)->DataReceivedFptr) fCallResult = (*(*(VChanCallbackData_type**)fCallData)->DataReceivedFptr)(taskControl, taskControl->state, (*(VChanCallbackData_type**)fCallData)->sinkVChan, &taskControl->abortFlag);
-			else functionMissingFlag = 1;
-			break;
+			if (!(*(VChanCallbackData_type**)fCallData)->DataReceivedFptr) return 0;	// function not provided 
+				
+			if ( (fCallError = (*(*(VChanCallbackData_type**)fCallData)->DataReceivedFptr)(taskControl, taskControl->state, taskActive,
+							   (*(VChanCallbackData_type**)fCallData)->sinkVChan, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Data Received", fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+				return FunctionCall_Error_FCall_Error;
+			}
+			return 0;																	// success
 			
 		case TASK_FCALL_MODULE_EVENT:
 			
-			if (taskControl->ModuleEventFptr) fCallResult = (*taskControl->ModuleEventFptr)(taskControl, taskControl->state, taskControl->currIterIdx, fCallData, &taskControl->abortFlag);
-			else functionMissingFlag = 1;
-			break;
+			if (!taskControl->ModuleEventFptr) return 0; 	// function not provided
+				
+			if ( (fCallError = (*taskControl->ModuleEventFptr)(taskControl, taskControl->state, taskActive, taskControl->currIterIdx, fCallData, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Module Event", fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+				return FunctionCall_Error_FCall_Error;
+			}
+			return 0;										// success
 			
 		case TASK_FCALL_ERROR:
 			
@@ -1288,20 +1293,13 @@ static ErrorMsg_type* FunctionCall (TaskControl_type* taskControl, EventPacket_t
 				DimTaskTreeBranch (taskControl, eventPacket, FALSE);
 
 			// call ErrorFptr
-			if (taskControl->ErrorFptr) (*taskControl->ErrorFptr)(taskControl, taskControl->errorMsg->errorInfo);
-			break;
+			if (!taskControl->ErrorFptr) return 0;			// function not provided
+				
+			(*taskControl->ErrorFptr)(taskControl, taskControl->errorID, taskControl->errorInfo);
+			return 0;										// success
 				
 	}
 	
-	
-	if (!fCallResult && (fID != TASK_FCALL_ITERATE) && (fID != TASK_FCALL_ABORT_ITERATION) && (fID != TASK_FCALL_DIM_UI) && (fID != TASK_FCALL_SET_UITC_MODE) && (fID != TASK_FCALL_ERROR)) 
-		if (functionMissingFlag)
-			return NULL;																				// function not provided
-		else
-			return init_ErrorMsg_type(FunctionCall_Error_OutOfMemory, "FunctionCall", "Function return value missing or out of memory");
-	
-	// in case of error, return error message otherwise return NULL
-	return FCallReturnToErrorMsg(&fCallResult, fID);
 }
 
 int	TaskControlEventToSubTasks  (TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventInfo,
@@ -1357,7 +1355,7 @@ int	AddSubTaskToParent (TaskControl_type* parent, TaskControl_type* child)
 	BOOL	UITCFlag = FALSE;
 	if (child->UITCFlag) {
 		EventPacket_type eventPacket = {TASK_EVENT_SUBTASK_ADDED_TO_PARENT, NULL, NULL};
-		FunctionCall(child, &eventPacket, TASK_FCALL_SET_UITC_MODE, &UITCFlag);
+		FunctionCall(child, &eventPacket, TASK_FCALL_SET_UITC_MODE, &UITCFlag, NULL);
 	}
 	// insert subtask
 	if (!ListInsertItem(parent->subtasks, &subtaskItem, END_OF_LIST)) return -1;
@@ -1392,7 +1390,7 @@ int	RemoveSubTaskFromParent	(TaskControl_type* child)
 			BOOL	UITCFlag = TRUE;
 			if (child->UITCFlag) {
 				EventPacket_type eventPacket = {TASK_EVENT_SUBTASK_REMOVED_FROM_PARENT, NULL, NULL};  
-				FunctionCall(child, &eventPacket, TASK_FCALL_SET_UITC_MODE, &UITCFlag);
+				FunctionCall(child, &eventPacket, TASK_FCALL_SET_UITC_MODE, &UITCFlag, NULL);
 			}
 			
 			return 0; // found and removed
@@ -1515,11 +1513,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 #define TaskEventHandler_Error_InvalidEventInState			-6
 #define TaskEventHandler_Error_IterateFCallTmeout			-7
 #define	TaskEventHandler_Error_IterateExternThread			-8
+#define TaskEventHandler_Error_DataPacketsNotCleared		-9
 
 	EventPacket_type 		eventpacket[EVENT_BUFFER_SIZE];
 	SubTask_type* 			subtaskPtr; 
-	ErrorMsg_type*			errMsg			= NULL;
 	char*					buff			= NULL;
+	char*					errMsg			= NULL;
 	char*					eventStr;
 	char*					stateStr;
 	size_t					nchars;
@@ -1545,22 +1544,20 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// configure this task
 					
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_CONFIGURE, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_CONFIGURE, NULL, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
 					
 					// send TASK_EVENT_CONFIGURE to all subtasks if there are any
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE posting to SubTasks failed"); 
-							
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE posting to SubTasks failed"); 
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;	
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					} 
@@ -1569,12 +1566,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// INITIAL state and inform parent task if there is any
 					if (!ListNumItems(taskControl->subtasks)) {
 						// reset device/module
-						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						}
@@ -1598,12 +1594,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UNCONFIGURE:
 					
 					// unconfigure
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -1626,10 +1621,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorInfo);
+						taskControl->errorID	= TaskEventHandler_Error_SubTaskInErrorState;
 						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;	
 					}
@@ -1639,12 +1634,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						}
@@ -1654,15 +1648,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
@@ -1676,11 +1669,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff);
+					taskControl->errorID	= TaskEventHandler_Error_InvalidEventInState;
 					OKfree(buff);
 					
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 			}
 			
@@ -1695,10 +1688,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
 					if (TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed"); 
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 						break;
 					}
@@ -1714,12 +1706,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UNCONFIGURE:
 					
 					// unconfigure
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -1744,10 +1735,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorInfo);
+						taskControl->errorID	= TaskEventHandler_Error_SubTaskInErrorState;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;	
 					}
@@ -1765,12 +1755,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					if (InitialStateFlag) {
 						// reset device/module
-						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						}
@@ -1786,30 +1775,28 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
@@ -1823,11 +1810,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff);
+					taskControl->errorID	= TaskEventHandler_Error_InvalidEventInState;
 					OKfree(buff);
-						 
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);	
 			}
 			
@@ -1843,10 +1829,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// configure again only this task control
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
 					if (TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed");
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 						break;
 					}
@@ -1855,12 +1840,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UNCONFIGURE:
 					
 					// unconfigure
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -1876,12 +1860,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Call Start Task Controller function pointer to inform that task will start
 					//--------------------------------------------------------------------------------------------------------------- 
 					
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -1901,7 +1884,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//-------------------------------------------------------------------------------------------------------------------------
 					
 					if(!taskControl->parenttask) {
-						ClearTaskTreeBranchVChans(taskControl);
+						if (ClearTaskTreeBranchVChans(taskControl, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_DataPacketsNotCleared, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_DataPacketsNotCleared;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
+						
 						DimTaskTreeBranch(taskControl, &eventpacket[i], TRUE);
 					}
 
@@ -1910,10 +1901,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//---------------------------------------------------------------------------------------------------------------
 					
 					if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed");
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -1945,10 +1935,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorInfo);
+						taskControl->errorID	= TaskEventHandler_Error_SubTaskInErrorState;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;	
 					}
@@ -1963,30 +1952,28 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
@@ -2000,11 +1987,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff);
+					taskControl->errorID	= TaskEventHandler_Error_InvalidEventInState;
 					OKfree(buff);
-					
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 			}
 			
@@ -2020,10 +2006,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// configure again only this task control
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
 					if (TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed"); 
+						taskControl->errorID 	= TaskEventHandler_Error_MsgPostToSelfFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 						break;
 					}
@@ -2033,12 +2018,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UNCONFIGURE:
 					
 					// call unconfigure function and switch to unconfigured state
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					} else {
@@ -2055,12 +2039,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Call Start Task Controller function pointer to inform that task will start
 					//--------------------------------------------------------------------------------------------------------------- 
 					
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_START, NULL, &errMsg) <0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -2078,10 +2061,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//---------------------------------------------------------------------------------------------------------------
 					
 					if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed"); 
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -2107,10 +2089,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// send RESET event to all subtasks
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_RESET, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_RESET posting to SubTasks failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_RESET posting to SubTasks failed"); 
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -2119,12 +2100,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					if (!ListNumItems(taskControl->subtasks)) {
 						
 						// reset device/module
-						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID 	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						}
@@ -2155,22 +2135,20 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorInfo);
+						taskControl->errorID	= TaskEventHandler_Error_SubTaskInErrorState;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;	
 					}
 					
 					// if subtask is unconfigured then switch to unconfigured state
 					if (subtaskPtr->subtaskState == TASK_STATE_UNCONFIGURED)
-						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-						
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						} else {
@@ -2191,12 +2169,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					if (InitialStateFlag) {
 						// reset device/module
-						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL, &errMsg) <0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						}
@@ -2212,30 +2189,28 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
@@ -2249,11 +2224,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorID	= TaskEventHandler_Error_InvalidEventInState;
 					OKfree(buff);
-					
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 					
 			}
@@ -2282,12 +2256,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						//---------------------------------------------------------------------------------------------------------------- 	
 										
 						// call done function
-						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-						
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 							break;
 						}
@@ -2321,13 +2294,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------
 									
 							if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL, NULL);
 							else 
 								if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
-									taskControl->errorMsg =
-									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
+									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;  // stop here
 								}
@@ -2347,10 +2319,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							if (ListNumItems(taskControl->subtasks)) {    
 								// send START event to all subtasks
 								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
-									taskControl->errorMsg =
-									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
+									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;
 								}
@@ -2363,13 +2334,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------
 									
 							if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL, NULL);
 							else 
 								if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
-									taskControl->errorMsg =
-									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
+									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;  // stop here
 								}
@@ -2388,10 +2358,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							if (ListNumItems(taskControl->subtasks)) 
 								// send START event to all subtasks
 								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
-									taskControl->errorMsg =
-									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
+									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;
 								}
@@ -2401,13 +2370,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------
 							
 							if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL, NULL);
 							else 
 								if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
-									taskControl->errorMsg =
-									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
+									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;
 								}
@@ -2433,12 +2401,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						// if there are no SubTask Controllers
 						if (taskControl->mode == TASK_CONTINUOUS) {
 							// switch to DONE state if continuous task controller
-							if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
-								taskControl->errorMsg = 
-								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-								discard_ErrorMsg_type(&errMsg);
-						
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+							if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+								taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+								OKfree(errMsg);
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 								break;
 							}
@@ -2448,12 +2415,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						} else 
 							// switch to IDLE or DONE state if finite task controller
 							if (taskControl->currIterIdx < taskControl->repeat) {
-								if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+								if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL, &errMsg) < 0) {
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+									OKfree(errMsg);
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;
 								}
@@ -2461,12 +2427,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
 									
 							} else {
-								if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+								if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+									OKfree(errMsg);
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;
 								}
@@ -2477,10 +2442,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					} else {
 						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
 						if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
-							taskControl->errorMsg =
-							init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
-						
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
+							taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						}
@@ -2495,19 +2459,17 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// send STOP command to self if continuous task controller and forward TASK_EVENT_STOP_CONTINUOUS_TASK to subtasks
 					if (taskControl->mode == TASK_CONTINUOUS) 
 						if (TaskControlEvent(taskControl, TASK_EVENT_STOP, NULL, NULL) < 0) {
-							taskControl->errorMsg =
-							init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_STOP self posting failed"); 
-								
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+							taskControl->errorInfo  = FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_STOP self posting failed"); 
+							taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;	
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 							break;
 						}
 					
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -2524,10 +2486,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// if subtask is in an error state then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorInfo); 
+						taskControl->errorID	= TaskEventHandler_Error_SubTaskInErrorState;
 						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;	
 					}
@@ -2576,10 +2538,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------- 
 							
 							if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
-								taskControl->errorMsg =
-								init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed"); 
-						
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed"); 
+								taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 								break;
 								
@@ -2596,13 +2557,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------
 									
 							if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL);
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ITERATE, NULL, NULL);
 							else 
 								if (TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL) < 0) {
-									taskControl->errorMsg =
-									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATION_DONE posting to self failed"); 
+									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;
 								}
@@ -2618,30 +2578,28 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
@@ -2655,11 +2613,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorInfo  = FormatMsg(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorID	= TaskEventHandler_Error_InvalidEventInState;
 					OKfree(buff);
-					
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 					
 			}
@@ -2685,13 +2642,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// (which may be also because it was aborted and this caused an error for the TC)
 					//---------------------------------------------------------------------------------------------------------------   
 					if (eventpacket[i].eventInfo) {
-						ErrorMsg_type* errMsg = eventpacket[i].eventInfo;
+						FCallReturn_type* fCallReturn = eventpacket[i].eventInfo;
 						
-						if (errMsg->errorID < 0) {
-							taskControl->errorMsg =
-							init_ErrorMsg_type(TaskEventHandler_Error_IterateExternThread, taskControl->taskName, errMsg->errorInfo); 
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						if (fCallReturn->retVal < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_IterateExternThread, taskControl->taskName, fCallReturn->errorInfo); 
+							taskControl->errorID	= TaskEventHandler_Error_IterateExternThread;
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 								
 							break;   // stop here
@@ -2713,12 +2669,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						// if there are no SubTask Controllers
 						if (taskControl->mode == TASK_CONTINUOUS) {
 							// switch to DONE state if continuous task controller
-							if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
-								taskControl->errorMsg = 
-								init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-								discard_ErrorMsg_type(&errMsg);
-						
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+							if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+								taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+								OKfree(errMsg);
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 								break;
 							}
@@ -2728,12 +2683,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						} else 
 							// switch to IDLE or DONE state if finite task controller
 							if (taskControl->currIterIdx < taskControl->repeat) {
-								if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+								if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL, &errMsg) < 0) {
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+									OKfree(errMsg);
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;
 								}
@@ -2741,12 +2695,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
 									
 							} else {
-								if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL))) {
-									taskControl->errorMsg = 
-									init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-									discard_ErrorMsg_type(&errMsg);
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+								if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+									OKfree(errMsg);
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;
 								}
@@ -2758,10 +2711,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 							// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
 							if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
-								taskControl->errorMsg =
-								init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
-						
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
+								taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 								break;
 							}
@@ -2788,10 +2740,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								
 								// send START event to all subtasks
 								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
-									taskControl->errorMsg =
-									init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
-						
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
+									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 									break;
 								}
@@ -2818,13 +2769,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------- 
 							
 							if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
-								taskControl->errorMsg =
-								init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed"); 
-						
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed"); 
+								taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 								break;
-								
 							}
 							
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING); 
@@ -2867,10 +2816,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------- 
 							
 							if (TaskControlEvent(taskControl, TASK_EVENT_ITERATE, NULL, NULL) < 0) {
-								taskControl->errorMsg =
-								init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed"); 
-						
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_ITERATE posting to self failed"); 
+								taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 								break;
 								
@@ -2889,10 +2837,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					taskControl->iterationTimerID = 0;
 					
 					// generate timeout error
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_IterateFCallTmeout, taskControl->taskName, "Iteration function call timeout"); 
-						
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_IterateFCallTmeout, taskControl->taskName, "Iteration function call timeout"); 
+					taskControl->errorID	= TaskEventHandler_Error_IterateFCallTmeout;	
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 					
 					break;
@@ -2901,7 +2848,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 				
 					taskControl->abortIterationFlag = TRUE;
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ABORT_ITERATION, NULL);
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ABORT_ITERATION, NULL, NULL);
 					
 					break;
 					
@@ -2915,16 +2862,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// if subtask is in an error state then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
-						
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorInfo); 
+						taskControl->errorID	= TaskEventHandler_Error_SubTaskInErrorState;
 						// remove timeout timer
 						if (taskControl->iterationTimerID > 0) {
 							DiscardAsyncTimer(taskControl->iterationTimerID);
 							taskControl->iterationTimerID = 0;
 						}
 						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;	
 					}
@@ -2933,31 +2879,31 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 				case TASK_EVENT_DATA_RECEIVED:
 					// call data received event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
 							
-							// remove timeout timer
-							if (taskControl->iterationTimerID > 0) {
-								DiscardAsyncTimer(taskControl->iterationTimerID);
-								taskControl->iterationTimerID = 0;
-							}
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
+						// remove timeout timer
+						if (taskControl->iterationTimerID > 0) {
+							DiscardAsyncTimer(taskControl->iterationTimerID);
+							taskControl->iterationTimerID = 0;
 						}
+							
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
 						
 						// remove timeout timer
 						if (taskControl->iterationTimerID > 0) {
@@ -2965,7 +2911,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							taskControl->iterationTimerID = 0;
 						}
 						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -2988,11 +2934,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff);
+					taskControl->errorID	= TaskEventHandler_Error_InvalidEventInState;
 					OKfree(buff);
 					
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 					
 			}
@@ -3020,10 +2966,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorInfo);
+						taskControl->errorID	= TaskEventHandler_Error_SubTaskInErrorState;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;	
 					}
@@ -3045,12 +2990,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						if(!taskControl->parenttask)
 							DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
 							
-						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-						
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						}
@@ -3063,30 +3007,28 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
@@ -3100,11 +3042,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff);
+					taskControl->errorID	= TaskEventHandler_Error_InvalidEventInState;
 					OKfree(buff);
 					
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 	
 			}
 			
@@ -3121,10 +3063,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// configure again only this task control
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
 					if (TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed"); 
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 						break;
 					}
@@ -3134,12 +3075,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UNCONFIGURE:
 					
 					// call unconfigure function and switch to unconfigured state
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					} else {
@@ -3152,12 +3092,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_START:
 					
 					// reset device/module
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -3170,10 +3109,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// send START event to self
 					if (TaskControlEvent(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_START self posting failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_START self posting failed");
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 						break;
 					}
@@ -3184,10 +3122,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// send RESET event to all subtasks
 					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_RESET, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_RESET posting to SubTasks failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_RESET posting to SubTasks failed"); 
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -3196,12 +3133,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					if (!ListNumItems(taskControl->subtasks)) {
 						
 						// reset device/module
-						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						}
@@ -3237,10 +3173,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorMsg->errorInfo); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_SubTaskInErrorState, taskControl->taskName, subtaskPtr->subtask->errorInfo); 
+						taskControl->errorID	= TaskEventHandler_Error_SubTaskInErrorState;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;	
 					}
@@ -3264,12 +3199,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					if (InitialStateFlag) {
 						// reset device/module
-						if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						}
@@ -3285,30 +3219,28 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
@@ -3322,11 +3254,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					OKfree(eventStr);
 					OKfree(stateStr);
 					
-					taskControl->errorMsg =
-					init_ErrorMsg_type(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+					taskControl->errorID	= TaskEventHandler_Error_InvalidEventInState;
 					OKfree(buff);
 					
-					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 	
 				
 			}
@@ -3342,27 +3274,26 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// configure again only this task control
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
 					if (TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
-						taskControl->errorMsg =
-						init_ErrorMsg_type(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed"); 
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed"); 
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 						break;
 					}
 					
 					// clear error
-					discard_ErrorMsg_type(&taskControl->errorMsg);
+					OKfree(taskControl->errorInfo);
+					taskControl->errorID = 0;
 					break;
 					
 				case TASK_EVENT_UNCONFIGURE:
 					
 					// unconfigure
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-						
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -3396,12 +3327,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo))) {
-						taskControl->errorMsg = 
-						init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-						discard_ErrorMsg_type(&errMsg);
-							
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
@@ -3411,15 +3341,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if ((errMsg = FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo))) {
-							taskControl->errorMsg = 
-							init_ErrorMsg_type(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg->errorInfo);
-							discard_ErrorMsg_type(&errMsg);
-							
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					

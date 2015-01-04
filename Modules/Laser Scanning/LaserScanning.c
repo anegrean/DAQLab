@@ -27,9 +27,10 @@
 #define OKfree(ptr) if (ptr) { free(ptr); ptr = NULL; } 
 #define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto Error; else 
 	// maximum number of characters to represent a double precision number
-#define MAX_DOUBLE_NCHARS						30
+#define MAX_DOUBLE_NCHARS							30
 
 #define MOD_LaserScanning_UI 						"./Modules/Laser Scanning/UI_LaserScanning.uir"
+#define VChanDataTimeout							1e4					// Timeout in [ms] for Sink VChans to receive data
 // Default VChan base names. Default base names must be unique among each other!
 #define VChan_Default_FastAxis_Command				"Fast Axis Command"
 #define VChan_Default_FastAxis_Position				"Fast Axis Position" 
@@ -325,7 +326,7 @@ struct ScanEngine {
 	// Scan Settings
 	//-----------------------------------
 	double						pixelClockRate;			// Pixel clock rate in [Hz] for incoming fluorescence data from all detector channels.
-													// Note: This is not to be confused with the pixel dwell time, which is a multiple of 1/pixelClockRate.
+														// Note: This is not to be confused with the pixel dwell time, which is a multiple of 1/pixelClockRate.
 	double						pixSize;				// Image pixel size in [um].   
 	//-----------------------------------
 	// Optics
@@ -541,6 +542,13 @@ static int 							init_ScanEngine_type 							(ScanEngine_type* 		engine,
 																				 	 double					tubeLensFL);
 
 static void							discard_ScanEngine_type 						(ScanEngine_type** engine);
+
+	//------------------------
+	// Common functionality
+	//------------------------
+
+	// opens/closes scan engine laser shutter
+static int							OpenScanEngineShutter							(ScanEngine_type* engine, BOOL openStatus, char** errorInfo);
 	
 	//--------------------------------------
 	// Non-Resonant Rectangle Raster Scan
@@ -585,7 +593,7 @@ static BOOL							NonResRectangleRasterScan_ValidConfig			(RectangleRaster_type*
 	// evaluates whether the scan engine is ready to scan
 static BOOL 						NonResRectangleRasterScan_ReadyToScan			(RectangleRaster_type* scanEngine);
 	// generates rectangular raster scan waveforms and sends them to the galvo command VChans
-static FCallReturn_type*			NonResRectangleRasterScan_GenerateScanSignals	(RectangleRaster_type* scanEngine);
+static int							NonResRectangleRasterScan_GenerateScanSignals	(RectangleRaster_type* scanEngine, char** errorInfo);
 
 //---------------------------------------------------------
 // determines scan axis types based on the scan engine type
@@ -676,50 +684,50 @@ static void							PixelSettingsVChan_Disconnected					(VChan_type* self, void* V
 //-----------------------------------------
 
 	// for Non Resonant Galvo scan axis calibration and testing
-static FCallReturn_type*			ConfigureTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int							ConfigureTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static FCallReturn_type*			UncofigureTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int							UncofigureTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static void							IterateTC_NonResGalvoCal						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
 static void							AbortIterationTC_NonResGalvoCal					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
-static FCallReturn_type*			StartTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int							StartTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static FCallReturn_type*			DoneTC_NonResGalvoCal							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static int							DoneTC_NonResGalvoCal							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
 
-static FCallReturn_type*			StoppedTC_NonResGalvoCal						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static int							StoppedTC_NonResGalvoCal						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
 
-static FCallReturn_type* 			ResetTC_NonResGalvoCal 							(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int				 			ResetTC_NonResGalvoCal 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static void							DimTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL dimmed);
 
-static FCallReturn_type* 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+//static int				 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 	// for RectangleRaster_type scanning
-static FCallReturn_type*			ConfigureTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int							ConfigureTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static FCallReturn_type*			UnconfigureTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int							UnconfigureTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static void							IterateTC_RectRaster							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
 
 static void							AbortIterationTC_RectRaster						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
-static FCallReturn_type*			StartTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int							StartTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static FCallReturn_type*			DoneTC_RectRaster								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static int							DoneTC_RectRaster								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
 
-static FCallReturn_type*			StoppedTC_RectRaster							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static int							StoppedTC_RectRaster							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
 
-static FCallReturn_type* 			ResetTC_RectRaster 								(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int				 			ResetTC_RectRaster 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static void							DimTC_RectRaster								(TaskControl_type* taskControl, BOOL dimmed);
 
-static FCallReturn_type* 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+//static int				 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
-static void 						ErrorTC_RectRaster 								(TaskControl_type* taskControl, char* errorMsg);
+static void 						ErrorTC_RectRaster 								(TaskControl_type* taskControl, int errorID, char* errorMsg);
 
-static FCallReturn_type*			ModuleEventHandler_RectRaster					(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
+static int							ModuleEventHandler_RectRaster					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 	// add below more task controller callbacks for different scan engine types
 
@@ -1725,6 +1733,8 @@ static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xml
 	OKfree(maxSlopesAmplitudeStr);
 	OKfree(triangleCalCommandAmplitudeStr);
 	OKfree(triangleCalActualAmplitudeStr);
+	OKfree(triangleCalMaxFreqStr);
+	OKfree(triangleCalResiduaLagStr);
 	
 	return 0;
 	
@@ -1736,6 +1746,8 @@ Error:
 	OKfree(maxSlopesAmplitudeStr);
 	OKfree(triangleCalCommandAmplitudeStr);
 	OKfree(triangleCalActualAmplitudeStr);
+	OKfree(triangleCalMaxFreqStr);
+	OKfree(triangleCalResiduaLagStr);
 	
 	return error;
 	
@@ -2403,7 +2415,7 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							char* commandVChanName = StrDup(calTCName);
 							AppendString(&commandVChanName,": command", -1);
 							
-							// get unique name for command signal nSamples vChan
+							// get unique name for command signal nSamples VChan
 							char* commandNSamplesVChanName = StrDup(calTCName);
 							AppendString(&commandNSamplesVChanName,": command n samples", -1);
 							
@@ -2451,9 +2463,11 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							DisplayPanel(nrgCal->baseClass.calPanHndl);
 							
 							// cleanup
-							OKfree(commandVChanName); 
-							OKfree(positionVChanName);
 							OKfree(calTCName);
+							OKfree(commandVChanName);
+							OKfree(commandNSamplesVChanName);
+							OKfree(positionVChanName);
+							
 							
 							break;
 							
@@ -2580,7 +2594,7 @@ static DetChan_type* init_DetChan_type (ScanEngine_type* scanEngine, char VChanN
 	
 	DLDataTypes allowedPacketTypes[] = Allowed_Detector_Data_Types;
 	
-	det->detVChan 	= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, DetVChan_Connected, DetVChan_Disconnected);
+	det->detVChan 	= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, VChanDataTimeout, DetVChan_Connected, DetVChan_Disconnected);
 	det->scanEngine = scanEngine;
 	
 	return det;
@@ -3354,13 +3368,11 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	if(!(cal->baseClass.calName		= StrDup(calName))) {free(cal); return NULL;}
 	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, DL_Waveform_Double, cal, NonResGalvoCal_ComVChan_Connected, NonResGalvoCal_ComVChan_Disconnected);   
 	cal->baseClass.VChanComNSamples	= init_SourceVChan_type(commandNSamplesVChanName, DL_ULongLong, cal, NonResGalvoCal_ComNSamplesVChan_Connected, NonResGalvoCal_ComNSamplesVChan_Disconnected);   
-	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
+	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, VChanDataTimeout, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
 								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, NULL, NULL);
-	// connect sink VChans (VChanPos) to the Task Controller so that it can process incoming galvo position data
-	AddSinkVChan(cal->baseClass.taskController, cal->baseClass.VChanPos, DataReceivedTC_NonResGalvoCal);  
 	cal->baseClass.lsModule			= lsModule;
 	
 								  
@@ -3737,8 +3749,8 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	// VChans
 	engine->VChanFastAxisCom		= init_SourceVChan_type(fastAxisComVChanName, DL_RepeatedWaveform_Double, engine, FastAxisComVChan_Connected, FastAxisComVChan_Disconnected); 
 	engine->VChanSlowAxisCom		= init_SourceVChan_type(slowAxisComVChanName, DL_RepeatedWaveform_Double, engine, SlowAxisComVChan_Connected, SlowAxisComVChan_Disconnected); 
-	engine->VChanFastAxisPos		= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected); 
-	engine->VChanSlowAxisPos		= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected); 
+	engine->VChanFastAxisPos		= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected); 
+	engine->VChanSlowAxisPos		= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected); 
 	engine->VChanScanOut			= init_SourceVChan_type(imageOutVChanName, DL_Image_NIVision, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected); 
 	engine->VChanShutter			= init_SourceVChan_type(shutterVChanName, DL_Waveform_UChar, engine, ShutterVChan_Connected, ShutterVChan_Disconnected); 
 	engine->VChanPixelSettings		= init_SourceVChan_type(pixelSettingsVChanName, DL_PulseTrain_Ticks, engine, PixelSettingsVChan_Connected, PixelSettingsVChan_Connected); 	
@@ -3868,6 +3880,35 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	if (engine->engineSetPanHndl)		{DiscardPanel(engine->engineSetPanHndl); engine->engineSetPanHndl = 0;}
 	
 	OKfree(engine);
+}
+
+static int OpenScanEngineShutter (ScanEngine_type* engine, BOOL openStatus, char** errorInfo)
+{
+	unsigned char*			shutterCommand				= NULL;
+	DataPacket_type*		shutterDataPacket			= NULL;
+	int						error 						= 0;
+	
+	nullChk( shutterCommand			= malloc (sizeof(unsigned char)) );
+	*shutterCommand					= (unsigned char) openStatus;
+	nullChk( shutterDataPacket		= init_DataPacket_type(DL_UChar, shutterCommand, NULL) );
+	
+	errChk( SendDataPacket(engine->VChanShutter, shutterDataPacket, FALSE, errorInfo) );
+	
+	
+	return 0; // no error
+	
+Error:
+	
+	// cleanup
+	OKfree(shutterCommand);
+	discard_DataPacket_type(&shutterDataPacket);
+	
+	// create out of memory message
+	if (error == UIEOutOfMemory && !*errorInfo)
+		*errorInfo = StrDup("Out of memory");
+	
+	return error;
+	
 }
 
 static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsModule,
@@ -4441,8 +4482,10 @@ static BOOL NonResRectangleRasterScan_ReadyToScan (RectangleRaster_type* scanEng
 }
 
 /// HIFN Generates galvo scan signals for bidirectional raster scanning
-static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* scanEngine)
+static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* scanEngine, char** errorInfo)
 {
+#define NonResRectangleRasterScan_GenerateScanSignals_Err_ScanSignals		-1
+	
 	// init dynamically allocated signals
 	double*						fastAxisCommandSignal						= NULL;
 	double*						fastAxisCompensationSignal					= NULL;
@@ -4458,9 +4501,8 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	RepeatedWaveform_type*		fastAxisScan_RepWaveform					= NULL;
 	RepeatedWaveform_type*		slowAxisScan_RepWaveform					= NULL; 
 	DataPacket_type*			galvoCommandPacket							= NULL; 
-	FCallReturn_type*			fCallReturn									= NULL;
-	FCallReturn_type*			fCallReturn_out								= NULL; 
 	PulseTrain_type*			pixelInfo									= NULL;
+	char*						errMsg										= NULL;
 	
 //============================================================================================================================================================================================
 //                          					   	Preparation of Scan Waveforms for X-axis Galvo (fast axis, triangular waveform scan)
@@ -4562,7 +4604,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 		nullChk( fastAxisCompensationSignal = malloc(nGalvoSamplesFastAxisCompensation * sizeof(double)) );
 		errChk( Set1D(fastAxisCompensationSignal, nGalvoSamplesFastAxisCompensation, ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked) ); 
 		nullChk( fastAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double,  *scanEngine->refGalvoSamplingRate, nGalvoSamplesFastAxisCompensation, &fastAxisCompensationSignal) );
-		errChk( AppendWaveform(fastAxisMoveFromParkedCompensatedWaveform, fastAxisMoveFromParkedWaveform) );
+		errChk( AppendWaveform(fastAxisMoveFromParkedCompensatedWaveform, fastAxisMoveFromParkedWaveform, &errMsg) );
 		discard_Waveform_type(&fastAxisMoveFromParkedWaveform);
 	}
 	
@@ -4571,7 +4613,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 		nullChk( slowAxisCompensationSignal = malloc(nGalvoSamplesSlowAxisCompensation * sizeof(double)) );
 		errChk( Set1D(slowAxisCompensationSignal, nGalvoSamplesSlowAxisCompensation, ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked) ); 
 		nullChk( slowAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double,  *scanEngine->refGalvoSamplingRate, nGalvoSamplesSlowAxisCompensation, &slowAxisCompensationSignal) );
-		errChk( AppendWaveform(slowAxisMoveFromParkedCompensatedWaveform, slowAxisMoveFromParkedWaveform) );
+		errChk( AppendWaveform(slowAxisMoveFromParkedCompensatedWaveform, slowAxisMoveFromParkedWaveform, &errMsg) );
 		discard_Waveform_type(&slowAxisMoveFromParkedWaveform);
 	}
 	
@@ -4590,7 +4632,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	
 	// send data 
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, fastAxisMoveFromParked_RepWaveform, discard_RepeatedWaveform_type) );
-	if ( (fCallReturn = SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, galvoCommandPacket, FALSE)) ) goto Error;
+	if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;
 	
 	// fastAxisScan_Waveform has two line scans (one triangle wave period)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl))
@@ -4602,7 +4644,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	
 	// send data
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, fastAxisScan_RepWaveform, discard_RepeatedWaveform_type) );   
-	if ( (fCallReturn = SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, galvoCommandPacket, FALSE)) ) goto Error;    
+	if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;    
 	
 	//go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl)) {	
@@ -4610,7 +4652,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 		*parkedVoltage = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, parkedVoltage, 0);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, parkedRepeatedWaveform, discard_RepeatedWaveform_type) ); 
-		if ( (fCallReturn = SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, galvoCommandPacket, FALSE)) ) goto Error;    
+		if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;    
 	}
 	
 	//---------------------------------------------------------------------------------------------------------------------------
@@ -4623,7 +4665,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	
 	// send data 
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, slowAxisMoveFromParked_RepWaveform, discard_RepeatedWaveform_type) );
-	if ( (fCallReturn = SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, galvoCommandPacket, FALSE)) ) goto Error;
+	if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;
 	
 	// slowAxisScan_Waveform has a symmetric staircase waveform (equivalent to two scan frames)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl))
@@ -4635,7 +4677,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	
 	// send data
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, slowAxisScan_RepWaveform, discard_RepeatedWaveform_type) );   
-	if ( (fCallReturn = SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, galvoCommandPacket, FALSE)) ) goto Error;  
+	if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;  
 	
 	//go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl)) {	
@@ -4643,7 +4685,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 		*parkedVoltage = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, parkedVoltage, 0);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, parkedRepeatedWaveform, discard_RepeatedWaveform_type) ); 
-		if ( (fCallReturn = SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, galvoCommandPacket, FALSE)) ) goto Error;    
+		if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, galvoCommandPacket, FALSE, &errMsg) <0) goto Error;    
 	}
 	
 	//---------------------------------------------------------------------------------------------------------------------------
@@ -4653,7 +4695,7 @@ static FCallReturn_type* NonResRectangleRasterScan_GenerateScanSignals (Rectangl
 	//pixelInfo = init_PulseTrainTimeTiming_type
 	
 	
-	return NULL; // no error
+	return 0; // no error
 				  
 Error:
 	
@@ -4673,13 +4715,10 @@ Error:
 	discard_PulseTrain_type(&pixelInfo);
 	ReleaseDataPacket(&galvoCommandPacket);
 	
-	if (fCallReturn) {
-		fCallReturn_out = init_FCallReturn_type(fCallReturn->retVal, "NonResRectangleRasterScan_GenerateScanSignals", fCallReturn->errorInfo);
-		discard_FCallReturn_type(&fCallReturn);
-		return fCallReturn_out;
-	}
-	else
-		return init_FCallReturn_type(error, "NonResRectangleRasterScan_GenerateScanSignals", "Preparation of scan waveforms failed");
+	*errorInfo = FormatMsg(NonResRectangleRasterScan_GenerateScanSignals_Err_ScanSignals, "NonResRectangleRasterScan_GenerateScanSignals", errMsg);
+	OKfree(errMsg);
+	
+	return NonResRectangleRasterScan_GenerateScanSignals_Err_ScanSignals;
 }
 
 static void	GetScanAxisTypes (ScanEngine_type* scanEngine, ScanAxis_type* fastAxisType, ScanAxis_type* slowAxisType)
@@ -4958,7 +4997,7 @@ static void	PixelSettingsVChan_Disconnected (VChan_type* self, void* VChanOwner,
 // Non Resonant Galvo Calibration and Testing Task Controller Callbacks 
 //---------------------------------------------------------------------
 
-static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ConfigureTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
@@ -4969,31 +5008,38 @@ static FCallReturn_type* ConfigureTC_NonResGalvoCal	(TaskControl_type* taskContr
 	// reset iteration index
 	cal->currIterIdx = 0;
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* UncofigureTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int UncofigureTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);  
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
 static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
-	ActiveNonResGalvoCal_type* 	cal 				= GetTaskControlModuleData(taskControl);
-	DataPacket_type*			commandPacket		= NULL;
-	
-	
-	// add empty galvo response waveform 
-	discard_Waveform_type(&cal->positionWaveform);
-	void*	nullData	= NULL;
-	cal->positionWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, 0, &nullData);
+#define		IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples 		-1
+	ActiveNonResGalvoCal_type* 		cal 						= GetTaskControlModuleData(taskControl);
+	double*							commandSignal				= NULL; 
+	double*							positionSignal				= NULL;
+	DataPacket_type*				commandPacket				= NULL;
+	char*							errMsg						= NULL;
+	uInt64*							nCommandWaveformSamplesPtr  = NULL;
+	size_t							nCommandSignalSamples		= 0;
+	size_t							nPositionSignalSamples		= 0;
+	int								error						= 0;
+	Waveform_type*					waveformCopy				= NULL;
 	
 	switch (cal->currentCal) {
 			
 		case NonResGalvoCal_Slope_Offset:
 		{
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			// Generate and send galvo command signal
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			
 			// discard previous measurements
 			OKfree(cal->slope);
 			OKfree(cal->offset);
@@ -5002,8 +5048,9 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			// create waveform with galvo steps to measure slope and offset between command and position signals
 			size_t 		nDelaySamples 			= (size_t) (SLOPE_OFFSET_DELAY * *cal->baseClass.comSampRate);
 			size_t		nSamplesPerCalPoint		= nDelaySamples + POSSAMPLES;
-			double*		commandSignal 			= malloc (CALPOINTS * nSamplesPerCalPoint * sizeof(double));
 			double		VCommand				= -cal->commandVMax;
+			
+			nullChk( commandSignal = malloc (CALPOINTS * nSamplesPerCalPoint * sizeof(double)) );
 			
 			for (size_t i = 0; i < CALPOINTS; i++) {
 				for (size_t j = 0; j < nSamplesPerCalPoint; j++)
@@ -5012,22 +5059,90 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			}
 			
 			// send command waveform
-			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, CALPOINTS * nSamplesPerCalPoint, &commandSignal);
-			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
-			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
-			SendDataPacket(cal->baseClass.VChanCom, NULL, 0);
+			nCommandSignalSamples = CALPOINTS * nSamplesPerCalPoint;
+			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
+			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, NULL, 0, &errMsg) );
 			
 			// send number of samples in waveform
-			uInt64*	nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
-			*nCommandWaveformSamplesPtr = CALPOINTS * nSamplesPerCalPoint;
-			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
-			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
+			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
+			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
+			
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0, &errMsg) );
+			
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			// Receive and analyze galvo response signal
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &errMsg) );
+			
+			//get pointer to galvo position signal
+			positionSignal 	= GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples); 
+			commandSignal	= GetWaveformDataPtr (cal->commandWaveform, &nCommandSignalSamples); 
+			
+			// check if number of received samples is different than the number of sent samples
+			if (nPositionSignalSamples != nCommandSignalSamples) {
+				errMsg = FormatMsg(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "IterateTC_NonResGalvoCal", "Number of command and response samples in the sent and received \
+									waveforms must be the same");
+				error = IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples;
+				goto Error;
+			}
+			
+			// analyze galvo response
+			double  	Pos[CALPOINTS];
+			double  	Comm[CALPOINTS];
+			double		PosStdDev[CALPOINTS];
+			double  	LinFitResult[CALPOINTS];
+			double  	meanSquaredError;
+			
+			// analyze galvo response  
+			for (size_t i = 0; i < CALPOINTS; i++) {
+				// get average position and signal StdDev
+				StdDev(positionSignal + i*nSamplesPerCalPoint + nDelaySamples, POSSAMPLES, &Pos[i], &PosStdDev[i]);
+				Comm[i] = 2*cal->commandVMax * i /(CALPOINTS - 1) - cal->commandVMax; 
+			}
+				
+			// calculate average of standard deviations to better estimate noise on position signal
+			if (!cal->posStdDev) cal->posStdDev = malloc (sizeof(double));
+			Mean(PosStdDev, CALPOINTS, cal->posStdDev);
+			
+			// determine slope and offset for linear cal curves for X and Y
+			if (!cal->slope) cal->slope = malloc (sizeof(double));
+			if (!cal->offset) cal->offset = malloc (sizeof(double));
+			LinFit (Pos, Comm, CALPOINTS, LinFitResult, cal->slope , cal->offset, &meanSquaredError);	
+			
+			// update results
+			int calibPanHndl;
+			GetPanelHandleFromTabPage(cal->baseClass.calPanHndl, NonResGCal_Tab, 0, &calibPanHndl);
+				
+			// slope
+			SetCtrlVal(calibPanHndl, Cal_Slope_a, *cal->slope);
+			SetCtrlAttribute(calibPanHndl, Cal_Slope_a, ATTR_DIMMED, 0);
+			// offset
+			SetCtrlVal(calibPanHndl, Cal_Offset_b, *cal->offset * 1000); 		// display in [mV]
+			SetCtrlAttribute(calibPanHndl, Cal_Offset_b, ATTR_DIMMED, 0);
+			// StdDev
+			SetCtrlVal(calibPanHndl, Cal_PosStdDev, *cal->posStdDev * 1000); 	// display in [mV]
+			SetCtrlAttribute(calibPanHndl, Cal_Offset_b, ATTR_DIMMED, 0);
+				
+			// proceed to next calibration method
+			cal->currentCal++;
+			cal->currIterIdx = 0;
+			TaskControlIterationDone(taskControl, 0, "", TRUE);
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			
 		}
 			
 			break;
 			
 		case NonResGalvoCal_Lag:
 		{
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			// Generate and send galvo command signal
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
 			// discard previous lag measurement if it exists and allocate new memory    
 			if (!cal->currIterIdx) {
@@ -5042,36 +5157,136 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			size_t 	flybackSamples 	= (size_t) floor(MAXFLYBACKTIME * 0.001 * *cal->baseClass.comSampRate) + 1; 
 			
 			// create ramp
-			double*	rampSignal = malloc ((flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat * sizeof(double));
+			nullChk( commandSignal = malloc ((flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat * sizeof(double)) );
 			// pad with flyback samples
-			for (size_t i = 0; i < flybackSamples; i++) rampSignal[i] = -cal->commandVMax;
+			for (size_t i = 0; i < flybackSamples; i++) commandSignal[i] = -cal->commandVMax;
 			// generate ramp
-			Ramp(cal->nRampSamples, -cal->commandVMax, cal->commandVMax, rampSignal + flybackSamples);
+			Ramp(cal->nRampSamples, -cal->commandVMax, cal->commandVMax, commandSignal + flybackSamples);
 			// pad with postrampsamples
 			for (size_t i = flybackSamples + cal->nRampSamples; i < (flybackSamples + cal->nRampSamples + postRampSamples); i++) 
-				rampSignal[i] = cal->commandVMax;
+				commandSignal[i] = cal->commandVMax;
 			// extend signal to nRepeat times
 			for (size_t i = 1; i < cal->nRepeat; i++)
-				memcpy(rampSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), rampSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
+				memcpy(commandSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), commandSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
 			
 			// send command waveform
-			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, &rampSignal);
-			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
-			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
-			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
+			nCommandSignalSamples = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
+			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
+			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, NULL, 0, &errMsg) ); 
 			
 			// send number of samples in waveform
-			uInt64*	nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
-			*nCommandWaveformSamplesPtr = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
-			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
-			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
+			nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
+			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0, &errMsg) );
 			
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			// Receive and analyze galvo response signal
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &errMsg) );
+			
+			//get pointer to galvo position signal
+			positionSignal 	= GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples); 
+			commandSignal	= GetWaveformDataPtr (cal->commandWaveform, &nCommandSignalSamples); 
+			
+			// check if number of received samples is different than the number of sent samples
+			if (nPositionSignalSamples != nCommandSignalSamples) {
+				errMsg = FormatMsg(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "IterateTC_NonResGalvoCal", "Number of command and response samples in the sent and received \
+									waveforms must be the same");
+				error = IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples;
+				goto Error;
+			}
+			
+			// average galvo ramp responses, use only ramp and post ramp time to analyze the data
+			double*		averageResponse = calloc (cal->nRampSamples + postRampSamples, sizeof(double));
+				
+			// sum up ramp responses
+			for (size_t i = 0; i < cal->nRepeat; i++)
+				for (size_t j = 0; j < cal->nRampSamples + postRampSamples; j++)
+					averageResponse[j] += positionSignal[i*(flybackSamples + cal->nRampSamples + postRampSamples)+flybackSamples+j];
+				
+			// average ramp responses
+			for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] /= cal->nRepeat;
+				
+			// calculate corrected position signal based on scaling and offset
+			for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] = *cal->slope * averageResponse[i] + *cal->offset;
+				
+			// calculate response slope
+			double rampSlope;
+			FindSlope(averageResponse, cal->nRampSamples + postRampSamples, *cal->baseClass.comSampRate, *cal->posStdDev, cal->nRepeat, RELERR, &rampSlope);   
+			// calculate command ramp slope
+			double targetSlope = 2*cal->commandVMax / ((cal->nRampSamples - 1) * 1000/ *cal->baseClass.comSampRate);  // ramp slope in [V/ms]
+				
+			// plot the command and response signals
+			DeleteGraphPlot(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, -1, VAL_IMMEDIATE_DRAW); 
+			// adjust plot time axis ranges
+			SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_BOTTOM_XAXIS, VAL_AUTOSCALE, 0, 0);
+			SetAxisScalingMode(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, VAL_LEFT_YAXIS, VAL_AUTOSCALE, 0, 0);
+			SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XLABEL_VISIBLE, 1);
+			SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YLABEL_VISIBLE, 1);
+			SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XGRID_VISIBLE, 1);
+			SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YGRID_VISIBLE, 1);
+			SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_LABEL_TEXT, "Galvo command and response");   
+			SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XNAME, "Time (ms)");
+			SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YNAME, "Galvo signals (V)");
+			// plot waveforms
+			PlotWaveform(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, commandSignal+flybackSamples, cal->nRampSamples + postRampSamples, VAL_DOUBLE, 1.0, 0, 0, 1000/ *cal->baseClass.comSampRate, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, VAL_BLUE);
+			PlotWaveform(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, averageResponse, cal->nRampSamples + postRampSamples, VAL_DOUBLE, 1.0, 0, 0, 1000/ *cal->baseClass.comSampRate, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, VAL_RED);
+			
+			double x, y;
+			
+			GetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, &x, &y);
+			SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, x);
+			SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, y);
+				
+			// if this was the last run, calculate lag
+			if (cal->lastRun) {
+					
+				cal->lag = malloc(sizeof(double));
+				cal->currIterIdx = 0;
+				cal->currentCal++; 
+				cal->lastRun = FALSE;
+				*cal->lag = MeasureLag(commandSignal+flybackSamples, averageResponse, cal->nRampSamples + postRampSamples) * 1000/ *cal->baseClass.comSampRate; // response lag in [ms]
+				// update results
+				int calibPanHndl;
+				GetPanelHandleFromTabPage(cal->baseClass.calPanHndl, NonResGCal_Tab, 0, &calibPanHndl);
+				
+				// slope
+				SetCtrlVal(calibPanHndl, Cal_ResponseLag, *cal->lag);
+				SetCtrlAttribute(calibPanHndl, Cal_ResponseLag, ATTR_DIMMED, 0);
+				
+			} else {
+				if (rampSlope < targetSlope * 0.98) {
+					// calculate ramp that has maxslope
+					cal->nRampSamples = (size_t) floor(2*cal->commandVMax / rampSlope * *cal->baseClass.comSampRate * 0.001);
+					cal->lastRun = FALSE;
+				}
+				else {
+					// reduce slope
+					cal->nRampSamples = (size_t) floor(2*cal->commandVMax / (rampSlope * MAX_SLOPE_REDUCTION_FACTOR) * *cal->baseClass.comSampRate * 0.001); 
+					cal->lastRun = TRUE;
+				}
+				if (cal->nRampSamples < 2) cal->nRampSamples = 2;  // make sure that the ramp generating function has at least 2 samples
+				cal->currIterIdx++;
+			}
+				
+			OKfree(averageResponse);
+			TaskControlIterationDone(taskControl, 0, "", TRUE);
+			
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		}
 			
 			break;
 			
 		case NonResGalvoCal_SwitchTimes:
 		{
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			// Generate and send galvo command signal
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
 			// delete previous measurements and adjust plotting area
 			if (!cal->currIterIdx) {
@@ -5098,33 +5313,99 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			cal->nRepeat = ceil(pow(*cal->posStdDev * 1.414 /(RELERR * 2*cal->commandVMax * amplitudeFactor), 2));
 			
 			// create step signal
-			double*	stepSignal = malloc ((flybackSamples + postStepSamples) * cal->nRepeat * sizeof(double));
+			nullChk( commandSignal = malloc ((flybackSamples + postStepSamples) * cal->nRepeat * sizeof(double)) );
 			
 			// pad flyback samples
-			for (size_t i = 0; i < flybackSamples; i++) stepSignal[i] = -cal->commandVMax * amplitudeFactor;
+			for (size_t i = 0; i < flybackSamples; i++) commandSignal[i] = -cal->commandVMax * amplitudeFactor;
 			// pad post step samples
-			for (size_t i = flybackSamples; i < (flybackSamples + postStepSamples); i++) stepSignal[i] = cal->commandVMax * amplitudeFactor;
+			for (size_t i = flybackSamples; i < (flybackSamples + postStepSamples); i++) commandSignal[i] = cal->commandVMax * amplitudeFactor;
 			// apply signal nRepeat times
 			for (size_t i = 1; i < cal->nRepeat; i++)
-				memcpy(stepSignal + i * (flybackSamples + postStepSamples), stepSignal, (flybackSamples + postStepSamples) * sizeof(double));
+				memcpy(commandSignal + i * (flybackSamples + postStepSamples), commandSignal, (flybackSamples + postStepSamples) * sizeof(double));
 			
 			// send command waveform
-			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + postStepSamples) * cal->nRepeat, &stepSignal);
-			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
-			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
-			SendDataPacket(cal->baseClass.VChanCom, NULL, 0);
+			nCommandSignalSamples = (flybackSamples + postStepSamples) * cal->nRepeat;
+			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
+			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, NULL, 0, &errMsg) );
 			
 			// send number of samples in waveform
-			uInt64*	nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
-			*nCommandWaveformSamplesPtr = (flybackSamples + postStepSamples) * cal->nRepeat;
-			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
-			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
+			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
+			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0, &errMsg) );
 			
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			// Receive and analyze galvo response signal
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &errMsg) );
+			
+			//get pointer to galvo position signal
+			positionSignal 	= GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples); 
+			commandSignal	= GetWaveformDataPtr (cal->commandWaveform, &nCommandSignalSamples); 
+			
+			// check if number of received samples is different than the number of sent samples
+			if (nPositionSignalSamples != nCommandSignalSamples) {
+				errMsg = FormatMsg(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "IterateTC_NonResGalvoCal", "Number of command and response samples in the sent and received \
+									waveforms must be the same");
+				error = IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples;
+				goto Error;
+			}
+			
+			double*		averageResponse = calloc (postStepSamples, sizeof(double));
+			// sum up step responses
+			for (size_t i = 0; i < cal->nRepeat; i++)
+				for (size_t j = 0; j < postStepSamples; j++)
+					averageResponse[j] += positionSignal[i * (flybackSamples + postStepSamples) + flybackSamples + j];
+			// average ramp responses
+			for (size_t i = 0; i < postStepSamples; i++) averageResponse[i] /= cal->nRepeat;
+				
+			// calculate corrected position signal based on scaling and offset
+			for (size_t i = 0; i < postStepSamples; i++) averageResponse[i] = *cal->slope * averageResponse[i] + *cal->offset;
+				
+			// find 50% crossing point where response is halfway between the applied step
+			for (int i = 0; i < postStepSamples; i++) 
+				if (averageResponse[i] > 0) { 
+					cal->switchTimes->n++;
+					cal->switchTimes->stepSize = realloc (cal->switchTimes->stepSize, cal->switchTimes->n * sizeof(double));
+					cal->switchTimes->stepSize[cal->switchTimes->n - 1] = 2*cal->commandVMax * amplitudeFactor;
+					cal->switchTimes->halfSwitch = realloc (cal->switchTimes->halfSwitch, cal->switchTimes->n * sizeof(double));
+					cal->switchTimes->halfSwitch[cal->switchTimes->n - 1] = i / *cal->baseClass.comSampRate * 1000;
+						
+					// plot switching time
+					double x, y;
+					PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 2 * cal->commandVMax * amplitudeFactor, cal->switchTimes->halfSwitch[cal->switchTimes->n - 1]  * 1000 , VAL_ASTERISK, VAL_BLUE);
+					GetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, &x, &y);
+					SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, x);
+					SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, y);
+						
+					break;
+				}
+				
+			if (2 * cal->commandVMax * amplitudeFactor >= cal->resolution * SWITCH_TIMES_AMP_ITER_FACTOR)
+			  cal->currIterIdx++;
+			else {
+					
+				cal->currIterIdx = 0;
+				cal->currentCal++;
+			}
+				
+			OKfree(averageResponse);
+			TaskControlIterationDone(taskControl, 0, "", TRUE);  
+			
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		}
 			break;
 			
 		case NonResGalvoCal_MaxSlopes:
 		{	
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			// Generate and send galvo command signal
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			
 			// delete previous measurements
 			if (!cal->currIterIdx) {
 				discard_MaxSlopes_type(&cal->maxSlopes);
@@ -5153,34 +5434,105 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			cal->nRepeat = ceil(pow(*cal->posStdDev * 1.414 /(RELERR * 2*cal->commandVMax * amplitudeFactor), 2));
 			
 			// create ramp
-			double*	rampSignal = malloc ((flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat * sizeof(double));
+			nullChk( commandSignal = malloc ((flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat * sizeof(double)) );
 			// pad with flyback samples
-			for (size_t i = 0; i < flybackSamples; i++) rampSignal[i] = -cal->commandVMax * amplitudeFactor;
+			for (size_t i = 0; i < flybackSamples; i++) commandSignal[i] = -cal->commandVMax * amplitudeFactor;
 			// generate ramp
-			Ramp(cal->nRampSamples, -cal->commandVMax * amplitudeFactor, cal->commandVMax * amplitudeFactor, rampSignal + flybackSamples);
+			Ramp(cal->nRampSamples, -cal->commandVMax * amplitudeFactor, cal->commandVMax * amplitudeFactor, commandSignal + flybackSamples);
 			// pad with postrampsamples
-			for (size_t i = flybackSamples + cal->nRampSamples; i < (flybackSamples + cal->nRampSamples + postRampSamples); i++) rampSignal[i] = cal->commandVMax * amplitudeFactor;
+			for (size_t i = flybackSamples + cal->nRampSamples; i < (flybackSamples + cal->nRampSamples + postRampSamples); i++) commandSignal[i] = cal->commandVMax * amplitudeFactor;
 			// apply signal nRepeat times
 			for (size_t i = 1; i < cal->nRepeat; i++)
-				memcpy(rampSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), rampSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
+				memcpy(commandSignal + i * (flybackSamples + cal->nRampSamples + postRampSamples), commandSignal, (flybackSamples + cal->nRampSamples + postRampSamples) * sizeof(double));
 			
 			// send command waveform
-			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat, &rampSignal);
-			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
-			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
-			SendDataPacket(cal->baseClass.VChanCom, NULL, 0); 
+			nCommandSignalSamples = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
+			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
+			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, NULL, 0, &errMsg) ); 
 			
 			// send number of samples in waveform
-			uInt64*	nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
-			*nCommandWaveformSamplesPtr = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
-			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
-			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
+			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
+			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0, &errMsg) );
+			
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			// Receive and analyze galvo response signal
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &errMsg) );
+			
+			//get pointer to galvo position signal
+			positionSignal	= GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples); 
+			commandSignal	= GetWaveformDataPtr (cal->commandWaveform, &nCommandSignalSamples); 
+			
+			// check if number of received samples is different than the number of sent samples
+			if (nPositionSignalSamples != nCommandSignalSamples) {
+				errMsg = FormatMsg(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "IterateTC_NonResGalvoCal", "Number of command and response samples in the sent and received \
+									waveforms must be the same");
+				error = IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples;
+				goto Error;
+			}
+			
+			double*		averageResponse = calloc (cal->nRampSamples + postRampSamples, sizeof(double));
+				
+			// sum up ramp responses
+			for (size_t i = 0; i < cal->nRepeat; i++)
+				for (size_t j = 0; j < cal->nRampSamples + postRampSamples; j++)
+					averageResponse[j] += positionSignal[i * (flybackSamples + cal->nRampSamples + postRampSamples) + flybackSamples + j];
+			// average ramp responses
+			for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] /= cal->nRepeat;
+				
+			// calculate corrected position signal based on scaling and offset
+			for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] = *cal->slope * averageResponse[i] + *cal->offset;
+				
+			// calculate ramp slope
+			double responseSlope;
+			double commandSlope = 2 * cal->commandVMax * amplitudeFactor / ((cal->nRampSamples - 1) * 1000/ *cal->baseClass.comSampRate); 
+				
+			FindSlope(averageResponse, cal->nRampSamples + postRampSamples, *cal->baseClass.comSampRate, *cal->posStdDev, cal->nRepeat, RELERR, &responseSlope); 
+			
+			if (2 * cal->commandVMax * amplitudeFactor >= cal->minStepSize * FIND_MAXSLOPES_AMP_ITER_FACTOR) 
+				if (responseSlope < commandSlope * 0.98)
+					// calculate ramp that has maxslope
+					cal->nRampSamples = (size_t) floor(2 * cal->commandVMax * amplitudeFactor / responseSlope * *cal->baseClass.comSampRate * 0.001);
+				else {
+					// store slope value
+					cal->currIterIdx++;  
+					cal->maxSlopes->n++;
+					cal->maxSlopes->amplitude = realloc (cal->maxSlopes->amplitude, cal->maxSlopes->n * sizeof(double));
+					cal->maxSlopes->amplitude[cal->maxSlopes->n - 1] = 2 * cal->commandVMax * amplitudeFactor;
+					cal->maxSlopes->slope = realloc (cal->maxSlopes->slope, cal->maxSlopes->n * sizeof(double)); 
+					cal->maxSlopes->slope[cal->maxSlopes->n - 1] = responseSlope;
+					// plot slope
+					double x, y;
+					PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 2 * cal->commandVMax * amplitudeFactor, responseSlope, VAL_ASTERISK, VAL_BLUE);
+					GetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, &x, &y);
+					SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, x);
+					SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, y);
+				}
+			else {
+				cal->currIterIdx	= 0;
+				cal->extraRuns 		= 0;  
+				cal->currentCal++; 
+			}
+				
+			OKfree(averageResponse);
+			TaskControlIterationDone(taskControl, 0, "", TRUE); 
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
 		}
 			break;
 			
 		case NonResGalvoCal_TriangleWave:
 		{
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			// Generate and send galvo command signal
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			
 			if (!cal->currIterIdx && !cal->extraRuns) {
 				discard_TriangleCal_type(&cal->triangleCal);
 				cal->triangleCal 		= init_TriangleCal_type();
@@ -5210,27 +5562,170 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			
 		  
 			// create ramp
-			double*		commandSignal 	= malloc (nSamples * sizeof(double));
+			nullChk( commandSignal 	= malloc (nSamples * sizeof(double)) );
 			
 			// generate command signal
 			double		phase	 		= -90;
 			TriangleWave(nSamples, funcAmp/2, 1.0/cycleSamples, &phase, commandSignal);
 						
 			// send command waveform
-			cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nSamples, &commandSignal);
-			commandPacket = init_DataPacket_type(DL_Waveform_Double, CopyWaveform(cal->commandWaveform), (DiscardPacketDataFptr_type)discard_Waveform_type);
-			SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0);
-			SendDataPacket(cal->baseClass.VChanCom, NULL, 0);
+			nCommandSignalSamples = nSamples;
+			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
+			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, NULL, 0, &errMsg) );
 			
 			// send number of samples in waveform
-			uInt64*	nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
-			*nCommandWaveformSamplesPtr = nSamples;
-			commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL);
-			SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0);
+			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
+			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0, &errMsg) );
+			
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			// Receive and analyze galvo response signal
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+			
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &errMsg) );
+			
+			//get pointer to galvo position signal
+			positionSignal 	= GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples); 
+			commandSignal	= GetWaveformDataPtr (cal->commandWaveform, &nCommandSignalSamples); 
+			
+			// check if number of received samples is different than the number of sent samples
+			if (nPositionSignalSamples != nCommandSignalSamples) {
+				errMsg = FormatMsg(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "IterateTC_NonResGalvoCal", "Number of command and response samples in the sent and received \
+									waveforms must be the same");
+				error = IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples;
+				goto Error;
+			}
+			
+			BOOL		overloadFlag	= FALSE;
+			double* 	averageResponse = NULL;
+				
+			// check if there is overload
+			for (int i = 0; i < nSamples; i++) 
+				if ((positionSignal[i] < - funcAmp/2 * 1.1 - 5 * *cal->posStdDev) || (positionSignal[i] > funcAmp/2 * 1.1 + 5 * *cal->posStdDev)) {
+					overloadFlag = TRUE;
+					break;
+				}
+				
+			// in case of overload, reduce slope and repeat until there is no overload
+			if (overloadFlag)
+				cal->extraRuns	= 0;
+			else {
+					
+				// calculate lag between position signal and command signal in number of samples
+				size_t delta = (size_t) (*cal->lag * *cal->baseClass.comSampRate/1000);
+				// average position signal triangle waveforms
+				averageResponse = calloc (cycleSamples, sizeof(double));   
+				// sum up triangle wave response taking into account the lag between command and response
+				for (size_t i = 0; i < nCycles; i++)
+					for (size_t j = 0; j < cycleSamples; j++)
+						averageResponse[j] += positionSignal[i * cycleSamples + delta + j];
+				// average ramp responses
+				for (size_t i = 0; i < cycleSamples; i++) averageResponse[i] /= nCycles;
+			
+				// calculate corrected position signal based on scaling and offset
+				for (size_t i = 0; i < cycleSamples; i++) averageResponse[i] = *cal->slope * averageResponse[i] + *cal->offset;
+					
+				double 	maxSlope, maxVal, minVal;
+				ssize_t maxIdx, minIdx;
+				FindSlope(averageResponse, cycleSamples, *cal->baseClass.comSampRate, *cal->posStdDev, nCycles, 0.05, &maxSlope);
+				MaxMin1D(averageResponse, cycleSamples, &maxVal, &maxIdx, &minVal, &minIdx);  
+					
+				if (maxSlope > cal->targetSlope * 0.95) cal->extraRuns++;
+					
+				if (cal->extraRuns == 2) {
+					// measure deadtime for galvo turn-around before and after a line scan, i.e. the duration during which the galvo response is not linear with the galvo command
+					// iterate a few times to converge
+					size_t 	nTotalSamplesDelay = 0;
+					double  fVal = funcAmp/2;
+					for (int i = 0; i < 3; i++){
+						// check if there is sufficient SNR to continue the estimation
+						if (1.141 * *cal->posStdDev / sqrt(nCycles) / fabs(fVal - maxVal) > 0.05) break;
+						if (fVal - maxVal < 0) break; 	// assumes the response is smaller in amplitude than the command
+						nTotalSamplesDelay += (size_t) floor( (fVal - maxVal) / (funcAmp * 2 * funcFreq) * *cal->baseClass.comSampRate ) ;
+						fVal = maxVal;
+						maxVal = averageResponse[maxIdx - nTotalSamplesDelay];
+					}
+						
+					// measure residual lag that may depend somewhat on the scan frequency and amplitude
+					cal->triangleCal->n++;
+					cal->triangleCal->commandAmp = realloc(cal->triangleCal->commandAmp, cal->triangleCal->n * sizeof(double)); 
+					cal->triangleCal->commandAmp[cal->currIterIdx] = cal->maxSlopes->amplitude[cal->currIterIdx];
+					cal->triangleCal->maxFreq = realloc(cal->triangleCal->maxFreq, cal->triangleCal->n * sizeof(double));   
+					cal->triangleCal->maxFreq[cal->currIterIdx] = maxSlope * 1000/(2 * funcAmp);  // maximum triangle function frequency! 
+					cal->triangleCal->resLag = realloc(cal->triangleCal->resLag, cal->triangleCal->n * sizeof(double));  
+					cal->triangleCal->resLag[cal->currIterIdx] = MeasureLag(commandSignal, averageResponse, cycleSamples) * 1000/ *cal->baseClass.comSampRate;
+					cal->triangleCal->deadTime += nTotalSamplesDelay / *cal->baseClass.comSampRate * 1000 ; // delay in ms 
+						
+					// plot
+					PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, funcAmp, cal->triangleCal->maxFreq[cal->triangleCal->n-1], VAL_ASTERISK, VAL_BLUE);
+					SetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, funcAmp, cal->triangleCal->maxFreq[cal->triangleCal->n-1]);
+					SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, funcAmp);
+					SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, cal->triangleCal->maxFreq[cal->triangleCal->n-1]);
+						
+					// continue with next maximum slope
+					cal->extraRuns = 0;
+					cal->currIterIdx++;
+						
+					// init next target slope
+					if (cal->currIterIdx < cal->maxSlopes->n) 
+						cal->targetSlope = cal->maxSlopes->slope[cal->currIterIdx] * DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR;
+				}
+			}
+				
+			// reduce slope
+			cal->targetSlope 	*= DYNAMICCAL_SLOPE_ITER_FACTOR;    
+					
+			OKfree(averageResponse);
+			discard_Waveform_type(&cal->commandWaveform);   
+				
+			if (cal->currIterIdx < cal->maxSlopes->n) {
+				TaskControlIterationDone(taskControl, 0, "", TRUE); 
+			}
+			else {
+				// calculate average dead time
+				cal->triangleCal->deadTime /= cal->maxSlopes->n;
+				// calculate actual triangle waveform amplitude
+				cal->triangleCal->actualAmp = malloc(cal->maxSlopes->n * sizeof(double));
+				for (size_t i = 0; i < cal->maxSlopes->n; i++)
+					cal->triangleCal->actualAmp[i] = cal->triangleCal->commandAmp[i] * (1 - 4 * cal->triangleCal->maxFreq[i] * cal->triangleCal->deadTime * 0.001);  
+					
+				// end task controller iterations
+				TaskControlIterationDone(taskControl, 0, "", FALSE);
+			}
+			
+		
+			
+			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		}
 			break;
 	}
 	
+	// cleanup
+	discard_Waveform_type(&cal->positionWaveform);
+	discard_Waveform_type(&cal->commandWaveform);
+	
+	return;
+	
+Error:
+	
+	discard_Waveform_type(&cal->positionWaveform);
+	discard_Waveform_type(&cal->commandWaveform);
+	discard_Waveform_type(&waveformCopy);
+	discard_DataPacket_type(&commandPacket);
+	OKfree(commandSignal);
+	OKfree(positionSignal);
+	OKfree(nCommandWaveformSamplesPtr);
+	
+	// create out of memory message
+	if (error == UIEOutOfMemory && !errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	TaskControlIterationDone(cal->baseClass.taskController, error, errMsg, 0);
+	OKfree(errMsg);
 }
 
 static void AbortIterationTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
@@ -5244,7 +5739,7 @@ static void AbortIterationTC_NonResGalvoCal (TaskControl_type* taskControl, size
 	TaskControlIterationDone(taskControl, 0, "", "");
 }
 
-static FCallReturn_type* StartTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int StartTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 #define StartTC_NonResGalvoCal_Err_InvalidParameter		-1
 	
@@ -5254,21 +5749,31 @@ static FCallReturn_type* StartTC_NonResGalvoCal (TaskControl_type* taskControl, 
 	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 1);  
 	
 	// check if settings are correct
-	if (cal->commandVMax == 0.0)
-		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Maximum command voltage cannot be 0");
+	if (cal->commandVMax == 0.0) {
+		*errorInfo = StrDup("Maximum command voltage cannot be 0");
+		return StartTC_NonResGalvoCal_Err_InvalidParameter;
+	}
 	
-	if (cal->minStepSize == 0.0)
-		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Minimum step size voltage cannot be 0");
+	if (cal->minStepSize == 0.0) {
+		*errorInfo = StrDup("Minimum step size voltage cannot be 0");
+		return StartTC_NonResGalvoCal_Err_InvalidParameter;
+	}
+		
+	if (cal->resolution == 0.0) {
+		*errorInfo = StrDup("Minimum resolution voltage cannot be 0");
+		return StartTC_NonResGalvoCal_Err_InvalidParameter;
+	}
+		
+	if (cal->mechanicalResponse == 0.0) {
+		*errorInfo = StrDup("Mechanical response cannot be 0");
+		return StartTC_NonResGalvoCal_Err_InvalidParameter; 
+	}
 	
-	if (cal->resolution == 0.0)
-		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Minimum resolution voltage cannot be 0"); 
-			
-	if (cal->mechanicalResponse == 0.0)
-		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Mechanical response cannot be 0"); 
-	
-	if (cal->scanTime == 0.0)
-		return init_FCallReturn_type(StartTC_NonResGalvoCal_Err_InvalidParameter, "StartTC_NonResGalvoCal", "Scan time cannot be 0"); 
-	
+	if (cal->scanTime == 0.0) {
+		*errorInfo = StrDup("Scan time cannot be 0");
+		return StartTC_NonResGalvoCal_Err_InvalidParameter; 
+	}
+		
 	// total number of iterations to start with
 	SetTaskControlIterations(taskControl, 1);
 	// set starting calibration type
@@ -5276,10 +5781,10 @@ static FCallReturn_type* StartTC_NonResGalvoCal (TaskControl_type* taskControl, 
 	// reset iteration index
 	cal->currIterIdx = 0;
 	
-	return init_FCallReturn_type(0, "", ""); 
+	return 0; 
 }
 
-static FCallReturn_type* ResetTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ResetTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
@@ -5290,10 +5795,10 @@ static FCallReturn_type* ResetTC_NonResGalvoCal (TaskControl_type* taskControl, 
 	// reset iteration index
 	cal->currIterIdx = 0;
 	
-	return init_FCallReturn_type(0, "", ""); 
+	return 0; 
 }
 
-static FCallReturn_type* DoneTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static int DoneTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
@@ -5303,18 +5808,17 @@ static FCallReturn_type* DoneTC_NonResGalvoCal (TaskControl_type* taskControl, s
 	// cleanup
 	discard_Waveform_type(&cal->positionWaveform);
 	
-	return init_FCallReturn_type(0, "", ""); 
+	return 0; 
 }
 
-static FCallReturn_type* StoppedTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static int StoppedTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
 	// dim Save calibration since calibration is incomplete
 	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_SaveCalib, ATTR_DIMMED, 1);
 	
-	
-	return init_FCallReturn_type(0, "", ""); 
+	return 0; 
 }
 
 static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
@@ -5333,7 +5837,8 @@ static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 	SetCtrlAttribute(calSetPanHndl, Cal_MechanicalResponse, ATTR_DIMMED, dimmed);
 }
 
-static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+/*
+static int DataReceivedTC_NonResGalvoCal (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 					= GetTaskControlModuleData(taskControl);
 	DataPacket_type**			dataPackets				= NULL;
@@ -5732,31 +6237,32 @@ static FCallReturn_type* DataReceivedTC_NonResGalvoCal (TaskControl_type* taskCo
 		
 	OKfree(dataPackets);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
+*/
 
 //-----------------------------------------
 // LaserScanning Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type* ConfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ConfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
 	// undim scan control panel
 	SetPanelAttribute(engine->baseClass.scanSetPanHndl, ATTR_DIMMED, 0);
 	
-	return init_FCallReturn_type(0, "", ""); 
+	return 0; 
 }
 
-static FCallReturn_type* UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
 	// dim scan control panel
 	SetPanelAttribute(engine->baseClass.scanSetPanHndl, ATTR_DIMMED, 1);
 	
-	return init_FCallReturn_type(0, "", ""); 
+	return 0; 
 }
 
 static void	IterateTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
@@ -5773,82 +6279,81 @@ static void AbortIterationTC_RectRaster (TaskControl_type* taskControl, size_t c
 	
 }
 
-static FCallReturn_type* StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* 	engine 		= GetTaskControlModuleData(taskControl);
-	FCallReturn_type*		fCallReturn = NULL;
+	RectangleRaster_type* 	engine 						= GetTaskControlModuleData(taskControl);
+	int						error 						= 0;
 	
-	//-------------------------------------------------------------------------------------------------------------------------------
 	// open shutter
-	//-------------------------------------------------------------------------------------------------------------------------------
-	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
-	*shutterCommand	= 1;
-	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, &shutterCommand);
-	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
+	errChk( OpenScanEngineShutter(&engine->baseClass, 1, errorInfo) );
 	
-	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
-	
-	//-------------------------------------------------------------------------------------------------------------------------------
 	// send galvo waveforms
-	//-------------------------------------------------------------------------------------------------------------------------------
-	if ( (fCallReturn = NonResRectangleRasterScan_GenerateScanSignals (engine)) ) goto Error;  
+	errChk ( NonResRectangleRasterScan_GenerateScanSignals (engine, errorInfo) );  
 	
-	return init_FCallReturn_type(0, "", ""); // no error
+	return 0; // no error
 	
 Error:
 	
-	return fCallReturn;
+	// create out of memory message
+	if (error == UIEOutOfMemory && !*errorInfo)
+		*errorInfo = StrDup("Out of memory");
+	
+	return error;
 }
 
-static FCallReturn_type* DoneTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static int DoneTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectangleRaster_type* 	engine		 				= GetTaskControlModuleData(taskControl);
+	int						error						= 0;
 	
-	//-------------------------------------------------------------------------------------------------------------------------------
 	// close shutter
-	//-------------------------------------------------------------------------------------------------------------------------------
-	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
-	*shutterCommand	= 0;
-	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, &shutterCommand);
-	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
+	errChk( OpenScanEngineShutter(&engine->baseClass, 0, errorInfo) );
 	
-	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
+	return 0; 
 	
-	return init_FCallReturn_type(0, "", "");   
+Error:
+	
+	// create out of memory message
+	if (error == UIEOutOfMemory && !*errorInfo)
+		*errorInfo = StrDup("Out of memory");
+	
+	return error;
 }
 
-static FCallReturn_type* StoppedTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static int StoppedTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectangleRaster_type* 	engine 	= GetTaskControlModuleData(taskControl);
+	int						error	= 0;
 	
-	//-------------------------------------------------------------------------------------------------------------------------------
 	// close shutter
-	//-------------------------------------------------------------------------------------------------------------------------------
-	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
-	*shutterCommand	= 0;
-	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, &shutterCommand);
-	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
+	errChk( OpenScanEngineShutter(&engine->baseClass, 0, errorInfo) );
 	
-	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
+	return 0;
 	
-	return init_FCallReturn_type(0, "", "");   
+Error:
+	
+	// create out of memory message
+	if (error == UIEOutOfMemory && !*errorInfo)
+		*errorInfo = StrDup("Out of memory");
+	
+	return error;
 }
 
-static FCallReturn_type* ResetTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ResetTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectangleRaster_type* 	engine 	= GetTaskControlModuleData(taskControl);
+	int						error	= 0;
 	
-	//-------------------------------------------------------------------------------------------------------------------------------
 	// close shutter
-	//-------------------------------------------------------------------------------------------------------------------------------
-	unsigned char*		shutterCommand			= malloc (sizeof(unsigned char));
-	*shutterCommand	= 0;
-	Waveform_type*		shutterCommandWaveform	= init_Waveform_type(Waveform_UChar, *engine->refGalvoSamplingRate, 1, &shutterCommand);
-	DataPacket_type*	shutterDataPacket		= init_DataPacket_type(DL_Waveform_UChar, shutterCommandWaveform, discard_Waveform_type);
+	errChk( OpenScanEngineShutter(&engine->baseClass, 0, errorInfo) ); 
 	
-	SendDataPacket(engine->baseClass.VChanShutter, shutterDataPacket, FALSE);
+Error:
 	
-	return init_FCallReturn_type(0, "", "");   
+	// create out of memory message
+	if (error == UIEOutOfMemory && !*errorInfo)
+		*errorInfo = StrDup("Out of memory");
+	
+	return error;
 }
 
 static void	DimTC_RectRaster (TaskControl_type* taskControl, BOOL dimmed)
@@ -5857,22 +6362,24 @@ static void	DimTC_RectRaster (TaskControl_type* taskControl, BOOL dimmed)
 	
 }
 
-static FCallReturn_type* DataReceivedTC_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+/*
+static int DataReceivedTC_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "");   
+	return 0;   
+}
+*/
+
+static void ErrorTC_RectRaster (TaskControl_type* taskControl, int errorID, char* errorMsg)
+{
+	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	
 }
 
-static void ErrorTC_RectRaster (TaskControl_type* taskControl, char* errorMsg)
+static int ModuleEventHandler_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
-}
-
-static FCallReturn_type* ModuleEventHandler_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
-{
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
-	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }

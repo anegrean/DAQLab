@@ -76,6 +76,19 @@ typedef struct {
 
 } AvailableDAQLabModules_type;
 
+
+AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
+																  // counter always to 0
+	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
+	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
+	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+	//{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }    
+	
+};
+
+//-------------------------------------------------------------------------------------------------
+
 //------------------------------------------------------------------------------------------------
 // 			Predefined DAQLab errors and warnings to be used with DAQLab_Msg function.
 //------------------------------------------------------------------------------------------------
@@ -144,21 +157,6 @@ typedef struct {
 double Ttaskstart; 
 
 
-//------------------------------------------------------------------------------------------------
-//                              AVAILABLE DAQLab MODULES
-//------------------------------------------------------------------------------------------------
-AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
-																  // counter always to 0
-	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
-	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
-	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
-	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
-	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }    
-	
-};
-
-//-------------------------------------------------------------------------------------------------
-
 
 	// DAQLab XML ActiveX server controller handle for DOM XML management
 CAObjHandle							DAQLabCfg_DOMHndl		= 0;
@@ -196,20 +194,23 @@ ListType		DAQLabTCs					= 0;
 	// List elements of VChan_type* type
 ListType		VChannels					= 0;
 
+	// List of HW Master triggers of HWTrigMaster_type*
+ListType		HWTrigMasters				= 0;
+
+	// List of HW Slave triggers of HWTrigSlave_type*	
+ListType		HWTrigSlaves				= 0;
+
 	// Panel handle for the Task Tree Manager 
 int				TaskTreeManagerPanHndl		= 0;
 
+	// Panel handle for VChan Switchboard
+int				VChanSwitchboardPanHndl		= 0;
+
+	// Panel handle for HW Triggers Switchboard
+int				HWTrigSwitchboardPanHndl	= 0;
+
 	// List of Task Tree nodes of TaskTreeNode_type needed to operate the Task Tree Manager 
 ListType		TaskTreeNodes				= 0;
-
-	// List of all available HW trig master names
-ListType		HWTrigMasters				= 0; 
-
-	// List of all available HW trig slave names
-ListType		HWTrigSlaves				= 0; 
-
-
- 
 
 
 
@@ -234,6 +235,14 @@ static UITaskCtrl_type*		DAQLab_AddTaskControllerToUI				(TaskControl_type* task
 static int					DAQLab_RemoveTaskControllerFromUI			(int index);
 
 static void					DAQLab_RedrawTaskControllerUI				(void);
+
+static void 				UpdateVChanSwitchboard	 					(int panHandle, int tableControlID);
+
+static void 				UpdateHWTriggersSwitchboard					(int panHandle, int tableControlID);
+
+int CVICALLBACK 			VChanSwitchboard_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+int CVICALLBACK 			HWTriggersSwitchboard_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static void CVICALLBACK 	DAQLab_TaskMenu_CB 							(int menuBarHndl, int menuItemID, void *callbackData, int panelHndl);
 
@@ -271,16 +280,16 @@ int 						CVICALLBACK TaskTree_CB 					(int panel, int control, int event, void 
 // UI Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type*	ConfigureUITC								(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*	UnconfigureUITC								(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int					ConfigureUITC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int					UnconfigureUITC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void					IterateUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
-static FCallReturn_type*	StartUITC									(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*	DoneUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-static FCallReturn_type*	StoppedUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static int					StartUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int					DoneUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static int					StoppedUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
 static void					DimUITC										(TaskControl_type* taskControl, BOOL dimmed);
 static void					UITCActive									(TaskControl_type* taskControl, BOOL UITCActive);
-static FCallReturn_type* 	ResetUITC 									(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static void				 	ErrorUITC 									(TaskControl_type* taskControl, char* errorMsg);
+static int				 	ResetUITC 									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+static void				 	ErrorUITC 									(TaskControl_type* taskControl, int errorID, char* errorMsg);
 
 
 //==============================================================================
@@ -375,24 +384,17 @@ static int DAQLab_Load (void)
 	errChk ( TasksUI.controllerPanHndl 	= LoadPanel (mainPanHndl, TASKCONTROLLER_UI, TCPan1) );
 	
 		// Framework
-	nullChk ( TasksUI.UItaskCtrls 		= ListCreate(sizeof(UITaskCtrl_type*)) );	// list with UI Task Controllers
-	nullChk ( DAQLabModules   			= ListCreate(sizeof(DAQLabModule_type*)) );	// list with loaded DAQLab modules
-	nullChk ( DAQLabTCs					= ListCreate(sizeof(TaskControl_type*)) );	// list with loaded Task Controllers
-	nullChk ( VChannels		   			= ListCreate(sizeof(VChan_type*)) );		// list with Virtual Channels
+	nullChk( TasksUI.UItaskCtrls 		= ListCreate(sizeof(UITaskCtrl_type*)) );		// list with UI Task Controllers
+	nullChk( DAQLabModules   			= ListCreate(sizeof(DAQLabModule_type*)) );		// list with loaded DAQLab modules
+	nullChk( DAQLabTCs					= ListCreate(sizeof(TaskControl_type*)) );		// list with loaded Task Controllers
+	nullChk( VChannels		   			= ListCreate(sizeof(VChan_type*)) );			// list with Virtual Channels
+	nullChk( HWTrigMasters				= ListCreate(sizeof(HWTrigMaster_type*)) );		// list with Master HW Triggers 
+	nullChk( HWTrigSlaves				= ListCreate(sizeof(HWTrigSlave_type*)) );		// list with Slave HW Triggers
 	
 		// Log panel for task controller execution
 	errChk ( taskLogPanHndl = LoadPanel (mainPanHndl, DAQLAB_UI_DAQLAB, TaskLogPan) );  
 	
-	//----------------------
-	//test lex
-	nullChk ( HWTrigMasters		   		= ListCreate(sizeof(char*)) );		// list with HW Trig masters
-	nullChk ( HWTrigSlaves		   		= ListCreate(sizeof(char*)) );		// list with HW Trig slaves 
 	
-	//--------------------------------------------
-	
-	char* none="None";
-	ListInsertItem(HWTrigMasters,&none,-1);  
-
 	//---------------------------------------------------------------------------------
 	// Adjust Panels
 	//---------------------------------------------------------------------------------
@@ -544,11 +546,7 @@ static int DAQLab_Load (void)
 				ListInsertItem(DAQLabModules, &newModule, END_OF_LIST);
 				// increase module instance counter
 				DAQLabModules_InitFunctions[j].nInstances++;
-					
-				// make sure that the Task Tree is updated
-				if (TaskTreeManagerPanHndl)
-					DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
-					
+				
 				// display module panels if method is defined
 				if (newModule->DisplayPanels)
 					(*newModule->DisplayPanels) (newModule, TRUE);
@@ -565,6 +563,14 @@ static int DAQLab_Load (void)
 	return 0;
 	
 	Error:
+	
+	// cleanup
+	if(TasksUI.UItaskCtrls)		ListDispose(TasksUI.UItaskCtrls);
+	if(DAQLabModules)			ListDispose(DAQLabModules);  
+	if(DAQLabTCs)				ListDispose(DAQLabTCs);  
+	if(VChannels)				ListDispose(VChannels); 
+	if (HWTrigMasters) 			ListDispose(HWTrigMasters);
+	if (HWTrigSlaves) 			ListDispose(HWTrigSlaves);
 	
 	return error;
 	
@@ -723,6 +729,15 @@ static int DAQLab_Close (void)
 	// dispose modules list
 	DAQLabModule_empty (&DAQLabModules);
 	
+	// discard UITCs
+	size_t				nUITCs = ListNumItems(TasksUI.UItaskCtrls);
+	UITaskCtrl_type**   UITCPtr;
+	for (size_t i = 1; i < nUITCs; i++) {
+		UITCPtr = ListGetPtrToItem(TasksUI.UItaskCtrls, i);
+		DAQLab_discard_UITaskCtrl_type(UITCPtr);
+	}
+	ListDispose(TasksUI.UItaskCtrls);
+	
 	// discard Task Controller list
 	ListDispose(DAQLabTCs);
 	
@@ -730,7 +745,11 @@ static int DAQLab_Close (void)
 	if (TaskTreeNodes) ListDispose(TaskTreeNodes);
 	
 	// discard VChans list
-	ListDispose(VChannels);  
+	if (VChannels) ListDispose(VChannels);
+	
+	// discard HW Trigger lists
+	if (HWTrigMasters) ListDispose(HWTrigMasters);
+	if (HWTrigSlaves) ListDispose(HWTrigSlaves);
 	
 	errChk( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) ); 
 	
@@ -851,13 +870,20 @@ BOOL DLRegisterVChan (DAQLabModule_type* mod, VChan_type* VChan)
 {
 	if (!VChan) return FALSE;
 	
+	// check if VChan name is unique
+	char*			VChanName;
+	VChan_type*		existingVChan;
+	existingVChan = DLVChanNameExists((VChanName = GetVChanName(VChan)), 0);
+	OKfree(VChanName);
+	if (existingVChan) return FALSE; // there is already a VChan with the same name
+	
 	// add VChan to framework
 	if (!ListInsertItem(VChannels, &VChan, END_OF_LIST)) return FALSE;
 	// add VChan to module list of VChans
 	if (mod)
 		if (!ListInsertItem(mod->VChans, &VChan, END_OF_LIST)) return FALSE;
 	
-	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
+	UpdateVChanSwitchboard(VChanSwitchboardPanHndl, VChanTab_Switchboard);
 	
 	return TRUE;
 }
@@ -884,7 +910,7 @@ int DLUnregisterVChan (DAQLabModule_type* mod, VChan_type* VChan)
 	// remove VChan from framework list
 	ListRemoveItem(VChannels, 0, DLItemPos);
 	// update UI
-	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
+	UpdateVChanSwitchboard(VChanSwitchboardPanHndl, VChanTab_Switchboard);
 	
 	return TRUE;
 }
@@ -905,7 +931,7 @@ void DLUnregisterModuleVChans (DAQLabModule_type* mod)
 	}
 	ListClear(mod->VChans);
 	// update UI
-	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
+	UpdateVChanSwitchboard(VChanSwitchboardPanHndl, VChanTab_Switchboard);
 }
 
 /// HIFN Checks if a VChan object is present in the DAQLab framework.
@@ -951,9 +977,89 @@ BOOL DLRenameVChan (VChan_type* VChan, char newName[])
 	SetVChanName(VChan, newName);
 	
 	// update UI
-	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
+	UpdateVChanSwitchboard(VChanSwitchboardPanHndl, VChanTab_Switchboard);
 	
 	return TRUE;
+}
+
+BOOL DLRegisterHWTrigMaster (HWTrigMaster_type* master)
+{
+	if (!master) return FALSE;
+	
+	// check if HW Trig Master name is unique
+	char*					masterName;
+	HWTrigMaster_type*		existingMaster;
+	existingMaster = HWTrigMasterNameExists(HWTrigMasters, (masterName = GetHWTrigMasterName(master)), 0);
+	OKfree(masterName);
+	if (existingMaster) return FALSE; // there is already a HW Trig Master with the same name
+	
+	// add master HW trigger to DAQLab framework
+	if (!ListInsertItem(HWTrigMasters, &master, END_OF_LIST)) return FALSE;
+	
+	// update UI
+	if (TaskTreeManagerPanHndl)
+		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+	
+	return TRUE;
+}
+
+BOOL DLUnregisterHWTrigMaster (HWTrigMaster_type* master)
+{
+	size_t 					nMasters = ListNumItems(HWTrigMasters);
+	HWTrigMaster_type**		masterPtr;
+	for (size_t i = 1; i <= nMasters; i++) {
+		masterPtr = ListGetPtrToItem(HWTrigMasters, i);
+		if (*masterPtr == master) {
+			// remove from DAQLab framework
+			ListRemoveItem(HWTrigMasters, 0, i);
+			// disconnect from slaves
+			RemoveHWTrigMasterFromSlaves(master);
+			// update UI
+			if (TaskTreeManagerPanHndl)
+				DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+			
+			return TRUE; // item found and removed
+		}
+		
+	}
+	
+	return FALSE; // item not found
+}
+
+BOOL DLRegisterHWTrigSlave (HWTrigSlave_type* slave)
+{
+	if (!slave) return FALSE;
+	
+	// add slave HW trigger to DAQLab framework
+	if (!ListInsertItem(HWTrigSlaves, &slave, END_OF_LIST)) return FALSE;
+	
+	// update UI
+	if (TaskTreeManagerPanHndl)
+		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+	
+	return TRUE;
+}
+
+BOOL DLUnregisterHWTrigSlave (HWTrigSlave_type* slave)
+{
+	size_t 					nSlaves = ListNumItems(HWTrigSlaves);
+	HWTrigSlave_type**		slavePtr;
+	for (size_t i = 1; i <= nSlaves; i++) {
+		slavePtr = ListGetPtrToItem(HWTrigSlaves, i);
+		if (*slavePtr == slave) {
+			// disconnect slave from master
+			RemoveHWTrigSlaveFromMaster(slave);
+			// remove from DAQLab framework
+			ListRemoveItem(HWTrigSlaves, 0, i);
+			// update UI
+			if (TaskTreeManagerPanHndl)
+				DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+			return TRUE; // item found and removed
+		}
+		
+	}
+	
+	return FALSE; // item not found
 }
 
 void DLMsg(const char* text, BOOL beep)
@@ -1622,9 +1728,6 @@ BOOL DLRemoveTaskControllers (DAQLabModule_type* mod, ListType tcList)
 	if (TaskTreeManagerPanHndl)
 		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 	
-	// update also the Switchboard in case any connections between VChans are broken
-	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
-
 	return TRUE;
 Error:
 	return FALSE;
@@ -1642,9 +1745,6 @@ BOOL DLRemoveTaskController (DAQLabModule_type* mod, TaskControl_type* taskContr
 	// update Task Tree if it is displayed
 	if (TaskTreeManagerPanHndl)
 		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
-	
-	// make sure that also the Switchboard is updated in case any connections between VChans are broken
-	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
 	
 	return TRUE;
 Error:
@@ -1794,6 +1894,389 @@ static void	DAQLab_RedrawTaskControllerUI (void)
 		
 	}
 	
+}
+
+/// HIFN Updates a table control with connections between a given list of VChans.
+static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
+{
+	int		          		nColumns				= 0;
+	int						nRows					= 0;
+	int						nCurrentColumns			= 0;
+	int						nCurrentRows			= 0;
+	int             		nItems;
+	int             		colWidth;
+	int  					colIdx;
+	SourceVChan_type** 		sourceVChanPtr			= NULL;
+	VChan_type**			VChanPtr1				= NULL;
+	SinkVChan_type**		sinkVChanPtr			= NULL;
+	Point           		cell;
+	Rect            		cellRange;
+	BOOL					extraColumn;
+	size_t					nVChans					= ListNumItems(VChannels);
+	size_t					nSinks;
+	char*					VChanName				= NULL;
+	int 					rowLabelWidth;
+	int						maxRowLabelWidth		= 0;
+	
+	if (!panHandle) return; // do nothing if panel is not loaded or list is not initialized
+	if (!VChannels) return;
+	
+	// clear table cell contents
+	GetNumTableRows(panHandle, tableControlID, &nCurrentRows);
+	GetNumTableColumns(panHandle, tableControlID, &nCurrentColumns);
+	cellRange.left 		= 1;
+	cellRange.top		= 1;
+	cellRange.height	= nCurrentRows;
+	cellRange.width		= nCurrentColumns;
+	DeleteTableCellRangeRingItems(panHandle, tableControlID, cellRange, 0, -1);
+	
+	// insert source VChans as rows
+	for (size_t chanIdx = 1; chanIdx <= nVChans; chanIdx++) {
+		sourceVChanPtr = ListGetPtrToItem(VChannels, chanIdx);
+		
+		if (GetVChanDataFlowType(*sourceVChanPtr) != VChan_Source) continue;	// select only Source VChans
+		
+		nRows++;
+		if (nRows > nCurrentRows || !nCurrentRows)
+			InsertTableRows(panHandle, tableControlID, -1, 1, VAL_CELL_RING);
+			
+		// adjust table display
+		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_USE_LABEL_TEXT, 1);
+		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_JUSTIFY, VAL_CENTER_CENTER_JUSTIFIED);
+		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_TEXT, (VChanName = GetVChanName(*sourceVChanPtr)));
+		GetTextDisplaySize(VChanName, VAL_DIALOG_META_FONT, NULL, &rowLabelWidth);
+		if (rowLabelWidth > maxRowLabelWidth) maxRowLabelWidth = rowLabelWidth;
+		OKfree(VChanName);
+			
+		nSinks = GetNSinkVChans(*sourceVChanPtr);
+		// keep track of required number of columns
+		if (nSinks > nColumns) 
+			nColumns = nSinks;
+		
+		// add columns and create combo boxes for the sinks of this source VChan if there are not enough columns already
+		if (nColumns > nCurrentColumns) {
+			InsertTableColumns(panHandle, tableControlID, -1, nColumns - nCurrentColumns, VAL_CELL_RING);
+			nCurrentColumns += nColumns - nCurrentColumns;
+		}
+		
+		
+		// add assigned sink VChans
+		for (size_t idx = 1; idx <= nSinks; idx++) {
+			cell.x = idx;	 // column
+			cell.y = nRows;  // row
+			sinkVChanPtr = ListGetPtrToItem(GetSinkVChanList(*sourceVChanPtr), idx);
+			InsertTableCellRingItem(panHandle, tableControlID, cell, 0, "");    
+			InsertTableCellRingItem(panHandle, tableControlID, cell, 1, (VChanName = GetVChanName(*sinkVChanPtr)));
+			OKfree(VChanName);
+			// select the assigned sink VChan
+			SetTableCellValFromIndex(panHandle, tableControlID, cell, 1); 
+		}
+			
+		// add unassigned sink VChans of the same type
+		extraColumn= FALSE;
+		for (size_t vchanIdx = 1; vchanIdx <= nVChans; vchanIdx++) {
+			VChanPtr1 = ListGetPtrToItem(VChannels, vchanIdx);
+				
+			// select only sinks
+			if (GetVChanDataFlowType(*VChanPtr1) != VChan_Sink) continue;
+				
+			// select only compatible unassigned sinks
+			if (GetSourceVChan((SinkVChan_type*)*VChanPtr1) || !CompatibleVChans(*sourceVChanPtr, (SinkVChan_type*)*VChanPtr1)) continue;
+			
+			// keep track of required number of columns
+			if (nSinks+1 > nColumns) 
+				nColumns = nSinks+1;
+		
+			if (nColumns > nCurrentColumns) {
+				extraColumn = TRUE;
+				InsertTableColumns(panHandle, tableControlID, -1, 1, VAL_CELL_RING);
+				nCurrentColumns += nColumns - nCurrentColumns;
+			}
+			
+			cellRange.top    = nRows;
+			cellRange.left   = 1;
+			cellRange.height = 1; 
+			cellRange.width  = nSinks+1;
+			InsertTableCellRangeRingItem(panHandle, tableControlID, cellRange, -1, (VChanName = GetVChanName(*VChanPtr1)));
+			// add empty selection to extra column and select it
+			InsertTableCellRingItem(panHandle, tableControlID, MakePoint(nSinks+1, nRows), 0, "");
+			SetTableCellValFromIndex(panHandle, tableControlID, MakePoint(nSinks+1, nRows), 0); 
+			OKfree(VChanName);
+		} 
+		
+	}
+	
+	// adjust width of row label column
+	SetCtrlAttribute(panHandle, tableControlID, ATTR_ROW_LABELS_WIDTH, maxRowLabelWidth + 4);
+	
+	// adjust table column width to widest cell
+	for (size_t i = 1; i <= nColumns; i++) {
+		SetColumnWidthToWidestCellContents(panHandle, tableControlID, i);
+		GetTableColumnAttribute(panHandle, tableControlID, i, ATTR_COLUMN_ACTUAL_WIDTH, &colWidth);
+		// set a minimum column width
+		if (colWidth < 50)
+			SetTableColumnAttribute(panHandle, tableControlID, i, ATTR_COLUMN_WIDTH, 50);
+	}
+	
+	// dim ring controls with only empty selection
+	for (size_t i = 1; i <= nRows; i++)
+		for (size_t j = 1; j <= nColumns; j++) {
+			cell.x = j; 
+			cell.y = i;
+			GetNumTableCellRingItems(panHandle, tableControlID, cell, &nItems);
+			if (nItems <= 1) 
+				SetTableCellAttribute(panHandle, tableControlID, cell, ATTR_CELL_DIMMED, 1);
+			else
+				SetTableCellAttribute(panHandle, tableControlID, cell, ATTR_CELL_DIMMED, 0);
+		}
+	
+	// delete extra rows and columns
+	if (nCurrentRows > nRows)
+		DeleteTableRows(panHandle, tableControlID, nRows+1, nCurrentRows - nRows);
+	
+	if (nCurrentColumns > nColumns)
+		DeleteTableColumns(panHandle, tableControlID, nColumns+1, nCurrentColumns - nColumns);
+	
+}
+
+/// HIFN Updates a table control with connections between a given list master and slave HW Triggers.
+static void UpdateHWTriggersSwitchboard (int panHandle, int tableControlID)
+{
+	int		          		nColumns				= 0;
+	int						nRows					= 0;
+	int						nCurrentColumns			= 0;
+	int						nCurrentRows			= 0;
+	int             		nItems;
+	int             		colWidth;
+	int  					colIdx;
+	HWTrigMaster_type** 	masterPtr				= NULL;
+	HWTrigSlave_type**		slavePtr				= NULL;
+	HWTrigSlave_type*		slave					= NULL;
+	Point           		cell;
+	Rect            		cellRange;
+	BOOL					extraColumn;
+	size_t					nMasters				= ListNumItems(HWTrigMasters);
+	size_t					nSlaves					= ListNumItems(HWTrigSlaves);
+	size_t					nConnectedSlaves;
+	char*					itemName				= NULL;
+	int 					rowLabelWidth;
+	int						maxRowLabelWidth		= 0;
+	
+	if (!panHandle) return; // do nothing if panel is not loaded or list is not initialized
+	
+	// clear table cell contents
+	GetNumTableRows(panHandle, tableControlID, &nCurrentRows);
+	GetNumTableColumns(panHandle, tableControlID, &nCurrentColumns);
+	cellRange.left 		= 1;
+	cellRange.top		= 1;
+	cellRange.height	= nCurrentRows;
+	cellRange.width		= nCurrentColumns;
+	DeleteTableCellRangeRingItems(panHandle, tableControlID, cellRange, 0, -1); 
+	
+	// insert HW Trig Master as rows
+	for (size_t masterIdx = 1; masterIdx <= nMasters; masterIdx++) {
+		masterPtr = ListGetPtrToItem(HWTrigMasters, masterIdx);
+		
+		nRows++;
+		if (nRows > nCurrentRows || !nCurrentRows)
+			InsertTableRows(panHandle, tableControlID, -1, 1, VAL_CELL_RING);
+			
+		// adjust table display
+		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_USE_LABEL_TEXT, 1);
+		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_JUSTIFY, VAL_CENTER_CENTER_JUSTIFIED);
+		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_TEXT, (itemName = GetHWTrigMasterName(*masterPtr)));
+		GetTextDisplaySize(itemName, VAL_DIALOG_META_FONT, NULL, &rowLabelWidth);
+		if (rowLabelWidth > maxRowLabelWidth) maxRowLabelWidth = rowLabelWidth;
+		OKfree(itemName);
+			
+		nConnectedSlaves = GetNumHWTrigSlaves(*masterPtr);
+		// keep track of required number of columns
+		if (nConnectedSlaves > nColumns) 
+			nColumns = nConnectedSlaves;
+		
+		// add columns and create combo boxes for the slaves connected to this master if there are not enough columns already
+		if (nColumns > nCurrentColumns) {
+			InsertTableColumns(panHandle, tableControlID, -1, nColumns - nCurrentColumns, VAL_CELL_RING);
+			nCurrentColumns += nColumns - nCurrentColumns;
+		}
+		
+		
+		// add assigned slaves
+		for (size_t idx = 1; idx <= nConnectedSlaves; idx++) {
+			cell.x = idx;	 // column
+			cell.y = nRows;  // row
+			slave = GetHWTrigSlaveFromMaster(*masterPtr, idx);
+			InsertTableCellRingItem(panHandle, tableControlID, cell, 0, "");    
+			InsertTableCellRingItem(panHandle, tableControlID, cell, 1, (itemName = GetHWTrigSlaveName(slave)));
+			OKfree(itemName);
+			// select the assigned HW Trig Slave
+			SetTableCellValFromIndex(panHandle, tableControlID, cell, 1); 
+		}
+			
+		// add unassigned HW Trig Slaves
+		extraColumn= FALSE;
+		for (size_t idx = 1; idx <= nSlaves; idx++) {
+			slavePtr = ListGetPtrToItem(HWTrigSlaves, idx);
+				
+			if (GetHWTrigSlaveMaster(*slavePtr)) continue; // select unassigned slaves
+			
+			// keep track of required number of columns
+			if (nConnectedSlaves+1 > nColumns) 
+				nColumns = nConnectedSlaves+1;
+		
+			if (nColumns > nCurrentColumns) {
+				extraColumn = TRUE;
+				InsertTableColumns(panHandle, tableControlID, -1, 1, VAL_CELL_RING);
+				nCurrentColumns += nColumns - nCurrentColumns;
+			}
+			
+			cellRange.top    = nRows;
+			cellRange.left   = 1;
+			cellRange.height = 1; 
+			cellRange.width  = nConnectedSlaves+1;
+			InsertTableCellRangeRingItem(panHandle, tableControlID, cellRange, -1, (itemName = GetHWTrigSlaveName(*slavePtr)));
+			// add empty selection to extra column and select it
+			InsertTableCellRingItem(panHandle, tableControlID, MakePoint(nConnectedSlaves+1, nRows), 0, "");
+			SetTableCellValFromIndex(panHandle, tableControlID, MakePoint(nConnectedSlaves+1, nRows), 0); 
+			OKfree(itemName);
+		} 
+		
+	}
+	
+	// adjust width of row label column
+	SetCtrlAttribute(panHandle, tableControlID, ATTR_ROW_LABELS_WIDTH, maxRowLabelWidth + 4);
+	
+	// adjust table column width to widest cell
+	for (size_t i = 1; i <= nColumns; i++) {
+		SetColumnWidthToWidestCellContents(panHandle, tableControlID, i);
+		GetTableColumnAttribute(panHandle, tableControlID, i, ATTR_COLUMN_ACTUAL_WIDTH, &colWidth);
+		// set a minimum column width
+		if (colWidth < 50)
+			SetTableColumnAttribute(panHandle, tableControlID, i, ATTR_COLUMN_WIDTH, 50);
+	}
+	
+	// dim ring controls with only empty selection
+	for (size_t i = 1; i <= nRows; i++)
+		for (size_t j = 1; j <= nColumns; j++) {
+			cell.x = j; 
+			cell.y = i;
+			GetNumTableCellRingItems(panHandle, tableControlID, cell, &nItems);
+			if (nItems <= 1) 
+				SetTableCellAttribute(panHandle, tableControlID, cell, ATTR_CELL_DIMMED, 1);
+			else
+				SetTableCellAttribute(panHandle, tableControlID, cell, ATTR_CELL_DIMMED, 0);
+		}
+	
+	// delete extra rows and columns
+	if (nCurrentRows > nRows)
+		DeleteTableRows(panHandle, tableControlID, nRows+1, nCurrentRows - nRows);
+	
+	if (nCurrentColumns > nColumns)
+		DeleteTableColumns(panHandle, tableControlID, nColumns+1, nCurrentColumns - nColumns);
+}
+
+// callback to operate the VChan switchboard
+int CVICALLBACK VChanSwitchboard_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	if (event != EVENT_COMMIT) return 0; // continue only if event is commit
+	
+	// eventData1 - 1-based row index
+	// eventData2 - 1-based column index
+	SourceVChan_type*		sourceVChan;
+	SinkVChan_type*			sinkVChan;
+	char*         			sourceVChanName;
+	char*         			sinkVChanName;
+	int	        			nChars;
+	Point        			cell;
+	
+	// find source VChan from the table row in the list
+	GetTableRowAttribute(panel, control, eventData1, ATTR_LABEL_TEXT_LENGTH, &nChars);
+	sourceVChanName = malloc((nChars+1) * sizeof(char));
+	if (!sourceVChanName) return 0;
+	
+	GetTableRowAttribute(panel, control, eventData1, ATTR_LABEL_TEXT, sourceVChanName);
+	sourceVChan = (SourceVChan_type*)VChanNameExists (VChannels, sourceVChanName, 0);
+	// read in new sink VChan name from the ring control
+	cell.x = eventData2;
+	cell.y = eventData1;
+	GetTableCellValLength(panel, control, cell, &nChars);
+	sinkVChanName = malloc((nChars+1) * sizeof(char));
+	if (!sinkVChanName) return 0;
+	
+	GetTableCellVal(panel, control, cell, sinkVChanName);
+	
+	size_t nSinks = GetNSinkVChans(sourceVChan);
+			
+	// disconnect selected Sink VChan from Source VChan
+	if (nSinks && (eventData2 <= nSinks)) {
+		sinkVChan = GetSinkVChan(sourceVChan, eventData2);
+		VChan_Disconnect((VChan_type*)sinkVChan);
+	}
+		
+	// reconnect new Sink VChan to the Source Vchan
+	if (strcmp(sinkVChanName, "")) {
+		sinkVChan =	(SinkVChan_type*)VChanNameExists(VChannels, sinkVChanName, 0);
+		VChan_Connect(sourceVChan, sinkVChan);
+	}
+			
+	// update table
+	UpdateVChanSwitchboard(panel, control);
+			
+	OKfree(sourceVChanName);
+	OKfree(sinkVChanName);
+	
+	return 0;
+}
+
+int CVICALLBACK HWTriggersSwitchboard_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	if (event != EVENT_COMMIT) return 0; // continue only if event is commit
+	
+	// eventData1 - 1-based row index
+	// eventData2 - 1-based column index
+	HWTrigMaster_type*		master;
+	HWTrigSlave_type*		slave;
+	char*         			slaveName;
+	char*         			masterName;
+	int	        			nChars;
+	Point        			cell;
+	
+	// find Master HW Trigger from the table row in the list
+	GetTableRowAttribute(panel, control, eventData1, ATTR_LABEL_TEXT_LENGTH, &nChars);
+	masterName = malloc((nChars+1) * sizeof(char));
+	if (!masterName) return 0;
+	
+	GetTableRowAttribute(panel, control, eventData1, ATTR_LABEL_TEXT, masterName);
+	master = HWTrigMasterNameExists(HWTrigMasters, masterName, 0);
+	
+	// read in new slave name from the ring control
+	cell.x = eventData2;
+	cell.y = eventData1;
+	GetTableCellValLength(panel, control, cell, &nChars);
+	slaveName = malloc((nChars+1) * sizeof(char));
+	if (!slaveName) return 0;
+	GetTableCellVal(panel, control, cell, slaveName);
+	
+	size_t nSlaves = GetNumHWTrigSlaves(master);
+	
+	// disconnect selected slave from master
+	if (nSlaves && (eventData2 <= nSlaves)) {
+		slave = GetHWTrigSlaveFromMaster(master, eventData2);
+		RemoveHWTrigSlaveFromMaster(slave);
+	}
+	
+	// reconnect new slave to master
+	if (strcmp(slaveName, "")) {
+		slave = HWTrigSlaveNameExists(HWTrigSlaves, slaveName, 0);
+		AddHWTrigSlaveToMaster(master, slave, 0);
+	}
+			
+	// update table
+	UpdateHWTriggersSwitchboard(panel, control);
+	
+	OKfree(masterName);
+	OKfree(slaveName);
+	return 0;
 }
 
 static void CVICALLBACK DAQLab_TaskMenu_CB (int menuBarHndl, int menuItemID, void *callbackData, int panelHndl)
@@ -2268,6 +2751,11 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 	if (!TaskTreeManagerPanHndl) {
 		TaskTreeManagerPanHndl = LoadPanel(parentPanHndl, DAQLAB_UI_DAQLAB, TaskPan);
 		
+		// get VChan Switchboard panel handle
+		GetPanelHandleFromTabPage(TaskTreeManagerPanHndl, TaskPan_Switchboards, 0, &VChanSwitchboardPanHndl);
+		// get HW Triggers Switchboard panel handle
+		GetPanelHandleFromTabPage(TaskTreeManagerPanHndl, TaskPan_Switchboards, 1, &HWTrigSwitchboardPanHndl);
+		
 		// populate execution mode ring control
 		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_ITERATE_BEFORE_SUBTASKS_START, "Before Child Task Controllers Start", TASK_ITERATE_BEFORE_SUBTASKS_START);
 		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_ITERATE_AFTER_SUBTASKS_COMPLETE, "After Child Task Controllers Complete", TASK_ITERATE_AFTER_SUBTASKS_COMPLETE);
@@ -2354,8 +2842,11 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 		AddRecursiveTaskTreeItems(TaskTreeManagerPanHndl, TaskPan_TaskTree, childIdx, tcPtr);
 	}
 	
-	// update Switchboard
-	UpdateSwitchboard(VChannels, TaskTreeManagerPanHndl, TaskPan_Switchboard);
+	// update VChan Switchboard
+	UpdateVChanSwitchboard(VChanSwitchboardPanHndl, VChanTab_Switchboard);
+	
+	// update HWTrigger Switchboard
+	UpdateHWTriggersSwitchboard(HWTrigSwitchboardPanHndl, HWTrigTab_Switchboard);
 	
 	DisplayPanel(TaskTreeManagerPanHndl);
 }
@@ -2406,7 +2897,10 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			
 			if (event == EVENT_COMMIT) {
 				DiscardPanel(TaskTreeManagerPanHndl);
-				TaskTreeManagerPanHndl = 0;
+				TaskTreeManagerPanHndl 		= 0;
+				VChanSwitchboardPanHndl		= 0;
+				HWTrigSwitchboardPanHndl	= 0;
+				
 			}
 			break;
 			
@@ -2545,7 +3039,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 // UI Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type* ConfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ConfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	unsigned int		repeat;
@@ -2575,10 +3069,10 @@ static FCallReturn_type* ConfigureUITC (TaskControl_type* taskControl, BOOL cons
 		SetTaskControlMode(taskControl, TASK_CONTINUOUS);
 	}
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* UnconfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int UnconfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
@@ -2591,7 +3085,7 @@ static FCallReturn_type* UnconfigureUITC (TaskControl_type* taskControl, BOOL co
 	// dim Start button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 1);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
 static void IterateUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
@@ -2604,17 +3098,17 @@ static void IterateUITC	(TaskControl_type* taskControl, size_t currentIteration,
 	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
 }
 
-static FCallReturn_type* StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
 	// change Task Controller name background color from gray (0x00F0F0F0) to green (0x002BD22F)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x002BD22F);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* DoneUITC  (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static int DoneUITC  (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	BOOL				taskControllerMode;
@@ -2649,19 +3143,19 @@ static FCallReturn_type* DoneUITC  (TaskControl_type* taskControl, size_t curren
 	// update iterations display
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, currentIteration);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* ResetUITC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ResetUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, 0);
 	
-	return init_FCallReturn_type(0, "", ""); 
+	return 0; 
 }
 
-static FCallReturn_type* StoppedUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static int StoppedUITC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	BOOL				taskControllerMode;
@@ -2688,7 +3182,7 @@ static FCallReturn_type* StoppedUITC	(TaskControl_type* taskControl, size_t curr
 	// update iterations display
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, currentIteration);
 	
-	return init_FCallReturn_type(0, "", ""); 
+	return 0; 
 }
 
 static void	DimUITC	(TaskControl_type* taskControl, BOOL dimmed)
@@ -2716,7 +3210,7 @@ static void	UITCActive (TaskControl_type* taskControl, BOOL UITCActive)
 	
 }
 
-static void ErrorUITC (TaskControl_type* taskControl, char* errorMsg)
+static void ErrorUITC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	BOOL				taskControllerMode;

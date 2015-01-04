@@ -247,6 +247,7 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 #include "DAQLabUtility.h"
 #include <toolbox.h>
 #include "VChannel.h"
+#include "HWTriggering.h"
 
 #define TASKCONTROLLER_UI		"./Framework/Execution control/UI_TaskController.uir" 
 #define N_TASK_EVENT_QITEMS		1000		// Number of events waiting to be processed by the state machine.
@@ -354,10 +355,10 @@ typedef struct TaskControl 			TaskControl_type;
 //--------------------------------------------------------------------------------
 
 // Called when a Task Controller needs to be configured based on module or device settings. 
-typedef FCallReturn_type* 	(*ConfigureFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag);
+typedef int				 	(*ConfigureFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 // Called when a Task Controller needs to be switched to an unconfigured state which prevents it from being executed.
-typedef FCallReturn_type* 	(*UnconfigureFptr_type) 		(TaskControl_type* taskControl, BOOL const* abortFlag); 
+typedef int				 	(*UnconfigureFptr_type) 		(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called each time a Task Controller performs an iteration of a device or module
 // This function is called in a separate thread from the Task Controller thread. The iteration can be completed either within this function call
@@ -371,16 +372,16 @@ typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t c
 typedef void				(*AbortIterationFptr_type)		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
 
 // Called before the first iteration starts from an INITIAL state.
-typedef FCallReturn_type* 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag); 
+typedef int				 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when device or module must be returned to its initial state (iteration index = 0).
-typedef FCallReturn_type* 	(*ResetFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag); 
+typedef int				 	(*ResetFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called automatically when a finite Task Controller finishes required iterations or a continuous Task Controller is stopped manually.
-typedef FCallReturn_type* 	(*DoneFptr_type) 				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag); 
+typedef int				 	(*DoneFptr_type) 				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a running finite Task Controller is stopped manually, before reaching a DONE state .
-typedef FCallReturn_type* 	(*StoppedFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag); 
+typedef int				 	(*StoppedFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a Task Controller needs to dim or undim certain module controls to allow/prevent user interaction.
 typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimmed); 
@@ -391,13 +392,13 @@ typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimm
 typedef void				(*SetUITCModeFptr_type)			(TaskControl_type* taskControl, BOOL UITCActive);
 
 // Called when Task Controller encounters an error, to continue Task Controller execution, a return from this function is needed.
-typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, char* errorMsg);
+typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 
 // Called when data is placed in a Task Controller Sink VChan.
-typedef FCallReturn_type*	(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+typedef int					(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 // Called for passing custom module or device events that are not handled directly by the Task Controller.
-typedef FCallReturn_type*	(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
+typedef int					(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 // Called after receiving a task control event and eventInfo must be disposed of.
 typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
@@ -435,7 +436,7 @@ void 					discard_TaskControl_type			(TaskControl_type** taskController);
 void					discard_TaskTreeBranch				(TaskControl_type** taskController);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-// Task Controller set/get functions
+// Task Controller Set/Get functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Sets UI resources for Task Controller logging. Multiple Task Controllers may share the same UI logging resources. 
@@ -496,6 +497,7 @@ BOOL					GetTaskControlUITCFlag				(TaskControl_type* taskControl);
 
 	// Returns TRUE if iteration must be stopped
 BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -524,11 +526,6 @@ BOOL					RemoveTaskControllersFromList		(ListType TCList, ListType TCsToBeRemove
 
 	// Returns a unique Task Controller name among a given list of Task Controllers. The naming convention uses a given baseTCName and adds a number to the name.
 char* 					GetUniqueTaskControllerName			(ListType TCList, char baseTCName[]);
-
-//------------------------------------------------------------------------------------------------------------------------------------------------------
-// HW trigger dependencies
-//------------------------------------------------------------------------------------------------------------------------------------------------------
-
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller event posting and execution control functions
@@ -580,7 +577,7 @@ int 					RemoveAllSinkVChans 				(TaskControl_type* taskControl);
 void					DisconnectAllSinkVChans				(TaskControl_type* taskControl);
 
 	// Clears all data packets from all the Sink VChans of a Task Controller
-void					ClearAllSinkVChans					(TaskControl_type* taskControl);
+int						ClearAllSinkVChans					(TaskControl_type* taskControl, char** errorInfo);
 
 
 #ifdef __cplusplus

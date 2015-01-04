@@ -72,26 +72,23 @@ DAQLabModule_type* initalloc_DAQLabModule (DAQLabModule_type* mod, char classNam
 	
 	// DATA
 	
-	mod->className			= StrDup(className);
-	mod->instanceName		= StrDup(instanceName);
-	mod->cfgPanHndl			= 0; 
+	mod->className					= StrDup(className);
+	mod->instanceName				= StrDup(instanceName);
+	mod->cfgPanHndl					= 0; 
 	//init
-	mod->taskControllers	= 0;
-	mod->VChans				= 0;
-	mod->taskControllers	= ListCreate(sizeof(TaskControl_type*));
-	if (!mod->taskControllers) 	goto Error;
-	mod->VChans				= ListCreate(sizeof(VChan_type*));
-	if (!mod->VChans) 			goto Error;
+	mod->taskControllers			= 0;
+	mod->VChans						= 0;
 	
-	
+	if ( !(mod->taskControllers		= ListCreate(sizeof(TaskControl_type*))) ) goto Error;
+	if ( !(mod->VChans				= ListCreate(sizeof(VChan_type*))) ) goto Error;
 	
 	// METHODS
 	
-	mod->Discard		= discard_DAQLabModule;
-	mod->Load			= NULL;
-	mod->LoadCfg		= NULL;
-	mod->SaveCfg		= NULL;
-	mod->DisplayPanels	= NULL;
+	mod->Discard					= discard_DAQLabModule;
+	mod->Load						= NULL;
+	mod->LoadCfg					= NULL;
+	mod->SaveCfg					= NULL;
+	mod->DisplayPanels				= NULL;
 	
 	return mod;
 	
@@ -99,8 +96,9 @@ Error:
 	
 	OKfree(mod->className); 
 	OKfree(mod->instanceName); 
-	if (mod->taskControllers) ListDispose(mod->taskControllers);
-	if (mod->VChans) ListDispose(mod->VChans); 
+	if (mod->taskControllers) 	ListDispose(mod->taskControllers);
+	if (mod->VChans) 			ListDispose(mod->VChans);
+	
 	OKfree(mod); 
 	
 	return NULL;

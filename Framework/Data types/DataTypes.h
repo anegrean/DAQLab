@@ -239,11 +239,14 @@ size_t						GetWaveformNumSamples					(Waveform_type* waveform);
 	// Returns pointer to waveform data.
 void* 						GetWaveformDataPtr 						(Waveform_type* waveform, size_t* nSamples);
 
+	// Returns waveform data type
+WaveformTypes				GetWaveformDataType						(Waveform_type* waveform);
+
 	// Makes a waveform copy
-Waveform_type*				CopyWaveform							(Waveform_type* waveform);
+int							CopyWaveform							(Waveform_type** waveformCopy, Waveform_type* waveform, char** errorInfo);
 
 	// Appends data from one waveform to another. Sampling rate, data type and physical unit must be the same.
-int 						AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_type* waveformToAppend); 
+int 						AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_type* waveformToAppend, char** errorInfo); 
 
 //---------------------------------------------------------------------------------------------------------  
 // Repeated Waveform 

@@ -28,11 +28,11 @@
 #define  TaskLogPan_LogBox                2       /* control type: textBox, callback function: (none) */
 
 #define  TaskPan                          5
-#define  TaskPan_Switchboard              2       /* control type: table, callback function: (none) */
-#define  TaskPan_Plate                    3       /* control type: deco, callback function: (none) */
-#define  TaskPan_TaskTree                 4       /* control type: tree, callback function: TaskTree_CB */
-#define  TaskPan_Close                    5       /* control type: command, callback function: TaskTree_CB */
-#define  TaskPan_ExecMode                 6       /* control type: ring, callback function: TaskTree_CB */
+#define  TaskPan_Plate                    2       /* control type: deco, callback function: (none) */
+#define  TaskPan_TaskTree                 3       /* control type: tree, callback function: TaskTree_CB */
+#define  TaskPan_Close                    4       /* control type: command, callback function: TaskTree_CB */
+#define  TaskPan_ExecMode                 5       /* control type: ring, callback function: TaskTree_CB */
+#define  TaskPan_Switchboards             6       /* control type: tab, callback function: (none) */
 
 #define  TasksPan                         6
 
@@ -40,6 +40,12 @@
 #define  TCDelPan_Plate                   2       /* control type: deco, callback function: (none) */
 #define  TCDelPan_TaskControllers         3       /* control type: listBox, callback function: (none) */
 #define  TCDelPan_DelBTTN                 4       /* control type: command, callback function: DAQLab_DelTaskControllersBTTN_CB */
+
+     /* tab page panel controls */
+#define  HWTrigTab_Switchboard            2       /* control type: table, callback function: HWTriggersSwitchboard_CB */
+
+     /* tab page panel controls */
+#define  VChanTab_Switchboard             2       /* control type: table, callback function: VChanSwitchboard_CB */
 
 
      /* Control Arrays: */
@@ -69,9 +75,11 @@ void CVICALLBACK DAQLab_DisplayTaskManagerMenu_CB(int menubar, int menuItem, voi
 int  CVICALLBACK DAQLab_ManageDAQLabModules_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 void CVICALLBACK DAQLab_ModulesMenu_CB(int menubar, int menuItem, void *callbackData, int panel);
 int  CVICALLBACK DAQLab_TCDelPan_CB(int panel, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK HWTriggersSwitchboard_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 void CVICALLBACK LogPanTaskLogMenu_CB(int menubar, int menuItem, void *callbackData, int panel);
 void CVICALLBACK TaskLogMenuClose_CB(int menubar, int menuItem, void *callbackData, int panel);
 int  CVICALLBACK TaskTree_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK VChanSwitchboard_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 
 #ifdef __cplusplus

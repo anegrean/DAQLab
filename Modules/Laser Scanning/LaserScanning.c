@@ -5031,6 +5031,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 	size_t							nPositionSignalSamples		= 0;
 	int								error						= 0;
 	Waveform_type*					waveformCopy				= NULL;
+	WaveformTypes					waveformType;
 	
 	switch (cal->currentCal) {
 			
@@ -5077,7 +5078,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			// Receive and analyze galvo response signal
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
-			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &errMsg) );
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
 			
 			//get pointer to galvo position signal
 			positionSignal 	= GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples); 
@@ -5187,7 +5188,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			// Receive and analyze galvo response signal
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
-			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &errMsg) );
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
 			
 			//get pointer to galvo position signal
 			positionSignal 	= GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples); 
@@ -5341,7 +5342,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			// Receive and analyze galvo response signal
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
-			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &errMsg) );
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
 			
 			//get pointer to galvo position signal
 			positionSignal 	= GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples); 
@@ -5463,7 +5464,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			// Receive and analyze galvo response signal
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
-			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &errMsg) );
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
 			
 			//get pointer to galvo position signal
 			positionSignal	= GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples); 
@@ -5586,7 +5587,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			// Receive and analyze galvo response signal
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
-			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &errMsg) );
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
 			
 			//get pointer to galvo position signal
 			positionSignal 	= GetWaveformDataPtr (cal->positionWaveform, &nPositionSignalSamples); 

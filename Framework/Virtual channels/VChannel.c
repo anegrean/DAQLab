@@ -99,9 +99,10 @@ struct SinkVChan {
 	DLDataTypes*					dataTypes;				// Array of packet data types of DLDataTypes that the sink may receive.
 	size_t							nDataTypes;				// Number of data types that the Sink VChan supports.
 	double							readTimeout;			// Timeout in [ms] to wait for data to be available in the TSQ.
+	double							writeTimeout;			
 	SourceVChan_type*				sourceVChan;			// SourceVChan attached to this sink.
 	CmtTSQHandle       				tsqHndl; 				// Thread safe queue handle to receive incoming data.
-	double							writeTimeout;
+	
 	
 };
 
@@ -415,7 +416,8 @@ int ReleaseAllDataPackets (SinkVChan_type* sinkVChan, char** errorInfo)
 	char*					errMsg			= NULL;
 	
 	if (GetAllDataPackets (sinkVChan, &dataPackets, &nPackets, &errMsg) < 0) {
-		*errorInfo = FormatMsg(ReleaseAllDataPackets_Err_CouldNotGetDataPackets, "ReleaseAllDataPackets", errMsg);
+		if (errorInfo)
+			*errorInfo = FormatMsg(ReleaseAllDataPackets_Err_CouldNotGetDataPackets, "ReleaseAllDataPackets", errMsg);
 		OKfree(errMsg);
 		return ReleaseAllDataPackets_Err_CouldNotGetDataPackets;
 	}
@@ -554,7 +556,7 @@ Error:
 	return error;
 }
 
-int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, char** errorInfo)
+int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, WaveformTypes* waveformType, char** errorInfo)
 {
 #define		ReceiveWaveform_Err_NoWaveform		-1
 #define		ReceiveWaveform_Err_WrongDataType	-2
@@ -586,17 +588,44 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, char**
 		// check if data packet is of waveform type
 		switch (dataPacketType) {
 			
-			case DL_Waveform_Char:						
+			case DL_Waveform_Char:
+				*waveformType = Waveform_Char;
+				break;
+				
 			case DL_Waveform_UChar:
+				*waveformType = Waveform_UChar;
+				break;
+				
 			case DL_Waveform_Short:
+				*waveformType = Waveform_Short;
+				break;
+				
 			case DL_Waveform_UShort:
+				*waveformType = Waveform_UShort;
+				break;
+				
 			case DL_Waveform_Int:
+				*waveformType = Waveform_Int;
+				break;
+				
 			case DL_Waveform_UInt:
+				*waveformType = Waveform_UInt;
+				break;
+				
 			case DL_Waveform_SSize:
+				*waveformType = Waveform_SSize;
+				break;
+				
 			case DL_Waveform_Size:
+				*waveformType = Waveform_Size;
+				break;
+				
 			case DL_Waveform_Float:
+				*waveformType = Waveform_Float;
+				break;
+				
 			case DL_Waveform_Double:
-				// ok, continue processing the data packet
+				*waveformType = Waveform_Double;
 				break;
 			
 			default:
@@ -772,14 +801,14 @@ size_t GetSinkVChanTSQSize (SinkVChan_type* sinkVChan)
 	return nItems;
 }
 
-void SetSinkVChanWriteTimeout (SinkVChan_type* sinkVChan, double time)
+void SetSinkVChanReadTimeout (SinkVChan_type* sinkVChan, double time)
 {
-	sinkVChan->writeTimeout = time;
+	sinkVChan->readTimeout = time;
 }
 
-double GetSinkVChanWriteTimeout	(SinkVChan_type* sinkVChan)
+double GetSinkVChanReadTimeout	(SinkVChan_type* sinkVChan)
 {
-	return sinkVChan->writeTimeout;
+	return sinkVChan->readTimeout;
 }
 
 void* GetVChanOwner (VChan_type* VChan)

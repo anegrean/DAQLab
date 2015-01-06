@@ -141,9 +141,9 @@ void						SetSinkVChanTSQSize					(SinkVChan_type* sinkVChan, size_t nItems);
 
 size_t						GetSinkVChanTSQSize					(SinkVChan_type* sinkVChan);
 
-	// Time in [ms] to keep on trying to write a data packet to a Sink VChan TSQ		
-void						SetSinkVChanWriteTimeout			(SinkVChan_type* sinkVChan, double time);	
-double						GetSinkVChanWriteTimeout			(SinkVChan_type* sinkVChan);
+	// Time in [ms] to keep on trying to read a data packet from a Sink VChan TSQ		
+void						SetSinkVChanReadTimeout				(SinkVChan_type* sinkVChan, double time);	
+double						GetSinkVChanReadTimeout				(SinkVChan_type* sinkVChan);
 
 void*						GetVChanOwner						(VChan_type* VChan);
 
@@ -174,7 +174,7 @@ int				 			GetDataPacket 						(SinkVChan_type* sinkVChan, DataPacket_type** dat
 	// Receives waveform data from a Sink VChan which is assembled from multiple data packets until a NULL packets is encountered. The function returns the 
 	// dynamically allocated waveform in case there is waveform data or NULL if the first data packet read from the VChan is NULL. On success, the function 
 	// return 0 and negative number plus an error message if it fails.
-int							ReceiveWaveform						(SinkVChan_type* sinkVChan, Waveform_type** waveform, char** errorInfo);
+int							ReceiveWaveform						(SinkVChan_type* sinkVChan, Waveform_type** waveform, WaveformTypes* waveformType, char** errorInfo);
 
 #ifdef __cplusplus
     }

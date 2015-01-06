@@ -494,9 +494,13 @@ typedef struct {
 	double       				sampleRate;    				// Sampling rate in [Hz].
 	uInt64        				nSamples;	    			// Total number of samples to be acquired in case of a finite recording.
 	SinkVChan_type*				nSamplesSinkVChan;			// Used for receiving number of samples to be generated/received with each iteration of the DAQmx task controller.
-	SourceVChan_type*			nSamplesSourceVChan;		// Used for sending number of samples for finite tasks
+															// data packets of DL_UChar, DL_UShort, DL_UInt, DL_ULong and DL_ULongLong types.
+	SourceVChan_type*			nSamplesSourceVChan;		// Used for sending number of samples for finite tasks.
+															// data packets of DL_ULongLong type.
 	SinkVChan_type*				samplingRateSinkVChan;		// Used for receiving sampling rate info with each iteration of the DAQmx task controller.  
+															// data packets of DL_Double, DL_Float types.
 	SourceVChan_type*			samplingRateSourceVChan;	// Used for sending sampling rate info.
+															// data packets of DL_Double type.
 	size_t        				blockSize;     				// Number of samples for reading after which callbacks are called.
 	char*         				sampClkSource; 				// Sample clock source if NULL then OnboardClock is used, otherwise the given clock
 	SampClockEdge_type 			sampClkEdge;   				// Sample clock active edge.
@@ -1042,10 +1046,19 @@ static int 							ClearDAQmxTasks 						(Dev_type* dev);
 static int							StopDAQmxTasks 							(Dev_type* dev, char** errorInfo); 
 	// Checks if all DAQmx Tasks are done
 //static BOOL						DAQmxTasksDone							(Dev_type* dev);
-	// Starts all DAQmx Tasks defined for the device
-	// Note: Tasks that have a HW-trigger defined will start before tasks that do not have any HW-trigger defined. This allows the later type of
-	// tasks to trigger the HW-triggered tasks. If all tasks are started successfully, it returns NULL, otherwise returns a negative value with DAQmx error code and error string combined.
-static int							StartAllDAQmxTasks						(Dev_type* dev, char** errorInfo);
+	// Starts DAQmx Tasks defined for the device
+static int							StartAIDAQmxTask						(Dev_type* dev, char** errorInfo);
+static int CVICALLBACK 				StartAIDAQmxTask_CB 					(void *functionData);
+static int							StartAODAQmxTask						(Dev_type* dev, char** errorInfo);
+static int CVICALLBACK 				StartAODAQmxTask_CB 					(void *functionData);
+static int							StartDIDAQmxTask						(Dev_type* dev, char** errorInfo);
+static int CVICALLBACK 				StartDIDAQmxTask_CB 					(void *functionData);
+static int							StartDODAQmxTask						(Dev_type* dev, char** errorInfo);
+static int CVICALLBACK 				StartDODAQmxTask_CB 					(void *functionData);
+static int							StartCIDAQmxTasks						(Dev_type* dev, char** errorInfo);
+static int CVICALLBACK 				StartCIDAQmxTasks_CB 					(void *functionData);
+static int							StartCODAQmxTasks						(Dev_type* dev, char** errorInfo);
+static int CVICALLBACK 				StartCODAQmxTasks_CB 					(void *functionData);
 
 //---------------------
 // DAQmx task callbacks
@@ -1073,12 +1086,10 @@ int32 CVICALLBACK 					CODAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 st
 // DAQmx module and VChan data exchange
 //-------------------------------------
 	// AO
-FCallReturn_type* 					WriteAODAQmx 							(Dev_type* dev, BOOL* writeBlockFilledFlag, size_t* nSamplesWritten); 
+static int				 			WriteAODAQmx 							(Dev_type* dev, char** errorInfo); 
 
-	// Output buffers
-//static BOOL						AOOutputBufferFilled					(Dev_type* dev);
+	// Output buffers   (remove from here and implement similarly to AO)
 static BOOL							DOOutputBufferFilled					(Dev_type* dev);
-//static FCallReturn_type* 			FillAOOutputBuffer						(Dev_type* dev);
 static FCallReturn_type* 			FillDOOutputBuffer						(Dev_type* dev);
 
 //--------------------------------------------
@@ -2973,9 +2984,11 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			GetCtrlVal(panel, control, &duration);
 			
 			// calculate number of samples
-			dev->AITaskSet->timing->nSamples = (size_t)(dev->AITaskSet->timing->sampleRate * duration);
-			// update display of number of samples
+			dev->AITaskSet->timing->nSamples = (uInt64)(dev->AITaskSet->timing->sampleRate * duration);
+			if (dev->AITaskSet->timing->nSamples < 2) dev->AITaskSet->timing->nSamples = 2; // minimum allowed by DAQmx 
+			// update display of number of samples & duration
 			SetCtrlVal(panel, Set_NSamples, dev->AITaskSet->timing->nSamples); 
+			SetCtrlVal(panel, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);  
 			
 			break;
 			
@@ -3094,9 +3107,11 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			GetCtrlVal(panel, control, &duration);
 			
 			// calculate number of samples
-			dev->AOTaskSet->timing->nSamples = (size_t)(dev->AOTaskSet->timing->sampleRate * duration);
-			// update display of number of samples
+			dev->AOTaskSet->timing->nSamples = (uInt64)(dev->AOTaskSet->timing->sampleRate * duration);
+			if (dev->AOTaskSet->timing->nSamples < 2) dev->AOTaskSet->timing->nSamples = 2; // minimum allowed by DAQmx 
+			// update display of number of samples & duration
 			SetCtrlVal(panel, Set_NSamples, dev->AOTaskSet->timing->nSamples); 
+			SetCtrlVal(panel, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);  
 			
 			break;
 			
@@ -4471,56 +4486,68 @@ Error:
 /// HIFN Updates AI number of samples acquired when task controller is not active.
 static int AInSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
-#define		AInSamples_DataReceivedTC_Err_AITaskMustBeFinite	-1
-	
 	// update only if task controller is not active
 	if (taskActive) return 0;
 	
 	Dev_type*				dev 			= GetTaskControlModuleData(taskControl);
 	int						error			= 0;
+	char*					errMsg			= NULL;
 	DataPacket_type*		dataPacket		= NULL;
-	uInt64**				nSamplesPtrPtr	= NULL;
+	void*					dataPacketData	= NULL;
 	DLDataTypes				dataPacketType;
 	
-	// get data packet
-	errChk( GetDataPacket(sinkVChan, &dataPacket, errorInfo) );
-	// get number of samples, data type of uInt64 (unsigned long long)
-	nSamplesPtrPtr = GetDataPacketPtrToData(dataPacket, &dataPacketType);
+	if (dev->AITaskSet->timing->measMode == MeasFinite) {
+		errChk( GetDataPacket(dev->AITaskSet->timing->nSamplesSinkVChan, &dataPacket, &errMsg) );
+		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
+		switch (dataPacketType) {
+			case DL_UChar:
+				dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned char**)dataPacketData;
+				break;
+				
+			case DL_UShort:
+				dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned short**)dataPacketData;
+				break;
+				
+			case DL_UInt:
+				dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned int**)dataPacketData;
+				break;
+				
+			case DL_ULongLong:
+				dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned long long**)dataPacketData;
+				break;
+		}
+			
+		// update number of samples in dev structure
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples));
+		// update number of samples in UI
+		SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_NSamples, dev->AITaskSet->timing->nSamples);
+		// update duration in UI
+		SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
 	
-	// make sure the AI task is finite, otherwise give error (cannot specify number of samples for a continuous task)
-	if (dev->AITaskSet->timing->measMode == MeasCont) {
-		*errorInfo = FormatMsg(AInSamples_DataReceivedTC_Err_AITaskMustBeFinite, "AInSamples_DataReceivedTC", "Number of samples cannot be specified for continuous AI tasks");
-		goto Error;
-	}
+		// cleanup
+		ReleaseDataPacket(&dataPacket);
 	
-	// get number of samples, data type of uInt64 (unsigned long long)
-	dev->AITaskSet->timing->nSamples = **nSamplesPtrPtr;
+	} else
+		// n Samples cannot be used for continuous tasks, empty Sink VChan if there are any elements
+		ReleaseAllDataPackets(dev->AITaskSet->timing->nSamplesSinkVChan, NULL);
 	
-	// update number of samples in dev structure
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples));
-	// update number of samples in UI
-	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_NSamples, dev->AITaskSet->timing->nSamples);
-	// update duration in UI
-	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
-	
-	// cleanup
-	ReleaseDataPacket(&dataPacket);
 	
 	return 0;
 
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	*errorInfo = FormatMsg(error, "AInSamples_DataReceivedTC", errMsg);
-	OKfree(errMsg);
 	
 	// fall through
 Error:
 	
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
+	
+	*errorInfo = FormatMsg(error, "AInSamples_DataReceivedTC", errMsg);
+	OKfree(errMsg);
 	
 	return error;
 
@@ -4534,20 +4561,28 @@ static int AISamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	
 	Dev_type*				dev 				= GetTaskControlModuleData(taskControl);
 	int						error				= 0;
+	char*					errMsg				= NULL;
 	DataPacket_type*		dataPacket			= NULL;
-	double**				samplingRatePtrPtr	= NULL;
+	void*					dataPacketData		= NULL;
 	DLDataTypes				dataPacketType;
 	
 	// get data packet
-	errChk( GetDataPacket(sinkVChan, &dataPacket, errorInfo) );
+	errChk( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
 	// get number of samples, data type of uInt64 (unsigned long long)
-	samplingRatePtrPtr = GetDataPacketPtrToData(dataPacket, &dataPacketType);
+	dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
 	
-	// get sampling rate, data type of double
-	dev->AITaskSet->timing->sampleRate = **samplingRatePtrPtr;
+	switch (dataPacketType) {
+		case DL_Float:
+			dev->AITaskSet->timing->sampleRate = (double)**(float**)dataPacketData;
+			break;
+				
+		case DL_Double:
+			dev->AITaskSet->timing->sampleRate = **(double**)dataPacketData;
+			break;
+	}
 	
 	// update sampling rate in dev structure
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate));
+	DAQmxErrChk(DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate));
 	// update sampling rate in UI
 	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AITaskSet->timing->sampleRate);
 	// update duration in UI
@@ -4561,16 +4596,17 @@ static int AISamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	*errorInfo = FormatMsg(error, "AISamplingRate_DataReceivedTC", errMsg);
-	OKfree(errMsg);
 	
 	// fall through
 Error:
 	
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
+	
+	*errorInfo = FormatMsg(error, "AISamplingRate_DataReceivedTC", errMsg);
+	OKfree(errMsg);
 	
 	return error;
 }
@@ -4578,50 +4614,60 @@ Error:
 /// HIFN Updates AO number of samples acquired when task controller is not active.
 static int AOnSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
-#define		AOnSamples_DataReceivedTC_Err_AOTaskMustBeFinite	-1
-	
 	// update only if task controller is not active
 	if (taskActive) return 0;
 	
 	Dev_type*				dev 			= GetTaskControlModuleData(taskControl);
 	int						error			= 0;
+	char*					errMsg			= NULL;
 	DataPacket_type*		dataPacket		= NULL;
-	uInt64**				nSamplesPtrPtr	= NULL;
+	void*					dataPacketData	= NULL;
 	DLDataTypes				dataPacketType;
 	
-	// get data packet
-	errChk( GetDataPacket(sinkVChan, &dataPacket, errorInfo) );
-	// get number of samples, data type of uInt64 (unsigned long long)
-	nSamplesPtrPtr = GetDataPacketPtrToData(dataPacket, &dataPacketType);
+	if (dev->AOTaskSet->timing->measMode == MeasFinite) {
+		errChk( GetDataPacket(dev->AOTaskSet->timing->nSamplesSinkVChan, &dataPacket, &errMsg) );
+		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
+		switch (dataPacketType) {
+			case DL_UChar:
+				dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned char**)dataPacketData;
+				break;
+				
+			case DL_UShort:
+				dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned short**)dataPacketData;
+				break;
+				
+			case DL_UInt:
+				dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned int**)dataPacketData;
+				break;
+				
+			case DL_ULongLong:
+				dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned long long**)dataPacketData;
+				break;
+		}
+			
+		// update number of samples in dev structure
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AOTaskSet->timing->nSamples));
+		// adjust output buffer size to match the number of samples to be generated   
+		DAQmxErrChk (DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples));
+		// update number of samples in UI
+		SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_NSamples, dev->AOTaskSet->timing->nSamples);
+		// update duration in UI
+		SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
 	
-	// make sure the AO task is finite, otherwise give error (cannot specify number of samples for a continuous task)
-	if (dev->AOTaskSet->timing->measMode == MeasCont) {
-		*errorInfo = FormatMsg(AOnSamples_DataReceivedTC_Err_AOTaskMustBeFinite, "AOnSamples_DataReceivedTC", "Number of samples cannot be specified for continuous AO tasks");
-		goto Error;
-	}
+		// cleanup
+		ReleaseDataPacket(&dataPacket);
 	
-	// get number of samples, data type of uInt64 (unsigned long long)
-	dev->AOTaskSet->timing->nSamples = **nSamplesPtrPtr;
-	
-	// update number of samples in dev structure
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AOTaskSet->timing->nSamples));
-	// update number of samples in UI
-	SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_NSamples, dev->AOTaskSet->timing->nSamples);
-	// update duration in UI
-	SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
-	
-	// cleanup
-	ReleaseDataPacket(&dataPacket);
+	} else
+		// n Samples cannot be used for continuous tasks, empty Sink VChan if there are any elements
+		ReleaseAllDataPackets(dev->AOTaskSet->timing->nSamplesSinkVChan, NULL);
 	
 	return 0;
 
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	*errorInfo = FormatMsg(error, "AOnSamples_DataReceivedTC", errMsg);
-	OKfree(errMsg);
 	
 	// fall through
 Error:
@@ -4629,6 +4675,8 @@ Error:
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
 	
+	*errorInfo = FormatMsg(error, "AOnSamples_DataReceivedTC", errMsg);
+	OKfree(errMsg);
 	return error;
 }
 
@@ -4640,17 +4688,25 @@ static int AOSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	
 	Dev_type*				dev 				= GetTaskControlModuleData(taskControl);
 	int						error				= 0;
+	char*					errMsg				= NULL;
 	DataPacket_type*		dataPacket			= NULL;
-	double**				samplingRatePtrPtr	= NULL;
+	void*					dataPacketData		= NULL;
 	DLDataTypes				dataPacketType;
 	
 	// get data packet
-	errChk( GetDataPacket(sinkVChan, &dataPacket, errorInfo) );
+	errChk( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
 	// get number of samples, data type of uInt64 (unsigned long long)
-	samplingRatePtrPtr = GetDataPacketPtrToData(dataPacket, &dataPacketType);
+	dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
 	
-	// get sampling rate, data type of double
-	dev->AOTaskSet->timing->sampleRate = **samplingRatePtrPtr;
+	switch (dataPacketType) {
+		case DL_Float:
+			dev->AOTaskSet->timing->sampleRate = (double)**(float**)dataPacketData;
+			break;
+				
+		case DL_Double:
+			dev->AOTaskSet->timing->sampleRate = **(double**)dataPacketData;
+			break;
+	}
 	
 	// update sampling rate in dev structure
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AOTaskSet->timing->sampleRate));
@@ -4667,23 +4723,21 @@ static int AOSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	*errorInfo = FormatMsg(error, "AOSamplingRate_DataReceivedTC", errMsg);
-	OKfree(errMsg);
 	
 	// fall through
 Error:
 	
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
-	
+	*errorInfo = FormatMsg(error, "AOSamplingRate_DataReceivedTC", errMsg);
+	OKfree(errMsg);
 	return error;
 }
 
 static int AO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
-
 	Dev_type*						dev					= GetTaskControlModuleData(taskControl);
 	ChanSet_type*					chan				= GetVChanOwner((VChan_type*)sinkVChan);
 	int								error				= 0;
@@ -4820,12 +4874,10 @@ static int CO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 {
 	
 	Dev_type*			dev					= GetTaskControlModuleData(taskControl);
-	unsigned int		nSamples;
 	int					error				= 0;
 	char*				errMsg				= NULL;
 	DataPacket_type**	dataPackets			= NULL;
 	size_t				nPackets			= 0;
-	size_t				nElem;
 	DLDataTypes			dataPacketType;  
 	PulseTrain_type*    pulseTrain;
 	
@@ -9204,6 +9256,467 @@ Error:
 	return StopDAQmxTasks_Err_StoppingTasks;
 }
 
+static int StartAIDAQmxTask (Dev_type* dev, char** errorInfo)
+{
+	int 	error 										= 0;
+	char	CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
+	
+	// launch AI task in a new thread if it exists
+	if (!dev->AITaskSet) return 0;
+	
+	if ((error = CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAIDAQmxTask_CB, dev, NULL)) < 0) goto CmtError;
+	
+	return 0;
+	
+CmtError:
+	
+	CmtGetErrorMessage (error, CmtErrMsgBuffer);
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "StartAIDAQmxTask", CmtErrMsgBuffer);   
+	return error;
+}
+							  
+int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
+{
+	Dev_type*			dev				= functionData;
+	char*				errMsg			= NULL;
+	int					error			= 0;
+	int*				nActiveTasksPtr	= NULL;	// Keeps track of the number of DAQmx tasks that must still complete
+												// before a task controller iteration is considered to be complete
+	DataPacket_type*	dataPacket		= NULL;
+	void*				dataPacketData	= NULL;
+	DLDataTypes			dataPacketType;
+	uInt64*				nSamplesPtr		= NULL;
+	double*				samplingRatePtr	= NULL;
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Receive task settings data
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	//----------
+	// N samples
+	//----------
+	if (dev->AITaskSet->timing->measMode == MeasFinite) {
+		if (IsVChanConnected((VChan_type*)dev->AITaskSet->timing->nSamplesSinkVChan)) {
+			errChk( GetDataPacket(dev->AITaskSet->timing->nSamplesSinkVChan, &dataPacket, &errMsg) );
+			dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
+			switch (dataPacketType) {
+				case DL_UChar:
+					dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned char**)dataPacketData;
+					break;
+				case DL_UShort:
+					dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned short**)dataPacketData;
+					break;
+				case DL_UInt:
+					dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned int**)dataPacketData;
+					break;
+				case DL_ULongLong:
+					dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned long long**)dataPacketData;
+					break;
+			}
+			
+			// update number of samples in dev structure
+			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples));
+			// update number of samples in UI
+			SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_NSamples, dev->AITaskSet->timing->nSamples);
+			// update duration in UI
+			SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
+	
+			// cleanup
+			ReleaseDataPacket(&dataPacket);
+		}
+	} else
+		// n samples cannot be used for continuous tasks, empty Sink VChan if there are any elements
+		ReleaseAllDataPackets(dev->AITaskSet->timing->nSamplesSinkVChan, NULL);
+	
+	//--------------
+	// Sampling rate
+	//--------------
+	if (IsVChanConnected((VChan_type*)dev->AITaskSet->timing->samplingRateSinkVChan)) { 
+		errChk( GetDataPacket(dev->AITaskSet->timing->samplingRateSinkVChan, &dataPacket, &errMsg) );
+		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
+		
+		switch (dataPacketType) {
+			case DL_Float:
+				dev->AITaskSet->timing->sampleRate = (double)**(float**)dataPacketData;
+				break;
+				
+			case DL_Double:
+				dev->AITaskSet->timing->sampleRate = **(double**)dataPacketData;
+				break;
+		}
+		
+		// update sampling rate in dev structure
+		DAQmxErrChk(DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate));
+		// update sampling rate in UI
+		SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AITaskSet->timing->sampleRate);
+		// update duration in UI
+		SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
+		// cleanup
+		ReleaseDataPacket(&dataPacket);
+	}
+	
+											
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Send task settings data
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	//----------
+	// N samples
+	//----------
+	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+	*nSamplesPtr = dev->AITaskSet->timing->nSamples;
+	dataPacket = init_DataPacket_type(DL_ULongLong, nSamplesPtr, NULL);
+	errChk(SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, dataPacket, FALSE, &errMsg));
+	
+	//--------------
+	// Sampling rate
+	//--------------
+	nullChk( samplingRatePtr = malloc(sizeof(double)) );
+	*samplingRatePtr = dev->AITaskSet->timing->sampleRate;
+	dataPacket = init_DataPacket_type(DL_Double, samplingRatePtr, NULL);
+	errChk(SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, dataPacket, FALSE, &errMsg));
+	
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Start task as a function of HW trigger dependencies
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	errChk(WaitForHWTrigArmedSlaves(dev->AITaskSet->HWTrigMaster, &errMsg));
+	
+	DAQmxErrChk(DAQmxTaskControl(dev->AITaskSet->taskHndl, DAQmx_Val_Task_Start));
+	
+	errChk(SetHWTrigSlaveArmedStatus(dev->AITaskSet->HWTrigSlave, &errMsg));
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Count active task
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	// get active tasks counter handle
+	if ((error = CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr)) < 0) {
+		errMsg = FormatMsg(error, "IterateTC", "Could not obtain TSV handle");
+		goto Error;
+	}
+	
+	// count active task
+	(*nActiveTasksPtr)++;
+	
+	// release active tasks counter handle
+	if ((error=CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
+		errMsg = FormatMsg(error, "IterateTC", "Could not release TSV handle"); 
+		goto Error;
+	}
+	
+	return 0;
+	
+DAQmxError:
+	
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	// fall through
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = FormatMsg(error, "StartAIDAQmxTask_CB", "Out of memory");
+	
+	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
+	OKfree(errMsg);
+	return 0;
+
+}
+
+static int StartAODAQmxTask (Dev_type* dev, char** errorInfo)
+{
+	int 	error 										= 0;
+	char	CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
+	
+	// launch AO task in a new thread if it exists
+	if (!dev->AOTaskSet) return 0;
+	
+	if ((error = CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAODAQmxTask_CB, dev, NULL)) < 0) goto CmtError;
+	
+	return 0;
+	
+CmtError:
+	
+	CmtGetErrorMessage (error, CmtErrMsgBuffer);
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "StartAODAQmxTask", CmtErrMsgBuffer);   
+	return error;
+	
+}
+
+int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
+{
+#define StartAODAQmxTask_CB_Err_NumberOfReceivedSamplesNotTheSameAsTask		-1
+	Dev_type*			dev						= functionData;
+	char*				errMsg					= NULL;
+	int					error					= 0;
+	int*				nActiveTasksPtr			= NULL;	// Keeps track of the number of DAQmx tasks that must still complete
+												// before a task controller iteration is considered to be complete
+	DataPacket_type*	dataPacket				= NULL;
+	void*				dataPacketData			= NULL;
+	DLDataTypes			dataPacketType;
+	uInt64*				nSamplesPtr				= NULL;
+	double*				samplingRatePtr			= NULL;
+	Waveform_type*		AOWaveform				= NULL;
+	float64*			AOData 					= NULL;
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Receive task settings data
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	//----------
+	// N samples
+	//----------
+	if (dev->AOTaskSet->timing->measMode == MeasFinite) {
+		if (IsVChanConnected((VChan_type*)dev->AOTaskSet->timing->nSamplesSinkVChan)) {
+			errChk( GetDataPacket(dev->AOTaskSet->timing->nSamplesSinkVChan, &dataPacket, &errMsg) );
+			dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
+			switch (dataPacketType) {
+				case DL_UChar:
+					dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned char**)dataPacketData;
+					break;
+				case DL_UShort:
+					dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned short**)dataPacketData;
+					break;
+				case DL_UInt:
+					dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned int**)dataPacketData;
+					break;
+				case DL_ULongLong:
+					dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned long long**)dataPacketData;
+					break;
+			}
+			
+			// update number of samples in dev structure
+			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AOTaskSet->timing->nSamples));
+			// update number of samples in UI
+			SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_NSamples, dev->AOTaskSet->timing->nSamples);
+			// update duration in UI
+			SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
+	
+			// cleanup
+			ReleaseDataPacket(&dataPacket);
+		}
+	} else
+		// n samples cannot be used for continuous tasks, empty Sink VChan if there are any elements
+		ReleaseAllDataPackets(dev->AOTaskSet->timing->nSamplesSinkVChan, NULL);
+	
+	//--------------
+	// Sampling rate
+	//--------------
+	if (IsVChanConnected((VChan_type*)dev->AOTaskSet->timing->samplingRateSinkVChan)) { 
+		errChk( GetDataPacket(dev->AOTaskSet->timing->samplingRateSinkVChan, &dataPacket, &errMsg) );
+		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
+		
+		switch (dataPacketType) {
+			case DL_Float:
+				dev->AOTaskSet->timing->sampleRate = (double)**(float**)dataPacketData;
+				break;
+				
+			case DL_Double:
+				dev->AOTaskSet->timing->sampleRate = **(double**)dataPacketData;
+				break;
+		}
+		
+		// update sampling rate in dev structure
+		DAQmxErrChk(DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AOTaskSet->timing->sampleRate));
+		// update sampling rate in UI
+		SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AOTaskSet->timing->sampleRate);
+		// update duration in UI
+		SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
+		// cleanup
+		ReleaseDataPacket(&dataPacket);
+	}
+	
+											
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Send task settings data
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	//----------
+	// N samples
+	//----------
+	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+	*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
+	dataPacket = init_DataPacket_type(DL_ULongLong, nSamplesPtr, NULL);
+	errChk(SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, dataPacket, FALSE, &errMsg));
+	
+	//--------------
+	// Sampling rate
+	//--------------
+	nullChk( samplingRatePtr = malloc(sizeof(double)) );
+	*samplingRatePtr = dev->AOTaskSet->timing->sampleRate;
+	dataPacket = init_DataPacket_type(DL_Double, samplingRatePtr, NULL);
+	errChk(SendDataPacket(dev->AOTaskSet->timing->samplingRateSourceVChan, dataPacket, FALSE, &errMsg));
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Fill output buffer
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	switch (dev->AOTaskSet->timing->measMode) {
+			
+		case MeasFinite:
+			
+			// adjust output buffer size to match the number of samples to be generated   
+			DAQmxErrChk( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples) );
+			
+			// fill buffer with waveform data
+			// note: only waveform are allowed in this mode
+			size_t				nChannels 		= ListNumItems(dev->AOTaskSet->chanSet);
+			ChanSet_type** 		chanSetPtr;
+			size_t				nUsedAOChannels	= 0;
+			void*				waveformData;
+			size_t				nWaveformSamples;
+			WaveformTypes		waveformType;
+			
+			for (size_t i = 1; i <= nChannels; i++) {
+				chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+				if ((*chanSetPtr)->onDemand) continue;
+				nUsedAOChannels++;
+				
+				// allocate memory to generate samples
+				nullChk( AOData = realloc(AOData, nUsedAOChannels * dev->AOTaskSet->timing->nSamples * sizeof(float64)) ); 
+			
+				// receive waform data, if data is not waveform, error occurs
+				errChk( ReceiveWaveform((*chanSetPtr)->sinkVChan, &AOWaveform, &waveformType, &errMsg) );
+				waveformData = GetWaveformDataPtr(AOWaveform, &nWaveformSamples); 
+				
+				// check if number of samples in the waveform is equal to the number of samples set for the task
+				if (nWaveformSamples != dev->AOTaskSet->timing->nSamples) {
+					error = StartAODAQmxTask_CB_Err_NumberOfReceivedSamplesNotTheSameAsTask;
+					errMsg = FormatMsg(error, "", "Number of received samples for finite AO is not the same as the number of samples set for the AO task");
+					goto Error;
+				}
+				
+				// copy data (only these two data types are used)
+				switch (waveformType) {
+					case Waveform_Double:
+						memcpy(AOData + ((nUsedAOChannels-1) * dev->AOTaskSet->timing->nSamples), waveformData, dev->AOTaskSet->timing->nSamples * sizeof(float64));
+						break;
+						
+					case Waveform_Float:
+						float* floatWaveformData = waveformData;
+						for (size_t j = 0; j < dev->AOTaskSet->timing->nSamples; j++)
+							*(AOData + ((nUsedAOChannels-1)*dev->AOTaskSet->timing->nSamples) + j) = (float64) floatWaveformData[j];
+						break;
+						
+				}
+			}
+			// write samples to AO buffer
+			int	nSamplesWritten;
+			DAQmxErrChk( DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, AOData, &nSamplesWritten, NULL) );
+			// cleanup
+			OKfree(AOData);
+			break;
+			
+		case MeasCont:
+			
+			// clear streaming data structure
+			discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
+			dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
+			// output buffer is twice the writeblock, thus write two writeblocks
+			errChk( WriteAODAQmx(dev, &errMsg) );
+			errChk( WriteAODAQmx(dev, &errMsg) );
+			
+			break;
+	}
+									
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Start task as a function of HW trigger dependencies
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	errChk(WaitForHWTrigArmedSlaves(dev->AOTaskSet->HWTrigMaster, &errMsg));
+	
+	DAQmxErrChk(DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Start));
+	
+	errChk(SetHWTrigSlaveArmedStatus(dev->AOTaskSet->HWTrigSlave, &errMsg));
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Count active task
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	// get active tasks counter handle
+	if ((error = CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr)) < 0) {
+		errMsg = FormatMsg(error, "IterateTC", "Could not obtain TSV handle");
+		goto Error;
+	}
+	
+	// count active task
+	(*nActiveTasksPtr)++;
+	
+	// release active tasks counter handle
+	if ((error=CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
+		errMsg = FormatMsg(error, "IterateTC", "Could not release TSV handle"); 
+		goto Error;
+	}
+	
+	return 0;
+	
+DAQmxError:
+	
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	// fall through
+	
+Error:
+	
+	// cleanup
+	OKfree(AOData);
+	discard_Waveform_type(&AOWaveform);
+	
+	if (!errMsg)
+		errMsg = FormatMsg(error, "StartAODAQmxTask_CB", "Out of memory");
+	
+	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
+	OKfree(errMsg);
+	return 0;
+	
+}
+
+static int StartDIDAQmxTask (Dev_type* dev, char** errorInfo)
+{
+	return 0;	
+}
+
+int CVICALLBACK StartDIDAQmxTask_CB (void *functionData)
+{
+	return 0;	
+}
+
+static int StartDODAQmxTask (Dev_type* dev, char** errorInfo)
+{
+	return 0;	
+}
+
+int CVICALLBACK StartDODAQmxTask_CB (void *functionData)
+{
+	return 0;	
+}
+
+static int StartCIDAQmxTasks (Dev_type* dev, char** errorInfo)
+{
+	return 0;	
+}
+
+int CVICALLBACK StartCIDAQmxTasks_CB (void *functionData)
+{
+	return 0;	
+}
+
+static int StartCODAQmxTasks (Dev_type* dev, char** errorInfo)
+{
+	return 0;	
+}
+
+int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
+{
+	return 0;	
+}
+
 static int ConfigDAQmxDevice (Dev_type* dev, char** errorInfo)
 {
 	int		error		= 0;
@@ -9447,7 +9960,6 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	
 	int 				error 			= 0;
 	ChanSet_type** 		chanSetPtrPtr;
-	//FCallReturn_type*	fCallReturn		= NULL;
 	
 	if (!dev->AOTaskSet) return 0; 		// do nothing
 	
@@ -9552,8 +10064,19 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	// disable AO regeneration
 	DAQmxSetWriteAttribute (dev->AOTaskSet->taskHndl, DAQmx_Write_RegenMode, DAQmx_Val_DoNotAllowRegen);
 	
-	// adjust output buffer size to be twice (even multiple) the blocksize
-	DAQmxErrChk (DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, 2 * dev->AOTaskSet->timing->blockSize));
+	
+	switch (dev->AOTaskSet->timing->measMode) {
+		case MeasFinite:
+			// adjust output buffer size to match the number of samples to be generated   
+			DAQmxErrChk ( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples) );
+			break;
+			
+		case MeasCont:
+			// adjust output buffer size to be twice (even multiple) the blocksize
+			DAQmxErrChk ( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, 2 * dev->AOTaskSet->timing->blockSize));
+			break;
+	}
+	
 	
 	//----------------------
 	// Configure AO triggers
@@ -9615,8 +10138,9 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	//----------------------
 	// Add AO Task callbacks
 	//----------------------
-	// register AO data request callback 
-	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev)); 
+	// register AO data request callback if task is continuous
+	if (dev->AOTaskSet->timing->measMode == MeasCont)
+		DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev)); 
 	// register AO task done event callback
 	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
@@ -10301,32 +10825,30 @@ DAQmxError:
 	return error;
 }
 
-/// HIFN Attempts to write a writeblock number of samples to the AO task. If there are fewer samples to write than writeblock they are written to the buffer and writeBlockFilledFlag is False.
-/// HIFN If there are enough samples than writeblockFilledFlag is set to True.
-/// HIRET NULL if there is no error and FCallReturn_type* data in case of error. 
-FCallReturn_type* WriteAODAQmx (Dev_type* dev, BOOL* writeBlockFilledFlag, size_t* nSamplesWritten) 
+/// HIFN Writes writeblock number of samples to the AO task.
+static int WriteAODAQmx (Dev_type* dev, char** errorInfo) 
 {
-	DataPacket_type* 		dataPacket;
+#define	WriteAODAQmx_Err_WaitingForDataTimeout		-1
+#define WriteAODAQmx_Err_DataTypeNotSupported		-2
+	
+	DataPacket_type* 		dataPacket									= NULL;
 	DLDataTypes				dataPacketType;
-	void*					dataPacketData;
+	void*					dataPacketData								= NULL;
 	double*					waveformData								= NULL;
+	float*					floatWaveformData							= NULL;
 	WriteAOData_type*    	data            							= dev->AOTaskSet->writeAOData;
 	size_t          		queue_items;
 	size_t          		ncopies;                								// number of datapacket copies to fill at least a writeblock size
-	int						itemsRead;
 	double					nRepeats									= 1;
 	int             		error           							= 0;
+	char*					errMsg										= NULL;
 	float64*        		tmpbuff;
-	FCallReturn_type*		fCallReturn									= NULL;
-	size_t					nSamples;
 	CmtTSQHandle			tsqID;
 	char* 					DAQmxErrMsg									= NULL;
 	char					CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
 	int 					buffsize;
-	
-	// assume that each output channel has at least data->writeblock elements
-	*writeBlockFilledFlag 	= TRUE;
-	*nSamplesWritten 		= 0;
+	int						itemsRead;
+	int						nSamplesWritten;
 	
 	// cycle over channels
 	for (int i = 0; i < data->numchan; i++) {
@@ -10338,13 +10860,14 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev, BOOL* writeBlockFilledFlag, size_
 				
 				// try to get a non-NULL data packet from queue 
 				do { 
-					CmtErrChk( itemsRead = CmtReadTSQData (tsqID, &dataPacket, 1, 0, 0) );
+					CmtErrChk( itemsRead = CmtReadTSQData (tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
 				} while (!dataPacket && itemsRead);
 				
-				// if there are no more data packets, then skip this channel
+				// if timeout occured and no data packet was read, generate error
 				if (!itemsRead) {
-					*writeBlockFilledFlag = FALSE;				// there is not enough data for this channel 
-					break;
+					error = WriteAODAQmx_Err_WaitingForDataTimeout;
+					errMsg = FormatMsg(error, "WriteAODAQmx", "Waiting for AO data timed out");
+					goto Error;
 				}
 				
 				// copy data packet to datain
@@ -10352,16 +10875,42 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev, BOOL* writeBlockFilledFlag, size_
 				switch (dataPacketType) {
 					case DL_Waveform_Double:
 						waveformData = GetWaveformDataPtr(*(Waveform_type**)dataPacketData, &data->datain_size[i]);
+						data->datain[i] = malloc (data->datain_size[i] * sizeof(float64));
+						memcpy(data->datain[i], waveformData, data->datain_size[i] * sizeof(float64));
+						nRepeats = 1;
+						break;
+						
+					case DL_Waveform_Float:
+						floatWaveformData = GetWaveformDataPtr(*(Waveform_type**)dataPacketData, &data->datain_size[i]);
+						data->datain[i] = malloc (data->datain_size[i] * sizeof(float64));
+						// transform float data to double data
+						for (size_t j = 0; j < data->datain_size[i]; j++)
+							data->datain[i][j] = (double) floatWaveformData[j];
 						nRepeats = 1;
 						break;
 						
 					case DL_RepeatedWaveform_Double:
 						waveformData = GetRepeatedWaveformDataPtr(*(RepeatedWaveform_type**)dataPacketData, &data->datain_size[i]);
+						data->datain[i] = malloc (data->datain_size[i] * sizeof(float64));
+						memcpy(data->datain[i], waveformData, data->datain_size[i] * sizeof(float64));
 						nRepeats = GetRepeatedWaveformRepeats(*(RepeatedWaveform_type**)dataPacketData);
 						break;
+					
+					case DL_RepeatedWaveform_Float:
+						floatWaveformData = GetRepeatedWaveformDataPtr(*(RepeatedWaveform_type**)dataPacketData, &data->datain_size[i]);
+						data->datain[i] = malloc (data->datain_size[i] * sizeof(float64));
+						// transform float data to double data
+						for (size_t j = 0; j < data->datain_size[i]; j++)
+							data->datain[i][j] = (double) floatWaveformData[j];
+						nRepeats = GetRepeatedWaveformRepeats(*(RepeatedWaveform_type**)dataPacketData);
+						break;
+						
+					default:
+						error = WriteAODAQmx_Err_DataTypeNotSupported;
+						errMsg = FormatMsg(error, "WriteAODAQmx", "Data type not supported");
+						goto Error;
 				}
-				data->datain[i] = malloc (data->datain_size[i] * sizeof(float64));
-				memcpy(data->datain[i], waveformData, data->datain_size[i] * sizeof(float64));
+				
 				
 				// copy repeats
 				if (nRepeats) {
@@ -10441,57 +10990,52 @@ FCallReturn_type* WriteAODAQmx (Dev_type* dev, BOOL* writeBlockFilledFlag, size_
 		}
 	}
 	
-	
-	if (*writeBlockFilledFlag) nSamples = data->writeblock;
-	else {
-		// determine the minimum number of samples available for all channels that can be written
-		nSamples = data->databuff_size[0];
-		for (size_t i = 1; i < data->numchan; i++)
-			if (data->databuff_size[i] < nSamples) nSamples = data->databuff_size[i];
-	}
-	
-	// do nothing if there are no available samples
-	if (!nSamples) return NULL;
-	
 	// build dataout from buffers and at the same time, update elements left in the buffers
 	for (size_t i = 0; i < data->numchan; i++) {
 		// build dataout with one writeblock from databuff
-		memcpy(data->dataout + i * nSamples, data->databuff[i], nSamples * sizeof(float64));
+		memcpy(data->dataout + i * data->writeblock, data->databuff[i], data->writeblock * sizeof(float64));
 		// keep remaining data
-		tmpbuff = malloc ((data->databuff_size[i] - nSamples) * sizeof(float64));
-		memcpy(tmpbuff, data->databuff[i] + nSamples, (data->databuff_size[i] - nSamples) * sizeof(float64)); 
+		tmpbuff = malloc ((data->databuff_size[i] - data->writeblock) * sizeof(float64));
+		memcpy(tmpbuff, data->databuff[i] + data->writeblock, (data->databuff_size[i] - data->writeblock) * sizeof(float64)); 
 		// clean buffer and restore remaining data
 		OKfree(data->databuff[i]);
 		data->databuff[i] = tmpbuff;
 		// update number of elements in databuff[i]
-		data->databuff_size[i] -= nSamples;
+		data->databuff_size[i] -= data->writeblock;
 	}
 	
-	if (dev->AOTaskSet->taskHndl)
-		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, nSamples, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, nSamplesWritten, NULL));
-	else {
-		*nSamplesWritten 		= 0;
-		*writeBlockFilledFlag   = 0;
-	}
-	 
-	return NULL; // no error
+	DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
+	
+	return 0; // no error
 	
 DAQmxError:
 	
 	buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
 	DAQmxErrMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(DAQmxErrMsg, buffsize+1);
-	fCallReturn = init_FCallReturn_type(error, "WriteAODAQmx", DAQmxErrMsg);
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "WriteAODAQmx", DAQmxErrMsg);
 	OKfree(DAQmxErrMsg);
-	ClearDAQmxTasks(dev);
-	return fCallReturn;
+	ReleaseDataPacket(&dataPacket);
+	return error;
 	
 CmtError:
 	
 	CmtGetErrorMessage (error, CmtErrMsgBuffer);
-	fCallReturn = init_FCallReturn_type(error, "WriteAODAQmx", CmtErrMsgBuffer);   
-	ClearDAQmxTasks(dev);
-	return fCallReturn;
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "WriteAODAQmx", CmtErrMsgBuffer); 
+	ReleaseDataPacket(&dataPacket);
+	return error;
+	
+Error:
+	
+	if (errorInfo)
+		*errorInfo = errMsg;
+	else
+		OKfree(errMsg);
+	
+	ReleaseDataPacket(&dataPacket);
+	return error;
 }
 
 
@@ -10756,6 +11300,7 @@ static BOOL	DAQmxTasksDone(Dev_type* dev)
 }
 */
 
+/*
 static int StartAllDAQmxTasks (Dev_type* dev, char** errorInfo)
 {
 #define	StartAllDAQmxTasks_Err_OutOfMem		-1
@@ -11029,27 +11574,24 @@ Error:
 	
 }
 
-/*   wrong approach
+*/
+
 static BOOL	AOOutputBufferFilled (Dev_type* dev)
 {
 	BOOL				AOFilledFlag;
 	unsigned int		nSamples;
 	
-	if (dev->AOTaskSet) {
-		DAQmxGetWriteAttribute(dev->AOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples); 
-		if (!nSamples) AOFilledFlag = TRUE;													 // no more space in the buffer, buffer filled
-		else 
-			if (dev->AOTaskSet->timing->measMode == MeasCont) AOFilledFlag = FALSE;			 // if continuous mode and there is space in the buffer, then buffer is not filled
-				else
-					if (dev->AOTaskSet->timing->nSamples == 2*dev->AOTaskSet->timing->blockSize - nSamples)  AOFilledFlag = TRUE; // otherwise if finite and the number of samples is exactly as requested, then buffer is considered filled.
-						else AOFilledFlag = FALSE;
-	} else
-		AOFilledFlag = TRUE;   // buffer considered filled if there is no AO task.
+	DAQmxGetWriteAttribute(dev->AOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples); 
+	if (!nSamples) AOFilledFlag = TRUE;													 // no more space in the buffer, buffer filled
+	else 
+		if (dev->AOTaskSet->timing->measMode == MeasCont) AOFilledFlag = FALSE;			 // if continuous mode and there is space in the buffer, then buffer is not filled
+			else
+				if (dev->AOTaskSet->timing->nSamples == 2*dev->AOTaskSet->timing->blockSize - nSamples)  AOFilledFlag = TRUE; // otherwise if finite and the number of samples is exactly as requested, then buffer is considered filled.
+					else AOFilledFlag = FALSE;
 	
  	return AOFilledFlag;
 }
 
-*/
 static BOOL	DOOutputBufferFilled (Dev_type* dev)
 {
 	BOOL				DOFilledFlag;
@@ -11065,33 +11607,6 @@ static BOOL	DOOutputBufferFilled (Dev_type* dev)
 	
  	return DOFilledFlag;
 }
-
-/* wrong approach
-static FCallReturn_type* FillAOOutputBuffer(Dev_type* dev) 
-{
-	FCallReturn_type*	fCallReturn		= NULL;
-	unsigned int		nSamples;
-	
-	// NOTE: make sure that AO task is reserved at this point
-	
-	if (!dev->AOTaskSet || !dev->AOTaskSet->taskHndl) return NULL; // no analog output buffers  
-	
-	DAQmxGetWriteAttribute(dev->AOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);
-	// try to fill buffer completely, i.e. the buffer has twice the blocksize number of samples
-	if(nSamples) // if there is space in the buffer
-		if ((fCallReturn = WriteAODAQmx(dev))) goto Error;
-	// check again if buffer is filled
-	DAQmxGetWriteAttribute(dev->AOTaskSet->taskHndl, DAQmx_Write_SpaceAvail, &nSamples);					
-	if(nSamples) // if there is space in the buffer
-		if ((fCallReturn = WriteAODAQmx(dev))) goto Error;
-					
-	return NULL; // no error
-	
-Error:
-	
-	return fCallReturn;
-}
-*/
 
 static FCallReturn_type* FillDOOutputBuffer(Dev_type* dev) 
 {
@@ -11315,18 +11830,18 @@ Error:
 int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
 	Dev_type*			dev 					= callbackData;
-	FCallReturn_type*	fCallReturn				= NULL; 
-	BOOL				writeBlockFilledFlag;
-	size_t				nSamplesWritten;
+	int					error					= 0;
+	char*				errMsg					= NULL;
 	
-	// this is called back every number of samples that is set, even if write WriteAODAQmx is called whenever data is available 
-	fCallReturn = WriteAODAQmx(dev, &writeBlockFilledFlag, &nSamplesWritten);
+	// this is called back every number of samples that is set
+	errChk( WriteAODAQmx(dev, &errMsg) );
 		
-	if (fCallReturn) { 
-		TaskControlIterationDone(dev->taskController, fCallReturn->retVal, fCallReturn->errorInfo, FALSE);
-		discard_FCallReturn_type(&fCallReturn);
-	}
-		
+	return 0;
+	
+Error:
+	
+	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
+	OKfree(errMsg);
 	return 0;
 }
 
@@ -11502,15 +12017,48 @@ static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 
 static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
-	Dev_type*		dev		= GetTaskControlModuleData(taskControl);
-	char*			errMsg	= NULL;
-	int				error	= 0;
+	Dev_type*		dev				= GetTaskControlModuleData(taskControl);
+	char*			errMsg			= NULL;
+	int				error			= 0;
+	int*			nActiveTasksPtr	= NULL;	// Keeps track of the number of DAQmx tasks that must still complete
+											// before a task controller iteration is considered to be complete
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
 	
-	// start all DAQmx tasks (at this point, output tasks have their buffers filled with data)
-	errChk( StartAllDAQmxTasks(dev, &errMsg) );
+	//----------------------------------------
+	// Reset active tasks counter  
+	//----------------------------------------
+	
+	// get active tasks counter handle
+	if ((error = CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr)) < 0) {
+		errMsg = FormatMsg(error, "IterateTC", "Could not obtain TSV handle");
+		goto Error;
+	}
+	
+	*nActiveTasksPtr = 0;
+	
+	// release active tasks counter handle
+	if ((error=CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
+		errMsg = FormatMsg(error, "IterateTC", "Could not release TSV handle"); 
+		goto Error;
+	}
+	
+	//----------------------------------------
+	// Launch DAQmx tasks
+	//----------------------------------------
+		// AI
+	errChk( StartAIDAQmxTask(dev, &errMsg) );
+		// AO
+	errChk( StartAODAQmxTask(dev, &errMsg) );
+		// DI
+	errChk( StartDIDAQmxTask(dev, &errMsg) );
+		// DO
+	errChk( StartDODAQmxTask(dev, &errMsg) );
+		// CI
+	errChk( StartCIDAQmxTasks(dev, &errMsg) );
+		// CO
+	errChk( StartCODAQmxTasks(dev, &errMsg) );
 		
 	return; // no error
 	

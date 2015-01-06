@@ -178,9 +178,9 @@ static struct TasksUI_ {									// UI data container for Task Controllers
 	int			menuID_Manage;
 	int			menuItem_Add;
 	int			menuItem_Delete;
-	ListType	UItaskCtrls;							// UI Task Controllers of UITaskCtrl_type*   
+	ListType	UItaskCtrls;								// UI Task Controllers of UITaskCtrl_type*   
 	
-} 				TasksUI						= {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+} 				TasksUI						= {0, 0, 0, 0, 0, 0, 0, 0, 0};
 	
 	// List of modules loaded in the framework. Modules inherit from DAQLabModule_type 
 	// List of DAQLabModule_type* type
@@ -287,7 +287,7 @@ static int					StartUITC									(TaskControl_type* taskControl, BOOL const* abo
 static int					DoneUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
 static int					StoppedUITC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
 static void					DimUITC										(TaskControl_type* taskControl, BOOL dimmed);
-static void					UITCActive									(TaskControl_type* taskControl, BOOL UITCActive);
+static void					UITCActive									(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetUITC 									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorUITC 									(TaskControl_type* taskControl, int errorID, char* errorMsg);
 
@@ -1934,7 +1934,7 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 	for (size_t chanIdx = 1; chanIdx <= nVChans; chanIdx++) {
 		sourceVChanPtr = ListGetPtrToItem(VChannels, chanIdx);
 		
-		if (GetVChanDataFlowType(*sourceVChanPtr) != VChan_Source) continue;	// select only Source VChans
+		if (GetVChanDataFlowType((VChan_type*)*sourceVChanPtr) != VChan_Source) continue;	// select only Source VChans
 		
 		nRows++;
 		if (nRows > nCurrentRows || !nCurrentRows)
@@ -1943,7 +1943,7 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 		// adjust table display
 		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_USE_LABEL_TEXT, 1);
 		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_JUSTIFY, VAL_CENTER_CENTER_JUSTIFIED);
-		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_TEXT, (VChanName = GetVChanName(*sourceVChanPtr)));
+		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_TEXT, (VChanName = GetVChanName((VChan_type*)*sourceVChanPtr)));
 		GetTextDisplaySize(VChanName, VAL_DIALOG_META_FONT, NULL, &rowLabelWidth);
 		if (rowLabelWidth > maxRowLabelWidth) maxRowLabelWidth = rowLabelWidth;
 		OKfree(VChanName);
@@ -1966,7 +1966,7 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 			cell.y = nRows;  // row
 			sinkVChanPtr = ListGetPtrToItem(GetSinkVChanList(*sourceVChanPtr), idx);
 			InsertTableCellRingItem(panHandle, tableControlID, cell, 0, "");    
-			InsertTableCellRingItem(panHandle, tableControlID, cell, 1, (VChanName = GetVChanName(*sinkVChanPtr)));
+			InsertTableCellRingItem(panHandle, tableControlID, cell, 1, (VChanName = GetVChanName((VChan_type*)*sinkVChanPtr)));
 			OKfree(VChanName);
 			// select the assigned sink VChan
 			SetTableCellValFromIndex(panHandle, tableControlID, cell, 1); 
@@ -3194,11 +3194,11 @@ static void	DimUITC	(TaskControl_type* taskControl, BOOL dimmed)
 		SetPanelAttribute(controllerUIDataPtr->panHndl, ATTR_DIMMED, dimmed);
 }
 
-static void	UITCActive (TaskControl_type* taskControl, BOOL UITCActive)
+static void	UITCActive (TaskControl_type* taskControl, BOOL UITCActiveFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
-	if (UITCActive) {
+	if (UITCActiveFlag) {
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 0);
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);

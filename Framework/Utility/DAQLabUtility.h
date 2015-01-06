@@ -44,7 +44,7 @@ FCallReturn_type*	init_FCallReturn_type			(int valFCall, const char errorOrigin[
 void				discard_FCallReturn_type		(FCallReturn_type** fCallReturnPtr);
 
 // Formats error and warning messages ( errors: msgID < 0, message: msgID = 0, warning: msgID > 0 )
-char* 				FormatMsg 							(int messageID, const char messageOrigin[], const char message[]);
+char* 				FormatMsg 							(int messageID, char messageOrigin[], char message[]);
 
 #ifdef __cplusplus
     }

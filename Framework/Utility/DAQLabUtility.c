@@ -67,7 +67,7 @@ void discard_FCallReturn_type (FCallReturn_type** fCallReturnPtr)
 }
 
 
-char* FormatMsg (int messageID, const char messageOrigin[], const char message[])
+char* FormatMsg (int messageID, char messageOrigin[], char message[])
 {
 	size_t	nChars;
 	char*   msg			= NULL;

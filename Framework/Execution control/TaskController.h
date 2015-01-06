@@ -389,7 +389,7 @@ typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimm
 // Called when an UITC has a parent Task Controller attached to or detached from it, in the former case the UITC functioning as a simple Task Controller
 // without the possibility for the user to control the Task execution. This function must dim/undim UITC controls that prevent/allow the user to control
 // the task execution.
-typedef void				(*SetUITCModeFptr_type)			(TaskControl_type* taskControl, BOOL UITCActive);
+typedef void				(*SetUITCModeFptr_type)			(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 
 // Called when Task Controller encounters an error, to continue Task Controller execution, a return from this function is needed.
 typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, int errorID, char errorMsg[]);

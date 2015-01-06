@@ -24,7 +24,6 @@
 
 //==============================================================================
 // Constants
-#define OKfree(ptr) if (ptr) { free(ptr); ptr = NULL; } 
 #define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto Error; else 
 	// maximum number of characters to represent a double precision number
 #define MAX_DOUBLE_NCHARS							30
@@ -3034,7 +3033,7 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 					
 					for (size_t i = 1; i <= nActiveCal; i++) {
 						activeCalPtr = ListGetPtrToItem(activeNRGCal->baseClass.lsModule->activeCal, i);
-						if (*activeCalPtr == activeNRGCal) {
+						if (*activeCalPtr == (ActiveScanAxisCal_type*)activeNRGCal) {
 							// remove list item
 							ListRemoveItem(activeNRGCal->baseClass.lsModule->activeCal, 0, i);
 							// discard active calibration data structure

@@ -215,7 +215,7 @@ int AddHWTrigSlaveToMaster (HWTrigMaster_type* master, HWTrigSlave_type* slave, 
 	// generate slave armed event handles
 	size_t					nSlaves 	= ListNumItems(master->slaves);
 	HWTrigSlave_type**   	slavePtr;
-	master->slaveArmedHndls = realloc(master->slaveArmedHndls, nSlaves * sizeof(HANDLE WINAPI));
+	master->slaveArmedHndls = realloc(master->slaveArmedHndls, nSlaves * sizeof(HANDLE));
 	for (size_t i = 0; i < nSlaves; i++) {
 		slavePtr = ListGetPtrToItem(master->slaves, i+1);
 		master->slaveArmedHndls[i] = (*slavePtr)->armed;
@@ -238,7 +238,7 @@ void RemoveHWTrigSlaveFromMaster (HWTrigSlave_type* slave)
 		if (*slavePtr == slave) {
 			ListRemoveItem(slaveList, 0, i);
 			// update slave armed event handles from master
-			slave->master->slaveArmedHndls = realloc(slave->master->slaveArmedHndls, (nSlaves-1) * sizeof(HANDLE WINAPI));
+			slave->master->slaveArmedHndls = realloc(slave->master->slaveArmedHndls, (nSlaves-1) * sizeof(HANDLE));
 			for (size_t j = 0; j < nSlaves-1; j++) {
 				slavePtr = ListGetPtrToItem(slaveList, j+1);
 				slave->master->slaveArmedHndls[j] = (*slavePtr)->armed;

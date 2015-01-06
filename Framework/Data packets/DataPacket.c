@@ -64,7 +64,7 @@ DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void* data, Discard
 	// create counter to keep track of how many sinks still need this data packet
 	CmtNewTSV(sizeof(int), &dataPacket->ctr);
 	// set counter to 1
-	int* 	ctrTSVptr;
+	int* 	ctrTSVptr = NULL;
 	
 	CmtGetTSVPtr(dataPacket->ctr, &ctrTSVptr);
 	*ctrTSVptr = 1;

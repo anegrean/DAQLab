@@ -19,30 +19,6 @@
 //==============================================================================
 // Types
 
-//---------------------------------------------------------------------------------
-	// Predefined DAQLabModule errors and warnings to be used with DAQLabModule_Msg function.
-	//
-	// DAQLabModule_Msg is a function with variable arguments and types which depend on
-	// the particular warning or error message. When calling this function with a 
-	// certain error code from below, pass in the additional parameters with 
-	// required data type.
-	//
-typedef enum _DAQLabModuleMessageID {
-												// parameter types (data1, data2, data3, data4)
-	// errors									// to pass in DAQLab_Msg
-	DAQLABMODULES_MSG_ERR_CFG_SAME_XML_MODULE_NAMES,		// char* module name
-	DAQLABMODULES_MSG_ERR_ACTIVEXML,						// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info
-	
-	// warnings									
-	DAQLABMODULES_MSG_WARN_MODULE_CFG_NOT_FOUND,			// CAObjHandle* object handle, HRESULT* error code, ERRORINFO* additional error info 
-	
-	// success
-	DAQLABMODULES_MSG_OK_MODULE_CFG_LOADED					// char* module name
-
-} DAQLabModuleMessageID;
-//----------------------------------------------------------------------------------
-
-
 //==============================================================================
 // Constants
 
@@ -51,8 +27,6 @@ typedef enum _DAQLabModuleMessageID {
 
 //==============================================================================
 // Static functions
-
-static void 	DAQLabModule_Msg 				(DAQLabModuleMessageID msgID, void* data1, void* data2, void* data3, void* data4);
 
 
 //==============================================================================
@@ -131,58 +105,10 @@ void DAQLabModule_empty	(ListType* modules)
 		modPtrPtr = ListGetPtrToItem(*modules, i);
 		// call discard method specific to each module
 		(*(*modPtrPtr)->Discard)(modPtrPtr);
+		// remove module from list
+		ListRemoveItem(*modules, 0, i);
 	}
 	
 	ListDispose(*modules);
 	*modules = 0;
-}
-
-/// HIFN Displays predefined error and warning messages in the main workspace log panel.
-/// HIPAR msgID/ If required, pass in additional data to format the message.
-static void DAQLabModule_Msg (DAQLabModuleMessageID msgID, void* data1, void* data2, void* data3, void* data4)
-{
-	char buff[1000]="";
-	char buffCA[1000]="";
-	
-	switch (msgID) {
-		
-		case DAQLABMODULES_MSG_OK_MODULE_CFG_LOADED:
-			
-			DLMsg("Module ", 0);
-			DLMsg((char*)data1, 0);
-			DLMsg(" configuration loaded.\n\n", 0);
-
-			break;
-		
-		case DAQLABMODULES_MSG_WARN_MODULE_CFG_NOT_FOUND:
-			
-			DLMsg("Warning: Could not find ", 1);
-			DLMsg((char*)data1, 0);
-			DLMsg(" configuration. \n\n", 0);
-			
-			break;
-			
-		case DAQLABMODULES_MSG_ERR_CFG_SAME_XML_MODULE_NAMES:
-			Fmt(buff, "Error: Multiple identical module XML names \"%s\" are not allowed. \n\n", (char*)data1);
-			DLMsg(buff, 1);
-			
-			break;
-			
-		case DAQLABMODULES_MSG_ERR_ACTIVEXML:
-			
-			CA_GetAutomationErrorString(*(HRESULT*)data2, buffCA, sizeof(buffCA));
-			DLMsg(buffCA, 1);
-			DLMsg("\n", 0);
-			// additional error info
-			if (*(HRESULT*)data2 == DISP_E_EXCEPTION) {
-				CA_DisplayErrorInfo(*(CAObjHandle*)data1, NULL, *(HRESULT*)data2, (ERRORINFO*)data3); 
-				DLMsg("\n\n", 0);
-			} else
-				DLMsg("\n", 0);
-			
-			break;
-			
-	}
-	
-	
 }

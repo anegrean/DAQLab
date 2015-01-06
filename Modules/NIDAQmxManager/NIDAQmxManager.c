@@ -2953,9 +2953,12 @@ static void	discard_AIAOTaskSet_type (AIAOTaskSet_type** taskSetPtr)
 // UI callback to adjust AI task settings
 static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	Dev_type*			dev 			= callbackData;
-	char*				errMsg			= NULL;
-	int					error			= 0;
+	Dev_type*			dev 				= callbackData;
+	char*				errMsg				= NULL;
+	int					error				= 0;
+	uInt64*				nSamplesPtr			= NULL;
+	double*				samplingRatePtr		= NULL;
+	DataPacket_type*	dataPacket			= NULL; 
 
 	if (event != EVENT_COMMIT) return 0;
 	
@@ -2966,7 +2969,13 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			GetCtrlVal(panel, control, &dev->AITaskSet->timing->sampleRate);   // read in [kHz]
 			dev->AITaskSet->timing->sampleRate *= 1000; 					   // transform to [Hz]
 			// adjust duration display
-			SetCtrlVal(panel, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);   
+			SetCtrlVal(panel, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
+			
+			// send sampling rate
+			nullChk( samplingRatePtr = malloc(sizeof(double)) );
+			*samplingRatePtr = dev->AITaskSet->timing->sampleRate;
+			nullChk( dataPacket = init_DataPacket_type(DL_Double, samplingRatePtr, NULL) );
+			errChk( SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, dataPacket, FALSE, &errMsg) );
 			
 			break;
 			
@@ -2975,6 +2984,12 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			GetCtrlVal(panel, control, &dev->AITaskSet->timing->nSamples);
 			// adjust duration display
 			SetCtrlVal(panel, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
+			
+			// send number of samples
+			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+			*nSamplesPtr = dev->AITaskSet->timing->nSamples;
+			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, nSamplesPtr, NULL) );
+			errChk( SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, dataPacket, FALSE, &errMsg) );
 			
 			break;
 			
@@ -2988,7 +3003,13 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			if (dev->AITaskSet->timing->nSamples < 2) dev->AITaskSet->timing->nSamples = 2; // minimum allowed by DAQmx 
 			// update display of number of samples & duration
 			SetCtrlVal(panel, Set_NSamples, dev->AITaskSet->timing->nSamples); 
-			SetCtrlVal(panel, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);  
+			SetCtrlVal(panel, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate); 
+			
+			// send number of samples
+			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+			*nSamplesPtr = dev->AITaskSet->timing->nSamples;
+			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, nSamplesPtr, NULL) );
+			errChk( SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, dataPacket, FALSE, &errMsg) );
 			
 			break;
 			
@@ -3002,6 +3023,18 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			unsigned int measMode;
 			GetCtrlVal(panel, control, &measMode);
 			dev->AITaskSet->timing->measMode = measMode;
+			
+			switch (dev->AITaskSet->timing->measMode) {
+				case MeasFinite:
+					SetCtrlAttribute(panel, Set_Duration, ATTR_DIMMED, 0);
+					SetCtrlAttribute(panel, Set_NSamples, ATTR_DIMMED, 0); 
+					break;
+					
+				case MeasCont:
+					SetCtrlAttribute(panel, Set_Duration, ATTR_DIMMED, 1);
+					SetCtrlAttribute(panel, Set_NSamples, ATTR_DIMMED, 1); 
+					break;
+			}
 			break;
 	}
 	
@@ -3012,8 +3045,16 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 	
 Error:
 	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
+	// cleanup
+	OKfree(nSamplesPtr);
+	OKfree(samplingRatePtr);
+	discard_DataPacket_type(&dataPacket); 
+	
+	if (errMsg) {
+		DLMsg(errMsg, 1);
+		OKfree(errMsg);
+	} else
+		DLMsg("Out of memory", 1);
 	
 	return 0;
 }
@@ -3076,9 +3117,12 @@ Error:
 // UI callback to adjust AO task settings
 static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	Dev_type*			dev 			= callbackData;
-	char*				errMsg			= NULL;
-	int					error			= 0;
+	Dev_type*			dev 				= callbackData;
+	char*				errMsg				= NULL;
+	int					error				= 0;
+	uInt64*				nSamplesPtr			= NULL;
+	double*				samplingRatePtr		= NULL;
+	DataPacket_type*	dataPacket			= NULL; 
 	
 	if (event != EVENT_COMMIT) return 0;
 	
@@ -3091,6 +3135,12 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			// adjust duration display
 			SetCtrlVal(panel, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
 			
+			// send sampling rate
+			nullChk( samplingRatePtr = malloc(sizeof(double)) );
+			*samplingRatePtr = dev->AOTaskSet->timing->sampleRate;
+			nullChk( dataPacket = init_DataPacket_type(DL_Double, samplingRatePtr, NULL) );
+			errChk( SendDataPacket(dev->AOTaskSet->timing->samplingRateSourceVChan, dataPacket, FALSE, &errMsg) );
+			
 			break;
 			
 		case Set_NSamples:
@@ -3098,6 +3148,12 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			GetCtrlVal(panel, control, &dev->AOTaskSet->timing->nSamples);
 			// adjust duration display
 			SetCtrlVal(panel, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
+			
+			// send number of samples
+			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+			*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
+			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, nSamplesPtr, NULL) );
+			errChk( SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, dataPacket, FALSE, &errMsg) );
 			
 			break;
 			
@@ -3111,7 +3167,13 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			if (dev->AOTaskSet->timing->nSamples < 2) dev->AOTaskSet->timing->nSamples = 2; // minimum allowed by DAQmx 
 			// update display of number of samples & duration
 			SetCtrlVal(panel, Set_NSamples, dev->AOTaskSet->timing->nSamples); 
-			SetCtrlVal(panel, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);  
+			SetCtrlVal(panel, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate); 
+			
+			// send number of samples
+			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+			*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
+			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, nSamplesPtr, NULL) );
+			errChk( SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, dataPacket, FALSE, &errMsg) );
 			
 			break;
 			
@@ -3125,6 +3187,19 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			unsigned int measMode;
 			GetCtrlVal(panel, control, &measMode);
 			dev->AOTaskSet->timing->measMode = measMode;
+			
+			switch (dev->AOTaskSet->timing->measMode) {
+				case MeasFinite:
+					SetCtrlAttribute(panel, Set_Duration, ATTR_DIMMED, 0);
+					SetCtrlAttribute(panel, Set_NSamples, ATTR_DIMMED, 0); 
+					break;
+					
+				case MeasCont:
+					SetCtrlAttribute(panel, Set_Duration, ATTR_DIMMED, 1);
+					SetCtrlAttribute(panel, Set_NSamples, ATTR_DIMMED, 1); 
+					break;
+			}
+			
 			break;
 	}
 	
@@ -3135,8 +3210,16 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 	
 Error:
 	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
+	// cleanup
+	OKfree(nSamplesPtr);
+	OKfree(samplingRatePtr);
+	discard_DataPacket_type(&dataPacket); 
+	
+	if (errMsg) {
+		DLMsg(errMsg, 1);
+		OKfree(errMsg);
+	} else
+		DLMsg("Out of memory", 1);
 	
 	return 0;
 }
@@ -4584,7 +4667,7 @@ static int AISamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	// update sampling rate in dev structure
 	DAQmxErrChk(DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate));
 	// update sampling rate in UI
-	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AITaskSet->timing->sampleRate);
+	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AITaskSet->timing->sampleRate /1000);	// display in [kHz]
 	// update duration in UI
 	SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
 	
@@ -4711,7 +4794,7 @@ static int AOSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	// update sampling rate in dev structure
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AOTaskSet->timing->sampleRate));
 	// update sampling rate in UI
-	SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AOTaskSet->timing->sampleRate);
+	SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AOTaskSet->timing->sampleRate /1000); // display in [kHz]
 	// update duration in UI
 	SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
 	
@@ -4872,7 +4955,6 @@ static int DO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 
 static int CO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
-	
 	Dev_type*			dev					= GetTaskControlModuleData(taskControl);
 	int					error				= 0;
 	char*				errMsg				= NULL;
@@ -8264,7 +8346,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						
 						// create VChan
 						char*	samplingRateSinkVChanName = GetTaskControlName(dev->taskController);
-						AppendString(&nSamplesSinkVChanName, ": ", -1);
+						AppendString(&samplingRateSinkVChanName, ": ", -1);
 						AppendString(&samplingRateSinkVChanName, SinkVChan_AOSamplingRate_BaseName, -1);
 						
 						DLDataTypes		samplingRateVChanAllowedDataTypes[] = {DL_Double, DL_Float};
@@ -8283,7 +8365,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						
 						// create VChan
 						char*	samplingRateSourceVChanName = GetTaskControlName(dev->taskController);
-						AppendString(&nSamplesSourceVChanName, ": ", -1);
+						AppendString(&samplingRateSourceVChanName, ": ", -1);
 						AppendString(&samplingRateSourceVChanName, SourceVChan_AOSamplingRate_BaseName, -1);
 						
 						dev->AOTaskSet->timing->samplingRateSourceVChan	= init_SourceVChan_type(samplingRateSourceVChanName, DL_Double, dev, AOSamplingRateSourceVChan_Connected, NULL);
@@ -9845,7 +9927,7 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	
 	switch (dev->AITaskSet->timing->measMode) {
 		uInt64		quot;
-		uInt64		defaultBuffSize; 
+		uInt32		defaultBuffSize; 
 		
 		case MeasFinite:
 			
@@ -10242,8 +10324,8 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	// default samples for continuous acquisition (which is adjusted automatically depending on the sampling rate)
 	
 	switch (dev->DITaskSet->timing->measMode) {
-		int		quot;
-		int		defaultBuffSize; 
+		int			quot;
+		uInt32		defaultBuffSize; 
 		
 		case MeasFinite:
 			
@@ -11661,7 +11743,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		// create waveform
 		nullChk( waveformData = malloc(nSamples * sizeof(double)) );
 		memcpy(waveformData, readBuffer + chIdx * nSamples, nSamples * sizeof(double));
-		nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nSamples, &waveformData) );
+		nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nSamples, (void**)&waveformData) );
 		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type) ); 
 		
 		// send data packet with waveform
@@ -11715,7 +11797,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	int					error				= 0;
 	char*				errMsg				= NULL;
 	int					nRead				= 0;
-	ChanSet_type**		chanSetPtr		= NULL;
+	ChanSet_type**		chanSetPtr			= NULL;
 	size_t				nItems				= ListNumItems(dev->AITaskSet->chanSet);
 	int*				nActiveTasksPtr		= NULL;
 
@@ -11772,7 +11854,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		// create waveform
 		nullChk( waveformData = malloc(nSamples * sizeof(double)) );
 		memcpy(waveformData, readBuffer + chIdx * nSamples, nSamples * sizeof(double));
-		nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nSamples, &waveformData) );
+		nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nSamples, (void**)&waveformData) );
 		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type) );  
 		
 		// send data packet with waveform

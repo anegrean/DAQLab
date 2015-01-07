@@ -194,8 +194,7 @@ static void							PulseTrainVChan_Connected 		(VChan_type* self, void* VChanOwne
 	// pulsetrain command VChan disconnected callback
 static void							PulseTrainVChan_Disconnected 	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
-static int 							PulseTrainDataReceivedTC		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
-
+static int 							PulseTrainDataReceivedTC 		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 static int 							PMT_Set_Mode 					(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
 static int 							PMT_Set_Fan 					(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
@@ -1192,10 +1191,29 @@ static void	IterateTC	(TaskControl_type* taskControl, size_t currentIteration, B
 	double timeout=3.0;
 	double delaystep=0.1;
 	int mode;
+	DataPacket_type*	dataPacket			= NULL;
+	char*				errMsg				= NULL;
+	int					error				= 0;
+	void*				dataPacketDataPtr;
+	DLDataTypes			dataPacketDataType;
+	PulseTrain_type*    pulsetrain;        
 
 	VUPC_SetStepCounter(vupc,currentIteration);
 	
-	//receive pulse train data
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Receive pulse train settings data
+	//-------------------------------------------------------------------------------------------------------------------------------
+	if (IsVChanConnected(vupc->pulseTrainVchan)) {
+		errChk( GetDataPacket(vupc->pulseTrainVchan, &dataPacket, &errMsg) );
+		dataPacketDataPtr = GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
+		pulsetrain=*(PulseTrain_type**)dataPacketDataPtr;
+		vupc->nSamples=GetPulseTrainNPulses(pulsetrain);
+		*vupc->refNSamples = vupc->nSamples;
+		
+		ReleaseDataPacket(&dataPacket);
+		dataPacket = NULL;
+	}
 	
 	
 	Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),vupc->samplingRate,vupc->nSamples); 
@@ -1205,7 +1223,10 @@ static void	IterateTC	(TaskControl_type* taskControl, size_t currentIteration, B
 	//inform that slave is armed
 	SetHWTrigSlaveArmedStatus(vupc->HWTrigSlave,NULL);
 	
+	return 0;
 	
+Error:
+	return -1;
 
 }
 
@@ -1318,7 +1339,7 @@ static void	PulseTrainVChan_Disconnected (VChan_type* self, void* VChanOwner, VC
 	
 }
 
-static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	
 	VUPhotonCtr_type* 	vupc				= GetTaskControlModuleData(taskControl);
@@ -1334,7 +1355,12 @@ static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_t
 	size_t 				i;
 	PulseTrainModes		pulsetrainmode;
 	double 				hightime,lowtime;
-	char*				errMsg				= NULL;     		
+	char*				errMsg				= NULL;
+	
+		// update only if task controller is not active
+	if (taskActive) return 0;
+	//or not connected to a sink channel
+	if (!(IsVChanConnected(vupc->pulseTrainVchan))) return 0; 
 	
 	switch(taskState) {
 			

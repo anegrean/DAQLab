@@ -280,7 +280,7 @@ int ReadBuffer(int bufsize)
 	FCallReturn_type* fCallReturn;
 	
 	unsigned short int* 	Samplebuffer	= NULL;   
-	unsigned short int*     pmtdataptr;
+	void*     pmtdataptr;
 	int numpixels;
 	int numshorts;
 	int ndatapoints;
@@ -357,7 +357,7 @@ int ReadBuffer(int bufsize)
 						waveform = init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr);  
 					    dataPacket = init_DataPacket_type(DL_Waveform_UShort, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type);       
 						// send data packet with waveform
-						fCallReturn = SendDataPacket(gchannels[i]->VChan, dataPacket, 0);
+						fCallReturn = SendDataPacket(gchannels[i]->VChan, dataPacket, 0, NULL);
 						discard_FCallReturn_type(&fCallReturn);
 					
 					}
@@ -377,7 +377,7 @@ int ReadBuffer(int bufsize)
 					for (i=0;i<MAX_CHANNELS;i++){   
 						if (gchannels[i]!=NULL){
 							if (gchannels[i]->VChan!=NULL){
-							fCallReturn = SendDataPacket(gchannels[i]->VChan, NULL, 0);
+							fCallReturn = SendDataPacket(gchannels[i]->VChan, NULL, 0,NULL);
 							discard_FCallReturn_type(&fCallReturn);
 							}
 						}

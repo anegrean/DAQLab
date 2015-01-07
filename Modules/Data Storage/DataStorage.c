@@ -27,7 +27,7 @@
 
 //test
 #define  DATAFILEBASEPATH 		"C:\\Rawdata\\"
-
+#define VChanDataTimeout							1e4					// Timeout in [ms] for Sink VChans to receive data  
 
 
 //==============================================================================
@@ -88,37 +88,28 @@ struct DatStore {
 // Static functions
 static void	RedrawDSPanel (DataStorage_type* ds);
 
+static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+
 //-----------------------------------------
 // Data Storage Task Controller Callbacks
 //-----------------------------------------
-
+static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
+static void					IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+static void 				AbortIterationTC		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static int					StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int					DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static int					StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static void					DimUITC					(TaskControl_type* taskControl, BOOL dimmed);
+static void					TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
+static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
+static int					ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo); 
 //-----------------------------------------
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type*	ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
 
-static FCallReturn_type*	UnconfigureTC			(TaskControl_type* taskControl, BOOL const* abortFlag);
-
-static void					IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
-
-static void 				AbortIterationTC		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-
-static FCallReturn_type*	StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
-
-static FCallReturn_type*	DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-
-static FCallReturn_type*	StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-
-static FCallReturn_type* 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag);
-
-static void					DimTC					(TaskControl_type* taskControl, BOOL dimmed);
-
-static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg);
-
-static FCallReturn_type*	DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
-
-static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
 
 
 static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int eventData1, int eventData2);
@@ -159,8 +150,8 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	ds->overwrite_files		= FALSE;
 	
 	// create Data Storage Task Controller
-	tc = init_TaskControl_type (instanceName, ds, ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
-								DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
+	tc = init_TaskControl_type (instanceName, ds, ConfigureTC, UnConfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
+								DoneTC, StoppedTC, DimUITC, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
 	//------------------------------------------------------------
@@ -242,7 +233,7 @@ static DS_Channel_type* init_DS_Channel_type (DataStorage_type* dsInstance, int 
 	if (!chan) return NULL;
 
 	chan->dsInstance	= dsInstance;
-	chan->VChan			= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan, NULL, NULL);
+	chan->VChan			= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan,VChanDataTimeout, NULL, NULL);
 	chan->panHndl   	= panHndl;
 	chan->chanIdx		= chanIdx;   
 
@@ -440,23 +431,29 @@ void ResetDSIterators(DataStorage_type* ds)
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+;
+;
+;
+;
+static void					UITCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
+; 
+;
+
+static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 		
-	       
-	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void	IterateTC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	//return immediate
@@ -466,11 +463,12 @@ static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 
 static void AbortIterationTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-	
+	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);    
 }
 
-static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+
+
+static int	StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	TaskControl_type*		parent;
@@ -482,32 +480,31 @@ static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abo
 	OKfree(ds->name);
 	ds->name=GetUIName(taskControl);  
 	 
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* DoneTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static int DoneTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static int StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 
-
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
+static void	DimUITC (TaskControl_type* taskControl, BOOL dimmed)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	//if 
@@ -516,7 +513,13 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 	
 }
 
-static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
+
+static void	TCActive (TaskControl_type* taskControl, BOOL UITCActiveFlag)
+{
+	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
+}
+
+static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	int error=0;
@@ -524,16 +527,15 @@ static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 
 	// print error message
 	DLMsg(errorMsg, 1);
-
-
 }
 
-static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
+static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-
-	return init_FCallReturn_type(0, "", "");
+	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl); 
+	
+	return 0;
 }
+
 
 
 
@@ -681,7 +683,7 @@ int SaveImage(Image* image,DataStorage_type* ds,char* vChanname,int iterationnr)
 }
 
 
-static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	
 	DataStorage_type*	ds					= GetTaskControlModuleData(taskControl);
@@ -733,7 +735,7 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 			
 			
 			// get all available data packets
-			if ((fCallReturn = GetAllDataPackets(sinkVChan, &dataPackets, &nPackets))) goto Error;
+			errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
 			
 			rawfilename=malloc(MAXCHAR*sizeof(char));
 			
@@ -783,7 +785,7 @@ static FCallReturn_type* DataReceivedTC	(TaskControl_type* taskControl, TaskStat
 			
 		case TASK_STATE_ERROR:
 			
-			ReleaseAllDataPackets(sinkVChan);
+			ReleaseAllDataPackets(sinkVChan,NULL);
 			
 			break;
 	}

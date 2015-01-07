@@ -28,6 +28,7 @@
 #define UI_VUPhotonCtr			"./Modules/VUPhotonCtr/UI_VUPhotonCtr.uir"
 
 
+#define VChanDataTimeout							1e4					// Timeout in [ms] for Sink VChans to receive data  
 	// Default number of samples for finite measurement mode
 #define DEFAULT_NSAMPLES		5000
   
@@ -46,7 +47,8 @@
 
 #define ITER_TIMEOUT 			10
 
-#define VChan_Default_PulseTrainSinkChan		"VUPC Pulsetrain Sink"    
+#define VChan_Default_PulseTrainSinkChan		"VUPC Pulsetrain Sink" 
+#define HWTrig_VUPC_BaseName					"PC Start"					// for slave HW triggering 
 
 
 #ifndef errChk
@@ -102,6 +104,8 @@ struct VUPhotonCtr {
 	
 	//	virtual channel to receive pulsetrain settings
 	SinkVChan_type*		pulseTrainVchan;
+	
+	HWTrigSlave_type*			HWTrigSlave;				// For establishing a task start HW-trigger dependency, this being a slave.        
 
 		//-------------------------
 		// Device IO settings
@@ -190,7 +194,7 @@ static void							PulseTrainVChan_Connected 		(VChan_type* self, void* VChanOwne
 	// pulsetrain command VChan disconnected callback
 static void							PulseTrainVChan_Disconnected 	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
-static FCallReturn_type* 			PulseTrainDataReceivedTC		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
+static int 							PulseTrainDataReceivedTC		(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag);
 
 
 static int 							PMT_Set_Mode 					(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
@@ -209,27 +213,18 @@ static int 							PMTController_ResetFifo			(VUPhotonCtr_type* vupc);
 // VUPhotonCtr Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type*	ConfigureTC				(TaskControl_type* taskControl, BOOL const* abortFlag);
-
-static FCallReturn_type*	UnConfigureTC			(TaskControl_type* taskControl, BOOL const* abortFlag);      
-
+static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
 static void					IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
-
-static void 				AbortIterationTC		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-
-static FCallReturn_type*	StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag);
-
-static FCallReturn_type*	DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-
-static FCallReturn_type*	StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
-
-static FCallReturn_type* 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag);
-
-static void					DimTC					(TaskControl_type* taskControl, BOOL dimmed);
-
-static void 				ErrorTC 				(TaskControl_type* taskControl, char* errorMsg);
-
-static FCallReturn_type*	ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag);
+static void 				AbortIterationTC 		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static int					StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int					DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static int					StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static void					DimUITC					(TaskControl_type* taskControl, BOOL dimmed);
+static void					TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
+static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
+static int					ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo); 
 
 
 //==============================================================================
@@ -261,8 +256,8 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	initalloc_DAQLabModule(&vupc->baseClass, className, instanceName);
 	
 	// create VUPhotonCtr Task Controller
-	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, UnConfigureTC,IterateTC, AbortIterationTC, StartTC, ResetTC,
-								DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
+	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, UnConfigureTC, IterateTC, AbortIterationTC, StartTC, 
+												 	  ResetTC, DoneTC, StoppedTC, DimUITC, TCActive, ModuleEventHandler, ErrorTC); // module data added to the task controller below
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
 	
 	//------------------------------------------------------------
@@ -354,6 +349,9 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	
 	// discard pulsetrain SinkVChan   
 	if (vupc->pulseTrainVchan) discard_VChan_type((VChan_type**)&vupc->pulseTrainVchan);
+	
+	//here? lex
+	DLUnregisterHWTrigSlave(vupc->HWTrigSlave);    
 
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
@@ -505,8 +503,19 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// redraw main panel
 	RedrawMainPanel(vupc);
 
-	// configure Photoncounter Task Controller
-	//default settings:
+	//-------------------------------------------------------------------------
+	// add HW Triggers
+	//-------------------------------------------------------------------------
+						
+	//  Slave HW Triggers
+	char*	HWTrigName = GetTaskControlName(vupc->taskControl);
+	AppendString(&HWTrigName, ": ", -1);
+	AppendString(&HWTrigName, HWTrig_VUPC_BaseName, -1);
+	vupc->HWTrigSlave		= init_HWTrigSlave_type(HWTrigName);
+	OKfree(HWTrigName);
+						
+	// register HW Triggers with framework
+	DLRegisterHWTrigSlave(vupc->HWTrigSlave);
 	
 		
 	
@@ -1005,7 +1014,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						if (vupc->pulseTrainVchan==NULL){
 							char*	pulsetrainVChanName		= DLGetUniqueVChanName(VChan_Default_PulseTrainSinkChan);
 							DLDataTypes allowedPacketTypes[] = {DL_PulseTrain_Freq, DL_PulseTrain_Ticks, DL_PulseTrain_Time};
-							vupc->pulseTrainVchan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
+							vupc->pulseTrainVchan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance,VChanDataTimeout, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
 							// register VChan with DAQLab
 							DLRegisterVChan((DAQLabModule_type*)vupc, (VChan_type*)vupc->pulseTrainVchan);	
 							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVchan, PulseTrainDataReceivedTC);  
@@ -1161,26 +1170,23 @@ void CVICALLBACK MenuSettings_CB (int menuBar, int menuItem, void *callbackData,
 // VUPhotonCtr Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	
 	
-
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
 
-static FCallReturn_type* UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	
-	
-
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void	IterateTC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	double timeout=3.0;
@@ -1189,15 +1195,23 @@ static void IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 
 	VUPC_SetStepCounter(vupc,currentIteration);
 	
+	//receive pulse train data
+	
+	
 	Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),vupc->samplingRate,vupc->nSamples); 
 	
 	PMTStartAcq(GetTaskControlMode(vupc->taskControl),currentIteration,vupc->taskControl,vupc->channels);
 	
-	// if  the VUPhotonCtr Task requires a HW trigger, then signal the HW Trigger Master Task Controller that the Slave HW Triggered Task Controller is armed 
-	if (GetTaskControlHWTrigger(taskControl) == TASK_SLAVE_HWTRIGGER)
-			TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);
+	//inform that slave is armed
+	SetHWTrigSlaveArmedStatus(vupc->HWTrigSlave,NULL);
+	
+	
 
 }
+
+
+
+
 
 static void AbortIterationTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
@@ -1205,7 +1219,7 @@ static void AbortIterationTC (TaskControl_type* taskControl, size_t currentItera
 	
 }
 
-static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
@@ -1214,37 +1228,44 @@ static FCallReturn_type* StartTC (TaskControl_type* taskControl, BOOL const* abo
 	//timeout testvalue
 	SetTaskControlIterationTimeout(taskControl,ITER_TIMEOUT);
 
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* DoneTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static int DoneTC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
 	PMTStopAcq();
 	PMTController_UpdateDisplay(vupc);   
 
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
-static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+
+
+static void	TCActive (TaskControl_type* taskControl, BOOL UITCActiveFlag)
+{
+	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl); 
+}
+
+
+static int StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
 	PMTStopAcq();
 	PMTController_UpdateDisplay(vupc);   
 
-
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
+static void	DimUITC	(TaskControl_type* taskControl, BOOL dimmed)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);\
 	
@@ -1257,7 +1278,7 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_TestMode, ATTR_DIMMED, dimmed); 
 }
 
-static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
+static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	int error=0;
@@ -1276,12 +1297,13 @@ static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 
 }
 
-static FCallReturn_type* ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, size_t currentIteration, void* eventData, BOOL const* abortFlag)
+static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
-	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
-
-	return init_FCallReturn_type(0, "", "");
+	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);    
+	
+	return 0;
 }
+
 
 
 // pulsetrain command VChan connected callback
@@ -1296,7 +1318,7 @@ static void	PulseTrainVChan_Disconnected (VChan_type* self, void* VChanOwner, VC
 	
 }
 
-static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
+static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag)
 {
 	
 	VUPhotonCtr_type* 	vupc				= GetTaskControlModuleData(taskControl);
@@ -1312,7 +1334,7 @@ static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl
 	size_t 				i;
 	PulseTrainModes		pulsetrainmode;
 	double 				hightime,lowtime;
-			
+	char*				errMsg				= NULL;     		
 	
 	switch(taskState) {
 			
@@ -1322,13 +1344,13 @@ static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl
 		case TASK_STATE_IDLE:
 		case TASK_STATE_STOPPING:
 		case TASK_STATE_DONE:
-		case TASK_STATE_RUNNING_WAITING_HWTRIG_SLAVES:
 		case TASK_STATE_RUNNING:
 		case TASK_STATE_RUNNING_WAITING_ITERATION:
 			
 			
 			// get all available data packets
-			if ((fCallReturn = GetAllDataPackets(sinkVChan, &dataPackets, &nPackets))) goto Error;
+			errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
+			
 			
 			for (i = 0; i < nPackets; i++) {
 				
@@ -1337,7 +1359,7 @@ static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl
 				vupc->nSamples=GetPulseTrainNPulses(pulsetrain);
 				*vupc->refNSamples = vupc->nSamples;  // changed by adrian, originally it was vupc->refNSamples = vupc->nSamples
 				pulsetrainmode=GetPulseTrainMode(pulsetrain); 
-				switch (pulsetrainmode){
+				switch (pulsetrainmode){						 
 					case PulseTrain_Finite:
 						SetTaskControlMode(vupc->taskControl,TASK_FINITE);
 						break;
@@ -1374,16 +1396,16 @@ static FCallReturn_type* PulseTrainDataReceivedTC (TaskControl_type* taskControl
 			
 		case TASK_STATE_ERROR:
 			
-			ReleaseAllDataPackets(sinkVChan);
+			ReleaseAllDataPackets(sinkVChan,NULL);
 			
 			break;
 	}
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 	
 Error:	   
 				
-	return fCallReturn;
+	return -1;
 }
  
 

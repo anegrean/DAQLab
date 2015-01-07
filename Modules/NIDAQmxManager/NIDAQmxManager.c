@@ -9817,27 +9817,29 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
+	if (IsVChanConnected(chanSet->sinkVChan) {
+		errChk( GetDataPacket(chanSet->sinkVChan, &dataPacket, &errMsg) );
+		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
+		discard_PulseTrain_type(&chanSet->pulseTrain);
+		nullChk( chanSet->pulseTrain = CopyPulseTrain(*dataPacketData) ); 
 	
-	errChk( GetDataPacket(chanSet->sinkVChan, &dataPacket, &errMsg) );
-	dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
-	discard_PulseTrain_type(&chanSet->pulseTrain);
-	nullChk( chanSet->pulseTrain = CopyPulseTrain(*dataPacketData) ); 
+		switch (dataPacketDataType) {
+			case DL_PulseTrain_Freq:
+			
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSet->baseClass->taskHndl, chanSet->baseClass->name, DAQmx_CO_Pulse_IdleState, GetPulseTrainIdleState(chanSet->pulseTrain)) ); 
+			
+				break;
+			
+			case DL_PulseTrain_Ticks:
+				break;
+			
+			case DL_PulseTrain_Time:
+				break;
+		}
 	
-	switch (dataPacketDataType) {
-		case DL_PulseTrain_Freq:
-			
-			
-			break;
-			
-		case DL_PulseTrain_Ticks:
-			break;
-			
-		case DL_PulseTrain_Time:
-			break;
+		ReleaseDataPacket(&dataPacket);
+		dataPacket = NULL;
 	}
-	
-	ReleaseDataPacket(&dataPacket);
-	dataPacket = NULL;
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Send task settings data
@@ -10868,6 +10870,7 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 			break;
 		}
 	}
+	
 	// continue setting up the CO task if any channels require HW-timing
 	if (!hwTimingFlag) return 0;	// do nothing
 	

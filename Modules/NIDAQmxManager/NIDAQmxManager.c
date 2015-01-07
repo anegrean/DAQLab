@@ -9345,6 +9345,7 @@ static int StartAIDAQmxTask (Dev_type* dev, char** errorInfo)
 	
 	// launch AI task in a new thread if it exists
 	if (!dev->AITaskSet) return 0;
+	if (!dev->AITaskSet->taskHndl) return 0; 
 	
 	if ((error = CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAIDAQmxTask_CB, dev, NULL)) < 0) goto CmtError;
 	
@@ -9470,24 +9471,6 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	
 	errChk(SetHWTrigSlaveArmedStatus(dev->AITaskSet->HWTrigSlave, &errMsg));
 	
-	//-------------------------------------------------------------------------------------------------------------------------------
-	// Count active task
-	//-------------------------------------------------------------------------------------------------------------------------------
-	
-	// get active tasks counter handle
-	if ((error = CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr)) < 0) {
-		errMsg = FormatMsg(error, "IterateTC", "Could not obtain TSV handle");
-		goto Error;
-	}
-	
-	// count active task
-	(*nActiveTasksPtr)++;
-	
-	// release active tasks counter handle
-	if ((error=CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
-		errMsg = FormatMsg(error, "IterateTC", "Could not release TSV handle"); 
-		goto Error;
-	}
 	
 	return 0;
 	
@@ -9516,6 +9499,7 @@ static int StartAODAQmxTask (Dev_type* dev, char** errorInfo)
 	
 	// launch AO task in a new thread if it exists
 	if (!dev->AOTaskSet) return 0;
+	if (!dev->AOTaskSet->taskHndl) return 0; 
 	
 	if ((error = CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAODAQmxTask_CB, dev, NULL)) < 0) goto CmtError;
 	
@@ -9613,7 +9597,6 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 		ReleaseDataPacket(&dataPacket);
 	}
 	
-											
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Send task settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
@@ -9716,24 +9699,6 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	
 	errChk(SetHWTrigSlaveArmedStatus(dev->AOTaskSet->HWTrigSlave, &errMsg));
 	
-	//-------------------------------------------------------------------------------------------------------------------------------
-	// Count active task
-	//-------------------------------------------------------------------------------------------------------------------------------
-	
-	// get active tasks counter handle
-	if ((error = CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr)) < 0) {
-		errMsg = FormatMsg(error, "IterateTC", "Could not obtain TSV handle");
-		goto Error;
-	}
-	
-	// count active task
-	(*nActiveTasksPtr)++;
-	
-	// release active tasks counter handle
-	if ((error=CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
-		errMsg = FormatMsg(error, "IterateTC", "Could not release TSV handle"); 
-		goto Error;
-	}
 	
 	return 0;
 	
@@ -9781,7 +9746,29 @@ int CVICALLBACK StartDODAQmxTask_CB (void *functionData)
 
 static int StartCIDAQmxTasks (Dev_type* dev, char** errorInfo)
 {
-	return 0;	
+	int 	error 										= 0;
+	char	CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
+	
+	// launch CI tasks in a new thread if there are any
+	if (!dev->CITaskSet) return 0;
+	
+	size_t				nCI 		= ListNumItems(dev->CITaskSet->chanTaskSet);
+	ChanSet_type** 		chanSetPtr;
+	for (size_t i = 1; i <= nCI; i++) {
+		chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+		if ((*chanSetPtr)->taskHndl)
+			if ((error = CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCIDAQmxTask_CB, *chanSetPtr, NULL)) < 0) goto CmtError; 
+	
+	}
+	
+	return 0;
+	
+CmtError:
+	
+	CmtGetErrorMessage (error, CmtErrMsgBuffer);
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "StartCIDAQmxTask", CmtErrMsgBuffer);   
+	return error;		
 }
 
 int CVICALLBACK StartCIDAQmxTasks_CB (void *functionData)
@@ -9791,12 +9778,125 @@ int CVICALLBACK StartCIDAQmxTasks_CB (void *functionData)
 
 static int StartCODAQmxTasks (Dev_type* dev, char** errorInfo)
 {
-	return 0;	
+	int 	error 										= 0;
+	char	CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
+	
+	// launch CO tasks in a new thread if there are any
+	if (!dev->COTaskSet) return 0;
+	
+	size_t				nCO 		= ListNumItems(dev->COTaskSet->chanTaskSet);
+	ChanSet_type** 		chanSetPtr;
+	for (size_t i = 1; i <= nCO; i++) {
+		chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+		if ((*chanSetPtr)->taskHndl)
+			if ((error = CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCODAQmxTask_CB, *chanSetPtr, NULL)) < 0) goto CmtError; 
+	
+	}
+	
+	return 0;
+	
+CmtError:
+	
+	CmtGetErrorMessage (error, CmtErrMsgBuffer);
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "StartCODAQmxTask", CmtErrMsgBuffer);   
+	return error;	
 }
 
 int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 {
-	return 0;	
+	ChanSet_type*		chanSet				= functionData;
+	Dev_type*			dev 				= chanSet->device;
+	DataPacket_type*	dataPacket			= NULL;
+	char*				errMsg				= NULL;
+	int					error				= 0;
+	void*				dataPacketData;
+	DLDataTypes			dataPacketDataType;
+	PulseTrain_type*	pulseTrain			= NULL;
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Receive task settings data
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	errChk( GetDataPacket(chanSet->sinkVChan, &dataPacket, &errMsg) );
+	dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
+	discard_PulseTrain_type(&chanSet->pulseTrain);
+	nullChk( chanSet->pulseTrain = CopyPulseTrain(*dataPacketData) ); 
+	
+	switch (dataPacketDataType) {
+		case DL_PulseTrain_Freq:
+			
+			
+			break;
+			
+		case DL_PulseTrain_Ticks:
+			break;
+			
+		case DL_PulseTrain_Time:
+			break;
+	}
+	
+	ReleaseDataPacket(&dataPacket);
+	dataPacket = NULL;
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Send task settings data
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	// copy pulse train info
+	nullChk( pulseTrain = CopyPulseTrain(chanSet->pulseTrain) );
+	
+	// generate data packet
+	switch (GetPulseTrainType(chanSet->pulseTrain)) {
+		
+		case PulseTrain_Freq:
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, pulseTrain, discard_PulseTrain_type) );  
+			break;
+			
+		case PulseTrain_Time:
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, pulseTrain, discard_PulseTrain_type) ); 
+			break;
+			
+		case PulseTrain_Ticks:
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, pulseTrain, discard_PulseTrain_type) ); 
+			break;
+		
+	}
+	
+	errChk( SendDataPacket(chanSet->srcVChan, dataPacket, FALSE, &errMsg) );
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Start task as a function of HW trigger dependencies
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	errChk(WaitForHWTrigArmedSlaves(chanSet->baseClass->HWTrigMaster, &errMsg));
+	
+	DAQmxErrChk(DAQmxTaskControl(chanSet->baseClass->taskHndl, DAQmx_Val_Task_Start));
+	
+	errChk(SetHWTrigSlaveArmedStatus(chanSet->baseClass->HWTrigSlave, &errMsg));
+	
+	
+	return 0;
+	
+DAQmxError:
+	
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	// fall through
+	
+Error:
+	
+	// cleanup
+	discard_PulseTrain_type(&pulseTrain);
+	
+	if (!errMsg)
+		errMsg = FormatMsg(error, "StartCODAQmxTask_CB", "Out of memory");
+	
+	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
+	OKfree(errMsg);
+	return 0;
+	
 }
 
 static int ConfigDAQmxDevice (Dev_type* dev, char** errorInfo)
@@ -11382,282 +11482,6 @@ static BOOL	DAQmxTasksDone(Dev_type* dev)
 }
 */
 
-/*
-static int StartAllDAQmxTasks (Dev_type* dev, char** errorInfo)
-{
-#define	StartAllDAQmxTasks_Err_OutOfMem		-1
-#define StartAllDAQmxTasks_Err_NULLTask		-2
-	
-	int					error				= 0;
-	ListType 			NonTriggeredTasks	= 0;
-	ListType 			TriggeredTasks		= 0;
-	BOOL				triggeredFlag;
-	size_t				nItems;
-	
-	
-	if (! (NonTriggeredTasks = ListCreate(sizeof(TaskHandle))) ) goto MemError;  // DAQmx tasks without any HW-trigger defined
-	if (! (TriggeredTasks = ListCreate(sizeof(TaskHandle))) ) goto MemError;  // DAQmx tasks with HW-triggering
-	
-	//--------------------------------------------
-	// AI task
-	//--------------------------------------------
-	if (!dev->AITaskSet) goto SkipAITask;
-	// check task handle
-	if (!dev->AITaskSet->taskHndl) {
-		if (errorInfo)
-			*errorInfo = FormatMsg(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "AI Task handle is missing");
-		error = StartAllDAQmxTasks_Err_NULLTask;
-		goto Error;
-	}
-	// start trig
-	triggeredFlag = FALSE;
-	if (dev->AITaskSet->startTrig)
-		if (dev->AITaskSet->startTrig->trigType != Trig_None) 
-			triggeredFlag = TRUE;
-	// ref trig
-	if (dev->AITaskSet->referenceTrig)
-		if (dev->AITaskSet->referenceTrig->trigType != Trig_None)
-			triggeredFlag = TRUE;
-	// add to one of the lists
-	if (triggeredFlag)
-		ListInsertItem(TriggeredTasks, &dev->AITaskSet->taskHndl, END_OF_LIST);
-	else
-		ListInsertItem(NonTriggeredTasks, &dev->AITaskSet->taskHndl, END_OF_LIST);
-	
-SkipAITask:
-	//--------------------------------------------
-	// AO task
-	//--------------------------------------------
-	if (!dev->AOTaskSet) goto SkipAOTask; 
-	// check task handle
-	if (!dev->AOTaskSet->taskHndl) {
-		if (errorInfo)
-			*errorInfo = FormatMsg(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "AO Task handle is missing");
-		error = StartAllDAQmxTasks_Err_NULLTask;
-		goto Error;
-	}
-	// start trig
-	triggeredFlag = FALSE;
-	if (dev->AOTaskSet->startTrig)
-		if (dev->AOTaskSet->startTrig->trigType != Trig_None) 
-			triggeredFlag = TRUE;
-	// ref trig
-	if (dev->AOTaskSet->referenceTrig)
-		if (dev->AOTaskSet->referenceTrig->trigType != Trig_None)
-			triggeredFlag = TRUE;
-	// add to one of the lists
-	if (triggeredFlag)
-		ListInsertItem(TriggeredTasks, &dev->AOTaskSet->taskHndl, END_OF_LIST);
-	else
-		ListInsertItem(NonTriggeredTasks, &dev->AOTaskSet->taskHndl, END_OF_LIST);
-	
-SkipAOTask:
-	//--------------------------------------------
-	// DI task
-	//--------------------------------------------
-	if (!dev->DITaskSet) goto SkipDITask; 
-	// check task handle
-	if (!dev->DITaskSet->taskHndl) {
-		if (errorInfo)
-			*errorInfo = FormatMsg(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "DI Task handle is missing");
-		error = StartAllDAQmxTasks_Err_NULLTask;
-		goto Error;
-	}
-	// start trig
-	triggeredFlag = FALSE;
-	if (dev->DITaskSet->startTrig)
-		if (dev->DITaskSet->startTrig->trigType != Trig_None) 
-			triggeredFlag = TRUE;
-	// ref trig
-	if (dev->DITaskSet->referenceTrig)
-		if (dev->DITaskSet->referenceTrig->trigType != Trig_None)
-			triggeredFlag = TRUE;
-	// add to one of the lists
-	if (triggeredFlag)
-		ListInsertItem(TriggeredTasks, &dev->DITaskSet->taskHndl, END_OF_LIST);
-	else
-		ListInsertItem(NonTriggeredTasks, &dev->DITaskSet->taskHndl, END_OF_LIST);
-	
-SkipDITask:
-	//--------------------------------------------
-	// DO task
-	//--------------------------------------------
-	if (!dev->DOTaskSet) goto SkipDOTask;
-	// check task handle
-	if (!dev->DOTaskSet->taskHndl) {
-		if (errorInfo)
-			*errorInfo = FormatMsg(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "DO Task handle is missing");
-		error = StartAllDAQmxTasks_Err_NULLTask;
-		goto Error;
-	}
-	// start trig
-	triggeredFlag = FALSE;
-	if (dev->DOTaskSet->startTrig)
-		if (dev->DOTaskSet->startTrig->trigType != Trig_None) 
-			triggeredFlag = TRUE;
-	// ref trig
-	if (dev->DOTaskSet->referenceTrig)
-		if (dev->DOTaskSet->referenceTrig->trigType != Trig_None)
-			triggeredFlag = TRUE;
-	// add to one of the lists
-	if (triggeredFlag)
-		ListInsertItem(TriggeredTasks, &dev->DOTaskSet->taskHndl, END_OF_LIST);
-	else
-		ListInsertItem(NonTriggeredTasks, &dev->DOTaskSet->taskHndl, END_OF_LIST);
-	
-SkipDOTask:
-	//--------------------------------------------
-	// CI tasks
-	//--------------------------------------------
-	if (dev->CITaskSet) {
-		ChanSet_type** 	chanSetPtrPtr;
-		nItems = ListNumItems(dev->CITaskSet->chanTaskSet);
-		for (size_t i = 1; i <= nItems; i++) {
-			chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-			if ((*chanSetPtrPtr)->taskHndl) {
-				// start trig
-				triggeredFlag = FALSE;
-				if ((*chanSetPtrPtr)->startTrig)
-					if ((*chanSetPtrPtr)->startTrig->trigType != Trig_None) 
-						triggeredFlag = TRUE;
-				// ref trig
-				if ((*chanSetPtrPtr)->referenceTrig)
-					if ((*chanSetPtrPtr)->referenceTrig->trigType != Trig_None)
-						triggeredFlag = TRUE;
-				// add to one of the lists
-				if (triggeredFlag)
-					ListInsertItem(TriggeredTasks, &(*chanSetPtrPtr)->taskHndl, END_OF_LIST);
-				else
-					ListInsertItem(NonTriggeredTasks, &(*chanSetPtrPtr)->taskHndl, END_OF_LIST);
-				
-			} else {
-				if (errorInfo)
-					*errorInfo = FormatMsg(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "CI Task handle is missing");
-				error = StartAllDAQmxTasks_Err_NULLTask;
-				goto Error;
-			}
-		}
-	}
-	
-	//--------------------------------------------
-	// CO tasks
-	//--------------------------------------------
-	if (dev->COTaskSet) {
-		ChanSet_type** 	chanSetPtrPtr;
-		nItems = ListNumItems(dev->COTaskSet->chanTaskSet);
-		for (size_t i = 1; i <= nItems; i++) {
-			chanSetPtrPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-			if ((*chanSetPtrPtr)->taskHndl) {
-				// start trig
-				triggeredFlag = FALSE;
-				if ((*chanSetPtrPtr)->startTrig)
-					if ((*chanSetPtrPtr)->startTrig->trigType != Trig_None) 
-						triggeredFlag = TRUE;
-				// ref trig
-				if ((*chanSetPtrPtr)->referenceTrig)
-					if ((*chanSetPtrPtr)->referenceTrig->trigType != Trig_None)
-						triggeredFlag = TRUE;
-				// add to one of the lists
-				if (triggeredFlag)
-					ListInsertItem(TriggeredTasks, &(*chanSetPtrPtr)->taskHndl, END_OF_LIST);
-				else
-					ListInsertItem(NonTriggeredTasks, &(*chanSetPtrPtr)->taskHndl, END_OF_LIST);
-				
-			} else {
-				if (errorInfo)
-					*errorInfo = FormatMsg(StartAllDAQmxTasks_Err_NULLTask, "StartAllDAQmxTasks", "CO Task handle is missing");
-				error = StartAllDAQmxTasks_Err_NULLTask;
-				goto Error;
-			}
-		}
-	}
-	
-	//----------------------
-	// Start Triggered Tasks
-	//----------------------
-	TaskHandle* 	taskHndlPtr;
-	int*			nActiveTasksPtr	= NULL;
-	if ((error = CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr)) < 0) {
-		if (errorInfo)
-			*errorInfo = FormatMsg(error, "StartAllDAQmxTasks", "Could not obtain TSV handle");
-		goto Error;
-	}
-	
-	// reset active tasks counter
-	*nActiveTasksPtr = 0;
-	
-	nItems = ListNumItems(TriggeredTasks);
-	for (size_t i = 1; i <= nItems; i++) {
-		taskHndlPtr = ListGetPtrToItem(TriggeredTasks, i);
-		DAQmxErrChk(DAQmxTaskControl (*taskHndlPtr, DAQmx_Val_Task_Start));
-		// count active tasks
-		(*nActiveTasksPtr)++;
-	}
-	
-	//--------------------------
-	// Start Non-Triggered Tasks
-	//--------------------------
-	nItems = ListNumItems(NonTriggeredTasks);
-	for (size_t i = 1; i <= nItems; i++) {
-		taskHndlPtr = ListGetPtrToItem(NonTriggeredTasks, i);
-		DAQmxErrChk(DAQmxTaskControl (*taskHndlPtr, DAQmx_Val_Task_Start));
-		// count active tasks
-		(*nActiveTasksPtr)++;
-	}
-	
-	if ((error=CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
-		if (errorInfo)
-			*errorInfo = FormatMsg(error, "StartAllDAQmxTasks", "Could not release TSV handle"); 
-		goto Error;
-	}
-	
-	// cleanup
-	ListDispose(NonTriggeredTasks);
-	ListDispose(TriggeredTasks);
-	
-	return NULL;
-	
-MemError:
-	
-	if (NonTriggeredTasks) ListDispose(NonTriggeredTasks);
-	if (TriggeredTasks) ListDispose(TriggeredTasks);
-	if (errorInfo)
-		*errorInfo = FormatMsg(StartAllDAQmxTasks_Err_OutOfMem, "StartAllDAQmxTasks", "Out of memory");
-	
-	return StartAllDAQmxTasks_Err_OutOfMem;
-	
-DAQmxError:
-	
-	CmtReleaseTSVPtr(dev->nActiveTasks);
-	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "StartAllDAQmxTasks", errMsg);
-	OKfree(errMsg);
-	// try to stop all triggered tasks
-	nItems = ListNumItems(TriggeredTasks);
-	for (size_t i = 1; i <= nItems; i++) {
-		taskHndlPtr = ListGetPtrToItem(TriggeredTasks, i);
-		DAQmxStopTask(*taskHndlPtr);
-	}
-	// stop all non-triggered tasks
-	nItems = ListNumItems(NonTriggeredTasks);
-	for (size_t i = 1; i <= nItems; i++) {
-		taskHndlPtr = ListGetPtrToItem(NonTriggeredTasks, i);
-		DAQmxStopTask(*taskHndlPtr);
-	}
-	
-	// fall through here
-Error:
-	if (NonTriggeredTasks) ListDispose(NonTriggeredTasks);
-	if (TriggeredTasks) ListDispose(TriggeredTasks);
-	return error;
-	
-}
-
-*/
-
 static BOOL	AOOutputBufferFilled (Dev_type* dev)
 {
 	BOOL				AOFilledFlag;
@@ -12109,7 +11933,7 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
 	
 	//----------------------------------------
-	// Reset active tasks counter  
+	// Count active tasks 
 	//----------------------------------------
 	
 	// get active tasks counter handle
@@ -12120,6 +11944,43 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	
 	*nActiveTasksPtr = 0;
 	
+	// AI
+	if (dev->AITaskSet)
+		if (dev->AITaskSet->taskHndl)
+			(*nActiveTasksPtr)++;
+	// AO
+	if (dev->AOTaskSet)
+		if (dev->AOTaskSet->taskHndl)
+			(*nActiveTasksPtr)++;
+	// DI
+	if (dev->DITaskSet)
+		if (dev->DITaskSet->taskHndl)
+			(*nActiveTasksPtr)++;
+	// DO
+	if (dev->DOTaskSet)
+		if (dev->DOTaskSet->taskHndl)
+			(*nActiveTasksPtr)++;
+	// CI
+	if (dev->CITaskSet) {
+		size_t 				nCI = ListNumItems(dev->CITaskSet->chanTaskSet);
+		ChanSet_type** 		chanSetPtr;
+		for (size_t i = 1; i <= nCI; i++) {
+			chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+			if ((*chanSetPtr)->taskHndl)
+				(*nActiveTasksPtr)++;
+		}
+	}
+	// CO
+	if (dev->COTaskSet) {
+		size_t 				nCO = ListNumItems(dev->COTaskSet->chanTaskSet);
+		ChanSet_type** 		chanSetPtr;
+		for (size_t i = 1; i <= nCO; i++) {
+			chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+			if ((*chanSetPtr)->taskHndl)
+				(*nActiveTasksPtr)++;
+		}
+	}
+	
 	// release active tasks counter handle
 	if ((error=CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
 		errMsg = FormatMsg(error, "IterateTC", "Could not release TSV handle"); 
@@ -12129,17 +11990,17 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 	//----------------------------------------
 	// Launch DAQmx tasks
 	//----------------------------------------
-		// AI
+	// AI
 	errChk( StartAIDAQmxTask(dev, &errMsg) );
-		// AO
+	// AO
 	errChk( StartAODAQmxTask(dev, &errMsg) );
-		// DI
+	// DI
 	errChk( StartDIDAQmxTask(dev, &errMsg) );
-		// DO
+	// DO
 	errChk( StartDODAQmxTask(dev, &errMsg) );
-		// CI
+	// CI
 	errChk( StartCIDAQmxTasks(dev, &errMsg) );
-		// CO
+	// CO
 	errChk( StartCODAQmxTasks(dev, &errMsg) );
 		
 	return; // no error

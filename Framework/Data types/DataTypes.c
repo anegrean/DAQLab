@@ -80,8 +80,8 @@ struct PulseTrain {
 // pulse train defined by frequency
 struct PulseTrainFreqTiming {
 	PulseTrain_type				baseClass;
-	double 						frequency;   				 
-	double 						dutyCycle;   
+	double 						frequency;					// pulse frequencu in [Hz]   				 
+	double 						dutyCycle;					// width of the pulse divided by the period in [%]  
 	double						initialDelay;    		   	// initial delay [s] 
 };
 

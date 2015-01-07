@@ -539,20 +539,36 @@ Error:
 /// OUT dataPackets, nPackets
 int GetDataPacket (SinkVChan_type* sinkVChan, DataPacket_type** dataPacketPtr, char** errorInfo)
 {
-	int						error				= 0;
-	CmtTSQHandle			sinkVChanTSQHndl 	= sinkVChan->tsqHndl;
+#define GetDataPacket_Err_Timeout	-1
+	
+	int					error				= 0;
+	CmtTSQHandle		sinkVChanTSQHndl 	= sinkVChan->tsqHndl;
+	char*				errMsg				= NULL;
 	
 	*dataPacketPtr = NULL;
 	
 	// get data packet
-	errChk(CmtReadTSQData(sinkVChanTSQHndl, dataPacketPtr, 1, sinkVChan->readTimeout, 0));
+	if ( (error = CmtReadTSQData(sinkVChanTSQHndl, dataPacketPtr, 1, sinkVChan->readTimeout, 0)) < 0) goto CmtError;
+	
+	// check if timeout occured
+	if (!error) {
+		errMsg = StrDup("Waiting for ");
+		AppendString(&errMsg, sinkVChan->baseClass.name, -1);
+		AppendString(&errMsg, " Sink VChan data timed out", -1);
+		if (errorInfo)
+			*errorInfo = FormatMsg(GetDataPacket_Err_Timeout, "GetDataPacket", errMsg);
+		OKfree(errMsg);
+		return GetDataPacket_Err_Timeout;
+	}
 	
 	return 0;		 
+
+CmtError:
 	
-Error:
-	char	errMsg[CMT_MAX_MESSAGE_BUF_SIZE];
-	CmtGetErrorMessage (error, errMsg);
-	*errorInfo = FormatMsg(error, "GetDataPacket", errMsg);
+	char	cmtErrMsg[CMT_MAX_MESSAGE_BUF_SIZE];
+	CmtGetErrorMessage (error, cmtErrMsg);
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "GetDataPacket", cmtErrMsg);
 	return error;
 }
 

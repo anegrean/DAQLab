@@ -29,26 +29,32 @@
 #define  CICOTskSet                       4
 #define  CICOTskSet_ChanSet               2       /* control type: tab, callback function: (none) */
 
-#define  COFREQPAN                        5
-#define  COFREQPAN_Plate                  2       /* control type: deco, callback function: (none) */
-#define  COFREQPAN_IdleState              3       /* control type: ring, callback function: (none) */
-#define  COFREQPAN_Frequency              4       /* control type: numeric, callback function: (none) */
-#define  COFREQPAN_InitialDelay           5       /* control type: numeric, callback function: (none) */
-#define  COFREQPAN_DutyCycle              6       /* control type: numeric, callback function: (none) */
+#define  COFreqPan                        5
+#define  COFreqPan_NPulses                2       /* control type: numeric, callback function: (none) */
+#define  COFreqPan_Mode                   3       /* control type: ring, callback function: (none) */
+#define  COFreqPan_Plate                  4       /* control type: deco, callback function: (none) */
+#define  COFreqPan_IdleState              5       /* control type: ring, callback function: (none) */
+#define  COFreqPan_Frequency              6       /* control type: numeric, callback function: (none) */
+#define  COFreqPan_InitialDelay           7       /* control type: numeric, callback function: (none) */
+#define  COFreqPan_DutyCycle              8       /* control type: numeric, callback function: (none) */
 
-#define  COTICKPAN                        6
-#define  COTICKPAN_Plate                  2       /* control type: deco, callback function: (none) */
-#define  COTICKPAN_IdleState              3       /* control type: ring, callback function: (none) */
-#define  COTICKPAN_LowTicks               4       /* control type: numeric, callback function: (none) */
-#define  COTICKPAN_InitialDelay           5       /* control type: numeric, callback function: (none) */
-#define  COTICKPAN_HighTicks              6       /* control type: numeric, callback function: (none) */
+#define  COTicksPan                       6
+#define  COTicksPan_NPulses               2       /* control type: numeric, callback function: (none) */
+#define  COTicksPan_Mode                  3       /* control type: ring, callback function: (none) */
+#define  COTicksPan_Plate                 4       /* control type: deco, callback function: (none) */
+#define  COTicksPan_IdleState             5       /* control type: ring, callback function: (none) */
+#define  COTicksPan_LowTicks              6       /* control type: numeric, callback function: (none) */
+#define  COTicksPan_InitialDelay          7       /* control type: numeric, callback function: (none) */
+#define  COTicksPan_HighTicks             8       /* control type: numeric, callback function: (none) */
 
-#define  COTIMPAN                         7
-#define  COTIMPAN_Plate                   2       /* control type: deco, callback function: (none) */
-#define  COTIMPAN_IdleState               3       /* control type: ring, callback function: (none) */
-#define  COTIMPAN_LowTime                 4       /* control type: numeric, callback function: (none) */
-#define  COTIMPAN_InitialDelay            5       /* control type: numeric, callback function: (none) */
-#define  COTIMPAN_HighTime                6       /* control type: numeric, callback function: (none) */
+#define  COTimePan                        7
+#define  COTimePan_NPulses                2       /* control type: numeric, callback function: (none) */
+#define  COTimePan_Mode                   3       /* control type: ring, callback function: (none) */
+#define  COTimePan_Plate                  4       /* control type: deco, callback function: (none) */
+#define  COTimePan_IdleState              5       /* control type: ring, callback function: (none) */
+#define  COTimePan_LowTime                6       /* control type: numeric, callback function: (none) */
+#define  COTimePan_InitialDelay           7       /* control type: numeric, callback function: (none) */
+#define  COTimePan_HighTime               8       /* control type: numeric, callback function: (none) */
 
 #define  DevListPan                       8
 #define  DevListPan_DAQTable              2       /* control type: table, callback function: ManageDevices_CB */
@@ -201,12 +207,10 @@
 #define  Trig_TrigSet                     2       /* control type: tab, callback function: (none) */
 
      /* tab page panel controls */
-#define  TRIGPAN_MeasMode                 2       /* control type: ring, callback function: (none) */
-#define  TRIGPAN_NSamples                 3       /* control type: numeric, callback function: (none) */
-#define  TRIGPAN_Plate                    4       /* control type: deco, callback function: (none) */
-#define  TRIGPAN_Slope                    5       /* control type: ring, callback function: (none) */
-#define  TRIGPAN_TrigType                 6       /* control type: ring, callback function: (none) */
-#define  TRIGPAN_Source                   7       /* control type: string, callback function: (none) */
+#define  TrigPan_Plate                    2       /* control type: deco, callback function: (none) */
+#define  TrigPan_Slope                    3       /* control type: ring, callback function: (none) */
+#define  TrigPan_TrigType                 4       /* control type: ring, callback function: (none) */
+#define  TrigPan_Source                   5       /* control type: string, callback function: (none) */
 
 
      /* Control Arrays: */

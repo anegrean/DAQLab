@@ -74,7 +74,7 @@ struct PulseTrain {
 	PulseTrainTimingTypes		pulseType;					// timing type.  
 	PulseTrainIdleStates		idleState;					// counter output idle state
 	PulseTrainModes				mode;						// measurement mode
-	size_t						nPulses;					// number of pulses
+	uInt64						nPulses;					// number of pulses
 };
 
 // pulse train defined by frequency
@@ -101,7 +101,7 @@ struct PulseTrainTickTiming {
 	size_t 						delayTicks;
 };
 
-static void init_PulseTrain_type (PulseTrain_type* pulseTrain, PulseTrainTimingTypes pulseType, PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses) 
+static void init_PulseTrain_type (PulseTrain_type* pulseTrain, PulseTrainTimingTypes pulseType, PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses) 
 {
 	pulseTrain->pulseType		= pulseType;
 	pulseTrain->mode			= mode;
@@ -109,7 +109,7 @@ static void init_PulseTrain_type (PulseTrain_type* pulseTrain, PulseTrainTimingT
 	pulseTrain->idleState		= idleState;
 }
 
-PulseTrainFreqTiming_type* init_PulseTrainFreqTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses, double dutyCycle, double frequency, double initialDelay)
+PulseTrainFreqTiming_type* init_PulseTrainFreqTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, double dutyCycle, double frequency, double initialDelay)
 {
 	PulseTrainFreqTiming_type*	pulseTrain = malloc (sizeof(PulseTrainFreqTiming_type));
 	if (!pulseTrain) return NULL;
@@ -125,7 +125,7 @@ PulseTrainFreqTiming_type* init_PulseTrainFreqTiming_type (PulseTrainModes mode,
 	return pulseTrain;
 }
 
-PulseTrainTimeTiming_type* init_PulseTrainTimeTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses, double highTime, double lowTime, double initialDelay)
+PulseTrainTimeTiming_type* init_PulseTrainTimeTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, double highTime, double lowTime, double initialDelay)
 {
 	PulseTrainTimeTiming_type* pulseTrain = malloc (sizeof(PulseTrainTimeTiming_type));
 	if (!pulseTrain) return NULL;
@@ -141,7 +141,7 @@ PulseTrainTimeTiming_type* init_PulseTrainTimeTiming_type (PulseTrainModes mode,
 	return pulseTrain;
 }
 
-PulseTrainTickTiming_type* init_PulseTrainTickTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses, size_t highTicks, size_t lowTicks, size_t delayTicks)
+PulseTrainTickTiming_type* init_PulseTrainTickTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, size_t highTicks, size_t lowTicks, size_t delayTicks)
 {
 	PulseTrainTickTiming_type* pulseTrain = malloc (sizeof(PulseTrainTickTiming_type));
 	if (!pulseTrain) return NULL;
@@ -177,13 +177,13 @@ PulseTrainIdleStates GetPulseTrainIdleState (PulseTrain_type* pulseTrain)
 }
 
 // sets the pulsetrain amount of pulses
-void SetPulseTrainNPulses (PulseTrain_type* pulseTrain, size_t nPulses)
+void SetPulseTrainNPulses (PulseTrain_type* pulseTrain, uInt64 nPulses)
 {
 	pulseTrain->nPulses = nPulses;	
 }
 
 // gets the pulsetrain amount of pulses
-size_t GetPulseTrainNPulses (PulseTrain_type* pulseTrain)
+uInt64 GetPulseTrainNPulses (PulseTrain_type* pulseTrain)
 {
 	return pulseTrain->nPulses;	
 }
@@ -312,14 +312,6 @@ void SetPulseTrainTimeTimingInitialDelay (PulseTrainTimeTiming_type* pulseTrain,
 double GetPulseTrainTimeTimingInitialDelay (PulseTrainTimeTiming_type* pulseTrain)
 {
 	return pulseTrain->initialDelay;
-}
-
-
-void discard_Pulsetrain_type (PulseTrain_type** pulsetrain)
-{
-	if (!*pulsetrain) return;
-	
-	OKfree(*pulsetrain);
 }
 
 PulseTrain_type* CopyPulseTrain(PulseTrain_type* pulsetrain)

@@ -50,7 +50,7 @@
 	// CO Task
 #define DAQmxDefault_CO_Task_idlestate    				PulseTrainIdle_Low   	// terminal state at rest, pulses switch this to the oposite state
 #define DAQmxDefault_CO_Task_timeout      				5.0            			// task timeout in [s] 
-#define DAQmxDefault_CO_Task_npulses      				1000            		// number of finite pulses 
+#define DAQmxDefault_CO_Task_nPulses      				1000            		// number of finite pulses 
  	// CO Frequency Task 
 #define DAQmxDefault_CO_Frequency_Task_freq				1000000   				// frequency in [Hz]
 #define DAQmxDefault_CO_Frequency_Task_dutycycle    	50.0					// duty cycle
@@ -525,18 +525,6 @@ typedef struct {
 //	SampClockEdge_type 			sampClkEdge;   				// Sample clock active edge.
 //	char*         				refClkSource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
 	double        				refClkFreq;    				// Reference clock frequency if such a clock is used.
-	
-	//------------------------------------
-	// UI
-	//------------------------------------
-	int							freqCtrlID;					// Timing setting control copy IDs
-	int							dutycycleCtrlID;			// Timing setting control copy IDs
-	int							timehighCtrlID;				// Timing setting control copy IDs
-	int							timelowCtrlID;				// Timing setting control copy IDs
-	int							tickshighCtrlID;			// Timing setting control copy IDs
-	int							tickslowCtrlID;				// Timing setting control copy IDs
-	int							idlestateCtrlID;			// Timing setting control copy IDs
-	int							initdelayCtrlID;			// Timing setting control copy IDs
 } CounterTaskTiming_type;
 
 	
@@ -983,6 +971,7 @@ static int 							AO_Timing_TaskSet_CB	 				(int panel, int control, int event, 
 	// AO continuous streaming data structure
 static WriteAOData_type* 			init_WriteAOData_type					(Dev_type* dev);
 static void							discard_WriteAOData_type				(WriteAOData_type** a);
+
 	// DO continuous streaming data structure
 static WriteDOData_type* 			init_WriteDOData_type					(Dev_type* dev);
 static void							discard_WriteDOData_type				(WriteDOData_type** a);
@@ -999,35 +988,11 @@ static void							discard_CITaskSet_type					(CITaskSet_type** a);
 	// CO task settings
 static COTaskSet_type*				init_COTaskSet_type						(void);
 static void							discard_COTaskSet_type					(COTaskSet_type** a);
-
-void 								GetCO_HiLo								(double freq,double dutycycle,double* hightime,double* lowtime);
-
-// to be cleaned up -------------------------------------------------------------------
-
-static int CVICALLBACK 				CO_Freq_TaskSet_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
-
-static int CVICALLBACK 				CO_Duty_TaskSet_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
-
-static int CVICALLBACK 				CO_InitDelay_TaskSet_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
-static int CVICALLBACK 				CO_InitDelayTicks_TaskSet_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
-static int CVICALLBACK 				CO_IdleState_TaskSet_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
-static int CVICALLBACK 				CO_THigh_TaskSet_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
-static int CVICALLBACK 				CO_TLow_TaskSet_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
-static int CVICALLBACK 				CO_TicksHigh_TaskSet_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
-static int CVICALLBACK 				CO_TicksLow_TaskSet_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
-static int CVICALLBACK 				CO_Clk_TaskSet_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
-static int CVICALLBACK 				CO_Trig_TaskSet_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
-
-//---------------------------------------------------------------------- to be cleaned up
+static int CVICALLBACK 				Chan_CO_Pulse_Frequency_CB				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				Chan_CO_Pulse_Time_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				Chan_CO_Pulse_Ticks_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				Chan_CO_Clk_CB							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				Chan_CO_Trig_CB							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 //-----------------------
 // DAQmx tasks management
@@ -1201,11 +1166,11 @@ static int							AISamplingRate_DataReceivedTC			(TaskControl_type* taskControl,
 static int							AOnSamples_DataReceivedTC				(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 	// AO sampling rate used for acquisition per task controller iteration
 static int							AOSamplingRate_DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
-	// AO data
+	// AO data when the task controller is not active
 static int							AO_DataReceivedTC						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 	// DO data
 static int							DO_DataReceivedTC						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
-	// pulse train data
+	// CO pulse train data when the task controller is not active
 static int				 			CO_DataReceivedTC						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 
@@ -2841,19 +2806,19 @@ static ChanSet_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], P
 			
 		case PulseTrain_Freq:
 			chanType 				= Chan_CO_Pulse_Frequency;
-			COChanSet->pulseTrain   = (PulseTrain_type*) init_PulseTrainFreqTiming_type(PulseTrain_Finite, DAQmxDefault_CO_Task_idlestate, DAQmxDefault_CO_Task_npulses, 
+			COChanSet->pulseTrain   = (PulseTrain_type*) init_PulseTrainFreqTiming_type(PulseTrain_Finite, DAQmxDefault_CO_Task_idlestate, DAQmxDefault_CO_Task_nPulses, 
 									  DAQmxDefault_CO_Frequency_Task_dutycycle, DAQmxDefault_CO_Frequency_Task_freq, DAQmxDefault_CO_Frequency_Task_initdelay); 
 			break;
 			
 		case PulseTrain_Time:
 			chanType = Chan_CO_Pulse_Time;
-			COChanSet->pulseTrain   = (PulseTrain_type*) init_PulseTrainTimeTiming_type(PulseTrain_Finite, DAQmxDefault_CO_Task_idlestate, DAQmxDefault_CO_Task_npulses, 
+			COChanSet->pulseTrain   = (PulseTrain_type*) init_PulseTrainTimeTiming_type(PulseTrain_Finite, DAQmxDefault_CO_Task_idlestate, DAQmxDefault_CO_Task_nPulses, 
 									  DAQmxDefault_CO_Time_Task_hightime, DAQmxDefault_CO_Time_Task_lowtime, DAQmxDefault_CO_Time_Task_initdelay); 
 			break;
 			
 		case PulseTrain_Ticks:
 			chanType = Chan_CO_Pulse_Ticks;
-			COChanSet->pulseTrain   = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, DAQmxDefault_CO_Task_idlestate, DAQmxDefault_CO_Task_npulses,
+			COChanSet->pulseTrain   = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, DAQmxDefault_CO_Task_idlestate, DAQmxDefault_CO_Task_nPulses,
 									  DAQmxDefault_CO_Ticks_Task_highticks, DAQmxDefault_CO_Ticks_Task_lowticks, DAQmxDefault_CO_Ticks_Task_initdelayticks);  
 			break;
 	}
@@ -3743,282 +3708,273 @@ static void discard_COTaskSet_type (COTaskSet_type** a)
 	
 }
 
-static int CVICALLBACK CO_Freq_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK Chan_CO_Pulse_Frequency_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	ChanSet_CO_type* 	selectedChan 	= callbackData;
 	DataPacket_type*  	dataPacket		= NULL;
 	char*				errMsg			= NULL;
 	int					error			= 0;
-	double 				frequency; 
-	PulseTrain_type* 	pulsetrain;
+	int					generationMode;
+	double 				frequency;
+	double				dutyCycle;
+	double				initialDelay;
+	int 				idleState;
+	uInt64				nPulses;
+	PulseTrain_type* 	pulseTrain		= NULL;
 	
 	if (event != EVENT_COMMIT) return 0;
-			
-	GetCtrlVal(panel, control, &frequency);
-	SetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)selectedChan->pulseTrain, frequency);
 	
-	//send pulsetrain on freq change
-	pulsetrain	= CopyPulseTrain(selectedChan->pulseTrain); 
-	dataPacket 	= init_DataPacket_type(DL_PulseTrain_Freq, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);
-	
-	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, dataPacket, 0, &errMsg) ); 
-	
-	// configure CO task
-	errChk(ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );   
-			
-	return 0;
-	
-Error:
-	
-	discard_DataPacket_type(&dataPacket);
-	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
-	
-	return 0;
-}
-
-static int CVICALLBACK CO_Duty_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
-{
-	ChanSet_CO_type* 	selectedChan 	= callbackData;
-	char*				errMsg			= NULL;
-	int					error			= 0;
-	double 				dutyCycle; 
-	
-	if (event != EVENT_COMMIT) return 0;  
-			
-	GetCtrlVal(panel, control, &dutyCycle); 
-	SetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)selectedChan->pulseTrain, dutyCycle); 
-	
-	// configure CO task
-	errChk ( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
-	
-	return 0;
-	
-Error:
-	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
-	
-	return 0;
-}
-
-
-static int CVICALLBACK CO_InitDelay_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
-{
-	ChanSet_CO_type* 	selectedChan = callbackData;
-	char*				errMsg			= NULL;
-	int					error			= 0;
-    double 				delay; 
-	
-	if (event != EVENT_COMMIT) return 0; 
-			
-	GetCtrlVal(panel, control, &delay);		// read in [ms]
-	delay *= 1e-3;   						// convert to [s] 
+	switch (control) {
 		
-	switch (GetPulseTrainType(selectedChan->pulseTrain)) {
-			
-		case PulseTrain_Freq:
-	 		SetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)selectedChan->pulseTrain, delay); 
+		case COFreqPan_Mode:
+			GetCtrlVal(panel, control, &generationMode);
+			if (generationMode == MeasFinite) {
+				selectedChan->taskTiming->measMode = MeasFinite;
+				SetPulseTrainMode(selectedChan->pulseTrain, MeasFinite);
+				// undim N Pulses
+				SetCtrlAttribute(panel, COFreqPan_NPulses, ATTR_DIMMED, 0); 
+			} else {
+				selectedChan->taskTiming->measMode = MeasCont;
+				SetPulseTrainMode(selectedChan->pulseTrain, MeasCont);
+				// dim N Pulses
+				SetCtrlAttribute(panel, COFreqPan_NPulses, ATTR_DIMMED, 1); 
+			}
 			break;
-					
-		case PulseTrain_Time:
-	 		SetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)selectedChan->pulseTrain, delay); 
+			
+		case COFreqPan_NPulses:
+			GetCtrlVal(panel, control, &nPulses);
+			SetPulseTrainNPulses(selectedChan->pulseTrain, nPulses);
+			break;
+			
+		case COFreqPan_Frequency:
+			GetCtrlVal(panel, control, &frequency);
+			SetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)selectedChan->pulseTrain, frequency);
+			break;
+			
+		case COFreqPan_DutyCycle:
+			GetCtrlVal(panel, control, &dutyCycle); 
+			SetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)selectedChan->pulseTrain, dutyCycle); 
+			break;
+			
+		case COFreqPan_InitialDelay:
+			GetCtrlVal(panel, control, &initialDelay);		// read in [ms]
+			initialDelay *= 1e-3;   						// convert to [s] 
+			SetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)selectedChan->pulseTrain, initialDelay);
+			break;
+			
+		case COFreqPan_IdleState:
+			GetCtrlVal(panel, control, &idleState);
+			if (idleState == 0) 
+				SetPulseTrainIdleState(selectedChan->pulseTrain, PulseTrainIdle_Low);
+			else 
+				SetPulseTrainIdleState(selectedChan->pulseTrain, PulseTrainIdle_High);
 			break;
 	}
-			 
-	// configure CO task
-	errChk ( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
-	
-	return 0;
-	
-Error:
-	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
-	
-	return 0;
-}
-
-
-static int CVICALLBACK CO_InitDelayTicks_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
-{
-	ChanSet_CO_type* 	selectedChan 	= callbackData;
-	char*				errMsg			= NULL;
-	int					error			= 0;
-	int 				delay;  
-	   
-	if (event != EVENT_COMMIT) return 0;
-	
-	GetCtrlVal(panel, control, &delay);
-	SetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)selectedChan->pulseTrain, delay); 
 	
 	// configure CO task
-	errChk(ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
+	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
 	
-	return 0;
-	
-Error:
-	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
-	
-	return 0;
-}
-
-
-static int CVICALLBACK CO_IdleState_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
-{
-	ChanSet_CO_type* 	selectedChan 	= callbackData;
-	char*				errMsg			= NULL;
-	int					error			= 0;
-	int 				idleState;  
-
-	if (event != EVENT_COMMIT) return 0; 
-	
-	GetCtrlVal(panel, control, &idleState);
-			
-	if (idleState==0) 
-		SetPulseTrainIdleState(selectedChan->pulseTrain, PulseTrainIdle_Low);
-	else 
-		SetPulseTrainIdleState(selectedChan->pulseTrain, PulseTrainIdle_High);
-	
-	// configure CO task
-	errChk(ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
-	
-	return 0;
-	
-Error:
-	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
-	
-	return 0;
-}
-
-static int CVICALLBACK CO_THigh_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
-{
-	ChanSet_CO_type* 	selectedChan 	= callbackData;
-	DataPacket_type*	dataPacket		= NULL;
-	char*				errMsg			= NULL;
-	int					error			= 0;
-    double 				time;
-	PulseTrain_type* 	pulsetrain;
-	
-	if (event != EVENT_COMMIT) return 0;   
-	
-	GetCtrlVal(panel, control, &time);		// read in [ms]
-	time *= 1e-3;							// convert to [s]
-	SetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*) selectedChan->pulseTrain, time);
-	
-	//send pulsetrain on freq change
-	pulsetrain	= CopyPulseTrain(selectedChan->pulseTrain);
-	dataPacket 	= init_DataPacket_type(DL_PulseTrain_Time, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);  
-	
+	// send new pulse train
+	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
+	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
 	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, dataPacket, 0, &errMsg) ); 
 	
-	// configure CO task
-	errChk(ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
 	
-	return 0; 
+	return 0;
 	
 Error:
 	
+	// clean up
 	discard_DataPacket_type(&dataPacket);
+	discard_PulseTrain_type(&pulseTrain);
 	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
+	if (!errMsg)
+		DLMsg("Chan_CO_Pulse_Frequency_CB Error: Out of memory", 1);	
+	else {
+		DLMsg(errMsg, 1);
+		OKfree(errMsg);
+	}
 	
 	return 0;
-	
 }
 
-static int CVICALLBACK CO_TLow_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK Chan_CO_Pulse_Time_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	ChanSet_CO_type* 	selectedChan 	= callbackData;
-	DataPacket_type*  	dataPacket		= NULL;      
+	DataPacket_type*  	dataPacket		= NULL;
 	char*				errMsg			= NULL;
 	int					error			= 0;
-	double 				time;
-	PulseTrain_type* 	pulsetrain;         
+	int					generationMode;
+	double				time;
+	double				initialDelay;
+	int 				idleState;
+	uInt64				nPulses;
+	PulseTrain_type* 	pulseTrain		= NULL;
 	
-	if (event != EVENT_COMMIT) return 0; 
+	if (event != EVENT_COMMIT) return 0;
 	
-	GetCtrlVal(panel, control, &time);		// read in [ms]
-	time *= 1e-3;							// convert to [s] 
-	SetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*) selectedChan->pulseTrain, time);  
-	
-	pulsetrain	= CopyPulseTrain(selectedChan->pulseTrain); 
-	dataPacket 	= init_DataPacket_type(DL_PulseTrain_Time, pulsetrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type);  
-	
-	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, dataPacket, 0, &errMsg) );
+	switch (control) {
+			
+		case COTimePan_Mode:
+			GetCtrlVal(panel, control, &generationMode);
+			if (generationMode == MeasFinite) {
+				selectedChan->taskTiming->measMode = MeasFinite;
+				SetPulseTrainMode(selectedChan->pulseTrain, MeasFinite);
+				// undim N Pulses
+				SetCtrlAttribute(panel, COTimePan_NPulses, ATTR_DIMMED, 0); 
+			} else {
+				selectedChan->taskTiming->measMode = MeasCont;
+				SetPulseTrainMode(selectedChan->pulseTrain, MeasCont);
+				// dim N Pulses
+				SetCtrlAttribute(panel, COTimePan_NPulses, ATTR_DIMMED, 1); 
+			}
+			break;
+			
+		case COTimePan_NPulses:
+			GetCtrlVal(panel, control, &nPulses);
+			SetPulseTrainNPulses(selectedChan->pulseTrain, nPulses);
+			break;
+		
+		case COTimePan_LowTime:
+			GetCtrlVal(panel, control, &time);				// read in [ms]
+			time *= 1e-3;									// convert to [s]
+			SetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)selectedChan->pulseTrain, time); 
+			break;
+			
+		case COTimePan_HighTime:
+			GetCtrlVal(panel, control, &time);				// read in [ms]
+			time *= 1e-3;									// convert to [s] 
+			SetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)selectedChan->pulseTrain, time); 
+			break;
+			
+		case COTimePan_InitialDelay:
+			GetCtrlVal(panel, control, &initialDelay);		// read in [ms]
+			initialDelay *= 1e-3;   						// convert to [s] 
+			SetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)selectedChan->pulseTrain, initialDelay);
+			break;
+			
+		case COTimePan_IdleState:
+			GetCtrlVal(panel, control, &idleState);
+			if (idleState == 0) 
+				SetPulseTrainIdleState(selectedChan->pulseTrain, PulseTrainIdle_Low);
+			else 
+				SetPulseTrainIdleState(selectedChan->pulseTrain, PulseTrainIdle_High);
+			break;
+	}
 	
 	// configure CO task
-	errChk (ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
+	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
+	
+	// send new pulse train
+	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
+	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
+	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, dataPacket, 0, &errMsg) ); 
 	
 	return 0;
 	
 Error:
 	
+	// clean up
 	discard_DataPacket_type(&dataPacket);
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
+	discard_PulseTrain_type(&pulseTrain);
+	
+	if (!errMsg)
+		DLMsg("Chan_CO_Pulse_Frequency_CB Error: Out of memory", 1);	
+	else {
+		DLMsg(errMsg, 1);
+		OKfree(errMsg);
+	}
 	
 	return 0;
 }
 
-static int CVICALLBACK CO_TicksHigh_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK Chan_CO_Pulse_Ticks_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	ChanSet_CO_type* 	selectedChan 	= callbackData;
+	DataPacket_type*  	dataPacket		= NULL;
 	char*				errMsg			= NULL;
 	int					error			= 0;
-	int 				ticks;
+	int					generationMode;
+	int					ticks;
+	int 				idleState;
+	uInt64				nPulses;
+	PulseTrain_type* 	pulseTrain		= NULL;
 	
-	if (event != EVENT_COMMIT) return 0; 
+	if (event != EVENT_COMMIT) return 0;
 	
-	GetCtrlVal(panel, control, &ticks);
-	SetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*) selectedChan->pulseTrain, ticks);          
+	switch (control) {
+			
+		case COTicksPan_Mode:
+			GetCtrlVal(panel, control, &generationMode);
+			if (generationMode == MeasFinite) {
+				selectedChan->taskTiming->measMode = MeasFinite;
+				SetPulseTrainMode(selectedChan->pulseTrain, MeasFinite);
+				// undim N Pulses
+				SetCtrlAttribute(panel, COTicksPan_NPulses, ATTR_DIMMED, 0); 
+			} else {
+				selectedChan->taskTiming->measMode = MeasCont;
+				SetPulseTrainMode(selectedChan->pulseTrain, MeasCont); 
+				// dim N Pulses
+				SetCtrlAttribute(panel, COTicksPan_NPulses, ATTR_DIMMED, 1); 
+			}
+			break;
+			
+		case COTicksPan_NPulses:
+			GetCtrlVal(panel, control, &nPulses);
+			SetPulseTrainNPulses(selectedChan->pulseTrain, nPulses);
+			break;
+		
+		case COTicksPan_LowTicks:
+			GetCtrlVal(panel, control, &ticks);
+			SetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)selectedChan->pulseTrain, ticks); 
+			break;
+			
+		case COTicksPan_HighTicks:
+			GetCtrlVal(panel, control, &ticks);
+			SetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)selectedChan->pulseTrain, ticks); 
+			break;
+			
+		case COTicksPan_InitialDelay:
+			GetCtrlVal(panel, control, &ticks);
+			SetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)selectedChan->pulseTrain, ticks); 
+			break;
+			
+		case COTicksPan_IdleState:
+			GetCtrlVal(panel, control, &idleState);
+			if (idleState == 0) 
+				SetPulseTrainIdleState(selectedChan->pulseTrain, PulseTrainIdle_Low);
+			else 
+				SetPulseTrainIdleState(selectedChan->pulseTrain, PulseTrainIdle_High);
+			break;
+	}
 	
 	// configure CO task
-	errChk(ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
+	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
+	
+	// send new pulse train
+	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
+	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
+	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, dataPacket, 0, &errMsg) ); 
 	
 	return 0;
 	
 Error:
 	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
+	// clean up
+	discard_DataPacket_type(&dataPacket);
+	discard_PulseTrain_type(&pulseTrain);
 	
-	return 0;
-	
-}
-
-static int CVICALLBACK CO_TicksLow_TaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
-{
-	ChanSet_CO_type* 	selectedChan 	= callbackData;
-	char*				errMsg			= NULL;
-	int					error			= 0;
-	int 				ticks;
-	
-	if (event != EVENT_COMMIT) return 0;    
-	
-	GetCtrlVal(panel, control, &ticks);
-	SetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*) selectedChan->pulseTrain, ticks);	
-	
-	// configure CO task
-	errChk(ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
-	
-	return 0;
-	
-Error:
-	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
+	if (!errMsg)
+		DLMsg("Chan_CO_Pulse_Frequency_CB Error: Out of memory", 1);	
+	else {
+		DLMsg(errMsg, 1);
+		OKfree(errMsg);
+	}
 	
 	return 0;
 }
 
-static int CVICALLBACK CO_Clk_TaskSet_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK Chan_CO_Clk_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	ChanSet_CO_type* 	selectedChan 	= callbackData; 
 	char*				errMsg			= NULL;
@@ -4078,7 +4034,7 @@ Error:
 	return 0;
 }
 
-static int CVICALLBACK CO_Trig_TaskSet_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK Chan_CO_Trig_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	ChanSet_CO_type* 			selectedChan 		= callbackData; 
 	char*						errMsg				= NULL;
@@ -4092,55 +4048,35 @@ static int CVICALLBACK CO_Trig_TaskSet_CB	(int panel, int control, int event, vo
 	
 	switch (control) { 							  
 			
-		case TRIGPAN_Slope:
+		case TrigPan_Slope:
 			
 		  	GetCtrlVal(panel, control, &intval);
 			if (intval == TrigSlope_Rising) selectedChan->baseClass.startTrig->slope = TrigSlope_Rising;
 			if (intval == TrigSlope_Falling) selectedChan->baseClass.startTrig->slope = TrigSlope_Falling; 
 			break;
 			
- 		case TRIGPAN_TrigType:
+ 		case TrigPan_TrigType:
 			
 			GetCtrlVal(panel, control,&intval); 
 			if (intval == Trig_None) {
 				selectedChan->baseClass.startTrig->trigType = DAQmx_Val_None;
-				SetCtrlAttribute(panel,TRIGPAN_Slope,ATTR_DIMMED,TRUE);
-				SetCtrlAttribute(panel,TRIGPAN_Source,ATTR_DIMMED,TRUE); 
+				SetCtrlAttribute(panel,TrigPan_Slope,ATTR_DIMMED,TRUE);
+				SetCtrlAttribute(panel,TrigPan_Source,ATTR_DIMMED,TRUE); 
 			}
 			
 			if (intval == Trig_DigitalEdge) {
 				selectedChan->baseClass.startTrig->trigType = DAQmx_Val_DigEdge;
-				SetCtrlAttribute(panel,TRIGPAN_Slope,ATTR_DIMMED,FALSE);
-				SetCtrlAttribute(panel,TRIGPAN_Source,ATTR_DIMMED,FALSE); 
+				SetCtrlAttribute(panel,TrigPan_Slope,ATTR_DIMMED,FALSE);
+				SetCtrlAttribute(panel,TrigPan_Source,ATTR_DIMMED,FALSE); 
 			}
 			break;
 			
-		case TRIGPAN_MeasMode:
-			
-			GetCtrlVal(panel, control,&intval);
-			if (intval == MeasFinite) {
-				selectedChan->taskTiming->measMode = MeasFinite;
-				SetPulseTrainMode( selectedChan->pulseTrain,MeasFinite);   
-			}
-			if (intval == MeasCont){ 
-				selectedChan->taskTiming->measMode = MeasCont;
-				SetPulseTrainMode( selectedChan->pulseTrain,MeasCont); 
-			}
-			break;
-			
-		case TRIGPAN_NSamples:
-			
-			GetCtrlVal(panel, control,&selectedChan->taskTiming->nSamples);
-			//sets the pulsetrain number of pulses
-			SetPulseTrainNPulses(selectedChan->pulseTrain, selectedChan->taskTiming->nSamples);
-			break;	
-			
-		case TRIGPAN_Source:
+		case TrigPan_Source:
 			
 			OKfree(selectedChan->baseClass.startTrig->trigSource);
 			GetCtrlValStringLength(panel, control, &buffsize);
 			selectedChan->baseClass.startTrig->trigSource = malloc((buffsize+1) * sizeof(char)); // including ASCII null
-			GetCtrlVal(panel, TRIGPAN_Source, selectedChan->baseClass.startTrig->trigSource);
+			GetCtrlVal(panel, TrigPan_Source, selectedChan->baseClass.startTrig->trigSource);
 			break;
 			
 	}
@@ -4247,7 +4183,7 @@ static CounterTaskTiming_type* init_CounterTaskTiming_type (void)
 	
 	// Counter task
 	taskTiming -> measMode				= MeasFinite;
-	taskTiming -> nSamples				= DAQmxDefault_CO_Task_npulses;
+	taskTiming -> nSamples				= DAQmxDefault_CO_Task_nPulses;
 	taskTiming -> refNSamples			= &taskTiming->nSamples;
 	taskTiming -> sampleRate			= DAQmxDefault_Task_SampleRate;
 	taskTiming -> refSampleRate			= &taskTiming->sampleRate;
@@ -4255,16 +4191,6 @@ static CounterTaskTiming_type* init_CounterTaskTiming_type (void)
 //	taskTiming -> sampClkEdge			= SampClockEdge_Rising;
 //	taskTiming -> refClkSource			= NULL;									// onboard clock has no external reference to sync to
 	taskTiming -> refClkFreq			= DAQmxDefault_Task_RefClkFreq;
-	
-	// UI
-	taskTiming -> dutycycleCtrlID		= 0;
-	taskTiming -> freqCtrlID			= 0;
-	taskTiming -> idlestateCtrlID		= 0;
-	taskTiming -> initdelayCtrlID		= 0;
-	taskTiming -> tickshighCtrlID		= 0;
-	taskTiming -> tickslowCtrlID		= 0;
-	taskTiming -> timehighCtrlID		= 0;
-	taskTiming -> timelowCtrlID			= 0;
 	
 	return taskTiming;
 }
@@ -4509,19 +4435,29 @@ Error:
 
 static void COPulseTrainSinkVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
+	ChanSet_CO_type* 		COChanSet		= GetVChanOwner(self);
+	int						timingPanHndl;
+	
+	// dim timing UI pulse train controls
+	GetPanelHandleFromTabPage(COChanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
+	SetPanelAttribute(timingPanHndl, ATTR_DIMMED, 1);
 	
 }
 
 static void COPulseTrainSinkVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
+	ChanSet_CO_type* 		COChanSet		= GetVChanOwner(self);
+	int						timingPanHndl;
 	
+	// undim timing UI pulse train controls
+	GetPanelHandleFromTabPage(COChanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
+	SetPanelAttribute(timingPanHndl, ATTR_DIMMED, 0);
 }
 
 // pulsetrain command VChan connected callback
 static void	COPulseTrainSourceVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	// construct pulse train packet when a connection is created with default settings and send it
-	
 	ChanSet_CO_type* 		COChanSet		= GetVChanOwner(self);	  
 	PulseTrain_type* 		pulseTrain		= NULL;
 	DataPacket_type*  		dataPacket		= NULL;
@@ -4535,15 +4471,15 @@ static void	COPulseTrainSourceVChan_Connected (VChan_type* self, void* VChanOwne
 	switch(pulseType){
 			
 		case PulseTrain_Freq:
-			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, pulseTrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type) );  
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
 			break;
 			
 		case PulseTrain_Time:
-			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, pulseTrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type) );  
+			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
 			break;
 			
 		case PulseTrain_Ticks: 
-			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, pulseTrain, (DiscardPacketDataFptr_type) discard_Pulsetrain_type) );  
+			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
 			break;
 			
 	}
@@ -4562,7 +4498,7 @@ Error:
 		DLMsg(errMsg, 1);
 		OKfree(errMsg);
 	} else
-		DLMsg("Out of memory", 1);
+		DLMsg("COPulseTrainSourceVChan_Connected Error: Out of memory", 1);
 	
 }
 
@@ -4963,6 +4899,7 @@ static int CO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 	ChanSet_CO_type*	chanSetCO			= GetVChanOwner((VChan_type*)sinkVChan);	
 	DLDataTypes			dataPacketType;  
 	PulseTrain_type*    pulseTrain;
+	int					timingPanHndl;
 	
 	// update only if task controller is not active
 	if (taskActive) return 0;
@@ -4977,21 +4914,25 @@ static int CO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 	discard_PulseTrain_type(&chanSetCO->pulseTrain); 
 	nullChk( chanSetCO->pulseTrain = CopyPulseTrain(pulseTrain) );
 	ReleaseDataPacket(&dataPackets[nPackets-1]); 
-		
-	switch (GetPulseTrainMode(pulseTrain)){
-				
-		case PulseTrain_Finite:
 	
-			break;
-				
-		case PulseTrain_Continuous:
-		
-			break;
-	}
-		
+	// get CO timing UI panel handle
+	GetPanelHandleFromTabPage(chanSetCO->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
+	
 	switch (dataPacketType) {
 				
 		case DL_PulseTrain_Freq:
+			
+			//
+			switch (GetPulseTrainMode(pulseTrain)){
+				
+				case PulseTrain_Finite:
+	
+					break;
+				
+				case PulseTrain_Continuous:
+		
+					break;
+			}
 			
 			break;
 				
@@ -8885,123 +8826,145 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					//--------------------------
 					// adjust "Timing" tab
 					//--------------------------
-					// get timing tab panel handle
-					int timingPanHndl;
-						
-					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
-						
-					int CO_TimPanHndl;
 					
+					// delete empty Timing tab
+					DeleteTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, 1); 
+					
+					int 					timingPanHndl;	
+					int 					COPulsePanHndl	= 0;
 					double					time;
-						
 					PulseTrainIdleStates	idleState;
-						
+					int 					ctrlIdx;
+					
 					switch (chanType){
 						
 						case Chan_CO_Pulse_Frequency:
-									
-							CO_TimPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COFREQPAN); 
-							newChan->taskTiming->freqCtrlID = DuplicateCtrl(CO_TimPanHndl, COFREQPAN_Frequency, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->freqCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->freqCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_Freq_TaskSet_CB);
-							SetCtrlVal(timingPanHndl, newChan->taskTiming->freqCtrlID, GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)newChan->pulseTrain));
-									
-							newChan->taskTiming->dutycycleCtrlID = DuplicateCtrl(CO_TimPanHndl, COFREQPAN_DutyCycle, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->dutycycleCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->dutycycleCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_Duty_TaskSet_CB);
-							SetCtrlVal(timingPanHndl, newChan->taskTiming->dutycycleCtrlID, GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)newChan->pulseTrain));
+							// load panel
+							COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COFreqPan);
+							InsertPanelAsTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
+							DiscardPanel(COPulsePanHndl);
+							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Timing");
+							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
 							
-							newChan->taskTiming->initdelayCtrlID = DuplicateCtrl(CO_TimPanHndl, COFREQPAN_InitialDelay, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->initdelayCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->initdelayCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_InitDelay_TaskSet_CB);
-							SetCtrlVal(timingPanHndl, newChan->taskTiming->initdelayCtrlID, GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)newChan->pulseTrain)); 
-								
-							newChan->taskTiming->idlestateCtrlID = DuplicateCtrl(CO_TimPanHndl, COFREQPAN_IdleState, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->idlestateCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->idlestateCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_IdleState_TaskSet_CB);
+							// add control callbacks
+							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Frequency_CB, timingPanHndl);
+							
+							// init idle state
 							idleState = GetPulseTrainIdleState(newChan->pulseTrain);
-							if (idleState == PulseTrainIdle_Low) 
-								SetCtrlIndex(timingPanHndl, newChan->taskTiming->idlestateCtrlID, 0);
-							else
-								SetCtrlIndex(timingPanHndl, newChan->taskTiming->idlestateCtrlID, 1);
-									
-							DuplicateCtrl(timingPanHndl, COFREQPAN_Plate, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);   
-							DiscardPanel(CO_TimPanHndl);
-									
+							switch (idleState) {
+								
+								case PulseTrainIdle_Low:
+									SetCtrlIndex(timingPanHndl, COFreqPan_IdleState, 0);
+									break;
+								case PulseTrainIdle_High:
+									SetCtrlIndex(timingPanHndl, COFreqPan_IdleState, 1);
+									break;
+							}
+							
+							// init frequency
+							SetCtrlVal(timingPanHndl, COFreqPan_Frequency, GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)newChan->pulseTrain)); 					// display in [Hz]
+							
+							// init duty cycle
+							SetCtrlVal(timingPanHndl, COFreqPan_DutyCycle, GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)newChan->pulseTrain)); 				// display in [%]
+							
+							// init initial delay
+							SetCtrlVal(timingPanHndl, COFreqPan_InitialDelay, GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)newChan->pulseTrain)*1e3); 	// display in [ms]
+							
+							// init CO generation mode
+							InsertListItem(timingPanHndl, COFreqPan_Mode, -1, "Finite", MeasFinite);
+							InsertListItem(timingPanHndl, COFreqPan_Mode, -1, "Continuous", MeasCont);
+							GetIndexFromValue(timingPanHndl, COFreqPan_Mode, &ctrlIdx, GetPulseTrainMode(newChan->pulseTrain)); 
+							SetCtrlIndex(timingPanHndl, COFreqPan_Mode, ctrlIdx);
+							
+							// init CO N Pulses
+							SetCtrlVal(timingPanHndl, COFreqPan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
+							
 							break;
 									
 						case Chan_CO_Pulse_Time:
-									
-							CO_TimPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COTIMPAN); 
-							newChan->taskTiming->timehighCtrlID = DuplicateCtrl(CO_TimPanHndl, COTIMPAN_HighTime, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->timehighCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->timehighCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_THigh_TaskSet_CB);
-							//set default timing values 
-							time = GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)newChan->pulseTrain); 	// read in [s]
-							time *= 1000;	   																			// convert to [ms]
-							SetCtrlVal(timingPanHndl, newChan->taskTiming->timehighCtrlID, time);
-									
-							newChan->taskTiming->timelowCtrlID = DuplicateCtrl(CO_TimPanHndl, COTIMPAN_LowTime, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->timelowCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->timelowCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_TLow_TaskSet_CB);
-							//set default timing values  
-							time = GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)newChan->pulseTrain); 	// read in [s]
-							time *= 1000;																				// convert to [ms]
-							SetCtrlVal(timingPanHndl, newChan->taskTiming->timelowCtrlID, time);
-									
-							newChan->taskTiming->initdelayCtrlID = DuplicateCtrl(CO_TimPanHndl, COTIMPAN_InitialDelay, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->initdelayCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->initdelayCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_InitDelay_TaskSet_CB);
-							//set default timing values 
-							time = GetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)newChan->pulseTrain);// read in [s] 
-							time *= 1000;																			   	// convert to [ms]   
-							SetCtrlVal(timingPanHndl, newChan->taskTiming->initdelayCtrlID, time);
-									
-							newChan->taskTiming->idlestateCtrlID = DuplicateCtrl(CO_TimPanHndl, COTIMPAN_IdleState, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->idlestateCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->idlestateCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_IdleState_TaskSet_CB);
-							idleState = GetPulseTrainIdleState(newChan->pulseTrain);   
-							if (idleState == PulseTrainIdle_Low) 
-								SetCtrlIndex(timingPanHndl, newChan->taskTiming->idlestateCtrlID, 0);
-							else
-								SetCtrlIndex(timingPanHndl, newChan->taskTiming->idlestateCtrlID, 1);
-									
-							DuplicateCtrl(timingPanHndl, COTIMPAN_Plate, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
-							DiscardPanel(CO_TimPanHndl);
+							
+							COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COTimePan);
+							InsertPanelAsTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
+							DiscardPanel(COPulsePanHndl);
+							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Timing");
+							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
+							
+							// add control callbacks
+							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Time_CB, timingPanHndl);
+							
+							// init idle state
+							idleState = GetPulseTrainIdleState(newChan->pulseTrain);
+							switch (idleState) {
+								
+								case PulseTrainIdle_Low:
+									SetCtrlIndex(timingPanHndl, COTimePan_IdleState, 0);
+									break;
+								case PulseTrainIdle_High:
+									SetCtrlIndex(timingPanHndl, COTimePan_IdleState, 1);
+									break;
+							}
+							
+							// init high time
+							SetCtrlVal(timingPanHndl, COTimePan_HighTime, GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 			// display in [ms]
+							
+							// init low time
+							SetCtrlVal(timingPanHndl, COTimePan_LowTime, GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 				// display in [ms]
+							
+							// init initial delay
+							SetCtrlVal(timingPanHndl, COTimePan_InitialDelay, GetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 	// display in [ms]
+							
+							// init CO generation mode
+							InsertListItem(timingPanHndl, COTimePan_Mode, -1, "Finite", MeasFinite);
+							InsertListItem(timingPanHndl, COTimePan_Mode, -1, "Continuous", MeasCont);
+							GetIndexFromValue(timingPanHndl, COTimePan_Mode, &ctrlIdx, GetPulseTrainMode(newChan->pulseTrain)); 
+							SetCtrlIndex(timingPanHndl, COTimePan_Mode, ctrlIdx);
+							
+							// init CO N Pulses
+							SetCtrlVal(timingPanHndl, COTimePan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
 									
 							break;
 									
 						case Chan_CO_Pulse_Ticks:
-									
-							CO_TimPanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, COTICKPAN); 
-							newChan->taskTiming->tickshighCtrlID = DuplicateCtrl(CO_TimPanHndl, COTICKPAN_HighTicks, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->tickshighCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->tickshighCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_TicksHigh_TaskSet_CB);
-									    
-							SetCtrlVal(timingPanHndl,newChan->taskTiming->tickshighCtrlID, GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));  
-									
-							newChan->taskTiming->tickslowCtrlID = DuplicateCtrl(CO_TimPanHndl, COTICKPAN_LowTicks, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->tickslowCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->tickslowCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_TicksLow_TaskSet_CB);
-							SetCtrlVal(timingPanHndl, newChan->taskTiming->tickslowCtrlID, GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));   
-									
-							newChan->taskTiming->initdelayCtrlID = DuplicateCtrl(CO_TimPanHndl, COTICKPAN_InitialDelay, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->initdelayCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->initdelayCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_InitDelayTicks_TaskSet_CB);
-							SetCtrlVal(timingPanHndl,newChan->taskTiming->initdelayCtrlID, GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));   
-									
-							newChan->taskTiming->idlestateCtrlID = DuplicateCtrl(CO_TimPanHndl, COTICKPAN_IdleState, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);  
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->idlestateCtrlID, ATTR_CALLBACK_DATA, newChan);
-							SetCtrlAttribute(timingPanHndl, newChan->taskTiming->idlestateCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, CO_IdleState_TaskSet_CB);
-							idleState = GetPulseTrainIdleState(newChan->pulseTrain);   
-							if (idleState == PulseTrainIdle_Low) 
-								SetCtrlIndex(timingPanHndl, newChan->taskTiming->idlestateCtrlID, 0);
-							else
-								SetCtrlIndex(timingPanHndl, newChan->taskTiming->idlestateCtrlID, 1);
+							
+							COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COTicksPan);
+							InsertPanelAsTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
+							DiscardPanel(COPulsePanHndl);
+							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Timing");
+							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
+							
+							// add control callbacks
+							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Ticks_CB, timingPanHndl);
+							
+							// init idle state
+							idleState = GetPulseTrainIdleState(newChan->pulseTrain);
+							switch (idleState) {
 								
-							DuplicateCtrl(timingPanHndl, COTICKPAN_Plate, timingPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION);    
-							DiscardPanel(CO_TimPanHndl);
-									
+								case PulseTrainIdle_Low:
+									SetCtrlIndex(timingPanHndl, COTicksPan_IdleState, 0);
+									break;
+								case PulseTrainIdle_High:
+									SetCtrlIndex(timingPanHndl, COTicksPan_IdleState, 1);
+									break;
+							}
+							
+							// init high ticks
+							SetCtrlVal(timingPanHndl, COTicksPan_HighTicks, GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));
+							
+							// init low ticks
+							SetCtrlVal(timingPanHndl, COTicksPan_LowTicks, GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));
+							
+							// init initial delay ticks
+							SetCtrlVal(timingPanHndl, COTicksPan_InitialDelay, GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));   
+							
+							// init CO generation mode
+							InsertListItem(timingPanHndl, COTicksPan_Mode, -1, "Finite", MeasFinite);
+							InsertListItem(timingPanHndl, COTicksPan_Mode, -1, "Continuous", MeasCont);
+							GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, GetPulseTrainMode(newChan->pulseTrain)); 
+							SetCtrlIndex(timingPanHndl, COTicksPan_Mode, ctrlIdx);
+							
+							// init CO N Pulses
+							SetCtrlVal(timingPanHndl, COTicksPan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
+							
 							break;
 					}
 
@@ -9039,7 +9002,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					SetCtrlVal(clkPanHndl, CLKPAN_RefClkSource, "OnboardClock");
 		
 					// add callback to controls in the panel
-					SetCtrlsInPanCBInfo(newChan, CO_Clk_TaskSet_CB, clkPanHndl);
+					SetCtrlsInPanCBInfo(newChan, Chan_CO_Clk_CB, clkPanHndl);
 						
 					//--------------------------
 					// adjust "Trigger" tab
@@ -9051,43 +9014,30 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TriggerTabIdx, &trigPanHndl);
 								
 					// make sure that the host controls are not dimmed before inserting terminal controls!
-					NIDAQmx_NewTerminalCtrl(trigPanHndl, TRIGPAN_Source, 0); // single terminal selection
+					NIDAQmx_NewTerminalCtrl(trigPanHndl, TrigPan_Source, 0); // single terminal selection
 					
 								
 					// adjust sample clock terminal control properties
-					NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TRIGPAN_Source, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
-					NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TRIGPAN_Source, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+					NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TrigPan_Source, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
+					NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TrigPan_Source, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 						
 					// set default start trigger source
 					newChan->baseClass.startTrig->trigSource = StrDup("/Dev2/ao/StartTrigger");
-					SetCtrlVal(trigPanHndl, TRIGPAN_Source, "/Dev2/ao/StartTrigger");
+					SetCtrlVal(trigPanHndl, TrigPan_Source, "/Dev2/ao/StartTrigger");
 						
 					// insert trigger type options
-					InsertListItem(trigPanHndl, TRIGPAN_TrigType, -1, "None", Trig_None); 
-					InsertListItem(trigPanHndl, TRIGPAN_TrigType, -1, "Digital Edge", Trig_DigitalEdge); 
+					InsertListItem(trigPanHndl, TrigPan_TrigType, -1, "None", Trig_None); 
+					InsertListItem(trigPanHndl, TrigPan_TrigType, -1, "Digital Edge", Trig_DigitalEdge); 
 					newChan->baseClass.startTrig->trigType=Trig_None;
-					SetCtrlAttribute(trigPanHndl,TRIGPAN_Slope,ATTR_DIMMED,TRUE);
-					SetCtrlAttribute(trigPanHndl,TRIGPAN_Source,ATTR_DIMMED,TRUE); 									   ;  
+					SetCtrlAttribute(trigPanHndl,TrigPan_Slope,ATTR_DIMMED,TRUE);
+					SetCtrlAttribute(trigPanHndl,TrigPan_Source,ATTR_DIMMED,TRUE); 									   ;  
 						
-					InsertListItem(trigPanHndl,TRIGPAN_Slope , 0, "Rising", TrigSlope_Rising); 
-					InsertListItem(trigPanHndl,TRIGPAN_Slope , 1, "Falling", TrigSlope_Falling);
-					newChan->baseClass.startTrig->slope=TrigSlope_Rising;
+					InsertListItem(trigPanHndl,TrigPan_Slope , 0, "Rising", TrigSlope_Rising); 
+					InsertListItem(trigPanHndl,TrigPan_Slope , 1, "Falling", TrigSlope_Falling);
+					newChan->baseClass.startTrig->slope = TrigSlope_Rising;
 						
-					// measurement mode
-					InsertListItem(trigPanHndl, TRIGPAN_MeasMode, -1, "Finite", MeasFinite);
-					InsertListItem(trigPanHndl, TRIGPAN_MeasMode, -1, "Continuous", MeasCont);
-					int ctrlIdx;
-					
-					GetIndexFromValue(trigPanHndl, TRIGPAN_MeasMode, &ctrlIdx, GetPulseTrainMode(newChan->pulseTrain)); 
-						
-					SetCtrlIndex(trigPanHndl, TRIGPAN_MeasMode, ctrlIdx);
-						
-					int npulses;
-					GetCtrlVal(trigPanHndl,TRIGPAN_NSamples, &npulses); 
-					SetPulseTrainNPulses(newChan->pulseTrain, npulses);
-			
 					// add callback to controls in the panel
-					SetCtrlsInPanCBInfo(newChan, CO_Trig_TaskSet_CB, trigPanHndl);
+					SetCtrlsInPanCBInfo(newChan, Chan_CO_Trig_CB, trigPanHndl);
 						
 					//------------------------------------
 					// Create and register CO Source VChan

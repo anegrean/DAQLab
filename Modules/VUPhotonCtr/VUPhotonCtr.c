@@ -1187,16 +1187,16 @@ static int UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 
 static void	IterateTC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
-	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
-	double timeout=3.0;
-	double delaystep=0.1;
+	VUPhotonCtr_type* 		vupc 				= GetTaskControlModuleData(taskControl);
+	double 					timeout				= 3.0;
+	double 					delaystep			= 0.1;
 	int mode;
-	DataPacket_type*	dataPacket			= NULL;
-	char*				errMsg				= NULL;
-	int					error				= 0;
-	void*				dataPacketDataPtr;
-	DLDataTypes			dataPacketDataType;
-	PulseTrain_type*    pulsetrain;        
+	DataPacket_type*		dataPacket			= NULL;
+	char*					errMsg				= NULL;
+	int						error				= 0;
+	void*					dataPacketDataPtr;
+	DLDataTypes				dataPacketDataType;
+	PulseTrain_type*    	pulsetrain;        
 
 	VUPC_SetStepCounter(vupc,currentIteration);
 	
@@ -1204,7 +1204,7 @@ static void	IterateTC	(TaskControl_type* taskControl, size_t currentIteration, B
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive pulse train settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
-	if (IsVChanConnected(vupc->pulseTrainVchan)) {
+	if (IsVChanConnected((VChan_type*)vupc->pulseTrainVchan)) {
 		errChk( GetDataPacket(vupc->pulseTrainVchan, &dataPacket, &errMsg) );
 		dataPacketDataPtr = GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
 		pulsetrain=*(PulseTrain_type**)dataPacketDataPtr;
@@ -1360,7 +1360,7 @@ static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_t
 		// update only if task controller is not active
 	if (taskActive) return 0;
 	//or not connected to a sink channel
-	if (!(IsVChanConnected(vupc->pulseTrainVchan))) return 0; 
+	if (!(IsVChanConnected((VChan_type*)vupc->pulseTrainVchan))) return 0; 
 	
 	switch(taskState) {
 			
@@ -1396,12 +1396,12 @@ static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_t
 				//only pass frew info  in DL_PulseTrain_Freq  and DL_PulseTrain_Time mode
 				switch (dataPacketType) {
 					case DL_PulseTrain_Freq:
-						vupc->samplingRate=GetPulseTrainFreqTimingFreq(pulsetrain);
+						vupc->samplingRate=GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)pulsetrain);
 						SetCtrlVal(vupc->settingsPanHndl,VUPCSet_SamplingRate,vupc->samplingRate/1000);  //in khz
 						break;
 					case DL_PulseTrain_Time:
-						hightime=GetPulseTrainTimeTimingHighTime(pulsetrain);
-						lowtime=GetPulseTrainTimeTimingLowTime(pulsetrain); 
+						hightime=GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)pulsetrain);
+						lowtime=GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)pulsetrain); 
 						vupc->samplingRate=1/(hightime+lowtime);
 						SetCtrlVal(vupc->settingsPanHndl,VUPCSet_SamplingRate,vupc->samplingRate/1000);     //in khz  
 						break;

@@ -281,13 +281,13 @@ size_t						GetRepeatedWaveformSizeofData			(RepeatedWaveform_type* waveform);
 	//-------------------------------------
 
 	// Frequency defined pulse train
-PulseTrainFreqTiming_type* 	init_PulseTrainFreqTiming_type 			(PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses, double dutyCycle, 
+PulseTrainFreqTiming_type* 	init_PulseTrainFreqTiming_type 			(PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, double dutyCycle, 
 																	 double frequency, double initialDelay);
 	// Time defined pulse train
-PulseTrainTimeTiming_type* 	init_PulseTrainTimeTiming_type 			(PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses, double highTime, 
+PulseTrainTimeTiming_type* 	init_PulseTrainTimeTiming_type 			(PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, double highTime, 
 																	 double lowTime, double initialDelay);
 	// Ticks defined pulse train
-PulseTrainTickTiming_type* 	init_PulseTrainTickTiming_type 			(PulseTrainModes mode, PulseTrainIdleStates idleState, size_t nPulses, size_t highTicks, 
+PulseTrainTickTiming_type* 	init_PulseTrainTickTiming_type 			(PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, size_t highTicks, 
 																	 size_t lowTicks, size_t delayTicks);
 	// Discards all pulse train types       
 void 						discard_PulseTrain_type 				(PulseTrain_type** pulseTrain);
@@ -306,16 +306,14 @@ PulseTrain_type* 			CopyPulseTrain							(PulseTrain_type* pulsetrain);
 	// sets the pulse train idle state
 void   						SetPulseTrainIdleState					(PulseTrain_type* pulseTrain, PulseTrainIdleStates idleState);
 
-	//gets thepulsetrain idle state   
+	// gets thepulsetrain idle state   
 PulseTrainIdleStates	 	GetPulseTrainIdleState					(PulseTrain_type* pulseTrain);
-//discards a pulse train
-void discard_Pulsetrain_type (PulseTrain_type** pulsetrain);
 
 	// sets the pulsetrain number of pulses
-void   						SetPulseTrainNPulses					(PulseTrain_type* pulseTrain, size_t nPulses);
+void   						SetPulseTrainNPulses					(PulseTrain_type* pulseTrain, uInt64 nPulses);
 
 	// gets the number of pulses in a pulsetrain
-size_t   					GetPulseTrainNPulses					(PulseTrain_type* pulseTrain);
+uInt64   					GetPulseTrainNPulses					(PulseTrain_type* pulseTrain);
 
 	// sets the pulsetrain mode
 void   						SetPulseTrainMode						(PulseTrain_type* pulseTrain, PulseTrainModes mode);

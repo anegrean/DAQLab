@@ -117,7 +117,7 @@ DLDataTypes	GetDataPacketDataType (DataPacket_type* dataPacket)
 	return dataPacket->dataType;
 }
 
-void* GetDataPacketPtrToData (DataPacket_type* dataPacket, DLDataTypes* dataType)  
+void** GetDataPacketPtrToData (DataPacket_type* dataPacket, DLDataTypes* dataType)  
 {
 	*dataType = dataPacket->dataType;
 	return &dataPacket->data;

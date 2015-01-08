@@ -440,10 +440,10 @@ size_t GetWaveformNumSamples (Waveform_type* waveform)
 	return waveform->nSamples;
 }
 
-void* GetWaveformDataPtr (Waveform_type* waveform, size_t* nSamples)
+void** GetWaveformPtrToData (Waveform_type* waveform, size_t* nSamples)
 {
 	*nSamples = waveform->nSamples;
-	return waveform->data;
+	return &waveform->data;
 }
 
 WaveformTypes GetWaveformDataType (Waveform_type* waveform)
@@ -461,7 +461,8 @@ int CopyWaveform (Waveform_type** waveformCopy, Waveform_type* waveform, char** 
 	
 	*waveformCopy = init_Waveform_type(waveform->waveformType, waveform->samplingRate, 0, &nullData);
 	if (!*waveformCopy) {
-		*errorInfo = FormatMsg(CopyWaveform_Err_OutOfMemory, "CopyWaveform", "Out of memory");
+		if (errorInfo)
+			*errorInfo = FormatMsg(CopyWaveform_Err_OutOfMemory, "CopyWaveform", "Out of memory");
 		return CopyWaveform_Err_OutOfMemory;
 	}
 	
@@ -478,7 +479,8 @@ Error:
 	
 	discard_Waveform_type(waveformCopy);
 	
-	*errorInfo = FormatMsg(error, "CopyWaveform", errMsg);	// chain error
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "CopyWaveform", errMsg);	// chain error
 	OKfree(errMsg);
 	return error;
 }
@@ -495,32 +497,37 @@ int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformTo
 	if (!waveformToAppend->nSamples) return 0;
 	// check if sampling rates are the same
 	if (waveformToAppendTo->samplingRate != waveformToAppend->samplingRate) {
-		*errorInfo = FormatMsg(AppendWaveformData_Err_SamplingRatesAreDifferent, "AppendWaveform", "Waveform sampling rates are different");
+		if (errorInfo)
+			*errorInfo = FormatMsg(AppendWaveformData_Err_SamplingRatesAreDifferent, "AppendWaveform", "Waveform sampling rates are different");
 		return AppendWaveformData_Err_SamplingRatesAreDifferent;	
 	}
 	
 	// check if data types are the same
 	if (waveformToAppendTo->waveformType != waveformToAppend->waveformType) {
-		*errorInfo = FormatMsg(AppendWaveformData_Err_DataTypesAreDifferent, "AppendWaveform", "Waveform data types are different");
+		if (errorInfo)
+			*errorInfo = FormatMsg(AppendWaveformData_Err_DataTypesAreDifferent, "AppendWaveform", "Waveform data types are different");
 		return AppendWaveformData_Err_DataTypesAreDifferent;
 	}
 	
 	// check if units are the same
 	if (waveformToAppendTo->unitName && waveformToAppend->unitName)
 		if (strcmp(waveformToAppendTo->unitName, waveformToAppend->unitName)) {
-			*errorInfo = FormatMsg(AppendWaveformData_Err_UnitsAreDifferent, "AppendWaveform", "Waveform units must be the same");
+			if (errorInfo)
+				*errorInfo = FormatMsg(AppendWaveformData_Err_UnitsAreDifferent, "AppendWaveform", "Waveform units must be the same");
 			return AppendWaveformData_Err_UnitsAreDifferent;
 		}
 	
 	if (waveformToAppendTo->unitName || waveformToAppend->unitName) {
-		*errorInfo = FormatMsg(AppendWaveformData_Err_UnitsAreDifferent, "AppendWaveform", "Waveform units must be the same");
+		if (errorInfo)
+			*errorInfo = FormatMsg(AppendWaveformData_Err_UnitsAreDifferent, "AppendWaveform", "Waveform units must be the same");
 		return AppendWaveformData_Err_UnitsAreDifferent;
 	}
 	
 	
 	void* dataBuffer = realloc(waveformToAppendTo->data, (waveformToAppendTo->nSamples + waveformToAppend->nSamples) * GetWaveformSizeofData(waveformToAppendTo));
 	if (!dataBuffer) {
-		*errorInfo = FormatMsg(AppendWaveformData_Err_OutOfMemory, "AppendWaveform", "Out of memory");
+		if (errorInfo)
+			*errorInfo = FormatMsg(AppendWaveformData_Err_OutOfMemory, "AppendWaveform", "Out of memory");
 		return AppendWaveformData_Err_OutOfMemory;
 	}
 	
@@ -657,10 +664,10 @@ void discard_RepeatedWaveform_type (RepeatedWaveform_type** waveform)
 	OKfree(*waveform);
 }
 
-void* GetRepeatedWaveformDataPtr (RepeatedWaveform_type* waveform, size_t* nSamples)
+void** GetRepeatedWaveformPtrToData (RepeatedWaveform_type* waveform, size_t* nSamples)
 {
 	*nSamples = waveform->nSamples;
-	return waveform->data;
+	return &waveform->data;
 }
 
 double GetRepeatedWaveformRepeats (RepeatedWaveform_type* waveform)

@@ -237,7 +237,7 @@ size_t						GetWaveformSizeofData					(Waveform_type* waveform);
 size_t						GetWaveformNumSamples					(Waveform_type* waveform);
 
 	// Returns pointer to waveform data.
-void* 						GetWaveformDataPtr 						(Waveform_type* waveform, size_t* nSamples);
+void** 						GetWaveformPtrToData 					(Waveform_type* waveform, size_t* nSamples);
 
 	// Returns waveform data type
 WaveformTypes				GetWaveformDataType						(Waveform_type* waveform);
@@ -261,7 +261,7 @@ RepeatedWaveform_type*		ConvertWaveformToRepeatedWaveformType	(Waveform_type** w
 void						discard_RepeatedWaveform_type			(RepeatedWaveform_type** waveform);
 
 	// Returns pointer to repeated waveform data (for one repeat)
-void*						GetRepeatedWaveformDataPtr				(RepeatedWaveform_type* waveform, size_t* nSamples);
+void**						GetRepeatedWaveformPtrToData			(RepeatedWaveform_type* waveform, size_t* nSamples);
 
 	// Returns the number of times the waveform must be repeated
 double						GetRepeatedWaveformRepeats				(RepeatedWaveform_type* waveform);

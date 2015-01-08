@@ -468,7 +468,8 @@ int SendDataPacket (SourceVChan_type* source, DataPacket_type** ptrToDataPacket,
 			AppendString(&errMsg, " failed. Reason: ", -1); 
 			CmtGetErrorMessage(itemsWritten, cmtStatusMessage);
 			AppendString(&errMsg, cmtStatusMessage, -1); 
-			*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
+			if (errorInfo)
+				*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
 			OKfree(errMsg);
 			OKfree(sinkName);
 			ReleaseDataPacket(ptrToDataPacket);
@@ -481,8 +482,9 @@ int SendDataPacket (SourceVChan_type* source, DataPacket_type** ptrToDataPacket,
 				char*				sinkName									= GetVChanName((VChan_type*)*sinkPtrPtr);
 			
 				AppendString(&errMsg, sinkName, -1); 
-				AppendString(&errMsg, " is full or write operation timed out", -1); 
-				*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
+				AppendString(&errMsg, " is full or write operation timed out", -1);
+				if (errorInfo)
+					*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
 				OKfree(errMsg);
 				OKfree(sinkName);
 				ReleaseDataPacket(ptrToDataPacket);
@@ -521,7 +523,8 @@ int GetAllDataPackets (SinkVChan_type* sinkVChan, DataPacket_type*** dataPackets
 	// get data packets
 	*dataPackets = malloc (*nPackets * sizeof(DataPacket_type*));
 	if (!*dataPackets) {
-		*errorInfo 	= FormatMsg(GetAllDataPackets_Err_OutOfMem, "GetAllDataPackets", "Out of memory");
+		if (errorInfo)
+			*errorInfo 	= FormatMsg(GetAllDataPackets_Err_OutOfMem, "GetAllDataPackets", "Out of memory");
 		*nPackets 	= 0;
 		return GetAllDataPackets_Err_OutOfMem;
 	}
@@ -535,7 +538,8 @@ Error:
 	CmtGetErrorMessage (error, errMsg);
 	OKfree(*dataPackets);
 	*nPackets 	= 0;
-	*errorInfo 	= FormatMsg(GetAllDataPackets_Err_ReadDataPackets, "GetAllDataPackets", errMsg);
+	if (errorInfo)
+		*errorInfo 	= FormatMsg(GetAllDataPackets_Err_ReadDataPackets, "GetAllDataPackets", errMsg);
 	return GetAllDataPackets_Err_ReadDataPackets;
 }
 
@@ -595,8 +599,9 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 	errChk ( GetDataPacket(sinkVChan, &dataPacket, errorInfo) );
 	
 	if (!dataPacket) {
-		*errorInfo = FormatMsg(ReceiveWaveform_Err_NoWaveform, "ReceiveWaveform", "Waveform received does not contain any data. This occurs if \
-							   a NULL packet is encountered before any data packets");
+		if (errorInfo)
+			*errorInfo = FormatMsg(ReceiveWaveform_Err_NoWaveform, "ReceiveWaveform", "Waveform received does not contain any data. This occurs if \
+								   a NULL packet is encountered before any data packets");
 		return ReceiveWaveform_Err_NoWaveform;
 	}
 	
@@ -651,8 +656,9 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 			
 			default:
 			
-				*errorInfo = FormatMsg(ReceiveWaveform_Err_WrongDataType, "ReceiveWaveform", " Data packet received is not of a waveform type and cannot \
-							   be retrieved by this function");
+				if (errorInfo)
+					*errorInfo = FormatMsg(ReceiveWaveform_Err_WrongDataType, "ReceiveWaveform", " Data packet received is not of a waveform type and cannot \
+								   be retrieved by this function");
 				ReleaseDataPacket(&dataPacket);
 				return ReceiveWaveform_Err_WrongDataType;
 		}
@@ -670,6 +676,15 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 		errChk ( GetDataPacket(sinkVChan, &dataPacket, errorInfo) );
 	}
 	
+	// check again if waveform is NULL
+	
+	if (!*waveform) {
+		if (errorInfo)
+			*errorInfo = FormatMsg(ReceiveWaveform_Err_NoWaveform, "ReceiveWaveform", "Waveform received does not contain any data. This occurs if \
+								   a NULL packet is encountered before any data packets or the data packet doesn't have any data");
+		return ReceiveWaveform_Err_NoWaveform;
+	}
+		
 	return 0;
 	
 Error:

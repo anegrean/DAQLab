@@ -50,7 +50,7 @@ void					SetDataPacketCounter				(DataPacket_type* dataPacket, size_t count);
 void 					ReleaseDataPacket					(DataPacket_type** dataPacket);
 	// Returns a pointer to the data in the packet
 DLDataTypes				GetDataPacketDataType				(DataPacket_type* dataPacket);
-void*					GetDataPacketPtrToData				(DataPacket_type* dataPacket, DLDataTypes* dataType);
+void**					GetDataPacketPtrToData				(DataPacket_type* dataPacket, DLDataTypes* dataType);
 
 
 #ifdef __cplusplus

@@ -267,7 +267,8 @@ int ReadBuffer(int bufsize)
 {
 	int 				error			= 0;
 	int 				result;
-	DataPacket_type*  	dataPacket;
+	DataPacket_type*  	dataPacket		= NULL;
+	DataPacket_type*	nullPacket		= NULL;
 	char*				errMsg			= NULL;  
 	unsigned short int* Samplebuffer	= NULL;   
 	void*     			pmtdataptr;
@@ -311,9 +312,9 @@ int ReadBuffer(int bufsize)
 						pmtdataptr = malloc(ndatapoints*sizeof(unsigned short));
 						memcpy(pmtdataptr,&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));
 						waveform = init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr);  
-					    dataPacket = init_DataPacket_type(DL_Waveform_UShort, waveform, (DiscardPacketDataFptr_type) discard_Waveform_type);       
+					    dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform, (DiscardPacketDataFptr_type) discard_Waveform_type);       
 						// send data packet with waveform
-						errChk(SendDataPacket(gchannels[i]->VChan, dataPacket, 0, &errMsg));
+						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
 					}
 				}
 			}
@@ -328,13 +329,13 @@ int ReadBuffer(int bufsize)
 					for (i=0;i<MAX_CHANNELS;i++){   
 						if (gchannels[i]!=NULL){
 							if (gchannels[i]->VChan!=NULL){
-							errChk(SendDataPacket(gchannels[i]->VChan, NULL, 0,&errMsg));
+							errChk( SendDataPacket(gchannels[i]->VChan, NULL, 0, &errMsg) );
 							
 							}
 						}
 					}
 					PMTStopAcq(); 
-					TaskControlIterationDone (gtaskControl, 0, NULL,FALSE);   
+					TaskControlIterationDone(gtaskControl, 0, nullPacket, FALSE);   
 				}
 			}
 		}

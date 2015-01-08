@@ -52,14 +52,10 @@ struct DataPacket {
 //==============================================================================
 // Global functions
 
-DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void* data, DiscardPacketDataFptr_type discardPacketDataFptr) 
+DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void** ptrToData, DiscardPacketDataFptr_type discardPacketDataFptr) 
 {
 	DataPacket_type* dataPacket = malloc (sizeof(DataPacket_type));
 	if (!dataPacket) return NULL;
-	
-	dataPacket -> dataType 					= dataType;
-	dataPacket -> data     					= data;
-	dataPacket -> discardPacketDataFptr   	= discardPacketDataFptr;
 	
 	// create counter to keep track of how many sinks still need this data packet
 	CmtNewTSV(sizeof(int), &dataPacket->ctr);
@@ -69,6 +65,11 @@ DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void* data, Discard
 	CmtGetTSVPtr(dataPacket->ctr, &ctrTSVptr);
 	*ctrTSVptr = 1;
 	CmtReleaseTSVPtr(dataPacket->ctr);
+	
+	dataPacket -> dataType 					= dataType;
+	dataPacket -> data     					= *ptrToData;
+	*ptrToData								= NULL;
+	dataPacket -> discardPacketDataFptr   	= discardPacketDataFptr;
 	
 	return dataPacket;
 }

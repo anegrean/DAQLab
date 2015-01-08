@@ -431,7 +431,7 @@ int ReleaseAllDataPackets (SinkVChan_type* sinkVChan, char** errorInfo)
 	return 0;
 }
 
-int SendDataPacket (SourceVChan_type* source, DataPacket_type* dataPacket, BOOL sourceNeedsPacket, char** errorInfo)
+int SendDataPacket (SourceVChan_type* source, DataPacket_type** ptrToDataPacket, BOOL sourceNeedsPacket, char** errorInfo)
 {
 #define SendDataPacket_Err_TSQWrite		-1
 	
@@ -439,16 +439,16 @@ int SendDataPacket (SourceVChan_type* source, DataPacket_type* dataPacket, BOOL 
 	
 	// if there are no Sink VChans, then dispose of the data and do nothing
 	if (!nSinks) {
-		if (dataPacket) ReleaseDataPacket(&dataPacket);
+		if (*ptrToDataPacket) ReleaseDataPacket(ptrToDataPacket);
 		return 0; 
 	}
 	
 	// set sinks counter
-	if (dataPacket)
+	if (*ptrToDataPacket)
 		if (sourceNeedsPacket)
-			SetDataPacketCounter(dataPacket, nSinks+1);
+			SetDataPacketCounter(*ptrToDataPacket, nSinks+1);
 		else
-			SetDataPacketCounter(dataPacket, nSinks);
+			SetDataPacketCounter(*ptrToDataPacket, nSinks);
 			
 	
 	// send data to sinks
@@ -457,7 +457,7 @@ int SendDataPacket (SourceVChan_type* source, DataPacket_type* dataPacket, BOOL 
 	for (size_t i = 1; i <= nSinks; i++) {
 		sinkPtrPtr = ListGetPtrToItem(source->sinkVChans,i);
 		// put data packet into Sink VChan TSQ
-		itemsWritten = CmtWriteTSQData((*sinkPtrPtr)->tsqHndl, &dataPacket, 1, (*sinkPtrPtr)->writeTimeout, NULL);
+		itemsWritten = CmtWriteTSQData((*sinkPtrPtr)->tsqHndl, ptrToDataPacket, 1, (*sinkPtrPtr)->writeTimeout, NULL);
 		
 		// check if writing the items to the sink queue succeeded
 		if (itemsWritten < 0) {
@@ -487,6 +487,8 @@ int SendDataPacket (SourceVChan_type* source, DataPacket_type* dataPacket, BOOL 
 			OKfree(sinkName);
 			return SendDataPacket_Err_TSQWrite;
 		}
+		
+		*ptrToDataPacket = NULL; // data packet is considered to be consumed if there is at least one Sink that received it
 	}
 	
 	return 0; // no error

@@ -3889,9 +3889,9 @@ static int OpenScanEngineShutter (ScanEngine_type* engine, BOOL openStatus, char
 	
 	nullChk( shutterCommand			= malloc (sizeof(unsigned char)) );
 	*shutterCommand					= (unsigned char) openStatus;
-	nullChk( shutterDataPacket		= init_DataPacket_type(DL_UChar, shutterCommand, NULL) );
+	nullChk( shutterDataPacket		= init_DataPacket_type(DL_UChar, &shutterCommand, NULL) );
 	
-	errChk( SendDataPacket(engine->VChanShutter, shutterDataPacket, FALSE, errorInfo) );
+	errChk( SendDataPacket(engine->VChanShutter, &shutterDataPacket, FALSE, errorInfo) );
 	
 	
 	return 0; // no error
@@ -4630,8 +4630,8 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 	nullChk( fastAxisMoveFromParked_RepWaveform = ConvertWaveformToRepeatedWaveformType(&fastAxisMoveFromParkedCompensatedWaveform, 1) );
 	
 	// send data 
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, fastAxisMoveFromParked_RepWaveform, discard_RepeatedWaveform_type) );
-	if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &fastAxisMoveFromParked_RepWaveform, discard_RepeatedWaveform_type) );
+	if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;
 	
 	// fastAxisScan_Waveform has two line scans (one triangle wave period)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl))
@@ -4642,16 +4642,16 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, 0) ); 
 	
 	// send data
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, fastAxisScan_RepWaveform, discard_RepeatedWaveform_type) );   
-	if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;    
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &fastAxisScan_RepWaveform, discard_RepeatedWaveform_type) );   
+	if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;    
 	
 	//go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl)) {	
 		double*		parkedVoltage = malloc(sizeof(double));
 		*parkedVoltage = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, parkedVoltage, 0);
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, parkedRepeatedWaveform, discard_RepeatedWaveform_type) ); 
-		if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;    
+		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedRepeatedWaveform, discard_RepeatedWaveform_type) ); 
+		if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;    
 	}
 	
 	//---------------------------------------------------------------------------------------------------------------------------
@@ -4663,8 +4663,8 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 	nullChk( slowAxisMoveFromParked_RepWaveform = ConvertWaveformToRepeatedWaveformType(&slowAxisMoveFromParkedCompensatedWaveform, 1) );
 	
 	// send data 
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, slowAxisMoveFromParked_RepWaveform, discard_RepeatedWaveform_type) );
-	if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &slowAxisMoveFromParked_RepWaveform, discard_RepeatedWaveform_type) );
+	if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;
 	
 	// slowAxisScan_Waveform has a symmetric staircase waveform (equivalent to two scan frames)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl))
@@ -4675,16 +4675,16 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 		nullChk( slowAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&slowAxisScan_Waveform, 0) ); 
 	
 	// send data
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, slowAxisScan_RepWaveform, discard_RepeatedWaveform_type) );   
-	if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;  
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &slowAxisScan_RepWaveform, discard_RepeatedWaveform_type) );   
+	if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;  
 	
 	//go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl)) {	
 		double*		parkedVoltage = malloc(sizeof(double));
 		*parkedVoltage = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, parkedVoltage, 0);
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, parkedRepeatedWaveform, discard_RepeatedWaveform_type) ); 
-		if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, galvoCommandPacket, FALSE, &errMsg) <0) goto Error;    
+		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedRepeatedWaveform, discard_RepeatedWaveform_type) ); 
+		if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) <0) goto Error;    
 	}
 	
 	//---------------------------------------------------------------------------------------------------------------------------
@@ -5031,6 +5031,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 	int								error						= 0;
 	Waveform_type*					waveformCopy				= NULL;
 	WaveformTypes					waveformType;
+	DataPacket_type*				nullPacket					= NULL;
 	
 	switch (cal->currentCal) {
 			
@@ -5062,16 +5063,16 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nCommandSignalSamples = CALPOINTS * nSamplesPerCalPoint;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0, &errMsg) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, NULL, 0, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
 			
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL) );
-			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			// Receive and analyze galvo response signal
@@ -5173,15 +5174,15 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nCommandSignalSamples = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0, &errMsg) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, NULL, 0, &errMsg) ); 
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) ); 
 			
 			// send number of samples in waveform
 			nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
 			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL) );
-			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			// Receive and analyze galvo response signal
@@ -5327,15 +5328,15 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nCommandSignalSamples = (flybackSamples + postStepSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0, &errMsg) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, NULL, 0, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL) );
-			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			// Receive and analyze galvo response signal
@@ -5449,15 +5450,15 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nCommandSignalSamples = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0, &errMsg) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, NULL, 0, &errMsg) ); 
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) ); 
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL) );
-			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			// Receive and analyze galvo response signal
@@ -5572,15 +5573,15 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nCommandSignalSamples = nSamples;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, commandPacket, 0, &errMsg) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, NULL, 0, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, nCommandWaveformSamplesPtr, NULL) );
-			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, commandPacket, 0, &errMsg) );
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			// Receive and analyze galvo response signal

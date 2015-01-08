@@ -157,7 +157,7 @@ int							ReleaseAllDataPackets				(SinkVChan_type* sinkVChan, char** errorInfo)
 
 	// Sends a data packet from a Source VChan to its Sink VChans. If the Source VChan also needs to use the data packet after it was sent
 	// then set sourceNeedsPacket = TRUE. This prevents the release of the data packet by the sinks alone.
-int				 			SendDataPacket 						(SourceVChan_type* source, DataPacket_type* dataPacket, BOOL sourceNeedsPacket, char** errorInfo);
+int				 			SendDataPacket 						(SourceVChan_type* source, DataPacket_type** ptrToDataPacket, BOOL sourceNeedsPacket, char** errorInfo);
 
 	// Gets all data packets from a Sink VChan. The function allocates dynamically a data packet array with nPackets elements of DataPacket_type*
 	// If there are no data packets in the Sink VChan, dataPackets = NULL, nPackets = 0 and the function returns NULL (success).

@@ -436,6 +436,7 @@ int SendDataPacket (SourceVChan_type* source, DataPacket_type** ptrToDataPacket,
 #define SendDataPacket_Err_TSQWrite		-1
 	
 	int		nSinks	=  ListNumItems(source->sinkVChans);
+	int		error	= 0;
 	
 	// if there are no Sink VChans, then dispose of the data and do nothing
 	if (!nSinks) {
@@ -449,9 +450,7 @@ int SendDataPacket (SourceVChan_type* source, DataPacket_type** ptrToDataPacket,
 			SetDataPacketCounter(*ptrToDataPacket, nSinks+1);
 		else
 			SetDataPacketCounter(*ptrToDataPacket, nSinks);
-			
 	
-	// send data to sinks
 	SinkVChan_type** 	sinkPtrPtr;
 	int					itemsWritten;
 	for (size_t i = 1; i <= nSinks; i++) {
@@ -472,26 +471,30 @@ int SendDataPacket (SourceVChan_type* source, DataPacket_type** ptrToDataPacket,
 			*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
 			OKfree(errMsg);
 			OKfree(sinkName);
-			return SendDataPacket_Err_TSQWrite;
-		}
-		
-		// check if the number of written elements is the same as what was requested
-		if (!itemsWritten) {
-			char* 				errMsg 										= StrDup("Sink VChan ");
-			char*				sinkName									= GetVChanName((VChan_type*)*sinkPtrPtr);
+			ReleaseDataPacket(ptrToDataPacket);
+			error = SendDataPacket_Err_TSQWrite;
 			
-			AppendString(&errMsg, sinkName, -1); 
-			AppendString(&errMsg, " is full or write operation timed out", -1); 
-			*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
-			OKfree(errMsg);
-			OKfree(sinkName);
-			return SendDataPacket_Err_TSQWrite;
-		}
+		} else
+		   // check if the number of written elements is the same as what was requested
+			if (!itemsWritten) {
+				char* 				errMsg 										= StrDup("Sink VChan ");
+				char*				sinkName									= GetVChanName((VChan_type*)*sinkPtrPtr);
+			
+				AppendString(&errMsg, sinkName, -1); 
+				AppendString(&errMsg, " is full or write operation timed out", -1); 
+				*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
+				OKfree(errMsg);
+				OKfree(sinkName);
+				ReleaseDataPacket(ptrToDataPacket);
+				error = SendDataPacket_Err_TSQWrite;
+			}
 		
-		*ptrToDataPacket = NULL; // data packet is considered to be consumed if there is at least one Sink that received it
 	}
 	
-	return 0; // no error
+	*ptrToDataPacket = NULL; 	// Data packet is considered to be consumed even if sending to some Sink VChans did not succeed
+								// Sink VChans that did receive the data packet, can further process it and release it.
+	
+	return error;
 }
 
 /// HIFN Gets all data packets that are available from a Sink VChan. The function allocates dynamically a data packet array with nPackets elements of DataPacket_type*

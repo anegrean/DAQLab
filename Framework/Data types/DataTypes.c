@@ -96,9 +96,9 @@ struct PulseTrainTimeTiming {
 // pulse train defined by number of ticks
 struct PulseTrainTickTiming {
 	PulseTrain_type				baseClass; 
-	size_t 						highTicks;
-	size_t 						lowTicks;
-	size_t 						delayTicks;
+	uInt32 						highTicks;
+	uInt32 						lowTicks;
+	uInt32 						delayTicks;
 };
 
 static void init_PulseTrain_type (PulseTrain_type* pulseTrain, PulseTrainTimingTypes pulseType, PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses) 
@@ -243,37 +243,37 @@ double GetPulseTrainFreqTimingInitialDelay (PulseTrainFreqTiming_type* pulseTrai
 }
 
 // sets the pulsetrain highticks
-void SetPulseTrainTickTimingHighTicks (PulseTrainTickTiming_type* pulseTrain, size_t highTicks)
+void SetPulseTrainTickTimingHighTicks (PulseTrainTickTiming_type* pulseTrain, uInt32 highTicks)
 {
 	pulseTrain->highTicks = highTicks;
 }
 
 // gets the pulsetrain highticks
-size_t GetPulseTrainTickTimingHighTicks (PulseTrainTickTiming_type* pulseTrain)
+uInt32 GetPulseTrainTickTimingHighTicks (PulseTrainTickTiming_type* pulseTrain)
 {
 	 return pulseTrain->highTicks;
 }
 
 // sets the pulsetrain lowticks
-void SetPulseTrainTickTimingLowTicks (PulseTrainTickTiming_type* pulseTrain, size_t lowTicks)
+void SetPulseTrainTickTimingLowTicks (PulseTrainTickTiming_type* pulseTrain, uInt32 lowTicks)
 {
 	pulseTrain->lowTicks=lowTicks;
 }
 
 // gets the pulsetrain lowticks
-size_t GetPulseTrainTickTimingLowTicks (PulseTrainTickTiming_type* pulseTrain)
+uInt32 GetPulseTrainTickTimingLowTicks (PulseTrainTickTiming_type* pulseTrain)
 {
 	return pulseTrain->lowTicks;
 }
 
 // sets the pulsetrain delayticks
-void SetPulseTrainTickTimingDelayTicks (PulseTrainTickTiming_type* pulseTrain, size_t delayTicks)
+void SetPulseTrainTickTimingDelayTicks (PulseTrainTickTiming_type* pulseTrain, uInt32 delayTicks)
 {
 	pulseTrain->delayTicks = delayTicks;
 }
 
 // gets the pulsetrain delay ticks
-size_t GetPulseTrainTickTimingDelayTicks (PulseTrainTickTiming_type* pulseTrain)
+uInt32 GetPulseTrainTickTimingDelayTicks (PulseTrainTickTiming_type* pulseTrain)
 {
 	return pulseTrain->delayTicks;
 }

@@ -414,6 +414,16 @@ TaskControl_type* GetTaskControlParent (TaskControl_type* taskControl)
 	return taskControl->parenttask;
 }
 
+TaskControl_type* GetTaskControlRootParent (TaskControl_type* taskControl)
+{
+	TaskControl_type*	rootTC = taskControl;
+	
+	while (rootTC->parenttask)
+		rootTC = rootTC->parenttask;
+	
+	return rootTC;
+}
+
 ListType GetTaskControlSubTasks (TaskControl_type* taskControl)
 {
 	size_t	nSubTasks = ListNumItems(taskControl->subtasks);
@@ -1116,8 +1126,8 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 	char	CmtErrorMsg[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
 	BOOL	taskActive								= FALSE;
 	
-	// determine if task is active or not
-	switch (taskControl->state) {
+	// determine if task tree is active or not
+	switch ((GetTaskControlRootParent(taskControl))->state) {
 		case TASK_STATE_UNCONFIGURED:
 		case TASK_STATE_CONFIGURED:
 		case TASK_STATE_INITIAL:

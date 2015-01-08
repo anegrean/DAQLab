@@ -486,6 +486,9 @@ void*					GetTaskControlModuleData			(TaskControl_type* taskControl);
 	// Returns the parent Task Controller, given a Task Controller. If none, returns NULL.
 TaskControl_type*		GetTaskControlParent				(TaskControl_type* taskControl);
 
+	// Returns the topmost (root) Task Controller of a given child Task Controller. If it doesn't have any, then it returns the child Task Controller
+TaskControl_type*		GetTaskControlRootParent			(TaskControl_type* taskControl);	
+
 	// Creates a list of SubTask Controllers of TaskControl_type* elements, given a Task Controller. 
 	// If there are no SubTasks, the list is empty. Use ListDispose to dispose of list.
 ListType				GetTaskControlSubTasks				(TaskControl_type* taskControl);

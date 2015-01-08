@@ -351,22 +351,22 @@ double 						GetPulseTrainFreqTimingInitialDelay		(PulseTrainFreqTiming_type* pu
 	//-------------------------------------
 
 	// sets the pulsetrain highticks
-void   						SetPulseTrainTickTimingHighTicks		(PulseTrainTickTiming_type* pulseTrain, size_t highTicks);
+void   						SetPulseTrainTickTimingHighTicks		(PulseTrainTickTiming_type* pulseTrain, uInt32 highTicks);
 
 	// gets the pulsetrain highticks
-size_t   					GetPulseTrainTickTimingHighTicks		(PulseTrainTickTiming_type* pulseTrain);
+uInt32   					GetPulseTrainTickTimingHighTicks		(PulseTrainTickTiming_type* pulseTrain);
 
 	// sets the pulsetrain lowticks
-void   						SetPulseTrainTickTimingLowTicks			(PulseTrainTickTiming_type* pulseTrain, size_t lowTicks);
+void   						SetPulseTrainTickTimingLowTicks			(PulseTrainTickTiming_type* pulseTrain, uInt32 lowTicks);
 
 	// gets the pulsetrain lowticks
-size_t   					GetPulseTrainTickTimingLowTicks			(PulseTrainTickTiming_type* pulseTrain);
+uInt32   					GetPulseTrainTickTimingLowTicks			(PulseTrainTickTiming_type* pulseTrain);
 
 	// sets the pulsetrain delayticks
-void   						SetPulseTrainTickTimingDelayTicks		(PulseTrainTickTiming_type* pulseTrain, size_t delayTicks);
+void   						SetPulseTrainTickTimingDelayTicks		(PulseTrainTickTiming_type* pulseTrain, uInt32 delayTicks);
 
 	// gets the pulsetrain delayticks
-size_t   					GetPulseTrainTickTimingDelayTicks		(PulseTrainTickTiming_type* pulseTrain);
+uInt32   					GetPulseTrainTickTimingDelayTicks		(PulseTrainTickTiming_type* pulseTrain);
 
 	//-------------------------------------
 	// Set/Get Time pulse train type

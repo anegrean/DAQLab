@@ -2891,11 +2891,11 @@ static void	discard_AIAOTaskSet_type (AIAOTaskSet_type** taskSetPtr)
 	
 	// channels
 	if ((*taskSetPtr)->chanSet) {
-		ChanSet_type** 		chanSetPtrPtr;
+		ChanSet_type** 		chanSetPtr;
 		size_t				nItems			= ListNumItems((*taskSetPtr)->chanSet); 	
 		for (size_t i = 1; i <= nItems; i++) {			
-			chanSetPtrPtr = ListGetPtrToItem((*taskSetPtr)->chanSet, i);
-			(*(*chanSetPtrPtr)->discardFptr)	((ChanSet_type**)chanSetPtrPtr);
+			chanSetPtr = ListGetPtrToItem((*taskSetPtr)->chanSet, i);
+			(*(*chanSetPtr)->discardFptr)	((ChanSet_type**)chanSetPtr);
 		}
 		ListDispose((*taskSetPtr)->chanSet);
 	}
@@ -3317,15 +3317,15 @@ Error:
 //------------------------------------------------------------------------------
 static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 {
-	ChanSet_type**		chanSetPtrPtr;
+	ChanSet_type**		chanSetPtr;
 	size_t				nAO				= 0;
 	size_t				i;
 	
 	// count number of AO channels using HW-timing
 	size_t	nItems	= ListNumItems(dev->AOTaskSet->chanSet); 	
 	for (size_t i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
-		if (!(*chanSetPtrPtr)->onDemand) nAO++;
+		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+		if (!(*chanSetPtr)->onDemand) nAO++;
 	}
 	// return NULL if there are no channels using HW-timing
 	if (!nAO) return NULL;
@@ -3367,9 +3367,9 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	nItems		= ListNumItems(dev->AOTaskSet->chanSet); 
 	size_t k 	= 0;
 	for (i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
-		if (!(*chanSetPtrPtr)->onDemand) {
-			a->sinkVChans[k] = (*chanSetPtrPtr)->sinkVChan;
+		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+		if (!(*chanSetPtr)->onDemand) {
+			a->sinkVChans[k] = (*chanSetPtr)->sinkVChan;
 			k++;
 		}
 	}
@@ -3444,15 +3444,15 @@ static void	discard_WriteAOData_type (WriteAOData_type** a)
 //------------------------------------------------------------------------------
 static WriteDOData_type* init_WriteDOData_type (Dev_type* dev)
 {
-	ChanSet_type**		chanSetPtrPtr;
+	ChanSet_type**		chanSetPtr;
 	size_t				nDO				= 0;
 	size_t				i;
 	
 	// count number of DO channels using HW-timing
 	size_t	nItems	= ListNumItems(dev->DOTaskSet->chanSet); 	
 	for (size_t i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
-		if (!(*chanSetPtrPtr)->onDemand) nDO++;
+		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+		if (!(*chanSetPtr)->onDemand) nDO++;
 	}
 	// return NULL if there are no channels using HW-timing
 	if (!nDO) return NULL;
@@ -3494,9 +3494,9 @@ static WriteDOData_type* init_WriteDOData_type (Dev_type* dev)
 	nItems		= ListNumItems(dev->DOTaskSet->chanSet); 
 	size_t k 	= 0;
 	for (i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
-		if (!(*chanSetPtrPtr)->onDemand) {
-			a->sinkVChans[k] = (*chanSetPtrPtr)->sinkVChan;
+		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+		if (!(*chanSetPtr)->onDemand) {
+			a->sinkVChans[k] = (*chanSetPtr)->sinkVChan;
 			k++;
 		}
 	}
@@ -3605,11 +3605,11 @@ static void	discard_DIDOTaskSet_type (DIDOTaskSet_type** a)
 	}
 	// channels
 	if ((*a)->chanSet) {
-		ChanSet_type** 	chanSetPtrPtr;
+		ChanSet_type** 	chanSetPtr;
 		size_t			nItems	= ListNumItems((*a)->chanSet);
 		for (size_t i = 1; i <= nItems; i++) {	
-			chanSetPtrPtr= ListGetPtrToItem((*a)->chanSet, i);
-			(*(*chanSetPtrPtr)->discardFptr)	((ChanSet_type**)chanSetPtrPtr);
+			chanSetPtr= ListGetPtrToItem((*a)->chanSet, i);
+			(*(*chanSetPtr)->discardFptr)	((ChanSet_type**)chanSetPtr);
 		}
 		ListDispose((*a)->chanSet);
 	}
@@ -3655,11 +3655,11 @@ static void	discard_CITaskSet_type (CITaskSet_type** a)
 	
 	// channels and DAQmx tasks
 	if ((*a)->chanTaskSet) {
-		ChanSet_type** 	chanSetPtrPtr;
+		ChanSet_type** 	chanSetPtr;
 		size_t			nItems			= ListNumItems((*a)->chanTaskSet);
 		for (size_t i = 1; i <= nItems; i++) {	
-			chanSetPtrPtr = ListGetPtrToItem((*a)->chanTaskSet, i);
-			(*(*chanSetPtrPtr)->discardFptr)	((ChanSet_type**)chanSetPtrPtr);
+			chanSetPtr = ListGetPtrToItem((*a)->chanTaskSet, i);
+			(*(*chanSetPtr)->discardFptr)	((ChanSet_type**)chanSetPtr);
 		}
 		ListDispose((*a)->chanTaskSet);
 	}
@@ -4514,6 +4514,7 @@ static int AInSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_
 	DataPacket_type*		dataPacket		= NULL;
 	void*					dataPacketData	= NULL;
 	DLDataTypes				dataPacketType;
+	uInt64*					nSamplesPtr		= NULL;   
 	
 	if (dev->AITaskSet->timing->measMode == MeasFinite) {
 		errChk( GetDataPacket(dev->AITaskSet->timing->nSamplesSinkVChan, &dataPacket, &errMsg) );
@@ -4545,6 +4546,12 @@ static int AInSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_
 	
 		// cleanup
 		ReleaseDataPacket(&dataPacket);
+		
+		// send data
+		nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+		*nSamplesPtr = dev->AITaskSet->timing->nSamples;
+		dataPacket = init_DataPacket_type(DL_ULongLong, nSamplesPtr, NULL);
+		errChk(SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, dataPacket, FALSE, &errMsg));
 	
 	} else
 		// n Samples cannot be used for continuous tasks, empty Sink VChan if there are any elements
@@ -4564,6 +4571,7 @@ Error:
 	
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
+	OKfree(nSamplesPtr);
 	
 	*errorInfo = FormatMsg(error, "AInSamples_DataReceivedTC", errMsg);
 	OKfree(errMsg);
@@ -4584,6 +4592,7 @@ static int AISamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	DataPacket_type*		dataPacket			= NULL;
 	void*					dataPacketData		= NULL;
 	DLDataTypes				dataPacketType;
+	double*					samplingRatePtr		= NULL;
 	
 	// get data packet
 	errChk( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
@@ -4610,6 +4619,12 @@ static int AISamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
 	
+	// send data
+	nullChk( samplingRatePtr = malloc(sizeof(double)) );
+	*samplingRatePtr = dev->AITaskSet->timing->sampleRate;
+	dataPacket = init_DataPacket_type(DL_Double, samplingRatePtr, NULL);
+	errChk(SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, dataPacket, FALSE, &errMsg));
+	
 	return 0;
 
 DAQmxError:
@@ -4623,6 +4638,7 @@ Error:
 	
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
+	OKfree(samplingRatePtr);
 	
 	*errorInfo = FormatMsg(error, "AISamplingRate_DataReceivedTC", errMsg);
 	OKfree(errMsg);
@@ -4642,6 +4658,7 @@ static int AOnSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_
 	DataPacket_type*		dataPacket		= NULL;
 	void*					dataPacketData	= NULL;
 	DLDataTypes				dataPacketType;
+	uInt64*					nSamplesPtr		= NULL;
 	
 	if (dev->AOTaskSet->timing->measMode == MeasFinite) {
 		errChk( GetDataPacket(dev->AOTaskSet->timing->nSamplesSinkVChan, &dataPacket, &errMsg) );
@@ -4675,6 +4692,12 @@ static int AOnSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_
 	
 		// cleanup
 		ReleaseDataPacket(&dataPacket);
+		
+		// send data
+		nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+		*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
+		dataPacket = init_DataPacket_type(DL_ULongLong, nSamplesPtr, NULL);
+		errChk(SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, dataPacket, FALSE, &errMsg));
 	
 	} else
 		// n Samples cannot be used for continuous tasks, empty Sink VChan if there are any elements
@@ -4693,6 +4716,7 @@ Error:
 	
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
+	OKfree(nSamplesPtr);
 	
 	*errorInfo = FormatMsg(error, "AOnSamples_DataReceivedTC", errMsg);
 	OKfree(errMsg);
@@ -4711,6 +4735,7 @@ static int AOSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	DataPacket_type*		dataPacket			= NULL;
 	void*					dataPacketData		= NULL;
 	DLDataTypes				dataPacketType;
+	double*					samplingRatePtr		= NULL;
 	
 	// get data packet
 	errChk( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
@@ -4737,6 +4762,12 @@ static int AOSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
 	
+	// send data
+	nullChk( samplingRatePtr = malloc(sizeof(double)) );
+	*samplingRatePtr = dev->AOTaskSet->timing->sampleRate;
+	dataPacket = init_DataPacket_type(DL_Double, samplingRatePtr, NULL);
+	errChk(SendDataPacket(dev->AOTaskSet->timing->samplingRateSourceVChan, dataPacket, FALSE, &errMsg));
+	
 	return 0;
 
 DAQmxError:
@@ -4750,6 +4781,8 @@ Error:
 	
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
+	OKfree(samplingRatePtr);
+	
 	*errorInfo = FormatMsg(error, "AOSamplingRate_DataReceivedTC", errMsg);
 	OKfree(errMsg);
 	return error;
@@ -4891,15 +4924,15 @@ static int DO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 
 static int CO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
-	Dev_type*			dev					= GetTaskControlModuleData(taskControl);
-	int					error				= 0;
-	char*				errMsg				= NULL;
-	DataPacket_type**	dataPackets			= NULL;
-	size_t				nPackets			= 0;
-	ChanSet_CO_type*	chanSetCO			= GetVChanOwner((VChan_type*)sinkVChan);	
-	DLDataTypes			dataPacketType;  
-	PulseTrain_type*    pulseTrain;
-	int					timingPanHndl;
+	Dev_type*				dev					= GetTaskControlModuleData(taskControl);
+	int						error				= 0;
+	char*					errMsg				= NULL;
+	DataPacket_type**		dataPackets			= NULL;
+	DataPacket_type*		dataPacket			= NULL;
+	size_t					nPackets			= 0;
+	ChanSet_CO_type*		chanSetCO			= GetVChanOwner((VChan_type*)sinkVChan);	
+	DLDataTypes				dataPacketType;  
+	PulseTrain_type*    	pulseTrain;
 	
 	// update only if task controller is not active
 	if (taskActive) return 0;
@@ -4915,41 +4948,166 @@ static int CO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 	nullChk( chanSetCO->pulseTrain = CopyPulseTrain(pulseTrain) );
 	ReleaseDataPacket(&dataPackets[nPackets-1]); 
 	
-	// get CO timing UI panel handle
-	GetPanelHandleFromTabPage(chanSetCO->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
-	
-	switch (dataPacketType) {
-				
-		case DL_PulseTrain_Freq:
-			
-			//
-			switch (GetPulseTrainMode(pulseTrain)){
-				
-				case PulseTrain_Finite:
-	
-					break;
-				
-				case PulseTrain_Continuous:
+	// get channel panel handle to adjust UI settings
+	int						timingPanHndl;
 		
+	GetPanelHandleFromTabPage(chanSetCO->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl); 
+		
+	double 					initialDelay;
+	double					frequency;
+	double					dutyCycle;
+	double					lowTime;
+	double					highTime;
+	uInt32					initialDelayTicks;
+	uInt32					lowTicks;
+	uInt32					highTicks;
+	PulseTrainIdleStates	idleState;
+	PulseTrainModes			pulseMode;
+	uInt64					nPulses;
+	int						ctrlIdx;
+		
+	// set idle state
+	idleState = GetPulseTrainIdleState(chanSetCO->pulseTrain);
+	DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_IdleState, idleState) );
+	// generation mode
+	pulseMode = GetPulseTrainMode(chanSetCO->pulseTrain);
+	// timing
+	nPulses = GetPulseTrainNPulses(chanSetCO->pulseTrain);
+	DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->baseClass.taskHndl, pulseMode, nPulses) );
+		
+	switch (dataPacketType) {
+		case DL_PulseTrain_Freq:
+			// set initial delay
+			initialDelay = GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain);
+			DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Freq_InitialDelay, initialDelay) );
+			SetCtrlVal(timingPanHndl, COFreqPan_InitialDelay, initialDelay); 
+			// frequency
+			frequency = GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain);
+			DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Freq, frequency) );
+			SetCtrlVal(timingPanHndl, COFreqPan_Frequency, frequency); 
+			// duty cycle
+			dutyCycle = GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain);
+			DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_DutyCyc, dutyCycle/100) ); // normalize from [%] to 0-1 range
+			SetCtrlVal(timingPanHndl, COFreqPan_DutyCycle, dutyCycle); // display in [%] 
+			// set UI idle state
+			switch (idleState) {
+				case PulseTrainIdle_Low:
+					SetCtrlIndex(timingPanHndl, COFreqPan_IdleState, 0);
+					break;
+						
+				case PulseTrainIdle_High:
+					SetCtrlIndex(timingPanHndl, COFreqPan_IdleState, 1);
 					break;
 			}
-			
+			// n pulses
+			SetCtrlVal(timingPanHndl, COFreqPan_NPulses, nPulses);
+			// pulse mode (daqmx settings set before)
+			GetIndexFromValue(timingPanHndl, COFreqPan_Mode, &ctrlIdx, pulseMode); 
+			SetCtrlIndex(timingPanHndl, COFreqPan_Mode, ctrlIdx);
 			break;
 				
 		case DL_PulseTrain_Time:
+			// set initial delay
+			initialDelay = GetPulseTrainTimeTimingInitialDelay((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain);
+			DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Time_InitialDelay, initialDelay) );
+			SetCtrlVal(timingPanHndl, COTimePan_InitialDelay, initialDelay); 
+			// low time
+			lowTime = GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)chanSetCO->pulseTrain);
+			DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_LowTime, lowTime) );
+			SetCtrlVal(timingPanHndl, COTimePan_LowTime, lowTime); 
+			// high time
+			highTime = GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)chanSetCO->pulseTrain);
+			DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_HighTime, highTime) );
+			SetCtrlVal(timingPanHndl, COTimePan_HighTime, highTime);
+			// set UI idle state
+			switch (idleState) {
+				case PulseTrainIdle_Low:
+					SetCtrlIndex(timingPanHndl, COTimePan_IdleState, 0);
+					break;
+					
+				case PulseTrainIdle_High:
+					SetCtrlIndex(timingPanHndl, COTimePan_IdleState, 1);
+					break;
+			} 
+			// n pulses
+			SetCtrlVal(timingPanHndl, COTimePan_NPulses, nPulses);
+			// pulse mode (daqmx settings set before)
+			GetIndexFromValue(timingPanHndl, COTimePan_Mode, &ctrlIdx, pulseMode); 
+			SetCtrlIndex(timingPanHndl, COTimePan_Mode, ctrlIdx);
+			break;
 			
-			break;
-				
 		case DL_PulseTrain_Ticks:
-				
+			// tick delay
+			initialDelayTicks = GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);
+			DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Ticks_InitialDelay, initialDelayTicks) );
+			SetCtrlVal(timingPanHndl, COTicksPan_InitialDelay, initialDelayTicks); 
+			// low ticks
+			lowTicks = GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);
+			DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_LowTicks, lowTicks) );
+			SetCtrlVal(timingPanHndl, COTicksPan_LowTicks, lowTicks); 
+			// high ticks
+			highTicks = GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);
+			DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_HighTicks, highTicks) );
+			SetCtrlVal(timingPanHndl, COTicksPan_LowTicks, highTicks);
+			// set UI idle state
+			switch (idleState) {
+				case PulseTrainIdle_Low:
+					SetCtrlIndex(timingPanHndl, COTicksPan_IdleState, 0);
+					break;
+						
+				case PulseTrainIdle_High:
+					SetCtrlIndex(timingPanHndl, COTicksPan_IdleState, 1);
+					break;
+			}
+			// n pulses
+			SetCtrlVal(timingPanHndl, COTicksPan_NPulses, nPulses);
+			// pulse mode (daqmx settings set before)
+			GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, pulseMode); 
+			SetCtrlIndex(timingPanHndl, COTicksPan_Mode, ctrlIdx);
 			break;
-	} 	
+	}
+	
+	//-------------------------------------------------------------------------------------------------------------------------------
+	// Send task settings data
+	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	// copy pulse train info
+	nullChk( pulseTrain = CopyPulseTrain(chanSetCO->pulseTrain) );
+	
+	// generate data packet
+	switch (GetPulseTrainType(chanSetCO->pulseTrain)) {
+		
+		case PulseTrain_Freq:
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, pulseTrain, discard_PulseTrain_type) );  
+			break;
+			
+		case PulseTrain_Time:
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, pulseTrain, discard_PulseTrain_type) ); 
+			break;
+			
+		case PulseTrain_Ticks:
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, pulseTrain, discard_PulseTrain_type) ); 
+			break;
+		
+	}
+	
+	errChk( SendDataPacket(chanSetCO->baseClass.srcVChan, dataPacket, FALSE, &errMsg) );
 						
 	OKfree(dataPackets);				
 	
 	return 0;
+
+DAQmxError:
 	
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	errMsg = malloc((buffsize+1)*sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	// fall through	
+
 Error:
+	
+	// cleanup
+	discard_DataPacket_type(&dataPacket);
 	
 	*errorInfo = FormatMsg(error, "CO_DataReceivedTC", errMsg);
 	OKfree(errMsg);
@@ -6904,16 +7062,16 @@ static int RemoveDAQmxAIChannel_CB (int panel, int control, int event, void *cal
 			AIChannel_type* AIChanAttr 	= GetAIChannel(dev, aiChanPtr->name);
 			AIChanAttr->inUse = FALSE;
 			// remove channel from AI task
-			ChanSet_type** 	chanSetPtrPtr;
+			ChanSet_type** 	chanSetPtr;
 			size_t			nItems			= ListNumItems(dev->AITaskSet->chanSet);
 			size_t			chIdx			= 1;
 			for (size_t i = 1; i <= nItems; i++) {	
-				chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
-				if (*chanSetPtrPtr == aiChanPtr) {
+				chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+				if (*chanSetPtr == aiChanPtr) {
 					// remove from framework
-					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtrPtr)->srcVChan);
+					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtr)->srcVChan);
 					// discard channel data structure
-					(*(*chanSetPtrPtr)->discardFptr)	(chanSetPtrPtr);
+					(*(*chanSetPtr)->discardFptr)	(chanSetPtr);
 					ListRemoveItem(dev->AITaskSet->chanSet, 0, chIdx);
 					break;
 				}
@@ -7008,18 +7166,18 @@ static int RemoveDAQmxAOChannel_CB (int panel, int control, int event, void *cal
 			AOChannel_type* AOChanAttr 	= GetAOChannel(dev, aoChanPtr->name);
 			AOChanAttr->inUse = FALSE;
 			// remove channel from AO task
-			ChanSet_type** 	chanSetPtrPtr;
+			ChanSet_type** 	chanSetPtr;
 			size_t			nItems			= ListNumItems(dev->AOTaskSet->chanSet);
 			size_t			chIdx			= 1;
 			for (size_t i = 1; i <= nItems; i++) {	
-				chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
-				if (*chanSetPtrPtr == aoChanPtr) {
+				chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+				if (*chanSetPtr == aoChanPtr) {
 					// remove from framework
-					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtrPtr)->sinkVChan);
+					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtr)->sinkVChan);
 					// detach from Task Controller										 
-					RemoveSinkVChan(dev->taskController, (*chanSetPtrPtr)->sinkVChan);
+					RemoveSinkVChan(dev->taskController, (*chanSetPtr)->sinkVChan);
 					// discard channel data structure
-					(*(*chanSetPtrPtr)->discardFptr)	(chanSetPtrPtr);
+					(*(*chanSetPtr)->discardFptr)	(chanSetPtr);
 					ListRemoveItem(dev->AOTaskSet->chanSet, 0, chIdx);
 					break;
 				}
@@ -7115,18 +7273,18 @@ static int RemoveDAQmxCIChannel_CB (int panel, int control, int event, void *cal
 			CIChannel_type* CIChanAttr 	= GetCIChannel(dev, ciChanPtr->name);
 			CIChanAttr->inUse = FALSE;
 			// remove channel from CI task
-	/*		ChanSet_type** 	chanSetPtrPtr;
+	/*		ChanSet_type** 	chanSetPtr;
 			size_t			nItems			= ListNumItems(dev->CITaskSet->chanSet);
 			size_t			chIdx			= 1;
 			for (size_t i = 1; i <= nItems; i++) {	
-				chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanSet, i);
-				if (*chanSetPtrPtr == ciChanPtr) {
+				chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanSet, i);
+				if (*chanSetPtr == ciChanPtr) {
 					// remove from framework
-					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtrPtr)->sinkVChan);
+					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtr)->sinkVChan);
 					// detach from Task Controller										 
-					RemoveSinkVChan(dev->taskController, (*chanSetPtrPtr)->sinkVChan);
+					RemoveSinkVChan(dev->taskController, (*chanSetPtr)->sinkVChan);
 					// discard channel data structure
-					(*(*chanSetPtrPtr)->discardFptr)	(chanSetPtrPtr);
+					(*(*chanSetPtr)->discardFptr)	(chanSetPtr);
 					ListRemoveItem(dev->CITaskSet->chanSet, 0, chIdx);
 					break;
 				}
@@ -7272,18 +7430,18 @@ static int RemoveDAQmxDOChannel_CB (int panel, int control, int event, void *cal
 			
 	
 			// remove channel from DO task
-			ChanSet_type** 	chanSetPtrPtr;
+			ChanSet_type** 	chanSetPtr;
 			size_t			nItems			= ListNumItems(dev->DOTaskSet->chanSet);
 			size_t			chIdx			= 1;
 			for (size_t i = 1; i <= nItems; i++) {	
-				chanSetPtrPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
-				if (*chanSetPtrPtr == doChanPtr) {
+				chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+				if (*chanSetPtr == doChanPtr) {
 					// remove from framework
-					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtrPtr)->sinkVChan);
+					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtr)->sinkVChan);
 					// detach from Task Controller										 
-				//	RemoveSinkVChan(dev->taskController, (*chanSetPtrPtr)->srcVChan);
+				//	RemoveSinkVChan(dev->taskController, (*chanSetPtr)->srcVChan);
 					// discard channel data structure
-					(*(*chanSetPtrPtr)->discardFptr)	(chanSetPtrPtr);
+					(*(*chanSetPtr)->discardFptr)	(chanSetPtr);
 					ListRemoveItem(dev->DOTaskSet->chanSet, 0, chIdx);
 					break;
 				}
@@ -9766,7 +9924,7 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 	PulseTrain_type*	pulseTrain			= NULL;
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
-	// Receive task settings data
+	// Receive task settings data and update UI settings
 	//-------------------------------------------------------------------------------------------------------------------------------
 	if (IsVChanConnected((VChan_type*)chanSetCO->baseClass.sinkVChan)) {
 		errChk( GetDataPacket(chanSetCO->baseClass.sinkVChan, &dataPacket, &errMsg) );
@@ -9774,37 +9932,122 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 		discard_PulseTrain_type(&chanSetCO->pulseTrain);
 		nullChk( chanSetCO->pulseTrain = CopyPulseTrain(*(PulseTrain_type**)dataPacketData) ); 
 	
+		// get channel panel handle to adjust UI settings
+		int						timingPanHndl;
+		
+		GetPanelHandleFromTabPage(chanSetCO->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl); 
+		
+		double 					initialDelay;
+		double					frequency;
+		double					dutyCycle;
+		double					lowTime;
+		double					highTime;
+		uInt32					initialDelayTicks;
+		uInt32					lowTicks;
+		uInt32					highTicks;
+		PulseTrainIdleStates	idleState;
+		PulseTrainModes			pulseMode;
+		uInt64					nPulses;
+		int						ctrlIdx;
+		
 		// set idle state
-		DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_IdleState, GetPulseTrainIdleState(chanSetCO->pulseTrain)) );
+		idleState = GetPulseTrainIdleState(chanSetCO->pulseTrain);
+		DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_IdleState, idleState) );
+		// generation mode
+		pulseMode = GetPulseTrainMode(chanSetCO->pulseTrain);
 		// timing
-		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->baseClass.taskHndl, GetPulseTrainMode(chanSetCO->pulseTrain), GetPulseTrainNPulses(chanSetCO->pulseTrain)) );
-				
+		nPulses = GetPulseTrainNPulses(chanSetCO->pulseTrain);
+		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->baseClass.taskHndl, pulseMode, nPulses) );
+		
 		switch (dataPacketDataType) {
 			case DL_PulseTrain_Freq:
 				// set initial delay
-				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Freq_InitialDelay, GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain)) );
+				initialDelay = GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain);
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Freq_InitialDelay, initialDelay) );
+				SetCtrlVal(timingPanHndl, COFreqPan_InitialDelay, initialDelay); 
 				// frequency
-				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Freq, GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain)) );
+				frequency = GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain);
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Freq, frequency) );
+				SetCtrlVal(timingPanHndl, COFreqPan_Frequency, frequency); 
 				// duty cycle
-				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_DutyCyc, GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain)/100) );
+				dutyCycle = GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain);
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_DutyCyc, dutyCycle/100) ); // normalize from [%] to 0-1 range
+				SetCtrlVal(timingPanHndl, COFreqPan_DutyCycle, dutyCycle); // display in [%] 
+				// set UI idle state
+				switch (idleState) {
+					case PulseTrainIdle_Low:
+						SetCtrlIndex(timingPanHndl, COFreqPan_IdleState, 0);
+						break;
+						
+					case PulseTrainIdle_High:
+						SetCtrlIndex(timingPanHndl, COFreqPan_IdleState, 1);
+						break;
+				}
+				// n pulses
+				SetCtrlVal(timingPanHndl, COFreqPan_NPulses, nPulses);
+				// pulse mode (daqmx settings set before)
+				GetIndexFromValue(timingPanHndl, COFreqPan_Mode, &ctrlIdx, pulseMode); 
+				SetCtrlIndex(timingPanHndl, COFreqPan_Mode, ctrlIdx);
 				break;
 				
 			case DL_PulseTrain_Time:
 				// set initial delay
-				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Time_InitialDelay, GetPulseTrainTimeTimingInitialDelay((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain)) );
+				initialDelay = GetPulseTrainTimeTimingInitialDelay((PulseTrainFreqTiming_type*)chanSetCO->pulseTrain);
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Time_InitialDelay, initialDelay) );
+				SetCtrlVal(timingPanHndl, COTimePan_InitialDelay, initialDelay); 
 				// low time
-				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_LowTime, GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)chanSetCO->pulseTrain)) );
+				lowTime = GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)chanSetCO->pulseTrain);
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_LowTime, lowTime) );
+				SetCtrlVal(timingPanHndl, COTimePan_LowTime, lowTime); 
 				// high time
-				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_HighTime, GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)chanSetCO->pulseTrain)) );
+				highTime = GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)chanSetCO->pulseTrain);
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_HighTime, highTime) );
+				SetCtrlVal(timingPanHndl, COTimePan_HighTime, highTime);
+				// set UI idle state
+				switch (idleState) {
+					case PulseTrainIdle_Low:
+						SetCtrlIndex(timingPanHndl, COTimePan_IdleState, 0);
+						break;
+						
+					case PulseTrainIdle_High:
+						SetCtrlIndex(timingPanHndl, COTimePan_IdleState, 1);
+						break;
+				} 
+				// n pulses
+				SetCtrlVal(timingPanHndl, COTimePan_NPulses, nPulses);
+				// pulse mode (daqmx settings set before)
+				GetIndexFromValue(timingPanHndl, COTimePan_Mode, &ctrlIdx, pulseMode); 
+				SetCtrlIndex(timingPanHndl, COTimePan_Mode, ctrlIdx);
 				break;
 			
 			case DL_PulseTrain_Ticks:
 				// tick delay
-				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Ticks_InitialDelay, GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain)) );
+				initialDelayTicks = GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Ticks_InitialDelay, initialDelayTicks) );
+				SetCtrlVal(timingPanHndl, COTicksPan_InitialDelay, initialDelayTicks); 
 				// low ticks
-				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_LowTicks, GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain)) );
+				lowTicks = GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_LowTicks, lowTicks) );
+				SetCtrlVal(timingPanHndl, COTicksPan_LowTicks, lowTicks); 
 				// high ticks
-				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_HighTicks, GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain)) );
+				highTicks = GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_HighTicks, highTicks) );
+				SetCtrlVal(timingPanHndl, COTicksPan_LowTicks, highTicks);
+				// set UI idle state
+				switch (idleState) {
+					case PulseTrainIdle_Low:
+						SetCtrlIndex(timingPanHndl, COTicksPan_IdleState, 0);
+						break;
+						
+					case PulseTrainIdle_High:
+						SetCtrlIndex(timingPanHndl, COTicksPan_IdleState, 1);
+						break;
+				}
+				// n pulses
+				SetCtrlVal(timingPanHndl, COTicksPan_NPulses, nPulses);
+				// pulse mode (daqmx settings set before)
+				GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, pulseMode); 
+				SetCtrlIndex(timingPanHndl, COTicksPan_Mode, ctrlIdx);
 				break;
 		}
 	
@@ -9906,7 +10149,7 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 {
 #define ConfigDAQmxAITask_Err_ChannelNotImplemented		-1
 	int 				error 			= 0;
-	ChanSet_type** 		chanSetPtrPtr;
+	ChanSet_type** 		chanSetPtr;
 	
 	if (!dev->AITaskSet) return 0; 		// do nothing
 	
@@ -9920,8 +10163,8 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	BOOL 	hwTimingFlag 	= FALSE;
 	size_t	nItems 			= ListNumItems(dev->AITaskSet->chanSet);
 	for (size_t i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
-		if (!(*chanSetPtrPtr)->onDemand) {
+		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		if (!(*chanSetPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -9938,25 +10181,25 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	// create AI channels
 	nItems = ListNumItems(dev->AITaskSet->chanSet);
 	for (size_t i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) continue;
+		if ((*chanSetPtr)->onDemand) continue;
 		
-		switch((*chanSetPtrPtr)->chanType) {
+		switch((*chanSetPtr)->chanType) {
 			
 			case Chan_AI_Voltage:
 				
-				DAQmxErrChk (DAQmxCreateAIVoltageChan(dev->AITaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAO_Voltage_type**)chanSetPtrPtr)->terminal, 
-													  (*(ChanSet_AIAO_Voltage_type**)chanSetPtrPtr)->Vmin, (*(ChanSet_AIAO_Voltage_type**)chanSetPtrPtr)->Vmax, DAQmx_Val_Volts, NULL)); 
+				DAQmxErrChk (DAQmxCreateAIVoltageChan(dev->AITaskSet->taskHndl, (*chanSetPtr)->name, "", (*(ChanSet_AIAO_Voltage_type**)chanSetPtr)->terminal, 
+													  (*(ChanSet_AIAO_Voltage_type**)chanSetPtr)->Vmin, (*(ChanSet_AIAO_Voltage_type**)chanSetPtr)->Vmax, DAQmx_Val_Volts, NULL)); 
 				
 				break;
 				
 			case Chan_AI_Current:
 				
-				DAQmxErrChk (DAQmxCreateAICurrentChan(dev->AITaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->terminal, 
-													  (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->Imin, (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->Imax, DAQmx_Val_Amps,
-													  (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->shuntResistorType, (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->shuntResistorValue, NULL));
+				DAQmxErrChk (DAQmxCreateAICurrentChan(dev->AITaskSet->taskHndl, (*chanSetPtr)->name, "", (*(ChanSet_AIAO_Current_type**)chanSetPtr)->terminal, 
+													  (*(ChanSet_AIAO_Current_type**)chanSetPtr)->Imin, (*(ChanSet_AIAO_Current_type**)chanSetPtr)->Imax, DAQmx_Val_Amps,
+													  (*(ChanSet_AIAO_Current_type**)chanSetPtr)->shuntResistorType, (*(ChanSet_AIAO_Current_type**)chanSetPtr)->shuntResistorValue, NULL));
 							  
 				break;
 				
@@ -10083,17 +10326,17 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	// Add AI Task callbacks
 	//----------------------
 	// register AI data available callback 
-	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->AITaskSet->timing->blockSize, 0, AIDAQmxTaskDataAvailable_CB, dev)); 
+	DAQmxErrChk( DAQmxRegisterEveryNSamplesEvent(dev->AITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->AITaskSet->timing->blockSize, 0, AIDAQmxTaskDataAvailable_CB, dev) ); 
 	// register AI task done event callback
 	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
-	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AITaskSet->taskHndl, 0, AIDAQmxTaskDone_CB, dev));
+	DAQmxErrChk( DAQmxRegisterDoneEvent(dev->AITaskSet->taskHndl, 0, AIDAQmxTaskDone_CB, dev) );
 	
 	//----------------------  
 	// Commit AI Task
 	//----------------------  
 	
-	DAQmxTaskControl(dev->AITaskSet->taskHndl, DAQmx_Val_Task_Commit);
+	DAQmxErrChk( DAQmxTaskControl(dev->AITaskSet->taskHndl, DAQmx_Val_Task_Commit) );
 	
 	return 0;
 	
@@ -10114,7 +10357,7 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 #define ConfigDAQmxAOTask_Err_ChannelNotImplemented		-2
 	
 	int 				error 			= 0;
-	ChanSet_type** 		chanSetPtrPtr;
+	ChanSet_type** 		chanSetPtr;
 	
 	if (!dev->AOTaskSet) return 0; 		// do nothing
 	
@@ -10133,8 +10376,8 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	BOOL 	hwTimingFlag 	= FALSE;
 	size_t	nItems			= ListNumItems(dev->AOTaskSet->chanSet);
 	for (size_t i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
-		if (!(*chanSetPtrPtr)->onDemand) {
+		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+		if (!(*chanSetPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -10151,31 +10394,31 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	// create AO channels
 	nItems			= ListNumItems(dev->AOTaskSet->chanSet);
 	for (size_t i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 	
 		// include in the task only channels for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) continue;
+		if ((*chanSetPtr)->onDemand) continue;
 		
-		switch((*chanSetPtrPtr)->chanType) {
+		switch((*chanSetPtr)->chanType) {
 			
 			case Chan_AO_Voltage:
 				
 				// create channel
-				DAQmxErrChk (DAQmxCreateAOVoltageChan(dev->AOTaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAO_Voltage_type**)chanSetPtrPtr)->Vmin, 
-													  (*(ChanSet_AIAO_Voltage_type**)chanSetPtrPtr)->Vmax, DAQmx_Val_Volts, NULL)); 
+				DAQmxErrChk (DAQmxCreateAOVoltageChan(dev->AOTaskSet->taskHndl, (*chanSetPtr)->name, "", (*(ChanSet_AIAO_Voltage_type**)chanSetPtr)->Vmin, 
+													  (*(ChanSet_AIAO_Voltage_type**)chanSetPtr)->Vmax, DAQmx_Val_Volts, NULL)); 
 				
 				break;
 				
 			case Chan_AO_Current:
 				
-				DAQmxErrChk (DAQmxCreateAOCurrentChan(dev->AOTaskSet->taskHndl, (*chanSetPtrPtr)->name, "", (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->Imin,
-													  (*(ChanSet_AIAO_Current_type**)chanSetPtrPtr)->Imax, DAQmx_Val_Amps, NULL));
+				DAQmxErrChk (DAQmxCreateAOCurrentChan(dev->AOTaskSet->taskHndl, (*chanSetPtr)->name, "", (*(ChanSet_AIAO_Current_type**)chanSetPtr)->Imin,
+													  (*(ChanSet_AIAO_Current_type**)chanSetPtr)->Imax, DAQmx_Val_Amps, NULL));
 							  
 				break;
 			/*	
 			case Chan_AO_Function:
 			
-				DAQmxErrChk (DAQmxCreateAOFuncGenChan(dev->AOTaskSet->taskHndl, (*chanSetPtrPtr)->name, "", ,
+				DAQmxErrChk (DAQmxCreateAOFuncGenChan(dev->AOTaskSet->taskHndl, (*chanSetPtr)->name, "", ,
 				
 				break;
 			*/
@@ -10305,7 +10548,7 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	// Commit AO Task
 	//----------------------  
 	
-	DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Commit);
+	DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Commit) );
 	
 	return 0;
 
@@ -10327,7 +10570,7 @@ DAQmxError:
 static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 {
 	int 				error 			= 0;
-	ChanSet_type** 		chanSetPtrPtr;
+	ChanSet_type** 		chanSetPtr;
 	
 	if (!dev->DITaskSet) return 0; 		// do nothing
 	
@@ -10341,8 +10584,8 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	BOOL 	hwTimingFlag 	= FALSE;
 	size_t	nItems			= ListNumItems(dev->DITaskSet->chanSet);
 	for (size_t i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
-		if (!(*chanSetPtrPtr)->onDemand) {
+		chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
+		if (!(*chanSetPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -10359,12 +10602,12 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	// create DI channels
 	nItems	= ListNumItems(dev->DITaskSet->chanSet); 
 	for (size_t i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
+		chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
 	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) continue;
+		if ((*chanSetPtr)->onDemand) continue;
 		
-		DAQmxErrChk (DAQmxCreateDIChan(dev->DITaskSet->taskHndl, (*chanSetPtrPtr)->name, "", DAQmx_Val_ChanForAllLines)); 
+		DAQmxErrChk (DAQmxCreateDIChan(dev->DITaskSet->taskHndl, (*chanSetPtr)->name, "", DAQmx_Val_ChanForAllLines)); 
 	}
 				 
 	// sample clock source
@@ -10488,7 +10731,7 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	// Commit DI Task
 	//----------------------  
 	
-	DAQmxTaskControl(dev->DITaskSet->taskHndl, DAQmx_Val_Task_Commit);
+	DAQmxErrChk( DAQmxTaskControl(dev->DITaskSet->taskHndl, DAQmx_Val_Task_Commit) );
 	
 	return 0;
 
@@ -10505,7 +10748,7 @@ DAQmxError:
 static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 {
 	int 				error 			= 0;
-	ChanSet_type** 		chanSetPtrPtr;
+	ChanSet_type** 		chanSetPtr;
 	
 	#define ConfigDAQmxDOTask_Err_OutOfMemory				-1 
 	
@@ -10527,8 +10770,8 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	BOOL 	hwTimingFlag 	= FALSE;
 	size_t	nItems			= ListNumItems(dev->DOTaskSet->chanSet);
 	for (size_t i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
-		if (!(*chanSetPtrPtr)->onDemand) {
+		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+		if (!(*chanSetPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -10545,12 +10788,12 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	// create DO channels
 	nItems	= ListNumItems(dev->DOTaskSet->chanSet);
 	for (size_t i = 1; i <= nItems; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
 	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) continue;
+		if ((*chanSetPtr)->onDemand) continue;
 		
-		DAQmxErrChk (DAQmxCreateDOChan(dev->DOTaskSet->taskHndl, (*chanSetPtrPtr)->name, "", DAQmx_Val_ChanForAllLines)); 
+		DAQmxErrChk (DAQmxCreateDOChan(dev->DOTaskSet->taskHndl, (*chanSetPtr)->name, "", DAQmx_Val_ChanForAllLines)); 
 	}
 				 
 	// sample clock source
@@ -10658,7 +10901,7 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	// Commit DO Task
 	//----------------------  
 	
-	DAQmxTaskControl(dev->DOTaskSet->taskHndl, DAQmx_Val_Task_Commit);
+	DAQmxErrChk( DAQmxTaskControl(dev->DOTaskSet->taskHndl, DAQmx_Val_Task_Commit) );
 	
 	return 0;
 	
@@ -10682,7 +10925,7 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 {
 #define ConfigDAQmxCITask_Err_ChanNotImplemented		-1 
 	int 				error 			= 0;
-	ChanSet_type** 		chanSetPtrPtr;
+	ChanSet_type** 		chanSetPtr;
 	size_t				nCIChan;
 	char*				refclksource;
 	char*				sampleclksource;
@@ -10694,18 +10937,18 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 	
 	// clear CI tasks
 	for (size_t i = 1; i <= nCIChan; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-		if ((*chanSetPtrPtr)->taskHndl) {
-			DAQmxErrChk(DAQmxClearTask((*chanSetPtrPtr)->taskHndl));
-			(*chanSetPtrPtr)->taskHndl = NULL;
+		chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+		if ((*chanSetPtr)->taskHndl) {
+			DAQmxErrChk(DAQmxClearTask((*chanSetPtr)->taskHndl));
+			(*chanSetPtr)->taskHndl = NULL;
 		}
 	}
 	
 	// check if there is at least one CI task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
 	for (size_t i = 1; i <= nCIChan; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-		if (!(*chanSetPtrPtr)->onDemand) {
+		chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+		if (!(*chanSetPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -10716,62 +10959,62 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 	
 	// create CI channels
 	for (size_t i = 1; i <= nCIChan; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+		chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) continue;
+		if ((*chanSetPtr)->onDemand) continue;
 		
 		// create DAQmx CI task for each counter
 		char* taskName = GetTaskControlName(dev->taskController);
 		AppendString(&taskName, " CI Task on ", -1);
-		AppendString(&taskName, (*chanSetPtrPtr)->name, -1);
-		DAQmxErrChk (DAQmxCreateTask(taskName, &(*chanSetPtrPtr)->taskHndl));
+		AppendString(&taskName, (*chanSetPtr)->name, -1);
+		DAQmxErrChk (DAQmxCreateTask(taskName, &(*chanSetPtr)->taskHndl));
 		OKfree(taskName);
 				
-		switch ((*chanSetPtrPtr)->chanType) {
+		switch ((*chanSetPtr)->chanType) {
 				
 			case Chan_CI_Frequency:
 				
-				ChanSet_CI_Frequency_type*	chCIFreqPtr = *(ChanSet_CI_Frequency_type**)chanSetPtrPtr;
+				ChanSet_CI_Frequency_type*	chCIFreqPtr = *(ChanSet_CI_Frequency_type**)chanSetPtr;
 				
 				sampleclksource=chCIFreqPtr->baseClass.startTrig->trigSource;
 				refclksource=chCIFreqPtr->baseClass.referenceTrig->trigSource;
 				
-				DAQmxErrChk (DAQmxCreateCIFreqChan((*chanSetPtrPtr)->taskHndl, (*chanSetPtrPtr)->name, "", chCIFreqPtr->freqMin, chCIFreqPtr->freqMax, DAQmx_Val_Hz, 
+				DAQmxErrChk (DAQmxCreateCIFreqChan((*chanSetPtr)->taskHndl, (*chanSetPtr)->name, "", chCIFreqPtr->freqMin, chCIFreqPtr->freqMax, DAQmx_Val_Hz, 
 												   chCIFreqPtr->edgeType, chCIFreqPtr->measMethod, chCIFreqPtr->measTime, chCIFreqPtr->divisor, NULL));
 				
 				// use another terminal for the counter if other than default
 				if (chCIFreqPtr->freqInputTerminal)
-				DAQmxErrChk (DAQmxSetChanAttribute((*chanSetPtrPtr)->taskHndl, (*chanSetPtrPtr)->name, DAQmx_CI_Freq_Term, chCIFreqPtr->freqInputTerminal));
+				DAQmxErrChk (DAQmxSetChanAttribute((*chanSetPtr)->taskHndl, (*chanSetPtr)->name, DAQmx_CI_Freq_Term, chCIFreqPtr->freqInputTerminal));
 				
 				// sample clock source
 				// if no sample clock is given, then use OnboardClock by default
 				if (!sampleclksource)  //chCIFreqPtr->taskTiming->sampClkSource
-					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
 				else
-					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_Src, sampleclksource));   //chCIFreqPtr->taskTiming->sampClkSource
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_SampClk_Src, sampleclksource));   //chCIFreqPtr->taskTiming->sampClkSource
 	
 				// sample clock edge
-				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreqPtr->baseClass.startTrig->slope));  //chCIFreqPtr->taskTiming->sampClkEdge
+				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreqPtr->baseClass.startTrig->slope));  //chCIFreqPtr->taskTiming->sampClkEdge
 	
 				// sampling rate
-				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampClk_Rate, *chCIFreqPtr->taskTiming->refSampleRate));
+				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_SampClk_Rate, *chCIFreqPtr->taskTiming->refSampleRate));
 	
 				// set operation mode: finite, continuous
-				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampQuant_SampMode, chCIFreqPtr->taskTiming->measMode));
+				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_SampQuant_SampMode, chCIFreqPtr->taskTiming->measMode));
 	
 				// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+				DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
 	
 				// if a reference clock is given, use it to synchronize the internal clock
 				if (refclksource) {  //chCIFreqPtr->taskTiming->refClkSource
-					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Src,refclksource ));	  //chCIFreqPtr->taskTiming->refClkSource
-					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Rate, chCIFreqPtr->taskTiming->refClkFreq));
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_RefClk_Src,refclksource ));	  //chCIFreqPtr->taskTiming->refClkSource
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_RefClk_Rate, chCIFreqPtr->taskTiming->refClkFreq));
 				}
 	
 				// set number of samples per channel for finite acquisition
 				if (chCIFreqPtr->taskTiming->measMode == MeasFinite)
-					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *chCIFreqPtr->taskTiming->refNSamples));
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *chCIFreqPtr->taskTiming->refNSamples));
 				
 				/*
 				DAQmxErrChk (DAQmxSetTrigAttribute(gTaskHandle,DAQmx_ArmStartTrig_Type,DAQmx_Val_DigEdge));
@@ -10792,7 +11035,7 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 		// Commit CI Task
 		//----------------------  
 	
-		DAQmxTaskControl((*chanSetPtrPtr)->taskHndl, DAQmx_Val_Task_Commit);
+		DAQmxErrChk( DAQmxTaskControl((*chanSetPtr)->taskHndl, DAQmx_Val_Task_Commit) );
 	}
 				 
 	
@@ -10814,7 +11057,7 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 #define ConfigDAQmxCOTask_Err_ChanNotImplemented		-1 
 	
 	int 				error 			= 0;
-	ChanSet_type** 		chanSetPtrPtr;
+	ChanSet_type** 		chanSetPtr;
 	ChanSet_CO_type*	chCOPtr;
 	size_t				nCOChan;
 	
@@ -10825,18 +11068,18 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 	
 	// clear CO tasks
 	for (size_t i = 1; i <= nCOChan; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-		if ((*chanSetPtrPtr)->taskHndl) {
-			DAQmxErrChk(DAQmxClearTask((*chanSetPtrPtr)->taskHndl));
-			(*chanSetPtrPtr)->taskHndl = NULL;
+		chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+		if ((*chanSetPtr)->taskHndl) {
+			DAQmxErrChk(DAQmxClearTask((*chanSetPtr)->taskHndl));
+			(*chanSetPtr)->taskHndl = NULL;
 		}
 	}
 	
 	// check if there is at least one CO task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
 	for (size_t i = 1; i <= nCOChan; i++) {	
-		chanSetPtrPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-		if (!(*chanSetPtrPtr)->onDemand) {
+		chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+		if (!(*chanSetPtr)->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -10847,35 +11090,33 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 	
 	// create CO channels
 	for (size_t i = 1; i <= nCOChan; i++) {	
-		chanSetPtrPtr 	= ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-		chCOPtr 		= *(ChanSet_CO_type**)chanSetPtrPtr;  
+		chanSetPtr 	= ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+		chCOPtr 		= *(ChanSet_CO_type**)chanSetPtr;  
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtrPtr)->onDemand) continue;
+		if ((*chanSetPtr)->onDemand) continue;
 		
 		
-		//char* taskName=GetTaskControlName(dev->taskController);
-		
-		
-		//AppendString(&taskName, " CO Task on ", -1);
-		//AppendString(&taskName, (*chanSetPtrPtr)->name, -1);
+		char* taskName = GetTaskControlName(dev->taskController);
+		AppendString(&taskName, " CO Task on ", -1);
+		AppendString(&taskName, strstr((*chanSetPtr)->name, "/")+1, -1);
 		
 		// create DAQmx CO task for each counter 
-		DAQmxErrChk (DAQmxCreateTask("", &(*chanSetPtrPtr)->taskHndl));
-		//OKfree(taskName);
+		DAQmxErrChk (DAQmxCreateTask(taskName, &(*chanSetPtr)->taskHndl));
+		OKfree(taskName);
 				
-		switch ((*chanSetPtrPtr)->chanType) {
+		switch ((*chanSetPtr)->chanType) {
 				
 			case Chan_CO_Pulse_Frequency:
 				
-				DAQmxErrChk ( DAQmxCreateCOPulseChanFreq((*chanSetPtrPtr)->taskHndl, (*chanSetPtrPtr)->name, "", DAQmx_Val_Hz, GetPulseTrainIdleState(chCOPtr->pulseTrain), 
+				DAQmxErrChk ( DAQmxCreateCOPulseChanFreq((*chanSetPtr)->taskHndl, (*chanSetPtr)->name, "", DAQmx_Val_Hz, GetPulseTrainIdleState(chCOPtr->pulseTrain), 
 														 GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)chCOPtr->pulseTrain), GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)chCOPtr->pulseTrain), 
 														 (GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)chCOPtr->pulseTrain)/100)) );
 	
 				
 				// if a reference clock is given, use it to synchronize the internal clock
 				if (chCOPtr->baseClass.referenceTrig->trigType==DAQmx_Val_DigEdge) {
-					DAQmxErrChk ( DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Src, chCOPtr->baseClass.referenceTrig->trigSource) );
-					//DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Rate, chCIFreqPtr->timing->refClkFreq));
+					DAQmxErrChk ( DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_RefClk_Src, chCOPtr->baseClass.referenceTrig->trigSource) );
+					//DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_RefClk_Rate, chCIFreqPtr->timing->refClkFreq));
 				}
 					// if no reference clock is given, then use OnboardClock by default
 			
@@ -10884,27 +11125,27 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 				// trigger 	
 				if (chCOPtr->baseClass.startTrig->trigType == DAQmx_Val_DigEdge){
 					if (chCOPtr->baseClass.startTrig->trigSource)
-						DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtrPtr)->taskHndl, chCOPtr->baseClass.startTrig->trigSource,chCOPtr->baseClass.startTrig->slope) );  
+						DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtr)->taskHndl, chCOPtr->baseClass.startTrig->trigSource,chCOPtr->baseClass.startTrig->slope) );  
 					else
-						DAQmxErrChk ( DAQmxDisableStartTrig((*chanSetPtrPtr)->taskHndl) );
+						DAQmxErrChk ( DAQmxDisableStartTrig((*chanSetPtr)->taskHndl) );
 				}
 			//	else 
-			//		DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_ArmStartTrig_Type,DAQmx_Val_None));  
+			//		DAQmxErrChk (DAQmxSetTrigAttribute((*chanSetPtr)->taskHndl,DAQmx_ArmStartTrig_Type,DAQmx_Val_None));  
 			
-				DAQmxErrChk ( DAQmxCfgImplicitTiming((*chanSetPtrPtr)->taskHndl, GetPulseTrainMode(chCOPtr->pulseTrain), GetPulseTrainNPulses(chCOPtr->pulseTrain)) );
-				DAQmxErrChk ( DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_StartTrig_Retriggerable, TRUE));    
+				DAQmxErrChk ( DAQmxCfgImplicitTiming((*chanSetPtr)->taskHndl, GetPulseTrainMode(chCOPtr->pulseTrain), GetPulseTrainNPulses(chCOPtr->pulseTrain)) );
+				DAQmxErrChk ( DAQmxSetTrigAttribute((*chanSetPtr)->taskHndl,DAQmx_StartTrig_Retriggerable, TRUE));    
 				break;
 				
 			case Chan_CO_Pulse_Time:
 				     
-				DAQmxErrChk ( DAQmxCreateCOPulseChanTime((*chanSetPtrPtr)->taskHndl, (*chanSetPtrPtr)->name, "",DAQmx_Val_Seconds  , GetPulseTrainIdleState(chCOPtr->pulseTrain), 
+				DAQmxErrChk ( DAQmxCreateCOPulseChanTime((*chanSetPtr)->taskHndl, (*chanSetPtr)->name, "",DAQmx_Val_Seconds  , GetPulseTrainIdleState(chCOPtr->pulseTrain), 
 													GetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)chCOPtr->pulseTrain), GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)chCOPtr->pulseTrain), 
 													GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)chCOPtr->pulseTrain)) );
 	
 				// if a reference clock is given, use it to synchronize the internal clock
 				if (chCOPtr->baseClass.referenceTrig->trigType==DAQmx_Val_DigEdge) {
-					DAQmxErrChk ( DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Src, chCOPtr->baseClass.referenceTrig->trigSource) );
-			//		DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Rate, chCIFreqPtr->timing->refClkFreq));
+					DAQmxErrChk ( DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_RefClk_Src, chCOPtr->baseClass.referenceTrig->trigSource) );
+			//		DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_RefClk_Rate, chCIFreqPtr->timing->refClkFreq));
 				}
 					// if no reference clock is given, then use OnboardClock by default
 			
@@ -10912,26 +11153,26 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 				// trigger 	
 				if (chCOPtr->baseClass.startTrig->trigType==DAQmx_Val_DigEdge){
 					if (chCOPtr->baseClass.startTrig->trigSource)
-						DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtrPtr)->taskHndl, chCOPtr->baseClass.startTrig->trigSource, chCOPtr->baseClass.startTrig->slope) );  
+						DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtr)->taskHndl, chCOPtr->baseClass.startTrig->trigSource, chCOPtr->baseClass.startTrig->slope) );  
 					else
-						DAQmxErrChk ( DAQmxDisableStartTrig((*chanSetPtrPtr)->taskHndl) );
+						DAQmxErrChk ( DAQmxDisableStartTrig((*chanSetPtr)->taskHndl) );
 				}
 			
-				DAQmxErrChk ( DAQmxCfgImplicitTiming((*chanSetPtrPtr)->taskHndl, GetPulseTrainMode(chCOPtr->pulseTrain), GetPulseTrainNPulses(chCOPtr->pulseTrain)) ); 
-				DAQmxErrChk ( DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_StartTrig_Retriggerable, TRUE) );    
+				DAQmxErrChk ( DAQmxCfgImplicitTiming((*chanSetPtr)->taskHndl, GetPulseTrainMode(chCOPtr->pulseTrain), GetPulseTrainNPulses(chCOPtr->pulseTrain)) ); 
+				DAQmxErrChk ( DAQmxSetTrigAttribute((*chanSetPtr)->taskHndl,DAQmx_StartTrig_Retriggerable, TRUE) );    
 				break;
 				
 			case Chan_CO_Pulse_Ticks:
 				
-				DAQmxErrChk ( DAQmxCreateCOPulseChanTicks((*chanSetPtrPtr)->taskHndl, (*chanSetPtrPtr)->name, "",chCOPtr->baseClass.referenceTrig->trigSource,
+				DAQmxErrChk ( DAQmxCreateCOPulseChanTicks((*chanSetPtr)->taskHndl, (*chanSetPtr)->name, "",chCOPtr->baseClass.referenceTrig->trigSource,
 							 GetPulseTrainIdleState(chCOPtr->pulseTrain), GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chCOPtr->pulseTrain), GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chCOPtr->pulseTrain),
 							 GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chCOPtr->pulseTrain)) );
 	
 				
 				// if a reference clock is given, use it to synchronize the internal clock
 				if (chCOPtr->baseClass.referenceTrig->trigType==DAQmx_Val_DigEdge) {
-					DAQmxErrChk ( DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Src, chCOPtr->baseClass.referenceTrig->trigSource) );
-			//		DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_RefClk_Rate, chCIFreqPtr->timing->refClkFreq));
+					DAQmxErrChk ( DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_RefClk_Src, chCOPtr->baseClass.referenceTrig->trigSource) );
+			//		DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_RefClk_Rate, chCIFreqPtr->timing->refClkFreq));
 				}
 					// if no reference clock is given, then use OnboardClock by default
 			
@@ -10940,13 +11181,13 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 				// trigger 	
 				if (chCOPtr->baseClass.startTrig->trigType==DAQmx_Val_DigEdge){
 					if (chCOPtr->baseClass.startTrig->trigSource)
-						DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtrPtr)->taskHndl, chCOPtr->baseClass.startTrig->trigSource, chCOPtr->baseClass.startTrig->slope) );  
+						DAQmxErrChk ( DAQmxCfgDigEdgeStartTrig((*chanSetPtr)->taskHndl, chCOPtr->baseClass.startTrig->trigSource, chCOPtr->baseClass.startTrig->slope) );  
 					else
-						DAQmxErrChk ( DAQmxDisableStartTrig((*chanSetPtrPtr)->taskHndl) ); 	
+						DAQmxErrChk ( DAQmxDisableStartTrig((*chanSetPtr)->taskHndl) ); 	
 				}
 			
-				DAQmxErrChk ( DAQmxCfgImplicitTiming((*chanSetPtrPtr)->taskHndl, GetPulseTrainMode(chCOPtr->pulseTrain), GetPulseTrainNPulses(chCOPtr->pulseTrain)) );    
-				DAQmxErrChk ( DAQmxSetTrigAttribute((*chanSetPtrPtr)->taskHndl,DAQmx_StartTrig_Retriggerable, TRUE) );      
+				DAQmxErrChk ( DAQmxCfgImplicitTiming((*chanSetPtr)->taskHndl, GetPulseTrainMode(chCOPtr->pulseTrain), GetPulseTrainNPulses(chCOPtr->pulseTrain)) );    
+				DAQmxErrChk ( DAQmxSetTrigAttribute((*chanSetPtr)->taskHndl,DAQmx_StartTrig_Retriggerable, TRUE) );      
 				
 			break;
 				
@@ -10959,15 +11200,14 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 		// register CO task done event callback
 		// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
 		// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
-		DAQmxErrChk (DAQmxRegisterDoneEvent((*chanSetPtrPtr)->taskHndl, 0, CODAQmxTaskDone_CB, dev));
+		DAQmxErrChk (DAQmxRegisterDoneEvent((*chanSetPtr)->taskHndl, 0, CODAQmxTaskDone_CB, dev));
 		
 		//----------------------  
 		// Commit CO Task
 		//----------------------  
 	
-		DAQmxTaskControl((*chanSetPtrPtr)->taskHndl, DAQmx_Val_Task_Commit);
+		DAQmxErrChk( DAQmxTaskControl((*chanSetPtr)->taskHndl, DAQmx_Val_Task_Commit) );
 	}
-	
 	
 	
 	return 0;
@@ -11430,12 +11670,12 @@ static BOOL	DAQmxTasksDone(Dev_type* dev)
 	
 	// CI task
 	if (dev->CITaskSet) {
-	   ChanSet_type** 	chanSetPtrPtr;
+	   ChanSet_type** 	chanSetPtr;
 	   size_t			nItems			= ListNumItems(dev->CITaskSet->chanTaskSet);
 	   for (size_t i = 1; i <= nItems; i++) {
-		   chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-		   if ((*chanSetPtrPtr)->taskHndl) {
-			   DAQmxGetTaskAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_Task_Complete, &taskDoneFlag); 
+		   chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+		   if ((*chanSetPtr)->taskHndl) {
+			   DAQmxGetTaskAttribute((*chanSetPtr)->taskHndl, DAQmx_Task_Complete, &taskDoneFlag); 
 			   if (!taskDoneFlag) return FALSE;
 		   }
 	   }
@@ -11443,12 +11683,12 @@ static BOOL	DAQmxTasksDone(Dev_type* dev)
 	
 	// CO task
 	if (dev->COTaskSet) {
-		ChanSet_type** 	chanSetPtrPtr;
+		ChanSet_type** 	chanSetPtr;
 		size_t			nItems			= ListNumItems(dev->COTaskSet->chanTaskSet);
 	   for (size_t i = 1; i <= nItems; i++) {
-		   chanSetPtrPtr= ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-		   if ((*chanSetPtrPtr)->taskHndl) {
-				DAQmxGetTaskAttribute((*chanSetPtrPtr)->taskHndl, DAQmx_Task_Complete, &taskDoneFlag); 
+		   chanSetPtr= ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+		   if ((*chanSetPtr)->taskHndl) {
+				DAQmxGetTaskAttribute((*chanSetPtr)->taskHndl, DAQmx_Task_Complete, &taskDoneFlag); 
 				if (!taskDoneFlag) return FALSE;
 		   }
 	   }
@@ -11815,7 +12055,7 @@ int32 CVICALLBACK CODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	uInt32				nAI;
 	int					error			= 0;
 	int					nRead;
-	ChanSet_type**		chanSetPtrPtr;
+	ChanSet_type**		chanSetPtr;
 	int*				nActiveTasksPtr	= NULL;
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
@@ -11998,13 +12238,13 @@ static void AbortIterationTC (TaskControl_type* taskControl, size_t currentItera
 	// send NULL data packets to AI channels used in the DAQmx task
 	if (dev->AITaskSet) {
 		size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet); 
-		ChanSet_type**		chanSetPtrPtr; 
+		ChanSet_type**		chanSetPtr; 
 		for (size_t i = 1; i <= nItems; i++) { 
-			chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+			chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 			// include only channels for which HW-timing is required
-			if ((*chanSetPtrPtr)->onDemand) continue;
+			if ((*chanSetPtr)->onDemand) continue;
 			// send NULL packet to signal end of data transmission
-			errChk( SendDataPacket((*chanSetPtrPtr)->srcVChan, NULL, 0, &errMsg) );
+			errChk( SendDataPacket((*chanSetPtr)->srcVChan, NULL, 0, &errMsg) );
 		}
 	}
 	
@@ -12058,7 +12298,7 @@ MemError:
 static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 {
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
-	ChanSet_type**		chanSetPtrPtr;
+	ChanSet_type**		chanSetPtr;
 	size_t				nChans;	
 	int					panHndl;
 	
@@ -12076,8 +12316,8 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		// channel panels 
 		nChans = ListNumItems(dev->AITaskSet->chanSet);
 		for (size_t i = 1; i <= nChans; i++) {
-			chanSetPtrPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
-			SetPanelAttribute((*chanSetPtrPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
 		}
 		// settings panel
 		GetPanelHandleFromTabPage(dev->AITaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_SettingsTabIdx, &panHndl);
@@ -12100,8 +12340,8 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		// channel panels 
 		nChans = ListNumItems(dev->AOTaskSet->chanSet);
 		for (size_t i = 1; i <= nChans; i++) {
-			chanSetPtrPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
-			SetPanelAttribute((*chanSetPtrPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
 		}
 		// settings panel
 		GetPanelHandleFromTabPage(dev->AOTaskSet->panHndl, AIAOTskSet_Tab, DAQmxAIAOTskSet_SettingsTabIdx, &panHndl);
@@ -12124,8 +12364,8 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		// channel panels 
 		nChans = ListNumItems(dev->DITaskSet->chanSet);
 		for (size_t i = 1; i <= nChans; i++) {
-			chanSetPtrPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
-			SetPanelAttribute((*chanSetPtrPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
 		}
 		
 		// dim/undim rest of panels
@@ -12135,8 +12375,8 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		// channel panels 
 		nChans = ListNumItems(dev->DOTaskSet->chanSet);
 		for (size_t i = 1; i <= nChans; i++) {
-			chanSetPtrPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
-			SetPanelAttribute((*chanSetPtrPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
 		}
 		
 		// dim/undim rest of panels
@@ -12146,8 +12386,8 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		// channel panels 
 		nChans = ListNumItems(dev->CITaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nChans; i++) {
-			chanSetPtrPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-			SetPanelAttribute((*chanSetPtrPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
 		}
 		
 		// dim/undim rest of panels
@@ -12157,8 +12397,8 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		// channel panels 
 		nChans = ListNumItems(dev->COTaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nChans; i++) {
-			chanSetPtrPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-			SetPanelAttribute((*chanSetPtrPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
 		}
 		
 		// dim/undim rest of panels

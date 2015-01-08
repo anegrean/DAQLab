@@ -1205,7 +1205,7 @@ static void	IterateTC	(TaskControl_type* taskControl, size_t currentIteration, B
 	PMTStartAcq(GetTaskControlMode(vupc->taskControl),currentIteration,vupc->taskControl,vupc->channels);
 	
 	//inform that slave is armed
-	SetHWTrigSlaveArmedStatus(vupc->HWTrigSlave,NULL);
+	errChk(SetHWTrigSlaveArmedStatus(vupc->HWTrigSlave,&errMsg));
 	
 Error:
 	return error;
@@ -1337,8 +1337,12 @@ static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_t
 	double 				hightime,lowtime;
 	char*				errMsg				= NULL;
 	
+	
+	// process data only if task controller is not active
+	if (taskActive) return 0;
 
-	// get all available data packets
+	// get all available data packets 
+    //get LAST!!
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
 			
 	for (i = 0; i < nPackets; i++) {

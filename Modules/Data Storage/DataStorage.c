@@ -340,7 +340,6 @@ int CreateRawDataDir(DataStorage_type* 	ds,TaskControl_type* taskControl)
 		
 	return err;
 	
-	
 }
 
 
@@ -363,7 +362,7 @@ char* GetUIName(TaskControl_type* taskControl)
 	
 	iteridx=GetTaskControlCurrentIterIdx(parent);
 	fullname=malloc(MAXBASEFILEPATH*sizeof(char));  
-	Fmt (fullname, "%s<%s[w2]#%i",tcname,iteridx); 
+	Fmt (fullname, "%s<%s[w3]#%i",tcname,iteridx); 
 	while (parent!=NULL) {  
 		child=parent;
 		parent=GetTaskControlParent(child);
@@ -371,7 +370,7 @@ char* GetUIName(TaskControl_type* taskControl)
 		tcname=GetTaskControlName(parent);
 		iteridx=GetTaskControlCurrentIterIdx(parent);
 		name=malloc(MAXBASEFILEPATH*sizeof(char));
-		Fmt (name, "%s<%s[w2]#%i",tcname,iteridx);    		
+		Fmt (name, "%s<%s[w3]#%i",tcname,iteridx);    		
 		AddStringPrefix (&fullname,"_",-1);    
 		AddStringPrefix (&fullname,name,-1);
 		OKfree(tcname);
@@ -431,13 +430,6 @@ void ResetDSIterators(DataStorage_type* ds)
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
 
-;
-;
-;
-;
-static void					UITCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
-; 
-;
 
 static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
@@ -456,8 +448,10 @@ static int UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 static void	IterateTC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
+	
+	
 	//return immediate
-	TaskControlIterationDone (taskControl, 0, NULL,FALSE);
+//	TaskControlIterationDone (taskControl, 0, NULL,FALSE);
 
 }
 
@@ -477,8 +471,7 @@ static int	StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	//get ui parent name
 	
 	ResetDSIterators(ds);
-	OKfree(ds->name);
-	ds->name=GetUIName(taskControl);  
+
 	 
 	return 0;
 }
@@ -661,10 +654,10 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 
 int SaveImage(Image* image,DataStorage_type* ds,char* vChanname,int iterationnr)
 {
-	int err=0;
+	int 			err=0;
 	TIFFFileOptions options;
-	char *fileName;
-	char buf[MAX_PATHNAME_LEN];   
+	char *			fileName;
+	char 			buf[MAX_PATHNAME_LEN];   
 	
 	Fmt (buf, "%s<%s#%i[w4p0]",vChanname,iterationnr);    
 	//append iteration number to file name
@@ -683,7 +676,7 @@ int SaveImage(Image* image,DataStorage_type* ds,char* vChanname,int iterationnr)
 }
 
 
-static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)  
 {
 	
 	DataStorage_type*	ds					= GetTaskControlModuleData(taskControl);
@@ -694,9 +687,9 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 	unsigned short int* shortDataPtr		= NULL;
 	size_t				nPackets;
 	size_t				nElem;
-	char*				sinkVChanName			= GetVChanName((VChan_type*)sinkVChan);
-	SourceVChan_type*   sourceVChan				= GetSourceVChan((VChan_type*)sinkVChan); 
-	char*				sourceVChanName			= GetVChanName((VChan_type*)sourceVChan);  
+	char*				sinkVChanName		= GetVChanName((VChan_type*)sinkVChan);
+	SourceVChan_type*   sourceVChan			= GetSourceVChan((VChan_type*)sinkVChan); 
+	char*				sourceVChanName		= GetVChanName((VChan_type*)sourceVChan);  
 	char* 				rawfilename; 
 	int 				filehandle;
 	int 				elementsize=2;
@@ -710,93 +703,78 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 			
 			
 	
-	switch(taskState) {
 			
-		case TASK_STATE_UNCONFIGURED:			
-		case TASK_STATE_CONFIGURED:						
-		case TASK_STATE_INITIAL:							
-		case TASK_STATE_IDLE:
-		case TASK_STATE_STOPPING:
-		case TASK_STATE_DONE:
-		case TASK_STATE_RUNNING:
-		case TASK_STATE_RUNNING_WAITING_ITERATION:
-			
-			//get channel index which corresponds to the vchan name
-			//needed to  get the iteration number for that channel
-			for(i=0;i<MAX_DS_CHANNELS;i++)  {
-				if (ds->channels[i]!=NULL){
-				 	if (strcmp(sinkVChanName,ds->channels[i]->VChan)==0){ 
-					 	//strings are equal
-					 	chanindex=ds->channels[i]->chanIdx;
-					 	break;
-				 	}
-				}
-			}
-			
-			
-			// get all available data packets
-			errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
-			
-			rawfilename=malloc(MAXCHAR*sizeof(char));
-			
-		
-				
-			for (i= 0; i < nPackets; i++) {
-				if (dataPackets[i]==NULL){
-					//
-					ds->channels[chanindex]->iterationnr++;
-				}
-				else{
-					dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);  
-					switch (dataPacketType) {
-						case DL_Waveform_UShort:
-							shortDataPtr = GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
-						
-							//test
-							Fmt (rawfilename, "%s<%s\\%s_%s#%d.bin", ds->rawdatapath,ds->name,sourceVChanName,ds->channels[chanindex]->iterationnr);  
-							filehandle=OpenFile (rawfilename, VAL_WRITE_ONLY, VAL_APPEND, VAL_BINARY);
-							if (filehandle<0) {
-								AppendString(&errMsg, sinkVChanName, -1); 
-								AppendString(&errMsg, " failed. Reason: file open failed", -1); 
-								fCallReturn = init_FCallReturn_type(-1, "DataStorage", errMsg);
-							}
-							error=WriteFile (filehandle, shortDataPtr, nElem*elementsize);
-							if (error<0) {
-								AppendString(&errMsg, sinkVChanName, -1); 
-								AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-								fCallReturn = init_FCallReturn_type(-1, "DataStorage", errMsg);
-							}
-							CloseFile(filehandle);
-						break;
-						case DL_Image_NIVision:
-							//get the image
-						//	GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
-							SaveImage(image,ds,sourceVChanName,ds->channels[chanindex]->iterationnr++);
+	//get channel index which corresponds to the vchan name
+	//needed to  get the iteration number for that channel
+	for(i=0;i<MAX_DS_CHANNELS;i++)  {
+		if (ds->channels[i]!=NULL){
+				if (strcmp(sinkVChanName,ds->channels[i]->VChan)==0){ 
+			 	//strings are equal
+					chanindex=ds->channels[i]->chanIdx;
 					break;
 				}
-				ReleaseDataPacket(&dataPackets[i]);
-				}
-			}
-		
-			free(rawfilename); 
-			OKfree(dataPackets);				
-			break;
-				
-			
-		case TASK_STATE_ERROR:
-			
-			ReleaseAllDataPackets(sinkVChan,NULL);
-			
-			break;
+		}
 	}
+			
+	// get all available data packets
+	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
 	
-	return init_FCallReturn_type(0, "", "");
-	
+				
+	for (i= 0; i < nPackets; i++) {
+		if (dataPackets[i]==NULL){
+			//raise iteration nr
+			ds->channels[chanindex]->iterationnr++;
+			//check if all channels received a null
+			//if
+			//return iteration
+			TaskControlIterationDone (taskControl, 0, NULL,FALSE);    
+			
+		}
+		else{
+			dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);  
+			switch (dataPacketType) {
+				case DL_Waveform_UShort:
+					shortDataPtr = GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
+						
+					//test
+					rawfilename=malloc(MAXCHAR*sizeof(char)); 
+					OKfree(ds->name);
+					ds->name=GetUIName(taskControl);  
+					Fmt (rawfilename, "%s<%s\\%s_%s#%d.bin", ds->rawdatapath,ds->name,sourceVChanName,ds->channels[chanindex]->iterationnr);  
+					filehandle=OpenFile (rawfilename, VAL_WRITE_ONLY, VAL_APPEND, VAL_BINARY);
+					if (filehandle<0) {
+						AppendString(&errMsg, sinkVChanName, -1); 
+						AppendString(&errMsg, " failed. Reason: file open failed", -1); 
+						
+					}
+					error=WriteFile (filehandle, shortDataPtr, nElem*elementsize);
+					if (error<0) {
+						AppendString(&errMsg, sinkVChanName, -1); 
+						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
+					
+					}
+					free(rawfilename);
+					CloseFile(filehandle);
+				break;
+				case DL_Image_NIVision:
+					//get the image
+				//	GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
+					SaveImage(image,ds,sourceVChanName,ds->channels[chanindex]->iterationnr++);
+				break;
+			}
+			ReleaseDataPacket(&dataPackets[i]);
+		}
+	}
+		
+	 
+	OKfree(dataPackets);				
+			
+			
 	
 Error:
 	
 	OKfree(sinkVChanName);
 	OKfree(sourceVChanName); 
 	OKfree(errMsg);
-	return fCallReturn;
+	return error;
 }

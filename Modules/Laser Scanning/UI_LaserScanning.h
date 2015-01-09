@@ -42,8 +42,9 @@
 #define  NonResGCal_GalvoPlot             3       /* control type: graph, callback function: (none) */
 #define  NonResGCal_CursorY               4       /* control type: numeric, callback function: (none) */
 #define  NonResGCal_CursorX               5       /* control type: numeric, callback function: (none) */
-#define  NonResGCal_Done                  6       /* control type: command, callback function: (none) */
-#define  NonResGCal_SaveCalib             7       /* control type: command, callback function: (none) */
+#define  NonResGCal_Plate                 6       /* control type: deco, callback function: (none) */
+#define  NonResGCal_Done                  7       /* control type: command, callback function: (none) */
+#define  NonResGCal_SaveCalib             8       /* control type: command, callback function: (none) */
 
 #define  RectRaster                       6
 #define  RectRaster_PixelSize             2       /* control type: numeric, callback function: (none) */

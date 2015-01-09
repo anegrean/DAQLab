@@ -72,13 +72,9 @@ struct DatStore {
 		//-------------------------
 		// Channels
 		//-------------------------
-
-		// Array of channels of Channel_type*, the index of the array corresponding to the
-		// hardware channel index. If a channel is not in use, its value in the array is NULL.
-
-	DS_Channel_type*	channels[MAX_DS_CHANNELS];
+		// Available datastorage channel data. Of DS_Channel_type* 
+	ListType					channels;
 	
-
 };
 
 //==============================================================================
@@ -179,9 +175,9 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 		// DATA
 	ds->taskController			= tc;
 	
-	for (int i = 0; i < MAX_DS_CHANNELS; i++)   {
-		ds->channels[i] = NULL;
-	}
+	if (!(ds->channels			= ListCreate(sizeof(DS_Channel_type*))))	return NULL; 
+	
+
 	
 
 	
@@ -221,41 +217,75 @@ void discard_DataStorage (DAQLabModule_type** mod)
 	// discard DAQLabModule_type specific data
 	//----------------------------------------
 	
+	if (ds->channels) {
+		size_t 				nItems = ListNumItems(ds->channels);
+		DS_Channel_type**   channelPtr;
+		for (size_t i = 1; i <= nItems; i++) {
+			channelPtr = ListGetPtrToItem(ds->channels, i);
+			(*(*channelPtr)->Discard)	(channelPtr); 
+		}
+		
+		ListDispose(ds->channels);
+	}
+	
 	discard_DAQLabModule(mod);
 }
 
 
-static DS_Channel_type* init_DS_Channel_type (DataStorage_type* dsInstance, int panHndl, size_t chanIdx,char VChanName[])
+
+static DS_Channel_type* init_DS_Channel_type (DataStorage_type* ds, int panHndl, char VChanName[])
 {
 	DLDataTypes allowedPacketTypes[] = {DL_Waveform_UShort,DL_Image_NIVision};   	   //, WaveformPacket_UInt, WaveformPacket_Double
 	
 	DS_Channel_type* chan = malloc (sizeof(DS_Channel_type));
 	if (!chan) return NULL;
 
-	chan->dsInstance	= dsInstance;
+	chan->dsInstance	= ds;
 	chan->VChan			= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan,VChanDataTimeout, NULL, NULL);
 	chan->panHndl   	= panHndl;
-	chan->chanIdx		= chanIdx;   
 
-	// register channel with device structure
-	dsInstance->channels[chanIdx - 1] = chan;
-	dsInstance->channels[chanIdx - 1]->iterationnr=0;   
+	// add new channel to data storage module list of channels
+	ListInsertItem(ds->channels, &chan, END_OF_LIST);
+
 
 	return chan;
 }
 
 
 static void	discard_DS_Channel_type (DS_Channel_type** chan)
-{
+{   
+		
+	DS_Channel_type** 	chanPtr;
+	DataStorage_type* 	ds				= (*chan)->dsInstance;
+	size_t				nchannels		= ListNumItems(ds->channels);
+	size_t				chIdx			= 1;
+	int 				i;
+	
 	if (!*chan) return;
 
-	if ((*chan)->panHndl) {
-		DiscardPanel((*chan)->panHndl);
-		(*chan)->panHndl = 0;
+//	if ((*chan)->panHndl) {
+//		DiscardPanel((*chan)->panHndl);
+//		(*chan)->panHndl = 0;
+//	}
+	
+	// remove channel     
+	for (size_t i = 1; i <= nchannels; i++) {	
+		chanPtr = ListGetPtrToItem(ds->channels, i);
+		if (strcmp(GetVChanName((*chan)->VChan),GetVChanName((*chanPtr)->VChan))==0){ 
+			// remove from framework if vchan names match
+			// unregister VChan from DAQLab framework
+			DLUnregisterVChan((DAQLabModule_type*)ds, (VChan_type*)(*chanPtr)->VChan);
+			// discard channel data structure
+			ListRemoveItem(ds->channels, 0, chIdx);
+			break;
+		}
+		chIdx++;
 	}
 
 	// discard SourceVChan
 	discard_VChan_type((VChan_type**)&(*chan)->VChan);
+	
+	
 
 	OKfree(*chan);  // this also removes the channel from the device structure
 }
@@ -406,9 +436,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	TaskControlEvent(ds->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
 
 
-	return 0;
-
-	Error:
+Error:
 
 	return error;
 
@@ -416,10 +444,15 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 
 void ResetDSIterators(DataStorage_type* ds)
 {
-	int i;
-	for(i=0;i<MAX_DS_CHANNELS;i++){
-		if (ds->channels[i]!=NULL)  {
-			ds->channels[i]->iterationnr=0;	
+	size_t 					nItems ; 
+	DS_Channel_type**   	channelPtr;
+	size_t 					i;
+	
+	if (ds->channels) {
+		nItems = ListNumItems(ds->channels); 
+		for ( i= 1; i <= nItems; i++) {
+			channelPtr = ListGetPtrToItem(ds->channels, i);
+			if (channelPtr) (*channelPtr)->iteration=0;
 		}
 	}
 }
@@ -539,11 +572,9 @@ static void	RedrawDSPanel (DataStorage_type* ds)
 	int			chanPanHeight	= 0;
 	int			chanPanWidth	= 0;
 	int			taskPanWidth	= 0;
-	size_t 		i;
 
 	// count the number of channels in use
-	for (i= 0; i < MAX_DS_CHANNELS; i++)
-		if (ds->channels[i]) nChannels++;
+	if (ds->channels) nChannels = ListNumItems(ds->channels); 
 	
 	if (nChannels>0) SetCtrlAttribute(ds->mainPanHndl,DSMain_COMMANDBUTTON_REM,ATTR_DIMMED,FALSE);
 	else SetCtrlAttribute(ds->mainPanHndl,DSMain_COMMANDBUTTON_REM,ATTR_DIMMED,TRUE); 
@@ -564,15 +595,19 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 	DataStorage_type* 	ds 			= callbackData;
 	SinkVChan_type* 	sinkVChan;
 	DS_Channel_type*	chan; 
+	DS_Channel_type**	chanPtr; 
 	char				buff[DAQLAB_MAX_VCHAN_NAME + 50];  
 	char*				vChanName;
+	char				channame[DAQLAB_MAX_VCHAN_NAME];
 	int 				numitems;
 	int 				checked;
+	int 				treeindex;
 	int 				i;
 	int 				channr=0;
 	int					itemIndex;
 	int 				reply;
 	char*				currentbasepath;
+	
 	
 	switch (event) {
 			
@@ -583,11 +618,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					break;
 					
 					case DSMain_COMMANDBUTTON_ADD:
-						do {
-							channr++;	
-						}
-						while ((ds->channels[channr-1]!=NULL)&&(channr<=MAX_DS_CHANNELS));
-						if (channr>MAX_DS_CHANNELS) return 0;  //no more channels available
+					
 						
 						// channel checked, give new VChan name and add channel
 						vChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
@@ -600,7 +631,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 						InsertListItem(panel, DSMain_Channels, -1, buff,channr);        
 					
 						// create channel
-						chan = init_DS_Channel_type(ds, panel, channr, vChanName);
+						chan = init_DS_Channel_type(ds, panel, vChanName);
 		
 						// register VChan with DAQLab
 						DLRegisterVChan((DAQLabModule_type*)ds, (VChan_type*)chan->VChan);
@@ -612,20 +643,31 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					
 					case DSMain_COMMANDBUTTON_REM:
 						GetNumListItems(panel, DSMain_Channels,&numitems);    
-						for(i=0;i<numitems;i++){
-							IsListItemChecked(panel,DSMain_Channels, i, &checked);      
+						for(treeindex=0;treeindex<numitems;treeindex++){
+							IsListItemChecked(panel,DSMain_Channels,treeindex, &checked);      
 							if (checked==1) {
-					   			// get channel pointer
-								sinkVChan = ds->channels[i]->VChan;
-								// unregister VChan from DAQLab framework
-								DLUnregisterVChan((DAQLabModule_type*)ds, (VChan_type*)sinkVChan);
-								// discard channel data
-								GetValueFromIndex (panel, DSMain_Channels, i, &channr);
-								discard_DS_Channel_type(&ds->channels[channr]);
-								// update channel list 
-							//	DeleteListItem(panel,DSMain_Channels ,channr , 1);
+					   			// get channel name
+								GetLabelFromIndex (panel, DSMain_Channels, treeindex, channame); 
+								//get channel from list
+								if (ds->channels) {
+									numitems = ListNumItems(ds->channels); 
+										for ( i= 1; i <= numitems; i++) {
+											chanPtr = ListGetPtrToItem(ds->channels, i);
+											if (chanPtr!=NULL) chan=*chanPtr;
+											if (chan!=NULL) {
+												if (strcmp(GetVChanName(chan->VChan),channame)==0){   
+													//strings are equal; channel found
+													// discard channel data
+													discard_DS_Channel_type(&chan);
+													// update channel list 
+													DeleteListItem(panel,DSMain_Channels ,treeindex , 1);
+													return 0;
+												}
+											}
+										}
+								}
 							}
-						}		 
+						}
 						// update main panel
 						RedrawDSPanel(ds);
 					break;
@@ -644,7 +686,6 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					case DSMain_CHECKBOX_OVERWRITE: 
 						 GetCtrlVal(panel,control,&ds->overwrite_files);
 					break;
-					
 					
 			}
 	}
@@ -699,22 +740,25 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 	DLDataTypes			dataPacketType; 
 	Image*				image;
 	size_t 				i;
-	int					chanindex=0; //selected channel index
+	DS_Channel_type*	chan; 
+	DS_Channel_type**	chanPtr; 
+	int 				numitems;
 			
 			
-	
-			
-	//get channel index which corresponds to the vchan name
-	//needed to  get the iteration number for that channel
-	for(i=0;i<MAX_DS_CHANNELS;i++)  {
-		if (ds->channels[i]!=NULL){
-				if (strcmp(sinkVChanName,ds->channels[i]->VChan)==0){ 
-			 	//strings are equal
-					chanindex=ds->channels[i]->chanIdx;
+	if (ds->channels) {
+		numitems = ListNumItems(ds->channels); 
+		for ( i= 1; i <= numitems; i++) {
+			chanPtr = ListGetPtrToItem(ds->channels, i);
+			if (chanPtr!=NULL) chan=*chanPtr;
+			if (chan!=NULL) {
+				if (strcmp(GetVChanName(chan),sinkVChanName)==0){   
+					//strings are equal; channel found
 					break;
 				}
+			}
 		}
 	}
+			
 			
 	// get all available data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
@@ -723,7 +767,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 	for (i= 0; i < nPackets; i++) {
 		if (dataPackets[i]==NULL){
 			//raise iteration nr
-			ds->channels[chanindex]->iterationnr++;
+			chan->iteration++;
 			//check if all channels received a null
 			//if
 			//return iteration
@@ -734,13 +778,13 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 			dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);  
 			switch (dataPacketType) {
 				case DL_Waveform_UShort:
-					shortDataPtr = GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
-						
+					shortDataPtr = GetWaveformPtrToData(*(Waveform_type**)dataPacketDataPtr, &nElem);
+					 	
 					//test
 					rawfilename=malloc(MAXCHAR*sizeof(char)); 
 					OKfree(ds->name);
 					ds->name=GetUIName(taskControl);  
-					Fmt (rawfilename, "%s<%s\\%s_%s#%d.bin", ds->rawdatapath,ds->name,sourceVChanName,ds->channels[chanindex]->iterationnr);  
+					Fmt (rawfilename, "%s<%s\\%s_%s#%d.bin", ds->rawdatapath,ds->name,sourceVChanName,chan->iteration);  
 					filehandle=OpenFile (rawfilename, VAL_WRITE_ONLY, VAL_APPEND, VAL_BINARY);
 					if (filehandle<0) {
 						AppendString(&errMsg, sinkVChanName, -1); 
@@ -759,7 +803,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 				case DL_Image_NIVision:
 					//get the image
 				//	GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
-					SaveImage(image,ds,sourceVChanName,ds->channels[chanindex]->iterationnr++);
+					SaveImage(image,ds,sourceVChanName,chan->iteration++);
 				break;
 			}
 			ReleaseDataPacket(&dataPackets[i]);

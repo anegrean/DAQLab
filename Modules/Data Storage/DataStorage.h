@@ -25,23 +25,24 @@
 
 #define MOD_DataStore_NAME 		"Data Storage"
 		
-#define MAX_DS_CHANNELS			4  //test value
 
 
 
 //==============================================================================
 // Types
 
-typedef struct DatStore	DataStorage_type;
+typedef struct DatStore		DataStorage_type;
+typedef struct DS_Channel	DS_Channel_type;
 
-typedef struct {
+struct DS_Channel{
 	DataStorage_type*	dsInstance;	    // reference to device that owns the channel
 	SinkVChan_type*		VChan;			// virtual channel assigned to this module
 	int					panHndl;		// panel handle to keep track of controls
-	size_t			   	chanIdx;		// 1-based channel index 
-	size_t				iterationnr;	//test, to keep track of number of iterations 
-} DS_Channel_type;
-
+	int 				iteration;		// local iteration counter (?)
+	// METHODS
+	void (*Discard) 	(DS_Channel_type** channel);
+} ;
+							    
 
 //==============================================================================
 // Global functions

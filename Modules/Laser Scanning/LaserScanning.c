@@ -687,15 +687,15 @@ static int							ConfigureTC_NonResGalvoCal						(TaskControl_type* taskControl,
 
 static int							UncofigureTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							IterateTC_NonResGalvoCal						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+static void							IterateTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
-static void							AbortIterationTC_NonResGalvoCal					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void							AbortIterationTC_NonResGalvoCal					(TaskControl_type* taskControl, BOOL const* abortFlag);
 
 static int							StartTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							DoneTC_NonResGalvoCal							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static int							DoneTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							StoppedTC_NonResGalvoCal						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static int				 			ResetTC_NonResGalvoCal 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
@@ -708,15 +708,15 @@ static int							ConfigureTC_RectRaster							(TaskControl_type* taskControl, BO
 
 static int							UnconfigureTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							IterateTC_RectRaster							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+static void							IterateTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
-static void							AbortIterationTC_RectRaster						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void							AbortIterationTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag);
 
 static int							StartTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							DoneTC_RectRaster								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static int							DoneTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							StoppedTC_RectRaster							(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static int				 			ResetTC_RectRaster 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
@@ -726,7 +726,7 @@ static void							DimTC_RectRaster								(TaskControl_type* taskControl, BOOL d
 
 static void 						ErrorTC_RectRaster 								(TaskControl_type* taskControl, int errorID, char* errorMsg);
 
-static int							ModuleEventHandler_RectRaster					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo);
+static int							ModuleEventHandler_RectRaster					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 	// add below more task controller callbacks for different scan engine types
 
@@ -3889,7 +3889,7 @@ static int OpenScanEngineShutter (ScanEngine_type* engine, BOOL openStatus, char
 	
 	nullChk( shutterCommand			= malloc (sizeof(unsigned char)) );
 	*shutterCommand					= (unsigned char) openStatus;
-	nullChk( shutterDataPacket		= init_DataPacket_type(DL_UChar, &shutterCommand, NULL) );
+	nullChk( shutterDataPacket		= init_DataPacket_type(DL_UChar, &shutterCommand, NULL, NULL) );
 	
 	errChk( SendDataPacket(engine->VChanShutter, &shutterDataPacket, FALSE, errorInfo) );
 	
@@ -4630,7 +4630,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 	nullChk( fastAxisMoveFromParked_RepWaveform = ConvertWaveformToRepeatedWaveformType(&fastAxisMoveFromParkedCompensatedWaveform, 1) );
 	
 	// send data 
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &fastAxisMoveFromParked_RepWaveform, discard_RepeatedWaveform_type) );
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &fastAxisMoveFromParked_RepWaveform, NULL,discard_RepeatedWaveform_type) );
 	if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;
 	
 	// fastAxisScan_Waveform has two line scans (one triangle wave period)
@@ -4642,7 +4642,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, 0) ); 
 	
 	// send data
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &fastAxisScan_RepWaveform, discard_RepeatedWaveform_type) );   
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &fastAxisScan_RepWaveform, NULL, discard_RepeatedWaveform_type) );   
 	if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;    
 	
 	//go back to parked position if finite frame scan mode
@@ -4650,7 +4650,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 		double*		parkedVoltage = malloc(sizeof(double));
 		*parkedVoltage = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, parkedVoltage, 0);
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedRepeatedWaveform, discard_RepeatedWaveform_type) ); 
+		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedRepeatedWaveform, NULL, discard_RepeatedWaveform_type) ); 
 		if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;    
 	}
 	
@@ -4663,7 +4663,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 	nullChk( slowAxisMoveFromParked_RepWaveform = ConvertWaveformToRepeatedWaveformType(&slowAxisMoveFromParkedCompensatedWaveform, 1) );
 	
 	// send data 
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &slowAxisMoveFromParked_RepWaveform, discard_RepeatedWaveform_type) );
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &slowAxisMoveFromParked_RepWaveform, NULL, discard_RepeatedWaveform_type) );
 	if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;
 	
 	// slowAxisScan_Waveform has a symmetric staircase waveform (equivalent to two scan frames)
@@ -4675,7 +4675,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 		nullChk( slowAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&slowAxisScan_Waveform, 0) ); 
 	
 	// send data
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &slowAxisScan_RepWaveform, discard_RepeatedWaveform_type) );   
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &slowAxisScan_RepWaveform, NULL, discard_RepeatedWaveform_type) );   
 	if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;  
 	
 	//go back to parked position if finite frame scan mode
@@ -4683,7 +4683,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 		double*		parkedVoltage = malloc(sizeof(double));
 		*parkedVoltage = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, parkedVoltage, 0);
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedRepeatedWaveform, discard_RepeatedWaveform_type) ); 
+		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedRepeatedWaveform, NULL, discard_RepeatedWaveform_type) ); 
 		if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) <0) goto Error;    
 	}
 	
@@ -5017,7 +5017,7 @@ static int UncofigureTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL cons
 	return 0;
 }
 
-static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
+static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
 #define		IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples 		-1
 	ActiveNonResGalvoCal_type* 		cal 						= GetTaskControlModuleData(taskControl);
@@ -5064,7 +5064,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nCommandSignalSamples = CALPOINTS * nSamplesPerCalPoint;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, NULL, (DiscardPacketDataFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
 			
@@ -5072,7 +5072,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
 			
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL) );
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5175,14 +5175,14 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nCommandSignalSamples = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, NULL,(DiscardPacketDataFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) ); 
 			
 			// send number of samples in waveform
 			nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
 			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL) );
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5329,14 +5329,14 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nCommandSignalSamples = (flybackSamples + postStepSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, NULL,(DiscardPacketDataFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL) );
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL,NULL) );
 			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5451,14 +5451,14 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nCommandSignalSamples = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, NULL, (DiscardPacketDataFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) ); 
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL) );
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5576,14 +5576,14 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, size_t curr
 			nCommandSignalSamples = nSamples;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, &commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, &waveformCopy,NULL, (DiscardPacketDataFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr, NULL) );
+			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, &nCommandWaveformSamplesPtr,NULL, NULL) );
 			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5732,7 +5732,7 @@ Error:
 	OKfree(errMsg);
 }
 
-static void AbortIterationTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void AbortIterationTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
@@ -5802,7 +5802,7 @@ static int ResetTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* ab
 	return 0; 
 }
 
-static int DoneTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
@@ -5815,7 +5815,7 @@ static int DoneTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentI
 	return 0; 
 }
 
-static int StoppedTC_NonResGalvoCal (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC_NonResGalvoCal (TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
@@ -5865,7 +5865,7 @@ static int UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* 
 	return 0; 
 }
 
-static void	IterateTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
+static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
@@ -5873,7 +5873,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, size_t currentI
 	
 }
 
-static void AbortIterationTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void AbortIterationTC_RectRaster (TaskControl_type* taskControl,BOOL const* abortFlag)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
@@ -5901,7 +5901,7 @@ Error:
 	return error;
 }
 
-static int DoneTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	RectangleRaster_type* 	engine		 				= GetTaskControlModuleData(taskControl);
 	int						error						= 0;
@@ -5920,7 +5920,7 @@ Error:
 	return error;
 }
 
-static int StoppedTC_RectRaster (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	RectangleRaster_type* 	engine 	= GetTaskControlModuleData(taskControl);
 	int						error	= 0;
@@ -5977,7 +5977,7 @@ static void ErrorTC_RectRaster (TaskControl_type* taskControl, int errorID, char
 	
 }
 
-static int ModuleEventHandler_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ModuleEventHandler_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
 	

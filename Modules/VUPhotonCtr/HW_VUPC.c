@@ -127,10 +127,10 @@ void SetMeasurementMode(int mode)
 	 measurementmode=mode;
 }
 
-void SetCurrentIterationnr(int iternr)
-{
-	 iterationnr=iternr;
-}
+//void SetCurrentIterationnr(int iternr)
+//{
+//	 iterationnr=iternr;
+//}
 
 void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples)
 {
@@ -312,7 +312,7 @@ int ReadBuffer(int bufsize)
 						pmtdataptr = malloc(ndatapoints*sizeof(unsigned short));
 						memcpy(pmtdataptr,&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));
 						waveform = init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr);  
-					    dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform, (DiscardPacketDataFptr_type) discard_Waveform_type);       
+					    dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIter(gtaskControl)    ,(DiscardPacketDataFptr_type) discard_Waveform_type);       
 						// send data packet with waveform
 						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
 					}
@@ -329,7 +329,7 @@ int ReadBuffer(int bufsize)
 					for (i=0;i<MAX_CHANNELS;i++){   
 						if (gchannels[i]!=NULL){
 							if (gchannels[i]->VChan!=NULL){
-							errChk( SendDataPacket(gchannels[i]->VChan, NULL, 0, &errMsg) );
+							errChk( SendDataPacket(gchannels[i]->VChan, &nullPacket, 0, &errMsg) );
 							
 							}
 						}
@@ -568,7 +568,7 @@ Error:
 
 /// HIFN  starts the PMT Controller Acquisition
 /// HIRET returns error, no error when 0
-int PMTStartAcq(TaskMode_type mode,int iternr,TaskControl_type* taskControl,Channel_type** channels)
+int PMTStartAcq(TaskMode_type mode,TaskControl_type* taskControl,Channel_type** channels)
 {
 	int 			error=0;
 	unsigned long 	controlreg;
@@ -584,7 +584,6 @@ int PMTStartAcq(TaskMode_type mode,int iternr,TaskControl_type* taskControl,Chan
 	}
 	
 	SetMeasurementMode(mode);
-	SetCurrentIterationnr(iternr); 
 	errChk(PMTClearFifo()); 
 	
 	//errChk(CmtNewThreadPool(NUMTHREADS,&poolHandle)); 

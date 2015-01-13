@@ -25,7 +25,7 @@
 struct Iterator {
 	char*					name;					// Iterator name.  
 	IterTypes				iterType;				// Iteratable objects type.
-	size_t					currentIterIdx;			// 0-based iteration index used to iterate over iterObjects
+	size_t					currentIterIdx; 		// 0-based iteration index used to iterate over iterObjects
 	size_t					totalIter;				// Total number of iterations
 	DiscardDataFptr_type 	discardDataFptr;		// For data type iterators only, function callback to discard data from an iterator.
 	ListType				iterObjects;			// List of iteratable data objects such as Waveform_type* or Iterator_type* elements specified by iterType.
@@ -68,6 +68,25 @@ Error:
 	return NULL;
 }
 
+void RemoveFromParentIterator(Iterator_type* iterator)
+{
+	size_t 				nObjects 		= ListNumItems(iterator->iterObjects);   
+	Iterator_type**		iterObjectPtr; 
+	
+	// remove from parent iterator if any
+	if (iterator->parent) {
+		nObjects = ListNumItems(iterator->parent->iterObjects);
+		for (size_t i = 1; i <= nObjects; i++) {
+			iterObjectPtr = ListGetPtrToItem(iterator->parent->iterObjects, i);
+			if (*iterObjectPtr == iterator) {
+				ListRemoveItem(iterator->parent->iterObjects, 0, i);
+				break;
+			}
+			
+		}
+	}	
+}
+
 void discard_Iterator_type (Iterator_type** iterator)
 {
 	if (!*iterator) return;
@@ -87,18 +106,8 @@ void discard_Iterator_type (Iterator_type** iterator)
 	
 	ListDispose((*iterator)->iterObjects);
 	
-	// remove from parent iterator if any
-	if ((*iterator)->parent) {
-		nObjects = ListNumItems((*iterator)->parent->iterObjects);
-		for (size_t i = 1; i <= nObjects; i++) {
-			iterObjectPtr = ListGetPtrToItem((*iterator)->parent->iterObjects, i);
-			if (*iterObjectPtr == *iterator) {
-				ListRemoveItem((*iterator)->parent->iterObjects, 0, i);
-				break;
-			}
-			
-		}
-	}
+	RemoveFromParentIterator(*iterator);
+
 	
 	OKfree(*iterator);
 }
@@ -106,6 +115,16 @@ void discard_Iterator_type (Iterator_type** iterator)
 IterTypes GetIteratorType (Iterator_type* iterator)
 {
 	return iterator->iterType;
+}
+
+Iterator_type* GetIteratorParent (Iterator_type* iterator)
+{
+	return iterator->parent;
+}
+
+void SetIteratorType (Iterator_type* iterator,IterTypes itertype)
+{
+	iterator->iterType=itertype;
 }
 
 size_t GetIteratorSize (Iterator_type* iterator)
@@ -117,6 +136,22 @@ void SetTotalIterations (Iterator_type* iterator, size_t nIterations)
 {
 	iterator->totalIter = nIterations;
 }
+
+size_t GetCurrentIterationIndex(Iterator_type* iterator)
+{
+	return iterator->currentIterIdx;	
+}
+
+char* GetCurrentIterationName(Iterator_type* iterator)
+{
+	return StrDup(iterator->name);	
+}
+
+void  SetCurrentIterationIndex	(Iterator_type* iterator,size_t index)
+{
+	iterator->currentIterIdx=index;
+}
+
 
 ListType GetCurrentIteratorSet	(Iterator_type* iterator)
 {
@@ -170,6 +205,7 @@ int	IteratorAddWaveform (Iterator_type* iterator, Waveform_type* waveform)
 	
 	return 0; // success
 }
+
 
 int	IteratorAddIterator	(Iterator_type* iterator, Iterator_type* iteratorToAdd)
 {

@@ -14,6 +14,7 @@
 #include "DataPacket.h"
 #include "DataTypes.h"
 #include "toolbox.h"
+#include "Iterator.h"
 
 //==============================================================================
 // Constants
@@ -32,6 +33,7 @@ struct DataPacket {
 	CmtTSVHandle   				ctr;      				// Data Packet in-use counter. Although there are multiple sinks that can receive a data packet, 
 														// there is only one copy of the data in the memory. To de-allocate memory for the data, each sink must 
 														// call ReleaseDataPacket which in the end frees the memory if ctr reaches 0. 
+	Iterator_type*				currentiter;            // data belongs to this iteration 
 	DiscardPacketDataFptr_type 	discardPacketDataFptr;	// Function pointer which will be called to discard the data pointer when ctr reaches 0.
 };
 
@@ -52,7 +54,7 @@ struct DataPacket {
 //==============================================================================
 // Global functions
 
-DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void** ptrToData, DiscardPacketDataFptr_type discardPacketDataFptr) 
+DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void** ptrToData, Iterator_type* currentiter,DiscardPacketDataFptr_type discardPacketDataFptr) 
 {
 	DataPacket_type* dataPacket = malloc (sizeof(DataPacket_type));
 	if (!dataPacket) return NULL;
@@ -70,6 +72,8 @@ DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void** ptrToData, D
 	dataPacket -> data     					= *ptrToData;
 	*ptrToData								= NULL;
 	dataPacket -> discardPacketDataFptr   	= discardPacketDataFptr;
+	
+	dataPacket -> currentiter				= currentiter;
 	
 	return dataPacket;
 }
@@ -121,6 +125,11 @@ void** GetDataPacketPtrToData (DataPacket_type* dataPacket, DLDataTypes* dataTyp
 {
 	*dataType = dataPacket->dataType;
 	return &dataPacket->data;
+}
+
+Iterator_type* GetDataPacketCurrentIter (DataPacket_type* dataPacket)  
+{
+	return dataPacket->currentiter;
 }
 
 				  

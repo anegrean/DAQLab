@@ -19,6 +19,7 @@
 // Include files
 
 #include "DataTypes.h"
+#include "Iterator.h"
 
 //==============================================================================
 // Constants
@@ -41,7 +42,7 @@ typedef void (*DiscardPacketDataFptr_type)	(void** data);
 
 	// Adds data to a data packet. Depending on the instance counter, calling ReleaseDataPacket repeatedly, the dscardPacketDataFptr is called to discard the provided data. 
 	// If data* has been allocated with malloc then for discardPacketDataFptr provide NULL. Otherwise provide the specific data type discard function.
-DataPacket_type* 		init_DataPacket_type 				(DLDataTypes dataType, void** ptrToData, DiscardPacketDataFptr_type discardPacketDataFptr);
+DataPacket_type* 		init_DataPacket_type 				(DLDataTypes dataType, void** ptrToData, Iterator_type* currentiter,DiscardPacketDataFptr_type discardPacketDataFptr);
 	// Discards a data packet.
 void					discard_DataPacket_type				(DataPacket_type** dataPacket);
 	// Sets number of times ReleaseDataPacket must be called before the data contained in the data packet is discarded
@@ -51,6 +52,8 @@ void 					ReleaseDataPacket					(DataPacket_type** dataPacket);
 	// Returns a pointer to the data in the packet
 DLDataTypes				GetDataPacketDataType				(DataPacket_type* dataPacket);
 void**					GetDataPacketPtrToData				(DataPacket_type* dataPacket, DLDataTypes* dataType);
+	// Returns a pointer to the current iter info
+Iterator_type* 			GetDataPacketCurrentIter 			(DataPacket_type* dataPacket); 
 
 
 #ifdef __cplusplus

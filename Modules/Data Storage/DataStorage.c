@@ -91,16 +91,16 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 //-----------------------------------------
 static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
-static void					IterateTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
-static void 				AbortIterationTC		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void					IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+static void 				AbortIterationTC		(TaskControl_type* taskControl, BOOL const* abortFlag);
 static int					StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					DoneTC					(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
-static int					StoppedTC				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void					DimUITC					(TaskControl_type* taskControl, BOOL dimmed);
 static void					TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
-static int					ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo); 
+static int					ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
 //-----------------------------------------
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
@@ -373,32 +373,30 @@ int CreateRawDataDir(DataStorage_type* 	ds,TaskControl_type* taskControl)
 }
 
 
-char* GetUIName(TaskControl_type* taskControl)
+char* CreateFullIterName(Iterator_type*		currentiter)
 {
 	
-	TaskControl_type* child;
-	TaskControl_type* parent;
+	Iterator_type* 	  childiter;
+	Iterator_type* 	  parentiter;
 	char*			  name;
 	char*			  fullname; 
 	char*			  tcname;
 	size_t			  iteridx;
 	
-	if (taskControl==NULL) return NULL;
+	if (currentiter==NULL) return NULL;
 	
-	
-	parent=GetTaskControlParent(taskControl);
-	if (parent==NULL) return NULL;  //no parent
-	tcname=GetTaskControlName(parent);
-	
-	iteridx=GetTaskControlCurrentIterIdx(parent);
+	parentiter = GetIteratorParent(currentiter);
+	if (parentiter==NULL) return NULL;  //no parent
+	tcname=GetCurrentIterationName(parentiter);
+	iteridx=GetCurrentIterationIndex(parentiter);
 	fullname=malloc(MAXBASEFILEPATH*sizeof(char));  
 	Fmt (fullname, "%s<%s[w3]#%i",tcname,iteridx); 
-	while (parent!=NULL) {  
-		child=parent;
-		parent=GetTaskControlParent(child);
-		if (parent==NULL) return fullname;
-		tcname=GetTaskControlName(parent);
-		iteridx=GetTaskControlCurrentIterIdx(parent);
+	while (parentiter!=NULL) {  
+		childiter=parentiter;
+		parentiter = GetIteratorParent(childiter);
+		if (parentiter==NULL) return fullname;  //no parent, return current name
+		tcname=GetCurrentIterationName(parentiter);
+		iteridx=GetCurrentIterationIndex(parentiter);
 		name=malloc(MAXBASEFILEPATH*sizeof(char));
 		Fmt (name, "%s<%s[w3]#%i",tcname,iteridx);    		
 		AddStringPrefix (&fullname,"_",-1);    
@@ -442,20 +440,6 @@ Error:
 
 }
 
-void ResetDSIterators(DataStorage_type* ds)
-{
-	size_t 					nItems ; 
-	DS_Channel_type**   	channelPtr;
-	size_t 					i;
-	
-	if (ds->channels) {
-		nItems = ListNumItems(ds->channels); 
-		for ( i= 1; i <= nItems; i++) {
-			channelPtr = ListGetPtrToItem(ds->channels, i);
-			if (channelPtr) (*channelPtr)->iteration=0;
-		}
-	}
-}
 
 
 
@@ -478,17 +462,17 @@ static int UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 	return 0;
 }
 
-static void	IterateTC	(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
+static void	IterateTC	(TaskControl_type* taskControl,  BOOL const* abortIterationFlag)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	
 	
 	//return immediate
-//	TaskControlIterationDone (taskControl, 0, NULL,FALSE);
+	TaskControlIterationDone (taskControl, 0, NULL,FALSE);
 
 }
 
-static void AbortIterationTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);    
 }
@@ -501,22 +485,19 @@ static int	StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	TaskControl_type*		parent;
 	char*					uiparentname;
 	
-	//get ui parent name
-	
-	ResetDSIterators(ds);
 
 	 
 	return 0;
 }
 
-static int DoneTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC (TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 
 	return 0;
 }
 
-static int StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 
@@ -555,7 +536,7 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 	DLMsg(errorMsg, 1);
 }
 
-static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl); 
 	
@@ -743,6 +724,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 	DS_Channel_type*	chan; 
 	DS_Channel_type**	chanPtr; 
 	int 				numitems;
+	Iterator_type*		currentiter;
 			
 			
 	if (ds->channels) {
@@ -766,25 +748,24 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 				
 	for (i= 0; i < nPackets; i++) {
 		if (dataPackets[i]==NULL){
-			//raise iteration nr
-			chan->iteration++;
 			//check if all channels received a null
 			//if
 			//return iteration
-			TaskControlIterationDone (taskControl, 0, NULL,FALSE);    
+			//TaskControlIterationDone (taskControl, 0, NULL,FALSE);    
 			
 		}
 		else{
-			dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);  
+			dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType); 
+			currentiter=GetDataPacketCurrentIter(dataPackets[i]);
 			switch (dataPacketType) {
 				case DL_Waveform_UShort:
 					shortDataPtr = GetWaveformPtrToData(*(Waveform_type**)dataPacketDataPtr, &nElem);
-					 	
+						
 					//test
 					rawfilename=malloc(MAXCHAR*sizeof(char)); 
 					OKfree(ds->name);
-					ds->name=GetUIName(taskControl);  
-					Fmt (rawfilename, "%s<%s\\%s_%s#%d.bin", ds->rawdatapath,ds->name,sourceVChanName,chan->iteration);  
+					ds->name=CreateFullIterName(currentiter);
+					Fmt (rawfilename, "%s<%s\\%s_%s#%d.bin", ds->rawdatapath,ds->name,sourceVChanName,GetCurrentIterationIndex(currentiter));  
 					filehandle=OpenFile (rawfilename, VAL_WRITE_ONLY, VAL_APPEND, VAL_BINARY);
 					if (filehandle<0) {
 						AppendString(&errMsg, sinkVChanName, -1); 
@@ -803,7 +784,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 				case DL_Image_NIVision:
 					//get the image
 				//	GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
-					SaveImage(image,ds,sourceVChanName,chan->iteration++);
+		//			SaveImage(image,ds,sourceVChanName,chan->iteration++);
 				break;
 			}
 			ReleaseDataPacket(&dataPackets[i]);

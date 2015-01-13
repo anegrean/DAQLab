@@ -1208,15 +1208,15 @@ static int							ConfigureTC								(TaskControl_type* taskControl, BOOL const* 
 
 static int							UnconfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							IterateTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+static void							IterateTC								(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
-static void							AbortIterationTC						(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+static void							AbortIterationTC						(TaskControl_type* taskControl, BOOL const* abortFlag);
 
 static int							StartTC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							DoneTC									(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static int							DoneTC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							StoppedTC								(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static void							DimTC									(TaskControl_type* taskControl, BOOL dimmed);
 
@@ -1224,7 +1224,7 @@ static int				 			ResetTC 								(TaskControl_type* taskControl, BOOL const* ab
 
 static void				 			ErrorTC 								(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 
-static int							ModuleEventHandler						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo);  
+static int							ModuleEventHandler						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);  
 
 //========================================================================================================================================================================================================
 // Global variables
@@ -6283,7 +6283,7 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			// send sampling rate
 			nullChk( samplingRatePtr = malloc(sizeof(double)) );
 			*samplingRatePtr = dev->AITaskSet->timing->sampleRate;
-			nullChk( dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL,NULL) );
 			errChk( SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg) );
 			
 			break;
@@ -6297,7 +6297,7 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			// send number of samples
 			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 			*nSamplesPtr = dev->AITaskSet->timing->nSamples;
-			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL,NULL) );
 			errChk( SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
 			
 			break;
@@ -6317,7 +6317,7 @@ static int AI_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			// send number of samples
 			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 			*nSamplesPtr = dev->AITaskSet->timing->nSamples;
-			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
 			
 			break;
@@ -6447,7 +6447,7 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			// send sampling rate
 			nullChk( samplingRatePtr = malloc(sizeof(double)) );
 			*samplingRatePtr = dev->AOTaskSet->timing->sampleRate;
-			nullChk( dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL, NULL) );
 			errChk( SendDataPacket(dev->AOTaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg) );
 			
 			break;
@@ -6461,7 +6461,7 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			// send number of samples
 			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 			*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
-			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
 			
 			break;
@@ -6481,7 +6481,7 @@ static int AO_Settings_TaskSet_CB	(int panel, int control, int event, void *call
 			// send number of samples
 			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 			*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
-			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
 			
 			break;
@@ -7115,7 +7115,7 @@ static int CVICALLBACK Chan_CO_Pulse_Frequency_CB (int panel, int control, int e
 	
 	// send new pulse train
 	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
-	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, NULL, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
 	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errMsg) ); 
 	
 	
@@ -7206,7 +7206,7 @@ static int CVICALLBACK Chan_CO_Pulse_Time_CB (int panel, int control, int event,
 	
 	// send new pulse train
 	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
-	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, NULL, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
 	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errMsg) ); 
 	
 	return 0;
@@ -7292,7 +7292,7 @@ static int CVICALLBACK Chan_CO_Pulse_Ticks_CB (int panel, int control, int event
 	
 	// send new pulse train
 	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
-	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, NULL, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
 	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errMsg) ); 
 	
 	return 0;
@@ -8903,7 +8903,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	//----------
 	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 	*nSamplesPtr = dev->AITaskSet->timing->nSamples;
-	dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL);
+	dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL, NULL);
 	errChk(SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	//--------------
@@ -8911,7 +8911,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	//--------------
 	nullChk( samplingRatePtr = malloc(sizeof(double)) );
 	*samplingRatePtr = dev->AITaskSet->timing->sampleRate;
-	dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL);
+	dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL, NULL);
 	errChk(SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	
@@ -9060,7 +9060,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	//----------
 	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 	*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
-	dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL);
+	dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL, NULL);
 	errChk(SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	//--------------
@@ -9068,7 +9068,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	//--------------
 	nullChk( samplingRatePtr = malloc(sizeof(double)) );
 	*samplingRatePtr = dev->AOTaskSet->timing->sampleRate;
-	dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL);
+	dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL, NULL);
 	errChk(SendDataPacket(dev->AOTaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
@@ -9411,15 +9411,15 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 	switch (GetPulseTrainType(chanSetCO->pulseTrain)) {
 		
 		case PulseTrain_Freq:
-			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, discard_PulseTrain_type) );  
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, NULL,discard_PulseTrain_type) );  
 			break;
 			
 		case PulseTrain_Time:
-			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, discard_PulseTrain_type) ); 
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, NULL,discard_PulseTrain_type) ); 
 			break;
 			
 		case PulseTrain_Ticks:
-			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, discard_PulseTrain_type) ); 
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, NULL,discard_PulseTrain_type) ); 
 			break;
 		
 	}
@@ -9495,7 +9495,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		nullChk( waveformData = malloc(nRead * sizeof(double)) );
 		memcpy(waveformData, readBuffer + chIdx * nRead, nRead * sizeof(double));
 		nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData) );
-		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform, (DiscardPacketDataFptr_type) discard_Waveform_type) ); 
+		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) ); 
 		
 		// send data packet with waveform
 		errChk( SendDataPacket((*chanSetPtr)->srcVChan, &dataPacket, 0, &errMsg) );
@@ -9606,7 +9606,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		nullChk( waveformData = malloc(nRead * sizeof(double)) );
 		memcpy(waveformData, readBuffer + chIdx * nRead, nRead * sizeof(double));
 		nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData) );
-		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform, (DiscardPacketDataFptr_type) discard_Waveform_type) );  
+		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform, NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );  
 		
 		// send data packet with waveform
 		errChk( SendDataPacket((*chanSetPtr)->srcVChan, &dataPacket, 0, &errMsg) );
@@ -11207,7 +11207,7 @@ static void	AInSamplesSourceVChan_Connected	(VChan_type* self, void* VChanOwner,
 	
 	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 	*nSamplesPtr = dev->AITaskSet->timing->nSamples;
-	nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL) );
+	nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL,NULL) );
 	errChk( SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
 	
 	return;
@@ -11251,7 +11251,7 @@ static void	AISamplingRateSourceVChan_Connected (VChan_type* self, void* VChanOw
 	
 	nullChk( samplingRatePtr = malloc(sizeof(double)) );
 	*samplingRatePtr = dev->AITaskSet->timing->sampleRate;
-	nullChk( dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL) );
+	nullChk( dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL,NULL) );
 	errChk( SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg) );
 	
 	return;
@@ -11300,7 +11300,7 @@ static void AOnSamplesSourceVChan_Connected (VChan_type* self, void* VChanOwner,
 	
 	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 	*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
-	nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL) );
+	nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL,NULL) );
 	errChk( SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
 	
 	return;
@@ -11346,7 +11346,7 @@ static void AOSamplingRateSourceVChan_Connected (VChan_type* self, void* VChanOw
 	
 	nullChk( samplingRatePtr = malloc(sizeof(double)) );
 	*samplingRatePtr = dev->AOTaskSet->timing->sampleRate;
-	nullChk( dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL) );
+	nullChk( dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr,NULL, NULL) );
 	errChk( SendDataPacket(dev->AOTaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg) );
 	
 	return;
@@ -11401,15 +11401,15 @@ static void	COPulseTrainSourceVChan_Connected (VChan_type* self, void* VChanOwne
 	switch(pulseType){
 			
 		case PulseTrain_Freq:
-			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, NULL,(DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
 			break;
 			
 		case PulseTrain_Time:
-			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
+			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, NULL,(DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
 			break;
 			
 		case PulseTrain_Ticks: 
-			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
+			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, NULL,(DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
 			break;
 			
 	}
@@ -11480,7 +11480,7 @@ static int AInSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_
 		// send data
 		nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 		*nSamplesPtr = dev->AITaskSet->timing->nSamples;
-		dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL);
+		dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr,  NULL,NULL);
 		errChk(SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	} else
@@ -11552,7 +11552,7 @@ static int AISamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	// send data
 	nullChk( samplingRatePtr = malloc(sizeof(double)) );
 	*samplingRatePtr = dev->AITaskSet->timing->sampleRate;
-	dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL);
+	dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr,  NULL,NULL);
 	errChk(SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	return 0;
@@ -11626,7 +11626,7 @@ static int AOnSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_
 		// send data
 		nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 		*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
-		dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL);
+		dataPacket = init_DataPacket_type(DL_ULongLong, &nSamplesPtr, NULL, NULL);
 		errChk(SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	} else
@@ -11695,7 +11695,7 @@ static int AOSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	// send data
 	nullChk( samplingRatePtr = malloc(sizeof(double)) );
 	*samplingRatePtr = dev->AOTaskSet->timing->sampleRate;
-	dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr, NULL);
+	dataPacket = init_DataPacket_type(DL_Double, &samplingRatePtr,  NULL,NULL);
 	errChk(SendDataPacket(dev->AOTaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	return 0;
@@ -12008,15 +12008,15 @@ static int CO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 	switch (GetPulseTrainType(chanSetCO->pulseTrain)) {
 		
 		case PulseTrain_Freq:
-			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, discard_PulseTrain_type) );  
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, NULL,discard_PulseTrain_type) );  
 			break;
 			
 		case PulseTrain_Time:
-			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, discard_PulseTrain_type) ); 
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, NULL,discard_PulseTrain_type) ); 
 			break;
 			
 		case PulseTrain_Ticks:
-			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, discard_PulseTrain_type) ); 
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, NULL,discard_PulseTrain_type) ); 
 			break;
 		
 	}
@@ -12094,7 +12094,7 @@ static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 	return 0; 
 }
 
-static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag)
+static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
 	Dev_type*		dev				= GetTaskControlModuleData(taskControl);
 	char*			errMsg			= NULL;
@@ -12103,7 +12103,8 @@ static void	IterateTC (TaskControl_type* taskControl, size_t currentIteration, B
 											// before a task controller iteration is considered to be complete
 	
 	// update iteration display
-	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
+	
+	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
 	
 	//----------------------------------------
 	// Count active tasks 
@@ -12184,7 +12185,7 @@ Error:
 	OKfree(errMsg);
 }
 
-static void AbortIterationTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
+static void AbortIterationTC (TaskControl_type* taskControl,BOOL const* abortFlag)
 {
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
 	char*				errMsg		= NULL;
@@ -12219,23 +12220,23 @@ static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static int DoneTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	
 	// update iteration display
-	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
+	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations,GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
 	
 	return 0;
 }
 
-static int StoppedTC (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo)
 {
 #define StoppedTC_Err_OutOfMemory	-1
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	
 	// update iteration display
-	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, currentIteration);
+	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
 	
 	// AO task
 	if (dev->AOTaskSet) {
@@ -12379,7 +12380,7 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[]
 	DLMsg(errorMsg, 1);
 }
 
-static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	//Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	

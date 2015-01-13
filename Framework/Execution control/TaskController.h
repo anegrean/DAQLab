@@ -248,6 +248,7 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 #include <toolbox.h>
 #include "VChannel.h"
 #include "HWTriggering.h"
+#include "Iterator.h"
 
 #define TASKCONTROLLER_UI		"./Framework/Execution control/UI_TaskController.uir" 
 #define N_TASK_EVENT_QITEMS		1000		// Number of events waiting to be processed by the state machine.
@@ -365,11 +366,11 @@ typedef int				 	(*UnconfigureFptr_type) 		(TaskControl_type* taskControl, BOOL 
 // or even in another thread. In either case, to signal back to the Task Controller that the iteration function is complete, send a
 // TASK_EVENT_ITERATION_DONE event using TaskControlEvent and passing for eventInfo init_FCallReturn_type (...) and for disposeEventInfoFptr
 // discard_FCallReturn_type.
-typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortIterationFlag);
+typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl,  BOOL const* abortIterationFlag);
 
 // Called when an iteration must be aborted. This is similar to the use of GetTaskControlAbortIterationFlag except that this function is called back, instead
 // of polling a flag during the iteration.
-typedef void				(*AbortIterationFptr_type)		(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag);
+typedef void				(*AbortIterationFptr_type)		(TaskControl_type* taskControl,  BOOL const* abortFlag);
 
 // Called before the first iteration starts from an INITIAL state.
 typedef int				 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
@@ -378,10 +379,10 @@ typedef int				 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL cons
 typedef int				 	(*ResetFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called automatically when a finite Task Controller finishes required iterations or a continuous Task Controller is stopped manually.
-typedef int				 	(*DoneFptr_type) 				(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo); 
+typedef int				 	(*DoneFptr_type) 				(TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a running finite Task Controller is stopped manually, before reaching a DONE state .
-typedef int				 	(*StoppedFptr_type) 			(TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag, char** errorInfo); 
+typedef int				 	(*StoppedFptr_type) 			(TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a Task Controller needs to dim or undim certain module controls to allow/prevent user interaction.
 typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimmed); 
@@ -398,7 +399,7 @@ typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, int error
 typedef int					(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 // Called for passing custom module or device events that are not handled directly by the Task Controller.
-typedef int					(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, size_t currentIteration, void* eventData, BOOL const* abortFlag, char** errorInfo);
+typedef int					(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 // Called after receiving a task control event and eventInfo must be disposed of.
 typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
@@ -454,7 +455,7 @@ TaskStates_type			GetTaskControlState					(TaskControl_type* taskControl);
 	// repeats = 1 by default
 void					SetTaskControlIterations			(TaskControl_type* taskControl, size_t repeat);
 size_t					GetTaskControlIterations			(TaskControl_type* taskControl);
-size_t 					GetTaskControlCurrentIterIdx		(TaskControl_type* taskControl);
+
 
 	// Task Controller Iteration block completion timeout
 	// default timeout = 0, Iteration block complete after calling IterateFptr. Otherwise iteration will complete
@@ -468,6 +469,10 @@ int						GetTaskControlIterationTimeout		(TaskControl_type* taskControl);
 	// default, iterationMode = TASK_ITERATE_BEFORE_SUBTASKS_START
 int						SetTaskControlIterMode				(TaskControl_type* taskControl, TaskIterMode_type iterMode);
 TaskIterMode_type		GetTaskControlIterMode				(TaskControl_type* taskControl);
+
+// Task Controller Current Iteration    
+int						SetTaskControlCurrentIter (TaskControl_type* taskControl, Iterator_type* currentiter);
+Iterator_type* 			GetTaskControlCurrentIter (TaskControl_type* taskControl);
 
 	// mode = TASK_FINITE by default
 void					SetTaskControlMode					(TaskControl_type* taskControl, TaskMode_type mode);

@@ -35,9 +35,9 @@ typedef enum {
 	
 	Iterator_None,												// Default for newly created iterators
 	Iterator_Iterator,			  								// Iterator over other Iterator_type* iterators.
-	Iterator_Waveform			  								// Iterator over Waveform_type* waveforms.
-	
-} IterTypes;
+	Iterator_Waveform,			  								// Iterator over Waveform_type* waveforms.
+	Iterator_Image			  								    // Iterator over Images  
+} IterTypes;		   
 
 typedef void (*DiscardDataFptr_type) (void** PtrToData);		// Function pointer for discarding data contained in data type iterators.
 
@@ -57,15 +57,29 @@ Iterator_type*			init_Iterator_type			(char name[]);
 	// Discards a given iterator and all the data or iterators contained within recursively
 void					discard_Iterator_type		(Iterator_type** iterator);
 
+
+
+void 					RemoveFromParentIterator	(Iterator_type* iterator);
+
 //---------------------------------------------------------------------------------------------------------------------------
 // Set/Get functions
 //---------------------------------------------------------------------------------------------------------------------------
 
 	// Returns the type of an iterator
 IterTypes				GetIteratorType				(Iterator_type* iterator);
+	// Sets the type of an iterator   
+void 					SetIteratorType 			(Iterator_type* iterator,IterTypes itertype);
+	// Returns the iterator parent  
+Iterator_type* 			GetIteratorParent 			(Iterator_type* iterator);
 
 	// Returns the number of iteratable objects 
 size_t					GetIteratorSize				(Iterator_type* iterator);
+
+	// 	Returns the current Iteration Index
+size_t 					GetCurrentIterationIndex	(Iterator_type* iterator);
+
+	// 	Sets the current Iteration Index
+void 					SetCurrentIterationIndex	(Iterator_type* iterator,size_t index);
 
 	// Set total number of iterations for a given iterator
 void					SetTotalIterations			(Iterator_type* iterator, size_t nIterations);
@@ -79,6 +93,9 @@ Iterator_type*			GetRootIterator				(Iterator_type* iterator);
 
 	// Returns TRUE if the provided iterator is a root iterator, i.e. it does not have another parent iterator, and FALSE otherwise
 BOOL					IsRootIterator				(Iterator_type* iterator);
+
+	// Returns the Iterators name
+char* 					GetCurrentIterationName		(Iterator_type* iterator);
 
 //---------------------------------------------------------------------------------------------------------------------------
 // Iterator composition

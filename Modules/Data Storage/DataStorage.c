@@ -297,11 +297,7 @@ static void	discard_DS_Channel_type (DS_Channel_type** chan)
  //creates a usable data dir, returns nonzero if failed
 int CreateRawDataDir(DataStorage_type* 	ds,TaskControl_type* taskControl)
 {
-	
-	TaskControl_type* child;
-	TaskControl_type* parent;
-	char*			  name;
-	char*			  fullname; 
+	char*			  rootname; 
 	char*			  tcname;
 	char*			  rawdatapath;
 	int 			  err=0;
@@ -310,35 +306,22 @@ int CreateRawDataDir(DataStorage_type* 	ds,TaskControl_type* taskControl)
 	BOOL			  uniquedir;
 	int				  dircounter=0;
 	char*			  dirctrstr;
-	
+	TaskControl_type* root_tc; 
 	
 	
 	if (taskControl==NULL) return -1;
 	
-	
-	parent=GetTaskControlParent(taskControl);
-	if (parent==NULL) return -1;  //no parent
-	tcname=GetTaskControlName(parent);
-	fullname=malloc(MAXBASEFILEPATH*sizeof(char));  
-	Fmt (fullname, "%s<%s",tcname); 
-	OKfree(tcname); 
-	while (parent!=NULL) {  
-		child=parent;
-		parent=GetTaskControlParent(child);
-		if (parent==NULL) break;
-		tcname=GetTaskControlName(parent);
-		name=malloc(MAXBASEFILEPATH*sizeof(char));
-		Fmt (name, "%s<%s",tcname);    		
-		AddStringPrefix (&fullname,"_",-1);    
-		AddStringPrefix (&fullname,name,-1);
-		OKfree(name);
-		OKfree(tcname); 
-	}
+	//determine dir name  
+	root_tc=GetTaskControlRootParent (taskControl);
+	rootname=GetTaskControlName(root_tc);
+
 	OKfree(ds->rawdatapath);
 	ds->rawdatapath=StrDup(ds->basefilepath);
 	AppendString(&ds->rawdatapath,"\\",-1);
-	AppendString(&ds->rawdatapath,fullname,-1);
-	free(fullname);
+	AppendString(&ds->rawdatapath,rootname,-1);
+	free(rootname);
+
+	
 	if (FileExists (ds->rawdatapath, &fileSize)){
 		if(ds->overwrite_files){
 		//clear dir

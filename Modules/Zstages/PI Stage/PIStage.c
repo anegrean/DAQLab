@@ -797,13 +797,15 @@ static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const*
 static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
 	Zstage_type* 		zstage 		= GetTaskControlModuleData(taskControl);
+	Iterator_type*		currentiter = GetTaskControlCurrentIter(taskControl);
+	size_t 				iterindex	= GetCurrentIterationIndex(currentiter);
 	
 	// update iteration counter
 	if (zstage->SetStepCounter)
-		(*zstage->SetStepCounter) (zstage, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
+		(*zstage->SetStepCounter) (zstage,iterindex);
 	
 	// move to start position for the first iteration
-	if (!currentIteration) {
+	if (!iterindex) {
 		TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, TaskControllerMove ((PIStage_type*)zstage, ZSTAGE_MOVE_ABS, *zstage->startAbsPos), dispose_FCallReturn_EventInfo); 
 		return;
 	}

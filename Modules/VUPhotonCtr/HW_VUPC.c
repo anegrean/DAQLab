@@ -312,7 +312,7 @@ int ReadBuffer(int bufsize)
 						pmtdataptr = malloc(ndatapoints*sizeof(unsigned short));
 						memcpy(pmtdataptr,&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));
 						waveform = init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr);  
-					    dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIter(gtaskControl)    ,(DiscardPacketDataFptr_type) discard_Waveform_type);       
+					    dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIterDup(gtaskControl)    ,(DiscardPacketDataFptr_type) discard_Waveform_type);       
 						// send data packet with waveform
 						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
 					}
@@ -586,7 +586,6 @@ int PMTStartAcq(TaskMode_type mode,TaskControl_type* taskControl,Channel_type** 
 	SetMeasurementMode(mode);
 	errChk(PMTClearFifo()); 
 	
-	//errChk(CmtNewThreadPool(NUMTHREADS,&poolHandle)); 
 	errChk(StartDAQThread(mode,DEFAULT_THREAD_POOL_HANDLE));
 	
 	readdata=1;   //start reading       

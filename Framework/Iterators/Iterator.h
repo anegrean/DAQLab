@@ -60,6 +60,8 @@ void					discard_Iterator_type		(Iterator_type** iterator);
 
 
 void 					RemoveFromParentIterator	(Iterator_type* iterator);
+	// Returns a copy of the iterator
+Iterator_type* 			DupIterator 				(Iterator_type* iterator);
 
 //---------------------------------------------------------------------------------------------------------------------------
 // Set/Get functions

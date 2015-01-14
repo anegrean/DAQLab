@@ -79,7 +79,6 @@ struct TaskControl {
 	 //add them to Iterator_Type?
 	TaskIterMode_type			iterMode;							// Determines how the iteration block of a Task Controller is executed with respect to its subtasks if any.
 	TaskMode_type				mode;								// Finite or continuous type of task controller
-//	size_t						currIterIdx;    					// 1-based task execution iteration index
 	Iterator_type* 				currentiter;						// iteration information structure
 	TaskControl_type*			parenttask;							// Pointer to parent task that own this subtask. 
 																	// If this is the main task, it has no parent and this is NULL. 
@@ -395,6 +394,13 @@ int	SetTaskControlCurrentIter (TaskControl_type* taskControl, Iterator_type* cur
 Iterator_type* GetTaskControlCurrentIter (TaskControl_type* taskControl)
 {
 	return taskControl->currentiter; 	
+}
+
+Iterator_type* GetTaskControlCurrentIterDup (TaskControl_type* taskControl)
+{
+	Iterator_type* dup=DupIterator(taskControl->currentiter);
+	
+	return dup; 	
 }
 
 void SetTaskControlMode	(TaskControl_type* taskControl, TaskMode_type mode)

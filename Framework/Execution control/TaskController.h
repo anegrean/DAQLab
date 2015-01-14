@@ -471,8 +471,9 @@ int						SetTaskControlIterMode				(TaskControl_type* taskControl, TaskIterMode_
 TaskIterMode_type		GetTaskControlIterMode				(TaskControl_type* taskControl);
 
 // Task Controller Current Iteration    
-int						SetTaskControlCurrentIter (TaskControl_type* taskControl, Iterator_type* currentiter);
-Iterator_type* 			GetTaskControlCurrentIter (TaskControl_type* taskControl);
+int						SetTaskControlCurrentIter 			(TaskControl_type* taskControl, Iterator_type* currentiter);
+Iterator_type* 			GetTaskControlCurrentIter 			(TaskControl_type* taskControl);
+Iterator_type* 			GetTaskControlCurrentIterDup		(TaskControl_type* taskControl);
 
 	// mode = TASK_FINITE by default
 void					SetTaskControlMode					(TaskControl_type* taskControl, TaskMode_type mode);

@@ -68,6 +68,30 @@ Error:
 	return NULL;
 }
 
+Iterator_type* DupIterator (Iterator_type* iterator)
+{
+	Iterator_type* dup = malloc (sizeof(Iterator_type));
+	if (!dup) return NULL;
+	
+	dup->name 					= StrDup(iterator->name);
+	dup->currentIterIdx			= iterator->currentIterIdx;
+	dup->totalIter				= iterator->totalIter;
+	dup->iterType				= iterator->iterType;
+	dup->iterObjects   			= iterator->iterObjects;
+	dup->discardDataFptr		= iterator->discardDataFptr;
+	dup->parent					= iterator->parent;
+	dup->iterObjects 			= ListCopy (iterator->iterObjects);
+	if (!(dup->iterObjects ))	goto Error;
+	
+	return dup;
+	
+Error:
+	if (dup->iterObjects) ListDispose(dup->iterObjects);
+	free(dup);
+	return NULL;
+}
+
+
 void RemoveFromParentIterator(Iterator_type* iterator)
 {
 	size_t 				nObjects 		= ListNumItems(iterator->iterObjects);   

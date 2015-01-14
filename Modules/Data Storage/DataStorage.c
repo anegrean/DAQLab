@@ -89,18 +89,19 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 //-----------------------------------------
 // Data Storage Task Controller Callbacks
 //-----------------------------------------
-static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
-static void					IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
-static void 				AbortIterationTC		(TaskControl_type* taskControl, BOOL const* abortFlag);
-static int					StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+//static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+//static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+//datastorage module shouldn't iterate
+//static void					IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+//static void 				AbortIterationTC		(TaskControl_type* taskControl, BOOL const* abortFlag);
+//static int					StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+//static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+//static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void					DimUITC					(TaskControl_type* taskControl, BOOL dimmed);
-static void					TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
+//static void					TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
-static int					ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
+//static int					ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
 //-----------------------------------------
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
@@ -146,8 +147,8 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	ds->overwrite_files		= FALSE;
 	
 	// create Data Storage Task Controller
-	tc = init_TaskControl_type (instanceName, ds, ConfigureTC, UnConfigureTC, IterateTC, AbortIterationTC, StartTC, ResetTC,
-								DoneTC, StoppedTC, DimUITC, NULL, ModuleEventHandler, ErrorTC);
+	tc = init_TaskControl_type (instanceName, ds, NULL, NULL, NULL, NULL,NULL , ResetTC,
+								NULL, NULL, DimUITC, NULL, NULL, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
 	//------------------------------------------------------------
@@ -337,6 +338,7 @@ int CreateRawDataDir(DataStorage_type* 	ds,TaskControl_type* taskControl)
 	ds->rawdatapath=StrDup(ds->basefilepath);
 	AppendString(&ds->rawdatapath,"\\",-1);
 	AppendString(&ds->rawdatapath,fullname,-1);
+	free(fullname);
 	if (FileExists (ds->rawdatapath, &fileSize)){
 		if(ds->overwrite_files){
 		//clear dir
@@ -447,7 +449,7 @@ Error:
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
 
-
+ /* 
 static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
@@ -503,7 +505,7 @@ static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 
 	return 0;
 }
-
+*/  
 static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
@@ -514,17 +516,20 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 static void	DimUITC (TaskControl_type* taskControl, BOOL dimmed)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-	//if 
-	if (dimmed) CreateRawDataDir(ds,taskControl);
-	else OKfree(ds->rawdatapath);
 	
+	if (dimmed) {
+		//create a new data directory
+		OKfree(ds->rawdatapath);
+		CreateRawDataDir(ds,taskControl);
+	}
 }
 
-
+ /*
 static void	TCActive (TaskControl_type* taskControl, BOOL UITCActiveFlag)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 }
+ */
 
 static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 {
@@ -535,7 +540,7 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 	// print error message
 	DLMsg(errorMsg, 1);
 }
-
+ /*
 static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl); 
@@ -543,7 +548,7 @@ static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type ta
 	return 0;
 }
 
-
+ */
 
 
 static void	RedrawDSPanel (DataStorage_type* ds)
@@ -741,18 +746,13 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 		}
 	}
 			
-			
 	// get all available data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
 	
 				
 	for (i= 0; i < nPackets; i++) {
 		if (dataPackets[i]==NULL){
-			//check if all channels received a null
-			//if
-			//return iteration
-			//TaskControlIterationDone (taskControl, 0, NULL,FALSE);    
-			
+			ReleaseDataPacket(&dataPackets[i]); 
 		}
 		else{
 			dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType); 

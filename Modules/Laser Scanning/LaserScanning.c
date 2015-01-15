@@ -30,17 +30,22 @@
 
 #define MOD_LaserScanning_UI 						"./Modules/Laser Scanning/UI_LaserScanning.uir"
 #define VChanDataTimeout							1e4					// Timeout in [ms] for Sink VChans to receive data
-// Default VChan base names. Default base names must be unique among each other!
-#define VChan_Default_FastAxis_Command				"Fast Axis Command"
-#define VChan_Default_FastAxis_Position				"Fast Axis Position" 
-#define VChan_Default_SlowAxis_Command				"Slow Axis Command"
-#define VChan_Default_SlowAxis_Position				"Slow Axis Position"
-#define VChan_Default_ImageOut						"Image"
-#define VChan_Default_DetectionChan					"Detector"
-#define VChan_Default_Shutter_Command				"Shutter"
-#define VChan_Default_Pixel_Settings				"Pixel Settings"
-#define AxisCal_Default_TaskController_Name			"Scan Axis Calibration"
-#define AxisCal_Default_NewCalibration_Name			"Calibration"
+// Default Scan Engine VChan base names. Default base names must be unique among each other!
+#define VChan_ScanEngine_FastAxis_Command				"fast axis command"
+#define VChan_ScanEngine_FastAxis_Position				"fast axis position" 
+#define VChan_ScanEngine_SlowAxis_Command				"slow axis command"
+#define VChan_ScanEngine_SlowAxis_Position				"slow axis position"
+#define VChan_ScanEngine_ImageOut						"image"
+#define VChan_ScanEngine_DetectionChan					"detector"
+#define VChan_ScanEngine_Shutter_Command				"shutter"
+#define VChan_ScanEngine_Pixel_Settings					"pixel settings"
+// Default Scan Axis Calibration VChan base names.
+#define VChan_AxisCal_Command							"command"
+#define VChan_AxisCal_Position							"position"
+#define VChan_AxisCal_NSamples							"command n samples"
+
+#define AxisCal_Default_TaskController_Name				"Scan Axis Calibration"
+#define AxisCal_Default_NewCalibration_Name				"Calibration"
 
 // Scan engine settings
 #define Max_NewScanEngine_NameLength				50
@@ -184,8 +189,8 @@ typedef struct {
 	SwitchTimes_type*		switchTimes;			// Calibration data for jumping between two voltages.
 	MaxSlopes_type*			maxSlopes;				// Calibration data for maximum scan speeds.
 	TriangleCal_type*		triangleCal;			// Calibration data for triangle waveforms.
-	double 					resolution;				// in [V]
-	double 					minStepSize;			// in [V]
+	double 					resolution;				// in [V] for performing Switch Times calibration.
+	double 					minStepSize;			// in [V] for performing Max Slopes calibration.
 	double 					parked;         		// Value of command signal to be applied to the galvo when parked, in [V].
 	double					mechanicalResponse;		// Galvo mechanical response in [deg/V].
 	double 					scanTime;				// Time to apply a triangle waveform to estimate galvo response and maximum scan speed in [s].
@@ -204,8 +209,8 @@ typedef struct {
 	SwitchTimes_type*		switchTimes;			// Calibration data for jumping between two voltages.
 	MaxSlopes_type*			maxSlopes;				// Calibration data for maximum scan speeds.
 	TriangleCal_type*		triangleCal;			// Calibration data for triangle waveforms.
-	double 					resolution;				// in [V]
-	double 					minStepSize;			// in [V]
+	double 					resolution;				// in [V] for performing Switch Times calibration.
+	double 					minStepSize;			// in [V] for performing Max Slopes calibration.
 	double 					parked;         		// Value of command signal to be applied to the galvo when parked, in [V].
 	double					mechanicalResponse;		// Galvo mechanical response in [deg/V].
 	double					sampleDisplacement;		// Displacement factor in sample space [um] depending on applied voltage [V] and chosen scan engine optics. The unit of this factor is [um/V].
@@ -1956,9 +1961,12 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	enginePtr = ListGetPtrToItem(ls->scanEngines, tabIdx+1);
 	engine = *enginePtr;
 	
-	// load settings panel if not loaded already
+	// load settings panel if not loaded already, otherwise bring it to focus
 	GetPanelAttribute(panelHandle, ATTR_PANEL_PARENT, &workspacePanHndl);
-	if (engine->engineSetPanHndl) return; // do nothing
+	if (engine->engineSetPanHndl) {
+		DisplayPanel(engine->engineSetPanHndl);
+		return;
+	}
 	
 	engine->engineSetPanHndl 	= LoadPanel(workspacePanHndl, MOD_LaserScanning_UI, ScanSetPan);
 	// change panel title
@@ -1997,8 +2005,6 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	if (engine->VChanPixelSettings)
 		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelSettings, VChanPixelSettingsName); 
 		
-		
-	
 	size_t 				nImgChans 		= ListNumItems(engine->DetChans);
 	DetChan_type** 		detChanPtrPtr;
 	char*				VChanDetName;
@@ -2048,7 +2054,10 @@ static void CVICALLBACK NewScanEngineMenu_CB (int menuBar, int menuItem, void *c
 	LaserScanning_type*		ls 				= callbackData;
 	int						workspacePanHndl;
 	
-	if (ls->enginesPanHndl) return; // do nothing if panel is already loaded and visible
+	if (ls->enginesPanHndl) {
+		DisplayPanel(ls->enginesPanHndl);
+		return;
+	}
 	
 	// load panel resources
 	GetPanelAttribute(panel, ATTR_PANEL_PARENT, &workspacePanHndl);
@@ -2104,14 +2113,14 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					//------------------------------------------------------------------------------------------------------------------
 					
 					// initialize raster scan engine
-					char*	fastAxisComVChanName 	= DLGetUniqueVChanName(VChan_Default_FastAxis_Command);
-					char*	slowAxisComVChanName 	= DLGetUniqueVChanName(VChan_Default_SlowAxis_Command);
-					char*	fastAxisPosVChanName 	= DLGetUniqueVChanName(VChan_Default_FastAxis_Position);
-					char*	slowAxisPosVChanName	= DLGetUniqueVChanName(VChan_Default_SlowAxis_Position);
-					char*	imageOutVChanName		= DLGetUniqueVChanName(VChan_Default_ImageOut);
-					char*	detectionVChanName		= DLGetUniqueVChanName(VChan_Default_DetectionChan);
-					char*	shutterVChanName		= DLGetUniqueVChanName(VChan_Default_Shutter_Command);
-					char*	pixelSettingsVChanName	= DLGetUniqueVChanName(VChan_Default_Pixel_Settings);  
+					char*	fastAxisComVChanName 	= DLGetUniqueVChanName(VChan_ScanEngine_FastAxis_Command);
+					char*	slowAxisComVChanName 	= DLGetUniqueVChanName(VChan_ScanEngine_SlowAxis_Command);
+					char*	fastAxisPosVChanName 	= DLGetUniqueVChanName(VChan_ScanEngine_FastAxis_Position);
+					char*	slowAxisPosVChanName	= DLGetUniqueVChanName(VChan_ScanEngine_SlowAxis_Position);
+					char*	imageOutVChanName		= DLGetUniqueVChanName(VChan_ScanEngine_ImageOut);
+					char*	detectionVChanName		= DLGetUniqueVChanName(VChan_ScanEngine_DetectionChan);
+					char*	shutterVChanName		= DLGetUniqueVChanName(VChan_ScanEngine_Shutter_Command);
+					char*	pixelSettingsVChanName	= DLGetUniqueVChanName(VChan_ScanEngine_Pixel_Settings);  
 							
 					switch (engineType) {
 					
@@ -2412,15 +2421,18 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							
 							// get unique name for command signal VChan
 							char* commandVChanName = StrDup(calTCName);
-							AppendString(&commandVChanName,": command", -1);
+							AppendString(&commandVChanName,": ", -1); 
+							AppendString(&commandVChanName, VChan_AxisCal_Command, -1);
 							
 							// get unique name for command signal nSamples VChan
 							char* commandNSamplesVChanName = StrDup(calTCName);
-							AppendString(&commandNSamplesVChanName,": command n samples", -1);
+							AppendString(&commandNSamplesVChanName,": ", -1);
+							AppendString(&commandNSamplesVChanName, VChan_AxisCal_NSamples, -1);
 							
 							// get unique name for position feedback signal VChan 
 							char* positionVChanName = StrDup(calTCName);
-							AppendString(&positionVChanName,": position", -1);
+							AppendString(&positionVChanName, ": ", -1);
+							AppendString(&positionVChanName, VChan_AxisCal_Position, -1);
 							
 							// init structure for galvo calibration
 							ActiveNonResGalvoCal_type* 	nrgCal = init_ActiveNonResGalvoCal_type(ls, calTCName, commandVChanName, commandNSamplesVChanName, positionVChanName);
@@ -2667,7 +2679,7 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 				case ScanSetPan_AddImgChan:
 					
 					// create new VChan with a predefined base name
-					newName = DLGetUniqueVChanName(VChan_Default_DetectionChan);
+					newName = DLGetUniqueVChanName(VChan_ScanEngine_DetectionChan);
 					DetChan_type* detChan = init_DetChan_type(engine, newName);
 					// insert new VChan to list control, engine list and register with framework
 					InsertListItem(panel, ScanSetPan_ImgChans, -1, newName, newName);
@@ -3023,6 +3035,7 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 					// unregister calibration VChans
 					DLUnregisterVChan((DAQLabModule_type*)activeNRGCal->baseClass.lsModule, (VChan_type*)activeNRGCal->baseClass.VChanCom);
 					DLUnregisterVChan((DAQLabModule_type*)activeNRGCal->baseClass.lsModule, (VChan_type*)activeNRGCal->baseClass.VChanPos);
+					DLUnregisterVChan((DAQLabModule_type*)activeNRGCal->baseClass.lsModule, (VChan_type*)activeNRGCal->baseClass.VChanComNSamples);
 					
 					// unregister calibration Task Controller
 					DLRemoveTaskController((DAQLabModule_type*)activeNRGCal->baseClass.lsModule, calTC);
@@ -3332,8 +3345,11 @@ void CVICALLBACK ScanAxisCalibrationMenu_CB	(int menuBarHandle, int menuItemID, 
 	LaserScanning_type*		ls 				= callbackData;
 	int						parentPanHndl;
 	
-	// if panel is already loaded, do nothing
-	if (ls->manageAxisCalPanHndl) return;
+	// if panel is already loaded, bring it to focus
+	if (ls->manageAxisCalPanHndl) {
+		DisplayPanel(ls->manageAxisCalPanHndl);
+		return;
+	}
 	// get workspace panel handle
 	GetPanelAttribute(panelHandle, ATTR_PANEL_PARENT, &parentPanHndl);
 	
@@ -5674,8 +5690,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 					cal->extraRuns = 0;
 					
 					// init next target slope
-					if (cal->triangleCal->n < cal->maxSlopes->n) 
-						cal->targetSlope = cal->maxSlopes->slope[cal->triangleCal->n] * DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR;
+					cal->targetSlope = cal->maxSlopes->slope[cal->triangleCal->n] * DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR;
 				}
 			}
 			

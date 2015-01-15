@@ -2064,12 +2064,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					} else {
+						
+					} else 
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
-						break;
-					}
 					
 					break;
 					
@@ -2452,7 +2451,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 							
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
-							
+						
 						} else 
 							// switch to IDLE or DONE state if finite task controller
 							if (GetCurrentIterationIndex(taskControl->currentiter) < taskControl->repeat) {
@@ -2466,7 +2465,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								}
 							
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
-									
+							
 							} else {
 								if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
@@ -2478,6 +2477,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								}
 							
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
+							
 							}
 							  
 					} else {
@@ -2707,36 +2707,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							if(!taskControl->parenttask)
 							DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
 								
-						// if there are no SubTask Controllers
-						if (taskControl->mode == TASK_CONTINUOUS) {
-							// switch to DONE state if continuous task controller
-							if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
-								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
-								taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
-								OKfree(errMsg);
-								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-								break;
-							}
-							
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
-								
-						} else 
-							// switch to IDLE or DONE state if finite task controller
-							
-							if ( GetCurrentIterationIndex(taskControl->currentiter) < taskControl->repeat) {
-								if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL, &errMsg) < 0) {
-									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
-									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
-									OKfree(errMsg);
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-									break;
-								}
-							
-								ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
-									
-							} else {
+							// if there are no SubTask Controllers
+							if (taskControl->mode == TASK_CONTINUOUS) {
+								// switch to DONE state if continuous task controller
 								if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
@@ -2747,7 +2720,37 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								}
 							
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
-							}
+								break; // stop here 
+								
+							} else 
+								// switch to IDLE or DONE state if finite task controller
+							
+								if ( GetCurrentIterationIndex(taskControl->currentiter) < taskControl->repeat) {
+									if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL, &errMsg) < 0) {
+										taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+										taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+										OKfree(errMsg);
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+										break;
+									}
+							
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
+									break; // stop here 
+									
+								} else {
+									if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
+										taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+										taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+										OKfree(errMsg);
+										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+										break;
+									}
+							
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
+									break; // stop here 
+								}
 						
 						} else {
 							
@@ -2761,9 +2764,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 						
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_STOPPING);
+							break; // stop here 
 						}
 						
-						break; // stop here
 					}
 					
 					//---------------------------------------------------------------------------------------------------------------   
@@ -3123,12 +3126,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					} else {
+						
+					} else 
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
-						break;
-					}
+				
 					
 					break;
 					

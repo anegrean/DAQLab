@@ -3405,15 +3405,15 @@ static void	PopulateChannels (Dev_type* dev)
 	int							ioMode;
 	int							ioType;
 	char*						shortChName;
-	AIChannel_type**			AIChanPtrPtr;
-	AOChannel_type**   			AOChanPtrPtr;
-	DILineChannel_type**		DILineChanPtrPtr;
-	DIPortChannel_type**  		DIPortChanPtrPtr;
-	DOLineChannel_type**		DOLineChanPtrPtr;
-	DOPortChannel_type**  		DOPortChanPtrPtr;
-	CIChannel_type**			CIChanPtrPtr;
-	COChannel_type**   			COChanPtrPtr;
-	size_t						n;
+	AIChannel_type**			AIChanPtr;
+	AOChannel_type**   			AOChanPtr;
+	DILineChannel_type**		DILineChanPtr;
+	DIPortChannel_type**  		DIPortChanPtr;
+	DOLineChannel_type**		DOLineChanPtr;
+	DOPortChannel_type**  		DOPortChanPtr;
+	CIChannel_type**			CIChanPtr;
+	COChannel_type**   			COChanPtr;
+	size_t						n				= 0;
 	
 	GetCtrlVal(dev->devPanHndl, TaskSetPan_IO, &ioVal);
 	GetCtrlVal(dev->devPanHndl, TaskSetPan_IOMode, &ioMode);
@@ -3431,13 +3431,13 @@ static void	PopulateChannels (Dev_type* dev)
 					
 					n = ListNumItems(dev->attr->AIchan);
 					for (int i = 1; i <= n; i++) {
-						AIChanPtrPtr = ListGetPtrToItem(dev->attr->AIchan, i);
+						AIChanPtr = ListGetPtrToItem(dev->attr->AIchan, i);
 						// select only channels that support this measurement type since not all channels of the same type may have the same capabilities
 						// as well as select channels that have not been already added to the DAQmx tasks
-						if (ListFindItem ((*AIChanPtrPtr)->supportedMeasTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*AIChanPtrPtr)->inUse) {
-							shortChName = strstr((*AIChanPtrPtr)->physChanName, "/") + 1;  
+						if (ListFindItem ((*AIChanPtr)->supportedMeasTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*AIChanPtr)->inUse) {
+							shortChName = strstr((*AIChanPtr)->physChanName, "/") + 1;  
 							// insert physical channel name in the list
-							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*AIChanPtrPtr)->physChanName);
+							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*AIChanPtr)->physChanName);
 						}
 					}
 					
@@ -3451,12 +3451,12 @@ static void	PopulateChannels (Dev_type* dev)
 							
 							n = ListNumItems(dev->attr->DIlines);
 							for (int i = 1; i <= n; i++) {
-								DILineChanPtrPtr = ListGetPtrToItem(dev->attr->DIlines, i);
+								DILineChanPtr = ListGetPtrToItem(dev->attr->DIlines, i);
 								// select channels that have not been already added to the DAQmx tasks
-								if (!(*DILineChanPtrPtr)->inUse) {
-									shortChName = strstr((*DILineChanPtrPtr)->physChanName, "/") + 1;  
+								if (!(*DILineChanPtr)->inUse) {
+									shortChName = strstr((*DILineChanPtr)->physChanName, "/") + 1;  
 									// insert physical channel name in the list
-									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DILineChanPtrPtr)->physChanName);
+									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DILineChanPtr)->physChanName);
 								}
 							}
 							
@@ -3466,12 +3466,12 @@ static void	PopulateChannels (Dev_type* dev)
 							
 							n = ListNumItems(dev->attr->DIports);
 							for (int i = 1; i <= n; i++) {
-								DIPortChanPtrPtr = ListGetPtrToItem(dev->attr->DIports, i);
+								DIPortChanPtr = ListGetPtrToItem(dev->attr->DIports, i);
 								// select channels that have not been already added to the DAQmx tasks
-								if (!(*DIPortChanPtrPtr)->inUse) {
-									shortChName = strstr((*DIPortChanPtrPtr)->physChanName, "/") + 1;  
+								if (!(*DIPortChanPtr)->inUse) {
+									shortChName = strstr((*DIPortChanPtr)->physChanName, "/") + 1;  
 									// insert physical channel name in the list
-									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DIPortChanPtrPtr)->physChanName);
+									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DIPortChanPtr)->physChanName);
 								}
 							}
 							
@@ -3484,13 +3484,13 @@ static void	PopulateChannels (Dev_type* dev)
 					
 					n = ListNumItems(dev->attr->CIchan);
 					for (int i = 1; i <= n; i++) {
-						CIChanPtrPtr = ListGetPtrToItem(dev->attr->CIchan, i);
+						CIChanPtr = ListGetPtrToItem(dev->attr->CIchan, i);
 						// select only channels that support this measurement type since not all channels of the same type may have the same capabilities
 						// as well as select channels that have not been already added to the DAQmx tasks
-						if (ListFindItem ((*CIChanPtrPtr)->supportedMeasTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*CIChanPtrPtr)->inUse) {
-							shortChName = strstr((*CIChanPtrPtr)->physChanName, "/") + 1; 
+						if (ListFindItem ((*CIChanPtr)->supportedMeasTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*CIChanPtr)->inUse) {
+							shortChName = strstr((*CIChanPtr)->physChanName, "/") + 1; 
 							// insert physical channel name in the list
-							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*CIChanPtrPtr)->physChanName);
+							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*CIChanPtr)->physChanName);
 						}
 					}
 					
@@ -3507,13 +3507,13 @@ static void	PopulateChannels (Dev_type* dev)
 					
 					n = ListNumItems(dev->attr->AOchan);
 					for (int i = 1; i <= n; i++) {
-						AOChanPtrPtr = ListGetPtrToItem(dev->attr->AOchan, i);
+						AOChanPtr = ListGetPtrToItem(dev->attr->AOchan, i);
 						// select only channels that support this measurement type since not all channels of the same type may have the same capabilities
 						// as well as select channels that have not been already added to the DAQmx tasks
-						if (ListFindItem ((*AOChanPtrPtr)->supportedOutputTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*AOChanPtrPtr)->inUse) {
-							shortChName = strstr((*AOChanPtrPtr)->physChanName, "/") + 1;
+						if (ListFindItem ((*AOChanPtr)->supportedOutputTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*AOChanPtr)->inUse) {
+							shortChName = strstr((*AOChanPtr)->physChanName, "/") + 1;
 							// insert physical channel name in the list
-							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*AOChanPtrPtr)->physChanName);
+							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*AOChanPtr)->physChanName);
 						}
 					}
 					
@@ -3527,12 +3527,12 @@ static void	PopulateChannels (Dev_type* dev)
 							
 							n = ListNumItems(dev->attr->DOlines);
 							for (int i = 1; i <= n; i++) {
-								DOLineChanPtrPtr = ListGetPtrToItem(dev->attr->DOlines, i);
+								DOLineChanPtr = ListGetPtrToItem(dev->attr->DOlines, i);
 								// select channels that have not been already added to the DAQmx tasks
-								if (!(*DOLineChanPtrPtr)->inUse) {
-									shortChName = strstr((*DOLineChanPtrPtr)->physChanName, "/") + 1;
+								if (!(*DOLineChanPtr)->inUse) {
+									shortChName = strstr((*DOLineChanPtr)->physChanName, "/") + 1;
 									// insert physical channel name in the list
-									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DOLineChanPtrPtr)->physChanName);
+									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DOLineChanPtr)->physChanName);
 								}
 							}
 							
@@ -3542,12 +3542,12 @@ static void	PopulateChannels (Dev_type* dev)
 							
 							n = ListNumItems(dev->attr->DOports);
 							for (int i = 1; i <= n; i++) {
-								DOPortChanPtrPtr = ListGetPtrToItem(dev->attr->DOports, i);
+								DOPortChanPtr = ListGetPtrToItem(dev->attr->DOports, i);
 								// select channels that have not been already added to the DAQmx tasks
-								if (!(*DOPortChanPtrPtr)->inUse) {
-									shortChName = strstr((*DOPortChanPtrPtr)->physChanName, "/") + 1;
+								if (!(*DOPortChanPtr)->inUse) {
+									shortChName = strstr((*DOPortChanPtr)->physChanName, "/") + 1;
 									// insert physical channel name in the list
-									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DOPortChanPtrPtr)->physChanName);
+									InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*DOPortChanPtr)->physChanName);
 								}
 							}
 							
@@ -3560,13 +3560,13 @@ static void	PopulateChannels (Dev_type* dev)
 					
 					n = ListNumItems(dev->attr->COchan);
 					for (int i = 1; i <= n; i++) {
-						COChanPtrPtr = ListGetPtrToItem(dev->attr->COchan, i);
+						COChanPtr = ListGetPtrToItem(dev->attr->COchan, i);
 						// select only channels that support this measurement type since not all channels of the same type may have the same capabilities
 						// as well as select channels that have not been already added to the DAQmx tasks
-						if (ListFindItem ((*COChanPtrPtr)->supportedOutputTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*COChanPtrPtr)->inUse) {
-							shortChName = strstr((*COChanPtrPtr)->physChanName, "/") + 1;
+						if (ListFindItem ((*COChanPtr)->supportedOutputTypes, &ioType, FRONT_OF_LIST, IntCompare) && !(*COChanPtr)->inUse) {
+							shortChName = strstr((*COChanPtr)->physChanName, "/") + 1;
 							// insert physical channel name in the list
-							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*COChanPtrPtr)->physChanName);
+							InsertListItem(dev->devPanHndl, TaskSetPan_PhysChan, -1, shortChName, (*COChanPtr)->physChanName);
 						}
 					}
 					
@@ -3575,6 +3575,7 @@ static void	PopulateChannels (Dev_type* dev)
 			
 			break;
 	}
+	
 }
 
 static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type ioMode, int ioType, char chName[], char** errorInfo)

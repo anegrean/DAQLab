@@ -591,18 +591,19 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 	Waveform_type**			waveformPacketData	= NULL;
 	DLDataTypes				dataPacketType;
 	void*					dataPacketPtrToData	= NULL;
+	char*					errMsg				= NULL;
 	
 	// init
 	*waveform = NULL;
 	
 	// get first data packet and check if it is a NULL packet
-	errChk ( GetDataPacket(sinkVChan, &dataPacket, errorInfo) );
+	errChk ( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
 	
 	if (!dataPacket) {
-		if (errorInfo)
-			*errorInfo = FormatMsg(ReceiveWaveform_Err_NoWaveform, "ReceiveWaveform", "Waveform received does not contain any data. This occurs if \
+		errMsg = FormatMsg(ReceiveWaveform_Err_NoWaveform, "ReceiveWaveform", "Waveform received does not contain any data. This occurs if \
 								   a NULL packet is encountered before any data packets");
-		return ReceiveWaveform_Err_NoWaveform;
+		error = ReceiveWaveform_Err_NoWaveform;
+		goto Error;
 	}
 	
 	// assemble waveform from multiple packets until a NULL packet is encountered
@@ -656,33 +657,33 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 			
 			default:
 			
-				if (errorInfo)
-					*errorInfo = FormatMsg(ReceiveWaveform_Err_WrongDataType, "ReceiveWaveform", " Data packet received is not of a waveform type and cannot \
+				errMsg = FormatMsg(ReceiveWaveform_Err_WrongDataType, "ReceiveWaveform", " Data packet received is not of a waveform type and cannot \
 								   be retrieved by this function");
 				ReleaseDataPacket(&dataPacket);
-				return ReceiveWaveform_Err_WrongDataType;
+				error = ReceiveWaveform_Err_WrongDataType;
+				goto Error;
 		}
 	
 		waveformPacketData = dataPacketPtrToData;
 		
 		if (!*waveform)
-			errChk( CopyWaveform(waveform, *waveformPacketData, errorInfo) );
+			errChk( CopyWaveform(waveform, *waveformPacketData, &errMsg) );
 		else
-			errChk( AppendWaveform(*waveform, *waveformPacketData, errorInfo) );
+			errChk( AppendWaveform(*waveform, *waveformPacketData, &errMsg) );
 	
 		ReleaseDataPacket(&dataPacket);
 		
 		// get another packet
-		errChk ( GetDataPacket(sinkVChan, &dataPacket, errorInfo) );
+		errChk ( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
 	}
 	
 	// check again if waveform is NULL
 	
 	if (!*waveform) {
-		if (errorInfo)
-			*errorInfo = FormatMsg(ReceiveWaveform_Err_NoWaveform, "ReceiveWaveform", "Waveform received does not contain any data. This occurs if \
+		errMsg = FormatMsg(ReceiveWaveform_Err_NoWaveform, "ReceiveWaveform", "Waveform received does not contain any data. This occurs if \
 								   a NULL packet is encountered before any data packets or the data packet doesn't have any data");
-		return ReceiveWaveform_Err_NoWaveform;
+		error = ReceiveWaveform_Err_NoWaveform;
+		goto Error;
 	}
 		
 	return 0;
@@ -690,6 +691,9 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 Error:
 	
 	ReleaseDataPacket(&dataPacket);
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "ReceiveWaveform", errMsg);
+	OKfree(errMsg);
 	
 	return error;
 }

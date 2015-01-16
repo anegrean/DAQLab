@@ -507,6 +507,14 @@ BOOL					GetTaskControlUITCFlag				(TaskControl_type* taskControl);
 	// Returns TRUE if iteration must be stopped
 BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
 
+BOOL 					GetTaskControlTCDone 				(TaskControl_type* taskControl);
+void 					SetTaskControlTCDone 				(TaskControl_type* taskControl,BOOL done);
+
+
+BOOL 					GetTaskControlTCStarted 			(TaskControl_type* taskControl);
+void 					SetTaskControlTCStarted 			(TaskControl_type* taskControl,BOOL started);
+
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------

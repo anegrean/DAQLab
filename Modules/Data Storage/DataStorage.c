@@ -59,7 +59,6 @@ struct DatStore {
 	
 	char*				basefilepath;
 	char*				rawdatapath;    //test, for saving raw data
-	char*				name;			//test, storage name;
 	BOOL				overwrite_files;
 	
 		// Callback to install on controls from selected panel in UI_DataStorage.uir
@@ -143,7 +142,6 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	
 	ds->basefilepath		= StrDup(DATAFILEBASEPATH);
 	ds->rawdatapath 		= NULL;
-	ds->name				= malloc(MAXBASEFILEPATH*sizeof(char)); 
 	ds->overwrite_files		= FALSE;
 	
 	// create Data Storage Task Controller
@@ -223,7 +221,7 @@ void discard_DataStorage (DAQLabModule_type** mod)
 		DS_Channel_type**   channelPtr;
 		for (size_t i = 1; i <= nItems; i++) {
 			channelPtr = ListGetPtrToItem(ds->channels, i);
-			(*(*channelPtr)->Discard)	(channelPtr); 
+			((*channelPtr)->Discard)	(channelPtr); 
 		}
 		
 		ListDispose(ds->channels);
@@ -713,6 +711,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 	DS_Channel_type**	chanPtr; 
 	int 				numitems;
 	Iterator_type*		currentiter;
+	char*				fullitername;
 			
 			
 	if (ds->channels) {
@@ -746,9 +745,8 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 						
 					//test
 					rawfilename=malloc(MAXCHAR*sizeof(char)); 
-					OKfree(ds->name);
-					ds->name=CreateFullIterName(currentiter);
-					Fmt (rawfilename, "%s<%s\\%s_%s#%d.bin", ds->rawdatapath,ds->name,sourceVChanName,GetCurrentIterationIndex(currentiter));  
+					fullitername=CreateFullIterName(currentiter);
+					Fmt (rawfilename, "%s<%s\\%s_%s#%d.bin", ds->rawdatapath,fullitername,sourceVChanName,GetCurrentIterationIndex(currentiter));  
 					filehandle=OpenFile (rawfilename, VAL_WRITE_ONLY, VAL_APPEND, VAL_BINARY);
 					if (filehandle<0) {
 						AppendString(&errMsg, sinkVChanName, -1); 
@@ -762,12 +760,16 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 					
 					}
 					free(rawfilename);
+					free(fullitername);
 					CloseFile(filehandle);
 				break;
 				case DL_Image_NIVision:
 					//get the image
 				//	GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
 		//			SaveImage(image,ds,sourceVChanName,chan->iteration++);
+				break;
+				default:
+					//shouldn't happen!
 				break;
 			}
 			ReleaseDataPacket(&dataPackets[i]);

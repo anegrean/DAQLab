@@ -765,7 +765,8 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
     }
 	SetReadyForReading(0);
     //quit
-	SetPMTCommandFlag(0); 
+	SetPMTCommandFlag(0);
+	
 	CmtDiscardThreadPool(poolHandle); 
 	
 	return 0;

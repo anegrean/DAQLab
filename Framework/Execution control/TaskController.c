@@ -8,7 +8,7 @@
 //
 //==============================================================================
 
-//==============================================================================
+//==============================================================================										    
 // Include files
 #include "DAQLabUtility.h"
 #include <windows.h>
@@ -83,6 +83,7 @@ struct TaskControl {
 	TaskControl_type*			parenttask;							// Pointer to parent task that own this subtask. 
 																	// If this is the main task, it has no parent and this is NULL. 
 	ListType					subtasks;							// List of subtasks of SubTask_type.
+	size_t						num_subtasks_started;				// need this to prevent race
 	void*						moduleData;							// Reference to module specific data that is controlled by the task.
 	int							logPanHandle;						// Panel handle in which there is a box control for printing Task Controller execution info useful for debugging. If not used, it is set to 0
 	int							logBoxControlID;					// Box control ID for printing Task Controller execution info useful for debugging. If not used, it is set to 0.  
@@ -1087,13 +1088,15 @@ static void disposeTCIterDoneInfo (void* eventInfo)
 static int ChangeState (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState)
 {
 	int error;
-	
+			  
 	// change state
 	taskControl->oldState   = taskControl->state;
 	taskControl->state 		= newState;
 	
+	
 	// add log entry if enabled
 	ExecutionLogEntry(taskControl, eventPacket, STATE_CHANGE, NULL);
+
 	
 	// if there is a parent task, inform it of subtask state chage
 	if (taskControl->parenttask)
@@ -2064,11 +2067,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						
-					} else 
+						break;
+					} else {
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
+						break;
+					}
 					
 					break;
 					
@@ -2358,6 +2362,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									
 							if (ListNumItems(taskControl->subtasks)) {    
 								// send START event to all subtasks
+								//reset num_subtasks_started, to keep track whether all child TC started
+								taskControl->num_subtasks_started=0;
 								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
 									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
@@ -2397,6 +2403,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 									
 							if (ListNumItems(taskControl->subtasks)) 
 								// send START event to all subtasks
+									//reset num_subtasks_started, to keep track whether all child TC started
+								taskControl->num_subtasks_started=0;
 								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
 									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
@@ -2451,7 +2459,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 							
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
-						
+							
 						} else 
 							// switch to IDLE or DONE state if finite task controller
 							if (GetCurrentIterationIndex(taskControl->currentiter) < taskControl->repeat) {
@@ -2465,7 +2473,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								}
 							
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
-							
+									
 							} else {
 								if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
@@ -2477,7 +2485,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								}
 							
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
-							
 							}
 							  
 					} else {
@@ -2539,25 +2546,45 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// If SubTasks are not yet complete, stay in RUNNING state and wait for their completion
 					//---------------------------------------------------------------------------------------------------------------- 
 					
-					// consider only transitions to TASK_STATE_DONE 
-					if (subtaskPtr->subtaskState != TASK_STATE_DONE)
+					// because of a possible race condition, the parent TC of multiple child TC's have to check if all child TC's
+					// have left their done state
+					
+					// consider only transitions to TASK_STATE_DONE OR transitions from TASK_STATE_INITIAL
+					if ((subtaskPtr->subtaskState != TASK_STATE_DONE)&&(subtaskPtr->previousSubTaskState != TASK_STATE_INITIAL))
 						break; // stop here
 					
-					// assume all subtasks are done 
-					BOOL AllDoneFlag = 1;
-							
+					
 					// check SubTasks
 					nItems = ListNumItems(taskControl->subtasks);
-					for (size_t i = 1; i <= nItems; i++) {
+					if (taskControl->num_subtasks_started!=nItems) {
+						BOOL AllStartedFlag = 0;  
+						for (size_t i = 1; i <= nItems; i++) {									 
+							subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+							if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) {
+								taskControl->num_subtasks_started++;
+								if (taskControl->num_subtasks_started==nItems) AllStartedFlag = 1;
+								break;
+							}
+						}
+						if (!AllStartedFlag) break;
+					}
+					//skip checking if not all child TCs have started
+					
+					//all modules have started their iteration, now it is time to check if all child TCs are done   
+					// assume all subtasks are done 
+					
+					BOOL AllDoneFlag=1;		
+					// check SubTasks
+					nItems = ListNumItems(taskControl->subtasks);
+					for (size_t i = 1; i <= nItems; i++) {									 
 						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
 						if (subtaskPtr->subtaskState != TASK_STATE_DONE) {
 							AllDoneFlag = 0;
 							break;
 						}
 					}
-					
-					if (!AllDoneFlag) 
-						break; // stop here
+		
+					if (!AllDoneFlag)  break; // stop here
 					
 					//---------------------------------------------------------------------------------------------------------------- 
 					// Decide on state transition
@@ -2570,7 +2597,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------
 							// Increment iteration index
 							//---------------------------------------------------------------------------------------------------------------
-							SetCurrentIterationIndex(taskControl->currentiter,GetCurrentIterationIndex(taskControl->currentiter)+1);
+							SetCurrentIterationIndex(taskControl->currentiter, GetCurrentIterationIndex(taskControl->currentiter)+1);
 							if (taskControl->nIterationsFlag > 0)
 								taskControl->nIterationsFlag--;
 							
@@ -2707,9 +2734,36 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							if(!taskControl->parenttask)
 							DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
 								
-							// if there are no SubTask Controllers
-							if (taskControl->mode == TASK_CONTINUOUS) {
-								// switch to DONE state if continuous task controller
+						// if there are no SubTask Controllers
+						if (taskControl->mode == TASK_CONTINUOUS) {
+							// switch to DONE state if continuous task controller
+							if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+								taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+								OKfree(errMsg);
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+								break;
+							}
+							
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
+								
+						} else 
+							// switch to IDLE or DONE state if finite task controller
+							
+							if ( GetCurrentIterationIndex(taskControl->currentiter) < taskControl->repeat) {
+								if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL, &errMsg) < 0) {
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+									OKfree(errMsg);
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+									break;
+								}
+							
+								ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
+									
+							} else {
 								if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
@@ -2720,37 +2774,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								}
 							
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
-								break; // stop here 
-								
-							} else 
-								// switch to IDLE or DONE state if finite task controller
-							
-								if ( GetCurrentIterationIndex(taskControl->currentiter) < taskControl->repeat) {
-									if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL, &errMsg) < 0) {
-										taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
-										taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
-										OKfree(errMsg);
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-										break;
-									}
-							
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
-									break; // stop here 
-									
-								} else {
-									if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DONE, NULL, &errMsg) < 0) {
-										taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
-										taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
-										OKfree(errMsg);
-										FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-										ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-										break;
-									}
-							
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
-									break; // stop here 
-								}
+							}
 						
 						} else {
 							
@@ -2764,9 +2788,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 						
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_STOPPING);
-							break; // stop here 
 						}
 						
+						break; // stop here
 					}
 					
 					//---------------------------------------------------------------------------------------------------------------   
@@ -2784,6 +2808,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							if (ListNumItems(taskControl->subtasks)) {
 								
 								// send START event to all subtasks
+								//reset num_subtasks_started, to keep track whether all child TC started
+								taskControl->num_subtasks_started=0;
 								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
 									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
@@ -3126,12 +3152,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						
-					} else 
+						break;
+					} else {
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
-				
+						break;
+					}
 					
 					break;
 					

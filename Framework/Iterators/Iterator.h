@@ -81,7 +81,7 @@ size_t					GetIteratorSize				(Iterator_type* iterator);
 size_t 					GetCurrentIterationIndex	(Iterator_type* iterator);
 
 	// 	Sets the current Iteration Index
-void 					SetCurrentIterationIndex	(Iterator_type* iterator,size_t index);
+void 					SetCurrentIterationIndex	(Iterator_type* iterator, size_t index);
 
 	// Set total number of iterations for a given iterator
 void					SetTotalIterations			(Iterator_type* iterator, size_t nIterations);

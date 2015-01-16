@@ -89,8 +89,8 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 //-----------------------------------------
 // Data Storage Task Controller Callbacks
 //-----------------------------------------
-//static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-//static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 //datastorage module shouldn't iterate
 //static void					IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 //static void 				AbortIterationTC		(TaskControl_type* taskControl, BOOL const* abortFlag);
@@ -147,7 +147,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	ds->overwrite_files		= FALSE;
 	
 	// create Data Storage Task Controller
-	tc = init_TaskControl_type (instanceName, ds, NULL, NULL, NULL, NULL,NULL , ResetTC,
+	tc = init_TaskControl_type (instanceName, ds, ConfigureTC, UnConfigureTC, NULL, NULL,NULL , ResetTC,
 								NULL, NULL, DimUITC, NULL, NULL, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
@@ -432,11 +432,11 @@ Error:
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
 
- /* 
+  
 static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-		
+	
 	return 0;
 }
 
@@ -446,7 +446,7 @@ static int UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 	
 	return 0;
 }
-
+ /*
 static void	IterateTC	(TaskControl_type* taskControl,  BOOL const* abortIterationFlag)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);

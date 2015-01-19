@@ -366,10 +366,10 @@ typedef struct {
 	//----------------
 	double*						refGalvoSamplingRate;   // Pointer to fast and slow axis waveform sampling rate in [Hz]. Value must be the same for VChanFastAxisCom and VChanSlowAxisCom
 	double						galvoSamplingRate;		// Default galvo sampling rate set by the scan engine in [Hz].
-	size_t						height;					// Image height in [pix].
-	size_t						heightOffset;			// Image height offset from center in [pix].
-	size_t						width;					// Image width in [pix].
-	size_t						widthOffset;			// Image width offset in [pix].
+	uInt32						height;					// Image height in [pix].
+	uInt32						heightOffset;			// Image height offset from center in [pix].
+	uInt32						width;					// Image width in [pix].
+	uInt32						widthOffset;			// Image width offset in [pix].
 	double						pixelDwellTime;			// Pixel dwell time in [us].
 	double						flyInDelay;				// Galvo fly-in time from parked position to start of the imaging area in [us]. This value is also an integer multiple of the pixelDwellTime. 
 } RectangleRaster_type;
@@ -4526,23 +4526,25 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 	RepeatedWaveform_type*		fastAxisScan_RepWaveform					= NULL;
 	RepeatedWaveform_type*		slowAxisScan_RepWaveform					= NULL; 
 	DataPacket_type*			galvoCommandPacket							= NULL; 
+	DataPacket_type*			pixelInfoPacket								= NULL; 
 	PulseTrain_type*			pixelInfo									= NULL;
 	char*						errMsg										= NULL;
+	int							error 										= 0;
 	
 //============================================================================================================================================================================================
 //                          					   	Preparation of Scan Waveforms for X-axis Galvo (fast axis, triangular waveform scan)
 //============================================================================================================================================================================================
 	
-	int				error 							= 0;
-	size_t 			nDeadTimePixels;						// Number of pixels at the beginning and end of each line where the motion of the galvo is not linear.
-	size_t			nPixelsPerLine;							// Total number of pixels per line including dead time pixels for galvo turn-around.
-	size_t			nGalvoSamplesPerLine;					// Total number of analog samples for the galvo command signal per line.
+	
+	uInt32 			nDeadTimePixels;						// Number of pixels at the beginning and end of each line where the motion of the galvo is not linear.
+	uInt32			nPixelsPerLine;							// Total number of pixels per line including dead time pixels for galvo turn-around.
+	uInt32			nGalvoSamplesPerLine;					// Total number of analog samples for the galvo command signal per line.
 	double			fastAxisCommandAmplitude;				// Fast axis signal amplitude in [V].
 
 	
 	// number of line scan dead time pixels
 	// note: deadTime in [ms] and pixelDwellTime in [us]
-	nDeadTimePixels = ceil(((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3/scanEngine->pixelDwellTime);
+	nDeadTimePixels = (uInt32) ceil(((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3/scanEngine->pixelDwellTime);
 	
 	// number of pixels per line
 	nPixelsPerLine = scanEngine->height + 2 * nDeadTimePixels;
@@ -4591,21 +4593,19 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 //============================================================================================================================================================================================
 	
 	// fast scan axis response lag in terms of number of galvo samples 
-	size_t				nGalvoSamplesFastAxisLag			= (size_t) floor(((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->lag * 1e-3 * *scanEngine->refGalvoSamplingRate);
+	uInt32				nGalvoSamplesFastAxisLag			= (uInt32) floor(((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->lag * 1e-3 * *scanEngine->refGalvoSamplingRate);
 	
 	// slow scan axis response lag in terms of number of galvo samples  
-	size_t				nGalvoSamplesSlowAxisLag			= (size_t) floor(((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->lag * 1e-3 * *scanEngine->refGalvoSamplingRate);
-	
-	// CONTINUE HERE, CHECK WHY fastAxisMoveFromParkedWaveform is NULL and is needed here!
+	uInt32				nGalvoSamplesSlowAxisLag			= (uInt32) floor(((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->lag * 1e-3 * *scanEngine->refGalvoSamplingRate);
 	
 	// fast axis number of samples needed to move the galvo from the parked position to the start of the scan region
-	size_t				nGalvoSamplesFastAxisMoveFromParked = GetWaveformNumSamples(fastAxisMoveFromParkedWaveform);
+	uInt32				nGalvoSamplesFastAxisMoveFromParked = GetWaveformNumSamples(fastAxisMoveFromParkedWaveform);
 	
 	// slow axis number of samples needed to move the galvo from the parked position to the start of the scan region
-	size_t				nGalvoSamplesSlowAxisMoveFromParked = GetWaveformNumSamples(slowAxisMoveFromParkedWaveform);
+	uInt32				nGalvoSamplesSlowAxisMoveFromParked = GetWaveformNumSamples(slowAxisMoveFromParkedWaveform);
 	
 	// total number of fly-in samples to move the galvos from their parked position to the start of the scan region
-	size_t				nGalvoSamplesFlyIn;		
+	uInt32				nGalvoSamplesFlyIn;		
 	
 	// determine the minimum number of galvo samples required from start to reach the scan region for both the fast and slow scan axis
 	if (nGalvoSamplesSlowAxisMoveFromParked + nGalvoSamplesSlowAxisLag > nGalvoSamplesFastAxisMoveFromParked + nGalvoSamplesFastAxisLag) 
@@ -4620,8 +4620,8 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 	scanEngine->flyInDelay = nGalvoSamplesFlyIn / *scanEngine->refGalvoSamplingRate * 1e6;
 	
 	// determine number of additional galvo samples needed to compensate fast and slow axis fly-in and lag delays
-	size_t				nGalvoSamplesFastAxisCompensation	=  nGalvoSamplesFlyIn - nGalvoSamplesFastAxisLag - nGalvoSamplesFastAxisMoveFromParked;
-	size_t				nGalvoSamplesSlowAxisCompensation	=  nGalvoSamplesFlyIn - nGalvoSamplesSlowAxisLag - nGalvoSamplesSlowAxisMoveFromParked; 
+	uInt32				nGalvoSamplesFastAxisCompensation	=  nGalvoSamplesFlyIn - nGalvoSamplesFastAxisLag - nGalvoSamplesFastAxisMoveFromParked;
+	uInt32				nGalvoSamplesSlowAxisCompensation	=  nGalvoSamplesFlyIn - nGalvoSamplesSlowAxisLag - nGalvoSamplesSlowAxisMoveFromParked; 
 	
 	
 	// generate compensated fast axis fly-in waveform from parked position
@@ -4657,7 +4657,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 	
 	// send data 
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &fastAxisMoveFromParked_RepWaveform, NULL,discard_RepeatedWaveform_type) );
-	if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
 	
 	// fastAxisScan_Waveform has two line scans (one triangle wave period)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl))
@@ -4669,7 +4669,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 	
 	// send data
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &fastAxisScan_RepWaveform, NULL, discard_RepeatedWaveform_type) );   
-	if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;    
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
 	
 	//go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl)) {	
@@ -4677,7 +4677,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 		*parkedVoltage = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, parkedVoltage, 0);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedRepeatedWaveform, NULL, discard_RepeatedWaveform_type) ); 
-		if (SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;    
+		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
 	
 	//---------------------------------------------------------------------------------------------------------------------------
@@ -4690,7 +4690,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 	
 	// send data 
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &slowAxisMoveFromParked_RepWaveform, NULL, discard_RepeatedWaveform_type) );
-	if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
 	
 	// slowAxisScan_Waveform has a symmetric staircase waveform (equivalent to two scan frames)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl))
@@ -4702,7 +4702,7 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 	
 	// send data
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &slowAxisScan_RepWaveform, NULL, discard_RepeatedWaveform_type) );   
-	if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) < 0) goto Error;  
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );  
 	
 	//go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl)) {	
@@ -4710,15 +4710,31 @@ static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* 
 		*parkedVoltage = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, parkedVoltage, 0);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedRepeatedWaveform, NULL, discard_RepeatedWaveform_type) ); 
-		if (SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) <0) goto Error;    
+		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
 	
 	//---------------------------------------------------------------------------------------------------------------------------
 	// 													Pixel timing info
 	//---------------------------------------------------------------------------------------------------------------------------
 	
-	//pixelInfo = init_PulseTrainTimeTiming_type
 	
+	if (GetTaskControlMode(scanEngine->baseClass.taskControl)) {
+		//--------------------
+		// finite mode
+		//--------------------
+		// total number of pixels (fly-in pixels + nFrames * imageSize)
+		uInt64	nPixels = scanEngine->flyInDelay / scanEngine->pixelDwellTime + scanEngine->height * scanEngine->width * GetTaskControlIterations(scanEngine->baseClass.taskControl); 
+		nullChk( pixelInfo = init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, scanEngine->pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate - 2, 2, 0) );
+	}
+	else 
+		//--------------------
+		// continuous mode
+		//--------------------
+		nullChk( pixelInfo = init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, scanEngine->pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate - 2, 2, 0) );
+	
+	// send data
+	nullChk( pixelInfoPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pixelInfo, NULL, discard_PulseTrain_type) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSettings, &pixelInfoPacket, FALSE, &errMsg) ); 
 	
 	return 0; // no error
 				  

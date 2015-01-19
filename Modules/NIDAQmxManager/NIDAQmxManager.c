@@ -3995,7 +3995,6 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					//------------------------------------------------
 					// add new channel
 					//------------------------------------------------
-					int 		error;
 					uInt32 		data;
 					
 					GetPanelHandleFromTabPage(dev->DOTaskSet->panHndl, ADTskSet_Tab, DAQmxADTskSet_ChanTabIdx, &chanPanHndl);
@@ -4030,7 +4029,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// add callback data to the controls in the panel
 							SetCtrlsInPanCBInfo(newDOChan, ChanSetLineDO_CB, newDOChan->baseClass.chanPanHndl);
 							// read current output state and set the control properly
-							error = ReadDirectDigitalOut(newDOChan->baseClass.name, &data);
+							errChk( ReadDirectDigitalOut(newDOChan->baseClass.name, &data) );
 							SetCtrlVal(newDOChan->baseClass.chanPanHndl,DIDOLChSet_OutputBTTN,data);           
 							break;
 								
@@ -4055,7 +4054,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							SetCtrlsInPanCBInfo(newDOChan, ChanSetPortDO_CB, newDOChan->baseClass.chanPanHndl);
 						
 							//read current output state and set the control properly
-							error = ReadDirectDigitalOut(newDOChan->baseClass.name,&data);
+							errChk( ReadDirectDigitalOut(newDOChan->baseClass.name,&data) );
 							SetPortControls(newDOChan->baseClass.chanPanHndl,data);  
 						
 							break;
@@ -8787,7 +8786,7 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 			case DL_PulseTrain_Ticks:
 				// tick delay
 				initialDelayTicks = GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);
-				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Ticks_InitialDelay, initialDelayTicks) );
+				 DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Ticks_InitialDelay, initialDelayTicks) );
 				SetCtrlVal(timingPanHndl, COTicksPan_InitialDelay, initialDelayTicks); 
 				// low ticks
 				lowTicks = GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);

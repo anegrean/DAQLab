@@ -108,11 +108,6 @@ void DAQLabModule_empty	(ListType* modules)
 		(*(*modPtrPtr)->Discard)(modPtrPtr);
 		
 	}
-	//do NOT remove items in previous loop; List gets renumbered because of the removed items
-	for (size_t i = 1; i <= nummodules; i++) {  
-		// remove module from list
-		ListRemoveItem(*modules, 0, i);	
-	}
 	
 	ListDispose(*modules);
 	*modules = 0;

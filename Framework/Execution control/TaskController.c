@@ -291,6 +291,9 @@ void discard_TaskControl_type(TaskControl_type** taskController)
 	// event queue
 	CmtDiscardTSQ((*taskController)->eventQ);
 	
+	// release thread
+	if ((*taskController)->threadFunctionID) CmtReleaseThreadPoolFunctionID(DEFAULT_THREAD_POOL_HANDLE, (*taskController)->threadFunctionID);   
+	
 	// event queue thread lock
 	CmtDiscardLock((*taskController)->eventQThreadLock); 
 	

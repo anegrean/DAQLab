@@ -853,6 +853,8 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		for (size_t i = 1; i <= nItems; i++) {
 			enginePtr = ListGetPtrToItem(ls->scanEngines, i);
 			(*(*enginePtr)->Discard)	(enginePtr);
+		       
+			
 		}
 		
 		ListDispose(ls->scanEngines);
@@ -867,6 +869,11 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	if (ls->enginesPanHndl) {DiscardPanel(ls->enginesPanHndl); ls->enginesPanHndl = 0;}
 	if (ls->manageAxisCalPanHndl) {DiscardPanel(ls->manageAxisCalPanHndl); ls->manageAxisCalPanHndl = 0;}
 	if (ls->newAxisCalTypePanHndl) {DiscardPanel(ls->newAxisCalTypePanHndl); ls->newAxisCalTypePanHndl = 0;}
+
+	//discard combo boxes here?
+ 
+	if (ls->menuBarHndl) DiscardMenuBar (ls->menuBarHndl);
+	
 	
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
@@ -3892,7 +3899,10 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	//----------------------------------
 	// UI
 	//----------------------------------
+	
 	if (engine->engineSetPanHndl)		{DiscardPanel(engine->engineSetPanHndl); engine->engineSetPanHndl = 0;}
+	if (engine->scanSetPanHndl) Combo_DiscardComboBox(engine->scanSetPanHndl, RectRaster_PixelDwell);
+	if (engine->scanSetPanHndl) Combo_DiscardComboBox(engine->scanSetPanHndl, RectRaster_Height);
 	
 	OKfree(engine);
 }

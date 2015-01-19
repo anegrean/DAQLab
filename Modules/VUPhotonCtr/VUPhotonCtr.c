@@ -91,6 +91,8 @@ struct VUPhotonCtr {
 	int 				counterPanHndl;
 
 	int					taskPanHndl;
+	
+	int					menubarHndl; 
 
 
 		//-------------------------
@@ -331,7 +333,9 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	for (int i = 0; i < MAX_CHANNELS; i++)
 		discard_Channel_type(&vupc->channels[i]);
 
+	//UI
 	// main panel and panels loaded into it (channels and task control)
+	if (vupc->menubarHndl)  DiscardMenuBar (vupc->menubarHndl);      
 	if (vupc->mainPanHndl) {
 		DiscardPanel(vupc->mainPanHndl);
 		vupc->mainPanHndl = 0;
@@ -339,19 +343,15 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 		vupc->chanPanHndl = 0;
 	}
 
-	if (vupc->statusPanHndl)
-		DiscardPanel(vupc->statusPanHndl);
-
-	if (vupc->settingsPanHndl)
-		DiscardPanel(vupc->settingsPanHndl);
-
-	if (vupc->counterPanHndl)
-		DiscardPanel(vupc->counterPanHndl);
+	if (vupc->statusPanHndl) 	DiscardPanel(vupc->statusPanHndl);
+	if (vupc->settingsPanHndl) 	DiscardPanel(vupc->settingsPanHndl);
+	if (vupc->counterPanHndl)	DiscardPanel(vupc->counterPanHndl);
+	
 	
 	// discard pulsetrain SinkVChan   
 	if (vupc->pulseTrainVchan) discard_VChan_type((VChan_type**)&vupc->pulseTrainVchan);
 	
-	//here? lex
+	discard_HWTrigSlave_type(&vupc->HWTrigSlave);  
 	DLUnregisterHWTrigSlave(vupc->HWTrigSlave);    
 
 	//----------------------------------------
@@ -419,7 +419,6 @@ Error:
 static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 {
 	VUPhotonCtr_type* 	vupc 				= (VUPhotonCtr_type*) mod;
-	int					menubarHndl;
 	int					menuItemSettingsHndl;
 	int					error 				= 0;
 	char				buff[50];
@@ -453,11 +452,11 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 
 
 	// connect module data to Settings menubar item
-	errChk( menubarHndl = NewMenuBar(vupc->mainPanHndl) );
-	errChk( menuItemSettingsHndl = NewMenu(menubarHndl, "Settings", -1) );
-	SetMenuBarAttribute(menubarHndl, menuItemSettingsHndl, ATTR_CALLBACK_DATA, mod);
-	SetMenuBarAttribute(menubarHndl, menuItemSettingsHndl, ATTR_CALLBACK_FUNCTION_POINTER, MenuSettings_CB);
-	SetMenuBarAttribute(menubarHndl, 0, ATTR_SHOW_IMMEDIATE_ACTION_SYMBOL, 0);
+	errChk( vupc->menubarHndl = NewMenuBar(vupc->mainPanHndl) );
+	errChk( menuItemSettingsHndl = NewMenu(vupc->menubarHndl, "Settings", -1) );
+	SetMenuBarAttribute(vupc->menubarHndl, menuItemSettingsHndl, ATTR_CALLBACK_DATA, mod);
+	SetMenuBarAttribute(vupc->menubarHndl, menuItemSettingsHndl, ATTR_CALLBACK_FUNCTION_POINTER, MenuSettings_CB);
+	SetMenuBarAttribute(vupc->menubarHndl, 0, ATTR_SHOW_IMMEDIATE_ACTION_SYMBOL, 0);
 
 	// change main panel title to module instance name
 	SetPanelAttribute(vupc->mainPanHndl, ATTR_TITLE, mod->instanceName);

@@ -98,15 +98,20 @@ void discard_DAQLabModule (DAQLabModule_type** mod)
 void DAQLabModule_empty	(ListType* modules)
 {
 	DAQLabModule_type** modPtrPtr;
+	size_t				nummodules =  ListNumItems(*modules);
 	
 	if (!(*modules)) return;
 	
-	for (size_t i = 1; i <= ListNumItems(*modules); i++) {
-		modPtrPtr = ListGetPtrToItem(*modules, i);
+	for (size_t i = 1; i <= nummodules; i++) {
+		modPtrPtr = ListGetPtrToItem(*modules, i);   
 		// call discard method specific to each module
 		(*(*modPtrPtr)->Discard)(modPtrPtr);
+		
+	}
+	//do NOT remove items in previous loop; List gets renumbered because of the removed items
+	for (size_t i = 1; i <= nummodules; i++) {  
 		// remove module from list
-		ListRemoveItem(*modules, 0, i);
+		ListRemoveItem(*modules, 0, i);	
 	}
 	
 	ListDispose(*modules);

@@ -203,11 +203,12 @@ void discard_DataStorage (DAQLabModule_type** mod)
 	// discard DataStorage specific data
 	//---------------------------------------
 	// main panel and panels loaded into it (channels and task control)
+	
 	if (ds->mainPanHndl) {
 		DiscardPanel(ds->mainPanHndl);
 		ds->mainPanHndl = 0;
 	}
-	
+	if (ds->basefilepath) OKfree(ds->basefilepath);
 	// discard Task Controller
 	DLRemoveTaskController((DAQLabModule_type*)ds, ds->taskController);
 	discard_TaskControl_type(&ds->taskController);
@@ -215,21 +216,20 @@ void discard_DataStorage (DAQLabModule_type** mod)
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
 	//----------------------------------------
-	
+/*	
 	if (ds->channels) {
 		size_t 				nItems = ListNumItems(ds->channels);
 		DS_Channel_type**   channelPtr;
 		for (size_t i = 1; i <= nItems; i++) {
 			channelPtr = ListGetPtrToItem(ds->channels, i);
-			((*channelPtr)->Discard)	(channelPtr); 
+			(*(*channelPtr)->Discard)	(channelPtr); 
 		}
 		
 		ListDispose(ds->channels);
 	}
-	
+*/	
 	discard_DAQLabModule(mod);
 }
-
 
 
 static DS_Channel_type* init_DS_Channel_type (DataStorage_type* ds, int panHndl, char VChanName[])

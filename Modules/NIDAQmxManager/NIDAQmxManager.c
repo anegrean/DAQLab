@@ -1308,9 +1308,12 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 	ListDispose(nidaq->DAQmxDevices);
 	
 	// discard UI
+	if (nidaq->menuBarHndl) DiscardMenuBar (nidaq->menuBarHndl);        
 	if (nidaq->mainPanHndl) {DiscardPanel(nidaq->mainPanHndl); nidaq->mainPanHndl = 0;}
 	if (nidaq->taskSetPanHndl) {DiscardPanel(nidaq->taskSetPanHndl); nidaq->taskSetPanHndl = 0;}
 	if (nidaq->devListPanHndl) {DiscardPanel(nidaq->devListPanHndl); nidaq->devListPanHndl = 0;}
+	
+	
 	
 	//----------------------------------------
 	// discard DAQLabModule_type specific data

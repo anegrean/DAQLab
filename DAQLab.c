@@ -733,11 +733,15 @@ static int DAQLab_Close (void)
 	// discard UITCs
 	size_t				nUITCs = ListNumItems(TasksUI.UItaskCtrls);
 	UITaskCtrl_type**   UITCPtr;
-	for (size_t i = 1; i < nUITCs; i++) {
+	for (size_t i = 1; i <= nUITCs; i++) {
 		UITCPtr = ListGetPtrToItem(TasksUI.UItaskCtrls, i);
 		DAQLab_discard_UITaskCtrl_type(UITCPtr);
 	}
+	
+	
 	ListDispose(TasksUI.UItaskCtrls);
+	if (TasksUI.menuBarHndl) DiscardMenuBar(TasksUI.menuBarHndl);
+
 	
 	// discard Task Controller list
 	ListDispose(DAQLabTCs);
@@ -752,12 +756,15 @@ static int DAQLab_Close (void)
 	if (HWTrigMasters) ListDispose(HWTrigMasters);
 	if (HWTrigSlaves) ListDispose(HWTrigSlaves);
 	
+	
 	errChk( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) ); 
 	
 	// discard DOM after saving all settings
+	
 	OKFreeCAHandle(DAQLabCfg_DOMHndl);
 	
-	
+		//
+	DiscardPanel(mainPanHndl);
 	
 	QuitUserInterface(0);  
 	
@@ -1652,7 +1659,6 @@ static void	DAQLab_discard_UITaskCtrl_type	(UITaskCtrl_type** a)
 	// remove Task Controller resources
 	discard_TaskControl_type(&(*a)->taskControl);
 	DiscardPanel((*a)->panHndl);
-	
 	OKfree(*a);
 }
 
@@ -2788,6 +2794,7 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 	for (size_t i = 1; i <= nModules; i++) {
 		modulePtrPtr 	= ListGetPtrToItem(modules, i);
 		modulePtr		= *modulePtrPtr;
+		if (!modulePtr) break;  //skip if NULL
 		
 		// insert Task Tree node
 		node.taskControl 			= NULL;

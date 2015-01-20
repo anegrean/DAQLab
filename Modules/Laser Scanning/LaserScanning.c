@@ -5541,9 +5541,11 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			FindSlope(averageResponse, cal->nRampSamples + postRampSamples, *cal->baseClass.comSampRate, *cal->posStdDev, cal->nRepeat, RELERR, &responseSlope); 
 			
 			if (2 * cal->commandVMax * amplitudeFactor >= cal->minStepSize * FIND_MAXSLOPES_AMP_ITER_FACTOR) {
-				if (responseSlope < commandSlope * 0.98)
+				if (responseSlope < commandSlope * 0.98) {
 					// calculate ramp that has maxslope
 					cal->nRampSamples = (size_t) floor(2 * cal->commandVMax * amplitudeFactor / responseSlope * *cal->baseClass.comSampRate * 0.001);
+					if (cal->nRampSamples < 2) cal->nRampSamples = 2;
+				}
 				else {
 					// store slope value
 					cal->maxSlopes->n++;

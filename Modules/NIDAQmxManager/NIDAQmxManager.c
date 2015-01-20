@@ -1209,7 +1209,7 @@ static int							ModuleEventHandler						(TaskControl_type* taskControl, TaskSta
 //========================================================================================================================================================================================================
 // Global variables
 
-ListType	devList			= 0;		// List of DAQ devices available of DevAttr_type. This will be updated every time init_DevList(ListType) is executed.
+ListType	devList			= 0;		// List of DAQ devices available of DevAttr_type*. This will be updated every time init_DevList(ListType) is executed.
 
 
 //lex test
@@ -1807,7 +1807,6 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		ListInsertItem(devlist, &devAttrPtr, END_OF_LIST);
 		
 		//Get the next device name in the list
-		OKfree(dev_pt);
 		dev_pt = substr (", ", idxnames); 
 	}
 	
@@ -9719,6 +9718,28 @@ Error:
 	
 	return;
 }
+ 
+/*
+char* DAQNameCopy(char* oldname)
+{
+	 char* 	newname	= NULL;
+	 size_t i;
+	 size_t j		= 0;
+	 size_t len		= strlen(oldname);
+	 
+	 newname = malloc(len+1); 
+	 for(i = 0; i <= len; i++){
+		newname[j] = oldname[i];
+		if ((oldname[i] == '\\') && (oldname[i+1] != '\\')){   
+			newname = realloc(newname, len+1);
+			newname[j+1]='\\';
+		}
+		j++;
+	 }
+	 
+	 return newname;
+}
+*/
 
 int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
@@ -9765,15 +9786,13 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					// keep track of the DAQmx task settings panel handle
 					newDAQmxDev->devPanHndl = newDAQmxDevPanHndl;
 					// change tab title to new Task Controller name
+					//newTabName = DAQNameCopy(newDAQmxDevAttrPtr->name);
 					newTabName = StrDup(newDAQmxDevAttrPtr->name);
-					//to do: newDAQmxDevAttrPtr->name might contain a backslash, causing the dev name to get mangled
-					// another slash needs to be inserted then to display the proper name
-					// Lex
 					
 					AppendString(&newTabName, ": ", -1);
 					AppendString(&newTabName, newTCName, -1);
 					SetTabPageAttribute(nidaq->mainPanHndl, NIDAQmxPan_Devices, newTabPageIdx, ATTR_LABEL_TEXT, newTabName);
-					free(newTabName);
+					OKfree(newTabName);
 					// remove "None" labelled Tab (always first tab) if its panel doesn't have callback data attached to it  
 					GetPanelHandleFromTabPage(nidaq->mainPanHndl, NIDAQmxPan_Devices, 0, &panHndl);
 					GetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, &callbackData); 

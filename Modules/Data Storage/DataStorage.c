@@ -374,10 +374,13 @@ char* CreateFullIterName(Iterator_type*		currentiter)
 	iteridx=GetCurrentIterationIndex(parentiter);
 	fullname=malloc(MAXBASEFILEPATH*sizeof(char));  
 	Fmt (fullname, "%s<%s[w3]#%i",tcname,iteridx); 
+	OKfree(tcname);
 	while (parentiter!=NULL) {  
 		childiter=parentiter;
 		parentiter = GetIteratorParent(childiter);
-		if (parentiter==NULL) return fullname;  //no parent, return current name
+		if (parentiter==NULL) {
+			return fullname;  //no parent, return current name
+		}
 		tcname=GetCurrentIterationName(parentiter);
 		iteridx=GetCurrentIterationIndex(parentiter);
 		name=malloc(MAXBASEFILEPATH*sizeof(char));
@@ -712,7 +715,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 	int 				numitems;
 	Iterator_type*		currentiter;
 	char*				fullitername;
-			
+	char*				channame;		
 			
 	if (ds->channels) {
 		numitems = ListNumItems(ds->channels); 
@@ -720,10 +723,13 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 			chanPtr = ListGetPtrToItem(ds->channels, i);
 			if (chanPtr!=NULL) chan=*chanPtr;
 			if (chan!=NULL) {
-				if (strcmp(GetVChanName(chan),sinkVChanName)==0){   
+				channame=GetVChanName(chan);
+				if (strcmp(channame,sinkVChanName)==0){   
 					//strings are equal; channel found
+					free(channame);
 					break;
 				}
+				else free(channame);
 			}
 		}
 	}

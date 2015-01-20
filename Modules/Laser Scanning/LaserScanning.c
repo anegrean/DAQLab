@@ -5482,6 +5482,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			// pad with flyback samples
 			for (size_t i = 0; i < flybackSamples; i++) commandSignal[i] = -cal->commandVMax * amplitudeFactor;
 			// generate ramp
+			// Lex fails here when cal->nRampSamples=1
 			Ramp(cal->nRampSamples, -cal->commandVMax * amplitudeFactor, cal->commandVMax * amplitudeFactor, commandSignal + flybackSamples);
 			// pad with postrampsamples
 			for (size_t i = flybackSamples + cal->nRampSamples; i < (flybackSamples + cal->nRampSamples + postRampSamples); i++) commandSignal[i] = cal->commandVMax * amplitudeFactor;
@@ -5726,7 +5727,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			cal->targetSlope 	*= DYNAMICCAL_SLOPE_ITER_FACTOR;    
 					
 			OKfree(averageResponse);
-			discard_Waveform_type(&cal->commandWaveform);   
+			discard_Waveform_type(&cal->commandWaveform); 
 				
 			if (cal->triangleCal->n < cal->maxSlopes->n) {
 				TaskControlIterationDone(taskControl, 0, "", TRUE); 

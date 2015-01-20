@@ -1807,6 +1807,7 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		ListInsertItem(devlist, &devAttrPtr, END_OF_LIST);
 		
 		//Get the next device name in the list
+		OKfree(dev_pt);
 		dev_pt = substr (", ", idxnames); 
 	}
 	
@@ -3394,6 +3395,7 @@ static ListType	GetPhysChanPropertyList	(char chanName[], int chanProperty)
 	for (size_t i = 0; i < nElem; i++)
 		ListInsertItem(propertyList, &properties[i], END_OF_LIST);
 	
+	OKfree(properties);
 	return propertyList;
 	
 Error:
@@ -6194,8 +6196,8 @@ static void	discard_WriteAOData_type (WriteAOData_type** writeDataPtr)
 	if (!*writeDataPtr) return;
 	
 	for (size_t i = 0; i < (*writeDataPtr)->numchan; i++) {
-		OKfree((*writeDataPtr)->datain[i]);
-		OKfree((*writeDataPtr)->databuff[i]);
+		OKfree((*writeDataPtr)->datain[i]);	    
+		OKfree((*writeDataPtr)->databuff[i]);   
 	}
 	
 	OKfree((*writeDataPtr)->dataout);
@@ -8547,6 +8549,8 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 			DAQmxErrChk( DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, AOData, &nSamplesWritten, NULL) );
 			// cleanup
 			OKfree(AOData);
+			//added lex
+			discard_Waveform_type(&AOWaveform); 
 			break;
 			
 		case MeasCont:
@@ -9762,6 +9766,10 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					newDAQmxDev->devPanHndl = newDAQmxDevPanHndl;
 					// change tab title to new Task Controller name
 					newTabName = StrDup(newDAQmxDevAttrPtr->name);
+					//to do: newDAQmxDevAttrPtr->name might contain a backslash, causing the dev name to get mangled
+					// another slash needs to be inserted then to display the proper name
+					// Lex
+					
 					AppendString(&newTabName, ": ", -1);
 					AppendString(&newTabName, newTCName, -1);
 					SetTabPageAttribute(nidaq->mainPanHndl, NIDAQmxPan_Devices, newTabPageIdx, ATTR_LABEL_TEXT, newTabName);
@@ -9826,6 +9834,11 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					
 					// undim "Delete" menu item
 					SetMenuBarAttribute(nidaq->menuBarHndl, nidaq->deleteDevMenuItemID, ATTR_DIMMED, 0);
+					
+					//cleanup test lex
+					//discard_DevAttr_type(&newDAQmxDevAttrPtr);
+					//discard_Dev_type(&newDAQmxDev);
+					
 					
 					break;
 					

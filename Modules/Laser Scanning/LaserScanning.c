@@ -155,7 +155,7 @@ typedef struct{
 													// This time is about the same for all scan frequencies and amplitudes that the galvo can follow.
 	double* 				commandAmp;				// Amplitude in [V] Pk-Pk of the command signal.
 	double* 				actualAmp;				// Amplitude in [V] Pk-Pk where the galvo motion is constant.
-	double* 				maxFreq;				// For given amplitude, maximum triangle wave frequency that the galvo can still follow for at least 1 sec.
+	double* 				maxFreq;				// For given amplitude, maximum triangle wave frequency that the galvo can still follow for the given testing time.
 													// Note: the line scan frequency is twice this frequency
 	double* 				resLag;					// Residual lag in [ms] that must be added to lag to accurately describe overall lag during dynamic scanning.
 } TriangleCal_type;
@@ -5640,7 +5640,9 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			// apply scan function with slope equal to max slope measured previously at a certain amplitude
 			double		funcFreq 		= cal->targetSlope * 1000/(2 * funcAmp);			   										// in [Hz]
 			size_t 		nCycles 		= ceil(cal->scanTime * funcFreq); 
-			size_t 		cycleSamples 	= (size_t) floor (1/funcFreq * *cal->baseClass.comSampRate);
+			size_t 		cycleSamples 	= (size_t) ceil (1/funcFreq * *cal->baseClass.comSampRate);
+			// re-calculate target slope due to rounding of number of cycle samples
+			cal->targetSlope			= funcAmp * *cal->baseClass.comSampRate * 2e-3 /cycleSamples;
 			// calculate number of cycles, precycles and samples
 			size_t		preCycles 		= (size_t) ceil (*cal->lag /1000 * funcFreq);
 			size_t 		nSamples 		= (nCycles + preCycles) * cycleSamples;

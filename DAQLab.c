@@ -10,6 +10,7 @@
 
 //==============================================================================
 // Include files
+
 #include "DAQLab.h"			// include this first
 #include <formatio.h>
 #include <userint.h>
@@ -313,7 +314,7 @@ int CVICALLBACK 			DAQLab_ManageDAQLabModules_CB 				(int panel, int control, in
 /// HIRET -1 fail
 int main (int argc, char *argv[])
 {
-	int error = 0;
+	int error 	= 0;
 	
 	// start CVI Run-Time Engine
 	if (!InitCVIRTE (0, argv, 0)) return -1;
@@ -724,9 +725,6 @@ static int DAQLab_Close (void)
 	
 	errChk( DAQLab_SaveXMLEnvironmentConfig() );
 	
-	// save module specific info
-	
-	
 	// dispose modules list
 	DAQLabModule_empty (&DAQLabModules);
 	
@@ -738,11 +736,9 @@ static int DAQLab_Close (void)
 		DAQLab_discard_UITaskCtrl_type(UITCPtr);
 	}
 	
-	
 	ListDispose(TasksUI.UItaskCtrls);
 	if (TasksUI.menuBarHndl) DiscardMenuBar(TasksUI.menuBarHndl);
 
-	
 	// discard Task Controller list
 	ListDispose(DAQLabTCs);
 	
@@ -760,10 +756,8 @@ static int DAQLab_Close (void)
 	errChk( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) ); 
 	
 	// discard DOM after saving all settings
-	
 	OKFreeCAHandle(DAQLabCfg_DOMHndl);
 	
-		//
 	DiscardPanel(mainPanHndl);
 	
 	QuitUserInterface(0);  
@@ -2851,6 +2845,9 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 		AddRecursiveTaskTreeItems(TaskTreeManagerPanHndl, TaskPan_TaskTree, childIdx, tcPtr);
 	}
 	
+	// since the first item in the tree is selected which is not a task controller, the extecution mode must be dimmed
+	SetCtrlAttribute(TaskTreeManagerPanHndl, TaskPan_ExecMode, ATTR_DIMMED, 1); 
+	
 	// update VChan Switchboard
 	UpdateVChanSwitchboard(VChanSwitchboardPanHndl, VChanTab_Switchboard);
 	
@@ -2976,7 +2973,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					
 					// refresh Task Tree
 					DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
-							
+					
 					break;
 					
 				case EVENT_KEYPRESS:

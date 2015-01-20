@@ -35,7 +35,7 @@ struct Waveform {
 	char*					unitName;					// Physical SI unit such as V, A, Ohm, etc.
 	double					dateTimestamp;				// Number of seconds since midnight, January 1, 1900 in the local time zone.
 	double					samplingRate;				// Sampling rate in [Hz]. If 0, sampling rate is not given.
-	size_t					nSamples;					// Number of samples in the waveform.
+	uInt64					nSamples;					// Number of samples in the waveform.
 	void*					data;						// Array of waveformType elements.
 };
 
@@ -46,7 +46,7 @@ struct RepeatedWaveform {
 	double					dateTimestamp;				// Number of seconds since midnight, January 1, 1900 in the local time zone.  
 	double					samplingRate;				// Sampling rate in [Hz]. If 0, sampling rate is not given.
 	double					repeat;						// number of times to repeat the waveform.
-	size_t					nSamples;					// Number of samples in the waveform.
+	uInt64					nSamples;					// Number of samples in the waveform.
 	void*					data;						// Array of waveformType elements. 
 };
 
@@ -141,7 +141,7 @@ PulseTrainTimeTiming_type* init_PulseTrainTimeTiming_type (PulseTrainModes mode,
 	return pulseTrain;
 }
 
-PulseTrainTickTiming_type* init_PulseTrainTickTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, size_t highTicks, size_t lowTicks, size_t delayTicks)
+PulseTrainTickTiming_type* init_PulseTrainTickTiming_type (PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, uInt32 highTicks, uInt32 lowTicks, uInt32 delayTicks)
 {
 	PulseTrainTickTiming_type* pulseTrain = malloc (sizeof(PulseTrainTickTiming_type));
 	if (!pulseTrain) return NULL;
@@ -348,7 +348,7 @@ PulseTrain_type* CopyPulseTrain(PulseTrain_type* pulsetrain)
 // Waveforms
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-Waveform_type* init_Waveform_type (WaveformTypes waveformType, double samplingRate, size_t nSamples, void** ptrToData)
+Waveform_type* init_Waveform_type (WaveformTypes waveformType, double samplingRate, uInt64 nSamples, void** ptrToData)
 {
 	Waveform_type*	waveform = malloc(sizeof(Waveform_type));
 	if (!waveform) return NULL;
@@ -435,12 +435,12 @@ size_t GetWaveformSizeofData (Waveform_type* waveform)
 	return dataTypeSize;
 }
 
-size_t GetWaveformNumSamples (Waveform_type* waveform)
+uInt64 GetWaveformNumSamples (Waveform_type* waveform)
 {
 	return waveform->nSamples;
 }
 
-void** GetWaveformPtrToData (Waveform_type* waveform, size_t* nSamples)
+void** GetWaveformPtrToData (Waveform_type* waveform, uInt64* nSamples)
 {
 	*nSamples = waveform->nSamples;
 	return &waveform->data;
@@ -572,7 +572,7 @@ int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformTo
 // Repeated Waveforms
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-RepeatedWaveform_type* init_RepeatedWaveform_type (RepeatedWaveformTypes waveformType, double samplingRate, size_t nSamples, void* data, double repeat)
+RepeatedWaveform_type* init_RepeatedWaveform_type (RepeatedWaveformTypes waveformType, double samplingRate, uInt64 nSamples, void* data, double repeat)
 {
 	RepeatedWaveform_type* waveform = malloc (sizeof(RepeatedWaveform_type));
 	if (!waveform) return NULL;
@@ -664,7 +664,7 @@ void discard_RepeatedWaveform_type (RepeatedWaveform_type** waveform)
 	OKfree(*waveform);
 }
 
-void** GetRepeatedWaveformPtrToData (RepeatedWaveform_type* waveform, size_t* nSamples)
+void** GetRepeatedWaveformPtrToData (RepeatedWaveform_type* waveform, uInt64* nSamples)
 {
 	*nSamples = waveform->nSamples;
 	return &waveform->data;
@@ -675,7 +675,7 @@ double GetRepeatedWaveformRepeats (RepeatedWaveform_type* waveform)
 	return waveform->repeat;
 }
 
-size_t GetRepeatedWaveformNumSamples (RepeatedWaveform_type* waveform)
+uInt64 GetRepeatedWaveformNumSamples (RepeatedWaveform_type* waveform)
 {
 	return waveform->nSamples;
 }

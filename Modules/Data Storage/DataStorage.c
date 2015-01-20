@@ -697,7 +697,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 	DataPacket_type**	dataPackets			= NULL;
 	unsigned short int* shortDataPtr		= NULL;
 	size_t				nPackets;
-	size_t				nElem;
+	uInt64				nElem;
 	char*				sinkVChanName		= GetVChanName((VChan_type*)sinkVChan);
 	SourceVChan_type*   sourceVChan			= GetSourceVChan((VChan_type*)sinkVChan); 
 	char*				sourceVChanName		= GetVChanName((VChan_type*)sourceVChan);  

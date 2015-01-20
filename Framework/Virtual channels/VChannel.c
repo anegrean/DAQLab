@@ -583,15 +583,16 @@ CmtError:
 
 int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, WaveformTypes* waveformType, char** errorInfo)
 {
-#define		ReceiveWaveform_Err_NoWaveform		-1
-#define		ReceiveWaveform_Err_WrongDataType	-2
+#define		ReceiveWaveform_Err_NoWaveform			-1
+#define		ReceiveWaveform_Err_WrongDataType		-2
+#define		ReceiveWaveform_Err_NotSameDataType		-3
 	
-	int						error				= 0;
-	DataPacket_type*		dataPacket			= NULL;
-	Waveform_type**			waveformPacketData	= NULL;
+	int						error					= 0;
+	DataPacket_type*		dataPacket				= NULL;
 	DLDataTypes				dataPacketType;
-	void*					dataPacketPtrToData	= NULL;
-	char*					errMsg				= NULL;
+	DLDataTypes				firstDataPacketType;
+	void*					dataPacketPtrToData		= NULL;
+	char*					errMsg					= NULL;
 	
 	// init
 	*waveform = NULL;
@@ -606,70 +607,54 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 		goto Error;
 	}
 	
+	// check if data packet type is supported by this function
+	dataPacketPtrToData = GetDataPacketPtrToData(dataPacket, &firstDataPacketType);
+	dataPacketType = firstDataPacketType;
+	
+	// check if data packet is of waveform type
+	switch (firstDataPacketType) {
+			
+		case DL_Waveform_Char:
+		case DL_Waveform_UChar:
+		case DL_Waveform_Short:
+		case DL_Waveform_UShort:
+		case DL_Waveform_Int:
+		case DL_Waveform_UInt:
+		case DL_Waveform_SSize:
+		case DL_Waveform_Size:
+		case DL_Waveform_Float:
+		case DL_Waveform_Double:
+			break;
+		
+		default:
+			
+			errMsg = FormatMsg(ReceiveWaveform_Err_WrongDataType, "ReceiveWaveform", "Data packet received is not of a waveform type and cannot \
+							   be retrieved by this function");
+			ReleaseDataPacket(&dataPacket);
+			error = ReceiveWaveform_Err_WrongDataType;
+			goto Error;
+	}
+	
+	errChk( CopyWaveform(waveform, *(Waveform_type**)dataPacketPtrToData, &errMsg) );
+	ReleaseDataPacket(&dataPacket);
+	
+	// get another data packet if any
+	errChk ( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
 	// assemble waveform from multiple packets until a NULL packet is encountered
 	while (dataPacket) {
 		
-		// get waveform data from the first non-NULL data packet and
-		dataPacketPtrToData = GetDataPacketPtrToData(dataPacket, &dataPacketType); 
-	
-		// check if data packet is of waveform type
-		switch (dataPacketType) {
-			
-			case DL_Waveform_Char:
-				*waveformType = Waveform_Char;
-				break;
-				
-			case DL_Waveform_UChar:
-				*waveformType = Waveform_UChar;
-				break;
-				
-			case DL_Waveform_Short:
-				*waveformType = Waveform_Short;
-				break;
-				
-			case DL_Waveform_UShort:
-				*waveformType = Waveform_UShort;
-				break;
-				
-			case DL_Waveform_Int:
-				*waveformType = Waveform_Int;
-				break;
-				
-			case DL_Waveform_UInt:
-				*waveformType = Waveform_UInt;
-				break;
-				
-			case DL_Waveform_SSize:
-				*waveformType = Waveform_SSize;
-				break;
-				
-			case DL_Waveform_Size:
-				*waveformType = Waveform_Size;
-				break;
-				
-			case DL_Waveform_Float:
-				*waveformType = Waveform_Float;
-				break;
-				
-			case DL_Waveform_Double:
-				*waveformType = Waveform_Double;
-				break;
-			
-			default:
-			
-				errMsg = FormatMsg(ReceiveWaveform_Err_WrongDataType, "ReceiveWaveform", " Data packet received is not of a waveform type and cannot \
-								   be retrieved by this function");
-				ReleaseDataPacket(&dataPacket);
-				error = ReceiveWaveform_Err_WrongDataType;
-				goto Error;
+		// get waveform data from the first non-NULL data packet
+		dataPacketPtrToData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
+		
+		// check if retrieved data packet is of the same type as the first packet
+		if (firstDataPacketType != dataPacketType) {
+			errMsg = FormatMsg(ReceiveWaveform_Err_NotSameDataType, "ReceiveWaveform", "Data packets must be all of the same type");
+			error = ReceiveWaveform_Err_NotSameDataType;
+			ReleaseDataPacket(&dataPacket);
+			goto Error;
 		}
 	
-		waveformPacketData = dataPacketPtrToData;
-		
-		if (!*waveform)
-			errChk( CopyWaveform(waveform, *waveformPacketData, &errMsg) );
-		else
-			errChk( AppendWaveform(*waveform, *waveformPacketData, &errMsg) );
+		errChk( AppendWaveform(*waveform, *(Waveform_type**)dataPacketPtrToData, &errMsg) );
 	
 		ReleaseDataPacket(&dataPacket);
 		
@@ -678,12 +663,63 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 	}
 	
 	// check again if waveform is NULL
-	
 	if (!*waveform) {
 		errMsg = FormatMsg(ReceiveWaveform_Err_NoWaveform, "ReceiveWaveform", "Waveform received does not contain any data. This occurs if \
 								   a NULL packet is encountered before any data packets or the data packet doesn't have any data");
 		error = ReceiveWaveform_Err_NoWaveform;
 		goto Error;
+	}
+	
+	// assign waveform type
+	switch (dataPacketType) {
+			
+		case DL_Waveform_Char:
+			*waveformType = Waveform_Char;
+			break;
+				
+		case DL_Waveform_UChar:
+			*waveformType = Waveform_UChar;
+			break;
+				
+		case DL_Waveform_Short:
+			*waveformType = Waveform_Short;
+			break;
+				
+		case DL_Waveform_UShort:
+			*waveformType = Waveform_UShort;
+			break;
+				
+		case DL_Waveform_Int:
+			*waveformType = Waveform_Int;
+			break;
+				
+		case DL_Waveform_UInt:
+			*waveformType = Waveform_UInt;
+			break;
+				
+		case DL_Waveform_SSize:
+			*waveformType = Waveform_SSize;
+			break;
+				
+		case DL_Waveform_Size:
+			*waveformType = Waveform_Size;
+			break;
+				
+		case DL_Waveform_Float:
+			*waveformType = Waveform_Float;
+			break;
+				
+		case DL_Waveform_Double:
+			*waveformType = Waveform_Double;
+			break;
+			
+		default:
+			
+			errMsg = FormatMsg(ReceiveWaveform_Err_WrongDataType, "ReceiveWaveform", " Data packet received is not of a waveform type and cannot \
+							   be retrieved by this function");
+			ReleaseDataPacket(&dataPacket);
+			error = ReceiveWaveform_Err_WrongDataType;
+			goto Error;
 	}
 		
 	return 0;
@@ -691,6 +727,7 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 Error:
 	
 	ReleaseDataPacket(&dataPacket);
+	discard_Waveform_type(waveform);
 	if (errorInfo)
 		*errorInfo = FormatMsg(error, "ReceiveWaveform", errMsg);
 	OKfree(errMsg);

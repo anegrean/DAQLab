@@ -699,7 +699,7 @@ typedef struct {
 	float64*      				dataout;					// Array length is writeblock * numchan used for DAQmx write call, data is grouped by channel
 	SinkVChan_type**			sinkVChans;					// Array of SinkVChan_type*
 	
-	size_t*       				datain_size; 
+	uInt64*       				datain_size; 
 	size_t*      				databuff_size;
 	
 	size_t*       				idx;						// Array of pointers with index for each channel from which to continue writing data (not used yet)  
@@ -720,7 +720,7 @@ typedef struct {
 	uInt32*      				dataout;					// Array length is writeblock * numchan used for DAQmx write call, data is grouped by channel
 	SinkVChan_type**			sinkVChans;					// Array of SinkVChan_type*
 	
-	size_t*       				datain_size; 
+	uInt64*       				datain_size; 
 	size_t*      				databuff_size;
 	
 	size_t*       				idx;						// Array of pointers with index for each channel from which to continue writing data (not used yet)  
@@ -6150,7 +6150,7 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	}
 	
 	// datain_size
-	if (!(	writeData -> datain_size 		= malloc(nAO * sizeof(size_t))))							goto Error;
+	if (!(	writeData -> datain_size 		= malloc(nAO * sizeof(uInt64))))							goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain_size[i] = 0;
 		
 	// databuff_size
@@ -6275,7 +6275,7 @@ static WriteDOData_type* init_WriteDOData_type (Dev_type* dev)
 	}
 	
 	// datain_size
-	if (!(	writeData -> datain_size 		= malloc(nDO * sizeof(size_t))))							goto Error;
+	if (!(	writeData -> datain_size 		= malloc(nDO * sizeof(uInt64))))							goto Error;
 	for (i = 0; i < nDO; i++) writeData->datain_size[i] = 0;
 		
 	// databuff_size
@@ -8508,7 +8508,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 			ChanSet_type** 		chanSetPtr;
 			size_t				nUsedAOChannels	= 0;
 			void**				waveformDataPtr;
-			size_t				nWaveformSamples;
+			uInt64				nWaveformSamples;
 			WaveformTypes		waveformType;
 			
 			for (size_t i = 1; i <= nChannels; i++) {
@@ -10886,7 +10886,7 @@ static int AO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 	double** 						doubleDataPtrPtr	= NULL;
 	float**							floatDataPtrPtr		= NULL;
 	size_t							nPackets			= 0;
-	size_t							nElem				= 0;
+	uInt64							nElem				= 0;
 	char*							errMsg				= NULL;
 	TaskHandle						taskHndl			= 0;
 	ChanSet_AIAO_Voltage_type*		aoVoltageChan		= (ChanSet_AIAO_Voltage_type*) chan;

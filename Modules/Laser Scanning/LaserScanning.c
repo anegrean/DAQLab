@@ -5069,8 +5069,8 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 	DataPacket_type*				commandPacket				= NULL;
 	char*							errMsg						= NULL;
 	uInt64*							nCommandWaveformSamplesPtr  = NULL;
-	size_t							nCommandSignalSamples		= 0;
-	size_t							nPositionSignalSamples		= 0;
+	uInt64							nCommandSignalSamples		= 0;
+	uInt64							nPositionSignalSamples		= 0;
 	int								error						= 0;
 	Waveform_type*					waveformCopy				= NULL;
 	WaveformTypes					waveformType;

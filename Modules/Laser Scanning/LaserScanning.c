@@ -2346,7 +2346,7 @@ static void UpdateAvailableCalibrations (LaserScanning_type* lsModule)
 
 static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	LaserScanning_type*		ls = callbackData;
+	LaserScanning_type*		ls 			= callbackData;
 	
 	switch (event) {
 			
@@ -2390,6 +2390,42 @@ static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event
 		case EVENT_KEYPRESS:   				// delete calibration
 			
 			if ((control != ManageAxis_AxisCalibList) || (eventData1 != VAL_FWD_DELETE_VKEY)) return 0; // continue only if Del key was pressed
+			
+			ScanAxisCal_type**		axisCalPtr	= NULL;
+			int						itemIdx;
+			
+			GetCtrlIndex(ls->manageAxisCalPanHndl, ManageAxis_AxisCalibList, &itemIdx);
+			if (itemIdx < 0) return 0; // no items to delete
+			axisCalPtr = ListGetPtrToItem(ls->availableCals, itemIdx+1);
+			
+			// remove from scan engines
+			size_t 				nEngines = ListNumItems(ls->scanEngines);
+			ScanEngine_type*   	scanEngine;
+			for (size_t i = 1; i <= nEngines; i++) {
+				scanEngine = *(ScanEngine_type**)ListGetPtrToItem(ls->scanEngines, i);
+				
+				// remove fast scan axis calibration if assigned
+				if (scanEngine->fastAxisCal == *axisCalPtr) {
+					scanEngine->fastAxisCal = NULL;
+					// unconfigure scan engine
+					TaskControlEvent(scanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+				}
+				// remove slow scan axis calibration if assigned
+				if (scanEngine->slowAxisCal == *axisCalPtr) {
+					scanEngine->slowAxisCal = NULL;
+					// unconfigure scan engine
+					TaskControlEvent(scanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+				}
+				
+				UpdateScanEngineCalibrations(scanEngine); 
+			}
+			
+			// discard calibration data
+			discard_ScanAxisCal_type(axisCalPtr);
+			
+			// delete from calibration list and UI
+			DeleteListItem(ls->manageAxisCalPanHndl, ManageAxis_AxisCalibList, itemIdx, 1);
+			ListRemoveItem(ls->availableCals, 0, itemIdx+1);
 			
 			break;
 			

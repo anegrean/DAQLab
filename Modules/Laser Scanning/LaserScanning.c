@@ -29,7 +29,7 @@
 #define MAX_DOUBLE_NCHARS							30
 
 #define MOD_LaserScanning_UI 						"./Modules/Laser Scanning/UI_LaserScanning.uir"
-#define VChanDataTimeout							1e4					// Timeout in [ms] for Sink VChans to receive data
+#define VChanDataTimeout							2e4					// Timeout in [ms] for Sink VChans to receive data
 // Default Scan Engine VChan base names. Default base names must be unique among each other!
 #define VChan_ScanEngine_FastAxis_Command				"fast axis command"
 #define VChan_ScanEngine_FastAxis_Position				"fast axis position" 
@@ -67,6 +67,7 @@
 #define DYNAMICCAL_INITIAL_SLOPE_REDUCTION_FACTOR 			0.8	 		// For each amplitude, the initial maxslope value is reduced by this factor.
 #define MAX_SLOPE_REDUCTION_FACTOR 							0.25		// Position lag is measured with quarter the maximum ramp to allow the galvo reach a steady state.
 #define VAL_OVLD_ERR -8000
+#define Default_ActiveNonResGalvoCal_ScanTime				2.0			// Scan time in [s] to test if using triangle waveform scan	there is an overload		
 
 #define NonResGalvoScan_MaxPixelDwellTime					100.0		// Maximum pixel dwell time in [us] , should be defined better from info either from the task or the hardware!
 #define NonResGalvoScan_MinPixelDwellTime 					0.125		// in [us], depends on hardware and fluorescence integration mode, using photon counting, there is a 25 ns dead time
@@ -3426,7 +3427,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	if(!(cal->baseClass.calName		= StrDup(calName))) {free(cal); return NULL;}
 	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, DL_Waveform_Double, cal, NonResGalvoCal_ComVChan_Connected, NonResGalvoCal_ComVChan_Disconnected);   
 	cal->baseClass.VChanComNSamples	= init_SourceVChan_type(commandNSamplesVChanName, DL_ULongLong, cal, NonResGalvoCal_ComNSamplesVChan_Connected, NonResGalvoCal_ComNSamplesVChan_Disconnected);   
-	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, VChanDataTimeout, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
+	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, VChanDataTimeout + Default_ActiveNonResGalvoCal_ScanTime * 1e3, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
@@ -3454,7 +3455,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	cal->commandWaveform	= NULL;
 	cal->resolution  		= 0;
 	cal->minStepSize 		= 0;
-	cal->scanTime    		= 2;	// in [s]
+	cal->scanTime    		= Default_ActiveNonResGalvoCal_ScanTime;	// in [s]
 	cal->parked				= 0;
 	cal->mechanicalResponse	= 1;
 	
@@ -5518,7 +5519,6 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			// pad with flyback samples
 			for (size_t i = 0; i < flybackSamples; i++) commandSignal[i] = -cal->commandVMax * amplitudeFactor;
 			// generate ramp
-			// Lex fails here when cal->nRampSamples=1
 			Ramp(cal->nRampSamples, -cal->commandVMax * amplitudeFactor, cal->commandVMax * amplitudeFactor, commandSignal + flybackSamples);
 			// pad with postrampsamples
 			for (size_t i = flybackSamples + cal->nRampSamples; i < (flybackSamples + cal->nRampSamples + postRampSamples); i++) commandSignal[i] = cal->commandVMax * amplitudeFactor;
@@ -5579,10 +5579,17 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			if (2 * cal->commandVMax * amplitudeFactor >= cal->minStepSize * FIND_MAXSLOPES_AMP_ITER_FACTOR) {
 				if (responseSlope < commandSlope * 0.98) {
 					// calculate ramp that has maxslope
-					cal->nRampSamples = (size_t) floor(2 * cal->commandVMax * amplitudeFactor / responseSlope * *cal->baseClass.comSampRate * 0.001);
+					size_t newRampSamples = (size_t) ceil(2 * cal->commandVMax * amplitudeFactor / responseSlope * *cal->baseClass.comSampRate * 0.001);
+					// ensure convergence
+					if (newRampSamples == cal->nRampSamples) cal->nRampSamples++;
+					else
+						cal->nRampSamples = newRampSamples;
+					
 					if (cal->nRampSamples < 2) cal->nRampSamples = 2;
 				}
 				else {
+					// reset ramp samples
+					cal->nRampSamples = 2;
 					// store slope value
 					cal->maxSlopes->n++;
 					cal->maxSlopes->amplitude = realloc (cal->maxSlopes->amplitude, cal->maxSlopes->n * sizeof(double));
@@ -5692,7 +5699,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 				
 			// check if there is overload
 			for (int i = 0; i < nSamples; i++) 
-				if (((*positionSignalPtr)[i] < - funcAmp/2 * 1.1 - 5 * *cal->posStdDev) || ((*positionSignalPtr)[i] > funcAmp/2 * 1.1 + 5 * *cal->posStdDev)) {
+				if (((*positionSignalPtr)[i] < - funcAmp/2 * 1.5 - 10 * *cal->posStdDev) || ((*positionSignalPtr)[i] > funcAmp/2 * 1.5 + 10 * *cal->posStdDev)) {
 					overloadFlag = TRUE;
 					break;
 				}

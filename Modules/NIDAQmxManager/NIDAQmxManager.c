@@ -11562,8 +11562,6 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[])
 {
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
-	
-	DLMsg(errorMsg, 1);
 }
 
 static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)

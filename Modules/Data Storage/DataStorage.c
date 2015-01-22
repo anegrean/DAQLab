@@ -667,27 +667,17 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 }
 
 
-int SaveImage(Image* image,DataStorage_type* ds,char* vChanname,int iterationnr)
+int SaveImage(char* filename,Image* image)
 {
 	int 			err=0;
 	TIFFFileOptions options;
 	char *			fileName;
-	char 			buf[MAX_PATHNAME_LEN];   
-	
-	Fmt (buf, "%s<%s#%i[w4p0]",vChanname,iterationnr);    
-	//append iteration number to file name
-	fileName=StrDup(ds->basefilepath);
-	AppendString(&fileName, buf, -1);	//create file name
-	AppendString(&fileName, ".tif", -1);		 
 
 	options.photoInterp=IMAQ_BLACK_IS_ZERO;
 	options.compressionType=IMAQ_NO_COMPRESSION;
- 	err=imaqWriteTIFFFile(image,fileName, &options, NULL); 
-	
-	free(fileName);
+ 	err=imaqWriteTIFFFile(image,filename, &options, NULL); 
 	
 	return err;
-
 }
 
 
@@ -775,8 +765,13 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 				break;
 				case DL_Image_NIVision:
 					//get the image
-				//	GetWaveformDataPtr(*(Waveform_type**)dataPacketDataPtr, &nElem);
-		//			SaveImage(image,ds,sourceVChanName,chan->iteration++);
+					image=(Image*) dataPacketDataPtr;
+					rawfilename=malloc(MAXCHAR*sizeof(char)); 
+					fullitername=CreateFullIterName(currentiter);
+					Fmt (rawfilename, "%s<%s\\%s_%s#.tif", ds->rawdatapath,fullitername,sourceVChanName);  
+					SaveImage(rawfilename,image);
+					free(rawfilename);
+					free(fullitername); 
 				break;
 				default:
 					//shouldn't happen!

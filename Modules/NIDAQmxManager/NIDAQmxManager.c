@@ -4469,9 +4469,24 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					AppendString(&pulseTrainSinkVChanName, " ", -1);
 					AppendString(&pulseTrainSinkVChanName, SinkVChan_COPulseTrain_BaseName, -1);
 					
-					DLDataTypes allowedPulseTrainPacket[] 	= {DL_PulseTrain_Freq, DL_PulseTrain_Ticks, DL_PulseTrain_Time}; 
+					DLDataTypes allowedPulseTrainPacket;
 					
-					newChan->baseClass.sinkVChan			= init_SinkVChan_type(pulseTrainSinkVChanName, allowedPulseTrainPacket, NumElem(allowedPulseTrainPacket), 
+					switch (GetPulseTrainType(newChan->pulseTrain)) {
+						
+						case PulseTrain_Freq:
+							allowedPulseTrainPacket = DL_PulseTrain_Freq;
+							break;
+								
+						case PulseTrain_Time:
+							allowedPulseTrainPacket = DL_PulseTrain_Time; 
+							break;
+								
+						case PulseTrain_Ticks:
+							allowedPulseTrainPacket = DL_PulseTrain_Ticks; 
+							break;
+					}
+					
+					newChan->baseClass.sinkVChan	= init_SinkVChan_type(pulseTrainSinkVChanName, &allowedPulseTrainPacket, 1, 
 																					 newChan, VChan_Data_Receive_Timeout, COPulseTrainSinkVChan_Connected, COPulseTrainSinkVChan_Disconnected); 
 					
 					SetCtrlVal(settingspanel, SETPAN_SinkVChanName, pulseTrainSinkVChanName);  
@@ -8789,7 +8804,7 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 			case DL_PulseTrain_Ticks:
 				// tick delay
 				initialDelayTicks = GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);
-				 DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Ticks_InitialDelay, initialDelayTicks) );
+				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_Ticks_InitialDelay, initialDelayTicks) );
 				SetCtrlVal(timingPanHndl, COTicksPan_InitialDelay, initialDelayTicks); 
 				// low ticks
 				lowTicks = GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);

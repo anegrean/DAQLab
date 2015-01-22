@@ -72,23 +72,23 @@ Iterator_type* DupIterator (Iterator_type* iterator)
 {
 	Iterator_type* dup = malloc (sizeof(Iterator_type));
 	if (!dup) return NULL;
+	if (!iterator) return NULL;
 	
 	dup->name 					= StrDup(iterator->name);
 	dup->currentIterIdx			= iterator->currentIterIdx;
 	dup->totalIter				= iterator->totalIter;
 	dup->iterType				= iterator->iterType;
-	dup->iterObjects   			= iterator->iterObjects;
+	dup->iterObjects   			= 0;						 //no need to keep track of child iter objects, so they are not copied
 	dup->discardDataFptr		= iterator->discardDataFptr;
-	dup->parent					= iterator->parent;
-	dup->iterObjects 			= ListCopy (iterator->iterObjects);
-	if (!(dup->iterObjects ))	goto Error;
+	dup->parent					= DupIterator(iterator->parent);
+	if ( !(dup->iterObjects   	= ListCreate(sizeof(void*))) )	goto Error; //but list must be created for discarding the iterator
 	
 	return dup;
-	
 Error:
 	if (dup->iterObjects) ListDispose(dup->iterObjects);
 	free(dup);
 	return NULL;
+	
 }
 
 
@@ -111,30 +111,101 @@ void RemoveFromParentIterator(Iterator_type* iterator)
 	}	
 }
 
-void discard_Iterator_type (Iterator_type** iterator)
+
+
+
+
+void discard_Iterator (Iterator_type** iterator)
 {
 	if (!*iterator) return;
 	
 	OKfree((*iterator)->name);
 	
-	size_t 				nObjects 		= ListNumItems((*iterator)->iterObjects);
+	size_t 				nObjects;
 	Iterator_type**		iterObjectPtr;
 	
-	for (size_t i = 1; i <= nObjects; i++) {
+	size_t 				i;
+	
+	
+	//free entire iterator tree structure from the root
+	
+	nObjects 		= ListNumItems((*iterator)->iterObjects);   
+	for (i = 1; i <= nObjects; i++) {
 		iterObjectPtr = ListGetPtrToItem((*iterator)->iterObjects, i);
-		if ((*iterator)->iterType == Iterator_Iterator)
+		if ((*iterator)->iterType == Iterator_Iterator)  {
+			(*iterObjectPtr)->parent=NULL;     //child will be losing its parent
 			discard_Iterator_type(iterObjectPtr);   							// discard recursively if object is another iterator
+			
+		}
 		else
 			(*(*iterObjectPtr)->discardDataFptr)	((void**)iterObjectPtr);	// discard data if data type iterator
 	}
 	
 	ListDispose((*iterator)->iterObjects);
 	
+	discard_Iterator_type(&(*iterator)->parent);
+	(*iterator)->parent=NULL;
+
+	OKfree(*iterator);
+}
+
+
+void discard_Iterator_type (Iterator_type** iterator) 
+{
+	//free entire iterator tree structure starting from the root 
+	Iterator_type* 		root;
+	if (!*iterator) return;
+	
+	root=GetRootIterator(*iterator);      
+	discard_Iterator(&root);
+}
+
+
+   /*
+void OLD_discard_Iterator_type (Iterator_type** iterator)
+{
+	if (!*iterator) return;
+	
+	OKfree((*iterator)->name);
+	
+	size_t 				nObjects;
+	Iterator_type**		iterObjectPtr;
+	Iterator_type* 		parent;
+	size_t 				i;
+	
+	//free entire iterator tree structure from the root
+	parent=(*iterator)->parent;
+	if (parent) {
+		nObjects 		= ListNumItems(parent->iterObjects);  
+		for (i = 1; i <= nObjects; i++) {  
+			iterObjectPtr = ListGetPtrToItem(parent->iterObjects, i);
+			//check if equal
+			if ((*iterator)==iterObjectPtr) {
+				//remove item
+				ListRemoveItem(parent->iterObjects,0,i);
+			}
+		}
+	}
+	nObjects 		= ListNumItems((*iterator)->iterObjects);   
+	for (i = 1; i <= nObjects; i++) {
+		iterObjectPtr = ListGetPtrToItem((*iterator)->iterObjects, i);
+		if ((*iterator)->iterType == Iterator_Iterator)  {
+			discard_Iterator_type(iterObjectPtr);   							// discard recursively if object is another iterator
+			
+		}
+		else
+			(*(*iterObjectPtr)->discardDataFptr)	((void**)iterObjectPtr);	// discard data if data type iterator
+	}
+	
+	ListDispose((*iterator)->iterObjects);
+	
+	
+	discard_Iterator_type(&(*iterator)->parent);	
 	RemoveFromParentIterator(*iterator);
 
 	
 	OKfree(*iterator);
-}
+}   */
 
 IterTypes GetIteratorType (Iterator_type* iterator)
 {

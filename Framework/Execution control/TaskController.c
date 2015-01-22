@@ -306,7 +306,7 @@ void discard_TaskControl_type(TaskControl_type** taskController)
 	
 	//iteration info
 	iterator=(*taskController)->currentiter;
-	discard_Iterator_type (&iterator); 
+	discard_Iterator_type (&iterator,TRUE,FALSE); 
 
 	// child Task Controllers list
 	ListDispose((*taskController)->subtasks);

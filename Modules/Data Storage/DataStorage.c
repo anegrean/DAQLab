@@ -209,6 +209,8 @@ void discard_DataStorage (DAQLabModule_type** mod)
 		ds->mainPanHndl = 0;
 	}
 	if (ds->basefilepath) OKfree(ds->basefilepath);
+	if (ds->rawdatapath) OKfree(ds->rawdatapath);   
+	
 	// discard Task Controller
 	DLRemoveTaskController((DAQLabModule_type*)ds, ds->taskController);
 	discard_TaskControl_type(&ds->taskController);
@@ -225,9 +227,11 @@ void discard_DataStorage (DAQLabModule_type** mod)
 			(*(*channelPtr)->Discard)	(channelPtr); 
 		}
 		
-		ListDispose(ds->channels);
+		
 	}
 */	
+	ListDispose(ds->channels);  
+	
 	discard_DAQLabModule(mod);
 }
 

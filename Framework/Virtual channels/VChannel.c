@@ -825,6 +825,11 @@ SourceVChan_type* GetSourceVChan (SinkVChan_type* sinkVChan)
 	return sinkVChan->sourceVChan;
 }
 
+DLDataTypes GetSourceVChanDataType (SourceVChan_type* srcVChan)
+{
+	return srcVChan->dataType;
+}
+
 void SetSinkVChanDataTypes (SinkVChan_type* sinkVChan, size_t nDataTypes, DLDataTypes dataTypes[])
 {
 	if (!nDataTypes) return;

@@ -17,7 +17,8 @@
 #include "LaserScanning.h"
 #include <userint.h>
 #include "combobox.h" 
-#include <analysis.h>   
+#include <analysis.h>
+#include <nivision.h>
 #include "UI_LaserScanning.h"
 
 
@@ -51,7 +52,7 @@
 
 // Scan engine settings
 #define Max_NewScanEngine_NameLength						50
-#define Allowed_Detector_Data_Types							{DL_Waveform_Char, DL_Waveform_Double, DL_Waveform_Float, DL_Waveform_Int, DL_Waveform_Short, DL_Waveform_UChar, DL_Waveform_UInt, DL_Waveform_UShort}
+#define Allowed_Detector_Data_Types							{DL_Waveform_UChar, DL_Waveform_UShort, DL_Waveform_Short, DL_Waveform_Float}
 
 // Non-resonant galvo calibration parameters
 #define	CALIBRATION_DATA_TO_STRING							"%s<%*f[j1] "
@@ -372,6 +373,18 @@ struct ScanEngine {
 // Rectangular raster scan
 //------------------------
 typedef struct {
+	void*						imagePixels;			// Pixel array for the image assembled so far. Array contains nImagePixels
+	uInt64						nImagePixels;			// Total number of pixels in imagePixels. Maximum Array size is imgWidth*imgHeight
+	uInt32						nAssembledColumns;		// Number of assembled colums (in the direction of image width).
+	void*						tmpPixels;				// Temporary pixels used to assemble an image. Array containing nTmpPixels elements
+	uInt64						nTmpPixels;				// Number of pixels in tmpPixels.
+	uInt64						nSkipPixels;			// Number of pixels left to skip from the pixel stream.
+	BOOL				        revHeightFlag;		   	// Flag used to reverse every second line in the image in the direction of height.
+	BOOL        				revWidthFlag;  			// Flag used to reverse every second completed image in the direction of width.
+	DetChan_type*				detChan;				// Detection channel to which this image assembly buffer belongs.
+} RectRasterImgBuffer_type;
+
+typedef struct {
 	ScanEngine_type				baseClass;				// Base class, must be first structure member.
 	
 	//----------------
@@ -385,7 +398,13 @@ typedef struct {
 	uInt32						widthOffset;			// Image width offset in [pix].
 	double						pixelDwellTime;			// Pixel dwell time in [us].
 	double						flyInDelay;				// Galvo fly-in time from parked position to start of the imaging area in [us]. This value is also an integer multiple of the pixelDwellTime. 
-} RectangleRaster_type;
+	//----------------
+	// Image buffers
+	//----------------
+	RectRasterImgBuffer_type**	imgBuffers;				// Array of image buffers of RectRasterImgBuffer_type*. Number of buffers and the buffer index is taken from the list of available detection channels (baseClass.DetChans)
+	size_t						nImgBuffers;			// Number of image buffers available.
+	
+} RectRaster_type;
 
 
 //----------------------
@@ -573,7 +592,7 @@ static int							OpenScanEngineShutter							(ScanEngine_type* engine, BOOL open
 	// Non-Resonant Rectangle Raster Scan
 	//--------------------------------------
 
-static RectangleRaster_type*		init_RectangleRaster_type						(LaserScanning_type*	lsModule, 
+static RectRaster_type*				init_RectRaster_type							(LaserScanning_type*	lsModule, 
 																			 	 	 char 					engineName[],
 														   					 	 	 char 					fastAxisComVChanName[],
 																					 char					fastAxisComNSampVChanName[],
@@ -596,25 +615,32 @@ static RectangleRaster_type*		init_RectangleRaster_type						(LaserScanning_type
 																				 	 double					scanLensFL,
 																				 	 double					tubeLensFL);
 
-static void							discard_RectangleRaster_type					(ScanEngine_type** engine);
+static void							discard_RectRaster_type							(ScanEngine_type** engine);
 
-static int CVICALLBACK 				NonResRectangleRasterScan_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+	// image assembly buffer
+static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 					(DetChan_type* detChan, uInt32 imgWidth, uInt32 imgHeight, uInt64 nSkipPixels, size_t pixelSizeBytes, BOOL reverseWidthDirection, BOOL reverseHeightDirection);
 
-void 								NonResRectangleRasterScan_ScanHeights			(RectangleRaster_type* scanEngine);
+static void							discard_RectRasterImgBuffer_type				(RectRasterImgBuffer_type** rectRasterPtr); 
 
-void								NonResRectangleRasterScan_PixelDwellTimes		(RectangleRaster_type* scanEngine);
+static int CVICALLBACK 				NonResRectRasterScan_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+void 								NonResRectRasterScan_ScanHeights				(RectRaster_type* scanEngine);
+
+void								NonResRectRasterScan_PixelDwellTimes			(RectRaster_type* scanEngine);
 
 	// determines whether a given rectangular ROI falls within a circular perimeter with radius
-static BOOL 						RectangleROIInsideCircle						(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double circleRadius);
+static BOOL 						RectROIInsideCircle								(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double circleRadius);
 	// determines whether a given rectangular ROI falls within another rectangle of size maxHeight and maxWidth
-static BOOL							RectangleROIInsideRectangle						(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double maxHeight, double maxWidth);
+static BOOL							RectROIInsideRect								(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double maxHeight, double maxWidth);
 
 	// evaluates whether the scan engine configuration is valid, i.e. it has both scan axes assigned, objective, pixel sampling rate, etc.
-static BOOL							NonResRectangleRasterScan_ValidConfig			(RectangleRaster_type* scanEngine);
+static BOOL							NonResRectRasterScan_ValidConfig				(RectRaster_type* scanEngine);
 	// evaluates whether the scan engine is ready to scan
-static BOOL 						NonResRectangleRasterScan_ReadyToScan			(RectangleRaster_type* scanEngine);
+static BOOL 						NonResRectRasterScan_ReadyToScan				(RectRaster_type* scanEngine);
 	// generates rectangular raster scan waveforms and sends them to the galvo command VChans
-static int							NonResRectangleRasterScan_GenerateScanSignals	(RectangleRaster_type* scanEngine, char** errorInfo);
+static int							NonResRectRasterScan_GenerateScanSignals		(RectRaster_type* scanEngine, char** errorInfo);
+	// builds images from a continuous pixel stream
+static int 							NonResRectRasterScan_BuildImage 				(RectRaster_type* rectRaster, size_t imgBufferIdx, char** errorInfo);
 
 //---------------------------------------------------------
 // determines scan axis types based on the scan engine type
@@ -725,7 +751,7 @@ static void							DimTC_NonResGalvoCal							(TaskControl_type* taskControl, BOO
 
 //static int				 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
-	// for RectangleRaster_type scanning
+	// for RectRaster_type scanning
 static int							ConfigureTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static int							UnconfigureTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
@@ -967,7 +993,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 			//------------------------------------------------------------------------------------------------------------------------------------------------------ 
 			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
-				RectangleRaster_type*	rectRasterScanEngine = (RectangleRaster_type*) *scanEnginePtr;
+				RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) *scanEnginePtr;
 				
 				scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
 				
@@ -1021,9 +1047,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 				
 			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
-				RectangleRaster_type*	rectRasterScanEngine = (RectangleRaster_type*) *scanEnginePtr;  
+				RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) *scanEnginePtr;  
 				
-				SetCtrlsInPanCBInfo(*scanEnginePtr, NonResRectangleRasterScan_CB, (*scanEnginePtr)->scanSetPanHndl);
+				SetCtrlsInPanCBInfo(*scanEnginePtr, NonResRectRasterScan_CB, (*scanEnginePtr)->scanSetPanHndl);
 				
 				// make Height string control into combo box
 				// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted
@@ -1053,12 +1079,12 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 				
 				// configure/unconfigure scan engine
 				// do this after adding combo boxes!
-				if (NonResRectangleRasterScan_ValidConfig(rectRasterScanEngine)) {
+				if (NonResRectRasterScan_ValidConfig(rectRasterScanEngine)) {
 				
-					NonResRectangleRasterScan_ScanHeights(rectRasterScanEngine);
-					NonResRectangleRasterScan_PixelDwellTimes(rectRasterScanEngine);
+					NonResRectRasterScan_ScanHeights(rectRasterScanEngine);
+					NonResRectRasterScan_PixelDwellTimes(rectRasterScanEngine);
 					
-					if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)*scanEnginePtr)) 
+					if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)*scanEnginePtr)) 
 						TaskControlEvent((*scanEnginePtr)->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 					else
 						TaskControlEvent((*scanEnginePtr)->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
@@ -1365,13 +1391,13 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
 				// initialize raster scan attributes
-				unsigned int			height					= ((RectangleRaster_type*) *scanEnginePtr)->height;  
-				unsigned int			width					= ((RectangleRaster_type*) *scanEnginePtr)->width;  
-				unsigned int			heightOffset			= ((RectangleRaster_type*) *scanEnginePtr)->heightOffset;  
-				unsigned int			widthOffset				= ((RectangleRaster_type*) *scanEnginePtr)->widthOffset; 
+				unsigned int			height					= ((RectRaster_type*) *scanEnginePtr)->height;  
+				unsigned int			width					= ((RectRaster_type*) *scanEnginePtr)->width;  
+				unsigned int			heightOffset			= ((RectRaster_type*) *scanEnginePtr)->heightOffset;  
+				unsigned int			widthOffset				= ((RectRaster_type*) *scanEnginePtr)->widthOffset; 
 				double					pixelSize				= (*scanEnginePtr)->pixSize;
-				double					pixelDwellTime			= ((RectangleRaster_type*) *scanEnginePtr)->pixelDwellTime;
-				double					galvoSamplingRate		= ((RectangleRaster_type*) *scanEnginePtr)->galvoSamplingRate;
+				double					pixelDwellTime			= ((RectRaster_type*) *scanEnginePtr)->pixelDwellTime;
+				double					galvoSamplingRate		= ((RectRaster_type*) *scanEnginePtr)->galvoSamplingRate;
 						
 				DAQLabXMLNode			rectangleRasterAttr[] 	= { {"ImageHeight", BasicData_UInt, &height},
 																	{"ImageWidth",  BasicData_UInt, &width},
@@ -1600,7 +1626,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 				//-----------------------------------  
 					
 				
-				scanEngine = (ScanEngine_type*)init_RectangleRaster_type((LaserScanning_type*)mod, scanEngineName, fastAxisCommandVChanName, fastAxisCommandNSampVChanName, slowAxisCommandVChanName, slowAxisCommandNSampVChanName, fastAxisPositionVChanName,
+				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, fastAxisCommandVChanName, fastAxisCommandNSampVChanName, slowAxisCommandVChanName, slowAxisCommandNSampVChanName, fastAxisPositionVChanName,
 													  slowAxisPositionVChanName, scanEngineOutVChanName, NULL, shutterVChanName, pixelSettingsVChanName, galvoSamplingRate, pixelClockRate, height, heightOffset, width, widthOffset, 
 													  pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
 				break;
@@ -2120,7 +2146,7 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_TubeLensFL, engine->tubeLensFL);
 	
 	// update galvo and pixel sampling rates
-	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_GalvoSamplingRate, *((RectangleRaster_type*)engine)->refGalvoSamplingRate/1e3); // convert from [Hz] to [kHz]
+	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_GalvoSamplingRate, *((RectRaster_type*)engine)->refGalvoSamplingRate/1e3); // convert from [Hz] to [kHz]
 	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelClockFrequency, engine->pixelClockRate/1e6);								// convert from [Hz] to [MHz] 
 	
 	
@@ -2207,11 +2233,11 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					
 						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 					
-							newScanEngine = (ScanEngine_type*) init_RectangleRaster_type(ls, engineName, fastAxisComVChanName, fastAxisComNSampVChanName, slowAxisComVChanName, slowAxisComNSampVChanName,
+							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, fastAxisComVChanName, fastAxisComNSampVChanName, slowAxisComVChanName, slowAxisComNSampVChanName,
 														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectionVChanName, shutterVChanName, 
 														pixelSettingsVChanName, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
 							
-							RectangleRaster_type*	rectRasterScanEngine = (RectangleRaster_type*) newScanEngine;   
+							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;   
 							
 							scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
 							// populate scan engine modes
@@ -2268,9 +2294,9 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 				
 						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
-							RectangleRaster_type*	rectRasterScanEngine = (RectangleRaster_type*) newScanEngine;  
+							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;  
 				
-							SetCtrlsInPanCBInfo(newScanEngine, NonResRectangleRasterScan_CB, newScanEngine->scanSetPanHndl);
+							SetCtrlsInPanCBInfo(newScanEngine, NonResRectRasterScan_CB, newScanEngine->scanSetPanHndl);
 				
 							// make Height string control into combo box
 							// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted
@@ -2300,12 +2326,12 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 				
 							// configure/unconfigure scan engine
 							// do this after adding combo boxes!
-							if (NonResRectangleRasterScan_ValidConfig(rectRasterScanEngine)) {
+							if (NonResRectRasterScan_ValidConfig(rectRasterScanEngine)) {
 				
-								NonResRectangleRasterScan_ScanHeights(rectRasterScanEngine);
-								NonResRectangleRasterScan_PixelDwellTimes(rectRasterScanEngine);
+								NonResRectRasterScan_ScanHeights(rectRasterScanEngine);
+								NonResRectRasterScan_PixelDwellTimes(rectRasterScanEngine);
 					
-								if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)newScanEngine))
+								if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)newScanEngine))
 									TaskControlEvent(newScanEngine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 								else 
 									TaskControlEvent(newScanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
@@ -2845,12 +2871,12 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
 					
 					// configure/unconfigure scan engine
-					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
 				
-						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
-						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+						NonResRectRasterScan_ScanHeights((RectRaster_type*)engine);
+						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
 					
-						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
 							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 						else 
 							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
@@ -2870,12 +2896,12 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
 					
 					// configure/unconfigure scan engine
-					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
 				
-						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
-						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+						NonResRectRasterScan_ScanHeights((RectRaster_type*)engine);
+						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
 					
-						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
 							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 						else 
 							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
@@ -2914,12 +2940,12 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					UpdateScanEngineCalibrations(engine);
 					
 					// configure/unconfigure scan engine
-					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
 				
-						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
-						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+						NonResRectRasterScan_ScanHeights((RectRaster_type*)engine);
+						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
 					
-						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
 							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 						else 
 							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
@@ -2954,12 +2980,12 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					UpdateScanEngineCalibrations(engine);
 					
 					// configure/unconfigure scan engine
-					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
 				
-						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
-						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+						NonResRectRasterScan_ScanHeights((RectRaster_type*)engine);
+						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
 					
-						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine)) 
+						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine)) 
 							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 						else 
 							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
@@ -2974,12 +3000,12 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					GetCtrlVal(panel, control, &engine->pixelClockRate);								// read in [MHz]
 					engine->pixelClockRate *= 1e6;														// convert to [Hz]
 					// configure/unconfigure scan engine
-					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
 				
-						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
-						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+						NonResRectRasterScan_ScanHeights((RectRaster_type*)engine);
+						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
 					
-						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
 							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 						else
 							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
@@ -2989,15 +3015,15 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					
 				case ScanSetPan_GalvoSamplingRate:
 					
-					GetCtrlVal(panel, control, &((RectangleRaster_type*) engine)->galvoSamplingRate);	// read in [kHz]
-					((RectangleRaster_type*) engine)->galvoSamplingRate *= 1e3;							// convert to [Hz]
+					GetCtrlVal(panel, control, &((RectRaster_type*) engine)->galvoSamplingRate);	// read in [kHz]
+					((RectRaster_type*) engine)->galvoSamplingRate *= 1e3;							// convert to [Hz]
 					// configure/unconfigure scan engine
-					if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
 				
-						NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
-						NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+						NonResRectRasterScan_ScanHeights((RectRaster_type*)engine);
+						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
 					
-						if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
 							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 						else
 							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
@@ -3028,7 +3054,7 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					DeleteListItem(panel, ScanSetPan_ImgChans, listItemIdx, 1);
 					
 					// configure / unconfigure
-					if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+					if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
 						TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 					else
 						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 
@@ -3060,7 +3086,7 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 						engine->objectiveLens = NULL;
 					
 					// configure / unconfigure
-					if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+					if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
 						TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 					else
 						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
@@ -4083,7 +4109,7 @@ Error:
 	
 }
 
-static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsModule,
+static RectRaster_type* init_RectRaster_type (LaserScanning_type*		lsModule,
 														char 					engineName[], 
 														char 					fastAxisComVChanName[],
 														char					fastAxisComNSampVChanName[],
@@ -4106,7 +4132,7 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 														double					scanLensFL,
 														double					tubeLensFL)
 {
-	RectangleRaster_type*	engine = malloc (sizeof(RectangleRaster_type));
+	RectRaster_type*	engine = malloc (sizeof(RectRaster_type));
 	if (!engine) return NULL;
 	
 	//--------------------------------------------------------
@@ -4115,15 +4141,15 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, fastAxisComVChanName, fastAxisComNSampVChanName, slowAxisComVChanName, slowAxisComNSampVChanName, fastAxisPosVChanName, 
 						 slowAxisPosVChanName, imageOutVChanName, detectorVChanName, shutterVChanName, pixelSettingsVChanName, pixelClockRate, pixelSize, scanLensFL, tubeLensFL);
 	// override discard method
-	engine->baseClass.Discard			= discard_RectangleRaster_type;
+	engine->baseClass.Discard			= discard_RectRaster_type;
 	// add task controller
 	engine->baseClass.taskControl		= init_TaskControl_type(engineName, engine, ConfigureTC_RectRaster, UnconfigureTC_RectRaster, IterateTC_RectRaster, AbortIterationTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
 										  DoneTC_RectRaster, StoppedTC_RectRaster, DimTC_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster);
 	
-	if (!engine->baseClass.taskControl) {discard_RectangleRaster_type((ScanEngine_type**)&engine); return NULL;}
+	if (!engine->baseClass.taskControl) {discard_RectRaster_type((ScanEngine_type**)&engine); return NULL;}
 	
 	//--------------------------------------------------------
-	// init RectangleRaster_type
+	// init RectRaster_type
 	//--------------------------------------------------------
 	engine->refGalvoSamplingRate	= &engine->galvoSamplingRate;
 	engine->galvoSamplingRate		= galvoSamplingRate;
@@ -4132,24 +4158,68 @@ static RectangleRaster_type* init_RectangleRaster_type (LaserScanning_type*		lsM
 	engine->width					= scanWidth;
 	engine->widthOffset				= scanWidthOffset;
 	engine->pixelDwellTime			= pixelDwellTime;
+	engine->imgBuffers				= NULL;
+	engine->nImgBuffers				= 0;
 
 	return engine;
 }
 
-static void	discard_RectangleRaster_type (ScanEngine_type** engine)
+static void	discard_RectRaster_type (ScanEngine_type** engine)
 {
-	RectangleRaster_type*	rectRasterPtr = (RectangleRaster_type*) *engine;
+	RectRaster_type*	rectRaster = (RectRaster_type*) *engine;
 	
-	// discard RectangleRaster_type data
+	//------------------------------
+	// discard RectRaster_type data
+	//------------------------------
 	
+	// discard image assembly buffers
+	for (size_t i = 0; i < rectRaster->nImgBuffers; i++)
+		discard_RectRasterImgBuffer_type(&rectRaster->imgBuffers[i]);
+	
+	OKfree(rectRaster->imgBuffers);
+	rectRaster->nImgBuffers = 0;
 	
 	// discard Scan Engine data
 	discard_ScanEngine_type(engine);
 }
 
-static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* detChan, uInt32 imgWidth, uInt32 imgHeight, uInt64 nSkipPixels, size_t pixelSizeBytes, BOOL reverseWidthDirection, BOOL reverseHeightDirection)
 {
-	RectangleRaster_type*	scanEngine		= callbackData;
+	RectRasterImgBuffer_type*	buffer = malloc (sizeof(RectRasterImgBuffer_type));
+	if (!buffer) return NULL;
+	
+	buffer->imagePixels  = malloc(imgWidth * imgHeight * pixelSizeBytes);
+	if (!buffer->imagePixels) goto Error;
+	
+	buffer->nImagePixels 		= 0;
+	buffer->nAssembledColumns   = 0;
+	buffer->tmpPixels			= NULL;
+	buffer->nTmpPixels			= 0;
+	buffer->nSkipPixels			= nSkipPixels;
+	buffer->revHeightFlag		= reverseHeightDirection;
+	buffer->revWidthFlag		= reverseWidthDirection;
+	buffer->detChan				= detChan;
+	
+	return buffer;
+Error:
+	
+	free(buffer);
+	return NULL;	
+}
+
+static void	discard_RectRasterImgBuffer_type (RectRasterImgBuffer_type** rectRasterPtr)
+{
+	if (!*rectRasterPtr) return;
+	
+	OKfree((*rectRasterPtr)->imagePixels);
+	OKfree((*rectRasterPtr)->tmpPixels);
+	
+	OKfree(*rectRasterPtr)
+}
+
+static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	RectRaster_type*	scanEngine		= callbackData;
 	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
 	NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
 	int						listItemIdx;
@@ -4168,12 +4238,12 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					scanEngine->baseClass.objectiveLens = *objectivePtr;
 					
 					// configure/unconfigure scan engine
-					if (NonResRectangleRasterScan_ValidConfig(scanEngine)) {
+					if (NonResRectRasterScan_ValidConfig(scanEngine)) {
 				
-						NonResRectangleRasterScan_ScanHeights(scanEngine);
-						NonResRectangleRasterScan_PixelDwellTimes(scanEngine);
+						NonResRectRasterScan_ScanHeights(scanEngine);
+						NonResRectRasterScan_PixelDwellTimes(scanEngine);
 					
-						if (NonResRectangleRasterScan_ReadyToScan(scanEngine))
+						if (NonResRectRasterScan_ReadyToScan(scanEngine))
 							TaskControlEvent(scanEngine->baseClass.taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 						else
 							TaskControlEvent(scanEngine->baseClass.taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
@@ -4229,7 +4299,7 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					SetCtrlVal(panel, control, heightString);
 					
 					// check if requested image falls within ROI
-					if(!RectangleROIInsideRectangle (height, scanEngine->width * scanEngine->baseClass.pixSize, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
+					if(!RectROIInsideRect (height, scanEngine->width * scanEngine->baseClass.pixSize, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
 												 scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement,
 												2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
 						DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
@@ -4247,7 +4317,7 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					Fmt(heightString, "%s<%f[p1]", height);  
 					SetCtrlVal(panel, control, heightString); 
 					// update pixel dwell times
-					NonResRectangleRasterScan_PixelDwellTimes(scanEngine); 
+					NonResRectRasterScan_PixelDwellTimes(scanEngine); 
 					
 					break;
 					
@@ -4261,7 +4331,7 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					if (!widthPix) widthPix = 1;
 					width 		= widthPix * scanEngine->baseClass.pixSize;
 					
-					if (!RectangleROIInsideRectangle(scanEngine->height * scanEngine->baseClass.pixSize, width, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
+					if (!RectROIInsideRect(scanEngine->height * scanEngine->baseClass.pixSize, width, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
 						scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 
 						2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
 							// return to previous value
@@ -4288,7 +4358,7 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					heightOffsetPix		= (uInt32) floor(heightOffset/scanEngine->baseClass.pixSize);
 					heightOffset 		= heightOffsetPix * scanEngine->baseClass.pixSize;
 					
-					if (!RectangleROIInsideRectangle(scanEngine->height * scanEngine->baseClass.pixSize, scanEngine->width * scanEngine->baseClass.pixSize, heightOffset, 
+					if (!RectROIInsideRect(scanEngine->height * scanEngine->baseClass.pixSize, scanEngine->width * scanEngine->baseClass.pixSize, heightOffset, 
 						scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement,
 						2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
 							// return to previous value
@@ -4315,7 +4385,7 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					widthOffsetPix 		= (uInt32) floor(widthOffset/scanEngine->baseClass.pixSize);
 					widthOffset 		= widthOffsetPix * scanEngine->baseClass.pixSize;
 					
-					if (!RectangleROIInsideRectangle(scanEngine->height * scanEngine->baseClass.pixSize, scanEngine->width * scanEngine->baseClass.pixSize, 
+					if (!RectROIInsideRect(scanEngine->height * scanEngine->baseClass.pixSize, scanEngine->width * scanEngine->baseClass.pixSize, 
 						scanEngine->heightOffset * scanEngine->baseClass.pixSize, widthOffset, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 
 						2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
 							// return to previous value
@@ -4361,7 +4431,7 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					
 					scanEngine->pixelDwellTime = dwellTime;
 					// update preferred heights
-					NonResRectangleRasterScan_ScanHeights(scanEngine);
+					NonResRectRasterScan_ScanHeights(scanEngine);
 					
 					break;
 					
@@ -4391,7 +4461,7 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 					// adjust height offset control to be multiple of new pixel size
 					SetCtrlVal(panel, RectRaster_HeightOffset, scanEngine->heightOffset * scanEngine->baseClass.pixSize);
 					// update preferred heights
-					NonResRectangleRasterScan_ScanHeights(scanEngine);
+					NonResRectRasterScan_ScanHeights(scanEngine);
 					
 					break;
 				
@@ -4402,7 +4472,7 @@ static int CVICALLBACK NonResRectangleRasterScan_CB (int panel, int control, int
 	return 0;
 }
 
-void NonResRectangleRasterScan_ScanHeights (RectangleRaster_type* scanEngine)
+void NonResRectRasterScan_ScanHeights (RectRaster_type* scanEngine)
 {  
 	int						error 					= 0;
 	size_t   				blank;
@@ -4450,7 +4520,7 @@ void NonResRectangleRasterScan_ScanHeights (RectangleRaster_type* scanEngine)
 		
 		ROIHeight = (pixelsPerLine - deadTimePixels) * scanEngine->baseClass.pixSize;
 		if (rem == 0.0){ 
-			inFOVFlag = RectangleROIInsideRectangle(ROIHeight, scanEngine->width * scanEngine->baseClass.pixSize, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
+			inFOVFlag = RectROIInsideRect(ROIHeight, scanEngine->width * scanEngine->baseClass.pixSize, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
 						scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement);
 			
 			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->baseClass.pixSize, scanEngine->pixelDwellTime, ROIHeight + deadTimePixels * scanEngine->baseClass.pixSize) && inFOVFlag) {
@@ -4499,7 +4569,7 @@ Error:
 	return;
 }
 
-void NonResRectangleRasterScan_PixelDwellTimes (RectangleRaster_type* scanEngine)
+void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 {
 	int						error						= 0;
 	int       				deadTimePixels;
@@ -4590,8 +4660,8 @@ Error:
 }
 																	
 // Determines whether a given rectangular ROI with given width and height as well as offsets is falling within a circular region with given radius.
-// 0 - Rectangle ROI is outside the circular perimeter, 1 - otherwise.
-static BOOL RectangleROIInsideCircle (double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double circleRadius)
+// 0 - Rect ROI is outside the circular perimeter, 1 - otherwise.
+static BOOL RectROIInsideCircle (double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double circleRadius)
 {
 	BOOL ok = TRUE;
 	
@@ -4603,14 +4673,14 @@ static BOOL RectangleROIInsideCircle (double ROIHeight, double ROIWidth, double 
 	return ok;
 }
 
-static BOOL RectangleROIInsideRectangle (double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double maxHeight, double maxWidth)
+static BOOL RectROIInsideRect (double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double maxHeight, double maxWidth)
 {
 	return (2*fabs(ROIHeightOffset)+fabs(ROIHeight) <= fabs(maxHeight)) && (2*fabs(ROIWidthOffset)+fabs(ROIWidth) <= fabs(maxWidth));
 }
 
 /// HIFN Evaluates whether the scan engine has a valid configuration
 /// HIRET True, if scan engine configuration is valid and False otherwise.
-static BOOL	NonResRectangleRasterScan_ValidConfig (RectangleRaster_type* scanEngine)
+static BOOL	NonResRectRasterScan_ValidConfig (RectRaster_type* scanEngine)
 {
 	// check if scan engine configuration is valid
 	BOOL	validFlag = scanEngine->baseClass.fastAxisCal && scanEngine->baseClass.slowAxisCal && scanEngine->baseClass.objectiveLens &&
@@ -4673,9 +4743,9 @@ static BOOL	NonResRectangleRasterScan_ValidConfig (RectangleRaster_type* scanEng
 	return validFlag;
 }
 
-static BOOL NonResRectangleRasterScan_ReadyToScan (RectangleRaster_type* scanEngine)
+static BOOL NonResRectRasterScan_ReadyToScan (RectRaster_type* scanEngine)
 {
-	BOOL scanReady = NonResRectangleRasterScan_ValidConfig(scanEngine) && (scanEngine->height != 0.0) && (scanEngine->width != 0.0);
+	BOOL scanReady = NonResRectRasterScan_ValidConfig(scanEngine) && (scanEngine->height != 0.0) && (scanEngine->width != 0.0);
 	
 	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Ready, scanReady);
 	
@@ -4683,9 +4753,9 @@ static BOOL NonResRectangleRasterScan_ReadyToScan (RectangleRaster_type* scanEng
 }
 
 /// HIFN Generates galvo scan signals for bidirectional raster scanning
-static int NonResRectangleRasterScan_GenerateScanSignals (RectangleRaster_type* scanEngine, char** errorInfo)
+static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine, char** errorInfo)
 {
-#define NonResRectangleRasterScan_GenerateScanSignals_Err_ScanSignals		-1
+#define NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals		-1
 	
 	// init dynamically allocated signals
 	double*						fastAxisCommandSignal						= NULL;
@@ -4968,10 +5038,297 @@ Error:
 	discard_PulseTrain_type(&pixelInfo);
 	ReleaseDataPacket(&galvoCommandPacket);
 	
-	*errorInfo = FormatMsg(NonResRectangleRasterScan_GenerateScanSignals_Err_ScanSignals, "NonResRectangleRasterScan_GenerateScanSignals", errMsg);
+	*errorInfo = FormatMsg(NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals, "NonResRectRasterScan_GenerateScanSignals", errMsg);
 	OKfree(errMsg);
 	
-	return NonResRectangleRasterScan_GenerateScanSignals_Err_ScanSignals;
+	return NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals;
+}
+
+/* 
+
+PURPOSE
+----------------
+
+Constructs an image from multiple data blocks of smaller size. When the image is ready, it is sent as a data packet to the source VChanName[]. 
+
+Suppose there are N different data channels, with data coming from e.g. photomultipliers. The data from each channel must be then assembled in N different images. 
+As more data comes in, in certain packet sizes, when enough data has been gathered each time an image is assembled and sent to a certain named source VChan.
+Finally, the source VChan is linked to one or more sink VChans, which will receive the assembled images.
+
+USAGE
+----------------
+
+When using the function the first time, by specifying a VChanName, the function will create an internal buffer which will be used to gather the pixel data.
+If there are more channels to be used, then by calling this function with different VChanName[] the function will create separate buffers for each channel.
+
+For each image call the function with a specified image width and height. The image width and heights can be different for each channel as they are processed independently.
+
+The data from one channel is given as {void* pixarray, size_t npix} where pixarray points to a valid ImageType imaqimgtype accepted by NI-Vision that specified data for one channel.
+
+The size of the pixarray may be different between channels and also between different calls to this function.
+
+The incoming image data stream for each channel is assumed to be of the form:
+
+sssssss|dduuuuuuuuuuuuuudd|dduuuuuuuuuuuuuudd|dduuuuuuuuuuuuuudd|dduuuuuuuuuuuuuudd|dduuuuuuuuuuuuuudd|dduuuuuuuuuuuuuudd|dduuuuuuuuuuuuuudd|dduuuuuuuuuuuuuudd| ...
+																																						
+^		^   ^								 ^				    ^      											         ^
+|		|   |								 |					|												         |
+|       |   																															
+|       |   u = useful pixels = height		 beginning of line	end of line 									   	     new frame starts here 
+|		  																											   
+|		d = deadtimepix
+
+s = skipinitialpix
+
+The width of the image means how many separate useful pixel regions are in the stream.
+
+By giving a VChanName[] string that is already in the buffer and setting pixarray to NULL, the buffer for the specified VChanName is emptied.
+By giving an empty string VChanName[] like "" the function emties all buffers.
+
+The function returns 0 on successfully adding data to the buffers and sending it to the specified VChanName[] when an image is available.
+The function returns -1 if error occurs and more detailed error info is sent to the UI.
+
+WARNING 
+----------------
+
+The function is not multi-threaded.
+
+*/
+
+static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t imgBufferIdx, char** errorInfo)
+{
+	int							error				= 0;
+	char*						errMsg				= NULL;
+	DataPacket_type*			pixelPacket			= NULL;
+	DLDataTypes					pixelDataType;			  		// Data type of incoming pixel waveform
+	Waveform_type*				pixelWaveform		= NULL;   	// Incoming pixel waveform.
+	void*						pixelData			= NULL;		// Array of received pixels from a single pixel waveform data packet.
+	uInt64						nPixels				= 0;		// Number of received pixels from a pixel data packet stored in pixelData.
+	uInt64             			pixelDataIdx   		= 0;      	// The index of the processed pixel from the received pixel waveform.
+	RectRasterImgBuffer_type*   imgBuffer			= rectRaster->imgBuffers[imgBufferIdx];
+	uInt64						nDeadTimePixels		= (uInt64) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->pixelDwellTime);
+	ImageType					imaqImgType;
+	Image*             			imaqImg        		= NULL;   
+	
+	do {
+		
+		//----------------------------------------------------------------------
+		// Receive pixel data
+		//----------------------------------------------------------------------
+		
+		errChk( GetDataPacket(imgBuffer->detChan->detVChan, &pixelPacket, &errMsg) );
+		
+		//----------------------------------------------------------------------
+		// Process NULL packet
+		//----------------------------------------------------------------------
+		
+		//----------------------------------------------------------------------
+		// Add data to the buffer
+		//----------------------------------------------------------------------
+		
+		// get pointer to pixel array
+		pixelWaveform = *(Waveform_type**) GetDataPacketPtrToData(pixelPacket, &pixelDataType);
+		pixelData = *(void**) GetWaveformPtrToData(pixelWaveform, &nPixels);
+			
+		// skip initial pixels if needed. Here pixelDataIdx is the index of the pixel within the received
+		// pixelData from which data must be processed up to nPixels
+		if (imgBuffer->nSkipPixels)
+			if (nPixels > imgBuffer->nSkipPixels) {
+				pixelDataIdx = imgBuffer->nSkipPixels; 
+				imgBuffer->nSkipPixels = 0;
+			} else {
+				imgBuffer->nSkipPixels -= nPixels;
+				ReleaseDataPacket(&pixelPacket);
+				continue; // get another pixel data packet
+			}
+		else 
+			pixelDataIdx = 0;
+			
+		// add pixels to the temporary buffer depending on the image data type
+		switch (pixelDataType) {
+			
+			case DL_Waveform_UChar: // IMAQ_IMAGE_U8
+				
+				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned char)) );
+				memcpy((unsigned char*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned char*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned char));
+				imaqImgType = IMAQ_IMAGE_U8; 
+				break;
+				
+			case DL_Waveform_UShort: // IMAQ_IMAGE_U16
+				
+				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned short)) );
+				memcpy((unsigned short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned short));
+				imaqImgType = IMAQ_IMAGE_U16;
+				break;
+				
+			case DL_Waveform_Short: // IMAQ_IMAGE_I16
+				
+				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(short)) );
+				memcpy((short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(short));
+				imaqImgType = IMAQ_IMAGE_I16;
+				break;
+				
+			case DL_Waveform_Float: // IMAQ_IMAGE_SGL
+					
+				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(float)) );
+				memcpy((float*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (float*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(float));
+				imaqImgType = IMAQ_IMAGE_SGL;
+				break;
+		}
+			
+		// update number of pixels in temporary buffer
+		imgBuffer->nTmpPixels += nPixels - pixelDataIdx;
+		
+		// if there are enough pixels to construct a row take them out of the buffer
+		while (imgBuffer->nTmpPixels >= rectRaster->height + 2 * nDeadTimePixels) {
+				
+			switch (pixelDataType) {   
+					
+				case DL_Waveform_UChar: // IMAQ_IMAGE_U8 	
+				
+					// copy pixels depending on their direction
+					if (imgBuffer->revWidthFlag){
+						if (!imgBuffer->revHeightFlag)
+							memcpy((unsigned char*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(unsigned char));
+						else 
+							for (uInt32 i = 0; i < rectRaster->height; i++)
+								*((unsigned char*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+					} else {
+						if (!imgBuffer->revHeightFlag)
+							memcpy((unsigned char*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height), (unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(unsigned char));
+						else 
+							for (uInt32 i = 0; i < rectRaster->height; i++)
+								*((unsigned char*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height) + i) = *((unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+					} 
+						
+					// move contents of the buffer to its beginning
+					memmove((unsigned char*)imgBuffer->tmpPixels, (unsigned char*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(unsigned char));
+					break;
+					
+				case DL_Waveform_UShort: // IMAQ_IMAGE_U16 
+						
+					// copy pixels depending on their direction
+					if (imgBuffer->revWidthFlag){
+						if (!imgBuffer->revHeightFlag)
+							memcpy((unsigned short*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(unsigned short));
+						else 
+							for (uInt32 i = 0; i < rectRaster->height; i++)
+								*((unsigned short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+					} else {
+						if (!imgBuffer->revHeightFlag)
+							memcpy((unsigned short*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height), (unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(unsigned short));
+						else 
+							for (uInt32 i = 0; i < rectRaster->height; i++)
+								*((unsigned short*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height) + i) = *((unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+					} 
+						
+					// move contents of the buffer to its beginning
+					memmove((unsigned short*)imgBuffer->tmpPixels, (unsigned short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(unsigned short));
+					break;
+						
+				case DL_Waveform_Short: // IMAQ_IMAGE_I16 
+						
+					// copy pixels depending on their direction
+					if (imgBuffer->revWidthFlag){
+						if (!imgBuffer->revHeightFlag)
+							memcpy((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(short));
+						else 
+							for (uInt32 i = 0; i < rectRaster->height; i++)
+								*((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+					} else {
+						if (!imgBuffer->revHeightFlag)
+							memcpy((short*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height), (short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(short));
+						else 
+							for (uInt32 i = 0; i < rectRaster->height; i++)
+								*((short*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height) + i) = *((short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+					} 
+						
+					// move contents of the buffer to its beginning
+					memmove((short*)imgBuffer->tmpPixels, (short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(short));
+					break;
+						
+				case DL_Waveform_Float: // IMAQ_IMAGE_SGL 
+					
+					// copy pixels depending on their direction
+					if (imgBuffer->revWidthFlag){
+						if (!imgBuffer->revHeightFlag)
+							memcpy((float*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (float*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(float));
+						else 
+							for (uInt32 i = 0; i < rectRaster->height; i++)
+								*((float*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((float*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+					} else {
+						if (!imgBuffer->revHeightFlag)
+							memcpy((float*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height), (float*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(float));
+						else 
+							for (uInt32 i = 0; i < rectRaster->height; i++)
+								*((float*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height) + i) = *((float*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+					} 
+						
+					// move contents of the buffer to its beginning
+					memmove((float*)imgBuffer->tmpPixels, (float*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(float));
+					break;
+						
+			}
+				
+			// update number of pixels in the buffers
+			imgBuffer->nTmpPixels  	-= rectRaster->height + 2 * nDeadTimePixels;
+			imgBuffer->nImagePixels	+= rectRaster->height;
+			// increment number of columns
+			imgBuffer->nAssembledColumns++;
+			// reverse pixel direction of every second column
+			imgBuffer->revHeightFlag = !imgBuffer->revHeightFlag;
+				
+			if (imgBuffer->nAssembledColumns == rectRaster->width) {
+				// pixels are transformed from an array to an image 
+				nullChk( imaqImg = imaqCreateImage(imaqImgType, 0) );
+				nullChk( imaqArrayToImage(imaqImg, imgBuffer->imagePixels, rectRaster->height, rectRaster->width) );
+				
+				/* send here image
+				// required for sending the data packet
+				tmpimgptr = malloc(sizeof(Image*));
+				if (!tmpimgptr) goto MemErr;
+				tmpimgptr[0] = imaqImg; 
+				
+				// put image in a data packet
+				init_DataPacket_type(IMAQ_Img, sizeof(Image*), 1, NULL, (void**)tmpimgptr, 1, &imagepacket);
+				imagepacket.imagetype=imagetype;
+				imagepacket.idstr=idstr;
+				if (SendData(ActiveTaskIndex, VChanName, &imagepacket) < 0) goto SendDataError;   		  
+				*/
+				
+				// reset number of elements in pixdata buffer (contents is not cleared!) new frame data will overwrite the old frame data in the buffer
+				// NOTE & WARNING: data in the imgBuffer->tmpPixels is kept since multiple images can follow and imgBuffer->tmpPixels may contain data from the next image
+				imgBuffer->nImagePixels = 0;
+				// reset column counter
+				imgBuffer->nAssembledColumns = 0;
+				// reverse direction of every second image
+				imgBuffer->revWidthFlag = !imgBuffer->revWidthFlag;
+			}
+			
+			
+		} // end of while loop, all available lines in tmpdata have been processed into pixdata
+		
+	} while (TRUE);
+			
+	return 0;
+
+Error:
+	
+	// cleanup
+	ReleaseDataPacket(&pixelPacket);
+	if (imaqImg) {
+		imaqDispose(imaqImg);
+		imaqImg = NULL;
+	}
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "NonResRectRasterScan_BuildImage", errMsg);
+	OKfree(errMsg);
+	
+	return error;
 }
 
 static void	GetScanAxisTypes (ScanEngine_type* scanEngine, ScanAxis_type* fastAxisType, ScanAxis_type* slowAxisType)
@@ -5080,12 +5437,12 @@ static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void 
 			OKfree(newObjectiveName);
 			
 			// configure/unconfigure scan engine
-			if (NonResRectangleRasterScan_ValidConfig((RectangleRaster_type*)engine)) {
+			if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
 				
-				NonResRectangleRasterScan_ScanHeights((RectangleRaster_type*)engine);
-				NonResRectangleRasterScan_PixelDwellTimes((RectangleRaster_type*)engine);
+				NonResRectRasterScan_ScanHeights((RectRaster_type*)engine);
+				NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
 					
-				if (NonResRectangleRasterScan_ReadyToScan((RectangleRaster_type*)engine))
+				if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
 					TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 				else
 					TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
@@ -6111,7 +6468,7 @@ static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
 
 static int ConfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
 	//SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_Ready, 1);
 	
@@ -6120,7 +6477,7 @@ static int ConfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* ab
 
 static int UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
 	//SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_Ready, 0);
 	
@@ -6129,28 +6486,80 @@ static int UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* 
 
 static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
-	TaskControlIterationDone(taskControl, 0, "", FALSE);	// test
+	TaskControlIterationDone(taskControl, 0, "", FALSE);
+	
+	// receive pixel stream and assemble image
+	
 	
 }
 
 static void AbortIterationTC_RectRaster (TaskControl_type* taskControl,BOOL const* abortFlag)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
 }
 
 static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* 	engine 						= GetTaskControlModuleData(taskControl);
-	int						error 						= 0;
+	RectRaster_type* 	engine 		= GetTaskControlModuleData(taskControl);
+	int					error 		= 0;
 	
-	// open shutter
+	//--------------------------------------------------------------------------------------------------------
+	// Initialize image assembly buffers
+	//--------------------------------------------------------------------------------------------------------
+	
+	// discard image assembly buffers
+	for (size_t i = 0; i < engine->nImgBuffers; i++)
+		discard_RectRasterImgBuffer_type(&engine->imgBuffers[i]);
+	OKfree(engine->imgBuffers);
+	engine->nImgBuffers = 0;
+	
+	// create new image assembly buffers for connected detector VChans
+	size_t				nDetChans 		= ListNumItems(engine->baseClass.DetChans);
+	DetChan_type*		detChan;
+	size_t				pixelByteSize 	= 0;
+	SourceVChan_type*   detSourceVChan;
+	
+	for (size_t i = 1; i <= nDetChans; i++) {
+		detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
+		if (!(detSourceVChan = GetSourceVChan(detChan->detVChan))) continue;	// select only connected detection channels
+		
+		engine->nImgBuffers++;
+		engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
+		switch (GetSourceVChanDataType(detSourceVChan)) {
+				
+			case DL_Waveform_UChar:
+				pixelByteSize = sizeof(unsigned char);
+				break;
+				
+			case DL_Waveform_UShort:
+				pixelByteSize = sizeof(unsigned short);
+				break;
+				
+			case DL_Waveform_Short:	
+				pixelByteSize = sizeof(short);
+				break;
+				
+			case DL_Waveform_Float:
+				pixelByteSize = sizeof(float); 
+				break;
+		}
+		engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, (uInt64)(engine->flyInDelay/engine->pixelDwellTime), pixelByteSize, FALSE, FALSE); 
+	}
+	
+	//--------------------------------------------------------------------------------------------------------
+	// Open shutter
+	//--------------------------------------------------------------------------------------------------------
+	
 	errChk( OpenScanEngineShutter(&engine->baseClass, 1, errorInfo) );
 	
-	// send galvo waveforms
-	errChk ( NonResRectangleRasterScan_GenerateScanSignals (engine, errorInfo) );  
+	//--------------------------------------------------------------------------------------------------------
+	// Send galvo waveforms
+	//--------------------------------------------------------------------------------------------------------
+	
+	errChk ( NonResRectRasterScan_GenerateScanSignals (engine, errorInfo) );  
 	
 	return 0; // no error
 	
@@ -6165,7 +6574,7 @@ Error:
 
 static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* 	engine		 				= GetTaskControlModuleData(taskControl);
+	RectRaster_type* 	engine		 				= GetTaskControlModuleData(taskControl);
 	int						error						= 0;
 	
 	// close shutter
@@ -6184,7 +6593,7 @@ Error:
 
 static int StoppedTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* 	engine 	= GetTaskControlModuleData(taskControl);
+	RectRaster_type* 	engine 	= GetTaskControlModuleData(taskControl);
 	int						error	= 0;
 	
 	// close shutter
@@ -6203,7 +6612,7 @@ Error:
 
 static int ResetTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* 	engine 	= GetTaskControlModuleData(taskControl);
+	RectRaster_type* 	engine 	= GetTaskControlModuleData(taskControl);
 	int						error	= 0;
 	
 	// close shutter
@@ -6220,14 +6629,14 @@ Error:
 
 static void	DimTC_RectRaster (TaskControl_type* taskControl, BOOL dimmed)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
 }
 
 /*
 static int DataReceivedTC_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
 	return 0;   
 }
@@ -6235,13 +6644,13 @@ static int DataReceivedTC_RectRaster (TaskControl_type* taskControl, TaskStates_
 
 static void ErrorTC_RectRaster (TaskControl_type* taskControl, int errorID, char* errorMsg)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
 }
 
 static int ModuleEventHandler_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
-	RectangleRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }

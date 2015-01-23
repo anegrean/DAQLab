@@ -125,7 +125,9 @@ DLDataTypes	GetDataPacketDataType (DataPacket_type* dataPacket)
 
 void** GetDataPacketPtrToData (DataPacket_type* dataPacket, DLDataTypes* dataType)  
 {
-	*dataType = dataPacket->dataType;
+	if (dataType)
+		*dataType = dataPacket->dataType;
+	
 	return &dataPacket->data;
 }
 

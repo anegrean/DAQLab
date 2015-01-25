@@ -262,9 +262,10 @@ typedef struct {
 
 
 typedef struct {
-	SinkVChan_type*				detVChan;				// Sink VChan for receiving pixel data
-	ScanEngine_type*			scanEngine;				// Reference to scan engine to which this detection channel belongs
-	int							displayPanHndl;
+	SinkVChan_type*				detVChan;				// Sink VChan for receiving pixel data.
+	ScanEngine_type*			scanEngine;				// Reference to scan engine to which this detection channel belongs.
+	int							imaqWndID;				// IMAQ window ID assigned to display the image of this channel.
+	Image*             			imaqImg;				// For placing assembled images from the raw pixel stream.
 } DetChan_type;
 
 //---------------------------------------------------------------
@@ -620,7 +621,7 @@ static RectRaster_type*				init_RectRaster_type							(LaserScanning_type*	lsMod
 static void							discard_RectRaster_type							(ScanEngine_type** engine);
 
 	// image assembly buffer
-static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 					(DetChan_type* detChan, uInt32 imgWidth, uInt32 imgHeight, uInt64 nSkipPixels, size_t pixelSizeBytes, BOOL reverseWidthDirection, BOOL reverseHeightDirection);
+static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 					(DetChan_type* detChan, uInt32 imgWidth, uInt32 imgHeight, uInt64 nSkipPixels, DLDataTypes pixelDataType, BOOL reverseWidthDirection, BOOL reverseHeightDirection);
 
 static void							discard_RectRasterImgBuffer_type				(RectRasterImgBuffer_type** rectRasterPtr); 
 
@@ -644,7 +645,7 @@ static int							NonResRectRasterScan_GenerateScanSignals		(RectRaster_type* sca
 	// builds images from a continuous pixel stream
 static int 							NonResRectRasterScan_BuildImage 				(RectRaster_type* rectRaster, size_t imgBufferIdx, char** errorInfo);
 	// closes the display of an image panel
-void CVICALLBACK 					DisplayClose_CB 								(int menuBar, int menuItem, void *callbackData, int panel);
+//void CVICALLBACK 					DisplayClose_CB 								(int menuBar, int menuItem, void *callbackData, int panel);
 
 
 //---------------------------------------------------------
@@ -1104,20 +1105,24 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 		// add scan engine task controller to DAQLab framework
 		DLAddTaskController((DAQLabModule_type*)ls, (*scanEnginePtr)->taskControl);
 		
-		// add scan engine VChans to DAQLab framework
+		// add scan engine VChans to DAQLab framework and register with task controller
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanFastAxisCom);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanFastAxisComNSamples);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanSlowAxisCom);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanSlowAxisComNSamples);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanFastAxisPos);
+		AddSinkVChan((*scanEnginePtr)->taskControl, (*scanEnginePtr)->VChanFastAxisPos, NULL); 
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanSlowAxisPos);
+		AddSinkVChan((*scanEnginePtr)->taskControl, (*scanEnginePtr)->VChanSlowAxisPos, NULL);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanScanOut);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanShutter);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanPixelSettings); 
+		
 		nDetectorVChans = ListNumItems((*scanEnginePtr)->DetChans);
 		for (size_t j = 1; j <= nDetectorVChans; j++) {
 			detPtr = ListGetPtrToItem((*scanEnginePtr)->DetChans, j);
-			DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan); 
+			DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan);
+			AddSinkVChan((*scanEnginePtr)->taskControl, (*detPtr)->detVChan, NULL);
 		}
 		
 	}
@@ -2362,7 +2367,12 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanShutter);     
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanPixelSettings);     
 					DetChan_type**	detPtr = ListGetPtrToItem(newScanEngine->DetChans, 1);
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan);   
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan);
+					
+					// register Sink VChans with the task controller
+					AddSinkVChan(newScanEngine->taskControl, (*detPtr)->detVChan, NULL);
+					AddSinkVChan(newScanEngine->taskControl, newScanEngine->VChanFastAxisPos, NULL);
+					AddSinkVChan(newScanEngine->taskControl, newScanEngine->VChanSlowAxisPos, NULL);
 					
 					// add new scan engine to laser scanning module list of scan engines
 					ListInsertItem(ls->scanEngines, &newScanEngine, END_OF_LIST);
@@ -2613,6 +2623,8 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanCom);
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanComNSamples);
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanPos);
+							// register sink VChan with task controller
+							AddSinkVChan(nrgCal->baseClass.taskController, nrgCal->baseClass.VChanPos, NULL); 
 							// add new galvo calibration to laser scanning module list
 							ListInsertItem(ls->activeCal, &nrgCal, END_OF_LIST);
 							//----------------------------------------------------------
@@ -2770,13 +2782,14 @@ static DetChan_type* init_DetChan_type (ScanEngine_type* scanEngine, char VChanN
 	
 	// init
 	DLDataTypes allowedPacketTypes[] 	= Allowed_Detector_Data_Types;
-	det->displayPanHndl 				= 0;
+	det->imaqImg		 				= NULL;
+	det->imaqWndID						= -1; // not valid, imaqGetWindowHandle(int* handle) is called to find an unassigned window number between 0-15.
 	det->detVChan						= NULL;
 	
 	if ( !(det->detVChan 		= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, VChanDataTimeout, DetVChan_Connected, DetVChan_Disconnected)) ) goto Error;
-	if ( (det->displayPanHndl 	= LoadPanel(scanEngine->lsModule->baseClass.workspacePanHndl, MOD_LaserScanning_UI, DisplayPan)) < 0 ) goto Error;
 	det->scanEngine 			= scanEngine;
 	
+	/*
 	// convert decoration control to image control
 	if (ImageControl_ConvertFromDecoration(det->displayPanHndl, DisplayPan_Image, NULL) < 0) goto Error;
 	
@@ -2814,7 +2827,8 @@ static DetChan_type* init_DetChan_type (ScanEngine_type* scanEngine, char VChanN
 	if ( (displayMenuIDClose		= NewMenu(displayMenuBarHndl, "Close", -1)) < 0 ) goto Error;
 	SetMenuBarAttribute(displayMenuBarHndl, 0, ATTR_SHOW_IMMEDIATE_ACTION_SYMBOL, 0);
 	SetMenuBarAttribute(displayMenuBarHndl, displayMenuIDClose, ATTR_CALLBACK_FUNCTION_POINTER, DisplayClose_CB);
-	SetMenuBarAttribute(displayMenuBarHndl, displayMenuIDClose, ATTR_CALLBACK_DATA, det);      
+	SetMenuBarAttribute(displayMenuBarHndl, displayMenuIDClose, ATTR_CALLBACK_DATA, det); 
+	*/
 	
 	return det;
 	
@@ -2822,7 +2836,6 @@ Error:
 	
 	// cleanup
 	discard_VChan_type(&det->detVChan);
-	if (det->displayPanHndl) DiscardPanel(det->displayPanHndl);
 	
 	free(det);
 	return NULL;
@@ -2833,8 +2846,10 @@ static void	discard_DetChan_type (DetChan_type** detChanPtr)
 	if (!*detChanPtr) return;
 	
 	discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
-	DiscardPanel((*detChanPtr)->displayPanHndl);
-	(*detChanPtr)->displayPanHndl = 0;
+	if ((*detChanPtr)->imaqImg) {
+		imaqDispose((*detChanPtr)->imaqImg);
+		(*detChanPtr)->imaqImg = NULL;
+	}
 	
 	OKfree(*detChanPtr);
 }
@@ -2900,10 +2915,11 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// create new VChan with a predefined base name
 					newName = DLGetUniqueVChanName(VChan_ScanEngine_DetectionChan);
 					DetChan_type* detChan = init_DetChan_type(engine, newName);
-					// insert new VChan to list control, engine list and register with framework
+					// insert new VChan to list control, engine list and register with framework and task controller
 					InsertListItem(panel, ScanSetPan_ImgChans, -1, newName, newName);
 					ListInsertItem(engine->DetChans, &detChan, END_OF_LIST);
 					DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)detChan->detVChan);
+					AddSinkVChan(engine->taskControl, detChan->detVChan, NULL);
 					break;
 					
 				case ScanSetPan_AddObjective:
@@ -3109,6 +3125,7 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					DetChan_type** 	detChanPtr; 
 					detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
 					DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtr)->detVChan);
+					RemoveSinkVChan(engine->taskControl, (*detChanPtr)->detVChan);
 					discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
 					DeleteListItem(panel, ScanSetPan_ImgChans, listItemIdx, 1);
 					
@@ -4073,12 +4090,14 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	// fast axis position feedback
 	if (engine->VChanFastAxisPos) {
 		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisPos);
+		RemoveSinkVChan(engine->taskControl, engine->VChanFastAxisPos); 
 		discard_VChan_type((VChan_type**)&engine->VChanFastAxisPos);
 	}
 	
 	// slow axis position feedback
 	if (engine->VChanSlowAxisPos) {
 		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisPos);
+		RemoveSinkVChan(engine->taskControl, engine->VChanSlowAxisPos);
 		discard_VChan_type((VChan_type**)&engine->VChanSlowAxisPos);
 	}
 	
@@ -4107,6 +4126,7 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 		detChanPtr = ListGetPtrToItem(engine->DetChans, i);
 		// remove VChan from framework
 		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtr)->detVChan);
+		RemoveSinkVChan(engine->taskControl, (*detChanPtr)->detVChan);
 		discard_DetChan_type(detChanPtr);
 	}
 	ListDispose(engine->DetChans);
@@ -4242,14 +4262,38 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	discard_ScanEngine_type(engine);
 }
 
-static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* detChan, uInt32 imgWidth, uInt32 imgHeight, uInt64 nSkipPixels, size_t pixelSizeBytes, BOOL reverseWidthDirection, BOOL reverseHeightDirection)
+static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* detChan, uInt32 imgWidth, uInt32 imgHeight, uInt64 nSkipPixels, DLDataTypes pixelDataType, BOOL reverseWidthDirection, BOOL reverseHeightDirection)
 {
-	RectRasterImgBuffer_type*	buffer = malloc (sizeof(RectRasterImgBuffer_type));
+	int 						error;
+	RectRasterImgBuffer_type*	buffer 			= malloc (sizeof(RectRasterImgBuffer_type));
+	ImageType					imaqImgType;
+	size_t						pixelSizeBytes 	= 0;
 	if (!buffer) return NULL;
 	
-	buffer->imagePixels  = malloc(imgWidth * imgHeight * pixelSizeBytes);
-	if (!buffer->imagePixels) goto Error;
+	switch (pixelDataType) {
+		case DL_Waveform_UChar:
+			imaqImgType 		= IMAQ_IMAGE_U8;
+			pixelSizeBytes 		= sizeof(unsigned char);   
+			break;
+		
+		case DL_Waveform_UShort:
+			imaqImgType 		= IMAQ_IMAGE_U16;
+			pixelSizeBytes 		= sizeof(unsigned short);
+			break;
+			
+		case DL_Waveform_Short:
+			imaqImgType 		= IMAQ_IMAGE_I16; 
+			pixelSizeBytes 		= sizeof(short); 
+			break;
+			
+		case DL_Waveform_Float:
+			imaqImgType 		= IMAQ_IMAGE_SGL; 
+			pixelSizeBytes 		= sizeof(float); 
+			break;
+		
+	}
 	
+	// init
 	buffer->nImagePixels 		= 0;
 	buffer->nAssembledColumns   = 0;
 	buffer->tmpPixels			= NULL;
@@ -4259,8 +4303,20 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* de
 	buffer->revWidthFlag		= reverseWidthDirection;
 	buffer->detChan				= detChan;
 	
+	nullChk( buffer->imagePixels 		= malloc(imgWidth * imgHeight * pixelSizeBytes) );
+	nullChk( buffer->detChan->imaqImg   = imaqCreateImage(imaqImgType, 0) );
+	nullChk( imaqSetImageSize(buffer->detChan->imaqImg, imgWidth, imgHeight) );
+	
 	return buffer;
+	
 Error:
+	
+	// cleanup
+	OKfree(buffer->imagePixels);
+	if (buffer->detChan->imaqImg) {
+		imaqDispose(buffer->detChan->imaqImg);
+		buffer->detChan->imaqImg = NULL;
+	}
 	
 	free(buffer);
 	return NULL;	
@@ -5166,8 +5222,6 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	uInt64             			pixelDataIdx   		= 0;      	// The index of the processed pixel from the received pixel waveform.
 	RectRasterImgBuffer_type*   imgBuffer			= rectRaster->imgBuffers[imgBufferIdx];
 	uInt64						nDeadTimePixels		= (uInt64) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->pixelDwellTime);
-	ImageType					imaqImgType;
-	Image*             			imaqImg        		= NULL;   
 	
 	do {
 		
@@ -5184,8 +5238,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 		// TEMPORARY for one channel only
 		// end task controller iteration
 		if (!pixelPacket) {
-			TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
 			TaskControlEvent(rectRaster->baseClass.taskControl, TASK_EVENT_STOP, NULL, NULL);
+			TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
 			break;
 		}
 			
@@ -5219,30 +5273,28 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				
 				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned char)) );
 				memcpy((unsigned char*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned char*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned char));
-				imaqImgType = IMAQ_IMAGE_U8; 
 				break;
 				
 			case DL_Waveform_UShort: // IMAQ_IMAGE_U16
 				
 				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned short)) );
 				memcpy((unsigned short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned short));
-				imaqImgType = IMAQ_IMAGE_U16;
 				break;
 				
 			case DL_Waveform_Short: // IMAQ_IMAGE_I16
 				
 				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(short)) );
 				memcpy((short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(short));
-				imaqImgType = IMAQ_IMAGE_I16;
 				break;
 				
 			case DL_Waveform_Float: // IMAQ_IMAGE_SGL
 					
 				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(float)) );
 				memcpy((float*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (float*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(float));
-				imaqImgType = IMAQ_IMAGE_SGL;
 				break;
 		}
+		
+		ReleaseDataPacket(&pixelPacket);
 			
 		// update number of pixels in temporary buffer
 		imgBuffer->nTmpPixels += nPixels - pixelDataIdx;
@@ -5348,15 +5400,11 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				
 			if (imgBuffer->nAssembledColumns == rectRaster->width) {
 				// pixels are transformed from an array to an image 
-				nullChk( imaqImg = imaqCreateImage(imaqImgType, 0) );
-				nullChk( imaqArrayToImage(imaqImg, imgBuffer->imagePixels, rectRaster->height, rectRaster->width) );
+				nullChk( imaqArrayToImage(imgBuffer->detChan->imaqImg, imgBuffer->imagePixels, rectRaster->height, rectRaster->width) );
 				
-				// display the image in the display pannel of each channel
-				if ( (error = ImageControl_SetAttribute(imgBuffer->detChan->displayPanHndl, DisplayPan_Image, ATTR_IMAGECTRL_IMAGE, imaqImg)) < 0 ) {
-					errMsg = StrDup(GetGeneralErrorString(error));
-					goto Error;
-				}
-		
+				if (imgBuffer->detChan->imaqWndID >= 0)
+					imaqDisplayImage(imgBuffer->detChan->imaqImg, imgBuffer->detChan->imaqWndID, FALSE);
+			
 				// TEMPORARY: just complete iteration, and use only one channel
 				TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
 				
@@ -5381,10 +5429,6 @@ Error:
 	
 	// cleanup
 	ReleaseDataPacket(&pixelPacket);
-	if (imaqImg) {
-		imaqDispose(imaqImg);
-		imaqImg = NULL;
-	}
 	
 	if (!errMsg)
 		errMsg = StrDup("Out of memory");
@@ -5396,6 +5440,7 @@ Error:
 	return error;
 }
 
+/*
 void CVICALLBACK DisplayClose_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
 	DetChan_type*	detChan = callbackData;
@@ -5403,6 +5448,7 @@ void CVICALLBACK DisplayClose_CB (int menuBar, int menuItem, void *callbackData,
 	ImageControl_SetAttribute(panel, DisplayPan_Image, ATTR_IMAGECTRL_IMAGE, NULL);
 	HidePanel(panel);
 }
+*/
 
 static void	GetScanAxisTypes (ScanEngine_type* scanEngine, ScanAxis_type* fastAxisType, ScanAxis_type* slowAxisType)
 {
@@ -6614,7 +6660,6 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	// create new image assembly buffers for connected detector VChans
 	size_t				nDetChans 		= ListNumItems(engine->baseClass.DetChans);
 	DetChan_type*		detChan;
-	size_t				pixelByteSize 	= 0;
 	SourceVChan_type*   detSourceVChan;
 	
 	for (size_t i = 1; i <= nDetChans; i++) {
@@ -6622,35 +6667,34 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 		if (!(detSourceVChan = GetSourceVChan(detChan->detVChan))) continue;	// select only connected detection channels
 		
 		engine->nImgBuffers++;
+		// allocate memory for image assembly
 		engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
-		switch (GetSourceVChanDataType(detSourceVChan)) {
-				
-			case DL_Waveform_UChar:
-				pixelByteSize = sizeof(unsigned char);
-				break;
-				
-			case DL_Waveform_UShort:
-				pixelByteSize = sizeof(unsigned short);
-				break;
-				
-			case DL_Waveform_Short:	
-				pixelByteSize = sizeof(short);
-				break;
-				
-			case DL_Waveform_Float:
-				pixelByteSize = sizeof(float); 
-				break;
-		}
-		engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, (uInt64)(engine->flyInDelay/engine->pixelDwellTime), pixelByteSize, FALSE, FALSE); 
+		engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, (uInt64)(engine->flyInDelay/engine->pixelDwellTime), GetSourceVChanDataType(detSourceVChan) , FALSE, FALSE); 
 	}
 	
 	//--------------------------------------------------------------------------------------------------------
 	// Display image panels for each channel
 	//--------------------------------------------------------------------------------------------------------
 	
+	intptr_t	workspaceWndHandle;
+	intptr_t	imaqWndHandle;
+	GetPanelAttribute(engine->baseClass.lsModule->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHandle);
+	
 	for (size_t i = 1; i <= nDetChans; i++) {
 		detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
-		DisplayPanel(detChan->displayPanHndl);
+		
+		// get unassigned IMAQ window ID
+		if (!imaqGetWindowHandle(&detChan->imaqWndID)) {
+			error = imaqGetLastError();
+			char* imaqErrMsg = NULL;
+			*errorInfo = StrDup((imaqErrMsg = imaqGetErrorText(error)));
+			if (imaqErrMsg) imaqDispose(imaqErrMsg);
+			goto Error;
+		}
+		
+		// confine the IMAQ window to the workspace panel
+		imaqWndHandle = (intptr_t) imaqGetSystemWindowHandle(detChan->imaqWndID); 
+		SetParent( (HWND) imaqWndHandle, (HWND)workspaceWndHandle);
 	}
 	
 	//--------------------------------------------------------------------------------------------------------

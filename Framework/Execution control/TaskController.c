@@ -2147,11 +2147,24 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING);
 					
 					//-------------------------------------------------------------------------------------------------------------------------
-					// If this is a Root Task Controller, i.e. it doesn't have a parent, then call dim UI function recursively for its SubTasks
-					//---------------------------------------------------------------------------------------------------------------------
+					// If this is a Root Task Controller, i.e. it doesn't have a parent, then: 
+					// - call dim UI function recursively for its SubTasks
+					// - clear data packets from SubTask Sink VChans recursively
+					//-------------------------------------------------------------------------------------------------------------------------
 					
-					if(!taskControl->parenttask)
+					if(!taskControl->parenttask) {
+						
+						if (ClearTaskTreeBranchVChans(taskControl, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_DataPacketsNotCleared, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_DataPacketsNotCleared;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
+						
 						DimTaskTreeBranch(taskControl, &eventpacket[i], TRUE);
+					}
 					
 					break;
 					

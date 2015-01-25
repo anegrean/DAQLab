@@ -67,7 +67,7 @@
 //------------------------------------------------------------------------------------------------
 
 // Constant function pointer that is used to launch the initialization of different DAQLabModules 
-typedef DAQLabModule_type* (* const ModuleInitAllocFunction_type ) (DAQLabModule_type* mod, char className[], char instanceName[]);
+typedef DAQLabModule_type* (* const ModuleInitAllocFunction_type ) (DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl);
 
 typedef struct {
 	
@@ -526,7 +526,7 @@ static int DAQLab_Load (void)
 		for (size_t j = 0; j < NumElem(DAQLabModules_InitFunctions); j++)
 			if (!strcmp(DAQLabModules_InitFunctions[j].className, moduleClassName)) {
 				// call module init function
-				newModule = (*DAQLabModules_InitFunctions[j].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[j].className, moduleInstanceName);
+				newModule = (*DAQLabModules_InitFunctions[j].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[j].className, moduleInstanceName, mainPanHndl);
 				// load module configuration data if specified
 				if (newModule->LoadCfg)
 					if( (*newModule->LoadCfg)	(newModule, xmlModuleNode) < 0) {
@@ -915,6 +915,11 @@ int DLUnregisterVChan (DAQLabModule_type* mod, VChan_type* VChan)
 	UpdateVChanSwitchboard(VChanSwitchboardPanHndl, VChanTab_Switchboard);
 	
 	return TRUE;
+}
+
+void DLUpdateSwitchboard (void)
+{
+	UpdateVChanSwitchboard(VChanSwitchboardPanHndl, VChanTab_Switchboard);
 }
 
 void DLUnregisterModuleVChans (DAQLabModule_type* mod)
@@ -2403,7 +2408,7 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 							newInstanceName = StrDup(DAQLabModules_InitFunctions[moduleidx].className);
 					
 					// call module init function
-					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[moduleidx].className, newInstanceName);
+					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[moduleidx].className, newInstanceName, mainPanHndl);
 					
 					// call module load function
 					if ( (*newModulePtr->Load) 	(newModulePtr, mainPanHndl) < 0) {

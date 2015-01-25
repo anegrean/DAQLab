@@ -86,6 +86,9 @@ BOOL				DLRegisterVChan						(DAQLabModule_type* mod, VChan_type* VChan);
 	// Unregisters a VChan from the DAQLab framework
 BOOL				DLUnregisterVChan					(DAQLabModule_type* mod, VChan_type* VChan);
 
+	// Updates the Switchboard explicitely.
+void				DLUpdateSwitchboard					(void);
+
 	// Unregisters all VChans from a module from the DAQLab framework
 void				DLUnregisterModuleVChans			(DAQLabModule_type* mod);
 

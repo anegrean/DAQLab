@@ -47,7 +47,7 @@ typedef struct {
 // Global functions
 
 
-DAQLabModule_type*	initalloc_VUPhotonCtr 	(DAQLabModule_type* mod, char className[], char instanceName[]);
+DAQLabModule_type*	initalloc_VUPhotonCtr 	(DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl);
 void 				discard_VUPhotonCtr 	(DAQLabModule_type** mod);
 
 

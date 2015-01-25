@@ -111,7 +111,7 @@ static FCallReturn_type*			EventHandler					(TaskControl_type* taskControl, Task
 /// HIPAR mod/ if !NULL the function performs only an initialization of a DAQLabModule_type.
 /// HIRET address of a DAQLabModule_type if memory allocation and initialization took place.
 /// HIRET NULL if only initialization was performed. 
-DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], char instanceName[])
+DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl)
 {
 	Zstage_type* zstage;
 	
@@ -122,7 +122,7 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 		zstage = (Zstage_type*) mod;
 		
 	// initialize base class
-	initalloc_DAQLabModule(&zstage->baseClass, className, instanceName);
+	initalloc_DAQLabModule(&zstage->baseClass, className, instanceName, workspacePanHndl);
 	
 	// initialize Task Controller
 	//

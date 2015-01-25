@@ -105,7 +105,7 @@ struct VUPhotonCtr {
 	Channel_type*		channels[MAX_CHANNELS];
 	
 	//	virtual channel to receive pulsetrain settings
-	SinkVChan_type*		pulseTrainVchan;
+	SinkVChan_type*		pulseTrainVChan;
 	
 	HWTrigSlave_type*	HWTrigSlave;				// For establishing a task start HW-trigger dependency, this being a slave.        
 
@@ -240,7 +240,7 @@ static int					ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_ty
 /// HIPAR mod/ if !NULL the function performs only an initialization of a DAQLabModule_type.
 /// HIRET address of a DAQLabModule_type if memory allocation and initialization took place.
 /// HIRET NULL if only initialization was performed.
-DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className[], char instanceName[])
+DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl)
 {
 	VUPhotonCtr_type* 	vupc;
 	TaskControl_type*	tc;
@@ -254,7 +254,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 		vupc = (VUPhotonCtr_type*) mod;
 
 	// initialize base class
-	initalloc_DAQLabModule(&vupc->baseClass, className, instanceName);
+	initalloc_DAQLabModule(&vupc->baseClass, className, instanceName, workspacePanHndl);
 	
 	// create VUPhotonCtr Task Controller
 	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, UnConfigureTC, IterateTC, AbortIterationTC, StartTC, 
@@ -295,7 +295,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	vupc->samplingRate				= DEFAULT_SAMPLING_RATE;
 	vupc->refSamplingRate			= &vupc->samplingRate; 		// by default point to device set sampling rate
 
-	vupc->pulseTrainVchan			= NULL;
+	vupc->pulseTrainVChan			= NULL;
 	
 	
 		// METHODS
@@ -349,11 +349,11 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	
 	
 	// discard pulsetrain SinkVChan   
-	if (vupc->pulseTrainVchan) discard_VChan_type((VChan_type**)&vupc->pulseTrainVchan);
+	if (vupc->pulseTrainVChan) discard_VChan_type((VChan_type**)&vupc->pulseTrainVChan);
 	
+	DLUnregisterHWTrigSlave(vupc->HWTrigSlave);
 	discard_HWTrigSlave_type(&vupc->HWTrigSlave);  
-	DLUnregisterHWTrigSlave(vupc->HWTrigSlave);    
-
+	    
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
 	//----------------------------------------
@@ -517,9 +517,6 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// register HW Triggers with framework
 	DLRegisterHWTrigSlave(vupc->HWTrigSlave);
 	
-		
-	
-
 	TaskControlEvent(vupc->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 
 Error:
@@ -1016,13 +1013,13 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						SetCtrlsInPanCBInfo(chan, ((VUPhotonCtr_type*)vupc)->uiCtrlsCB, chan->panHndl);
 						
 						//add sink to receive pulsetrain settings
-						if (vupc->pulseTrainVchan==NULL){
+						if (vupc->pulseTrainVChan==NULL){
 							char*	pulsetrainVChanName		= DLGetUniqueVChanName(VChan_Default_PulseTrainSinkChan);
 							DLDataTypes allowedPacketTypes[] = {DL_PulseTrain_Freq, DL_PulseTrain_Ticks, DL_PulseTrain_Time};
-							vupc->pulseTrainVchan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance,VChanDataTimeout, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
+							vupc->pulseTrainVChan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance,VChanDataTimeout, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
 							// register VChan with DAQLab
-							DLRegisterVChan((DAQLabModule_type*)vupc, (VChan_type*)vupc->pulseTrainVchan);	
-							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVchan, PulseTrainDataReceivedTC);  
+							DLRegisterVChan((DAQLabModule_type*)vupc, (VChan_type*)vupc->pulseTrainVChan);	
+							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVChan, PulseTrainDataReceivedTC);  
 						}
 						// update main panel
 						RedrawMainPanel(vupc);
@@ -1194,8 +1191,8 @@ static void	IterateTC	(TaskControl_type* taskControl, BOOL const* abortIteration
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive pulse train settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
-	if (IsVChanConnected((VChan_type*)vupc->pulseTrainVchan)) {
-		errChk( GetDataPacket(vupc->pulseTrainVchan, &dataPacket, &errMsg) );
+	if (IsVChanConnected((VChan_type*)vupc->pulseTrainVChan)) {
+		errChk( GetDataPacket(vupc->pulseTrainVChan, &dataPacket, &errMsg) );
 		dataPacketDataPtr = GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
 		pulsetrain=*(PulseTrain_type**)dataPacketDataPtr;
 		vupc->nSamples=GetPulseTrainNPulses(pulsetrain);

@@ -24,7 +24,8 @@
 
 //==============================================================================
 // Constants
-				 //instrument registers
+		
+		//instrument registers
 #define	 CTRL_REG		0x00B0		//0x0000
 #define	 STAT_REG		0x00B4		//0x0004
 #define	 VERS_REG		0x00B8		//0x0008

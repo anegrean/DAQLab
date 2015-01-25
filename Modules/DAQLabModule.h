@@ -43,7 +43,9 @@ struct DAQLabModule {
 		// List of Virtual Channels provided by the module to the framework. Of VChan_type* 
 	ListType					VChans;
 		// module configuration panel; one panel per module
-	int							cfgPanHndl;									
+	int							cfgPanHndl;	
+		// workspace panel where module panels can be loaded
+	int							workspacePanHndl;
 
 	// METHODS
 		
@@ -75,7 +77,7 @@ struct DAQLabModule {
 // Global functions
 
 	// module creation/discarding
-DAQLabModule_type*				initalloc_DAQLabModule				(DAQLabModule_type* mod, char className[], char instanceName[]);
+DAQLabModule_type*				initalloc_DAQLabModule				(DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl);
 void 							discard_DAQLabModule 				(DAQLabModule_type** mod);
 
 	// removes modules

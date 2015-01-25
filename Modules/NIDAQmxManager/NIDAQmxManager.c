@@ -1234,7 +1234,7 @@ double taskEndTime;
 /// HIPAR mod/ if !NULL the function performs only an initialization of a DAQLabModule_type.
 /// HIRET address of a DAQLabModule_type if memory allocation and initialization took place.
 /// HIRET NULL if only initialization was performed. 
-DAQLabModule_type*	initalloc_NIDAQmxManager (DAQLabModule_type* mod, char className[], char instanceName[])
+DAQLabModule_type*	initalloc_NIDAQmxManager (DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl)
 {
 	NIDAQmxManager_type* nidaq;
 	
@@ -1245,7 +1245,7 @@ DAQLabModule_type*	initalloc_NIDAQmxManager (DAQLabModule_type* mod, char classN
 		nidaq = (NIDAQmxManager_type*) mod;
 		
 	// initialize base class
-	initalloc_DAQLabModule(&nidaq->baseClass, className, instanceName);
+	initalloc_DAQLabModule(&nidaq->baseClass, className, instanceName, workspacePanHndl);
 	//------------------------------------------------------------
 	
 	//---------------------------
@@ -2890,6 +2890,26 @@ static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callb
 			
 			break;
 			
+		case AIAOChSet_AIDataType:
+			
+			int AIDataTypeIdx;
+			
+			GetCtrlIndex(panel, control, &AIDataTypeIdx);
+			switch (AIDataTypeIdx) {
+					
+				case 0:
+					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_Double);
+					break;
+					
+				case 1:
+					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_Float);
+					break;
+			}
+			
+			DLUpdateSwitchboard();
+			
+			break;
+			
 		case AIAOChSet_Terminal:
 			
 			int terminalType;
@@ -3689,6 +3709,14 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							SetCtrlIndex(newChan->baseClass.chanPanHndl, AIAOChSet_Range, AIchanAttr->Vrngs->Nrngs - 1);
 							newChan->Vmax = AIchanAttr->Vrngs->high[AIchanAttr->Vrngs->Nrngs - 1];
 							newChan->Vmin = AIchanAttr->Vrngs->low[AIchanAttr->Vrngs->Nrngs - 1];
+							
+							//---------------------
+							// Data type conversion
+							//---------------------
+							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, 0, "double", 0);
+							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, 1, "float", 1);
+							SetCtrlIndex(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, 0); // set to default
+							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, ATTR_VISIBLE, TRUE);
 							
 							//--------------------------
 							// Create and register VChan
@@ -8902,18 +8930,19 @@ Error:
 
 int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
-	Dev_type*			dev 			= callbackData;
-	float64*    		readBuffer		= NULL;				// temporary buffer to place data into
+	Dev_type*			dev 					= callbackData;
+	float64*    		readBuffer				= NULL;				// temporary buffer to place data into
 	uInt32				nAI;
 	int					nRead;
-	int					error			= 0;
-	char*				errMsg			= NULL;
-	ChanSet_type**		chanSetPtr		= NULL;
-	size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet);
-	size_t				chIdx			= 0;
-	double*				waveformData	= NULL;
-	Waveform_type*		waveform		= NULL; 
-	DataPacket_type*	dataPacket		= NULL;
+	int					error					= 0;
+	char*				errMsg					= NULL;
+	ChanSet_type**		chanSetPtr				= NULL;
+	size_t				nItems					= ListNumItems(dev->AITaskSet->chanSet);
+	size_t				chIdx					= 0;
+	double*				waveformData_double		= NULL;
+	float*				waveformData_float		= NULL;
+	Waveform_type*		waveform				= NULL; 
+	DataPacket_type*	dataPacket				= NULL;
 	
 	// allocate memory to read samples
 	DAQmxErrChk( DAQmxGetTaskAttribute(taskHandle, DAQmx_Task_NumChans, &nAI) );
@@ -8927,12 +8956,31 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		// include only channels for which HW-timing is required
 		if ((*chanSetPtr)->onDemand) continue;
 		
-		// create waveform
-		nullChk( waveformData = malloc(nRead * sizeof(double)) );
-		memcpy(waveformData, readBuffer + chIdx * nRead, nRead * sizeof(double));
-		nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData) );
-		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) ); 
-		
+		switch(GetSourceVChanDataType((*chanSetPtr)->srcVChan)) {
+				
+			case DL_Waveform_Double:
+				
+				nullChk( waveformData_double = malloc(nRead * sizeof(double)) );
+				memcpy(waveformData_double, readBuffer + chIdx * nRead, nRead * sizeof(double));
+				
+				nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_double) );
+				nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) ); 
+				
+				break;
+				
+			case DL_Waveform_Float:
+				
+				nullChk( waveformData_float = malloc(nRead * sizeof(float)) );
+				// transform double data to float
+				for (int j = 0; j < nRead; j++)
+					waveformData_float[j] = (float) *(readBuffer + chIdx * nRead + j);
+				
+				nullChk( waveform = init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_float) );
+				nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+				
+				break;
+		}
+
 		// send data packet with waveform
 		errChk( SendDataPacket((*chanSetPtr)->srcVChan, &dataPacket, 0, &errMsg) );
 		
@@ -8954,7 +9002,8 @@ DAQmxError:
 	OKfree(DAQmxErrMsg);
 	ClearDAQmxTasks(dev); 
 	OKfree(readBuffer); 
-	OKfree(waveformData);
+	OKfree(waveformData_double);
+	OKfree(waveformData_float);
 	discard_Waveform_type(&waveform);
 	discard_DataPacket_type(&dataPacket);
 	return 0;
@@ -8967,7 +9016,8 @@ Error:
 	ClearDAQmxTasks(dev);
 	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);  
 	OKfree(readBuffer);
-	OKfree(waveformData);
+	OKfree(waveformData_double);
+	OKfree(waveformData_float);
 	discard_Waveform_type(&waveform);
 	discard_DataPacket_type(&dataPacket);
 	return 0;
@@ -8977,21 +9027,22 @@ Error:
 // It is not called if task stops after calling DAQmxClearTask or DAQmxStopTask.
 int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
-	Dev_type*			dev 				= callbackData;
-	uInt32				nSamples			= 0;						// number of samples per channel in the AI buffer
-	float64*    		readBuffer			= NULL;						// temporary buffer to place data into       
-	uInt32				nAI					= 0;
-	int					error				= 0;
-	char*				errMsg				= NULL;
-	int					nRead				= 0;
-	ChanSet_type**		chanSetPtr			= NULL;
-	size_t				nItems				= ListNumItems(dev->AITaskSet->chanSet);
-	int*				nActiveTasksPtr		= NULL;
-	DataPacket_type*	nullPacket			= NULL;
-	size_t				chIdx				= 0;
-	double*				waveformData		= NULL;
-	DataPacket_type*	dataPacket			= NULL;
-	Waveform_type*		waveform			= NULL;
+	Dev_type*			dev 					= callbackData;
+	uInt32				nSamples				= 0;						// number of samples per channel in the AI buffer
+	float64*    		readBuffer				= NULL;						// temporary buffer to place data into       
+	uInt32				nAI						= 0;
+	int					error					= 0;
+	char*				errMsg					= NULL;
+	int					nRead					= 0;
+	ChanSet_type**		chanSetPtr				= NULL;
+	size_t				nItems					= ListNumItems(dev->AITaskSet->chanSet);
+	int*				nActiveTasksPtr			= NULL;
+	DataPacket_type*	nullPacket				= NULL;
+	size_t				chIdx					= 0;
+	double*				waveformData_double		= NULL;
+	float*				waveformData_float		= NULL;
+	DataPacket_type*	dataPacket				= NULL;
+	Waveform_type*		waveform				= NULL;
 
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
@@ -9032,23 +9083,40 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	// read remaining samples from the AI buffer
 	DAQmxErrChk( DAQmxReadAnalogF64(taskHandle, -1, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL) );
 	
-	// forward data to Source VChans
 	for (size_t i = 1; i <= nItems; i++) {
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
 		if ((*chanSetPtr)->onDemand) continue;
 		
-		// create waveform
-		nullChk( waveformData = malloc(nRead * sizeof(double)) );
-		memcpy(waveformData, readBuffer + chIdx * nRead, nRead * sizeof(double));
-		nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData) );
-		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform, NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );  
-		
+		switch(GetSourceVChanDataType((*chanSetPtr)->srcVChan)) {
+				
+			case DL_Waveform_Double:
+				
+				nullChk( waveformData_double = malloc(nRead * sizeof(double)) );
+				memcpy(waveformData_double, readBuffer + chIdx * nRead, nRead * sizeof(double));
+				
+				nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_double) );
+				nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) ); 
+				
+				break;
+				
+			case DL_Waveform_Float:
+				
+				nullChk( waveformData_float = malloc(nRead * sizeof(float)) );
+				// transform double data to float
+				for (int j = 0; j < nRead; j++)
+					waveformData_float[j] = (float) *(readBuffer + chIdx * nRead + j);
+				
+				nullChk( waveform = init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_float) );
+				nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+				
+				break;
+		}
+
 		// send data packet with waveform
 		errChk( SendDataPacket((*chanSetPtr)->srcVChan, &dataPacket, 0, &errMsg) );
 		// send NULL packet to signal end of data transmission
 		errChk( SendDataPacket((*chanSetPtr)->srcVChan, &nullPacket, 0, &errMsg) );
-		
 		// next AI channel
 		chIdx++;
 	}
@@ -9076,7 +9144,7 @@ DAQmxError:
 	OKfree(DAQmxErrMsg);
 	ClearDAQmxTasks(dev); 
 	OKfree(readBuffer); 
-	OKfree(waveformData);
+	OKfree(waveformData_double);
 	discard_Waveform_type(&waveform);
 	discard_DataPacket_type(&dataPacket);
 	return 0;
@@ -9090,7 +9158,7 @@ Error:
 	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);  
 	OKfree(readBuffer);
 	OKfree(errMsg);
-	OKfree(waveformData);
+	OKfree(waveformData_double);
 	discard_Waveform_type(&waveform);
 	discard_DataPacket_type(&dataPacket);
 	return 0;

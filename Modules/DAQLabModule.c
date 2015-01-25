@@ -37,7 +37,7 @@
 
 
 /// HIFN Allocates memory and initializes a generic DAQLabModule
-DAQLabModule_type* initalloc_DAQLabModule (DAQLabModule_type* mod, char className[], char instanceName[])
+DAQLabModule_type* initalloc_DAQLabModule (DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl)
 {
 	if (!mod) {
 		mod = malloc (sizeof(DAQLabModule_type));
@@ -48,7 +48,8 @@ DAQLabModule_type* initalloc_DAQLabModule (DAQLabModule_type* mod, char classNam
 	
 	mod->className					= StrDup(className);
 	mod->instanceName				= StrDup(instanceName);
-	mod->cfgPanHndl					= 0; 
+	mod->cfgPanHndl					= 0;
+	mod->workspacePanHndl			= workspacePanHndl;
 	//init
 	mod->taskControllers			= 0;
 	mod->VChans						= 0;

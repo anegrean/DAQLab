@@ -125,6 +125,9 @@ SourceVChan_type*			GetSourceVChan						(SinkVChan_type* sinkVChan);
 
 DLDataTypes					GetSourceVChanDataType				(SourceVChan_type* srcVChan);
 
+	// Changes the data types of a Source VChan. If there is a Sink VChan attached, and none of its data types are compatible 
+	// with the Source VChan, then the Sink VChan is disconnected from the Source VChan.
+void						SetSourceVChanDataType				(SourceVChan_type* srcVChan, DLDataTypes dataType);
 	// Changes the data types a SinkVChan accepts. If there is a Source VChan attached to the Sink VChan, and the data type
 	// of the Source VChan is incompatible with the provided types, then the Sink VChan is disconnected from the Source VChan.
 void						SetSinkVChanDataTypes				(SinkVChan_type* sinkVChan, size_t nDataTypes, DLDataTypes dataTypes[]);

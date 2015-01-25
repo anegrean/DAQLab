@@ -48,7 +48,7 @@ struct DS_Channel{
 // Global functions
 
 
-DAQLabModule_type*	initalloc_DataStorage 	(DAQLabModule_type* mod, char className[], char instanceName[]);
+DAQLabModule_type*	initalloc_DataStorage 	(DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl);
 void 				discard_DataStorage    	(DAQLabModule_type** mod);
 
 

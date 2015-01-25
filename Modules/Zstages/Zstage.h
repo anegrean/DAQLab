@@ -159,7 +159,7 @@ struct Zstage {
 //==============================================================================
 // Global functions
 
-DAQLabModule_type*	initalloc_Zstage 	(DAQLabModule_type* mod, char className[], char instanceName[]);
+DAQLabModule_type*	initalloc_Zstage 	(DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl);
 void 				discard_Zstage 		(DAQLabModule_type** mod);
 
 	// loads generic Z stage module resources

@@ -19,25 +19,28 @@
 #define  AxisSelect_CancelBTTN            4       /* control type: command, callback function: (none) */
 #define  AxisSelect_OKBTTN                5       /* control type: command, callback function: (none) */
 
-#define  EnginesPan                       2
+#define  DisplayPan                       2
+#define  DisplayPan_Image                 2       /* control type: deco, callback function: (none) */
+
+#define  EnginesPan                       3
 #define  EnginesPan_DoneBTTN              2       /* control type: command, callback function: (none) */
 #define  EnginesPan_Plate_3               3       /* control type: deco, callback function: (none) */
 #define  EnginesPan_ScanTypes             4       /* control type: listBox, callback function: (none) */
 
-#define  ManageAxis                       3
+#define  ManageAxis                       4
 #define  ManageAxis_AxisCalibList         2       /* control type: listBox, callback function: (none) */
 #define  ManageAxis_Plate_3               3       /* control type: deco, callback function: (none) */
 #define  ManageAxis_Close                 4       /* control type: command, callback function: (none) */
 #define  ManageAxis_New                   5       /* control type: command, callback function: (none) */
 
-#define  NewObjPan                        4
+#define  NewObjPan                        5
 #define  NewObjPan_Cancel                 2       /* control type: command, callback function: (none) */
 #define  NewObjPan_OK                     3       /* control type: command, callback function: (none) */
 #define  NewObjPan_Name                   4       /* control type: string, callback function: (none) */
 #define  NewObjPan_ObjectiveLensFL        5       /* control type: numeric, callback function: (none) */
 #define  NewObjPan_Plate                  6       /* control type: deco, callback function: (none) */
 
-#define  NonResGCal                       5
+#define  NonResGCal                       6
 #define  NonResGCal_Tab                   2       /* control type: tab, callback function: (none) */
 #define  NonResGCal_GalvoPlot             3       /* control type: graph, callback function: (none) */
 #define  NonResGCal_CursorY               4       /* control type: numeric, callback function: (none) */
@@ -46,7 +49,7 @@
 #define  NonResGCal_Done                  7       /* control type: command, callback function: (none) */
 #define  NonResGCal_SaveCalib             8       /* control type: command, callback function: (none) */
 
-#define  RectRaster                       6
+#define  RectRaster                       7
 #define  RectRaster_PixelSize             2       /* control type: numeric, callback function: (none) */
 #define  RectRaster_Plate_3               3       /* control type: deco, callback function: (none) */
 #define  RectRaster_Duration              4       /* control type: numeric, callback function: (none) */
@@ -64,11 +67,11 @@
 #define  RectRaster_ExecutionMode         16      /* control type: radioButton, callback function: (none) */
 #define  RectRaster_Ready                 17      /* control type: LED, callback function: (none) */
 
-#define  ScanPan                          7
+#define  ScanPan                          8
 #define  ScanPan_Plate                    2       /* control type: deco, callback function: (none) */
 #define  ScanPan_ScanEngines              3       /* control type: tab, callback function: (none) */
 
-#define  ScanSetPan                       8
+#define  ScanSetPan                       9
 #define  ScanSetPan_AddObjective          2       /* control type: command, callback function: (none) */
 #define  ScanSetPan_AddImgChan            3       /* control type: command, callback function: (none) */
 #define  ScanSetPan_Close                 4       /* control type: command, callback function: (none) */

@@ -16,6 +16,7 @@
 #include <formatio.h>  
 #include "LaserScanning.h"
 #include <userint.h>
+#include <ImageControl.h>
 #include "combobox.h" 
 #include <analysis.h>
 #include <nivision.h>
@@ -263,6 +264,7 @@ typedef struct {
 typedef struct {
 	SinkVChan_type*				detVChan;				// Sink VChan for receiving pixel data
 	ScanEngine_type*			scanEngine;				// Reference to scan engine to which this detection channel belongs
+	int							displayPanHndl;
 } DetChan_type;
 
 //---------------------------------------------------------------
@@ -451,7 +453,7 @@ struct LaserScanning {
 //-------------------
 static DetChan_type*				init_DetChan_type								(ScanEngine_type* scanEngine, char VChanName[]);
 
-static void							discard_DetChan_type							(DetChan_type** a);
+static void							discard_DetChan_type							(DetChan_type** detChanPtr);
 
 //----------------------
 // Scan axis calibration
@@ -641,6 +643,9 @@ static BOOL 						NonResRectRasterScan_ReadyToScan				(RectRaster_type* scanEngi
 static int							NonResRectRasterScan_GenerateScanSignals		(RectRaster_type* scanEngine, char** errorInfo);
 	// builds images from a continuous pixel stream
 static int 							NonResRectRasterScan_BuildImage 				(RectRaster_type* rectRaster, size_t imgBufferIdx, char** errorInfo);
+	// closes the display of an image panel
+void CVICALLBACK 					DisplayClose_CB 								(int menuBar, int menuItem, void *callbackData, int panel);
+
 
 //---------------------------------------------------------
 // determines scan axis types based on the scan engine type
@@ -790,7 +795,7 @@ static int							ModuleEventHandler_RectRaster					(TaskControl_type* taskContro
 /// HIPAR mod/ Pass !NULL if the function performs only an initialization of a DAQLabModule_type.
 /// HIRET address of a DAQLabModule_type if memory allocation and initialization took place.
 /// HIRET NULL if only initialization was performed.
-DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char className[], char instanceName[])
+DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl)
 {
 	LaserScanning_type*		ls;
 	
@@ -801,7 +806,7 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 		ls = (LaserScanning_type*) mod;
 		
 	// initialize base class
-	initalloc_DAQLabModule(&ls->baseClass, className, instanceName);
+	initalloc_DAQLabModule(&ls->baseClass, className, instanceName, workspacePanHndl);
 	//------------------------------------------------------------
 	
 	//---------------------------
@@ -2763,21 +2768,75 @@ static DetChan_type* init_DetChan_type (ScanEngine_type* scanEngine, char VChanN
 	DetChan_type* det = malloc(sizeof(DetChan_type));
 	if (!det) return NULL;
 	
-	DLDataTypes allowedPacketTypes[] = Allowed_Detector_Data_Types;
+	// init
+	DLDataTypes allowedPacketTypes[] 	= Allowed_Detector_Data_Types;
+	det->displayPanHndl 				= 0;
+	det->detVChan						= NULL;
 	
-	det->detVChan 	= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, VChanDataTimeout, DetVChan_Connected, DetVChan_Disconnected);
-	det->scanEngine = scanEngine;
+	if ( !(det->detVChan 		= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, VChanDataTimeout, DetVChan_Connected, DetVChan_Disconnected)) ) goto Error;
+	if ( (det->displayPanHndl 	= LoadPanel(scanEngine->lsModule->baseClass.workspacePanHndl, MOD_LaserScanning_UI, DisplayPan)) < 0 ) goto Error;
+	det->scanEngine 			= scanEngine;
+	
+	// convert decoration control to image control
+	if (ImageControl_ConvertFromDecoration(det->displayPanHndl, DisplayPan_Image, NULL) < 0) goto Error;
+	
+	// adjust image control
+	ImageControl_SetAttribute(det->displayPanHndl, DisplayPan_Image, ATTR_IMAGECTRL_FILL_COLOR, VAL_BLACK);
+	ImageControl_SetAttribute(det->displayPanHndl, DisplayPan_Image, ATTR_IMAGECTRL_BACKGROUND_COLOR, VAL_BLACK);
+	ImageControl_SetAttribute(det->displayPanHndl, DisplayPan_Image, ATTR_IMAGECTRL_BACKGROUND_COLOR, VAL_BLACK);
+	ImageControl_SetAttribute(det->displayPanHndl, DisplayPan_Image, ATTR_IMAGECTRL_CURRENT_TOOL, VAL_PAN_TOOL);
+	
+	// add tools to the window
+	ToolWindowOptions ImgDisplayTools = {	.showSelectionTool 			= FALSE,
+											.showZoomTool				= TRUE,
+											.showPointTool				= FALSE,
+											.showLineTool				= FALSE,
+											.showRectangleTool			= FALSE,
+											.showOvalTool				= FALSE,
+											.showPolygonTool			= FALSE,
+											.showClosedFreehandTool		= FALSE,
+											.showPolyLineTool			= FALSE,
+											.showFreehandTool			= FALSE,
+											.showAnnulusTool			= FALSE,
+											.showRotatedRectangleTool	= FALSE,
+											.showPanTool				= TRUE,
+											.showZoomOutTool			= TRUE,
+											.reserved2					= FALSE,
+											.reserved3					= FALSE,
+											.reserved4					= FALSE	   };
+	
+	ImageControl_SetTools(det->displayPanHndl, DisplayPan_Image, &ImgDisplayTools);
+	
+	// add menu bar to the panel
+	int 	displayMenuBarHndl;
+	int		displayMenuIDClose;
+	if ( (displayMenuBarHndl		= NewMenuBar(det->displayPanHndl)) < 0 ) goto Error;
+	if ( (displayMenuIDClose		= NewMenu(displayMenuBarHndl, "Close", -1)) < 0 ) goto Error;
+	SetMenuBarAttribute(displayMenuBarHndl, 0, ATTR_SHOW_IMMEDIATE_ACTION_SYMBOL, 0);
+	SetMenuBarAttribute(displayMenuBarHndl, displayMenuIDClose, ATTR_CALLBACK_FUNCTION_POINTER, DisplayClose_CB);
+	SetMenuBarAttribute(displayMenuBarHndl, displayMenuIDClose, ATTR_CALLBACK_DATA, det);      
 	
 	return det;
+	
+Error:
+	
+	// cleanup
+	discard_VChan_type(&det->detVChan);
+	if (det->displayPanHndl) DiscardPanel(det->displayPanHndl);
+	
+	free(det);
+	return NULL;
 }
 
-static void	discard_DetChan_type (DetChan_type** a)
+static void	discard_DetChan_type (DetChan_type** detChanPtr)
 {
-	if (!*a) return;
+	if (!*detChanPtr) return;
 	
-	discard_VChan_type((VChan_type**)&(*a)->detVChan);
+	discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
+	DiscardPanel((*detChanPtr)->displayPanHndl);
+	(*detChanPtr)->displayPanHndl = 0;
 	
-	OKfree(*a);
+	OKfree(*detChanPtr);
 }
 
 static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -5122,6 +5181,15 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 		// Process NULL packet
 		//----------------------------------------------------------------------
 		
+		// TEMPORARY for one channel only
+		// end task controller iteration
+		if (!pixelPacket) {
+			TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
+			TaskControlEvent(rectRaster->baseClass.taskControl, TASK_EVENT_STOP, NULL, NULL);
+			break;
+		}
+			
+		
 		//----------------------------------------------------------------------
 		// Add data to the buffer
 		//----------------------------------------------------------------------
@@ -5283,18 +5351,14 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				nullChk( imaqImg = imaqCreateImage(imaqImgType, 0) );
 				nullChk( imaqArrayToImage(imaqImg, imgBuffer->imagePixels, rectRaster->height, rectRaster->width) );
 				
-				/* send here image
-				// required for sending the data packet
-				tmpimgptr = malloc(sizeof(Image*));
-				if (!tmpimgptr) goto MemErr;
-				tmpimgptr[0] = imaqImg; 
-				
-				// put image in a data packet
-				init_DataPacket_type(IMAQ_Img, sizeof(Image*), 1, NULL, (void**)tmpimgptr, 1, &imagepacket);
-				imagepacket.imagetype=imagetype;
-				imagepacket.idstr=idstr;
-				if (SendData(ActiveTaskIndex, VChanName, &imagepacket) < 0) goto SendDataError;   		  
-				*/
+				// display the image in the display pannel of each channel
+				if ( (error = ImageControl_SetAttribute(imgBuffer->detChan->displayPanHndl, DisplayPan_Image, ATTR_IMAGECTRL_IMAGE, imaqImg)) < 0 ) {
+					errMsg = StrDup(GetGeneralErrorString(error));
+					goto Error;
+				}
+		
+				// TEMPORARY: just complete iteration, and use only one channel
+				TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
 				
 				// reset number of elements in pixdata buffer (contents is not cleared!) new frame data will overwrite the old frame data in the buffer
 				// NOTE & WARNING: data in the imgBuffer->tmpPixels is kept since multiple images can follow and imgBuffer->tmpPixels may contain data from the next image
@@ -5303,6 +5367,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				imgBuffer->nAssembledColumns = 0;
 				// reverse direction of every second image
 				imgBuffer->revWidthFlag = !imgBuffer->revWidthFlag;
+				return 0;
 			}
 			
 			
@@ -5329,6 +5394,14 @@ Error:
 	OKfree(errMsg);
 	
 	return error;
+}
+
+void CVICALLBACK DisplayClose_CB (int menuBar, int menuItem, void *callbackData, int panel)
+{
+	DetChan_type*	detChan = callbackData;
+	
+	ImageControl_SetAttribute(panel, DisplayPan_Image, ATTR_IMAGECTRL_IMAGE, NULL);
+	HidePanel(panel);
 }
 
 static void	GetScanAxisTypes (ScanEngine_type* scanEngine, ScanAxis_type* fastAxisType, ScanAxis_type* slowAxisType)
@@ -6486,13 +6559,35 @@ static int UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* 
 
 static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
-	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectRaster_type* 	engine 			= GetTaskControlModuleData(taskControl);
+	int					error 			= 0;
+	char*				errMsg			= NULL;
+	size_t				nIterations;
 	
-	TaskControlIterationDone(taskControl, 0, "", FALSE);
+	switch(engine->baseClass.scanMode) {
+		
+		case ScanEngineMode_Frames:
+			
+			if (engine->imgBuffers)
+				// receive pixel stream and assemble image
+				errChk( NonResRectRasterScan_BuildImage (engine, 0, &errMsg) );
+			else
+				// if there are no detection channels assigned, then do nothing
+				TaskControlIterationDone(taskControl, 0, 0, FALSE);
+			
+			break;
+			
+		case ScanEngineMode_PointROIs:
+			
+			break;
+	}
 	
-	// receive pixel stream and assemble image
+	return;
 	
+Error:
 	
+	TaskControlIterationDone(taskControl, error, errMsg, FALSE);
+	OKfree(errMsg);
 }
 
 static void AbortIterationTC_RectRaster (TaskControl_type* taskControl,BOOL const* abortFlag)
@@ -6547,6 +6642,15 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 				break;
 		}
 		engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, (uInt64)(engine->flyInDelay/engine->pixelDwellTime), pixelByteSize, FALSE, FALSE); 
+	}
+	
+	//--------------------------------------------------------------------------------------------------------
+	// Display image panels for each channel
+	//--------------------------------------------------------------------------------------------------------
+	
+	for (size_t i = 1; i <= nDetChans; i++) {
+		detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
+		DisplayPanel(detChan->displayPanHndl);
 	}
 	
 	//--------------------------------------------------------------------------------------------------------

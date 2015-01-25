@@ -124,7 +124,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)  ;
 /// HIPAR mod/ if !NULL the function performs only an initialization of a DAQLabModule_type.
 /// HIRET address of a DAQLabModule_type if memory allocation and initialization took place.
 /// HIRET NULL if only initialization was performed.
-DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className[], char instanceName[])
+DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl)
 {
 	DataStorage_type* 	ds;
 	TaskControl_type*	tc;
@@ -138,7 +138,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 		ds = (DataStorage_type*) mod;
 
 	// initialize base class
-	initalloc_DAQLabModule(&ds->baseClass, className, instanceName);
+	initalloc_DAQLabModule(&ds->baseClass, className, instanceName, workspacePanHndl);
 	
 	ds->basefilepath		= StrDup(DATAFILEBASEPATH);
 	ds->rawdatapath 		= NULL;

@@ -36,7 +36,7 @@
 //==============================================================================
 // Global functions
 
-DAQLabModule_type*	initalloc_NIDAQmxManager	(DAQLabModule_type* mod, char className[], char instanceName[]);
+DAQLabModule_type*	initalloc_NIDAQmxManager	(DAQLabModule_type* mod, char className[], char instanceName[], workspacePanHndl);
 void 				discard_NIDAQmxManager		(DAQLabModule_type** mod); 
 
 #ifdef __cplusplus

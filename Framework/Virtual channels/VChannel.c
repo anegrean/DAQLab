@@ -830,6 +830,30 @@ DLDataTypes GetSourceVChanDataType (SourceVChan_type* srcVChan)
 	return srcVChan->dataType;
 }
 
+void SetSourceVChanDataType (SourceVChan_type* srcVChan, DLDataTypes dataType)
+{
+	// disconnect Sink VChans if they are incompatible
+	size_t 				nSinks 			= ListNumItems(srcVChan->sinkVChans);
+	SinkVChan_type*		sinkVChan;
+	BOOL				compatibleVChans;
+	for (size_t i = 1; i <= nSinks; i++) {
+		sinkVChan = *(SinkVChan_type**) ListGetPtrToItem(srcVChan->sinkVChans, i);
+		
+		compatibleVChans = FALSE;
+		for (size_t j = 0; j < sinkVChan->nDataTypes; j++) {
+			if (srcVChan->dataType == sinkVChan->dataTypes[j])
+				compatibleVChans = TRUE;
+			break;
+		}
+		
+		if (!compatibleVChans)
+			VChan_Disconnect((VChan_type*)sinkVChan);
+	}
+	
+	// change Source VChan data type
+	srcVChan->dataType = dataType;
+}
+
 void SetSinkVChanDataTypes (SinkVChan_type* sinkVChan, size_t nDataTypes, DLDataTypes dataTypes[])
 {
 	if (!nDataTypes) return;

@@ -3,8 +3,8 @@
 // Title:		HW_VUPC.c
 // Purpose:		A short description of the implementation.
 //
-// Created on:	2-7-2014 at 14:31:24 by Lex.
-// Copyright:	Vrije Universiteit. All Rights Reserved.
+// Created on:	2-7-2014 at 14:31:24 by Lex van der Gracht.
+// Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 

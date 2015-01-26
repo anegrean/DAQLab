@@ -3,8 +3,8 @@
 // Title:		DataStorage.h
 // Purpose:		A short description of the interface.
 //
-// Created on:	12-9-2014 at 12:08:22 by Systeembeheer.
-// Copyright:	IT-Groep FEW, Vrije Universiteit Amsterdam. All Rights Reserved.
+// Created on:	12-9-2014 at 12:08:22 by Lex van der Gracht.
+// Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 

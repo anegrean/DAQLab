@@ -3,8 +3,8 @@
 // Title:		LaserScanning.h
 // Purpose:		A short description of the interface.
 //
-// Created on:	25-8-2014 at 14:17:14 by Adrian.
-// Copyright:	. All Rights Reserved.
+// Created on:	25-8-2014 at 14:17:14 by Adrian Negrean.
+// Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 

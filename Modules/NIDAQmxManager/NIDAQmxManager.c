@@ -14,6 +14,7 @@
 #include "DAQLab.h" 		// include this first
 #include <formatio.h> 
 #include <userint.h>
+#include <limits.h>
 #include "DAQLabModule.h"
 #include "NIDAQmxManager.h"
 #include "UI_NIDAQmxManager.h"
@@ -585,11 +586,23 @@ struct ChanSet {
 	SourceVChan_type*			srcVChan;					// Source VChan assigned to input type physical channels.
 	SinkVChan_type*				sinkVChan;					// Sink VChan assigned to output type physical channels.
 	BOOL						onDemand;					// If TRUE, the channel is updated/read out using software-timing.
+	double						ScaleMax;					// Maximum value in the channel's measurement units used to rescale an input signal when data type is other than double to 
+															// the range of the chosen data type.	
+	double						ScaleMin;					// Minimum value in the channel's measurement units used to rescale an input signal when data type is other than double to
+															// the range of the chosen data type.	
 	// METHODS
 	DiscardChanSetFptr_type		discardFptr;				// Function pointer to discard specific channel data that is derived from this base class.					
 };
 
 // Analog Input & Output channel type settings
+typedef enum {
+	AI_Double,
+	AI_Float,
+	AI_UInt,
+	AI_UShort,
+	AI_UChar
+} AIDataTypes;
+
 typedef struct {
 	ChanSet_type				baseClass;					// Channel settings common to all channel types.
 	AIChannel_type*				aiChanAttr;					// If AI channel, this points to channel attributes, otherwise this is NULL.
@@ -1057,6 +1070,7 @@ static int CVICALLBACK 				StartCODAQmxTasks_CB 					(void *functionData);
 // DAQmx task callbacks
 //---------------------
 	// AI
+static int 							SendAIBufferData 						(Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx, int nRead, float64* AIReadBuffer, char** errorInfo); 
 int32 CVICALLBACK 					AIDAQmxTaskDataAvailable_CB 			(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData);
 int32 CVICALLBACK 					AIDAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 status, void *callbackData);
 
@@ -2779,6 +2793,8 @@ static void  init_ChanSet_type (Dev_type* dev, ChanSet_type* chanSet, char physC
 	chanSet -> HWTrigSlave		= NULL;
 	chanSet -> referenceTrig	= NULL;
 	chanSet -> taskHndl			= NULL;
+	chanSet -> ScaleMax			= 0;
+	chanSet -> ScaleMin			= 0;
 }
 
 static void	discard_ChanSet_type (ChanSet_type** a)
@@ -2877,8 +2893,24 @@ static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callb
 			GetCtrlVal(panel, control, &rangeIdx);
 			
 			if (chSetPtr->aiChanAttr) {
+				
+				// read in ranges
 				chSetPtr->Vmax = chSetPtr->aiChanAttr->Vrngs->high[rangeIdx];
 				chSetPtr->Vmin = chSetPtr->aiChanAttr->Vrngs->low[rangeIdx];
+				//---------------------------
+				// adjust data type scaling
+				//---------------------------
+				// max value
+				chSetPtr->baseClass.ScaleMax = chSetPtr->Vmax; 
+				SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMax, chSetPtr->baseClass.ScaleMax); 
+				SetCtrlAttribute(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMax, ATTR_MAX_VALUE, chSetPtr->Vmax);
+				SetCtrlAttribute(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMax, ATTR_MIN_VALUE, chSetPtr->Vmin);
+				// min value
+				chSetPtr->baseClass.ScaleMin = chSetPtr->Vmin;
+				SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMin, chSetPtr->baseClass.ScaleMin); 
+				SetCtrlAttribute(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMin, ATTR_MAX_VALUE, chSetPtr->Vmax);
+				SetCtrlAttribute(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMin, ATTR_MIN_VALUE, chSetPtr->Vmin);
+							
 			} else {
 				chSetPtr->Vmax = chSetPtr->aoChanAttr->Vrngs->high[rangeIdx];
 				chSetPtr->Vmin = chSetPtr->aoChanAttr->Vrngs->low[rangeIdx];
@@ -2895,21 +2927,53 @@ static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callb
 			int AIDataTypeIdx;
 			
 			GetCtrlIndex(panel, control, &AIDataTypeIdx);
+			BOOL showScaleControls = FALSE;
 			switch (AIDataTypeIdx) {
 					
-				case 0:
+				case AI_Double:
 					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_Double);
 					break;
 					
-				case 1:
+				case AI_Float:
 					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_Float);
 					break;
+					
+				case AI_UInt:
+					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_UInt);
+					showScaleControls = TRUE;
+					break;
+					
+				case AI_UShort:
+					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_UShort);
+					showScaleControls = TRUE;
+					break;
+					
+				case AI_UChar:
+					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_UChar);
+					showScaleControls = TRUE;
+					break;
 			}
+			
+			// dim/undim scale controls
+			SetCtrlAttribute(panel, AIAOChSet_ScaleMin, ATTR_VISIBLE, showScaleControls);
+			SetCtrlAttribute(panel, AIAOChSet_ScaleMax, ATTR_VISIBLE, showScaleControls);
 			
 			DLUpdateSwitchboard();
 			
 			break;
 			
+		case AIAOChSet_ScaleMin:
+			
+			GetCtrlVal(panel, control, &chSetPtr->baseClass.ScaleMin);
+			
+			break;
+			
+		case AIAOChSet_ScaleMax:
+			
+			GetCtrlVal(panel, control, &chSetPtr->baseClass.ScaleMax);
+			
+			break;
+				
 		case AIAOChSet_Terminal:
 			
 			int terminalType;
@@ -3710,12 +3774,30 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							newChan->Vmax = AIchanAttr->Vrngs->high[AIchanAttr->Vrngs->Nrngs - 1];
 							newChan->Vmin = AIchanAttr->Vrngs->low[AIchanAttr->Vrngs->Nrngs - 1];
 							
+							//---------------------------
+							// adjust data type scaling
+							//---------------------------
+							// max value
+							newChan->baseClass.ScaleMax = newChan->Vmax;
+							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_ScaleMax, newChan->baseClass.ScaleMax); 
+							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_ScaleMax, ATTR_MAX_VALUE, newChan->Vmax);
+							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_ScaleMax, ATTR_MIN_VALUE, newChan->Vmin);
+							// min value
+							newChan->baseClass.ScaleMin = newChan->Vmin;
+							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_ScaleMin, newChan->baseClass.ScaleMin); 
+							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_ScaleMin, ATTR_MAX_VALUE, newChan->Vmax);
+							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_ScaleMin, ATTR_MIN_VALUE, newChan->Vmin);
+							
+							
 							//---------------------
 							// Data type conversion
 							//---------------------
-							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, 0, "double", 0);
-							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, 1, "float", 1);
-							SetCtrlIndex(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, 0); // set to default
+							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, AI_Double, "double", AI_Double);
+							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, AI_Float, "float", AI_Float);
+							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, AI_UInt, "uInt", AI_UInt);
+							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, AI_UShort, "uShort", AI_UShort);
+							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, AI_UChar, "uChar", AI_UChar);
+							SetCtrlIndex(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, AI_Double); // set double to default
 							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, ATTR_VISIBLE, TRUE);
 							
 							//--------------------------
@@ -8928,6 +9010,145 @@ Error:
 // DAQmx task callbacks
 //---------------------------------------------------------------------------------------------------------------------
 
+static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx, int nRead, float64* AIReadBuffer, char** errorInfo) 
+{
+	int					error					= 0;
+	char*				errMsg					= NULL;
+	double*				waveformData_double		= NULL;
+	float*				waveformData_float		= NULL;
+	uInt8*				waveformData_uInt8		= NULL;
+	uInt16*				waveformData_uInt16		= NULL;
+	uInt32*				waveformData_uInt32		= NULL;
+	Waveform_type*		waveform				= NULL; 
+	DataPacket_type*	dataPacket				= NULL;
+	double				scalingFactor;
+	double				scaledSignal;
+	double				maxSignal;
+	
+	switch(GetSourceVChanDataType(AIChSet->srcVChan)) {
+				
+		case DL_Waveform_Double:
+				
+			nullChk( waveformData_double = malloc(nRead * sizeof(double)) );
+			memcpy(waveformData_double, AIReadBuffer + chIdx * nRead, nRead * sizeof(double));
+				
+			nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_double) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) ); 
+				
+			break;
+				
+		case DL_Waveform_Float:
+				
+			nullChk( waveformData_float = malloc(nRead * sizeof(float)) );
+			// transform double data to float
+			for (int j = 0; j < nRead; j++)
+				waveformData_float[j] = (float) *(AIReadBuffer + chIdx * nRead + j);
+			
+			nullChk( waveform = init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_float) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+				
+			break;
+				
+		case DL_Waveform_UInt:
+				
+			// calculate scaling factor to transform double to uInt32 given min & max values
+			maxSignal = (double)UINT_MAX;
+			scalingFactor = maxSignal/(AIChSet->ScaleMax - AIChSet->ScaleMin);
+				
+			nullChk( waveformData_uInt32 = malloc(nRead * sizeof(uInt32)) );
+				
+			for (int j = 0; j < nRead; j++) {
+				// scale data
+				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nRead + j) - AIChSet->ScaleMin);
+				// apply limits and transform data
+				if (scaledSignal < 0) waveformData_uInt32[j] = 0;
+				else
+					if (scaledSignal > maxSignal) waveformData_uInt32[j] = UINT_MAX;
+					else
+						waveformData_uInt32[j] = (uInt32) scaledSignal;
+			}
+				
+			nullChk( waveform = init_Waveform_type(Waveform_UInt, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_uInt32) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UInt, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+				
+			break;
+				
+		case DL_Waveform_UShort:
+				
+			// calculate scaling factor to transform double to uInt16 given min & max values
+			maxSignal = (double)USHRT_MAX;
+			scalingFactor = maxSignal/(AIChSet->ScaleMax - AIChSet->ScaleMin);
+				
+			nullChk( waveformData_uInt16 = malloc(nRead * sizeof(uInt16)) );
+				
+			for (int j = 0; j < nRead; j++) {
+				// scale data
+				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nRead + j) - AIChSet->ScaleMin);
+				// apply limits and transform data
+				if (scaledSignal < 0) waveformData_uInt16[j] = 0;
+				else
+					if (scaledSignal > maxSignal) waveformData_uInt16[j] = USHRT_MAX;
+					else
+						waveformData_uInt16[j] = (uInt16) scaledSignal;
+			}
+				
+			nullChk( waveform = init_Waveform_type(Waveform_UShort, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_uInt16) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+				
+			break;
+				
+		case DL_Waveform_UChar:
+				
+			// calculate scaling factor to transform double to uInt8 given min & max values
+			maxSignal = (double)UCHAR_MAX;
+			scalingFactor = maxSignal/(AIChSet->ScaleMax - AIChSet->ScaleMin);
+				
+			nullChk( waveformData_uInt8 = malloc(nRead * sizeof(uInt8)) );
+				
+			for (int j = 0; j < nRead; j++) {
+				// scale data
+				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nRead + j) - AIChSet->ScaleMin);
+				// apply limits and transform data
+				if (scaledSignal < 0) waveformData_uInt8[j] = 0;
+				else
+					if (scaledSignal > maxSignal) waveformData_uInt8[j] = UCHAR_MAX;
+					else
+						waveformData_uInt8[j] = (uInt8) scaledSignal;
+			}
+				
+			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_uInt8) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+				
+			break;
+	}
+
+	// send data packet with waveform
+	errChk( SendDataPacket(AIChSet->srcVChan, &dataPacket, 0, &errMsg) );
+		
+	return 0;
+	
+Error:
+	
+	// cleanup
+	OKfree(waveformData_double);
+	OKfree(waveformData_float);
+	OKfree(waveformData_uInt8);
+	OKfree(waveformData_uInt16);
+	OKfree(waveformData_uInt32);
+	discard_Waveform_type(&waveform);
+	discard_DataPacket_type(&dataPacket);
+	
+	// no error message means out of memory
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "SendAIBufferData", errMsg);
+	OKfree(errMsg);
+	
+	return error;
+}
+
 int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
 	Dev_type*			dev 					= callbackData;
@@ -8939,10 +9160,6 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	ChanSet_type**		chanSetPtr				= NULL;
 	size_t				nItems					= ListNumItems(dev->AITaskSet->chanSet);
 	size_t				chIdx					= 0;
-	double*				waveformData_double		= NULL;
-	float*				waveformData_float		= NULL;
-	Waveform_type*		waveform				= NULL; 
-	DataPacket_type*	dataPacket				= NULL;
 	
 	// allocate memory to read samples
 	DAQmxErrChk( DAQmxGetTaskAttribute(taskHandle, DAQmx_Task_NumChans, &nAI) );
@@ -8955,35 +9172,8 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
 		if ((*chanSetPtr)->onDemand) continue;
-		
-		switch(GetSourceVChanDataType((*chanSetPtr)->srcVChan)) {
-				
-			case DL_Waveform_Double:
-				
-				nullChk( waveformData_double = malloc(nRead * sizeof(double)) );
-				memcpy(waveformData_double, readBuffer + chIdx * nRead, nRead * sizeof(double));
-				
-				nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_double) );
-				nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) ); 
-				
-				break;
-				
-			case DL_Waveform_Float:
-				
-				nullChk( waveformData_float = malloc(nRead * sizeof(float)) );
-				// transform double data to float
-				for (int j = 0; j < nRead; j++)
-					waveformData_float[j] = (float) *(readBuffer + chIdx * nRead + j);
-				
-				nullChk( waveform = init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_float) );
-				nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
-				
-				break;
-		}
-
-		// send data packet with waveform
-		errChk( SendDataPacket((*chanSetPtr)->srcVChan, &dataPacket, 0, &errMsg) );
-		
+		// forward data from the AI buffer to the VChan
+		errChk( SendAIBufferData(dev, *chanSetPtr, chIdx, nRead, readBuffer, &errMsg) ); 
 		// next AI channel
 		chIdx++;
 	}
@@ -8995,32 +9185,26 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	
 DAQmxError:
 	
-	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* DAQmxErrMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(DAQmxErrMsg, buffsize+1);
-	TaskControlIterationDone(dev->taskController, error, DAQmxErrMsg, FALSE);
-	OKfree(DAQmxErrMsg);
-	ClearDAQmxTasks(dev); 
-	OKfree(readBuffer); 
-	OKfree(waveformData_double);
-	OKfree(waveformData_float);
-	discard_Waveform_type(&waveform);
-	discard_DataPacket_type(&dataPacket);
-	return 0;
+	int errMsgBuffSize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	errMsg = malloc((errMsgBuffSize+1) * sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, errMsgBuffSize+1);
 	
 Error:
 	
 	if (!errMsg)
 		errMsg = FormatMsg(error, "AIDAQmxTaskDataAvailable_CB", "Out of memory");
 	
-	ClearDAQmxTasks(dev);
-	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);  
-	OKfree(readBuffer);
-	OKfree(waveformData_double);
-	OKfree(waveformData_float);
-	discard_Waveform_type(&waveform);
-	discard_DataPacket_type(&dataPacket);
-	return 0;
+	//-------------------------
+	// cleanup
+	//-------------------------
+	// clear all device tasks
+	ClearDAQmxTasks(dev); 
+	
+	OKfree(readBuffer); 
+
+	// terminate task controller iteration
+	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
+	OKfree(errMsg);
 }
 
 // Called only if a running task encounters an error or stops by itself in case of a finite acquisition or generation task. 
@@ -9039,11 +9223,6 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	int*				nActiveTasksPtr			= NULL;
 	DataPacket_type*	nullPacket				= NULL;
 	size_t				chIdx					= 0;
-	double*				waveformData_double		= NULL;
-	float*				waveformData_float		= NULL;
-	DataPacket_type*	dataPacket				= NULL;
-	Waveform_type*		waveform				= NULL;
-
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
 	if (status < 0) goto DAQmxError;
@@ -9087,34 +9266,8 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
 		if ((*chanSetPtr)->onDemand) continue;
-		
-		switch(GetSourceVChanDataType((*chanSetPtr)->srcVChan)) {
-				
-			case DL_Waveform_Double:
-				
-				nullChk( waveformData_double = malloc(nRead * sizeof(double)) );
-				memcpy(waveformData_double, readBuffer + chIdx * nRead, nRead * sizeof(double));
-				
-				nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_double) );
-				nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) ); 
-				
-				break;
-				
-			case DL_Waveform_Float:
-				
-				nullChk( waveformData_float = malloc(nRead * sizeof(float)) );
-				// transform double data to float
-				for (int j = 0; j < nRead; j++)
-					waveformData_float[j] = (float) *(readBuffer + chIdx * nRead + j);
-				
-				nullChk( waveform = init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_float) );
-				nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
-				
-				break;
-		}
-
-		// send data packet with waveform
-		errChk( SendDataPacket((*chanSetPtr)->srcVChan, &dataPacket, 0, &errMsg) );
+		// forward data from AI buffer to the VChan 
+		errChk( SendAIBufferData(dev, *chanSetPtr, chIdx, nRead, readBuffer, &errMsg) ); 
 		// send NULL packet to signal end of data transmission
 		errChk( SendDataPacket((*chanSetPtr)->srcVChan, &nullPacket, 0, &errMsg) );
 		// next AI channel
@@ -9137,31 +9290,27 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	return 0;
 	
 DAQmxError:
-	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* DAQmxErrMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(DAQmxErrMsg, buffsize+1);
-	TaskControlIterationDone(dev->taskController, error, DAQmxErrMsg, FALSE);
-	OKfree(DAQmxErrMsg);
-	ClearDAQmxTasks(dev); 
-	OKfree(readBuffer); 
-	OKfree(waveformData_double);
-	discard_Waveform_type(&waveform);
-	discard_DataPacket_type(&dataPacket);
-	return 0;
+	
+	int errMsgBuffSize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	errMsg = malloc((errMsgBuffSize+1) * sizeof(char));
+	DAQmxGetExtendedErrorInfo(errMsg, errMsgBuffSize+1);
 	
 Error:
 	
 	if (!errMsg)
 		errMsg = FormatMsg(error, "AIDAQmxTaskDone_CB", "Out of memory");
 	
-	ClearDAQmxTasks(dev);
-	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);  
-	OKfree(readBuffer);
+	//-------------------------
+	// cleanup
+	//-------------------------
+	// clear all device tasks
+	ClearDAQmxTasks(dev); 
+	
+	OKfree(readBuffer); 
+
+	// terminate task controller iteration
+	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	OKfree(errMsg);
-	OKfree(waveformData_double);
-	discard_Waveform_type(&waveform);
-	discard_DataPacket_type(&dataPacket);
-	return 0;
 }
 
 int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
@@ -10991,8 +11140,8 @@ static int AO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 	uInt64							nElem				= 0;
 	char*							errMsg				= NULL;
 	TaskHandle						taskHndl			= 0;
-	ChanSet_AIAO_Voltage_type*		aoVoltageChan		= (ChanSet_AIAO_Voltage_type*) chan;
-	ChanSet_AIAO_Current_type*		aoCurrentChan		= (ChanSet_AIAO_Current_type*) chan;
+	ChanSet_AIAO_Voltage_type*		aoVoltageChan		= NULL;
+	ChanSet_AIAO_Current_type*		aoCurrentChan		= NULL;
 	DLDataTypes						dataPacketType;
 	void*							dataPacketDataPtr	= NULL;
 	double							doubleData;
@@ -11007,7 +11156,7 @@ static int AO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 	switch (chan->chanType) {
 						
 		case Chan_AO_Voltage:
-							
+			aoVoltageChan = (ChanSet_AIAO_Voltage_type*) chan;				
 			// create task
 			DAQmxErrChk(DAQmxCreateTask("On demand AO voltage task", &taskHndl));
 			// create DAQmx channel  
@@ -11015,7 +11164,7 @@ static int AO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 			break;
 							
 		case Chan_AO_Current:
-							
+			aoCurrentChan = (ChanSet_AIAO_Current_type*) chan;				
 			// create task
 			DAQmxErrChk(DAQmxCreateTask("On demand AO current task", &taskHndl));
 			// create DAQmx channel  

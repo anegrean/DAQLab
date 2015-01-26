@@ -20,9 +20,11 @@
 #define  AIAOChSet_Plate                  2       /* control type: deco, callback function: (none) */
 #define  AIAOChSet_Terminal               3       /* control type: ring, callback function: (none) */
 #define  AIAOChSet_VChanName              4       /* control type: string, callback function: (none) */
-#define  AIAOChSet_AIDataType             5       /* control type: ring, callback function: (none) */
-#define  AIAOChSet_Range                  6       /* control type: ring, callback function: (none) */
-#define  AIAOChSet_OnDemand               7       /* control type: radioButton, callback function: (none) */
+#define  AIAOChSet_ScaleMax               5       /* control type: numeric, callback function: (none) */
+#define  AIAOChSet_ScaleMin               6       /* control type: numeric, callback function: (none) */
+#define  AIAOChSet_AIDataType             7       /* control type: ring, callback function: (none) */
+#define  AIAOChSet_Range                  8       /* control type: ring, callback function: (none) */
+#define  AIAOChSet_OnDemand               9       /* control type: radioButton, callback function: (none) */
 
 #define  CICOChSet                        3
 #define  CICOChSet_TAB                    2       /* control type: tab, callback function: (none) */

@@ -4,8 +4,8 @@
 // Title:		GalvoScanEngine.c
 // Purpose:		A short description of the implementation.
 //
-// Created on:	25-8-2014 at 14:17:14 by Adrian.
-// Copyright:	. All Rights Reserved.
+// Created on:	25-8-2014 at 14:17:14 by Adrian Negrean.
+// Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 

@@ -16,7 +16,6 @@
 #include <formatio.h>  
 #include "LaserScanning.h"
 #include <userint.h>
-#include <ImageControl.h>
 #include "combobox.h" 
 #include <analysis.h>
 #include <nivision.h>

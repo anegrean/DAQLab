@@ -122,7 +122,7 @@ struct VUPhotonCtr {
 	size_t*				refNSamples;
 		// Points to either device set sampling rate or virtual channel set sampling rate.
 		// By default it points to the device sampling rate samplingRate. In [Hz]
-	double*				refSamplingRate;
+	double*				PixClkFreq;
 
 
 
@@ -293,7 +293,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	vupc->nSamples					= DEFAULT_NSAMPLES;
 	vupc->refNSamples				= &vupc->nSamples;	  		// by default point to device set number of samples
 	vupc->samplingRate				= DEFAULT_SAMPLING_RATE;
-	vupc->refSamplingRate			= &vupc->samplingRate; 		// by default point to device set sampling rate
+	vupc->PixClkFreq			= &vupc->samplingRate; 		// by default point to device set sampling rate
 
 	vupc->pulseTrainVChan			= NULL;
 	
@@ -349,7 +349,11 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	
 	
 	// discard pulsetrain SinkVChan   
-	if (vupc->pulseTrainVChan) discard_VChan_type((VChan_type**)&vupc->pulseTrainVChan);
+	if (vupc->pulseTrainVChan) {
+		DLUnregisterVChan((DAQLabModule_type*)vupc, ((VChan_type*) vupc->pulseTrainVChan));
+		RemoveSinkVChan(vupc->taskControl, vupc->pulseTrainVChan);
+		discard_VChan_type((VChan_type**)&vupc->pulseTrainVChan);
+	}
 	
 	DLUnregisterHWTrigSlave(vupc->HWTrigSlave);
 	discard_HWTrigSlave_type(&vupc->HWTrigSlave);  
@@ -481,8 +485,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 
 	// update acquisition settings display from structure data
 	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_NSamples, *vupc->refNSamples);
-	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_SamplingRate, *vupc->refSamplingRate/1000);					// display in [kHz]
-	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_Duration, *vupc->refNSamples/(*vupc->refSamplingRate*1000));	// display in [s]
+	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_PixClkFreq, *vupc->PixClkFreq/1000);					// display in [kHz]
+	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_Duration, *vupc->refNSamples/(*vupc->PixClkFreq*1000));	// display in [s]
 
 
 	// add functionality to set PMT mode
@@ -940,19 +944,19 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 				case VUPCSet_MeasMode:
 					GetCtrlIndex(panel,VUPCSet_MeasMode,&mode);
 					SetTaskControlMode(vupc->taskControl,mode);
-					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate );  
+					GetCtrlVal(panel,VUPCSet_PixClkFreq,vupc->PixClkFreq );  
 					GetCtrlVal(panel,VUPCSet_NSamples,&nsamples);   
 					*vupc->refNSamples=nsamples;
-					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->refSamplingRate,*vupc->refNSamples);
+					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->PixClkFreq,*vupc->refNSamples);
 					break;
 
-				case VUPCSet_SamplingRate:
+				case VUPCSet_PixClkFreq:
 					GetCtrlIndex(panel,VUPCSet_MeasMode,&mode);
 					SetTaskControlMode(vupc->taskControl,mode);    
-					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate);  
+					GetCtrlVal(panel,VUPCSet_PixClkFreq,vupc->PixClkFreq);  
 					GetCtrlVal(panel,VUPCSet_NSamples,&nsamples);   
 					*vupc->refNSamples=nsamples;
-					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->refSamplingRate,*vupc->refNSamples);
+					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->PixClkFreq,*vupc->refNSamples);
 					
 					break;
 
@@ -963,9 +967,9 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 				case VUPCSet_NSamples:
 					GetCtrlIndex(panel,VUPCSet_MeasMode,&mode);
 					SetTaskControlMode(vupc->taskControl,mode);    
-					GetCtrlVal(panel,VUPCSet_SamplingRate,vupc->refSamplingRate);  
+					GetCtrlVal(panel,VUPCSet_PixClkFreq,vupc->PixClkFreq);  
 					GetCtrlVal(panel,VUPCSet_NSamples,vupc->refNSamples);   
-					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->refSamplingRate,*vupc->refNSamples);
+					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->PixClkFreq,*vupc->refNSamples);
 					break;
 
 				case VUPCSet_Close:
@@ -1193,14 +1197,16 @@ static void	IterateTC	(TaskControl_type* taskControl, BOOL const* abortIteration
 	//-------------------------------------------------------------------------------------------------------------------------------
 	if (IsVChanConnected((VChan_type*)vupc->pulseTrainVChan)) {
 		errChk( GetDataPacket(vupc->pulseTrainVChan, &dataPacket, &errMsg) );
-		dataPacketDataPtr = GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
-		pulsetrain=*(PulseTrain_type**)dataPacketDataPtr;
-		vupc->nSamples=GetPulseTrainNPulses(pulsetrain);
-		*vupc->refNSamples = vupc->nSamples;
+		dataPacketDataPtr 	= GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
+		pulsetrain			= *(PulseTrain_type**)dataPacketDataPtr;
+		vupc->nSamples		= GetPulseTrainNPulses(pulsetrain);
+		
+		*vupc->refNSamples 	= vupc->nSamples;
 		ReleaseDataPacket(&dataPacket);
 		dataPacket = NULL;
 	}
 	Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),vupc->samplingRate,vupc->nSamples); 
+	
 	PMTStartAcq(GetTaskControlMode(vupc->taskControl),vupc->taskControl,vupc->channels);
 	
 	//inform that slave is armed
@@ -1227,9 +1233,7 @@ static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 
 	//reset hardware iteration counter
 	//ResetDataCounter();
-	//timeout testvalue
-	SetTaskControlIterationTimeout(taskControl,ITER_TIMEOUT);
-
+	
 	return 0;
 }
 
@@ -1363,13 +1367,13 @@ static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TaskStates_t
 		switch (dataPacketType) {
 			case DL_PulseTrain_Freq:
 				vupc->samplingRate=GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)pulsetrain);
-				SetCtrlVal(vupc->settingsPanHndl,VUPCSet_SamplingRate,vupc->samplingRate/1000);  //in khz
+				SetCtrlVal(vupc->settingsPanHndl,VUPCSet_PixClkFreq,vupc->samplingRate/1000);  //in khz
 				break;
 			case DL_PulseTrain_Time:
 				hightime=GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)pulsetrain);
 				lowtime=GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)pulsetrain); 
 				vupc->samplingRate=1/(hightime+lowtime);
-				SetCtrlVal(vupc->settingsPanHndl,VUPCSet_SamplingRate,vupc->samplingRate/1000);     //in khz  
+				SetCtrlVal(vupc->settingsPanHndl,VUPCSet_PixClkFreq,vupc->samplingRate/1000);     //in khz  
 				break;
 			case DL_PulseTrain_Ticks:
 				break;

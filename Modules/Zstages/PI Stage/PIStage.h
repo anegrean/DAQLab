@@ -57,7 +57,7 @@ struct PIStage {
 //==============================================================================
 // Global functions
 
-DAQLabModule_type*	initalloc_PIStage		(DAQLabModule_type* mod, char className[], char instanceName[]);
+DAQLabModule_type*	initalloc_PIStage		(DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl);
 void 				discard_PIStage 		(DAQLabModule_type** mod);
 
 #ifdef __cplusplus

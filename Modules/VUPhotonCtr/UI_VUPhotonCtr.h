@@ -1,6 +1,5 @@
 /**************************************************************************/
 /* LabWindows/CVI User Interface Resource (UIR) Include File              */
-/* Copyright (c) National Instruments 2014. All Rights Reserved.          */
 /*                                                                        */
 /* WARNING: Do not add to, delete from, or otherwise modify the contents  */
 /*          of this include file.                                         */
@@ -41,14 +40,11 @@
 #define  VUPCSet                          4
 #define  VUPCSet_Channels                 2       /* control type: listBox, callback function: (none) */
 #define  VUPCSet_Background               3       /* control type: deco, callback function: (none) */
-#define  VUPCSet_SamplingRate             4       /* control type: numeric, callback function: (none) */
+#define  VUPCSet_PixClkFreq               4       /* control type: numeric, callback function: (none) */
 #define  VUPCSet_Duration                 5       /* control type: numeric, callback function: (none) */
 #define  VUPCSet_NSamples                 6       /* control type: numeric, callback function: (none) */
 #define  VUPCSet_MeasMode                 7       /* control type: ring, callback function: (none) */
 #define  VUPCSet_Close                    8       /* control type: command, callback function: (none) */
-#define  VUPCSet_UseRefNSamples           9       /* control type: radioButton, callback function: (none) */
-#define  VUPCSet_UseRefSampRate           10      /* control type: radioButton, callback function: (none) */
-#define  VUPCSet_RefChan                  11      /* control type: ring, callback function: (none) */
 
 #define  VUPCStatus                       5
 

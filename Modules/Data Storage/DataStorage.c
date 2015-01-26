@@ -755,6 +755,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 					}
 					error=WriteFile (filehandle, shortDataPtr, nElem*elementsize);
 					if (error<0) {
+						FmtIOErrType fmterr=GetFmtIOError();
 						AppendString(&errMsg, sinkVChanName, -1); 
 						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
 					

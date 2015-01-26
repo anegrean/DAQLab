@@ -1133,6 +1133,35 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 		DeleteTabPage(ls->mainPanHndl, ScanPan_ScanEngines, 0, 1); 
 	}
 	
+	//------------------------------------
+	// configure imaq tool window
+	//------------------------------------
+	ToolWindowOptions imaqTools = {			.showSelectionTool 			= TRUE,
+											.showZoomTool				= TRUE,
+											.showPointTool				= TRUE,
+											.showLineTool				= FALSE,
+											.showRectangleTool			= TRUE,
+											.showOvalTool				= FALSE,
+											.showPolygonTool			= FALSE,
+											.showClosedFreehandTool		= FALSE,
+											.showPolyLineTool			= FALSE,
+											.showFreehandTool			= FALSE,
+											.showAnnulusTool			= FALSE,
+											.showRotatedRectangleTool	= FALSE,
+											.showPanTool				= TRUE,
+											.showZoomOutTool			= TRUE,
+											.reserved2					= FALSE,
+											.reserved3					= FALSE,
+											.reserved4					= FALSE	   };
+	
+	// confine imaq tools to workspace
+	nullChk( imaqSetupToolWindow(TRUE, 2, &imaqTools) );
+	nullChk( imaqSetCurrentTool(IMAQ_PAN_TOOL) );
+	intptr_t	imaqToolWndHndl;
+	intptr_t	workspaceWndHndl;
+	GetPanelAttribute(ls->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHndl);
+	nullChk( imaqToolWndHndl = (intptr_t) imaqGetToolWindowHandle() );
+	SetParent( (HWND) imaqToolWndHndl, (HWND)workspaceWndHndl);
 	
 	return 0;
 Error:
@@ -2787,47 +2816,6 @@ static DetChan_type* init_DetChan_type (ScanEngine_type* scanEngine, char VChanN
 	
 	if ( !(det->detVChan 		= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, VChanDataTimeout, DetVChan_Connected, DetVChan_Disconnected)) ) goto Error;
 	det->scanEngine 			= scanEngine;
-	
-	/*
-	// convert decoration control to image control
-	if (ImageControl_ConvertFromDecoration(det->displayPanHndl, DisplayPan_Image, NULL) < 0) goto Error;
-	
-	// adjust image control
-	ImageControl_SetAttribute(det->displayPanHndl, DisplayPan_Image, ATTR_IMAGECTRL_FILL_COLOR, VAL_BLACK);
-	ImageControl_SetAttribute(det->displayPanHndl, DisplayPan_Image, ATTR_IMAGECTRL_BACKGROUND_COLOR, VAL_BLACK);
-	ImageControl_SetAttribute(det->displayPanHndl, DisplayPan_Image, ATTR_IMAGECTRL_BACKGROUND_COLOR, VAL_BLACK);
-	ImageControl_SetAttribute(det->displayPanHndl, DisplayPan_Image, ATTR_IMAGECTRL_CURRENT_TOOL, VAL_PAN_TOOL);
-	
-	// add tools to the window
-	ToolWindowOptions ImgDisplayTools = {	.showSelectionTool 			= FALSE,
-											.showZoomTool				= TRUE,
-											.showPointTool				= FALSE,
-											.showLineTool				= FALSE,
-											.showRectangleTool			= FALSE,
-											.showOvalTool				= FALSE,
-											.showPolygonTool			= FALSE,
-											.showClosedFreehandTool		= FALSE,
-											.showPolyLineTool			= FALSE,
-											.showFreehandTool			= FALSE,
-											.showAnnulusTool			= FALSE,
-											.showRotatedRectangleTool	= FALSE,
-											.showPanTool				= TRUE,
-											.showZoomOutTool			= TRUE,
-											.reserved2					= FALSE,
-											.reserved3					= FALSE,
-											.reserved4					= FALSE	   };
-	
-	ImageControl_SetTools(det->displayPanHndl, DisplayPan_Image, &ImgDisplayTools);
-	
-	// add menu bar to the panel
-	int 	displayMenuBarHndl;
-	int		displayMenuIDClose;
-	if ( (displayMenuBarHndl		= NewMenuBar(det->displayPanHndl)) < 0 ) goto Error;
-	if ( (displayMenuIDClose		= NewMenu(displayMenuBarHndl, "Close", -1)) < 0 ) goto Error;
-	SetMenuBarAttribute(displayMenuBarHndl, 0, ATTR_SHOW_IMMEDIATE_ACTION_SYMBOL, 0);
-	SetMenuBarAttribute(displayMenuBarHndl, displayMenuIDClose, ATTR_CALLBACK_FUNCTION_POINTER, DisplayClose_CB);
-	SetMenuBarAttribute(displayMenuBarHndl, displayMenuIDClose, ATTR_CALLBACK_DATA, det); 
-	*/
 	
 	return det;
 	
@@ -6695,6 +6683,12 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 		imaqWndHandle = (intptr_t) imaqGetSystemWindowHandle(detChan->imaqWndID); 
 		SetParent( (HWND) imaqWndHandle, (HWND)workspaceWndHandle);
 	}
+	
+	//--------------------------------------------------------------------------------------------------------
+	// Display IMAQ tool window
+	//--------------------------------------------------------------------------------------------------------
+	
+	imaqShowToolWindow(TRUE);
 	
 	//--------------------------------------------------------------------------------------------------------
 	// Open shutter

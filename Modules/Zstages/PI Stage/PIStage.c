@@ -130,7 +130,7 @@ static FCallReturn_type*			ZStageEventHandler					(TaskControl_type* taskControl
 //==============================================================================
 // Global functions
 
-DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], char instanceName[])
+DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl)
 {
 	PIStage_type* 		PIzstage;
 	Zstage_type*  		zstage;
@@ -145,7 +145,7 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 	zstage = (Zstage_type*) PIzstage;
 	
 	// initialize base class
-	initalloc_Zstage ((DAQLabModule_type*)zstage, className, instanceName);
+	initalloc_Zstage ((DAQLabModule_type*)zstage, className, instanceName, workspacePanHndl);
 	
 	// create PIStage Task Controller
 	tc = init_TaskControl_type (instanceName, PIzstage, ConfigureTC, IterateTC, NULL, StartTC, ResetTC, DoneTC, StoppedTC, DimTC, NULL, NULL, ZStageEventHandler, ErrorTC);

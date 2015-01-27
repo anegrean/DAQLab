@@ -1407,7 +1407,7 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type* 
 	//-------------------------------------------------------------------------------------------------
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
-	dev -> taskController = init_TaskControl_type (taskControllerName, dev, ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, 
+	dev -> taskController = init_TaskControl_type (taskControllerName, dev, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, 
 						  ResetTC, DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
 	if (!dev->taskController) goto Error;
 	

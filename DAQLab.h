@@ -178,7 +178,13 @@ BOOL				DLAddTaskController					(DAQLabModule_type* mod, TaskControl_type* taskC
 	// tcList of TaskControl_type*   
 BOOL				DLRemoveTaskControllers 			(DAQLabModule_type* mod, ListType tcList);
 	// Removes a single Task Controller from the DAQLab framework.
-BOOL				DLRemoveTaskController 				(DAQLabModule_type* mod, TaskControl_type* taskController);			
+BOOL				DLRemoveTaskController 				(DAQLabModule_type* mod, TaskControl_type* taskController);	
+
+//-------------------------------------------------------------------------------
+// DAQLab common thread pool management
+//-------------------------------------------------------------------------------
+
+CmtThreadPoolHandle	DLGetCommonThreadPoolHndl			(void);
 
 //-------------------------------------------------------------------------------
 // DAQLab XML management

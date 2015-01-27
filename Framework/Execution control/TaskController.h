@@ -416,6 +416,7 @@ typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
 
 TaskControl_type*  	 	init_TaskControl_type				(const char					taskControllerName[],
 															void*						moduleData,
+															CmtThreadPoolHandle			tcThreadPoolHndl,
 												 	 	 	ConfigureFptr_type 			ConfigureFptr,
 															UnconfigureFptr_type		UnconfigureFptr,
 												 	 		IterateFptr_type			IterateFptr,

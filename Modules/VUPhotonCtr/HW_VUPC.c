@@ -601,6 +601,7 @@ int PMTStartAcq(TaskMode_type mode,TaskControl_type* taskControl,Channel_type** 
 	}
 	
 Error:
+	
 	return error;
 }																																				   
 

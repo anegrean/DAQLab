@@ -182,37 +182,40 @@ static struct TasksUI_ {									// UI data container for Task Controllers
 	int			menuItem_Delete;
 	ListType	UItaskCtrls;								// UI Task Controllers of UITaskCtrl_type*   
 	
-} 				TasksUI						= {0, 0, 0, 0, 0, 0, 0, 0, 0};
+} 						TasksUI						= {0, 0, 0, 0, 0, 0, 0, 0, 0};
 	
 	// List of modules loaded in the framework. Modules inherit from DAQLabModule_type 
 	// List of DAQLabModule_type* type
-ListType		DAQLabModules				= 0;
+ListType				DAQLabModules				= 0;
 
 	// List of Task Controllers provided by all modules (including UI Task Controllers) to the framework
 	// List of TaskControl_type* elements
-ListType		DAQLabTCs					= 0;
+ListType				DAQLabTCs					= 0;
 
 	// Virtual channels from all the modules that register such channels with the framework
 	// List elements of VChan_type* type
-ListType		VChannels					= 0;
+ListType				VChannels					= 0;
 
 	// List of HW Master triggers of HWTrigMaster_type*
-ListType		HWTrigMasters				= 0;
+ListType				HWTrigMasters				= 0;
 
 	// List of HW Slave triggers of HWTrigSlave_type*	
-ListType		HWTrigSlaves				= 0;
+ListType				HWTrigSlaves				= 0;
 
 	// Panel handle for the Task Tree Manager 
-int				TaskTreeManagerPanHndl		= 0;
+int						TaskTreeManagerPanHndl		= 0;
 
 	// Panel handle for VChan Switchboard
-int				VChanSwitchboardPanHndl		= 0;
+int						VChanSwitchboardPanHndl		= 0;
 
 	// Panel handle for HW Triggers Switchboard
-int				HWTrigSwitchboardPanHndl	= 0;
+int						HWTrigSwitchboardPanHndl	= 0;
 
 	// List of Task Tree nodes of TaskTreeNode_type needed to operate the Task Tree Manager 
-ListType		TaskTreeNodes				= 0;
+ListType				TaskTreeNodes				= 0;
+
+	// Custom thread pool handle
+CmtThreadPoolHandle		DLThreadPoolHndl			= 0;
 
 
 
@@ -320,7 +323,14 @@ int main (int argc, char *argv[])
 	if (!InitCVIRTE (0, argv, 0)) return -1;
 	
 	// set main thread sleep policy
-	SetSleepPolicy(VAL_SLEEP_SOME);
+	errChk( SetSleepPolicy(VAL_SLEEP_SOME) );
+	
+	// create custom thread pool
+	errChk( CmtNewThreadPool(UNLIMITED_THREAD_POOL_THREADS, &DLThreadPoolHndl) );
+	
+	// adjust thread pool
+	errChk( CmtSetThreadPoolAttribute(DLThreadPoolHndl, ATTR_TP_PROCESS_EVENTS_WHILE_WAITING, TRUE) );
+	
 	
 	// load DAQLab environment resources
 	
@@ -328,6 +338,9 @@ int main (int argc, char *argv[])
 	
 	// run GUI
 	errChk ( RunUserInterface() ); 
+	
+	// discard thread pool
+	errChk( CmtDiscardThreadPool(DLThreadPoolHndl) );
 	
 	return 0;
 	
@@ -467,7 +480,7 @@ static int DAQLab_Load (void)
 		}
 		
 		// create new UI Task Controller
-		newTaskControllerPtr = init_TaskControl_type (UITCName, NULL, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
+		newTaskControllerPtr = init_TaskControl_type (UITCName, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
 												 	  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 		
 		if (!newTaskControllerPtr) {
@@ -1757,6 +1770,11 @@ Error:
 	return FALSE;
 }
 
+CmtThreadPoolHandle	DLGetCommonThreadPoolHndl (void)
+{
+	return DLThreadPoolHndl;
+}
+
 /// HIFN Adds a list of Task Controllers provided by tcList as TaskControl_type* list elements to the DAQLab framework if their names are unique.
 /// HIRET TRUE if successful or if list is empty.
 /// HIRET FALSE if Task Controller names in tcList and the framework are not unique.
@@ -2571,7 +2589,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	if (!newControllerName) return; // operation cancelled, do nothing
 	
 	// create new task controller
-	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
+	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
 												  ResetUITC, DoneUITC, StoppedUITC, DimUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 	
 	OKfree(newControllerName);

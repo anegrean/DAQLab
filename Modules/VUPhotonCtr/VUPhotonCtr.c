@@ -257,7 +257,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	initalloc_DAQLabModule(&vupc->baseClass, className, instanceName, workspacePanHndl);
 	
 	// create VUPhotonCtr Task Controller
-	tc = init_TaskControl_type (instanceName, vupc, ConfigureTC, UnConfigureTC, IterateTC, AbortIterationTC, StartTC, 
+	tc = init_TaskControl_type (instanceName, vupc, DLGetCommonThreadPoolHndl(), ConfigureTC, UnConfigureTC, IterateTC, AbortIterationTC, StartTC, 
 												 	  ResetTC, DoneTC, StoppedTC, DimUITC, TCActive, ModuleEventHandler, ErrorTC); // module data added to the task controller below
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
 	
@@ -326,9 +326,6 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	// clean up hardware
 	PMTController_Finalize();
 	
-	// discard Task Controller
-	discard_TaskControl_type(&vupc->taskControl);
-
 	// discard channel resources
 	for (int i = 0; i < MAX_CHANNELS; i++)
 		discard_Channel_type(&vupc->channels[i]);
@@ -357,7 +354,10 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	
 	DLUnregisterHWTrigSlave(vupc->HWTrigSlave);
 	discard_HWTrigSlave_type(&vupc->HWTrigSlave);  
-	    
+	
+	// discard Task Controller
+	discard_TaskControl_type(&vupc->taskControl);
+	
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
 	//----------------------------------------
@@ -1207,7 +1207,7 @@ static void	IterateTC	(TaskControl_type* taskControl, BOOL const* abortIteration
 	}
 	Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),vupc->samplingRate,vupc->nSamples); 
 	
-	PMTStartAcq(GetTaskControlMode(vupc->taskControl),vupc->taskControl,vupc->channels);
+	error=PMTStartAcq(GetTaskControlMode(vupc->taskControl),vupc->taskControl,vupc->channels);
 	
 	//inform that slave is armed
 	errChk(SetHWTrigSlaveArmedStatus(vupc->HWTrigSlave,&errMsg));

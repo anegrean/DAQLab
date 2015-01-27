@@ -72,6 +72,7 @@ struct TaskControl {
 	ListType					dataQs;								// Incoming data queues, list of VChanCallbackData_type*.
 	unsigned int				eventQThreadID;						// Thread ID in which queue events are processed.
 	CmtThreadFunctionID			threadFunctionID;					// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
+	CmtThreadPoolHandle			threadPoolHndl;						// Thread pool handle used to launch task controller threads.
 	TaskStates_type 			state;								// Task Controller state.
 	TaskStates_type 			oldState;							// Previous Task Controller state used for logging.
 	size_t						repeat;								// Total number of repeats. If repeat is 0, then the iteration function is not called. 
@@ -180,6 +181,7 @@ int CVICALLBACK 							TaskControlIterTimeout 					(int reserved, int timerId, i
 /// HIFN Initializes a Task controller.
 TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 										void*						moduleData,
+										CmtThreadPoolHandle			tcThreadPoolHndl, 
 										ConfigureFptr_type 			ConfigureFptr,
 										UnconfigureFptr_type		UnconfigureFptr,
 										IterateFptr_type			IterateFptr,
@@ -217,6 +219,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	
 	tc -> taskName 							= StrDup(taskControllerName);
 	tc -> moduleData						= moduleData;
+	tc -> threadPoolHndl					= tcThreadPoolHndl;
 	tc -> subtaskIdx						= 0;
 	tc -> state								= TASK_STATE_UNCONFIGURED;
 	tc -> oldState							= TASK_STATE_UNCONFIGURED;
@@ -292,7 +295,7 @@ void discard_TaskControl_type(TaskControl_type** taskController)
 	CmtDiscardTSQ((*taskController)->eventQ);
 	
 	// release thread
-	if ((*taskController)->threadFunctionID) CmtReleaseThreadPoolFunctionID(DEFAULT_THREAD_POOL_HANDLE, (*taskController)->threadFunctionID);   
+	if ((*taskController)->threadFunctionID) CmtReleaseThreadPoolFunctionID((*taskController)->threadPoolHndl, (*taskController)->threadFunctionID);   
 	
 	// event queue thread lock
 	CmtDiscardLock((*taskController)->eventQThreadLock); 
@@ -1023,12 +1026,12 @@ void CVICALLBACK TaskEventItemsInQueue (CmtTSQHandle queueHandle, unsigned int e
 	
 	// launch event handler in new thread if it is not running already
 	if (taskControl->threadFunctionID)
-		CmtGetThreadPoolFunctionAttribute(DEFAULT_THREAD_POOL_HANDLE, taskControl->threadFunctionID, 
+		CmtGetThreadPoolFunctionAttribute(taskControl->threadPoolHndl, taskControl->threadFunctionID, 
 									  ATTR_TP_FUNCTION_EXECUTION_STATUS, &ExecutionStatus);
 	
 	if (ExecutionStatus == kCmtThreadFunctionComplete) {
-		if (taskControl->threadFunctionID) CmtReleaseThreadPoolFunctionID(DEFAULT_THREAD_POOL_HANDLE, taskControl->threadFunctionID);
-		CmtScheduleThreadPoolFunctionAdv(DEFAULT_THREAD_POOL_HANDLE, ScheduleTaskEventHandler, taskControl, 
+		if (taskControl->threadFunctionID) CmtReleaseThreadPoolFunctionID(taskControl->threadPoolHndl, taskControl->threadFunctionID);
+		CmtScheduleThreadPoolFunctionAdv(taskControl->threadPoolHndl, ScheduleTaskEventHandler, taskControl, 
 									 	 DEFAULT_THREAD_PRIORITY, NULL, 
 									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), 
 										 taskControl, RUN_IN_SCHEDULED_THREAD, &taskControl->threadFunctionID);	
@@ -1247,7 +1250,7 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 			}
 			
 			// launch provided iteration function pointer in a separate thread
-			if ( (fCallError = CmtScheduleThreadPoolFunctionAdv(DEFAULT_THREAD_POOL_HANDLE, ScheduleIterateFunction, taskControl, DEFAULT_THREAD_PRIORITY,
+			if ( (fCallError = CmtScheduleThreadPoolFunctionAdv(taskControl->threadPoolHndl, ScheduleIterateFunction, taskControl, DEFAULT_THREAD_PRIORITY,
 					IterationFunctionThreadCallback, EVENT_TP_THREAD_FUNCTION_BEGIN, taskControl, RUN_IN_SCHEDULED_THREAD, NULL)) < 0) {
 						
 				CmtGetErrorMessage(fCallError, CmtErrorMsg);

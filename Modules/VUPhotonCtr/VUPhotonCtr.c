@@ -162,51 +162,51 @@ struct VUPhotonCtr {
 //==============================================================================
 // Static functions
 
-static Channel_type* 				init_Channel_type 				(VUPhotonCtr_type* vupcInstance, int panHndl, size_t chanIdx, char VChanName[]);
+static Channel_type* 			init_Channel_type 				(VUPhotonCtr_type* vupcInstance, int panHndl, size_t chanIdx, char VChanName[]);
 
-static void							UpdateAcqSetDisplay				(VUPhotonCtr_type* vupc);
+static void						UpdateAcqSetDisplay				(VUPhotonCtr_type* vupc);
 
-static void							discard_Channel_type			(Channel_type** chan);
+static void						discard_Channel_type			(Channel_type** chan);
 
-static int							InitHardware 					(VUPhotonCtr_type* vupc);
+static int						InitHardware 					(VUPhotonCtr_type* vupc);
 
-static int							Load 							(DAQLabModule_type* mod, int workspacePanHndl);
+static int						Load 							(DAQLabModule_type* mod, int workspacePanHndl);
 
-static int							DisplayPanels					(DAQLabModule_type* mod, BOOL visibleFlag);
+static int						DisplayPanels					(DAQLabModule_type* mod, BOOL visibleFlag);
 
-static void							RedrawMainPanel 				(VUPhotonCtr_type* vupc);
+static void						RedrawMainPanel 				(VUPhotonCtr_type* vupc);
 
 	// UI controls callback for operating the photon counter
-static int CVICALLBACK 				VUPCChannel_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 			VUPCChannel_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 	// UI controls callback for setting up the photon counter
-static int CVICALLBACK 				VUPCSettings_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 			VUPCSettings_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 	// UI controls callback for changing the Task Controller settings
-static int CVICALLBACK 				VUPCTask_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 			VUPCTask_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-void CVICALLBACK 					MenuSettings_CB 				(int menuBar, int menuItem, void *callbackData, int panel);
+void CVICALLBACK 				MenuSettings_CB 				(int menuBar, int menuItem, void *callbackData, int panel);
 
-static int CVICALLBACK 				VUPCPhotonCounter_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 			VUPCPhotonCounter_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static BOOL 						ValidTaskControllerName			(char name[], void* dataPtr);
+static BOOL 					ValidTaskControllerName			(char name[], void* dataPtr);
 
 	// pulsetrain command VChan connected callback
-static void							PulseTrainVChan_Connected 		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void						PulseTrainVChan_Connected 		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
 	// pulsetrain command VChan disconnected callback
-static void							PulseTrainVChan_Disconnected 	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void						PulseTrainVChan_Disconnected 	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
-static int 							PulseTrainDataReceivedTC 		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int 						PulseTrainDataReceivedTC 		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
-static int 							PMT_Set_Mode 					(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
-static int 							PMT_Set_Fan 					(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
-static int 							PMT_Set_Cooling 				(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
-static int 							PMT_Set_GainThresh 				(VUPhotonCtr_type* vupc, int PMTnr, double gain, double threshold);
-static int 							PMTController_UpdateDisplay 	(VUPhotonCtr_type* vupc);
-//void 								PMTController_DimWhenRunning 	(VUPhotonCtr_type* vupc, BOOL dimmed);
-static int 							PMTController_SetTestMode		(VUPhotonCtr_type* vupc, BOOL testmode);
-static int 							PMTController_Reset				(VUPhotonCtr_type* vupc);
-static int 							PMTController_ResetFifo			(VUPhotonCtr_type* vupc);
+static int 						PMT_Set_Mode 					(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
+static int 						PMT_Set_Fan 					(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
+static int 						PMT_Set_Cooling 				(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
+static int 						PMT_Set_GainThresh 				(VUPhotonCtr_type* vupc, int PMTnr, double gain, double threshold);
+static int 						PMTController_UpdateDisplay 	(VUPhotonCtr_type* vupc);
+//void 							PMTController_DimWhenRunning 	(VUPhotonCtr_type* vupc, BOOL dimmed);
+static int 						PMTController_SetTestMode		(VUPhotonCtr_type* vupc, BOOL testmode);
+static int 						PMTController_Reset				(VUPhotonCtr_type* vupc);
+static int 						PMTController_ResetFifo			(VUPhotonCtr_type* vupc);
 
 
 
@@ -214,18 +214,18 @@ static int 							PMTController_ResetFifo			(VUPhotonCtr_type* vupc);
 // VUPhotonCtr Task Controller Callbacks
 //-----------------------------------------
 
-static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
-static void					IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
-static void 				AbortIterationTC 		(TaskControl_type* taskControl, BOOL const* abortFlag);
-static int					StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static void					DimUITC					(TaskControl_type* taskControl, BOOL dimmed);
-static void					TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
-static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
-static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
-static int					ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
+static int 						ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int 						UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
+static void						IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+static void 					AbortIterationTC 		(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int						StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int						DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int						StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static void						DimUITC					(TaskControl_type* taskControl, BOOL dimmed);
+static void						TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
+static int				 		ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+static void				 		ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
+static int						ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
 
 
 //==============================================================================

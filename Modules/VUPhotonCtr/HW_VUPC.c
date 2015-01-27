@@ -77,12 +77,16 @@ typedef struct _PMTregcommand {
 // Global variables
 TaskControl_type*		gtaskControl;
 Channel_type*			gchannels[MAX_CHANNELS];
-
-
 int         			measurementmode =TASK_FINITE;  //default
 int 		 			bufsize; 
-CmtThreadPoolHandle 	poolHandle		= 0;
-
+unsigned int 			PMTThreadID; 
+unsigned int 			PMTThread2ID;
+PMTregcommand 			newcommand;
+int 					readerror				=0; 
+int 					readdata				=0;
+int 					nrsamples_in_iteration;   				// requested amount of samples
+size_t 					nrsamples;				  				// number of samples measured 
+int 					iterationnr;              				// current iteration number, passed in data
 
 DefineThreadSafeScalarVar(int,PMTCommandFlag,0);				// do a PMT controller register command in pmt thread
 DefineThreadSafeScalarVar(unsigned long,PMTControllerData,0); 	// current PMT controller data
@@ -91,29 +95,16 @@ DefineThreadSafeScalarVar(unsigned int,PMTnewbufsizeflag,0); 	// newbufsize flag
 DefineThreadSafeScalarVar(unsigned int,AcqBusy,0); 	            // acquisition is busy 
 DefineThreadSafeScalarVar(unsigned int,ReadyForReading,0); 	    // acquisition thread is ready for reading
 
-
-
-unsigned int 			PMTThreadID; 
-unsigned int 			PMTThread2ID;
-PMTregcommand 			newcommand;
-int 					readerror				=0; 
-int 					readdata				=0;
-
-int 					nrsamples_in_iteration;   				// requested amount of samples
-size_t 					nrsamples;				  				// number of samples measured 
-int 					iterationnr;              				// current iteration number, passed in data
-
-
-
 //==============================================================================
 // Global functions
-int CVICALLBACK PMTThreadFunction(void *(functionData));
-int CVICALLBACK PMTThreadFunction2(void *(functionData));    
-int 			StartDAQThread(int mode,CmtThreadPoolHandle poolHandle) ;
-int 			StopDAQThread(CmtThreadPoolHandle poolHandle);
-int 			PMTReset(void);
-unsigned long 	ImReadReg(unsigned long regaddress);
-int 			ImWriteReg(unsigned long regaddress,unsigned long regvalue);
+
+int CVICALLBACK 		PMTThreadFunction				(void *(functionData));
+int CVICALLBACK 		PMTThreadFunction2				(void *(functionData));    
+int 					StartDAQThread					(int mode, CmtThreadPoolHandle poolHandle) ;
+int 					StopDAQThread					(CmtThreadPoolHandle poolHandle);
+int 					PMTReset						(void);
+unsigned long 			ImReadReg						(unsigned long regaddress);
+int 					ImWriteReg						(unsigned long regaddress,unsigned long regvalue);
 
 
 unsigned int GetAcquisitionBusy(void)
@@ -121,55 +112,48 @@ unsigned int GetAcquisitionBusy(void)
 	return GetAcqBusy();
 }
 
-
 void SetMeasurementMode(int mode)
 {
 	 measurementmode=mode;
 }
 
-//void SetCurrentIterationnr(int iternr)
-//{
-//	 iterationnr=iternr;
-//}
-
 void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples)
 {
-	 int bufsize;
+	int bufsize;
 	 
-	 if (mode==TASK_CONTINUOUS) {   //continuous mode, bufsize based on sample freq
-		 if (samplerate_in_khz>500) {
-			 bufsize=0x200000;  
-		 }
-		 else if (samplerate_in_khz>250) {
-			 bufsize=0x100000;  
-		 }
-		 else if (samplerate_in_khz>125) {
-			 bufsize=0x80000;  
-		 }
-		 else if (samplerate_in_khz>64) {
-			 bufsize=0x40000;  
-		 }
-		 else if (samplerate_in_khz>32) {
-			 bufsize=0x20000;  
-		 }
-		 else bufsize=0x10000;      
-	 }
-	 else {  //finite mode, bufsize based on sample requested samples
+	if (mode==TASK_CONTINUOUS) {   
+		// continuous mode, bufsize based on sample freq
+		if (samplerate_in_khz>500) {
+			bufsize=0x200000;  
+		}
+		else if (samplerate_in_khz>250) {
+			bufsize=0x100000;  
+		}
+		else if (samplerate_in_khz>125) {
+			bufsize=0x80000;  
+		}
+		else if (samplerate_in_khz>64) {
+			bufsize=0x40000;  
+		}
+		else if (samplerate_in_khz>32) {
+			bufsize=0x20000;  
+		}
+		else bufsize=0x10000;      
+		
+	 } else {  
+		// finite mode, bufsize based on sample requested samples
 	 	nrsamples_in_iteration=itsamples;
-	 	bufsize=8*itsamples;  //8 bytes per sample (pixel)
+		// 8 bytes per sample (pixel)
+	 	bufsize=8*itsamples;  
 	 }
 	 SetPMTBufsize(bufsize);  
 	 SetPMTnewbufsizeflag(1);
 }
 
-
-
-
-
 int ReadPMTReg(unsigned long regaddress,unsigned long *regval)
 {
-	int 			error=0;
-	unsigned long 	reply=0;
+	int 			error = 0;
+	unsigned long 	reply = 0;
 	 
 	if(!VUPCI_Get_Reg(regaddress,&reply)){ 
 		error=-1;
@@ -177,19 +161,15 @@ int ReadPMTReg(unsigned long regaddress,unsigned long *regval)
 	*regval=reply;
 	
 	return error;
-	 
 }
-
 
 int WritePMTReg(unsigned long regaddress,unsigned long regvalue)
 {
-	 int error=0;
+	 int 	error = 0;
 	 
-	 if(!VUPCI_Set_Reg(regaddress,regvalue)){ 
-		error=-1;
-	 };
+	 if(!VUPCI_Set_Reg(regaddress, regvalue))
+		error = -1;
 	 
-
 	 return error;
 }
 
@@ -204,19 +184,20 @@ int GetPMTControllerVersion(void)
 	
 	errChk(ReadPMTReg(VERS_REG,&version));
 	
-	minor=version&0x0000000F;
-	major=(version>>4)&0x0000000F;
-	if(!((major==MAJOR_VERSION)&&(minor==MINOR_VERSION))) error=-1;
+	minor = version&0x0000000F;
+	major = (version>>4)&0x0000000F;
+	if(!((major == MAJOR_VERSION) && (minor == MINOR_VERSION))) error = -1;
 	
 Error:
+	
 	return error;
 }
 
 
 int PMTController_Init(void)
 {
-	int 			error	=0;
-	unsigned long 	timeout	=5000;  //in ms
+	int 			error	= 0;
+	unsigned long 	timeout	= 5000;  //in ms
 	
 	InitializeAcqBusy();
 	InitializePMTCommandFlag();
@@ -259,87 +240,87 @@ int PMTController_Finalize(void)
 	 VUPCI_Close();
 	 
 Error:
+	 
 	 return error;
 }
 
 //called in pmt thread
 int ReadBuffer(int bufsize)
 {
-	int 				error			= 0;
-	int 				result;
-	DataPacket_type*  	dataPacket		= NULL;
-	DataPacket_type*	nullPacket		= NULL;
-	char*				errMsg			= NULL;  
-	unsigned short int* Samplebuffer	= NULL;   
-	void*     			pmtdataptr;
-	int 				numpixels;
-	int 				numshorts;
-	int 				ndatapoints;
-	int 				i;
-	double 				refSamplingRate	= 1000;
-	long 				errcode;
-	unsigned long 		statreg; 
-	Waveform_type* 		waveform;
+	int 					error			= 0;
+	int 					result;
+	DataPacket_type*  		dataPacket		= NULL;
+	DataPacket_type*		nullPacket		= NULL;
+	char*					errMsg			= NULL;  
+	unsigned short int* 	Samplebuffer	= NULL;   
+	void*     				pmtdataptr		= NULL;
+	int 					numpixels;
+	int 					numshorts;
+	int 					ndatapoints;
+	double 					refSamplingRate	= 1000;
+	long 					errcode;
+	unsigned long 			statreg; 
+	Waveform_type* 			waveform		= NULL;
 	
 	
-	Samplebuffer = malloc(bufsize); 
+	Samplebuffer 	= malloc(bufsize); 
 	
-	result = VUPCI_Read_Buffer(Samplebuffer,bufsize);
+	result 			= VUPCI_Read_Buffer(Samplebuffer,bufsize);
 	
-	if((result<0)&&(GetAcqBusy()==0)){ //only pass errors when acq is busy  
+	if((result < 0) && (GetAcqBusy() == 0)){ //only pass errors when acq is busy  
 		OKfree(Samplebuffer);  
 		return 0;
 	}
-	if (result<0){  
-		//err
-		readerror=1;
-		errcode=~result;
-		result=0;
+	
+	if (result < 0){  
+		//error
+		readerror	= 1;
+		errcode		= ~result;
+		result		= 0;
 		//timeout occured, skip this read
 	}
-	if (result>0){
-			// deinterlace data here
-			numpixels=result/8;  //8 bytes per pixel, result gives number of bytes
-			numshorts=result/2;
-			ndatapoints=numshorts/4;
-			//transpose data array
-			TransposeData(Samplebuffer,VAL_SHORT_INTEGER,numshorts,4);
-			//send datapackets
-			//index i is index of active channels; chanIdx contains the PMT channel index
-			for (i=0;i<MAX_CHANNELS;i++){
-				if (gchannels[i]!=NULL){
-					if (gchannels[i]->VChan!=NULL){
-						pmtdataptr = malloc(ndatapoints*sizeof(unsigned short));
-						nullChk(pmtdataptr);
-						memcpy(pmtdataptr,&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));
-						waveform = init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr);  
-					    dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIterDup(gtaskControl)    ,(DiscardPacketDataFptr_type) discard_Waveform_type);       
-						// send data packet with waveform
-						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
-					}
-				}
-			}
-			if(measurementmode==TASK_FINITE){		 //need to count samples 
-				//data is in pixels
-				nrsamples=nrsamples+numpixels;
-				//determine if iteration has completed
-				if (nrsamples>=nrsamples_in_iteration){
-					//iteration is done
-					nrsamples=0;
-					//send null packet(s)
-					for (i=0;i<MAX_CHANNELS;i++){   
-						if (gchannels[i]!=NULL){
-							if (gchannels[i]->VChan!=NULL){
-							errChk( SendDataPacket(gchannels[i]->VChan, &nullPacket, 0, &errMsg) );
-							
-							}
-						}
-					}
-					PMTStopAcq(); 
-					TaskControlIterationDone(gtaskControl, 0, nullPacket, FALSE);   
+	
+	if (result > 0){
+		// deinterlace data here
+		numpixels 	= result/8;  //8 bytes per pixel, result gives number of bytes
+		numshorts 	= result/2;
+		ndatapoints = numshorts/4;
+		//transpose data array
+		TransposeData(Samplebuffer, VAL_SHORT_INTEGER, numshorts, 4);
+		//send datapackets
+		//index i is index of active channels; chanIdx contains the PMT channel index
+		for (int i = 0; i < MAX_CHANNELS; i++){
+			if (gchannels[i] != NULL){
+				if (gchannels[i]->VChan != NULL){
+					nullChk( pmtdataptr = malloc(ndatapoints * sizeof(unsigned short)) );
+					memcpy(pmtdataptr, &Samplebuffer[i*ndatapoints], ndatapoints * sizeof(unsigned short));
+					// prepare waveform
+					nullChk( waveform 	= init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );  
+				    nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIterDup(gtaskControl), (DiscardPacketDataFptr_type) discard_Waveform_type));       
+					// send data packet with waveform
+					errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
 				}
 			}
 		}
+		
+		if(measurementmode == TASK_FINITE){		 // need to count samples 
+			//data is in pixels
+			nrsamples = nrsamples + numpixels;
+			//determine if iteration is complete
+			if (nrsamples >= nrsamples_in_iteration){
+				//iteration is done
+				nrsamples = 0;
+				//send null packet(s)
+				for (int i = 0; i < MAX_CHANNELS; i++)
+					if (gchannels[i] != NULL)
+						if (gchannels[i]->VChan != NULL)
+							errChk( SendDataPacket(gchannels[i]->VChan, &nullPacket, 0, &errMsg) );
+							
+				PMTStopAcq(); 
+				TaskControlIterationDone(gtaskControl, 0, "", FALSE);   
+			}
+		}
+	}
 	
 	OKfree(Samplebuffer);
 	
@@ -347,8 +328,12 @@ int ReadBuffer(int bufsize)
 	
 Error:	
 	// cleanup
-	
+	OKfree(pmtdataptr);
+	discard_Waveform_type(&waveform);
 	discard_DataPacket_type(&dataPacket);
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
 	
 	TaskControlIterationDone(gtaskControl, error, errMsg, FALSE); 
 	OKfree(errMsg);
@@ -564,9 +549,6 @@ Error:
 	return error;
 }
 
- 
-
-
 /// HIFN  starts the PMT Controller Acquisition
 /// HIRET returns error, no error when 0
 int PMTStartAcq(TaskMode_type mode,TaskControl_type* taskControl,Channel_type** channels)
@@ -614,7 +596,7 @@ int PMTStopAcq(void)
 	int 			i;
 	
 	readdata=0;  //stop reading  
-	errChk(StopDAQThread(poolHandle));
+	errChk(StopDAQThread(DLGetCommonThreadPoolHndl()));
 
 	for (i=0;i<MAX_CHANNELS;i++){
 		OKfree(gchannels[i]);
@@ -707,18 +689,19 @@ Error:
 }
 
 
-int StartDAQThread(int mode,CmtThreadPoolHandle poolHandle)
+int StartDAQThread(int mode, CmtThreadPoolHandle poolHandle)
 {
 	int error=0;
 	
 	
 	SetAcqBusy(1);   
 	
-	errChk(CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL));   	   //&PMTThreadFunctionID
+	errChk(CmtScheduleThreadPoolFunctionAdv(poolHandle, PMTThreadFunction, NULL, THREAD_PRIORITY_NORMAL, NULL, 0, NULL, 0, NULL));   	   //&PMTThreadFunctionID
 	//only launch second acq thread in movie mode
-	if (mode==TASK_CONTINUOUS){
-		errChk(CmtScheduleThreadPoolFunctionAdv(poolHandle,PMTThreadFunction2,NULL,THREAD_PRIORITY_NORMAL,NULL,0,NULL,0,NULL));   	   //&PMTThreadFunctionID
+	if (mode == TASK_CONTINUOUS){
+		errChk(CmtScheduleThreadPoolFunctionAdv(poolHandle, PMTThreadFunction2, NULL, THREAD_PRIORITY_NORMAL, NULL, 0, NULL, 0, NULL));   	   //&PMTThreadFunctionID
 	}
+	
 	ProcessSystemEvents();  //to start the tread functions      
 	
 	//InitializePMTstate();  
@@ -730,10 +713,10 @@ Error:
 
 int StopDAQThread(CmtThreadPoolHandle poolHandle)
 {
-	int error						=0;	
-	int DAQThreadFunctionStatus;
-	int PMTThreadFunctionStatus;   
-	int PMTSyncThreadFunctionStatus;   
+	int 	error							= 0;	
+	int 	DAQThreadFunctionStatus;
+	int 	PMTThreadFunctionStatus;   
+	int 	PMTSyncThreadFunctionStatus;   
 
 	SetAcqBusy(0);  //should stop the acq thread 
 	
@@ -769,11 +752,8 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
     //quit
 	SetPMTCommandFlag(0);
 	
-	CmtDiscardThreadPool(poolHandle); 
-	
 	return 0;
 }
-
 
 //thread function,
 //run pmt read actions in this separate thread to prevent other daq tasks from underrunning

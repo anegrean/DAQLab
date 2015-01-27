@@ -568,7 +568,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 {
 	DataStorage_type* 	ds 			= callbackData;
 	SinkVChan_type* 	sinkVChan;
-	DS_Channel_type*	chan; 
+	DS_Channel_type*	chan		= NULL; 
 	DS_Channel_type**	chanPtr; 
 	char				buff[DAQLAB_MAX_VCHAN_NAME + 50];  
 	char*				vChanName;
@@ -709,7 +709,8 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 	int 				numitems;
 	Iterator_type*		currentiter;
 	char*				fullitername;
-	char*				channame;		
+	char*				channame;	
+	Waveform_type*		waveform;
 			
 	if (ds->channels) {
 		numitems = ListNumItems(ds->channels); 
@@ -741,7 +742,8 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 			currentiter=GetDataPacketCurrentIter(dataPackets[i]);
 			switch (dataPacketType) {
 				case DL_Waveform_UShort:
-					shortDataPtr = GetWaveformPtrToData(*(Waveform_type**)dataPacketDataPtr, &nElem);
+					waveform=*(Waveform_type**)dataPacketDataPtr;
+					shortDataPtr = *(unsigned short int**)GetWaveformPtrToData(waveform, &nElem);
 						
 					//test
 					rawfilename=malloc(MAXCHAR*sizeof(char)); 

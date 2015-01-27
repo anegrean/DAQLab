@@ -7871,7 +7871,7 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	// register DO task done event callback (which is called also if the task encounters an error)
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DOTaskSet->taskHndl, 0, DODAQmxTaskDone_CB, dev));
 	
-	
+				 
 	//----------------------  
 	// Commit DO Task
 	//----------------------  
@@ -8923,7 +8923,7 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 				// high ticks
 				highTicks = GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);
 				DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_HighTicks, highTicks) );
-				SetCtrlVal(timingPanHndl, COTicksPan_LowTicks, highTicks);
+				SetCtrlVal(timingPanHndl, COTicksPan_HighTicks, highTicks);
 				// set UI idle state
 				switch (idleState) {
 					case PulseTrainIdle_Low:
@@ -11388,7 +11388,7 @@ static int CO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 			// high ticks
 			highTicks = GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSetCO->pulseTrain);
 			DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->baseClass.taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_HighTicks, highTicks) );
-			SetCtrlVal(timingPanHndl, COTicksPan_LowTicks, highTicks);
+			SetCtrlVal(timingPanHndl, COTicksPan_HighTicks, highTicks);
 			// set UI idle state
 			switch (idleState) {
 				case PulseTrainIdle_Low:

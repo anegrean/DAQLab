@@ -90,7 +90,7 @@ void discard_DataPacket_type (DataPacket_type** dataPacket)
 	
 	// discard instance counter
 	CmtDiscardTSV((*dataPacket)->ctr);
-	
+									  
 	discard_Iterator_type(&((*dataPacket)->currentiter),FALSE,TRUE);
 	
 	// discard data packet

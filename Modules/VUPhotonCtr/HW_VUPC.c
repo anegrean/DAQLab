@@ -310,6 +310,7 @@ int ReadBuffer(int bufsize)
 				if (gchannels[i]!=NULL){
 					if (gchannels[i]->VChan!=NULL){
 						pmtdataptr = malloc(ndatapoints*sizeof(unsigned short));
+						nullChk(pmtdataptr);
 						memcpy(pmtdataptr,&Samplebuffer[i*ndatapoints],ndatapoints*sizeof(unsigned short));
 						waveform = init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr);  
 					    dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIterDup(gtaskControl)    ,(DiscardPacketDataFptr_type) discard_Waveform_type);       

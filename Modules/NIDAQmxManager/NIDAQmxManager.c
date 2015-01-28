@@ -590,6 +590,9 @@ struct ChanSet {
 															// the range of the chosen data type.	
 	double						ScaleMin;					// Minimum value in the channel's measurement units used to rescale an input signal when data type is other than double to
 															// the range of the chosen data type.	
+	double						offset;						// Offset added to the AI signal.
+	double						gain;						// Multiplication factor to be applied to the AI signal before it is converted to another data type.
+	uInt32						integrate;					// Number of samples to integrate (sum) for input type channels.
 	// METHODS
 	DiscardChanSetFptr_type		discardFptr;				// Function pointer to discard specific channel data that is derived from this base class.					
 };
@@ -723,6 +726,14 @@ typedef struct {
 	BOOL*         				datain_loop;	   			// Data will be looped regardless of repeat value until new data packet is provided
 } WriteAOData_type;
 
+typedef struct {
+	size_t						nAI;						// Number of AI channels used in the task.
+	uInt32*						nIntBuffElem;				// Array of number of elements within each buffer that must be still integrated with incoming data.
+															// This number cannot be larger than the number of elements contained within one integration block.
+	float64**					intBuffers;					// Array of integration buffers, each buffer having a maximum size equal to the readblock + number of elements within one integration block. 
+	
+} ReadAIData_type;
+
 // Used for continuous DO streaming
 typedef struct {
 	size_t        				writeblock;        			// Size of writeblock is IO_block_size
@@ -755,8 +766,9 @@ typedef struct {
 	HWTrigMaster_type*			HWTrigMaster;				// For establishing a task start HW-trigger dependency, this being a master.
 	HWTrigSlave_type*			HWTrigSlave;				// For establishing a task start HW-trigger dependency, this being a slave.
 	TaskTrig_type* 				referenceTrig;     			// Task reference trigger type. If NULL then there is no reference trigger.
-	WriteAOData_type*			writeAOData;					// Used for continuous AO streaming 
-	WriteDOData_type*			writeDOData;				// Used for continuous DO streaming                         
+	WriteAOData_type*			writeAOData;				// Used for continuous AO streaming. 
+	ReadAIData_type*			readAIData;					// Used for processing of incoming AI data.
+	WriteDOData_type*			writeDOData;				// Used for continuous DO streaming.                         
 	TaskTiming_type*			timing;						// Task timing info
 } ADTaskSet_type;
 
@@ -1009,6 +1021,10 @@ static void							discardUI_ADTaskSet 					(ADTaskSet_type** tskSetPtr);
 
 static int 							ADTaskSettings_CB			 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
 static int 							ADTimingSettings_CB			 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
+
+	// AI reading structure for processing incoming data (integration, etc.)
+static ReadAIData_type*				init_ReadAIData_type					(Dev_type* dev);
+static void							discard_ReadAIData_type					(ReadAIData_type** readAIPtr);
 
 	// AO continuous streaming data structure
 static WriteAOData_type* 			init_WriteAOData_type					(Dev_type* dev);
@@ -2795,6 +2811,9 @@ static void  init_ChanSet_type (Dev_type* dev, ChanSet_type* chanSet, char physC
 	chanSet -> taskHndl			= NULL;
 	chanSet -> ScaleMax			= 0;
 	chanSet -> ScaleMin			= 0;
+	chanSet -> integrate		= 1;
+	chanSet -> offset			= 0;
+	chanSet -> gain				= 1;
 }
 
 static void	discard_ChanSet_type (ChanSet_type** a)
@@ -2859,6 +2878,7 @@ static void	discard_ChanSet_AIAO_Voltage_type (ChanSet_type** a)
 static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	ChanSet_AIAO_Voltage_type* 	chSetPtr 		= callbackData;
+	Dev_type*					dev				= chSetPtr->baseClass.device;
 	char*						errMsg			= NULL;
 	int							error			= 0;
 
@@ -2959,6 +2979,27 @@ static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callb
 			SetCtrlAttribute(panel, AIAOChSet_ScaleMax, ATTR_VISIBLE, showScaleControls);
 			
 			DLUpdateSwitchboard();
+			
+			break;
+			
+		case AIAOChSet_Integrate:
+			
+			GetCtrlVal(panel, control, &chSetPtr->baseClass.integrate);
+			
+			discard_ReadAIData_type(&dev->AITaskSet->readAIData);
+			dev->AITaskSet->readAIData = init_ReadAIData_type(dev);
+			
+			break;
+			
+		case AIAOChSet_Offset:
+			
+			GetCtrlVal(panel, control, &chSetPtr->baseClass.offset);
+			
+			break;
+			
+		case AIAOChSet_Gain:
+			
+			GetCtrlVal(panel, control, &chSetPtr->baseClass.gain);
 			
 			break;
 			
@@ -3777,6 +3818,12 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							//---------------------------
 							// adjust data type scaling
 							//---------------------------
+							// offset
+							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_Offset, newChan->baseClass.offset); 
+							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_Offset, ATTR_VISIBLE, TRUE);
+							// gain
+							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_Gain, newChan->baseClass.gain); 
+							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_Gain, ATTR_VISIBLE, TRUE);
 							// max value
 							newChan->baseClass.ScaleMax = newChan->Vmax;
 							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_ScaleMax, newChan->baseClass.ScaleMax); 
@@ -3799,6 +3846,13 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, AI_UChar, "uChar", AI_UChar);
 							SetCtrlIndex(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, AI_Double); // set double to default
 							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, ATTR_VISIBLE, TRUE);
+							
+							//-----------------
+							// Data integration
+							//-----------------
+							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_Integrate, newChan->baseClass.integrate);
+							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_Integrate, ATTR_VISIBLE, TRUE);
+							
 							
 							//--------------------------
 							// Create and register VChan
@@ -5656,6 +5710,7 @@ static ADTaskSet_type* init_ADTaskSet_type (Dev_type* dev)
 			taskSet -> HWTrigSlave		= NULL;
 			taskSet -> referenceTrig	= NULL;
 			taskSet -> writeAOData		= NULL;
+			taskSet -> readAIData		= NULL;
 			taskSet -> writeDOData		= NULL;
 		
 	return taskSet;
@@ -5688,19 +5743,22 @@ static void	discard_ADTaskSet_type (ADTaskSet_type** taskSetPtr)
 		ListDispose((*taskSetPtr)->chanSet);
 	}
 	
-	// discard trigger data
+	// trigger data
 	discard_TaskTrig_type(&(*taskSetPtr)->startTrig);
 	discard_TaskTrig_type(&(*taskSetPtr)->referenceTrig);
 	discard_HWTrigMaster_type(&(*taskSetPtr)->HWTrigMaster);
 	discard_HWTrigSlave_type(&(*taskSetPtr)->HWTrigSlave);
 	
-	// discard timing info
+	// timing info
 	discard_TaskTiming_type(&(*taskSetPtr)->timing);
 	
-	// discard AO streaming structure
+	// AO streaming structure
 	discard_WriteAOData_type(&(*taskSetPtr)->writeAOData);
 	
-	// discard DO streaming structure
+	// AI read structure
+	discard_ReadAIData_type(&(*taskSetPtr)->readAIData);
+	
+	// DO streaming structure
 	discard_WriteDOData_type(&(*taskSetPtr)->writeDOData);
 	
 	OKfree(*taskSetPtr);
@@ -6212,6 +6270,70 @@ Error:
 }
 
 //------------------------------------------------------------------------------
+// ReadAIData_type
+//------------------------------------------------------------------------------
+static ReadAIData_type* init_ReadAIData_type (Dev_type* dev)
+{
+	ReadAIData_type*	readAI 		= NULL;
+	size_t				nAITotal	= ListNumItems(dev->AITaskSet->chanSet);
+	ChanSet_type**		chanSetPtr	= NULL;
+	size_t				nAI			= 0; 
+	size_t				chIdx		= 0;
+	
+	// count number of AI channels using HW-timing
+	for (size_t i = 1; i <= nAITotal; i++) {	
+		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		if (!(*chanSetPtr)->onDemand) nAI++;
+	}
+	// return NULL if there are no channels using HW-timing
+	if (!nAI) return NULL;
+	
+	// allocate memory for processing AI data
+	readAI 		= malloc (sizeof(ReadAIData_type));
+	if (!readAI) return NULL;
+	
+	// init
+	readAI->nAI 			= nAI;
+	readAI->nIntBuffElem 	= NULL;
+	readAI->intBuffers 		= NULL;
+	
+	// alloc
+	if ( !(readAI->nIntBuffElem = calloc(nAI, sizeof(uInt32))) ) goto Error;
+	if ( !(readAI->intBuffers 	= calloc(nAI, sizeof(float64*))) ) goto Error;
+	for (size_t i = 1; i <= nAITotal; i++) {
+		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		if ((*chanSetPtr)->onDemand) continue;
+		
+		if ( !(readAI->intBuffers[chIdx] = calloc((*chanSetPtr)->integrate + dev->AITaskSet->timing->blockSize, sizeof(float64))) ) goto Error;
+		
+		chIdx++;
+	}
+	
+	return readAI;
+	
+Error:
+	
+	discard_ReadAIData_type(&readAI);
+	return NULL;
+}
+
+static void discard_ReadAIData_type (ReadAIData_type** readAIPtr)
+{
+	if (!*readAIPtr) return;
+	
+	OKfree((*readAIPtr)->nIntBuffElem);
+	
+	if ((*readAIPtr)->intBuffers) {
+		for (size_t i = 0; i < (*readAIPtr)->nAI; i++)
+			OKfree((*readAIPtr)->intBuffers[i]);
+		
+		OKfree((*readAIPtr)->intBuffers);
+	}
+	
+	OKfree(*readAIPtr);
+}
+
+//------------------------------------------------------------------------------
 // WriteAOData_type
 //------------------------------------------------------------------------------
 static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
@@ -6222,7 +6344,7 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	
 	// count number of AO channels using HW-timing
 	size_t	nItems	= ListNumItems(dev->AOTaskSet->chanSet); 	
-	for (size_t i = 1; i <= nItems; i++) {	
+	for (i = 1; i <= nItems; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 		if (!(*chanSetPtr)->onDemand) nAO++;
 	}
@@ -7114,6 +7236,7 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 {
 #define ConfigDAQmxAITask_Err_ChannelNotImplemented		-1
 	int 				error 			= 0;
+	char*				errMsg			= NULL;
 	ChanSet_type** 		chanSetPtr;
 	
 	if (!dev->AITaskSet) return 0; 		// do nothing
@@ -7123,6 +7246,10 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 		DAQmxErrChk(DAQmxClearTask(dev->AITaskSet->taskHndl));
 		dev->AITaskSet->taskHndl = NULL;
 	}
+	
+	// clear and init readAIData used for processing incoming data
+	discard_ReadAIData_type(&dev->AITaskSet->readAIData);
+	nullChk( dev->AITaskSet->readAIData = init_ReadAIData_type(dev) );
 	
 	// check if there is at least one AI task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
@@ -7308,13 +7435,19 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	return 0;
 	
 DAQmxError:
+	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
-	if (!errMsg) return error;
+	nullChk(errMsg = malloc((buffsize+1)*sizeof(char)));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
 	if (errorInfo)
 		*errorInfo = FormatMsg(error, "ConfigDAQmxAITask", errMsg);
-	free(errMsg);
+	OKfree(errMsg);
 	return error;
 }
 
@@ -7324,6 +7457,7 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 #define ConfigDAQmxAOTask_Err_ChannelNotImplemented		-2
 	
 	int 				error 			= 0;
+	char*				errMsg			= NULL;
 	ChanSet_type** 		chanSetPtr;
 	
 	if (!dev->AOTaskSet) return 0; 		// do nothing
@@ -7336,8 +7470,7 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	
 	// clear and init writeAOData used for continuous streaming
 	discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
-	dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
-	if (!dev->AOTaskSet->writeAOData) goto MemError;
+	nullChk( dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev) );
 	
 	// check if there is at least one AO task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
@@ -7519,19 +7652,21 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Commit) );
 	
 	return 0;
-
-MemError:
-	if (errorInfo)
-		*errorInfo = FormatMsg(ConfigDAQmxAOTask_Err_OutOfMemory, "ConfigDAQmxAOTask", "Out of memory");
-	return ConfigDAQmxAOTask_Err_OutOfMemory;
 	
 DAQmxError:
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	nullChk( errMsg = malloc((buffsize+1)*sizeof(char)) );
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
 	if (errorInfo)
 		*errorInfo = FormatMsg(error, "ConfigDAQmxAOTask", errMsg);
-	free(errMsg);
+	OKfree(errMsg);
+	
 	return error;
 }
 
@@ -8459,6 +8594,10 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	errChk(SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	
+	// reset AI data processing structure
+	discard_ReadAIData_type(&dev->AITaskSet->readAIData);
+	nullChk( dev->AITaskSet->readAIData = init_ReadAIData_type(dev) );
+	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Start task as a function of HW trigger dependencies
 	//-------------------------------------------------------------------------------------------------------------------------------
@@ -9024,51 +9163,120 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	double				scalingFactor;
 	double				scaledSignal;
 	double				maxSignal;
+	float64*			integrationBuffer		= dev->AITaskSet->readAIData->intBuffers[chIdx];
+	uInt32				integration				= AIChSet->integrate;
+	uInt32				nItegratedSamples		= (nRead + dev->AITaskSet->readAIData->nIntBuffElem[chIdx]) / integration;  // number of samples integrated per channel
+	uInt32				nRemainingSamples		= (nRead + dev->AITaskSet->readAIData->nIntBuffElem[chIdx]) % integration;	// number of samples remaining to be integrated per channel
+	uInt32				nBufferSamples;
+	float64*			AIOffsetReadBuffer		= AIReadBuffer + chIdx * nRead;
+	uInt32				i, j, k;
 	
 	switch(GetSourceVChanDataType(AIChSet->srcVChan)) {
 				
 		case DL_Waveform_Double:
+			
+			//----------------------
+			// process incoming data
+			//----------------------
+			
+			nullChk( waveformData_double = calloc(nItegratedSamples, sizeof(double)) );
+			
+			if (integration > 1) {
+				// add data to the integration buffer
+				memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
+				dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
+				nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
+			
+				// integrate
+				for (i = 0; i < integration; i++) {
+					k = i;
+					for (j = 0; j < nItegratedSamples; j++) {
+						waveformData_double[j] += integrationBuffer[k] * AIChSet->gain + AIChSet->offset;
+						k += integration;
+					}							   
+				}
+			
+				// shift unprocessed samples from the end of the buffer to its beginning
+				if (nRemainingSamples)
+					memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(float64));
+			
+				dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
 				
-			nullChk( waveformData_double = malloc(nRead * sizeof(double)) );
-			memcpy(waveformData_double, AIReadBuffer + chIdx * nRead, nRead * sizeof(double));
-				
-			nullChk( waveform = init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_double) );
+			} else
+				memcpy(waveformData_double, AIOffsetReadBuffer, nRead * sizeof(double));
+			
+			//--------------------
+			// prepare data packet
+			//--------------------
+			
+			nullChk( waveform 	= init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_double) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) ); 
 				
 			break;
 				
 		case DL_Waveform_Float:
-				
-			nullChk( waveformData_float = malloc(nRead * sizeof(float)) );
-			// transform double data to float
-			for (int j = 0; j < nRead; j++)
-				waveformData_float[j] = (float) *(AIReadBuffer + chIdx * nRead + j);
 			
-			nullChk( waveform = init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_float) );
+			//----------------------
+			// process incoming data
+			//----------------------
+			
+			nullChk( waveformData_float = calloc(nItegratedSamples, sizeof(float)) );
+			
+			if (integration > 1) {
+				// add data to the integration buffer
+				memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
+				dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
+				nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
+			
+				// integrate
+				for (i = 0; i < integration; i++) {
+					k = i;
+					for (j = 0; j < nItegratedSamples; j++) {
+						waveformData_float[j] += (float) (integrationBuffer[k] * AIChSet->gain + AIChSet->offset);
+						k += integration;
+					}							   
+				}
+			
+				// shift unprocessed samples from the end of the buffer to its beginning
+				if (nRemainingSamples)
+					memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(float64));
+			
+				dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
+				
+			} else
+				for (i = 0; i < nRead; i++)
+					waveformData_float[i] = (float) *(AIOffsetReadBuffer + i);
+			
+			//-------------------- 
+			// prepare data packet
+			//--------------------
+			
+			nullChk( waveform 	= init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_float) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
 				
 			break;
 				
 		case DL_Waveform_UInt:
-				
+			
+			nullChk( waveformData_uInt32 = calloc(nItegratedSamples, sizeof(uInt32)) );
+			
 			// calculate scaling factor to transform double to uInt32 given min & max values
 			maxSignal = (double)UINT_MAX;
 			scalingFactor = maxSignal/(AIChSet->ScaleMax - AIChSet->ScaleMin);
-				
-			nullChk( waveformData_uInt32 = malloc(nRead * sizeof(uInt32)) );
-				
-			for (int j = 0; j < nRead; j++) {
+			
+			
+			for (int i = 0; i < nItegratedSamples; i++) {
 				// scale data
-				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nRead + j) - AIChSet->ScaleMin);
+				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nItegratedSamples + i) - AIChSet->ScaleMin);
 				// apply limits and transform data
-				if (scaledSignal < 0) waveformData_uInt32[j] = 0;
+				if (scaledSignal < 0) waveformData_uInt32[i] = 0;
 				else
-					if (scaledSignal > maxSignal) waveformData_uInt32[j] = UINT_MAX;
+					if (scaledSignal > maxSignal) waveformData_uInt32[i] = UINT_MAX;
 					else
-						waveformData_uInt32[j] = (uInt32) scaledSignal;
+						waveformData_uInt32[i] = (uInt32) scaledSignal;
 			}
 				
-			nullChk( waveform = init_Waveform_type(Waveform_UInt, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_uInt32) );
+			nullChk( waveform = init_Waveform_type(Waveform_UInt, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_uInt32) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UInt, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
 				
 			break;
@@ -9079,20 +9287,20 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			maxSignal = (double)USHRT_MAX;
 			scalingFactor = maxSignal/(AIChSet->ScaleMax - AIChSet->ScaleMin);
 				
-			nullChk( waveformData_uInt16 = malloc(nRead * sizeof(uInt16)) );
+			nullChk( waveformData_uInt16 = calloc(nItegratedSamples, sizeof(uInt16)) );
 				
-			for (int j = 0; j < nRead; j++) {
+			for (int i = 0; i < nItegratedSamples; i++) {
 				// scale data
-				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nRead + j) - AIChSet->ScaleMin);
+				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nItegratedSamples + i) - AIChSet->ScaleMin);
 				// apply limits and transform data
-				if (scaledSignal < 0) waveformData_uInt16[j] = 0;
+				if (scaledSignal < 0) waveformData_uInt16[i] = 0;
 				else
-					if (scaledSignal > maxSignal) waveformData_uInt16[j] = USHRT_MAX;
+					if (scaledSignal > maxSignal) waveformData_uInt16[i] = USHRT_MAX;
 					else
-						waveformData_uInt16[j] = (uInt16) scaledSignal;
+						waveformData_uInt16[i] = (uInt16) scaledSignal;
 			}
 				
-			nullChk( waveform = init_Waveform_type(Waveform_UShort, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_uInt16) );
+			nullChk( waveform = init_Waveform_type(Waveform_UShort, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_uInt16) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
 				
 			break;
@@ -9103,26 +9311,29 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			maxSignal = (double)UCHAR_MAX;
 			scalingFactor = maxSignal/(AIChSet->ScaleMax - AIChSet->ScaleMin);
 				
-			nullChk( waveformData_uInt8 = malloc(nRead * sizeof(uInt8)) );
+			nullChk( waveformData_uInt8 = calloc(nItegratedSamples, sizeof(uInt8)) );
 				
-			for (int j = 0; j < nRead; j++) {
+			for (int i = 0; i < nItegratedSamples; i++) {
 				// scale data
-				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nRead + j) - AIChSet->ScaleMin);
+				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nItegratedSamples + i) - AIChSet->ScaleMin);
 				// apply limits and transform data
-				if (scaledSignal < 0) waveformData_uInt8[j] = 0;
+				if (scaledSignal < 0) waveformData_uInt8[i] = 0;
 				else
-					if (scaledSignal > maxSignal) waveformData_uInt8[j] = UCHAR_MAX;
+					if (scaledSignal > maxSignal) waveformData_uInt8[i] = UCHAR_MAX;
 					else
-						waveformData_uInt8[j] = (uInt8) scaledSignal;
+						waveformData_uInt8[i] = (uInt8) scaledSignal;
 			}
 				
-			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_uInt8) );
+			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_uInt8) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
 				
 			break;
 	}
 
+	//-------------------------------
 	// send data packet with waveform
+	//-------------------------------
+	
 	errChk( SendDataPacket(AIChSet->srcVChan, &dataPacket, 0, &errMsg) );
 		
 	return 0;
@@ -9205,6 +9416,8 @@ Error:
 	// terminate task controller iteration
 	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	OKfree(errMsg);
+	
+	return 0;
 }
 
 // Called only if a running task encounters an error or stops by itself in case of a finite acquisition or generation task. 
@@ -11642,34 +11855,45 @@ static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** 
 
 static int StoppedTC (TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo)
 {
-#define StoppedTC_Err_OutOfMemory	-1
-	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
+	int			error 	= 0;
+	char*		errMsg	= NULL;
+	Dev_type*	dev		= GetTaskControlModuleData(taskControl);
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
+	
+	// AI task
+	if (dev->AITaskSet) {
+		// clear and init readAIData used for processing icoming data
+		discard_ReadAIData_type(&dev->AITaskSet->readAIData);
+		nullChk( dev->AITaskSet->readAIData = init_ReadAIData_type(dev) );
+	}
 	
 	// AO task
 	if (dev->AOTaskSet) {
 		// clear and init writeAOData used for continuous streaming
 		discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
-		dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
-		if (!dev->AOTaskSet->writeAOData) goto MemError;
+		nullChk( dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev) );
 	}
 	
 	// DO task
 	if (dev->DOTaskSet) {
 		// clear and init writeDOData used for continuous streaming
 		discard_WriteDOData_type(&dev->DOTaskSet->writeDOData);
-		dev->DOTaskSet->writeDOData = init_WriteDOData_type(dev);
-		if (!dev->DOTaskSet->writeDOData) goto MemError;
+		nullChk( dev->DOTaskSet->writeDOData = init_WriteDOData_type(dev) );
 	}
 	
 	return 0;
 	
-MemError:
+Error:
 	
-	*errorInfo = FormatMsg(StoppedTC_Err_OutOfMemory, "StoppedTC", "Out of memory");   
-	return StoppedTC_Err_OutOfMemory; 
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	*errorInfo = FormatMsg(error, "StoppedTC", errMsg);   
+	OKfree(errMsg);
+	
+	return error; 
 }
 
 static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)

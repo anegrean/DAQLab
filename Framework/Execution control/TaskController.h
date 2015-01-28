@@ -366,11 +366,11 @@ typedef int				 	(*UnconfigureFptr_type) 		(TaskControl_type* taskControl, BOOL 
 // or even in another thread. In either case, to signal back to the Task Controller that the iteration function is complete, send a
 // TASK_EVENT_ITERATION_DONE event using TaskControlEvent and passing for eventInfo init_FCallReturn_type (...) and for disposeEventInfoFptr
 // discard_FCallReturn_type.
-typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl,  BOOL const* abortIterationFlag);
+typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
 // Called when an iteration must be aborted. This is similar to the use of GetTaskControlAbortIterationFlag except that this function is called back, instead
 // of polling a flag during the iteration.
-typedef void				(*AbortIterationFptr_type)		(TaskControl_type* taskControl,  BOOL const* abortFlag);
+typedef void				(*AbortIterationFptr_type)		(TaskControl_type* taskControl, BOOL const* abortFlag);
 
 // Called before the first iteration starts from an INITIAL state.
 typedef int				 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
@@ -379,10 +379,10 @@ typedef int				 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL cons
 typedef int				 	(*ResetFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called automatically when a finite Task Controller finishes required iterations or a continuous Task Controller is stopped manually.
-typedef int				 	(*DoneFptr_type) 				(TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo); 
+typedef int				 	(*DoneFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a running finite Task Controller is stopped manually, before reaching a DONE state .
-typedef int				 	(*StoppedFptr_type) 			(TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo); 
+typedef int				 	(*StoppedFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a Task Controller needs to dim or undim certain module controls to allow/prevent user interaction.
 typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimmed); 

@@ -5389,6 +5389,9 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// pixels are transformed from an array to an image 
 				nullChk( imaqArrayToImage(imgBuffer->detChan->imaqImg, imgBuffer->imagePixels, rectRaster->height, rectRaster->width) );
 				
+				// equalize intensity
+				//imaqEqualize(imgBuffer->detChan->imaqImg, imgBuffer->detChan->imaqImg, minPixVal, maxPixVal, NULL);
+				
 				if (imgBuffer->detChan->imaqWndID >= 0)
 					imaqDisplayImage(imgBuffer->detChan->imaqImg, imgBuffer->detChan->imaqWndID, FALSE);
 			

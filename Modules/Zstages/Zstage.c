@@ -90,14 +90,16 @@ static void CVICALLBACK 			SettingsMenu_CB 				(int menuBar, int menuItem, void 
 // ZStage Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type*			ConfigureTC						(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int							ConfigureTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							UnconfigureTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void							IterateTC						(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
-static FCallReturn_type*			StartTC							(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*			DoneTC							(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*			StoppedTC						(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type* 			ResetTC 						(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static void				 			ErrorTC 						(TaskControl_type* taskControl, char* errorMsg);
-static FCallReturn_type*			EventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, void* eventData, BOOL const* abortFlag);  
+static void							AbortIterationTC				(TaskControl_type* taskControl, BOOL const* abortFlag);  
+static int						 	StartTC			 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int						 	ResetTC			 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+static int							DoneTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static void				 			ErrorTC 						(TaskControl_type* taskControl, int errorID, char errorMsg[]);
+static int							EventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 
 //==============================================================================
@@ -1109,14 +1111,21 @@ static BOOL ValidateRefPosName (char inputStr[], void* dataPtr)
 // ZStage Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type* ConfigureTC	(TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static void IterateTC (TaskControl_type* taskControl,  BOOL const* abortIterationFlag)
+static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+{
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	
+	return 0;
+}
+
+static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
@@ -1124,44 +1133,51 @@ static void IterateTC (TaskControl_type* taskControl,  BOOL const* abortIteratio
 	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
 }
 
-static FCallReturn_type* StartTC	(TaskControl_type* taskControl, BOOL const* abortFlag)
-{
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
-	
-	return init_FCallReturn_type(0, "", "");
-}
-
-static FCallReturn_type* DoneTC (TaskControl_type* taskControl,  BOOL const* abortFlag)
-{
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
-	
-	return init_FCallReturn_type(0, "", "");
-}
-static FCallReturn_type* StoppedTC (TaskControl_type* taskControl,  BOOL const* abortFlag)
-{
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
-	
-	return init_FCallReturn_type(0, "", "");
-}
-
-static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
-{
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
-	
-	return init_FCallReturn_type(0, "", "");
-}
-
-static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
+static void	AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 }
 
-static FCallReturn_type* EventHandler (TaskControl_type* taskControl, TaskStates_type taskState, void* eventData, BOOL const* abortFlag)
+static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
+}
+
+static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+{
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	
+	return 0;
+}
+
+static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+{
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	
+	return 0;
+}
+
+static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+{
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	
+	return 0;
+}
+
+static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[])
+{
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	
+}
+
+static int EventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
+{
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	
+	return 0;
 }
 
 

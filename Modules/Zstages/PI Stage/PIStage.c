@@ -113,15 +113,15 @@ static void							dispose_MoveCommand_EventInfo		(void* eventInfo);
 // PIStage Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type*			ConfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int							ConfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void							IterateTC							(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
-static FCallReturn_type*			StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*			DoneTC								(TaskControl_type* taskControl, BOOL const* abortFlag);
-static FCallReturn_type*			StoppedTC							(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int							StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							DoneTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void							DimTC								(TaskControl_type* taskControl, BOOL dimmed);
-static FCallReturn_type* 			ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag); 
-static void				 			ErrorTC 							(TaskControl_type* taskControl, char* errorMsg);
-static FCallReturn_type*			ZStageEventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, void* eventData, BOOL const* abortFlag);  
+static int				 			ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static void				 			ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
+static int							ZStageEventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 
 //==============================================================================
@@ -783,7 +783,7 @@ static int SetHWStageLimits	(Zstage_type* zstage, double minimumLimit, double ma
 // PI ZStage Task Controller Callbacks
 //-----------------------------------------
 
-static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	Zstage_type* 	zstage  = GetTaskControlModuleData(taskControl);
 	
@@ -791,18 +791,18 @@ static FCallReturn_type* ConfigureTC (TaskControl_type* taskControl, BOOL const*
 	// first iteration the stage doesn't move from the starting position, therefore for nZSteps there will be nZSteps+1 iterations
 	SetTaskControlIterations(taskControl, zstage->nZSteps + 1);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
 static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
-	Zstage_type* 		zstage 		= GetTaskControlModuleData(taskControl);
-	Iterator_type*		currentiter = GetTaskControlCurrentIter(taskControl);
-	size_t 				iterindex	= GetCurrentIterationIndex(currentiter);
+	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	Iterator_type*		currentiter 	= GetTaskControlCurrentIter(taskControl);
+	size_t 				iterindex		= GetCurrentIterationIndex(currentiter);
 	
 	// update iteration counter
 	if (zstage->SetStepCounter)
-		(*zstage->SetStepCounter) (zstage,iterindex);
+		(*zstage->SetStepCounter) (zstage, iterindex);
 	
 	// move to start position for the first iteration
 	if (!iterindex) {
@@ -818,34 +818,34 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	
 }
 
-static FCallReturn_type* StartTC	(TaskControl_type* taskControl, BOOL const* abortFlag)
+static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	
 	// dim items
 	(*zstage->baseClass.DimWhenRunning) ((Zstage_type*)zstage, TRUE);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	
 	// undim items
 	(*zstage->baseClass.DimWhenRunning) ((Zstage_type*)zstage, FALSE);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static FCallReturn_type* StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	
 	// undim items
 	(*zstage->baseClass.DimWhenRunning) ((Zstage_type*)zstage, FALSE);
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
 static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
@@ -854,17 +854,17 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 	
 }
 
-static FCallReturn_type* ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag)
+static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	
 	if (zstage->SetStepCounter)
 		(*zstage->SetStepCounter) (zstage, 0); 
 	
-	return init_FCallReturn_type(0, "", "");
+	return 0;
 }
 
-static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
+static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[])
 {
 	PIStage_type* 		PIStage = GetTaskControlModuleData(taskControl);
 	Zstage_type*		zstage	= (Zstage_type*) PIStage;
@@ -886,7 +886,7 @@ static void ErrorTC (TaskControl_type* taskControl, char* errorMsg)
 	
 }
 
-static FCallReturn_type* ZStageEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, void* eventData, BOOL const* abortFlag)
+static int ZStageEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	MoveCommand_type*	command 		= eventData;
 	

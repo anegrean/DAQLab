@@ -349,7 +349,6 @@ int main (int argc, char *argv[])
 	return error;
 }
 
-
 /// HIFN  Loads DAQLab environment
 /// HIRET Return indicates if function was successful.
 /// HIRET 0 if success

@@ -6445,7 +6445,10 @@ static void	discard_WriteAOData_type (WriteAOData_type** writeDataPtr)
 		OKfree((*writeDataPtr)->datain[i]);	    
 		OKfree((*writeDataPtr)->databuff[i]);   
 	}
-	
+	//added memleak
+	OKfree((*writeDataPtr)->databuff);
+	OKfree((*writeDataPtr)->datain); 
+	//end added
 	OKfree((*writeDataPtr)->dataout);
 	OKfree((*writeDataPtr)->sinkVChans);
 	OKfree((*writeDataPtr)->datain_size);

@@ -5209,6 +5209,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	uInt64             			pixelDataIdx   		= 0;      	// The index of the processed pixel from the received pixel waveform.
 	RectRasterImgBuffer_type*   imgBuffer			= rectRaster->imgBuffers[imgBufferIdx];
 	uInt64						nDeadTimePixels		= (uInt64) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->pixelDwellTime);
+	DataPacket_type*  			imagePacket			= NULL;
+	
 	
 	do {
 		
@@ -5392,11 +5394,20 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// equalize intensity
 				//imaqEqualize(imgBuffer->detChan->imaqImg, imgBuffer->detChan->imaqImg, minPixVal, maxPixVal, NULL);
 				
-				if (imgBuffer->detChan->imaqWndID >= 0)
+				if (imgBuffer->detChan->imaqWndID >= 0)  {
 					imaqDisplayImage(imgBuffer->detChan->imaqImg, imgBuffer->detChan->imaqWndID, FALSE);
+				
+					//test lex 
+					//create image packet 
+					nullChk( imagePacket	= init_DataPacket_type(DL_Image_NIVision, &imgBuffer->detChan->imaqImg, GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl), (DiscardPacketDataFptr_type) discard_Image_type));       
+					// send data packet with image
+					errChk( SendDataPacket(rectRaster->baseClass.VChanScanOut, &imagePacket, 0, &errMsg) );
+				}
 			
 				// TEMPORARY: just complete iteration, and use only one channel
 				TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
+				
+			
 				
 				// reset number of elements in pixdata buffer (contents is not cleared!) new frame data will overwrite the old frame data in the buffer
 				// NOTE & WARNING: data in the imgBuffer->tmpPixels is kept since multiple images can follow and imgBuffer->tmpPixels may contain data from the next image

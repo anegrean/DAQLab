@@ -377,6 +377,16 @@ void discard_Waveform_type (Waveform_type** waveform)
 	OKfree(*waveform);
 }
 
+
+void discard_Image_type (Image** image)
+{
+	if (!*image) return;
+	
+	
+//	OKfree(*image);
+}
+
+
 void SetWaveformName (Waveform_type* waveform, char waveformName[])
 {
 	waveform->waveformName = StrDup(waveformName);

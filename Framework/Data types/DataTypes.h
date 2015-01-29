@@ -20,6 +20,7 @@
 
 #include "cvidef.h"
 #include "nidaqmx.h"
+#include "nivision.h" 
 
 //==============================================================================
 // Constants
@@ -271,6 +272,12 @@ uInt64						GetRepeatedWaveformNumSamples			(RepeatedWaveform_type* waveform);
 
 	// Returns number of bytes per repeated waveform element.
 size_t						GetRepeatedWaveformSizeofData			(RepeatedWaveform_type* waveform);
+
+//
+//---------------------------------------------------------------------------------------------------------  
+// Image types     
+//--------------------------------------------------------------------------------------------------------- 
+void 						discard_Image_type 						(Image** image);
 
 //---------------------------------------------------------------------------------------------------------  
 // Pulse Trains     

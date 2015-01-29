@@ -1275,13 +1275,13 @@ static void	DimUITC	(TaskControl_type* taskControl, BOOL dimmed)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);\
 	
-	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_NUM_COMMAND, ATTR_DIMMED, dimmed); 
+/*	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_NUM_COMMAND, ATTR_DIMMED, dimmed); 
 	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_NUM_STATUS, ATTR_DIMMED, dimmed);
 	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_FFRESET, ATTR_DIMMED, dimmed);    
 	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_RESET, ATTR_DIMMED, dimmed);    
 	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_LED_DOOR_OPEN, ATTR_DIMMED, dimmed); 
 	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_LED_RUNNING, ATTR_DIMMED, dimmed); 
-	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_TestMode, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_TestMode, ATTR_DIMMED, dimmed);    */
 }
 
 static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)

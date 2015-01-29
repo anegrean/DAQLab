@@ -250,7 +250,6 @@ int ReadBuffer(int bufsize)
 	int 					error			= 0;
 	int 					result;
 	DataPacket_type*  		dataPacket		= NULL;
-	DataPacket_type*		nullPacket		= NULL;
 	char*					errMsg			= NULL;  
 	unsigned short int* 	Samplebuffer	= NULL;   
 	void*     				pmtdataptr		= NULL;
@@ -310,12 +309,6 @@ int ReadBuffer(int bufsize)
 			if (nrsamples >= nrsamples_in_iteration){
 				//iteration is done
 				nrsamples = 0;
-				//send null packet(s)
-				for (int i = 0; i < MAX_CHANNELS; i++)
-					if (gchannels[i] != NULL)
-						if (gchannels[i]->VChan != NULL)
-							errChk( SendDataPacket(gchannels[i]->VChan, &nullPacket, 0, &errMsg) );
-							
 				PMTStopAcq(); 
 				TaskControlIterationDone(gtaskControl, 0, "", FALSE);   
 			}
@@ -591,9 +584,18 @@ Error:
 ///  HIRET returns error, no error when 0
 int PMTStopAcq(void)
 {
-	int 			error		=0;
-	unsigned long 	controlreg;
-	int 			i;
+	DataPacket_type*		nullPacket		= NULL; 
+	int 					error			= 0;
+	unsigned long 			controlreg;
+	int 					i;
+	char*					errMsg			= NULL;
+	
+	//send null packet(s)
+	for (int i = 0; i < MAX_CHANNELS; i++)
+		if (gchannels[i] != NULL)
+			if (gchannels[i]->VChan != NULL)
+				errChk( SendDataPacket(gchannels[i]->VChan, &nullPacket, 0, &errMsg) );
+	
 	
 	readdata=0;  //stop reading  
 	errChk(StopDAQThread(DLGetCommonThreadPoolHndl()));

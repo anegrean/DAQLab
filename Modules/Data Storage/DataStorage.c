@@ -768,7 +768,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 				break;
 				case DL_Image_NIVision:
 					//get the image
-					image=(Image*) dataPacketDataPtr;
+					image=*(Image**) dataPacketDataPtr;
 					rawfilename=malloc(MAXCHAR*sizeof(char)); 
 					fullitername=CreateFullIterName(currentiter);
 					Fmt (rawfilename, "%s<%s\\%s_%s#.tif", ds->rawdatapath,fullitername,sourceVChanName);  

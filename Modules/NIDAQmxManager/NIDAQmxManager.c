@@ -8429,7 +8429,7 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	// AI task
 	if (dev->AITaskSet)
 	if (dev->AITaskSet->taskHndl) errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
-   
+	
 	// AO task
 	if (dev->AOTaskSet)
 	if (dev->AOTaskSet->taskHndl) errChk(DAQmxStopTask(dev->AOTaskSet->taskHndl));
@@ -11820,6 +11820,8 @@ static void AbortIterationTC (TaskControl_type* taskControl,BOOL const* abortFla
 	
 	errChk( StopDAQmxTasks(dev, &errMsg) );
 	
+	SyncWait(Timer(), 1.0); // just make sure that all tasks stop and place data in queues before sending NULL packets from this thread
+	
 	// send NULL data packets to AI channels used in the DAQmx task
 	if (dev->AITaskSet) {
 		size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet); 
@@ -11865,6 +11867,7 @@ static int StoppedTC (TaskControl_type* taskControl,  BOOL const* abortFlag, cha
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
 	
+	/*
 	// AI task
 	if (dev->AITaskSet) {
 		// clear and init readAIData used for processing icoming data
@@ -11885,6 +11888,7 @@ static int StoppedTC (TaskControl_type* taskControl,  BOOL const* abortFlag, cha
 		discard_WriteDOData_type(&dev->DOTaskSet->writeDOData);
 		nullChk( dev->DOTaskSet->writeDOData = init_WriteDOData_type(dev) );
 	}
+	*/
 	
 	return 0;
 	

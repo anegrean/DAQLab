@@ -623,11 +623,19 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 {
 	int 	i;
 	double 	zero	= 0.0;
+	double 	twenty_mV	= 20.0;  
 
 	for(i=0;i<MAX_CHANNELS;i++)  {
 		if(vupc->channels[i]!=NULL) {
 			if(i==0){
 			//PMT1 is selected
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Fan,0);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Cooling,0);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Mode,0);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,0);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, 0);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, twenty_mV);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Gain, zero);
 			 
 			}
 			if(i==1){
@@ -637,7 +645,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Mode,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, 0);
-				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, zero);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, twenty_mV);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Gain, zero);
 			}
 			if(i==2){
@@ -647,7 +655,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Mode,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, 0);
-				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, zero);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, twenty_mV);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Gain, zero);
 			}
 			if(i==3){
@@ -657,7 +665,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Mode,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_STATE1,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_LED_TEMP1, 0);
-				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, zero);
+				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Threshold, twenty_mV);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Gain, zero);
 			}
 		}
@@ -697,52 +705,39 @@ Error:
 	return error;
 }
 
-///  HIFN  Sets the PMT gain
-///  HIPAR PMTnr/PMT number,PMTGain /Gain, range ......
-///  HIRET returns error, no error when 0
-int SetPMTGainTresh(int PMTnr,unsigned int PMTGain,unsigned int PMTThreshold)
-{
-	int error=0;
-
-	errChk(PMT_SetGainTresh(PMTnr,PMTGain,PMTThreshold));
-
-Error:
-	return error;
-}
 
 
-int ConvertVoltsToBits(float value_in_volts)
-{
-	  int 		value_in_bits;
-	  double 	voltsperbit	=1/65535.0;
-	  
-	  //1V corresponds with a bitvalue of 65535
-	  value_in_bits=value_in_volts/voltsperbit;
-	  
-	  return value_in_bits;
-}
 
 
-static int PMT_Set_GainThresh (VUPhotonCtr_type* self, int PMTnr, double gain, double threshold)
+
+
+
+
+
+static int PMT_Set_GainThresh (VUPhotonCtr_type* vupc,int PMTnr, double gain, double threshold)
 {
 	int 			error = 0;
-	unsigned int 	gain_in_bits;
-	unsigned int 	threshold_in_bits;
 
-	gain_in_bits=ConvertVoltsToBits(gain);
-	threshold_in_bits=ConvertVoltsToBits(threshold);
-	errChk(SetPMTGainTresh(PMTnr,gain_in_bits,threshold_in_bits));
+	errChk(SetPMTGainTresh(PMTnr,gain,threshold));
 
 Error:
 	return error;
 }
+
+
+
+
+
 
 int ResetActions(VUPhotonCtr_type* 	vupc)
 {
 	int error = 0;
 	
+	
 	errChk(PMTReset());
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_BTTN_TestMode, FALSE);
+	//set all gains to zero, all thresholds to 20 mV
+	
 	ResetVUPC_UI(vupc);
 	PMTController_UpdateDisplay(vupc);
 	
@@ -1213,7 +1208,7 @@ static void	IterateTC	(TaskControl_type* taskControl, BOOL const* abortIteration
 	errChk(SetHWTrigSlaveArmedStatus(vupc->HWTrigSlave,&errMsg));
 	
 Error:
-	return error;
+	return;
 
 }
 

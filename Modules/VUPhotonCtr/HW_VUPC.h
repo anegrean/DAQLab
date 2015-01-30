@@ -127,7 +127,7 @@ int 		PMTClearFifo				(void);
 int 		PMT_SetMode 				(int PMTnr, PMT_Mode_type mode);
 int 		PMT_SetFan 					(int PMTnr, BOOL value);
 int 		PMT_SetCooling 				(int PMTnr, BOOL value);
-int 		PMT_SetGainTresh			(int PMTnr, unsigned int PMTGain, unsigned int PMTThreshold);
+int 		SetPMTGainTresh				(int PMTnr,double gain,double threshold);
 int 		PMT_SetTestMode				(BOOL testmode);
 int 		PMT_ClearControl			(int PMTnr);
 void 		Setnrsamples_in_iteration	(int mode,int samplerate_in_khz,int itsamples);

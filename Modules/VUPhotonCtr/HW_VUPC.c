@@ -216,6 +216,7 @@ int PMTController_Init(void)
 	errChk(GetPMTControllerVersion());
 	
 	errChk(PMTReset());
+	
 	VUPCI_Set_Read_Timeout(timeout);
 	
 Error:
@@ -260,6 +261,7 @@ int ReadBuffer(int bufsize)
 	long 					errcode;
 	unsigned long 			statreg; 
 	Waveform_type* 			waveform		= NULL;
+	int						swappedi		= 0;
 	
 	
 	Samplebuffer 	= malloc(bufsize); 
@@ -292,7 +294,19 @@ int ReadBuffer(int bufsize)
 			if (gchannels[i] != NULL){
 				if (gchannels[i]->VChan != NULL){
 					nullChk( pmtdataptr = malloc(ndatapoints * sizeof(unsigned short)) );
-					memcpy(pmtdataptr, &Samplebuffer[i*ndatapoints], ndatapoints * sizeof(unsigned short));
+					//swap index; 
+					//to be repaired in hardware!
+					switch (i) {
+						case 0: swappedi=2;
+						break;
+						case 1: swappedi=3;
+						break;
+						case 2: swappedi=0;
+						break;
+						case 3: swappedi=1;
+						break;
+						}
+					memcpy(pmtdataptr, &Samplebuffer[swappedi*ndatapoints], ndatapoints * sizeof(unsigned short));
 					// prepare waveform
 					nullChk( waveform 	= init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );  
 				    nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIterDup(gtaskControl), (DiscardPacketDataFptr_type) discard_Waveform_type));       
@@ -527,6 +541,39 @@ Error:
 }
 
 
+
+int ConvertVoltsToBits(float value_in_volts)
+{
+	  int 		value_in_bits;
+	  double 	voltsperbit	=1/65535.0;
+	  
+	  //1V corresponds with a bitvalue of 65535
+	  value_in_bits=value_in_volts/voltsperbit;
+	  
+	  return value_in_bits;
+}
+
+
+
+///  HIFN  Sets the PMT gain
+///  HIPAR PMTnr/PMT number,PMTGain /Gain, range ......
+///  HIRET returns error, no error when 0
+int SetPMTGainTresh(int PMTnr,double gain,double threshold)
+{
+	int error=0;
+	unsigned int 	gain_in_bits;
+	unsigned int 	threshold_in_bits;
+
+	gain_in_bits=ConvertVoltsToBits(gain);
+	threshold_in_bits=ConvertVoltsToBits(threshold);
+	
+	errChk(PMT_SetGainTresh(PMTnr,gain_in_bits,threshold_in_bits));
+
+Error:
+	return error;
+}
+
+
 int PMT_SetTestMode(BOOL testmode)
 {
 	int 			error=0;
@@ -616,12 +663,21 @@ Error:
 }
 
 
+
+
+
+
+
+
+
 ///  HIFN  resets the PMT Controller 
  /// HIRET returns error, no error when 0
 int PMTReset(void)
 {
 	int 			error		=0;
 	unsigned long 	controlreg;
+	double 			zero		= 0.0;
+	double 			twenty_mV	= 0.020;
 
 
 	controlreg=0;   //clear control reg 
@@ -630,7 +686,15 @@ int PMTReset(void)
 	errChk(WritePMTReg(CTRL_REG,controlreg));
 	//clear reset bit
 	controlreg=controlreg&~RESET_BIT;
-	errChk(WritePMTReg(CTRL_REG,controlreg)); 
+	errChk(WritePMTReg(CTRL_REG,controlreg));
+	
+	//set gain to zero, threshold level to 20mV
+	SetPMTGainTresh(PMT1,zero,twenty_mV);
+	SetPMTGainTresh(PMT2,zero,twenty_mV);   
+	SetPMTGainTresh(PMT3,zero,twenty_mV);   
+	SetPMTGainTresh(PMT4,zero,twenty_mV);   
+	
+	
 	
 Error:
 	return error;

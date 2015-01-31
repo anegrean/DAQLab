@@ -1024,6 +1024,7 @@ BOOL DLRegisterHWTrigMaster (HWTrigMaster_type* master)
 
 BOOL DLUnregisterHWTrigMaster (HWTrigMaster_type* master)
 {
+	if (!master) return TRUE;
 	size_t 					nMasters = ListNumItems(HWTrigMasters);
 	HWTrigMaster_type**		masterPtr;
 	for (size_t i = 1; i <= nMasters; i++) {
@@ -1061,6 +1062,8 @@ BOOL DLRegisterHWTrigSlave (HWTrigSlave_type* slave)
 
 BOOL DLUnregisterHWTrigSlave (HWTrigSlave_type* slave)
 {
+	if (!slave) return TRUE;
+	
 	size_t 					nSlaves = ListNumItems(HWTrigSlaves);
 	HWTrigSlave_type**		slavePtr;
 	for (size_t i = 1; i <= nSlaves; i++) {

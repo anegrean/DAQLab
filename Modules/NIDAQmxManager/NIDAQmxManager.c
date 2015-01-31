@@ -2828,7 +2828,7 @@ static void	discard_ChanSet_type (ChanSet_type** a)
 	
 	// discard DAQmx task if any
 	if ((*a)->taskHndl) {
-		DAQmxTaskControl((*a)->taskHndl, DAQmx_Val_Task_Unreserve);
+		DAQmxTaskControl((*a)->taskHndl, DAQmx_Val_Task_Abort);
 		DAQmxClearTask ((*a)->taskHndl); 
 		(*a)->taskHndl = 0;
 	}
@@ -4737,7 +4737,6 @@ static int RemoveDAQmxAIChannel_CB (int panel, int control, int event, void *cal
 			// remove channel from AI task
 			ChanSet_type** 	chanSetPtr;
 			size_t			nItems			= ListNumItems(dev->AITaskSet->chanSet);
-			size_t			chIdx			= 1;
 			for (size_t i = 1; i <= nItems; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 				if (*chanSetPtr == aiChanPtr) {
@@ -4745,10 +4744,9 @@ static int RemoveDAQmxAIChannel_CB (int panel, int control, int event, void *cal
 					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtr)->srcVChan);
 					// discard channel data structure
 					(*(*chanSetPtr)->discardFptr)	(chanSetPtr);
-					ListRemoveItem(dev->AITaskSet->chanSet, 0, chIdx);
+					ListRemoveItem(dev->AITaskSet->chanSet, 0, i);
 					break;
 				}
-				chIdx++;
 			}
 			
 			// remove channel tab
@@ -4807,7 +4805,6 @@ static int RemoveDAQmxAOChannel_CB (int panel, int control, int event, void *cal
 			// remove channel from AO task
 			ChanSet_type** 	chanSetPtr;
 			size_t			nItems			= ListNumItems(dev->AOTaskSet->chanSet);
-			size_t			chIdx			= 1;
 			for (size_t i = 1; i <= nItems; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 				if (*chanSetPtr == aoChanPtr) {
@@ -4817,10 +4814,9 @@ static int RemoveDAQmxAOChannel_CB (int panel, int control, int event, void *cal
 					RemoveSinkVChan(dev->taskController, (*chanSetPtr)->sinkVChan);
 					// discard channel data structure
 					(*(*chanSetPtr)->discardFptr)	(chanSetPtr);
-					ListRemoveItem(dev->AOTaskSet->chanSet, 0, chIdx);
+					ListRemoveItem(dev->AOTaskSet->chanSet, 0, i);
 					break;
 				}
-				chIdx++;
 			}
 			
 			// remove channel tab
@@ -4891,7 +4887,6 @@ static int RemoveDAQmxDIChannel_CB (int panel, int control, int event, void *cal
 			// remove channel from DI task
 			ChanSet_type** 	chanSetPtr;
 			size_t			nItems			= ListNumItems(dev->DITaskSet->chanSet);
-			size_t			chIdx			= 1;
 			for (size_t i = 1; i <= nItems; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
 				if (*chanSetPtr == diChanPtr) {
@@ -4901,10 +4896,9 @@ static int RemoveDAQmxDIChannel_CB (int panel, int control, int event, void *cal
 					RemoveSinkVChan(dev->taskController, (*chanSetPtr)->srcVChan);
 					// discard channel data structure
 					(*(*chanSetPtr)->discardFptr)	(chanSetPtr);
-					ListRemoveItem(dev->DITaskSet->chanSet, 0, chIdx);
+					ListRemoveItem(dev->DITaskSet->chanSet, 0, i);
 					break;
 				}
-				chIdx++;
 			}		   
 			
 			// remove channel tab
@@ -4974,7 +4968,6 @@ static int RemoveDAQmxDOChannel_CB (int panel, int control, int event, void *cal
 			// remove channel from DO task
 			ChanSet_type** 	chanSetPtr;
 			size_t			nItems			= ListNumItems(dev->DOTaskSet->chanSet);
-			size_t			chIdx			= 1;
 			for (size_t i = 1; i <= nItems; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
 				if (*chanSetPtr == doChanPtr) {
@@ -4984,10 +4977,9 @@ static int RemoveDAQmxDOChannel_CB (int panel, int control, int event, void *cal
 					RemoveSinkVChan(dev->taskController, (*chanSetPtr)->srcVChan);
 					// discard channel data structure
 					(*(*chanSetPtr)->discardFptr)	(chanSetPtr);
-					ListRemoveItem(dev->DOTaskSet->chanSet, 0, chIdx);
+					ListRemoveItem(dev->DOTaskSet->chanSet, 0, i);
 					break;
 				}
-				chIdx++;
 			}		   
 			
 			// remove channel tab
@@ -5115,7 +5107,6 @@ static int RemoveDAQmxCOChannel_CB (int panel, int control, int event, void *cal
 			// remove channel from CO task
 			ChanSet_type** 	chanSetPtr;
 			size_t			nItems			= ListNumItems(dev->COTaskSet->chanTaskSet);
-			size_t			chIdx			= 1;
 			for (size_t i = 1; i <= nItems; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
 				if (*chanSetPtr == coChan) {
@@ -5130,10 +5121,9 @@ static int RemoveDAQmxCOChannel_CB (int panel, int control, int event, void *cal
 					DLUnregisterHWTrigSlave((*chanSetPtr)->HWTrigSlave);
 					// discard channel data structure
 					(*(*chanSetPtr)->discardFptr)	(chanSetPtr);
-					ListRemoveItem(dev->COTaskSet->chanTaskSet, 0, chIdx);
+					ListRemoveItem(dev->COTaskSet->chanTaskSet, 0, i);
 					break;
 				}
-				chIdx++;
 			}		   
 			
 			// remove channel tab
@@ -5727,7 +5717,7 @@ static void	discard_ADTaskSet_type (ADTaskSet_type** taskSetPtr)
 	
 	// DAQmx task
 	if ((*taskSetPtr)->taskHndl) {
-		DAQmxTaskControl((*taskSetPtr)->taskHndl, DAQmx_Val_Task_Unreserve);
+		DAQmxTaskControl((*taskSetPtr)->taskHndl, DAQmx_Val_Task_Abort);
 		DAQmxClearTask ((*taskSetPtr)->taskHndl); 
 		(*taskSetPtr)->taskHndl = 0;
 	}
@@ -6348,8 +6338,6 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 		if (!(*chanSetPtr)->onDemand) nAO++;
 	}
-	// return NULL if there are no channels using HW-timing
-	if (!nAO) return NULL;
 	
 	WriteAOData_type* 	writeData	= malloc(sizeof(WriteAOData_type));
 	if (!writeData) return NULL;
@@ -6372,18 +6360,18 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 			writeData -> datain_loop      	= NULL;
 	
 	// datain
-	if (!(	writeData -> datain				= malloc(nAO * sizeof(float64*)))) 							goto Error;
+	if (!(	writeData -> datain				= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain[i] = NULL;
 	
 	// databuff
-	if (!(	writeData -> databuff   		= malloc(nAO * sizeof(float64*)))) 							goto Error;
+	if (!(	writeData -> databuff   		= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
 	for (i = 0; i < nAO; i++) writeData->databuff[i] = NULL;
 	
 	// dataout
-	if (!(	writeData -> dataout 			= malloc(nAO * writeData->writeblock * sizeof(float64))))	goto Error;
+	if (!(	writeData -> dataout 			= malloc(nAO * writeData->writeblock * sizeof(float64))) && nAO)	goto Error;
 	
 	// sink VChans
-	if (!(	writeData -> sinkVChans			= malloc(nAO * sizeof(SinkVChan_type*))))					goto Error;
+	if (!(	writeData -> sinkVChans			= malloc(nAO * sizeof(SinkVChan_type*))) && nAO)					goto Error;
 	
 	nItems		= ListNumItems(dev->AOTaskSet->chanSet); 
 	size_t k 	= 0;
@@ -6396,27 +6384,27 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	}
 	
 	// datain_size
-	if (!(	writeData -> datain_size 		= malloc(nAO * sizeof(uInt64))))							goto Error;
+	if (!(	writeData -> datain_size 		= malloc(nAO * sizeof(uInt64))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain_size[i] = 0;
 		
 	// databuff_size
-	if (!(	writeData -> databuff_size 		= malloc(nAO * sizeof(size_t))))							goto Error;
+	if (!(	writeData -> databuff_size 		= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->databuff_size[i] = 0;
 		
 	// idx
-	if (!(	writeData -> idx 				= malloc(nAO * sizeof(size_t))))							goto Error;
+	if (!(	writeData -> idx 				= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->idx[i] = 0;
 		
 	// datain_repeat
-	if (!(	writeData -> datain_repeat 		= malloc(nAO * sizeof(size_t))))							goto Error;
+	if (!(	writeData -> datain_repeat 		= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain_repeat[i] = 0;
 		
 	// datain_remainder
-	if (!(	writeData -> datain_remainder 	= malloc(nAO * sizeof(size_t))))							goto Error;
+	if (!(	writeData -> datain_remainder 	= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain_remainder[i] = 0;
 		
 	// datain_loop
-	if (!(	writeData -> datain_loop 		= malloc(nAO * sizeof(BOOL))))								goto Error;
+	if (!(	writeData -> datain_loop 		= malloc(nAO * sizeof(BOOL))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain_loop[i] = 0;
 	
 	return writeData;
@@ -7433,6 +7421,8 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	// Commit AI Task
 	//----------------------  
 	
+	DAQmxErrChk( DAQmxTaskControl(dev->AITaskSet->taskHndl, DAQmx_Val_Task_Verify) );
+	DAQmxErrChk( DAQmxTaskControl(dev->AITaskSet->taskHndl, DAQmx_Val_Task_Reserve) );
 	DAQmxErrChk( DAQmxTaskControl(dev->AITaskSet->taskHndl, DAQmx_Val_Task_Commit) );
 	
 	return 0;
@@ -7652,6 +7642,8 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	// Commit AO Task
 	//----------------------  
 	
+	DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Verify) );
+	DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Reserve) );
 	DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Commit) );
 	
 	return 0;
@@ -7841,6 +7833,8 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	// Commit DI Task
 	//----------------------  
 	
+	DAQmxErrChk( DAQmxTaskControl(dev->DITaskSet->taskHndl, DAQmx_Val_Task_Verify) );
+	DAQmxErrChk( DAQmxTaskControl(dev->DITaskSet->taskHndl, DAQmx_Val_Task_Reserve) );
 	DAQmxErrChk( DAQmxTaskControl(dev->DITaskSet->taskHndl, DAQmx_Val_Task_Commit) );
 	
 	return 0;
@@ -8014,6 +8008,8 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	// Commit DO Task
 	//----------------------  
 	
+	DAQmxErrChk( DAQmxTaskControl(dev->DOTaskSet->taskHndl, DAQmx_Val_Task_Verify) );
+	DAQmxErrChk( DAQmxTaskControl(dev->DOTaskSet->taskHndl, DAQmx_Val_Task_Reserve) );
 	DAQmxErrChk( DAQmxTaskControl(dev->DOTaskSet->taskHndl, DAQmx_Val_Task_Commit) );
 	
 	return 0;
@@ -8148,6 +8144,8 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 		// Commit CI Task
 		//----------------------  
 	
+		DAQmxErrChk( DAQmxTaskControl((*chanSetPtr)->taskHndl, DAQmx_Val_Task_Verify) );
+		DAQmxErrChk( DAQmxTaskControl((*chanSetPtr)->taskHndl, DAQmx_Val_Task_Reserve) );
 		DAQmxErrChk( DAQmxTaskControl((*chanSetPtr)->taskHndl, DAQmx_Val_Task_Commit) );
 	}
 				 
@@ -8319,6 +8317,8 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 		// Commit CO Task
 		//----------------------  
 	
+		DAQmxErrChk( DAQmxTaskControl((*chanSetPtr)->taskHndl, DAQmx_Val_Task_Verify) );
+		DAQmxErrChk( DAQmxTaskControl((*chanSetPtr)->taskHndl, DAQmx_Val_Task_Reserve) );
 		DAQmxErrChk( DAQmxTaskControl((*chanSetPtr)->taskHndl, DAQmx_Val_Task_Commit) );
 	}
 	
@@ -8425,22 +8425,36 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 {
 #define StopDAQmxTasks_Err_StoppingTasks	-1
 	int 		error			= 0;  
+	int*		nActiveTasksPtr;
 	
+	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
 	// AI task
 	if (dev->AITaskSet)
-	if (dev->AITaskSet->taskHndl) errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
+	if (dev->AITaskSet->taskHndl) {
+		errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
+		(*nActiveTasksPtr)--;
+	}
 	
 	// AO task
 	if (dev->AOTaskSet)
-	if (dev->AOTaskSet->taskHndl) errChk(DAQmxStopTask(dev->AOTaskSet->taskHndl));
+	if (dev->AOTaskSet->taskHndl) {
+		errChk(DAQmxStopTask(dev->AOTaskSet->taskHndl));
+		(*nActiveTasksPtr)--; 
+	}
 	
 	// DI task
 	if (dev->DITaskSet)
-	if (dev->DITaskSet->taskHndl) errChk(DAQmxStopTask(dev->DITaskSet->taskHndl));
+	if (dev->DITaskSet->taskHndl) {
+		errChk(DAQmxStopTask(dev->DITaskSet->taskHndl));
+		(*nActiveTasksPtr)--;
+	}
 	
 	// DO task
 	if (dev->DOTaskSet)
-	if (dev->DOTaskSet->taskHndl) errChk(DAQmxStopTask(dev->DOTaskSet->taskHndl));
+	if (dev->DOTaskSet->taskHndl) {
+		errChk(DAQmxStopTask(dev->DOTaskSet->taskHndl));
+		(*nActiveTasksPtr)--;
+	}
 	
 	// CI task
 	if (dev->CITaskSet) {
@@ -8448,7 +8462,10 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 		size_t			nItems			= ListNumItems(dev->CITaskSet->chanTaskSet);
 	   	for (size_t i = 1; i <= nItems; i++) {	
 			chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-			if ((*chanSetPtr)->taskHndl) errChk( DAQmxStopTask((*chanSetPtr)->taskHndl) );
+			if ((*chanSetPtr)->taskHndl) {
+				errChk( DAQmxStopTask((*chanSetPtr)->taskHndl) );
+				(*nActiveTasksPtr)--;
+			}
 		}
 	}
 	
@@ -8458,9 +8475,17 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 		size_t			nItems			= ListNumItems(dev->COTaskSet->chanTaskSet);
 	   	for (size_t i = 1; i <= nItems; i++) {	
 			chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);	
-			if ((*chanSetPtr)->taskHndl) errChk( DAQmxStopTask((*chanSetPtr)->taskHndl) );
+			if ((*chanSetPtr)->taskHndl) {
+				errChk( DAQmxStopTask((*chanSetPtr)->taskHndl) );
+				(*nActiveTasksPtr)--;
+			}
 		}
 	}
+	
+	if (!*nActiveTasksPtr)
+		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+		
+	CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	return 0;
 	
@@ -9706,6 +9731,25 @@ static int WriteAODAQmx (Dev_type* dev, char** errorInfo)
 				// try to get a non-NULL data packet from queue 
 				do { 
 					CmtErrChk( itemsRead = CmtReadTSQData (tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
+					
+					/*
+					//--------------------------------------------------------------------------------
+					// try to stop AO generation if task was aborted and NULL packet was received
+					if (!dataPacket && GetTaskControlAbortIterationFlag(dev->taskController)) {
+						int*		nActiveTasksPtr;
+						DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Stop) );
+						// Task Controller iteration is complete if all DAQmx Tasks are complete
+						CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+						(*nActiveTasksPtr)--;
+		
+						if (!*nActiveTasksPtr)
+						TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+		
+						CmtReleaseTSVPtr(dev->nActiveTasks);
+					}
+					//--------------------------------------------------------------------------------
+					*/
+					
 				} while (!dataPacket && itemsRead);
 				
 				// if timeout occured and no data packet was read, generate error
@@ -11365,6 +11409,9 @@ static int AO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 	// process data only if task controller is not active
 	if (taskActive) return 0;
 	
+	// set AO task to Verified state
+	DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Abort) );  
+	
 	// get all available data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
 				
@@ -11447,6 +11494,10 @@ static int AO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 	DAQmxClearTask(taskHndl);
 				
 	OKfree(dataPackets); 
+	
+	// set AO task to Commited state
+	DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Reserve) );
+	DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Commit) );  
 				
 	return 0;
 	
@@ -11811,7 +11862,7 @@ Error:
 	OKfree(errMsg);
 }
 
-static void AbortIterationTC (TaskControl_type* taskControl,BOOL const* abortFlag)
+static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
 	char*				errMsg		= NULL;
@@ -11835,6 +11886,7 @@ static void AbortIterationTC (TaskControl_type* taskControl,BOOL const* abortFla
 		}
 	}
 	
+	return;
 Error:
 	
 	TaskControlIterationDone(taskControl, error, errMsg, FALSE); 
@@ -11866,29 +11918,6 @@ static int StoppedTC (TaskControl_type* taskControl,  BOOL const* abortFlag, cha
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
-	
-	/*
-	// AI task
-	if (dev->AITaskSet) {
-		// clear and init readAIData used for processing icoming data
-		discard_ReadAIData_type(&dev->AITaskSet->readAIData);
-		nullChk( dev->AITaskSet->readAIData = init_ReadAIData_type(dev) );
-	}
-	
-	// AO task
-	if (dev->AOTaskSet) {
-		// clear and init writeAOData used for continuous streaming
-		discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
-		nullChk( dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev) );
-	}
-	
-	// DO task
-	if (dev->DOTaskSet) {
-		// clear and init writeDOData used for continuous streaming
-		discard_WriteDOData_type(&dev->DOTaskSet->writeDOData);
-		nullChk( dev->DOTaskSet->writeDOData = init_WriteDOData_type(dev) );
-	}
-	*/
 	
 	return 0;
 	

@@ -283,9 +283,12 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	
 	vupc->taskControl   			= tc;
 	vupc->mainPanHndl				= 0;
+	vupc->chanPanHndl				= 0;
 	vupc->statusPanHndl				= 0;
 	vupc->settingsPanHndl			= 0;
 	vupc->counterPanHndl			= 0;
+	vupc->taskPanHndl				= 0;
+	vupc->menubarHndl				= 0;
 
 	for (int i = 0; i < MAX_CHANNELS; i++)
 		vupc->channels[i] = NULL;
@@ -293,9 +296,10 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	vupc->nSamples					= DEFAULT_NSAMPLES;
 	vupc->refNSamples				= &vupc->nSamples;	  		// by default point to device set number of samples
 	vupc->samplingRate				= DEFAULT_SAMPLING_RATE;
-	vupc->PixClkFreq			= &vupc->samplingRate; 		// by default point to device set sampling rate
+	vupc->PixClkFreq				= &vupc->samplingRate; 		// by default point to device set sampling rate
 
 	vupc->pulseTrainVChan			= NULL;
+	vupc->HWTrigSlave				= NULL;
 	
 	
 		// METHODS
@@ -332,7 +336,7 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 
 	//UI
 	// main panel and panels loaded into it (channels and task control)
-	if (vupc->menubarHndl)  DiscardMenuBar (vupc->menubarHndl);      
+	if (vupc->menubarHndl)  { DiscardMenuBar (vupc->menubarHndl); vupc->menubarHndl = 0; }     
 	if (vupc->mainPanHndl) {
 		DiscardPanel(vupc->mainPanHndl);
 		vupc->mainPanHndl = 0;
@@ -340,10 +344,9 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 		vupc->chanPanHndl = 0;
 	}
 
-	if (vupc->statusPanHndl) 	DiscardPanel(vupc->statusPanHndl);
-	if (vupc->settingsPanHndl) 	DiscardPanel(vupc->settingsPanHndl);
-	if (vupc->counterPanHndl)	DiscardPanel(vupc->counterPanHndl);
-	
+	if (vupc->statusPanHndl) 	{DiscardPanel(vupc->statusPanHndl); vupc->statusPanHndl = 0;}
+	if (vupc->settingsPanHndl) 	{DiscardPanel(vupc->settingsPanHndl); vupc->settingsPanHndl = 0;}
+	if (vupc->counterPanHndl)	{DiscardPanel(vupc->counterPanHndl); vupc->counterPanHndl = 0;}
 	
 	// discard pulsetrain SinkVChan   
 	if (vupc->pulseTrainVChan) {

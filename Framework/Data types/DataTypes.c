@@ -582,7 +582,7 @@ int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformTo
 // Repeated Waveforms
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-RepeatedWaveform_type* init_RepeatedWaveform_type (RepeatedWaveformTypes waveformType, double samplingRate, uInt64 nSamples, void* data, double repeat)
+RepeatedWaveform_type* init_RepeatedWaveform_type (RepeatedWaveformTypes waveformType, double samplingRate, uInt64 nSamples, void** ptrToData, double repeat)
 {
 	RepeatedWaveform_type* waveform = malloc (sizeof(RepeatedWaveform_type));
 	if (!waveform) return NULL;
@@ -594,7 +594,8 @@ RepeatedWaveform_type* init_RepeatedWaveform_type (RepeatedWaveformTypes wavefor
 	waveform->samplingRate 		= samplingRate;
 	waveform->repeat			= repeat;
 	waveform->nSamples			= nSamples;
-	waveform->data				= data;
+	waveform->data				= *ptrToData;  // assign data
+	*ptrToData					= NULL;		   // consume data
 	
 	return waveform;
 }
@@ -646,10 +647,9 @@ RepeatedWaveform_type* ConvertWaveformToRepeatedWaveformType (Waveform_type** wa
 			break;
 	}
 	
-	RepeatedWaveform_type* repWaveform = init_RepeatedWaveform_type(repWaveformType, (*waveform)->samplingRate, (*waveform)->nSamples, (*waveform)->data, repeat);
+	RepeatedWaveform_type* repWaveform = init_RepeatedWaveform_type(repWaveformType, (*waveform)->samplingRate, (*waveform)->nSamples, &(*waveform)->data, repeat);
 	if (!repWaveform) return NULL;
 	// transfer info from waveform to repeated waveform
-	(*waveform)->data 			= NULL;
 	repWaveform->waveformName 	= (*waveform)->waveformName;
 	(*waveform)->waveformName 	= NULL;
 	repWaveform->unitName 		= (*waveform)->unitName;

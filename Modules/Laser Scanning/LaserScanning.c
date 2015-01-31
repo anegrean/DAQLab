@@ -398,9 +398,9 @@ typedef struct {
 	double*						refGalvoSamplingRate;   // Pointer to fast and slow axis waveform sampling rate in [Hz]. Value must be the same for VChanFastAxisCom and VChanSlowAxisCom
 	double						galvoSamplingRate;		// Default galvo sampling rate set by the scan engine in [Hz].
 	uInt32						height;					// Image height in [pix].
-	uInt32						heightOffset;			// Image height offset from center in [pix].
+	int							heightOffset;			// Image height offset from center in [pix].
 	uInt32						width;					// Image width in [pix].
-	uInt32						widthOffset;			// Image width offset in [pix].
+	int							widthOffset;			// Image width offset in [pix].
 	double						pixelDwellTime;			// Pixel dwell time in [us].
 	double						flyInDelay;				// Galvo fly-in time from parked position to start of the imaging area in [us]. This value is also an integer multiple of the pixelDwellTime. 
 	//----------------
@@ -593,6 +593,9 @@ static void							discard_ScanEngine_type 						(ScanEngine_type** engine);
 
 	// opens/closes scan engine laser shutter
 static int							OpenScanEngineShutter							(ScanEngine_type* engine, BOOL openStatus, char** errorInfo);
+
+	// return both the fast and slow axis galvos to their parked position
+static int 							ReturnRectRasterToParkedPosition 				(RectRaster_type* engine, char** errorInfo);  
 	
 	//--------------------------------------
 	// Non-Resonant Rectangle Raster Scan
@@ -614,9 +617,9 @@ static RectRaster_type*				init_RectRaster_type							(LaserScanning_type*	lsMod
 																				 	 double					pixelClockRate,
 																					 double					pixelDelay,
 																				 	 uInt32					scanHeight,
-																				 	 uInt32					scanHeightOffset,
+																				 	 int					scanHeightOffset,
 																				 	 uInt32					scanWidth,
-																				 	 uInt32					scanWidthOffset,
+																				 	 int					scanWidthOffset,
 																			  	 	 double					pixelSize,
 																				 	 double					pixelDwellTime,
 																				 	 double					scanLensFL,
@@ -1440,16 +1443,16 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 				// initialize raster scan attributes
 				unsigned int			height					= ((RectRaster_type*) *scanEnginePtr)->height;  
 				unsigned int			width					= ((RectRaster_type*) *scanEnginePtr)->width;  
-				unsigned int			heightOffset			= ((RectRaster_type*) *scanEnginePtr)->heightOffset;  
-				unsigned int			widthOffset				= ((RectRaster_type*) *scanEnginePtr)->widthOffset; 
+				int						heightOffset			= ((RectRaster_type*) *scanEnginePtr)->heightOffset;  
+				int						widthOffset				= ((RectRaster_type*) *scanEnginePtr)->widthOffset; 
 				double					pixelSize				= (*scanEnginePtr)->pixSize;
 				double					pixelDwellTime			= ((RectRaster_type*) *scanEnginePtr)->pixelDwellTime;
 				double					galvoSamplingRate		= ((RectRaster_type*) *scanEnginePtr)->galvoSamplingRate;
 						
 				DAQLabXMLNode			rectangleRasterAttr[] 	= { {"ImageHeight", BasicData_UInt, &height},
 																	{"ImageWidth",  BasicData_UInt, &width},
-																	{"ImageHeightOffset", BasicData_UInt, &heightOffset},
-																	{"ImageWidthOffset", BasicData_UInt, &widthOffset},
+																	{"ImageHeightOffset", BasicData_Int, &heightOffset},
+																	{"ImageWidthOffset", BasicData_Int, &widthOffset},
 																	{"PixelSize", BasicData_Double, &pixelSize},
 																	{"PixelDwellTime", BasicData_Double, &pixelDwellTime},
 																	{"GalvoSamplingRate", BasicData_Double, &galvoSamplingRate}}; 				
@@ -1633,17 +1636,17 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
 				uInt32				height;
-				uInt32				heightOffset;
+				int					heightOffset;
 				uInt32				width;
-				uInt32				widthOffset;
+				int					widthOffset;
 				double				pixelSize;
 				double				pixelDwellTime;
 				double				galvoSamplingRate;
 				
 				DAQLabXMLNode		scanInfoAttr[]	= { {"ImageHeight", BasicData_UInt, &height},
-														{"ImageHeightOffset", BasicData_UInt, &heightOffset},
+														{"ImageHeightOffset", BasicData_Int, &heightOffset},
 														{"ImageWidth", BasicData_UInt, &width},
-														{"ImageWidthOffset", BasicData_UInt, &widthOffset},
+														{"ImageWidthOffset", BasicData_Int, &widthOffset},
 														{"PixelSize", BasicData_Double, &pixelSize},
 														{"PixelDwellTime", BasicData_Double, &pixelDwellTime},
 														{"GalvoSamplingRate", BasicData_Double, &galvoSamplingRate}};
@@ -4195,7 +4198,58 @@ Error:
 	
 }
 
-static RectRaster_type* init_RectRaster_type (LaserScanning_type*		lsModule,
+static int ReturnRectRasterToParkedPosition (RectRaster_type* engine, char** errorInfo) 
+{
+	double*						parkedFastAxis				= NULL;
+	double*						parkedSlowAxis				= NULL;
+	size_t						nParkedSamples				= (size_t) (engine->galvoSamplingRate * 0.1); // generate 0.1s long parked signal
+	RepeatedWaveform_type*		parkedFastAxisWaveform		= NULL;
+	RepeatedWaveform_type*		parkedSlowAxisWaveform		= NULL;
+	DataPacket_type*			fastAxisDataPacket			= NULL;
+	DataPacket_type*			slowAxisDataPacket			= NULL;
+	DataPacket_type*			nullPacket					= NULL;
+	char*						errMsg						= NULL; 
+	int							error						= 0;         
+	
+	nullChk( parkedFastAxis = malloc(nParkedSamples * sizeof(double)) );
+	nullChk( parkedSlowAxis = malloc(nParkedSamples * sizeof(double)) );
+	Set1D(parkedFastAxis, nParkedSamples, ((NonResGalvoCal_type*)engine->baseClass.fastAxisCal)->parked);
+	Set1D(parkedSlowAxis, nParkedSamples, ((NonResGalvoCal_type*)engine->baseClass.slowAxisCal)->parked);
+	nullChk( parkedFastAxisWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, engine->galvoSamplingRate, nParkedSamples, &parkedFastAxis, 0) );
+	nullChk( parkedSlowAxisWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, engine->galvoSamplingRate, nParkedSamples, &parkedSlowAxis, 0) );
+	nullChk( fastAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedFastAxisWaveform, NULL, discard_RepeatedWaveform_type) );
+	nullChk( slowAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedSlowAxisWaveform, NULL, discard_RepeatedWaveform_type) );
+	// send parked signal data packets
+	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &fastAxisDataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &slowAxisDataPacket, FALSE, &errMsg) );
+	// send NULL packets to terminate AO
+	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );
+	
+	return 0;
+	
+Error:
+
+	// cleanup
+	OKfree(parkedFastAxis);
+	OKfree(parkedSlowAxis);
+	discard_RepeatedWaveform_type(&parkedFastAxisWaveform);
+	discard_RepeatedWaveform_type(&parkedSlowAxisWaveform);
+	discard_DataPacket_type(&fastAxisDataPacket);
+	discard_DataPacket_type(&slowAxisDataPacket);
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "ReturnToParkedPosition", errMsg);
+	
+	OKfree(errMsg);	
+	return error;
+	
+}
+
+static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 														char 					engineName[], 
 														char 					fastAxisComVChanName[],
 														char					fastAxisComNSampVChanName[],
@@ -4211,9 +4265,9 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*		lsModule,
 														double					pixelClockRate,
 														double					pixelDelay,
 														uInt32					scanHeight,
-														uInt32					scanHeightOffset,
+														int						scanHeightOffset,
 														uInt32					scanWidth,
-														uInt32					scanWidthOffset,
+														int						scanWidthOffset,
 														double					pixelSize,
 														double					pixelDwellTime,
 														double					scanLensFL,
@@ -4475,10 +4529,10 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 				case RectRaster_HeightOffset:
 					
 					double		heightOffset;					// in [um]
-					uInt32		heightOffsetPix;				// in [pix]
+					int			heightOffsetPix;				// in [pix]
 					GetCtrlVal(panel, control, &heightOffset);  // in [um]
 					// adjust heightOffset to be a multiple of pixel size
-					heightOffsetPix		= (uInt32) floor(heightOffset/scanEngine->baseClass.pixSize);
+					heightOffsetPix		= (int) floor(heightOffset/scanEngine->baseClass.pixSize);
 					heightOffset 		= heightOffsetPix * scanEngine->baseClass.pixSize;
 					
 					if (!RectROIInsideRect(scanEngine->height * scanEngine->baseClass.pixSize, scanEngine->width * scanEngine->baseClass.pixSize, heightOffset, 
@@ -4502,10 +4556,10 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 				case RectRaster_WidthOffset:
 					
 					double		widthOffset;					// in [um]
-					uInt32		widthOffsetPix;					// in [pix]
+					int		widthOffsetPix;					// in [pix]
 					GetCtrlVal(panel, control, &widthOffset);
 					// adjust heightOffset to be a multiple of pixel size
-					widthOffsetPix 		= (uInt32) floor(widthOffset/scanEngine->baseClass.pixSize);
+					widthOffsetPix 		= (int) floor(widthOffset/scanEngine->baseClass.pixSize);
 					widthOffset 		= widthOffsetPix * scanEngine->baseClass.pixSize;
 					
 					if (!RectROIInsideRect(scanEngine->height * scanEngine->baseClass.pixSize, scanEngine->width * scanEngine->baseClass.pixSize, 
@@ -4579,9 +4633,9 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					
 					// calculate new image width, height and offsets in pixels to keep current image size in sample space constant
 					scanEngine->width 			= (uInt32) (scanEngine->width * scanEngine->baseClass.pixSize/newPixelSize);
-					scanEngine->widthOffset		= (uInt32) (scanEngine->widthOffset * scanEngine->baseClass.pixSize/newPixelSize);
+					scanEngine->widthOffset		= (int) (scanEngine->widthOffset * scanEngine->baseClass.pixSize/newPixelSize);
 					scanEngine->height 			= (uInt32) (scanEngine->height * scanEngine->baseClass.pixSize/newPixelSize);
-					scanEngine->heightOffset 	= (uInt32) (scanEngine->heightOffset * scanEngine->baseClass.pixSize/newPixelSize);
+					scanEngine->heightOffset 	= (int) (scanEngine->heightOffset * scanEngine->baseClass.pixSize/newPixelSize);
 					// update pixel size
 					scanEngine->baseClass.pixSize = newPixelSize;
 					// adjust width control to be multiple of new pixel size
@@ -4690,10 +4744,10 @@ void NonResRectRasterScan_ScanHeights (RectRaster_type* scanEngine)
 		Fmt(heightString,"%s<%f[p1]", heightItem);
 		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, heightString);
 		// update scan engine structure
-		scanEngine->height = (size_t) heightItem/scanEngine->baseClass.pixSize;	// in [pix]
+		scanEngine->height = (uInt32) (heightItem/scanEngine->baseClass.pixSize);	// in [pix]
 	} else
 		// update scan engine structure
-		scanEngine->height = 0;													// in [pix]
+		scanEngine->height = 0;														// in [pix]
 	
 	ListDispose(Heights);
 	
@@ -4893,6 +4947,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	double*						fastAxisCommandSignal						= NULL;
 	double*						fastAxisCompensationSignal					= NULL;
 	double*						slowAxisCompensationSignal					= NULL; 
+	double*						parkedVoltageSignal							= NULL;
+	uInt64*						nSamplesPtr									= NULL;
 	Waveform_type* 				fastAxisScan_Waveform						= NULL;
 	Waveform_type*				fastAxisMoveFromParkedWaveform				= NULL;
 	Waveform_type*				fastAxisMoveFromParkedCompensatedWaveform   = NULL;
@@ -5066,16 +5122,16 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
 		// generate one sample
-		double*		parkedVoltage = malloc(sizeof(double));
-		*parkedVoltage = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
-		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, parkedVoltage, 1);
+		nullChk( parkedVoltageSignal = malloc(sizeof(double)) );
+		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
+		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, &parkedVoltageSignal, 1);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedRepeatedWaveform, NULL, discard_RepeatedWaveform_type) ); 
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
 	
 	// send number of samples in fast axis command waveform if scan is finite
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
-		uInt64*		nSamplesPtr = malloc(sizeof(uInt64));
+		nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 		// move from parked waveform + scan waveform + one sample to return to parked position
 		*nSamplesPtr = (nGalvoSamplesFastAxisCompensation + nGalvoSamplesFastAxisMoveFromParkedWaveform) + 
 					   (scanEngine->width/2.0 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) * 2 * nGalvoSamplesPerLine + 1;
@@ -5110,16 +5166,16 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
 		// generate one sample
-		double*		parkedVoltage = malloc(sizeof(double));
-		*parkedVoltage = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
-		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, parkedVoltage, 1);
+		nullChk( parkedVoltageSignal = malloc(sizeof(double)) );
+		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
+		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, &parkedVoltageSignal, 1);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, &parkedRepeatedWaveform, NULL, discard_RepeatedWaveform_type) ); 
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
 	
 	// send number of samples in slow axis command waveform if scan is finite
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
-		uInt64*		nSamplesPtr = malloc(sizeof(uInt64));
+		nSamplesPtr = malloc(sizeof(uInt64));
 		// move from parked waveform + scan waveform + one sample to return to parked position
 		*nSamplesPtr = (nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParkedWaveform) + 
 					    GetTaskControlIterations(scanEngine->baseClass.taskControl) * 0.5 * nGalvoSamplesSlowAxisScanWaveform + 1;
@@ -5157,6 +5213,8 @@ Error:
 	OKfree(fastAxisCommandSignal);
 	OKfree(fastAxisCompensationSignal);
 	OKfree(slowAxisCompensationSignal);
+	OKfree(parkedVoltageSignal);
+	OKfree(nSamplesPtr);
 	discard_Waveform_type(&fastAxisScan_Waveform);
 	discard_Waveform_type(&fastAxisMoveFromParkedWaveform);
 	discard_Waveform_type(&fastAxisMoveFromParkedCompensatedWaveform); 
@@ -5667,8 +5725,33 @@ Error:
 
 // Fast Axis Command VChan
 static void	FastAxisComVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
-{
+{ 
+	ScanEngine_type*	engine				= VChanOwner;
+	double*				parkedVPtr 			= NULL;
+	int					error				= 0;
+	char*				errMsg				= NULL;
+	DataPacket_type*	parkedDataPacket	= NULL;
 	
+	if (!engine->fastAxisCal) return; // no parked voltage available
+	
+	nullChk( parkedVPtr = malloc(sizeof(double)) );
+	*parkedVPtr = ((NonResGalvoCal_type*)engine->fastAxisCal)->parked;
+	nullChk( parkedDataPacket = init_DataPacket_type(DL_Double, &parkedVPtr, NULL, NULL) );
+	errChk( SendDataPacket(engine->VChanFastAxisCom, &parkedDataPacket, FALSE, &errMsg) );
+	
+	return;
+	
+Error:
+	
+	// cleanup
+	OKfree(parkedVPtr);
+	discard_DataPacket_type(&parkedDataPacket);
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	DLMsg(errMsg, TRUE);
+	OKfree(errMsg);
 }
 
 static void	FastAxisComVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
@@ -5679,7 +5762,32 @@ static void	FastAxisComVChan_Disconnected (VChan_type* self, void* VChanOwner, V
 // Slow Axis Command VChan
 static void	SlowAxisComVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
+	ScanEngine_type*	engine				= VChanOwner;
+	double*				parkedVPtr 			= NULL;
+	int					error				= 0;
+	char*				errMsg				= NULL;
+	DataPacket_type*	parkedDataPacket	= NULL;
 	
+	if (!engine->slowAxisCal) return; // no parked voltage available
+	
+	nullChk( parkedVPtr = malloc(sizeof(double)) );
+	*parkedVPtr = ((NonResGalvoCal_type*)engine->slowAxisCal)->parked;
+	nullChk( parkedDataPacket = init_DataPacket_type(DL_Double, &parkedVPtr, NULL, NULL) );
+	errChk( SendDataPacket(engine->VChanSlowAxisCom, &parkedDataPacket, FALSE, &errMsg) );
+	
+	return;
+	
+Error:
+	
+	// cleanup
+	OKfree(parkedVPtr);
+	discard_DataPacket_type(&parkedDataPacket);
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	DLMsg(errMsg, TRUE);
+	OKfree(errMsg);
 }
 
 static void	SlowAxisComVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
@@ -6675,34 +6783,17 @@ static void AbortIterationTC_RectRaster (TaskControl_type* taskControl,BOOL cons
 
 static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectRaster_type* 	engine 		= GetTaskControlModuleData(taskControl);
-	int					error 		= 0;
-	
-	//--------------------------------------------------------------------------------------------------------
-	// Initialize image assembly buffers
-	//--------------------------------------------------------------------------------------------------------
+	RectRaster_type* 	engine 			= GetTaskControlModuleData(taskControl);
+	DetChan_type*		detChan			= NULL;
+	size_t				nDetChans 		= ListNumItems(engine->baseClass.DetChans);
+	SourceVChan_type*   detSourceVChan	= NULL;
+	int					error 			= 0;
 	
 	// discard image assembly buffers
 	for (size_t i = 0; i < engine->nImgBuffers; i++)
 		discard_RectRasterImgBuffer_type(&engine->imgBuffers[i]);
 	OKfree(engine->imgBuffers);
 	engine->nImgBuffers = 0;
-	
-	// create new image assembly buffers for connected detector VChans
-	size_t				nDetChans 		= ListNumItems(engine->baseClass.DetChans);
-	DetChan_type*		detChan;
-	SourceVChan_type*   detSourceVChan;
-	
-	for (size_t i = 1; i <= nDetChans; i++) {
-		detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
-		if (!(detSourceVChan = GetSourceVChan(detChan->detVChan))) continue;	// select only connected detection channels
-		
-		engine->nImgBuffers++;
-		// allocate memory for image assembly
-		engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
-		engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, 
-				(uInt64)(engine->flyInDelay/engine->pixelDwellTime + engine->baseClass.pixDelay/engine->pixelDwellTime), GetSourceVChanDataType(detSourceVChan) , FALSE, FALSE); 
-	}
 	
 	//--------------------------------------------------------------------------------------------------------
 	// Display image panels for each channel
@@ -6747,6 +6838,22 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	
 	errChk ( NonResRectRasterScan_GenerateScanSignals (engine, errorInfo) );  
 	
+	//--------------------------------------------------------------------------------------------------------
+	// Initialize image assembly buffers
+	//--------------------------------------------------------------------------------------------------------
+	
+	// create new image assembly buffers for connected detector VChans
+	for (size_t i = 1; i <= nDetChans; i++) {
+		detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
+		if (!(detSourceVChan = GetSourceVChan(detChan->detVChan))) continue;	// select only connected detection channels
+		
+		engine->nImgBuffers++;
+		// allocate memory for image assembly
+		engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
+		engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, 
+				(uInt64)(engine->flyInDelay/engine->pixelDwellTime + engine->baseClass.pixDelay/engine->pixelDwellTime), GetSourceVChanDataType(detSourceVChan) , FALSE, FALSE); 
+	}
+	
 	return 0; // no error
 	
 Error:
@@ -6765,6 +6872,8 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 	
 	// close shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorInfo) );
+	// return to parked position
+	errChk( ReturnRectRasterToParkedPosition(engine, errorInfo) );
 	
 	return 0; 
 	
@@ -6779,19 +6888,17 @@ Error:
 
 static int StoppedTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectRaster_type* 	engine 		= GetTaskControlModuleData(taskControl);
-	int					error		= 0;
+	RectRaster_type* 			engine 						= GetTaskControlModuleData(taskControl);
+	int							error						= 0;
 	
 	// close shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorInfo) );
+	// return to parked position
+	errChk( ReturnRectRasterToParkedPosition(engine, errorInfo) );
 	
 	return 0;
 	
 Error:
-	
-	// create out of memory message
-	if (error == UIEOutOfMemory && !*errorInfo)
-		*errorInfo = StrDup("Out of memory");
 	
 	return error;
 }

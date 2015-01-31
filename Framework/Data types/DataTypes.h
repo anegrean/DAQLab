@@ -253,7 +253,7 @@ int 						AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_typ
 // Repeated Waveform 
 //--------------------------------------------------------------------------------------------------------- 
 	// Creates a waveform that must be repeated repeat times. data* must be allocated with malloc and be of a basic data type
-RepeatedWaveform_type*		init_RepeatedWaveform_type				(RepeatedWaveformTypes waveformType, double samplingRate, uInt64 nSamples, void* data, double repeat);
+RepeatedWaveform_type*		init_RepeatedWaveform_type				(RepeatedWaveformTypes waveformType, double samplingRate, uInt64 nSamples, void** ptrToData, double repeat);
 
 	// Converts a Waveform_type to a RepeatedWaveform_type
 RepeatedWaveform_type*		ConvertWaveformToRepeatedWaveformType	(Waveform_type** waveform, double repeat);	

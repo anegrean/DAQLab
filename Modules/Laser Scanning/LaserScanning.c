@@ -737,7 +737,11 @@ static void							PixelSettingsVChan_Connected					(VChan_type* self, void* VCha
 static void							PixelSettingsVChan_Disconnected					(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 
+//-----------------------------------------
+// IMAQ display processing
+//-----------------------------------------
 
+static void IMAQ_CALLBACK			ScanEngineDisplay_CB							(WindowEventType type, int windowNumber, Tool tool, Rect rect); 
 
 //-----------------------------------------
 // Task Controller Callbacks
@@ -1171,7 +1175,13 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	nullChk( imaqToolWndHndl = (intptr_t) imaqGetToolWindowHandle() );
 	SetParent( (HWND) imaqToolWndHndl, (HWND)workspaceWndHndl);
 	
+	//------------------------------------
+	// configure imaq callbacks
+	//------------------------------------
+	errChk( imaqSetEventCallback(ScanEngineDisplay_CB, FALSE) ); 
+	
 	return 0;
+	
 Error:
 	
 	if (ls->mainPanHndl) {DiscardPanel(ls->mainPanHndl); ls->mainPanHndl = 0;}
@@ -4223,8 +4233,8 @@ static int ReturnRectRasterToParkedPosition (RectRaster_type* engine, char** err
 	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &fastAxisDataPacket, FALSE, &errMsg) );
 	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &slowAxisDataPacket, FALSE, &errMsg) );
 	// send NULL packets to terminate AO
-	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );
-	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );
+//	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );
+//	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );
 	
 	return 0;
 	
@@ -5859,6 +5869,19 @@ static void	PixelSettingsVChan_Connected (VChan_type* self, void* VChanOwner, VC
 static void	PixelSettingsVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
 {
 	
+}
+
+//-----------------------------------------
+// IMAQ display processing
+//-----------------------------------------
+
+static void IMAQ_CALLBACK ScanEngineDisplay_CB (WindowEventType event, int windowNumber, Tool tool, Rect rect)
+{
+	switch (event) {
+			
+		
+			
+	}
 }
 
 //---------------------------------------------------------------------

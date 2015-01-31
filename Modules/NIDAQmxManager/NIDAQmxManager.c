@@ -11869,6 +11869,9 @@ static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFl
 	int					error		= 0;
 	DataPacket_type*	nullPacket	= NULL;
 	
+	SyncWait(Timer(), 2.0);   // just temporary to make sure that continuous AO switches to the desired final voltage when receving the closing data packet
+								// this should be implemented better!
+	
 	errChk( StopDAQmxTasks(dev, &errMsg) );
 	
 	SyncWait(Timer(), 1.0); // just make sure that all tasks stop and place data in queues before sending NULL packets from this thread

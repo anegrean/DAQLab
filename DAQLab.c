@@ -44,8 +44,6 @@
 #define DAQLAB_CFG_DOM_ROOT_NAME							"DAQLab_Config"
 #define DAQLAB_UITASKCONTROLLER_XML_TAG						"DAQLab_UITaskController"
 #define DAQLAB_MODULES_XML_TAG								"DAQLab_Modules"
-	// log panel displayed at startup and displays received messages
-#define DAQLAB_LOG_PANEL									TRUE
 
 	// number of Task Controllers visible at once. If there are more, a scroll bar appears.
 #define DAQLAB_NVISIBLE_TASKCONTROLLERS						4
@@ -391,9 +389,7 @@ static int DAQLab_Load (void)
 	
 		// UI
 	errChk ( mainPanHndl = LoadPanel (0, DAQLAB_UI_DAQLAB, MainPan) );
-	if (DAQLAB_LOG_PANEL)
-		errChk ( logPanHndl = LoadPanel (mainPanHndl, DAQLAB_UI_DAQLAB, LogPan) );
-	
+	errChk ( logPanHndl = LoadPanel (mainPanHndl, DAQLAB_UI_DAQLAB, LogPan) );
 	errChk ( TasksUI.panHndl 			= LoadPanel (mainPanHndl, DAQLAB_UI_DAQLAB, TasksPan) );
 	errChk ( TasksUI.controllerPanHndl 	= LoadPanel (mainPanHndl, TASKCONTROLLER_UI, TCPan1) );
 	
@@ -443,8 +439,7 @@ static int DAQLab_Load (void)
 	
 	DisplayPanel(TasksUI.panHndl); 
 	
-	if (DAQLAB_LOG_PANEL)
-		DisplayPanel(logPanHndl);
+	DisplayPanel(logPanHndl);
 	
 	// init DAQLab DOM
 	errChk ( FoundDAQLabSettingsFlag = DAQLab_NewXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl, &DAQLabCfg_RootElement) );
@@ -465,7 +460,7 @@ static int DAQLab_Load (void)
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(DAQLabCfg_RootElement, &xmlERRINFO, DAQLAB_UITASKCONTROLLER_XML_TAG, &xmlUITaskControlers) );
 	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlUITaskControlers, &xmlERRINFO, &nUITaskControlers) );
-	for (size_t i = 0; i < nUITaskControlers; i++) {
+	for (long i = 0; i < nUITaskControlers; i++) {
 		// get xml Task Controller Node
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlUITaskControlers, &xmlERRINFO, i, &xmlTaskControllerNode) );
 		
@@ -529,7 +524,7 @@ static int DAQLab_Load (void)
 	// get number of modules to be loaded
 	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlModulesNodeList, &xmlERRINFO, &nModules) );
 	// load modules and their settings
-	for (size_t i = 0; i < nModules; i++) {
+	for (long i = 0; i < nModules; i++) {
 		// get DAQLab module node
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlModulesNodeList, &xmlERRINFO, i, &xmlModuleNode) );
 		// get DAQlab module attributes such as class name listed in attrModules
@@ -630,13 +625,14 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Save UI Task Controllers
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
-	UITaskCtrl_type**				UItaskCtrlPtrPtr;
-	DAQLabXMLNode 					attr2[4];
-	int								niter;
-	double							wait;
-	BOOL							mode;
+	UITaskCtrl_type**		UItaskCtrlPtrPtr;
+	DAQLabXMLNode 			attr2[4];
+	int						niter;
+	double					wait;
+	BOOL					mode;
+	size_t					nUITCs = ListNumItems(TasksUI.UItaskCtrls);
 	
-	for (int i = 1; i <= ListNumItems(TasksUI.UItaskCtrls); i++) {
+	for (size_t i = 1; i <= nUITCs; i++) {
 		UItaskCtrlPtrPtr = ListGetPtrToItem (TasksUI.UItaskCtrls, i);
 		// create new XML UITaskController element
 		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_UITASKCONTROLLER_XML_TAG, &newXMLElement) );
@@ -1086,8 +1082,6 @@ BOOL DLUnregisterHWTrigSlave (HWTrigSlave_type* slave)
 
 void DLMsg(const char* text, BOOL beep)
 {
-	if (!DAQLAB_LOG_PANEL) return;
-	
 	SetCtrlVal(logPanHndl, LogPan_LogBox, text);
 	if (beep) {
 		DisplayPanel(logPanHndl); // bring to focus
@@ -1330,11 +1324,11 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 {
 	HRESULT							xmlerror;
 	ERRORINFO						xmlERRINFO;
-	ActiveXMLObj_IXMLDOMElement_	newXMLElement;
+	ActiveXMLObj_IXMLDOMElement_	newXMLElement		= 0;
 	VARIANT							xmlVal				= CA_VariantNULL ();
 	BSTR							bstrVal;
 	
-	for (int i = 0; i < nNodes; i++) {
+	for (size_t i = 0; i < nNodes; i++) {
 		
 		// ignore elements or attributes that have NULL data
 		if (!childXMLNodes[i].pData) continue;
@@ -1527,7 +1521,7 @@ int DLGetXMLElementAttributes (ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXM
 	ActiveXMLObj_IXMLDOMAttribute_		xmlAttribute;
 	char*								attributeString;	
 	
-	for (int i = 0; i < nAttributes; i++) {
+	for (size_t i = 0; i < nAttributes; i++) {
 		// get attribute node
 		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttributeNode(XMLElement, &xmlERRINFO, Attributes[i].tag, &xmlAttribute) ); 
 		// get attribute text
@@ -1564,7 +1558,7 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 	// get list of attributes
 	XMLErrChk ( ActiveXML_IXMLDOMNode_Getattributes(XMLNode, &xmlERRINFO, &xmlNamedNodeMap) );  
 	
-	for (int i = 0; i < nAttributes; i++) {
+	for (size_t i = 0; i < nAttributes; i++) {
 		// get attribute node
 		XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlERRINFO, Attributes[i].tag, &xmlAttributeNode) );
 		// get attribute node text
@@ -1750,8 +1744,6 @@ BOOL DLRemoveTaskControllers (DAQLabModule_type* mod, ListType tcList)
 		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 	
 	return TRUE;
-Error:
-	return FALSE;
 }
 
 BOOL DLRemoveTaskController (DAQLabModule_type* mod, TaskControl_type* taskController)
@@ -1768,8 +1760,6 @@ BOOL DLRemoveTaskController (DAQLabModule_type* mod, TaskControl_type* taskContr
 		DisplayTaskTreeManager(mainPanHndl, TasksUI.UItaskCtrls, DAQLabModules);
 	
 	return TRUE;
-Error:
-	return FALSE;
 }
 
 CmtThreadPoolHandle	DLGetCommonThreadPoolHndl (void)
@@ -1891,7 +1881,7 @@ static void	DAQLab_RedrawTaskControllerUI (void)
 	SetMenuBarAttribute(TasksUI.menuBarHndl, TasksUI.menuItem_Delete, ATTR_DIMMED, 0);
 	
 	// reposition Task Controller panels and display them
-	for (int i = 1; i <= nControllers; i++) {
+	for (size_t i = 1; i <= nControllers; i++) {
 		controllerPtrPtr = ListGetPtrToItem(TasksUI.UItaskCtrls, i);
 		SetPanelAttribute((*controllerPtrPtr)->panHndl, ATTR_TOP, (TasksUI.controllerPanHeight + DAQLAB_TASKCONTROLLERS_SPACING) * (i-1) + DAQLAB_TASKCONTROLLERS_PAN_MARGIN + menubarHeight);  
 		DisplayPanel((*controllerPtrPtr)->panHndl);
@@ -1926,13 +1916,12 @@ static void	DAQLab_RedrawTaskControllerUI (void)
 /// HIFN Updates a table control with connections between a given list of VChans.
 static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 {
-	int		          		nColumns				= 0;
+	int	    	      		nColumns				= 0;
 	int						nRows					= 0;
 	int						nCurrentColumns			= 0;
 	int						nCurrentRows			= 0;
 	int             		nItems;
 	int             		colWidth;
-	int  					colIdx;
 	SourceVChan_type** 		sourceVChanPtr			= NULL;
 	VChan_type**			VChanPtr1				= NULL;
 	SinkVChan_type**		sinkVChanPtr			= NULL;
@@ -1940,7 +1929,7 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 	Rect            		cellRange;
 	BOOL					extraColumn;
 	size_t					nVChans					= ListNumItems(VChannels);
-	size_t					nSinks;
+	int						nSinks;
 	char*					VChanName				= NULL;
 	int 					rowLabelWidth;
 	int						maxRowLabelWidth		= 0;
@@ -1975,7 +1964,7 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 		if (rowLabelWidth > maxRowLabelWidth) maxRowLabelWidth = rowLabelWidth;
 		OKfree(VChanName);
 			
-		nSinks = GetNSinkVChans(*sourceVChanPtr);
+		nSinks = (int) GetNSinkVChans(*sourceVChanPtr);
 		// keep track of required number of columns
 		if (nSinks > nColumns) 
 			nColumns = nSinks;
@@ -1988,7 +1977,7 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 		
 		
 		// add assigned sink VChans
-		for (size_t idx = 1; idx <= nSinks; idx++) {
+		for (int idx = 1; idx <= nSinks; idx++) {
 			cell.x = idx;	 // column
 			cell.y = nRows;  // row
 			sinkVChanPtr = ListGetPtrToItem(GetSinkVChanList(*sourceVChanPtr), idx);
@@ -2037,7 +2026,7 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 	SetCtrlAttribute(panHandle, tableControlID, ATTR_ROW_LABELS_WIDTH, maxRowLabelWidth + 4);
 	
 	// adjust table column width to widest cell
-	for (size_t i = 1; i <= nColumns; i++) {
+	for (int i = 1; i <= nColumns; i++) {
 		SetColumnWidthToWidestCellContents(panHandle, tableControlID, i);
 		GetTableColumnAttribute(panHandle, tableControlID, i, ATTR_COLUMN_ACTUAL_WIDTH, &colWidth);
 		// set a minimum column width
@@ -2046,8 +2035,8 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 	}
 	
 	// dim ring controls with only empty selection
-	for (size_t i = 1; i <= nRows; i++)
-		for (size_t j = 1; j <= nColumns; j++) {
+	for (int i = 1; i <= nRows; i++)
+		for (int j = 1; j <= nColumns; j++) {
 			cell.x = j; 
 			cell.y = i;
 			GetNumTableCellRingItems(panHandle, tableControlID, cell, &nItems);
@@ -2075,7 +2064,6 @@ static void UpdateHWTriggersSwitchboard (int panHandle, int tableControlID)
 	int						nCurrentRows			= 0;
 	int             		nItems;
 	int             		colWidth;
-	int  					colIdx;
 	HWTrigMaster_type** 	masterPtr				= NULL;
 	HWTrigSlave_type**		slavePtr				= NULL;
 	HWTrigSlave_type*		slave					= NULL;
@@ -2084,7 +2072,7 @@ static void UpdateHWTriggersSwitchboard (int panHandle, int tableControlID)
 	BOOL					extraColumn;
 	size_t					nMasters				= ListNumItems(HWTrigMasters);
 	size_t					nSlaves					= ListNumItems(HWTrigSlaves);
-	size_t					nConnectedSlaves;
+	int						nConnectedSlaves;
 	char*					itemName				= NULL;
 	int 					rowLabelWidth;
 	int						maxRowLabelWidth		= 0;
@@ -2116,7 +2104,7 @@ static void UpdateHWTriggersSwitchboard (int panHandle, int tableControlID)
 		if (rowLabelWidth > maxRowLabelWidth) maxRowLabelWidth = rowLabelWidth;
 		OKfree(itemName);
 			
-		nConnectedSlaves = GetNumHWTrigSlaves(*masterPtr);
+		nConnectedSlaves = (int) GetNumHWTrigSlaves(*masterPtr);
 		// keep track of required number of columns
 		if (nConnectedSlaves > nColumns) 
 			nColumns = nConnectedSlaves;
@@ -2129,7 +2117,7 @@ static void UpdateHWTriggersSwitchboard (int panHandle, int tableControlID)
 		
 		
 		// add assigned slaves
-		for (size_t idx = 1; idx <= nConnectedSlaves; idx++) {
+		for (int idx = 1; idx <= nConnectedSlaves; idx++) {
 			cell.x = idx;	 // column
 			cell.y = nRows;  // row
 			slave = GetHWTrigSlaveFromMaster(*masterPtr, idx);
@@ -2174,7 +2162,7 @@ static void UpdateHWTriggersSwitchboard (int panHandle, int tableControlID)
 	SetCtrlAttribute(panHandle, tableControlID, ATTR_ROW_LABELS_WIDTH, maxRowLabelWidth + 4);
 	
 	// adjust table column width to widest cell
-	for (size_t i = 1; i <= nColumns; i++) {
+	for (int i = 1; i <= nColumns; i++) {
 		SetColumnWidthToWidestCellContents(panHandle, tableControlID, i);
 		GetTableColumnAttribute(panHandle, tableControlID, i, ATTR_COLUMN_ACTUAL_WIDTH, &colWidth);
 		// set a minimum column width
@@ -2183,8 +2171,8 @@ static void UpdateHWTriggersSwitchboard (int panHandle, int tableControlID)
 	}
 	
 	// dim ring controls with only empty selection
-	for (size_t i = 1; i <= nRows; i++)
-		for (size_t j = 1; j <= nColumns; j++) {
+	for (int i = 1; i <= nRows; i++)
+		for (int j = 1; j <= nColumns; j++) {
 			cell.x = j; 
 			cell.y = i;
 			GetNumTableCellRingItems(panHandle, tableControlID, cell, &nItems);
@@ -2232,7 +2220,7 @@ int CVICALLBACK VChanSwitchboard_CB (int panel, int control, int event, void *ca
 	
 	GetTableCellVal(panel, control, cell, sinkVChanName);
 	
-	size_t nSinks = GetNSinkVChans(sourceVChan);
+	int nSinks = (int) GetNSinkVChans(sourceVChan);
 			
 	// disconnect selected Sink VChan from Source VChan
 	if (nSinks && (eventData2 <= nSinks)) {
@@ -2284,7 +2272,7 @@ int CVICALLBACK HWTriggersSwitchboard_CB (int panel, int control, int event, voi
 	if (!slaveName) return 0;
 	GetTableCellVal(panel, control, cell, slaveName);
 	
-	size_t nSlaves = GetNumHWTrigSlaves(master);
+	int nSlaves = (int) GetNumHWTrigSlaves(master);
 	
 	// disconnect selected slave from master
 	if (nSlaves && (eventData2 <= nSlaves)) {
@@ -2324,14 +2312,14 @@ void CVICALLBACK DAQLab_ModulesMenu_CB (int menuBarHndl, int menuItem, void *cal
 {
 	DAQLabModule_type**		modulePtrPtr;
 	char*					fullModuleName;
-	size_t					nModules;			
+	int						nModules;			
 	ListType				moduleClassNames;	// of char* type
 	size_t					idx;
 	
 	// check if module class names are unique
 	moduleClassNames = ListCreate(sizeof(char*));
 	nModules = NumElem(DAQLabModules_InitFunctions);
-	for (size_t i = 0; i < nModules; i++)
+	for (int i = 0; i < nModules; i++)
 		ListInsertItem(moduleClassNames, &DAQLabModules_InitFunctions[i].className, END_OF_LIST);
 	
 	if (!DLUniqueStrings(moduleClassNames, &idx)) {
@@ -2353,7 +2341,7 @@ void CVICALLBACK DAQLab_ModulesMenu_CB (int menuBarHndl, int menuItem, void *cal
 	
 	// list installed modules
 	nModules = ListNumItems(DAQLabModules);
-	for (size_t i = 1; i <= nModules; i++) {
+	for (int i = 1; i <= nModules; i++) {
 		modulePtrPtr = ListGetPtrToItem(DAQLabModules, i);
 		fullModuleName = StrDup((*modulePtrPtr)->className);
 		AppendString(&fullModuleName, ": ", -1);
@@ -2378,8 +2366,9 @@ static BOOL DAQLab_CheckValidModuleName (char name[], void* dataPtr)
 BOOL DLValidModuleInstanceName (char name[])
 {
 	DAQLabModule_type**		modulePtrPtr;
+	size_t					nDLModules 		= ListNumItems(DAQLabModules);
 	
-	for (int i = 1; i <= ListNumItems(DAQLabModules); i++) {
+	for (size_t i = 1; i <= nDLModules; i++) {
 		modulePtrPtr = ListGetPtrToItem(DAQLabModules, i);
 		if (!strcmp((*modulePtrPtr)->instanceName, name)) return FALSE; // module with same instance name exists already
 	}
@@ -2919,8 +2908,6 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 	int 						nodeListIdx; 
 	int							selectedNodeIdx;
 	TaskTreeNode_type*			selectedTreeNodePtr; 
-	TaskControl_type*   		master;
-	TaskControl_type*   		slave; 
 	
 	switch (control) {
 			
@@ -2952,7 +2939,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					
 					// do not allow a Task Controller to be added if this is not possible
 						relation = LoWord(eventData1);  // VAL_CHILD or VAL_SIBLING
-					int	position = HiWord(eventData1);  // VAL_PREV, VAL_NEXT, or VAL_FIRST 
+					// int	position = HiWord(eventData1);  // VAL_PREV, VAL_NEXT, or VAL_FIRST 
 					
 					// allow only child to parent drops
 					if (relation != VAL_CHILD) return 1; // swallow drop event

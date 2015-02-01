@@ -214,7 +214,7 @@ typedef enum {
 // Waveform
 //---------------------------------------------------------------------------------------------------------  
 	// Creates a waveform container for void* basic data allocated with malloc.
-Waveform_type*				init_Waveform_type						(WaveformTypes waveformType, double samplingRate, uInt64 nSamples, void** ptrToData);
+Waveform_type*				init_Waveform_type						(WaveformTypes waveformType, double samplingRate, size_t nSamples, void** ptrToData);
 
 	// Discards the waveform container and its data allocated with malloc.
 void 						discard_Waveform_type 					(Waveform_type** waveform);
@@ -235,10 +235,10 @@ double						GetWaveformDateTimestamp				(Waveform_type* waveform);
 size_t						GetWaveformSizeofData					(Waveform_type* waveform);
 
 	// Returns number of samples in the waveform.
-uInt64						GetWaveformNumSamples					(Waveform_type* waveform);
+size_t						GetWaveformNumSamples					(Waveform_type* waveform);
 
 	// Returns pointer to waveform data.
-void** 						GetWaveformPtrToData 					(Waveform_type* waveform, uInt64* nSamples);
+void** 						GetWaveformPtrToData 					(Waveform_type* waveform, size_t* nSamples);
 
 	// Returns waveform data type
 WaveformTypes				GetWaveformDataType						(Waveform_type* waveform);
@@ -253,7 +253,7 @@ int 						AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_typ
 // Repeated Waveform 
 //--------------------------------------------------------------------------------------------------------- 
 	// Creates a waveform that must be repeated repeat times. data* must be allocated with malloc and be of a basic data type
-RepeatedWaveform_type*		init_RepeatedWaveform_type				(RepeatedWaveformTypes waveformType, double samplingRate, uInt64 nSamples, void** ptrToData, double repeat);
+RepeatedWaveform_type*		init_RepeatedWaveform_type				(RepeatedWaveformTypes waveformType, double samplingRate, size_t nSamples, void** ptrToData, double repeat);
 
 	// Converts a Waveform_type to a RepeatedWaveform_type
 RepeatedWaveform_type*		ConvertWaveformToRepeatedWaveformType	(Waveform_type** waveform, double repeat);	
@@ -262,13 +262,13 @@ RepeatedWaveform_type*		ConvertWaveformToRepeatedWaveformType	(Waveform_type** w
 void						discard_RepeatedWaveform_type			(RepeatedWaveform_type** waveform);
 
 	// Returns pointer to repeated waveform data (for one repeat)
-void**						GetRepeatedWaveformPtrToData			(RepeatedWaveform_type* waveform, uInt64* nSamples);
+void**						GetRepeatedWaveformPtrToData			(RepeatedWaveform_type* waveform, size_t* nSamples);
 
 	// Returns the number of times the waveform must be repeated
 double						GetRepeatedWaveformRepeats				(RepeatedWaveform_type* waveform);
 
 	// Returns the number of samples in the waveform that must be repeated. Note: the total number of samples is this value times the number of repeats
-uInt64						GetRepeatedWaveformNumSamples			(RepeatedWaveform_type* waveform);
+size_t						GetRepeatedWaveformNumSamples			(RepeatedWaveform_type* waveform);
 
 	// Returns number of bytes per repeated waveform element.
 size_t						GetRepeatedWaveformSizeofData			(RepeatedWaveform_type* waveform);

@@ -537,8 +537,8 @@ typedef struct {
 // timing structure for counter tasks
 typedef struct {
 	MeasMode_type 				measMode;      				// Measurement mode: finite or continuous.     
-	size_t        				nSamples;	    			// Total number of samples or pulses to be acquired/generated in case of a finite recording if device task settings is used as reference.
-	size_t*						refNSamples;				// Points to either device or VChan-based number of samples to acquire. By default points to device. 
+	uInt64        				nSamples;	    			// Total number of samples or pulses to be acquired/generated in case of a finite recording if device task settings is used as reference.
+	uInt64*						refNSamples;				// Points to either device or VChan-based number of samples to acquire. By default points to device. 
 	double       				sampleRate;    				// Sampling rate in [Hz] if device task settings is used as reference. 
 	double*						refSampleRate;				// Points to either device or VChan-based sampling rate. By default points to device.    
 	double        				refClkFreq;    				// Reference clock frequency if such a clock is used.
@@ -715,7 +715,7 @@ typedef struct {
 	float64*      				dataout;					// Array length is writeblock * numchan used for DAQmx write call, data is grouped by channel
 	SinkVChan_type**			sinkVChans;					// Array of SinkVChan_type*
 	
-	uInt64*       				datain_size; 
+	size_t*       				datain_size; 
 	size_t*      				databuff_size;
 	
 	size_t*       				idx;						// Array of pointers with index for each channel from which to continue writing data (not used yet)  
@@ -744,7 +744,7 @@ typedef struct {
 	uInt32*      				dataout;					// Array length is writeblock * numchan used for DAQmx write call, data is grouped by channel
 	SinkVChan_type**			sinkVChans;					// Array of SinkVChan_type*
 	
-	uInt64*       				datain_size; 
+	size_t*       				datain_size; 
 	size_t*      				databuff_size;
 	
 	size_t*       				idx;						// Array of pointers with index for each channel from which to continue writing data (not used yet)  
@@ -6384,7 +6384,7 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	}
 	
 	// datain_size
-	if (!(	writeData -> datain_size 		= malloc(nAO * sizeof(uInt64))) && nAO)								goto Error;
+	if (!(	writeData -> datain_size 		= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain_size[i] = 0;
 		
 	// databuff_size
@@ -6512,7 +6512,7 @@ static WriteDOData_type* init_WriteDOData_type (Dev_type* dev)
 	}
 	
 	// datain_size
-	if (!(	writeData -> datain_size 		= malloc(nDO * sizeof(uInt64))))							goto Error;
+	if (!(	writeData -> datain_size 		= malloc(nDO * sizeof(size_t))))							goto Error;
 	for (i = 0; i < nDO; i++) writeData->datain_size[i] = 0;
 		
 	// databuff_size
@@ -7544,7 +7544,7 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	
 	// set number of samples per channel for finite generation
 	if (dev->AOTaskSet->timing->measMode == MeasFinite)
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->AOTaskSet->timing->nSamples));
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AOTaskSet->timing->nSamples));
 	
 	// if a reference clock is given, use it to synchronize the internal clock
 	if (dev->AOTaskSet->timing->refClkSource) {
@@ -7744,7 +7744,7 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 		case MeasFinite:
 			
 			// set number of samples per channel read within one call of the read function, i.e. blocksize
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->DITaskSet->timing->nSamples));
+			DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->DITaskSet->timing->nSamples));
 			quot = dev->DITaskSet->timing->nSamples  / dev->DITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
 			DAQmxErrChk(DAQmxCfgInputBuffer (dev->DITaskSet->taskHndl, dev->DITaskSet->timing->blockSize * quot));
@@ -7926,7 +7926,7 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	
 	// set number of samples per channel for finite acquisition
 	if (dev->DOTaskSet->timing->measMode == MeasFinite)
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->DOTaskSet->timing->nSamples));
+		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->DOTaskSet->timing->nSamples));
 	
 	// disable DO regeneration
 	DAQmxSetWriteAttribute (dev->DOTaskSet->taskHndl, DAQmx_Write_RegenMode, DAQmx_Val_DoNotAllowRegen);
@@ -8123,7 +8123,7 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 	
 				// set number of samples per channel for finite acquisition
 				if (chCIFreqPtr->taskTiming->measMode == MeasFinite)
-					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) *chCIFreqPtr->taskTiming->refNSamples));
+					DAQmxErrChk (DAQmxSetTimingAttribute((*chanSetPtr)->taskHndl, DAQmx_SampQuant_SampPerChan, *chCIFreqPtr->taskTiming->refNSamples));
 				
 				/*
 				DAQmxErrChk (DAQmxSetTrigAttribute(gTaskHandle,DAQmx_ArmStartTrig_Type,DAQmx_Val_DigEdge));
@@ -8799,7 +8799,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 			ChanSet_type** 		chanSetPtr;
 			size_t				nUsedAOChannels	= 0;
 			void**				waveformDataPtr;
-			uInt64				nWaveformSamples;
+			size_t				nWaveformSamples;
 			WaveformTypes		waveformType;
 			
 			for (size_t i = 1; i <= nChannels; i++) {
@@ -11338,7 +11338,6 @@ static int ADSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskSta
 	
 	// get data packet
 	errChk( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
-	// get number of samples, data type of uInt64 (unsigned long long)
 	dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
 	
 	switch (dataPacketType) {
@@ -11397,7 +11396,7 @@ static int AO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type tas
 	double** 						doubleDataPtrPtr	= NULL;
 	float**							floatDataPtrPtr		= NULL;
 	size_t							nPackets			= 0;
-	uInt64							nElem				= 0;
+	size_t							nElem				= 0;
 	char*							errMsg				= NULL;
 	TaskHandle						taskHndl			= 0;
 	ChanSet_AIAO_Voltage_type*		aoVoltageChan		= NULL;

@@ -254,9 +254,9 @@ int ReadBuffer(int bufsize)
 	char*					errMsg			= NULL;  
 	unsigned short int* 	Samplebuffer	= NULL;   
 	void*     				pmtdataptr		= NULL;
-	int 					numpixels;
-	int 					numshorts;
-	int 					ndatapoints;
+	size_t 					numpixels;
+	size_t 					numshorts;
+	size_t 					ndatapoints;
 	double 					refSamplingRate	= 1000;
 	long 					errcode;
 	unsigned long 			statreg; 

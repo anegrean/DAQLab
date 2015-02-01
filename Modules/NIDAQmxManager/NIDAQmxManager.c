@@ -40,7 +40,7 @@
 #define DAQmxDefault_Task_MeasMode						MeasFinite
 #define	DAQmxDefault_Task_NSamples						100
 #define	DAQmxDefault_Task_BlockSize						4096					// must be a power of 2 !
-#define DAQmxDefault_Task_RefClkFreq					1000000.0				// in [Hz]
+#define DAQmxDefault_Task_RefClkFreq					1e7						// in [Hz]
 	// CI Frequency
 #define DAQmxDefault_CI_Frequency_Task_MinFreq			2						// in [Hz]
 #define DAQmxDefault_CI_Frequency_Task_MaxFreq			100						// in [Hz]
@@ -554,7 +554,7 @@ typedef struct {
 	double    					wndTop; 	   				// For analog window trigger.
 	double   					wndBttm;   					// For analog window trigger.
 	TrigWndCond_type			wndTrigCond;  				// For analog window trigger.
-	size_t						nPreTrigSamples;			// For reference type trigger. Number of pre-trigger samples to acquire.
+	uInt32						nPreTrigSamples;			// For reference type trigger. Number of pre-trigger samples to acquire.
 	Dev_type*					device;						// Reference to the device that owns this task trigger.
 	//------------------------------------
 	// UI
@@ -763,13 +763,13 @@ typedef struct {
 	ListType 					chanSet;     				// Channel settings. Of ChanSet_type*
 	double        				timeout;       				// Task timeout [s]
 	TaskTrig_type* 				startTrig;     				// Task start trigger type. If NULL then there is no start trigger.
+	TaskTrig_type* 				referenceTrig;     			// Task reference trigger type. If NULL then there is no reference trigger.
+	TaskTiming_type*			timing;						// Task timing info
 	HWTrigMaster_type*			HWTrigMaster;				// For establishing a task start HW-trigger dependency, this being a master.
 	HWTrigSlave_type*			HWTrigSlave;				// For establishing a task start HW-trigger dependency, this being a slave.
-	TaskTrig_type* 				referenceTrig;     			// Task reference trigger type. If NULL then there is no reference trigger.
 	WriteAOData_type*			writeAOData;				// Used for continuous AO streaming. 
 	ReadAIData_type*			readAIData;					// Used for processing of incoming AI data.
 	WriteDOData_type*			writeDOData;				// Used for continuous DO streaming.                         
-	TaskTiming_type*			timing;						// Task timing info
 } ADTaskSet_type;
 
 // CI
@@ -822,7 +822,7 @@ struct NIDAQmxManager {
 		// UI
 		//-------------------------
 	
-	int							mainPanHndl;
+	int							mainPanHndl;				// NI DAQ manager main panel
 	int							taskSetPanHndl;
 	int							devListPanHndl;
 	int							menuBarHndl;
@@ -846,6 +846,28 @@ static int	 currDev = -1;        // currently selected device from the DAQ table
 //---------------------------------------------
 
 static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
+
+static int 							LoadCfg							 		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement); 
+
+static int							SaveCfg									(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+
+static int 							SaveDeviceCfg 							(Dev_type* dev, CAObjHandle  xmlDOM, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement); 
+
+static int 							SaveAITaskCfg 							(ADTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement); 
+
+static int 							SaveAOTaskCfg 							(ADTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement);
+
+static int 							SaveDITaskCfg 							(ADTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement); 
+
+static int 							SaveDOTaskCfg 							(ADTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement);
+
+static int 							SaveCITaskCfg 							(CITaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement); 
+
+static int 							SaveCOTaskCfg 							(COTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement); 
+
+static int 							SaveTaskTrigCfg 						(TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ TriggerXMLElement);
+
+static int 							SaveChannelCfg 							(ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ ChannelXMLElement);
 
 static int 							DisplayPanels							(DAQLabModule_type* mod, BOOL visibleFlag); 
 
@@ -1242,12 +1264,6 @@ static int							ModuleEventHandler						(TaskControl_type* taskControl, TaskSta
 ListType	devList			= 0;		// List of DAQ devices available of DevAttr_type*. This will be updated every time init_DevList(ListType) is executed.
 
 
-//lex test
-double IterStartTime;
-double IterEndTime=0;
-double taskStartTime;
-double taskEndTime;
-
 //========================================================================================================================================================================================================
 // Global functions
 
@@ -1288,7 +1304,11 @@ DAQLabModule_type*	initalloc_NIDAQmxManager (DAQLabModule_type* mod, char classN
 			// overriding methods
 	nidaq->baseClass.Discard 		= discard_NIDAQmxManager;
 			
-	nidaq->baseClass.Load			= Load; 
+	nidaq->baseClass.Load			= Load;
+	
+	nidaq->baseClass.LoadCfg		= LoadCfg;
+	
+	nidaq->baseClass.SaveCfg		= SaveCfg;
 	
 	nidaq->baseClass.DisplayPanels	= DisplayPanels;
 			
@@ -1389,6 +1409,369 @@ Error:
 	if (nidaq->mainPanHndl) {DiscardPanel(nidaq->mainPanHndl); nidaq->mainPanHndl = 0;}
 	if (nidaq->devListPanHndl) {DiscardPanel(nidaq->devListPanHndl); nidaq->devListPanHndl = 0;}
 	if (nidaq->taskSetPanHndl) {DiscardPanel(nidaq->taskSetPanHndl); nidaq->taskSetPanHndl = 0;} 
+	
+	return error;
+}
+
+static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+{
+	NIDAQmxManager_type*	NIDAQ				 	= mod;
+	
+	
+	
+	return 0;
+}
+
+static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+{
+	NIDAQmxManager_type*			NIDAQ	 				= mod;
+	int								error					= 0;
+	ERRORINFO						xmlERRINFO;
+	
+	//--------------------------------------------------------------------------
+	// Save DAQmanager main panel position
+	//--------------------------------------------------------------------------
+	
+	int								panTopPos				= 0;
+	int								panLeftPos				= 0;
+	DAQLabXMLNode 					NIDAQAttr[] 			= {	{"PanTopPos", BasicData_Int, &panTopPos},
+											  		   			{"PanLeftPos", BasicData_Int, &panLeftPos}	};
+	
+	errChk( GetPanelAttribute(NIDAQ->mainPanHndl, ATTR_LEFT, &panLeftPos) );
+	errChk( GetPanelAttribute(NIDAQ->mainPanHndl, ATTR_TOP, &panTopPos) );
+	DLAddToXMLElem(xmlDOM, moduleElement, NIDAQAttr, DL_ATTRIBUTE, NumElem(NIDAQAttr)); 
+	
+	//--------------------------------------------------------------------------
+	// Save NIDAQ device configuration
+	//--------------------------------------------------------------------------
+	
+	size_t							nDevices				= ListNumItems(NIDAQ->DAQmxDevices);
+	Dev_type*						dev						= NULL;
+	ActiveXMLObj_IXMLDOMElement_	NIDAQDeviceXMLElement	= 0;	 // holds an "NIDAQDevice" element to which device settings are added
+	
+	for (size_t i = 1; i <= nDevices; i++) {
+		dev = *(Dev_type**)ListGetPtrToItem(NIDAQ->DAQmxDevices, i);
+		// create new device XML element
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "NIDAQDevice", &NIDAQDeviceXMLElement) );
+		// save device config
+		errChk( SaveDeviceCfg(dev, xmlDOM, NIDAQDeviceXMLElement) );
+		// add device XML element to NIDAQ module
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, NIDAQDeviceXMLElement, NULL) );
+		// discard device XML element handle
+		OKFreeCAHandle(NIDAQDeviceXMLElement); 
+	}
+	
+	return 0;
+	
+Error:
+	
+	return error;
+}
+
+static int SaveDeviceCfg (Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement) 
+{
+	int								error					= 0;
+	ERRORINFO						xmlERRINFO;
+	
+	//--------------------------------------------------------------------------------
+	// Save  	- device product ID that must match when the settings are loaded again
+	//			- task controller name
+	//--------------------------------------------------------------------------------
+	
+	char*							tcName					= GetTaskControlName(dev->taskController);
+	DAQLabXMLNode 					DevAttr[] 				= {	{"NIProductClassID", BasicData_UInt, &dev->attr->productNum},
+																{"Name", BasicData_CString, tcName}	};
+	
+	DLAddToXMLElem(xmlDOM, NIDAQDeviceXMLElement, DevAttr, DL_ATTRIBUTE, NumElem(DevAttr)); 
+	OKfree(tcName);
+	
+	//--------------------------------------------------------------------------------
+	// Save DAQmx tasks
+	//--------------------------------------------------------------------------------
+	
+	ActiveXMLObj_IXMLDOMElement_	AITaskXMLElement	= 0;	 // holds an "AITask" element
+	ActiveXMLObj_IXMLDOMElement_	AOTaskXMLElement	= 0;	 // holds an "AOTask" element
+	ActiveXMLObj_IXMLDOMElement_	DITaskXMLElement	= 0;	 // holds an "DITask" element
+	ActiveXMLObj_IXMLDOMElement_	DOTaskXMLElement	= 0;	 // holds an "DOTask" element
+	ActiveXMLObj_IXMLDOMElement_	CITaskXMLElement	= 0;	 // holds an "CITask" element
+	ActiveXMLObj_IXMLDOMElement_	COTaskXMLElement	= 0;	 // holds an "COTask" element
+	
+	// AI task
+	if (dev->AITaskSet) {
+		// create new task XML element
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "AITask", &AITaskXMLElement) );
+		// save task config
+		errChk( SaveAITaskCfg (dev->AITaskSet, xmlDOM, AITaskXMLElement) );
+		// add task XML element to device element
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (NIDAQDeviceXMLElement, &xmlERRINFO, AITaskXMLElement, NULL) );
+		// discard task XML element handle
+		OKFreeCAHandle(AITaskXMLElement);
+	}
+	
+	// AO task
+	if (dev->AOTaskSet) {
+		// create new task XML element
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "AOTask", &AOTaskXMLElement) );
+		// save task config
+		errChk( SaveAOTaskCfg (dev->AOTaskSet, xmlDOM, AOTaskXMLElement) );
+		// add device XML element to device element
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (NIDAQDeviceXMLElement, &xmlERRINFO, AOTaskXMLElement, NULL) );
+		// discard task XML element handle
+		OKFreeCAHandle(AOTaskXMLElement);
+	}
+	
+	return 0;
+	
+Error:
+	
+	return error;
+}
+		
+static int SaveAITaskCfg (ADTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement) 
+{
+	int								error					= 0;
+	ERRORINFO						xmlERRINFO;
+	
+	//--------------------------------------------------------------------------------
+	// Save task properties
+	//--------------------------------------------------------------------------------
+	
+	uInt32							operationMode			= (uInt32)task->timing->measMode;
+	uInt32							sampleClockEdge			= (uInt32)task->timing->sampClkEdge;
+	
+	DAQLabXMLNode 					taskAttr[] 				= {	{"Timeout", BasicData_Double, &task->timeout},
+																{"OperationMode", BasicData_UInt, &operationMode},
+																{"SamplingRate", BasicData_Double, &task->timing->sampleRate},
+																{"NSamples", BasicData_ULongLong, &task->timing->nSamples},
+																{"BlockSize", BasicData_UInt, &task->timing->blockSize},
+																{"SampleClockSource", BasicData_CString, task->timing->sampClkSource},
+																{"SampleClockEdge", BasicData_UInt, &sampleClockEdge},
+																{"ReferenceClockSource", BasicData_CString, task->timing->refClkSource},
+																{"ReferenceClockFrequency", BasicData_Double, &task->timing->refClkFreq} };
+																	
+	DLAddToXMLElem(xmlDOM, AITaskXMLElement, taskAttr, DL_ATTRIBUTE, NumElem(taskAttr)); 
+	
+	//--------------------------------------------------------------------------------
+	// Save task triggers
+	//--------------------------------------------------------------------------------
+	
+	ActiveXMLObj_IXMLDOMElement_	TriggersXMLElement			= 0;	 // holds the "Triggers" element
+	ActiveXMLObj_IXMLDOMElement_	StartTriggerXMLElement		= 0;	 // holds the "StartTrigger" element
+	ActiveXMLObj_IXMLDOMElement_	ReferenceTriggerXMLElement	= 0;	 // holds the "ReferenceTrigger" element
+	
+	// create new triggers XML element
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Triggers", &TriggersXMLElement) );
+	
+	//----------------------
+	// Start Trigger
+	//----------------------
+	if (task->startTrig) {
+		// create "StartTrigger" XML element
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "StartTrigger", &StartTriggerXMLElement) );
+		// save trigger info
+		errChk( SaveTaskTrigCfg(task->startTrig, xmlDOM, StartTriggerXMLElement) ); 
+		// add "StartTrigger" XML element to "Triggers" XML element
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (TriggersXMLElement, &xmlERRINFO, StartTriggerXMLElement, NULL) );
+		// discard "StartTrigger" XML element handle
+		OKFreeCAHandle(StartTriggerXMLElement);
+	}
+	
+	//----------------------
+	// Reference Trigger
+	//----------------------
+	if (task->referenceTrig) {
+		// create "ReferenceTrigger" XML element
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ReferenceTrigger", &ReferenceTriggerXMLElement) );
+		// save trigger info
+		errChk( SaveTaskTrigCfg(task->referenceTrig, xmlDOM, ReferenceTriggerXMLElement) );
+		DAQLabXMLNode 	refTrigAttr[] = {{"NPreTrigSamples", BasicData_UInt, &task->referenceTrig->nPreTrigSamples}};
+		errChk( DLAddToXMLElem(xmlDOM, ReferenceTriggerXMLElement, refTrigAttr, DL_ATTRIBUTE, NumElem(refTrigAttr)) ); 
+		// add "ReferenceTrigger" XML element to "Triggers" XML element
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (TriggersXMLElement, &xmlERRINFO, ReferenceTriggerXMLElement, NULL) );
+		// discard "ReferenceTrigger" XML element handle
+		OKFreeCAHandle(ReferenceTriggerXMLElement);
+	}
+	
+	// add "Triggers" XML element to task element
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (AITaskXMLElement, &xmlERRINFO, TriggersXMLElement, NULL) );
+	// discard "Triggers" XML element handle
+	OKFreeCAHandle(TriggersXMLElement);
+	
+	//--------------------------------------------------------------------------------
+	// Save task channels
+	//--------------------------------------------------------------------------------
+	
+	ActiveXMLObj_IXMLDOMElement_	ChannelsXMLElement			= 0;	 // holds the "Channels" element
+	ActiveXMLObj_IXMLDOMElement_	ChannelXMLElement			= 0;	 // holds the "Channel" element for each channel in the task
+	size_t							nChannels					= ListNumItems(task->chanSet);
+	ChanSet_type*					chanSet						= NULL;
+	
+	// create new "Channels" XML element
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Channels", &ChannelsXMLElement) );
+	// save channels info
+	for (size_t i = 1; i <= nChannels; i++) {
+		chanSet = *(ChanSet_type**) ListGetPtrToItem(task->chanSet, i);
+		// create new "Channel" element
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Channel", &ChannelXMLElement) );
+		// save channel info
+		errChk( SaveChannelCfg(chanSet, xmlDOM, ChannelXMLElement) );
+		// add "Channel" element to "Channels" element
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (ChannelsXMLElement, &xmlERRINFO, ChannelXMLElement, NULL) );
+		// discard "Channel" XML element handle
+		OKFreeCAHandle(ChannelXMLElement);
+	}
+	
+	// add "Channels" XML element to task element
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (AITaskXMLElement, &xmlERRINFO, ChannelsXMLElement, NULL) );
+	// discard "Channels" XML element handle
+	OKFreeCAHandle(ChannelsXMLElement);
+	
+	return 0;
+	
+Error:
+	
+	return error;	
+}
+
+static int SaveAOTaskCfg (ADTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement) 
+{
+	int								error					= 0;
+	ERRORINFO						xmlERRINFO;
+	
+	
+	return 0;
+	
+Error:
+	
+	return error;	
+}
+
+static int SaveDITaskCfg (ADTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement) 
+{
+	int								error					= 0;
+	ERRORINFO						xmlERRINFO;
+	
+	
+	return 0;
+	
+Error:
+	
+	return error;	
+}
+
+static int SaveDOTaskCfg (ADTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement) 
+{
+	int								error					= 0;
+	ERRORINFO						xmlERRINFO;
+	
+	
+	return 0;
+	
+Error:
+	
+	return error;	
+}
+
+static int SaveCITaskCfg (CITaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement) 
+{
+	int								error					= 0;
+	ERRORINFO						xmlERRINFO;
+	
+	
+	return 0;
+	
+Error:
+	
+	return error;	
+}
+
+static int SaveCOTaskCfg (COTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement) 
+{
+	int								error					= 0;
+	ERRORINFO						xmlERRINFO;
+	
+	
+	return 0;
+	
+Error:
+	
+	return error;	
+}
+
+static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ TriggerXMLElement)
+{
+#define SaveTaskTrigCfg_Err_NotImplemented		-1
+	
+	int								error					= 0;
+	ERRORINFO						xmlERRINFO;
+	
+	uInt32							trigType				= (uInt32) taskTrig->trigType;
+	uInt32							slopeType				= (uInt32) taskTrig->slope;
+	uInt32							triggerCondition		= (uInt32) taskTrig->wndTrigCond;
+		// shared trigger attributes
+	DAQLabXMLNode 					sharedTrigAttr[]		= {	{"Type", BasicData_UInt, &trigType},
+																{"Source", BasicData_CString, taskTrig->trigSource} };
+		// for both analog and digital edge triggers
+	DAQLabXMLNode 					edgeTrigAttr[]			= {	{"Slope", BasicData_UInt, &slopeType} };
+		// for analog edge trigger
+	DAQLabXMLNode 					levelTrigAttr[]			= {	{"Level", BasicData_Double, &taskTrig->level} };
+		// for analog window trigger
+	DAQLabXMLNode 					windowTrigAttr[]		= {	{"WindowTop", BasicData_Double, &taskTrig->wndTop},
+																{"WindowBottom", BasicData_Double, &taskTrig->wndBttm},
+																{"WindowTriggerCondition", BasicData_UInt, &triggerCondition} };
+
+	// add shared trigger attributes 
+	DLAddToXMLElem(xmlDOM, TriggerXMLElement, sharedTrigAttr, DL_ATTRIBUTE, NumElem(sharedTrigAttr)); 
+	
+	// add specific trigger attributes
+	switch (taskTrig->trigType) {
+			
+		case Trig_None:
+			
+			break;
+			
+		case Trig_DigitalEdge:
+			
+			DLAddToXMLElem(xmlDOM, TriggerXMLElement, edgeTrigAttr, DL_ATTRIBUTE, NumElem(edgeTrigAttr)); 
+			
+			break;
+			
+		case Trig_DigitalPattern:
+			
+			return SaveTaskTrigCfg_Err_NotImplemented;
+			
+		case Trig_AnalogEdge:
+			
+			DLAddToXMLElem(xmlDOM, TriggerXMLElement, edgeTrigAttr, DL_ATTRIBUTE, NumElem(edgeTrigAttr)); 
+			DLAddToXMLElem(xmlDOM, TriggerXMLElement, levelTrigAttr, DL_ATTRIBUTE, NumElem(levelTrigAttr)); 
+			
+			break;
+			
+		case Trig_AnalogWindow:
+			
+			DLAddToXMLElem(xmlDOM, TriggerXMLElement, windowTrigAttr, DL_ATTRIBUTE, NumElem(windowTrigAttr)); 
+	}
+									
+	
+	return 0;
+	
+Error:
+	
+	return error;
+}
+
+static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ ChannelXMLElement)
+{
+#define SaveChannelCfg_Err_NotImplemented		-1
+	
+	int								error					= 0;
+	ERRORINFO						xmlERRINFO;
+	
+	
+	
+	return 0;
+	
+Error:
 	
 	return error;
 }
@@ -7389,18 +7772,18 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 			
 			case Trig_AnalogEdge:
 				if (dev->AITaskSet->referenceTrig->trigSource)
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->level));  
+					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->level, dev->AITaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_AnalogWindow:
 				if (dev->AITaskSet->referenceTrig->trigSource)
-				DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->wndTrigCond, 
-							 dev->AITaskSet->referenceTrig->wndTop, dev->AITaskSet->referenceTrig->wndBttm));  
+				DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->wndTrigCond, 
+							 dev->AITaskSet->referenceTrig->wndTop, dev->AITaskSet->referenceTrig->wndBttm, dev->AITaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_DigitalEdge:
 				if (dev->AITaskSet->referenceTrig->trigSource)
-				DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope));  
+				DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_DigitalPattern:
@@ -7609,18 +7992,19 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 			
 			case Trig_AnalogEdge:
 				if (dev->AOTaskSet->referenceTrig->trigSource)
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, dev->AOTaskSet->referenceTrig->level));  
+					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, 
+														 dev->AOTaskSet->referenceTrig->level, dev->AOTaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_AnalogWindow:
 				if (dev->AOTaskSet->referenceTrig->trigSource)
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->wndTrigCond, 
-							 dev->AOTaskSet->referenceTrig->wndTop, dev->AOTaskSet->referenceTrig->wndBttm));  
+					DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->wndTrigCond, 
+							 dev->AOTaskSet->referenceTrig->wndTop, dev->AOTaskSet->referenceTrig->wndBttm, dev->AOTaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_DigitalEdge:
 				if (dev->AOTaskSet->referenceTrig->trigSource)
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope));  
+					DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, dev->AOTaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_DigitalPattern:
@@ -7800,18 +8184,19 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 			
 			case Trig_AnalogEdge:
 				if (dev->DITaskSet->referenceTrig->trigSource)
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, dev->DITaskSet->referenceTrig->level));  
+					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, 
+														 dev->DITaskSet->referenceTrig->level, dev->DITaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_AnalogWindow:
 				if (dev->DITaskSet->referenceTrig->trigSource)
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->wndTrigCond, 
-								 dev->DITaskSet->referenceTrig->wndTop, dev->DITaskSet->referenceTrig->wndBttm));  
+					DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->wndTrigCond, 
+								 dev->DITaskSet->referenceTrig->wndTop, dev->DITaskSet->referenceTrig->wndBttm, dev->DITaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_DigitalEdge:
 				if (dev->DITaskSet->referenceTrig->trigSource)
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope));  
+					DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, dev->DITaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_DigitalPattern:
@@ -7975,18 +8360,19 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 			
 			case Trig_AnalogEdge:
 				if (dev->DOTaskSet->referenceTrig->trigSource)
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, dev->DOTaskSet->referenceTrig->level));  
+					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, 
+														 dev->DOTaskSet->referenceTrig->level, dev->DOTaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_AnalogWindow:
 				if (dev->DOTaskSet->referenceTrig->trigSource)
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->wndTrigCond, 
-						 		dev->DOTaskSet->referenceTrig->wndTop, dev->DOTaskSet->referenceTrig->wndBttm));  
+					DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->wndTrigCond, 
+						 		dev->DOTaskSet->referenceTrig->wndTop, dev->DOTaskSet->referenceTrig->wndBttm, dev->DOTaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_DigitalEdge:
 				if (dev->DOTaskSet->referenceTrig->trigSource)
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope));  
+					DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, dev->DOTaskSet->referenceTrig->nPreTrigSamples));  
 				break;
 			
 			case Trig_DigitalPattern:
@@ -8840,7 +9226,6 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 			DAQmxErrChk( DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, AOData, &nSamplesWritten, NULL) );
 			// cleanup
 			OKfree(AOData);
-			//added lex
 			discard_Waveform_type(&AOWaveform); 
 			break;
 			
@@ -10756,7 +11141,7 @@ static int CVICALLBACK TaskReferenceTrigType_CB (int panel, int control, int eve
 			SetCtrlIndex(panel, taskTrigPtr->trigSlopeCtrlID, ctrlIdx);}
 			// pre-trigger samples
 			taskTrigPtr->preTrigNSamplesCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, RefTrig1_NSamples, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
-			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_DATA_TYPE, VAL_SIZE_T);
+			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_DATA_TYPE, VAL_UNSIGNED_INTEGER);
 			SetCtrlVal(panel, taskTrigPtr->preTrigNSamplesCtrlID, taskTrigPtr->nPreTrigSamples);
 			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
 			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerPreTrigSamples_CB);
@@ -10798,7 +11183,7 @@ static int CVICALLBACK TaskReferenceTrigType_CB (int panel, int control, int eve
 			SetCtrlAttribute(panel, taskTrigPtr->levelCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerLevel_CB );
 			// pre-trigger samples
 			taskTrigPtr->preTrigNSamplesCtrlID = DuplicateCtrl(AnEdgeTrig_PanHndl, RefTrig3_NSamples, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
-			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_DATA_TYPE, VAL_SIZE_T);
+			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_DATA_TYPE, VAL_UNSIGNED_INTEGER);
 			SetCtrlVal(panel, taskTrigPtr->preTrigNSamplesCtrlID, taskTrigPtr->nPreTrigSamples);
 			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
 			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerPreTrigSamples_CB);
@@ -10839,7 +11224,7 @@ static int CVICALLBACK TaskReferenceTrigType_CB (int panel, int control, int eve
 			SetCtrlAttribute(panel, taskTrigPtr->windowBottomCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerWindowBttm_CB);
 			// pre-trigger samples
 			taskTrigPtr->preTrigNSamplesCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, RefTrig4_NSamples, panel, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
-			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_DATA_TYPE, VAL_SIZE_T);
+			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_DATA_TYPE, VAL_UNSIGNED_INTEGER);
 			SetCtrlVal(panel, taskTrigPtr->preTrigNSamplesCtrlID, taskTrigPtr->nPreTrigSamples);
 			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_DATA, taskTrigPtr);
 			SetCtrlAttribute(panel, taskTrigPtr->preTrigNSamplesCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerPreTrigSamples_CB);
@@ -11033,7 +11418,7 @@ static int CVICALLBACK TriggerPreTrigDuration_CB (int panel, int control, int ev
 	
 	GetCtrlVal(panel, control, &duration);
 	// calculate number of samples given sampling rate
-	taskTrigPtr->nPreTrigSamples = (size_t) (*taskTrigPtr->samplingRate * duration);
+	taskTrigPtr->nPreTrigSamples = (uInt32) (*taskTrigPtr->samplingRate * duration);
 	SetCtrlVal(panel, taskTrigPtr->preTrigNSamplesCtrlID, taskTrigPtr->nPreTrigSamples);
 	// recalculate duration to match the number of samples and sampling rate
 	SetCtrlVal(panel, control, taskTrigPtr->nPreTrigSamples/(*taskTrigPtr->samplingRate)); 

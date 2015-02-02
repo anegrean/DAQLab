@@ -40,11 +40,13 @@
 
 #define QUEUE_LENGTH	100   
 	
-#define NUMTHREADS		10
+#define NUMTHREADS		10																			  
 		
 #define MAXBYTES		0x100000  //1Mb    
 		
 #define MAXCHAR 255  //testval for filename
+
+#define MAXPACKETSIZE   0x8000      //bytes
 	
 
 
@@ -124,22 +126,23 @@ void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples)
 	if (mode==TASK_CONTINUOUS) {   
 		// continuous mode, bufsize based on sample freq
 		if (samplerate_in_khz>500) {
-			bufsize=0x200000;  
-		}
-		else if (samplerate_in_khz>250) {
-			bufsize=0x100000;  
-		}
-		else if (samplerate_in_khz>125) {
-			bufsize=0x80000;  
-		}
-		else if (samplerate_in_khz>64) {
 			bufsize=0x40000;  
 		}
-		else if (samplerate_in_khz>32) {
+		else if (samplerate_in_khz>250) {
 			bufsize=0x20000;  
 		}
-		else bufsize=0x10000;      
-		
+		else if (samplerate_in_khz>125) {
+			bufsize=0x10000;  
+		}
+		else if (samplerate_in_khz>64) {
+			bufsize=0x8000;  
+		}
+		else if (samplerate_in_khz>32) {
+			bufsize=0x4000;  
+		}
+		else bufsize=0x2000;   
+	
+	
 	 } else {  
 		// finite mode, bufsize based on sample requested samples
 	 	nrsamples_in_iteration=itsamples;
@@ -262,6 +265,10 @@ int ReadBuffer(int bufsize)
 	unsigned long 			statreg; 
 	Waveform_type* 			waveform		= NULL;
 	int						swappedi		= 0;
+	size_t					bytes_send		= 0;
+	size_t					blksize			= 0;
+	size_t					totalbytes;
+	size_t					dataindex		= 0;
 	
 	
 	Samplebuffer 	= malloc(bufsize); 
@@ -288,12 +295,13 @@ int ReadBuffer(int bufsize)
 		ndatapoints = numshorts/4;
 		//transpose data array
 		TransposeData(Samplebuffer, VAL_SHORT_INTEGER, numshorts, 4);
+		totalbytes=ndatapoints * sizeof(unsigned short);
 		//send datapackets
 		//index i is index of active channels; chanIdx contains the PMT channel index
 		for (int i = 0; i < MAX_CHANNELS; i++){
 			if (gchannels[i] != NULL){
 				if (gchannels[i]->VChan != NULL){
-					nullChk( pmtdataptr = malloc(ndatapoints * sizeof(unsigned short)) );
+					
 					//swap index; 
 					//to be repaired in hardware!
 					switch (i) {
@@ -306,12 +314,34 @@ int ReadBuffer(int bufsize)
 						case 3: swappedi=1;
 						break;
 						}
-					memcpy(pmtdataptr, &Samplebuffer[swappedi*ndatapoints], ndatapoints * sizeof(unsigned short));
-					// prepare waveform
-					nullChk( waveform 	= init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );  
-				    nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIterDup(gtaskControl), (DiscardPacketDataFptr_type) discard_Waveform_type));       
+				/*	//chop data in MAXPACKETSIZE blocks
+					bytes_send=0;
+					while (bytes_send<totalbytes){
+						//start of data block
+						dataindex=(swappedi*ndatapoints)+(bytes_send/sizeof(unsigned short));  
+						if ((totalbytes-bytes_send)>MAXPACKETSIZE) {
+							//send block
+							blksize=MAXPACKETSIZE;
+							bytes_send+=MAXPACKETSIZE;   
+						}
+						else {
+							//send remaing bytes
+							blksize=totalbytes-bytes_send; 	
+							bytes_send=ndatapoints;
+						}
+						nullChk(pmtdataptr = malloc(blksize)); 
+						memcpy(pmtdataptr, &Samplebuffer[dataindex], blksize);
+					//end chop data in MAXPACKETSIZE blocks */  
+					//full block code
+						nullChk(pmtdataptr = malloc(totalbytes)); 
+						memcpy(pmtdataptr, &Samplebuffer[swappedi*ndatapoints], totalbytes);
+					//end full block code	
+						// prepare waveform
+						nullChk( waveform 	= init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );  
+				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIterDup(gtaskControl), (DiscardPacketDataFptr_type) discard_Waveform_type));       
 					// send data packet with waveform
-					errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
+						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
+				//	}
 				}
 			}
 		}

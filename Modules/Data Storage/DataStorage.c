@@ -94,8 +94,8 @@ static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abo
 //static void					IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 //static void 				AbortIterationTC		(TaskControl_type* taskControl, BOOL const* abortFlag);
 //static int					StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-//static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-//static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void					DimUITC					(TaskControl_type* taskControl, BOOL dimmed);
 //static void					TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
@@ -146,7 +146,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	
 	// create Data Storage Task Controller
 	tc = init_TaskControl_type (instanceName, ds, DLGetCommonThreadPoolHndl(), ConfigureTC, UnConfigureTC, NULL, NULL,NULL , ResetTC,
-								NULL, NULL, DimUITC, NULL, NULL, ErrorTC);
+								 DoneTC, StoppedTC, DimUITC, NULL, NULL, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
 	//------------------------------------------------------------
@@ -192,48 +192,6 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 
 }
 
-/// HIFN Discards DataStorage data but does not free the structure memory.
-void discard_DataStorage (DAQLabModule_type** mod)
-{
-	DataStorage_type* 		ds 			= (DataStorage_type*) (*mod);
-
-	if (!ds) return;
-	
-	//---------------------------------------
-	// discard DataStorage specific data
-	//---------------------------------------
-	// main panel and panels loaded into it (channels and task control)
-	
-	if (ds->mainPanHndl) {
-		DiscardPanel(ds->mainPanHndl);
-		ds->mainPanHndl = 0;
-	}
-	if (ds->basefilepath) OKfree(ds->basefilepath);
-	if (ds->rawdatapath) OKfree(ds->rawdatapath);   
-	
-	// discard Task Controller
-	DLRemoveTaskController((DAQLabModule_type*)ds, ds->taskController);
-	discard_TaskControl_type(&ds->taskController);
-
-	//----------------------------------------
-	// discard DAQLabModule_type specific data
-	//----------------------------------------
-/*	
-	if (ds->channels) {
-		size_t 				nItems = ListNumItems(ds->channels);
-		DS_Channel_type**   channelPtr;
-		for (size_t i = 1; i <= nItems; i++) {
-			channelPtr = ListGetPtrToItem(ds->channels, i);
-			(*(*channelPtr)->Discard)	(channelPtr); 
-		}
-		
-		
-	}
-*/	
-	ListDispose(ds->channels);  
-	
-	discard_DAQLabModule(mod);
-}
 
 
 static DS_Channel_type* init_DS_Channel_type (DataStorage_type* ds, int panHndl, char VChanName[])
@@ -263,6 +221,8 @@ static void	discard_DS_Channel_type (DS_Channel_type** chan)
 	size_t				nchannels		= ListNumItems(ds->channels);
 	size_t				chIdx			= 1;
 	int 				i;
+	char*				vchanname		= NULL;
+	char*				discvchanname		= NULL; 
 	
 	if (!*chan) return;
 
@@ -272,15 +232,23 @@ static void	discard_DS_Channel_type (DS_Channel_type** chan)
 //	}
 	
 	// remove channel     
-	for (size_t i = 1; i <= nchannels; i++) {	
+	for (i = 1; i <= nchannels; i++) {	
 		chanPtr = ListGetPtrToItem(ds->channels, i);
-		if (strcmp(GetVChanName((*chan)->VChan),GetVChanName((*chanPtr)->VChan))==0){ 
+		vchanname=GetVChanName((*chanPtr)->VChan);
+		discvchanname=GetVChanName((*chan)->VChan);
+		if (strcmp(discvchanname,vchanname)==0){ 
 			// remove from framework if vchan names match
 			// unregister VChan from DAQLab framework
 			DLUnregisterVChan((DAQLabModule_type*)ds, (VChan_type*)(*chanPtr)->VChan);
 			// discard channel data structure
 			ListRemoveItem(ds->channels, 0, chIdx);
+			free(vchanname);
+			free(discvchanname);
 			break;
+		}
+		else {
+			free(vchanname);
+			free(discvchanname);
 		}
 		chIdx++;
 	}
@@ -292,6 +260,60 @@ static void	discard_DS_Channel_type (DS_Channel_type** chan)
 
 	OKfree(*chan);  // this also removes the channel from the device structure
 }
+
+
+/// HIFN Discards DataStorage data but does not free the structure memory.
+void discard_DataStorage (DAQLabModule_type** mod)
+{
+	DataStorage_type* 		ds 			= (DataStorage_type*) (*mod);
+
+	if (!ds) return;
+	
+	//---------------------------------------
+	// discard DataStorage specific data
+	//---------------------------------------
+	// main panel and panels loaded into it (channels and task control)
+	
+	if (ds->mainPanHndl) {
+		DiscardPanel(ds->mainPanHndl);
+		ds->mainPanHndl = 0;
+	}
+	
+	//stop parsing data  ?!
+	
+	
+	
+
+	
+	// discard Task Controller
+	DLRemoveTaskController((DAQLabModule_type*)ds, ds->taskController);
+	discard_TaskControl_type(&ds->taskController);
+
+	//----------------------------------------
+	// discard DAQLabModule_type specific data
+	//----------------------------------------
+	
+	if (ds->channels) {
+		size_t 				nItems = ListNumItems(ds->channels);
+		DS_Channel_type**   channelPtr;
+		for (size_t i = 1; i <= nItems; i++) {
+			channelPtr = ListGetPtrToItem(ds->channels, nItems-i+1);
+			if (channelPtr!=NULL) discard_DS_Channel_type(channelPtr); 
+		}
+	}
+	
+	
+	
+	ListDispose(ds->channels);  
+	
+	discard_DAQLabModule(mod);
+	
+	if (ds->basefilepath) OKfree(ds->basefilepath);
+	if (ds->rawdatapath) OKfree(ds->rawdatapath);   
+}
+
+
+
 
 
 
@@ -479,6 +501,7 @@ static int	StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	 
 	return 0;
 }
+ */
 
 static int DoneTC (TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo)
 {
@@ -493,7 +516,8 @@ static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 
 	return 0;
 }
-*/  
+
+
 static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
@@ -613,6 +637,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 
 						// update main panel
 						RedrawDSPanel(ds);
+						free(vChanName);
 					break;
 					
 					case DSMain_COMMANDBUTTON_REM:

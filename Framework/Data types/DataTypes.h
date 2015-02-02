@@ -91,15 +91,21 @@ typedef enum {
 	RepeatedWaveform_Float,						
 	RepeatedWaveform_Double					
 	
-} RepeatedWaveformTypes;
-
+} RepeatedWaveformTypes;							 
+													
 	//----------------------------------------------------------------------------------------------
 	// Image types
 	//----------------------------------------------------------------------------------------------   
 
 typedef enum {
 	
-	Image_NIVision
+	Image_UChar,					// 8 bit unsigned
+	Image_UShort,					// 16 bit unsigned
+	Image_Short,					// 16 bit signed
+	Image_UInt,						// 32 bit unsigned
+	Image_Int,						// 32 bit signed
+	Image_Float,					// 32 bit float
+	Image_NIVision,					// NI VISION
 	
 } ImageTypes;
 
@@ -193,6 +199,12 @@ typedef enum {
 	// Images
 	//---------------------
 	DL_Image_NIVision,
+	DL_Image_UChar,	
+	DL_Image_UShort,				
+	DL_Image_Short,			
+	DL_Image_UInt,				
+	DL_Image_Int,				
+	DL_Image_Float,			
 	
 	//---------------------
 	// Pulse Train

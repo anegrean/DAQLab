@@ -382,6 +382,7 @@ void discard_Image_type (Image** image)
 {
 	if (!*image) return;
 	
+	imaqDispose(*image); 
 	
 //	OKfree(*image);
 }

@@ -395,7 +395,7 @@ static void	discard_Channel_type (Channel_type** chan)
 		DiscardPanel((*chan)->panHndl);
 		(*chan)->panHndl = 0;
 	}
-
+	DLUnregisterVChan((DAQLabModule_type*)(*chan)->vupcInstance, (VChan_type*)(*chan)->VChan);
 	// discard SourceVChan
 	discard_VChan_type((VChan_type**)&(*chan)->VChan);
 

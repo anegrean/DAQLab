@@ -5280,8 +5280,11 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	size_t             			pixelDataIdx   		= 0;      	// The index of the processed pixel from the received pixel waveform.
 	RectRasterImgBuffer_type*   imgBuffer			= rectRaster->imgBuffers[imgBufferIdx];
 	size_t						nDeadTimePixels		= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->pixelDwellTime);
-	//DataPacket_type*  			imagePacket			= NULL;	// For sending assembled image packets
-	
+	DataPacket_type*  			imagePacket			= NULL;	// For sending assembled image packets
+	Image*						sendImage			= NULL;
+	ImageType					imaqImgType			= 0;   
+	size_t 						iterindex			= 0;
+	Iterator_type* 				currentiter		    = NULL;
 	
 	do {
 		
@@ -5481,10 +5484,33 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					imaqDisplayImage(imgBuffer->detChan->imaqImg, imgBuffer->detChan->imaqWndID, FALSE);
 				
 					//test lex 
-					//create image packet 
-			//		nullChk( imagePacket	= init_DataPacket_type(DL_Image_NIVision, &imgBuffer->detChan->imaqImg, GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl), (DiscardPacketDataFptr_type) discard_Image_type));       
+				//create image packet
+				switch (pixelDataType) {
+					case DL_Waveform_UChar:
+						imaqImgType 		= IMAQ_IMAGE_U8;
+					break;
+		
+					case DL_Waveform_UShort:
+						imaqImgType 		= IMAQ_IMAGE_U16;
+					break;
+					case DL_Waveform_Short:
+						imaqImgType 		= IMAQ_IMAGE_I16; 
+					break;
+				   	case DL_Waveform_Float:
+						imaqImgType 		= IMAQ_IMAGE_SGL; 
+					break;
+				}
+					sendImage=imaqCreateImage(imaqImgType, 0); 
+					imaqDuplicate(sendImage,imgBuffer->detChan->imaqImg); 
+					
+					currentiter=GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);
+					//test
+					iterindex=GetCurrentIterationIndex(currentiter);
+					iterindex++;
+					SetCurrentIterationIndex(currentiter,iterindex);
+					nullChk( imagePacket	= init_DataPacket_type(DL_Image_NIVision, &sendImage,currentiter , (DiscardPacketDataFptr_type) discard_Image_type));       
 					// send data packet with image
-			//		errChk( SendDataPacket(rectRaster->baseClass.VChanScanOut, &imagePacket, 0, &errMsg) );
+					errChk( SendDataPacket(rectRaster->baseClass.VChanScanOut, &imagePacket, 0, &errMsg) );
 				}
 			
 				// TEMPORARY: just complete iteration, and use only one channel

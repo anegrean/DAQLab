@@ -396,7 +396,7 @@ TaskIterMode_type GetTaskControlIterMode (TaskControl_type* taskControl)
 int	SetTaskControlCurrentIter (TaskControl_type* taskControl, Iterator_type* currentiter)
 {
 	taskControl->currentiter = currentiter;
-	return 0; // set succefully
+	return 0; // set succesfully
 }
 
 Iterator_type* GetTaskControlCurrentIter (TaskControl_type* taskControl)

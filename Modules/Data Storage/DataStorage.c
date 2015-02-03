@@ -279,12 +279,6 @@ void discard_DataStorage (DAQLabModule_type** mod)
 		ds->mainPanHndl = 0;
 	}
 	
-	//stop parsing data  ?!
-	
-	
-	
-
-	
 	// discard Task Controller
 	DLRemoveTaskController((DAQLabModule_type*)ds, ds->taskController);
 	discard_TaskControl_type(&ds->taskController);
@@ -796,7 +790,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 					image=*(Image**) dataPacketDataPtr;
 					rawfilename=malloc(MAXCHAR*sizeof(char)); 
 					fullitername=CreateFullIterName(currentiter);
-					Fmt (rawfilename, "%s<%s\\%s_%s#.tif", ds->rawdatapath,fullitername,sourceVChanName);  
+					Fmt (rawfilename, "%s<%s\\%s_%s#%d.tif", ds->rawdatapath,fullitername,sourceVChanName,GetCurrentIterationIndex(currentiter));  
 					SaveImage(rawfilename,image);
 					free(rawfilename);
 					free(fullitername); 

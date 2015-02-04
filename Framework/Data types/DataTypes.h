@@ -20,7 +20,6 @@
 
 #include "cvidef.h"
 #include "nidaqmx.h"
-#include "nivision.h" 
 
 //==============================================================================
 // Constants
@@ -110,6 +109,21 @@ typedef enum {
 } ImageTypes;
 
 	//----------------------------------------------------------------------------------------------
+	// Region Of Interest (ROI) types for images
+	//----------------------------------------------------------------------------------------------
+
+typedef struct ROI 			ROI_type;		 // Base class
+typedef struct Point		Point_type;		 // Child class of ROI_type
+typedef struct Rect			Rect_type;		 // Child class of ROI_type
+	
+typedef enum {
+	
+	ROI_Point,
+	ROI_Rectangle
+	
+} ROITypes;
+
+	//----------------------------------------------------------------------------------------------
 	// Pulse train types
 	//----------------------------------------------------------------------------------------------
 
@@ -135,14 +149,14 @@ typedef enum {
 	PulseTrain_Continuous	= DAQmx_Val_ContSamps
 } PulseTrainModes;
 
-	//----------------------------------------------------------------------------------------------
+	//---------------------------------------------------------------------------------------------------------------------------------------
 	// All types
-	//---------------------------------------------------------------------------------------------- 
+	//---------------------------------------------------------------------------------------------------------------------------------------
 	
 typedef enum {
-	//------------------------------------------------------
+	//----------------------------------------------------------------------------------------
 	// Atomic types
-	//------------------------------------------------------  
+	//----------------------------------------------------------------------------------------
 	DL_Null,
 	DL_Bool,							
 	DL_Char,							// 8 bits	   			 			char 
@@ -158,18 +172,18 @@ typedef enum {
 	DL_Float,							// 16 bits							float  
 	DL_Double,							// 32 bits							double 
 	
-	//------------------------------------------------------  
+	//----------------------------------------------------------------------------------------  
 	// Composite types
-	//------------------------------------------------------
+	//----------------------------------------------------------------------------------------
 	
-	//---------------------
+	//------------------------------------------
 	// String
-	//---------------------
-	DL_CString,							// null-terminated string
+	//------------------------------------------
+	DL_CString,		// null-terminated string
 	
-	//---------------------
+	//------------------------------------------
 	// Waveforms
-	//---------------------
+	//------------------------------------------
 	DL_Waveform_Char,						
 	DL_Waveform_UChar,						
 	DL_Waveform_Short,						
@@ -181,9 +195,9 @@ typedef enum {
 	DL_Waveform_Float,						
 	DL_Waveform_Double,
 	
-	//---------------------
+	//------------------------------------------
 	// Repeated Waveforms
-	//---------------------
+	//------------------------------------------
 	DL_RepeatedWaveform_Char,						
 	DL_RepeatedWaveform_UChar,						
 	DL_RepeatedWaveform_Short,						
@@ -195,20 +209,26 @@ typedef enum {
 	DL_RepeatedWaveform_Float,						
 	DL_RepeatedWaveform_Double,	
 	
-	//---------------------
+	//------------------------------------------
 	// Images
-	//---------------------
+	//------------------------------------------
 	DL_Image_NIVision,
 	DL_Image_UChar,	
 	DL_Image_UShort,				
 	DL_Image_Short,			
 	DL_Image_UInt,				
 	DL_Image_Int,				
-	DL_Image_Float,			
+	DL_Image_Float,	
 	
-	//---------------------
+	//------------------------------------------
+	// Region Of Interest (ROI) types for images
+	//------------------------------------------
+	DL_ROI_Point,
+	DL_ROI_Rectangle,
+	
+	//------------------------------------------
 	// Pulse Train
-	//---------------------
+	//------------------------------------------
 	DL_PulseTrain_Freq,
 	DL_PulseTrain_Time,
 	DL_PulseTrain_Ticks
@@ -221,6 +241,7 @@ typedef enum {
 
 //==============================================================================
 // Global functions
+
 
 //---------------------------------------------------------------------------------------------------------
 // Waveform
@@ -285,11 +306,6 @@ size_t						GetRepeatedWaveformNumSamples			(RepeatedWaveform_type* waveform);
 	// Returns number of bytes per repeated waveform element.
 size_t						GetRepeatedWaveformSizeofData			(RepeatedWaveform_type* waveform);
 
-//
-//---------------------------------------------------------------------------------------------------------  
-// Image types     
-//--------------------------------------------------------------------------------------------------------- 
-void 						discard_Image_type 						(Image** image);
 
 //---------------------------------------------------------------------------------------------------------  
 // Pulse Trains     
@@ -408,6 +424,20 @@ void   						SetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* pu
 
 	// gets the pulsetrain iniial delay time
 double   					GetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* pulseTrain);
+
+//---------------------------------------------------------------------------------------------------------  
+// Region Of Interest (ROI) types for images
+//---------------------------------------------------------------------------------------------------------
+
+	// Point
+Point_type*						init_Point_type						(char ROIName[], int x, int y);
+
+	// Rectangle
+Rect_type*						init_Rect_type						(char ROIName[], int top, int left, int height, int width);
+
+	// All ROIs
+void							discard_ROI_type					(ROI_type** ROIPtr);
+
 
 
 #ifdef __cplusplus

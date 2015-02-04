@@ -31,40 +31,41 @@ typedef struct DisplayEngine	DisplayEngine_type;		// Generic display engine.
 
 typedef void*					DisplayHandle_type;		// Display handle for one display window that can be used by
 														// an external module to interact with the display.
-//------------------
-// ROIs
-//------------------
-	// Point
-typedef struct {
-	int x;
-	int y;
-} Point_type;
 
-	// Rectangle
-typedef struct {
-	int top;
-	int left;
-	int height;
-	int width;
-} Rect_type;
-							   
+//==============================================================================
+// Methods to override
+							
+														
+	// Discards a display engine 
+typedef void 							(* DiscardDisplayEngineFptr_type) 			(void** displayEnginePtr);
+
+	// Displays or updates an image in a display window
+typedef int								(* DisplayImageFptr_type)					(DisplayHandle_type displayHandle, void* pixelArray, int imgWidth, int imgHeight, ImageTypes imageType);
+
+	// Obtains a display handle from the display engine that can be passed to other functions like updating the image
+typedef DisplayHandle_type				(* GetDisplayHandleFptr_type)				(DisplayEngine_type* displayEngine, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType); 
+	
 //==============================================================================
 // Class to inherit from
 
 struct DisplayEngine {
-	//-------------------------------------
+	//--------------------------------------------------------
 	// DATA
-	//-------------------------------------
+	//--------------------------------------------------------
 	
 	
-	//-------------------------------------
-	// METHODS
-	//-------------------------------------
+	//--------------------------------------------------------
+	// METHODS (override with child class implementation)
+	//--------------------------------------------------------
 	
-	int							(* DisplayImage)			(DisplayEngine_type* displayEngine, DisplayHandle_type displayHandle, void* pixelArray, 
-													 		 int imgHeight, int imgWidth, ImageTypes imageType);
+	DiscardDisplayEngineFptr_type		discardFptr;
 	
-	DisplayHandle_type			(* NewDisplayHandle)		(DisplayEngine_type* displayEngine, void* callbackData)
+	DisplayImageFptr_type				displayImageFptr;
+	
+	GetDisplayHandleFptr_type			getDisplayHandleFptr;
+	
+	
+	
 	
 };
 
@@ -77,19 +78,20 @@ struct DisplayEngine {
 //--------------------------------------------------------------------------------------------------------------------------
 // Display Engine management
 //--------------------------------------------------------------------------------------------------------------------------
-DisplayEngine_type*				initalloc_DisplayEngine				(DisplayEngine_type* displayEngine);
-void 							discard_DisplayEngine 				(DisplayEngine_type** displayEnginePtr);
 
-//--------------------------------------------------------------------------------------------------------------------------
-// ROI management
-//--------------------------------------------------------------------------------------------------------------------------
-	// Point
-Point_type*						init_Point_type						(int x, int y);
-void							discard_Point_type					(Point_type** pointPtr);
+	// Initializes a generic display engine.
+void									init_DisplayEngine_type					(DisplayEngine_type* 					displayEngine,
+																				 DiscardDisplayEngineFptr_type			discardFptr,
+																				 DisplayImageFptr_type					displayImageFptr,
+																				 GetDisplayHandleFptr_type				getDisplayHandleFptr );
 
-	// Rectangle
-Rect_type*						init_Rect_type						(int top, int left, int height, int width);
-void							discard_Rect_type					(Rect_type** rectPtr);
+
+	// Disposes all types of display engines by invoking the specific dispose method.
+void 									discard_DisplayEngine_type 				(DisplayEngine_type** displayEnginePtr);
+
+	// Disposes of the DisplayEngine base class. Use this to implement child class dispose method.
+void									discard_DisplayEngineClass				(DisplayEngine_type** displayEnginePtr);
+
 
 
 #ifdef __cplusplus

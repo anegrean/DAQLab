@@ -9594,30 +9594,26 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			
 			nullChk( waveformData_double = calloc(nItegratedSamples, sizeof(double)) );
 			
-			if (integration > 1) {
-				// add data to the integration buffer
-				memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
-				dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
-				nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
+			// add data to the integration buffer
+			memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
+			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
+			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
 			
-				// integrate
-				for (i = 0; i < integration; i++) {
-					k = i;
-					for (j = 0; j < nItegratedSamples; j++) {
-						waveformData_double[j] += integrationBuffer[k] * AIChSet->gain + AIChSet->offset;
-						k += integration;
-					}							   
-				}
+			// integrate
+			for (i = 0; i < integration; i++) {
+				k = i;
+				for (j = 0; j < nItegratedSamples; j++) {
+					waveformData_double[j] += integrationBuffer[k] * AIChSet->gain + AIChSet->offset;
+					k += integration;
+				}							   
+			}
 			
-				// shift unprocessed samples from the end of the buffer to its beginning
-				if (nRemainingSamples)
-					memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(float64));
+			// shift unprocessed samples from the end of the buffer to its beginning
+			if (nRemainingSamples)
+				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(float64));
 			
-				dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
+			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
 				
-			} else
-				memcpy(waveformData_double, AIOffsetReadBuffer, nRead * sizeof(double));
-			
 			//--------------------
 			// prepare data packet
 			//--------------------
@@ -9635,31 +9631,26 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			
 			nullChk( waveformData_float = calloc(nItegratedSamples, sizeof(float)) );
 			
-			if (integration > 1) {
-				// add data to the integration buffer
-				memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
-				dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
-				nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
+			// add data to the integration buffer
+			memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
+			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
+			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
 			
-				// integrate
-				for (i = 0; i < integration; i++) {
-					k = i;
-					for (j = 0; j < nItegratedSamples; j++) {
-						waveformData_float[j] += (float) (integrationBuffer[k] * AIChSet->gain + AIChSet->offset);
-						k += integration;
-					}							   
-				}
+			// integrate
+			for (i = 0; i < integration; i++) {
+				k = i;
+				for (j = 0; j < nItegratedSamples; j++) {
+					waveformData_float[j] += (float) (integrationBuffer[k] * AIChSet->gain + AIChSet->offset);
+					k += integration;
+				}							   
+			}
 			
-				// shift unprocessed samples from the end of the buffer to its beginning
-				if (nRemainingSamples)
-					memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(float64));
+			// shift unprocessed samples from the end of the buffer to its beginning
+			if (nRemainingSamples)
+				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(float64));
 			
-				dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
+			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
 				
-			} else
-				for (i = 0; i < nRead; i++)
-					waveformData_float[i] = (float) *(AIOffsetReadBuffer + i);
-			
 			//-------------------- 
 			// prepare data packet
 			//--------------------

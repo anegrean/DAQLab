@@ -18,7 +18,7 @@
 #include <userint.h>
 #include "combobox.h" 
 #include <analysis.h>
-#include <nivision.h>
+#include <NIVisionDisplay.h>
 #include "UI_LaserScanning.h"
 
 									 
@@ -263,8 +263,7 @@ typedef struct {
 typedef struct {
 	SinkVChan_type*				detVChan;				// Sink VChan for receiving pixel data.
 	ScanEngine_type*			scanEngine;				// Reference to scan engine to which this detection channel belongs.
-	int							imaqWndID;				// IMAQ window ID assigned to display the image of this channel.
-	Image*             			imaqImg;				// For placing assembled images from the raw pixel stream.
+	DisplayHandle_type			displayHndl;				// Handle to display images for this channel
 } DetChan_type;
 
 //---------------------------------------------------------------
@@ -429,6 +428,8 @@ struct LaserScanning {
 	ListType					activeCal;
 		// Scan engines of ScanEngine_type* base class which can be casted to specific scan engines. 
 	ListType					scanEngines;
+		// Display engine
+	DisplayEngine_type*			displayEngine;
 	
 		//-------------------------
 		// UI
@@ -735,12 +736,6 @@ static void							PixelSettingsVChan_Connected					(VChan_type* self, void* VCha
 
 
 //-----------------------------------------
-// IMAQ display processing
-//-----------------------------------------
-
-static void IMAQ_CALLBACK			ScanEngineDisplay_CB							(WindowEventType type, int windowNumber, Tool tool, Rect rect); 
-
-//-----------------------------------------
 // Task Controller Callbacks
 //-----------------------------------------
 
@@ -841,6 +836,7 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 	ls->availableCals				= 0;
 	ls->activeCal					= 0;
 	ls->scanEngines					= 0;
+	ls->displayEngine				= NULL; // added when the module is loading
 		
 	if (!(ls->availableCals			= ListCreate(sizeof(ScanAxisCal_type*))))	goto Error;
 	if (!(ls->activeCal				= ListCreate(sizeof(ActiveScanAxisCal_type*))))	goto Error;
@@ -882,6 +878,7 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	// discard LaserScanning_type specific data
 	//-----------------------------------------
 	
+	// available calibrations
 	if (ls->availableCals) {
 		size_t 				nItems = ListNumItems(ls->availableCals);
 		ScanAxisCal_type**  calPtr;
@@ -893,6 +890,7 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		ListDispose(ls->availableCals);
 	}
 	
+	// active calibrations
 	if (ls->activeCal) {
 		size_t 				nItems = ListNumItems(ls->activeCal);
 		ActiveScanAxisCal_type**  calPtr;
@@ -904,6 +902,7 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		ListDispose(ls->activeCal);
 	}
 	
+	// scan engines
 	if (ls->scanEngines) {
 		size_t 				nItems = ListNumItems(ls->scanEngines);
 		ScanEngine_type**  	enginePtr;
@@ -917,9 +916,10 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		ListDispose(ls->scanEngines);
 	}
 	
-		//----------------------------------
-		// UI
-		//----------------------------------
+	// display engine
+	discard_DisplayEngine_type(&ls->displayEngine);
+	
+	// UI
 	OKfree(ls->mainPanLeftPos);
 	OKfree(ls->mainPanTopPos);
 	if (ls->mainPanHndl) {DiscardPanel(ls->mainPanHndl); ls->mainPanHndl = 0;}
@@ -1142,40 +1142,11 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 		DeleteTabPage(ls->mainPanHndl, ScanPan_ScanEngines, 0, 1); 
 	}
 	
-	//------------------------------------
-	// configure imaq tool window
-	//------------------------------------
-	ToolWindowOptions imaqTools = {			.showSelectionTool 			= TRUE,
-											.showZoomTool				= TRUE,
-											.showPointTool				= TRUE,
-											.showLineTool				= FALSE,
-											.showRectangleTool			= TRUE,
-											.showOvalTool				= FALSE,
-											.showPolygonTool			= FALSE,
-											.showClosedFreehandTool		= FALSE,
-											.showPolyLineTool			= FALSE,
-											.showFreehandTool			= FALSE,
-											.showAnnulusTool			= FALSE,
-											.showRotatedRectangleTool	= FALSE,
-											.showPanTool				= TRUE,
-											.showZoomOutTool			= TRUE,
-											.reserved2					= FALSE,
-											.reserved3					= FALSE,
-											.reserved4					= FALSE	   };
-	
-	// confine imaq tools to workspace
-	nullChk( imaqSetupToolWindow(TRUE, 2, &imaqTools) );
-	nullChk( imaqSetCurrentTool(IMAQ_PAN_TOOL) );
-	intptr_t	imaqToolWndHndl;
-	intptr_t	workspaceWndHndl;
+	// initialize display engine
+	intptr_t workspaceWndHndl = 0;	
 	GetPanelAttribute(ls->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHndl);
-	nullChk( imaqToolWndHndl = (intptr_t) imaqGetToolWindowHandle() );
-	SetParent( (HWND) imaqToolWndHndl, (HWND)workspaceWndHndl);
+	nullChk( ls->displayEngine = (DisplayEngine_type*)init_NIVisionDisplay_type(workspaceWndHndl) );
 	
-	//------------------------------------
-	// configure imaq callbacks
-	//------------------------------------
-	errChk( imaqSetEventCallback(ScanEngineDisplay_CB, FALSE) ); 
 	
 	return 0;
 	
@@ -2828,8 +2799,7 @@ static DetChan_type* init_DetChan_type (ScanEngine_type* scanEngine, char VChanN
 	
 	// init
 	DLDataTypes allowedPacketTypes[] 	= Allowed_Detector_Data_Types;
-	det->imaqImg		 				= NULL;
-	det->imaqWndID						= -1; // not valid, imaqGetWindowHandle(int* handle) is called to find an unassigned window number between 0-15.
+	det->displayHndl						= NULL;
 	det->detVChan						= NULL;
 	
 	if ( !(det->detVChan 		= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, VChanDataTimeout, DetVChan_Connected, DetVChan_Disconnected)) ) goto Error;
@@ -2851,10 +2821,6 @@ static void	discard_DetChan_type (DetChan_type** detChanPtr)
 	if (!*detChanPtr) return;
 	
 	discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
-	if ((*detChanPtr)->imaqImg) {
-		imaqDispose((*detChanPtr)->imaqImg);
-		(*detChanPtr)->imaqImg = NULL;
-	}
 	
 	OKfree(*detChanPtr);
 }
@@ -4314,28 +4280,23 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* de
 #define init_RectRasterImgBuffer_type_Err_PixelDataTypeInvalid	-1
 	int 						error;
 	RectRasterImgBuffer_type*	buffer 			= malloc (sizeof(RectRasterImgBuffer_type));
-	ImageType					imaqImgType		= 0;
 	size_t						pixelSizeBytes 	= 0;
 	if (!buffer) return NULL;
 	
 	switch (pixelDataType) {
 		case DL_Waveform_UChar:
-			imaqImgType 		= IMAQ_IMAGE_U8;
 			pixelSizeBytes 		= sizeof(unsigned char);   
 			break;
 		
 		case DL_Waveform_UShort:
-			imaqImgType 		= IMAQ_IMAGE_U16;
 			pixelSizeBytes 		= sizeof(unsigned short);
 			break;
 			
 		case DL_Waveform_Short:
-			imaqImgType 		= IMAQ_IMAGE_I16; 
 			pixelSizeBytes 		= sizeof(short); 
 			break;
 			
 		case DL_Waveform_Float:
-			imaqImgType 		= IMAQ_IMAGE_SGL; 
 			pixelSizeBytes 		= sizeof(float); 
 			break;
 			
@@ -4345,18 +4306,16 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* de
 	}
 	
 	// init
-	buffer->nImagePixels 		= 0;
-	buffer->nAssembledColumns   = 0;
-	buffer->tmpPixels			= NULL;
-	buffer->nTmpPixels			= 0;
-	buffer->nSkipPixels			= nSkipPixels;
-	buffer->revHeightFlag		= reverseHeightDirection;
-	buffer->revWidthFlag		= reverseWidthDirection;
-	buffer->detChan				= detChan;
+	buffer->nImagePixels 			= 0;
+	buffer->nAssembledColumns   	= 0;
+	buffer->tmpPixels				= NULL;
+	buffer->nTmpPixels				= 0;
+	buffer->nSkipPixels				= nSkipPixels;
+	buffer->revHeightFlag			= reverseHeightDirection;
+	buffer->revWidthFlag			= reverseWidthDirection;
+	buffer->detChan					= detChan;
 	
-	nullChk( buffer->imagePixels 		= malloc(imgWidth * imgHeight * pixelSizeBytes) );
-	nullChk( buffer->detChan->imaqImg   = imaqCreateImage(imaqImgType, 0) );
-	nullChk( imaqSetImageSize(buffer->detChan->imaqImg, imgWidth, imgHeight) );
+	nullChk( buffer->imagePixels 	= malloc(imgWidth * imgHeight * pixelSizeBytes) );
 	
 	return buffer;
 	
@@ -4364,10 +4323,6 @@ Error:
 	
 	// cleanup
 	OKfree(buffer->imagePixels);
-	if (buffer->detChan->imaqImg) {
-		imaqDispose(buffer->detChan->imaqImg);
-		buffer->detChan->imaqImg = NULL;
-	}
 	
 	free(buffer);
 	return NULL;	
@@ -5273,16 +5228,15 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	int							error				= 0;
 	char*						errMsg				= NULL;
 	DataPacket_type*			pixelPacket			= NULL;
-	DLDataTypes					pixelDataType;			  		// Data type of incoming pixel waveform
+	DLDataTypes					pixelDataType		= 0; 		// Data type of incoming pixel waveform
+	ImageTypes					imageType			= 0;		// Data type of assembled image
 	Waveform_type*				pixelWaveform		= NULL;   	// Incoming pixel waveform.
 	void*						pixelData			= NULL;		// Array of received pixels from a single pixel waveform data packet.
 	size_t						nPixels				= 0;		// Number of received pixels from a pixel data packet stored in pixelData.
 	size_t             			pixelDataIdx   		= 0;      	// The index of the processed pixel from the received pixel waveform.
 	RectRasterImgBuffer_type*   imgBuffer			= rectRaster->imgBuffers[imgBufferIdx];
 	size_t						nDeadTimePixels		= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->pixelDwellTime);
-	DataPacket_type*  			imagePacket			= NULL;	// For sending assembled image packets
-	Image*						sendImage			= NULL;
-	ImageType					imaqImgType			= 0;   
+	
 	size_t 						iterindex			= 0;
 	Iterator_type* 				currentiter		    = NULL;
 	
@@ -5474,15 +5428,38 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 			imgBuffer->revHeightFlag = !imgBuffer->revHeightFlag;
 				
 			if (imgBuffer->nAssembledColumns == rectRaster->width) {
-				// pixels are transformed from an array to an image 
-				nullChk( imaqArrayToImage(imgBuffer->detChan->imaqImg, imgBuffer->imagePixels, rectRaster->height, rectRaster->width) );
 				
-				// equalize intensity
-				//imaqEqualize(imgBuffer->detChan->imaqImg, imgBuffer->detChan->imaqImg, minPixVal, maxPixVal, NULL);
+			
+				switch (pixelDataType) {
 				
-				if (imgBuffer->detChan->imaqWndID >= 0)  {
-					imaqDisplayImage(imgBuffer->detChan->imaqImg, imgBuffer->detChan->imaqWndID, FALSE);
+					case DL_Waveform_UChar:
+						imageType = Image_UChar;  
+						break;
+		
+					case DL_Waveform_UShort:
+						imageType = Image_UShort;    
+						break;
+			
+					case DL_Waveform_Short:
+						imageType = Image_Short;    
+						break;
+			
+					case DL_Waveform_Float:
+						imageType = Image_Float;     
+						break;
+			
+					default:
+						error = NonResRectRasterScan_BuildImage_Err_WrongPixelDataType;
+						errMsg = StrDup("Wrong pixel data type");
+						goto Error;
+				}
 				
+				// send pixel array to display 
+				DisplayEngine_type* 	displayEngine = imgBuffer->detChan->scanEngine->lsModule->displayEngine;
+				errChk( (*displayEngine->displayImageFptr) (imgBuffer->detChan->displayHndl, imgBuffer->imagePixels, rectRaster->width, rectRaster->height, imageType) );
+				 
+				
+				  /*
 					//test lex 
 				//create image packet
 				switch (pixelDataType) {
@@ -5511,7 +5488,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					nullChk( imagePacket	= init_DataPacket_type(DL_Image_NIVision, &sendImage,currentiter , (DiscardPacketDataFptr_type) discard_Image_type));       
 					// send data packet with image
 					errChk( SendDataPacket(rectRaster->baseClass.VChanScanOut, &imagePacket, 0, &errMsg) );
-				}
+				  */
+			
 			
 				// TEMPORARY: just complete iteration, and use only one channel
 				TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
@@ -5875,22 +5853,6 @@ static void	ShutterVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan
 static void	PixelSettingsVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
-}
-
-
-//-----------------------------------------
-// IMAQ display processing
-//-----------------------------------------
-
-static void IMAQ_CALLBACK ScanEngineDisplay_CB (WindowEventType event, int windowNumber, Tool tool, Rect rect)
-{
-	/*
-	switch (event) {
-			
-		
-			
-	}
-	*/
 }
 
 //---------------------------------------------------------------------
@@ -6814,48 +6776,20 @@ static void AbortIterationTC_RectRaster (TaskControl_type* taskControl,BOOL cons
 
 static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	RectRaster_type* 	engine 			= GetTaskControlModuleData(taskControl);
-	DetChan_type*		detChan			= NULL;
-	size_t				nDetChans 		= ListNumItems(engine->baseClass.DetChans);
-	SourceVChan_type*   detSourceVChan	= NULL;
-	int					error 			= 0;
+	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
+	DetChan_type*			detChan				= NULL;
+	size_t					nDetChans 			= ListNumItems(engine->baseClass.DetChans);
+	SourceVChan_type*   	detSourceVChan		= NULL;
+	int						error 				= 0;
+	DisplayEngine_type*		displayEngine		= engine->baseClass.lsModule->displayEngine;
+	DLDataTypes				pixelDataType		= 0;
+	ImageTypes				imageType			= 0;
 	
 	// discard image assembly buffers
 	for (size_t i = 0; i < engine->nImgBuffers; i++)
 		discard_RectRasterImgBuffer_type(&engine->imgBuffers[i]);
 	OKfree(engine->imgBuffers);
 	engine->nImgBuffers = 0;
-	
-	//--------------------------------------------------------------------------------------------------------
-	// Display image panels for each channel
-	//--------------------------------------------------------------------------------------------------------
-	
-	intptr_t	workspaceWndHandle;
-	intptr_t	imaqWndHandle;
-	GetPanelAttribute(engine->baseClass.lsModule->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHandle);
-	
-	for (size_t i = 1; i <= nDetChans; i++) {
-		detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
-		
-		// get unassigned IMAQ window ID
-		if (!imaqGetWindowHandle(&detChan->imaqWndID)) {
-			error = imaqGetLastError();
-			char* imaqErrMsg = NULL;
-			*errorInfo = StrDup((imaqErrMsg = imaqGetErrorText(error)));
-			if (imaqErrMsg) imaqDispose(imaqErrMsg);
-			goto Error;
-		}
-		
-		// confine the IMAQ window to the workspace panel
-		imaqWndHandle = (intptr_t) imaqGetSystemWindowHandle(detChan->imaqWndID); 
-		SetParent( (HWND) imaqWndHandle, (HWND)workspaceWndHandle);
-	}
-	
-	//--------------------------------------------------------------------------------------------------------
-	// Display IMAQ tool window
-	//--------------------------------------------------------------------------------------------------------
-	
-	imaqShowToolWindow(TRUE);
 	
 	//--------------------------------------------------------------------------------------------------------
 	// Open shutter
@@ -6870,7 +6804,7 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	errChk ( NonResRectRasterScan_GenerateScanSignals (engine, errorInfo) );  
 	
 	//--------------------------------------------------------------------------------------------------------
-	// Initialize image assembly buffers
+	// Initialize image assembly buffers obtain display handles
 	//--------------------------------------------------------------------------------------------------------
 	
 	// create new image assembly buffers for connected detector VChans
@@ -6878,11 +6812,38 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 		detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
 		if (!(detSourceVChan = GetSourceVChan(detChan->detVChan))) continue;	// select only connected detection channels
 		
+		pixelDataType = GetSourceVChanDataType(detSourceVChan);
+		switch (pixelDataType) {
+				
+			case DL_Waveform_UChar:
+				imageType = Image_UChar;  
+				break;
+		
+			case DL_Waveform_UShort:
+				imageType = Image_UShort;    
+				break;
+			
+			case DL_Waveform_Short:
+				imageType = Image_Short;    
+				break;
+			
+			case DL_Waveform_Float:
+				imageType = Image_Float;     
+				break;
+			
+			default:
+			
+			goto Error;
+		}
+		
+		// get display handles for connected channels
+		nullChk( detChan->displayHndl 	= (*displayEngine->getDisplayHandleFptr) (displayEngine, detChan, engine->width, engine->height, imageType) ); 
+		
 		engine->nImgBuffers++;
 		// allocate memory for image assembly
 		engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
 		engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, 
-				(size_t)(engine->flyInDelay/engine->pixelDwellTime + engine->baseClass.pixDelay/engine->pixelDwellTime), GetSourceVChanDataType(detSourceVChan) ,FALSE, FALSE); 
+				(size_t)(engine->flyInDelay/engine->pixelDwellTime + engine->baseClass.pixDelay/engine->pixelDwellTime), pixelDataType,FALSE, FALSE); 
 	}
 	
 	return 0; // no error

@@ -11,7 +11,7 @@
 //==============================================================================
 // Include files
 
-//#include "DisplayEngine.h"
+#include "DisplayEngine.h"
 
 //==============================================================================
 // Constants
@@ -31,10 +31,27 @@
 //==============================================================================
 // Global functions
 
-/// HIFN  What does your function do?
-/// HIPAR x/What inputs does your function expect?
-/// HIRET What does your function return?
-int Define_Your_Functions_Here (int x)
+
+void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
+								DiscardDisplayEngineFptr_type			discardFptr,
+								DisplayImageFptr_type					displayImageFptr,
+								GetDisplayHandleFptr_type				getDisplayHandleFptr	)
 {
-	return x;
+	displayEngine->discardFptr 				= discardFptr;
+	displayEngine->displayImageFptr 		= displayImageFptr; 
+	displayEngine->getDisplayHandleFptr 	= getDisplayHandleFptr;
+	
+}
+
+void discard_DisplayEngine_type (DisplayEngine_type** displayEnginePtr)
+{
+	if (!*displayEnginePtr) return;
+	
+	// call child class dispose method
+	(*(*displayEnginePtr)->discardFptr) ((void**)displayEnginePtr);
+}
+
+void discard_DisplayEngineClass (DisplayEngine_type** displayEnginePtr)
+{
+	
 }

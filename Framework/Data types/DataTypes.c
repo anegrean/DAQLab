@@ -29,6 +29,10 @@
 //==============================================================================
 // Types
 
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Waveforms
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 struct Waveform {
 	WaveformTypes			waveformType;				// Waveform data type.
 	char*					waveformName;				// Name of signal represented by the waveform. 
@@ -38,6 +42,10 @@ struct Waveform {
 	size_t					nSamples;					// Number of samples in the waveform.
 	void*					data;						// Array of waveformType elements.
 };
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Repeated Waveforms
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 struct RepeatedWaveform {
 	RepeatedWaveformTypes	waveformType;				// Waveform data type. 
@@ -49,21 +57,6 @@ struct RepeatedWaveform {
 	size_t					nSamples;					// Number of samples in the waveform.
 	void*					data;						// Array of waveformType elements. 
 };
-
-
-
-
-//==============================================================================
-// Static global variables
-
-//==============================================================================
-// Static functions
-
-//==============================================================================
-// Global variables
-
-//==============================================================================
-// Global functions
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Pulse trains
@@ -100,6 +93,64 @@ struct PulseTrainTickTiming {
 	uInt32 						lowTicks;
 	uInt32 						delayTicks;
 };
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Region of Interest (ROI)
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+	// Generic ROI
+typedef void (* DiscardFptr_type) (void** ROIPtr);
+
+struct ROI {
+	// DATA
+	ROITypes			ROIType;
+	char*				ROIName;
+	// METHODS
+	DiscardFptr_type	discardFptr;  // overriden by child classes
+};
+
+	// Point
+struct Point {
+	ROI_type			baseClass;
+	int 				x;
+	int 				y;
+};
+
+	// Rectangle
+struct Rect {
+	ROI_type			baseClass;
+	int 				top;
+	int 				left;
+	int 				height;
+	int 				width;
+};
+
+
+//==============================================================================
+// Static Functions
+
+	// Pulse Train
+static void 				init_PulseTrain_type 					(PulseTrain_type* pulseTrain, PulseTrainTimingTypes pulseType, 
+																	 PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses);
+
+	// ROI base class
+static void 				init_ROI_type							(ROI_type* ROI, ROITypes ROIType, char ROIName[], DiscardFptr_type discardFptr);
+
+static void					discard_ROIBaseClass					(ROI_type** ROIPtr);
+
+	// Point ROI
+static void 				discard_Point_type 						(Point_type** PointPtr);
+
+	// Rectangle ROI
+static void 				discard_Rect_type 						(Rect_type** RectPtr);
+
+
+//==============================================================================
+// Global Functions (other than defined in DataTypes.h)
+
+
+
+//==============================================================================
 
 static void init_PulseTrain_type (PulseTrain_type* pulseTrain, PulseTrainTimingTypes pulseType, PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses) 
 {
@@ -316,8 +367,8 @@ double GetPulseTrainTimeTimingInitialDelay (PulseTrainTimeTiming_type* pulseTrai
 
 PulseTrain_type* CopyPulseTrain(PulseTrain_type* pulsetrain)
 {
-	PulseTrain_type* newpulsetrain;
-	PulseTrainTimingTypes pulseTrainType;
+	PulseTrain_type* 		newpulsetrain			= NULL;
+	PulseTrainTimingTypes 	pulseTrainType;
 	
 	pulseTrainType=GetPulseTrainType(pulsetrain);
 	switch (pulseTrainType) {
@@ -376,17 +427,6 @@ void discard_Waveform_type (Waveform_type** waveform)
 	
 	OKfree(*waveform);
 }
-
-
-void discard_Image_type (Image** image)
-{
-	if (!*image) return;
-	
-	imaqDispose(*image); 
-	
-//	OKfree(*image);
-}
-
 
 void SetWaveformName (Waveform_type* waveform, char waveformName[])
 {
@@ -728,4 +768,101 @@ size_t GetRepeatedWaveformSizeofData (RepeatedWaveform_type* waveform)
 	
 	return dataTypeSize;
 	
+}
+
+//---------------------------------------------------------------------------------------------------------  
+// Region Of Interest (ROI) types for images
+//---------------------------------------------------------------------------------------------------------
+
+//-------------------------
+// ROI
+//-------------------------
+
+static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], DiscardFptr_type discardFptr)
+{
+	ROI->ROIType 		= ROIType;
+	ROI->ROIName		= StrDup(ROIName);
+	ROI->discardFptr	= discardFptr;
+}
+
+static void	discard_ROIBaseClass (ROI_type** ROIPtr)
+{
+	if (!*ROIPtr) return;
+	
+	// ROI name
+	OKfree((*ROIPtr)->ROIName);
+	
+	OKfree(*ROIPtr);
+}				  
+
+//-------------------------
+// Point
+//-------------------------
+Point_type* init_Point_type (char ROIName[], int x, int y)
+{
+	Point_type* 	point = malloc(sizeof(Point_type));
+	if (!point) return NULL;
+	
+	
+	// init base class
+	init_ROI_type(&point->baseClass, ROI_Point, ROIName, (DiscardFptr_type) discard_Point_type); 
+	
+	// init point child class
+	point->x	= x;
+	point->y	= y;
+	
+	return point;
+}
+			  
+static void discard_Point_type (Point_type** PointPtr)
+{
+	if (!*PointPtr) return;
+	
+	// discard Point specific data
+	
+	// discard base class data
+	discard_ROIBaseClass((ROI_type**)PointPtr);
+}
+
+//-------------------------
+// Rectangle
+//-------------------------
+	
+Rect_type* init_Rect_type (char ROIName[], int top, int left, int height, int width)
+{
+	Rect_type*	rect = malloc(sizeof(Rect_type));
+	if (!rect) return NULL;
+	
+	// init base class
+	init_ROI_type(&rect->baseClass, ROI_Rectangle, ROIName, (DiscardFptr_type) discard_Rect_type); 
+	
+	// init rectangle child class
+	rect->top 		= top;
+	rect->left 		= left;
+	rect->height	= height;
+	rect->width		= width;
+	
+	return rect;
+}
+
+static void discard_Rect_type (Rect_type** RectPtr)
+{
+	if (!*RectPtr) return;
+	
+	// discard Rectangle specific data
+	
+	// discard base class data
+	discard_ROIBaseClass((ROI_type**)RectPtr);
+}
+
+//-------------------------     
+// All ROIs
+//-------------------------     
+
+void discard_ROI_type (ROI_type** ROIPtr)
+{
+	if (!*ROIPtr) return;
+	
+	// call ROI specific discard method
+	(*(*ROIPtr)->discardFptr) ((void**)ROIPtr);
 }

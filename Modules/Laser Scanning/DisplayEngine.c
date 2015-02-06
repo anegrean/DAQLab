@@ -35,12 +35,19 @@
 void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 								DiscardDisplayEngineFptr_type			discardFptr,
 								DisplayImageFptr_type					displayImageFptr,
-								GetDisplayHandleFptr_type				getDisplayHandleFptr	)
+								GetDisplayHandleFptr_type				getDisplayHandleFptr,
+								OverlayROIFptr_type						overlayROIFptr,
+								ClearAllROIFptr_type					clearAllROIFptr,
+							 	ROIPlaced_CBFptr_type					ROIPlacedCBFptr,
+								ROIRemoved_CBFptr_type					ROIRemovedCBFptr		)
 {
 	displayEngine->discardFptr 				= discardFptr;
 	displayEngine->displayImageFptr 		= displayImageFptr; 
 	displayEngine->getDisplayHandleFptr 	= getDisplayHandleFptr;
-	
+	displayEngine->overlayROIFptr			= overlayROIFptr;
+	displayEngine->clearAllROIFptr			= clearAllROIFptr;
+	displayEngine->ROIPlacedCBFptr			= ROIPlacedCBFptr;
+	displayEngine->ROIRemovedCBFptr			= ROIRemovedCBFptr;
 }
 
 void discard_DisplayEngine_type (DisplayEngine_type** displayEnginePtr)

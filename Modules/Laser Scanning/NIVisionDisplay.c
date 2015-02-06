@@ -28,9 +28,10 @@
 
 typedef struct {
 	NIVisionDisplay_type*	niDisplay;		
-	void*					callbackData;   // callback data set by NewNIVisionDisplayHandle() 
-	int						imaqWndID;		// assigned IMAQ window ID for display
-	Image*					imaqImg;		// buffer to store the displayed image
+	void*					callbackData;   // Callback data set by NewNIVisionDisplayHandle() 
+	int						imaqWndID;		// Assigned IMAQ window ID for display
+	Image*					imaqImg;		// Buffer to store the displayed image
+	//ListType				ROIs;			// List of ROIs added to imaqImg of ROI_type*
 } Display_type;
 
 struct NIVisionDisplay {
@@ -83,11 +84,16 @@ static void 					discard_Display_type 							(Display_type** displayPtr);
 
 static void 					discard_NIVisionDisplay 						(NIVisionDisplay_type** niVisionDisplayPtr);
 
-static int						DisplayNIVisionImage							(Display_type* displayHandle, void* pixelArray, int imgWidth, int imgHeight, ImageTypes imageType);
+static int						DisplayNIVisionImage							(Display_type* displayHndl, void* pixelArray, int imgWidth, int imgHeight, ImageTypes imageType);
 
 static DisplayHandle_type		GetNIVisionDisplayHandle						(NIVisionDisplay_type* NIDisplay, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType);
 
-	// For receiving display callbacks such as placement of ROI
+static int						OverlayNIVisionROI								(Display_type* displayHndl, ROI_type* ROI);
+
+static void						ClearAllROI										(Display_type* displayHndl);
+
+
+	// For receiving NI Vision callbacks such as placement of ROI
 static void IMAQ_CALLBACK		Display_CB										(WindowEventType type, int windowNumber, Tool tool, Rect rect); 
 
 //==============================================================================
@@ -96,7 +102,9 @@ static void IMAQ_CALLBACK		Display_CB										(WindowEventType type, int window
 //==============================================================================
 // Global functions
 
-NIVisionDisplay_type* init_NIVisionDisplay_type (intptr_t parentWindowHndl)
+NIVisionDisplay_type* init_NIVisionDisplay_type (	intptr_t 					parentWindowHndl,
+													ROIPlaced_CBFptr_type		ROIPlacedCBFptr,
+													ROIRemoved_CBFptr_type		ROIRemovedCBFptr		)
 {
 	int						error				= 0;
 	intptr_t				imaqToolWndHndl		= 0; 
@@ -107,7 +115,14 @@ NIVisionDisplay_type* init_NIVisionDisplay_type (intptr_t parentWindowHndl)
 	//--------------------------
 	// init base class
 	//--------------------------
-	init_DisplayEngine_type(&niVision->baseClass, (DiscardDisplayEngineFptr_type)discard_NIVisionDisplay, (DisplayImageFptr_type)DisplayNIVisionImage, (GetDisplayHandleFptr_type)GetNIVisionDisplayHandle);
+	init_DisplayEngine_type(	&niVision->baseClass, 
+								(DiscardDisplayEngineFptr_type) discard_NIVisionDisplay, 
+								(DisplayImageFptr_type) DisplayNIVisionImage, 
+								(GetDisplayHandleFptr_type) GetNIVisionDisplayHandle,
+								(OverlayROIFptr_type) OverlayNIVisionROI,
+								(ClearAllROIFptr_type) ClearAllROI,
+								ROIPlacedCBFptr,
+								ROIRemovedCBFptr											);
 	
 	//--------------------------
 	// init NI Vision Data
@@ -167,34 +182,61 @@ static Display_type* init_Display_type (NIVisionDisplay_type* NIDisplay, int ima
 	Display_type*	disp = malloc(sizeof(Display_type));
 	if (!disp) return NULL;
 	
+	// init
 	disp->niDisplay 		= NIDisplay;
 	disp->callbackData		= callbackData;
 	disp->imaqWndID			= imaqWndID;
 	disp->imaqImg			= NULL;
+	//disp->ROIs				= 0;
+	
+	// allocate
+	//if ( !(disp->ROIs		= ListCreate(sizeof(ROI_type*))) ) 		goto Error;
 	
 	return disp;
+	
+//Error:
+
+	//discard_Display_type(&disp);
+	//return NULL;
 }
 
 static void discard_Display_type (Display_type** displayPtr)
 {
-	if (!*displayPtr) return;
+	Display_type*	display = *displayPtr;
 	
-	if ((*displayPtr)->imaqImg) {
-		imaqDispose((*displayPtr)->imaqImg);
-		(*displayPtr)->imaqImg = NULL;
+	if (!display) return;
+	
+	// NI Vision image
+	if (display->imaqImg) {
+		imaqDispose(display->imaqImg);
+		display->imaqImg = NULL;
 	}
+	
+	// ROIs
+	/*
+	if (display->ROIs) {
+		size_t		nROIs = ListNumItems(display->ROIs);
+		ROI_type**  ROIPtr;
+		for (size_t i = 1; i <= nROIs; i++) {
+			ROIPtr = ListGetPtrToItem(display->ROIs, i);
+			discard_ROI_type(ROIPtr);
+		}
+		ListDispose(display->ROIs);
+		display->ROIs = 0;
+	}
+	*/
 	
 	OKfree(*displayPtr);
 }
 
-static int DisplayNIVisionImage (Display_type* displayHandle, void* pixelArray, int imgHeight, int imgWidth, ImageTypes imageType)
+static int DisplayNIVisionImage (Display_type* displayHndl, void* pixelArray, int imgHeight, int imgWidth, ImageTypes imageType)
 {
 	int		error		= 0;
 	
 	// display image
-	nullChk( imaqArrayToImage(displayHandle->imaqImg, pixelArray, imgHeight, imgWidth) );
+	nullChk( imaqArrayToImage(displayHndl->imaqImg, pixelArray, imgHeight, imgWidth) );
 	
-	nullChk( imaqDisplayImage(displayHandle->imaqImg, displayHandle->imaqWndID, FALSE) );
+	nullChk( imaqDisplayImage(displayHndl->imaqImg, displayHndl->imaqWndID, FALSE) );
 			 
 	// display IMAQ tool window
 	if (!imaqToolWindowVisibleFlag) {
@@ -266,16 +308,161 @@ Error:
 	return NULL;
 }
 
-static void IMAQ_CALLBACK Display_CB (WindowEventType event, int windowNumber, Tool tool, Rect rect)
+static int OverlayNIVisionROI (Display_type* displayHndl, ROI_type* ROI)
 {
+	int					error 				= 0;
+	RGBValue			rgbVal 				= { .R		= ROI->rgba.R,
+												.G		= ROI->rgba.G,
+												.B		= ROI->rgba.B,
+												.alpha	= ROI->rgba.A	};
 	
-	/*
-	switch (event) {
+	OverlayTextOptions	overlayTextOptions	= {	.fontName					="Arial",
+						 						.fontSize					= 12,
+												.bold						= FALSE,
+												.italic						= FALSE,
+												.underline					= FALSE,
+												.strikeout					= FALSE,
+												.horizontalTextAlignment	= IMAQ_LEFT,
+												.verticalTextAlignment		= IMAQ_TOP,
+												.backgroundColor			= {0,0,0,0},
+												.angle						= 0				};
+	
+	// overlay ROI on the image
+	switch (ROI->ROIType) {
 			
-		
+		case ROI_Point:
+			
+			Point 		point = { .x = ((Point_type*)ROI)->x, 
+								  .y = ((Point_type*)ROI)->y	};
+			
+			// point overlay 			
+			nullChk( imaqOverlayPoints(displayHndl->imaqImg, &point, 1, &rgbVal, 1, IMAQ_POINT_AS_CROSS, NULL, ROI->ROIName) );   
+			// label overlay
+			nullChk( imaqOverlayText(displayHndl->imaqImg, point, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
+			
+			break;
+			
+		case ROI_Rectangle:
+			
+			Rect		rect = { .top 		= ((Rect_type*)ROI)->top,
+								 .left 		= ((Rect_type*)ROI)->left,
+								 .width 	= ((Rect_type*)ROI)->width,
+								 .height	= ((Rect_type*)ROI)->height	};
+			
+			Point		textPoint = { .x = rect.left, .y = rect.top };
+			
+			// rectangle overlay
+			nullChk( imaqOverlayRect(displayHndl->imaqImg, rect, &rgbVal, IMAQ_DRAW_VALUE, ROI->ROIName) );
+			// label overlay
+			nullChk( imaqOverlayText(displayHndl->imaqImg, textPoint, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
+			
+			break;
 			
 	}
-	*/
+	
+	// add ROI overlay to list
+	//ListInsertItem(displayHndl->ROIs, &ROI, END_OF_LIST);
+	
+	return 0;
+	
+Error:
+	
+	return error;
+}
+
+static void ClearAllROI (Display_type* displayHndl)
+{
+	imaqClearOverlay(displayHndl->imaqImg, NULL);
+}
+
+static void IMAQ_CALLBACK Display_CB (WindowEventType event, int windowNumber, Tool tool, Rect rect)
+{
+	Display_type*	display = displays[windowNumber];
+	
+	switch (event) {
+			
+		case IMAQ_CLICK_EVENT:
+			
+			switch (tool) {
+					
+				case IMAQ_SELECTION_TOOL:
+					
+					break;
+					
+				default:
+					
+					break;
+			}
+			
+			break;
+			
+		case IMAQ_DOUBLE_CLICK_EVENT:
+			
+			switch (tool) {
+					
+				case IMAQ_SELECTION_TOOL:
+					
+					break;
+					
+				default:
+					
+					break;
+			}
+			
+			break;
+			
+		case IMAQ_DRAW_EVENT:
+			
+			switch (tool) {
+					
+				case IMAQ_POINT_TOOL:
+					
+					Point_type*	PointROI =  init_Point_type(NULL, rect.left, rect.top);
+					
+					// execute callback
+					if (display->niDisplay->baseClass.ROIPlacedCBFptr)
+						(*display->niDisplay->baseClass.ROIPlacedCBFptr) (display, display->callbackData, (ROI_type**) &PointROI);
+					
+					
+					break;
+					
+				case IMAQ_LINE_TOOL:
+					
+					break;
+					
+				case IMAQ_RECTANGLE_TOOL:
+					
+					Rect_type*	RectROI =  init_Rect_type(NULL, rect.top, rect.left, rect.height, rect.width);
+					
+					// execute callback
+					if (display->niDisplay->baseClass.ROIPlacedCBFptr)
+						(*display->niDisplay->baseClass.ROIPlacedCBFptr) (display, display->callbackData, (ROI_type**) &RectROI);
+					
+					
+					break;
+					
+				default:
+					
+					break;
+			}
+			
+			break;
+			
+		case IMAQ_ACTIVATE_EVENT:
+			
+			break;
+			
+		case IMAQ_CLOSE_EVENT:
+			
+			break;
+			
+	
+			
+		default:
+			
+			break;
+	}
+	
 }
 
 void discard_Image_type (Image** image)

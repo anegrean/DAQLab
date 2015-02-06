@@ -31,10 +31,10 @@ typedef struct DisplayEngine	DisplayEngine_type;		// Generic display engine.
 
 typedef void*					DisplayHandle_type;		// Display handle for one display window that can be used by
 														// an external module to interact with the display.
-
-//==============================================================================
-// Methods to override
-							
+														
+//--------------------------------------
+// Methods typedefs
+//--------------------------------------
 														
 	// Discards a display engine 
 typedef void 							(* DiscardDisplayEngineFptr_type) 			(void** displayEnginePtr);
@@ -43,20 +43,39 @@ typedef void 							(* DiscardDisplayEngineFptr_type) 			(void** displayEnginePt
 typedef int								(* DisplayImageFptr_type)					(DisplayHandle_type displayHandle, void* pixelArray, int imgWidth, int imgHeight, ImageTypes imageType);
 
 	// Obtains a display handle from the display engine that can be passed to other functions like updating the image
-typedef DisplayHandle_type				(* GetDisplayHandleFptr_type)				(DisplayEngine_type* displayEngine, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType); 
+typedef DisplayHandle_type				(* GetDisplayHandleFptr_type)				(DisplayEngine_type* displayEngine, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType);
+
+	// Places an ROI overlay over the displayed image 
+typedef int								(* OverlayROIFptr_type)						(DisplayHandle_type displayHandle, ROI_type* ROI);
+
+	// Clears all ROI overlays
+typedef void							(* ClearAllROIFptr_type)					(DisplayHandle_type displayHandle);
+
+
+//--------------------------------------
+// Callback typedefs
+//--------------------------------------
+
+	// ROI was placed over the image (but not added to it)
+typedef void							(* ROIPlaced_CBFptr_type)					(DisplayHandle_type displayHandle, void* callbackData, ROI_type** ROI);
+
+	// An overlaid ROI was removed from the image
+typedef void							(* ROIRemoved_CBFptr_type)					(DisplayHandle_type displayHandle, void* callbackData, ROI_type* ROI);
+
+
 	
 //==============================================================================
 // Class to inherit from
 
 struct DisplayEngine {
-	//--------------------------------------------------------
+	//---------------------------------------------------------------------------------------------------------------
 	// DATA
-	//--------------------------------------------------------
+	//---------------------------------------------------------------------------------------------------------------
 	
 	
-	//--------------------------------------------------------
+	//---------------------------------------------------------------------------------------------------------------
 	// METHODS (override with child class implementation)
-	//--------------------------------------------------------
+	//---------------------------------------------------------------------------------------------------------------
 	
 	DiscardDisplayEngineFptr_type		discardFptr;
 	
@@ -64,7 +83,17 @@ struct DisplayEngine {
 	
 	GetDisplayHandleFptr_type			getDisplayHandleFptr;
 	
+	OverlayROIFptr_type					overlayROIFptr;
 	
+	ClearAllROIFptr_type				clearAllROIFptr;
+	
+	//---------------------------------------------------------------------------------------------------------------
+	// CALLBACKS (provide action to be taken by the module making use of the display engine)
+	//---------------------------------------------------------------------------------------------------------------
+	
+	ROIPlaced_CBFptr_type				ROIPlacedCBFptr;
+	
+	ROIRemoved_CBFptr_type				ROIRemovedCBFptr;
 	
 	
 };
@@ -80,10 +109,14 @@ struct DisplayEngine {
 //--------------------------------------------------------------------------------------------------------------------------
 
 	// Initializes a generic display engine.
-void									init_DisplayEngine_type					(DisplayEngine_type* 					displayEngine,
-																				 DiscardDisplayEngineFptr_type			discardFptr,
-																				 DisplayImageFptr_type					displayImageFptr,
-																				 GetDisplayHandleFptr_type				getDisplayHandleFptr );
+void									init_DisplayEngine_type					(	DisplayEngine_type* 					displayEngine,
+																				 	DiscardDisplayEngineFptr_type			discardFptr,
+																				 	DisplayImageFptr_type					displayImageFptr,
+																				 	GetDisplayHandleFptr_type				getDisplayHandleFptr,
+																				 	OverlayROIFptr_type						overlayROIFptr,
+																					ClearAllROIFptr_type					clearAllROIFptr,
+																				 	ROIPlaced_CBFptr_type					ROIPlacedCBFptr,
+																				 	ROIRemoved_CBFptr_type					ROIRemovedCBFptr		);
 
 
 	// Disposes all types of display engines by invoking the specific dispose method.

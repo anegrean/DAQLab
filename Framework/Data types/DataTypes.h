@@ -109,19 +109,63 @@ typedef enum {
 } ImageTypes;
 
 	//----------------------------------------------------------------------------------------------
+	// Color
+	//----------------------------------------------------------------------------------------------
+
+typedef struct RGBA		RGBA_type;
+
+struct RGBA {
+	
+	unsigned char R;     								// Red value of the color. 
+	unsigned char G;     								// Green value of the color.
+    unsigned char B;     								// Blue value of the color.
+    unsigned char A; 									// Alpha value of the color (0 = transparent, 255 = opaque).
+	
+};
+
+	//----------------------------------------------------------------------------------------------
 	// Region Of Interest (ROI) types for images
 	//----------------------------------------------------------------------------------------------
 
 typedef struct ROI 			ROI_type;		 // Base class
 typedef struct Point		Point_type;		 // Child class of ROI_type
 typedef struct Rect			Rect_type;		 // Child class of ROI_type
-	
+
+typedef void (* DiscardFptr_type) (void** ROIPtr);	
+
 typedef enum {
 	
 	ROI_Point,
 	ROI_Rectangle
 	
 } ROITypes;
+
+	// Generic ROI base class	
+struct ROI {
+	// DATA
+	ROITypes			ROIType;
+	char*				ROIName;
+	RGBA_type			rgba;			// ROI color
+	// METHODS
+	DiscardFptr_type	discardFptr;  	// overriden by child classes
+};
+
+	// Point
+struct Point {
+	ROI_type			baseClass;
+	int 				x;
+	int 				y;
+};
+
+	// Rectangle
+struct Rect {
+	ROI_type			baseClass;
+	int 				top;
+	int 				left;
+	int 				height;
+	int 				width;
+};
+
 
 	//----------------------------------------------------------------------------------------------
 	// Pulse train types
@@ -429,14 +473,19 @@ double   					GetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* p
 // Region Of Interest (ROI) types for images
 //---------------------------------------------------------------------------------------------------------
 
-	// Point
-Point_type*						init_Point_type						(char ROIName[], int x, int y);
+//---------------------------
+// Init/Discard
+//---------------------------
 
-	// Rectangle
-Rect_type*						init_Rect_type						(char ROIName[], int top, int left, int height, int width);
+	// Creates a Point ROI with default Black Opaque color.
+Point_type*					init_Point_type							(char ROIName[], int x, int y);
 
-	// All ROIs
-void							discard_ROI_type					(ROI_type** ROIPtr);
+	// Creates a Rectangle with default Black Opaque color.
+Rect_type*					init_Rect_type							(char ROIName[], int top, int left, int height, int width);
+
+	// Discards all ROIs
+void						discard_ROI_type						(ROI_type** ROIPtr);
+
 
 
 

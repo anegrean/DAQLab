@@ -94,37 +94,6 @@ struct PulseTrainTickTiming {
 	uInt32 						delayTicks;
 };
 
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-// Region of Interest (ROI)
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-	// Generic ROI
-typedef void (* DiscardFptr_type) (void** ROIPtr);
-
-struct ROI {
-	// DATA
-	ROITypes			ROIType;
-	char*				ROIName;
-	// METHODS
-	DiscardFptr_type	discardFptr;  // overriden by child classes
-};
-
-	// Point
-struct Point {
-	ROI_type			baseClass;
-	int 				x;
-	int 				y;
-};
-
-	// Rectangle
-struct Rect {
-	ROI_type			baseClass;
-	int 				top;
-	int 				left;
-	int 				height;
-	int 				width;
-};
-
 
 //==============================================================================
 // Static Functions
@@ -782,6 +751,13 @@ static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], Disc
 {
 	ROI->ROIType 		= ROIType;
 	ROI->ROIName		= StrDup(ROIName);
+	
+	// init color to opaque black
+	ROI->rgba.R			= 0;
+	ROI->rgba.G			= 0;
+	ROI->rgba.B			= 0;
+	ROI->rgba.A			= 255;
+	
 	ROI->discardFptr	= discardFptr;
 }
 

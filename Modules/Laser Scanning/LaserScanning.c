@@ -734,6 +734,13 @@ static void							ShutterVChan_Disconnected						(VChan_type* self, void* VChanO
 	// Pixel settings VChan
 static void							PixelSettingsVChan_Connected					(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
 
+//-----------------------------------------
+// Display interface
+//-----------------------------------------
+
+static void							ROIPlacedOnDisplay								(DisplayHandle_type displayHandle, void* callbackData, ROI_type** ROI);
+
+static void							ROIRemovedFromDisplay							(DisplayHandle_type displayHandle, void* callbackData, ROI_type* ROI);
 
 //-----------------------------------------
 // Task Controller Callbacks
@@ -1145,7 +1152,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// initialize display engine
 	intptr_t workspaceWndHndl = 0;	
 	GetPanelAttribute(ls->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHndl);
-	nullChk( ls->displayEngine = (DisplayEngine_type*)init_NIVisionDisplay_type(workspaceWndHndl) );
+	nullChk( ls->displayEngine = (DisplayEngine_type*)init_NIVisionDisplay_type(	workspaceWndHndl,
+																			   		ROIPlacedOnDisplay,
+																					ROIRemovedFromDisplay	) );
 	
 	
 	return 0;
@@ -4749,13 +4758,12 @@ void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 	}
 	
 	// select value from the list that is closest to the old_dwelltime value
-	int       	nElem;
+	size_t      nElem			= ListNumItems(dwellTimes);
 	int       	itemPos;
 	double    	dwellTimeItem;
 	double    	diffOld;
 	double    	diffNew;
 	
-	nElem = ListNumItems(dwellTimes);		  
 	if (nElem) {
 		ListGetItem(dwellTimes, &dwellTimeItem, 1);
 		diffOld = fabs(dwellTimeItem - scanEngine->pixelDwellTime);
@@ -5286,25 +5294,25 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 		// add pixels to the temporary buffer depending on the image data type
 		switch (pixelDataType) {
 			
-			case DL_Waveform_UChar: // IMAQ_IMAGE_U8
+			case DL_Waveform_UChar:
 				
 				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned char)) );
 				memcpy((unsigned char*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned char*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned char));
 				break;
 				
-			case DL_Waveform_UShort: // IMAQ_IMAGE_U16
+			case DL_Waveform_UShort:
 				
 				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned short)) );
 				memcpy((unsigned short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned short));
 				break;
 				
-			case DL_Waveform_Short: // IMAQ_IMAGE_I16
+			case DL_Waveform_Short:
 				
 				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(short)) );
 				memcpy((short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(short));
 				break;
 				
-			case DL_Waveform_Float: // IMAQ_IMAGE_SGL
+			case DL_Waveform_Float:
 					
 				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(float)) );
 				memcpy((float*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (float*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(float));
@@ -5327,7 +5335,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				
 			switch (pixelDataType) {   
 					
-				case DL_Waveform_UChar: // IMAQ_IMAGE_U8 	
+				case DL_Waveform_UChar:
 				
 					// copy pixels depending on their direction
 					if (imgBuffer->revWidthFlag){
@@ -5348,7 +5356,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					memmove((unsigned char*)imgBuffer->tmpPixels, (unsigned char*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(unsigned char));
 					break;
 					
-				case DL_Waveform_UShort: // IMAQ_IMAGE_U16 
+				case DL_Waveform_UShort:
 						
 					// copy pixels depending on their direction
 					if (imgBuffer->revWidthFlag){
@@ -5369,7 +5377,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					memmove((unsigned short*)imgBuffer->tmpPixels, (unsigned short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(unsigned short));
 					break;
 						
-				case DL_Waveform_Short: // IMAQ_IMAGE_I16 
+				case DL_Waveform_Short:
 						
 					// copy pixels depending on their direction
 					if (imgBuffer->revWidthFlag){
@@ -5390,7 +5398,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					memmove((short*)imgBuffer->tmpPixels, (short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(short));
 					break;
 						
-				case DL_Waveform_Float: // IMAQ_IMAGE_SGL 
+				case DL_Waveform_Float:
 					
 					// copy pixels depending on their direction
 					if (imgBuffer->revWidthFlag){
@@ -5854,6 +5862,24 @@ static void	PixelSettingsVChan_Connected (VChan_type* self, void* VChanOwner, VC
 {
 	
 }
+
+//-----------------------------------------
+// Display interface
+//-----------------------------------------
+
+static void ROIPlacedOnDisplay (DisplayHandle_type displayHandle, void* callbackData, ROI_type** ROI)
+{
+	DetChan_type*	detChan = callbackData; 
+	
+	
+}
+
+static void	ROIRemovedFromDisplay (DisplayHandle_type displayHandle, void* callbackData, ROI_type* ROI)
+{
+	DetChan_type*	detChan = callbackData;
+	
+}
+
 
 //---------------------------------------------------------------------
 // Non Resonant Galvo Calibration and Testing Task Controller Callbacks 

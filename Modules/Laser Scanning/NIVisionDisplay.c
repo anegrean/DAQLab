@@ -11,6 +11,7 @@
 //==============================================================================
 // Include files
 #include "windows.h"  			// include this first!
+#include "Commctrl.h"
 #include "NIVisionDisplay.h"
 #include "DisplayEngine.h"
 #include "toolbox.h"
@@ -32,6 +33,7 @@ typedef struct {
 	int						imaqWndID;		// Assigned IMAQ window ID for display
 	Image*					imaqImg;		// Buffer to store the displayed image
 	//ListType				ROIs;			// List of ROIs added to imaqImg of ROI_type*
+	LONG_PTR				imaqWndProc;	// Pointer to the original imaq window procedure.
 } Display_type;
 
 struct NIVisionDisplay {
@@ -95,6 +97,9 @@ static void						ClearAllROI										(Display_type* displayHndl);
 
 	// For receiving NI Vision callbacks such as placement of ROI
 static void IMAQ_CALLBACK		Display_CB										(WindowEventType type, int windowNumber, Tool tool, Rect rect); 
+
+	// For processing custom NI Vision window events
+LRESULT CALLBACK 				CustomDisplay_CB 								(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 
 //==============================================================================
 // Global variables
@@ -187,6 +192,7 @@ static Display_type* init_Display_type (NIVisionDisplay_type* NIDisplay, int ima
 	disp->callbackData		= callbackData;
 	disp->imaqWndID			= imaqWndID;
 	disp->imaqImg			= NULL;
+	disp->imaqWndProc		= 0;
 	//disp->ROIs				= 0;
 	
 	// allocate
@@ -253,12 +259,16 @@ Error:
 
 static DisplayHandle_type GetNIVisionDisplayHandle (NIVisionDisplay_type* NIDisplay, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType)
 {
-	int				imaqHndl		= 0;
-	int				error			= 0;
-	ImageType		imaqImgType		= 0;
+	int				imaqHndl				= 0;	// imaq window ID
+	int				error					= 0;
+	ImageType		imaqImgType				= 0;
+	HWND			imaqWndHndl				= 0;	// windows handle of the imaq window
+	HMENU			imaqWndMenuHndl			= 0;	// menu bar for the imaq window
 	
 	// get IMAQ window handle
 	if (!imaqGetWindowHandle(&imaqHndl)) return NULL;
+	// get windows window handle
+	imaqWndHndl	= (HWND) imaqGetSystemWindowHandle(imaqHndl); 
 	
 	// assign data structure
 	discard_Display_type(&displays[imaqHndl]);
@@ -292,11 +302,22 @@ static DisplayHandle_type GetNIVisionDisplayHandle (NIVisionDisplay_type* NIDisp
 	nullChk( imaqSetImageSize(displays[imaqHndl]->imaqImg, imgWidth, imgHeight) );
 	
 	// confine image window to parent window if provided
+	if (NIDisplay->parentWindowHndl)
+		SetParent( imaqWndHndl, (HWND)NIDisplay->parentWindowHndl);
+	// create menu bar
+	imaqWndMenuHndl = CreateMenu();
+	// add menu item "Save"
+	AppendMenu(imaqWndMenuHndl, MF_STRING, 0, "&Save");
 	
-	if (NIDisplay->parentWindowHndl) {
-		intptr_t	imaqWndHandle	= (intptr_t) imaqGetSystemWindowHandle(imaqHndl); 
-		SetParent( (HWND)imaqWndHandle, (HWND)NIDisplay->parentWindowHndl);    
-	}
+	// add menu bar to the imaq window
+	SetMenu(imaqWndHndl, imaqWndMenuHndl);
+	
+	// store original imaq window procedure pointer
+	//displays[imaqHndl]->imaqWndProc = GetWindowLongPtr(imaqWndHndl, GWLP_WNDPROC);
+	// replace original imaq window procedure pointer
+	//SetWindowLongPtr(imaqWndHndl, GWLP_WNDPROC, 
+	SetWindowSubclass(imaqWndHndl, CustomDisplay_CB, 0, 0);
+	
 	
 	return displays[imaqHndl];
 	
@@ -389,6 +410,10 @@ static void IMAQ_CALLBACK Display_CB (WindowEventType event, int windowNumber, T
 					
 					break;
 					
+				case IMAQ_POINT_TOOL:
+					
+					break;
+					
 				default:
 					
 					break;
@@ -464,6 +489,26 @@ static void IMAQ_CALLBACK Display_CB (WindowEventType event, int windowNumber, T
 	}
 	
 }
+
+LRESULT CALLBACK CustomDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{   
+	switch (msg) {
+			
+		case WM_COMMAND:
+			
+			// filter menu events (wParam = 0)
+			if (wParam) break;
+			
+			
+			break;
+			
+		default:
+			break;
+	}
+	
+	return DefSubclassProc(hWnd, msg, wParam, lParam);
+}
+
 
 void discard_Image_type (Image** image)
 {

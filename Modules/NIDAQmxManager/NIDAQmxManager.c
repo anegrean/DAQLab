@@ -724,6 +724,9 @@ typedef struct {
 									 						// WARNING: this does not apply when looping is ON. In this case when receiving a new data packet, a full cycle is generated before switching.
 	
 	BOOL*         				datain_loop;	   			// Data will be looped regardless of repeat value until new data packet is provided
+	BOOL*						nullPacketReceived;			// Array of BOOL equal to the number of AO channels. If TRUE, then the AO channel received a NULL packet and it will keep on generating
+															// the last value until all AO channels have also received a NULL packet.
+	int							writeBlocksLeftToWrite;		// Number of writeblocks left to write before the AO task stops. This guarantees that the last value of a given waveform is generated before the stop.
 } WriteAOData_type;
 
 typedef struct {
@@ -2539,8 +2542,8 @@ Error:
 static AIChannel_type* GetAIChannel (Dev_type* dev, char physChanName[])
 {
 	AIChannel_type** 	chPtrPtr;
-	size_t				nItems		= ListNumItems(dev->attr->AIchan); 	
-	for (size_t i = 1; i <= nItems; i++) { 
+	size_t				nChans		= ListNumItems(dev->attr->AIchan); 	
+	for (size_t i = 1; i <= nChans; i++) { 
 		chPtrPtr = ListGetPtrToItem(dev->attr->AIchan, i);
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
@@ -2632,8 +2635,8 @@ Error:
 static AOChannel_type* GetAOChannel (Dev_type* dev, char physChanName[])
 {
 	AOChannel_type** 	chPtrPtr;
-	size_t				nItems		= ListNumItems(dev->attr->AOchan); 	
-	for (size_t i = 1; i <= nItems; i++) {
+	size_t				nChans		= ListNumItems(dev->attr->AOchan); 	
+	for (size_t i = 1; i <= nChans; i++) {
 		chPtrPtr = ListGetPtrToItem(dev->attr->AOchan, i); 
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
@@ -2721,8 +2724,8 @@ Error:
 static DILineChannel_type* GetDILineChannel (Dev_type* dev, char physChanName[])
 {
 	DILineChannel_type** 	chPtrPtr;
-	size_t					nItems		= ListNumItems(dev->attr->DIlines); 	
-	for (size_t i = 1; i <= nItems; i++) {
+	size_t					nChans		= ListNumItems(dev->attr->DIlines); 	
+	for (size_t i = 1; i <= nChans; i++) {
 		chPtrPtr = ListGetPtrToItem(dev->attr->DIlines, i); 	
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
@@ -2812,8 +2815,8 @@ Error:
 static DIPortChannel_type* GetDIPortChannel (Dev_type* dev, char physChanName[])
 {
 	DIPortChannel_type** 	chPtrPtr;
-	size_t					nItems		= ListNumItems(dev->attr->DIports); 	
-	for (size_t i = 1; i <= nItems; i++) {
+	size_t					nChans		= ListNumItems(dev->attr->DIports); 	
+	for (size_t i = 1; i <= nChans; i++) {
 		chPtrPtr = ListGetPtrToItem(dev->attr->DIports, i); 		
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
@@ -2899,8 +2902,8 @@ Error:
 static DOLineChannel_type* GetDOLineChannel (Dev_type* dev, char physChanName[])
 {
 	DOLineChannel_type** 	chPtrPtr;
-	size_t					nItems		= ListNumItems(dev->attr->DOlines); 	
-	for (size_t i = 1; i <= nItems; i++) {	
+	size_t					nChans		= ListNumItems(dev->attr->DOlines); 	
+	for (size_t i = 1; i <= nChans; i++) {	
 		chPtrPtr= ListGetPtrToItem(dev->attr->DOlines, i);
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
@@ -2988,8 +2991,8 @@ Error:
 static DOPortChannel_type* GetDOPortChannel (Dev_type* dev, char physChanName[])
 {
 	DOPortChannel_type** chPtrPtr;
-	size_t					nItems		= ListNumItems(dev->attr->DOports); 	
-	for (size_t i = 1; i <= nItems; i++) {
+	size_t					nChans		= ListNumItems(dev->attr->DOports); 	
+	for (size_t i = 1; i <= nChans; i++) {
 		chPtrPtr = ListGetPtrToItem(dev->attr->DOports, i);
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
@@ -3074,8 +3077,8 @@ Error:
 static CIChannel_type* GetCIChannel (Dev_type* dev, char physChanName[])
 {
 	CIChannel_type** 	chPtrPtr;
-	size_t				nItems		= ListNumItems(dev->attr->CIchan); 	
-	for (size_t i = 1; i <= nItems; i++) {	
+	size_t				nChans		= ListNumItems(dev->attr->CIchan); 	
+	for (size_t i = 1; i <= nChans; i++) {	
 		chPtrPtr = ListGetPtrToItem(dev->attr->CIchan, i);
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
@@ -3160,8 +3163,8 @@ Error:
 static COChannel_type* GetCOChannel (Dev_type* dev, char physChanName[])
 {
 	COChannel_type** 	chPtrPtr;
-	size_t				nItems		= ListNumItems(dev->attr->COchan); 	
-	for (size_t i = 1; i <= nItems; i++) {		
+	size_t				nChans		= ListNumItems(dev->attr->COchan); 	
+	for (size_t i = 1; i <= nChans; i++) {		
 		chPtrPtr = ListGetPtrToItem(dev->attr->COchan, i);
 		if (!strcmp((*chPtrPtr)->physChanName, physChanName))
 			return *chPtrPtr;
@@ -5119,8 +5122,8 @@ static int RemoveDAQmxAIChannel_CB (int panel, int control, int event, void *cal
 			AIChanAttr->inUse = FALSE;
 			// remove channel from AI task
 			ChanSet_type** 	chanSetPtr;
-			size_t			nItems			= ListNumItems(dev->AITaskSet->chanSet);
-			for (size_t i = 1; i <= nItems; i++) {	
+			size_t			nChans			= ListNumItems(dev->AITaskSet->chanSet);
+			for (size_t i = 1; i <= nChans; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 				if (*chanSetPtr == aiChanPtr) {
 					// remove from framework
@@ -5187,8 +5190,8 @@ static int RemoveDAQmxAOChannel_CB (int panel, int control, int event, void *cal
 			AOChanAttr->inUse = FALSE;
 			// remove channel from AO task
 			ChanSet_type** 	chanSetPtr;
-			size_t			nItems			= ListNumItems(dev->AOTaskSet->chanSet);
-			for (size_t i = 1; i <= nItems; i++) {	
+			size_t			nChans			= ListNumItems(dev->AOTaskSet->chanSet);
+			for (size_t i = 1; i <= nChans; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 				if (*chanSetPtr == aoChanPtr) {
 					// remove from framework
@@ -5269,8 +5272,8 @@ static int RemoveDAQmxDIChannel_CB (int panel, int control, int event, void *cal
 			
 			// remove channel from DI task
 			ChanSet_type** 	chanSetPtr;
-			size_t			nItems			= ListNumItems(dev->DITaskSet->chanSet);
-			for (size_t i = 1; i <= nItems; i++) {	
+			size_t			nChans			= ListNumItems(dev->DITaskSet->chanSet);
+			for (size_t i = 1; i <= nChans; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
 				if (*chanSetPtr == diChanPtr) {
 					// remove from framework
@@ -5350,8 +5353,8 @@ static int RemoveDAQmxDOChannel_CB (int panel, int control, int event, void *cal
 			
 			// remove channel from DO task
 			ChanSet_type** 	chanSetPtr;
-			size_t			nItems			= ListNumItems(dev->DOTaskSet->chanSet);
-			for (size_t i = 1; i <= nItems; i++) {	
+			size_t			nChans			= ListNumItems(dev->DOTaskSet->chanSet);
+			for (size_t i = 1; i <= nChans; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
 				if (*chanSetPtr == doChanPtr) {
 					// remove from framework
@@ -5420,9 +5423,9 @@ static int RemoveDAQmxCIChannel_CB (int panel, int control, int event, void *cal
 			CIChanAttr->inUse = FALSE;
 			// remove channel from CI task
 	/*		ChanSet_type** 	chanSetPtr;
-			size_t			nItems			= ListNumItems(dev->CITaskSet->chanSet);
+			size_t			nChans			= ListNumItems(dev->CITaskSet->chanSet);
 			size_t			chIdx			= 1;
-			for (size_t i = 1; i <= nItems; i++) {	
+			for (size_t i = 1; i <= nChans; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanSet, i);
 				if (*chanSetPtr == ciChanPtr) {
 					// remove from framework
@@ -5489,8 +5492,8 @@ static int RemoveDAQmxCOChannel_CB (int panel, int control, int event, void *cal
 			COChanAttr->inUse = FALSE;
 			// remove channel from CO task
 			ChanSet_type** 	chanSetPtr;
-			size_t			nItems			= ListNumItems(dev->COTaskSet->chanTaskSet);
-			for (size_t i = 1; i <= nItems; i++) {	
+			size_t			nChans			= ListNumItems(dev->COTaskSet->chanTaskSet);
+			for (size_t i = 1; i <= nChans; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
 				if (*chanSetPtr == coChan) {
 					// remove Source VChan from framework
@@ -6108,8 +6111,8 @@ static void	discard_ADTaskSet_type (ADTaskSet_type** taskSetPtr)
 	// channels
 	if ((*taskSetPtr)->chanSet) {
 		ChanSet_type** 		chanSetPtr;
-		size_t				nItems			= ListNumItems((*taskSetPtr)->chanSet); 	
-		for (size_t i = 1; i <= nItems; i++) {			
+		size_t				nChans			= ListNumItems((*taskSetPtr)->chanSet); 	
+		for (size_t i = 1; i <= nChans; i++) {			
 			chanSetPtr = ListGetPtrToItem((*taskSetPtr)->chanSet, i);
 			(*(*chanSetPtr)->discardFptr)	((ChanSet_type**)chanSetPtr);
 		}
@@ -6716,49 +6719,51 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	size_t				i;
 	
 	// count number of AO channels using HW-timing
-	size_t	nItems	= ListNumItems(dev->AOTaskSet->chanSet); 	
-	for (i = 1; i <= nItems; i++) {	
+	size_t	nChans	= ListNumItems(dev->AOTaskSet->chanSet); 	
+	for (i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 		if (!(*chanSetPtr)->onDemand) nAO++;
 	}
 	
-	WriteAOData_type* 	writeData	= malloc(sizeof(WriteAOData_type));
+	WriteAOData_type* 	writeData				= malloc(sizeof(WriteAOData_type));
 	if (!writeData) return NULL;
 	
 	
 	
-			writeData -> writeblock			= dev->AOTaskSet->timing->blockSize;
-			writeData -> numchan			= nAO;
+			writeData -> writeblock				= dev->AOTaskSet->timing->blockSize;
+			writeData -> numchan				= nAO;
 	
 	// init
-			writeData -> datain           	= NULL;
-			writeData -> databuff         	= NULL;
-			writeData -> dataout          	= NULL;
-			writeData -> sinkVChans        	= NULL;
-			writeData -> datain_size      	= NULL;
-			writeData -> databuff_size    	= NULL;
-			writeData -> idx              	= NULL;
-			writeData -> datain_repeat    	= NULL;
-			writeData -> datain_remainder 	= NULL;
-			writeData -> datain_loop      	= NULL;
+			writeData -> datain           		= NULL;
+			writeData -> databuff         		= NULL;
+			writeData -> dataout          		= NULL;
+			writeData -> sinkVChans        		= NULL;
+			writeData -> datain_size      		= NULL;
+			writeData -> databuff_size    		= NULL;
+			writeData -> idx              		= NULL;
+			writeData -> datain_repeat    		= NULL;
+			writeData -> datain_remainder 		= NULL;
+			writeData -> datain_loop      		= NULL;
+			writeData -> nullPacketReceived		= NULL;
+			writeData -> writeBlocksLeftToWrite	= 2;
 	
 	// datain
-	if (!(	writeData -> datain				= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
+	if (!(	writeData -> datain					= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain[i] = NULL;
 	
 	// databuff
-	if (!(	writeData -> databuff   		= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
+	if (!(	writeData -> databuff   			= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
 	for (i = 0; i < nAO; i++) writeData->databuff[i] = NULL;
 	
 	// dataout
-	if (!(	writeData -> dataout 			= malloc(nAO * writeData->writeblock * sizeof(float64))) && nAO)	goto Error;
+	if (!(	writeData -> dataout 				= malloc(nAO * writeData->writeblock * sizeof(float64))) && nAO)	goto Error;
 	
 	// sink VChans
-	if (!(	writeData -> sinkVChans			= malloc(nAO * sizeof(SinkVChan_type*))) && nAO)					goto Error;
+	if (!(	writeData -> sinkVChans				= malloc(nAO * sizeof(SinkVChan_type*))) && nAO)					goto Error;
 	
-	nItems		= ListNumItems(dev->AOTaskSet->chanSet); 
+	nChans		= ListNumItems(dev->AOTaskSet->chanSet); 
 	size_t k 	= 0;
-	for (i = 1; i <= nItems; i++) {	
+	for (i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 		if (!(*chanSetPtr)->onDemand) {
 			writeData->sinkVChans[k] = (*chanSetPtr)->sinkVChan;
@@ -6767,44 +6772,39 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 	}
 	
 	// datain_size
-	if (!(	writeData -> datain_size 		= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
+	if (!(	writeData -> datain_size 			= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain_size[i] = 0;
 		
 	// databuff_size
-	if (!(	writeData -> databuff_size 		= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
+	if (!(	writeData -> databuff_size 			= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->databuff_size[i] = 0;
 		
 	// idx
-	if (!(	writeData -> idx 				= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
+	if (!(	writeData -> idx 					= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->idx[i] = 0;
 		
 	// datain_repeat
-	if (!(	writeData -> datain_repeat 		= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
+	if (!(	writeData -> datain_repeat 			= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain_repeat[i] = 0;
 		
 	// datain_remainder
-	if (!(	writeData -> datain_remainder 	= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
+	if (!(	writeData -> datain_remainder 		= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
 	for (i = 0; i < nAO; i++) writeData->datain_remainder[i] = 0;
 		
 	// datain_loop
-	if (!(	writeData -> datain_loop 		= malloc(nAO * sizeof(BOOL))) && nAO)								goto Error;
-	for (i = 0; i < nAO; i++) writeData->datain_loop[i] = 0;
+	if (!(	writeData -> datain_loop 			= malloc(nAO * sizeof(BOOL))) && nAO)								goto Error;
+	for (i = 0; i < nAO; i++) writeData->datain_loop[i] = FALSE;
+	
+	// nullPacketReceived
+	if (!(	writeData -> nullPacketReceived		= malloc(nAO * sizeof(BOOL))) && nAO)								goto Error;
+	for (i = 0; i < nAO; i++) writeData->nullPacketReceived[i] = FALSE;
 	
 	return writeData;
 	
 Error:
-	OKfree(writeData->datain);
-	OKfree(writeData->databuff);
-	OKfree(writeData->dataout);
-	OKfree(writeData->sinkVChans);
-	OKfree(writeData->datain_size);
-	OKfree(writeData->databuff_size);
-	OKfree(writeData->idx);
-	OKfree(writeData->datain_repeat);
-	OKfree(writeData->datain_remainder);
-	OKfree(writeData->datain_loop);
 	
-	OKfree(writeData);
+	discard_WriteAOData_type(&writeData);
+	
 	return NULL;
 }
 
@@ -6816,10 +6816,9 @@ static void	discard_WriteAOData_type (WriteAOData_type** writeDataPtr)
 		OKfree((*writeDataPtr)->datain[i]);	    
 		OKfree((*writeDataPtr)->databuff[i]);   
 	}
-	//added memleak
+	
 	OKfree((*writeDataPtr)->databuff);
 	OKfree((*writeDataPtr)->datain); 
-	//end added
 	OKfree((*writeDataPtr)->dataout);
 	OKfree((*writeDataPtr)->sinkVChans);
 	OKfree((*writeDataPtr)->datain_size);
@@ -6828,6 +6827,7 @@ static void	discard_WriteAOData_type (WriteAOData_type** writeDataPtr)
 	OKfree((*writeDataPtr)->datain_repeat);
 	OKfree((*writeDataPtr)->datain_remainder);
 	OKfree((*writeDataPtr)->datain_loop);
+	OKfree((*writeDataPtr)->nullPacketReceived)
 	
 	OKfree(*writeDataPtr);
 }
@@ -6842,8 +6842,8 @@ static WriteDOData_type* init_WriteDOData_type (Dev_type* dev)
 	size_t				i;
 	
 	// count number of DO channels using HW-timing
-	size_t	nItems	= ListNumItems(dev->DOTaskSet->chanSet); 	
-	for (size_t i = 1; i <= nItems; i++) {	
+	size_t	nChans	= ListNumItems(dev->DOTaskSet->chanSet); 	
+	for (size_t i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
 		if (!(*chanSetPtr)->onDemand) nDO++;
 	}
@@ -6884,9 +6884,9 @@ static WriteDOData_type* init_WriteDOData_type (Dev_type* dev)
 	// sink VChans
 	if (!(	writeData -> sinkVChans			= malloc(nDO * sizeof(SinkVChan_type*))))					goto Error;
 	
-	nItems		= ListNumItems(dev->DOTaskSet->chanSet); 
+	nChans		= ListNumItems(dev->DOTaskSet->chanSet); 
 	size_t k 	= 0;
-	for (i = 1; i <= nItems; i++) {	
+	for (i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
 		if (!(*chanSetPtr)->onDemand) {
 			writeData->sinkVChans[k] = (*chanSetPtr)->sinkVChan;
@@ -7025,8 +7025,8 @@ static void	discard_CITaskSet_type (CITaskSet_type** a)
 	// channels and DAQmx tasks
 	if ((*a)->chanTaskSet) {
 		ChanSet_type** 	chanSetPtr;
-		size_t			nItems			= ListNumItems((*a)->chanTaskSet);
-		for (size_t i = 1; i <= nItems; i++) {	
+		size_t			nChans			= ListNumItems((*a)->chanTaskSet);
+		for (size_t i = 1; i <= nChans; i++) {	
 			chanSetPtr = ListGetPtrToItem((*a)->chanTaskSet, i);
 			(*(*chanSetPtr)->discardFptr)	((ChanSet_type**)chanSetPtr);
 		}
@@ -7065,8 +7065,8 @@ static void discard_COTaskSet_type (COTaskSet_type** a)
 		// channels and DAQmx tasks
 	if ((*a)->chanTaskSet) {
 		ChanSet_type** 	chanSetPtr;
-		size_t			nItems			= ListNumItems((*a)->chanTaskSet);
-		for (size_t i = 1; i <= nItems; i++) {	
+		size_t			nChans			= ListNumItems((*a)->chanTaskSet);
+		for (size_t i = 1; i <= nChans; i++) {	
 			chanSetPtr = ListGetPtrToItem((*a)->chanTaskSet, i);
 			(*(*chanSetPtr)->discardFptr)	((ChanSet_type**)chanSetPtr);
 		}
@@ -7627,8 +7627,8 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	
 	// check if there is at least one AI task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
-	size_t	nItems 			= ListNumItems(dev->AITaskSet->chanSet);
-	for (size_t i = 1; i <= nItems; i++) {	
+	size_t	nChans 			= ListNumItems(dev->AITaskSet->chanSet);
+	for (size_t i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		if (!(*chanSetPtr)->onDemand) {
 			hwTimingFlag = TRUE;
@@ -7645,8 +7645,8 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	OKfree(taskName);
 	
 	// create AI channels
-	nItems = ListNumItems(dev->AITaskSet->chanSet);
-	for (size_t i = 1; i <= nItems; i++) {	
+	nChans = ListNumItems(dev->AITaskSet->chanSet);
+	for (size_t i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 	
 		// include in the task only channel for which HW-timing is required
@@ -7850,8 +7850,8 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	
 	// check if there is at least one AO task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
-	size_t	nItems			= ListNumItems(dev->AOTaskSet->chanSet);
-	for (size_t i = 1; i <= nItems; i++) {	
+	size_t	nChans			= ListNumItems(dev->AOTaskSet->chanSet);
+	for (size_t i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 		if (!(*chanSetPtr)->onDemand) {
 			hwTimingFlag = TRUE;
@@ -7868,8 +7868,8 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	OKfree(taskName);
 	
 	// create AO channels
-	nItems			= ListNumItems(dev->AOTaskSet->chanSet);
-	for (size_t i = 1; i <= nItems; i++) {	
+	nChans			= ListNumItems(dev->AOTaskSet->chanSet);
+	for (size_t i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 	
 		// include in the task only channels for which HW-timing is required
@@ -8064,8 +8064,8 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	
 	// check if there is at least one DI task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
-	size_t	nItems			= ListNumItems(dev->DITaskSet->chanSet);
-	for (size_t i = 1; i <= nItems; i++) {	
+	size_t	nChans			= ListNumItems(dev->DITaskSet->chanSet);
+	for (size_t i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
 		if (!(*chanSetPtr)->onDemand) {
 			hwTimingFlag = TRUE;
@@ -8082,8 +8082,8 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	OKfree(taskName);
 	
 	// create DI channels
-	nItems	= ListNumItems(dev->DITaskSet->chanSet); 
-	for (size_t i = 1; i <= nItems; i++) {	
+	nChans	= ListNumItems(dev->DITaskSet->chanSet); 
+	for (size_t i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
 	
 		// include in the task only channel for which HW-timing is required
@@ -8256,8 +8256,8 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 						 
 	// check if there is at least one DO task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
-	size_t	nItems			= ListNumItems(dev->DOTaskSet->chanSet);
-	for (size_t i = 1; i <= nItems; i++) {	
+	size_t	nChans			= ListNumItems(dev->DOTaskSet->chanSet);
+	for (size_t i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
 		if (!(*chanSetPtr)->onDemand) {
 			hwTimingFlag = TRUE;
@@ -8274,8 +8274,8 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	OKfree(taskName);
 	
 	// create DO channels
-	nItems	= ListNumItems(dev->DOTaskSet->chanSet);
-	for (size_t i = 1; i <= nItems; i++) {	
+	nChans	= ListNumItems(dev->DOTaskSet->chanSet);
+	for (size_t i = 1; i <= nChans; i++) {	
 		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
 	
 		// include in the task only channel for which HW-timing is required
@@ -8774,8 +8774,8 @@ static int ClearDAQmxTasks (Dev_type* dev)
 	// CI task
 	if (dev->CITaskSet) {
 		ChanSet_type** 	chanSetPtr;
-		size_t			nItems			= ListNumItems(dev->CITaskSet->chanTaskSet);
-	   	for (size_t i = 1; i <= nItems; i++) {	
+		size_t			nChans			= ListNumItems(dev->CITaskSet->chanTaskSet);
+	   	for (size_t i = 1; i <= nChans; i++) {	
 			chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 			if ((*chanSetPtr)->taskHndl) {
 				DAQmxClearTask((*chanSetPtr)->taskHndl);
@@ -8787,8 +8787,8 @@ static int ClearDAQmxTasks (Dev_type* dev)
 	// CO task
 	if (dev->COTaskSet) {
 		ChanSet_type** 	chanSetPtr;
-		size_t			nItems			= ListNumItems(dev->COTaskSet->chanTaskSet);
-	   	for (size_t i = 1; i <= nItems; i++) {	
+		size_t			nChans			= ListNumItems(dev->COTaskSet->chanTaskSet);
+	   	for (size_t i = 1; i <= nChans; i++) {	
 			chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);	
 			if ((*chanSetPtr)->taskHndl) {
 				DAQmxClearTask((*chanSetPtr)->taskHndl);
@@ -8815,29 +8815,25 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	
 	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
 	// AI task
-	if (dev->AITaskSet)
-	if (dev->AITaskSet->taskHndl) {
+	if (dev->AITaskSet && dev->AITaskSet->taskHndl) {
 		errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
 		(*nActiveTasksPtr)--;
 	}
 	
-	// AO task
-	if (dev->AOTaskSet)
-	if (dev->AOTaskSet->taskHndl) {
+	// AO task (stop if finite; continuous task stopping happens on receiving a NULL packet and is handled by WriteAODAQmx)
+	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl && dev->AOTaskSet->timing->measMode == MeasFinite) {
 		errChk(DAQmxStopTask(dev->AOTaskSet->taskHndl));
 		(*nActiveTasksPtr)--; 
 	}
 	
 	// DI task
-	if (dev->DITaskSet)
-	if (dev->DITaskSet->taskHndl) {
+	if (dev->DITaskSet && dev->DITaskSet->taskHndl) {
 		errChk(DAQmxStopTask(dev->DITaskSet->taskHndl));
 		(*nActiveTasksPtr)--;
 	}
 	
 	// DO task
-	if (dev->DOTaskSet)
-	if (dev->DOTaskSet->taskHndl) {
+	if (dev->DOTaskSet && dev->DOTaskSet->taskHndl) {
 		errChk(DAQmxStopTask(dev->DOTaskSet->taskHndl));
 		(*nActiveTasksPtr)--;
 	}
@@ -8845,8 +8841,8 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	// CI task
 	if (dev->CITaskSet) {
 		ChanSet_type** 	chanSetPtr;
-		size_t			nItems			= ListNumItems(dev->CITaskSet->chanTaskSet);
-	   	for (size_t i = 1; i <= nItems; i++) {	
+		size_t			nChans			= ListNumItems(dev->CITaskSet->chanTaskSet);
+	   	for (size_t i = 1; i <= nChans; i++) {	
 			chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 			if ((*chanSetPtr)->taskHndl) {
 				errChk( DAQmxStopTask((*chanSetPtr)->taskHndl) );
@@ -8858,8 +8854,8 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	// CO task
 	if (dev->COTaskSet) {
 		ChanSet_type** 	chanSetPtr;
-		size_t			nItems			= ListNumItems(dev->COTaskSet->chanTaskSet);
-	   	for (size_t i = 1; i <= nItems; i++) {	
+		size_t			nChans			= ListNumItems(dev->COTaskSet->chanTaskSet);
+	   	for (size_t i = 1; i <= nChans; i++) {	
 			chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);	
 			if ((*chanSetPtr)->taskHndl) {
 				errChk( DAQmxStopTask((*chanSetPtr)->taskHndl) );
@@ -9773,7 +9769,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	int					error					= 0;
 	char*				errMsg					= NULL;
 	ChanSet_type**		chanSetPtr				= NULL;
-	size_t				nItems					= ListNumItems(dev->AITaskSet->chanSet);
+	size_t				nChans					= ListNumItems(dev->AITaskSet->chanSet);
 	size_t				chIdx					= 0;
 	
 	// allocate memory to read samples
@@ -9783,11 +9779,11 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	// read samples from the AI buffer
 	DAQmxErrChk( DAQmxReadAnalogF64(taskHandle, nSamples, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL) );
 	
-	for (size_t i = 1; i <= nItems; i++) {
+	for (size_t i = 1; i <= nChans; i++) {
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
 		if ((*chanSetPtr)->onDemand) continue;
-		// forward data from the AI buffer to the VChan
+		// forward data from the AI buffer to the VChan 								// <----- ABORT HERE AI TASK IF REQUIRED!!!!!!!!!!!!!!!!
 		errChk( SendAIBufferData(dev, *chanSetPtr, chIdx, nRead, readBuffer, &errMsg) ); 
 		// next AI channel
 		chIdx++;
@@ -9836,7 +9832,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	char*				errMsg					= NULL;
 	int					nRead					= 0;
 	ChanSet_type**		chanSetPtr				= NULL;
-	size_t				nItems					= ListNumItems(dev->AITaskSet->chanSet);
+	size_t				nChans					= ListNumItems(dev->AITaskSet->chanSet);
 	int*				nActiveTasksPtr			= NULL;
 	DataPacket_type*	nullPacket				= NULL;
 	size_t				chIdx					= 0;
@@ -9849,7 +9845,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	
 	// if there are no samples left in the buffer, send NULL data packet and stop here, otherwise read them out
 	if (!nSamples) {
-		for (size_t i = 1; i <= nItems; i++) {
+		for (size_t i = 1; i <= nChans; i++) {
 			chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 			// include only channels for which HW-timing is required
 			if ((*chanSetPtr)->onDemand) continue;
@@ -9879,7 +9875,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	// read remaining samples from the AI buffer
 	DAQmxErrChk( DAQmxReadAnalogF64(taskHandle, -1, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL) );
 	
-	for (size_t i = 1; i <= nItems; i++) {
+	for (size_t i = 1; i <= nChans; i++) {
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
 		if ((*chanSetPtr)->onDemand) continue;
@@ -10076,25 +10072,27 @@ static int WriteAODAQmx (Dev_type* dev, char** errorInfo)
 {
 #define	WriteAODAQmx_Err_WaitingForDataTimeout		-1
 #define WriteAODAQmx_Err_DataTypeNotSupported		-2
+#define WriteAODAQmx_Err_NULLReceivedBeforeData		-3
 	
 	DataPacket_type* 		dataPacket									= NULL;
-	DLDataTypes				dataPacketType;
+	DLDataTypes				dataPacketType								= 0;
 	void*					dataPacketData								= NULL;
 	double*					waveformData								= NULL;
 	float*					floatWaveformData							= NULL;
 	WriteAOData_type*    	data            							= dev->AOTaskSet->writeAOData;
-	size_t          		queue_items;
-	size_t          		ncopies;                								// number of datapacket copies to fill at least a writeblock size
+	size_t          		queue_items									= 0;
+	size_t          		ncopies										= 0;	// number of datapacket copies to fill at least a writeblock size
 	double					nRepeats									= 1;
 	int             		error           							= 0;
 	char*					errMsg										= NULL;
-	float64*        		tmpbuff;
-	CmtTSQHandle			tsqID;
+	float64*        		tmpbuff										= NULL;
+	CmtTSQHandle			tsqID										= 0;
 	char* 					DAQmxErrMsg									= NULL;
-	char					CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
-	int 					buffsize;
-	int						itemsRead;
-	int						nSamplesWritten;
+	char					CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
+	int 					buffsize									= 0;
+	int						itemsRead									= 0;
+	int						nSamplesWritten								= 0;
+	BOOL					stopAOTaskFlag								= TRUE;
 	
 	// cycle over channels
 	for (int i = 0; i < data->numchan; i++) {
@@ -10104,30 +10102,33 @@ static int WriteAODAQmx (Dev_type* dev, char** errorInfo)
 			// if datain[i] is empty, get data packet from queue
 			if (!data->datain_size[i]) {
 				
-				// try to get a non-NULL data packet from queue 
-				do { 
-					CmtErrChk( itemsRead = CmtReadTSQData (tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
+				CmtErrChk( itemsRead = CmtReadTSQData (tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
 					
-					/*
-					//--------------------------------------------------------------------------------
-					// try to stop AO generation if task was aborted and NULL packet was received
-					if (!dataPacket && GetTaskControlAbortIterationFlag(dev->taskController)) {
-						int*		nActiveTasksPtr;
-						DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Stop) );
-						// Task Controller iteration is complete if all DAQmx Tasks are complete
-						CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
-						(*nActiveTasksPtr)--;
-		
-						if (!*nActiveTasksPtr)
-						TaskControlIterationDone(dev->taskController, 0, "", FALSE);
-		
-						CmtReleaseTSVPtr(dev->nActiveTasks);
+				// process NULL packet
+				if (!dataPacket) {
+					data->nullPacketReceived[i] = TRUE;
+					
+					if (!data->databuff_size[i]) {
+						// if NULL received and there is no data in the AO buffer, generate error 
+						error = WriteAODAQmx_Err_NULLReceivedBeforeData;
+						errMsg = FormatMsg(error, "WriteAODAQmx", "NULL packet received before any data was written to the AO buffer");
+						goto Error;
+					} else {
+						
+						// repeat last value from the buffer until all AO channels have received a NULL packet
+						data->datain[i] = malloc (data->writeblock * sizeof(float64));
+						for (int j = 0; j < data->writeblock ; j++)
+							data->datain[i][j] = data->databuff[i][data->databuff_size[i] - 1];
+						
+						data->datain_size[i]		= data->writeblock;
+						data->datain_repeat[i] 		= 0;
+						data->datain_remainder[i] 	= 0;
+						data->datain_loop[i] 		= TRUE;
+						
+						goto SkipPacket;
 					}
-					//--------------------------------------------------------------------------------
-					*/
+				}
 					
-				} while (!dataPacket && itemsRead);
-				
 				// if timeout occured and no data packet was read, generate error
 				if (!itemsRead) {
 					error = WriteAODAQmx_Err_WaitingForDataTimeout;
@@ -10181,12 +10182,14 @@ static int WriteAODAQmx (Dev_type* dev, char** errorInfo)
 				if (nRepeats) {
 					data->datain_repeat[i]    = (size_t) nRepeats;
 					data->datain_remainder[i] = (size_t) ((nRepeats - (double) data->datain_repeat[i]) * (double) data->datain_size[i]);
-					data->datain_loop[i]      = 0;
-				} else data->datain_loop[i]   = 1;
+					data->datain_loop[i]      = FALSE;
+				} else data->datain_loop[i]   = TRUE;
 				
 				// data packet not needed anymore, release it (data is deleted if there are no other sinks that need it)
 				ReleaseDataPacket(&dataPacket); 
 			}
+			
+SkipPacket:
 			
 			// get number of datain copies needed to fill the rest of databuff
 			ncopies = (data->writeblock - data->databuff_size[i]) /data->datain_size[i] + 1;
@@ -10270,6 +10273,27 @@ static int WriteAODAQmx (Dev_type* dev, char** errorInfo)
 	}
 	
 	DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
+	
+	// if all AO channels received a NULL packet, stop AO task
+	for (int j = 0; j < data->numchan; j++)
+		if (!data->nullPacketReceived[j]) {
+			stopAOTaskFlag = FALSE;
+			break;
+		}
+	
+	if (stopAOTaskFlag && (!data->writeBlocksLeftToWrite--)) {
+		int*		nActiveTasksPtr;
+		DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Stop) );
+		// Task Controller iteration is complete if all DAQmx Tasks are complete
+		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+		(*nActiveTasksPtr)--;
+		
+		if (!*nActiveTasksPtr)
+		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+		
+		CmtReleaseTSVPtr(dev->nActiveTasks);
+	} 
+		
 	
 	return 0; // no error
 	
@@ -12244,18 +12268,15 @@ static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFl
 	int					error		= 0;
 	DataPacket_type*	nullPacket	= NULL;
 	
-	SyncWait(Timer(), 2.0);   // just temporary to make sure that continuous AO switches to the desired final voltage when receving the closing data packet
-								// this should be implemented better!
-	
 	errChk( StopDAQmxTasks(dev, &errMsg) );
 	
 	SyncWait(Timer(), 1.0); // just make sure that all tasks stop and place data in queues before sending NULL packets from this thread
 	
 	// send NULL data packets to AI channels used in the DAQmx task
 	if (dev->AITaskSet) {
-		size_t				nItems			= ListNumItems(dev->AITaskSet->chanSet); 
+		size_t				nChans			= ListNumItems(dev->AITaskSet->chanSet); 
 		ChanSet_type**		chanSetPtr; 
-		for (size_t i = 1; i <= nItems; i++) { 
+		for (size_t i = 1; i <= nChans; i++) { 
 			chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 			// include only channels for which HW-timing is required
 			if ((*chanSetPtr)->onDemand) continue;

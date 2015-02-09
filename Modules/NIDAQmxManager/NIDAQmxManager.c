@@ -7942,8 +7942,8 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	switch (dev->AOTaskSet->timing->measMode) {
 		case MeasFinite:
 			// adjust output buffer size to match the number of samples to be generated   
-			DAQmxErrChk ( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples) );
-			break;
+		//	DAQmxErrChk ( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples) );
+		//	break;
 			
 		case MeasCont:
 			// adjust output buffer size to be twice (even multiple) the blocksize
@@ -8015,7 +8015,7 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	// Add AO Task callbacks
 	//----------------------
 	// register AO data request callback if task is continuous
-	if (dev->AOTaskSet->timing->measMode == MeasCont)
+	//if (dev->AOTaskSet->timing->measMode == MeasCont)
 		DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev)); 
 	// register AO task done event callback
 	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
@@ -9171,7 +9171,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	switch (dev->AOTaskSet->timing->measMode) {
 			
 		case MeasFinite:
-			
+			/*
 			// adjust output buffer size to match the number of samples to be generated   
 			DAQmxErrChk( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples) );
 			
@@ -9224,6 +9224,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 			OKfree(AOData);
 			discard_Waveform_type(&AOWaveform); 
 			break;
+			*/
 			
 		case MeasCont:
 			

@@ -4977,7 +4977,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	RepeatedWaveform_type*		fastAxisScan_RepWaveform					= NULL;
 	RepeatedWaveform_type*		slowAxisScan_RepWaveform					= NULL; 
 	DataPacket_type*			galvoCommandPacket							= NULL; 
-	DataPacket_type*			pixelInfoPacket								= NULL; 
+	DataPacket_type*			pixelInfoPacket								= NULL;
+	DataPacket_type*			nullPacket									= NULL;
 	PulseTrain_type*			pixelInfo									= NULL;
 	char*						errMsg										= NULL;
 	int							error 										= 0;
@@ -5141,9 +5142,11 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		// generate one sample
 		nullChk( parkedVoltageSignal = malloc(sizeof(double)) );
 		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
-		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, (void**)&parkedVoltageSignal, 1);
+		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) ); 
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
+		// send NULL packet to signal termination of data stream
+		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );    
 	}
 	
 	// send number of samples in fast axis command waveform if scan is finite
@@ -5185,9 +5188,11 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		// generate one sample
 		nullChk( parkedVoltageSignal = malloc(sizeof(double)) );
 		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
-		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, (void**)&parkedVoltageSignal, 1);
+		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) ); 
-		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
+		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
+		// send NULL packet to signal termination of data stream
+		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );    
 	}
 	
 	// send number of samples in slow axis command waveform if scan is finite
@@ -6973,8 +6978,9 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 	
 	// close shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorInfo) );
-	// return to parked position
-	errChk( ReturnRectRasterToParkedPosition(engine, errorInfo) );
+	// return to parked position if continuous
+	if (GetTaskControlMode(engine->baseClass.taskControl) == TASK_CONTINUOUS)
+		errChk( ReturnRectRasterToParkedPosition(engine, errorInfo) );
 	
 	return 0; 
 	

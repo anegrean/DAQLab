@@ -4455,10 +4455,20 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					BOOL	executionMode;
 					GetCtrlVal(panel, control, &executionMode);
 					SetTaskControlMode(scanEngine->baseClass.taskControl, (TaskMode_type)!executionMode);
+					// dim/undim N Frames
+					if (executionMode)
+						SetCtrlAttribute(panel, RectRaster_NFrames, ATTR_DIMMED, 1);
+					else
+						SetCtrlAttribute(panel, RectRaster_NFrames, ATTR_DIMMED, 0);
 					
 					break;
 					
-				case RectRaster_Duration:
+				case RectRaster_NFrames:
+					
+					unsigned int nFrames = 0;
+					
+					GetCtrlVal(panel, control, &nFrames);
+					SetTaskControlIterations(scanEngine->baseClass.taskControl, nFrames);
 					
 					break;
 				
@@ -6853,11 +6863,14 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 			break;
 	}
 	
+	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	
 	return;
 	
 Error:
 	
 	TaskControlIterationDone(taskControl, error, errMsg, FALSE);
+	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	OKfree(errMsg);
 }
 
@@ -6877,6 +6890,9 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	DisplayEngine_type*		displayEngine		= engine->baseClass.lsModule->displayEngine;
 	DLDataTypes				pixelDataType		= 0;
 	ImageTypes				imageType			= 0;
+	
+	// reset iterations display
+	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, 0);
 	
 	// discard image assembly buffers
 	for (size_t i = 0; i < engine->nImgBuffers; i++)
@@ -6992,6 +7008,9 @@ static int ResetTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 {
 	RectRaster_type* 	engine 		= GetTaskControlModuleData(taskControl);
 	int					error		= 0;
+	
+	// reset acquired frames
+	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, 0);
 	
 	// close shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorInfo) ); 

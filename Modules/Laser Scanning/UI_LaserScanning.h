@@ -49,9 +49,9 @@
 #define  RectRaster                       6
 #define  RectRaster_PixelSize             2       /* control type: numeric, callback function: (none) */
 #define  RectRaster_Plate_3               3       /* control type: deco, callback function: (none) */
-#define  RectRaster_Duration              4       /* control type: numeric, callback function: (none) */
-#define  RectRaster_Plate_2               5       /* control type: deco, callback function: (none) */
-#define  RectRaster_Plate                 6       /* control type: deco, callback function: (none) */
+#define  RectRaster_Plate_2               4       /* control type: deco, callback function: (none) */
+#define  RectRaster_Plate                 5       /* control type: deco, callback function: (none) */
+#define  RectRaster_FramesAcquired        6       /* control type: numeric, callback function: (none) */
 #define  RectRaster_FPS                   7       /* control type: numeric, callback function: (none) */
 #define  RectRaster_HeightOffset          8       /* control type: numeric, callback function: (none) */
 #define  RectRaster_WidthOffset           9       /* control type: numeric, callback function: (none) */
@@ -60,9 +60,10 @@
 #define  RectRaster_Height                12      /* control type: string, callback function: (none) */
 #define  RectRaster_Objective             13      /* control type: ring, callback function: (none) */
 #define  RectRaster_Mode                  14      /* control type: ring, callback function: (none) */
-#define  RectRaster_Averages              15      /* control type: numeric, callback function: (none) */
-#define  RectRaster_ExecutionMode         16      /* control type: radioButton, callback function: (none) */
-#define  RectRaster_Ready                 17      /* control type: LED, callback function: (none) */
+#define  RectRaster_NFrames               15      /* control type: numeric, callback function: (none) */
+#define  RectRaster_Averages              16      /* control type: numeric, callback function: (none) */
+#define  RectRaster_ExecutionMode         17      /* control type: radioButton, callback function: (none) */
+#define  RectRaster_Ready                 18      /* control type: LED, callback function: (none) */
 
 #define  ScanPan                          7
 #define  ScanPan_Plate                    2       /* control type: deco, callback function: (none) */

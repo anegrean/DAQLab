@@ -9783,8 +9783,9 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
 		if ((*chanSetPtr)->onDemand) continue;
-		// forward data from the AI buffer to the VChan 								// <----- ABORT HERE AI TASK IF REQUIRED!!!!!!!!!!!!!!!!
-		errChk( SendAIBufferData(dev, *chanSetPtr, chIdx, nRead, readBuffer, &errMsg) ); 
+		// forward data from the AI buffer to the VChan if the task was not aborted	
+		if (!GetTaskControlAbortIterationFlag(dev->taskController))
+			errChk( SendAIBufferData(dev, *chanSetPtr, chIdx, nRead, readBuffer, &errMsg) ); 
 		// next AI channel
 		chIdx++;
 	}
@@ -12269,8 +12270,6 @@ static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFl
 	DataPacket_type*	nullPacket	= NULL;
 	
 	errChk( StopDAQmxTasks(dev, &errMsg) );
-	
-	SyncWait(Timer(), 1.0); // just make sure that all tasks stop and place data in queues before sending NULL packets from this thread
 	
 	// send NULL data packets to AI channels used in the DAQmx task
 	if (dev->AITaskSet) {

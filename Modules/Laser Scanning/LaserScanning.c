@@ -41,7 +41,8 @@
 #define VChan_ScanEngine_ImageOut							"image"
 #define VChan_ScanEngine_DetectionChan						"detector"
 #define VChan_ScanEngine_Shutter_Command					"shutter"
-#define VChan_ScanEngine_Pixel_Settings						"pixel settings"
+#define VChan_ScanEngine_Pixel_PulseTrain					"pixel pulse train"
+#define VChan_ScanEngine_NPixels							"n pixels"
 // Default Scan Axis Calibration VChan base names.
 #define VChan_AxisCal_Command								"command"
 #define VChan_AxisCal_Position								"position"
@@ -336,8 +337,10 @@ struct ScanEngine {
 	SourceVChan_type*			VChanScanOut;
 		// Mechanical shutter command
 	SourceVChan_type*			VChanShutter;
-		// Pixel info settings
-	SourceVChan_type*			VChanPixelSettings;
+		// Pixel pulse train
+	SourceVChan_type*			VChanPixelPulseTrain;
+		// N pixels
+	SourceVChan_type*			VChanNPixels;
 		// Detector input channels of DetChan_type* with incoming fluorescence pixel stream 
 	ListType					DetChans;
 	
@@ -586,7 +589,8 @@ static int 							init_ScanEngine_type 							(ScanEngine_type* 		engine,
 								 											 	 	 char					imageOutVChanName[],
 																				 	 char					detectorVChanName[],
 																				 	 char					shutterVChanName[],
-																				 	 char					pixelSettingsVChanName[],
+																				 	 char					pixelPulseTrainVChanName[],
+																					 char					nPixelsVChanName[],
 																				 	 double					pixelClockRate,
 																					 double					pixelDelay,
 																					 double					pixelSize,
@@ -620,7 +624,8 @@ static RectRaster_type*				init_RectRaster_type							(LaserScanning_type*	lsMod
 								 											 	 	 char					imageOutVChanName[],
 																			 	 	 char					detectorVChanName[],
 																				 	 char					shutterVChanName[],
-																				 	 char					pixelSettingsVChanName[],
+																				 	 char					pixelPulseTrainVChanName[],
+																					 char					nPixelsVChanName[],
 																				 	 double					galvoSamplingRate,
 																				 	 double					pixelClockRate,
 																					 double					pixelDelay,
@@ -739,9 +744,6 @@ static void							DetVChan_Disconnected							(VChan_type* self, void* VChanOwne
 	// Shutter VChan
 static void							ShutterVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
 static void							ShutterVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
-
-	// Pixel settings VChan
-static void							PixelSettingsVChan_Connected					(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
 
 //-----------------------------------------
 // Display interface
@@ -1144,7 +1146,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 		AddSinkVChan((*scanEnginePtr)->taskControl, (*scanEnginePtr)->VChanSlowAxisPos, NULL);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanScanOut);
 		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanShutter);
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanPixelSettings); 
+		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanPixelPulseTrain); 
+		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*scanEnginePtr)->VChanNPixels); 
 		
 		nDetectorVChans = ListNumItems((*scanEnginePtr)->DetChans);
 		for (size_t j = 1; j <= nDetectorVChans; j++) {
@@ -1279,8 +1282,9 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	char* 					slowAxisPositionVChanName		= NULL;
 	char* 					scanEngineOutVChanName			= NULL;
 	char*					shutterVChanName				= NULL;
-	char*					pixelSettingsVChanName			= NULL;
-	DAQLabXMLNode			scanEngineVChansAttr[9];
+	char*					pixelPulseTrainVChanName		= NULL;
+	char*					nPixelsVChanName				= NULL;
+	DAQLabXMLNode			scanEngineVChansAttr[10];
 	DAQLabXMLNode			detectorVChanAttr;
 	size_t					nDetectionChans;
 	size_t					nObjectives;
@@ -1357,7 +1361,9 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		slowAxisPositionVChanName 		= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanSlowAxisPos);
 		scanEngineOutVChanName			= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanScanOut);
 		shutterVChanName				= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanShutter);
-		pixelSettingsVChanName			= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanPixelSettings); 
+		pixelPulseTrainVChanName		= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanPixelPulseTrain);
+		nPixelsVChanName				= GetVChanName((VChan_type*)(*scanEnginePtr)->VChanNPixels);
+		
 				
 		scanEngineVChansAttr[0].tag 	= "FastAxisCommand";
 		scanEngineVChansAttr[0].type   	= BasicData_CString;
@@ -1391,9 +1397,13 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		scanEngineVChansAttr[7].type   	= BasicData_CString;
 		scanEngineVChansAttr[7].pData	= shutterVChanName;
 		
-		scanEngineVChansAttr[8].tag 	= "PixelSettings";
+		scanEngineVChansAttr[8].tag 	= "PixelPulseTrain";
 		scanEngineVChansAttr[8].type   	= BasicData_CString;
-		scanEngineVChansAttr[8].pData	= pixelSettingsVChanName;
+		scanEngineVChansAttr[8].pData	= pixelPulseTrainVChanName;
+		
+		scanEngineVChansAttr[9].tag 	= "NPixels";
+		scanEngineVChansAttr[9].type   	= BasicData_CString;
+		scanEngineVChansAttr[9].pData	= nPixelsVChanName;
 														 	
 		DLAddToXMLElem(xmlDOM, VChanNamesXMLElement, scanEngineVChansAttr, DL_ATTRIBUTE, NumElem(scanEngineVChansAttr));
 				
@@ -1405,7 +1415,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		OKfree(slowAxisPositionVChanName);
 		OKfree(scanEngineOutVChanName);
 		OKfree(shutterVChanName);
-		OKfree(pixelSettingsVChanName);
+		OKfree(pixelPulseTrainVChanName);
 		
 		// save detector VChans
 		nDetectionChans = ListNumItems((*scanEnginePtr)->DetChans);
@@ -1579,7 +1589,8 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	char*							scanEngineOutVChanName			= NULL;
 	char*							detectorVChanName				= NULL;
 	char*							shutterVChanName				= NULL;
-	char*							pixelSettingsVChanName			= NULL;
+	char*							pixelPulseTrainVChanName		= NULL;
+	char*							nPixelsVChanName				= NULL;
 	double							scanLensFL						= 0;
 	double							tubeLensFL						= 0;
 	double							objectiveFL						= 0;
@@ -1608,7 +1619,8 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 																		{"SlowAxisPosition", BasicData_CString, &slowAxisPositionVChanName},
 																		{"ScanEngineOut", BasicData_CString, &scanEngineOutVChanName},
 																		{"Shutter", BasicData_CString, &shutterVChanName},
-																		{"PixelSettings", BasicData_CString, &pixelSettingsVChanName} };
+																		{"PixelPulseTrain", BasicData_CString, &pixelPulseTrainVChanName},
+																		{"NPixels", BasicData_CString, &nPixelsVChanName} };
 																	
 	DAQLabXMLNode					objectiveAttr[]					= { {"Name", BasicData_CString, &objectiveName},
 																		{"FL", BasicData_Double, &objectiveFL} };
@@ -1679,7 +1691,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 					
 				
 				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, fastAxisCommandVChanName, fastAxisCommandNSampVChanName, slowAxisCommandVChanName, slowAxisCommandNSampVChanName, fastAxisPositionVChanName,
-													  slowAxisPositionVChanName, scanEngineOutVChanName, NULL, shutterVChanName, pixelSettingsVChanName, galvoSamplingRate, pixelClockRate, pixelDelay, height, heightOffset, width, widthOffset, 
+													  slowAxisPositionVChanName, scanEngineOutVChanName, NULL, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName, galvoSamplingRate, pixelClockRate, pixelDelay, height, heightOffset, width, widthOffset, 
 													  pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
 				break;
 			
@@ -1770,7 +1782,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 		OKfree(slowAxisPositionVChanName);
 		OKfree(scanEngineOutVChanName);
 		OKfree(shutterVChanName);
-		OKfree(pixelSettingsVChanName);
+		OKfree(pixelPulseTrainVChanName);
 	}
 	
 	
@@ -2129,7 +2141,7 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	char* VChanSlowAxisPosName 		= GetVChanName((VChan_type*)engine->VChanSlowAxisPos);
 	char* VChanScanOutName 			= GetVChanName((VChan_type*)engine->VChanScanOut); 
 	char* VChanShutterName			= GetVChanName((VChan_type*)engine->VChanShutter);   
-	char* VChanPixelSettingsName	= GetVChanName((VChan_type*)engine->VChanPixelSettings);   
+	char* VChanPixelPulseTrainName	= GetVChanName((VChan_type*)engine->VChanPixelPulseTrain);   
 	
 	// update VChans from data structure
 	if (engine->VChanFastAxisCom)
@@ -2150,8 +2162,8 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	if (engine->VChanShutter)
 		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ShutterCommand, VChanShutterName);
 	
-	if (engine->VChanPixelSettings)
-		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelSettings, VChanPixelSettingsName); 
+	if (engine->VChanPixelPulseTrain)
+		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelPulseTrain, VChanPixelPulseTrainName); 
 		
 	size_t 				nImgChans 		= ListNumItems(engine->DetChans);
 	DetChan_type** 		detChanPtrPtr;
@@ -2271,14 +2283,15 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					char*	imageOutVChanName			= DLGetUniqueVChanName(VChan_ScanEngine_ImageOut);
 					char*	detectionVChanName			= DLGetUniqueVChanName(VChan_ScanEngine_DetectionChan);
 					char*	shutterVChanName			= DLGetUniqueVChanName(VChan_ScanEngine_Shutter_Command);
-					char*	pixelSettingsVChanName		= DLGetUniqueVChanName(VChan_ScanEngine_Pixel_Settings);  
+					char*	pixelPulseTrainVChanName	= DLGetUniqueVChanName(VChan_ScanEngine_Pixel_PulseTrain); 
+					char*	nPixelsVChanName			= DLGetUniqueVChanName(VChan_ScanEngine_NPixels);
 							
 					switch (engineType) {
 					
 						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 					
 							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, fastAxisComVChanName, fastAxisComNSampVChanName, slowAxisComVChanName, slowAxisComNSampVChanName,
-														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectionVChanName, shutterVChanName, pixelSettingsVChanName, 
+														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectionVChanName, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName,
 														NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
 							
 							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;   
@@ -2319,7 +2332,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					OKfree(imageOutVChanName);
 					OKfree(detectionVChanName);
 					OKfree(shutterVChanName);
-					OKfree(pixelSettingsVChanName);
+					OKfree(pixelPulseTrainVChanName);
 					//------------------------------------------------------------------------------------------------------------------
 					newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl);  
 					// discard loaded panel and add scan control panel handle to scan engine
@@ -2399,7 +2412,8 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanSlowAxisPos);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanScanOut);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanShutter);     
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanPixelSettings);     
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanPixelPulseTrain); 
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanNPixels); 
 					DetChan_type**	detPtr = ListGetPtrToItem(newScanEngine->DetChans, 1);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan);
 					
@@ -2897,10 +2911,10 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					DLRenameVChan((VChan_type*)engine->VChanShutter, newName); 
 					break;
 					
-				case ScanSetPan_PixelSettings:
+				case ScanSetPan_PixelPulseTrain:
 					
 					newName = GetStringFromControl (panel, control);
-					DLRenameVChan((VChan_type*)engine->VChanPixelSettings, newName);  
+					DLRenameVChan((VChan_type*)engine->VChanPixelPulseTrain, newName);  
 					break;
 					
 				case ScanSetPan_AddImgChan:
@@ -3968,7 +3982,8 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 								 char					imageOutVChanName[],
 								 char					detectorVChanName[],
 								 char					shutterVChanName[],
-								 char					pixelSettingsVChanName[],
+								 char					pixelPulseTrainVChanName[],
+								 char					nPixelsVChanName[],
 								 double					pixelClockRate,
 								 double					pixelDelay,
 								 double					pixelSize,
@@ -4000,7 +4015,8 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	engine->VChanFastAxisPos			= NULL;
 	engine->VChanScanOut				= NULL;
 	engine->VChanShutter				= NULL;
-	engine->VChanPixelSettings			= NULL;
+	engine->VChanPixelPulseTrain		= NULL;
+	engine->VChanNPixels				= NULL;
 	engine->DetChans 					= 0;
 	// optics
 	engine->objectives					= 0;
@@ -4033,7 +4049,8 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	nullChk( engine->VChanSlowAxisPos			= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected) ); 
 	nullChk( engine->VChanScanOut				= init_SourceVChan_type(imageOutVChanName, DL_Image_NIVision, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected) );
 	nullChk( engine->VChanShutter				= init_SourceVChan_type(shutterVChanName, DL_Waveform_UChar, engine, ShutterVChan_Connected, ShutterVChan_Disconnected) ); 
-	nullChk( engine->VChanPixelSettings			= init_SourceVChan_type(pixelSettingsVChanName, DL_PulseTrain_Ticks, engine, PixelSettingsVChan_Connected, PixelSettingsVChan_Connected) ); 	
+	nullChk( engine->VChanPixelPulseTrain		= init_SourceVChan_type(pixelPulseTrainVChanName, DL_PulseTrain_Ticks, engine, NULL, NULL) ); 	
+	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_ULongLong, engine, NULL, NULL) ); 	
 	nullChk( engine->DetChans					= ListCreate(sizeof(DetChan_type*)) ); 
 	// add one detection channel to the scan engine if required
 	if (detectorVChanName) {
@@ -4055,7 +4072,8 @@ Error:
 	discard_VChan_type(&engine->VChanSlowAxisPos);
 	discard_VChan_type(&engine->VChanScanOut);
 	discard_VChan_type(&engine->VChanShutter);
-	discard_VChan_type(&engine->VChanPixelSettings);
+	discard_VChan_type(&engine->VChanPixelPulseTrain);
+	discard_VChan_type(&engine->VChanNPixels); 
 	if (engine->DetChans) {
 		if (ListNumItems(engine->DetChans)) {
 			DetChan_type** 	detChanPtr = ListGetPtrToItem(engine->DetChans, 1);
@@ -4125,10 +4143,16 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 		discard_VChan_type((VChan_type**)&engine->VChanShutter);
 	}
 	
-	// pixel settings 
-	if (engine->VChanPixelSettings) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelSettings);
-		discard_VChan_type((VChan_type**)&engine->VChanPixelSettings);
+	// pixel pulse train
+	if (engine->VChanPixelPulseTrain) {
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelPulseTrain);
+		discard_VChan_type((VChan_type**)&engine->VChanPixelPulseTrain);
+	}
+	
+	// n pixels
+	if (engine->VChanNPixels) {
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanNPixels);
+		discard_VChan_type((VChan_type**)&engine->VChanNPixels);
 	}
 	
 	// detection channels
@@ -4262,7 +4286,8 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 														char					imageOutVChanName[],
 														char					detectorVChanName[],
 														char					shutterVChanName[],
-														char					pixelSettingsVChanName[],
+														char					pixelPulseTrainVChanName[],
+														char					nPixelsVChanName[],
 														double					galvoSamplingRate,
 														double					pixelClockRate,
 														double					pixelDelay,
@@ -4283,7 +4308,7 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	// init base scan engine class
 	//--------------------------------------------------------
 	errChk( init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, fastAxisComVChanName, fastAxisComNSampVChanName, slowAxisComVChanName, slowAxisComNSampVChanName, fastAxisPosVChanName, 
-						 slowAxisPosVChanName, imageOutVChanName, detectorVChanName, shutterVChanName, pixelSettingsVChanName, pixelClockRate, pixelDelay, pixelSize, scanLensFL, tubeLensFL) );
+						 slowAxisPosVChanName, imageOutVChanName, detectorVChanName, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName, pixelClockRate, pixelDelay, pixelSize, scanLensFL, tubeLensFL) );
 	// override discard method
 	engine->baseClass.Discard			= discard_RectRaster_type;
 	// add task controller
@@ -4965,7 +4990,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	double*						fastAxisCompensationSignal					= NULL;
 	double*						slowAxisCompensationSignal					= NULL; 
 	double*						parkedVoltageSignal							= NULL;
-	uInt64*						nSamplesPtr									= NULL;
+	uInt64*						nGalvoSamplesPtr							= NULL;
+	uInt64* 					nPixelsPtr									= NULL;
 	Waveform_type* 				fastAxisScan_Waveform						= NULL;
 	Waveform_type*				fastAxisMoveFromParkedWaveform				= NULL;
 	Waveform_type*				fastAxisMoveFromParkedCompensatedWaveform   = NULL;
@@ -4977,9 +5003,10 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	RepeatedWaveform_type*		fastAxisScan_RepWaveform					= NULL;
 	RepeatedWaveform_type*		slowAxisScan_RepWaveform					= NULL; 
 	DataPacket_type*			galvoCommandPacket							= NULL; 
-	DataPacket_type*			pixelInfoPacket								= NULL;
+	DataPacket_type*			pixelPulseTrainPacket						= NULL;
+	DataPacket_type*			nPixelsPacket								= NULL;
 	DataPacket_type*			nullPacket									= NULL;
-	PulseTrain_type*			pixelInfo									= NULL;
+	PulseTrain_type*			pixelPulseTrain								= NULL;
 	char*						errMsg										= NULL;
 	int							error 										= 0;
 	
@@ -5151,11 +5178,11 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// send number of samples in fast axis command waveform if scan is finite
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
-		nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+		nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
 		// move from parked waveform + scan waveform + one sample to return to parked position
-		*nSamplesPtr = (uInt64)((nGalvoSamplesFastAxisCompensation + nGalvoSamplesFastAxisMoveFromParkedWaveform) + 
+		*nGalvoSamplesPtr = (uInt64)((nGalvoSamplesFastAxisCompensation + nGalvoSamplesFastAxisMoveFromParkedWaveform) + 
 					   (scanEngine->width/2.0 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) * 2 * nGalvoSamplesPerLine + 1);
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nSamplesPtr, NULL, NULL) );
+		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
 	
@@ -5197,11 +5224,11 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// send number of samples in slow axis command waveform if scan is finite
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
-		nSamplesPtr = malloc(sizeof(uInt64));
+		nGalvoSamplesPtr = malloc(sizeof(uInt64));
 		// move from parked waveform + scan waveform + one sample to return to parked position
-		*nSamplesPtr = (uInt64) ((nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParkedWaveform) + 
+		*nGalvoSamplesPtr = (uInt64) ((nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParkedWaveform) + 
 					    GetTaskControlIterations(scanEngine->baseClass.taskControl) * 0.5 * nGalvoSamplesSlowAxisScanWaveform + 1);
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nSamplesPtr, NULL, NULL) );
+		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
 	
@@ -5214,19 +5241,25 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		//--------------------
 		// finite mode
 		//--------------------
-		// total number of pixels (fly-in pixels + pixel signal delay / pixel  dwell time + nFrames * imageSize)
-		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->pixelDwellTime) + (uInt64)scanEngine->height * (uInt64)scanEngine->width * (uInt64)GetTaskControlIterations(scanEngine->baseClass.taskControl); 
-		nullChk( pixelInfo = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32)(scanEngine->pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
+		// total number of pixels
+		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)scanEngine->width * (uInt64)GetTaskControlIterations(scanEngine->baseClass.taskControl); 
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32)(scanEngine->pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
+		
+		// send n pixels
+		nullChk( nPixelsPtr = malloc(sizeof(uInt64)) );
+		*nPixelsPtr = nPixels;
+		nullChk( nPixelsPacket = init_DataPacket_type(DL_ULongLong, (void**)&nPixelsPtr, NULL, NULL) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &nPixelsPacket, FALSE, &errMsg) );    
 	}
 	else 
 		//--------------------
 		// continuous mode
 		//--------------------
-		nullChk( pixelInfo = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32)(scanEngine->pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32)(scanEngine->pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
 	
-	// send data
-	nullChk( pixelInfoPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelInfo, NULL, (DiscardPacketDataFptr_type)discard_PulseTrain_type) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSettings, &pixelInfoPacket, FALSE, &errMsg) ); 
+	// send pulse train info
+	nullChk( pixelPulseTrainPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, NULL, (DiscardPacketDataFptr_type)discard_PulseTrain_type) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &pixelPulseTrainPacket, FALSE, &errMsg) ); 
 	
 	return 0; // no error
 				  
@@ -5236,7 +5269,7 @@ Error:
 	OKfree(fastAxisCompensationSignal);
 	OKfree(slowAxisCompensationSignal);
 	OKfree(parkedVoltageSignal);
-	OKfree(nSamplesPtr);
+	OKfree(nGalvoSamplesPtr);
 	discard_Waveform_type(&fastAxisScan_Waveform);
 	discard_Waveform_type(&fastAxisMoveFromParkedWaveform);
 	discard_Waveform_type(&fastAxisMoveFromParkedCompensatedWaveform); 
@@ -5247,8 +5280,10 @@ Error:
 	discard_RepeatedWaveform_type(&slowAxisMoveFromParked_RepWaveform); 
 	discard_RepeatedWaveform_type(&fastAxisScan_RepWaveform);
 	discard_RepeatedWaveform_type(&slowAxisScan_RepWaveform);
-	discard_PulseTrain_type(&pixelInfo);
+	discard_PulseTrain_type(&pixelPulseTrain);
 	ReleaseDataPacket(&galvoCommandPacket);
+	ReleaseDataPacket(&pixelPulseTrainPacket);
+	ReleaseDataPacket(&nPixelsPacket);
 	
 	*errorInfo = FormatMsg(NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals, "NonResRectRasterScan_GenerateScanSignals", errMsg);
 	OKfree(errMsg);
@@ -5930,12 +5965,6 @@ static void	ShutterVChan_Connected (VChan_type* self, void* VChanOwner, VChan_ty
 }
 
 static void	ShutterVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
-// Pixel settings VChan
-static void	PixelSettingsVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
 	
 }
@@ -6868,6 +6897,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 			break;
 	}
 	
+	// update iterations
 	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
 	return;
@@ -6957,7 +6987,7 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 		// allocate memory for image assembly
 		engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
 		engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, 
-				(size_t)(engine->flyInDelay/engine->pixelDwellTime + engine->baseClass.pixDelay/engine->pixelDwellTime), pixelDataType,FALSE, FALSE); 
+				(size_t)((engine->flyInDelay - engine->baseClass.pixDelay)/engine->pixelDwellTime), pixelDataType,FALSE, FALSE); 
 	}
 	
 	return 0; // no error
@@ -6981,6 +7011,8 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 	// return to parked position if continuous
 	if (GetTaskControlMode(engine->baseClass.taskControl) == TASK_CONTINUOUS)
 		errChk( ReturnRectRasterToParkedPosition(engine, errorInfo) );
+	// update iterations
+	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
 	return 0; 
 	

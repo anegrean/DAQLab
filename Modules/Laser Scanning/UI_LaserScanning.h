@@ -83,7 +83,7 @@
 #define  ScanSetPan_FastAxisCommand       12      /* control type: string, callback function: (none) */
 #define  ScanSetPan_SlowAxisPosition      13      /* control type: string, callback function: (none) */
 #define  ScanSetPan_SlowAxisCommand       14      /* control type: string, callback function: (none) */
-#define  ScanSetPan_PixelSettings         15      /* control type: string, callback function: (none) */
+#define  ScanSetPan_PixelPulseTrain       15      /* control type: string, callback function: (none) */
 #define  ScanSetPan_ShutterCommand        16      /* control type: string, callback function: (none) */
 #define  ScanSetPan_ImageOut              17      /* control type: string, callback function: (none) */
 #define  ScanSetPan_Objectives            18      /* control type: listBox, callback function: (none) */

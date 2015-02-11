@@ -8810,32 +8810,60 @@ Error:
 static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 {
 #define StopDAQmxTasks_Err_StoppingTasks	-1
-	int 		error			= 0;  
-	int*		nActiveTasksPtr;
+	
+	int 				error				= 0;  
+	int*				nActiveTasksPtr		= NULL;
+	bool32				taskDoneFlag		= FALSE;
+	DataPacket_type*	nullPacket			= NULL;
+	char*				errMsg				= NULL;
 	
 	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
 	// AI task
 	if (dev->AITaskSet && dev->AITaskSet->taskHndl) {
-		errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
-		(*nActiveTasksPtr)--;
+		DAQmxIsTaskDone(dev->AITaskSet->taskHndl, &taskDoneFlag); 
+		if (!taskDoneFlag ) {
+			errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
+			(*nActiveTasksPtr)--;
+			
+			// send NULL data packets to AI channels used in the DAQmx task
+			size_t				nChans			= ListNumItems(dev->AITaskSet->chanSet); 
+			ChanSet_type**		chanSetPtr; 
+			for (size_t i = 1; i <= nChans; i++) { 
+				chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+				// include only channels for which HW-timing is required
+				if ((*chanSetPtr)->onDemand) continue;
+				// send NULL packet to signal end of data transmission
+				errChk( SendDataPacket((*chanSetPtr)->srcVChan, &nullPacket, 0, &errMsg) );
+			}
+			
+		}
 	}
 	
 	// AO task (stop if finite; continuous task stopping happens on receiving a NULL packet and is handled by WriteAODAQmx)
 	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl && dev->AOTaskSet->timing->measMode == MeasFinite) {
-		errChk(DAQmxStopTask(dev->AOTaskSet->taskHndl));
-		(*nActiveTasksPtr)--; 
+		DAQmxIsTaskDone(dev->AOTaskSet->taskHndl, &taskDoneFlag); 
+		if (!taskDoneFlag ) {
+			errChk(DAQmxStopTask(dev->AOTaskSet->taskHndl));
+			(*nActiveTasksPtr)--; 
+		}
 	}
 	
 	// DI task
 	if (dev->DITaskSet && dev->DITaskSet->taskHndl) {
-		errChk(DAQmxStopTask(dev->DITaskSet->taskHndl));
-		(*nActiveTasksPtr)--;
+		DAQmxIsTaskDone(dev->DITaskSet->taskHndl, &taskDoneFlag); 
+		if (!taskDoneFlag ) {
+			errChk(DAQmxStopTask(dev->DITaskSet->taskHndl));
+			(*nActiveTasksPtr)--;
+		}
 	}
 	
 	// DO task
 	if (dev->DOTaskSet && dev->DOTaskSet->taskHndl) {
-		errChk(DAQmxStopTask(dev->DOTaskSet->taskHndl));
-		(*nActiveTasksPtr)--;
+		DAQmxIsTaskDone(dev->DOTaskSet->taskHndl, &taskDoneFlag); 
+		if (!taskDoneFlag ) {
+			errChk(DAQmxStopTask(dev->DOTaskSet->taskHndl));
+			(*nActiveTasksPtr)--;
+		}
 	}
 	
 	// CI task
@@ -8845,8 +8873,11 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	   	for (size_t i = 1; i <= nChans; i++) {	
 			chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 			if ((*chanSetPtr)->taskHndl) {
-				errChk( DAQmxStopTask((*chanSetPtr)->taskHndl) );
-				(*nActiveTasksPtr)--;
+				DAQmxIsTaskDone((*chanSetPtr)->taskHndl, &taskDoneFlag); 
+				if (!taskDoneFlag ) {
+					errChk( DAQmxStopTask((*chanSetPtr)->taskHndl) );
+					(*nActiveTasksPtr)--;
+				}
 			}
 		}
 	}
@@ -8858,8 +8889,11 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	   	for (size_t i = 1; i <= nChans; i++) {	
 			chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);	
 			if ((*chanSetPtr)->taskHndl) {
-				errChk( DAQmxStopTask((*chanSetPtr)->taskHndl) );
-				(*nActiveTasksPtr)--;
+				DAQmxIsTaskDone((*chanSetPtr)->taskHndl, &taskDoneFlag); 
+				if (!taskDoneFlag ) {
+					errChk( DAQmxStopTask((*chanSetPtr)->taskHndl) );
+					(*nActiveTasksPtr)--;
+				}
 			}
 		}
 	}
@@ -8873,7 +8907,7 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	
 Error:
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
 	if (errorInfo)
 		*errorInfo = FormatMsg(StopDAQmxTasks_Err_StoppingTasks, "StopDAQmxTasks", errMsg);
@@ -8907,8 +8941,6 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	Dev_type*			dev				= functionData;
 	char*				errMsg			= NULL;
 	int					error			= 0;
-	int*				nActiveTasksPtr	= NULL;	// Keeps track of the number of DAQmx tasks that must still complete
-												// before a task controller iteration is considered to be complete
 	DataPacket_type*	dataPacket		= NULL;
 	void*				dataPacketData	= NULL;
 	DLDataTypes			dataPacketType;
@@ -9067,8 +9099,6 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	Dev_type*			dev						= functionData;
 	char*				errMsg					= NULL;
 	int					error					= 0;
-	int*				nActiveTasksPtr			= NULL;	// Keeps track of the number of DAQmx tasks that must still complete
-												// before a task controller iteration is considered to be complete
 	DataPacket_type*	dataPacket				= NULL;
 	void*				dataPacketData			= NULL;
 	DLDataTypes			dataPacketType;
@@ -10109,12 +10139,23 @@ static int WriteAODAQmx (Dev_type* dev, char** errorInfo)
 				// process NULL packet
 				if (!dataPacket) {
 					data->nullPacketReceived[i] = TRUE;
-					
+																			
+																			
 					if (!data->databuff_size[i]) {
-						// if NULL received and there is no data in the AO buffer, generate error 
-						error = WriteAODAQmx_Err_NULLReceivedBeforeData;
-						errMsg = FormatMsg(error, "WriteAODAQmx", "NULL packet received before any data was written to the AO buffer");
-						goto Error;
+						// if NULL received and there is no data in the AO buffer, stop AO task
+						int*		nActiveTasksPtr;
+						DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Stop) );
+						// Task Controller iteration is complete if all DAQmx Tasks are complete
+						CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+						(*nActiveTasksPtr)--;
+		
+						if (!*nActiveTasksPtr)
+						TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+		
+						CmtReleaseTSVPtr(dev->nActiveTasks);
+						
+						return 0;
+						
 					} else {
 						
 						// repeat last value from the buffer until all AO channels have received a NULL packet
@@ -12268,22 +12309,8 @@ static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFl
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
 	char*				errMsg		= NULL;
 	int					error		= 0;
-	DataPacket_type*	nullPacket	= NULL;
 	
 	errChk( StopDAQmxTasks(dev, &errMsg) );
-	
-	// send NULL data packets to AI channels used in the DAQmx task
-	if (dev->AITaskSet) {
-		size_t				nChans			= ListNumItems(dev->AITaskSet->chanSet); 
-		ChanSet_type**		chanSetPtr; 
-		for (size_t i = 1; i <= nChans; i++) { 
-			chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
-			// include only channels for which HW-timing is required
-			if ((*chanSetPtr)->onDemand) continue;
-			// send NULL packet to signal end of data transmission
-			errChk( SendDataPacket((*chanSetPtr)->srcVChan, &nullPacket, 0, &errMsg) );
-		}
-	}
 	
 	return;
 Error:

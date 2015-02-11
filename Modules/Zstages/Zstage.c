@@ -884,12 +884,18 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 						case MOUSE_WHEEL_SCROLL_UP:
 							
 							SetCtrlVal(panel, control, (*zstage->zPos + direction * stepsize) * 1000);	// convert back to [um]
-							break;
+							// move relative to current position
+							if (zstage->MoveZ)
+								(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, direction * stepsize);
+							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, (*zstage->zPos - direction * stepsize) * 1000);	// convert back to [um] 
-							break;
+							// move relative to current position
+							if (zstage->MoveZ)
+								(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, -direction * stepsize);
+							return 1;
 					
 					}
 					break;
@@ -901,12 +907,18 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 						case MOUSE_WHEEL_SCROLL_UP:
 							
 							SetCtrlVal(panel, control, direction * stepsize * 1000);					// convert back to [um]
-							break;
+							// move relative to current position
+							if (zstage->MoveZ)
+								(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, direction * stepsize);
+							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, -direction * stepsize * 1000);					// convert back to [um]
-							break;
+							// move relative to current position
+							if (zstage->MoveZ)
+								(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, -direction * stepsize);
+							return 1;
 					
 					}
 					break;

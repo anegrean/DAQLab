@@ -124,7 +124,7 @@ struct Zstage {
 		// moveVal in [mm] same units as zPos
 	int					(* MoveZ) 					(Zstage_type* self, Zstage_move_type moveType, double moveVal);
 		// Activates Z stage joystick control
-	FCallReturn_type*	(* UseJoystick)				(Zstage_type* self, BOOL useJoystick);	
+	int					(* UseJoystick)				(Zstage_type* self, BOOL useJoystick);	
 		// Stops Z stage motion
 	int					(* StopZ)					(Zstage_type* self);
 		// Changes the status of the LED on the Zstage control panel

@@ -5375,8 +5375,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 		// TEMPORARY for one channel only
 		// end task controller iteration
 		if (!pixelPacket) {
-			TaskControlEvent(rectRaster->baseClass.taskControl, TASK_EVENT_STOP, NULL, NULL);
-			TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
+			//TaskControlEvent(rectRaster->baseClass.taskControl, TASK_EVENT_STOP, NULL, NULL);
+			//TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
 			break;
 		}
 			
@@ -6911,8 +6911,7 @@ Error:
 
 static void AbortIterationTC_RectRaster (TaskControl_type* taskControl,BOOL const* abortFlag)
 {
-	//RectRaster_type* engine = GetTaskControlModuleData(taskControl);
-	
+	TaskControlIterationDone(taskControl, 0, "", FALSE);   
 }
 
 static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)

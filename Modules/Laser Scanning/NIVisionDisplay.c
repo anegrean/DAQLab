@@ -267,6 +267,8 @@ static DisplayHandle_type GetNIVisionDisplayHandle (NIVisionDisplay_type* NIDisp
 	
 	// get IMAQ window handle
 	if (!imaqGetWindowHandle(&imaqHndl)) return NULL;
+	// check if an available imaq window handle was obtained
+	if (imaqHndl < 0) return NULL;
 	// get windows window handle
 	imaqWndHndl	= (HWND) imaqGetSystemWindowHandle(imaqHndl); 
 	

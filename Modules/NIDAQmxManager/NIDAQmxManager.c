@@ -9956,6 +9956,8 @@ Error:
 	// terminate task controller iteration
 	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	OKfree(errMsg);
+	
+	return 0;
 }
 
 int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
@@ -9963,9 +9965,13 @@ int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyN
 	Dev_type*			dev 					= callbackData;
 	int					error					= 0;
 	char*				errMsg					= NULL;
+	bool32				taskDoneFlag			= FALSE;
 	
 	// this is called back every number of samples that is set
-	errChk( WriteAODAQmx(dev, &errMsg) );
+
+	DAQmxIsTaskDone(dev->AOTaskSet->taskHndl, &taskDoneFlag);
+	if (!taskDoneFlag) 
+		errChk( WriteAODAQmx(dev, &errMsg) );
 		
 	return 0;
 	
@@ -9991,9 +9997,9 @@ int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	// stop task explicitly
 	DAQmxErrChk(DAQmxStopTask(taskHandle));
 	// clear and init writeAOData used for continuous streaming
-	discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
-	dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
-	if (!dev->AOTaskSet->writeAOData) goto MemError;
+	//discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
+	//dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
+	//if (!dev->AOTaskSet->writeAOData) goto MemError;
 	
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
 	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
@@ -10125,26 +10131,27 @@ static int WriteAODAQmx (Dev_type* dev, char** errorInfo)
 	int						itemsRead									= 0;
 	int						nSamplesWritten								= 0;
 	BOOL					stopAOTaskFlag								= TRUE;
-	
+
 	// cycle over channels
 	for (int i = 0; i < data->numchan; i++) {
 		tsqID = GetSinkVChanTSQHndl(data->sinkVChans[i]);
 		while (data->databuff_size[i] < data->writeblock) {
 			
-			// if datain[i] is empty, get data packet from queue
+			// if datain[i] is empty, get data packet from queue if NULL packet was not yet received
 			if (!data->datain_size[i]) {
 				
-				CmtErrChk( itemsRead = CmtReadTSQData (tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
-					
+				if (!data->nullPacketReceived[i])
+					CmtErrChk( itemsRead = CmtReadTSQData (tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
+				
 				// process NULL packet
 				if (!dataPacket) {
 					data->nullPacketReceived[i] = TRUE;
 																			
-																			
 					if (!data->databuff_size[i]) {
-						// if NULL received and there is no data in the AO buffer, stop AO task
-						int*		nActiveTasksPtr;
-						DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Stop) );
+						// if NULL received and there is no data in the AO buffer, stop AO task if running
+						int*		nActiveTasksPtr	= NULL;
+					
+						DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
 						// Task Controller iteration is complete if all DAQmx Tasks are complete
 						CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
 						(*nActiveTasksPtr)--;
@@ -10315,8 +10322,6 @@ SkipPacket:
 		data->databuff_size[i] -= data->writeblock;
 	}
 	
-	DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
-	
 	// if all AO channels received a NULL packet, stop AO task
 	for (int j = 0; j < data->numchan; j++)
 		if (!data->nullPacketReceived[j]) {
@@ -10324,9 +10329,12 @@ SkipPacket:
 			break;
 		}
 	
+	DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
+		
 	if (stopAOTaskFlag && (!data->writeBlocksLeftToWrite--)) {
-		int*		nActiveTasksPtr;
-		DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Stop) );
+		int*	nActiveTasksPtr = NULL;
+		
+		DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
 		// Task Controller iteration is complete if all DAQmx Tasks are complete
 		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
 		(*nActiveTasksPtr)--;
@@ -10335,8 +10343,8 @@ SkipPacket:
 		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 		
 		CmtReleaseTSVPtr(dev->nActiveTasks);
-	} 
 		
+	}
 	
 	return 0; // no error
 	

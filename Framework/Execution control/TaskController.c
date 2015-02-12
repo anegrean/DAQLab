@@ -2348,7 +2348,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// The iterate event is self generated, when it occurs, all child TCs are in an initial or done state
 					// For a Finite TC for both repeat == 0 and repeat == 1 the TC will undergo one iteration, however when 
 					// repeat == 0, its iteration callback function will not be called.
-					size_t curriterindex=GetCurrentIterationIndex(taskControl->currentiter);
+					size_t curriterindex = GetCurrentIterationIndex(taskControl->currentiter);
 					if ( taskControl->mode == TASK_FINITE  &&  (curriterindex>= taskControl->repeat  ||  !taskControl->nIterationsFlag)  && curriterindex ) {			
 						//---------------------------------------------------------------------------------------------------------------- 	 
 						// Task Controller is finite switch to DONE

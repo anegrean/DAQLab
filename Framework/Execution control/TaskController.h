@@ -310,8 +310,8 @@ typedef enum {
 	TASK_FCALL_RESET,
 	TASK_FCALL_DONE,					// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
 	TASK_FCALL_STOPPED,					// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
-	TASK_FCALL_DIM_UI,					// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
-	TASK_FCALL_SET_UITC_MODE,				// Called when an UITC has a parent Task Controller attached to or deattached from it.
+	TASK_FCALL_TASK_TREE_STATUS,		// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
+	TASK_FCALL_SET_UITC_MODE,			// Called when an UITC has a parent Task Controller attached to or deattached from it.
 	TASK_FCALL_DATA_RECEIVED,			// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
 	TASK_FCALL_ERROR,
 	TASK_FCALL_MODULE_EVENT				// Called for custom module events that are not handled directly by the Task Controller
@@ -324,6 +324,14 @@ typedef enum {
 	TASK_CONTINUOUS = FALSE,
 	TASK_FINITE 	= TRUE
 } TaskMode_type;
+
+//---------------------------------------------------------------
+// Task Tree Execution
+//---------------------------------------------------------------
+typedef enum {
+	TASK_TREE_FINISHED 	= FALSE,
+	TASK_TREE_STARTED	= TRUE
+} TaskTreeExecution_type;
 
 //---------------------------------------------------------------
 // Task Controller Iteration Execution Mode
@@ -381,11 +389,11 @@ typedef int				 	(*ResetFptr_type) 				(TaskControl_type* taskControl, BOOL cons
 // Called automatically when a finite Task Controller finishes required iterations or a continuous Task Controller is stopped manually.
 typedef int				 	(*DoneFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
-// Called when a running finite Task Controller is stopped manually, before reaching a DONE state .
+// Called when a running finite Task Controller is stopped manually, before reaching a DONE state.
 typedef int				 	(*StoppedFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
-// Called when a Task Controller needs to dim or undim certain module controls to allow/prevent user interaction.
-typedef void 				(*DimUIFptr_type)	 			(TaskControl_type* taskControl, BOOL dimmed); 
+// Called when a Task Tree in which the Task Controller participates is started or stops/is stopped. This is called before the Start callback of the Task Controller.
+typedef void 				(*TaskTreeStatusFptr_type)		(TaskControl_type* taskControl, TaskTreeExecution_type status); 
 
 // Called when an UITC has a parent Task Controller attached to or detached from it, in the former case the UITC functioning as a simple Task Controller
 // without the possibility for the user to control the Task execution. This function must dim/undim UITC controls that prevent/allow the user to control
@@ -425,7 +433,7 @@ TaskControl_type*  	 	init_TaskControl_type				(const char					taskControllerNam
 												  		 	ResetFptr_type				ResetFptr,
 														 	DoneFptr_type				DoneFptr,
 														 	StoppedFptr_type			StoppedFptr,
-															DimUIFptr_type				DimUIFptr,
+															TaskTreeStatusFptr_type		TaskTreeStatusFptr,
 															SetUITCModeFptr_type		SetUITCModeFptr,
 														 	ModuleEventFptr_type		ModuleEventFptr,
 														 	ErrorFptr_type				ErrorFptr);

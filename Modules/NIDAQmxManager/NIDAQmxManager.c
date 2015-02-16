@@ -1253,7 +1253,7 @@ static int							DoneTC									(TaskControl_type* taskControl, BOOL const* abor
 
 static int							StoppedTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							DimTC									(TaskControl_type* taskControl, BOOL dimmed);
+static void							TaskTreeStatus 							(TaskControl_type* taskControl, TaskTreeExecution_type status);
 
 static int				 			ResetTC 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
@@ -1810,7 +1810,7 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type* 
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
 	dev -> taskController = init_TaskControl_type (taskControllerName, dev, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, 
-						  ResetTC, DoneTC, StoppedTC, DimTC, NULL, ModuleEventHandler, ErrorTC);
+						  ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC);
 	if (!dev->taskController) goto Error;
 	
 	dev -> niDAQModule			= niDAQModule;
@@ -12366,7 +12366,7 @@ Error:
 	return error; 
 }
 
-static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
+static void	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status)
 {
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
 	ChanSet_type**		chanSetPtr;
@@ -12374,28 +12374,28 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 	int					panHndl;
 	
 	// device panel
-	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_IO, ATTR_DIMMED, dimmed);
-	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_IOMode, ATTR_DIMMED, dimmed);
-	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_IOType, ATTR_DIMMED, dimmed);
-	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_PhysChan, ATTR_DIMMED, dimmed);
-	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_Mode, ATTR_DIMMED, dimmed);
+	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_IO, ATTR_DIMMED, (int) status);
+	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_IOMode, ATTR_DIMMED, (int) status);
+	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_IOType, ATTR_DIMMED, (int) status);
+	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_PhysChan, ATTR_DIMMED, (int) status);
+	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_Mode, ATTR_DIMMED, (int) status);
 	if (GetTaskControlMode(dev->taskController) == TASK_FINITE)
-		SetCtrlAttribute(dev->devPanHndl, TaskSetPan_Repeat, ATTR_DIMMED, dimmed);
-	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_Wait, ATTR_DIMMED, dimmed);
+		SetCtrlAttribute(dev->devPanHndl, TaskSetPan_Repeat, ATTR_DIMMED, (int) status);
+	SetCtrlAttribute(dev->devPanHndl, TaskSetPan_Wait, ATTR_DIMMED, (int) status);
 	// AI
 	if (dev->AITaskSet) {
 		// channel panels 
 		nChans = ListNumItems(dev->AITaskSet->chanSet);
 		for (size_t i = 1; i <= nChans; i++) {
 			chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
-			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, (int) status); 
 		}
 		// settings panel
 		GetPanelHandleFromTabPage(dev->AITaskSet->panHndl, ADTskSet_Tab, DAQmxADTskSet_SettingsTabIdx, &panHndl);
-		SetPanelAttribute(panHndl, ATTR_DIMMED, dimmed);
+		SetPanelAttribute(panHndl, ATTR_DIMMED, (int) status);
 		// timing panel
 		GetPanelHandleFromTabPage(dev->AITaskSet->panHndl, ADTskSet_Tab, DAQmxADTskSet_TimingTabIdx, &panHndl);
-		SetPanelAttribute(panHndl, ATTR_DIMMED, dimmed);
+		SetPanelAttribute(panHndl, ATTR_DIMMED, (int) status);
 		// trigger panel
 		int 	trigPanHndl;
 		int		nTabs;
@@ -12403,7 +12403,7 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		GetNumTabPages(trigPanHndl, Trig_TrigSet, &nTabs);
 		for (size_t i = 0; i < nTabs; i++) {
 			GetPanelHandleFromTabPage(trigPanHndl, Trig_TrigSet, i, &panHndl);
-			SetPanelAttribute(panHndl, ATTR_DIMMED, dimmed);
+			SetPanelAttribute(panHndl, ATTR_DIMMED, (int) status);
 		}
 	}
 	// AO
@@ -12412,14 +12412,14 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		nChans = ListNumItems(dev->AOTaskSet->chanSet);
 		for (size_t i = 1; i <= nChans; i++) {
 			chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
-			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, (int) status); 
 		}
 		// settings panel
 		GetPanelHandleFromTabPage(dev->AOTaskSet->panHndl, ADTskSet_Tab, DAQmxADTskSet_SettingsTabIdx, &panHndl);
-		SetPanelAttribute(panHndl, ATTR_DIMMED, dimmed);
+		SetPanelAttribute(panHndl, ATTR_DIMMED, (int) status);
 		// timing panel
 		GetPanelHandleFromTabPage(dev->AOTaskSet->panHndl, ADTskSet_Tab, DAQmxADTskSet_TimingTabIdx, &panHndl);
-		SetPanelAttribute(panHndl, ATTR_DIMMED, dimmed);
+		SetPanelAttribute(panHndl, ATTR_DIMMED, (int) status);
 		// trigger panel
 		int 	trigPanHndl;
 		int		nTabs;
@@ -12427,7 +12427,7 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		GetNumTabPages(trigPanHndl, Trig_TrigSet, &nTabs);
 		for (size_t i = 0; i < nTabs; i++) {
 			GetPanelHandleFromTabPage(trigPanHndl, Trig_TrigSet, i, &panHndl);
-			SetPanelAttribute(panHndl, ATTR_DIMMED, dimmed);
+			SetPanelAttribute(panHndl, ATTR_DIMMED, (int) status);
 		}
 	}
 	// DI
@@ -12436,7 +12436,7 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		nChans = ListNumItems(dev->DITaskSet->chanSet);
 		for (size_t i = 1; i <= nChans; i++) {
 			chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
-			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, (int) status); 
 		}
 		
 		// dim/undim rest of panels
@@ -12447,7 +12447,7 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		nChans = ListNumItems(dev->DOTaskSet->chanSet);
 		for (size_t i = 1; i <= nChans; i++) {
 			chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
-			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, (int) status); 
 		}
 		
 		// dim/undim rest of panels
@@ -12458,7 +12458,7 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		nChans = ListNumItems(dev->CITaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nChans; i++) {
 			chanSetPtr = ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, (int) status); 
 		}
 		
 		// dim/undim rest of panels
@@ -12469,7 +12469,7 @@ static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
 		nChans = ListNumItems(dev->COTaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nChans; i++) {
 			chanSetPtr = ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, dimmed); 
+			SetPanelAttribute((*chanSetPtr)->chanPanHndl, ATTR_DIMMED, (int) status); 
 		}
 		
 		// dim/undim rest of panels

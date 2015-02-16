@@ -91,16 +91,16 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 //datastorage module shouldn't iterate
-//static void					IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+//static void				IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 //static void 				AbortIterationTC		(TaskControl_type* taskControl, BOOL const* abortFlag);
-//static int					StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+//static int				StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static void					DimUITC					(TaskControl_type* taskControl, BOOL dimmed);
-//static void					TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
+static void					TaskTreeStatus 			(TaskControl_type* taskControl, TaskTreeExecution_type status);
+//static void				TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
-//static int					ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
+//static int				ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
 //-----------------------------------------
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
@@ -146,7 +146,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	
 	// create Data Storage Task Controller
 	tc = init_TaskControl_type (instanceName, ds, DLGetCommonThreadPoolHndl(), ConfigureTC, UnConfigureTC, NULL, NULL,NULL , ResetTC,
-								 DoneTC, StoppedTC, DimUITC, NULL, NULL, ErrorTC);
+								 DoneTC, StoppedTC, TaskTreeStatus, NULL, NULL, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
 	//------------------------------------------------------------
@@ -519,11 +519,11 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static void	DimUITC (TaskControl_type* taskControl, BOOL dimmed)
+static void	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	
-	if (dimmed) {
+	if (status) {
 		//create a new data directory
 		OKfree(ds->rawdatapath);
 		CreateRawDataDir(ds,taskControl);

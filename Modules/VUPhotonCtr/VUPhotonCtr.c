@@ -215,13 +215,13 @@ static int 						PMTController_ResetFifo			(VUPhotonCtr_type* vupc);
 //-----------------------------------------
 
 static int 						ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int 						UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
+static int 						UnconfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
 static void						IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 static void 					AbortIterationTC 		(TaskControl_type* taskControl, BOOL const* abortFlag);
 static int						StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int						DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int						StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static void						DimUITC					(TaskControl_type* taskControl, BOOL dimmed);
+static void						TaskTreeStatus			(TaskControl_type* taskControl, TaskTreeExecution_type status);
 static void						TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 		ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 		ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
@@ -257,8 +257,8 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	initalloc_DAQLabModule(&vupc->baseClass, className, instanceName, workspacePanHndl);
 	
 	// create VUPhotonCtr Task Controller
-	tc = init_TaskControl_type (instanceName, vupc, DLGetCommonThreadPoolHndl(), ConfigureTC, UnConfigureTC, IterateTC, AbortIterationTC, StartTC, 
-												 	  ResetTC, DoneTC, StoppedTC, DimUITC, TCActive, ModuleEventHandler, ErrorTC); // module data added to the task controller below
+	tc = init_TaskControl_type (instanceName, vupc, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, 
+												 	  ResetTC, DoneTC, StoppedTC, TaskTreeStatus, TCActive, ModuleEventHandler, ErrorTC); // module data added to the task controller below
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
 	
 	//------------------------------------------------------------
@@ -1166,7 +1166,7 @@ static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, ch
 }
 
 
-static int UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	
@@ -1269,9 +1269,9 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static void	DimUITC	(TaskControl_type* taskControl, BOOL dimmed)
+static void	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status)
 {
-	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);\
+	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	
 /*	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_NUM_COMMAND, ATTR_DIMMED, dimmed); 
 	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_NUM_STATUS, ATTR_DIMMED, dimmed);

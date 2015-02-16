@@ -118,7 +118,7 @@ static void							IterateTC							(TaskControl_type* taskControl, BOOL const* ab
 static int							StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int							DoneTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int							StoppedTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static void							DimTC								(TaskControl_type* taskControl, BOOL dimmed);
+static void							TaskTreeStatus	 					(TaskControl_type* taskControl, TaskTreeExecution_type status);
 static int				 			ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void				 			ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 static int							ZStageEventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
@@ -148,7 +148,7 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 	initalloc_Zstage ((DAQLabModule_type*)zstage, className, instanceName, workspacePanHndl);
 	
 	// create PIStage Task Controller
-	tc = init_TaskControl_type (instanceName, PIzstage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, NULL, StartTC, ResetTC, DoneTC, StoppedTC, DimTC, NULL, ZStageEventHandler, ErrorTC);
+	tc = init_TaskControl_type (instanceName, PIzstage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, NULL, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ZStageEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&PIzstage); return NULL;}
 	
 	//------------------------------------------------------------
@@ -859,7 +859,7 @@ static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	return 0;
 }
 
-static void	DimTC (TaskControl_type* taskControl, BOOL dimmed)
+static void	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status)
 {
 	//PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	

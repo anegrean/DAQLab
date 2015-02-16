@@ -108,7 +108,7 @@ struct TaskControl {
 	ResetFptr_type				ResetFptr;
 	DoneFptr_type				DoneFptr;
 	StoppedFptr_type			StoppedFptr;
-	DimUIFptr_type				DimUIFptr;
+	TaskTreeStatusFptr_type		TaskTreeStatusFptr;
 	SetUITCModeFptr_type		SetUITCModeFptr;
 	ModuleEventFptr_type		ModuleEventFptr;
 	ErrorFptr_type				ErrorFptr;
@@ -148,8 +148,8 @@ static VChanCallbackData_type*				init_VChanCallbackData_type				(TaskControl_ty
 static void									discard_VChanCallbackData_type			(VChanCallbackData_type** a);
 static void									disposeCmtTSQVChanEventInfo				(void* eventInfo);
 
-// Dims and undims recursively a Task Controller and all its SubTasks by calling the provided function pointer (i.e. dims/undims an entire Task Tree branch)
-static void									DimTaskTreeBranch 						(TaskControl_type* taskControl, EventPacket_type* eventPacket, BOOL dimmed);
+// Informs recursively Task Controllers about the Task Tree status when it changes (active/inactive).
+static void									TaskTreeStatusChanged 					(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeExecution_type status);
 
 // Clears recursively all data packets from the Sink VChans of all Task Controllers in a Task Tree Branch starting with the given Task Controller.
 static int									ClearTaskTreeBranchVChans				(TaskControl_type* taskControl, char** errorInfo);
@@ -190,7 +190,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 										ResetFptr_type				ResetFptr,
 										DoneFptr_type				DoneFptr,
 										StoppedFptr_type			StoppedFptr,
-										DimUIFptr_type				DimUIFptr,
+										TaskTreeStatusFptr_type		TaskTreeStatusFptr,
 										SetUITCModeFptr_type		SetUITCModeFptr,
 										ModuleEventFptr_type		ModuleEventFptr,
 										ErrorFptr_type				ErrorFptr)
@@ -252,7 +252,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	tc -> ResetFptr							= ResetFptr;
 	tc -> DoneFptr							= DoneFptr;
 	tc -> StoppedFptr						= StoppedFptr;
-	tc -> DimUIFptr							= DimUIFptr;
+	tc -> TaskTreeStatusFptr				= TaskTreeStatusFptr;
 	tc -> SetUITCModeFptr					= SetUITCModeFptr;
 	tc -> ModuleEventFptr					= ModuleEventFptr;
 	tc -> ErrorFptr							= ErrorFptr;
@@ -640,19 +640,19 @@ static void	disposeCmtTSQVChanEventInfo (void* eventInfo)
 	free(eventInfo);
 }
 
-static void	DimTaskTreeBranch (TaskControl_type* taskControl, EventPacket_type* eventPacket, BOOL dimmed)
+static void TaskTreeStatusChanged (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeExecution_type status)
 {
 	if (!taskControl) return;
 	
-	// dim/undim
-	FunctionCall(taskControl, eventPacket, TASK_FCALL_DIM_UI, &dimmed, NULL); 
+	// status change
+	FunctionCall(taskControl, eventPacket, TASK_FCALL_TASK_TREE_STATUS, &status, NULL); 
 	
 	size_t			nSubTasks = ListNumItems(taskControl->subtasks);
 	SubTask_type*	subTaskPtr;
 	
 	for (size_t i = nSubTasks; i; i--) {
 		subTaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
-		DimTaskTreeBranch (subTaskPtr->subtask, eventPacket, dimmed);
+		TaskTreeStatusChanged (subTaskPtr->subtask, eventPacket, status);
 	}
 }
 
@@ -767,9 +767,6 @@ static char* StateToString (TaskStates_type state)
 			
 			return StrDup("Error"); 
 			
-		default:
-			
-			return StrDup("?");  
 	}
 	
 }
@@ -781,6 +778,10 @@ static char* EventToString (TaskEvents_type event)
 		case TASK_EVENT_CONFIGURE:
 			
 			return StrDup("Configure");
+			
+		case TASK_EVENT_UNCONFIGURE: 
+			
+			return StrDup("Unconfigure");
 			
 		case TASK_EVENT_START:
 			
@@ -836,8 +837,6 @@ static char* EventToString (TaskEvents_type event)
 			
 	}
 	
-	return StrDup("?");
-	
 }
 
 static char* FCallToString (TaskFCall_type fcall)
@@ -880,9 +879,9 @@ static char* FCallToString (TaskFCall_type fcall)
 			
 			return StrDup("FCall Stopped");
 			
-		case TASK_FCALL_DIM_UI:
+		case TASK_FCALL_TASK_TREE_STATUS:
 			
-			return StrDup("FCall Dim/Undim UI");
+			return StrDup("FCall Task Tree Status");
 			
 		case TASK_FCALL_SET_UITC_MODE:
 			
@@ -901,8 +900,6 @@ static char* FCallToString (TaskFCall_type fcall)
 			return StrDup("FCall Error");
 			
 	}
-	
-	return StrDup("?");
 	
 }
 
@@ -1315,11 +1312,11 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 			}
 			return 0;										// success
 			
-		case TASK_FCALL_DIM_UI:
+		case TASK_FCALL_TASK_TREE_STATUS:
 			
-			if (!taskControl->DimUIFptr) return 0;			// function not provided
+			if (!taskControl->TaskTreeStatusFptr) return 0;	// function not provided
 				
-			(*taskControl->DimUIFptr)(taskControl, *(BOOL*)fCallData); 
+			(*taskControl->TaskTreeStatusFptr)(taskControl, *(TaskTreeExecution_type*)fCallData); 
 			return 0;										// success
 			
 		case TASK_FCALL_SET_UITC_MODE:
@@ -1355,14 +1352,14 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 			
 		case TASK_FCALL_ERROR:
 			
-			// undim Task tree if this is a Root Task Controller
-			if (!taskControl->parenttask)
-				DimTaskTreeBranch (taskControl, eventPacket, FALSE);
-
 			// call ErrorFptr
-			if (!taskControl->ErrorFptr) return 0;			// function not provided
-				
-			(*taskControl->ErrorFptr)(taskControl, taskControl->errorID, taskControl->errorInfo);
+			if (taskControl->ErrorFptr)
+				(*taskControl->ErrorFptr)(taskControl, taskControl->errorID, taskControl->errorInfo);
+			
+			// change Task Tree status if this is a Root Task Controller
+			if (!taskControl->parenttask)
+				TaskTreeStatusChanged (taskControl, eventPacket, TASK_TREE_FINISHED);
+			
 			return 0;										// success
 				
 	}
@@ -1449,9 +1446,9 @@ int	RemoveSubTaskFromParent	(TaskControl_type* child)
 			ListRemoveItem(child->parenttask->subtasks, 0, i);
 			// update subtask indices
 			nSubTasks = ListNumItems(child->parenttask->subtasks);
-			for (size_t i = 1; i <= nSubTasks; i++) {
-				subtaskPtr = ListGetPtrToItem(child->parenttask->subtasks, i);
-				subtaskPtr->subtask->subtaskIdx = i;
+			for (size_t j = 1; j <= nSubTasks; j++) {
+				subtaskPtr = ListGetPtrToItem(child->parenttask->subtasks, j);
+				subtaskPtr->subtask->subtaskIdx = j;
 			}
 			child->subtaskIdx = 0;
 			child->parenttask = NULL;
@@ -1822,8 +1819,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// check states of all subtasks and transition to INITIAL state if all subtasks are in INITIAL state
 					BOOL InitialStateFlag = 1; // assume all subtasks are in INITIAL state
 					nItems = ListNumItems(taskControl->subtasks); 
-					for (size_t i = 1; i <= nItems; i++) {
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+					for (size_t j = 1; j <= nItems; j++) {
+						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
 						if (subtaskPtr->subtaskState != TASK_STATE_INITIAL) {
 							InitialStateFlag = 0;
 							break;
@@ -1934,6 +1931,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_START:
 				case TASK_EVENT_ITERATE_ONCE: 
 					
+					//-------------------------------------------------------------------------------------------------------------------------
+					// If this is a Root Task Controller, i.e. it doesn't have a parent then change Task Tree status
+					//-------------------------------------------------------------------------------------------------------------------------
+					
+					if(!taskControl->parenttask)
+						TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_STARTED);
+					
+					
 					//--------------------------------------------------------------------------------------------------------------- 
 					// Call Start Task Controller function pointer to inform that task will start
 					//--------------------------------------------------------------------------------------------------------------- 
@@ -1955,15 +1960,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					else
 						taskControl->nIterationsFlag = -1;
 					
-					//-------------------------------------------------------------------------------------------------------------------------
-					// If this is a Root Task Controller, i.e. it doesn't have a parent, then: 
-					// - call dim UI function recursively for its SubTasks
-					//-------------------------------------------------------------------------------------------------------------------------
-					
-					if(!taskControl->parenttask)
-						DimTaskTreeBranch(taskControl, &eventpacket[i], TRUE);
-					
-
 					//---------------------------------------------------------------------------------------------------------------
 					// Iterate Task Controller
 					//---------------------------------------------------------------------------------------------------------------
@@ -2096,16 +2092,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						OKfree(errMsg);
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					} else {
+						
+					} else 
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
-						break;
-					}
 					
 					break;
 					
 				case TASK_EVENT_START:
 				case TASK_EVENT_ITERATE_ONCE: 
+					
+					//-------------------------------------------------------------------------------------------------------------------------
+					// If this is a Root Task Controller, i.e. it doesn't have a parent then change Task Tree status
+					//-------------------------------------------------------------------------------------------------------------------------
+					
+					if(!taskControl->parenttask)
+						TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_STARTED);
 					
 					//--------------------------------------------------------------------------------------------------------------- 
 					// Call Start Task Controller function pointer to inform that task will start
@@ -2122,7 +2123,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					//---------------------------------------------------------------------------------------------------------------   
 					// Set flag to iterate once or continue until done or stopped
-					//---------------------------------------------------------------------------------------------------------------   
+					//---------------------------------------------------------------------------------------------------------------
+					
 					if (eventpacket[i].event == TASK_EVENT_ITERATE_ONCE)
 						taskControl->nIterationsFlag = 1;
 					else
@@ -2141,14 +2143,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					}
 					
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING);
-					
-					//-------------------------------------------------------------------------------------------------------------------------
-					// If this is a Root Task Controller, i.e. it doesn't have a parent, then: 
-					// - call dim UI function recursively for its SubTasks
-					//-------------------------------------------------------------------------------------------------------------------------
-					
-					if(!taskControl->parenttask)
-						DimTaskTreeBranch(taskControl, &eventpacket[i], TRUE);
 					
 					break;
 					
@@ -2236,8 +2230,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// check states of all subtasks and transition to INITIAL state if all subtasks are in INITIAL state
 					BOOL InitialStateFlag = 1; // assume all subtasks are in INITIAL state
 					nItems = ListNumItems(taskControl->subtasks);
-					for (size_t i = 1; i <= nItems; i++) {
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+					for (size_t j = 1; j <= nItems; j++) {
+						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
 						if (subtaskPtr->subtaskState != TASK_STATE_INITIAL) {
 							InitialStateFlag = 0;
 							break;
@@ -2357,9 +2351,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
 						
-						// undim Task Tree if this is a Root Task Controller
+						// change Task Tree status
 						if(!taskControl->parenttask) 
-						DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
+							TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED);
 						
 						break; // stop here
 					}
@@ -2409,8 +2403,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							if (nItems) {    
 								// send START event to all subtasks
 								//reset subtasks info 
-								for (size_t i = 1; i <= nItems; i++) {									 
-									subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+								for (size_t j = 1; j <= nItems; j++) {									 
+									subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
 									SetTaskControlTCDone(subtaskPtr->subtask,FALSE);  
 									SetTaskControlTCStarted(subtaskPtr->subtask,FALSE);  
 								}
@@ -2456,8 +2450,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 								// send START event to all subtasks
 									//reset num_subtasks_started, to keep track whether all child TC started
 								//reset subtasks info 
-								for (size_t i = 1; i <= nItems; i++) {									 
-									subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+								for (size_t j = 1; j <= nItems; j++) {									 
+									subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
 									SetTaskControlTCDone(subtaskPtr->subtask,FALSE);  
 									SetTaskControlTCStarted(subtaskPtr->subtask,FALSE);  
 								}
@@ -2499,10 +2493,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					if (!ListNumItems(taskControl->subtasks)) {
 						
-						// undim Task Tree if this is a root Task Controller
-							if(!taskControl->parenttask)
-							DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
-							
 						// if there are no SubTask Controllers
 						if (taskControl->mode == TASK_CONTINUOUS) {
 							// switch to DONE state if continuous task controller
@@ -2543,6 +2533,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
 							}
+						
+						// change Task Tree status
+						if(!taskControl->parenttask)
+							TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED);
 							  
 					} else {
 						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
@@ -2617,8 +2611,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// check all SubTasks
 					BOOL AllStartedFlag = TRUE;    
 					nItems = ListNumItems(taskControl->subtasks);
-					for (size_t i = 1; i <= nItems; i++) {									 
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+					for (size_t j = 1; j <= nItems; j++) {									 
+						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
 						if (!GetTaskControlTCStarted(subtaskPtr->subtask)){
 							AllStartedFlag = FALSE;
 							break;
@@ -2633,8 +2627,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					BOOL AllDoneFlag=TRUE;		
 					// check SubTasks
 					nItems = ListNumItems(taskControl->subtasks);
-					for (size_t i = 1; i <= nItems; i++) {									 
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+					for (size_t j = 1; j <= nItems; j++) {									 
+						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
 						if (!GetTaskControlTCDone(subtaskPtr->subtask)){
 							AllDoneFlag = FALSE;
 							break;
@@ -2787,10 +2781,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					if (taskControl->abortIterationFlag) {
 						
 						if (!ListNumItems(taskControl->subtasks)) {
-							// undim Task Tree if this is a root Task Controller
-							if(!taskControl->parenttask)
-							DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
-								
+							
 							// if there are no SubTask Controllers
 							if (taskControl->mode == TASK_CONTINUOUS) {
 								// switch to DONE state if continuous task controller
@@ -2833,6 +2824,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 									ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);
 								}
+							
+							// change Task Tree status
+							if(!taskControl->parenttask)
+								TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED);
 						
 						} else {
 							
@@ -2866,11 +2861,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							if (nItems) {
 								// send START event to all subtasks
 								//reset num_subtasks_started, to keep track whether all child TC started
-								for (size_t i = 1; i <= nItems; i++) {									 
-									subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+								for (size_t j = 1; j <= nItems; j++) {									 
+									subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
 									SetTaskControlTCDone(subtaskPtr->subtask,FALSE);  
 									SetTaskControlTCStarted(subtaskPtr->subtask,FALSE);  
 								}
+								
 								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
 									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
@@ -2922,8 +2918,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							BOOL AllDoneFlag=TRUE;		
 							// check SubTasks
 							nItems = ListNumItems(taskControl->subtasks);
-							for (size_t i = 1; i <= nItems; i++) {									 
-								subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+							for (size_t j = 1; j <= nItems; j++) {									 
+								subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
 								if (!GetTaskControlTCDone(subtaskPtr->subtask)){
 									AllDoneFlag = FALSE;
 									break;
@@ -3116,8 +3112,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					BOOL	IdleOrDoneFlag	= TRUE;		// assume all subtasks are either IDLE or DONE
 					nItems = ListNumItems(taskControl->subtasks);
 					
-					for (size_t i = 1; i <= nItems; i++) {
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+					for (size_t j = 1; j <= nItems; j++) {
+						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
 						if (!((subtaskPtr->subtaskState == TASK_STATE_IDLE) || (subtaskPtr->subtaskState == TASK_STATE_DONE))) {
 							IdleOrDoneFlag = FALSE;
 							break;
@@ -3126,10 +3122,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// if all SubTasks are IDLE or DONE, switch to IDLE state
 					if (IdleOrDoneFlag) {
-						// undim Task Tree if this is a root Task Controller
-						if(!taskControl->parenttask)
-							DimTaskTreeBranch(taskControl, &eventpacket[i], FALSE);
-							
+						
 						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_STOPPED, NULL, &errMsg) < 0) {
 							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
@@ -3140,6 +3133,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 							
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);
+						
+						// change Task Tree status
+						if(!taskControl->parenttask)
+							TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED);
 					}
 						
 					break;
@@ -3221,11 +3218,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						OKfree(errMsg);
 						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					} else {
+					
+					} else 
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
-						break;
-					}
+					
 					
 					break;
 					
@@ -3333,8 +3329,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// check states of all subtasks and transition to INITIAL state if all subtasks are in INITIAL state
 					BOOL InitialStateFlag = 1; // assume all subtasks are in INITIAL state
 					nItems = ListNumItems(taskControl->subtasks);
-					for (size_t i = 1; i <= nItems; i++) {
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
+					for (size_t j = 1; j <= nItems; j++) {
+						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
 						if (subtaskPtr->subtaskState != TASK_STATE_INITIAL) {
 							InitialStateFlag = 0;
 							break;
@@ -3446,17 +3442,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
-				case TASK_EVENT_START:
-				case TASK_EVENT_ITERATE:
-				case TASK_EVENT_RESET:
-				case TASK_EVENT_STOP:
-				case TASK_EVENT_STOP_CONTINUOUS_TASK:
-				case TASK_EVENT_ITERATION_TIMEOUT:
-					
-					// ignore and stay in error state
-					
-					break;
-					
 				case TASK_EVENT_SUBTASK_STATE_CHANGED: 
 					
 					// update subtask state
@@ -3497,6 +3482,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
+					break;
+					
+				default:
+					
+					// ignore and stay in error state
 					break;
 					
 			}

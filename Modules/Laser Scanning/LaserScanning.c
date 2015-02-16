@@ -778,7 +778,7 @@ static int							StoppedTC_NonResGalvoCal						(TaskControl_type* taskControl, B
 
 static int				 			ResetTC_NonResGalvoCal 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							DimTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL dimmed);
+static void							TaskTreeStatus_NonResGalvoCal 					(TaskControl_type* taskControl, TaskTreeExecution_type status);
 
 //static int				 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
@@ -799,7 +799,7 @@ static int							StoppedTC_RectRaster							(TaskControl_type* taskControl, BOOL
 
 static int				 			ResetTC_RectRaster 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							DimTC_RectRaster								(TaskControl_type* taskControl, BOOL dimmed);
+static void							TaskTreeStatus_RectRaster 						(TaskControl_type* taskControl, TaskTreeExecution_type status);
 
 //static int				 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
@@ -3622,7 +3622,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, DLGetCommonThreadPoolHndl(), ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
-								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, DimTC_NonResGalvoCal, NULL, NULL, NULL);
+								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, TaskTreeStatus_NonResGalvoCal, NULL, NULL, NULL);
 	cal->baseClass.lsModule			= lsModule;
 	
 								  
@@ -4064,16 +4064,16 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	
 Error:
 	
-	discard_VChan_type(&engine->VChanFastAxisCom);
-	discard_VChan_type(&engine->VChanFastAxisComNSamples);
-	discard_VChan_type(&engine->VChanSlowAxisCom);
-	discard_VChan_type(&engine->VChanSlowAxisComNSamples);
-	discard_VChan_type(&engine->VChanFastAxisPos);
-	discard_VChan_type(&engine->VChanSlowAxisPos);
-	discard_VChan_type(&engine->VChanScanOut);
-	discard_VChan_type(&engine->VChanShutter);
-	discard_VChan_type(&engine->VChanPixelPulseTrain);
-	discard_VChan_type(&engine->VChanNPixels); 
+	discard_VChan_type((VChan_type**)&engine->VChanFastAxisCom);
+	discard_VChan_type((VChan_type**)&engine->VChanFastAxisComNSamples);
+	discard_VChan_type((VChan_type**)&engine->VChanSlowAxisCom);
+	discard_VChan_type((VChan_type**)&engine->VChanSlowAxisComNSamples);
+	discard_VChan_type((VChan_type**)&engine->VChanFastAxisPos);
+	discard_VChan_type((VChan_type**)&engine->VChanSlowAxisPos);
+	discard_VChan_type((VChan_type**)&engine->VChanScanOut);
+	discard_VChan_type((VChan_type**)&engine->VChanShutter);
+	discard_VChan_type((VChan_type**)&engine->VChanPixelPulseTrain);
+	discard_VChan_type((VChan_type**)&engine->VChanNPixels); 
 	if (engine->DetChans) {
 		if (ListNumItems(engine->DetChans)) {
 			DetChan_type** 	detChanPtr = ListGetPtrToItem(engine->DetChans, 1);
@@ -4313,7 +4313,7 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	engine->baseClass.Discard			= discard_RectRaster_type;
 	// add task controller
 	engine->baseClass.taskControl		= init_TaskControl_type(engineName, engine, DLGetCommonThreadPoolHndl(), ConfigureTC_RectRaster, UnconfigureTC_RectRaster, IterateTC_RectRaster, AbortIterationTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
-										  DoneTC_RectRaster, StoppedTC_RectRaster, DimTC_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster);
+										  DoneTC_RectRaster, StoppedTC_RectRaster, TaskTreeStatus_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster);
 	
 	if (!engine->baseClass.taskControl) {discard_RectRaster_type((ScanEngine_type**)&engine); return NULL;}
 	
@@ -4360,7 +4360,7 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 		Point_type**	pointPtr;
 		for (size_t i = 1; i <= nROIs; i++) {
 			pointPtr = ListGetPtrToItem(rectRaster->pointROIs, i);
-			discard_ROI_type(pointPtr);
+			discard_ROI_type((ROI_type**)pointPtr);
 		}
 		ListDispose(rectRaster->pointROIs);
 	}
@@ -6835,20 +6835,20 @@ static int StoppedTC_NonResGalvoCal (TaskControl_type* taskControl,  BOOL const*
 	return 0; 
 }
 
-static void	DimTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL dimmed)
+static void	TaskTreeStatus_NonResGalvoCal (TaskControl_type* taskControl, TaskTreeExecution_type status)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
 	// dim/undim controls
-	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_Done, ATTR_DIMMED, dimmed);
+	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_Done, ATTR_DIMMED, (int) status);
     int calSetPanHndl;
 	GetPanelHandleFromTabPage(cal->baseClass.calPanHndl, NonResGCal_Tab, 0, &calSetPanHndl);
-	SetCtrlAttribute(calSetPanHndl, Cal_CommMaxV, ATTR_DIMMED, dimmed); 
-	SetCtrlAttribute(calSetPanHndl, Cal_ParkedV, ATTR_DIMMED, dimmed); 
-	SetCtrlAttribute(calSetPanHndl, Cal_ScanTime, ATTR_DIMMED, dimmed);
-	SetCtrlAttribute(calSetPanHndl, Cal_MinStep, ATTR_DIMMED, dimmed); 
-	SetCtrlAttribute(calSetPanHndl, Cal_Resolution, ATTR_DIMMED, dimmed);
-	SetCtrlAttribute(calSetPanHndl, Cal_MechanicalResponse, ATTR_DIMMED, dimmed);
+	SetCtrlAttribute(calSetPanHndl, Cal_CommMaxV, ATTR_DIMMED, (int) status); 
+	SetCtrlAttribute(calSetPanHndl, Cal_ParkedV, ATTR_DIMMED, (int) status); 
+	SetCtrlAttribute(calSetPanHndl, Cal_ScanTime, ATTR_DIMMED, (int) status);
+	SetCtrlAttribute(calSetPanHndl, Cal_MinStep, ATTR_DIMMED, (int) status); 
+	SetCtrlAttribute(calSetPanHndl, Cal_Resolution, ATTR_DIMMED, (int) status);
+	SetCtrlAttribute(calSetPanHndl, Cal_MechanicalResponse, ATTR_DIMMED, (int) status);
 }
 
 //-----------------------------------------
@@ -7063,7 +7063,7 @@ Error:
 	return error;
 }
 
-static void	DimTC_RectRaster (TaskControl_type* taskControl, BOOL dimmed)
+static void	TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExecution_type status)
 {
 	//RectRaster_type* 	engine 		= GetTaskControlModuleData(taskControl);
 	

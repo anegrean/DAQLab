@@ -863,6 +863,7 @@ static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type
 {
 	//PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	
+	return 0;
 }
 
 static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)

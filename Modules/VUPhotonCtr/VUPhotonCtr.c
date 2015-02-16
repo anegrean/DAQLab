@@ -1280,6 +1280,8 @@ static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type
 	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_LED_DOOR_OPEN, ATTR_DIMMED, dimmed); 
 	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_LED_RUNNING, ATTR_DIMMED, dimmed); 
 	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_TestMode, ATTR_DIMMED, dimmed);    */
+
+	return 0;
 }
 
 static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)

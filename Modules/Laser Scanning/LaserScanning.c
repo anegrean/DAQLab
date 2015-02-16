@@ -6835,7 +6835,7 @@ static int StoppedTC_NonResGalvoCal (TaskControl_type* taskControl,  BOOL const*
 	return 0; 
 }
 
-static int	TaskTreeStatus_NonResGalvoCal (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
+static int TaskTreeStatus_NonResGalvoCal (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
@@ -6849,6 +6849,8 @@ static int	TaskTreeStatus_NonResGalvoCal (TaskControl_type* taskControl, TaskTre
 	SetCtrlAttribute(calSetPanHndl, Cal_MinStep, ATTR_DIMMED, (int) status); 
 	SetCtrlAttribute(calSetPanHndl, Cal_Resolution, ATTR_DIMMED, (int) status);
 	SetCtrlAttribute(calSetPanHndl, Cal_MechanicalResponse, ATTR_DIMMED, (int) status);
+	
+	return 0;
 }
 
 //-----------------------------------------

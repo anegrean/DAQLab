@@ -528,6 +528,8 @@ static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type
 		OKfree(ds->rawdatapath);
 		CreateRawDataDir(ds,taskControl);
 	}
+	
+	return 0;
 }
 
  /*

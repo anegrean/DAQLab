@@ -108,12 +108,12 @@ Window Width = 683
 [File 0005]
 Path = "/d/ELE_DAQLab/Modules/NIDAQmxManager/NIDAQmxManager.c"
 File Type = "CSource"
-Disk Date = 3506959007
+Disk Date = 3506963131
 In Projects = "1,"
 Window Top = 66
 Window Left = -1599
 Window Released = True
-Source Window State Line0001 = "1,12368,12368,12368,7,11,7,0,0,211,0,10135,0,10150,91,69,12431,0,12477,13,971,17"
+Source Window State Line0001 = "1,12368,12368,12368,7,11,7,0,0,211,0,10135,0,10150,91,69,12433,0,12368,58,971,17"
 Source Window State Line0002 = "30,0,0,"
 Breakpoint 0001 = "9415,0,disabled,"
 
@@ -139,12 +139,12 @@ Source Window State = "1,1131,1131,1131,112,113,112,0,3,80,0,92,0,101,0,25,59,0,
 [File 0008]
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/PIStage.c"
 File Type = "CSource"
-Disk Date = 3506959007
+Disk Date = 3506963338
 In Projects = "1,"
 Window Top = 92
 Window Left = 42
 Window Z-Order = 1
-Source Window State = "1,861,861,861,7,11,7,0,0,170,0,96,0,94,54,57,833,0,861,10,349,683,1,0,"
+Source Window State = "1,861,861,861,7,11,7,0,0,170,0,96,0,94,54,57,833,0,865,13,349,683,1,0,"
 
 [File 0009]
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/PIStage.h"
@@ -316,12 +316,12 @@ Window Width = 643
 [File 0028]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.c"
 File Type = "CSource"
-Disk Date = 3506959007
+Disk Date = 3506963338
 In Projects = "1,"
 Window Top = 103
 Window Left = -1492
 Window Released = True
-Source Window State = "1,1271,1271,1271,7,11,7,0,0,156,0,101,0,116,38,49,1247,0,1271,106,715,1289,0,0,"
+Source Window State = "1,1271,1271,1271,7,11,7,0,0,156,0,101,0,116,38,49,1247,0,1283,13,715,1289,0,0,"
 
 [File 0029]
 Path = "/d/ELE_DAQLab/Modules/VUPhotonCtr/VUPhotonCtr.h"
@@ -371,12 +371,12 @@ Source Window State = "1,31,31,31,32,50,50,0,0,0,0,0,0,0,0,0,3,0,16,54,811,1668,
 [File 0034]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/LaserScanning.c"
 File Type = "CSource"
-Disk Date = 3506959007
+Disk Date = 3506963338
 In Projects = "1,"
 Window Top = 36
 Window Left = -1630
 Window Released = True
-Source Window State Line0001 = "1,7032,7032,7032,12,118,12,0,0,218,0,1344,0,1364,134,58,7017,0,7033,95,829,1783,"
+Source Window State Line0001 = "1,7032,7032,7032,12,118,12,0,0,218,0,1344,0,1364,134,58,7041,0,7010,69,829,1783,"
 Source Window State Line0002 = "0,0,"
 
 [File 0035]
@@ -411,12 +411,12 @@ Source Window State = "1,58,58,58,9,26,26,0,3,0,0,0,0,0,0,0,37,0,58,9,349,683,1,
 [File 0038]
 Path = "/d/ELE_DAQLab/Modules/Data Storage/DataStorage.c"
 File Type = "CSource"
-Disk Date = 3506959007
+Disk Date = 3506963338
 In Projects = "1,"
 Window Top = 83
 Window Left = -1267
 Window Released = True
-Source Window State = "1,521,521,521,7,11,7,0,0,150,0,0,0,0,0,52,495,0,521,106,760,1243,0,0,"
+Source Window State = "1,521,521,521,7,11,7,0,0,150,0,0,0,0,0,52,495,0,531,13,760,1243,0,0,"
 
 [File 0039]
 Path = "/d/ELE_DAQLab/Modules/Data Storage/DataStorage.h"
@@ -567,12 +567,12 @@ Source Window State = "1,99,99,99,28,53,28,0,0,0,0,0,0,0,0,0,0,0,88,23,349,683,1
 [File 0055]
 Path = "/d/ELE_DAQLab/DAQLab.c"
 File Type = "CSource"
-Disk Date = 3506959007
+Disk Date = 3506963131
 In Projects = "1,"
 Window Top = 124
 Window Left = -1329
 Window Released = True
-Source Window State = "1,3205,3205,3205,7,11,7,0,0,139,0,459,0,478,31,56,3177,0,3212,0,810,1152,0,0,"
+Source Window State = "1,3205,3205,3205,62,91,62,0,0,139,0,459,0,478,31,56,3177,0,3205,62,810,1152,0,0,"
 
 [File 0056]
 Path = "/d/ELE_DAQLab/DAQLab.h"

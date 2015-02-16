@@ -149,7 +149,7 @@ static void									discard_VChanCallbackData_type			(VChanCallbackData_type** a
 static void									disposeCmtTSQVChanEventInfo				(void* eventInfo);
 
 // Informs recursively Task Controllers about the Task Tree status when it changes (active/inactive).
-static void									TaskTreeStatusChanged 					(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeExecution_type status);
+static int									TaskTreeStatusChanged 					(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeExecution_type status, char** errorInfo);
 
 // Clears recursively all data packets from the Sink VChans of all Task Controllers in a Task Tree Branch starting with the given Task Controller.
 static int									ClearTaskTreeBranchVChans				(TaskControl_type* taskControl, char** errorInfo);
@@ -640,20 +640,23 @@ static void	disposeCmtTSQVChanEventInfo (void* eventInfo)
 	free(eventInfo);
 }
 
-static void TaskTreeStatusChanged (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeExecution_type status)
+static int TaskTreeStatusChanged (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeExecution_type status, char** errorInfo)
 {
-	if (!taskControl) return;
+	int		error = 0;
+	if (!taskControl) return 0;
 	
 	// status change
-	FunctionCall(taskControl, eventPacket, TASK_FCALL_TASK_TREE_STATUS, &status, NULL); 
+	if ( (error = FunctionCall(taskControl, eventPacket, TASK_FCALL_TASK_TREE_STATUS, &status, errorInfo)) < 0) return error; 
 	
 	size_t			nSubTasks = ListNumItems(taskControl->subtasks);
 	SubTask_type*	subTaskPtr;
 	
 	for (size_t i = nSubTasks; i; i--) {
 		subTaskPtr = ListGetPtrToItem(taskControl->subtasks, i);
-		TaskTreeStatusChanged (subTaskPtr->subtask, eventPacket, status);
+		if ( (error = TaskTreeStatusChanged (subTaskPtr->subtask, eventPacket, status, errorInfo)) < 0) return error;
 	}
+	
+	return 0;
 }
 
 int ClearAllSinkVChans	(TaskControl_type* taskControl, char** errorInfo)
@@ -1315,8 +1318,13 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 		case TASK_FCALL_TASK_TREE_STATUS:
 			
 			if (!taskControl->TaskTreeStatusFptr) return 0;	// function not provided
-				
-			(*taskControl->TaskTreeStatusFptr)(taskControl, *(TaskTreeExecution_type*)fCallData); 
+			
+			if ( (fCallError = (*taskControl->TaskTreeStatusFptr)(taskControl, *(TaskTreeExecution_type*)fCallData, &fCallErrorMsg)) < 0) {
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Task Tree Status", fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+				return FunctionCall_Error_FCall_Error;
+			}
+			
 			return 0;										// success
 			
 		case TASK_FCALL_SET_UITC_MODE:
@@ -1352,13 +1360,17 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 			
 		case TASK_FCALL_ERROR:
 			
+			// change Task Tree status if this is a Root Task Controller
+			if (!taskControl->parenttask) {
+				TaskTreeStatusChanged (taskControl, eventPacket, TASK_TREE_FINISHED, &fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+			}
+			
 			// call ErrorFptr
 			if (taskControl->ErrorFptr)
 				(*taskControl->ErrorFptr)(taskControl, taskControl->errorID, taskControl->errorInfo);
 			
-			// change Task Tree status if this is a Root Task Controller
-			if (!taskControl->parenttask)
-				TaskTreeStatusChanged (taskControl, eventPacket, TASK_TREE_FINISHED);
+			
 			
 			return 0;										// success
 				
@@ -1936,8 +1948,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//-------------------------------------------------------------------------------------------------------------------------
 					
 					if(!taskControl->parenttask)
-						TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_STARTED);
-					
+						if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_STARTED, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
 					
 					//--------------------------------------------------------------------------------------------------------------- 
 					// Call Start Task Controller function pointer to inform that task will start
@@ -2106,7 +2124,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//-------------------------------------------------------------------------------------------------------------------------
 					
 					if(!taskControl->parenttask)
-						TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_STARTED);
+						if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_STARTED, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
 					
 					//--------------------------------------------------------------------------------------------------------------- 
 					// Call Start Task Controller function pointer to inform that task will start
@@ -2353,7 +2378,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// change Task Tree status
 						if(!taskControl->parenttask) 
-							TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED);
+							if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED, &errMsg) < 0) {
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+								taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+								OKfree(errMsg);
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+								break;
+							}
 						
 						break; // stop here
 					}
@@ -2536,7 +2568,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// change Task Tree status
 						if(!taskControl->parenttask)
-							TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED);
+							if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED, &errMsg) < 0) {
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+								taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+								OKfree(errMsg);
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+								break;
+							}
 							  
 					} else {
 						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
@@ -2827,7 +2866,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 							// change Task Tree status
 							if(!taskControl->parenttask)
-								TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED);
+								if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED, &errMsg) < 0) {
+									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+									OKfree(errMsg);
+									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+									break;
+								}
 						
 						} else {
 							
@@ -3136,7 +3182,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// change Task Tree status
 						if(!taskControl->parenttask)
-							TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED);
+							if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_FINISHED, &errMsg) < 0) {
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+								taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+								OKfree(errMsg);
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+								break;
+							}
 					}
 						
 					break;

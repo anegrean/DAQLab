@@ -96,7 +96,7 @@ static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abo
 //static int				StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static void					TaskTreeStatus 			(TaskControl_type* taskControl, TaskTreeExecution_type status);
+static int					TaskTreeStatus 			(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
 //static void				TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
@@ -519,7 +519,7 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static void	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status)
+static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	

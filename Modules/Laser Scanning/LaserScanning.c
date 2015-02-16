@@ -778,7 +778,7 @@ static int							StoppedTC_NonResGalvoCal						(TaskControl_type* taskControl, B
 
 static int				 			ResetTC_NonResGalvoCal 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							TaskTreeStatus_NonResGalvoCal 					(TaskControl_type* taskControl, TaskTreeExecution_type status);
+static int							TaskTreeStatus_NonResGalvoCal 					(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
 
 //static int				 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
@@ -799,7 +799,7 @@ static int							StoppedTC_RectRaster							(TaskControl_type* taskControl, BOOL
 
 static int				 			ResetTC_RectRaster 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							TaskTreeStatus_RectRaster 						(TaskControl_type* taskControl, TaskTreeExecution_type status);
+static int							TaskTreeStatus_RectRaster 						(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
 
 //static int				 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
@@ -6835,7 +6835,7 @@ static int StoppedTC_NonResGalvoCal (TaskControl_type* taskControl,  BOOL const*
 	return 0; 
 }
 
-static void	TaskTreeStatus_NonResGalvoCal (TaskControl_type* taskControl, TaskTreeExecution_type status)
+static int	TaskTreeStatus_NonResGalvoCal (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
@@ -6917,22 +6917,10 @@ static void AbortIterationTC_RectRaster (TaskControl_type* taskControl,BOOL cons
 static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
-	DetChan_type*			detChan				= NULL;
-	size_t					nDetChans 			= ListNumItems(engine->baseClass.DetChans);
-	SourceVChan_type*   	detSourceVChan		= NULL;
 	int						error 				= 0;
-	DisplayEngine_type*		displayEngine		= engine->baseClass.lsModule->displayEngine;
-	DLDataTypes				pixelDataType		= 0;
-	ImageTypes				imageType			= 0;
 	
 	// reset iterations display
 	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, 0);
-	
-	// discard image assembly buffers
-	for (size_t i = 0; i < engine->nImgBuffers; i++)
-		discard_RectRasterImgBuffer_type(&engine->imgBuffers[i]);
-	OKfree(engine->imgBuffers);
-	engine->nImgBuffers = 0;
 	
 	//--------------------------------------------------------------------------------------------------------
 	// Open shutter
@@ -6945,49 +6933,6 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	//--------------------------------------------------------------------------------------------------------
 	
 	errChk ( NonResRectRasterScan_GenerateScanSignals (engine, errorInfo) );  
-	
-	//--------------------------------------------------------------------------------------------------------
-	// Initialize image assembly buffers obtain display handles
-	//--------------------------------------------------------------------------------------------------------
-	
-	// create new image assembly buffers for connected detector VChans
-	for (size_t i = 1; i <= nDetChans; i++) {
-		detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
-		if (!(detSourceVChan = GetSourceVChan(detChan->detVChan))) continue;	// select only connected detection channels
-		
-		pixelDataType = GetSourceVChanDataType(detSourceVChan);
-		switch (pixelDataType) {
-				
-			case DL_Waveform_UChar:
-				imageType = Image_UChar;  
-				break;
-		
-			case DL_Waveform_UShort:
-				imageType = Image_UShort;    
-				break;
-			
-			case DL_Waveform_Short:
-				imageType = Image_Short;    
-				break;
-			
-			case DL_Waveform_Float:
-				imageType = Image_Float;     
-				break;
-			
-			default:
-			
-			goto Error;
-		}
-		
-		// get display handles for connected channels
-		nullChk( detChan->displayHndl 	= (*displayEngine->getDisplayHandleFptr) (displayEngine, detChan, engine->width, engine->height, imageType) ); 
-		
-		engine->nImgBuffers++;
-		// allocate memory for image assembly
-		engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
-		engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, 
-				(size_t)((engine->flyInDelay - engine->baseClass.pixDelay)/engine->pixelDwellTime), pixelDataType,FALSE, FALSE); 
-	}
 	
 	return 0; // no error
 	
@@ -7063,10 +7008,90 @@ Error:
 	return error;
 }
 
-static void	TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExecution_type status)
+static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
 {
-	//RectRaster_type* 	engine 		= GetTaskControlModuleData(taskControl);
+	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
+	int						error				= 0;
+	DetChan_type*			detChan				= NULL;
+	size_t					nDetChans 			= ListNumItems(engine->baseClass.DetChans);
+	SourceVChan_type*   	detSourceVChan		= NULL;
+	DisplayEngine_type*		displayEngine		= engine->baseClass.lsModule->displayEngine;
+	DLDataTypes				pixelDataType		= 0;
+	ImageTypes				imageType			= 0;
 	
+	switch (status) {
+			
+		case TASK_TREE_STARTED:
+			
+			//--------------------------------------------------------------------------------------------------------
+			// Discard image assembly buffers
+			//--------------------------------------------------------------------------------------------------------
+			
+			for (size_t i = 0; i < engine->nImgBuffers; i++)
+				discard_RectRasterImgBuffer_type(&engine->imgBuffers[i]);
+			
+			OKfree(engine->imgBuffers);
+			engine->nImgBuffers = 0;
+			
+			//--------------------------------------------------------------------------------------------------------
+			// Initialize image assembly buffers obtain display handles
+			//--------------------------------------------------------------------------------------------------------
+	
+			// create new image assembly buffers for connected detector VChans
+			for (size_t i = 1; i <= nDetChans; i++) {
+				detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
+				if (!(detSourceVChan = GetSourceVChan(detChan->detVChan))) continue;	// select only connected detection channels
+		
+				pixelDataType = GetSourceVChanDataType(detSourceVChan);
+				switch (pixelDataType) {
+				
+					case DL_Waveform_UChar:
+						imageType = Image_UChar;  
+						break;
+		
+					case DL_Waveform_UShort:
+						imageType = Image_UShort;    
+						break;
+			
+					case DL_Waveform_Short:
+						imageType = Image_Short;    
+						break;
+			
+					case DL_Waveform_Float:
+						imageType = Image_Float;     
+						break;
+			
+					default:
+					
+					goto Error;
+				}
+		
+				// get display handles for connected channels
+				nullChk( detChan->displayHndl 	= (*displayEngine->getDisplayHandleFptr) (displayEngine, detChan, engine->width, engine->height, imageType) ); 
+		
+				engine->nImgBuffers++;
+				// allocate memory for image assembly
+				engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
+				engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, 
+						(size_t)((engine->flyInDelay - engine->baseClass.pixDelay)/engine->pixelDwellTime), pixelDataType,FALSE, FALSE); 
+			}
+			
+			break;
+			
+		case TASK_TREE_FINISHED:
+			
+			break;
+	}
+	
+	return 0;
+
+Error:
+	
+	// create out of memory message
+	if (error == UIEOutOfMemory && !*errorInfo)
+		*errorInfo = StrDup("Out of memory");
+	
+	return error;
 }
 
 /*

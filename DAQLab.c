@@ -289,7 +289,7 @@ static void					IterateUITC									(TaskControl_type* taskControl, BOOL const* 
 static int					StartUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					DoneUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					StoppedUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static void					TaskTreeStatusUITC 							(TaskControl_type* taskControl, TaskTreeExecution_type status);
+static int					TaskTreeStatusUITC 							(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
 static void					UITCActive									(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetUITC 									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorUITC 									(TaskControl_type* taskControl, int errorID, char* errorMsg);
@@ -3203,13 +3203,15 @@ static int StoppedUITC	(TaskControl_type* taskControl, BOOL const* abortFlag, ch
 	return 0; 
 }
 
-static void	TaskTreeStatusUITC (TaskControl_type* taskControl, TaskTreeExecution_type status)
+static int TaskTreeStatusUITC (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
 	// ignore if this is a Root UITC
 	if (GetTaskControlParent(controllerUIDataPtr->taskControl))
 		SetPanelAttribute(controllerUIDataPtr->panHndl, ATTR_DIMMED, (int) status);
+	
+	return 0;
 }
 
 static void	UITCActive (TaskControl_type* taskControl, BOOL UITCActiveFlag)

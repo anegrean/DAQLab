@@ -1253,7 +1253,7 @@ static int							DoneTC									(TaskControl_type* taskControl, BOOL const* abor
 
 static int							StoppedTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							TaskTreeStatus 							(TaskControl_type* taskControl, TaskTreeExecution_type status);
+static int							TaskTreeStatus 							(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
 
 static int				 			ResetTC 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
@@ -12366,7 +12366,7 @@ Error:
 	return error; 
 }
 
-static void	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status)
+static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
 {
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
 	ChanSet_type**		chanSetPtr;
@@ -12474,6 +12474,8 @@ static void	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_typ
 		
 		// dim/undim rest of panels
 	}
+	
+	return 0;
 }
 
 static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)

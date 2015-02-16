@@ -118,7 +118,7 @@ static void							IterateTC							(TaskControl_type* taskControl, BOOL const* ab
 static int							StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int							DoneTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int							StoppedTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static void							TaskTreeStatus	 					(TaskControl_type* taskControl, TaskTreeExecution_type status);
+static int							TaskTreeStatus	 					(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
 static int				 			ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void				 			ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 static int							ZStageEventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
@@ -859,7 +859,7 @@ static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	return 0;
 }
 
-static void	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status)
+static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
 {
 	//PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	

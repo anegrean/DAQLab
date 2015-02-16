@@ -393,7 +393,7 @@ typedef int				 	(*DoneFptr_type) 				(TaskControl_type* taskControl, BOOL const
 typedef int				 	(*StoppedFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a Task Tree in which the Task Controller participates is started or stops/is stopped. This is called before the Start callback of the Task Controller.
-typedef void 				(*TaskTreeStatusFptr_type)		(TaskControl_type* taskControl, TaskTreeExecution_type status); 
+typedef int 				(*TaskTreeStatusFptr_type)		(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo); 
 
 // Called when an UITC has a parent Task Controller attached to or detached from it, in the former case the UITC functioning as a simple Task Controller
 // without the possibility for the user to control the Task execution. This function must dim/undim UITC controls that prevent/allow the user to control

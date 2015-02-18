@@ -43,7 +43,8 @@ typedef struct NIVisionDisplay	NIVisionDisplay_type;	// child class of DisplayEn
 		
 NIVisionDisplay_type*				init_NIVisionDisplay_type		(	intptr_t 						parentWindowHndl,
 																	 	ROIPlaced_CBFptr_type			ROIPlacedCBFptr,
-																		ROIRemoved_CBFptr_type			ROIRemovedCBFptr	);
+																		ROIRemoved_CBFptr_type			ROIRemovedCBFptr,
+																		ErrorHandlerFptr_type			errorHandlerCBFptr);
 
 	// Disposes NI Vision Images
 void 								discard_Image_type 				(Image** image);

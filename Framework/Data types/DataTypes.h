@@ -26,6 +26,12 @@
 
 //==============================================================================
 // Types
+
+	//----------------------------------------------------------------------------------------------
+	// Function types
+	//---------------------------------------------------------------------------------------------- 
+	
+typedef void (*DiscardFptr_type) (void** dataPtr);  // generic function type to dispose of dinamically allocated data
 		
 	//----------------------------------------------------------------------------------------------
 	// Basic types
@@ -130,8 +136,6 @@ struct RGBA {
 typedef struct ROI 			ROI_type;		 // Base class
 typedef struct Point		Point_type;		 // Child class of ROI_type
 typedef struct Rect			Rect_type;		 // Child class of ROI_type
-
-typedef void (* DiscardFptr_type) (void** ROIPtr);	
 
 typedef enum {
 	

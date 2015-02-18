@@ -349,8 +349,6 @@ struct ScanEngine {
 	//-----------------------------------
 	double						pixelClockRate;			// Pixel clock rate in [Hz] for incoming fluorescence data from all detector channels.
 														// Note: This is not to be confused with the pixel dwell time, which is a multiple of 1/pixelClockRate.
-	double						pixSize;				// Image pixel size in [um].   
-	
 	double						pixDelay;				// Pixel signal delay in [us] due to processing electronics measured from the moment the signal (fluorescence) is 
 														// generated at the sample.
 	//-----------------------------------
@@ -392,19 +390,23 @@ typedef struct {
 } RectRasterImgBuffer_type;
 
 typedef struct {
+	double						pixSize;				// Image pixel size in [um].
+	uInt32						height;					// Image height in [pix].
+	int							heightOffset;			// Image height offset from center in [pix].
+	uInt32						width;					// Image width in [pix].
+	int							widthOffset;			// Image width offset in [pix].
+	double						pixelDwellTime;			// Pixel dwell time in [us].
+} RectRasterScanSet_type;
+
+typedef struct {
 	ScanEngine_type				baseClass;				// Base class, must be first structure member.
 	
 	//----------------
 	// Scan parameters
 	//----------------
 	
-	double*						refGalvoSamplingRate;   // Pointer to fast and slow axis waveform sampling rate in [Hz]. Value must be the same for VChanFastAxisCom and VChanSlowAxisCom
+	RectRasterScanSet_type		scanSettings;
 	double						galvoSamplingRate;		// Default galvo sampling rate set by the scan engine in [Hz].
-	uInt32						height;					// Image height in [pix].
-	int							heightOffset;			// Image height offset from center in [pix].
-	uInt32						width;					// Image width in [pix].
-	int							widthOffset;			// Image width offset in [pix].
-	double						pixelDwellTime;			// Pixel dwell time in [us].
 	double						flyInDelay;				// Galvo fly-in time from parked position to start of the imaging area in [us]. This value is also an integer multiple of the pixelDwellTime. 
 	
 	//----------------
@@ -593,7 +595,6 @@ static int 							init_ScanEngine_type 							(ScanEngine_type* 		engine,
 																					 char					nPixelsVChanName[],
 																				 	 double					pixelClockRate,
 																					 double					pixelDelay,
-																					 double					pixelSize,
 																				 	 double					scanLensFL,
 																				 	 double					tubeLensFL);
 
@@ -612,6 +613,10 @@ static int 							ReturnRectRasterToParkedPosition 				(RectRaster_type* engine,
 	//--------------------------------------
 	// Non-Resonant Rectangle Raster Scan
 	//--------------------------------------
+
+static RectRasterScanSet_type*		init_RectRasterScanSet_type						(double pixSize, uInt32 height, int heightOffset, uInt32 width, int widthOffset, double pixelDwellTime); 
+
+static void 						discard_RectRasterScanSet_type 					(RectRasterScanSet_type** scanSetPtr);
 
 static RectRaster_type*				init_RectRaster_type							(LaserScanning_type*	lsModule, 
 																			 	 	 char 					engineName[],
@@ -753,9 +758,13 @@ static void							ShutterVChan_Disconnected						(VChan_type* self, void* VChanO
 	// trying each letter alphabetically, after which it increments the number of characters and starts again e.g."aa", "ab"
 static char*						GenerateUniqueROIName							(ListType	ROIList);
 
-static void							ROIPlacedOnDisplay								(DisplayHandle_type displayHandle, void* callbackData, ROI_type** ROI);
+static void							ROIPlacedOnDisplay_CB							(DisplayHandle_type displayHandle, void* callbackData, ROI_type** ROI);
 
-static void							ROIRemovedFromDisplay							(DisplayHandle_type displayHandle, void* callbackData, ROI_type* ROI);
+static void							ROIRemovedFromDisplay_CB						(DisplayHandle_type displayHandle, void* callbackData, ROI_type* ROI);
+
+static int							RestoreImgSettings_CB							(DisplayHandle_type displayHandle, void* callbackData, char** errorInfo);
+
+static void							DisplayErrorHandler_CB							(DisplayHandle_type displayHandle, int errorID, char* errorInfo);
 
 //-----------------------------------------
 // Task Controller Callbacks
@@ -1048,14 +1057,14 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 				}
 				
 				// update width
-				SetCtrlVal(scanPanHndl, RectRaster_Width, rectRasterScanEngine->width * rectRasterScanEngine->baseClass.pixSize);
+				SetCtrlVal(scanPanHndl, RectRaster_Width, rectRasterScanEngine->scanSettings.width * rectRasterScanEngine->scanSettings.pixSize);
 				
 				// update height and width offsets
-				SetCtrlVal(scanPanHndl, RectRaster_WidthOffset, rectRasterScanEngine->widthOffset * rectRasterScanEngine->baseClass.pixSize); 
-				SetCtrlVal(scanPanHndl, RectRaster_HeightOffset, rectRasterScanEngine->heightOffset * rectRasterScanEngine->baseClass.pixSize);
+				SetCtrlVal(scanPanHndl, RectRaster_WidthOffset, rectRasterScanEngine->scanSettings.widthOffset * rectRasterScanEngine->scanSettings.pixSize); 
+				SetCtrlVal(scanPanHndl, RectRaster_HeightOffset, rectRasterScanEngine->scanSettings.heightOffset * rectRasterScanEngine->scanSettings.pixSize);
 				
 				// update pixel size & set boundaries
-				SetCtrlVal(scanPanHndl, RectRaster_PixelSize, (*scanEnginePtr)->pixSize);
+				SetCtrlVal(scanPanHndl, RectRaster_PixelSize, ((RectRaster_type*)(*scanEnginePtr))->scanSettings.pixSize);
 				SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
 				SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
 				SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
@@ -1094,8 +1103,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 				
 				// update height
 				char heightString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-				Fmt(heightString, "%s<%f[p1]", rectRasterScanEngine->height * rectRasterScanEngine->baseClass.pixSize);
-				if (rectRasterScanEngine->height)
+				Fmt(heightString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.height * rectRasterScanEngine->scanSettings.pixSize);
+				if (rectRasterScanEngine->scanSettings.height)
 					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_Height, heightString); 
 				else
 					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_Height, ""); 
@@ -1107,8 +1116,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 				
 				// update pixel dwell time
 				char pixelDwellString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-				Fmt(pixelDwellString, "%s<%f[p1]", rectRasterScanEngine->pixelDwellTime);
-				if (rectRasterScanEngine->pixelDwellTime != 0.0)
+				Fmt(pixelDwellString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.pixelDwellTime);
+				if (rectRasterScanEngine->scanSettings.pixelDwellTime != 0.0)
 					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_PixelDwell, pixelDwellString);
 				else
 					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_PixelDwell, "");
@@ -1169,9 +1178,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	intptr_t workspaceWndHndl = 0;	
 	GetPanelAttribute(ls->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHndl);
 	nullChk( ls->displayEngine = (DisplayEngine_type*)init_NIVisionDisplay_type(	workspaceWndHndl,
-																			   		ROIPlacedOnDisplay,
-																					ROIRemovedFromDisplay	) );
-	
+																			   		ROIPlacedOnDisplay_CB,
+																					ROIRemovedFromDisplay_CB,
+																					DisplayErrorHandler_CB		) );
 	
 	return 0;
 	
@@ -1451,12 +1460,12 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
 				// initialize raster scan attributes
-				unsigned int			height					= ((RectRaster_type*) *scanEnginePtr)->height;  
-				unsigned int			width					= ((RectRaster_type*) *scanEnginePtr)->width;  
-				int						heightOffset			= ((RectRaster_type*) *scanEnginePtr)->heightOffset;  
-				int						widthOffset				= ((RectRaster_type*) *scanEnginePtr)->widthOffset; 
-				double					pixelSize				= (*scanEnginePtr)->pixSize;
-				double					pixelDwellTime			= ((RectRaster_type*) *scanEnginePtr)->pixelDwellTime;
+				unsigned int			height					= ((RectRaster_type*) *scanEnginePtr)->scanSettings.height;  
+				unsigned int			width					= ((RectRaster_type*) *scanEnginePtr)->scanSettings.width;  
+				int						heightOffset			= ((RectRaster_type*) *scanEnginePtr)->scanSettings.heightOffset;  
+				int						widthOffset				= ((RectRaster_type*) *scanEnginePtr)->scanSettings.widthOffset; 
+				double					pixelSize				= ((RectRaster_type*) *scanEnginePtr)->scanSettings.pixSize;
+				double					pixelDwellTime			= ((RectRaster_type*) *scanEnginePtr)->scanSettings.pixelDwellTime;
 				double					galvoSamplingRate		= ((RectRaster_type*) *scanEnginePtr)->galvoSamplingRate;
 						
 				DAQLabXMLNode			rectangleRasterAttr[] 	= { {"ImageHeight", BasicData_UInt, &height},
@@ -2201,7 +2210,7 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_TubeLensFL, engine->tubeLensFL);
 	
 	// update galvo and pixel sampling rates
-	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_GalvoSamplingRate, *((RectRaster_type*)engine)->refGalvoSamplingRate/1e3); 		// convert from [Hz] to [kHz]
+	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_GalvoSamplingRate, ((RectRaster_type*)engine)->galvoSamplingRate/1e3); 		// convert from [Hz] to [kHz]
 	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelClockFrequency, engine->pixelClockRate/1e6);								// convert from [Hz] to [MHz] 
 	// update pixel delay
 	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelDelay, engine->pixDelay);													// convert from [Hz] to [MHz] 
@@ -2306,14 +2315,14 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 							SetPanelAttribute(scanPanHndl, ATTR_DIMMED, 1);
 							
 							// update width
-							SetCtrlVal(scanPanHndl, RectRaster_Width, rectRasterScanEngine->width * rectRasterScanEngine->baseClass.pixSize);
+							SetCtrlVal(scanPanHndl, RectRaster_Width, rectRasterScanEngine->scanSettings.width * rectRasterScanEngine->scanSettings.pixSize);
 				
 							// update height and width offsets
-							SetCtrlVal(scanPanHndl, RectRaster_WidthOffset, rectRasterScanEngine->widthOffset * rectRasterScanEngine->baseClass.pixSize); 
-							SetCtrlVal(scanPanHndl, RectRaster_HeightOffset, rectRasterScanEngine->heightOffset * rectRasterScanEngine->baseClass.pixSize);
+							SetCtrlVal(scanPanHndl, RectRaster_WidthOffset, rectRasterScanEngine->scanSettings.widthOffset * rectRasterScanEngine->scanSettings.pixSize); 
+							SetCtrlVal(scanPanHndl, RectRaster_HeightOffset, rectRasterScanEngine->scanSettings.heightOffset * rectRasterScanEngine->scanSettings.pixSize);
 				
 							// update pixel size
-							SetCtrlVal(scanPanHndl, RectRaster_PixelSize, newScanEngine->pixSize);
+							SetCtrlVal(scanPanHndl, RectRaster_PixelSize, ((RectRaster_type*)newScanEngine)->scanSettings.pixSize);
 							SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
 							SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
 							SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
@@ -2362,8 +2371,8 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 				
 							// update height
 							char heightString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-							Fmt(heightString, "%s<%f[p1]", rectRasterScanEngine->height * rectRasterScanEngine->baseClass.pixSize);
-							if (rectRasterScanEngine->height)
+							Fmt(heightString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.height * rectRasterScanEngine->scanSettings.pixSize);
+							if (rectRasterScanEngine->scanSettings.height)
 								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_Height, heightString); 
 							else
 								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_Height, ""); 
@@ -2375,8 +2384,8 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 				
 							// update pixel dwell time
 							char pixelDwellString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-							Fmt(pixelDwellString, "%s<%f[p1]", rectRasterScanEngine->pixelDwellTime);
-							if (rectRasterScanEngine->pixelDwellTime != 0.0)
+							Fmt(pixelDwellString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.pixelDwellTime);
+							if (rectRasterScanEngine->scanSettings.pixelDwellTime != 0.0)
 								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_PixelDwell, pixelDwellString);
 							else
 								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_PixelDwell, "");
@@ -3986,7 +3995,6 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 								 char					nPixelsVChanName[],
 								 double					pixelClockRate,
 								 double					pixelDelay,
-								 double					pixelSize,
 								 double					scanLensFL,
 								 double					tubeLensFL)					
 {
@@ -4028,7 +4036,6 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	engine->engineSetPanHndl			= 0;
 	engine->pixelClockRate				= pixelClockRate;
 	engine->pixDelay					= pixelDelay;
-	engine->pixSize						= pixelSize;
 	// optics
 	engine->scanLensFL					= scanLensFL;
 	engine->tubeLensFL					= tubeLensFL;
@@ -4275,6 +4282,27 @@ Error:
 	
 }
 
+static RectRasterScanSet_type* init_RectRasterScanSet_type (double pixSize, uInt32 height, int heightOffset, uInt32 width, int widthOffset, double pixelDwellTime)
+{
+	RectRasterScanSet_type*	scanSet = malloc(sizeof(RectRasterScanSet_type));
+	if (!scanSet) return NULL;
+	
+	// init
+	scanSet->pixSize 		= pixSize;
+	scanSet->height 		= height;
+	scanSet->heightOffset 	= heightOffset;
+	scanSet->width			= width;
+	scanSet->widthOffset	= widthOffset;
+	scanSet->pixelDwellTime	= pixelDwellTime;
+	
+	return scanSet;
+}
+
+static void discard_RectRasterScanSet_type (RectRasterScanSet_type** scanSetPtr)
+{
+	OKfree(*scanSetPtr);
+}
+
 static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 														char 					engineName[], 
 														char 					fastAxisComVChanName[],
@@ -4308,7 +4336,7 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	// init base scan engine class
 	//--------------------------------------------------------
 	errChk( init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, fastAxisComVChanName, fastAxisComNSampVChanName, slowAxisComVChanName, slowAxisComNSampVChanName, fastAxisPosVChanName, 
-						 slowAxisPosVChanName, imageOutVChanName, detectorVChanName, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName, pixelClockRate, pixelDelay, pixelSize, scanLensFL, tubeLensFL) );
+						 slowAxisPosVChanName, imageOutVChanName, detectorVChanName, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName, pixelClockRate, pixelDelay, scanLensFL, tubeLensFL) );
 	// override discard method
 	engine->baseClass.Discard			= discard_RectRaster_type;
 	// add task controller
@@ -4320,13 +4348,17 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	//--------------------------------------------------------
 	// init RectRaster_type
 	//--------------------------------------------------------
-	engine->refGalvoSamplingRate	= &engine->galvoSamplingRate;
-	engine->galvoSamplingRate		= galvoSamplingRate;
-	engine->height					= scanHeight;
-	engine->heightOffset			= scanHeightOffset;
-	engine->width					= scanWidth;
-	engine->widthOffset				= scanWidthOffset;
-	engine->pixelDwellTime			= pixelDwellTime;
+	
+	engine->galvoSamplingRate			= galvoSamplingRate;
+	
+	// scan settings
+	engine->scanSettings.height			= scanHeight;
+	engine->scanSettings.heightOffset	= scanHeightOffset;
+	engine->scanSettings.width			= scanWidth;
+	engine->scanSettings.widthOffset	= scanWidthOffset;
+	engine->scanSettings.pixelDwellTime	= pixelDwellTime;
+	engine->scanSettings.pixSize		= pixelSize;
+	
 	engine->imgBuffers				= NULL;
 	engine->nImgBuffers				= 0;
 	engine->pointROIs				= ListCreate(sizeof(Point_type*));
@@ -4507,40 +4539,40 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					GetCtrlVal(panel, control, heightString);
 					if (Scan(heightString, "%s>%f", &height) <= 0) {
 						// invalid entry, display previous value
-						Fmt(heightString, "%s<%f[p1]", scanEngine->height * scanEngine->baseClass.pixSize);
+						Fmt(heightString, "%s<%f[p1]", scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize);
 						SetCtrlVal(panel, control, heightString);
 						return 0;
 					}
 					
 					// no negative or zero value for height
 					if (height <= 0){
-						Fmt(heightString, "%s<%f[p1]", scanEngine->height * scanEngine->baseClass.pixSize);
+						Fmt(heightString, "%s<%f[p1]", scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize);
 						SetCtrlVal(panel, control, heightString);
 						return 0;
 					}
 					
 					// make sure height is a multiple of the pixel size
-					heightPix = (uInt32) ceil(height/scanEngine->baseClass.pixSize);
-					height = heightPix * scanEngine->baseClass.pixSize;
+					heightPix = (uInt32) ceil(height/scanEngine->scanSettings.pixSize);
+					height = heightPix * scanEngine->scanSettings.pixSize;
 					Fmt(heightString, "%s<%f[p1]", height);
 					SetCtrlVal(panel, control, heightString);
 					
 					// check if requested image falls within ROI
-					if(!RectROIInsideRect (height, scanEngine->width * scanEngine->baseClass.pixSize, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
-												 scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement,
+					if(!RectROIInsideRect (height, scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize, 
+												 scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement,
 												2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
 						DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
 						char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
 						DLMsg(scanEngineName, 0);
 						OKfree(scanEngineName);
 						DLMsg(".\n\n", 0);
-						Fmt(heightString, "%s<%f[p1]", scanEngine->height * scanEngine->baseClass.pixSize);
+						Fmt(heightString, "%s<%f[p1]", scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize);
 						SetCtrlVal(panel, control, heightString);
 						return 0;
 					}
 					
 					// update height
-					scanEngine->height = heightPix;
+					scanEngine->scanSettings.height = heightPix;
 					Fmt(heightString, "%s<%f[p1]", height);  
 					SetCtrlVal(panel, control, heightString); 
 					// update pixel dwell times
@@ -4554,15 +4586,15 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					uInt32		widthPix;				// in [pix]
 					GetCtrlVal(panel, control, &width);
 					// adjust width to be a multiple of pixel size
-					widthPix 	= (uInt32) ceil(width/scanEngine->baseClass.pixSize);
+					widthPix 	= (uInt32) ceil(width/scanEngine->scanSettings.pixSize);
 					if (!widthPix) widthPix = 1;
-					width 		= widthPix * scanEngine->baseClass.pixSize;
+					width 		= widthPix * scanEngine->scanSettings.pixSize;
 					
-					if (!RectROIInsideRect(scanEngine->height * scanEngine->baseClass.pixSize, width, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
-						scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 
+					if (!RectROIInsideRect(scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize, width, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize, 
+						scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 
 						2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
 							// return to previous value
-							SetCtrlVal(panel, control, scanEngine->width * scanEngine->baseClass.pixSize);
+							SetCtrlVal(panel, control, scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize);
 							DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
 							char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
 							DLMsg(scanEngineName, 0);
@@ -4572,7 +4604,7 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 						}
 						
 					// update width
-					scanEngine->width = widthPix;  // in [pix]
+					scanEngine->scanSettings.width = widthPix;  // in [pix]
 					SetCtrlVal(panel, control, width); 
 					break;
 					
@@ -4582,14 +4614,14 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					int			heightOffsetPix;				// in [pix]
 					GetCtrlVal(panel, control, &heightOffset);  // in [um]
 					// adjust heightOffset to be a multiple of pixel size
-					heightOffsetPix		= (int) floor(heightOffset/scanEngine->baseClass.pixSize);
-					heightOffset 		= heightOffsetPix * scanEngine->baseClass.pixSize;
+					heightOffsetPix		= (int) floor(heightOffset/scanEngine->scanSettings.pixSize);
+					heightOffset 		= heightOffsetPix * scanEngine->scanSettings.pixSize;
 					
-					if (!RectROIInsideRect(scanEngine->height * scanEngine->baseClass.pixSize, scanEngine->width * scanEngine->baseClass.pixSize, heightOffset, 
-						scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement,
+					if (!RectROIInsideRect(scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize, scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize, heightOffset, 
+						scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement,
 						2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
 							// return to previous value
-							SetCtrlVal(panel, control, scanEngine->heightOffset * scanEngine->baseClass.pixSize);
+							SetCtrlVal(panel, control, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize);
 							DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
 							char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
 							DLMsg(scanEngineName, 0);
@@ -4599,24 +4631,24 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					}
 							
 					// update height offset
-					scanEngine->heightOffset = heightOffsetPix;  // in [pix]
+					scanEngine->scanSettings.heightOffset = heightOffsetPix;  // in [pix]
 					SetCtrlVal(panel, control, heightOffset);
 					break;
 					
 				case RectRaster_WidthOffset:
 					
 					double		widthOffset;					// in [um]
-					int		widthOffsetPix;					// in [pix]
+					int			widthOffsetPix;					// in [pix]
 					GetCtrlVal(panel, control, &widthOffset);
 					// adjust heightOffset to be a multiple of pixel size
-					widthOffsetPix 		= (int) floor(widthOffset/scanEngine->baseClass.pixSize);
-					widthOffset 		= widthOffsetPix * scanEngine->baseClass.pixSize;
+					widthOffsetPix 		= (int) floor(widthOffset/scanEngine->scanSettings.pixSize);
+					widthOffset 		= widthOffsetPix * scanEngine->scanSettings.pixSize;
 					
-					if (!RectROIInsideRect(scanEngine->height * scanEngine->baseClass.pixSize, scanEngine->width * scanEngine->baseClass.pixSize, 
-						scanEngine->heightOffset * scanEngine->baseClass.pixSize, widthOffset, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 
+					if (!RectROIInsideRect(scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize, scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize, 
+						scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize, widthOffset, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 
 						2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement)) {
 							// return to previous value
-							SetCtrlVal(panel, control, scanEngine->widthOffset * scanEngine->baseClass.pixSize);
+							SetCtrlVal(panel, control, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
 							DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
 							char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
 							DLMsg(scanEngineName, 0);
@@ -4626,7 +4658,7 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 						}
 						
 					// update width offset
-					scanEngine->widthOffset = widthOffsetPix;  // in [pix]
+					scanEngine->scanSettings.widthOffset = widthOffsetPix;  // in [pix]
 					SetCtrlVal(panel, control, widthOffset); 
 					break;
 					
@@ -4639,14 +4671,14 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					GetCtrlVal(panel, control, dwellTimeString);
 					if (Scan(dwellTimeString, "%s>%f", &dwellTime) <= 0) {
 						// invalid entry, display previous value
-						Fmt(dwellTimeString, "%s<%f[p1]", scanEngine->pixelDwellTime);
+						Fmt(dwellTimeString, "%s<%f[p1]", scanEngine->scanSettings.pixelDwellTime);
 						SetCtrlVal(panel, control, dwellTimeString);
 						return 0;
 					}
 					
 					// dwell time must be within bounds
 					if ((dwellTime < NonResGalvoScan_MinPixelDwellTime) || (dwellTime > NonResGalvoScan_MaxPixelDwellTime)){
-						Fmt(dwellTimeString, "%s<%f[p1]", scanEngine->pixelDwellTime);
+						Fmt(dwellTimeString, "%s<%f[p1]", scanEngine->scanSettings.pixelDwellTime);
 						SetCtrlVal(panel, control, dwellTimeString);
 						return 0;
 					}
@@ -4656,7 +4688,7 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					Fmt(dwellTimeString, "%s<%f[p1]", dwellTime);
 					SetCtrlVal(panel, control, dwellTimeString);	  // <--- can be taken out
 					
-					scanEngine->pixelDwellTime = dwellTime;
+					scanEngine->scanSettings.pixelDwellTime = dwellTime;
 					// update preferred heights and pixel dwell times
 					NonResRectRasterScan_ScanHeights(scanEngine);
 				
@@ -4682,18 +4714,18 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 						}
 					
 					// calculate new image width, height and offsets in pixels to keep current image size in sample space constant
-					scanEngine->width 			= (uInt32) (scanEngine->width * scanEngine->baseClass.pixSize/newPixelSize);
-					scanEngine->widthOffset		= (int) (scanEngine->widthOffset * scanEngine->baseClass.pixSize/newPixelSize);
-					scanEngine->height 			= (uInt32) (scanEngine->height * scanEngine->baseClass.pixSize/newPixelSize);
-					scanEngine->heightOffset 	= (int) (scanEngine->heightOffset * scanEngine->baseClass.pixSize/newPixelSize);
+					scanEngine->scanSettings.width 			= (uInt32) (scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize/newPixelSize);
+					scanEngine->scanSettings.widthOffset	= (int) (scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize/newPixelSize);
+					scanEngine->scanSettings.height 		= (uInt32) (scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize/newPixelSize);
+					scanEngine->scanSettings.heightOffset 	= (int) (scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize/newPixelSize);
 					// update pixel size
-					scanEngine->baseClass.pixSize = newPixelSize;
+					scanEngine->scanSettings.pixSize = newPixelSize;
 					// adjust width control to be multiple of new pixel size
-					SetCtrlVal(panel, RectRaster_Width, scanEngine->width * scanEngine->baseClass.pixSize);
+					SetCtrlVal(panel, RectRaster_Width, scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize);
 					// adjust width offset control to be multiple of new pixel size
-					SetCtrlVal(panel, RectRaster_WidthOffset, scanEngine->widthOffset * scanEngine->baseClass.pixSize);
+					SetCtrlVal(panel, RectRaster_WidthOffset, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
 					// adjust height offset control to be multiple of new pixel size
-					SetCtrlVal(panel, RectRaster_HeightOffset, scanEngine->heightOffset * scanEngine->baseClass.pixSize);
+					SetCtrlVal(panel, RectRaster_HeightOffset, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize);
 					// update preferred heights
 					NonResRectRasterScan_ScanHeights(scanEngine);
 					NonResRectRasterScan_PixelDwellTimes(scanEngine);
@@ -4725,8 +4757,8 @@ void NonResRectRasterScan_ScanHeights (RectRaster_type* scanEngine)
 
 	// enforce pixeldwelltime to be an integer multiple of 1/pixelClockRate
 	// make sure pixeldwelltime is in [us] and pixelClockRate in [Hz] 
-	scanEngine->pixelDwellTime = floor(scanEngine->pixelDwellTime * scanEngine->baseClass.pixelClockRate) / scanEngine->baseClass.pixelClockRate; // result in [us]
-	Fmt(dwellTimeString,"%s<%f[p3]", scanEngine->pixelDwellTime);
+	scanEngine->scanSettings.pixelDwellTime = floor(scanEngine->scanSettings.pixelDwellTime * scanEngine->baseClass.pixelClockRate) / scanEngine->baseClass.pixelClockRate; // result in [us]
+	Fmt(dwellTimeString,"%s<%f[p3]", scanEngine->scanSettings.pixelDwellTime);
 	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, dwellTimeString);	// in [us]
 	
 	// empty list of preferred heights
@@ -4737,26 +4769,26 @@ void NonResRectRasterScan_ScanHeights (RectRaster_type* scanEngine)
 	
 	//---Calculation of prefered heights---
 	//deadtime in [ms], scanEngine->pixelDwellTime in [us]
-	blank = (size_t)ceil(fastAxisCal->triangleCal->deadTime * 1e+3 /scanEngine->pixelDwellTime);  
+	blank = (size_t)ceil(fastAxisCal->triangleCal->deadTime * 1e+3 /scanEngine->scanSettings.pixelDwellTime);  
 	// the sum of unused pixels at the beginning and end of each line
 	deadTimePixels = 2 * blank; 
 	
 	while (inFOVFlag == TRUE){
 		// this condition ensures that at the end of each line, the pixels remain in sync with the galvo samples
 		// this allows for freedom in choosing the pixel dwell time (and implicitly the scan speed)
-		pixelsPerLine = floor(i/(*scanEngine->refGalvoSamplingRate * scanEngine->pixelDwellTime * 1e-6));
+		pixelsPerLine = floor(i/(scanEngine->galvoSamplingRate * scanEngine->scanSettings.pixelDwellTime * 1e-6));
 		if (pixelsPerLine < deadTimePixels) {
 			i++;
 			continue;
 		}
-		rem = i/(*scanEngine->refGalvoSamplingRate * scanEngine->pixelDwellTime * 1e-6) - pixelsPerLine;
+		rem = i/(scanEngine->galvoSamplingRate * scanEngine->scanSettings.pixelDwellTime * 1e-6) - pixelsPerLine;
 		
-		ROIHeight = (pixelsPerLine - deadTimePixels) * scanEngine->baseClass.pixSize;
+		ROIHeight = (pixelsPerLine - deadTimePixels) * scanEngine->scanSettings.pixSize;
 		if (rem == 0.0){ 
-			inFOVFlag = RectROIInsideRect(ROIHeight, scanEngine->width * scanEngine->baseClass.pixSize, scanEngine->heightOffset * scanEngine->baseClass.pixSize, 
-						scanEngine->widthOffset * scanEngine->baseClass.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement);
+			inFOVFlag = RectROIInsideRect(ROIHeight, scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize, 
+						scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize, 2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement, 2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement);
 			
-			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->baseClass.pixSize, scanEngine->pixelDwellTime, ROIHeight + deadTimePixels * scanEngine->baseClass.pixSize) && inFOVFlag) {
+			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->scanSettings.pixSize, scanEngine->scanSettings.pixelDwellTime, ROIHeight + deadTimePixels * scanEngine->scanSettings.pixSize) && inFOVFlag) {
 				// add to list if scan frequency is valid
 				Fmt(heightString,"%s<%f[p1]", ROIHeight);
 				errChk( Combo_InsertComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, -1, heightString) );
@@ -4773,7 +4805,7 @@ void NonResRectRasterScan_ScanHeights (RectRaster_type* scanEngine)
 	double   	diffOld;
 	double   	diffNew;
 	double   	heightItem; 				// in [um]
-	double		targetROIHeight 	= scanEngine->height * scanEngine->baseClass.pixSize;
+	double		targetROIHeight 	= scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize;
 	size_t     	itemPos;
 	if (nElem) {
 		ListGetItem(Heights, &heightItem, 1);
@@ -4792,10 +4824,10 @@ void NonResRectRasterScan_ScanHeights (RectRaster_type* scanEngine)
 		Fmt(heightString,"%s<%f[p1]", heightItem);
 		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, heightString);
 		// update scan engine structure
-		scanEngine->height = (uInt32) (heightItem/scanEngine->baseClass.pixSize);	// in [pix]
+		scanEngine->scanSettings.height = (uInt32) (heightItem/scanEngine->scanSettings.pixSize);	// in [pix]
 	} else
 		// update scan engine structure
-		scanEngine->height = 0;														// in [pix]
+		scanEngine->scanSettings.height = 0;														// in [pix]
 	
 	ListDispose(Heights);
 	
@@ -4822,29 +4854,29 @@ void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, "");
 	
 	// stop here if scan height is 0
-	if (!scanEngine->height) {
-		scanEngine->pixelDwellTime = 0;
+	if (!scanEngine->scanSettings.height) {
+		scanEngine->scanSettings.pixelDwellTime = 0;
 		ListDispose(dwellTimes);
 		return;
 	}
 	
 	// make sure that pixelDwell is a multiple of 1/pix_clock_rate      
 	pixelDwell 	= ceil (NonResGalvoScan_MinPixelDwellTime * (scanEngine->baseClass.pixelClockRate/1e6)) * (1e6/scanEngine->baseClass.pixelClockRate);
-	n 		 	= (uInt32) ceil (fastAxisCal->triangleCal->deadTime * (1e3/pixelDwell));           		// dead time pixels at the beginning and end of each line
-	k		 	= (uInt32) ceil (pixelDwell * (*scanEngine->refGalvoSamplingRate/1e6) * (scanEngine->height + 2*n));
+	n 		 	= (uInt32) ceil (fastAxisCal->triangleCal->deadTime * (1e3/pixelDwell));           				// dead time pixels at the beginning and end of each line
+	k		 	= (uInt32) ceil (pixelDwell * (scanEngine->galvoSamplingRate/1e6) * (scanEngine->scanSettings.height + 2*n));
 	while (pixelDwell <= NonResGalvoScan_MaxPixelDwellTime) {
 		
 		pixelDwellOld = 0;
 		while (pixelDwellOld != pixelDwell) {
 			pixelDwellOld = pixelDwell;
-			n 		 = (uInt32) ceil (fastAxisCal->triangleCal->deadTime * (1e3/pixelDwell));   			// dead time pixels at the beginning and end of each line
-			pixelDwell = k/(*scanEngine->refGalvoSamplingRate * (scanEngine->height + 2*n)) * 1e6;       // in [us]
+			n 		 = (uInt32) ceil (fastAxisCal->triangleCal->deadTime * (1e3/pixelDwell));   				// dead time pixels at the beginning and end of each line
+			pixelDwell = k/(scanEngine->galvoSamplingRate * (scanEngine->scanSettings.height + 2*n)) * 1e6;      // in [us]
 		}
 	
 		// check if the pixel dwell time is a multiple of 1/pixelClockRate 
 		rem = pixelDwell * (scanEngine->baseClass.pixelClockRate/1e6) - floor(pixelDwell * (scanEngine->baseClass.pixelClockRate/1e6));
 		if (rem == 0.0)
-			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->baseClass.pixSize, pixelDwell, scanEngine->height * scanEngine->baseClass.pixSize + 2 * n * scanEngine->baseClass.pixSize)) {
+			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->scanSettings.pixSize, pixelDwell, scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize + 2 * n * scanEngine->scanSettings.pixSize)) {
 				// add to list
 				Fmt(dwellTimeString,"%s<%f[p3]", pixelDwell);
 				errChk( Combo_InsertComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, -1, dwellTimeString) );
@@ -4863,11 +4895,11 @@ void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 	
 	if (nElem) {
 		ListGetItem(dwellTimes, &dwellTimeItem, 1);
-		diffOld = fabs(dwellTimeItem - scanEngine->pixelDwellTime);
+		diffOld = fabs(dwellTimeItem - scanEngine->scanSettings.pixelDwellTime);
 		itemPos = 1;
 		for (size_t i = 2; i <= nElem; i++) {
 			ListGetItem(dwellTimes, &dwellTimeItem, i);
-			diffNew = fabs(dwellTimeItem - scanEngine->pixelDwellTime);
+			diffNew = fabs(dwellTimeItem - scanEngine->scanSettings.pixelDwellTime);
 			if (diffNew < diffOld) {diffOld = diffNew; itemPos = i;}
 		}
 		
@@ -4876,9 +4908,9 @@ void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 		Fmt(dwellTimeString,"%s<%f[p3]", dwellTimeItem);
 		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, dwellTimeString);
 		// update scan engine structure
-		scanEngine->pixelDwellTime = dwellTimeItem;
+		scanEngine->scanSettings.pixelDwellTime = dwellTimeItem;
 	} else
-		scanEngine->pixelDwellTime = 0;
+		scanEngine->scanSettings.pixelDwellTime = 0;
 	
 	ListDispose(dwellTimes);
 	
@@ -4912,10 +4944,10 @@ static BOOL	NonResRectRasterScan_ValidConfig (RectRaster_type* scanEngine)
 {
 	// check if scan engine configuration is valid
 	BOOL	validFlag = scanEngine->baseClass.fastAxisCal && scanEngine->baseClass.slowAxisCal && scanEngine->baseClass.objectiveLens &&
-		   				(scanEngine->baseClass.pixelClockRate != 0.0) && scanEngine->refGalvoSamplingRate && (scanEngine->baseClass.pixSize != 0.0) && 
+		   				(scanEngine->baseClass.pixelClockRate != 0.0) && (scanEngine->scanSettings.pixSize != 0.0) && 
 						ListNumItems(scanEngine->baseClass.DetChans);
 	if (validFlag)
-		validFlag = (*scanEngine->refGalvoSamplingRate != 0.0) && (scanEngine->baseClass.scanLensFL != 0.0) && (scanEngine->baseClass.tubeLensFL != 0.0) &&
+		validFlag = (scanEngine->galvoSamplingRate != 0.0) && (scanEngine->baseClass.scanLensFL != 0.0) && (scanEngine->baseClass.tubeLensFL != 0.0) &&
 					(scanEngine->baseClass.objectiveLens->objectiveFL != 0.0);
 	
 	// check if fast scan axis configuration is valid
@@ -4973,7 +5005,7 @@ static BOOL	NonResRectRasterScan_ValidConfig (RectRaster_type* scanEngine)
 
 static BOOL NonResRectRasterScan_ReadyToScan (RectRaster_type* scanEngine)
 {
-	BOOL scanReady = NonResRectRasterScan_ValidConfig(scanEngine) && (scanEngine->height != 0.0) && (scanEngine->width != 0.0);
+	BOOL scanReady = NonResRectRasterScan_ValidConfig(scanEngine) && (scanEngine->scanSettings.height != 0.0) && (scanEngine->scanSettings.width != 0.0);
 	
 	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Ready, scanReady);
 	
@@ -5023,29 +5055,29 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// number of line scan dead time pixels
 	// note: deadTime in [ms] and pixelDwellTime in [us]
-	nDeadTimePixels = (uInt32) ceil(((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3/scanEngine->pixelDwellTime);
+	nDeadTimePixels = (uInt32) ceil(((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3/scanEngine->scanSettings.pixelDwellTime);
 	
 	// number of pixels per line
-	nPixelsPerLine = scanEngine->height + 2 * nDeadTimePixels;
+	nPixelsPerLine = scanEngine->scanSettings.height + 2 * nDeadTimePixels;
 	
 	// number of galvo samples per line
-	nGalvoSamplesPerLine = RoundRealToNearestInteger(nPixelsPerLine * scanEngine->pixelDwellTime * 1e-6 * *scanEngine->refGalvoSamplingRate);
+	nGalvoSamplesPerLine = RoundRealToNearestInteger(nPixelsPerLine * scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->galvoSamplingRate);
 	
 	// generate bidirectional raster scan signal (2 line scans, 1 triangle waveform period)
-	fastAxisCommandAmplitude = nPixelsPerLine * scanEngine->baseClass.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->sampleDisplacement;
+	fastAxisCommandAmplitude = nPixelsPerLine * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->sampleDisplacement;
 	
 	nullChk( fastAxisCommandSignal = malloc(2 * nGalvoSamplesPerLine * sizeof(double)) );
 	double 		phase = -90;   
 	errChk( TriangleWave(2 * nGalvoSamplesPerLine , fastAxisCommandAmplitude/2, 0.5/nGalvoSamplesPerLine , &phase, fastAxisCommandSignal) );
-	double		fastAxisCommandOffset = scanEngine->heightOffset * scanEngine->baseClass.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->sampleDisplacement; 
+	double		fastAxisCommandOffset = scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->sampleDisplacement; 
 	for (size_t i = 0; i < 2 * nGalvoSamplesPerLine; i++)
 		fastAxisCommandSignal[i] += fastAxisCommandOffset;
 	
 	// generate bidirectional raster scan waveform 
-	nullChk( fastAxisScan_Waveform = init_Waveform_type(Waveform_Double, *scanEngine->refGalvoSamplingRate, 2 * nGalvoSamplesPerLine, (void**)&fastAxisCommandSignal) );
+	nullChk( fastAxisScan_Waveform = init_Waveform_type(Waveform_Double, scanEngine->galvoSamplingRate, 2 * nGalvoSamplesPerLine, (void**)&fastAxisCommandSignal) );
 	
 	// generate fast axis fly-in waveform from parked position
-	nullChk( fastAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal, *scanEngine->refGalvoSamplingRate, 
+	nullChk( fastAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal, scanEngine->galvoSamplingRate, 
 	((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked, 0, - fastAxisCommandAmplitude/2 + fastAxisCommandOffset, 0) );
 	
 	size_t		nGalvoSamplesFastAxisMoveFromParkedWaveform = GetWaveformNumSamples(fastAxisMoveFromParkedWaveform);
@@ -5059,23 +5091,23 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	double				slowAxisStepVoltage;					// Slow axis staircase step voltage in [V]. 
 
 	// generate staircase signal
-	slowAxisStepVoltage  	= scanEngine->baseClass.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement; 
-	slowAxisAmplitude 		= (scanEngine->width - 1) * slowAxisStepVoltage;
-	slowAxisStartVoltage 	= scanEngine->widthOffset * scanEngine->baseClass.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement - slowAxisAmplitude/2;
+	slowAxisStepVoltage  	= scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement; 
+	slowAxisAmplitude 		= (scanEngine->scanSettings.width - 1) * slowAxisStepVoltage;
+	slowAxisStartVoltage 	= scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement - slowAxisAmplitude/2;
 	
-	if (scanEngine->width > 1)
+	if (scanEngine->scanSettings.width > 1)
 		// generate staircase signal
-		nullChk( slowAxisScan_Waveform = StaircaseWaveform(TRUE, *scanEngine->refGalvoSamplingRate, nGalvoSamplesPerLine, scanEngine->width, slowAxisStartVoltage, slowAxisStepVoltage) );  
+		nullChk( slowAxisScan_Waveform = StaircaseWaveform(TRUE, scanEngine->galvoSamplingRate, nGalvoSamplesPerLine, scanEngine->scanSettings.width, slowAxisStartVoltage, slowAxisStepVoltage) );  
 	else {
 		// generate constant signal (no movement)
 		double* slowAxisSignal = NULL;
 		nullChk( slowAxisSignal = malloc (2*nGalvoSamplesPerLine * sizeof(double)) );
-		Set1D(slowAxisSignal, 2*nGalvoSamplesPerLine, scanEngine->widthOffset * scanEngine->baseClass.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement);
-		slowAxisScan_Waveform = init_Waveform_type(Waveform_Double, *scanEngine->refGalvoSamplingRate, 2*nGalvoSamplesPerLine, (void**)&slowAxisSignal);
+		Set1D(slowAxisSignal, 2*nGalvoSamplesPerLine, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement);
+		slowAxisScan_Waveform = init_Waveform_type(Waveform_Double, scanEngine->galvoSamplingRate, 2*nGalvoSamplesPerLine, (void**)&slowAxisSignal);
 	}
 	
 	// generate slow axis fly-in waveform from parked position
-	nullChk( slowAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal, *scanEngine->refGalvoSamplingRate, 
+	nullChk( slowAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal, scanEngine->galvoSamplingRate, 
 	((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked, 0, slowAxisStartVoltage, 0) ); 
 	
 	size_t		nGalvoSamplesSlowAxisScanWaveform 			= GetWaveformNumSamples(slowAxisScan_Waveform);    
@@ -5086,10 +5118,10 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 //============================================================================================================================================================================================
 	
 	// fast scan axis response lag in terms of number of galvo samples 
-	size_t				nGalvoSamplesFastAxisLag			= (size_t) floor(((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->lag * 1e-3 * *scanEngine->refGalvoSamplingRate);
+	size_t				nGalvoSamplesFastAxisLag			= (size_t) floor(((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->lag * 1e-3 * scanEngine->galvoSamplingRate);
 	
 	// slow scan axis response lag in terms of number of galvo samples  
-	size_t				nGalvoSamplesSlowAxisLag			= (size_t) floor(((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->lag * 1e-3 * *scanEngine->refGalvoSamplingRate);
+	size_t				nGalvoSamplesSlowAxisLag			= (size_t) floor(((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->lag * 1e-3 * scanEngine->galvoSamplingRate);
 	
 	// fast axis number of samples needed to move the galvo from the parked position to the start of the scan region
 	size_t				nGalvoSamplesFastAxisMoveFromParked = GetWaveformNumSamples(fastAxisMoveFromParkedWaveform);
@@ -5110,7 +5142,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	nGalvoSamplesFlyIn = (nGalvoSamplesFlyIn/nGalvoSamplesPerLine + 1) * nGalvoSamplesPerLine;
 	
 	// update galvo fly-in duration in raster scan data structure
-	scanEngine->flyInDelay = nGalvoSamplesFlyIn / *scanEngine->refGalvoSamplingRate * 1e6;
+	scanEngine->flyInDelay = nGalvoSamplesFlyIn / scanEngine->galvoSamplingRate * 1e6;
 	
 	// determine number of additional galvo samples needed to compensate fast and slow axis fly-in and lag delays
 	size_t				nGalvoSamplesFastAxisCompensation	=  nGalvoSamplesFlyIn - nGalvoSamplesFastAxisLag - nGalvoSamplesFastAxisMoveFromParked;
@@ -5121,7 +5153,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	if (nGalvoSamplesFastAxisCompensation) {
 		nullChk( fastAxisCompensationSignal = malloc(nGalvoSamplesFastAxisCompensation * sizeof(double)) );
 		errChk( Set1D(fastAxisCompensationSignal, nGalvoSamplesFastAxisCompensation, ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked) ); 
-		nullChk( fastAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double,  *scanEngine->refGalvoSamplingRate, nGalvoSamplesFastAxisCompensation, (void**)&fastAxisCompensationSignal) );
+		nullChk( fastAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double, scanEngine->galvoSamplingRate, nGalvoSamplesFastAxisCompensation, (void**)&fastAxisCompensationSignal) );
 		errChk( AppendWaveform(fastAxisMoveFromParkedCompensatedWaveform, fastAxisMoveFromParkedWaveform, &errMsg) );
 		discard_Waveform_type(&fastAxisMoveFromParkedWaveform);
 	}
@@ -5130,7 +5162,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	if (nGalvoSamplesSlowAxisCompensation) {
 		nullChk( slowAxisCompensationSignal = malloc(nGalvoSamplesSlowAxisCompensation * sizeof(double)) );
 		errChk( Set1D(slowAxisCompensationSignal, nGalvoSamplesSlowAxisCompensation, ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked) ); 
-		nullChk( slowAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double,  *scanEngine->refGalvoSamplingRate, nGalvoSamplesSlowAxisCompensation, (void**)&slowAxisCompensationSignal) );
+		nullChk( slowAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double, scanEngine->galvoSamplingRate, nGalvoSamplesSlowAxisCompensation, (void**)&slowAxisCompensationSignal) );
 		errChk( AppendWaveform(slowAxisMoveFromParkedCompensatedWaveform, slowAxisMoveFromParkedWaveform, &errMsg) );
 		discard_Waveform_type(&slowAxisMoveFromParkedWaveform);
 	}
@@ -5155,7 +5187,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// fastAxisScan_Waveform has two line scans (one triangle wave period)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
 		// finite mode
-		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, scanEngine->width/2.0 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) ); 
+		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, scanEngine->scanSettings.width/2.0 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) ); 
 	else 
 		// for continuous mode
 		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, 0) ); 
@@ -5169,7 +5201,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		// generate one sample
 		nullChk( parkedVoltageSignal = malloc(sizeof(double)) );
 		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
-		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
+		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) ); 
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
 		// send NULL packet to signal termination of data stream
@@ -5181,7 +5213,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
 		// move from parked waveform + scan waveform + one sample to return to parked position
 		*nGalvoSamplesPtr = (uInt64)((nGalvoSamplesFastAxisCompensation + nGalvoSamplesFastAxisMoveFromParkedWaveform) + 
-					   (scanEngine->width/2.0 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) * 2 * nGalvoSamplesPerLine + 1);
+					   (scanEngine->scanSettings.width/2.0 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) * 2 * nGalvoSamplesPerLine + 1);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
@@ -5215,7 +5247,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		// generate one sample
 		nullChk( parkedVoltageSignal = malloc(sizeof(double)) );
 		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
-		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, *scanEngine->refGalvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
+		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) ); 
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
 		// send NULL packet to signal termination of data stream
@@ -5242,8 +5274,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		// finite mode
 		//--------------------
 		// total number of pixels
-		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)scanEngine->width * (uInt64)GetTaskControlIterations(scanEngine->baseClass.taskControl); 
-		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32)(scanEngine->pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
+		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)scanEngine->scanSettings.width * (uInt64)GetTaskControlIterations(scanEngine->baseClass.taskControl); 
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32)(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
 		
 		// send n pixels
 		nullChk( nPixelsPtr = malloc(sizeof(uInt64)) );
@@ -5255,7 +5287,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		//--------------------
 		// continuous mode
 		//--------------------
-		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32)(scanEngine->pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32)(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
 	
 	// send pulse train info
 	nullChk( pixelPulseTrainPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, NULL, (DiscardPacketDataFptr_type)discard_PulseTrain_type) );
@@ -5355,10 +5387,12 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	size_t						nPixels				= 0;		// Number of received pixels from a pixel data packet stored in pixelData.
 	size_t             			pixelDataIdx   		= 0;      	// The index of the processed pixel from the received pixel waveform.
 	RectRasterImgBuffer_type*   imgBuffer			= rectRaster->imgBuffers[imgBufferIdx];
-	size_t						nDeadTimePixels		= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->pixelDwellTime);
+	size_t						nDeadTimePixels		= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->scanSettings.pixelDwellTime);
 	
 	size_t 						iterindex			= 0;
 	Iterator_type* 				currentiter		    = NULL;
+	DisplayEngine_type* 		displayEngine 		= imgBuffer->detChan->scanEngine->lsModule->displayEngine;
+	RectRasterScanSet_type*		imgSettings			= NULL;
 	
 	do {
 		
@@ -5443,7 +5477,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 		imgBuffer->nTmpPixels += nPixels - pixelDataIdx;
 		
 		// if there are enough pixels to construct a row take them out of the buffer
-		while (imgBuffer->nTmpPixels >= rectRaster->height + 2 * nDeadTimePixels) {
+		while (imgBuffer->nTmpPixels >= rectRaster->scanSettings.height + 2 * nDeadTimePixels) {
 				
 			switch (pixelDataType) {   
 					
@@ -5452,20 +5486,20 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					// copy pixels depending on their direction
 					if (imgBuffer->revWidthFlag){
 						if (!imgBuffer->revHeightFlag)
-							memcpy((unsigned char*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(unsigned char));
+							memcpy((unsigned char*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.height * sizeof(unsigned char));
 						else 
-							for (uInt32 i = 0; i < rectRaster->height; i++)
-								*((unsigned char*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+							for (uInt32 i = 0; i < rectRaster->scanSettings.height; i++)
+								*((unsigned char*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.height - 1 - i);
 					} else {
 						if (!imgBuffer->revHeightFlag)
-							memcpy((unsigned char*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height), (unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(unsigned char));
+							memcpy((unsigned char*)imgBuffer->imagePixels + (rectRaster->scanSettings.height * rectRaster->scanSettings.width - imgBuffer->nImagePixels - rectRaster->scanSettings.height), (unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.height * sizeof(unsigned char));
 						else 
-							for (uInt32 i = 0; i < rectRaster->height; i++)
-								*((unsigned char*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height) + i) = *((unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+							for (uInt32 i = 0; i < rectRaster->scanSettings.height; i++)
+								*((unsigned char*)imgBuffer->imagePixels + (rectRaster->scanSettings.height * rectRaster->scanSettings.width - imgBuffer->nImagePixels - rectRaster->scanSettings.height) + i) = *((unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.height - 1 - i);
 					} 
 						
 					// move contents of the buffer to its beginning
-					memmove((unsigned char*)imgBuffer->tmpPixels, (unsigned char*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(unsigned char));
+					memmove((unsigned char*)imgBuffer->tmpPixels, (unsigned char*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.height) * sizeof(unsigned char));
 					break;
 					
 				case DL_Waveform_UShort:
@@ -5473,20 +5507,20 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					// copy pixels depending on their direction
 					if (imgBuffer->revWidthFlag){
 						if (!imgBuffer->revHeightFlag)
-							memcpy((unsigned short*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(unsigned short));
+							memcpy((unsigned short*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.height * sizeof(unsigned short));
 						else 
-							for (uInt32 i = 0; i < rectRaster->height; i++)
-								*((unsigned short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+							for (uInt32 i = 0; i < rectRaster->scanSettings.height; i++)
+								*((unsigned short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.height - 1 - i);
 					} else {
 						if (!imgBuffer->revHeightFlag)
-							memcpy((unsigned short*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height), (unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(unsigned short));
+							memcpy((unsigned short*)imgBuffer->imagePixels + (rectRaster->scanSettings.height * rectRaster->scanSettings.width - imgBuffer->nImagePixels - rectRaster->scanSettings.height), (unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.height * sizeof(unsigned short));
 						else 
-							for (uInt32 i = 0; i < rectRaster->height; i++)
-								*((unsigned short*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height) + i) = *((unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+							for (uInt32 i = 0; i < rectRaster->scanSettings.height; i++)
+								*((unsigned short*)imgBuffer->imagePixels + (rectRaster->scanSettings.height * rectRaster->scanSettings.width - imgBuffer->nImagePixels - rectRaster->scanSettings.height) + i) = *((unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.height - 1 - i);
 					} 
 						
 					// move contents of the buffer to its beginning
-					memmove((unsigned short*)imgBuffer->tmpPixels, (unsigned short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(unsigned short));
+					memmove((unsigned short*)imgBuffer->tmpPixels, (unsigned short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.height) * sizeof(unsigned short));
 					break;
 						
 				case DL_Waveform_Short:
@@ -5494,20 +5528,20 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					// copy pixels depending on their direction
 					if (imgBuffer->revWidthFlag){
 						if (!imgBuffer->revHeightFlag)
-							memcpy((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(short));
+							memcpy((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.height * sizeof(short));
 						else 
-							for (uInt32 i = 0; i < rectRaster->height; i++)
-								*((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+							for (uInt32 i = 0; i < rectRaster->scanSettings.height; i++)
+								*((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.height - 1 - i);
 					} else {
 						if (!imgBuffer->revHeightFlag)
-							memcpy((short*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height), (short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(short));
+							memcpy((short*)imgBuffer->imagePixels + (rectRaster->scanSettings.height * rectRaster->scanSettings.width - imgBuffer->nImagePixels - rectRaster->scanSettings.height), (short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.height * sizeof(short));
 						else 
-							for (uInt32 i = 0; i < rectRaster->height; i++)
-								*((short*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height) + i) = *((short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+							for (uInt32 i = 0; i < rectRaster->scanSettings.height; i++)
+								*((short*)imgBuffer->imagePixels + (rectRaster->scanSettings.height * rectRaster->scanSettings.width - imgBuffer->nImagePixels - rectRaster->scanSettings.height) + i) = *((short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.height - 1 - i);
 					} 
 						
 					// move contents of the buffer to its beginning
-					memmove((short*)imgBuffer->tmpPixels, (short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(short));
+					memmove((short*)imgBuffer->tmpPixels, (short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.height) * sizeof(short));
 					break;
 						
 				case DL_Waveform_Float:
@@ -5515,20 +5549,20 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					// copy pixels depending on their direction
 					if (imgBuffer->revWidthFlag){
 						if (!imgBuffer->revHeightFlag)
-							memcpy((float*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (float*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(float));
+							memcpy((float*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (float*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.height * sizeof(float));
 						else 
-							for (uInt32 i = 0; i < rectRaster->height; i++)
-								*((float*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((float*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+							for (uInt32 i = 0; i < rectRaster->scanSettings.height; i++)
+								*((float*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((float*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.height - 1 - i);
 					} else {
 						if (!imgBuffer->revHeightFlag)
-							memcpy((float*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height), (float*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->height * sizeof(float));
+							memcpy((float*)imgBuffer->imagePixels + (rectRaster->scanSettings.height * rectRaster->scanSettings.width - imgBuffer->nImagePixels - rectRaster->scanSettings.height), (float*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.height * sizeof(float));
 						else 
-							for (uInt32 i = 0; i < rectRaster->height; i++)
-								*((float*)imgBuffer->imagePixels + (rectRaster->height * rectRaster->width - imgBuffer->nImagePixels - rectRaster->height) + i) = *((float*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->height - 1 - i);
+							for (uInt32 i = 0; i < rectRaster->scanSettings.height; i++)
+								*((float*)imgBuffer->imagePixels + (rectRaster->scanSettings.height * rectRaster->scanSettings.width - imgBuffer->nImagePixels - rectRaster->scanSettings.height) + i) = *((float*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.height - 1 - i);
 					} 
 						
 					// move contents of the buffer to its beginning
-					memmove((float*)imgBuffer->tmpPixels, (float*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->height) * sizeof(float));
+					memmove((float*)imgBuffer->tmpPixels, (float*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.height, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.height) * sizeof(float));
 					break;
 					
 				default:
@@ -5540,14 +5574,14 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 			}
 				
 			// update number of pixels in the buffers
-			imgBuffer->nTmpPixels  	-= rectRaster->height + 2 * nDeadTimePixels;
-			imgBuffer->nImagePixels	+= rectRaster->height;
+			imgBuffer->nTmpPixels  	-= rectRaster->scanSettings.height + 2 * nDeadTimePixels;
+			imgBuffer->nImagePixels	+= rectRaster->scanSettings.height;
 			// increment number of columns
 			imgBuffer->nAssembledColumns++;
 			// reverse pixel direction of every second column
 			imgBuffer->revHeightFlag = !imgBuffer->revHeightFlag;
 				
-			if (imgBuffer->nAssembledColumns == rectRaster->width) {
+			if (imgBuffer->nAssembledColumns == rectRaster->scanSettings.width) {
 				
 			
 				switch (pixelDataType) {
@@ -5574,9 +5608,17 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 						goto Error;
 				}
 				
+				// add restore image settings callback info
+				nullChk( imgSettings = init_RectRasterScanSet_type(rectRaster->scanSettings.pixSize, rectRaster->scanSettings.height, rectRaster->scanSettings.heightOffset, rectRaster->scanSettings.width,
+													 rectRaster->scanSettings.widthOffset, rectRaster->scanSettings.pixelDwellTime) );
+				RestoreImgSettings_CBFptr_type	restoreCBFns[] 					= {RestoreImgSettings_CB};
+				void* 							callbackData[]					= {imgSettings};
+				DiscardFptr_type 				discardCallbackDataFunctions[] 	= {(DiscardFptr_type)discard_RectRasterScanSet_type};
+				
+				errChk( (*displayEngine->setRestoreImgSettingsFptr) (imgBuffer->detChan->displayHndl, NumElem(restoreCBFns), restoreCBFns, callbackData, discardCallbackDataFunctions) );
+				
 				// send pixel array to display 
-				DisplayEngine_type* 	displayEngine = imgBuffer->detChan->scanEngine->lsModule->displayEngine;
-				errChk( (*displayEngine->displayImageFptr) (imgBuffer->detChan->displayHndl, imgBuffer->imagePixels, rectRaster->width, rectRaster->height, imageType) );
+				errChk( (*displayEngine->displayImageFptr) (imgBuffer->detChan->displayHndl, imgBuffer->imagePixels, rectRaster->scanSettings.width, rectRaster->scanSettings.height, imageType) );
 				 
 				
 				  /*
@@ -5637,6 +5679,7 @@ Error:
 	
 	// cleanup
 	ReleaseDataPacket(&pixelPacket);
+	discard_RectRasterScanSet_type(&imgSettings);
 	
 	if (!errMsg)
 		errMsg = StrDup("Out of memory");
@@ -5978,19 +6021,38 @@ static char* GenerateUniqueROIName (ListType ROIList)
 	return NULL;
 }
 
-static void ROIPlacedOnDisplay (DisplayHandle_type displayHandle, void* callbackData, ROI_type** ROI)
+static void ROIPlacedOnDisplay_CB (DisplayHandle_type displayHandle, void* callbackData, ROI_type** ROI)
 {
 	DetChan_type*	detChan = callbackData; 
 	
 	
 }
 
-static void	ROIRemovedFromDisplay (DisplayHandle_type displayHandle, void* callbackData, ROI_type* ROI)
+static void	ROIRemovedFromDisplay_CB (DisplayHandle_type displayHandle, void* callbackData, ROI_type* ROI)
 {
 	DetChan_type*	detChan = callbackData;
 	
 }
 
+static int RestoreImgSettings_CB (DisplayHandle_type displayHandle, void* callbackData, char** errorInfo)
+{
+	RectRasterScanSet_type* 	scanSet = callbackData;
+	int							error	= 0;
+	
+	
+	
+	
+	return 0;
+	
+Error:
+	
+	return error;
+}
+
+static void	DisplayErrorHandler_CB (DisplayHandle_type displayHandle, int errorID, char* errorInfo)
+{
+	DLMsg(errorInfo, 1);
+}
 
 //---------------------------------------------------------------------
 // Non Resonant Galvo Calibration and Testing Task Controller Callbacks 
@@ -7069,13 +7131,13 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 				}
 		
 				// get display handles for connected channels
-				nullChk( detChan->displayHndl 	= (*displayEngine->getDisplayHandleFptr) (displayEngine, detChan, engine->width, engine->height, imageType) ); 
+				nullChk( detChan->displayHndl 	= (*displayEngine->getDisplayHandleFptr) (displayEngine, detChan, engine->scanSettings.width, engine->scanSettings.height, imageType) ); 
 		
 				engine->nImgBuffers++;
 				// allocate memory for image assembly
 				engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
-				engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->width, engine->height, 
-						(size_t)((engine->flyInDelay - engine->baseClass.pixDelay)/engine->pixelDwellTime), pixelDataType,FALSE, FALSE); 
+				engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->scanSettings.width, engine->scanSettings.height, 
+						(size_t)((engine->flyInDelay - engine->baseClass.pixDelay)/engine->scanSettings.pixelDwellTime), pixelDataType,FALSE, FALSE); 
 			}
 			
 			break;

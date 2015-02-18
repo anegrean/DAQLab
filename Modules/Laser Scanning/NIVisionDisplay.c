@@ -27,21 +27,32 @@
 //==============================================================================
 // Types
 
+typedef enum {
+	NIDisplayMenu_Save,
+	NIDisplayMenu_Restore
+} NIDisplayMenuItems;
+
 typedef struct {
-	NIVisionDisplay_type*	niDisplay;		
-	void*					callbackData;   // Callback data set by NewNIVisionDisplayHandle() 
-	int						imaqWndID;		// Assigned IMAQ window ID for display
-	Image*					imaqImg;		// Buffer to store the displayed image
-	//ListType				ROIs;			// List of ROIs added to imaqImg of ROI_type*
-	LONG_PTR				imaqWndProc;	// Pointer to the original imaq window procedure.
+	NIVisionDisplay_type*				niDisplay;		
+	void*								callbackData;   // Callback data set by NewNIVisionDisplayHandle() 
+	int									imaqWndID;		// Assigned IMAQ window ID for display
+	Image*								imaqImg;		// Buffer to store the displayed image
+	//ListType							ROIs;			// List of ROIs added to imaqImg of ROI_type*
+	LONG_PTR							imaqWndProc;	// Pointer to the original imaq window procedure. This will be called after the custom window procedure
+	
+	// callbacks to restore image settings to the various modules
+	size_t 								nRestoreSettingsCBs;
+	RestoreImgSettings_CBFptr_type* 	restoreSettingsCBs;
+	void** 								restoreSettingsCBsData;
+	DiscardFptr_type* 					discardCallbackDataFunctions;
 } Display_type;
 
 struct NIVisionDisplay {
 	// BASE CLASS
-	DisplayEngine_type		baseClass;
+	DisplayEngine_type					baseClass;
 	
 	// DATA
-	intptr_t 				parentWindowHndl;
+	intptr_t 							parentWindowHndl;
 	
 	
 	// METHODS
@@ -90,6 +101,8 @@ static int						DisplayNIVisionImage							(Display_type* displayHndl, void* pix
 
 static DisplayHandle_type		GetNIVisionDisplayHandle						(NIVisionDisplay_type* NIDisplay, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType);
 
+static int						SetRestoreImgSettingsCBs						(Display_type* displayHndl, size_t nCallbackFunctions, RestoreImgSettings_CBFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions);
+
 static int						OverlayNIVisionROI								(Display_type* displayHndl, ROI_type* ROI);
 
 static void						ClearAllROI										(Display_type* displayHndl);
@@ -109,7 +122,8 @@ LRESULT CALLBACK 				CustomDisplay_CB 								(HWND hWnd, UINT msg, WPARAM wPara
 
 NIVisionDisplay_type* init_NIVisionDisplay_type (	intptr_t 					parentWindowHndl,
 													ROIPlaced_CBFptr_type		ROIPlacedCBFptr,
-													ROIRemoved_CBFptr_type		ROIRemovedCBFptr		)
+													ROIRemoved_CBFptr_type		ROIRemovedCBFptr,
+													ErrorHandlerFptr_type		errorHandlerCBFptr	)
 {
 	int						error				= 0;
 	intptr_t				imaqToolWndHndl		= 0; 
@@ -124,10 +138,12 @@ NIVisionDisplay_type* init_NIVisionDisplay_type (	intptr_t 					parentWindowHndl
 								(DiscardDisplayEngineFptr_type) discard_NIVisionDisplay, 
 								(DisplayImageFptr_type) DisplayNIVisionImage, 
 								(GetDisplayHandleFptr_type) GetNIVisionDisplayHandle,
+								(SetRestoreImgSettingsCBsFptr_type) SetRestoreImgSettingsCBs,
 								(OverlayROIFptr_type) OverlayNIVisionROI,
 								(ClearAllROIFptr_type) ClearAllROI,
 								ROIPlacedCBFptr,
-								ROIRemovedCBFptr											);
+								ROIRemovedCBFptr,
+						   		errorHandlerCBFptr);
 	
 	//--------------------------
 	// init NI Vision Data
@@ -188,15 +204,21 @@ static Display_type* init_Display_type (NIVisionDisplay_type* NIDisplay, int ima
 	if (!disp) return NULL;
 	
 	// init
-	disp->niDisplay 		= NIDisplay;
-	disp->callbackData		= callbackData;
-	disp->imaqWndID			= imaqWndID;
-	disp->imaqImg			= NULL;
-	disp->imaqWndProc		= 0;
-	//disp->ROIs				= 0;
+	disp->niDisplay 					= NIDisplay;
+	disp->callbackData					= callbackData;
+	disp->imaqWndID						= imaqWndID;
+	disp->imaqImg						= NULL;
+	disp->imaqWndProc					= 0;
+	//disp->ROIs						= 0;
 	
 	// allocate
 	//if ( !(disp->ROIs		= ListCreate(sizeof(ROI_type*))) ) 		goto Error;
+	
+	// callbacks to restore image settings back to the modules that determine the image (scan engine, xyz stages, etc)
+	disp->nRestoreSettingsCBs			= 0;
+	disp->restoreSettingsCBs			= NULL;
+	disp->restoreSettingsCBsData		= NULL;
+	disp->discardCallbackDataFunctions  = NULL;
 	
 	return disp;
 	
@@ -231,6 +253,19 @@ static void discard_Display_type (Display_type** displayPtr)
 		display->ROIs = 0;
 	}
 	*/
+	
+	// restore settings callback data
+	for (size_t i = 0; i < display->nRestoreSettingsCBs; i++)
+		if (display->discardCallbackDataFunctions[i])
+			(*display->discardCallbackDataFunctions[i]) (&display->restoreSettingsCBsData[i]);	
+		else
+			OKfree(display->restoreSettingsCBsData[i]);
+	
+	display->nRestoreSettingsCBs = 0;
+	OKfree(display->discardCallbackDataFunctions);
+	OKfree(display->restoreSettingsCBs);
+	OKfree(display->restoreSettingsCBsData);
+	
 	
 	OKfree(*displayPtr);
 }
@@ -309,16 +344,15 @@ static DisplayHandle_type GetNIVisionDisplayHandle (NIVisionDisplay_type* NIDisp
 	// create menu bar
 	imaqWndMenuHndl = CreateMenu();
 	// add menu item "Save"
-	AppendMenu(imaqWndMenuHndl, MF_STRING, 0, "&Save");
+	AppendMenu(imaqWndMenuHndl, MF_STRING, NIDisplayMenu_Save, "&Save");
+	// add menu item "Restore"
+	AppendMenu(imaqWndMenuHndl, MF_STRING, NIDisplayMenu_Restore, "&Restore");
 	
 	// add menu bar to the imaq window
 	SetMenu(imaqWndHndl, imaqWndMenuHndl);
 	
-	// store original imaq window procedure pointer
-	//displays[imaqHndl]->imaqWndProc = GetWindowLongPtr(imaqWndHndl, GWLP_WNDPROC);
-	// replace original imaq window procedure pointer
-	//SetWindowLongPtr(imaqWndHndl, GWLP_WNDPROC, 
-	SetWindowSubclass(imaqWndHndl, CustomDisplay_CB, 0, 0);
+	// add custom window callback function
+	SetWindowSubclass(imaqWndHndl, CustomDisplay_CB, 0, (DWORD_PTR)displays[imaqHndl]);
 	
 	
 	return displays[imaqHndl];
@@ -329,6 +363,48 @@ Error:
 	discard_Display_type(&displays[imaqHndl]);
 	
 	return NULL;
+}
+
+static int SetRestoreImgSettingsCBs (Display_type* displayHndl, size_t nCallbackFunctions, RestoreImgSettings_CBFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions)
+{
+	int error = 0;
+	
+	// discard restore settings callback data
+	for (size_t i = 0; i < displayHndl->nRestoreSettingsCBs; i++)
+		if (displayHndl->discardCallbackDataFunctions[i])
+			(*displayHndl->discardCallbackDataFunctions[i]) (&displayHndl->restoreSettingsCBsData[i]);	
+		else
+			OKfree(displayHndl->restoreSettingsCBsData[i]);
+	
+	OKfree(displayHndl->restoreSettingsCBs);
+	OKfree(displayHndl->restoreSettingsCBsData); 
+	OKfree(displayHndl->discardCallbackDataFunctions);
+
+	displayHndl->nRestoreSettingsCBs = 0;
+	
+	// allocate restore settings data
+	displayHndl->nRestoreSettingsCBs = nCallbackFunctions;
+	
+	nullChk( displayHndl->discardCallbackDataFunctions 	= malloc (nCallbackFunctions*sizeof(DiscardFptr_type)) );
+	nullChk( displayHndl->restoreSettingsCBs 			= malloc (nCallbackFunctions*sizeof(RestoreImgSettings_CBFptr_type)) );
+	nullChk( displayHndl->restoreSettingsCBsData 		= malloc (nCallbackFunctions*sizeof(void*)) );
+	
+	for (size_t i = 0; i < nCallbackFunctions; i++) {
+		displayHndl->restoreSettingsCBs[i] 				= callbackFunctions[i];
+		displayHndl->restoreSettingsCBsData[i]			= callbackData[i];
+		displayHndl->discardCallbackDataFunctions[i] 	= discardCallbackDataFunctions[i];
+	}
+	
+	return 0;
+	
+Error: 
+	
+	OKfree(displayHndl->discardCallbackDataFunctions);
+	OKfree(displayHndl->restoreSettingsCBs);
+	OKfree(displayHndl->restoreSettingsCBsData);
+	
+	return error;
+	
 }
 
 static int OverlayNIVisionROI (Display_type* displayHndl, ROI_type* ROI)
@@ -494,12 +570,33 @@ static void IMAQ_CALLBACK Display_CB (WindowEventType event, int windowNumber, T
 
 LRESULT CALLBACK CustomDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {   
+	Display_type*	disp 			= (Display_type*) dwRefData;
+	WORD			wParamHighWord	= HIWORD(wParam);
+	WORD			wParamLowWord	= LOWORD(wParam);
+	int				error			= 0;
+	char*			errMsg			= NULL;
+	
 	switch (msg) {
 			
 		case WM_COMMAND:
 			
-			// filter menu events (wParam = 0)
-			if (wParam) break;
+			// filter menu events (wParamHighWord = 0)
+			if (wParamHighWord) break;
+			
+			switch (wParamLowWord) {
+					
+				case NIDisplayMenu_Save:
+					
+					break;
+					
+				case NIDisplayMenu_Restore:
+					
+					// process each restore function sequencially within this thread
+					for (size_t i = 0; i < disp->nRestoreSettingsCBs; i++)
+						
+					
+					break;
+			}
 			
 			
 			break;
@@ -507,6 +604,14 @@ LRESULT CALLBACK CustomDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LPARAM lP
 		default:
 			break;
 	}
+	
+	return DefSubclassProc(hWnd, msg, wParam, lParam);
+	
+Error:
+	
+	// call display error handler
+	(*disp->niDisplay->baseClass.errorHandlerCBFptr) ((DisplayHandle_type)disp->niDisplay, error, errMsg);
+	OKfree(errMsg);
 	
 	return DefSubclassProc(hWnd, msg, wParam, lParam);
 }

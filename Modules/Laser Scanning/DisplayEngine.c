@@ -36,18 +36,22 @@ void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 								DiscardDisplayEngineFptr_type			discardFptr,
 								DisplayImageFptr_type					displayImageFptr,
 								GetDisplayHandleFptr_type				getDisplayHandleFptr,
+								SetRestoreImgSettingsCBsFptr_type		setRestoreImgSettingsFptr, 
 								OverlayROIFptr_type						overlayROIFptr,
 								ClearAllROIFptr_type					clearAllROIFptr,
 							 	ROIPlaced_CBFptr_type					ROIPlacedCBFptr,
-								ROIRemoved_CBFptr_type					ROIRemovedCBFptr		)
+								ROIRemoved_CBFptr_type					ROIRemovedCBFptr,
+							 	ErrorHandlerFptr_type					errorHandlerCBFptr		)
 {
-	displayEngine->discardFptr 				= discardFptr;
-	displayEngine->displayImageFptr 		= displayImageFptr; 
-	displayEngine->getDisplayHandleFptr 	= getDisplayHandleFptr;
-	displayEngine->overlayROIFptr			= overlayROIFptr;
-	displayEngine->clearAllROIFptr			= clearAllROIFptr;
-	displayEngine->ROIPlacedCBFptr			= ROIPlacedCBFptr;
-	displayEngine->ROIRemovedCBFptr			= ROIRemovedCBFptr;
+	displayEngine->discardFptr 					= discardFptr;
+	displayEngine->displayImageFptr 			= displayImageFptr; 
+	displayEngine->getDisplayHandleFptr 		= getDisplayHandleFptr;
+	displayEngine->setRestoreImgSettingsFptr	= setRestoreImgSettingsFptr;
+	displayEngine->overlayROIFptr				= overlayROIFptr;
+	displayEngine->clearAllROIFptr				= clearAllROIFptr;
+	displayEngine->ROIPlacedCBFptr				= ROIPlacedCBFptr;
+	displayEngine->ROIRemovedCBFptr				= ROIRemovedCBFptr;
+	displayEngine->errorHandlerCBFptr			= errorHandlerCBFptr;
 }
 
 void discard_DisplayEngine_type (DisplayEngine_type** displayEnginePtr)

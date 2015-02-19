@@ -762,7 +762,7 @@ static void							ROIPlacedOnDisplay_CB							(DisplayHandle_type displayHandle,
 
 static void							ROIRemovedFromDisplay_CB						(DisplayHandle_type displayHandle, void* callbackData, ROI_type* ROI);
 
-static int							RestoreImgSettings_CB							(DisplayHandle_type displayHandle, void* callbackData, char** errorInfo);
+static int							RestoreImgSettings_CB							(DisplayEngine_type* displayEngine, DisplayHandle_type displayHandle, void* callbackData, char** errorInfo);
 
 static void							DisplayErrorHandler_CB							(DisplayHandle_type displayHandle, int errorID, char* errorInfo);
 
@@ -4468,7 +4468,7 @@ static void	discard_RectRasterImgBuffer_type (RectRasterImgBuffer_type** rectRas
 
 static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	RectRaster_type*	scanEngine		= callbackData;
+	RectRaster_type*		scanEngine		= callbackData;
 	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
 	NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
 	int						listItemIdx;
@@ -4728,6 +4728,7 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					SetCtrlVal(panel, RectRaster_HeightOffset, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize);
 					// update preferred heights
 					NonResRectRasterScan_ScanHeights(scanEngine);
+					// update preferred pixel dwell times
 					NonResRectRasterScan_PixelDwellTimes(scanEngine);
 					
 					break;
@@ -6034,19 +6035,34 @@ static void	ROIRemovedFromDisplay_CB (DisplayHandle_type displayHandle, void* ca
 	
 }
 
-static int RestoreImgSettings_CB (DisplayHandle_type displayHandle, void* callbackData, char** errorInfo)
+static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, DisplayHandle_type displayHandle, void* callbackData, char** errorInfo)
 {
-	RectRasterScanSet_type* 	scanSet = callbackData;
-	int							error	= 0;
+	RectRasterScanSet_type* 	previousScanSettings 		= callbackData;
+	int							error						= 0;
+	DetChan_type*				detChan						= (DetChan_type*)(*displayEngine->getDisplayHandleCBDataFptr) (displayHandle);
+	RectRasterScanSet_type*		currentScanSettings			= &((RectRaster_type*)detChan->scanEngine)->scanSettings;			
+	RectRaster_type*			scanEngine					= (RectRaster_type*)detChan->scanEngine;
 	
+	// assign previous scan settings
+	currentScanSettings->pixSize			= previousScanSettings->pixSize;
+	currentScanSettings->height				= previousScanSettings->height;
+	currentScanSettings->heightOffset		= previousScanSettings->heightOffset;
+	currentScanSettings->width				= previousScanSettings->width;
+	currentScanSettings->widthOffset		= previousScanSettings->widthOffset;
+	currentScanSettings->pixelDwellTime		= previousScanSettings->pixelDwellTime;
 	
+	// update preferred heights and pixel dwell times
+	NonResRectRasterScan_ScanHeights(scanEngine);
+	NonResRectRasterScan_PixelDwellTimes(scanEngine);
 	
+	// update remaining controls on the scan panel
+	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_HeightOffset, currentScanSettings->heightOffset * currentScanSettings->pixSize);
+	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Width, currentScanSettings->width * currentScanSettings->pixSize);
+	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_WidthOffset, currentScanSettings->widthOffset * currentScanSettings->pixSize);
+	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelSize, currentScanSettings->pixSize);
 	
 	return 0;
 	
-Error:
-	
-	return error;
 }
 
 static void	DisplayErrorHandler_CB (DisplayHandle_type displayHandle, int errorID, char* errorInfo)

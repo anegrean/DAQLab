@@ -44,7 +44,7 @@ typedef void							(*ROIRemoved_CBFptr_type)					(DisplayHandle_type displayHand
 
 	// Restores the module configuration stored previously with the image (scan settings, moves stages to the stored positions, etc)
 	// each display handle can have multiple such callbacks, each with its own callback data
-typedef int								(*RestoreImgSettings_CBFptr_type)			(DisplayHandle_type displayHandle, void* callbackData, char** errorInfo);
+typedef int								(*RestoreImgSettings_CBFptr_type)			(DisplayEngine_type* displayEngine, DisplayHandle_type displayHandle, void* callbackData, char** errorInfo);
 
 	// Called when a display module error occurs
 typedef void							(*ErrorHandlerFptr_type)					(DisplayHandle_type displayHandle, int errorID, char* errorInfo);
@@ -62,6 +62,9 @@ typedef int								(*DisplayImageFptr_type)					(DisplayHandle_type displayHandl
 
 	// Obtains a display handle from the display engine that can be passed to other functions like updating the image
 typedef DisplayHandle_type				(*GetDisplayHandleFptr_type)				(DisplayEngine_type* displayEngine, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType);
+
+	// Returns the callback data associated with the display handle
+typedef void*							(*GetDisplayHandleCBDataFptr_type)			(DisplayHandle_type displayHandle);
 
 	// Sets callbacks to a display handle to restore the image settings to the various modules/devices that contributed to the image. Each callback function has its own dinamically allocated callback data.
 	// The callback data is automatically disposed if the display handle is discarded by calling the provided discardCallbackDataFunctions. If a discard callback data function is NULL then free() is called by default.
@@ -97,6 +100,8 @@ struct DisplayEngine {
 	
 	GetDisplayHandleFptr_type			getDisplayHandleFptr;
 	
+	GetDisplayHandleCBDataFptr_type		getDisplayHandleCBDataFptr;
+	
 	SetRestoreImgSettingsCBsFptr_type	setRestoreImgSettingsFptr;
 	
 	OverlayROIFptr_type					overlayROIFptr;
@@ -131,6 +136,7 @@ void									init_DisplayEngine_type					(	DisplayEngine_type* 					displayEngin
 																				 	DiscardDisplayEngineFptr_type			discardFptr,
 																				 	DisplayImageFptr_type					displayImageFptr,
 																				 	GetDisplayHandleFptr_type				getDisplayHandleFptr,
+																					GetDisplayHandleCBDataFptr_type			getDisplayHandleCBDataFptr,
 																					SetRestoreImgSettingsCBsFptr_type		setRestoreImgSettingsFptr,
 																				 	OverlayROIFptr_type						overlayROIFptr,
 																					ClearAllROIFptr_type					clearAllROIFptr,

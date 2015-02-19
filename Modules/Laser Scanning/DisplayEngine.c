@@ -36,6 +36,7 @@ void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 								DiscardDisplayEngineFptr_type			discardFptr,
 								DisplayImageFptr_type					displayImageFptr,
 								GetDisplayHandleFptr_type				getDisplayHandleFptr,
+								GetDisplayHandleCBDataFptr_type			getDisplayHandleCBDataFptr,
 								SetRestoreImgSettingsCBsFptr_type		setRestoreImgSettingsFptr, 
 								OverlayROIFptr_type						overlayROIFptr,
 								ClearAllROIFptr_type					clearAllROIFptr,
@@ -46,6 +47,7 @@ void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 	displayEngine->discardFptr 					= discardFptr;
 	displayEngine->displayImageFptr 			= displayImageFptr; 
 	displayEngine->getDisplayHandleFptr 		= getDisplayHandleFptr;
+	displayEngine->getDisplayHandleCBDataFptr	= getDisplayHandleCBDataFptr;
 	displayEngine->setRestoreImgSettingsFptr	= setRestoreImgSettingsFptr;
 	displayEngine->overlayROIFptr				= overlayROIFptr;
 	displayEngine->clearAllROIFptr				= clearAllROIFptr;

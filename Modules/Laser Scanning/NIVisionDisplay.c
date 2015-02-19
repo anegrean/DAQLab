@@ -99,7 +99,9 @@ static void 					discard_NIVisionDisplay 						(NIVisionDisplay_type** niVisionD
 
 static int						DisplayNIVisionImage							(Display_type* displayHndl, void* pixelArray, int imgWidth, int imgHeight, ImageTypes imageType);
 
-static DisplayHandle_type		GetNIVisionDisplayHandle						(NIVisionDisplay_type* NIDisplay, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType);
+static Display_type*			GetNIVisionDisplayHandle						(NIVisionDisplay_type* NIDisplay, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType);
+
+static void*					GetDisplayHandleCBData							(Display_type* displayHndl);
 
 static int						SetRestoreImgSettingsCBs						(Display_type* displayHndl, size_t nCallbackFunctions, RestoreImgSettings_CBFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions);
 
@@ -138,6 +140,7 @@ NIVisionDisplay_type* init_NIVisionDisplay_type (	intptr_t 					parentWindowHndl
 								(DiscardDisplayEngineFptr_type) discard_NIVisionDisplay, 
 								(DisplayImageFptr_type) DisplayNIVisionImage, 
 								(GetDisplayHandleFptr_type) GetNIVisionDisplayHandle,
+								(GetDisplayHandleCBDataFptr_type) GetDisplayHandleCBData,
 								(SetRestoreImgSettingsCBsFptr_type) SetRestoreImgSettingsCBs,
 								(OverlayROIFptr_type) OverlayNIVisionROI,
 								(ClearAllROIFptr_type) ClearAllROI,
@@ -292,7 +295,7 @@ Error:
 	return error;
 }
 
-static DisplayHandle_type GetNIVisionDisplayHandle (NIVisionDisplay_type* NIDisplay, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType)
+static Display_type* GetNIVisionDisplayHandle (NIVisionDisplay_type* NIDisplay, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType)
 {
 	int				imaqHndl				= 0;	// imaq window ID
 	int				error					= 0;
@@ -363,6 +366,11 @@ Error:
 	discard_Display_type(&displays[imaqHndl]);
 	
 	return NULL;
+}
+
+static void* GetDisplayHandleCBData (Display_type* displayHndl)
+{
+	return displayHndl->callbackData;
 }
 
 static int SetRestoreImgSettingsCBs (Display_type* displayHndl, size_t nCallbackFunctions, RestoreImgSettings_CBFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions)
@@ -593,8 +601,8 @@ LRESULT CALLBACK CustomDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LPARAM lP
 					
 					// process each restore function sequencially within this thread
 					for (size_t i = 0; i < disp->nRestoreSettingsCBs; i++)
+						errChk( (*disp->restoreSettingsCBs[i]) ((DisplayEngine_type*)disp->niDisplay, (DisplayHandle_type)disp, disp->restoreSettingsCBsData[i], &errMsg) );
 						
-					
 					break;
 			}
 			

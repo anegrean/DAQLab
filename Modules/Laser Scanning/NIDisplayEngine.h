@@ -1,6 +1,6 @@
 //==============================================================================
 //
-// Title:		NIVisionDisplay.h
+// Title:		NIDisplayEngine.h
 // Purpose:		A short description of the interface.
 //
 // Created on:	3-2-2015 at 17:41:58 by Adrian.
@@ -8,8 +8,8 @@
 //
 //==============================================================================
 
-#ifndef __NIVisionDisplay_H__
-#define __NIVisionDisplay_H__
+#ifndef __NIDisplayEngine_H__
+#define __NIDisplayEngine_H__
 
 #ifdef __cplusplus
     extern "C" {
@@ -28,7 +28,9 @@
 //==============================================================================
 // Types
 
-typedef struct NIVisionDisplay	NIVisionDisplay_type;	// child class of DisplayEngine_type	 		
+typedef struct NIDisplayEngine	NIDisplayEngine_type;	// Child class of DisplayEngine_type
+
+typedef struct NIImageDisplay	NIImageDisplay_type;	// Child class of ImageDisplay_type 
 
 //==============================================================================
 // External variables
@@ -41,10 +43,9 @@ typedef struct NIVisionDisplay	NIVisionDisplay_type;	// child class of DisplayEn
 // NI Vision Engine management
 //--------------------------------------------------------------------------------------------------------------------------
 		
-NIVisionDisplay_type*				init_NIVisionDisplay_type		(	intptr_t 						parentWindowHndl,
-																	 	ROIPlaced_CBFptr_type			ROIPlacedCBFptr,
-																		ROIRemoved_CBFptr_type			ROIRemovedCBFptr,
-																		ErrorHandlerFptr_type			errorHandlerCBFptr);
+NIDisplayEngine_type*				init_NIDisplayEngine_type		(intptr_t 						parentWindowHndl,
+																     ROIEvents_CBFptr_type			ROIEventsCBFptr,
+																	 ErrorHandlerFptr_type			errorHandlerCBFptr);
 
 	// Disposes NI Vision Images
 void 								discard_Image_type 				(Image** image);
@@ -53,4 +54,4 @@ void 								discard_Image_type 				(Image** image);
     }
 #endif
 
-#endif  /* ndef __NIVisionDisplay_H__ */
+#endif  /* ndef __NIDisplayEngine_H__ */

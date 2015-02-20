@@ -18,7 +18,7 @@
 #include <userint.h>
 #include "combobox.h" 
 #include <analysis.h>
-#include <NIVisionDisplay.h>
+#include <NIDisplayEngine.h>
 #include "UI_LaserScanning.h"
 
 									 
@@ -264,7 +264,7 @@ typedef struct {
 typedef struct {
 	SinkVChan_type*				detVChan;				// Sink VChan for receiving pixel data.
 	ScanEngine_type*			scanEngine;				// Reference to scan engine to which this detection channel belongs.
-	DisplayHandle_type			displayHndl;			// Handle to display images for this channel
+	ImageDisplay_type*			imgDisplay;			// Handle to display images for this channel
 } DetChan_type;
 
 //---------------------------------------------------------------
@@ -754,17 +754,11 @@ static void							ShutterVChan_Disconnected						(VChan_type* self, void* VChanO
 // Display interface
 //-----------------------------------------
 
-	// Generates a unique ROI name given an existing ROI list, starting with a single letter "a", 
-	// trying each letter alphabetically, after which it increments the number of characters and starts again e.g."aa", "ab"
-static char*						GenerateUniqueROIName							(ListType	ROIList);
+static void							ROIDisplay_CB									(ImageDisplay_type* imgDisplay, void* callbackData, ROIActions action, ROI_type* ROI);
 
-static void							ROIPlacedOnDisplay_CB							(DisplayHandle_type displayHandle, void* callbackData, ROI_type** ROI);
+static int							RestoreImgSettings_CB							(DisplayEngine_type* displayEngine, ImageDisplay_type* imgDisplay, void* callbackData, char** errorInfo);
 
-static void							ROIRemovedFromDisplay_CB						(DisplayHandle_type displayHandle, void* callbackData, ROI_type* ROI);
-
-static int							RestoreImgSettings_CB							(DisplayEngine_type* displayEngine, DisplayHandle_type displayHandle, void* callbackData, char** errorInfo);
-
-static void							DisplayErrorHandler_CB							(DisplayHandle_type displayHandle, int errorID, char* errorInfo);
+static void							DisplayErrorHandler_CB							(ImageDisplay_type* imgDisplay, int errorID, char* errorInfo);
 
 //-----------------------------------------
 // Task Controller Callbacks
@@ -1177,9 +1171,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	// initialize display engine
 	intptr_t workspaceWndHndl = 0;	
 	GetPanelAttribute(ls->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHndl);
-	nullChk( ls->displayEngine = (DisplayEngine_type*)init_NIVisionDisplay_type(	workspaceWndHndl,
-																			   		ROIPlacedOnDisplay_CB,
-																					ROIRemovedFromDisplay_CB,
+	nullChk( ls->displayEngine = (DisplayEngine_type*)init_NIDisplayEngine_type(	workspaceWndHndl,
+																			   		ROIDisplay_CB,
 																					DisplayErrorHandler_CB		) );
 	
 	return 0;
@@ -2844,7 +2837,7 @@ static DetChan_type* init_DetChan_type (ScanEngine_type* scanEngine, char VChanN
 	
 	// init
 	DLDataTypes allowedPacketTypes[] 	= Allowed_Detector_Data_Types;
-	det->displayHndl						= NULL;
+	det->imgDisplay						= NULL;
 	det->detVChan						= NULL;
 	
 	if ( !(det->detVChan 		= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, VChanDataTimeout, DetVChan_Connected, DetVChan_Disconnected)) ) goto Error;
@@ -5616,10 +5609,10 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				void* 							callbackData[]					= {imgSettings};
 				DiscardFptr_type 				discardCallbackDataFunctions[] 	= {(DiscardFptr_type)discard_RectRasterScanSet_type};
 				
-				errChk( (*displayEngine->setRestoreImgSettingsFptr) (imgBuffer->detChan->displayHndl, NumElem(restoreCBFns), restoreCBFns, callbackData, discardCallbackDataFunctions) );
+				errChk( (*displayEngine->setRestoreImgSettingsFptr) (imgBuffer->detChan->imgDisplay, NumElem(restoreCBFns), restoreCBFns, callbackData, discardCallbackDataFunctions) );
 				
 				// send pixel array to display 
-				errChk( (*displayEngine->displayImageFptr) (imgBuffer->detChan->displayHndl, imgBuffer->imagePixels, rectRaster->scanSettings.width, rectRaster->scanSettings.height, imageType) );
+				errChk( (*displayEngine->displayImageFptr) (imgBuffer->detChan->imgDisplay, imgBuffer->imagePixels, rectRaster->scanSettings.width, rectRaster->scanSettings.height, imageType) );
 				 
 				
 				  /*
@@ -6017,29 +6010,39 @@ static void	ShutterVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan
 // Display interface
 //-----------------------------------------
 
-static char* GenerateUniqueROIName (ListType ROIList)
+static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, ROIActions action, ROI_type* ROI)
 {
-	return NULL;
-}
-
-static void ROIPlacedOnDisplay_CB (DisplayHandle_type displayHandle, void* callbackData, ROI_type** ROI)
-{
-	DetChan_type*	detChan = callbackData; 
+	DetChan_type*			detChan 		= callbackData;
+	ROI_type*				addedROI		= NULL;
+	DisplayEngine_type*		displayEngine   = imgDisplay->displayEngine; 
+	
+	switch (action) {
+			
+		case ROI_Placed:
+			
+			break;
+			
+		case ROI_Added:
+			
+			// add ROI to the image
+			addedROI = (*displayEngine->overlayROIFptr) (imgDisplay, ROI);
+			
+			break;
+			
+		case ROI_Removed:
+			
+			break;
+		
+	}
 	
 	
 }
 
-static void	ROIRemovedFromDisplay_CB (DisplayHandle_type displayHandle, void* callbackData, ROI_type* ROI)
-{
-	DetChan_type*	detChan = callbackData;
-	
-}
-
-static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, DisplayHandle_type displayHandle, void* callbackData, char** errorInfo)
+static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDisplay_type* imgDisplay, void* callbackData, char** errorInfo)
 {
 	RectRasterScanSet_type* 	previousScanSettings 		= callbackData;
 	int							error						= 0;
-	DetChan_type*				detChan						= (DetChan_type*)(*displayEngine->getDisplayHandleCBDataFptr) (displayHandle);
+	DetChan_type*				detChan						= (DetChan_type*)(*displayEngine->getImageDisplayCBDataFptr) (imgDisplay);
 	RectRasterScanSet_type*		currentScanSettings			= &((RectRaster_type*)detChan->scanEngine)->scanSettings;			
 	RectRaster_type*			scanEngine					= (RectRaster_type*)detChan->scanEngine;
 	
@@ -6065,7 +6068,7 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, DisplayHand
 	
 }
 
-static void	DisplayErrorHandler_CB (DisplayHandle_type displayHandle, int errorID, char* errorInfo)
+static void	DisplayErrorHandler_CB (ImageDisplay_type* imgDisplay, int errorID, char* errorInfo)
 {
 	DLMsg(errorInfo, 1);
 }
@@ -7147,7 +7150,7 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 				}
 		
 				// get display handles for connected channels
-				nullChk( detChan->displayHndl 	= (*displayEngine->getDisplayHandleFptr) (displayEngine, detChan, engine->scanSettings.width, engine->scanSettings.height, imageType) ); 
+				nullChk( detChan->imgDisplay 	= (*displayEngine->getImageDisplayFptr) (displayEngine, detChan, engine->scanSettings.width, engine->scanSettings.height, imageType) ); 
 		
 				engine->nImgBuffers++;
 				// allocate memory for image assembly

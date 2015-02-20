@@ -490,6 +490,19 @@ Rect_type*					init_Rect_type							(char ROIName[], int top, int left, int heig
 	// Discards all ROIs
 void						discard_ROI_type						(ROI_type** ROIPtr);
 
+//---------------------------
+// ROI operations
+//---------------------------
+
+	// Copies a ROI
+ROI_type*					copy_ROI_type							(ROI_type* ROI);
+
+	// Generates a unique ROI name given an existing ROI_type* list, starting with a single letter "a", 
+	// trying each letter alphabetically, after which it increments the number of characters and starts again e.g."aa", "ab"
+char*						GetDefaultUniqueROIName					(ListType ROIList);
+
+
+
 
 
 

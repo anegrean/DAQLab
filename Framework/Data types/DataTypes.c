@@ -842,3 +842,34 @@ void discard_ROI_type (ROI_type** ROIPtr)
 	// call ROI specific discard method
 	(*(*ROIPtr)->discardFptr) ((void**)ROIPtr);
 }
+
+ROI_type* copy_ROI_type (ROI_type* ROI)
+{
+	ROI_type*	ROICopy	= NULL;
+	
+	if (!ROI) return NULL;
+	
+	switch (ROI->ROIType) {
+			
+		case ROI_Point:
+			
+			ROICopy = (ROI_type*)init_Point_type(ROI->ROIName, ((Point_type*)ROI)->x, ((Point_type*)ROI)->y);
+			
+			break;
+			
+		case ROI_Rectangle:
+			
+			ROICopy = (ROI_type*)init_Rect_type(ROI->ROIName, ((Rect_type*)ROI)->top, ((Rect_type*)ROI)->left,
+												((Rect_type*)ROI)->height, ((Rect_type*)ROI)->width);
+			
+			break;
+			
+	}
+	
+	return ROICopy;
+}
+
+char* GetDefaultUniqueROIName (ListType ROIList)
+{
+	return NULL;
+}

@@ -48,12 +48,19 @@ typedef enum {
 	ROI_Removed											// ROI removed.
 } ROIActions;
 
+typedef enum {
+	ImageDisplay_Close
+} ImageDisplayEvents;
+
 //--------------------------------------
 // Callback typedefs
 //--------------------------------------
 
 	// ROI was placed over the image (but not added to it)
 typedef void							(*ROIEvents_CBFptr_type)					(ImageDisplay_type* imgDisplay, void* callbackData, ROIActions action, ROI_type* ROI);
+
+	// General callback for various image display events
+typedef void							(*ImageDisplay_CBFptr_type)					(ImageDisplay_type* imgDisplay, void* callbackData, ImageDisplayEvents event);
 
 	// Restores the module configuration stored previously with the image (scan settings, moves stages to the stored positions, etc)
 	// each display handle can have multiple such callbacks, each with its own callback data
@@ -68,7 +75,8 @@ typedef void							(*ErrorHandlerFptr_type)					(ImageDisplay_type* imgDisplay, 
 //--------------------------------------
 														
 	// Displays or updates an image in a display window
-typedef int								(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, void* pixelArray, int imgWidth, int imgHeight, ImageTypes imageType);
+typedef int								(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, void* pixelArray, int imgWidth, int imgHeight, ImageTypes imageType, 
+																					 double pixSize, double imgTopLeftXCoord, double imgTopLeftYCoord, double imgZCoord);
 
 	// Obtains a display handle from the display engine that can be passed to other functions like updating the image
 typedef ImageDisplay_type*				(*GetImageDisplayFptr_type)					(DisplayEngine_type* displayEngine, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType);
@@ -84,8 +92,8 @@ typedef int								(*SetRestoreImgSettingsCBsFptr_type)		(ImageDisplay_type* img
 	// Places an ROI overlay over the displayed image 
 typedef ROI_type*						(*OverlayROIFptr_type)						(ImageDisplay_type* imgDisplay, ROI_type* ROI);
 
-	// Clears all ROI overlays
-typedef void							(*ClearAllROIFptr_type)						(ImageDisplay_type* imgDisplay);
+	// Clears all ROI overlays. ROIIdx is the 1-based ROI index from the image display ROI list. If ROIIdx is 0, all ROIs are cleared
+typedef void							(*ClearROIFptr_type)						(ImageDisplay_type* imgDisplay, int ROIIdx);
 
 
 
@@ -106,6 +114,8 @@ struct DisplayEngine {
 	
 	DiscardFptr_type					discardFptr;					// method to discard child class data
 	
+	DiscardFptr_type					imageDiscardFptr;				// Method to discard imageData.
+	
 	DisplayImageFptr_type				displayImageFptr;
 	
 	GetImageDisplayFptr_type			getImageDisplayFptr;
@@ -116,13 +126,15 @@ struct DisplayEngine {
 	
 	OverlayROIFptr_type					overlayROIFptr;
 	
-	ClearAllROIFptr_type				clearAllROIFptr;
+	ClearROIFptr_type					clearROIFptr;
 	
 	//---------------------------------------------------------------------------------------------------------------
 	// CALLBACKS (provide action to be taken by the module making use of the display engine)
 	//---------------------------------------------------------------------------------------------------------------
 	
 	ROIEvents_CBFptr_type				ROIEventsCBFptr;
+	
+	ImageDisplay_CBFptr_type			imgDisplayEventCBFptr;
 	
 	ErrorHandlerFptr_type				errorHandlerCBFptr;
 	
@@ -134,17 +146,39 @@ struct ImageDisplay {
 	// DATA
 	//---------------------------------------------------------------------------------------------------------------
 	
+	//----------------------------------
+	// Image display data binding
+	//----------------------------------
+	
 	DisplayEngine_type*					displayEngine;					// Reference to the display engine to which this Image display belongs.
 	ImgDisplayCBData_type				imageDisplayCBData;				// Callback data associated with the image display.
+	
+	//----------------------------------
+	// Image data
+	//----------------------------------
+	int									imgHeight;						// Image height in [pix].
+	int									imgWidth;						// Image width in [pix].
+	double								pixSize;						// Image pixel size in [um].
+	double								imgTopLeftXCoord;				// Image top-left corner X-Axis coordinates in [um].
+	double								imgTopLeftYCoord;				// Image top-left corner Y-Axis coordinates in [um].
+	double								imgZCoord;						// Image z-axis (height) location in [um].
+	void*								image;							// Stores image data of imageType.
+	ImageTypes							imageType;
+	
+	//----------------------------------
+	// ROI management
+	//----------------------------------
+	
 	ListType							ROIs;							// List of ROIs added to the image of ROI_type*
+	RGBA_type							ROITextBackground;				// Color of ROIs label background.
+	int									ROITextFontSize;				// Font size for displaying ROI labels. Default: 12
 	ROIActions							ROIAction;						// Parameter passed to the ROI callback.
 	
 	//---------------------------------------------------------------------------------------------------------------
 	// METHODS (override with child class implementation)
 	//---------------------------------------------------------------------------------------------------------------
 	
-	DiscardFptr_type					discardFptr;					// method to discard child class data
-	
+	DiscardFptr_type					discardFptr;					// Method to discard child class data
 	
 	//---------------------------------------------------------------------------------------------------------------
 	// CALLBACKS (provide action to be taken by the module making use of the display engine)
@@ -172,12 +206,14 @@ struct ImageDisplay {
 void									init_DisplayEngine_type					(DisplayEngine_type* 					displayEngine,
 																				 DiscardFptr_type						discardFptr,
 																				 DisplayImageFptr_type					displayImageFptr,
+																				 DiscardFptr_type						imageDiscardFptr,
 																				 GetImageDisplayFptr_type				getImageDisplayFptr,
 																				 GetImageDisplayCBDataFptr_type			getImageDisplayCBDataFptr,
 																				 SetRestoreImgSettingsCBsFptr_type		setRestoreImgSettingsFptr,
 																				 OverlayROIFptr_type					overlayROIFptr,
-																				 ClearAllROIFptr_type					clearAllROIFptr,
+																				 ClearROIFptr_type					clearROIFptr,
 																				 ROIEvents_CBFptr_type					ROIEventsCBFptr,
+																				 ImageDisplay_CBFptr_type				imgDisplayEventCBFptr,
 																				 ErrorHandlerFptr_type					errorHandlerCBFptr);
 
 	// Disposes all types of display engines by invoking the specific dispose method.

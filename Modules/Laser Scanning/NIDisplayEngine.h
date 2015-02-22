@@ -45,6 +45,7 @@ typedef struct NIImageDisplay	NIImageDisplay_type;	// Child class of ImageDispla
 		
 NIDisplayEngine_type*				init_NIDisplayEngine_type		(intptr_t 						parentWindowHndl,
 																     ROIEvents_CBFptr_type			ROIEventsCBFptr,
+																	 ImageDisplay_CBFptr_type		imgDisplayEventCBFptr,
 																	 ErrorHandlerFptr_type			errorHandlerCBFptr);
 
 	// Disposes NI Vision Images

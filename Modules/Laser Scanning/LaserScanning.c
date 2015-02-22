@@ -76,7 +76,7 @@
 #define Default_ScanAxisCal_SampleRate						1e5			// Default sampling rate for galvo command and position in [Hz]
 
 //-----------------------------------------------------------------------
-// Non-resonant galvo raster scan defaul & min max settings
+// Non-resonant galvo raster scan default & min max settings
 //-----------------------------------------------------------------------
 #define NonResGalvoRasterScan_Max_ComboboxEntryLength		20			// Maximum number of characters that can be entered in the combobox controls.
 #define NonResGalvoRasterScan_Default_PixelClockRate		40e6		// Default pixel clock frequency in [Hz].
@@ -92,6 +92,18 @@
 #define	NonResGalvoRasterScan_Default_PixelSize				1.0			// Default pixel size in [um].
 #define	NonResGalvoRasterScan_Min_PixelSize					0.01		// Minimum allowed pixel size in [um].
 #define	NonResGalvoRasterScan_Max_PixelSize					10.0		// Maximum allowed pixel size in [um].
+
+	// UI
+#define NonResGalvoRasterScan_FrameScanTabIDX				0
+#define NonResGalvoRasterScan_ROIsTabIDX					1
+
+//-----------------------------------------------------------------------
+// Display settings
+//-----------------------------------------------------------------------
+#define Default_ROI_R_Color									0	   		// red
+#define Default_ROI_G_Color									255	   		// green
+#define Default_ROI_B_Color									0			// blue
+#define Default_ROI_A_Color									0			// alpha
 
 
 //==============================================================================
@@ -264,7 +276,7 @@ typedef struct {
 typedef struct {
 	SinkVChan_type*				detVChan;				// Sink VChan for receiving pixel data.
 	ScanEngine_type*			scanEngine;				// Reference to scan engine to which this detection channel belongs.
-	ImageDisplay_type*			imgDisplay;			// Handle to display images for this channel
+	ImageDisplay_type*			imgDisplay;				// Handle to display images for this channel
 } DetChan_type;
 
 //---------------------------------------------------------------
@@ -363,8 +375,12 @@ struct ScanEngine {
 	// UI
 	//-----------------------------------
 	int							newObjectivePanHndl;
-	int							scanSetPanHndl;			// Panel handle for adjusting scan settings such as pixel size, etc...
+	int							scanPanHndl;			// Panel handle for the scan engine.
+	int							frameScanPanHndl;		// Panel handle for adjusting scan settings such as pixel size, etc...
+	int							ROIsPanHndl;			// Panel handle for the management of ROIs
 	int							engineSetPanHndl;		// Panel handle for scan engine settings such as VChans and scan axis types.
+	
+	ImageDisplay_type*			activeDisplay;			// Reference to the active image display that interacts with the scan engine
 	
 	//-----------------------------------
 	// Methods
@@ -416,12 +432,7 @@ typedef struct {
 	RectRasterImgBuffer_type**	imgBuffers;				// Array of image buffers of RectRasterImgBuffer_type*. Number of buffers and the buffer index is taken from the list of available detection channels (baseClass.DetChans)
 	size_t						nImgBuffers;			// Number of image buffers available.
 	
-	//----------------
-	// ROIs
-	//----------------
-	
-	ListType					pointROIs;				// List of Point_type* ROIs
-	
+
 } RectRaster_type;
 
 
@@ -650,7 +661,11 @@ static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 					(DetChan_ty
 
 static void							discard_RectRasterImgBuffer_type				(RectRasterImgBuffer_type** rectRasterPtr); 
 
-static int CVICALLBACK 				NonResRectRasterScan_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResRectRasterScan_MainPan_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+static int CVICALLBACK 				NonResRectRasterScan_FrameScanPan_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+static int CVICALLBACK 				NonResRectRasterScan_ROIsPan_CB		 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 void 								NonResRectRasterScan_ScanHeights				(RectRaster_type* scanEngine);
 
@@ -755,6 +770,8 @@ static void							ShutterVChan_Disconnected						(VChan_type* self, void* VChanO
 //-----------------------------------------
 
 static void							ROIDisplay_CB									(ImageDisplay_type* imgDisplay, void* callbackData, ROIActions action, ROI_type* ROI);
+
+static void							ImageDisplay_CB									(ImageDisplay_type* imgDisplay, void* callbackData, ImageDisplayEvents event);
 
 static int							RestoreImgSettings_CB							(DisplayEngine_type* displayEngine, ImageDisplay_type* imgDisplay, void* callbackData, char** errorInfo);
 
@@ -1014,7 +1031,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	ScanEngine_type**	scanEnginePtr;
 	size_t				nScanEngines 		= ListNumItems(ls->scanEngines);
 	size_t				nDetectorVChans;
-	int					scanPanHndl			= 0;
+	int					scanPanHndl			= 0;	
+	int					frameScanPanHndl	= 0;	// contains the frame scan controls
 	int					newTabIdx			= 0; 
 	char*				scanEngineName		= NULL;
 	DetChan_type**		detPtr;
@@ -1036,6 +1054,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 				
 				scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
 				
+				GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &frameScanPanHndl); 
+				
 				// populate scan engine modes
 				for (size_t j = 0; j < NumElem(scanEngineModes); j++)
 					InsertListItem(scanPanHndl, RectRaster_Mode, -1, scanEngineModes[j].label, scanEngineModes[j].mode);
@@ -1051,17 +1071,17 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 				}
 				
 				// update width
-				SetCtrlVal(scanPanHndl, RectRaster_Width, rectRasterScanEngine->scanSettings.width * rectRasterScanEngine->scanSettings.pixSize);
+				SetCtrlVal(frameScanPanHndl, ScanTab_Width, rectRasterScanEngine->scanSettings.width * rectRasterScanEngine->scanSettings.pixSize);
 				
 				// update height and width offsets
-				SetCtrlVal(scanPanHndl, RectRaster_WidthOffset, rectRasterScanEngine->scanSettings.widthOffset * rectRasterScanEngine->scanSettings.pixSize); 
-				SetCtrlVal(scanPanHndl, RectRaster_HeightOffset, rectRasterScanEngine->scanSettings.heightOffset * rectRasterScanEngine->scanSettings.pixSize);
+				SetCtrlVal(frameScanPanHndl, ScanTab_WidthOffset, rectRasterScanEngine->scanSettings.widthOffset * rectRasterScanEngine->scanSettings.pixSize); 
+				SetCtrlVal(frameScanPanHndl, ScanTab_HeightOffset, rectRasterScanEngine->scanSettings.heightOffset * rectRasterScanEngine->scanSettings.pixSize);
 				
 				// update pixel size & set boundaries
-				SetCtrlVal(scanPanHndl, RectRaster_PixelSize, ((RectRaster_type*)(*scanEnginePtr))->scanSettings.pixSize);
-				SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
-				SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
-				SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
+				SetCtrlVal(frameScanPanHndl, ScanTab_PixelSize, ((RectRaster_type*)(*scanEnginePtr))->scanSettings.pixSize);
+				SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
+				SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
+				SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
 				
 				break;
 				
@@ -1071,50 +1091,59 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 		newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl);
 		DiscardPanel(scanPanHndl);
 		scanPanHndl = 0;
-		GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &(*scanEnginePtr)->scanSetPanHndl);
+		frameScanPanHndl = 0;
+		
+		// get panel handle to the inserted scan engine panel
+		GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &(*scanEnginePtr)->scanPanHndl);
+		// get panel handle to the frame scan settings from the inserted scan engine
+		GetPanelHandleFromTabPage((*scanEnginePtr)->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &(*scanEnginePtr)->frameScanPanHndl);
+		// get panel handle to the ROIs panel from the inserted scan engine
+		GetPanelHandleFromTabPage((*scanEnginePtr)->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_ROIsTabIDX, &(*scanEnginePtr)->ROIsPanHndl);
 		
 		// change new scan engine tab title
 		scanEngineName = GetTaskControlName((*scanEnginePtr)->taskControl); 
 		SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, scanEngineName);
 		OKfree(scanEngineName);
 		
-		// add pannel callback data
-		SetPanelAttribute((*scanEnginePtr)->scanSetPanHndl, ATTR_CALLBACK_DATA, *scanEnginePtr);
+		// add scan engine pannel callback data
+		SetPanelAttribute((*scanEnginePtr)->scanPanHndl, ATTR_CALLBACK_DATA, *scanEnginePtr);
 		
-		// add callback function and data to scan engine controls
+		// add callback function and data to scan engine controls on the main scan panel, frame scan and ROIs panels
 		switch ((*scanEnginePtr)->engineType) {
 				
 			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
 				RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) *scanEnginePtr;  
 				
-				SetCtrlsInPanCBInfo(*scanEnginePtr, NonResRectRasterScan_CB, (*scanEnginePtr)->scanSetPanHndl);
+				SetCtrlsInPanCBInfo(*scanEnginePtr, NonResRectRasterScan_MainPan_CB, (*scanEnginePtr)->scanPanHndl);
+				SetCtrlsInPanCBInfo(*scanEnginePtr, NonResRectRasterScan_FrameScanPan_CB, (*scanEnginePtr)->frameScanPanHndl);
+				SetCtrlsInPanCBInfo(*scanEnginePtr, NonResRectRasterScan_ROIsPan_CB, (*scanEnginePtr)->ROIsPanHndl);
 				
 				// make Height string control into combo box
 				// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted
-				errChk( Combo_NewComboBox((*scanEnginePtr)->scanSetPanHndl, RectRaster_Height) );
-				errChk( Combo_SetComboAttribute((*scanEnginePtr)->scanSetPanHndl, RectRaster_Height, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
+				errChk( Combo_NewComboBox((*scanEnginePtr)->frameScanPanHndl, ScanTab_Height) );
+				errChk( Combo_SetComboAttribute((*scanEnginePtr)->frameScanPanHndl, ScanTab_Height, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
 				
 				// update height
 				char heightString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 				Fmt(heightString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.height * rectRasterScanEngine->scanSettings.pixSize);
 				if (rectRasterScanEngine->scanSettings.height)
-					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_Height, heightString); 
+					SetCtrlVal((*scanEnginePtr)->frameScanPanHndl, ScanTab_Height, heightString); 
 				else
-					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_Height, ""); 
+					SetCtrlVal((*scanEnginePtr)->frameScanPanHndl, ScanTab_Height, ""); 
 				
 				// make Pixel Dwell time string control into combo box
 				// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted  
-				errChk( Combo_NewComboBox((*scanEnginePtr)->scanSetPanHndl, RectRaster_PixelDwell) );
-				errChk( Combo_SetComboAttribute((*scanEnginePtr)->scanSetPanHndl, RectRaster_PixelDwell, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
+				errChk( Combo_NewComboBox((*scanEnginePtr)->frameScanPanHndl, ScanTab_PixelDwell) );
+				errChk( Combo_SetComboAttribute((*scanEnginePtr)->frameScanPanHndl, ScanTab_PixelDwell, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
 				
 				// update pixel dwell time
 				char pixelDwellString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 				Fmt(pixelDwellString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.pixelDwellTime);
 				if (rectRasterScanEngine->scanSettings.pixelDwellTime != 0.0)
-					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_PixelDwell, pixelDwellString);
+					SetCtrlVal((*scanEnginePtr)->frameScanPanHndl, ScanTab_PixelDwell, pixelDwellString);
 				else
-					SetCtrlVal((*scanEnginePtr)->scanSetPanHndl, RectRaster_PixelDwell, "");
+					SetCtrlVal((*scanEnginePtr)->frameScanPanHndl, ScanTab_PixelDwell, "");
 				
 				// configure/unconfigure scan engine
 				// do this after adding combo boxes!
@@ -1173,6 +1202,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	GetPanelAttribute(ls->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHndl);
 	nullChk( ls->displayEngine = (DisplayEngine_type*)init_NIDisplayEngine_type(	workspaceWndHndl,
 																			   		ROIDisplay_CB,
+																					ImageDisplay_CB,
 																					DisplayErrorHandler_CB		) );
 	
 	return 0;
@@ -2259,6 +2289,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					void*					panDataPtr;
 					int						newTabIdx			= 0;
 					int						scanPanHndl			= 0;
+					int						frameScanPanHndl	= 0;				// contains the frame scan controls
 			
 					GetCtrlVal(panel, EnginesPan_ScanTypes, &engineType);
 			
@@ -2299,6 +2330,8 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;   
 							
 							scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
+							
+							GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &frameScanPanHndl); 
 							// populate scan engine modes
 							for (size_t i = 0; i < NumElem(scanEngineModes); i++)
 								InsertListItem(scanPanHndl, RectRaster_Mode, -1, scanEngineModes[i].label, scanEngineModes[i].mode);
@@ -2308,17 +2341,17 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 							SetPanelAttribute(scanPanHndl, ATTR_DIMMED, 1);
 							
 							// update width
-							SetCtrlVal(scanPanHndl, RectRaster_Width, rectRasterScanEngine->scanSettings.width * rectRasterScanEngine->scanSettings.pixSize);
+							SetCtrlVal(frameScanPanHndl, ScanTab_Width, rectRasterScanEngine->scanSettings.width * rectRasterScanEngine->scanSettings.pixSize);
 				
 							// update height and width offsets
-							SetCtrlVal(scanPanHndl, RectRaster_WidthOffset, rectRasterScanEngine->scanSettings.widthOffset * rectRasterScanEngine->scanSettings.pixSize); 
-							SetCtrlVal(scanPanHndl, RectRaster_HeightOffset, rectRasterScanEngine->scanSettings.heightOffset * rectRasterScanEngine->scanSettings.pixSize);
+							SetCtrlVal(frameScanPanHndl, ScanTab_WidthOffset, rectRasterScanEngine->scanSettings.widthOffset * rectRasterScanEngine->scanSettings.pixSize); 
+							SetCtrlVal(frameScanPanHndl, ScanTab_HeightOffset, rectRasterScanEngine->scanSettings.heightOffset * rectRasterScanEngine->scanSettings.pixSize);
 				
 							// update pixel size
-							SetCtrlVal(scanPanHndl, RectRaster_PixelSize, ((RectRaster_type*)newScanEngine)->scanSettings.pixSize);
-							SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
-							SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
-							SetCtrlAttribute(scanPanHndl, RectRaster_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
+							SetCtrlVal(frameScanPanHndl, ScanTab_PixelSize, ((RectRaster_type*)newScanEngine)->scanSettings.pixSize);
+							SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
+							SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
+							SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
 							
 							break;
 							// add below more cases	
@@ -2340,13 +2373,20 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					// discard loaded panel and add scan control panel handle to scan engine
 					DiscardPanel(scanPanHndl); 
 					scanPanHndl = 0;
-					GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &newScanEngine->scanSetPanHndl);
+					frameScanPanHndl = 0;
+					
+					// get panel handle to the inserted scan engine panel  
+					GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &newScanEngine->scanPanHndl);
+					// get panel handle to the frame scan settings from the inserted scan engine
+					GetPanelHandleFromTabPage(newScanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &newScanEngine->frameScanPanHndl);
+					// get panel handle to the ROIs panel from the inserted scan engine
+					GetPanelHandleFromTabPage(newScanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_ROIsTabIDX, &newScanEngine->ROIsPanHndl);
 			
 					// change new scan engine tab title
 					SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, engineName);  
 			
-					// add panel callback data
-					SetPanelAttribute(newScanEngine->scanSetPanHndl, ATTR_CALLBACK_DATA, newScanEngine); 
+					// add scan engine panel callback data
+					SetPanelAttribute(newScanEngine->scanPanHndl, ATTR_CALLBACK_DATA, newScanEngine); 
 					
 					// add callback function and data to scan engine controls
 					switch (newScanEngine->engineType) {
@@ -2355,33 +2395,35 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 				
 							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;  
 				
-							SetCtrlsInPanCBInfo(newScanEngine, NonResRectRasterScan_CB, newScanEngine->scanSetPanHndl);
+							SetCtrlsInPanCBInfo(newScanEngine, NonResRectRasterScan_MainPan_CB, newScanEngine->scanPanHndl);
+							SetCtrlsInPanCBInfo(newScanEngine, NonResRectRasterScan_FrameScanPan_CB, newScanEngine->frameScanPanHndl);
+							SetCtrlsInPanCBInfo(newScanEngine, NonResRectRasterScan_ROIsPan_CB, newScanEngine->ROIsPanHndl);
 				
 							// make Height string control into combo box
 							// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted
-							errChk( Combo_NewComboBox(newScanEngine->scanSetPanHndl, RectRaster_Height) );
-							errChk( Combo_SetComboAttribute(newScanEngine->scanSetPanHndl, RectRaster_Height, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
+							errChk( Combo_NewComboBox(newScanEngine->frameScanPanHndl, ScanTab_Height) );
+							errChk( Combo_SetComboAttribute(newScanEngine->frameScanPanHndl, ScanTab_Height, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
 				
 							// update height
 							char heightString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 							Fmt(heightString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.height * rectRasterScanEngine->scanSettings.pixSize);
 							if (rectRasterScanEngine->scanSettings.height)
-								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_Height, heightString); 
+								SetCtrlVal(newScanEngine->frameScanPanHndl, ScanTab_Height, heightString); 
 							else
-								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_Height, ""); 
+								SetCtrlVal(newScanEngine->frameScanPanHndl, ScanTab_Height, ""); 
 				
 							// make Pixel Dwell time string control into combo box
 							// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted  
-							errChk( Combo_NewComboBox(newScanEngine->scanSetPanHndl, RectRaster_PixelDwell) );
-							errChk( Combo_SetComboAttribute(newScanEngine->scanSetPanHndl, RectRaster_PixelDwell, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
+							errChk( Combo_NewComboBox(newScanEngine->frameScanPanHndl, ScanTab_PixelDwell) );
+							errChk( Combo_SetComboAttribute(newScanEngine->frameScanPanHndl, ScanTab_PixelDwell, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
 				
 							// update pixel dwell time
 							char pixelDwellString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 							Fmt(pixelDwellString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.pixelDwellTime);
 							if (rectRasterScanEngine->scanSettings.pixelDwellTime != 0.0)
-								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_PixelDwell, pixelDwellString);
+								SetCtrlVal(newScanEngine->frameScanPanHndl, ScanTab_PixelDwell, pixelDwellString);
 							else
-								SetCtrlVal(newScanEngine->scanSetPanHndl, RectRaster_PixelDwell, "");
+								SetCtrlVal(newScanEngine->frameScanPanHndl, ScanTab_PixelDwell, "");
 				
 							// configure/unconfigure scan engine
 							// do this after adding combo boxes!
@@ -3166,10 +3208,10 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// remove objective from scan engine settings UI 
 					DeleteListItem(panel, control, listItemIdx, 1);  
 					// remove objective from scan control UI
-					DeleteListItem(engine->scanSetPanHndl, RectRaster_Objective, listItemIdx, 1);
+					DeleteListItem(engine->scanPanHndl, RectRaster_Objective, listItemIdx, 1);
 					
 					// update chosen objective in scan engine structure
-					GetCtrlIndex(engine->scanSetPanHndl, RectRaster_Objective, &listItemIdx);
+					GetCtrlIndex(engine->scanPanHndl, RectRaster_Objective, &listItemIdx);
 					if (listItemIdx >= 0) {
 						objectivePtr = ListGetPtrToItem(engine->objectives, listItemIdx+1); 
 						engine->objectiveLens = *objectivePtr;
@@ -4024,7 +4066,10 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	// new objective panel handle
 	engine->newObjectivePanHndl			= 0;
 	// scan settings panel handle
-	engine->scanSetPanHndl				= 0;
+	engine->scanPanHndl					= 0;
+	engine->frameScanPanHndl			= 0;
+	engine->ROIsPanHndl					= 0;
+	engine->activeDisplay				= NULL;
 	// scan engine settings panel handle
 	engine->engineSetPanHndl			= 0;
 	engine->pixelClockRate				= pixelClockRate;
@@ -4188,9 +4233,9 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	// UI
 	//----------------------------------
 	
-	if (engine->engineSetPanHndl)		{DiscardPanel(engine->engineSetPanHndl); engine->engineSetPanHndl = 0;}
-	if (engine->scanSetPanHndl) Combo_DiscardComboBox(engine->scanSetPanHndl, RectRaster_PixelDwell);
-	if (engine->scanSetPanHndl) Combo_DiscardComboBox(engine->scanSetPanHndl, RectRaster_Height);
+	if (engine->engineSetPanHndl) {DiscardPanel(engine->engineSetPanHndl); engine->engineSetPanHndl = 0;}
+	if (engine->frameScanPanHndl) Combo_DiscardComboBox(engine->frameScanPanHndl, ScanTab_PixelDwell);
+	if (engine->frameScanPanHndl) Combo_DiscardComboBox(engine->frameScanPanHndl, ScanTab_Height);
 	
 	OKfree(engine);
 }
@@ -4354,7 +4399,6 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	
 	engine->imgBuffers				= NULL;
 	engine->nImgBuffers				= 0;
-	engine->pointROIs				= ListCreate(sizeof(Point_type*));
 
 	return engine;
 	
@@ -4379,17 +4423,6 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	OKfree(rectRaster->imgBuffers);
 	rectRaster->nImgBuffers = 0;
 	
-	// discard ROIs
-	if (rectRaster->pointROIs) {
-		size_t			nROIs = ListNumItems(rectRaster->pointROIs);
-		Point_type**	pointPtr;
-		for (size_t i = 1; i <= nROIs; i++) {
-			pointPtr = ListGetPtrToItem(rectRaster->pointROIs, i);
-			discard_ROI_type((ROI_type**)pointPtr);
-		}
-		ListDispose(rectRaster->pointROIs);
-	}
-		
 	//------------------------------
 	// discard Scan Engine data
 	//------------------------------
@@ -4459,11 +4492,9 @@ static void	discard_RectRasterImgBuffer_type (RectRasterImgBuffer_type** rectRas
 	OKfree(*rectRasterPtr)
 }
 
-static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK NonResRectRasterScan_MainPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	RectRaster_type*		scanEngine		= callbackData;
-	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
-	NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
 	int						listItemIdx;
 
 	switch (event)
@@ -4522,7 +4553,26 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					
 					break;
 				
-				case RectRaster_Height:
+			}
+
+			break;
+	}
+	return 0;
+}
+
+static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	RectRaster_type*		scanEngine		= callbackData;
+	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
+	NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
+	
+	switch (event) {
+			
+		case EVENT_COMMIT:
+			
+			switch (control) {
+			
+				case ScanTab_Height:
 					
 					char   		heightString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 					double		height;
@@ -4573,7 +4623,7 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					
 					break;
 					
-				case RectRaster_Width:
+				case ScanTab_Width:
 					
 					double		width;					// in [um]
 					uInt32		widthPix;				// in [pix]
@@ -4601,7 +4651,7 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					SetCtrlVal(panel, control, width); 
 					break;
 					
-				case RectRaster_HeightOffset:
+				case ScanTab_HeightOffset:
 					
 					double		heightOffset;					// in [um]
 					int			heightOffsetPix;				// in [pix]
@@ -4628,7 +4678,7 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					SetCtrlVal(panel, control, heightOffset);
 					break;
 					
-				case RectRaster_WidthOffset:
+				case ScanTab_WidthOffset:
 					
 					double		widthOffset;					// in [um]
 					int			widthOffsetPix;					// in [pix]
@@ -4655,7 +4705,7 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					SetCtrlVal(panel, control, widthOffset); 
 					break;
 					
-				case RectRaster_PixelDwell:
+				case ScanTab_PixelDwell:
 					
 					char   		dwellTimeString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 					double		dwellTime;
@@ -4687,11 +4737,11 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 				
 					break;
 					
-				case RectRaster_FPS:
+				case ScanTab_FPS:
 					
 					break;
 					
-				case RectRaster_PixelSize:
+				case ScanTab_PixelSize:
 					
 					double newPixelSize = 0;
 					
@@ -4714,22 +4764,65 @@ static int CVICALLBACK NonResRectRasterScan_CB (int panel, int control, int even
 					// update pixel size
 					scanEngine->scanSettings.pixSize = newPixelSize;
 					// adjust width control to be multiple of new pixel size
-					SetCtrlVal(panel, RectRaster_Width, scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize);
+					SetCtrlVal(panel, ScanTab_Width, scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize);
 					// adjust width offset control to be multiple of new pixel size
-					SetCtrlVal(panel, RectRaster_WidthOffset, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
+					SetCtrlVal(panel, ScanTab_WidthOffset, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
 					// adjust height offset control to be multiple of new pixel size
-					SetCtrlVal(panel, RectRaster_HeightOffset, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize);
+					SetCtrlVal(panel, ScanTab_HeightOffset, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize);
 					// update preferred heights
 					NonResRectRasterScan_ScanHeights(scanEngine);
 					// update preferred pixel dwell times
 					NonResRectRasterScan_PixelDwellTimes(scanEngine);
 					
 					break;
-				
 			}
-
 			break;
 	}
+	
+	return 0;
+}
+
+static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	RectRaster_type*		scanEngine		= callbackData;
+	int						listItemIdx		= 0;
+	ROI_type*				ROI				= NULL;
+	
+	switch (event) {
+		
+		case EVENT_COMMIT:
+			
+			switch (control) {
+					
+				case ROITab_ROIs:
+					
+					break;
+			}
+			
+			break;
+			
+		case EVENT_KEYPRESS:
+			
+			switch (control) {
+					
+				case ROITab_ROIs:
+					
+					// continue only if Del key is pressed
+					if (eventData1 != VAL_FWD_DELETE_VKEY) break;
+					
+					GetCtrlIndex(panel, control, &listItemIdx);
+					if (listItemIdx < 0) break; // stop here if list is empty
+					
+					// remove ROI item from display and from scan engine list
+					(*scanEngine->baseClass.activeDisplay->displayEngine->clearROIFptr) (scanEngine->baseClass.activeDisplay, listItemIdx+1);
+					DeleteListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, listItemIdx, 1);
+					
+					break;
+			}
+			
+			break;
+	}
+	
 	return 0;
 }
 
@@ -4753,13 +4846,13 @@ void NonResRectRasterScan_ScanHeights (RectRaster_type* scanEngine)
 	// make sure pixeldwelltime is in [us] and pixelClockRate in [Hz] 
 	scanEngine->scanSettings.pixelDwellTime = floor(scanEngine->scanSettings.pixelDwellTime * scanEngine->baseClass.pixelClockRate) / scanEngine->baseClass.pixelClockRate; // result in [us]
 	Fmt(dwellTimeString,"%s<%f[p3]", scanEngine->scanSettings.pixelDwellTime);
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, dwellTimeString);	// in [us]
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelDwell, dwellTimeString);	// in [us]
 	
 	// empty list of preferred heights
-	errChk( Combo_DeleteComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, 0, -1) );
+	errChk( Combo_DeleteComboItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, 0, -1) );
 	
 	// empty value for Height, if the calculated list contains at least one item, then it will be filled out
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, ""); 
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, ""); 
 	
 	//---Calculation of prefered heights---
 	//deadtime in [ms], scanEngine->pixelDwellTime in [us]
@@ -4785,7 +4878,7 @@ void NonResRectRasterScan_ScanHeights (RectRaster_type* scanEngine)
 			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->scanSettings.pixSize, scanEngine->scanSettings.pixelDwellTime, ROIHeight + deadTimePixels * scanEngine->scanSettings.pixSize) && inFOVFlag) {
 				// add to list if scan frequency is valid
 				Fmt(heightString,"%s<%f[p1]", ROIHeight);
-				errChk( Combo_InsertComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, -1, heightString) );
+				errChk( Combo_InsertComboItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, -1, heightString) );
 				ListInsertItem(Heights, &ROIHeight, END_OF_LIST);
 			}
 			 
@@ -4816,7 +4909,7 @@ void NonResRectRasterScan_ScanHeights (RectRaster_type* scanEngine)
 		ListGetItem(Heights, &heightItem, itemPos);
 		// update scan control UI
 		Fmt(heightString,"%s<%f[p1]", heightItem);
-		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Height, heightString);
+		SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, heightString);
 		// update scan engine structure
 		scanEngine->scanSettings.height = (uInt32) (heightItem/scanEngine->scanSettings.pixSize);	// in [pix]
 	} else
@@ -4842,10 +4935,10 @@ void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 	NonResGalvoCal_type*	fastAxisCal					= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;    
 	
 	// empty list of preferred dwell times
-	errChk( Combo_DeleteComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, 0, -1) );
+	errChk( Combo_DeleteComboItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelDwell, 0, -1) );
 	
 	// empty value for Dwell Time, if the calculated list contains at least one item, then it will be filled out
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, "");
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelDwell, "");
 	
 	// stop here if scan height is 0
 	if (!scanEngine->scanSettings.height) {
@@ -4873,7 +4966,7 @@ void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->scanSettings.pixSize, pixelDwell, scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize + 2 * n * scanEngine->scanSettings.pixSize)) {
 				// add to list
 				Fmt(dwellTimeString,"%s<%f[p3]", pixelDwell);
-				errChk( Combo_InsertComboItem(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, -1, dwellTimeString) );
+				errChk( Combo_InsertComboItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelDwell, -1, dwellTimeString) );
 				ListInsertItem(dwellTimes, &pixelDwell, END_OF_LIST);
 			}
 		
@@ -4900,7 +4993,7 @@ void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 		ListGetItem(dwellTimes, &dwellTimeItem, itemPos);
 		// update scan control UI
 		Fmt(dwellTimeString,"%s<%f[p3]", dwellTimeItem);
-		SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelDwell, dwellTimeString);
+		SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelDwell, dwellTimeString);
 		// update scan engine structure
 		scanEngine->scanSettings.pixelDwellTime = dwellTimeItem;
 	} else
@@ -5001,7 +5094,7 @@ static BOOL NonResRectRasterScan_ReadyToScan (RectRaster_type* scanEngine)
 {
 	BOOL scanReady = NonResRectRasterScan_ValidConfig(scanEngine) && (scanEngine->scanSettings.height != 0.0) && (scanEngine->scanSettings.width != 0.0);
 	
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Ready, scanReady);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Ready, scanReady);
 	
 	return scanReady;
 }
@@ -5612,7 +5705,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				errChk( (*displayEngine->setRestoreImgSettingsFptr) (imgBuffer->detChan->imgDisplay, NumElem(restoreCBFns), restoreCBFns, callbackData, discardCallbackDataFunctions) );
 				
 				// send pixel array to display 
-				errChk( (*displayEngine->displayImageFptr) (imgBuffer->detChan->imgDisplay, imgBuffer->imagePixels, rectRaster->scanSettings.width, rectRaster->scanSettings.height, imageType) );
+				errChk( (*displayEngine->displayImageFptr) (imgBuffer->detChan->imgDisplay, imgBuffer->imagePixels, rectRaster->scanSettings.width, rectRaster->scanSettings.height, imageType,
+														    rectRaster->scanSettings.pixSize, 0, 0, 0) ); // TEMPORARY: X, Y & Z coordinates set to 0 for now
 				 
 				
 				  /*
@@ -5783,7 +5877,7 @@ static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void 
 			OKfree(extendedObjName);
 			
 			// update rectangular raster scan UI
-			if (engine->scanSetPanHndl) {
+			if (engine->scanPanHndl) {
 				// if there were no objectives previously, then assign this FL by default
 				if (!nObjectives)
 					engine->objectiveLens = objective;
@@ -5796,7 +5890,7 @@ static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void 
 						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
 				
 				// inserts new objective and selects it if there were no other objectives previously
-				InsertListItem(engine->scanSetPanHndl, RectRaster_Objective, -1, newObjectiveName, objectiveFL);
+				InsertListItem(engine->scanPanHndl, RectRaster_Objective, -1, newObjectiveName, objectiveFL);
 			}
 			OKfree(newObjectiveName);
 			
@@ -6015,6 +6109,7 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 	DetChan_type*			detChan 		= callbackData;
 	ROI_type*				addedROI		= NULL;
 	DisplayEngine_type*		displayEngine   = imgDisplay->displayEngine; 
+	RectRaster_type*		scanEngine		= (RectRaster_type*) detChan->scanEngine;
 	
 	switch (action) {
 			
@@ -6024,8 +6119,22 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 			
 		case ROI_Added:
 			
+			// obtain default unique ROI name and apply it
+			OKfree(ROI->ROIName);
+			ROI->ROIName = GetDefaultUniqueROIName(imgDisplay->ROIs);
+			// apply ROI color
+			ROI->rgba.R = Default_ROI_R_Color; 
+			ROI->rgba.G = Default_ROI_G_Color;
+			ROI->rgba.B = Default_ROI_B_Color;
+			ROI->rgba.A = Default_ROI_A_Color;
+	
 			// add ROI to the image
 			addedROI = (*displayEngine->overlayROIFptr) (imgDisplay, ROI);
+			
+			// update scan engine if this display is assigned to it
+			if (scanEngine->baseClass.activeDisplay == imgDisplay) {
+				InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, ROI->ROIName, ListNumItems(imgDisplay->ROIs));
+			}
 			
 			break;
 			
@@ -6038,6 +6147,23 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 	
 }
 
+static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, ImageDisplayEvents event)
+{
+	RectRaster_type*		scanEngine = callbackData;
+	switch (event) {
+			
+		case ImageDisplay_Close:
+			
+			// detach image display from scan engine if it was previously assigned to it and clear ROI list
+			if (scanEngine->baseClass.activeDisplay == imgDisplay) {
+				ClearListCtrl(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs);
+				scanEngine->baseClass.activeDisplay = NULL;
+			}
+				
+			break;
+	}
+}
+
 static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDisplay_type* imgDisplay, void* callbackData, char** errorInfo)
 {
 	RectRasterScanSet_type* 	previousScanSettings 		= callbackData;
@@ -6045,6 +6171,9 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 	DetChan_type*				detChan						= (DetChan_type*)(*displayEngine->getImageDisplayCBDataFptr) (imgDisplay);
 	RectRasterScanSet_type*		currentScanSettings			= &((RectRaster_type*)detChan->scanEngine)->scanSettings;			
 	RectRaster_type*			scanEngine					= (RectRaster_type*)detChan->scanEngine;
+	
+	// assign this image display to the scan engine
+	scanEngine->baseClass.activeDisplay		= imgDisplay; 
 	
 	// assign previous scan settings
 	currentScanSettings->pixSize			= previousScanSettings->pixSize;
@@ -6059,10 +6188,20 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 	NonResRectRasterScan_PixelDwellTimes(scanEngine);
 	
 	// update remaining controls on the scan panel
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_HeightOffset, currentScanSettings->heightOffset * currentScanSettings->pixSize);
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_Width, currentScanSettings->width * currentScanSettings->pixSize);
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_WidthOffset, currentScanSettings->widthOffset * currentScanSettings->pixSize);
-	SetCtrlVal(scanEngine->baseClass.scanSetPanHndl, RectRaster_PixelSize, currentScanSettings->pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_HeightOffset, currentScanSettings->heightOffset * currentScanSettings->pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Width, currentScanSettings->width * currentScanSettings->pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_WidthOffset, currentScanSettings->widthOffset * currentScanSettings->pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, currentScanSettings->pixSize);
+	
+	// update ROIs in the scan engine UI
+	ClearListCtrl(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs);
+	size_t 		nROIs 	= ListNumItems(imgDisplay->ROIs);
+	ROI_type*   ROI		= NULL;
+	for (size_t i = 1; i <= nROIs; i++) {
+		ROI= *(ROI_type**)ListGetPtrToItem(imgDisplay->ROIs, i);
+		InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, ROI->ROIName, i);
+	}
+	
 	
 	return 0;
 	
@@ -6942,7 +7081,7 @@ static int ConfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* ab
 {
 	//RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
-	//SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_Ready, 1);
+	//SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_Ready, 1);
 	
 	return 0; 
 }
@@ -6951,7 +7090,7 @@ static int UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* 
 {
 	//RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
-	//SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_Ready, 0);
+	//SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_Ready, 0);
 	
 	return 0; 
 }
@@ -6981,14 +7120,14 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 	}
 	
 	// update iterations
-	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
 	return;
 	
 Error:
 	
 	TaskControlIterationDone(taskControl, error, errMsg, FALSE);
-	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	OKfree(errMsg);
 }
 
@@ -7003,7 +7142,7 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	int						error 				= 0;
 	
 	// reset iterations display
-	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, 0);
+	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, 0);
 	
 	//--------------------------------------------------------------------------------------------------------
 	// Open shutter
@@ -7039,7 +7178,7 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 	if (GetTaskControlMode(engine->baseClass.taskControl) == TASK_CONTINUOUS)
 		errChk( ReturnRectRasterToParkedPosition(engine, errorInfo) );
 	// update iterations
-	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
 	return 0; 
 	
@@ -7075,7 +7214,7 @@ static int ResetTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	int					error		= 0;
 	
 	// reset acquired frames
-	SetCtrlVal(engine->baseClass.scanSetPanHndl, RectRaster_FramesAcquired, 0);
+	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, 0);
 	
 	// close shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorInfo) ); 

@@ -47,23 +47,14 @@
 #define  NonResGCal_SaveCalib             8       /* control type: command, callback function: (none) */
 
 #define  RectRaster                       6
-#define  RectRaster_PixelSize             2       /* control type: numeric, callback function: (none) */
-#define  RectRaster_Plate_3               3       /* control type: deco, callback function: (none) */
-#define  RectRaster_Plate_2               4       /* control type: deco, callback function: (none) */
-#define  RectRaster_Plate                 5       /* control type: deco, callback function: (none) */
-#define  RectRaster_FramesAcquired        6       /* control type: numeric, callback function: (none) */
-#define  RectRaster_FPS                   7       /* control type: numeric, callback function: (none) */
-#define  RectRaster_HeightOffset          8       /* control type: numeric, callback function: (none) */
-#define  RectRaster_WidthOffset           9       /* control type: numeric, callback function: (none) */
-#define  RectRaster_Width                 10      /* control type: numeric, callback function: (none) */
-#define  RectRaster_PixelDwell            11      /* control type: string, callback function: (none) */
-#define  RectRaster_Height                12      /* control type: string, callback function: (none) */
-#define  RectRaster_Objective             13      /* control type: ring, callback function: (none) */
-#define  RectRaster_Mode                  14      /* control type: ring, callback function: (none) */
-#define  RectRaster_NFrames               15      /* control type: numeric, callback function: (none) */
-#define  RectRaster_Averages              16      /* control type: numeric, callback function: (none) */
-#define  RectRaster_ExecutionMode         17      /* control type: radioButton, callback function: (none) */
-#define  RectRaster_Ready                 18      /* control type: LED, callback function: (none) */
+#define  RectRaster_Plate_3               2       /* control type: deco, callback function: (none) */
+#define  RectRaster_FramesAcquired        3       /* control type: numeric, callback function: (none) */
+#define  RectRaster_Objective             4       /* control type: ring, callback function: (none) */
+#define  RectRaster_Mode                  5       /* control type: ring, callback function: (none) */
+#define  RectRaster_NFrames               6       /* control type: numeric, callback function: (none) */
+#define  RectRaster_Averages              7       /* control type: numeric, callback function: (none) */
+#define  RectRaster_ExecutionMode         8       /* control type: radioButton, callback function: (none) */
+#define  RectRaster_Tab                   9       /* control type: tab, callback function: (none) */
 
 #define  ScanPan                          7
 #define  ScanPan_Plate                    2       /* control type: deco, callback function: (none) */
@@ -106,6 +97,21 @@
 #define  Cal_Plate_2                      13      /* control type: deco, callback function: (none) */
 #define  Cal_Plate                        14      /* control type: deco, callback function: (none) */
 #define  Cal_Resolution                   15      /* control type: numeric, callback function: (none) */
+
+     /* tab page panel controls */
+#define  ROITab_ROIs                      2       /* control type: listBox, callback function: (none) */
+
+     /* tab page panel controls */
+#define  ScanTab_PixelSize                2       /* control type: numeric, callback function: (none) */
+#define  ScanTab_Plate_2                  3       /* control type: deco, callback function: (none) */
+#define  ScanTab_Plate                    4       /* control type: deco, callback function: (none) */
+#define  ScanTab_FPS                      5       /* control type: numeric, callback function: (none) */
+#define  ScanTab_HeightOffset             6       /* control type: numeric, callback function: (none) */
+#define  ScanTab_WidthOffset              7       /* control type: numeric, callback function: (none) */
+#define  ScanTab_Height                   8       /* control type: string, callback function: (none) */
+#define  ScanTab_Width                    9       /* control type: numeric, callback function: (none) */
+#define  ScanTab_Ready                    10      /* control type: LED, callback function: (none) */
+#define  ScanTab_PixelDwell               11      /* control type: string, callback function: (none) */
 
 
      /* Control Arrays: */

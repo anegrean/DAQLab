@@ -756,7 +756,7 @@ static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], Disc
 	ROI->rgba.R			= 0;
 	ROI->rgba.G			= 0;
 	ROI->rgba.B			= 0;
-	ROI->rgba.A			= 255;
+	ROI->rgba.A			= 0;
 	
 	ROI->discardFptr	= discardFptr;
 }
@@ -871,5 +871,57 @@ ROI_type* copy_ROI_type (ROI_type* ROI)
 
 char* GetDefaultUniqueROIName (ListType ROIList)
 {
-	return NULL;
+	char*		newName			= NULL;
+	BOOL		nameExists  	= FALSE;
+	size_t 		nROIs 			= ListNumItems(ROIList);
+	ROI_type*   ROI				= NULL;
+	size_t		i				= 0;
+	size_t		j				= 0;
+	char		letters[]		= "abcdefghijklmnopqrstuvwxyz";
+	
+	
+	do {
+		
+		// generate new name
+		j = i;
+		OKfree(newName);
+		newName = StrDup("");
+		do {
+            if (newName[0])
+                j--;
+			AddStringPrefix(&newName, letters + j % 26, 1);
+            j /= 26;
+        } while (j > 0);
+		
+		// check if name exists
+		nameExists = FALSE;
+		for (size_t i = 1; i <= nROIs; i++) {
+			ROI = *(ROI_type**) ListGetPtrToItem(ROIList, i);
+			if (!strcmp(newName, ROI->ROIName)) {
+				nameExists = TRUE;
+				break;
+			}
+		}
+		
+		i++; // get another name
+	} while (nameExists);
+	
+	
+	return newName;
+}
+
+
+int SetROIName (ROI_type* ROI, char newName[])
+{
+	int		error = 0;
+	
+	OKfree(ROI->ROIName);
+	
+	if (newName)
+		nullChk( ROI->ROIName = StrDup(newName) );
+	
+	return 0;
+Error:
+	
+	return error;
 }

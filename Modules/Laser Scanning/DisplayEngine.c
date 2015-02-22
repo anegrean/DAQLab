@@ -18,6 +18,8 @@
 
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}
 
+#define Default_ROI_Label_FontSize		12			// in points
+
 //==============================================================================
 // Types
 
@@ -37,45 +39,82 @@
 void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 								DiscardFptr_type						discardFptr,
 								DisplayImageFptr_type					displayImageFptr,
+								DiscardFptr_type						imageDiscardFptr,
 								GetImageDisplayFptr_type				getImageDisplayFptr,
 								GetImageDisplayCBDataFptr_type			getImageDisplayCBDataFptr,
 								SetRestoreImgSettingsCBsFptr_type		setRestoreImgSettingsFptr, 
 								OverlayROIFptr_type						overlayROIFptr,
-								ClearAllROIFptr_type					clearAllROIFptr,
+								ClearROIFptr_type						clearROIFptr,
 							 	ROIEvents_CBFptr_type					ROIEventsCBFptr,
+								ImageDisplay_CBFptr_type				imgDisplayEventCBFptr,
 							 	ErrorHandlerFptr_type					errorHandlerCBFptr		)
 {
 	displayEngine->discardFptr 					= discardFptr;
 	displayEngine->displayImageFptr 			= displayImageFptr; 
+	displayEngine->imageDiscardFptr				= imageDiscardFptr;
 	displayEngine->getImageDisplayFptr 			= getImageDisplayFptr;
 	displayEngine->getImageDisplayCBDataFptr	= getImageDisplayCBDataFptr;
 	displayEngine->setRestoreImgSettingsFptr	= setRestoreImgSettingsFptr;
 	displayEngine->overlayROIFptr				= overlayROIFptr;
-	displayEngine->clearAllROIFptr				= clearAllROIFptr;
+	displayEngine->clearROIFptr					= clearROIFptr;
 	displayEngine->ROIEventsCBFptr				= ROIEventsCBFptr;
+	displayEngine->imgDisplayEventCBFptr		= imgDisplayEventCBFptr;
 	displayEngine->errorHandlerCBFptr			= errorHandlerCBFptr;
+	
 }
 
 int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 								DiscardFptr_type						discardFptr,
 								DisplayEngine_type* 					displayEngine,
-								ImgDisplayCBData_type					imageDisplayCBData		)
+								ImgDisplayCBData_type					imageDisplayCBData 		)
 {
 	int		error	= 0;
 	
+	//--------------------------------------
 	// init
-	imageDisplay->discardFptr					= discardFptr;
+	//--------------------------------------
+	
+	// image display data binding
 	imageDisplay->displayEngine					= displayEngine;
 	imageDisplay->imageDisplayCBData			= imageDisplayCBData;
+	
+	// image data
+	imageDisplay->imgHeight						= 0;
+	imageDisplay->imgWidth						= 0;
+	imageDisplay->pixSize						= 0;
+	imageDisplay->imgTopLeftXCoord				= 0;
+	imageDisplay->imgTopLeftYCoord				= 0;
+	imageDisplay->imgZCoord						= 0;
+	imageDisplay->image							= NULL;
+	imageDisplay->imageType						= Image_UChar;
+	
+	// ROI management
 	imageDisplay->ROIs							= 0;
+	imageDisplay->ROITextBackground.R			= 0;
+	imageDisplay->ROITextBackground.G			= 0;	
+	imageDisplay->ROITextBackground.B			= 0;	
+	imageDisplay->ROITextBackground.A			= 255;	// transparent
+	imageDisplay->ROITextFontSize				= Default_ROI_Label_FontSize;
 	imageDisplay->ROIAction						= ROI_Placed;
 	
+	// methods
+	imageDisplay->discardFptr					= discardFptr;       
+	
+	//----------------------
+	// callbacks
+	//----------------------
+	
+	// restore settings
 	imageDisplay->nRestoreSettingsCBs			= 0;
 	imageDisplay->restoreSettingsCBs			= NULL;
 	imageDisplay->restoreSettingsCBsData		= NULL;
 	imageDisplay->discardCallbackDataFunctions	= NULL;
 	
+	//--------------------------------------
 	// allocate
+	//--------------------------------------
+	
+	// ROI management
 	nullChk( imageDisplay->ROIs					= ListCreate(sizeof(ROI_type*)) );
 	
 	return 0;

@@ -19,6 +19,7 @@
 // Include files
 
 #include "cvidef.h"
+#include "toolbox.h"
 #include "nidaqmx.h"
 
 //==============================================================================
@@ -500,6 +501,8 @@ ROI_type*					copy_ROI_type							(ROI_type* ROI);
 	// Generates a unique ROI name given an existing ROI_type* list, starting with a single letter "a", 
 	// trying each letter alphabetically, after which it increments the number of characters and starts again e.g."aa", "ab"
 char*						GetDefaultUniqueROIName					(ListType ROIList);
+
+int							SetROIName								(ROI_type* ROI, char newName[]);
 
 
 

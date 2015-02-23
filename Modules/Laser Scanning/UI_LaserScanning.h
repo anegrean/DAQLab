@@ -100,6 +100,7 @@
 
      /* tab page panel controls */
 #define  ROITab_ROIs                      2       /* control type: listBox, callback function: (none) */
+#define  ROITab_ParkedTime                3       /* control type: numeric, callback function: (none) */
 
      /* tab page panel controls */
 #define  ScanTab_PixelSize                2       /* control type: numeric, callback function: (none) */

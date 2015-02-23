@@ -43,6 +43,7 @@
 #define VChan_ScanEngine_Shutter_Command					"shutter"
 #define VChan_ScanEngine_Pixel_PulseTrain					"pixel pulse train"
 #define VChan_ScanEngine_NPixels							"n pixels"
+#define VChan_ScanEngine_ROITiming							"ROI timing"
 // Default Scan Axis Calibration VChan base names.
 #define VChan_AxisCal_Command								"command"
 #define VChan_AxisCal_Position								"position"
@@ -289,11 +290,11 @@ typedef enum {
 
 //------------------------------------------------------------------------------------------
 // Scan engine operation mode
-#define ScanEngineMode_Frames_Name				"Frame scan"
-#define ScanEngineMode_PointROIs_Name			"Point scan"
+#define ScanEngineMode_FrameScan_Name				"Frame scan"
+#define ScanEngineMode_PointROIs_Name				"Point jump"
 typedef enum {
-	ScanEngineMode_Frames,						// Frame scans 
-	ScanEngineMode_PointROIs					// Jumps between point ROIs repeatedly
+	ScanEngineMode_FrameScan,						// Frame scans 
+	ScanEngineMode_PointJump						// Jumps between point ROIs repeatedly
 } ScanEngineModesEnum_type;
 
 typedef struct {
@@ -301,8 +302,8 @@ typedef struct {
 	char*						label;
 } ScanEngineModes_type;
 
- ScanEngineModes_type			scanEngineModes[] = {	{ScanEngineMode_Frames, ScanEngineMode_Frames_Name}, 
-	 													{ScanEngineMode_PointROIs, ScanEngineMode_PointROIs_Name}	};
+ ScanEngineModes_type			scanEngineModes[] = {	{ScanEngineMode_FrameScan, ScanEngineMode_FrameScan_Name}, 
+	 													{ScanEngineMode_PointJump, ScanEngineMode_PointROIs_Name}	};
 //------------------------------------------------------------------------------------------  
 typedef struct {
 	char*						objectiveName;			// Objective name.
@@ -336,7 +337,7 @@ struct ScanEngine {
 	//-----------------------------------
 	// VChans
 	//-----------------------------------
-		// Command signals
+		// Command signals for scanning
 	SourceVChan_type*			VChanFastAxisCom;   
 	SourceVChan_type*			VChanSlowAxisCom;
 		// Command signals waveform n samples
@@ -357,12 +358,13 @@ struct ScanEngine {
 	ListType					DetChans;
 	
 	//-----------------------------------
-	// Scan Settings
+	// Scan Settings									// For performing frame scans.
 	//-----------------------------------
 	double						pixelClockRate;			// Pixel clock rate in [Hz] for incoming fluorescence data from all detector channels.
 														// Note: This is not to be confused with the pixel dwell time, which is a multiple of 1/pixelClockRate.
 	double						pixDelay;				// Pixel signal delay in [us] due to processing electronics measured from the moment the signal (fluorescence) is 
 														// generated at the sample.
+	
 	//-----------------------------------
 	// Optics
 	//-----------------------------------
@@ -415,6 +417,11 @@ typedef struct {
 } RectRasterScanSet_type;
 
 typedef struct {
+	Point_type*					point;					// Point to jump to.
+	BOOL						active;					// If TRUE, then jump to this point, otherwise skip it.
+} PointJump_type;
+
+typedef struct {
 	ScanEngine_type				baseClass;				// Base class, must be first structure member.
 	
 	//----------------
@@ -424,6 +431,18 @@ typedef struct {
 	RectRasterScanSet_type		scanSettings;
 	double						galvoSamplingRate;		// Default galvo sampling rate set by the scan engine in [Hz].
 	double						flyInDelay;				// Galvo fly-in time from parked position to start of the imaging area in [us]. This value is also an integer multiple of the pixelDwellTime. 
+	
+	//-----------------------------------
+	// Point Jump Settings								// For jumping as fast as possible between a series of points and staying at each point a given amount of time. 
+	//-----------------------------------
+	double						pointParkedTime;		// Time during which the beam remains stationary at a given point
+	ListType					pointJumps;				// List of points to jump in-between of PointJump_type*. The order of point jumping is determined by the order of the elements in the list.				
+	
+	//-----------------------------------
+	// VChans											// Additional VChans specific to this child class
+	//-----------------------------------
+	
+	SourceVChan_type*			VChanROITiming;			// ROI timing signal (used for example to time photostimulation to jumping between pointions).
 	
 	//----------------
 	// Image buffers
@@ -642,6 +661,7 @@ static RectRaster_type*				init_RectRaster_type							(LaserScanning_type*	lsMod
 																				 	 char					shutterVChanName[],
 																				 	 char					pixelPulseTrainVChanName[],
 																					 char					nPixelsVChanName[],
+																					 char					ROITimingVChanName[],
 																				 	 double					galvoSamplingRate,
 																				 	 double					pixelClockRate,
 																					 double					pixelDelay,
@@ -682,6 +702,8 @@ static BOOL							NonResRectRasterScan_ValidConfig				(RectRaster_type* scanEngi
 static BOOL 						NonResRectRasterScan_ReadyToScan				(RectRaster_type* scanEngine);
 	// generates rectangular raster scan waveforms and sends them to the galvo command VChans
 static int							NonResRectRasterScan_GenerateScanSignals		(RectRaster_type* scanEngine, char** errorInfo);
+	// generates galvo and ROI timing signals to jump between a series of points starting from the parked position and stays at each point a given amount of time.
+static int							NonResRectRasterScan_GeneratePointJumpSignals 	(RectRaster_type* scanEngine, char** errorInfo);
 	// builds images from a continuous pixel stream
 static int 							NonResRectRasterScan_BuildImage 				(RectRaster_type* rectRaster, size_t imgBufferIdx, char** errorInfo);
 	// closes the display of an image panel
@@ -1188,6 +1210,19 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 			AddSinkVChan((*scanEnginePtr)->taskControl, (*detPtr)->detVChan, NULL);
 		}
 		
+		// register scan engine specific vChan with the DAQLab framework
+		switch ((*scanEnginePtr)->engineType) {
+				
+			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
+				
+				RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) *scanEnginePtr; 
+				
+				DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)rectRasterScanEngine->VChanROITiming);
+				
+				break;
+				
+		}
+	
 	}
 	
 	if (nScanEngines) {
@@ -1490,7 +1525,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 				double					pixelSize				= ((RectRaster_type*) *scanEnginePtr)->scanSettings.pixSize;
 				double					pixelDwellTime			= ((RectRaster_type*) *scanEnginePtr)->scanSettings.pixelDwellTime;
 				double					galvoSamplingRate		= ((RectRaster_type*) *scanEnginePtr)->galvoSamplingRate;
-						
+			
 				DAQLabXMLNode			rectangleRasterAttr[] 	= { {"ImageHeight", BasicData_UInt, &height},
 																	{"ImageWidth",  BasicData_UInt, &width},
 																	{"ImageHeightOffset", BasicData_Int, &heightOffset},
@@ -1623,6 +1658,8 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	char*							shutterVChanName				= NULL;
 	char*							pixelPulseTrainVChanName		= NULL;
 	char*							nPixelsVChanName				= NULL;
+	char*							ROITimingVChanName				= DLGetUniqueVChanName(VChan_ScanEngine_ROITiming); // temporary, anyways these VChan names will be fixed and doesn't make sense anymore
+																														// to save them. It just add unncessary overhead.
 	double							scanLensFL						= 0;
 	double							tubeLensFL						= 0;
 	double							objectiveFL						= 0;
@@ -1723,7 +1760,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 					
 				
 				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, fastAxisCommandVChanName, fastAxisCommandNSampVChanName, slowAxisCommandVChanName, slowAxisCommandNSampVChanName, fastAxisPositionVChanName,
-													  slowAxisPositionVChanName, scanEngineOutVChanName, NULL, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName, galvoSamplingRate, pixelClockRate, pixelDelay, height, heightOffset, width, widthOffset, 
+													  slowAxisPositionVChanName, scanEngineOutVChanName, NULL, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName, ROITimingVChanName, galvoSamplingRate, pixelClockRate, pixelDelay, height, heightOffset, width, widthOffset, 
 													  pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
 				break;
 			
@@ -1815,6 +1852,8 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 		OKfree(scanEngineOutVChanName);
 		OKfree(shutterVChanName);
 		OKfree(pixelPulseTrainVChanName);
+		OKfree(nPixelsVChanName);
+		OKfree(ROITimingVChanName);
 	}
 	
 	
@@ -2318,6 +2357,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					char*	shutterVChanName			= DLGetUniqueVChanName(VChan_ScanEngine_Shutter_Command);
 					char*	pixelPulseTrainVChanName	= DLGetUniqueVChanName(VChan_ScanEngine_Pixel_PulseTrain); 
 					char*	nPixelsVChanName			= DLGetUniqueVChanName(VChan_ScanEngine_NPixels);
+					char*	ROITimingVChanName			= DLGetUniqueVChanName(VChan_ScanEngine_ROITiming);
 							
 					switch (engineType) {
 					
@@ -2325,7 +2365,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					
 							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, fastAxisComVChanName, fastAxisComNSampVChanName, slowAxisComVChanName, slowAxisComNSampVChanName,
 														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectionVChanName, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName,
-														NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
+														ROITimingVChanName, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
 							
 							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;   
 							
@@ -2368,6 +2408,8 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					OKfree(detectionVChanName);
 					OKfree(shutterVChanName);
 					OKfree(pixelPulseTrainVChanName);
+					OKfree(nPixelsVChanName);
+					OKfree(ROITimingVChanName);
 					//------------------------------------------------------------------------------------------------------------------
 					newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl);  
 					// discard loaded panel and add scan control panel handle to scan engine
@@ -2457,7 +2499,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanScanOut);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanShutter);     
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanPixelPulseTrain); 
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanNPixels); 
+					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanNPixels);
 					DetChan_type**	detPtr = ListGetPtrToItem(newScanEngine->DetChans, 1);
 					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan);
 					
@@ -2465,6 +2507,18 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					AddSinkVChan(newScanEngine->taskControl, (*detPtr)->detVChan, NULL);
 					AddSinkVChan(newScanEngine->taskControl, newScanEngine->VChanFastAxisPos, NULL);
 					AddSinkVChan(newScanEngine->taskControl, newScanEngine->VChanSlowAxisPos, NULL);
+					
+					// register scan engine specific VChans
+					switch (newScanEngine->engineType) {
+				
+						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
+				
+							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;
+							
+							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)rectRasterScanEngine->VChanROITiming);
+							
+							break;
+					}
 					
 					// add new scan engine to laser scanning module list of scan engines
 					ListInsertItem(ls->scanEngines, &newScanEngine, END_OF_LIST);
@@ -4042,7 +4096,7 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	//------------------------
 	
 	engine->engineType					= engineType;
-	engine->scanMode					= ScanEngineMode_Frames;
+	engine->scanMode					= ScanEngineMode_FrameScan;
 	// reference to axis calibration
 	engine->fastAxisCal					= NULL;
 	engine->slowAxisCal					= NULL;
@@ -4354,6 +4408,7 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 														char					shutterVChanName[],
 														char					pixelPulseTrainVChanName[],
 														char					nPixelsVChanName[],
+														char					ROITimingVChanName[],
 														double					galvoSamplingRate,
 														double					pixelClockRate,
 														double					pixelDelay,
@@ -4387,9 +4442,9 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	// init RectRaster_type
 	//--------------------------------------------------------
 	
-	engine->galvoSamplingRate			= galvoSamplingRate;
-	
-	// scan settings
+	//--------------------
+	// scan parameters
+	//--------------------
 	engine->scanSettings.height			= scanHeight;
 	engine->scanSettings.heightOffset	= scanHeightOffset;
 	engine->scanSettings.width			= scanWidth;
@@ -4397,8 +4452,25 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	engine->scanSettings.pixelDwellTime	= pixelDwellTime;
 	engine->scanSettings.pixSize		= pixelSize;
 	
-	engine->imgBuffers				= NULL;
-	engine->nImgBuffers				= 0;
+	engine->galvoSamplingRate			= galvoSamplingRate;
+	engine->flyInDelay					= 0;
+	
+	//--------------------
+	// point jump settings
+	//--------------------
+	
+	engine->pointParkedTime				= 0;
+	
+	//--------------------
+	// VChans
+	//--------------------
+	engine->VChanROITiming				= init_SourceVChan_type(ROITimingVChanName, DL_Waveform_Char, engine, NULL, NULL);
+	
+	//--------------------
+	// image buffers
+	//--------------------
+	engine->imgBuffers					= NULL;
+	engine->nImgBuffers					= 0;
 
 	return engine;
 	
@@ -4412,20 +4484,32 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 {
 	RectRaster_type*	rectRaster = (RectRaster_type*) *engine;
 	
-	//------------------------------
+	//--------------------------------------------------------------------
 	// discard RectRaster_type data
-	//------------------------------
+	//--------------------------------------------------------------------
 	
-	// discard image assembly buffers
+	//----------------------------------
+	// VChans
+	//----------------------------------
+	
+	// ROI timing
+	if (rectRaster->VChanROITiming) {
+		DLUnregisterVChan((DAQLabModule_type*)rectRaster->baseClass.lsModule, (VChan_type*)rectRaster->VChanROITiming);
+		discard_VChan_type((VChan_type**)&rectRaster->VChanROITiming);
+	}
+	
+	//----------------------------------
+	// Image assembly buffers
+	//----------------------------------
 	for (size_t i = 0; i < rectRaster->nImgBuffers; i++)
 		discard_RectRasterImgBuffer_type(&rectRaster->imgBuffers[i]);
 	
 	OKfree(rectRaster->imgBuffers);
 	rectRaster->nImgBuffers = 0;
 	
-	//------------------------------
+	//--------------------------------------------------------------------
 	// discard Scan Engine data
-	//------------------------------
+	//--------------------------------------------------------------------
 	discard_ScanEngine_type(engine);
 }
 
@@ -4795,6 +4879,12 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 			switch (control) {
 					
 				case ROITab_ROIs:
+					
+					break;
+					
+				case ROITab_ParkedTime:
+					
+					GetCtrlVal(panel, control, &scanEngine->pointParkedTime);
 					
 					break;
 			}
@@ -5408,6 +5498,12 @@ Error:
 	OKfree(errMsg);
 	
 	return NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals;
+}
+
+static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanEngine, char** errorInfo)
+{
+	
+	return 0;
 }
 
 /* 
@@ -7103,7 +7199,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 
 	switch(engine->baseClass.scanMode) {
 		
-		case ScanEngineMode_Frames:
+		case ScanEngineMode_FrameScan:
 			
 			if (engine->imgBuffers)
 				// receive pixel stream and assemble image
@@ -7114,7 +7210,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 			
 			break;
 			
-		case ScanEngineMode_PointROIs:
+		case ScanEngineMode_PointJump:
 			
 			break;
 	}
@@ -7144,17 +7240,25 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	// reset iterations display
 	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, 0);
 	
-	//--------------------------------------------------------------------------------------------------------
-	// Open shutter
-	//--------------------------------------------------------------------------------------------------------
-	
+	// open shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, 1, errorInfo) );
 	
-	//--------------------------------------------------------------------------------------------------------
-	// Send galvo waveforms
-	//--------------------------------------------------------------------------------------------------------
-	
-	errChk ( NonResRectRasterScan_GenerateScanSignals (engine, errorInfo) );  
+	switch(engine->baseClass.scanMode) {
+		
+		case ScanEngineMode_FrameScan:
+			
+			// send galvo waveforms
+			errChk ( NonResRectRasterScan_GenerateScanSignals (engine, errorInfo) );  
+			
+			break;
+			
+		case ScanEngineMode_PointJump:
+			
+			// send galvo and ROI timing waveforms
+			errChk ( NonResRectRasterScan_GeneratePointJumpSignals (engine, errorInfo) );  
+			
+			break;
+	}
 	
 	return 0; // no error
 	

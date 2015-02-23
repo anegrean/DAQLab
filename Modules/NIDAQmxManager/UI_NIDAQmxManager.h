@@ -23,11 +23,11 @@
 #define  AIAOChSet_ScaleMax               5       /* control type: numeric, callback function: (none) */
 #define  AIAOChSet_Gain                   6       /* control type: numeric, callback function: (none) */
 #define  AIAOChSet_Offset                 7       /* control type: numeric, callback function: (none) */
-#define  AIAOChSet_Integrate              8       /* control type: numeric, callback function: (none) */
-#define  AIAOChSet_ScaleMin               9       /* control type: numeric, callback function: (none) */
-#define  AIAOChSet_AIDataType             10      /* control type: ring, callback function: (none) */
-#define  AIAOChSet_Range                  11      /* control type: ring, callback function: (none) */
-#define  AIAOChSet_OnDemand               12      /* control type: radioButton, callback function: (none) */
+#define  AIAOChSet_ScaleMin               8       /* control type: numeric, callback function: (none) */
+#define  AIAOChSet_AIDataType             9       /* control type: ring, callback function: (none) */
+#define  AIAOChSet_Range                  10      /* control type: ring, callback function: (none) */
+#define  AIAOChSet_OnDemand               11      /* control type: radioButton, callback function: (none) */
+#define  AIAOChSet_Integrate              12      /* control type: radioButton, callback function: (none) */
 
 #define  CICOChSet                        3
 #define  CICOChSet_TAB                    2       /* control type: tab, callback function: (none) */
@@ -179,6 +179,7 @@
 #define  Set_Duration                     5       /* control type: numeric, callback function: (none) */
 #define  Set_NSamples                     6       /* control type: numeric, callback function: (none) */
 #define  Set_MeasMode                     7       /* control type: ring, callback function: (none) */
+#define  Set_Oversampling                 8       /* control type: numeric, callback function: (none) */
 
      /* tab page panel controls */
 #define  SETPAN_Plate                     2       /* control type: deco, callback function: (none) */

@@ -511,8 +511,9 @@ typedef enum{
 // timing structure for ADC/DAC & digital sampling tasks
 typedef struct {
 	MeasMode_type 				measMode;      				// Measurement mode: finite or continuous.
-	double       				sampleRate;    				// Sampling rate in [Hz].
-	uInt64        				nSamples;	    			// Total number of samples to be acquired in case of a finite recording.
+	double       				sampleRate;    				// Target sampling rate in [Hz].
+	uInt64        				nSamples;	    			// Target number of samples to be acquired in case of a finite recording.
+	uInt32						oversampling;				// Oversampling factor, used in AI. This determines the actual sampling rate and the actual number of samples to be acquired
 	SinkVChan_type*				nSamplesSinkVChan;			// Used for receiving number of samples to be generated/received with each iteration of the DAQmx task controller.
 															// data packets of DL_UChar, DL_UShort, DL_UInt, DL_ULong and DL_ULongLong types.
 	SourceVChan_type*			nSamplesSourceVChan;		// Used for sending number of samples for finite tasks.
@@ -592,7 +593,7 @@ struct ChanSet {
 															// the range of the chosen data type.	
 	double						offset;						// Offset added to the AI signal.
 	double						gain;						// Multiplication factor to be applied to the AI signal before it is converted to another data type.
-	uInt32						integrate;					// Number of samples to integrate (sum) for input type channels.
+	BOOL						integrateFlag;				// Used for AI. If true, then based on the AI task settings, samples are integrated, otherwise, the oversamples are discarded.
 	// METHODS
 	DiscardChanSetFptr_type		discardFptr;				// Function pointer to discard specific channel data that is derived from this base class.					
 };
@@ -734,7 +735,6 @@ typedef struct {
 	uInt32*						nIntBuffElem;				// Array of number of elements within each buffer that must be still integrated with incoming data.
 															// This number cannot be larger than the number of elements contained within one integration block.
 	float64**					intBuffers;					// Array of integration buffers, each buffer having a maximum size equal to the readblock + number of elements within one integration block. 
-	
 } ReadAIData_type;
 
 // Used for continuous DO streaming
@@ -3197,9 +3197,9 @@ static void  init_ChanSet_type (Dev_type* dev, ChanSet_type* chanSet, char physC
 	chanSet -> taskHndl			= NULL;
 	chanSet -> ScaleMax			= 0;
 	chanSet -> ScaleMin			= 0;
-	chanSet -> integrate		= 1;
 	chanSet -> offset			= 0;
 	chanSet -> gain				= 1;
+	chanSet -> integrateFlag	= FALSE;
 }
 
 static void	discard_ChanSet_type (ChanSet_type** a)
@@ -3368,15 +3368,6 @@ static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callb
 			
 			break;
 			
-		case AIAOChSet_Integrate:
-			
-			GetCtrlVal(panel, control, &chSetPtr->baseClass.integrate);
-			
-			discard_ReadAIData_type(&dev->AITaskSet->readAIData);
-			dev->AITaskSet->readAIData = init_ReadAIData_type(dev);
-			
-			break;
-			
 		case AIAOChSet_Offset:
 			
 			GetCtrlVal(panel, control, &chSetPtr->baseClass.offset);
@@ -3386,6 +3377,12 @@ static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callb
 		case AIAOChSet_Gain:
 			
 			GetCtrlVal(panel, control, &chSetPtr->baseClass.gain);
+			
+			break;
+			
+		case AIAOChSet_Integrate:
+			
+			GetCtrlVal(panel, control, &chSetPtr->baseClass.integrateFlag);
 			
 			break;
 			
@@ -4201,6 +4198,13 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							newChan->Vmax = AIchanAttr->Vrngs->high[AIchanAttr->Vrngs->Nrngs - 1];
 							newChan->Vmin = AIchanAttr->Vrngs->low[AIchanAttr->Vrngs->Nrngs - 1];
 							
+							//------------------
+							// integration mode
+							//------------------
+							
+							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_Integrate, newChan->baseClass.integrateFlag);
+							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_Integrate, ATTR_VISIBLE, TRUE);
+							
 							//---------------------------
 							// adjust data type scaling
 							//---------------------------
@@ -4232,13 +4236,6 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							InsertListItem(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, AI_UChar, "uChar", AI_UChar);
 							SetCtrlIndex(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, AI_Double); // set double to default
 							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_AIDataType, ATTR_VISIBLE, TRUE);
-							
-							//-----------------
-							// Data integration
-							//-----------------
-							SetCtrlVal(newChan->baseClass.chanPanHndl, AIAOChSet_Integrate, newChan->baseClass.integrate);
-							SetCtrlAttribute(newChan->baseClass.chanPanHndl, AIAOChSet_Integrate, ATTR_VISIBLE, TRUE);
-							
 							
 							//--------------------------
 							// Create and register VChan
@@ -6007,6 +6004,7 @@ static TaskTiming_type*	init_TaskTiming_type (void)
 	taskTiming -> measMode					= DAQmxDefault_Task_MeasMode;
 	taskTiming -> sampleRate				= DAQmxDefault_Task_SampleRate;
 	taskTiming -> nSamples					= DAQmxDefault_Task_NSamples;
+	taskTiming -> oversampling				= 1;
 	taskTiming -> blockSize					= DAQmxDefault_Task_BlockSize;
 	taskTiming -> sampClkSource				= NULL;   								// use onboard clock for sampling
 	taskTiming -> sampClkEdge				= SampClockEdge_Rising;
@@ -6199,6 +6197,12 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	
 	// set duration
 	SetCtrlVal(tskSet->timing->settingsPanHndl, Set_Duration, tskSet->timing->nSamples / tskSet->timing->sampleRate); 	// display in [s]
+	
+	// set oversampling if AI task
+	if (tskSet->dev->AITaskSet == tskSet) {
+		SetCtrlVal(tskSet->timing->settingsPanHndl, Set_Oversampling, tskSet->timing->oversampling);					// set oversampling factor
+		SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Oversampling, ATTR_VISIBLE, TRUE);
+	}
 	
 	// set measurement mode
 	InsertListItem(tskSet->timing->settingsPanHndl, Set_MeasMode, -1, "Finite", MeasFinite);
@@ -6521,6 +6525,15 @@ static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackD
 			
 			break;
 			
+		case Set_Oversampling:
+			
+			GetCtrlVal(panel, control, &tskSet->timing->oversampling);
+			
+			discard_ReadAIData_type(&tskSet->readAIData);
+			tskSet->readAIData = init_ReadAIData_type(tskSet->dev);
+			
+			break;
+			
 		case Set_BlockSize:
 			
 			GetCtrlVal(panel, control, &tskSet->timing->blockSize);
@@ -6680,7 +6693,7 @@ static ReadAIData_type* init_ReadAIData_type (Dev_type* dev)
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		if ((*chanSetPtr)->onDemand) continue;
 		
-		if ( !(readAI->intBuffers[chIdx] = calloc((*chanSetPtr)->integrate + dev->AITaskSet->timing->blockSize, sizeof(float64))) ) goto Error;
+		if ( !(readAI->intBuffers[chIdx] = calloc(dev->AITaskSet->timing->oversampling + dev->AITaskSet->timing->blockSize, sizeof(float64))) ) goto Error;
 		
 		chIdx++;
 	}
@@ -7689,7 +7702,7 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AITaskSet->timing->sampClkEdge));
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate));
+	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate * dev->AITaskSet->timing->oversampling));
 	
 	// set operation mode: finite, continuous
 	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AITaskSet->timing->measMode));
@@ -7714,8 +7727,8 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 		case MeasFinite:
 			
 			// set number of samples per channel
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, (uInt64) dev->AITaskSet->timing->nSamples));
-			quot = dev->AITaskSet->timing->nSamples  / dev->AITaskSet->timing->blockSize; 
+			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples * dev->AITaskSet->timing->oversampling));
+			quot = (dev->AITaskSet->timing->nSamples * dev->AITaskSet->timing->oversampling) / dev->AITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
 			if (!quot) quot = 1;
 			DAQmxErrChk(DAQmxCfgInputBuffer (dev->AITaskSet->taskHndl, dev->AITaskSet->timing->blockSize * quot));
@@ -8974,7 +8987,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 			}
 			
 			// update number of samples in dev structure
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples));
+			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples * dev->AITaskSet->timing->oversampling));
 			// update number of samples in UI
 			SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_NSamples, dev->AITaskSet->timing->nSamples);
 			// update duration in UI
@@ -9005,7 +9018,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 		}
 		
 		// update sampling rate in dev structure
-		DAQmxErrChk(DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate));
+		DAQmxErrChk(DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate * dev->AITaskSet->timing->oversampling));
 		// update sampling rate in UI
 		SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AITaskSet->timing->sampleRate);
 		// update duration in UI
@@ -9604,7 +9617,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	double				scaledSignal;
 	double				maxSignal;
 	float64*			integrationBuffer		= dev->AITaskSet->readAIData->intBuffers[chIdx];
-	uInt32				integration				= AIChSet->integrate;
+	uInt32				integration				= dev->AITaskSet->timing->oversampling;
 	uInt32				nItegratedSamples		= (nRead + dev->AITaskSet->readAIData->nIntBuffElem[chIdx]) / integration;  // number of samples integrated per channel
 	uInt32				nRemainingSamples		= (nRead + dev->AITaskSet->readAIData->nIntBuffElem[chIdx]) % integration;	// number of samples remaining to be integrated per channel
 	uInt32				nBufferSamples;
@@ -9626,26 +9639,31 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
 			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
 			
-			// integrate
-			for (i = 0; i < integration; i++) {
-				k = i;
-				for (j = 0; j < nItegratedSamples; j++) {
-					waveformData_double[j] += integrationBuffer[k] * AIChSet->gain + AIChSet->offset;
-					k += integration;
-				}							   
-			}
+			if (AIChSet->integrateFlag)
+				// integrate
+				for (i = 0; i < integration; i++) {
+					k = i;
+					for (j = 0; j < nItegratedSamples; j++) {
+						waveformData_double[j] += integrationBuffer[k] * AIChSet->gain + AIChSet->offset;
+						k += integration;
+					}							   
+				}
+			 else 
+				// jump over oversampled samples
+				for (i = 0; i < nItegratedSamples; i++)
+					waveformData_double[i] = integrationBuffer[i*integration] * AIChSet->gain + AIChSet->offset;
+			
 			
 			// shift unprocessed samples from the end of the buffer to its beginning
 			if (nRemainingSamples)
 				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(float64));
 			
 			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
-				
-			//--------------------
+			
+			//-------------------- 
 			// prepare data packet
 			//--------------------
-			
-			nullChk( waveform 	= init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_double) );
+			nullChk( waveform 	= init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_double) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) ); 
 				
 			break;
@@ -9663,14 +9681,20 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
 			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
 			
-			// integrate
-			for (i = 0; i < integration; i++) {
-				k = i;
-				for (j = 0; j < nItegratedSamples; j++) {
-					waveformData_float[j] += (float) (integrationBuffer[k] * AIChSet->gain + AIChSet->offset);
-					k += integration;
-				}							   
-			}
+			if (AIChSet->integrateFlag)
+				// integrate
+				for (i = 0; i < integration; i++) {
+					k = i;
+					for (j = 0; j < nItegratedSamples; j++) {
+						waveformData_float[j] += (float) (integrationBuffer[k] * AIChSet->gain + AIChSet->offset);
+						k += integration;
+					}							   
+				}
+			else
+				// jump over oversampled samples
+				for (i = 0; i < nItegratedSamples; i++)
+					waveformData_float[i] = (float) (integrationBuffer[i*integration] * AIChSet->gain + AIChSet->offset);
+				
 			
 			// shift unprocessed samples from the end of the buffer to its beginning
 			if (nRemainingSamples)
@@ -9682,11 +9706,12 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			// prepare data packet
 			//--------------------
 			
-			nullChk( waveform 	= init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_float) );
+			nullChk( waveform 	= init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_float) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
 				
 			break;
-				
+		
+		/*
 		case DL_Waveform_UInt:
 			
 			nullChk( waveformData_uInt32 = calloc(nItegratedSamples, sizeof(uInt32)) );
@@ -9758,6 +9783,15 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_uInt8) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
 				
+			break;
+		*/
+		default:
+			
+			errMsg = StrDup("Must be implemented correctly still!"); 
+			error = -1;
+			goto Error;
+					
+			
 			break;
 	}
 

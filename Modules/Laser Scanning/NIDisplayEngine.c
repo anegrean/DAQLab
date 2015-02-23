@@ -291,7 +291,6 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 	imaqWndHndl	= (HWND) imaqGetSystemWindowHandle(imaqHndl); 
 	
 	// assign data structure
-	discard_NIImageDisplay_type(&displays[imaqHndl]);
 	nullChk(displays[imaqHndl] = init_NIImageDisplay_type(NIDisplay, imaqHndl, callbackData) );
 	
 	// init IMAQ image buffer 
@@ -379,7 +378,7 @@ static int SetRestoreImgSettingsCBs (NIImageDisplay_type* imgDisplay, size_t nCa
 	
 	for (size_t i = 0; i < nCallbackFunctions; i++) {
 		imgDisplay->baseClass.restoreSettingsCBs[i] 				= callbackFunctions[i];
-		imgDisplay->baseClass.restoreSettingsCBsData[i]			= callbackData[i];
+		imgDisplay->baseClass.restoreSettingsCBsData[i]				= callbackData[i];
 		imgDisplay->baseClass.discardCallbackDataFunctions[i] 		= discardCallbackDataFunctions[i];
 	}
 	
@@ -590,6 +589,7 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 			(*display->baseClass.displayEngine->imgDisplayEventCBFptr) (&display->baseClass, display->baseClass.imageDisplayCBData, ImageDisplay_Close);
 			
 			// discard image display data
+			displays[display->imaqWndID] = NULL;
 			(*display->baseClass.discardFptr) ((void**)&display);
 			
 			break;

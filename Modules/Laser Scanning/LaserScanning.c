@@ -409,9 +409,9 @@ typedef struct {
 
 typedef struct {
 	double						pixSize;				// Image pixel size in [um].
-	uInt32						height;					// Image height in [pix].
+	uInt32						height;					// Image height in [pix] when viewed on the screen.
 	int							heightOffset;			// Image height offset from center in [pix].
-	uInt32						width;					// Image width in [pix].
+	uInt32						width;					// Image width in [pix] when viewed on the screen.
 	int							widthOffset;			// Image width offset in [pix].
 	double						pixelDwellTime;			// Pixel dwell time in [us].
 } RectRasterScanSet_type;
@@ -436,7 +436,7 @@ typedef struct {
 	// Point Jump Settings								// For jumping as fast as possible between a series of points and staying at each point a given amount of time. 
 	//-----------------------------------
 	double						pointParkedTime;		// Time during which the beam remains stationary at a given point
-	ListType					pointJumps;				// List of points to jump in-between of PointJump_type*. The order of point jumping is determined by the order of the elements in the list.				
+	ListType					pointJumps;				// List of points to jump in-between of PointJump_type. The order of point jumping is determined by the order of the elements in the list.				
 	
 	//-----------------------------------
 	// VChans											// Additional VChans specific to this child class
@@ -4460,6 +4460,7 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	//--------------------
 	
 	engine->pointParkedTime				= 0;
+	engine->pointJumps					= ListCreate(sizeof(PointJump_type));
 	
 	//--------------------
 	// VChans
@@ -4490,7 +4491,6 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	
 	//----------------------------------
 	// VChans
-	//----------------------------------
 	
 	// ROI timing
 	if (rectRaster->VChanROITiming) {
@@ -4500,12 +4500,18 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	
 	//----------------------------------
 	// Image assembly buffers
-	//----------------------------------
+
 	for (size_t i = 0; i < rectRaster->nImgBuffers; i++)
 		discard_RectRasterImgBuffer_type(&rectRaster->imgBuffers[i]);
 	
 	OKfree(rectRaster->imgBuffers);
 	rectRaster->nImgBuffers = 0;
+	
+	//----------------------------------
+	// Point jump settings
+	
+	ListDispose(rectRaster->pointJumps);
+	rectRaster->pointJumps = 0;
 	
 	//--------------------------------------------------------------------
 	// discard Scan Engine data
@@ -5503,6 +5509,7 @@ Error:
 static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanEngine, char** errorInfo)
 {
 	
+	
 	return 0;
 }
 
@@ -6203,9 +6210,10 @@ static void	ShutterVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan
 static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, ROIActions action, ROI_type* ROI)
 {
 	DetChan_type*			detChan 		= callbackData;
-	ROI_type*				addedROI		= NULL;
+	ROI_type*				addedROI		= NULL;						  // reference to the ROI added to the image display
 	DisplayEngine_type*		displayEngine   = imgDisplay->displayEngine; 
 	RectRaster_type*		scanEngine		= (RectRaster_type*) detChan->scanEngine;
+	int						nListItems		= 0;
 	
 	switch (action) {
 			
@@ -6229,7 +6237,27 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 			
 			// update scan engine if this display is assigned to it
 			if (scanEngine->baseClass.activeDisplay == imgDisplay) {
-				InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, ROI->ROIName, ListNumItems(imgDisplay->ROIs));
+				// insert ROI item in the UI
+				InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, addedROI->ROIName, ListNumItems(imgDisplay->ROIs));
+				
+				switch (addedROI->ROIType) {
+						
+					case ROI_Point:
+						
+						// mark point as checked (in use)  
+						GetNumListItems(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, &nListItems);
+						CheckListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, nListItems - 1, 1); 
+						// insert ROI item in the scan engine as well
+						PointJump_type	pointJump = {.point = (Point_type*) addedROI, .active = TRUE};
+						ListInsertItem(scanEngine->pointJumps, &pointJump, END_OF_LIST);
+						
+						break;
+						
+					default:
+						
+						break;
+				}
+				
 			}
 			
 			break;
@@ -6296,6 +6324,23 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 	for (size_t i = 1; i <= nROIs; i++) {
 		ROI= *(ROI_type**)ListGetPtrToItem(imgDisplay->ROIs, i);
 		InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, ROI->ROIName, i);
+		
+		switch (ROI->ROIType) {
+						
+			case ROI_Point:
+						
+				// mark point as checked (in use)  
+				CheckListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, i - 1, 1); 
+				// insert ROI item in the scan engine as well
+				PointJump_type	pointJump = {.point = (Point_type*) ROI, .active = TRUE};
+				ListInsertItem(scanEngine->pointJumps, &pointJump, END_OF_LIST);
+						
+				break;
+					
+			default:
+					
+				break;
+		}
 	}
 	
 	
@@ -7399,7 +7444,7 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 				// allocate memory for image assembly
 				engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
 				engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->scanSettings.width, engine->scanSettings.height, 
-						(size_t)((engine->flyInDelay - engine->baseClass.pixDelay)/engine->scanSettings.pixelDwellTime), pixelDataType,FALSE, FALSE); 
+						(size_t)((engine->flyInDelay - engine->baseClass.pixDelay)/engine->scanSettings.pixelDwellTime), pixelDataType, TRUE, FALSE); 
 			}
 			
 			break;

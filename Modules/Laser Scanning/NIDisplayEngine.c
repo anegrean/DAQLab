@@ -94,10 +94,10 @@ static void 					discard_NIImageDisplay_type 					(NIImageDisplay_type** display
 
 static void 					discard_NIDisplayEngine_type 					(NIDisplayEngine_type** niVisionDisplayPtr);
 
-static int						DisplayNIVisionImage							(NIImageDisplay_type* imgDisplay, void* pixelArray, int imgWidth, int imgHeight, ImageTypes imageType, 
+static int						DisplayNIVisionImage							(NIImageDisplay_type* imgDisplay, void* pixelArray, int imgHeight, int imgWidth, ImageTypes imageType, 
 																				 double pixSize, double imgTopLeftXCoord, double imgTopLeftYCoord, double imgZCoord);
 
-static NIImageDisplay_type*		GetNIImageDisplay								(NIDisplayEngine_type* NIDisplay, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType);
+static NIImageDisplay_type*		GetNIImageDisplay								(NIDisplayEngine_type* NIDisplay, void* callbackData, int imgHeight, int imgWidth, ImageTypes imageType);
 
 static ImgDisplayCBData_type	GetNIImageDisplayCBData							(NIImageDisplay_type* imgDisplay);
 
@@ -244,7 +244,7 @@ static void discard_NIImageDisplay_type (NIImageDisplay_type** displayPtr)
 	discard_ImageDisplay_type((ImageDisplay_type**) displayPtr);
 }
 
-static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, void* pixelArray, int imgWidth, int imgHeight, ImageTypes imageType, 
+static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, void* pixelArray, int imgHeight, int imgWidth, ImageTypes imageType, 
 								 double pixSize, double imgTopLeftXCoord, double imgTopLeftYCoord, double imgZCoord)
 {								
 	int		error		= 0;
@@ -259,7 +259,7 @@ static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, void* pixelArr
 	imgDisplay->baseClass.imageType				= imageType;
 	
 	// display image
-	nullChk( imaqArrayToImage((Image*)imgDisplay->baseClass.image, pixelArray, imgHeight, imgWidth) );
+	nullChk( imaqArrayToImage((Image*)imgDisplay->baseClass.image, pixelArray, imgWidth, imgHeight) );
 	nullChk( imaqDisplayImage((Image*)imgDisplay->baseClass.image, imgDisplay->imaqWndID, FALSE) );
 			 
 	// display IMAQ tool window
@@ -275,7 +275,7 @@ Error:
 	return error;
 }
 
-static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, void* callbackData, int imgWidth, int imgHeight, ImageTypes imageType)
+static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, void* callbackData, int imgHeight, int imgWidth, ImageTypes imageType)
 {
 	int				imaqHndl				= 0;	// imaq window ID
 	int				error					= 0;

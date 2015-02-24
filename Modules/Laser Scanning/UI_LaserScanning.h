@@ -107,10 +107,10 @@
 #define  ScanTab_Plate_2                  3       /* control type: deco, callback function: (none) */
 #define  ScanTab_Plate                    4       /* control type: deco, callback function: (none) */
 #define  ScanTab_FPS                      5       /* control type: numeric, callback function: (none) */
-#define  ScanTab_HeightOffset             6       /* control type: numeric, callback function: (none) */
-#define  ScanTab_WidthOffset              7       /* control type: numeric, callback function: (none) */
-#define  ScanTab_Height                   8       /* control type: string, callback function: (none) */
-#define  ScanTab_Width                    9       /* control type: numeric, callback function: (none) */
+#define  ScanTab_WidthOffset              6       /* control type: numeric, callback function: (none) */
+#define  ScanTab_HeightOffset             7       /* control type: numeric, callback function: (none) */
+#define  ScanTab_Width                    8       /* control type: string, callback function: (none) */
+#define  ScanTab_Height                   9       /* control type: numeric, callback function: (none) */
 #define  ScanTab_Ready                    10      /* control type: LED, callback function: (none) */
 #define  ScanTab_PixelDwell               11      /* control type: string, callback function: (none) */
 

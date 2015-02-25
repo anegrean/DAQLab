@@ -402,8 +402,11 @@ typedef struct {
 	void*						tmpPixels;				// Temporary pixels used to assemble an image. Array containing nTmpPixels elements
 	size_t						nTmpPixels;				// Number of pixels in tmpPixels.
 	size_t						nSkipPixels;			// Number of pixels left to skip from the pixel stream.
-	BOOL				        flipRow;		   		// Flag used to flip every second row in the image in the width direction.
-	BOOL        				flipColumns;  			// Flag used to flip every second completed image in the direction of height.
+	BOOL				        flipRow;		   		// Flag used to flip every second row in the image in the width direction (fast-axis).
+	BOOL						skipRows;				// If TRUE, then skipFlybackRows rows will be skipped.
+	uInt32        				skipFlybackRows;		// Number of fast-axis rows to skip at the end of each frame while the slow axis returns to the beginning of the image.
+	uInt32						rowsSkipped;			// Number of rows skipped so far.
+	DLDataTypes					pixelDataType;
 	DetChan_type*				detChan;				// Detection channel to which this image assembly buffer belongs.
 } RectRasterImgBuffer_type;
 
@@ -602,8 +605,9 @@ static void							MaxTriangleWaveformScan							(NonResGalvoCal_type* cal, doubl
 
 	// Moves the galvo between two positions given by startVoltage and endVoltage in [V] given a sampleRate in [Hz] and calibration data.
 	// The command signal is a ramp such that the galvo lags behind the command signal with a constant lag
-static Waveform_type* 				NonResGalvoMoveBetweenPoints 					(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double startDelay, 
-																					 double endVoltage, double endDelay);
+static Waveform_type* 				NonResGalvoMoveBetweenPoints 					(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
+static int 							NonResGalvoPointJumpTime 						(NonResGalvoCal_type* cal, double jumpAmplitude, double* jumpTime);
+static Waveform_type* 				NonResGalvoJumpBetweenPoints 					(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
 
 //-------------
 // Scan Engines
@@ -677,7 +681,7 @@ static RectRaster_type*				init_RectRaster_type							(LaserScanning_type*	lsMod
 static void							discard_RectRaster_type							(ScanEngine_type** engine);
 
 	// image assembly buffer
-static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 					(DetChan_type* detChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows, BOOL flipColumns);
+static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 					(DetChan_type* detChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows);
 
 static void							discard_RectRasterImgBuffer_type				(RectRasterImgBuffer_type** rectRasterPtr); 
 
@@ -728,7 +732,7 @@ static int CVICALLBACK 				NewObjective_CB									(int panel, int control, int 
 // Waveforms
 //---------------------------------------------------------
 
-static Waveform_type* 				StaircaseWaveform								(BOOL symmetricStaircase, double sampleRate, size_t nSamplesPerStep, size_t nSteps, double startVoltage, double stepVoltage); 
+static Waveform_type* 				StaircaseWaveform 								(double sampleRate, size_t nSamplesPerStep, size_t nSteps, size_t delaySamples, double startVoltage, double stepVoltage);
 
 //------------------
 // Module management
@@ -3538,10 +3542,10 @@ startV ___
 				     
 */
 // sampleRate in [Hz], startVoltage and endVoltage in [V], startDelay and endDelay in [s]
-static Waveform_type* NonResGalvoMoveBetweenPoints (NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double startDelay, double endVoltage, double endDelay)
+static Waveform_type* NonResGalvoMoveBetweenPoints (NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay)
 {
 	double 			maxSlope;			// in [V/ms]
-	double 			amplitude			= fabs(startVoltage - endVoltage);;
+	double 			amplitude			= fabs(startVoltage - endVoltage);
 	double 			min;
 	double 			max;
 	int    			minIdx;
@@ -3592,6 +3596,98 @@ Error:
 	
 	OKfree(waveformData);
 	OKfree(secondDerivatives);
+	discard_Waveform_type(&waveform);
+	
+	return NULL;
+}
+
+// Estimates from the galvo calibration data, the time it takes the galvo to jump and settle in [ms] given a jump amplitude in [V].
+// If estimation is successful, the function return 0 and negative values otherwise.
+static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplitude, double* jumpTime)
+{
+#define NonResGalvoPointJumpTime_Err_JumpAmplitudeOutOfRange	-1
+	
+	int				error				= 0;
+	double			halfSwitchTime		= 0;
+	double 			min					= 0;
+	double 			max					= 0;
+	int    			minIdx				= 0;
+	int    			maxIdx				= 0;
+	double* 		secondDerivatives	= NULL;
+	
+	// init
+	*jumpTime = 0;
+	
+	// check if jump amplitude is within calibration range   
+	errChk( MaxMin1D(cal->switchTimes->stepSize, cal->switchTimes->n, &max, &maxIdx, &min, &minIdx) );
+	if ((jumpAmplitude < min) || (jumpAmplitude > max)) 
+		return NonResGalvoPointJumpTime_Err_JumpAmplitudeOutOfRange;
+	
+	nullChk( secondDerivatives = malloc(cal->switchTimes->n * sizeof(double)) );
+	
+	// interpolate half-switch times vs. amplitude measurements
+	errChk( Spline(cal->switchTimes->stepSize, cal->switchTimes->halfSwitch, cal->switchTimes->n, 0, 0, secondDerivatives) );
+	errChk( SpInterp(cal->switchTimes->stepSize, cal->switchTimes->halfSwitch, secondDerivatives,  cal->switchTimes->n, jumpAmplitude, &halfSwitchTime) );
+	OKfree(secondDerivatives);
+	
+	*jumpTime = 2 * halfSwitchTime;  // total time for galvo to settle
+	
+	return 0;
+	
+Error:
+	
+	OKfree(secondDerivatives);
+	
+	return error;
+}
+
+/* 
+Generates a step waveform with a given initial delay, and end delay that is added to a settling delay that is determined by the galvo calibration data.
+
+		  initial delay	   settling  (determined by 2 x half switch time from calibration data)
+	   :<-------------->:<--------->:
+	   :				:			:		  :
+	   v				v			:  end delay:
+startV _________________			:<----------->:
+		  				|			:		  	  :
+		  				| 			:		      :
+		  				| 			:		  	  :
+		  				|			v		  	  v
+		  				|__________________________ endV 
+				     
+*/
+// sampleRate in [Hz], startVoltage and endVoltage in [V], startDelay and endDelay in [s]
+static Waveform_type* NonResGalvoJumpBetweenPoints (NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay)
+{
+	int				error				= 0;
+	double 			amplitude			= fabs(startVoltage - endVoltage);
+	double			switchTime			= 0;   	// Time required for the galvo to reach 50% between startVoltage to endVoltage in [ms].
+	size_t 			nElemJump			= 0;	// Number of galvo samples required for the galvo to jump and settle when switching from startVoltage to endVoltage.
+	size_t			nElemStartDelay		= 0;
+	size_t			nElemEndDelay		= 0;
+	double*			waveformData		= NULL;
+	Waveform_type* 	waveform			= NULL; 
+	
+	errChk( NonResGalvoPointJumpTime(cal, amplitude, &switchTime) );
+	
+	nElemJump 			= (size_t) ceil(sampleRate * switchTime * 1e-3);
+	nElemStartDelay		= (size_t) floor(sampleRate * startDelay);
+	nElemEndDelay		= (size_t) floor(sampleRate * endDelay);
+	
+	nullChk( waveformData = malloc ((nElemStartDelay + nElemJump + nElemEndDelay) * sizeof(double)) );
+	
+	if (nElemStartDelay)
+		Set1D(waveformData, nElemStartDelay, startVoltage);
+	
+	Set1D(waveformData + nElemStartDelay, nElemJump + nElemEndDelay, endVoltage);
+	
+	nullChk( waveform = init_Waveform_type(Waveform_Double, sampleRate, nElemStartDelay + nElemJump + nElemEndDelay, (void**)&waveformData) );  
+    
+	return waveform;
+	
+Error:
+	
+	OKfree(waveformData);
 	discard_Waveform_type(&waveform);
 	
 	return NULL;
@@ -4519,7 +4615,7 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	discard_ScanEngine_type(engine);
 }
 
-static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* detChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows, BOOL flipColumns)
+static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* detChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows)
 {
 #define init_RectRasterImgBuffer_type_Err_PixelDataTypeInvalid	-1
 	int 						error;
@@ -4556,7 +4652,10 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* de
 	buffer->nTmpPixels				= 0;
 	buffer->nSkipPixels				= 0;			// calculated once scan signals are calculated
 	buffer->flipRow					= flipRows;
-	buffer->flipColumns				= flipColumns;
+	buffer->skipRows				= FALSE;
+	buffer->skipFlybackRows			= 0;			// calculated once scan signals are calculated
+	buffer->rowsSkipped				= 0;
+	buffer->pixelDataType			= 0;
 	buffer->detChan					= detChan;
 	
 	nullChk( buffer->imagePixels 	= malloc(imgWidth * imgHeight * pixelSizeBytes) );
@@ -5226,16 +5325,23 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	char*						errMsg										= NULL;
 	int							error 										= 0;
 	
+	uInt32 						nDeadTimePixels								= 0;	// Number of pixels at the beginning and end of each line where the motion of the galvo is not linear.
+	uInt32						nPixelsPerLine								= 0;	// Total number of pixels per line including dead time pixels for galvo turn-around.
+	uInt32						nGalvoSamplesPerLine						= 0;	// Total number of analog samples for the galvo command signal per line.
+	double						fastAxisCommandAmplitude					= 0;	// Fast axis signal amplitude in [V].
+	double						lineDuration								= 0;	// Fast axis line duration in [us] (incl. dead-time pixels at the beginning and end of each line).
+	
+	double						slowAxisAmplitude							= 0;	// Slow axis signal amplitude in [V].
+	double						slowAxisStartVoltage						= 0;	// Slow axis staircase start voltage in [V].
+	double						slowAxisStepVoltage							= 0;	// Slow axis staircase step voltage in [V]. 
+	
+	double						flybackTime									= 0;	// Slow-axis fly back time in [ms] after completing a framescan.
+	uInt32						nFastAxisFlybackLines						= 0;
+
+	
 //============================================================================================================================================================================================
 //                          					   	Preparation of Scan Waveforms for X-axis Galvo (fast axis, triangular waveform scan)
 //============================================================================================================================================================================================
-	
-	
-	uInt32 			nDeadTimePixels;						// Number of pixels at the beginning and end of each line where the motion of the galvo is not linear.
-	uInt32			nPixelsPerLine;							// Total number of pixels per line including dead time pixels for galvo turn-around.
-	uInt32			nGalvoSamplesPerLine;					// Total number of analog samples for the galvo command signal per line.
-	double			fastAxisCommandAmplitude;				// Fast axis signal amplitude in [V].
-
 	
 	// number of line scan dead time pixels
 	// note: deadTime in [ms] and pixelDwellTime in [us]
@@ -5244,8 +5350,22 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// number of pixels per line
 	nPixelsPerLine = scanEngine->scanSettings.width + 2 * nDeadTimePixels;
 	
+	// line duration in [us]
+	lineDuration = nPixelsPerLine * scanEngine->scanSettings.pixelDwellTime;
+	
+	// calculate number of fast axis lines to skip at the end of each image until the slow axis flies back to the start of the image
+	slowAxisStepVoltage 	= scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement; 
+	slowAxisAmplitude 		= (scanEngine->scanSettings.height - 1) * slowAxisStepVoltage;
+	slowAxisStartVoltage 	= scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement - slowAxisAmplitude/2;
+	
+	NonResGalvoPointJumpTime((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal, slowAxisAmplitude, &flybackTime);  
+	nFastAxisFlybackLines 	= (uInt32) ceil(flybackTime*1e3/lineDuration);
+	// store this value in the image buffers
+	for (size_t i = 0; i < scanEngine->nImgBuffers; i++)
+		scanEngine->imgBuffers[i]->skipFlybackRows = nFastAxisFlybackLines;
+	
 	// number of galvo samples per line
-	nGalvoSamplesPerLine = RoundRealToNearestInteger(nPixelsPerLine * scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->galvoSamplingRate);
+	nGalvoSamplesPerLine = RoundRealToNearestInteger(lineDuration * 1e-6 * scanEngine->galvoSamplingRate);
 	
 	// generate bidirectional raster scan signal (2 line scans, 1 triangle waveform period)
 	fastAxisCommandAmplitude = nPixelsPerLine * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->sampleDisplacement;
@@ -5262,7 +5382,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// generate fast axis fly-in waveform from parked position
 	nullChk( fastAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal, scanEngine->galvoSamplingRate, 
-	((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked, 0, - fastAxisCommandAmplitude/2 + fastAxisCommandOffset, 0) );
+	((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked, - fastAxisCommandAmplitude/2 + fastAxisCommandOffset, 0, 0) );
 	
 	size_t		nGalvoSamplesFastAxisMoveFromParkedWaveform = GetWaveformNumSamples(fastAxisMoveFromParkedWaveform);
 	
@@ -5270,18 +5390,11 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 //                             						Preparation of Scan Waveforms for Y-axis Galvo (slow axis, staircase waveform scan)
 //============================================================================================================================================================================================
 	
-	double				slowAxisAmplitude;						// Slow axis signal amplitude in [V].
-	double				slowAxisStartVoltage;					// Slow axis staircase start voltage in [V].
-	double				slowAxisStepVoltage;					// Slow axis staircase step voltage in [V]. 
-
 	// generate staircase signal
-	slowAxisStepVoltage  	= scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement; 
-	slowAxisAmplitude 		= (scanEngine->scanSettings.height - 1) * slowAxisStepVoltage;
-	slowAxisStartVoltage 	= scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement - slowAxisAmplitude/2;
-	
+	/*
 	if (scanEngine->scanSettings.height > 1)
 		// generate staircase signal
-		nullChk( slowAxisScan_Waveform = StaircaseWaveform(TRUE, scanEngine->galvoSamplingRate, nGalvoSamplesPerLine, scanEngine->scanSettings.height, slowAxisStartVoltage, slowAxisStepVoltage) );  
+		nullChk( slowAxisScan_Waveform = StaircaseWaveform(scanEngine->galvoSamplingRate, nGalvoSamplesPerLine, scanEngine->scanSettings.height, nGalvoSamplesPerLine * nFastAxisFlybackLines, slowAxisStartVoltage, slowAxisStepVoltage) );  
 	else {
 		// generate constant signal (no movement)
 		double* slowAxisSignal = NULL;
@@ -5289,13 +5402,16 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		Set1D(slowAxisSignal, 2*nGalvoSamplesPerLine, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement);
 		slowAxisScan_Waveform = init_Waveform_type(Waveform_Double, scanEngine->galvoSamplingRate, 2*nGalvoSamplesPerLine, (void**)&slowAxisSignal);
 	}
+	*/
+	
+	// generate staircase signal
+	nullChk( slowAxisScan_Waveform = StaircaseWaveform(scanEngine->galvoSamplingRate, nGalvoSamplesPerLine, scanEngine->scanSettings.height, nGalvoSamplesPerLine * nFastAxisFlybackLines, slowAxisStartVoltage, slowAxisStepVoltage) );  
 	
 	// generate slow axis fly-in waveform from parked position
 	nullChk( slowAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal, scanEngine->galvoSamplingRate, 
-	((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked, 0, slowAxisStartVoltage, 0) ); 
+	((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked, slowAxisStartVoltage, 0, 0) ); 
 	
 	size_t		nGalvoSamplesSlowAxisScanWaveform 			= GetWaveformNumSamples(slowAxisScan_Waveform);    
-	size_t		nGalvoSamplesSlowAxisMoveFromParkedWaveform = GetWaveformNumSamples(slowAxisMoveFromParkedWaveform);    
 	
 //============================================================================================================================================================================================
 //                             						Compensate delay between X and Y galvo response and fly-in from parked position
@@ -5374,7 +5490,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// fastAxisScan_Waveform has two line scans (one triangle wave period)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
 		// finite mode
-		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, scanEngine->scanSettings.height/2.0 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) ); 
+		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, (scanEngine->scanSettings.height + nFastAxisFlybackLines)/2.0 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) ); 
 	else 
 		// for continuous mode
 		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, 0) ); 
@@ -5400,7 +5516,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
 		// move from parked waveform + scan waveform + one sample to return to parked position
 		*nGalvoSamplesPtr = (uInt64)((nGalvoSamplesFastAxisCompensation + nGalvoSamplesFastAxisMoveFromParkedWaveform) + 
-					   (scanEngine->scanSettings.height/2.0 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) * 2 * nGalvoSamplesPerLine + 1);
+					   (scanEngine->scanSettings.height+nFastAxisFlybackLines) * nGalvoSamplesPerLine * GetTaskControlIterations(scanEngine->baseClass.taskControl) + 1);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
@@ -5417,10 +5533,10 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisMoveFromParked_RepWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
 	
-	// slowAxisScan_Waveform has a symmetric staircase waveform (equivalent to two scan frames)
+	// repeat staircase waveform
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
 		// finite mode
-		nullChk( slowAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&slowAxisScan_Waveform, 0.5 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) ); 
+		nullChk( slowAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&slowAxisScan_Waveform, GetTaskControlIterations(scanEngine->baseClass.taskControl)) ); 
 	else 
 		// for continuous mode
 		nullChk( slowAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&slowAxisScan_Waveform, 0) ); 
@@ -5445,8 +5561,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
 		nGalvoSamplesPtr = malloc(sizeof(uInt64));
 		// move from parked waveform + scan waveform + one sample to return to parked position
-		*nGalvoSamplesPtr = (uInt64) ((nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParkedWaveform) + 
-					    GetTaskControlIterations(scanEngine->baseClass.taskControl) * 0.5 * nGalvoSamplesSlowAxisScanWaveform + 1);
+		*nGalvoSamplesPtr = (uInt64) ((nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParked) + 
+					    GetTaskControlIterations(scanEngine->baseClass.taskControl) * nGalvoSamplesSlowAxisScanWaveform + 1);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
@@ -5461,7 +5577,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		// finite mode
 		//--------------------
 		// total number of pixels
-		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)scanEngine->scanSettings.height * (uInt64)GetTaskControlIterations(scanEngine->baseClass.taskControl); 
+		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)(scanEngine->scanSettings.height + nFastAxisFlybackLines) * (uInt64)GetTaskControlIterations(scanEngine->baseClass.taskControl); 
 		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32)(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
 		
 		// send n pixels
@@ -5575,7 +5691,6 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	int							error				= 0;
 	char*						errMsg				= NULL;
 	DataPacket_type*			pixelPacket			= NULL;
-	DLDataTypes					pixelDataType		= 0; 		// Data type of incoming pixel waveform
 	ImageTypes					imageType			= 0;		// Data type of assembled image
 	Waveform_type*				pixelWaveform		= NULL;   	// Incoming pixel waveform.
 	void*						pixelData			= NULL;		// Array of received pixels from a single pixel waveform data packet.
@@ -5591,202 +5706,112 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	
 	do {
 		
-		//----------------------------------------------------------------------
-		// Receive pixel data
-		//----------------------------------------------------------------------
-		
-		errChk( GetDataPacket(imgBuffer->detChan->detVChan, &pixelPacket, &errMsg) );
-		
-		//----------------------------------------------------------------------
-		// Process NULL packet
-		//----------------------------------------------------------------------
-		
-		// TEMPORARY for one channel only
-		// end task controller iteration
-		if (!pixelPacket) {
-			//TaskControlEvent(rectRaster->baseClass.taskControl, TASK_EVENT_STOP, NULL, NULL);
-			//TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
-			break;
-		}
-			
-		
-		//----------------------------------------------------------------------
-		// Add data to the buffer
-		//----------------------------------------------------------------------
-		
-		// get pointer to pixel array
-		pixelWaveform = *(Waveform_type**) GetDataPacketPtrToData(pixelPacket, &pixelDataType);
-		pixelData = *(void**) GetWaveformPtrToData(pixelWaveform, &nPixels);
-			
-		// skip initial pixels if needed. Here pixelDataIdx is the index of the pixel within the received
-		// pixelData from which data must be processed up to nPixels
-		if (imgBuffer->nSkipPixels)
-			if (nPixels > imgBuffer->nSkipPixels) {
-				pixelDataIdx = imgBuffer->nSkipPixels; 
-				imgBuffer->nSkipPixels = 0;
-			} else {
-				imgBuffer->nSkipPixels -= nPixels;
-				ReleaseDataPacket(&pixelPacket);
-				continue; // get another pixel data packet
-			}
-		else 
-			pixelDataIdx = 0;
-			
-		// add pixels to the temporary buffer depending on the image data type
-		switch (pixelDataType) {
-			
-			case DL_Waveform_UChar:
-				
-				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned char)) );
-				memcpy((unsigned char*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned char*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned char));
-				break;
-				
-			case DL_Waveform_UShort:
-				
-				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned short)) );
-				memcpy((unsigned short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned short));
-				break;
-				
-			case DL_Waveform_Short:
-				
-				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(short)) );
-				memcpy((short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(short));
-				break;
-				
-			case DL_Waveform_Float:
-					
-				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(float)) );
-				memcpy((float*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (float*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(float));
-				break;
-				
-			default:
-				
-				error = NonResRectRasterScan_BuildImage_Err_WrongPixelDataType;
-				errMsg = StrDup("Wrong pixel data type");
-				goto Error;
-		}
-		
-		ReleaseDataPacket(&pixelPacket);
-			
-		// update number of pixels in temporary buffer
-		imgBuffer->nTmpPixels += nPixels - pixelDataIdx;
-		
 		// if there are enough pixels to construct a row take them out of the buffer
 		while (imgBuffer->nTmpPixels >= rectRaster->scanSettings.width + 2 * nDeadTimePixels) {
+			
+			if (!imgBuffer->skipRows) {
 				
-			switch (pixelDataType) {   
+				switch (imgBuffer->pixelDataType) {   
 					
-				case DL_Waveform_UChar:
+					case DL_Waveform_UChar:
 				
-					// copy pixels depending on their direction
-					if (imgBuffer->flipColumns) { 
-						if (imgBuffer->flipRow)
-							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
-								*((unsigned char*)imgBuffer->imagePixels + (rectRaster->scanSettings.width * rectRaster->scanSettings.height - imgBuffer->nImagePixels - rectRaster->scanSettings.width) + i) = *((unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
-						else
-							memcpy((unsigned char*)imgBuffer->imagePixels + (rectRaster->scanSettings.width * rectRaster->scanSettings.height - imgBuffer->nImagePixels - rectRaster->scanSettings.width), (unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(unsigned char));
-							
-					} else { 
 						if (imgBuffer->flipRow)
 							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
 								*((unsigned char*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
 						else 
 							memcpy((unsigned char*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(unsigned char));
-					}
-					 
-						
-					// move contents of the buffer to its beginning
-					memmove((unsigned char*)imgBuffer->tmpPixels, (unsigned char*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(unsigned char));
-					break;
 					
-				case DL_Waveform_UShort:
+						break;
+					
+					case DL_Waveform_UShort:
 						
-					// copy pixels depending on their direction
-					if (imgBuffer->flipColumns) {
-						if (imgBuffer->flipRow)
-							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
-								*((unsigned short*)imgBuffer->imagePixels + (rectRaster->scanSettings.width * rectRaster->scanSettings.height - 
-								imgBuffer->nImagePixels - rectRaster->scanSettings.width) + i) = *((unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
-						else 
-							memcpy((unsigned short*)imgBuffer->imagePixels + (rectRaster->scanSettings.width * rectRaster->scanSettings.height - imgBuffer->nImagePixels - rectRaster->scanSettings.width), (unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(unsigned short));
-						
-					} else {
 						if (imgBuffer->flipRow)
 							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
 								*((unsigned short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
 						else
 							memcpy((unsigned short*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(unsigned short));
-					}
+					
+						break;
 						
-					// move contents of the buffer to its beginning
-					memmove((unsigned short*)imgBuffer->tmpPixels, (unsigned short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(unsigned short));
-					break;
+					case DL_Waveform_Short:
 						
-				case DL_Waveform_Short:
-						
-					// copy pixels depending on their direction
-					if (imgBuffer->flipColumns) {
 						if (imgBuffer->flipRow)
-							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
-								*((short*)imgBuffer->imagePixels + (rectRaster->scanSettings.width * rectRaster->scanSettings.height - imgBuffer->nImagePixels - rectRaster->scanSettings.width) + i) = *((short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
-						else 
-							memcpy((short*)imgBuffer->imagePixels + (rectRaster->scanSettings.width * rectRaster->scanSettings.height - imgBuffer->nImagePixels - rectRaster->scanSettings.width), (short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(short));
-						
-					} else {
-					    if (imgBuffer->flipRow)
 							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
 								*((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
 						else
 							memcpy((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(short));
-					}
-							
-						
-					// move contents of the buffer to its beginning
-					memmove((short*)imgBuffer->tmpPixels, (short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(short));
-					break;
-						
-				case DL_Waveform_Float:
 					
-					// copy pixels depending on their direction
-					if (imgBuffer->flipColumns) {
-						if (imgBuffer->flipRow)
-							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
-								*((float*)imgBuffer->imagePixels + (rectRaster->scanSettings.width * rectRaster->scanSettings.height - imgBuffer->nImagePixels - rectRaster->scanSettings.width) + i) = *((float*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
-						else 
-							memcpy((float*)imgBuffer->imagePixels + (rectRaster->scanSettings.width * rectRaster->scanSettings.height - imgBuffer->nImagePixels - rectRaster->scanSettings.width), (float*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(float));
+						break;
 						
-					} else {
+					case DL_Waveform_Float:
+					
 						if (imgBuffer->flipRow)
 							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
 								*((float*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((float*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
 						else
 							memcpy((float*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (float*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(float));
-					}
+					
+						break;
+					
+					default:
+				
+					error = NonResRectRasterScan_BuildImage_Err_WrongPixelDataType;
+					errMsg = StrDup("Wrong pixel data type");
+					goto Error;
 						
-					// move contents of the buffer to its beginning
+				}
+			
+				// update number of pixels in the image
+				imgBuffer->nImagePixels	+= rectRaster->scanSettings.width; 
+				// increment number of rows
+				imgBuffer->nAssembledRows++;
+				
+			} else {
+				
+				imgBuffer->rowsSkipped++;
+				if (imgBuffer->rowsSkipped == imgBuffer->skipFlybackRows)
+					imgBuffer->skipRows = FALSE;
+			}
+			
+			// move contents of the buffer to its beginning  
+			switch (imgBuffer->pixelDataType) {
+					
+				case DL_Waveform_UChar:
+					
+					memmove((unsigned char*)imgBuffer->tmpPixels, (unsigned char*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(unsigned char));
+					break;
+					
+				case DL_Waveform_UShort:
+					
+					memmove((unsigned short*)imgBuffer->tmpPixels, (unsigned short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(unsigned short));
+					break;
+					
+				case DL_Waveform_Short:
+					
+					memmove((short*)imgBuffer->tmpPixels, (short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(short));
+					break;
+					
+				case DL_Waveform_Float:
+					
 					memmove((float*)imgBuffer->tmpPixels, (float*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(float));
 					break;
 					
 				default:
 				
-				error = NonResRectRasterScan_BuildImage_Err_WrongPixelDataType;
-				errMsg = StrDup("Wrong pixel data type");
-				goto Error;
-						
+					error = NonResRectRasterScan_BuildImage_Err_WrongPixelDataType;
+					errMsg = StrDup("Wrong pixel data type");
+					goto Error;
 			}
 				
 			// update number of pixels in the buffers
 			imgBuffer->nTmpPixels  	-= rectRaster->scanSettings.width + 2 * nDeadTimePixels;
-			imgBuffer->nImagePixels	+= rectRaster->scanSettings.width;
-			// increment number of rows
-			imgBuffer->nAssembledRows++;
 			// reverse pixel direction of every second row
 			imgBuffer->flipRow = !imgBuffer->flipRow;
 				
 			if (imgBuffer->nAssembledRows == rectRaster->scanSettings.height) {
 				
 			
-				switch (pixelDataType) {
+				switch (imgBuffer->pixelDataType) {
 				
 					case DL_Waveform_UChar:
 						imageType = Image_UChar;  
@@ -5827,7 +5852,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				  /*
 					//test lex 
 				//create image packet
-				switch (pixelDataType) {
+				switch (imgBuffer->pixelDataType) {
 					case DL_Waveform_UChar:
 						imaqImgType 		= IMAQ_IMAGE_U8;
 					break;
@@ -5864,15 +5889,97 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// reset number of elements in pixdata buffer (contents is not cleared!) new frame data will overwrite the old frame data in the buffer
 				// NOTE & WARNING: data in the imgBuffer->tmpPixels is kept since multiple images can follow and imgBuffer->tmpPixels may contain data from the next image
 				imgBuffer->nImagePixels = 0;
-				// reset column counter
+				// reset row counter
 				imgBuffer->nAssembledRows = 0;
-				// reverse columns of every second image
-				imgBuffer->flipColumns = !imgBuffer->flipColumns;
+				// start skipping flyback rows
+				imgBuffer->skipRows = TRUE;
+				imgBuffer->rowsSkipped = 0;
+				
 				return 0;
 			}
 			
 			
 		} // end of while loop, all available lines in tmpdata have been processed into pixdata
+		
+		//---------------------------------------------------------------------------
+		// Receive pixel data 
+		//---------------------------------------------------------------------------
+		
+		errChk( GetDataPacket(imgBuffer->detChan->detVChan, &pixelPacket, &errMsg) );
+		
+		//----------------------------------------------------------------------
+		// Process NULL packet
+		//----------------------------------------------------------------------
+		
+		// TEMPORARY for one channel only
+		// end task controller iteration
+		if (!pixelPacket) {
+			//TaskControlEvent(rectRaster->baseClass.taskControl, TASK_EVENT_STOP, NULL, NULL);
+			//TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
+			break;
+		}
+			
+		
+		//----------------------------------------------------------------------
+		// Add data to the buffer
+		//----------------------------------------------------------------------
+		
+		// get pointer to pixel array
+		pixelWaveform = *(Waveform_type**) GetDataPacketPtrToData(pixelPacket, &imgBuffer->pixelDataType);
+		pixelData = *(void**) GetWaveformPtrToData(pixelWaveform, &nPixels);
+			
+		// skip initial pixels if needed. Here pixelDataIdx is the index of the pixel within the received
+		// pixelData from which data must be processed up to nPixels
+		if (imgBuffer->nSkipPixels)
+			if (nPixels > imgBuffer->nSkipPixels) {
+				pixelDataIdx = imgBuffer->nSkipPixels; 
+				imgBuffer->nSkipPixels = 0;
+			} else {
+				imgBuffer->nSkipPixels -= nPixels;
+				ReleaseDataPacket(&pixelPacket);
+				continue; // get another pixel data packet
+			}
+		else 
+			pixelDataIdx = 0;
+			
+		// add pixels to the temporary buffer depending on the image data type
+		switch (imgBuffer->pixelDataType) {
+			
+			case DL_Waveform_UChar:
+				
+				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned char)) );
+				memcpy((unsigned char*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned char*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned char));
+				break;
+				
+			case DL_Waveform_UShort:
+				
+				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned short)) );
+				memcpy((unsigned short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned short));
+				break;
+				
+			case DL_Waveform_Short:
+				
+				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(short)) );
+				memcpy((short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(short));
+				break;
+				
+			case DL_Waveform_Float:
+					
+				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(float)) );
+				memcpy((float*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (float*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(float));
+				break;
+				
+			default:
+				
+				error = NonResRectRasterScan_BuildImage_Err_WrongPixelDataType;
+				errMsg = StrDup("Wrong pixel data type");
+				goto Error;
+		}
+		
+		ReleaseDataPacket(&pixelPacket);
+			
+		// update number of pixels in temporary buffer
+		imgBuffer->nTmpPixels += nPixels - pixelDataIdx;
 		
 	} while (TRUE);
 			
@@ -6039,42 +6146,37 @@ static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void 
 }
 
 /*
-Generates a staircase waveform that either goes up or up and down like this:
-        	 __			 ____
-		  __|  		  __|    |__
-	   __|		   __|          |__
-	__|			__|                |__
+Generates a staircase waveform like this:
+
+ 	      start				              end
+ 		   :   endV -->     _5_		       :	
+ 		   :            _4_|   |   delay   : 
+  		   :        _3_|	   |<--------->:
+    	   v    _2_|	       |		   :
+ startV --> _1_|		       |___________v
 
 sampleRate 			= Sampling rate in [Hz].
 nSamplesPerStep		= Number of samples per staircase step.
-nSteps				= Number of steps in the staircase.
+nSteps				= Number of steps in the staircase, including the first step at startV. If nStepts is 0, then only the delay samples at startV are included
 startVoltage		= Start voltage at the bottom of the staircase [V].
 stepVoltage    		= Increase in voltage with each step in [V], except for the symmetric staircase where at the peak are two consecutive lines at the same voltage.
+delaySamples		= Number of samples to be added after the last sample from the staircase that return the voltage to startV.
 */
-static Waveform_type* StaircaseWaveform (BOOL symmetricStaircase, double sampleRate, size_t nSamplesPerStep, size_t nSteps, double startVoltage, double stepVoltage)
+static Waveform_type* StaircaseWaveform (double sampleRate, size_t nSamplesPerStep, size_t nSteps, size_t delaySamples, double startVoltage, double stepVoltage)
 {
-	double*				waveformData	= NULL;
-	size_t				nSamples		= 0;
-    
-	if (symmetricStaircase)
-		nSamples = 2 * nSteps * nSamplesPerStep; 
-	else 
-		nSamples = nSteps * nSamplesPerStep;    
+	double*		waveformData	= NULL;
+	size_t		nSamples		= nSteps * nSamplesPerStep + delaySamples;    
 		
     waveformData = malloc(nSamples * sizeof(double));
     if (!waveformData) goto Error;
 
-    // build first half of the staircase
+    // build staircase
     for (size_t i = 0; i < nSteps; i++)
         for (size_t j = 0; j < nSamplesPerStep; j++)
                 waveformData[i*nSamplesPerStep+j] = startVoltage + stepVoltage*i;
 	
-	
-    // if neccessary, build second half which is the mirror image of the first half
-	if (symmetricStaircase)
-    	for (size_t i = nSteps * nSamplesPerStep; i < 2 * nSteps * nSamplesPerStep; i++)
-        	waveformData[i] = waveformData[2 * nSteps * nSamplesPerStep - i - 1];
-	
+	Set1D(waveformData + nSteps * nSamplesPerStep, delaySamples, startVoltage); 
+    
     return init_Waveform_type(Waveform_Double, sampleRate, nSamples, (void**)&waveformData);
 	
 Error:
@@ -7456,7 +7558,7 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 				engine->nImgBuffers++;
 				// allocate memory for image assembly
 				engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
-				engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->scanSettings.height, engine->scanSettings.width, pixelDataType, FALSE, FALSE); 
+				engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->scanSettings.height, engine->scanSettings.width, pixelDataType, FALSE); 
 			}
 			
 			break;

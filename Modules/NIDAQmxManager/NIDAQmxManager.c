@@ -9624,6 +9624,8 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	float64*			AIOffsetReadBuffer		= AIReadBuffer + chIdx * nRead;
 	uInt32				i, j, k;
 	
+	/*
+	
 	switch(GetSourceVChanDataType(AIChSet->srcVChan)) {
 				
 		case DL_Waveform_Double:
@@ -9800,7 +9802,18 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	//-------------------------------
 	
 	errChk( SendDataPacket(AIChSet->srcVChan, &dataPacket, 0, &errMsg) );
-		
+	
+	*/
+	
+	// just to test if the integration process is causing problems
+	nullChk( waveformData_float = malloc(nRead * sizeof(float)) );
+	for (size_t i = 0; i < nRead; i++)
+		waveformData_float[i] = (float) AIOffsetReadBuffer[i];
+	
+	nullChk( waveform = init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nRead, (void**)&waveformData_float) );
+	nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+	errChk( SendDataPacket(AIChSet->srcVChan, &dataPacket, 0, &errMsg) );		
+			
 	return 0;
 	
 Error:

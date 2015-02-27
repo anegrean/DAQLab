@@ -751,12 +751,14 @@ static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], Disc
 {
 	ROI->ROIType 		= ROIType;
 	ROI->ROIName		= StrDup(ROIName);
+	ROI->active			= TRUE;
 	
 	// init color to opaque black
 	ROI->rgba.R			= 0;
 	ROI->rgba.G			= 0;
 	ROI->rgba.B			= 0;
 	ROI->rgba.A			= 0;
+	
 	
 	ROI->discardFptr	= discardFptr;
 }

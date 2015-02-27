@@ -420,11 +420,6 @@ typedef struct {
 } RectRasterScanSet_type;
 
 typedef struct {
-	Point_type*					point;					// Point to jump to.
-	BOOL						active;					// If TRUE, then jump to this point, otherwise skip it.
-} PointJump_type;
-
-typedef struct {
 	ScanEngine_type				baseClass;				// Base class, must be first structure member.
 	
 	//----------------
@@ -439,7 +434,11 @@ typedef struct {
 	// Point Jump Settings								// For jumping as fast as possible between a series of points and staying at each point a given amount of time. 
 	//-----------------------------------
 	double						pointParkedTime;		// Time during which the beam remains stationary at a given point
-	ListType					pointJumps;				// List of points to jump in-between of PointJump_type. The order of point jumping is determined by the order of the elements in the list.				
+	double						jumpStartDelay;			// Delay from the start point of galvo movement from the parked position in [ms] to the first point ROI.
+	double						pointJumpPeriod;		// Period in [ms] between repeating a cycle of jumps between a series of points.
+	uInt32						pointJumpCycles;		// Number of times to repeat a jump cycle between a series of point ROIs.
+	
+	ListType					pointJumps;				// List of points to jump in-between of Point_type*. The order of point jumping is determined by the order of the elements in the list.				
 	
 	//-----------------------------------
 	// VChans											// Additional VChans specific to this child class
@@ -502,356 +501,365 @@ struct LaserScanning {
 //-------------------
 // Detection channels
 //-------------------
-static DetChan_type*				init_DetChan_type								(ScanEngine_type* scanEngine, char VChanName[]);
+static DetChan_type*				init_DetChan_type									(ScanEngine_type* scanEngine, char VChanName[]);
 
-static void							discard_DetChan_type							(DetChan_type** detChanPtr);
+static void							discard_DetChan_type								(DetChan_type** detChanPtr);
 
 //----------------------
 // Scan axis calibration
 //----------------------
 	// generic active scan axis calibration data 
 
-static ActiveScanAxisCal_type*		initalloc_ActiveScanAxisCal_type				(ActiveScanAxisCal_type* cal);
+static ActiveScanAxisCal_type*		initalloc_ActiveScanAxisCal_type					(ActiveScanAxisCal_type* cal);
 
-static void							discard_ActiveScanAxisCal_type					(ActiveScanAxisCal_type** cal);
+static void							discard_ActiveScanAxisCal_type						(ActiveScanAxisCal_type** cal);
 
 	// generic scan axis calibration data
-static void							discard_ScanAxisCal_type						(ScanAxisCal_type** cal);
+static void							discard_ScanAxisCal_type							(ScanAxisCal_type** cal);
 
-void CVICALLBACK 					ScanAxisCalibrationMenu_CB						(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+void CVICALLBACK 					ScanAxisCalibrationMenu_CB							(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 
-static void							UpdateScanEngineCalibrations					(ScanEngine_type* scanEngine);
+static void							UpdateScanEngineCalibrations						(ScanEngine_type* scanEngine);
 
-static void 						UpdateAvailableCalibrations 					(LaserScanning_type* lsModule); 
+static void 						UpdateAvailableCalibrations 						(LaserScanning_type* lsModule); 
 
-static int CVICALLBACK 				ManageScanAxisCalib_CB							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				ManageScanAxisCalib_CB								(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int CVICALLBACK 				NewScanAxisCalib_CB								(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NewScanAxisCalib_CB									(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 	// galvo response analysis functions
 
-static int 							FindSlope										(double* signal, size_t nsamples, double samplingRate, double signalStdDev, size_t nRep, double sloperelerr, double* maxslope); 
-static int 							MeasureLag										(double* signal1, double* signal2, int nelem); 
-static int 							GetStepTimes									(double* signal, int nsamples, double lowlevel, double highlevel, double threshold, int* lowidx, int* highidx, int* stepsamples);
+static int 							FindSlope											(double* signal, size_t nsamples, double samplingRate, double signalStdDev, size_t nRep, double sloperelerr, double* maxslope); 
+static int 							MeasureLag											(double* signal1, double* signal2, int nelem); 
+static int 							GetStepTimes										(double* signal, int nsamples, double lowlevel, double highlevel, double threshold, int* lowidx, int* highidx, int* stepsamples);
 
 	//-----------------------------------------
 	// Non-resonant galvo axis calibration data
 	//-----------------------------------------
 
-static ActiveNonResGalvoCal_type* 	init_ActiveNonResGalvoCal_type 					(LaserScanning_type* lsModule, char calName[], char commandVChanName[], char commandNSamplesVChanName[], char positionVChanName[]);
+static ActiveNonResGalvoCal_type* 	init_ActiveNonResGalvoCal_type 						(LaserScanning_type* lsModule, char calName[], char commandVChanName[], char commandNSamplesVChanName[], char positionVChanName[]);
 
-static void							discard_ActiveNonResGalvoCal_type				(ActiveScanAxisCal_type** cal);
+static void							discard_ActiveNonResGalvoCal_type					(ActiveScanAxisCal_type** cal);
 
-static NonResGalvoCal_type*			init_NonResGalvoCal_type						(char calName[], LaserScanning_type* lsModule, double commandVMax, double slope, double offset, double posStdDev, 
-																			 		 double lag, SwitchTimes_type* switchTimes, MaxSlopes_type* maxSlopes,
-																			 		 TriangleCal_type* triangleCal, double resolution, double minStepSize, double parked, double mechanicalResponse);
+static NonResGalvoCal_type*			init_NonResGalvoCal_type							(char calName[], LaserScanning_type* lsModule, double commandVMax, double slope, double offset, double posStdDev, 
+																			 		 	double lag, SwitchTimes_type* switchTimes, MaxSlopes_type* maxSlopes,
+																			 		 	TriangleCal_type* triangleCal, double resolution, double minStepSize, double parked, double mechanicalResponse);
 
-static void							discard_NonResGalvoCal_type						(NonResGalvoCal_type** cal);
+static void							discard_NonResGalvoCal_type							(NonResGalvoCal_type** cal);
 
 	// updates optical settings
-void								NonResGalvoCal_UpdateOptics						(NonResGalvoCal_type* cal);
+void								NonResGalvoCal_UpdateOptics							(NonResGalvoCal_type* cal);
 
 	// validation for new scan axis calibration name
-static BOOL 						ValidateNewScanAxisCal							(char inputStr[], void* dataPtr); 
+static BOOL 						ValidateNewScanAxisCal								(char inputStr[], void* dataPtr); 
 	// switch times data
-static SwitchTimes_type* 			init_SwitchTimes_type							(void);
+static SwitchTimes_type* 			init_SwitchTimes_type								(void);
 
-static void 						discard_SwitchTimes_type 						(SwitchTimes_type** a);
+static void 						discard_SwitchTimes_type 							(SwitchTimes_type** a);
 
 	// copies switch times data
-static SwitchTimes_type*			copy_SwitchTimes_type							(SwitchTimes_type* switchTimes);
+static SwitchTimes_type*			copy_SwitchTimes_type								(SwitchTimes_type* switchTimes);
 
 	// max slopes data
 
-static MaxSlopes_type* 				init_MaxSlopes_type 							(void);
+static MaxSlopes_type* 				init_MaxSlopes_type 								(void);
 
-static void 						discard_MaxSlopes_type 							(MaxSlopes_type** a);
+static void 						discard_MaxSlopes_type 								(MaxSlopes_type** a);
 	// copies max slopes data
-static MaxSlopes_type* 				copy_MaxSlopes_type 							(MaxSlopes_type* maxSlopes);
+static MaxSlopes_type* 				copy_MaxSlopes_type 								(MaxSlopes_type* maxSlopes);
 
 	// triangle wave calibration data
 
-static TriangleCal_type* 			init_TriangleCal_type							(void);
+static TriangleCal_type* 			init_TriangleCal_type								(void);
 
-static void 						discard_TriangleCal_type 						(TriangleCal_type** a);
+static void 						discard_TriangleCal_type 							(TriangleCal_type** a);
 	// copies triangle waveform calibration data
-static TriangleCal_type* 			copy_TriangleCal_type 							(TriangleCal_type* triangleCal);
+static TriangleCal_type* 			copy_TriangleCal_type 								(TriangleCal_type* triangleCal);
 	// saves non resonant galvo scan axis calibration data to XML
-static int 							SaveNonResGalvoCalToXML							(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  axisCalibrationsElement);
-static int 							LoadNonResGalvoCalFromXML 						(LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement);    
+static int 							SaveNonResGalvoCalToXML								(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  axisCalibrationsElement);
+static int 							LoadNonResGalvoCalFromXML 							(LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement);    
 
 	// command VChan
-static void							NonResGalvoCal_ComVChan_Connected				(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							NonResGalvoCal_ComVChan_Disconnected			(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							NonResGalvoCal_ComVChan_Connected					(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							NonResGalvoCal_ComVChan_Disconnected				(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// number of samples in calibration command waveform
-static void							NonResGalvoCal_ComNSamplesVChan_Connected		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							NonResGalvoCal_ComNSamplesVChan_Disconnected	(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							NonResGalvoCal_ComNSamplesVChan_Connected			(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							NonResGalvoCal_ComNSamplesVChan_Disconnected		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
 
 	// position VChan
-static void							NonResGalvoCal_PosVChan_Connected				(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							NonResGalvoCal_PosVChan_Disconnected			(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							NonResGalvoCal_PosVChan_Connected					(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							NonResGalvoCal_PosVChan_Disconnected				(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// galvo calibration
-static int CVICALLBACK 				NonResGalvoCal_MainPan_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-static int CVICALLBACK 				NonResGalvoCal_CalPan_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-static int CVICALLBACK 				NonResGalvoCal_TestPan_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResGalvoCal_MainPan_CB							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResGalvoCal_CalPan_CB							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResGalvoCal_TestPan_CB							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 	// determines maximum frequency for a triangle waveform with given amplitude, taking into account the calibration data of the galvo
-static void							MaxTriangleWaveformScan							(NonResGalvoCal_type* cal, double targetAmplitude, double* maxTriangleWaveFrequency);
+static void							MaxTriangleWaveformScan								(NonResGalvoCal_type* cal, double targetAmplitude, double* maxTriangleWaveFrequency);
 
 	// determines galvo response lag (static+residual dynamic lag) for a triangle waveform  command signal of a given frequency in [ms]
-//static double						TriangleWaveformLag								(NonResGalvoCal_type* cal, double triangleWaveFrequency);
+//static double						TriangleWaveformLag									(NonResGalvoCal_type* cal, double triangleWaveFrequency);
 
 	// Moves the galvo between two positions given by startVoltage and endVoltage in [V] given a sampleRate in [Hz] and calibration data.
 	// The command signal is a ramp such that the galvo lags behind the command signal with a constant lag
-static Waveform_type* 				NonResGalvoMoveBetweenPoints 					(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
-static int 							NonResGalvoPointJumpTime 						(NonResGalvoCal_type* cal, double jumpAmplitude, double* jumpTime);
-static Waveform_type* 				NonResGalvoJumpBetweenPoints 					(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
+static Waveform_type* 				NonResGalvoMoveBetweenPoints 						(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
+static int 							NonResGalvoPointJumpTime 							(NonResGalvoCal_type* cal, double jumpAmplitude, double* jumpTime);
+static Waveform_type* 				NonResGalvoJumpBetweenPoints 						(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
 
 //-------------
 // Scan Engines
 //-------------
 	// parent class
-static int 							init_ScanEngine_type 							(ScanEngine_type* 		engine,
-																			 	 	 LaserScanning_type*	lsModule,
-																			 	 	 ScanEngineEnum_type 	engineType,
-																			 	 	 char 					fastAxisComVChanName[],
-																					 char					fastAxisComNSampVChanName[],
-								 											 	 	 char 					slowAxisComVChanName[], 
-																					 char					slowAxisComNSampVChanName[],
-								 											 	 	 char					fastAxisPosVChanName[],
-								 											 	 	 char					slowAxisPosVChanName[],
-								 											 	 	 char					imageOutVChanName[],
-																				 	 char					detectorVChanName[],
-																				 	 char					shutterVChanName[],
-																				 	 char					pixelPulseTrainVChanName[],
-																					 char					nPixelsVChanName[],
-																				 	 double					pixelClockRate,
-																					 double					pixelDelay,
-																				 	 double					scanLensFL,
-																				 	 double					tubeLensFL);
+static int 							init_ScanEngine_type 								(ScanEngine_type* 		engine,
+																			 	 	 	LaserScanning_type*	lsModule,
+																			 	 	 	ScanEngineEnum_type 	engineType,
+																			 	 	 	char 					fastAxisComVChanName[],
+																					 	char					fastAxisComNSampVChanName[],
+								 											 	 	 	char 					slowAxisComVChanName[], 
+																					 	char					slowAxisComNSampVChanName[],
+								 											 	 	 	char					fastAxisPosVChanName[],
+								 											 	 	 	char					slowAxisPosVChanName[],
+								 											 	 	 	char					imageOutVChanName[],
+																				 	 	char					detectorVChanName[],
+																				 	 	char					shutterVChanName[],
+																				 	 	char					pixelPulseTrainVChanName[],
+																					 	char					nPixelsVChanName[],
+																				 	 	double					pixelClockRate,
+																					 	double					pixelDelay,
+																				 	 	double					scanLensFL,
+																				 	 	double					tubeLensFL);
 
-static void							discard_ScanEngine_type 						(ScanEngine_type** engine);
+static void							discard_ScanEngine_type 							(ScanEngine_type** engine);
 
 	//------------------------
 	// Common functionality
 	//------------------------
 
 	// opens/closes scan engine laser shutter
-static int							OpenScanEngineShutter							(ScanEngine_type* engine, BOOL openStatus, char** errorInfo);
+static int							OpenScanEngineShutter								(ScanEngine_type* engine, BOOL openStatus, char** errorInfo);
 
 	// return both the fast and slow axis galvos to their parked position
-static int 							ReturnRectRasterToParkedPosition 				(RectRaster_type* engine, char** errorInfo);  
+static int 							ReturnRectRasterToParkedPosition 					(RectRaster_type* engine, char** errorInfo);  
 	
 	//--------------------------------------
 	// Non-Resonant Rectangle Raster Scan
 	//--------------------------------------
 
-static RectRasterScanSet_type*		init_RectRasterScanSet_type						(double pixSize, uInt32 height, int heightOffset, uInt32 width, int widthOffset, double pixelDwellTime); 
+static RectRasterScanSet_type*		init_RectRasterScanSet_type							(double pixSize, uInt32 height, int heightOffset, uInt32 width, int widthOffset, double pixelDwellTime); 
 
-static void 						discard_RectRasterScanSet_type 					(RectRasterScanSet_type** scanSetPtr);
+static void 						discard_RectRasterScanSet_type 						(RectRasterScanSet_type** scanSetPtr);
 
-static RectRaster_type*				init_RectRaster_type							(LaserScanning_type*	lsModule, 
-																			 	 	 char 					engineName[],
-														   					 	 	 char 					fastAxisComVChanName[],
-																					 char					fastAxisComNSampVChanName[],
-								 											 	 	 char 					slowAxisComVChanName[], 
-																					 char					slowAxisComNSampVChanName[],
-								 											 	 	 char					fastAxisPosVChanName[],
-								 											 	 	 char					slowAxisPosVChanName[],
-								 											 	 	 char					imageOutVChanName[],
-																			 	 	 char					detectorVChanName[],
-																				 	 char					shutterVChanName[],
-																				 	 char					pixelPulseTrainVChanName[],
-																					 char					nPixelsVChanName[],
-																					 char					ROITimingVChanName[],
-																				 	 double					galvoSamplingRate,
-																				 	 double					pixelClockRate,
-																					 double					pixelDelay,
-																				 	 uInt32					scanHeight,
-																				 	 int					scanHeightOffset,
-																				 	 uInt32					scanWidth,
-																				 	 int					scanWidthOffset,
-																			  	 	 double					pixelSize,
-																				 	 double					pixelDwellTime,
-																				 	 double					scanLensFL,
-																				 	 double					tubeLensFL);
+static RectRaster_type*				init_RectRaster_type								(LaserScanning_type*	lsModule, 
+																			 	 	 	char 					engineName[],
+														   					 	 	 	char 					fastAxisComVChanName[],
+																					 	char					fastAxisComNSampVChanName[],
+								 											 	 	 	char 					slowAxisComVChanName[], 
+																					 	char					slowAxisComNSampVChanName[],
+								 											 	 	 	char					fastAxisPosVChanName[],
+								 											 	 	 	char					slowAxisPosVChanName[],
+								 											 	 	 	char					imageOutVChanName[],
+																			 	 	 	char					detectorVChanName[],
+																				 	 	char					shutterVChanName[],
+																				 	 	char					pixelPulseTrainVChanName[],
+																					 	char					nPixelsVChanName[],
+																					 	char					ROITimingVChanName[],
+																				 	 	double					galvoSamplingRate,
+																				 	 	double					pixelClockRate,
+																					 	double					pixelDelay,
+																				 	 	uInt32					scanHeight,
+																				 	 	int					scanHeightOffset,
+																				 	 	uInt32					scanWidth,
+																				 	 	int					scanWidthOffset,
+																			  	 	 	double					pixelSize,
+																				 	 	double					pixelDwellTime,
+																				 	 	double					scanLensFL,
+																				 	 	double					tubeLensFL);
 
-static void							discard_RectRaster_type							(ScanEngine_type** engine);
+static void							discard_RectRaster_type								(ScanEngine_type** engine);
 
 	// image assembly buffer
-static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 					(DetChan_type* detChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows);
+static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 						(DetChan_type* detChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows);
 
-static void							discard_RectRasterImgBuffer_type				(RectRasterImgBuffer_type** rectRasterPtr); 
+static void							discard_RectRasterImgBuffer_type					(RectRasterImgBuffer_type** rectRasterPtr); 
 
-static int CVICALLBACK 				NonResRectRasterScan_MainPan_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResRectRasterScan_MainPan_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int CVICALLBACK 				NonResRectRasterScan_FrameScanPan_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResRectRasterScan_FrameScanPan_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int CVICALLBACK 				NonResRectRasterScan_ROIsPan_CB		 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NonResRectRasterScan_ROIsPan_CB		 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-void 								NonResRectRasterScan_ScanWidths				(RectRaster_type* scanEngine);
+void 								NonResRectRasterScan_ScanWidths						(RectRaster_type* scanEngine);
 
-void								NonResRectRasterScan_PixelDwellTimes			(RectRaster_type* scanEngine);
+void								NonResRectRasterScan_PixelDwellTimes				(RectRaster_type* scanEngine);
 
 	// determines whether a given rectangular ROI falls within a circular perimeter with radius
-static BOOL 						RectROIInsideCircle								(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double circleRadius);
+static BOOL 						RectROIInsideCircle									(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double circleRadius);
 	// determines whether a given rectangular ROI falls within another rectangle of size maxHeight and maxWidth
-static BOOL							RectROIInsideRect								(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double maxHeight, double maxWidth);
+static BOOL							RectROIInsideRect									(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double maxHeight, double maxWidth);
 
 	// evaluates whether the scan engine configuration is valid, i.e. it has both scan axes assigned, objective, pixel sampling rate, etc.
-static BOOL							NonResRectRasterScan_ValidConfig				(RectRaster_type* scanEngine);
+static BOOL							NonResRectRasterScan_ValidConfig					(RectRaster_type* scanEngine);
 	// evaluates whether the scan engine is ready to scan
-static BOOL 						NonResRectRasterScan_ReadyToScan				(RectRaster_type* scanEngine);
+static BOOL 						NonResRectRasterScan_ReadyToScan					(RectRaster_type* scanEngine);
 	// generates rectangular raster scan waveforms and sends them to the galvo command VChans
-static int							NonResRectRasterScan_GenerateScanSignals		(RectRaster_type* scanEngine, char** errorInfo);
+static int							NonResRectRasterScan_GenerateScanSignals			(RectRaster_type* scanEngine, char** errorInfo);
 	// generates galvo and ROI timing signals to jump between a series of points starting from the parked position and stays at each point a given amount of time.
-static int							NonResRectRasterScan_GeneratePointJumpSignals 	(RectRaster_type* scanEngine, char** errorInfo);
+static int							NonResRectRasterScan_GeneratePointJumpSignals 		(RectRaster_type* scanEngine, char** errorInfo);
 	// builds images from a continuous pixel stream
-static int 							NonResRectRasterScan_BuildImage 				(RectRaster_type* rectRaster, size_t imgBufferIdx, char** errorInfo);
+static int 							NonResRectRasterScan_BuildImage 					(RectRaster_type* rectRaster, size_t imgBufferIdx, char** errorInfo);
+	// convert a point ROI coordinate from a given scan setting to a command voltage for both scan axes
+static void 						NonResRectRasterScan_PointROIVoltage 				(RectRaster_type* rectRaster, Point_type* point, double* fastAxisCommandV, double* slowAxisCommandV);
+	// calculates the combined jump time for both scan axes to jump a given amplitude voltage in [V]
+static double						NonResRectRasterScan_JumpTime						(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude);
+	// sets the minimum jump delay from parked position to the start of a given point ROI in the scan engine structure and in the UI
+static void							NonResRectRasterScan_SetMinimumPointJumpStartDelay 	(RectRaster_type* rectRaster, Point_type* point);
+	// calculates the minimum period in [ms] to complete a point jump cycle starting and ending at the parked location for both galvos
+static void 						NonResRectRasterScan_SetMinimumPointJumpPeriod 		(RectRaster_type* rectRaster);
+
 	// closes the display of an image panel
-//void CVICALLBACK 					DisplayClose_CB 								(int menuBar, int menuItem, void *callbackData, int panel);
+//void CVICALLBACK 					DisplayClose_CB 									(int menuBar, int menuItem, void *callbackData, int panel);
 
 
 //---------------------------------------------------------
 // determines scan axis types based on the scan engine type
 //---------------------------------------------------------
-static void							GetScanAxisTypes								(ScanEngine_type* scanEngine, ScanAxis_type* fastAxisType, ScanAxis_type* slowAxisType); 
+static void							GetScanAxisTypes									(ScanEngine_type* scanEngine, ScanAxis_type* fastAxisType, ScanAxis_type* slowAxisType); 
 
 //-------------------------
 // Objectives for scanning
 //-------------------------
-static Objective_type*				init_Objective_type								(char objectiveName[], double objectiveFL);
+static Objective_type*				init_Objective_type									(char objectiveName[], double objectiveFL);
 
-static void							discard_Objective_type							(Objective_type** objective);
+static void							discard_Objective_type								(Objective_type** objective);
 
-static int CVICALLBACK 				NewObjective_CB									(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NewObjective_CB										(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 //---------------------------------------------------------
 // Waveforms
 //---------------------------------------------------------
 
-static Waveform_type* 				StaircaseWaveform 								(double sampleRate, size_t nSamplesPerStep, size_t nSteps, size_t delaySamples, double startVoltage, double stepVoltage);
+static Waveform_type* 				StaircaseWaveform 									(double sampleRate, size_t nSamplesPerStep, size_t nSteps, size_t delaySamples, double startVoltage, double stepVoltage);
 
 //------------------
 // Module management
 //------------------
 
-static int							Load 											(DAQLabModule_type* mod, int workspacePanHndl);
+static int							Load 												(DAQLabModule_type* mod, int workspacePanHndl);
 
-static int 							LoadCfg 										(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
-static int 							SaveCfg 										(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int 							SaveCfg 											(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
-static int 							DisplayPanels									(DAQLabModule_type* mod, BOOL visibleFlag); 
+static int 							DisplayPanels										(DAQLabModule_type* mod, BOOL visibleFlag); 
 
-static int CVICALLBACK 				ScanEngineSettings_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				ScanEngineSettings_CB 								(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int CVICALLBACK 				ScanEnginesTab_CB 								(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				ScanEnginesTab_CB 									(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-void CVICALLBACK 					ScanEngineSettingsMenu_CB						(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+void CVICALLBACK 					ScanEngineSettingsMenu_CB							(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 
 
-static void CVICALLBACK 			NewScanEngineMenu_CB							(int menuBar, int menuItem, void *callbackData, int panel);
+static void CVICALLBACK 			NewScanEngineMenu_CB								(int menuBar, int menuItem, void *callbackData, int panel);
 
-static int CVICALLBACK 				NewScanEngine_CB 								(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				NewScanEngine_CB 									(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static BOOL							ValidScanEngineName								(char name[], void* dataPtr);
+static BOOL							ValidScanEngineName									(char name[], void* dataPtr);
 
 //-----------------------------------------
 // Scan Engine VChan management
 //-----------------------------------------
 
 	// Fast Axis Command VChan
-static void							FastAxisComVChan_Connected						(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							FastAxisComVChan_Disconnected					(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							FastAxisComVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							FastAxisComVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Slow Axis Command VChan
-static void							SlowAxisComVChan_Connected						(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							SlowAxisComVChan_Disconnected					(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							SlowAxisComVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							SlowAxisComVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Fast Axis Position VChan
-static void							FastAxisPosVChan_Connected						(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							FastAxisPosVChan_Disconnected					(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							FastAxisPosVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							FastAxisPosVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Slow Axis Position VChan
-static void							SlowAxisPosVChan_Connected						(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							SlowAxisPosVChan_Disconnected					(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							SlowAxisPosVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							SlowAxisPosVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Image Out VChan
-static void							ImageOutVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							ImageOutVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							ImageOutVChan_Connected								(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							ImageOutVChan_Disconnected							(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Detection VChan
-static void							DetVChan_Connected								(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							DetVChan_Disconnected							(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan); 
+static void							DetVChan_Connected									(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							DetVChan_Disconnected								(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan); 
 
 	// Shutter VChan
-static void							ShutterVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							ShutterVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							ShutterVChan_Connected								(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							ShutterVChan_Disconnected							(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 //-----------------------------------------
 // Display interface
 //-----------------------------------------
 
-static void							ROIDisplay_CB									(ImageDisplay_type* imgDisplay, void* callbackData, ROIActions action, ROI_type* ROI);
+static void							ROIDisplay_CB										(ImageDisplay_type* imgDisplay, void* callbackData, ROIActions action, ROI_type* ROI);
 
-static void							ImageDisplay_CB									(ImageDisplay_type* imgDisplay, void* callbackData, ImageDisplayEvents event);
+static void							ImageDisplay_CB										(ImageDisplay_type* imgDisplay, void* callbackData, ImageDisplayEvents event);
 
-static int							RestoreImgSettings_CB							(DisplayEngine_type* displayEngine, ImageDisplay_type* imgDisplay, void* callbackData, char** errorInfo);
+static int							RestoreImgSettings_CB								(DisplayEngine_type* displayEngine, ImageDisplay_type* imgDisplay, void* callbackData, char** errorInfo);
 
-static void							DisplayErrorHandler_CB							(ImageDisplay_type* imgDisplay, int errorID, char* errorInfo);
+static void							DisplayErrorHandler_CB								(ImageDisplay_type* imgDisplay, int errorID, char* errorInfo);
 
 //-----------------------------------------
 // Task Controller Callbacks
 //-----------------------------------------
 
 	// for Non Resonant Galvo scan axis calibration and testing
-static int							ConfigureTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							ConfigureTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							UncofigureTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							UncofigureTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							IterateTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+static void							IterateTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
-static void							AbortIterationTC_NonResGalvoCal					(TaskControl_type* taskControl, BOOL const* abortFlag);
+static void							AbortIterationTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag);
 
-static int							StartTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							StartTC_NonResGalvoCal								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							DoneTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							DoneTC_NonResGalvoCal								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							StoppedTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int				 			ResetTC_NonResGalvoCal 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int				 			ResetTC_NonResGalvoCal 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							TaskTreeStatus_NonResGalvoCal 					(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int							TaskTreeStatus_NonResGalvoCal 						(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
 
 //static int				 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 	// for RectRaster_type scanning
-static int							ConfigureTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							ConfigureTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							UnconfigureTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							UnconfigureTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							IterateTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+static void							IterateTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
-static void							AbortIterationTC_RectRaster						(TaskControl_type* taskControl, BOOL const* abortFlag);
+static void							AbortIterationTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag);
 
-static int							StartTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							StartTC_RectRaster									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							DoneTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							DoneTC_RectRaster									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							StoppedTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int				 			ResetTC_RectRaster 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int				 			ResetTC_RectRaster 									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							TaskTreeStatus_RectRaster 						(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int							TaskTreeStatus_RectRaster 							(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
 
 //static int				 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
-static void 						ErrorTC_RectRaster 								(TaskControl_type* taskControl, int errorID, char* errorMsg);
+static void 						ErrorTC_RectRaster 									(TaskControl_type* taskControl, int errorID, char* errorMsg);
 
-static int							ModuleEventHandler_RectRaster					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
+static int							ModuleEventHandler_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 	// add below more task controller callbacks for different scan engine types
 
@@ -3620,7 +3628,7 @@ static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplit
 	
 	// check if jump amplitude is within calibration range   
 	errChk( MaxMin1D(cal->switchTimes->stepSize, cal->switchTimes->n, &max, &maxIdx, &min, &minIdx) );
-	if ((jumpAmplitude < min) || (jumpAmplitude > max)) 
+	if ((fabs(jumpAmplitude) < min) || (fabs(jumpAmplitude) > max)) 
 		return NonResGalvoPointJumpTime_Err_JumpAmplitudeOutOfRange;
 	
 	nullChk( secondDerivatives = malloc(cal->switchTimes->n * sizeof(double)) );
@@ -4556,7 +4564,10 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	//--------------------
 	
 	engine->pointParkedTime				= 0;
-	engine->pointJumps					= ListCreate(sizeof(PointJump_type));
+	engine->jumpStartDelay				= 0;
+	engine->pointJumpPeriod				= 0;
+	engine->pointJumpCycles				= 1;
+	engine->pointJumps					= ListCreate(sizeof(Point_type*));
 	
 	//--------------------
 	// VChans
@@ -4975,6 +4986,7 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 {
 	RectRaster_type*		scanEngine		= callbackData;
 	int						listItemIdx		= 0;
+	int						nROIs			= 0;	
 	ROI_type*				ROI				= NULL;
 	
 	switch (event) {
@@ -4990,6 +5002,32 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 				case ROITab_ParkedTime:
 					
 					GetCtrlVal(panel, control, &scanEngine->pointParkedTime);
+					
+					// round up to a multiple of galvo sampling
+					scanEngine->pointParkedTime = ceil(scanEngine->pointParkedTime * 1e-6 * scanEngine->galvoSamplingRate) * 1e6/scanEngine->galvoSamplingRate;
+					SetCtrlVal(panel, control, scanEngine->pointParkedTime);
+					
+					break;
+					
+				case ROITab_StartDelay:
+					
+					GetCtrlVal(panel, control, &scanEngine->jumpStartDelay);
+					
+					// round up to a multiple of galvo sampling
+					scanEngine->jumpStartDelay = ceil(scanEngine->jumpStartDelay * 1e-3 * scanEngine->galvoSamplingRate) * 1e3/scanEngine->galvoSamplingRate;
+					SetCtrlVal(panel, control, scanEngine->jumpStartDelay);
+					
+					break;
+					
+				case ROITab_Period:
+					
+					GetCtrlVal(panel, control, &scanEngine->pointJumpPeriod);
+					
+					break;
+					
+				case ROITab_Repeat:
+					
+					GetCtrlVal(panel, control, &scanEngine->pointJumpCycles);
 					
 					break;
 			}
@@ -5011,6 +5049,15 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 					// remove ROI item from display and from scan engine list
 					(*scanEngine->baseClass.activeDisplay->displayEngine->clearROIFptr) (scanEngine->baseClass.activeDisplay, listItemIdx+1);
 					DeleteListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, listItemIdx, 1);
+					
+					// dim controls if there are no more ROIs
+					GetNumListItems(panel, control, &nROIs);
+					if (!nROIs) {
+						SetCtrlAttribute(panel, ROITab_ParkedTime, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, ROITab_StartDelay, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, ROITab_Period, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, ROITab_Repeat, ATTR_DIMMED, 1);
+					}
 					
 					break;
 			}
@@ -5391,20 +5438,6 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 //============================================================================================================================================================================================
 	
 	// generate staircase signal
-	/*
-	if (scanEngine->scanSettings.height > 1)
-		// generate staircase signal
-		nullChk( slowAxisScan_Waveform = StaircaseWaveform(scanEngine->galvoSamplingRate, nGalvoSamplesPerLine, scanEngine->scanSettings.height, nGalvoSamplesPerLine * nFastAxisFlybackLines, slowAxisStartVoltage, slowAxisStepVoltage) );  
-	else {
-		// generate constant signal (no movement)
-		double* slowAxisSignal = NULL;
-		nullChk( slowAxisSignal = malloc (2*nGalvoSamplesPerLine * sizeof(double)) );
-		Set1D(slowAxisSignal, 2*nGalvoSamplesPerLine, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement);
-		slowAxisScan_Waveform = init_Waveform_type(Waveform_Double, scanEngine->galvoSamplingRate, 2*nGalvoSamplesPerLine, (void**)&slowAxisSignal);
-	}
-	*/
-	
-	// generate staircase signal
 	nullChk( slowAxisScan_Waveform = StaircaseWaveform(scanEngine->galvoSamplingRate, nGalvoSamplesPerLine, scanEngine->scanSettings.height, nGalvoSamplesPerLine * nFastAxisFlybackLines, slowAxisStartVoltage, slowAxisStepVoltage) );  
 	
 	// generate slow axis fly-in waveform from parked position
@@ -5628,7 +5661,20 @@ Error:
 
 static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanEngine, char** errorInfo)
 {
+	// NonResGalvoJumpBetweenPoints
+	// NonResGalvoPointJumpTime
+	int					error				= 0;
+	size_t				nPointROIs			= ListNumItems(scanEngine->pointJumps);   // number of point ROIs available
+	Point_type*			pointJump			= NULL;
+	double*				fastAxisVoltages	= NULL;
+	double*				slowAxisVoltages	= NULL;
 	
+	
+	// count number of points in the image to jump to
+	for (size_t i = 1; i <= nPointROIs; i++) {
+		pointJump = *(Point_type**) ListGetPtrToItem(scanEngine->pointJumps, i);
+		if (!pointJump->baseClass.active) continue; // select only point ROIs to jump to
+	}
 	
 	return 0;
 }
@@ -6001,6 +6047,138 @@ Error:
 	return error;
 }
 
+static void NonResRectRasterScan_PointROIVoltage (RectRaster_type* rectRaster, Point_type* point, double* fastAxisCommandV, double* slowAxisCommandV)
+{
+	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
+	NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
+	uInt32					nDeadTimePixels = (uInt32) ceil(fastAxisCal->triangleCal->deadTime * 1e3/rectRaster->scanSettings.pixelDwellTime);	// Number of pixel at the beginning and end of each line scan
+																																				// in the fast axis scan direction that are dropped when assembling the image
+	// Check if point is within the FOV:
+	// point X coordinate is along the fast scan axis, while the Y coordinate is along the slow scan axis
+	// X = 0, Y = 0 corresponds to the upper left corner of the image to which this point ROI belongs to
+	
+	*fastAxisCommandV = (-(rectRaster->scanSettings.width + 2 * nDeadTimePixels)/2.0 + nDeadTimePixels + point->x) * rectRaster->scanSettings.pixSize / fastAxisCal->sampleDisplacement;
+	*slowAxisCommandV = (-rectRaster->scanSettings.height/2.0 + point->y) * rectRaster->scanSettings.pixSize / fastAxisCal->sampleDisplacement;	
+	
+}
+
+static double NonResRectRasterScan_JumpTime	(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude)
+{
+	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
+	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
+	double					jumpTime			= 0;
+	double					fastAxisJumpTime	= 0;
+	double					slowAxisJumpTime	= 0;
+	
+	// fast axis jump time
+	NonResGalvoPointJumpTime(fastAxisCal, fastAxisAmplitude, &fastAxisJumpTime);
+	// slow axis jump time
+	NonResGalvoPointJumpTime(slowAxisCal, slowAxisAmplitude, &slowAxisJumpTime);
+	// set jump time to be the largest jump time of the two scan axes
+	if (fastAxisJumpTime > slowAxisJumpTime)
+		jumpTime = fastAxisJumpTime;
+	else
+		jumpTime = slowAxisJumpTime;
+	
+	// round up to a multiple of galvo sampling time
+	jumpTime = ceil(jumpTime * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+	
+	return jumpTime;
+}
+
+static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type* rectRaster, Point_type* point)
+{
+	double					fastAxisCommandV	= 0;
+	double					slowAxisCommandV	= 0;
+	double					startDelay			= 0;
+	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
+	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
+	
+	// get jump voltages from point ROI
+	NonResRectRasterScan_PointROIVoltage(rectRaster, point, &fastAxisCommandV, &slowAxisCommandV);
+	startDelay = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
+	
+	// update lower bound and coerce value
+	if (rectRaster->jumpStartDelay <= startDelay) {
+		rectRaster->jumpStartDelay = startDelay;
+		SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_StartDelay, rectRaster->jumpStartDelay);
+	}
+	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_MIN_VALUE, rectRaster->jumpStartDelay);  
+}
+
+// Calculates the minimum time it takes to visit all the point ROIs starting from the parked position and ending up again in the parked position
+static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rectRaster)
+{
+	double					fastAxisCommandV	= 0;
+	double					slowAxisCommandV	= 0;
+	double					fastAxisCommandV1	= 0;
+	double					slowAxisCommandV1	= 0;
+	double					fastAxisCommandV2	= 0;
+	double					slowAxisCommandV2	= 0;
+	Point_type*				firstPointJump		= NULL;
+	Point_type*				lastPointJump		= NULL;
+	Point_type*				pointJump			= NULL;
+	Point_type*				pointJump1			= NULL;
+	Point_type*				pointJump2			= NULL;
+	size_t					nTotalPoints		= ListNumItems(rectRaster->pointJumps);
+	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
+	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
+	double					jumpPeriod			= 0; // in [ms]
+	
+	// get first point to jump to
+	pointJump = NULL;
+	for (size_t i = 1; i <= nTotalPoints; i++) {
+		pointJump = *(Point_type**)ListGetPtrToItem(rectRaster->pointJumps, i);
+		if (!pointJump->baseClass.active) continue; // select only the first active point jump
+		break;
+	}
+	
+	// if there are no points, skip calculations
+	if (!pointJump) goto SkipPoints;
+	
+	// get last point to jump to
+	pointJump = NULL;
+	for (size_t i = nTotalPoints; i >= 1; i--) {
+		pointJump = *(Point_type**)ListGetPtrToItem(rectRaster->pointJumps, i);
+		if (!pointJump->baseClass.active) continue; // select only the first from last active point jump
+		break;
+	}
+	
+	lastPointJump = pointJump;		
+			
+	// calculate time to jump from parked position to the first Point ROI and add also the parked time
+	NonResRectRasterScan_PointROIVoltage(rectRaster, firstPointJump, &fastAxisCommandV, &slowAxisCommandV); 
+	jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV) + rectRaster->pointParkedTime;
+	// calculate time to jump from last Point ROI back to the parked position
+	NonResRectRasterScan_PointROIVoltage(rectRaster, lastPointJump, &fastAxisCommandV, &slowAxisCommandV); 
+	jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
+	
+	// calculate time to jump between active Point ROIs
+	for (size_t i = 1; i < nTotalPoints; i++) {
+		pointJump1 = *(Point_type**)ListGetPtrToItem(rectRaster->pointJumps, i);
+		if (!pointJump1->baseClass.active) continue; // select only active point jumps
+		for (size_t j = i+1; j <= nTotalPoints; j++) {
+			pointJump2 = *(Point_type**)ListGetPtrToItem(rectRaster->pointJumps, j);
+			if (!pointJump2->baseClass.active) continue; // select only active point jump
+			
+			// calculate jump time and add also the parked time
+			NonResRectRasterScan_PointROIVoltage(rectRaster, pointJump1, &fastAxisCommandV1, &slowAxisCommandV1);
+			NonResRectRasterScan_PointROIVoltage(rectRaster, pointJump2, &fastAxisCommandV2, &slowAxisCommandV2); 
+			jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCommandV1 - fastAxisCommandV2, slowAxisCommandV1 - slowAxisCommandV2) + rectRaster->pointParkedTime;
+			break; // get next pair
+		}
+	}
+	
+SkipPoints:
+	
+	// if period is larger or equal to previous value, then update lower bound 
+	if (rectRaster->pointJumpPeriod <= jumpPeriod) {
+		rectRaster->pointJumpPeriod = jumpPeriod;
+		SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_Period, rectRaster->pointJumpPeriod);
+	}
+	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_Period, ATTR_MIN_VALUE, rectRaster->pointJumpPeriod);
+}
+
 
 /*
 void CVICALLBACK DisplayClose_CB (int menuBar, int menuItem, void *callbackData, int panel)
@@ -6363,8 +6541,21 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 						GetNumListItems(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, &nListItems);
 						CheckListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, nListItems - 1, 1); 
 						// insert ROI item in the scan engine as well
-						PointJump_type	pointJump = {.point = (Point_type*) addedROI, .active = TRUE};
-						ListInsertItem(scanEngine->pointJumps, &pointJump, END_OF_LIST);
+						ListInsertItem(scanEngine->pointJumps, &addedROI, END_OF_LIST);
+						
+						// if this is the first point added, i.e. the first point to which the galvo will jump, 
+						// then calculate the initial delay, display it and set this as a lower bound in the UI
+						if (nListItems == 1)
+							NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine, (Point_type*) addedROI);
+						
+						// update minimum point jump period
+						NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
+							
+						// undim controls if there are no more ROIs
+						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_ParkedTime, ATTR_DIMMED, 0);
+						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_DIMMED, 0);
+						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Period, ATTR_DIMMED, 0);
+						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Repeat, ATTR_DIMMED, 0);
 						
 						break;
 						
@@ -6447,8 +6638,7 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 				// mark point as checked (in use)  
 				CheckListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, i - 1, 1); 
 				// insert ROI item in the scan engine as well
-				PointJump_type	pointJump = {.point = (Point_type*) ROI, .active = TRUE};
-				ListInsertItem(scanEngine->pointJumps, &pointJump, END_OF_LIST);
+				ListInsertItem(scanEngine->pointJumps, &ROI, END_OF_LIST);
 						
 				break;
 					

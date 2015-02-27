@@ -151,8 +151,9 @@ struct ROI {
 	ROITypes			ROIType;
 	char*				ROIName;
 	RGBA_type			rgba;			// ROI color
+	BOOL				active;			// Flag to mark active ROIs, by default, TRUE.
 	// METHODS
-	DiscardFptr_type	discardFptr;  	// overriden by child classes
+	DiscardFptr_type	discardFptr;  	// Overriden by child classes
 };
 
 	// Point

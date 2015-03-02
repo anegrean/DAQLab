@@ -9786,7 +9786,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
 				
 			break;
-		*/
+		
 		default:
 			
 			errMsg = StrDup("Must be implemented correctly still!"); 

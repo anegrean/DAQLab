@@ -433,9 +433,10 @@ typedef struct {
 	//-----------------------------------
 	// Point Jump Settings								// For jumping as fast as possible between a series of points and staying at each point a given amount of time. 
 	//-----------------------------------
-	double						pointParkedTime;		// Time during which the beam remains stationary at a given point
+	double						pointParkedTime;		// Time during which the beam remains stationary at a given point in [us].
 	double						jumpStartDelay;			// Delay from the start point of galvo movement from the parked position in [ms] to the first point ROI.
 	double						pointJumpPeriod;		// Period in [ms] between repeating a cycle of jumps between a series of points.
+	double						minimumPointJumpPeriod;	// Minimum period to complete a point jump cycle in [ms].
 	uInt32						pointJumpCycles;		// Number of times to repeat a jump cycle between a series of point ROIs.
 	
 	ListType					pointJumps;				// List of points to jump in-between of Point_type*. The order of point jumping is determined by the order of the elements in the list.				
@@ -713,8 +714,8 @@ static int 							NonResRectRasterScan_BuildImage 					(RectRaster_type* rectRas
 static void 						NonResRectRasterScan_PointROIVoltage 				(RectRaster_type* rectRaster, Point_type* point, double* fastAxisCommandV, double* slowAxisCommandV);
 	// calculates the combined jump time for both scan axes to jump a given amplitude voltage in [V]
 static double						NonResRectRasterScan_JumpTime						(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude);
-	// sets the minimum jump delay from parked position to the start of a given point ROI in the scan engine structure and in the UI
-static void							NonResRectRasterScan_SetMinimumPointJumpStartDelay 	(RectRaster_type* rectRaster, Point_type* point);
+	// sets the minimum jump delay from parked position to the first point ROI
+static void							NonResRectRasterScan_SetMinimumPointJumpStartDelay 	(RectRaster_type* rectRaster);
 	// calculates the minimum period in [ms] to complete a point jump cycle starting and ending at the parked location for both galvos
 static void 						NonResRectRasterScan_SetMinimumPointJumpPeriod 		(RectRaster_type* rectRaster);
 
@@ -4566,6 +4567,7 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	engine->pointParkedTime				= 0;
 	engine->jumpStartDelay				= 0;
 	engine->pointJumpPeriod				= 0;
+	engine->minimumPointJumpPeriod		= 0;
 	engine->pointJumpCycles				= 1;
 	engine->pointJumps					= ListCreate(sizeof(Point_type*));
 	
@@ -5006,6 +5008,8 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 					// round up to a multiple of galvo sampling
 					scanEngine->pointParkedTime = ceil(scanEngine->pointParkedTime * 1e-6 * scanEngine->galvoSamplingRate) * 1e6/scanEngine->galvoSamplingRate;
 					SetCtrlVal(panel, control, scanEngine->pointParkedTime);
+					// update minimum point jump period
+					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
 					break;
 					
@@ -5047,8 +5051,14 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 					if (listItemIdx < 0) break; // stop here if list is empty
 					
 					// remove ROI item from display and from scan engine list
-					(*scanEngine->baseClass.activeDisplay->displayEngine->clearROIFptr) (scanEngine->baseClass.activeDisplay, listItemIdx+1);
+					(*scanEngine->baseClass.activeDisplay->displayEngine->clearROIFptr) (scanEngine->baseClass.activeDisplay, listItemIdx + 1);
 					DeleteListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, listItemIdx, 1);
+					ListRemoveItem(scanEngine->pointJumps, 0, listItemIdx + 1);
+					
+					// calculate minimum point jump start delay
+					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
+					// calculate point jump period
+					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
 					// dim controls if there are no more ROIs
 					GetNumListItems(panel, control, &nROIs);
@@ -5058,6 +5068,26 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 						SetCtrlAttribute(panel, ROITab_Period, ATTR_DIMMED, 1);
 						SetCtrlAttribute(panel, ROITab_Repeat, ATTR_DIMMED, 1);
 					}
+					
+					break;
+			}
+			
+			break;
+			
+		case EVENT_MARK_STATE_CHANGE:
+			
+			switch (control) {
+					
+				case ROITab_ROIs:
+					
+					// change active state of point ROI
+					ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumps, eventData2 + 1);
+					ROI->active = eventData1;
+					
+					// calculate minimum point jump start delay
+					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
+					// calculate point jump period
+					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
 					break;
 			}
@@ -6057,8 +6087,8 @@ static void NonResRectRasterScan_PointROIVoltage (RectRaster_type* rectRaster, P
 	// point X coordinate is along the fast scan axis, while the Y coordinate is along the slow scan axis
 	// X = 0, Y = 0 corresponds to the upper left corner of the image to which this point ROI belongs to
 	
-	*fastAxisCommandV = (-(rectRaster->scanSettings.width + 2 * nDeadTimePixels)/2.0 + nDeadTimePixels + point->x) * rectRaster->scanSettings.pixSize / fastAxisCal->sampleDisplacement;
-	*slowAxisCommandV = (-rectRaster->scanSettings.height/2.0 + point->y) * rectRaster->scanSettings.pixSize / fastAxisCal->sampleDisplacement;	
+	*fastAxisCommandV = (nDeadTimePixels + point->x - (double)(rectRaster->scanSettings.width + 2 * nDeadTimePixels)/2.0 ) * rectRaster->scanSettings.pixSize / fastAxisCal->sampleDisplacement;
+	*slowAxisCommandV = (point->y - (double)rectRaster->scanSettings.height/2.0) * rectRaster->scanSettings.pixSize / slowAxisCal->sampleDisplacement;	
 	
 }
 
@@ -6086,18 +6116,33 @@ static double NonResRectRasterScan_JumpTime	(RectRaster_type* rectRaster, double
 	return jumpTime;
 }
 
-static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type* rectRaster, Point_type* point)
+static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type* rectRaster)
 {
 	double					fastAxisCommandV	= 0;
 	double					slowAxisCommandV	= 0;
 	double					startDelay			= 0;
 	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
+	size_t					nTotalPoints		= ListNumItems(rectRaster->pointJumps);
+	Point_type*				pointJump			= NULL;
+	Point_type*				firstPointJump		= NULL;
+	
+	// get first point to jump to
+	for (size_t i = 1; i <= nTotalPoints; i++) {
+		pointJump = *(Point_type**)ListGetPtrToItem(rectRaster->pointJumps, i);
+		if (!pointJump->baseClass.active) continue; // select only the first active point jump
+		firstPointJump = pointJump;
+		break;
+	}
+	
+	// if there are no points, skip calculations
+	if (!firstPointJump) goto SkipPoints;
 	
 	// get jump voltages from point ROI
-	NonResRectRasterScan_PointROIVoltage(rectRaster, point, &fastAxisCommandV, &slowAxisCommandV);
+	NonResRectRasterScan_PointROIVoltage(rectRaster, firstPointJump, &fastAxisCommandV, &slowAxisCommandV);
 	startDelay = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
 	
+SkipPoints:
 	// update lower bound and coerce value
 	if (rectRaster->jumpStartDelay <= startDelay) {
 		rectRaster->jumpStartDelay = startDelay;
@@ -6126,29 +6171,28 @@ static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rec
 	double					jumpPeriod			= 0; // in [ms]
 	
 	// get first point to jump to
-	pointJump = NULL;
 	for (size_t i = 1; i <= nTotalPoints; i++) {
 		pointJump = *(Point_type**)ListGetPtrToItem(rectRaster->pointJumps, i);
 		if (!pointJump->baseClass.active) continue; // select only the first active point jump
+		firstPointJump = pointJump;
 		break;
 	}
 	
 	// if there are no points, skip calculations
-	if (!pointJump) goto SkipPoints;
+	if (!firstPointJump) goto SkipPoints;
 	
 	// get last point to jump to
 	pointJump = NULL;
 	for (size_t i = nTotalPoints; i >= 1; i--) {
 		pointJump = *(Point_type**)ListGetPtrToItem(rectRaster->pointJumps, i);
 		if (!pointJump->baseClass.active) continue; // select only the first from last active point jump
+		lastPointJump = pointJump;
 		break;
 	}
 	
-	lastPointJump = pointJump;		
-			
 	// calculate time to jump from parked position to the first Point ROI and add also the parked time
 	NonResRectRasterScan_PointROIVoltage(rectRaster, firstPointJump, &fastAxisCommandV, &slowAxisCommandV); 
-	jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV) + rectRaster->pointParkedTime;
+	jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV) + rectRaster->pointParkedTime * 1e-3;
 	// calculate time to jump from last Point ROI back to the parked position
 	NonResRectRasterScan_PointROIVoltage(rectRaster, lastPointJump, &fastAxisCommandV, &slowAxisCommandV); 
 	jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
@@ -6164,13 +6208,15 @@ static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rec
 			// calculate jump time and add also the parked time
 			NonResRectRasterScan_PointROIVoltage(rectRaster, pointJump1, &fastAxisCommandV1, &slowAxisCommandV1);
 			NonResRectRasterScan_PointROIVoltage(rectRaster, pointJump2, &fastAxisCommandV2, &slowAxisCommandV2); 
-			jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCommandV1 - fastAxisCommandV2, slowAxisCommandV1 - slowAxisCommandV2) + rectRaster->pointParkedTime;
+			jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCommandV1 - fastAxisCommandV2, slowAxisCommandV1 - slowAxisCommandV2) + rectRaster->pointParkedTime * 1e-3;
 			break; // get next pair
 		}
 	}
 	
 SkipPoints:
 	
+	// update minimum point jump period
+	rectRaster->minimumPointJumpPeriod = jumpPeriod;
 	// if period is larger or equal to previous value, then update lower bound 
 	if (rectRaster->pointJumpPeriod <= jumpPeriod) {
 		rectRaster->pointJumpPeriod = jumpPeriod;
@@ -6546,7 +6592,7 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 						// if this is the first point added, i.e. the first point to which the galvo will jump, 
 						// then calculate the initial delay, display it and set this as a lower bound in the UI
 						if (nListItems == 1)
-							NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine, (Point_type*) addedROI);
+							NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 						
 						// update minimum point jump period
 						NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
@@ -6625,6 +6671,7 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 	
 	// update ROIs in the scan engine UI
 	ClearListCtrl(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs);
+	ListClear(scanEngine->pointJumps);
 	size_t 		nROIs 	= ListNumItems(imgDisplay->ROIs);
 	ROI_type*   ROI		= NULL;
 	for (size_t i = 1; i <= nROIs; i++) {
@@ -6646,6 +6693,29 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 					
 				break;
 		}
+	}
+	
+	switch (ROI->ROIType) {
+						
+			case ROI_Point:
+				
+				// update jump start delay and minimum jump period
+				NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
+				NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine); 
+				
+				if (nROIs) {
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_ParkedTime, ATTR_DIMMED, 0);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_DIMMED, 0);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Period, ATTR_DIMMED, 0);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Repeat, ATTR_DIMMED, 0);
+				}
+				
+				break;
+				
+			default:
+					
+				break;
+				
 	}
 	
 	

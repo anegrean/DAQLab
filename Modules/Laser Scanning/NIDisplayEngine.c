@@ -103,9 +103,11 @@ static ImgDisplayCBData_type	GetNIImageDisplayCBData							(NIImageDisplay_type*
 
 static int						SetRestoreImgSettingsCBs						(NIImageDisplay_type* imgDisplay, size_t nCallbackFunctions, RestoreImgSettings_CBFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions);
 
+static int 						DrawROI 										(NIImageDisplay_type* imgDisplay, ROI_type* ROI);
+
 static ROI_type*				OverlayNIVisionROI								(NIImageDisplay_type* imgDisplay, ROI_type* ROI);
 
-static void						ClearROI										(NIImageDisplay_type* imgDisplay, int ROIIdx);
+static void						NIVisionROIActions								(NIImageDisplay_type* imgDisplay, int ROIIdx, ROIActions action);
 
 static void						DiscardImaqImg									(Image** image);
 
@@ -144,7 +146,7 @@ NIDisplayEngine_type* init_NIDisplayEngine_type (	intptr_t 					parentWindowHndl
 								(GetImageDisplayCBDataFptr_type) GetNIImageDisplayCBData,
 								(SetRestoreImgSettingsCBsFptr_type) SetRestoreImgSettingsCBs,
 								(OverlayROIFptr_type) OverlayNIVisionROI,
-								(ClearROIFptr_type) ClearROI,
+								(ROIActionsFptr_type) NIVisionROIActions,
 								ROIEventsCBFptr,
 								imgDisplayEventCBFptr,
 						   		errorHandlerCBFptr);
@@ -394,10 +396,9 @@ Error:
 	
 }
 
-static ROI_type* OverlayNIVisionROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
+static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 {
 	int					error 				= 0;
-	ROI_type*			ROICopy				= NULL;
 	RGBValue			rgbVal 				= { .R		= ROI->rgba.R,
 												.G		= ROI->rgba.G,
 												.B		= ROI->rgba.B,
@@ -455,6 +456,21 @@ static ROI_type* OverlayNIVisionROI (NIImageDisplay_type* imgDisplay, ROI_type* 
 			
 	}
 	
+	return 0;
+	
+Error:
+	
+	return error;
+	
+}
+
+static ROI_type* OverlayNIVisionROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
+{
+	int					error 				= 0;
+	ROI_type*			ROICopy				= NULL;
+	
+	errChk( DrawROI(imgDisplay, ROI) );
+	
 	// make ROI Copy
 	nullChk( ROICopy = copy_ROI_type(ROI) );
 	
@@ -474,24 +490,82 @@ Error:
 	return NULL;
 }
 
-static void ClearROI (NIImageDisplay_type* imgDisplay, int ROIIdx)
+static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROIActions action)
 {
 	ROI_type**	ROIPtr 	= NULL;
 	size_t		nROIs	= ListNumItems(imgDisplay->baseClass.ROIs);
 	if (ROIIdx) {
 		ROIPtr = ListGetPtrToItem(imgDisplay->baseClass.ROIs, ROIIdx);
-		// clear imaq ROI group (shape and label)
-		imaqClearOverlay((Image*)imgDisplay->baseClass.image, (*ROIPtr)->ROIName);
-		discard_ROI_type(ROIPtr);
-		// remove ROI from image display list
-		ListRemoveItem(imgDisplay->baseClass.ROIs, 0, ROIIdx);
+		switch (action) {
+				
+			case ROI_Visible:
+				
+				if (!(*ROIPtr)->active) {
+					DrawROI(imgDisplay, *ROIPtr);
+					(*ROIPtr)->active = TRUE;
+				}
+				
+				break;
+				
+			case ROI_Hide:
+				
+				// clear imaq ROI group (shape and label)
+				if ((*ROIPtr)->active) {
+					imaqClearOverlay((Image*)imgDisplay->baseClass.image, (*ROIPtr)->ROIName);
+					(*ROIPtr)->active = FALSE;
+				}
+				
+				break;
+				
+			case ROI_Delete:
+				
+				// clear imaq ROI group (shape and label)
+				imaqClearOverlay((Image*)imgDisplay->baseClass.image, (*ROIPtr)->ROIName);
+				// discard ROI data
+				discard_ROI_type(ROIPtr);
+				// remove ROI from image display list
+				ListRemoveItem(imgDisplay->baseClass.ROIs, 0, ROIIdx);
+				break;
+		}
 	} else {
 		for (size_t i = 1; i <= nROIs; i++) {
 			ROIPtr = ListGetPtrToItem(imgDisplay->baseClass.ROIs, i);
-			discard_ROI_type(ROIPtr);
+			
+			switch (action) {
+				
+				case ROI_Visible:
+				
+					if (!(*ROIPtr)->active) {
+						DrawROI(imgDisplay, *ROIPtr);
+						(*ROIPtr)->active = TRUE;
+					}
+				
+					break;
+				
+				case ROI_Hide:
+				
+					// clear imaq ROI group (shape and label)
+					if ((*ROIPtr)->active) {
+						imaqClearOverlay((Image*)imgDisplay->baseClass.image, (*ROIPtr)->ROIName);
+						(*ROIPtr)->active = FALSE;
+					}
+				
+					break;
+				
+				case ROI_Delete:
+				
+					// clear imaq ROI group (shape and label)
+					imaqClearOverlay((Image*)imgDisplay->baseClass.image, (*ROIPtr)->ROIName);
+					// discard ROI data
+					discard_ROI_type(ROIPtr);
+					// remove ROI from image display list
+					ListRemoveItem(imgDisplay->baseClass.ROIs, 0, ROIIdx);
+					break;
+			}
 		}
-		ListClear(imgDisplay->baseClass.ROIs);
-		imaqClearOverlay((Image*)imgDisplay->baseClass.image, NULL);
+		
+		if (action == ROI_Delete)
+			ListClear(imgDisplay->baseClass.ROIs);
 	}
 	
 	// update imaq display
@@ -524,7 +598,7 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 					
 					// execute callback
 					if (display->baseClass.displayEngine->ROIEventsCBFptr)
-						(*display->baseClass.displayEngine->ROIEventsCBFptr) ((ImageDisplay_type*)display, display->baseClass.imageDisplayCBData, display->baseClass.ROIAction, (ROI_type*) PointROI);
+						(*display->baseClass.displayEngine->ROIEventsCBFptr) ((ImageDisplay_type*)display, display->baseClass.imageDisplayCBData, display->baseClass.ROIEvent, (ROI_type*) PointROI);
 					
 					discard_ROI_type((ROI_type**)&PointROI);
 					
@@ -566,7 +640,7 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 					
 					// execute callback
 					if (display->baseClass.displayEngine->ROIEventsCBFptr)
-						(*display->baseClass.displayEngine->ROIEventsCBFptr) ((ImageDisplay_type*)display, display->baseClass.imageDisplayCBData, display->baseClass.ROIAction,(ROI_type*) RectROI);
+						(*display->baseClass.displayEngine->ROIEventsCBFptr) ((ImageDisplay_type*)display, display->baseClass.imageDisplayCBData, display->baseClass.ROIEvent,(ROI_type*) RectROI);
 					
 					discard_ROI_type((ROI_type**)&RectROI);
 					
@@ -640,7 +714,7 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 			switch (wParam) {
 				case VK_CONTROL:
 					
-					disp->baseClass.ROIAction	= ROI_Added;
+					disp->baseClass.ROIEvent	= ROI_Added;
 					
 					break;
 					
@@ -656,7 +730,7 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 			switch (wParam) {
 				case VK_CONTROL:
 					
-					disp->baseClass.ROIAction	= ROI_Placed;
+					disp->baseClass.ROIEvent	= ROI_Placed;
 					
 					break;
 					

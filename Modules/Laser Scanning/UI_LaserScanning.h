@@ -103,7 +103,8 @@
 #define  ROITab_Repeat                    3       /* control type: numeric, callback function: (none) */
 #define  ROITab_Period                    4       /* control type: numeric, callback function: (none) */
 #define  ROITab_StartDelay                5       /* control type: numeric, callback function: (none) */
-#define  ROITab_ParkedTime                6       /* control type: numeric, callback function: (none) */
+#define  ROITab_JumpTime                  6       /* control type: numeric, callback function: (none) */
+#define  ROITab_ParkedTime                7       /* control type: numeric, callback function: (none) */
 
      /* tab page panel controls */
 #define  ScanTab_PixelSize                2       /* control type: numeric, callback function: (none) */

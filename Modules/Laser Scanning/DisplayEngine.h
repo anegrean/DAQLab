@@ -46,6 +46,12 @@ typedef enum {
 	ROI_Placed,											// ROI placed on the image, but not added to it.
 	ROI_Added,											// ROI added to the image.
 	ROI_Removed											// ROI removed.
+} ROIEvents;
+
+typedef enum {
+	ROI_Visible,										// ROI is visible on the image.
+	ROI_Hide,											// ROI is hidden.
+	ROI_Delete											// ROI is deleted from the image.
 } ROIActions;
 
 typedef enum {
@@ -57,7 +63,7 @@ typedef enum {
 //--------------------------------------
 
 	// ROI was placed over the image (but not added to it)
-typedef void							(*ROIEvents_CBFptr_type)					(ImageDisplay_type* imgDisplay, void* callbackData, ROIActions action, ROI_type* ROI);
+typedef void							(*ROIEvents_CBFptr_type)					(ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI);
 
 	// General callback for various image display events
 typedef void							(*ImageDisplay_CBFptr_type)					(ImageDisplay_type* imgDisplay, void* callbackData, ImageDisplayEvents event);
@@ -92,8 +98,8 @@ typedef int								(*SetRestoreImgSettingsCBsFptr_type)		(ImageDisplay_type* img
 	// Places an ROI overlay over the displayed image 
 typedef ROI_type*						(*OverlayROIFptr_type)						(ImageDisplay_type* imgDisplay, ROI_type* ROI);
 
-	// Clears all ROI overlays. ROIIdx is the 1-based ROI index from the image display ROI list. If ROIIdx is 0, all ROIs are cleared
-typedef void							(*ClearROIFptr_type)						(ImageDisplay_type* imgDisplay, int ROIIdx);
+	// Clears ROI overlays. ROIIdx is the 1-based ROI index from the image display ROI list. If ROIIdx is 0, all ROIs are cleared
+typedef void							(*ROIActionsFptr_type)						(ImageDisplay_type* imgDisplay, int ROIIdx, ROIActions action);
 
 
 
@@ -126,7 +132,7 @@ struct DisplayEngine {
 	
 	OverlayROIFptr_type					overlayROIFptr;
 	
-	ClearROIFptr_type					clearROIFptr;
+	ROIActionsFptr_type					ROIActionsFptr;
 	
 	//---------------------------------------------------------------------------------------------------------------
 	// CALLBACKS (provide action to be taken by the module making use of the display engine)
@@ -172,7 +178,7 @@ struct ImageDisplay {
 	ListType							ROIs;							// List of ROIs added to the image of ROI_type*
 	RGBA_type							ROITextBackground;				// Color of ROIs label background.
 	int									ROITextFontSize;				// Font size for displaying ROI labels. Default: 12
-	ROIActions							ROIAction;						// Parameter passed to the ROI callback.
+	ROIEvents							ROIEvent;						// Parameter passed to the ROI callback.
 	
 	//---------------------------------------------------------------------------------------------------------------
 	// METHODS (override with child class implementation)
@@ -211,7 +217,7 @@ void									init_DisplayEngine_type					(DisplayEngine_type* 					displayEngine
 																				 GetImageDisplayCBDataFptr_type			getImageDisplayCBDataFptr,
 																				 SetRestoreImgSettingsCBsFptr_type		setRestoreImgSettingsFptr,
 																				 OverlayROIFptr_type					overlayROIFptr,
-																				 ClearROIFptr_type					clearROIFptr,
+																				 ROIActionsFptr_type					ROIActionsFptr,
 																				 ROIEvents_CBFptr_type					ROIEventsCBFptr,
 																				 ImageDisplay_CBFptr_type				imgDisplayEventCBFptr,
 																				 ErrorHandlerFptr_type					errorHandlerCBFptr);

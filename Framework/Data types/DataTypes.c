@@ -868,6 +868,13 @@ ROI_type* copy_ROI_type (ROI_type* ROI)
 			
 	}
 	
+	// copy ROI base class properties
+	ROICopy->active = ROI->active;
+	ROICopy->rgba.A = ROI->rgba.A;
+	ROICopy->rgba.B = ROI->rgba.B;
+	ROICopy->rgba.G = ROI->rgba.G;
+	ROICopy->rgba.R = ROI->rgba.R;
+	
 	return ROICopy;
 }
 

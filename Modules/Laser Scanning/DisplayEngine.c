@@ -44,7 +44,7 @@ void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 								GetImageDisplayCBDataFptr_type			getImageDisplayCBDataFptr,
 								SetRestoreImgSettingsCBsFptr_type		setRestoreImgSettingsFptr, 
 								OverlayROIFptr_type						overlayROIFptr,
-								ClearROIFptr_type						clearROIFptr,
+								ROIActionsFptr_type						ROIActionsFptr,
 							 	ROIEvents_CBFptr_type					ROIEventsCBFptr,
 								ImageDisplay_CBFptr_type				imgDisplayEventCBFptr,
 							 	ErrorHandlerFptr_type					errorHandlerCBFptr		)
@@ -56,7 +56,7 @@ void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 	displayEngine->getImageDisplayCBDataFptr	= getImageDisplayCBDataFptr;
 	displayEngine->setRestoreImgSettingsFptr	= setRestoreImgSettingsFptr;
 	displayEngine->overlayROIFptr				= overlayROIFptr;
-	displayEngine->clearROIFptr					= clearROIFptr;
+	displayEngine->ROIActionsFptr				= ROIActionsFptr;
 	displayEngine->ROIEventsCBFptr				= ROIEventsCBFptr;
 	displayEngine->imgDisplayEventCBFptr		= imgDisplayEventCBFptr;
 	displayEngine->errorHandlerCBFptr			= errorHandlerCBFptr;
@@ -95,7 +95,7 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 	imageDisplay->ROITextBackground.B			= 0;	
 	imageDisplay->ROITextBackground.A			= 255;	// transparent
 	imageDisplay->ROITextFontSize				= Default_ROI_Label_FontSize;
-	imageDisplay->ROIAction						= ROI_Placed;
+	imageDisplay->ROIEvent						= ROI_Placed;
 	
 	// methods
 	imageDisplay->discardFptr					= discardFptr;       

@@ -434,8 +434,11 @@ typedef struct {
 	// Point Jump Settings								// For jumping as fast as possible between a series of points and staying at each point a given amount of time. 
 	//-----------------------------------
 	double						pointParkedTime;		// Time during which the beam remains stationary at a given point in [us].
-	double						jumpStartDelay;			// Delay from the start point of galvo movement from the parked position in [ms] to the first point ROI.
-	double						pointJumpPeriod;		// Period in [ms] between repeating a cycle of jumps between a series of points.
+	double						jumpStartDelay;			// Delay from the start point of galvo movement from the parked position in [ms] to the first point ROI set by the user.
+	double						minimumJumpStartDelay;	// Minimum delay from the start point of galvo movement from the parked position in [ms] to the first point ROI.
+	double						pointJumpTime;			// Time in [ms] during which the beam jumps from point to point including the parked time of each point. This time does not include the time
+														// of the beam to get from the parked position to the first point ROI nor the time it takes to return from the last point ROI to the parked position.
+	double						pointJumpPeriod;		// Period in [ms] between repeating a cycle of jumps between a series of points set by the user.
 	double						minimumPointJumpPeriod;	// Minimum period to complete a point jump cycle in [ms].
 	uInt32						pointJumpCycles;		// Number of times to repeat a jump cycle between a series of point ROIs.
 	
@@ -804,7 +807,7 @@ static void							ShutterVChan_Disconnected							(VChan_type* self, void* VChan
 // Display interface
 //-----------------------------------------
 
-static void							ROIDisplay_CB										(ImageDisplay_type* imgDisplay, void* callbackData, ROIActions action, ROI_type* ROI);
+static void							ROIDisplay_CB										(ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI);
 
 static void							ImageDisplay_CB										(ImageDisplay_type* imgDisplay, void* callbackData, ImageDisplayEvents event);
 
@@ -3636,7 +3639,7 @@ static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplit
 	
 	// interpolate half-switch times vs. amplitude measurements
 	errChk( Spline(cal->switchTimes->stepSize, cal->switchTimes->halfSwitch, cal->switchTimes->n, 0, 0, secondDerivatives) );
-	errChk( SpInterp(cal->switchTimes->stepSize, cal->switchTimes->halfSwitch, secondDerivatives,  cal->switchTimes->n, jumpAmplitude, &halfSwitchTime) );
+	errChk( SpInterp(cal->switchTimes->stepSize, cal->switchTimes->halfSwitch, secondDerivatives,  cal->switchTimes->n, fabs(jumpAmplitude), &halfSwitchTime) );
 	OKfree(secondDerivatives);
 	
 	*jumpTime = 2 * halfSwitchTime;  // total time for galvo to settle
@@ -4568,6 +4571,8 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	engine->jumpStartDelay				= 0;
 	engine->pointJumpPeriod				= 0;
 	engine->minimumPointJumpPeriod		= 0;
+	engine->minimumJumpStartDelay		= 0;	
+	engine->pointJumpTime				= 0;
 	engine->pointJumpCycles				= 1;
 	engine->pointJumps					= ListCreate(sizeof(Point_type*));
 	
@@ -5051,7 +5056,7 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 					if (listItemIdx < 0) break; // stop here if list is empty
 					
 					// remove ROI item from display and from scan engine list
-					(*scanEngine->baseClass.activeDisplay->displayEngine->clearROIFptr) (scanEngine->baseClass.activeDisplay, listItemIdx + 1);
+					(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, listItemIdx + 1, ROI_Delete);
 					DeleteListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, listItemIdx, 1);
 					ListRemoveItem(scanEngine->pointJumps, 0, listItemIdx + 1);
 					
@@ -5060,13 +5065,14 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 					// calculate point jump period
 					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
-					// dim controls if there are no more ROIs
-					GetNumListItems(panel, control, &nROIs);
+					// dim controls if there are no more active ROIs
+					GetNumCheckedItems(panel, control, &nROIs);
 					if (!nROIs) {
 						SetCtrlAttribute(panel, ROITab_ParkedTime, ATTR_DIMMED, 1);
 						SetCtrlAttribute(panel, ROITab_StartDelay, ATTR_DIMMED, 1);
 						SetCtrlAttribute(panel, ROITab_Period, ATTR_DIMMED, 1);
 						SetCtrlAttribute(panel, ROITab_Repeat, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, ROITab_JumpTime, ATTR_DIMMED, 1);
 					}
 					
 					break;
@@ -5080,14 +5086,33 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 					
 				case ROITab_ROIs:
 					
-					// change active state of point ROI
-					ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumps, eventData2 + 1);
-					ROI->active = eventData1;
+					if (eventData1)
+						// mark point ROI as active and make it visible
+						(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Visible);
+					else
+						// mark point ROI as inactive and hide it
+						(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Hide);
 					
 					// calculate minimum point jump start delay
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 					// calculate point jump period
 					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
+					
+					// dim/undim controls
+					GetNumCheckedItems(panel, control, &nROIs);
+					if (nROIs) {
+						SetCtrlAttribute(panel, ROITab_ParkedTime, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, ROITab_StartDelay, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, ROITab_Period, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, ROITab_Repeat, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, ROITab_JumpTime, ATTR_DIMMED, 0);
+					} else {
+						SetCtrlAttribute(panel, ROITab_ParkedTime, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, ROITab_StartDelay, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, ROITab_Period, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, ROITab_Repeat, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, ROITab_JumpTime, ATTR_DIMMED, 1);
+					}
 					
 					break;
 			}
@@ -5691,22 +5716,111 @@ Error:
 
 static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanEngine, char** errorInfo)
 {
-	// NonResGalvoJumpBetweenPoints
-	// NonResGalvoPointJumpTime
-	int					error				= 0;
-	size_t				nPointROIs			= ListNumItems(scanEngine->pointJumps);   // number of point ROIs available
-	Point_type*			pointJump			= NULL;
-	double*				fastAxisVoltages	= NULL;
-	double*				slowAxisVoltages	= NULL;
+	
+#define NonResRectRasterScan_GeneratePointJumpSignals_Err_NoPoints		-1
+	int						error					= 0;
+	char*					errMsg					= NULL;
+	size_t					nTotalPoints			= ListNumItems(scanEngine->pointJumps);   // number of point ROIs available
+	Point_type*				pointJump				= NULL;
+	size_t					nVoltages				= 0;
+	size_t					j						= 0;
+	double*					fastAxisVoltages		= NULL;
+	double*					slowAxisVoltages		= NULL;
+	double*					fastAxisCommandSignal1	= NULL;
+	double*					slowAxisCommandSignal1	= NULL;
+	double*					fastAxisCommandSignal2	= NULL;
+	double*					slowAxisCommandSignal2	= NULL;
+	Waveform_type*			fastAxisWaveform		= NULL;
+	Waveform_type*			slowAxisWaveform		= NULL;
+	DataPacket_type*		galvoCommandPacket		= NULL; 
+	Point_type*				firstPointJump			= NULL;
+	Point_type*				lastPointJump			= NULL;
+	NonResGalvoCal_type*	fastAxisCal				= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;
+	NonResGalvoCal_type*	slowAxisCal				= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
 	
 	
-	// count number of points in the image to jump to
-	for (size_t i = 1; i <= nPointROIs; i++) {
-		pointJump = *(Point_type**) ListGetPtrToItem(scanEngine->pointJumps, i);
-		if (!pointJump->baseClass.active) continue; // select only point ROIs to jump to
+	// get first point to jump to
+	for (size_t i = 1; i <= nTotalPoints; i++) {
+		pointJump = *(Point_type**)ListGetPtrToItem(scanEngine->pointJumps, i);
+		if (!pointJump->baseClass.active) continue; // select only the first active point jump
+		firstPointJump = pointJump;
+		break;
 	}
 	
+	// if there are no points, generate error
+	if (!firstPointJump) {
+		error = NonResRectRasterScan_GeneratePointJumpSignals_Err_NoPoints;
+		errMsg = StrDup("No points to jump to");
+		goto Error;
+	}
+	
+	// get last point to jump to
+	pointJump = NULL;
+	for (size_t i = nTotalPoints; i >= 1; i--) {
+		pointJump = *(Point_type**)ListGetPtrToItem(scanEngine->pointJumps, i);
+		if (!pointJump->baseClass.active) continue; // select only the first from last active point jump
+		lastPointJump = pointJump;
+		break;
+	}
+	
+	// count number of point ROIs to jump to
+	for (size_t i = 1; i <= nTotalPoints; i++) {
+		pointJump = *(Point_type**) ListGetPtrToItem(scanEngine->pointJumps, i);
+		if (!pointJump->baseClass.active) continue; // select only point ROIs to jump to
+		nVoltages++;
+	}
+	
+	// add also the parked voltages before and after the ROI jumps and allocate memory
+	nVoltages += 2;
+	nullChk(fastAxisVoltages = malloc(nVoltages * sizeof(double)) );
+	nullChk(slowAxisVoltages = malloc(nVoltages * sizeof(double)) ); 
+	
+	// set the first and last voltages to be the parked voltage
+	fastAxisVoltages[0] = fastAxisCal->parked;
+	fastAxisVoltages[nVoltages-1] = fastAxisCal->parked;
+	slowAxisVoltages[0] = slowAxisCal->parked;
+	slowAxisVoltages[nVoltages-1] = slowAxisCal->parked;
+	
+	// set ROI jumping voltages
+	for (size_t i = 1; i < nTotalPoints; i++) {
+		pointJump = *(Point_type**)ListGetPtrToItem(scanEngine->pointJumps, i);
+		if (!pointJump->baseClass.active) continue; // select only active point jumps
+		j++;
+		NonResRectRasterScan_PointROIVoltage(scanEngine, pointJump, &fastAxisVoltages[j], &slowAxisVoltages[j]);
+	}
+			
+	// allocate memory for waveforms within one point jump cycle (excl. additional initial delay)
+	nullChk( fastAxisCommandSignal2 = malloc((size_t)(scanEngine->pointJumpPeriod * 1e-3 * scanEngine->galvoSamplingRate) * sizeof(double)) );
+	nullChk( slowAxisCommandSignal2 = malloc((size_t)(scanEngine->pointJumpPeriod * 1e-3 * scanEngine->galvoSamplingRate) * sizeof(double)) );
+	
+	
+	// cleanup
+	OKfree(fastAxisVoltages);
+	OKfree(slowAxisVoltages);
+	
 	return 0;
+	
+Error:
+	
+	// cleanup
+	OKfree(fastAxisVoltages);
+	OKfree(slowAxisVoltages);
+	OKfree(fastAxisWaveform);
+	OKfree(slowAxisWaveform);
+	OKfree(fastAxisCommandSignal1);
+	OKfree(slowAxisCommandSignal1);
+	OKfree(fastAxisCommandSignal2);
+	OKfree(slowAxisCommandSignal2);
+	OKfree(galvoCommandPacket);
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "NonResRectRasterScan_GeneratePointJumpSignals", errMsg);
+	OKfree(errMsg);
+	
+	return error;
 }
 
 /* 
@@ -6148,7 +6262,7 @@ SkipPoints:
 		rectRaster->jumpStartDelay = startDelay;
 		SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_StartDelay, rectRaster->jumpStartDelay);
 	}
-	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_MIN_VALUE, rectRaster->jumpStartDelay);  
+	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_MIN_VALUE, startDelay);  
 }
 
 // Calculates the minimum time it takes to visit all the point ROIs starting from the parked position and ending up again in the parked position
@@ -6168,7 +6282,9 @@ static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rec
 	size_t					nTotalPoints		= ListNumItems(rectRaster->pointJumps);
 	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
-	double					jumpPeriod			= 0; // in [ms]
+	double					jumpPeriod			= 0; // Jump time starting from parked position, going through the point ROIs and returning back to the parked position, in [ms].
+	double					ROIsJumpTime		= 0; // Jump time from the first point ROI to the last point ROI including the parked times, in [ms].
+	double					jumpTime			= 0; // Jump time between two point ROIs including the parked time spent at the forst point ROI, in [ms]
 	
 	// get first point to jump to
 	for (size_t i = 1; i <= nTotalPoints; i++) {
@@ -6190,12 +6306,12 @@ static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rec
 		break;
 	}
 	
-	// calculate time to jump from parked position to the first Point ROI and add also the parked time
+	// calculate time to jump from parked position to the first Point ROI
 	NonResRectRasterScan_PointROIVoltage(rectRaster, firstPointJump, &fastAxisCommandV, &slowAxisCommandV); 
-	jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV) + rectRaster->pointParkedTime * 1e-3;
-	// calculate time to jump from last Point ROI back to the parked position
-	NonResRectRasterScan_PointROIVoltage(rectRaster, lastPointJump, &fastAxisCommandV, &slowAxisCommandV); 
 	jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
+	// calculate time to jump from last Point ROI back to the parked position and add also the parked time
+	NonResRectRasterScan_PointROIVoltage(rectRaster, lastPointJump, &fastAxisCommandV, &slowAxisCommandV); 
+	jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV) + rectRaster->pointParkedTime * 1e-3;
 	
 	// calculate time to jump between active Point ROIs
 	for (size_t i = 1; i < nTotalPoints; i++) {
@@ -6208,21 +6324,27 @@ static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rec
 			// calculate jump time and add also the parked time
 			NonResRectRasterScan_PointROIVoltage(rectRaster, pointJump1, &fastAxisCommandV1, &slowAxisCommandV1);
 			NonResRectRasterScan_PointROIVoltage(rectRaster, pointJump2, &fastAxisCommandV2, &slowAxisCommandV2); 
-			jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCommandV1 - fastAxisCommandV2, slowAxisCommandV1 - slowAxisCommandV2) + rectRaster->pointParkedTime * 1e-3;
+			jumpTime = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCommandV1 - fastAxisCommandV2, slowAxisCommandV1 - slowAxisCommandV2) + rectRaster->pointParkedTime * 1e-3;
+			jumpPeriod += jumpTime;
+			ROIsJumpTime += jumpTime;
 			break; // get next pair
 		}
 	}
+	
+	ROIsJumpTime += rectRaster->pointParkedTime * 1e-3; // add the parked time of the last point, before jumping back to the parked position
 	
 SkipPoints:
 	
 	// update minimum point jump period
 	rectRaster->minimumPointJumpPeriod = jumpPeriod;
+	rectRaster->pointJumpTime = ROIsJumpTime;
+	SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_JumpTime, ROIsJumpTime); 
 	// if period is larger or equal to previous value, then update lower bound 
 	if (rectRaster->pointJumpPeriod <= jumpPeriod) {
 		rectRaster->pointJumpPeriod = jumpPeriod;
 		SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_Period, rectRaster->pointJumpPeriod);
 	}
-	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_Period, ATTR_MIN_VALUE, rectRaster->pointJumpPeriod);
+	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_Period, ATTR_MIN_VALUE, jumpPeriod);
 }
 
 
@@ -6546,7 +6668,7 @@ static void	ShutterVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan
 // Display interface
 //-----------------------------------------
 
-static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, ROIActions action, ROI_type* ROI)
+static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI)
 {
 	DetChan_type*			detChan 		= callbackData;
 	ROI_type*				addedROI		= NULL;						  // reference to the ROI added to the image display
@@ -6554,7 +6676,7 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 	RectRaster_type*		scanEngine		= (RectRaster_type*) detChan->scanEngine;
 	int						nListItems		= 0;
 	
-	switch (action) {
+	switch (event) {
 			
 		case ROI_Placed:
 			
@@ -6602,6 +6724,7 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_DIMMED, 0);
 						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Period, ATTR_DIMMED, 0);
 						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Repeat, ATTR_DIMMED, 0);
+						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_JumpTime, ATTR_DIMMED, 0);
 						
 						break;
 						
@@ -6672,18 +6795,22 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 	// update ROIs in the scan engine UI
 	ClearListCtrl(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs);
 	ListClear(scanEngine->pointJumps);
-	size_t 		nROIs 	= ListNumItems(imgDisplay->ROIs);
-	ROI_type*   ROI		= NULL;
+	size_t 		nROIs 				= ListNumItems(imgDisplay->ROIs);
+	ROI_type*   ROI					= NULL;
+	BOOL		activeROIAvailable 	= FALSE;
 	for (size_t i = 1; i <= nROIs; i++) {
 		ROI= *(ROI_type**)ListGetPtrToItem(imgDisplay->ROIs, i);
 		InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, ROI->ROIName, i);
+		
+		if (ROI->active)
+			activeROIAvailable = TRUE;
 		
 		switch (ROI->ROIType) {
 						
 			case ROI_Point:
 						
-				// mark point as checked (in use)  
-				CheckListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, i - 1, 1); 
+				// mark point as checked/unchecked
+				CheckListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, i - 1, ROI->active); 
 				// insert ROI item in the scan engine as well
 				ListInsertItem(scanEngine->pointJumps, &ROI, END_OF_LIST);
 						
@@ -6703,11 +6830,12 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 				NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 				NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine); 
 				
-				if (nROIs) {
+				if (activeROIAvailable) {
 					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_ParkedTime, ATTR_DIMMED, 0);
 					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_DIMMED, 0);
 					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Period, ATTR_DIMMED, 0);
 					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Repeat, ATTR_DIMMED, 0);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_JumpTime, ATTR_DIMMED, 0);
 				}
 				
 				break;

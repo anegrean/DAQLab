@@ -4579,7 +4579,7 @@ static RectRaster_type* init_RectRaster_type (LaserScanning_type*				lsModule,
 	//--------------------
 	// VChans
 	//--------------------
-	engine->VChanROITiming				= init_SourceVChan_type(ROITimingVChanName, DL_Waveform_Char, engine, NULL, NULL);
+	engine->VChanROITiming				= init_SourceVChan_type(ROITimingVChanName, DL_RepeatedWaveform_UChar, engine, NULL, NULL);
 	
 	//--------------------
 	// image buffers
@@ -5031,6 +5031,10 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 				case ROITab_Period:
 					
 					GetCtrlVal(panel, control, &scanEngine->pointJumpPeriod);
+					
+					// round up to a multiple of galvo sampling
+					scanEngine->pointJumpPeriod = ceil(scanEngine->pointJumpPeriod * 1e-3 * scanEngine->galvoSamplingRate) * 1e3/scanEngine->galvoSamplingRate;
+					SetCtrlVal(panel, control, scanEngine->pointJumpPeriod);
 					
 					break;
 					
@@ -5718,26 +5722,43 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 {
 	
 #define NonResRectRasterScan_GeneratePointJumpSignals_Err_NoPoints		-1
-	int						error					= 0;
-	char*					errMsg					= NULL;
-	size_t					nTotalPoints			= ListNumItems(scanEngine->pointJumps);   // number of point ROIs available
-	Point_type*				pointJump				= NULL;
-	size_t					nVoltages				= 0;
-	size_t					j						= 0;
-	double*					fastAxisVoltages		= NULL;
-	double*					slowAxisVoltages		= NULL;
-	double*					fastAxisCommandSignal1	= NULL;
-	double*					slowAxisCommandSignal1	= NULL;
-	double*					fastAxisCommandSignal2	= NULL;
-	double*					slowAxisCommandSignal2	= NULL;
-	Waveform_type*			fastAxisWaveform		= NULL;
-	Waveform_type*			slowAxisWaveform		= NULL;
-	DataPacket_type*		galvoCommandPacket		= NULL; 
-	Point_type*				firstPointJump			= NULL;
-	Point_type*				lastPointJump			= NULL;
-	NonResGalvoCal_type*	fastAxisCal				= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;
-	NonResGalvoCal_type*	slowAxisCal				= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
+	int						error							= 0;
+	char*					errMsg							= NULL;
+	size_t					nTotalPoints					= ListNumItems(scanEngine->pointJumps);   // number of point ROIs available
+	Point_type*				pointJump						= NULL;
+	size_t					nVoltages						= 0;
+	size_t					nStartDelayElem					= 0;
+	size_t					nCycleDelayElem					= 0;
+	size_t					nCycleElem						= 0;
+	size_t					nJumpSamples					= 0;
+	size_t					nParkedSamples					= 0;
+	size_t					j								= 0;
+	double*					fastAxisVoltages				= NULL;
+	double*					slowAxisVoltages				= NULL;
+	double*					fastAxisStartDelaySignal		= NULL;
+	double*					slowAxisStartDelaySignal		= NULL;
+	double*					fastAxisJumpSignal				= NULL;
+	double*					slowAxisJumpSignal				= NULL;
+	unsigned char*			ROIStartDelaySignal				= NULL;
+	unsigned char*			ROIJumpSignal					= NULL;
+	uInt64*					nGalvoSamplesPtr				= NULL;
+	RepeatedWaveform_type*	fastAxisStartDelayWaveform		= NULL;
+	RepeatedWaveform_type*	slowAxisStartDelayWaveform		= NULL;
+	RepeatedWaveform_type*	fastAxisJumpWaveform			= NULL;
+	RepeatedWaveform_type*	slowAxisJumpWaveform			= NULL;
+	RepeatedWaveform_type*	ROIStartDelayWaveform			= NULL;
+	RepeatedWaveform_type*	ROIJumpWaveform					= NULL;
+	DataPacket_type*		dataPacket						= NULL; 
+	DataPacket_type*		nullPacket						= NULL; 
+	Point_type*				firstPointJump					= NULL;
+	Point_type*				lastPointJump					= NULL;
+	NonResGalvoCal_type*	fastAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;
+	NonResGalvoCal_type*	slowAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
 	
+	
+	//-----------------------------------------------
+	// Generate waveforms
+	//-----------------------------------------------
 	
 	// get first point to jump to
 	for (size_t i = 1; i <= nTotalPoints; i++) {
@@ -5782,16 +5803,96 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	slowAxisVoltages[nVoltages-1] = slowAxisCal->parked;
 	
 	// set ROI jumping voltages
-	for (size_t i = 1; i < nTotalPoints; i++) {
+	for (size_t i = 1; i <= nTotalPoints; i++) {
 		pointJump = *(Point_type**)ListGetPtrToItem(scanEngine->pointJumps, i);
 		if (!pointJump->baseClass.active) continue; // select only active point jumps
 		j++;
 		NonResRectRasterScan_PointROIVoltage(scanEngine, pointJump, &fastAxisVoltages[j], &slowAxisVoltages[j]);
 	}
-			
+	
+	// generate start delay waveforms
+	nStartDelayElem = (size_t)((scanEngine->jumpStartDelay - scanEngine->minimumJumpStartDelay) * 1e-3 * scanEngine->galvoSamplingRate);
+	if (nStartDelayElem) {
+		// galvo command signals
+		nullChk( fastAxisStartDelaySignal = malloc(nStartDelayElem * sizeof(double)) );
+		nullChk( slowAxisStartDelaySignal = malloc(nStartDelayElem * sizeof(double)) );
+		Set1D(fastAxisStartDelaySignal, nStartDelayElem, fastAxisCal->parked);
+		Set1D(slowAxisStartDelaySignal, nStartDelayElem, slowAxisCal->parked);
+		nullChk( fastAxisStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nStartDelayElem, &fastAxisStartDelaySignal, 1.0) );
+		nullChk( slowAxisStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nStartDelayElem, &fastAxisStartDelaySignal, 1.0) );
+		// ROI timing signal
+		nullChk( ROIStartDelaySignal = calloc(nStartDelayElem, sizeof(unsigned char)) );
+		nullChk( ROIStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, scanEngine->galvoSamplingRate, nStartDelayElem, &ROIStartDelaySignal, 1.0) ); 
+	}
+	
 	// allocate memory for waveforms within one point jump cycle (excl. additional initial delay)
-	nullChk( fastAxisCommandSignal2 = malloc((size_t)(scanEngine->pointJumpPeriod * 1e-3 * scanEngine->galvoSamplingRate) * sizeof(double)) );
-	nullChk( slowAxisCommandSignal2 = malloc((size_t)(scanEngine->pointJumpPeriod * 1e-3 * scanEngine->galvoSamplingRate) * sizeof(double)) );
+	nCycleElem = (size_t)(scanEngine->pointJumpPeriod * 1e-3 * scanEngine->galvoSamplingRate);
+	nullChk( fastAxisJumpSignal = malloc(nCycleElem * sizeof(double)) );
+	nullChk( slowAxisJumpSignal = malloc(nCycleElem * sizeof(double)) );
+	nullChk( ROIJumpSignal = calloc(nCycleElem, sizeof(unsigned char)) );
+	
+	// set cycle delay elements to be equal to the parked voltage
+	nCycleDelayElem = (size_t)((scanEngine->pointJumpPeriod - scanEngine->minimumPointJumpPeriod) * 1e-3 * scanEngine->galvoSamplingRate);
+	if (nCycleDelayElem) {
+		Set1D(fastAxisJumpSignal + (nCycleElem - nCycleDelayElem), nCycleDelayElem, fastAxisCal->parked);
+		Set1D(slowAxisJumpSignal + (nCycleElem - nCycleDelayElem), nCycleDelayElem, slowAxisCal->parked);
+	}
+	
+	// set jump voltages
+	nParkedSamples = (size_t)(scanEngine->pointParkedTime * 1e-6 * scanEngine->galvoSamplingRate);
+	j = 0;
+	for (size_t i = 0; i < nVoltages - 1; i++) {
+		nJumpSamples = (size_t)(NonResRectRasterScan_JumpTime(scanEngine, fastAxisVoltages[i+1] - fastAxisVoltages[i], slowAxisVoltages[i+1] - slowAxisVoltages[i]) * 1e-3 * scanEngine->galvoSamplingRate); 
+		// set galvo command signals
+		Set1D(fastAxisJumpSignal + j, nJumpSamples + nParkedSamples, fastAxisVoltages[i+1]);
+		Set1D(slowAxisJumpSignal + j, nJumpSamples + nParkedSamples, slowAxisVoltages[i+1]);
+		// set ROI timing signal
+		for (size_t k = j+nJumpSamples; k < j+nJumpSamples+nParkedSamples; k++)
+			ROIJumpSignal[k] = 1;
+		
+		j += nJumpSamples + nParkedSamples;
+	}
+	
+	// generate galvo command jump waveforms
+	nullChk( fastAxisJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nCycleElem, &fastAxisJumpSignal, (double)scanEngine->pointJumpCycles) );
+	nullChk( slowAxisJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nCycleElem, &slowAxisJumpSignal, (double)scanEngine->pointJumpCycles) );
+	// generate ROI jump timing waveform
+	nullChk( ROIJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, scanEngine->galvoSamplingRate, nCycleElem, &ROIJumpSignal, (double)scanEngine->pointJumpCycles) );
+	
+	//-----------------------------------------------
+	// Send data packets
+	//-----------------------------------------------
+	if (nStartDelayElem) {
+		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisStartDelayWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
+		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisStartDelayWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
+		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&ROIStartDelayWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+		errChk( SendDataPacket(scanEngine->VChanROITiming, &dataPacket, FALSE, &errMsg) );
+	}
+	
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisJumpWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisJumpWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&ROIJumpWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(scanEngine->VChanROITiming, &dataPacket, FALSE, &errMsg) );
+	
+	// send null packets to mark end of waveforms
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(scanEngine->VChanROITiming, &nullPacket, FALSE, &errMsg) );   
+	
+	// send number of samples in fast axis command waveform
+	nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
+	// initial start delay waveform + jump waveform
+	*nGalvoSamplesPtr = (uInt64) nStartDelayElem + (uInt64) scanEngine->pointJumpCycles * nCycleElem;
+	nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &dataPacket, FALSE, &errMsg) );
+	nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
+	*nGalvoSamplesPtr = (uInt64) nStartDelayElem + (uInt64) scanEngine->pointJumpCycles * nCycleElem;
+	nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errMsg) ); 
 	
 	
 	// cleanup
@@ -5805,13 +5906,20 @@ Error:
 	// cleanup
 	OKfree(fastAxisVoltages);
 	OKfree(slowAxisVoltages);
-	OKfree(fastAxisWaveform);
-	OKfree(slowAxisWaveform);
-	OKfree(fastAxisCommandSignal1);
-	OKfree(slowAxisCommandSignal1);
-	OKfree(fastAxisCommandSignal2);
-	OKfree(slowAxisCommandSignal2);
-	OKfree(galvoCommandPacket);
+	OKfree(fastAxisStartDelaySignal);
+	OKfree(slowAxisStartDelaySignal);
+	OKfree(fastAxisJumpSignal);
+	OKfree(slowAxisJumpSignal);
+	OKfree(ROIStartDelaySignal);
+	OKfree(ROIJumpSignal);
+	OKfree(nGalvoSamplesPtr);
+	discard_RepeatedWaveform_type(&fastAxisStartDelayWaveform);
+	discard_RepeatedWaveform_type(&slowAxisStartDelayWaveform);
+	discard_RepeatedWaveform_type(&fastAxisJumpWaveform);
+	discard_RepeatedWaveform_type(&slowAxisJumpWaveform);
+	discard_RepeatedWaveform_type(&ROIStartDelayWaveform);
+	discard_RepeatedWaveform_type(&ROIJumpWaveform);
+	discard_DataPacket_type(&dataPacket);
 	
 	if (!errMsg)
 		errMsg = StrDup("Out of memory");
@@ -6234,7 +6342,6 @@ static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type*
 {
 	double					fastAxisCommandV	= 0;
 	double					slowAxisCommandV	= 0;
-	double					startDelay			= 0;
 	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
 	size_t					nTotalPoints		= ListNumItems(rectRaster->pointJumps);
@@ -6254,15 +6361,15 @@ static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type*
 	
 	// get jump voltages from point ROI
 	NonResRectRasterScan_PointROIVoltage(rectRaster, firstPointJump, &fastAxisCommandV, &slowAxisCommandV);
-	startDelay = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
+	rectRaster->minimumJumpStartDelay = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
 	
 SkipPoints:
 	// update lower bound and coerce value
-	if (rectRaster->jumpStartDelay <= startDelay) {
-		rectRaster->jumpStartDelay = startDelay;
+	if (rectRaster->jumpStartDelay <= rectRaster->minimumJumpStartDelay) {
+		rectRaster->jumpStartDelay = rectRaster->minimumJumpStartDelay;
 		SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_StartDelay, rectRaster->jumpStartDelay);
 	}
-	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_MIN_VALUE, startDelay);  
+	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_MIN_VALUE, rectRaster->minimumJumpStartDelay);  
 }
 
 // Calculates the minimum time it takes to visit all the point ROIs starting from the parked position and ending up again in the parked position
@@ -6282,9 +6389,10 @@ static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rec
 	size_t					nTotalPoints		= ListNumItems(rectRaster->pointJumps);
 	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
-	double					jumpPeriod			= 0; // Jump time starting from parked position, going through the point ROIs and returning back to the parked position, in [ms].
 	double					ROIsJumpTime		= 0; // Jump time from the first point ROI to the last point ROI including the parked times, in [ms].
 	double					jumpTime			= 0; // Jump time between two point ROIs including the parked time spent at the forst point ROI, in [ms]
+	
+	rectRaster->minimumPointJumpPeriod = 0;
 	
 	// get first point to jump to
 	for (size_t i = 1; i <= nTotalPoints; i++) {
@@ -6308,10 +6416,10 @@ static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rec
 	
 	// calculate time to jump from parked position to the first Point ROI
 	NonResRectRasterScan_PointROIVoltage(rectRaster, firstPointJump, &fastAxisCommandV, &slowAxisCommandV); 
-	jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
+	rectRaster->minimumPointJumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
 	// calculate time to jump from last Point ROI back to the parked position and add also the parked time
 	NonResRectRasterScan_PointROIVoltage(rectRaster, lastPointJump, &fastAxisCommandV, &slowAxisCommandV); 
-	jumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV) + rectRaster->pointParkedTime * 1e-3;
+	rectRaster->minimumPointJumpPeriod += NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV) + rectRaster->pointParkedTime * 1e-3;
 	
 	// calculate time to jump between active Point ROIs
 	for (size_t i = 1; i < nTotalPoints; i++) {
@@ -6325,7 +6433,7 @@ static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rec
 			NonResRectRasterScan_PointROIVoltage(rectRaster, pointJump1, &fastAxisCommandV1, &slowAxisCommandV1);
 			NonResRectRasterScan_PointROIVoltage(rectRaster, pointJump2, &fastAxisCommandV2, &slowAxisCommandV2); 
 			jumpTime = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCommandV1 - fastAxisCommandV2, slowAxisCommandV1 - slowAxisCommandV2) + rectRaster->pointParkedTime * 1e-3;
-			jumpPeriod += jumpTime;
+			rectRaster->minimumPointJumpPeriod += jumpTime;
 			ROIsJumpTime += jumpTime;
 			break; // get next pair
 		}
@@ -6336,15 +6444,14 @@ static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rec
 SkipPoints:
 	
 	// update minimum point jump period
-	rectRaster->minimumPointJumpPeriod = jumpPeriod;
 	rectRaster->pointJumpTime = ROIsJumpTime;
 	SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_JumpTime, ROIsJumpTime); 
 	// if period is larger or equal to previous value, then update lower bound 
-	if (rectRaster->pointJumpPeriod <= jumpPeriod) {
-		rectRaster->pointJumpPeriod = jumpPeriod;
+	if (rectRaster->pointJumpPeriod <= rectRaster->minimumPointJumpPeriod) {
+		rectRaster->pointJumpPeriod = rectRaster->minimumPointJumpPeriod;
 		SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_Period, rectRaster->pointJumpPeriod);
 	}
-	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_Period, ATTR_MIN_VALUE, jumpPeriod);
+	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_Period, ATTR_MIN_VALUE, rectRaster->minimumPointJumpPeriod);
 }
 
 
@@ -7759,6 +7866,8 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 			break;
 			
 		case ScanEngineMode_PointJump:
+			
+			TaskControlIterationDone(taskControl, 0, 0, FALSE);
 			
 			break;
 	}

@@ -470,7 +470,9 @@ struct LaserScanning {
 	
 	DAQLabModule_type 			baseClass;
 	
+	//-------------------------
 	// DATA
+	//-------------------------
 	
 		// Available calibration data per scan axis. Of ScanAxisCal_type* which can be casted to various child classes such as GalvoCal_type*
 	ListType					availableCals;
@@ -1025,6 +1027,11 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	int 					error 				= 0;
 	int						newMenuItem			= 0;
 	int						settingsMenuItemHndl;
+	
+	
+	//----------------------------------------------------------------------
+	// load module
+	//----------------------------------------------------------------------
 	
 	// load main panel
 	errChk(ls->mainPanHndl 		= LoadPanel(workspacePanHndl, MOD_LaserScanning_UI, ScanPan));

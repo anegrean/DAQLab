@@ -9,7 +9,7 @@ IVI Standard Root Dir = "/C/Program Files (x86)/IVI Foundation/IVI"
 VXIplug&play Framework Dir = "/C/Program Files (x86)/IVI Foundation/VISA/winnt"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
-Number of Files = 58
+Number of Files = 62
 Target Type = "Executable"
 Flags = 2064
 Copied From Locked InstrDrv Directory = False
@@ -42,33 +42,36 @@ FolderEx 6 Parent = 0
 Folder 7 = "Modules/Data Storage"
 FolderEx 7 = "Data Storage"
 FolderEx 7 Parent = 0
-Folder 8 = "XML"
-FolderEx 8 = "XML"
-Folder 9 = "Instrument Files"
-FolderEx 9 = "Instrument Files"
-Folder 10 = "Framework"
-FolderEx 10 = "Framework"
-Folder 11 = "Framework/Task Control"
-FolderEx 11 = "Task Control"
-FolderEx 11 Parent = 10
-Folder 12 = "Framework/Virtual Channels"
-FolderEx 12 = "Virtual Channels"
-FolderEx 12 Parent = 10
-Folder 13 = "Framework/Iterators"
-FolderEx 13 = "Iterators"
-FolderEx 13 Parent = 10
-Folder 14 = "Framework/Data Packets"
-FolderEx 14 = "Data Packets"
-FolderEx 14 Parent = 10
-Folder 15 = "Framework/Data Types"
-FolderEx 15 = "Data Types"
-FolderEx 15 Parent = 10
-Folder 16 = "Framework/HW Triggering"
-FolderEx 16 = "HW Triggering"
-FolderEx 16 Parent = 10
-Folder 17 = "Framework/Utility"
-FolderEx 17 = "Utility"
-FolderEx 17 Parent = 10
+Folder 8 = "Modules/Pockells Cell"
+FolderEx 8 = "Pockells Cell"
+FolderEx 8 Parent = 0
+Folder 9 = "XML"
+FolderEx 9 = "XML"
+Folder 10 = "Instrument Files"
+FolderEx 10 = "Instrument Files"
+Folder 11 = "Framework"
+FolderEx 11 = "Framework"
+Folder 12 = "Framework/Task Control"
+FolderEx 12 = "Task Control"
+FolderEx 12 Parent = 11
+Folder 13 = "Framework/Virtual Channels"
+FolderEx 13 = "Virtual Channels"
+FolderEx 13 Parent = 11
+Folder 14 = "Framework/Iterators"
+FolderEx 14 = "Iterators"
+FolderEx 14 Parent = 11
+Folder 15 = "Framework/Data Packets"
+FolderEx 15 = "Data Packets"
+FolderEx 15 Parent = 11
+Folder 16 = "Framework/Data Types"
+FolderEx 16 = "Data Types"
+FolderEx 16 Parent = 11
+Folder 17 = "Framework/HW Triggering"
+FolderEx 17 = "HW Triggering"
+FolderEx 17 Parent = 11
+Folder 18 = "Framework/Utility"
+FolderEx 18 = "Utility"
+FolderEx 18 Parent = 11
 
 [File 0001]
 File Type = "Include"
@@ -469,6 +472,55 @@ File Type = "CSource"
 Res Id = 33
 Path Is Rel = True
 Path Rel To = "Project"
+Path Rel Path = "Modules/Pockells Cell/Pockells.c"
+Path = "/d/ELE_DAQLab/Modules/Pockells Cell/Pockells.c"
+Exclude = False
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Modules/Pockells Cell"
+Folder Id = 8
+
+[File 0034]
+File Type = "Include"
+Res Id = 34
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/Pockells Cell/Pockells.h"
+Path = "/d/ELE_DAQLab/Modules/Pockells Cell/Pockells.h"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/Pockells Cell"
+Folder Id = 8
+
+[File 0035]
+File Type = "Include"
+Res Id = 35
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/Pockells Cell/UI_Pockells.h"
+Path = "/d/ELE_DAQLab/Modules/Pockells Cell/UI_Pockells.h"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/Pockells Cell"
+Folder Id = 8
+
+[File 0036]
+File Type = "User Interface Resource"
+Res Id = 36
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/Pockells Cell/UI_Pockells.uir"
+Path = "/d/ELE_DAQLab/Modules/Pockells Cell/UI_Pockells.uir"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/Pockells Cell"
+Folder Id = 8
+
+[File 0037]
+File Type = "CSource"
+Res Id = 37
+Path Is Rel = True
+Path Rel To = "Project"
 Path Rel Path = "Modules/DAQLabModule.c"
 Path = "/d/ELE_DAQLab/Modules/DAQLabModule.c"
 Exclude = False
@@ -477,9 +529,9 @@ Project Flags = 0
 Folder = "Modules"
 Folder Id = 0
 
-[File 0034]
+[File 0038]
 File Type = "Include"
-Res Id = 34
+Res Id = 38
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/DAQLabModule.h"
@@ -489,9 +541,9 @@ Project Flags = 0
 Folder = "Modules"
 Folder Id = 0
 
-[File 0035]
+[File 0039]
 File Type = "Function Panel"
-Res Id = 35
+Res Id = 39
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "MSXML/ActiveXML.fp"
@@ -499,11 +551,11 @@ Path = "/d/ELE_DAQLab/MSXML/ActiveXML.fp"
 Exclude = False
 Project Flags = 0
 Folder = "XML"
-Folder Id = 8
+Folder Id = 9
 
-[File 0036]
+[File 0040]
 File Type = "Include"
-Res Id = 36
+Res Id = 40
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "MSXML/ActiveXML.h"
@@ -511,11 +563,11 @@ Path = "/d/ELE_DAQLab/MSXML/ActiveXML.h"
 Exclude = False
 Project Flags = 0
 Folder = "XML"
-Folder Id = 8
+Folder Id = 9
 
-[File 0037]
+[File 0041]
 File Type = "Function Panel"
-Res Id = 37
+Res Id = 41
 Path Is Rel = True
 Path Rel To = "CVI"
 Path Rel To Override = "CVI"
@@ -525,11 +577,11 @@ Path Line0002 = "p"
 Exclude = False
 Project Flags = 0
 Folder = "Instrument Files"
-Folder Id = 9
+Folder Id = 10
 
-[File 0038]
+[File 0042]
 File Type = "Function Panel"
-Res Id = 38
+Res Id = 42
 Path Is Rel = True
 Path Rel To = "CVI"
 Path Rel To Override = "CVI Shared"
@@ -539,11 +591,11 @@ Path Line0002 = "ctrl.fp"
 Exclude = False
 Project Flags = 0
 Folder = "Instrument Files"
-Folder Id = 9
+Folder Id = 10
 
-[File 0039]
+[File 0043]
 File Type = "CSource"
-Res Id = 39
+Res Id = 43
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/TaskController.c"
@@ -552,11 +604,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Task Control"
-Folder Id = 11
+Folder Id = 12
 
-[File 0040]
+[File 0044]
 File Type = "Include"
-Res Id = 40
+Res Id = 44
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/TaskController.h"
@@ -564,11 +616,11 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Task Control"
-Folder Id = 11
+Folder Id = 12
 
-[File 0041]
+[File 0045]
 File Type = "Include"
-Res Id = 41
+Res Id = 45
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/UI_TaskController.h"
@@ -576,11 +628,11 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Task Control"
-Folder Id = 11
+Folder Id = 12
 
-[File 0042]
+[File 0046]
 File Type = "User Interface Resource"
-Res Id = 42
+Res Id = 46
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/UI_TaskController.uir"
@@ -588,11 +640,11 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.uir"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Task Control"
-Folder Id = 11
+Folder Id = 12
 
-[File 0043]
+[File 0047]
 File Type = "CSource"
-Res Id = 43
+Res Id = 47
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Virtual channels/VChannel.c"
@@ -601,11 +653,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Virtual Channels"
-Folder Id = 12
+Folder Id = 13
 
-[File 0044]
+[File 0048]
 File Type = "Include"
-Res Id = 44
+Res Id = 48
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Virtual channels/VChannel.h"
@@ -613,11 +665,11 @@ Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Virtual Channels"
-Folder Id = 12
+Folder Id = 13
 
-[File 0045]
+[File 0049]
 File Type = "CSource"
-Res Id = 45
+Res Id = 49
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Iterators/Iterator.c"
@@ -626,11 +678,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Iterators"
-Folder Id = 13
+Folder Id = 14
 
-[File 0046]
+[File 0050]
 File Type = "Include"
-Res Id = 46
+Res Id = 50
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Iterators/Iterator.h"
@@ -638,11 +690,11 @@ Path = "/d/ELE_DAQLab/Framework/Iterators/Iterator.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Iterators"
-Folder Id = 13
+Folder Id = 14
 
-[File 0047]
+[File 0051]
 File Type = "CSource"
-Res Id = 47
+Res Id = 51
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data packets/DataPacket.c"
@@ -651,11 +703,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Data Packets"
-Folder Id = 14
+Folder Id = 15
 
-[File 0048]
+[File 0052]
 File Type = "Include"
-Res Id = 48
+Res Id = 52
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data packets/DataPacket.h"
@@ -663,11 +715,11 @@ Path = "/d/ELE_DAQLab/Framework/Data packets/DataPacket.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Data Packets"
-Folder Id = 14
+Folder Id = 15
 
-[File 0049]
+[File 0053]
 File Type = "CSource"
-Res Id = 49
+Res Id = 53
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data types/DataTypes.c"
@@ -676,11 +728,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Data Types"
-Folder Id = 15
+Folder Id = 16
 
-[File 0050]
+[File 0054]
 File Type = "Include"
-Res Id = 50
+Res Id = 54
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data types/DataTypes.h"
@@ -688,11 +740,11 @@ Path = "/d/ELE_DAQLab/Framework/Data types/DataTypes.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Data Types"
-Folder Id = 15
+Folder Id = 16
 
-[File 0051]
+[File 0055]
 File Type = "CSource"
-Res Id = 51
+Res Id = 55
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/HW Triggering/HWTriggering.c"
@@ -701,11 +753,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/HW Triggering"
-Folder Id = 16
+Folder Id = 17
 
-[File 0052]
+[File 0056]
 File Type = "Include"
-Res Id = 52
+Res Id = 56
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/HW Triggering/HWTriggering.h"
@@ -713,11 +765,11 @@ Path = "/d/ELE_DAQLab/Framework/HW Triggering/HWTriggering.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/HW Triggering"
-Folder Id = 16
+Folder Id = 17
 
-[File 0053]
+[File 0057]
 File Type = "CSource"
-Res Id = 53
+Res Id = 57
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Utility/DAQLabUtility.c"
@@ -726,11 +778,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Utility"
-Folder Id = 17
+Folder Id = 18
 
-[File 0054]
+[File 0058]
 File Type = "Include"
-Res Id = 54
+Res Id = 58
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Utility/DAQLabUtility.h"
@@ -738,11 +790,11 @@ Path = "/d/ELE_DAQLab/Framework/Utility/DAQLabUtility.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Utility"
-Folder Id = 17
+Folder Id = 18
 
-[File 0055]
+[File 0059]
 File Type = "CSource"
-Res Id = 55
+Res Id = 59
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.c"
@@ -752,9 +804,9 @@ Compile Into Object File = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0056]
+[File 0060]
 File Type = "Include"
-Res Id = 56
+Res Id = 60
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.h"
@@ -763,9 +815,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0057]
+[File 0061]
 File Type = "Include"
-Res Id = 57
+Res Id = 61
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.h"
@@ -774,9 +826,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0058]
+[File 0062]
 File Type = "User Interface Resource"
-Res Id = 58
+Res Id = 62
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.uir"

@@ -54,6 +54,7 @@ struct PockellsEOM {
 	
 	// UI
 	int							eomPanHndl;					// Panel handle with pockells cell controls.
+	int							calibPanHndl;				// Panel handle for pockells cell calibration data.
 };
 
 struct PockellsModule {
@@ -114,7 +115,8 @@ static void CVICALLBACK 			NewPockellsCell_CB 									(int menuBar, int menuIte
 static void CVICALLBACK 			PockellsCellCalibration_CB 							(int menuBar, int menuItem, void *callbackData, int panel);
 	// pockells module main panel callback
 static int CVICALLBACK 				MainPan_CB 											(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
+	// pockells module calibration panel callback
+static int CVICALLBACK 				CalibPan_CB											(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 //--------------------------
 // Pockells cell operation
 //--------------------------
@@ -274,6 +276,7 @@ static PockellsEOM_type* init_PockellsEOM_type (char 	taskControllerName[],
 	eom->modulationVChan			= NULL;
 		// UI
 	eom->eomPanHndl					= 0;
+	eom->calibPanHndl				= 0;
 		
 	// alloc
 		// DATA
@@ -425,7 +428,40 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 
 static void CVICALLBACK PockellsCellCalibration_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
-	PockellsModule_type*	eomModule	= callbackData;
+	PockellsModule_type*	eomModule			= callbackData;
+	PockellsEOM_type*		eom					= NULL;
+	int 					activeTabIdx		= 0; 
+	int						workspacePanHndl	= 0;
+	
+	// get workspace panel handle
+	GetPanelAttribute(panel, ATTR_PANEL_PARENT, &workspacePanHndl);
+	
+	// get pockells cell from active tab page
+	GetActiveTabPage(panel, MainPan_Tab, &activeTabIdx);
+	eom = *(PockellsEOM_type**) ListGetPtrToItem(eomModule->pockellsCells, activeTabIdx + 1);
+	
+	// load calibration panel if not loaded already
+	if (eom->calibPanHndl) {
+		DisplayPanel(eom->calibPanHndl);
+		return;
+	}
+	
+	// load and add callback info
+	eom->calibPanHndl = LoadPanel(workspacePanHndl, MOD_PockellsModule_UI, Calib);
+	SetCtrlsInPanCBInfo(eom, CalibPan_CB, eom->calibPanHndl); 
+	
+	// set min & max operation voltages
+	SetCtrlVal(eom->calibPanHndl, Calib_VMin, eom->minSafeV);
+	SetCtrlVal(eom->calibPanHndl, Calib_VMax, eom->maxSafeV);
+	
+	// populate table with calibration data
+	size_t					nCals 	= ListNumItems(eom->calib);
+	PockellsEOMCal_type*	eomCal	= NULL;
+	for (size_t i = 1; i <= nCals; i++) {
+		eomCal = ListGetPtrToItem(eom->calib, i);
+		
+	}
+	
 	
 }
 
@@ -476,6 +512,41 @@ static int CVICALLBACK MainPan_CB (int panel, int control, int event, void *call
 	}
 	
 	return 0;
+}
+
+static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	PockellsEOM_type*		eom		= callbackData;
+	
+	switch (event) {
+			
+		case EVENT_COMMIT:
+			
+			switch (control) {
+					
+				case Calib_Add:
+					
+					break;
+					
+				case Calib_VMin:
+					
+					break;
+					
+				case Calib_VMax:
+					
+					break;
+					
+				case Calib_Close:
+					
+					DiscardPanel(eom->calibPanHndl);
+					eom->calibPanHndl = 0;
+					break;
+						
+						
+			}
+			
+			break;
+	}
 }
 
 //--------------------------

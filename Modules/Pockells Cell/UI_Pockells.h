@@ -16,11 +16,10 @@
 #define  Calib                            1
 #define  Calib_Plate                      2       /* control type: deco, callback function: (none) */
 #define  Calib_Table                      3       /* control type: table, callback function: (none) */
-#define  Calib_CloseBttn                  4       /* control type: command, callback function: (none) */
-#define  Calib_DelBttn                    5       /* control type: command, callback function: (none) */
-#define  Calib_AddBttn                    6       /* control type: command, callback function: (none) */
-#define  Calib_VMax                       7       /* control type: numeric, callback function: (none) */
-#define  Calib_VMin                       8       /* control type: numeric, callback function: (none) */
+#define  Calib_Close                      4       /* control type: command, callback function: (none) */
+#define  Calib_Add                        5       /* control type: command, callback function: (none) */
+#define  Calib_VMax                       6       /* control type: numeric, callback function: (none) */
+#define  Calib_VMin                       7       /* control type: numeric, callback function: (none) */
 
 #define  MainPan                          2
 #define  MainPan_Plate                    2       /* control type: deco, callback function: (none) */

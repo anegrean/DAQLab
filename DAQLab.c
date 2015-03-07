@@ -344,7 +344,7 @@ int main (int argc, char *argv[])
 	
 	return 0;
 	
-	Error:
+Error:
 	
 	return error;
 }

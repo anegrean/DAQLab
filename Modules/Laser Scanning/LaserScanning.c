@@ -1276,9 +1276,9 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 {
 	LaserScanning_type*				ls 				= (LaserScanning_type*) mod;
 	int								error			= 0;
-	int								lsPanTopPos;
-	int								lsPanLeftPos;
-	HRESULT							xmlerror;
+	int								lsPanTopPos		= 0;
+	int								lsPanLeftPos	= 0;
+	HRESULT							xmlerror		= 0;
 	ERRORINFO						xmlERRINFO;
 	DAQLabXMLNode 					lsAttr[] 		= {{"PanTopPos", BasicData_Int, &lsPanTopPos},
 											  		   {"PanLeftPos", BasicData_Int, &lsPanLeftPos}};

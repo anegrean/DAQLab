@@ -27,10 +27,11 @@
 
 // Pockells calibration table column indices
 #define CalibTableColIdx_Wavelength			1
-#define CalibTableColIdx_aCoefficient		2
-#define CalibTableColIdx_bCoefficient		3
-#define CalibTableColIdx_cCoefficient		4
-#define CalibTableColIdx_dCoefficient		5
+#define CalibTableColIdx_MaxPower			2
+#define CalibTableColIdx_aCoefficient		3
+#define CalibTableColIdx_bCoefficient		4
+#define CalibTableColIdx_cCoefficient		5
+#define CalibTableColIdx_dCoefficient		6
 
 // VChan base names
 #define VChanDataTimeout					10e4					// Timeout in [ms] for Sink VChans to receive data.
@@ -49,16 +50,19 @@ typedef struct PockellsModule		PockellsModule_type;
 
 struct PockellsEOMCal {
 	double 						wavelength;					// Wavelength in [nm] at which the calibration of minTransmV and maxTransmV was done.
-	double						a;							// Calibration coefficients according to the formula I(Vbias) = a * sin(b * Vbias + c) + d that 
-	double						b;							// is a fit to the experimentally obtained transmitted power vs. bias voltage. The units are:
-	double						c;							// a [mW], b [1/V], c [], d [mW] 
+	double						maxPower;					// Maximum optical power in [mW] that is available from the pockells cell. This value may be adjusted whenever needed, and can be measured e.g. 
+															// at the sample. Default value is 1 mW.
+	double						a;							// Calibration coefficients according to the formula I(Vbias) = a * sin(b * Vbias + c)^2 + d that 
+	double						b;							// is a fit to the experimentally obtained normalized transmitted power vs. bias voltage. The units are:
+	double						c;							// a [ ], b [1/V], c [ ], d [ ] 
 	double						d;							
 };
 
 struct PockellsEOM {
 	
 	// DATA
-	double						eomOutput;					// Pockells cell output in [mW].
+	double						eomOutput;					// Pockells cell normalized power output.
+	double						maxSafeVoltage;				// Maximum safe voltage that can be applied to the pockells cell in [V].
 	int							calibIdx;					// 1-based calibration index set for the pockells cell from the calib list.
 	ListType 					calib;          			// List of pockells EOM calibration wavelengths of PockellsEOMCal_type. 
 	SourceVChan_type*			modulationVChan;			// Output waveform VChan used to modulate the pockells cell. VChan of Waveform_Double or RepeatedWaveform_Double.
@@ -117,9 +121,17 @@ static void							discard_PockellsEOM_type							(PockellsEOM_type** eomPtr);
 
 static int							Load 												(DAQLabModule_type* mod, int workspacePanHndl);
 
-static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement);
 
-static int 							SaveCfg 											(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static PockellsEOM_type* 			LoadPockellsCellFromXMLData 						(ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement);
+
+static int 							LoadPockellsCalibrationFromXMLData 					(PockellsEOMCal_type* eomCal, ActiveXMLObj_IXMLDOMElement_ calXMLElement);
+
+static int 							SaveCfg 											(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement);
+
+static int 							SavePockellsCellXMLData								(PockellsEOM_type* eom, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement);
+
+static int 							SavePockellsCalibrationXMLData						(PockellsEOMCal_type* eomCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ calXMLElement); 
 
 static int 							DisplayPanels										(DAQLabModule_type* mod, BOOL visibleFlag); 
 
@@ -130,11 +142,14 @@ static int							RegisterPockellsCell								(PockellsModule_type* eomModule, Po
 	// unregisters a Pockells cell from the framework
 static int							UnregisterPockellsCell								(PockellsModule_type* eomModule, PockellsEOM_type* eom);
 	// initializes new pockells cell UI 
-static void							InitNewPockellsCellUI								(PockellsModule_type* eomModule, PockellsEOM_type* eom, int eomNewPanHndl);
+static int							InitNewPockellsCellUI								(PockellsModule_type* eomModule, PockellsEOM_type* eom, int eomNewPanHndl, char** errorInfo);
 	// opens the calibration window for a given pockells cell
 static void CVICALLBACK 			PockellsCellCalibration_CB 							(int menuBar, int menuItem, void *callbackData, int panel);
 	// adds a calibration table entry
 static void 						AddCalibTableEntry 									(PockellsEOM_type* eom, PockellsEOMCal_type* eomCal); 
+
+	// dims cells in a calibration table row when calibration has been added
+static void							DimCalibTableCells									(PockellsEOM_type* eom, int row);
 	// adds a table calibration entry to the calibration list
 static void 						AddTableEntryToCalibList							(PockellsEOM_type* eom, int tableRow); 
 	// checks if a calibration table entry is valid
@@ -151,7 +166,7 @@ static int CVICALLBACK 				PockellsControl_CB									(int panel, int control, i
 	// applies a command voltage to the Pockells cell
 static int 							ApplyPockellsCellVoltage 							(PockellsEOM_type* eom, double voltage, char** errorInfo);
 	// calculates the command voltage to apply to the pockells cell given a certain calibration to generate the desired output power.
-static double						GetPockellsCellVoltage								(PockellsEOMCal_type* eomCal, double power); // power in [mW]
+static double						GetPockellsCellVoltage								(PockellsEOMCal_type* eomCal, double normalizedPower);
 	
 
 
@@ -301,6 +316,7 @@ static PockellsEOM_type* init_PockellsEOM_type (char 	taskControllerName[],
 	// init
 		// DATA
 	eom->eomOutput					= 0.0;
+	eom->maxSafeVoltage				= 0;
 	eom->calibIdx					= 0;
 	eom->calib						= 0;
 	eom->taskControl				= NULL;
@@ -364,6 +380,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 {
 	PockellsModule_type*	eomModule 			= (PockellsModule_type*) mod;
 	int						error				= 0;
+	char*					errMsg				= NULL;
 	int						newMenuItem			= 0; 
 	int						eomPanHndl  		= 0;
 	
@@ -396,7 +413,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	eomModule->calMenuItemHndl 	= NewMenu(eomModule->menuBarHndl, "Calibration", -1);
 	SetMenuBarAttribute(eomModule->menuBarHndl, eomModule->calMenuItemHndl, ATTR_CALLBACK_DATA, eomModule);
 	SetMenuBarAttribute(eomModule->menuBarHndl, eomModule->calMenuItemHndl, ATTR_CALLBACK_FUNCTION_POINTER, PockellsCellCalibration_CB);
-	SetMenuBarAttribute(eomModule->menuBarHndl, eomModule->calMenuItemHndl, ATTR_DIMMED, 1);  
+	 
 	
 	// add callback function and data to pockell eom module main panel controls
 	SetCtrlsInPanCBInfo(eomModule, MainPan_CB, eomModule->mainPanHndl);  				 
@@ -412,12 +429,17 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 	for (size_t i = 1; i <= nCells; i++) {
 		eom = *(PockellsEOM_type**) ListGetPtrToItem(eomModule->pockellsCells, i);
-		InitNewPockellsCellUI(eomModule, eom, eomPanHndl);
+		errChk( InitNewPockellsCellUI(eomModule, eom, eomPanHndl, &errMsg) );
 		errChk( RegisterPockellsCell(eomModule, eom) );
 	}
 	
-	// delete "None" tab if present
-	if (nCells) DeleteTabPage(eomModule->mainPanHndl, MainPan_Tab, 0, 1);
+	// delete "None" tab if present and undim "Calibration" menu item
+	if (nCells) {
+		DeleteTabPage(eomModule->mainPanHndl, MainPan_Tab, 0, 1);
+		SetMenuBarAttribute(eomModule->menuBarHndl, eomModule->calMenuItemHndl, ATTR_DIMMED, 0);
+	} else
+		SetMenuBarAttribute(eomModule->menuBarHndl, eomModule->calMenuItemHndl, ATTR_DIMMED, 1);
+		
 	
 	// display main panel
 	DisplayPanel(eomModule->mainPanHndl);
@@ -429,20 +451,281 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 Error:
 	
+	if (errMsg)
+		DLMsg(errMsg, 1);
+	
 	// cleanup
 	if (eomPanHndl) DiscardPanel(eomPanHndl);
 	
 	return error;
 }
 
-static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement)
 {
+	PockellsModule_type*			eomModule				= (PockellsModule_type*)mod;    
+	int 							error 							= 0;
+	HRESULT							xmlerror						= 0;
+	ERRORINFO						xmlERRINFO;
+	eomModule->mainPanTopPos										= malloc(sizeof(int));
+	eomModule->mainPanLeftPos										= malloc(sizeof(int));
+	DAQLabXMLNode 					eomModuleAttr[]					= { {"PanTopPos", BasicData_Int, eomModule->mainPanTopPos},
+											  		   					{"PanLeftPos", BasicData_Int, eomModule->mainPanLeftPos}};
+	
+	//-------------------------------------------------------------------------- 
+	// Load main panel position 
+	//-------------------------------------------------------------------------- 
+	
+	errChk( DLGetXMLElementAttributes(moduleElement, eomModuleAttr, NumElem(eomModuleAttr)) ); 
+	
+	//-------------------------------------------------------------------------- 
+	// Load pockells cells
+	//--------------------------------------------------------------------------
+	
+	ActiveXMLObj_IXMLDOMNodeList_	pockellsNodeList				= 0;
+	ActiveXMLObj_IXMLDOMNode_		pockellsNode					= 0;
+	long							nCells							= 0;
+	PockellsEOM_type*				eom								= NULL;
+	
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(moduleElement, &xmlERRINFO, "PockellsCell", &pockellsNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(pockellsNodeList, &xmlERRINFO, &nCells) );
+	
+	for (long i = 0; i < nCells; i++) {
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(pockellsNodeList, &xmlERRINFO, i, &pockellsNode) );
+		nullChk( eom = LoadPockellsCellFromXMLData((ActiveXMLObj_IXMLDOMElement_) pockellsNode) ); 
+		ListInsertItem(eomModule->pockellsCells, &eom, END_OF_LIST);
+		OKFreeCAHandle(pockellsNode); 
+	}
+	
+	OKFreeCAHandle(pockellsNodeList);
+	
 	return 0;
+	
+Error:
+	
+	return error;
+	
+XMLError:   
+	
+	return xmlerror;
+}
+
+static PockellsEOM_type* LoadPockellsCellFromXMLData (ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement)
+{
+	int 							error 							= 0;
+	HRESULT							xmlerror						= 0;
+	ERRORINFO						xmlERRINFO;
+	PockellsEOM_type*				eom								= NULL;
+	double							maxSafeVoltage					= 0;
+	int								calibIdx						= 0;
+	char*							modulationVChanName				= NULL;
+	char*							timingVChanName					= NULL;
+	char*							taskControllerName				= NULL;
+	
+	DAQLabXMLNode 					eomAttr[] 						= {	{"MaxSafeVoltage", BasicData_Double, &maxSafeVoltage},
+											  		   		   			{"CalibrationIdx", BasicData_Int, &calibIdx},
+															   			{"ModulationVChan", BasicData_CString, &modulationVChanName},
+															   			{"TimingVChan", BasicData_CString, &timingVChanName},
+															   			{"TaskControllerName", BasicData_CString, &taskControllerName} };
+	
+	//-------------------------------------------------------------------------- 
+	// Load pockells cell data
+	//--------------------------------------------------------------------------
+	
+	errChk( DLGetXMLElementAttributes(pockellsXMLElement, eomAttr, NumElem(eomAttr)) ); 
+	
+	nullChk( eom = init_PockellsEOM_type(taskControllerName, timingVChanName, modulationVChanName) );
+	OKfree(taskControllerName);
+	OKfree(timingVChanName);
+	OKfree(modulationVChanName);
+	
+	eom->calibIdx 			= calibIdx;
+	eom->maxSafeVoltage 	= maxSafeVoltage;
+	
+	//-------------------------------------------------------------------------- 
+	// Load pockells cell calibrations
+	//--------------------------------------------------------------------------
+	ActiveXMLObj_IXMLDOMNodeList_	calNodeList				= 0;
+	ActiveXMLObj_IXMLDOMNode_		calNode					= 0;
+	long							nCals					= 0;
+	PockellsEOMCal_type				eomCal;
+	
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(pockellsXMLElement, &xmlERRINFO, "Calibration", &calNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(calNodeList, &xmlERRINFO, &nCals) );
+	
+	for (long i = 0; i < nCals; i++) {
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(calNodeList, &xmlERRINFO, i, &calNode) );
+		errChk( LoadPockellsCalibrationFromXMLData(&eomCal, (ActiveXMLObj_IXMLDOMElement_) calNode) ); 
+		ListInsertItem(eom->calib, &eomCal, END_OF_LIST);
+		OKFreeCAHandle(calNode); 
+	}
+	
+	OKFreeCAHandle(calNodeList);
+
+	return eom;
+	
+Error:
+XMLError:   
+	
+	return NULL;
+}
+
+static int LoadPockellsCalibrationFromXMLData (PockellsEOMCal_type* eomCal, ActiveXMLObj_IXMLDOMElement_ calXMLElement)
+{
+	int 							error 							= 0;
+	HRESULT							xmlerror						= 0;
+	ERRORINFO						xmlERRINFO;
+	DAQLabXMLNode 					calAttr[] 						= {	{"Wavelength", BasicData_Double, &eomCal->wavelength},
+																		{"MaxPower", BasicData_Double, &eomCal->maxPower},
+											  		   		   			{"a", BasicData_Double, &eomCal->a},
+															   			{"b", BasicData_Double, &eomCal->b},
+															   			{"c", BasicData_Double, &eomCal->c},
+															   			{"d", BasicData_Double, &eomCal->d}};
+																		
+	errChk( DLGetXMLElementAttributes(calXMLElement, calAttr, NumElem(calAttr)) ); 
+																		
+	return 0;
+	
+Error:
+	
+	return error;
+	
+XMLError:   
+	
+	return xmlerror;	
+	
+	
 }
 
 static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement)
 {
+	PockellsModule_type*			eomModule				= (PockellsModule_type*)mod;
+	int								error					= 0;
+	int								lsPanTopPos				= 0;
+	int								lsPanLeftPos			= 0;
+	HRESULT							xmlerror				= 0;
+	ERRORINFO						xmlERRINFO;
+	DAQLabXMLNode 					moduleAttr[] 			= {{"PanTopPos", BasicData_Int, &lsPanTopPos},
+											  		   		   {"PanLeftPos", BasicData_Int, &lsPanLeftPos}};
+	
+	//--------------------------------------------------------------------------
+	// Save pockells module main panel position
+	//--------------------------------------------------------------------------
+	
+	errChk( GetPanelAttribute(eomModule->mainPanHndl, ATTR_LEFT, &lsPanLeftPos) );
+	errChk( GetPanelAttribute(eomModule->mainPanHndl, ATTR_TOP, &lsPanTopPos) );
+	errChk( DLAddToXMLElem(xmlDOM, moduleElement, moduleAttr, DL_ATTRIBUTE, NumElem(moduleAttr)) ); 
+	
+	//--------------------------------------------------------------------------
+	// Save pockells cells
+	//--------------------------------------------------------------------------
+	size_t							nCells					= ListNumItems(eomModule->pockellsCells);
+	PockellsEOM_type*				eom						= NULL;
+	ActiveXMLObj_IXMLDOMElement_	pockellsXMLElement		= 0;
+	
+	for (size_t i = 1; i <= nCells; i++) {
+		eom = *(PockellsEOM_type**) ListGetPtrToItem(eomModule->pockellsCells, i);
+		// create new pockells cell element
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "PockellsCell", &pockellsXMLElement) );
+		// add pockells cell data to the element
+		errChk( SavePockellsCellXMLData(eom, xmlDOM, pockellsXMLElement) );
+		// add pockells cell element to the module
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, pockellsXMLElement, NULL) );
+		OKFreeCAHandle(pockellsXMLElement); 
+	}
+	
+	
 	return 0;
+	
+Error:
+	
+	return error;
+	
+XMLError:   
+	
+	return xmlerror;
+}
+
+static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement)
+{
+	int								error					= 0;
+	HRESULT							xmlerror				= 0;
+	char*							modulationVChanName		= GetVChanName(eom->modulationVChan);
+	char*							timingVChanName			= GetVChanName(eom->timingVChan);
+	char*							taskControllerName		= GetTaskControlName(eom->taskControl);
+	ERRORINFO						xmlERRINFO;
+	ActiveXMLObj_IXMLDOMElement_	calXMLElement			= 0;   // pockells cell XML calibration element
+	DAQLabXMLNode 					eomAttr[] 				= {{"MaxSafeVoltage", BasicData_Double, &eom->maxSafeVoltage},
+											  		   		   {"CalibrationIdx", BasicData_Int, &eom->calibIdx},
+															   {"ModulationVChan", BasicData_CString, modulationVChanName},
+															   {"TimingVChan", BasicData_CString, timingVChanName},
+															   {"TaskControllerName", BasicData_CString, taskControllerName}};
+	
+															   
+	//--------------------------------------------------------------------------
+	// Save pockells cell attributes
+	//--------------------------------------------------------------------------
+	
+	errChk( DLAddToXMLElem(xmlDOM, pockellsXMLElement, eomAttr, DL_ATTRIBUTE, NumElem(eomAttr)) );
+	OKfree(modulationVChanName);
+	OKfree(timingVChanName);
+	OKfree(taskControllerName);
+	
+	//--------------------------------------------------------------------------
+	// Save pockells cell calibrations
+	//--------------------------------------------------------------------------
+	size_t							nCals				= ListNumItems(eom->calib);
+	PockellsEOMCal_type*			eomCal				= NULL;
+	for (size_t i = 1; i <= nCals; i++) {
+		eomCal = ListGetPtrToItem(eom->calib, i);
+		// create new calibration element
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Calibration", &calXMLElement) );
+		// add calibration data to the element
+		errChk( SavePockellsCalibrationXMLData(eomCal, xmlDOM, calXMLElement) );
+		// add calibration element to the pockells cell element
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (pockellsXMLElement, &xmlERRINFO, calXMLElement, NULL) );
+		OKFreeCAHandle(calXMLElement); 
+	}
+	
+	return 0;
+	
+Error:
+	
+	return error;
+	
+XMLError:   
+	
+	return xmlerror;	
+	
+}
+
+static int SavePockellsCalibrationXMLData (PockellsEOMCal_type* eomCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ calXMLElement)
+{
+	int								error					= 0;
+	HRESULT							xmlerror				= 0;
+	ERRORINFO						xmlERRINFO;
+	DAQLabXMLNode 					calAttr[] 				= {{"Wavelength", BasicData_Double, &eomCal->wavelength},
+															   {"MaxPower", BasicData_Double, &eomCal->maxPower},
+											  		   		   {"a", BasicData_Double, &eomCal->a},
+															   {"b", BasicData_Double, &eomCal->b},
+															   {"c", BasicData_Double, &eomCal->c},
+															   {"d", BasicData_Double, &eomCal->d}};
+			
+	//--------------------------------------------------------------------------
+	// Save calibration attributes
+	//--------------------------------------------------------------------------
+	
+	errChk( DLAddToXMLElem(xmlDOM, calXMLElement, calAttr, DL_ATTRIBUTE, NumElem(calAttr)) );
+	
+	return 0;
+	
+Error:
+	
+	return error;
+	
+XMLError:   
+	
+	return xmlerror;
+	
 }
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
@@ -460,6 +743,7 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	int						eomPanHndl				= 0;
 	int						workspacePanHndl		= 0;
 	int						error					= 0;
+	char*					errMsg					= NULL;
 	void*					panelData				= NULL;
 	int						panelHndl				= 0;
 	
@@ -476,7 +760,7 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	
 	ListInsertItem(eomModule->pockellsCells, &eom, END_OF_LIST);
 	
-	InitNewPockellsCellUI(eomModule, eom, eomPanHndl);
+	errChk( InitNewPockellsCellUI(eomModule, eom, eomPanHndl, &errMsg) );
 	errChk( RegisterPockellsCell(eomModule, eom) );
 	
 	// delete "None" tab if present
@@ -496,6 +780,10 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	return;
 	
 Error:
+	
+	if (errMsg)
+		DLMsg(errMsg, 1);
+	OKfree(errMsg);
 	
 	DiscardPanel(eomPanHndl);
 	UnregisterPockellsCell(eomModule, eom);
@@ -545,13 +833,15 @@ Error:
 	return -1;
 }
 
-static void InitNewPockellsCellUI (PockellsModule_type* eomModule, PockellsEOM_type* eom, int eomNewPanHndl)
+static int InitNewPockellsCellUI (PockellsModule_type* eomModule, PockellsEOM_type* eom, int eomNewPanHndl, char** errorInfo)
 {
 	int						nTabs			= 0;
 	char*					eomName			= NULL;
 	size_t					nCals			= ListNumItems(eom->calib); 
 	PockellsEOMCal_type*	eomCal			= NULL; 
-	char					name[50]		= "";  
+	char					name[50]		= ""; 
+	int						error			= 0;
+	char*					errMsg			= NULL;
 	
 	// insert new pockells cell tab
 	InsertPanelAsTabPage(eomModule->mainPanHndl, MainPan_Tab, -1, eomNewPanHndl);  
@@ -566,19 +856,39 @@ static void InitNewPockellsCellUI (PockellsModule_type* eomModule, PockellsEOM_t
 	SetPanelAttribute(eom->eomPanHndl, ATTR_CALLBACK_DATA, eom);
 	SetCtrlsInPanCBInfo(eom, PockellsControl_CB, eom->eomPanHndl);
 	// populate calibration wavelengths
-	if (nCals) {
-		SetCtrlAttribute(eom->eomPanHndl, Pockells_Wavelength, ATTR_DIMMED, 0);
-		SetCtrlIndex(eom->eomPanHndl, Pockells_Wavelength, eom->calibIdx);
-		SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_DIMMED, 0);
-		SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->eomOutput);
-	}
-	
 	for (size_t i = 1; i <= nCals; i++) {
 		eomCal = ListGetPtrToItem(eom->calib, i);
 		Fmt(name, "%s<%f[p1]", eomCal->wavelength); 
 		InsertListItem(eom->eomPanHndl, Pockells_Wavelength, -1, name, eomCal->wavelength);
 	}
 	
+	if (nCals) {
+		SetCtrlAttribute(eom->eomPanHndl, Pockells_Wavelength, ATTR_DIMMED, 0);
+		SetCtrlIndex(eom->eomPanHndl, Pockells_Wavelength, eom->calibIdx - 1);
+		eomCal = ListGetPtrToItem(eom->calib, eom->calibIdx);
+		SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_DIMMED, 0);
+		// set limits
+		SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
+		SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
+		eom->eomOutput = eomCal->d;
+		// apply voltage
+		SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->eomOutput * eomCal->maxPower);
+		// update pockells cell voltage
+		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
+	}
+	
+	return 0;
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "InitNewPockellsCellUI", errMsg);
+	OKfree(errMsg);
+	
+	return error;
 }
 
 static void AddCalibTableEntry (PockellsEOM_type* eom, PockellsEOMCal_type* eomCal)
@@ -593,6 +903,8 @@ static void AddCalibTableEntry (PockellsEOM_type* eom, PockellsEOMCal_type* eomC
 	cell.y = nRows; // row
 	cell.x = CalibTableColIdx_Wavelength;
 	SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eomCal->wavelength);
+	cell.x = CalibTableColIdx_MaxPower;
+	SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eomCal->maxPower);
 	cell.x = CalibTableColIdx_aCoefficient;
 	SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eomCal->a);
 	cell.x = CalibTableColIdx_bCoefficient;
@@ -603,14 +915,28 @@ static void AddCalibTableEntry (PockellsEOM_type* eom, PockellsEOMCal_type* eomC
 	SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eomCal->d);
 }
 
+static void DimCalibTableCells (PockellsEOM_type* eom, int row)
+{
+	Point 	cell 		= {.x = 0, .y = row};
+	int		columns[]	= {	CalibTableColIdx_Wavelength, CalibTableColIdx_aCoefficient, CalibTableColIdx_bCoefficient,
+					 		CalibTableColIdx_cCoefficient, CalibTableColIdx_dCoefficient};
+	
+	for (int i = 0; i < NumElem(columns); i++) {
+		cell.x = columns[i];
+		SetTableCellAttribute(eom->calibPanHndl, Calib_Table, cell, ATTR_CELL_MODE, VAL_INDICATOR);
+	}
+}
+
 static void AddTableEntryToCalibList (PockellsEOM_type* eom, int tableRow)
 {
 	Point					cell			= { .x = 0, .y = tableRow};
-	PockellsEOMCal_type		eomCal			= {.wavelength = 0, .a = 0, .b = 0, .c = 0, .d = 0};
+	PockellsEOMCal_type		eomCal			= {.wavelength = 0, .maxPower = 0, .a = 0, .b = 0, .c = 0, .d = 0};
 	char					name[50]		= "";
 	
 	cell.x = CalibTableColIdx_Wavelength;
 	GetTableCellVal(eom->calibPanHndl, Calib_Table, cell, &eomCal.wavelength);
+	cell.x = CalibTableColIdx_MaxPower;
+	GetTableCellVal(eom->calibPanHndl, Calib_Table, cell, &eomCal.maxPower);
 	cell.x = CalibTableColIdx_aCoefficient;
 	GetTableCellVal(eom->calibPanHndl, Calib_Table, cell, &eomCal.a);
 	cell.x = CalibTableColIdx_bCoefficient;
@@ -624,7 +950,10 @@ static void AddTableEntryToCalibList (PockellsEOM_type* eom, int tableRow)
 	
 	// update calibration wavelength drop down control
 	Fmt(name, "%s<%f[p1]", eomCal.wavelength);
-	InsertListItem(eom->eomPanHndl, Pockells_Wavelength, -1, name, eomCal.wavelength); 
+	InsertListItem(eom->eomPanHndl, Pockells_Wavelength, -1, name, eomCal.wavelength);
+	
+	// dim cells
+	DimCalibTableCells(eom, tableRow);
 	
 }
 
@@ -632,8 +961,11 @@ static BOOL CalibTableRowIsValid (PockellsEOM_type* eom, int tableRow)
 {
 	Point					cell			= { .x = 0, .y = tableRow};
 	double					wavelength		= 0;
+	double					maxPower			= 0;
 	double					a				= 0;
 	double					b				= 0;
+	double					c				= 0;
+	double					d				= 0;
 	size_t					nCals			= ListNumItems(eom->calib);
 	PockellsEOMCal_type*	eomCal			= NULL;  
 	
@@ -642,6 +974,11 @@ static BOOL CalibTableRowIsValid (PockellsEOM_type* eom, int tableRow)
 	GetTableCellVal(eom->calibPanHndl, Calib_Table, cell, &wavelength);
 	if (wavelength == 0.0) return FALSE;
 	
+	// do not allow null maximum power
+	cell.x = CalibTableColIdx_MaxPower;
+	GetTableCellVal(eom->calibPanHndl, Calib_Table, cell, &maxPower);
+	if (maxPower == 0.0) return FALSE;
+	
 	// do not allow entering the same wavelength more than once
 	for (size_t i = 1; i <= nCals; i++) {
 		eomCal = ListGetPtrToItem(eom->calib, i);
@@ -649,15 +986,26 @@ static BOOL CalibTableRowIsValid (PockellsEOM_type* eom, int tableRow)
 			return FALSE;
 	}
 	
-	// do not allow coefficient a to be 0
+	// a > 0
 	cell.x = CalibTableColIdx_aCoefficient;
 	GetTableCellVal(eom->calibPanHndl, Calib_Table, cell, &a);
-	if (a == 0.0) return FALSE;
+	if (a <= 0.0) return FALSE;
 	
-	// do not allow coefficient b to be 0
+	// b > 0
 	cell.x = CalibTableColIdx_bCoefficient;
 	GetTableCellVal(eom->calibPanHndl, Calib_Table, cell, &b);
-	if (b == 0.0) return FALSE;
+	if (b <= 0.0) return FALSE;
+	
+	// c <= 0
+	cell.x = CalibTableColIdx_cCoefficient;
+	GetTableCellVal(eom->calibPanHndl, Calib_Table, cell, &c);
+	if (c > 0.0) return FALSE;
+	
+	// d >= 0
+	cell.x = CalibTableColIdx_dCoefficient;
+	GetTableCellVal(eom->calibPanHndl, Calib_Table, cell, &d);
+	if (d < 0.0) return FALSE;
+	
 		
 	return TRUE;
 }
@@ -693,10 +1041,12 @@ static void CVICALLBACK PockellsCellCalibration_CB (int menuBar, int menuItem, v
 	for (size_t i = 1; i <= nCals; i++) {
 		eomCal = ListGetPtrToItem(eom->calib, i);
 		AddCalibTableEntry(eom, eomCal);
+		DimCalibTableCells(eom, i);
 	}
 	
 	// add default new calibration item to the end
-	InsertTableRows(eom->calibPanHndl, Calib_Table, -1, 1, VAL_USE_MASTER_CELL_TYPE);
+	PockellsEOMCal_type		defaultEOMCal = {.wavelength = 0, .maxPower = 1, .a = 0, .b = 0, .c = 0, .d = 0};
+	AddCalibTableEntry(eom, &defaultEOMCal);
 	
 	// display panel
 	DisplayPanel(eom->calibPanHndl);
@@ -780,13 +1130,21 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 					SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_DIMMED, 0);
 					// update pockells cell output limits if this is the first entry
 					if (nRows == 1) {
-						SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d);
-						SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->a + eomCal->d);
+						// update output
+						eom->eomOutput = eomCal->d;
+						// set limits
+						SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
+						SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
+						// apply voltage
+						SetCtrlVal(eom->eomPanHndl, Pockells_Output, eomCal->d * eomCal->maxPower);
 						// send command voltage
 						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );
+						// update calibration index assigned to the pockells cell
+						eom->calibIdx = 1;
 					}
 					// add default new calibration item to the end
-					InsertTableRows(eom->calibPanHndl, Calib_Table, -1, 1, VAL_USE_MASTER_CELL_TYPE);
+					PockellsEOMCal_type		defaultEOMCal = {.wavelength = 0, .maxPower = 1, .a = 0, .b = 0, .c = 0, .d = 0};
+					AddCalibTableEntry(eom, &defaultEOMCal);
 					SetCtrlAttribute(panel, control, ATTR_DIMMED, 1);
 					break;
 					
@@ -816,6 +1174,19 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 							
 						case CalibTableColIdx_Wavelength:	
 						
+							break;
+							
+						case CalibTableColIdx_MaxPower:
+							
+							GetTableCellVal(panel, control, cell, &eomCal->maxPower);
+							// change scaling for pockells cell control
+							if (cell.y == eom->calibIdx) {
+								// set limits
+								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
+								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
+								// apply voltage
+								SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->eomOutput * eomCal->maxPower);
+							}
 							break;
 						
 						case CalibTableColIdx_aCoefficient:
@@ -866,11 +1237,36 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 							ListRemoveItem(eom->calib, 0, cell.y);
 							
 							// if this wavelength is currently selected by the pockells cell, remove it and select first available wavelength
-							int wavelengthIdx 	= 0;
+							int 		wavelengthIdx 	= 0;
+							BOOL		isSelected		= FALSE;
+							
+							GetCtrlIndex(eom->eomPanHndl, Pockells_Wavelength, &wavelengthIdx);
+							if (wavelengthIdx + 1 == cell.y)
+								isSelected = TRUE;
+							else
+								isSelected = FALSE;
 							
 							DeleteListItem(eom->eomPanHndl, Pockells_Wavelength, cell.y - 1, 1);
 							GetCtrlIndex(eom->eomPanHndl, Pockells_Wavelength, &wavelengthIdx);
-							eom->calibIdx = wavelengthIdx + 1;
+							eom->calibIdx == wavelengthIdx + 1;
+							
+							if (isSelected && eom->calibIdx) {
+								// apply voltage for min transmission at the new wavelength
+								eomCal = ListGetPtrToItem(eom->calib, eom->calibIdx);
+								// adjust operation range
+								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
+								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
+								// apply voltage
+								SetCtrlVal(eom->eomPanHndl, Pockells_Output, eomCal->d * eomCal->maxPower);  
+								
+								errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );       
+							}
+							
+							// if there are no more calibrations available, dim the pockells cell controls
+							if (nRows == 2) {
+								SetCtrlAttribute(eom->eomPanHndl, Pockells_Wavelength, ATTR_DIMMED, 1);
+								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_DIMMED, 1);
+							}
 							
 							break;
 					}
@@ -897,7 +1293,17 @@ Error:
 
 static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	PockellsEOM_type*   eom		= callbackData;
+	PockellsEOM_type*  		eom				= callbackData;
+	PockellsEOMCal_type*	eomCal			= NULL;
+	int						wavelengthIdx	= 0;
+	int						error			= 0;
+	char*					errMsg			= NULL;
+	
+	// update index of assigned calibration
+	GetCtrlIndex(panel, Pockells_Wavelength, &wavelengthIdx);
+	if (wavelengthIdx < 0) return 0; // no calibrations
+	eom->calibIdx = wavelengthIdx + 1;
+	eomCal = ListGetPtrToItem(eom->calib, eom->calibIdx);
 	
 	switch (event) {
 			
@@ -907,20 +1313,37 @@ static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, vo
 					
 				case Pockells_Wavelength:
 					
+					// adjust operation range
+					SetCtrlAttribute(panel, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
+					SetCtrlAttribute(panel, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
 					// apply voltage for min transmission at this wavelength
+					SetCtrlVal(panel, Pockells_Output, eomCal->d * eomCal->maxPower);
 					
+					// update output
+					eom->eomOutput = eomCal->d;
+					errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );
 					break;
 					
 				case Pockells_Output:
 					
-					// apply voltage
-					
+					// apply voltage to get desired beam intensity
+					GetCtrlVal(panel, control, &eom->eomOutput);
+					eom->eomOutput /= eomCal->maxPower;
+					errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
 					break;
 			}
 			
 			break;
 			
 	}
+	
+	return 0;
+	
+Error:
+	
+	if (errMsg)
+		DLMsg(errMsg, 1);
+	
 	return 0;
 }
 
@@ -962,9 +1385,9 @@ Error:
 	return error;
 }
 
-static double GetPockellsCellVoltage (PockellsEOMCal_type* eomCal, double power) // power in [mW]
+static double GetPockellsCellVoltage (PockellsEOMCal_type* eomCal, double normalizedPower)
 {
-	return asin(sqrt((power - eomCal->d)/eomCal->a) - eomCal->c)/eomCal->b;
+	return (asin(sqrt((normalizedPower - eomCal->d)/eomCal->a)) - eomCal->c)/eomCal->b;
 }
 
 

@@ -180,7 +180,6 @@ static void							TimingVChan_Disconnected							(VChan_type* self, void* VChanO
 
 	// Modulation VChan
 static void							ModulationVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							ModulationVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 //-----------------------------------------
 // Task Controller callbacks
@@ -336,7 +335,7 @@ static PockellsEOM_type* init_PockellsEOM_type (char 	taskControllerName[],
 	DLDataTypes		timingVChanDataTypes[] = {DL_Waveform_UChar, DL_RepeatedWaveform_UChar};
 	
 	nullChk( eom->timingVChan  		= init_SinkVChan_type(timingVChanName, timingVChanDataTypes, NumElem(timingVChanDataTypes), eom, VChanDataTimeout, TimingVChan_Connected, TimingVChan_Disconnected) );
-	nullChk( eom->modulationVChan	= init_SourceVChan_type(modulationVChanName, DL_Waveform_Double, eom, ModulationVChan_Connected, ModulationVChan_Disconnected) );
+	nullChk( eom->modulationVChan	= init_SourceVChan_type(modulationVChanName, DL_Waveform_Double, eom, ModulationVChan_Connected, NULL) );
 	
 	
 	return eom;
@@ -462,7 +461,7 @@ Error:
 
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement)
 {
-	PockellsModule_type*			eomModule				= (PockellsModule_type*)mod;    
+	PockellsModule_type*			eomModule						= (PockellsModule_type*)mod;    
 	int 							error 							= 0;
 	HRESULT							xmlerror						= 0;
 	ERRORINFO						xmlERRINFO;
@@ -649,8 +648,8 @@ static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, A
 {
 	int								error					= 0;
 	HRESULT							xmlerror				= 0;
-	char*							modulationVChanName		= GetVChanName(eom->modulationVChan);
-	char*							timingVChanName			= GetVChanName(eom->timingVChan);
+	char*							modulationVChanName		= GetVChanName((VChan_type*)eom->modulationVChan);
+	char*							timingVChanName			= GetVChanName((VChan_type*)eom->timingVChan);
 	char*							taskControllerName		= GetTaskControlName(eom->taskControl);
 	ERRORINFO						xmlERRINFO;
 	ActiveXMLObj_IXMLDOMElement_	calXMLElement			= 0;   // pockells cell XML calibration element
@@ -921,7 +920,7 @@ static void DimCalibTableCells (PockellsEOM_type* eom, int row)
 	int		columns[]	= {	CalibTableColIdx_Wavelength, CalibTableColIdx_aCoefficient, CalibTableColIdx_bCoefficient,
 					 		CalibTableColIdx_cCoefficient, CalibTableColIdx_dCoefficient};
 	
-	for (int i = 0; i < NumElem(columns); i++) {
+	for (unsigned int i = 0; i < NumElem(columns); i++) {
 		cell.x = columns[i];
 		SetTableCellAttribute(eom->calibPanHndl, Calib_Table, cell, ATTR_CELL_MODE, VAL_INDICATOR);
 	}
@@ -1398,7 +1397,22 @@ static double GetPockellsCellVoltage (PockellsEOMCal_type* eomCal, double normal
 // Timing VChan
 static void TimingVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
-	PockellsEOM_type* eom = VChanOwner;
+	PockellsEOM_type* 		eom 	= VChanOwner;
+	
+	// change "Pockells Out" VChan data type depending on the data type of the source
+	switch (GetSourceVChanDataType(GetSourceVChan(eom->timingVChan))) {
+			
+		case DL_Waveform_UChar:
+			
+			SetSourceVChanDataType(eom->modulationVChan, DL_Waveform_Double);
+			break;
+			
+		case DL_RepeatedWaveform_UChar:
+			
+			SetSourceVChanDataType(eom->modulationVChan, DL_RepeatedWaveform_Double);
+			break;
+	}
+	
 	
 }
 
@@ -1411,14 +1425,22 @@ static void	TimingVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_
 // Modulation VChan
 static void	ModulationVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
-	PockellsEOM_type* eom = VChanOwner;
+	PockellsEOM_type* 		eom 	= VChanOwner;
+	PockellsEOMCal_type* 	eomCal 	= ListGetPtrToItem(eom->calib, eom->calibIdx);
+	int						error	= 0;
+	char*					errMsg	= NULL;
 	
-}
-
-static void ModulationVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	PockellsEOM_type* eom = VChanOwner;
+	errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
 	
+	return;
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	DLMsg(errMsg, 1);
+	OKfree(errMsg);
 }
 
 //-----------------------------------------
@@ -1441,10 +1463,114 @@ static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 
 static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+#define	IterateTC_Err_DataTypeNotSupported	-1
 	
-	TaskControlIterationDone(taskControl, 0, "", TRUE);
+	PockellsEOM_type* 			eom 						= GetTaskControlModuleData(taskControl);
+	PockellsEOMCal_type*		eomCal						= ListGetPtrToItem(eom->calib, eom->calibIdx);
+	int							error						= 0;
+	char*						errMsg						= NULL;
+	DataPacket_type*			dataPacketIN				= NULL;
+	DataPacket_type*			dataPacketOUT				= NULL;
+	DataPacket_type*			nullDataPacket				= NULL;
+	DLDataTypes					dataPacketINType			= 0;
+	void**						dataPacketINDataPtr			= NULL;
+	double*						commandSignal				= NULL;
+	unsigned char*				timingSignal				= NULL;
+	Waveform_type*				commandWaveform				= NULL;
+	Waveform_type*				waveformIN					= NULL;
+	RepeatedWaveform_type* 		commandRepeatedWaveform		= NULL;
+	RepeatedWaveform_type* 		repeatedWaveformIN			= NULL;
+	size_t						nSamples					= 0;
+	double						commandVoltage				= GetPockellsCellVoltage(eomCal, eom->eomOutput);
+	double						samplingRate				= 0;
+	double						nRepeats					= 0;
 	
+	
+	// generate pockells cell command waveform if there is a Source VChan attached to the timing Sink VChan of the pockells cell
+	if (!IsVChanConnected((VChan_type*)eom->timingVChan)) {
+		TaskControlIterationDone(taskControl, 0, "", FALSE);
+		return;
+	}
+	
+	errChk( GetDataPacket(eom->timingVChan, &dataPacketIN, &errMsg) );
+	
+	while (dataPacketIN) {
+	
+		// get pockells cell timing signal
+		dataPacketINDataPtr = GetDataPacketPtrToData(dataPacketIN, &dataPacketINType);
+		switch (dataPacketINType) {
+				
+			case DL_Waveform_UChar:   				// Pockells output VChan is of DL_Waveform_Double type
+				
+				waveformIN 			= *(Waveform_type**)dataPacketINDataPtr;
+				timingSignal 		= *(unsigned char**)GetWaveformPtrToData(waveformIN, &nSamples);
+				samplingRate 		= GetWaveformSamplingRate(waveformIN);
+				break;
+				
+			case DL_RepeatedWaveform_UChar:		// Pockells output VChan is of DL_RepeatedWaveform_Double type
+				
+				repeatedWaveformIN 	= *(RepeatedWaveform_type**)dataPacketINDataPtr;
+				timingSignal 		= *(unsigned char**)GetRepeatedWaveformPtrToData(repeatedWaveformIN, &nSamples);
+				samplingRate 		= GetRepeatedWaveformSamplingRate(repeatedWaveformIN);
+				nRepeats 			= GetRepeatedWaveformRepeats(repeatedWaveformIN);
+				break;
+				
+			default:
+				TaskControlIterationDone(taskControl, IterateTC_Err_DataTypeNotSupported, "Incoming data type is not supported", FALSE);   
+				return;
+		}
+		
+		// apply pockells cell command voltage to the timing signal
+		nullChk( commandSignal = malloc(nSamples * sizeof(double)) );
+		for (size_t i = 0; i < nSamples; i++)
+			commandSignal[i] = (timingSignal[i] != 0) * commandVoltage;
+		
+		// send pockells cell command waveform
+		switch (dataPacketINType) { 
+				
+			case DL_Waveform_UChar:
+				
+				nullChk( commandWaveform = init_Waveform_type(Waveform_Double, samplingRate, nSamples, (void**)&commandSignal) );
+				nullChk( dataPacketOUT = init_DataPacket_type(DL_Waveform_Double, (void**)&commandWaveform, NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+				break;
+				
+			case DL_RepeatedWaveform_UChar:
+				nullChk( commandRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, samplingRate, nSamples, (void**)&commandSignal, nRepeats) );
+				nullChk( dataPacketOUT = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandRepeatedWaveform, NULL, (DiscardPacketDataFptr_type) discard_RepeatedWaveform_type) );
+				break;
+				
+			default:
+				TaskControlIterationDone(taskControl, IterateTC_Err_DataTypeNotSupported, "Incoming data type is not supported", FALSE);   
+				return;
+		}
+		
+		errChk( SendDataPacket(eom->modulationVChan, &dataPacketOUT, FALSE, &errMsg) );
+	
+		ReleaseDataPacket(&dataPacketIN);
+		errChk( GetDataPacket(eom->timingVChan, &dataPacketIN, &errMsg) );   // get new packet
+	}
+	
+	// send NULL packet to terminate transmission
+	errChk( SendDataPacket(eom->modulationVChan, &nullDataPacket, FALSE, &errMsg) );
+	
+	TaskControlIterationDone(taskControl, 0, "", FALSE);
+	
+	return;
+	
+Error:
+	
+	// cleanup
+	ReleaseDataPacket(&dataPacketIN);
+	discard_DataPacket_type(&dataPacketOUT);
+	discard_Waveform_type(&commandWaveform);
+	discard_RepeatedWaveform_type(&commandRepeatedWaveform);
+	OKfree(commandSignal);
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	TaskControlIterationDone(taskControl, error, errMsg, FALSE);
+	OKfree(errMsg);
 }
 
 static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFlag)

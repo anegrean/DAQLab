@@ -313,6 +313,9 @@ int							AddWaveformDateTimestamp				(Waveform_type* waveform);
 
 	// Returns waveform timestamp
 double						GetWaveformDateTimestamp				(Waveform_type* waveform); 
+
+	// Returns waveform sampling rate
+double						GetWaveformSamplingRate					(Waveform_type* waveform);
 	
 	// Returns number of bytes per waveform element.
 size_t						GetWaveformSizeofData					(Waveform_type* waveform);
@@ -349,6 +352,9 @@ void**						GetRepeatedWaveformPtrToData			(RepeatedWaveform_type* waveform, siz
 
 	// Returns the number of times the waveform must be repeated
 double						GetRepeatedWaveformRepeats				(RepeatedWaveform_type* waveform);
+
+	// Returns the sampling rate
+double						GetRepeatedWaveformSamplingRate			(RepeatedWaveform_type* waveform);
 
 	// Returns the number of samples in the waveform that must be repeated. Note: the total number of samples is this value times the number of repeats
 size_t						GetRepeatedWaveformNumSamples			(RepeatedWaveform_type* waveform);

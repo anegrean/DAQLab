@@ -840,11 +840,11 @@ void SetSourceVChanDataType (SourceVChan_type* srcVChan, DLDataTypes dataType)
 		sinkVChan = *(SinkVChan_type**) ListGetPtrToItem(srcVChan->sinkVChans, i);
 		
 		compatibleVChans = FALSE;
-		for (size_t j = 0; j < sinkVChan->nDataTypes; j++) {
-			if (srcVChan->dataType == sinkVChan->dataTypes[j])
+		for (size_t j = 0; j < sinkVChan->nDataTypes; j++)
+			if (srcVChan->dataType == sinkVChan->dataTypes[j]) {
 				compatibleVChans = TRUE;
-			break;
-		}
+				break;
+			}
 		
 		if (!compatibleVChans)
 			VChan_Disconnect((VChan_type*)sinkVChan);

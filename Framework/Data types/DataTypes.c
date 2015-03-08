@@ -417,6 +417,11 @@ double GetWaveformDateTimestamp (Waveform_type* waveform)
 	return waveform->dateTimestamp;
 }
 
+double GetWaveformSamplingRate (Waveform_type* waveform)
+{
+	return waveform->samplingRate;
+}
+
 size_t GetWaveformSizeofData (Waveform_type* waveform)
 {
 	size_t dataTypeSize = 0;
@@ -693,6 +698,11 @@ void** GetRepeatedWaveformPtrToData (RepeatedWaveform_type* waveform, size_t* nS
 double GetRepeatedWaveformRepeats (RepeatedWaveform_type* waveform)
 {
 	return waveform->repeat;
+}
+
+double GetRepeatedWaveformSamplingRate (RepeatedWaveform_type* waveform)
+{
+	return waveform->samplingRate;
 }
 
 size_t GetRepeatedWaveformNumSamples (RepeatedWaveform_type* waveform)

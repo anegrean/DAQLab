@@ -448,7 +448,7 @@ typedef struct {
 	// VChans											// Additional VChans specific to this child class
 	//-----------------------------------
 	
-	SourceVChan_type*			VChanROITiming;			// ROI timing signal (used for example to time photostimulation to jumping between pointions).
+	SourceVChan_type*			VChanROITiming;			// ROI timing signal (used for example to time photostimulation to jumping between pointions) of DL_RepeatedWaveform_UChar type
 	
 	//----------------
 	// Image buffers
@@ -5838,17 +5838,19 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	nullChk( slowAxisJumpSignal = malloc(nCycleElem * sizeof(double)) );
 	nullChk( ROIJumpSignal = calloc(nCycleElem, sizeof(unsigned char)) );
 	
+	/*
 	// set cycle delay elements to be equal to the parked voltage
 	nCycleDelayElem = (size_t)((scanEngine->pointJumpPeriod - scanEngine->minimumPointJumpPeriod) * 1e-3 * scanEngine->galvoSamplingRate);
 	if (nCycleDelayElem) {
 		Set1D(fastAxisJumpSignal + (nCycleElem - nCycleDelayElem), nCycleDelayElem, fastAxisCal->parked);
 		Set1D(slowAxisJumpSignal + (nCycleElem - nCycleDelayElem), nCycleDelayElem, slowAxisCal->parked);
 	}
+	*/
 	
 	// set jump voltages
 	nParkedSamples = (size_t)(scanEngine->pointParkedTime * 1e-6 * scanEngine->galvoSamplingRate);
 	j = 0;
-	for (size_t i = 0; i < nVoltages - 1; i++) {
+	for (size_t i = 0; i < nVoltages - 2; i++) {
 		nJumpSamples = (size_t)(NonResRectRasterScan_JumpTime(scanEngine, fastAxisVoltages[i+1] - fastAxisVoltages[i], slowAxisVoltages[i+1] - slowAxisVoltages[i]) * 1e-3 * scanEngine->galvoSamplingRate); 
 		// set galvo command signals
 		Set1D(fastAxisJumpSignal + j, nJumpSamples + nParkedSamples, fastAxisVoltages[i+1]);
@@ -5859,6 +5861,11 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		
 		j += nJumpSamples + nParkedSamples;
 	}
+	
+	// jump back to parked position
+	nJumpSamples = (size_t)(NonResRectRasterScan_JumpTime(scanEngine, fastAxisVoltages[nVoltages - 1] - fastAxisVoltages[nVoltages - 2], slowAxisVoltages[nVoltages - 1] - slowAxisVoltages[nVoltages - 2]) * 1e-3 * scanEngine->galvoSamplingRate); 
+	Set1D(fastAxisJumpSignal + j, nCycleElem - j, fastAxisVoltages[nVoltages - 1]);
+	Set1D(slowAxisJumpSignal + j, nCycleElem - j, slowAxisVoltages[nVoltages - 1]);
 	
 	// generate galvo command jump waveforms
 	nullChk( fastAxisJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nCycleElem, &fastAxisJumpSignal, (double)scanEngine->pointJumpCycles) );

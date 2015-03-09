@@ -285,6 +285,14 @@ void discard_PockellsModule (DAQLabModule_type** mod)
 	// discard PockellsModule_type specific data
 	//-------------------------------------------
 	
+	if (eomModule->menuBarHndl)  { 
+		DiscardMenuBar (eomModule->menuBarHndl); 
+		eomModule->menuBarHndl = 0; 
+	} 
+	
+	OKfree(eomModule->mainPanTopPos);
+	OKfree(eomModule->mainPanLeftPos);
+	
 	// available pockells cells
 	size_t				nCells 	= ListNumItems(eomModule->pockellsCells);
 	PockellsEOM_type**	cellPtr	= NULL;

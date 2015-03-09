@@ -169,5 +169,6 @@ void discard_DisplayEngine_type (DisplayEngine_type** displayEnginePtr)
 
 void discard_DisplayEngineClass (DisplayEngine_type** displayEnginePtr)
 {
-	
+	//free displayEnginePtr
+	OKfree(*displayEnginePtr); 
 }

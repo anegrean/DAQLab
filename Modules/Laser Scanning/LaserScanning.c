@@ -1506,7 +1506,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		OKfree(scanEngineOutVChanName);
 		OKfree(shutterVChanName);
 		OKfree(pixelPulseTrainVChanName);
-		
+		OKfree(nPixelsVChanName);
 		// save detector VChans
 		nDetectionChans = ListNumItems((*scanEnginePtr)->DetChans);
 		for (size_t j = 0; j < nDetectionChans; j++) {
@@ -1631,7 +1631,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(axisCalibrationNodeList, &xmlERRINFO, i, &axisCalibrationNode) );
 		
 		errChk( DLGetXMLNodeAttributes(axisCalibrationNode, axisCalibrationGenericAttr, NumElem(axisCalibrationGenericAttr)) ); 
-		
+		   
 		switch (axisCalibrationType) {
 				
 			case NonResonantGalvo:
@@ -1647,6 +1647,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 			case Translation:
 				break;
 		}
+		OKFreeCAHandle(axisCalibrationNode); 
 		
 	}
 	
@@ -1856,6 +1857,8 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 		ListInsertItem(ls->scanEngines, &scanEngine, END_OF_LIST);
 		
 		// cleanup
+		errChk(DLDiscardXMLNodeAttributes(VChansXMLElement, scanEngineVChansAttr, NumElem(scanEngineVChansAttr)) );       
+	
 		OKFreeCAHandle(scanEngineNode);
 		OKFreeCAHandle(VChansXMLElement);
 		OKFreeCAHandle(scanInfoXMLElement);

@@ -80,7 +80,7 @@ typedef struct {
 
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+//	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
 	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
@@ -498,7 +498,12 @@ static int DAQLab_Load (void)
 		SetTaskControlModuleData(newTaskControllerPtr, UITaskCtrlsPtr);
 		// send a configure event to the Task Controller
 		TaskControlEvent(newTaskControllerPtr, TASK_EVENT_CONFIGURE, NULL, NULL);
+		 //free  attributes
+	    errChk(DLDiscardXMLNodeAttributes(xmlTaskControllerNode, attr2, NumElem(attr2)) );
+		OKFreeCAHandle(xmlTaskControllerNode);
 	}
+	
+	OKFreeCAHandle(xmlUITaskControlers);
 	
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Load DAQLab Modules and apply saved settings
@@ -563,11 +568,21 @@ static int DAQLab_Load (void)
 					(*newModule->DisplayPanels) (newModule, TRUE);
 			}
 		
+		//free  attributes
+	   DLDiscardXMLNodeAttributes(xmlModuleNode, attrModule, NumElem(attrModule));  
+	   OKFreeCAHandle(xmlModuleNode);
+		
 	}
+	
+	    
+	OKFreeCAHandle(xmlNodeList);
+	OKFreeCAHandle(xmlModulesNode);
+	OKFreeCAHandle(xmlModulesNodeList);
 	
 	    
 	// discard DOM after loading all settings
 	OKFreeCAHandle(DAQLabCfg_DOMHndl);
+	OKFreeCAHandle(DAQLabCfg_RootElement);
 	
 	DAQLabNoSettings:
 	
@@ -606,7 +621,7 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	// create new DAQLab Config root element and append it to the DOM
 	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_CFG_DOM_ROOT_NAME, &newXMLElement) );
 	XMLErrChk ( ActiveXML_IXMLDOMDocument3_appendChild(DAQLabCfg_DOMHndl, &xmlERRINFO, newXMLElement, &DAQLabCfg_RootElement) );
-	
+	OKFreeCAHandle(newXMLElement);   
 	// save Tasks and Log panel positions
 	int								taskPanTopPos;
 	int								taskPanLeftPos;
@@ -664,6 +679,7 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		// add task controller element to DAQLab root element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (DAQLabCfg_RootElement, &xmlERRINFO, newXMLElement, NULL) );
 		// free attributes memory
+		OKFreeCAHandle(newXMLElement);   
 		OKfree(attr2[0].pData);
 	}
 	
@@ -711,8 +727,13 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		if ((*DLModulePtr)->SaveCfg)
 			(*(*DLModulePtr)->SaveCfg)	(*DLModulePtr, DAQLabCfg_DOMHndl, moduleXMLElement);
 		
+		OKFreeCAHandle(moduleXMLElement); 
+		
 	}
 	
+	//free used handles
+	OKFreeCAHandle(modulesXMLElement); 
+	OKFreeCAHandle(DAQLabCfg_RootElement);
 	
 	return 0;
 	
@@ -1586,6 +1607,47 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 	return error;
 	
 }
+
+
+
+int DLDiscardXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes)
+{
+	int									error;
+	HRESULT								xmlerror;
+	ERRORINFO							xmlERRINFO;
+	char*								attributeString;
+	ActiveXMLObj_IXMLDOMNamedNodeMap_	xmlNamedNodeMap;	 // list of attributes
+	ActiveXMLObj_IXMLDOMNode_			xmlAttributeNode;	 // selected attribute
+	
+	// get list of attributes
+	XMLErrChk ( ActiveXML_IXMLDOMNode_Getattributes(XMLNode, &xmlERRINFO, &xmlNamedNodeMap) );  
+	
+	for (size_t i = 0; i < nAttributes; i++) {
+		// get attribute node
+	//	XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlERRINFO, Attributes[i].tag, &xmlAttributeNode) );
+		
+	//	OKFreeCAHandle(xmlAttributeNode);
+	if (Attributes[i].type==BasicData_CString)
+		OKfree(*(char**)Attributes[i].pData);
+	}
+	
+	OKFreeCAHandle(xmlNamedNodeMap); 
+	
+	return 0;
+	
+	XMLError:
+	
+	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, &xmlerror, 0, 0, 0);
+	
+	return xmlerror;
+	
+	Error:  // conversion error
+	
+	return error;
+	
+}
+
+
 
 int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElement, char elementName[], ActiveXMLObj_IXMLDOMElement_* childXMLElement)
 {

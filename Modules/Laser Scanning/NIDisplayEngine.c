@@ -192,11 +192,14 @@ static void discard_NIDisplayEngine_type (NIDisplayEngine_type** niVisionDisplay
 	// discard NI Vision Display specific data
 	
 	// if there are no more NI Vision Displays, then clean up display array
-	if (!nNIDisplayEngines) {
+	//cleanup anyway ?! Lex
+	
+	//if (!nNIDisplayEngines) {
 		for (int i = 0; i < MAX_NI_VISION_DISPLAYS; i++)
 			discard_NIImageDisplay_type(&displays[i]);
 		OKfree(displays);
-	}
+	//}
+	
 	
 	// discard Display Engine base class data
 	discard_DisplayEngineClass((DisplayEngine_type**)niVisionDisplayPtr);

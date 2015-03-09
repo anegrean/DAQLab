@@ -1943,11 +1943,20 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_START:
 				case TASK_EVENT_ITERATE_ONCE: 
 					
-					//-------------------------------------------------------------------------------------------------------------------------
-					// If this is a Root Task Controller, i.e. it doesn't have a parent then change Task Tree status
-					//-------------------------------------------------------------------------------------------------------------------------
 					
-					if(!taskControl->parenttask)
+					if (!taskControl->parenttask) {
+						
+						// clear task tree recursively if this is the root task controller (i.e. it doesn't have a parent)
+						if (ClearTaskTreeBranchVChans(taskControl, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_DataPacketsNotCleared, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_DataPacketsNotCleared;
+							OKfree(errMsg);
+							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+							break;
+						}
+						
+						// if this is the root task controller (i.e. it doesn't have a parent) then change Task Tree status
 						if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TASK_TREE_STARTED, &errMsg) < 0) {
 							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
@@ -1956,6 +1965,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 							break;
 						}
+					}
 					
 					//--------------------------------------------------------------------------------------------------------------- 
 					// Call Start Task Controller function pointer to inform that task will start
@@ -2335,19 +2345,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			switch (eventpacket[i].event) {
 				
 				case TASK_EVENT_ITERATE:
-					
-					//---------------------------------------------------------------------------------------------------------------
-					// Clear task tree recursively with this task controller at the root
-					//---------------------------------------------------------------------------------------------------------------
-					
-					if (ClearTaskTreeBranchVChans(taskControl, &errMsg) < 0) {
-						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_DataPacketsNotCleared, taskControl->taskName, errMsg);
-						taskControl->errorID	= TaskEventHandler_Error_DataPacketsNotCleared;
-						OKfree(errMsg);
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					}
 					
 					//---------------------------------------------------------------------------------------------------------------
 					// Check if an iteration is needed:

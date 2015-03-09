@@ -34,7 +34,7 @@
 #define CalibTableColIdx_dCoefficient		6
 
 // VChan base names
-#define VChanDataTimeout					10e4					// Timeout in [ms] for Sink VChans to receive data.
+#define VChanDataTimeout					1e4						// Timeout in [ms] for Sink VChans to receive data.
 #define VChan_PockellsEOM_In				"Pockells In"			// Sink VChan of Waveform_UChar or RepeatedWaveform_UChar used to time the light pulses
 #define VChan_PockellsEOM_Out				"Pockells Out"			// Source VChan of Waveform_Double or RepeatedWaveform_Double used to modulate the Pockells cell.
 

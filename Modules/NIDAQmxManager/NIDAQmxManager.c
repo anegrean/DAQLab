@@ -1360,6 +1360,10 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 	
 	ListDispose(nidaq->DAQmxDevices);
 	
+	//discard global devList
+	empty_DevList(devList);
+	if (devList) {ListDispose(devList); devList = 0;}  
+	
 	// discard UI
 	if (nidaq->menuBarHndl) DiscardMenuBar (nidaq->menuBarHndl);        
 	if (nidaq->mainPanHndl) {DiscardPanel(nidaq->mainPanHndl); nidaq->mainPanHndl = 0;}
@@ -1882,8 +1886,9 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	char* 						tmpnames			= NULL;
 	char* 						tmpsubstr			= NULL;
 	char* 						dev_pt     			= NULL;
-	char** 						idxnames  			= NULL;          // Used to break up the names string
-	char** 						idxstr    			= NULL;          // Used to break up the other strings like AI channels
+	char* 						idxnames  			= NULL;          // Used to break up the names string
+	char* 						idxstr    			= NULL;          // Used to break up the other strings like AI channels
+	char* 						idxcopy				= NULL;			 // Used to release original idx string
 	DevAttr_type* 				devAttrPtr; 
 	AIChannel_type*				newAIChanPtr		= NULL;
 	AOChannel_type*				newAOChanPtr		= NULL;
@@ -1905,9 +1910,9 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	unsigned int   				nCO;          						// # Counter outputs
 								
 	// Allocate memory for pointers to work on the strings
-	nullChk(idxnames = malloc(sizeof(char*)));
-	nullChk(idxstr = malloc(sizeof(char*)));
-	*idxstr = NULL;
+//	nullChk(idxnames = malloc(sizeof(char*)));
+//	nullChk(idxstr = malloc(sizeof(char*)));
+//	*idxstr = NULL;
 	
 	// Get number of table columns
 	GetNumTableColumns (panHndl, DevListPan_DAQTable, &columns);
@@ -1929,8 +1934,9 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	DAQmxGetSystemInfoAttribute (DAQmx_Sys_DevNames, tmpnames, buffersize);
 	
 	// Get first dev name using malloc, dev_pt is dynamically allocated
-	*idxnames = tmpnames;
-	dev_pt = substr (", ", idxnames);
+	idxnames = tmpnames;
+	OKfree(dev_pt); 
+	dev_pt = substr (", ", &idxnames);
 	
 	/* Populate table and device structure with device info */
 	while (dev_pt!=NULL)
@@ -1944,7 +1950,7 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		}
 		
 		// 1. Name (dynamically allocated)
-		devAttrPtr->name = dev_pt;
+		devAttrPtr->name = StrDup(dev_pt);
 		
 		// 2. Type (dynamically allocated)
 		errChk(buffersize = DAQmxGetDeviceAttribute(dev_pt, DAQmx_Dev_ProductType, NULL));
@@ -1966,157 +1972,182 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		nAI = 0;
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_PhysicalChans, NULL));
 		if (buffersize){   //process info if available         
-			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_PhysicalChans, *idxstr, buffersize));
-		 															
-			tmpsubstr = substr (", ", idxstr);										
+			nullChk(idxstr = malloc (buffersize));
+			idxcopy=idxstr;
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AI_PhysicalChans, idxstr, buffersize));
+	   		OKfree(tmpsubstr);											
+			tmpsubstr = substr (", ", &idxstr);										
 			while (tmpsubstr != NULL) {												
 				if (!(newAIChanPtr = init_AIChannel_type())) goto Error;			
-				newAIChanPtr->physChanName 			= tmpsubstr;
+				newAIChanPtr->physChanName 			= StrDup(tmpsubstr);
 				newAIChanPtr->supportedMeasTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_AI_SupportedMeasTypes);  
 				newAIChanPtr->Vrngs					= GetIORanges(dev_pt, DAQmx_Dev_AI_VoltageRngs);
 				newAIChanPtr->Irngs					= GetIORanges(dev_pt, DAQmx_Dev_AI_CurrentRngs);
 				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_AI_TermCfgs, &newAIChanPtr->terminalCfg); 
-				ListInsertItem (devAttrPtr->AIchan, &newAIChanPtr, END_OF_LIST);						
-				tmpsubstr = substr (", ", idxstr); 									
+				ListInsertItem (devAttrPtr->AIchan, &newAIChanPtr, END_OF_LIST);
+				OKfree(tmpsubstr);    
+				tmpsubstr = substr (", ", &idxstr); 									
 				nAI++; 															
-			} 	
+			} 
+			OKfree(idxcopy);  
 		}
 		
 		// 6. AO
 		nAO = 0;
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_PhysicalChans, NULL));  
 		if (buffersize){   //process info if available     
-			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_PhysicalChans, *idxstr, buffersize));
-																
-			tmpsubstr = substr (", ", idxstr);										
+			nullChk(idxstr = malloc ( buffersize));
+			idxcopy=idxstr;
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_AO_PhysicalChans, idxstr, buffersize));
+			OKfree(tmpsubstr);												
+			tmpsubstr = substr (", ", &idxstr);										
 			while (tmpsubstr != NULL) {												
 				if (!(newAOChanPtr = init_AOChannel_type())) goto Error;			
-				newAOChanPtr->physChanName 			= tmpsubstr;
+				newAOChanPtr->physChanName 			= StrDup(tmpsubstr);
 				newAOChanPtr->supportedOutputTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_AO_SupportedOutputTypes);  
 				newAOChanPtr->Vrngs					= GetIORanges(dev_pt, DAQmx_Dev_AO_VoltageRngs);
 				newAOChanPtr->Irngs					= GetIORanges(dev_pt, DAQmx_Dev_AO_CurrentRngs);
 				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_AO_TermCfgs, &newAOChanPtr->terminalCfg); 
-				ListInsertItem (devAttrPtr->AOchan, &newAOChanPtr, END_OF_LIST);						
-				tmpsubstr = substr (", ", idxstr); 									
+				ListInsertItem (devAttrPtr->AOchan, &newAOChanPtr, END_OF_LIST);
+				OKfree(tmpsubstr);
+				tmpsubstr = substr (", ", &idxstr); 									
 				nAO++; 															
 			}
+			OKfree(idxcopy); 
 		}
 					 
 		// 7. DI lines
 		nDIlines = 0; 
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Lines, NULL));  
 		if (buffersize){   //process info if available           
-			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Lines, *idxstr, buffersize));
-			tmpsubstr = substr (", ", idxstr);										
+			nullChk(idxstr = malloc ( buffersize)); 
+			idxcopy=idxstr;
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Lines, idxstr, buffersize));
+			OKfree(tmpsubstr); 
+			tmpsubstr = substr (", ", &idxstr);										
 			while (tmpsubstr != NULL) {												
 				if (!(newDILineChanPtr = init_DILineChannel_type())) goto Error;			
-				newDILineChanPtr->physChanName 			= tmpsubstr;
+				newDILineChanPtr->physChanName 			= StrDup(tmpsubstr);
 				newDILineChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DI_SampModes);  
 				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_ChangeDetectSupported, &newDILineChanPtr->changeDetectSupported);
 				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_SampClkSupported, &newDILineChanPtr->sampClkSupported);
-				ListInsertItem (devAttrPtr->DIlines, &newDILineChanPtr, END_OF_LIST);						
-				tmpsubstr = substr (", ", idxstr); 									
+				ListInsertItem (devAttrPtr->DIlines, &newDILineChanPtr, END_OF_LIST);
+				OKfree(tmpsubstr);
+				tmpsubstr = substr (", ", &idxstr); 									
 				nDIlines++; 															
-			} 	
+			} 
+			OKfree(idxcopy);  
 		}
 		
 		// 8. DI ports
 		nDIports = 0; 
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Ports, NULL));
 		if (buffersize){   //process info if available   
-			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Ports, *idxstr, buffersize));
-																	
-			tmpsubstr = substr (", ", idxstr);										
+			nullChk(idxstr = malloc ( buffersize)); 
+			idxcopy=idxstr;
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DI_Ports, idxstr, buffersize));
+			OKfree(tmpsubstr);													
+			tmpsubstr = substr (", ", &idxstr);										
 			while (tmpsubstr != NULL) {												
 				if (!(newDIPortChanPtr = init_DIPortChannel_type())) goto Error;			
-				newDIPortChanPtr->physChanName 			= tmpsubstr;
+				newDIPortChanPtr->physChanName 			= StrDup(tmpsubstr);
 				newDIPortChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DI_SampModes);  
 				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_ChangeDetectSupported, &newDIPortChanPtr->changeDetectSupported);
 				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_SampClkSupported, &newDIPortChanPtr->sampClkSupported);
 				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DI_PortWidth, &newDIPortChanPtr->portWidth);
-				ListInsertItem (devAttrPtr->DIports, &newDIPortChanPtr, END_OF_LIST);						
-				tmpsubstr = substr (", ", idxstr); 									
+				ListInsertItem (devAttrPtr->DIports, &newDIPortChanPtr, END_OF_LIST);
+				OKfree(tmpsubstr);
+				tmpsubstr = substr (", ", &idxstr); 									
 				nDIports++; 															
 			} 
+			OKfree(idxcopy);  
 		}
 		
 		// 9. DO lines
 		nDOlines = 0; 
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Lines, NULL));  
 		if (buffersize){   //process info if available   
-			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Lines, *idxstr, buffersize));
-																	
-			tmpsubstr = substr (", ", idxstr);										
+			nullChk(idxstr = malloc ( buffersize)); 
+			idxcopy=idxstr;
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Lines, idxstr, buffersize));
+			OKfree(tmpsubstr); 														
+			tmpsubstr = substr (", ", &idxstr);										
 			while (tmpsubstr != NULL) {												
 				if (!(newDOLineChanPtr = init_DOLineChannel_type())) goto Error;			
-				newDOLineChanPtr->physChanName 			= tmpsubstr;
+				newDOLineChanPtr->physChanName 			= StrDup(tmpsubstr);
 				newDOLineChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DO_SampModes);  
 				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_SampClkSupported, &newDOLineChanPtr->sampClkSupported);
-				ListInsertItem (devAttrPtr->DOlines, &newDOLineChanPtr, END_OF_LIST);						
-				tmpsubstr = substr (", ", idxstr); 									
+				ListInsertItem (devAttrPtr->DOlines, &newDOLineChanPtr, END_OF_LIST);
+				OKfree(tmpsubstr);
+				tmpsubstr = substr (", ", &idxstr); 									
 				nDOlines++; 															
 			} 
+			OKfree(idxcopy);  
 		}
 		
 		// 10. DO ports
 		nDOports = 0; 
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Ports, NULL));
 		if (buffersize){   //process info if available    
-			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Ports, *idxstr, buffersize));
-																	
-			tmpsubstr = substr (", ", idxstr);										
+			nullChk(idxstr = malloc ( buffersize)); 
+			idxcopy=idxstr;
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_DO_Ports, idxstr, buffersize));
+			OKfree(tmpsubstr);														
+			tmpsubstr = substr (", ", &idxstr);										
 			while (tmpsubstr != NULL) {												
 				if (!(newDOPortChanPtr = init_DOPortChannel_type())) goto Error;			
-				newDOPortChanPtr->physChanName 			= tmpsubstr;
+				newDOPortChanPtr->physChanName 			= StrDup(tmpsubstr);
 				newDOPortChanPtr->sampModes				= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_DO_SampModes);  
 				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_SampClkSupported, &newDOPortChanPtr->sampClkSupported);
 				DAQmxGetPhysicalChanAttribute(tmpsubstr, DAQmx_PhysicalChan_DO_PortWidth, &newDOPortChanPtr->portWidth);  
-				ListInsertItem (devAttrPtr->DOports, &newDOPortChanPtr, END_OF_LIST);						
-				tmpsubstr = substr (", ", idxstr); 									
+				ListInsertItem (devAttrPtr->DOports, &newDOPortChanPtr, END_OF_LIST);
+				OKfree(tmpsubstr);
+				tmpsubstr = substr (", ", &idxstr); 									
 				nDOports++; 															
 			}
+			OKfree(idxcopy);  
 		}
 		
 		// 11. CI 
 		nCI = 0;
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CI_PhysicalChans, NULL));
 		if (buffersize){   //process info if available        
-		nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CI_PhysicalChans, *idxstr, buffersize));
-																	
-			tmpsubstr = substr (", ", idxstr);										
+			nullChk(idxstr = malloc ( buffersize)); 
+			idxcopy=idxstr;
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CI_PhysicalChans, idxstr, buffersize));
+			OKfree(tmpsubstr);														
+			tmpsubstr = substr (", ", &idxstr);										
 			while (tmpsubstr != NULL) {												
 				if (!(newCIChanPtr = init_CIChannel_type())) goto Error;			
-				newCIChanPtr->physChanName 			= tmpsubstr;
+				newCIChanPtr->physChanName 			= StrDup(tmpsubstr);
 				newCIChanPtr->supportedMeasTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_CI_SupportedMeasTypes);  
-				ListInsertItem (devAttrPtr->CIchan, &newCIChanPtr, END_OF_LIST);						
-				tmpsubstr = substr (", ", idxstr); 									
+				ListInsertItem (devAttrPtr->CIchan, &newCIChanPtr, END_OF_LIST);
+				OKfree(tmpsubstr);
+				tmpsubstr = substr (", ", &idxstr); 									
 				nCI++; 															
 			} 
+			OKfree(idxcopy);  
 		}
 		
 		// 12. CO 
 		nCO = 0; 
 		errChk(buffersize = DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CO_PhysicalChans, NULL));
 		if (buffersize){   //process info if available
-			nullChk(*idxstr = realloc (*idxstr, buffersize)); 						
-			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CO_PhysicalChans, *idxstr, buffersize));
-																	
-			tmpsubstr = substr (", ", idxstr);										
+			nullChk(idxstr = malloc ( buffersize));
+			idxcopy=idxstr;
+			errChk(DAQmxGetDeviceAttribute (dev_pt, DAQmx_Dev_CO_PhysicalChans, idxstr, buffersize));
+			OKfree(tmpsubstr); 													
+			tmpsubstr = substr (", ", &idxstr);										
 			while (tmpsubstr != NULL) {												
 				if (!(newCOChanPtr = init_COChannel_type())) goto Error;			
-				newCOChanPtr->physChanName 			= tmpsubstr;
+				newCOChanPtr->physChanName 			= StrDup(tmpsubstr);
 				newCOChanPtr->supportedOutputTypes 	= GetPhysChanPropertyList(tmpsubstr, DAQmx_PhysicalChan_CO_SupportedOutputTypes);  
-				ListInsertItem (devAttrPtr->COchan, &newCOChanPtr, END_OF_LIST);						
-				tmpsubstr = substr (", ", idxstr); 									
+				ListInsertItem (devAttrPtr->COchan, &newCOChanPtr, END_OF_LIST);
+				OKfree(tmpsubstr);
+				tmpsubstr = substr (", ", &idxstr); 									
 				nCO++; 															
 			} 
+			OKfree(idxcopy); 
 		}
 		
 		// 13. Single Channel AI max rate
@@ -2222,14 +2253,14 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 		/* Add device to list */
 		ListInsertItem(devlist, &devAttrPtr, END_OF_LIST);
 		
+		//discard_DevAttr_type(&devAttrPtr);
+		OKfree(dev_pt);
 		//Get the next device name in the list
-		dev_pt = substr (", ", idxnames); 
+		dev_pt = substr (", ", &idxnames); 
 	}
 	
 	SetCtrlAttribute (panHndl, tableCtrl, ATTR_LABEL_TEXT, "Devices found");  
 	
-	OKfree(*idxnames);
-	OKfree(*idxstr);
 	OKfree(idxnames);
 	OKfree(idxstr);
 	OKfree(tmpnames);
@@ -2238,12 +2269,10 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	
 Error:
 	
-	OKfree(*idxnames);
-	OKfree(*idxstr);
 	OKfree(idxnames);
 	OKfree(idxstr);
 	OKfree(tmpnames);
-	discard_DevAttr_type(&devAttrPtr);
+//	discard_DevAttr_type(&devAttrPtr);
 	return error;
 }
 
@@ -2335,6 +2364,8 @@ Error:
 	return NULL;
 }
 
+
+
 static void discard_DevAttr_type(DevAttr_type** a)
 {
 	if (!(*a)) return;
@@ -2345,42 +2376,50 @@ static void discard_DevAttr_type(DevAttr_type** a)
 	// discard channel lists and free pointers within lists.
 	if ((*a)->AIchan) { 	
 		ListApplyToEachEx ((*a)->AIchan, 1, DisposeAIChannelList, NULL); 
-		ListDispose((*a)->AIchan); 
+		ListDispose((*a)->AIchan);
+		(*a)->AIchan=NULL;
 	}
 	
 	if ((*a)->AOchan) {
 		ListApplyToEachEx ((*a)->AOchan, 1, DisposeAOChannelList, NULL); 
-		ListDispose((*a)->AOchan);	  
+		ListDispose((*a)->AOchan);	
+		(*a)->AOchan=NULL;  
 	}
 	
 	if ((*a)->DIlines) {
 		ListApplyToEachEx ((*a)->DIlines, 1, DisposeDILineChannelList, NULL); 
-		ListDispose((*a)->DIlines);  
+		ListDispose((*a)->DIlines);
+		(*a)->DIlines=NULL;    
 	}
 	
 	if ((*a)->DIports) {
 		ListApplyToEachEx ((*a)->DIports, 1, DisposeDIPortChannelList, NULL); 
-		ListDispose((*a)->DIports);  
+		ListDispose((*a)->DIports); 
+		(*a)->DIports=NULL;    
 	}
 	
 	if ((*a)->DOlines) {
 		ListApplyToEachEx ((*a)->DOlines, 1, DisposeDOLineChannelList, NULL); 
 		ListDispose((*a)->DOlines);
+		(*a)->DOlines=NULL;    
 	}
 	
 	if ((*a)->DOports) {
 		ListApplyToEachEx ((*a)->DOports, 1, DisposeDOPortChannelList, NULL); 
-		ListDispose((*a)->DOports);  
+		ListDispose((*a)->DOports);
+		(*a)->DOports=NULL;    
 	}
 	
 	if ((*a)->CIchan) {
 		ListApplyToEachEx ((*a)->CIchan, 1, DisposeCIChannelList, NULL); 
 		ListDispose((*a)->CIchan);
+		(*a)->CIchan=NULL;    
 	}
 	
 	if ((*a)->COchan) {
 		ListApplyToEachEx ((*a)->COchan, 1, DisposeCOChannelList, NULL); 
 		ListDispose((*a)->COchan);
+		(*a)->COchan=NULL;    
 	}
 	
 	// discard supported IO type lists
@@ -5551,7 +5590,7 @@ static ListType GetSupportedIOTypes (char devName[], int IOType)
 	
 	for (size_t i = 0; i < nElem; i++)
 		ListInsertItem(IOTypes, &io[i], END_OF_LIST);
-	
+	OKfree(io);
 	return IOTypes;
 	
 Error:
@@ -10778,6 +10817,7 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					// connect DAQmx data to the panel as well
 					SetPanelAttribute(newDAQmxDevPanHndl, ATTR_CALLBACK_DATA, newDAQmxDev);
 					// cleanup
+					
 					OKfree(newTCName);
 					
 					//------------------------------------------------------------------------------------------------
@@ -10831,8 +10871,41 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					SetMenuBarAttribute(nidaq->menuBarHndl, nidaq->deleteDevMenuItemID, ATTR_DIMMED, 0);
 					
 					//cleanup test lex
-					//discard_DevAttr_type(&newDAQmxDevAttrPtr);
-					//discard_Dev_type(&newDAQmxDev);
+				//		discard_DevAttr_type(&newDAQmxDevAttrPtr);   
+				/*	if(newDAQmxDevAttrPtr -> AIchan)   	 {
+						ListDispose (newDAQmxDevAttrPtr -> AIchan);
+						newDAQmxDevAttrPtr -> AIchan=NULL;
+					}
+					if(newDAQmxDevAttrPtr -> AOchan)   	 {
+						ListDispose (newDAQmxDevAttrPtr -> AOchan);
+						newDAQmxDevAttrPtr -> AOchan=NULL;     
+					}
+					if(newDAQmxDevAttrPtr -> DIlines)    {
+						ListDispose (newDAQmxDevAttrPtr -> DIlines);
+						newDAQmxDevAttrPtr -> DIlines=NULL;     
+					}
+					if(newDAQmxDevAttrPtr -> DIports)    {
+						ListDispose (newDAQmxDevAttrPtr -> DIports); 
+						newDAQmxDevAttrPtr -> DIports=NULL;   
+					}
+					if(newDAQmxDevAttrPtr -> DOlines)    {
+						ListDispose (newDAQmxDevAttrPtr -> DOlines);   
+						newDAQmxDevAttrPtr -> DOlines=NULL;   
+					}
+					if(newDAQmxDevAttrPtr -> DOports)    {
+						ListDispose (newDAQmxDevAttrPtr -> DOports); 
+						newDAQmxDevAttrPtr -> DOports=NULL;   
+					}
+					if(newDAQmxDevAttrPtr -> CIchan)   	 {
+						ListDispose (newDAQmxDevAttrPtr -> CIchan);    
+						newDAQmxDevAttrPtr -> CIchan=NULL;   
+					}
+					if(newDAQmxDevAttrPtr -> COchan)   	 {
+						ListDispose (newDAQmxDevAttrPtr -> COchan); 
+						newDAQmxDevAttrPtr -> COchan=NULL;   
+					}   */
+				
+				
 					
 					
 					break;

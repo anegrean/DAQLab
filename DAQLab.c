@@ -784,6 +784,7 @@ static int DAQLab_Close (void)
 	if (HWTrigSlaves) ListDispose(HWTrigSlaves);
 	
 	
+	
 	errChk( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) ); 
 	
 	// discard DOM after saving all settings

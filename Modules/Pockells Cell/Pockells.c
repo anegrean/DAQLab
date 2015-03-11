@@ -3,8 +3,8 @@
 // Title:		Pockells.c
 // Purpose:		A short description of the implementation.
 //
-// Created on:	5-3-2015 at 12:36:38 by Adrian.
-// Copyright:	. All Rights Reserved.
+// Created on:	5-3-2015 at 12:36:38 by Adrian Negrean.
+// Copyright:	VU University Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 
@@ -12,6 +12,7 @@
 // Include files
 
 #include "DAQLab.h" 		// include this first 
+#include <analysis.h> 
 #include <formatio.h>
 #include "UI_Pockells.h"
 #include "Pockells.h"
@@ -36,7 +37,7 @@
 // VChan base names
 #define VChanDataTimeout					1e4						// Timeout in [ms] for Sink VChans to receive data.
 #define VChan_PockellsEOM_In				"Pockells In"			// Sink VChan of Waveform_UChar or RepeatedWaveform_UChar used to time the light pulses
-#define VChan_PockellsEOM_Out				"Pockells Out"			// Source VChan of Waveform_Double or RepeatedWaveform_Double used to modulate the Pockells cell.
+#define VChan_PockellsEOM_Out				"Pockells Out"			// Source VChan of RepeatedWaveform_Double used to modulate the Pockells cell.
 
 
 //==============================================================================
@@ -65,7 +66,7 @@ struct PockellsEOM {
 	double						maxSafeVoltage;				// Maximum safe voltage that can be applied to the pockells cell in [V].
 	int							calibIdx;					// 1-based calibration index set for the pockells cell from the calib list.
 	ListType 					calib;          			// List of pockells EOM calibration wavelengths of PockellsEOMCal_type. 
-	SourceVChan_type*			modulationVChan;			// Output waveform VChan used to modulate the pockells cell. VChan of Waveform_Double or RepeatedWaveform_Double.
+	SourceVChan_type*			modulationVChan;			// Output waveform VChan used to modulate the pockells cell. VChan of RepeatedWaveform_Double.
 	SinkVChan_type*				timingVChan;				// Input waveform VChan used to time the modulation of the pockells cell. VChan of Waveform_UChar or RepeatedWaveform_UChar. 
 	TaskControl_type*			taskControl;				// Pockells cell task controller.
 	BOOL						DLRegistered;				// If True, pockells cell registered its task controller and VChans with the framework, False otherwise.
@@ -149,7 +150,7 @@ static void CVICALLBACK 			PockellsCellCalibration_CB 							(int menuBar, int m
 static void 						AddCalibTableEntry 									(PockellsEOM_type* eom, PockellsEOMCal_type* eomCal); 
 
 	// dims cells in a calibration table row when calibration has been added
-static void							DimCalibTableCells									(PockellsEOM_type* eom, int row);
+//static void							DimCalibTableCells									(PockellsEOM_type* eom, int row);
 	// adds a table calibration entry to the calibration list
 static void 						AddTableEntryToCalibList							(PockellsEOM_type* eom, int tableRow); 
 	// checks if a calibration table entry is valid
@@ -173,10 +174,6 @@ static double						GetPockellsCellVoltage								(PockellsEOMCal_type* eomCal, d
 //-----------------------------------------
 // VChan callbacks
 //-----------------------------------------
-
-	// Timing VChan
-static void							TimingVChan_Connected								(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							TimingVChan_Disconnected							(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Modulation VChan
 static void							ModulationVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
@@ -339,11 +336,13 @@ static PockellsEOM_type* init_PockellsEOM_type (char 	taskControllerName[],
 	nullChk( eom->calib				= ListCreate(sizeof(PockellsEOMCal_type)) );
 	nullChk( eom->taskControl   	= init_TaskControl_type(taskControllerName, eom, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
 									  AbortIterationTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC) );
+	// configure task controller
+	TaskControlEvent(eom->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 	
 	DLDataTypes		timingVChanDataTypes[] = {DL_Waveform_UChar, DL_RepeatedWaveform_UChar};
 	
-	nullChk( eom->timingVChan  		= init_SinkVChan_type(timingVChanName, timingVChanDataTypes, NumElem(timingVChanDataTypes), eom, VChanDataTimeout, TimingVChan_Connected, TimingVChan_Disconnected) );
-	nullChk( eom->modulationVChan	= init_SourceVChan_type(modulationVChanName, DL_Waveform_Double, eom, ModulationVChan_Connected, NULL) );
+	nullChk( eom->timingVChan  		= init_SinkVChan_type(timingVChanName, timingVChanDataTypes, NumElem(timingVChanDataTypes), eom, VChanDataTimeout, NULL, NULL) );
+	nullChk( eom->modulationVChan	= init_SourceVChan_type(modulationVChanName, DL_RepeatedWaveform_Double, eom, ModulationVChan_Connected, NULL) );
 	
 	
 	return eom;
@@ -922,17 +921,18 @@ static void AddCalibTableEntry (PockellsEOM_type* eom, PockellsEOMCal_type* eomC
 	SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eomCal->d);
 }
 
+/*
 static void DimCalibTableCells (PockellsEOM_type* eom, int row)
 {
 	Point 	cell 		= {.x = 0, .y = row};
-	int		columns[]	= {	CalibTableColIdx_Wavelength, CalibTableColIdx_aCoefficient, CalibTableColIdx_bCoefficient,
-					 		CalibTableColIdx_cCoefficient, CalibTableColIdx_dCoefficient};
+	int		columns[]	= {	CalibTableColIdx_Wavelength, CalibTableColIdx_aCoefficient, CalibTableColIdx_bCoefficient, CalibTableColIdx_dCoefficient};
 	
 	for (unsigned int i = 0; i < NumElem(columns); i++) {
 		cell.x = columns[i];
 		SetTableCellAttribute(eom->calibPanHndl, Calib_Table, cell, ATTR_CELL_MODE, VAL_INDICATOR);
 	}
 }
+*/
 
 static void AddTableEntryToCalibList (PockellsEOM_type* eom, int tableRow)
 {
@@ -960,7 +960,7 @@ static void AddTableEntryToCalibList (PockellsEOM_type* eom, int tableRow)
 	InsertListItem(eom->eomPanHndl, Pockells_Wavelength, -1, name, eomCal.wavelength);
 	
 	// dim cells
-	DimCalibTableCells(eom, tableRow);
+	//DimCalibTableCells(eom, tableRow);
 	
 }
 
@@ -968,7 +968,7 @@ static BOOL CalibTableRowIsValid (PockellsEOM_type* eom, int tableRow)
 {
 	Point					cell			= { .x = 0, .y = tableRow};
 	double					wavelength		= 0;
-	double					maxPower			= 0;
+	double					maxPower		= 0;
 	double					a				= 0;
 	double					b				= 0;
 	double					c				= 0;
@@ -985,13 +985,6 @@ static BOOL CalibTableRowIsValid (PockellsEOM_type* eom, int tableRow)
 	cell.x = CalibTableColIdx_MaxPower;
 	GetTableCellVal(eom->calibPanHndl, Calib_Table, cell, &maxPower);
 	if (maxPower == 0.0) return FALSE;
-	
-	// do not allow entering the same wavelength more than once
-	for (size_t i = 1; i <= nCals; i++) {
-		eomCal = ListGetPtrToItem(eom->calib, i);
-		if (eomCal->wavelength == wavelength)
-			return FALSE;
-	}
 	
 	// a > 0
 	cell.x = CalibTableColIdx_aCoefficient;
@@ -1048,7 +1041,7 @@ static void CVICALLBACK PockellsCellCalibration_CB (int menuBar, int menuItem, v
 	for (size_t i = 1; i <= nCals; i++) {
 		eomCal = ListGetPtrToItem(eom->calib, i);
 		AddCalibTableEntry(eom, eomCal);
-		DimCalibTableCells(eom, i);
+		//DimCalibTableCells(eom, i);
 	}
 	
 	// add default new calibration item to the end
@@ -1112,12 +1105,13 @@ static int CVICALLBACK MainPan_CB (int panel, int control, int event, void *call
 
 static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	PockellsEOM_type*		eom		= callbackData;
-	PockellsEOMCal_type*	eomCal	= NULL;
-	Point					cell	= {.x = 0, .y = 0};
-	int						nRows	= 0;
-	int						error	= 0;
-	char*					errMsg	= NULL;
+	PockellsEOM_type*		eom			= callbackData;
+	PockellsEOMCal_type*	eomCal		= NULL;
+	Point					cell		= {.x = 0, .y = 0};
+	int						nRows		= 0;
+	int						error		= 0;
+	char*					errMsg		= NULL;
+	double					paramVal	= 0;
 	
 	switch (event) {
 			
@@ -1191,97 +1185,125 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 								// set limits
 								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
 								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
-								// apply voltage
+								// update UI power display
 								SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->eomOutput * eomCal->maxPower);
 							}
 							break;
 						
 						case CalibTableColIdx_aCoefficient:
 							
-							GetTableCellVal(panel, control, cell, &eomCal->a);
+							GetTableCellVal(panel, control, cell, &paramVal);
+							
+							if (CalibTableRowIsValid(eom, eventData1))
+								eomCal->a = paramVal;
+							else
+								SetTableCellVal(panel, control, cell, eomCal->a);
+								
 							break;
 							
 						case CalibTableColIdx_bCoefficient:
 							
-							GetTableCellVal(panel, control, cell, &eomCal->b);
+							GetTableCellVal(panel, control, cell, &paramVal);
+							
+							if (CalibTableRowIsValid(eom, eventData1))
+								eomCal->b = paramVal;
+							else
+								SetTableCellVal(panel, control, cell, eomCal->b);
+							
 							break;
 							
 						case CalibTableColIdx_cCoefficient:
 							
-							GetTableCellVal(panel, control, cell, &eomCal->c);
+							GetTableCellVal(panel, control, cell, &paramVal);
+							
+							if (CalibTableRowIsValid(eom, eventData1)) {
+								eomCal->c = paramVal;
+								if (cell.y == eom->calibIdx)
+								// apply voltage
+								errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
+							}
+							else
+								SetTableCellVal(panel, control, cell, eomCal->c);
+							
+							 
 							break;
 							
 						case CalibTableColIdx_dCoefficient:
 							
-							GetTableCellVal(panel, control, cell, &eomCal->d);
-							break;
-					}
-					
-					break;
-						
-						
-			}
-			
-			break;
-			
-		case EVENT_KEYPRESS:
-			
-			switch (control) {
-					
-				case Calib_Table:
-					
-					switch (eventData1) {
+							GetTableCellVal(panel, control, cell, &paramVal);
 							
-						case VAL_FWD_DELETE_VKEY:  
-							
-							GetActiveTableCell(panel, control, &cell);
-							GetNumTableRows(panel, control, &nRows);
-							
-							// delete if the selected row is not the last row in the table
-							if (cell.y >= nRows) return 0;
-							
-							DeleteTableRows(panel, control, cell.y, 1);
-							ListRemoveItem(eom->calib, 0, cell.y);
-							
-							// if this wavelength is currently selected by the pockells cell, remove it and select first available wavelength
-							int 		wavelengthIdx 	= 0;
-							BOOL		isSelected		= FALSE;
-							
-							GetCtrlIndex(eom->eomPanHndl, Pockells_Wavelength, &wavelengthIdx);
-							if (wavelengthIdx + 1 == cell.y)
-								isSelected = TRUE;
-							else
-								isSelected = FALSE;
-							
-							DeleteListItem(eom->eomPanHndl, Pockells_Wavelength, cell.y - 1, 1);
-							GetCtrlIndex(eom->eomPanHndl, Pockells_Wavelength, &wavelengthIdx);
-							eom->calibIdx == wavelengthIdx + 1;
-							
-							if (isSelected && eom->calibIdx) {
-								// apply voltage for min transmission at the new wavelength
-								eomCal = ListGetPtrToItem(eom->calib, eom->calibIdx);
-								// adjust operation range
+							if (CalibTableRowIsValid(eom, eventData1)) {
+								eomCal->d = paramVal;
 								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
-								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
-								// apply voltage
-								SetCtrlVal(eom->eomPanHndl, Pockells_Output, eomCal->d * eomCal->maxPower);  
+								if (eom->eomOutput < eomCal->d) {
+									eom->eomOutput = eomCal->d;
+									// apply voltage
+									SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->eomOutput * eomCal->maxPower);
+									// update pockells cell voltage
+									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
+								}
+							} else 
+								SetTableCellVal(panel, control, cell, eomCal->d);
 								
-								errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );       
-							}
-							
-							// if there are no more calibrations available, dim the pockells cell controls
-							if (nRows == 2) {
-								SetCtrlAttribute(eom->eomPanHndl, Pockells_Wavelength, ATTR_DIMMED, 1);
-								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_DIMMED, 1);
-							}
-							
 							break;
 					}
 					
 					break;
+					
+				case Calib_Del:
+					
+					// confirm delete
+					if (!ConfirmPopup("Pockells cell calibration", "Delete calibration?"))
+						return 0;
+							
+					GetActiveTableCell(panel, control, &cell);
+					GetNumTableRows(panel, control, &nRows);
+							
+					// delete if the selected row is not the last row in the table
+					if (cell.y >= nRows) return 0;
+							
+					DeleteTableRows(panel, control, cell.y, 1);
+					ListRemoveItem(eom->calib, 0, cell.y);
+							
+					// if this wavelength is currently selected by the pockells cell, remove it and select first available wavelength
+					int 		wavelengthIdx 	= 0;
+					BOOL		isSelected		= FALSE;
+							
+					GetCtrlIndex(eom->eomPanHndl, Pockells_Wavelength, &wavelengthIdx);
+					if (wavelengthIdx + 1 == cell.y)
+						isSelected = TRUE;
+					else
+						isSelected = FALSE;
+							
+					DeleteListItem(eom->eomPanHndl, Pockells_Wavelength, cell.y - 1, 1);
+					GetCtrlIndex(eom->eomPanHndl, Pockells_Wavelength, &wavelengthIdx);
+					eom->calibIdx == wavelengthIdx + 1;
+							
+					if (isSelected && eom->calibIdx) {
+						// apply voltage for min transmission at the new wavelength
+						eomCal = ListGetPtrToItem(eom->calib, eom->calibIdx);
+						// adjust operation range
+						SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
+						SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
+						// apply voltage
+						SetCtrlVal(eom->eomPanHndl, Pockells_Output, eomCal->d * eomCal->maxPower);  
+								
+						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );       
+					}
+							
+					// if there are no more calibrations available, dim the pockells cell controls
+					if (nRows == 2) {
+						SetCtrlAttribute(eom->eomPanHndl, Pockells_Wavelength, ATTR_DIMMED, 1);
+						SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_DIMMED, 1);
+						}
+					
+					break;
+						
+						
 			}
 			
 			break;
+			
 	}
 	
 	return 0;
@@ -1356,30 +1378,28 @@ Error:
 
 static int ApplyPockellsCellVoltage (PockellsEOM_type* eom, double voltage, char** errorInfo)
 {
-	double*				commandVoltage			= NULL;
-	Waveform_type*		commandWaveform			= NULL;
-	DataPacket_type*	dataPacket				= NULL;
-	int					error					= 0;
-	char*				errMsg					= NULL;
-	DLDataTypes			modulationVChanDataType = GetSourceVChanDataType(eom->modulationVChan);
+#define ApplyPockellsCellVoltage_Waveform_NSamples		100
 	
-	// switch modulationVChan data type to DL_Waveform_Double if otherwise
-	if (modulationVChanDataType != DL_Waveform_Double)
-		SetSourceVChanDataType(eom->modulationVChan, DL_Waveform_Double);
+	double*						commandSignal			= NULL;
+	RepeatedWaveform_type*		commandWaveform			= NULL;
+	DataPacket_type*			dataPacket				= NULL;
+	DataPacket_type*			nullPacket				= NULL;
+	int							error					= 0;
+	char*						errMsg					= NULL;
 	
-	nullChk( commandVoltage = malloc(sizeof(double)) );
-	*commandVoltage = voltage;
+	nullChk( commandSignal = malloc(ApplyPockellsCellVoltage_Waveform_NSamples * sizeof(double)) );
+	Set1D(commandSignal, ApplyPockellsCellVoltage_Waveform_NSamples, voltage);
 	
-	nullChk( commandWaveform = init_Waveform_type(Waveform_Double, 0, 1, (void**)&commandVoltage) );
-	nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&commandWaveform, NULL, (DiscardPacketDataFptr_type) discard_Waveform_type) );
-	errChk( SendDataPacket(eom->modulationVChan, &dataPacket, FALSE, &errMsg) ); 
-	
+	nullChk( commandWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, 0, ApplyPockellsCellVoltage_Waveform_NSamples, (void**)&commandSignal, 0) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandWaveform, NULL, (DiscardPacketDataFptr_type) discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(eom->modulationVChan, &dataPacket, FALSE, &errMsg) );
+							  
 	return 0;
 	
 Error:
 	
-	OKfree(commandVoltage);
-	discard_Waveform_type(&commandWaveform);
+	OKfree(commandSignal);
+	discard_RepeatedWaveform_type(&commandWaveform);
 	discard_DataPacket_type(&dataPacket);
 	
 	if (!errMsg)
@@ -1401,34 +1421,6 @@ static double GetPockellsCellVoltage (PockellsEOMCal_type* eomCal, double normal
 //-----------------------------------------
 // VChan callbacks
 //-----------------------------------------
-
-// Timing VChan
-static void TimingVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
-{
-	PockellsEOM_type* 		eom 	= VChanOwner;
-	
-	// change "Pockells Out" VChan data type depending on the data type of the source
-	switch (GetSourceVChanDataType(GetSourceVChan(eom->timingVChan))) {
-			
-		case DL_Waveform_UChar:
-			
-			SetSourceVChanDataType(eom->modulationVChan, DL_Waveform_Double);
-			break;
-			
-		case DL_RepeatedWaveform_UChar:
-			
-			SetSourceVChanDataType(eom->modulationVChan, DL_RepeatedWaveform_Double);
-			break;
-	}
-	
-	
-}
-
-static void	TimingVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	PockellsEOM_type* eom = VChanOwner;
-	
-}
 
 // Modulation VChan
 static void	ModulationVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
@@ -1484,7 +1476,6 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	void**						dataPacketINDataPtr			= NULL;
 	double*						commandSignal				= NULL;
 	unsigned char*				timingSignal				= NULL;
-	Waveform_type*				commandWaveform				= NULL;
 	Waveform_type*				waveformIN					= NULL;
 	RepeatedWaveform_type* 		commandRepeatedWaveform		= NULL;
 	RepeatedWaveform_type* 		repeatedWaveformIN			= NULL;
@@ -1494,8 +1485,11 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	double						nRepeats					= 0;
 	
 	
-	// generate pockells cell command waveform if there is a Source VChan attached to the timing Sink VChan of the pockells cell
+	// if there is no Source VChan attached to the timing Sink VChan of the pockells cell, then just send constant voltage waveform
 	if (!IsVChanConnected((VChan_type*)eom->timingVChan)) {
+		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
+		// send NULL packet as well to signal termination of transmission
+		errChk( SendDataPacket(eom->modulationVChan, &nullDataPacket, FALSE, &errMsg) ); 
 		TaskControlIterationDone(taskControl, 0, "", FALSE);
 		return;
 	}
@@ -1508,7 +1502,7 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 		dataPacketINDataPtr = GetDataPacketPtrToData(dataPacketIN, &dataPacketINType);
 		switch (dataPacketINType) {
 				
-			case DL_Waveform_UChar:   				// Pockells output VChan is of DL_Waveform_Double type
+			case DL_Waveform_UChar:   			// Pockells output VChan is of DL_Waveform_Double type
 				
 				waveformIN 			= *(Waveform_type**)dataPacketINDataPtr;
 				timingSignal 		= *(unsigned char**)GetWaveformPtrToData(waveformIN, &nSamples);
@@ -1538,20 +1532,18 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 				
 			case DL_Waveform_UChar:
 				
-				nullChk( commandWaveform = init_Waveform_type(Waveform_Double, samplingRate, nSamples, (void**)&commandSignal) );
-				nullChk( dataPacketOUT = init_DataPacket_type(DL_Waveform_Double, (void**)&commandWaveform, NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+				nullChk( commandRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, samplingRate, nSamples, (void**)&commandSignal, 1) );
 				break;
 				
 			case DL_RepeatedWaveform_UChar:
 				nullChk( commandRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, samplingRate, nSamples, (void**)&commandSignal, nRepeats) );
-				nullChk( dataPacketOUT = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandRepeatedWaveform, NULL, (DiscardPacketDataFptr_type) discard_RepeatedWaveform_type) );
 				break;
 				
 			default:
 				TaskControlIterationDone(taskControl, IterateTC_Err_DataTypeNotSupported, "Incoming data type is not supported", FALSE);   
 				return;
 		}
-		
+		nullChk( dataPacketOUT = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandRepeatedWaveform, NULL, (DiscardPacketDataFptr_type) discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(eom->modulationVChan, &dataPacketOUT, FALSE, &errMsg) );
 	
 		ReleaseDataPacket(&dataPacketIN);
@@ -1570,7 +1562,6 @@ Error:
 	// cleanup
 	ReleaseDataPacket(&dataPacketIN);
 	discard_DataPacket_type(&dataPacketOUT);
-	discard_Waveform_type(&commandWaveform);
 	discard_RepeatedWaveform_type(&commandRepeatedWaveform);
 	OKfree(commandSignal);
 	
@@ -1611,7 +1602,7 @@ static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** 
 
 static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	PockellsEOM_type* 		eom 					= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }

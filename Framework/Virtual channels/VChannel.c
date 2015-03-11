@@ -856,14 +856,21 @@ void SetSourceVChanDataType (SourceVChan_type* srcVChan, DLDataTypes dataType)
 
 void SetSinkVChanDataTypes (SinkVChan_type* sinkVChan, size_t nDataTypes, DLDataTypes dataTypes[])
 {
+	BOOL	compatibleVChans	= FALSE;
+	
 	if (!nDataTypes) return;
 	
-	if (sinkVChan->sourceVChan)
+	if (sinkVChan->sourceVChan) {
 		for (size_t i = 0; i < nDataTypes; i++)
-			if (dataTypes[i] != sinkVChan->sourceVChan->dataType) {
-				VChan_Disconnect((VChan_type*)sinkVChan);
+			if (dataTypes[i] == sinkVChan->sourceVChan->dataType) {
+				compatibleVChans = TRUE;
 				break;
 			}
+		
+		if (!compatibleVChans)
+			VChan_Disconnect((VChan_type*)sinkVChan);
+	}
+	
 	// copy new data types
 	OKfree(sinkVChan->dataTypes);
 	sinkVChan->nDataTypes 	= nDataTypes;

@@ -3,8 +3,8 @@
 // Title:		Pockells.h
 // Purpose:		A short description of the interface.
 //
-// Created on:	5-3-2015 at 12:36:38 by Adrian.
-// Copyright:	. All Rights Reserved.
+// Created on:	5-3-2015 at 12:36:38 by Adrian Negrean.
+// Copyright:	VU University Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 

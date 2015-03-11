@@ -17,8 +17,9 @@
 #define  Calib_Plate                      2       /* control type: deco, callback function: (none) */
 #define  Calib_Table                      3       /* control type: table, callback function: (none) */
 #define  Calib_Close                      4       /* control type: command, callback function: (none) */
-#define  Calib_Add                        5       /* control type: command, callback function: (none) */
-#define  Calib_Notes                      6       /* control type: textBox, callback function: (none) */
+#define  Calib_Del                        5       /* control type: command, callback function: (none) */
+#define  Calib_Add                        6       /* control type: command, callback function: (none) */
+#define  Calib_Notes                      7       /* control type: textBox, callback function: (none) */
 
 #define  MainPan                          2
 #define  MainPan_Plate                    2       /* control type: deco, callback function: (none) */

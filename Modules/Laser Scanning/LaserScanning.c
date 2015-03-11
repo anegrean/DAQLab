@@ -30,7 +30,7 @@
 #define MAX_DOUBLE_NCHARS									30
 
 #define MOD_LaserScanning_UI 								"./Modules/Laser Scanning/UI_LaserScanning.uir"
-#define VChanDataTimeout									10e4					// Timeout in [ms] for Sink VChans to receive data
+#define VChanDataTimeout									1e4					// Timeout in [ms] for Sink VChans to receive data
 // Default Scan Engine VChan base names. Default base names must be unique among each other!
 #define VChan_ScanEngine_FastAxis_Command					"fast axis command"
 #define VChan_ScanEngine_FastAxis_Command_NSamples			"fast axis command n samples"

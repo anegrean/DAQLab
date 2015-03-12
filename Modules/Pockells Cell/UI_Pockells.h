@@ -28,6 +28,7 @@
 #define  Pockells                         3
 #define  Pockells_Wavelength              2       /* control type: ring, callback function: (none) */
 #define  Pockells_Output                  3       /* control type: scale, callback function: (none) */
+#define  Pockells_Pulsed                  4       /* control type: radioButton, callback function: (none) */
 
 
      /* Control Arrays: */

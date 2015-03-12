@@ -52,9 +52,8 @@
 #define  RectRaster_Objective             4       /* control type: ring, callback function: (none) */
 #define  RectRaster_Mode                  5       /* control type: ring, callback function: (none) */
 #define  RectRaster_NFrames               6       /* control type: numeric, callback function: (none) */
-#define  RectRaster_Averages              7       /* control type: numeric, callback function: (none) */
-#define  RectRaster_ExecutionMode         8       /* control type: radioButton, callback function: (none) */
-#define  RectRaster_Tab                   9       /* control type: tab, callback function: (none) */
+#define  RectRaster_ExecutionMode         7       /* control type: radioButton, callback function: (none) */
+#define  RectRaster_Tab                   8       /* control type: tab, callback function: (none) */
 
 #define  ScanPan                          7
 #define  ScanPan_Plate                    2       /* control type: deco, callback function: (none) */

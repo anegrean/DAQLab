@@ -62,8 +62,10 @@ struct PockellsEOMCal {
 struct PockellsEOM {
 	
 	// DATA
-	double						eomOutput;					// Pockells cell normalized power output.
+	double						outputPower;				// Pockells cell normalized optical power output when not in pulsed mode.
+	double						pulsedOutputPower;			// Pockells cell normalized optical power output for pulsed mode.
 	double						maxSafeVoltage;				// Maximum safe voltage that can be applied to the pockells cell in [V].
+	BOOL						isPulsed;					// If True, the Pockells cell is switched to a pulsed operation mode with appropriate pulse timing provided by the timingVChan.
 	int							calibIdx;					// 1-based calibration index set for the pockells cell from the calib list.
 	ListType 					calib;          			// List of pockells EOM calibration wavelengths of PockellsEOMCal_type. 
 	SourceVChan_type*			modulationVChan;			// Output waveform VChan used to modulate the pockells cell. VChan of RepeatedWaveform_Double.
@@ -319,7 +321,9 @@ static PockellsEOM_type* init_PockellsEOM_type (char 	taskControllerName[],
 	
 	// init
 		// DATA
-	eom->eomOutput					= 0.0;
+	eom->outputPower				= 0;
+	eom->pulsedOutputPower			= 0;
+	eom->isPulsed					= FALSE;
 	eom->maxSafeVoltage				= 0;
 	eom->calibIdx					= 0;
 	eom->calib						= 0;
@@ -870,17 +874,19 @@ static int InitNewPockellsCellUI (PockellsModule_type* eomModule, PockellsEOM_ty
 	
 	if (nCals) {
 		SetCtrlAttribute(eom->eomPanHndl, Pockells_Wavelength, ATTR_DIMMED, 0);
+		SetCtrlAttribute(eom->eomPanHndl, Pockells_Pulsed, ATTR_DIMMED, 0);   
 		SetCtrlIndex(eom->eomPanHndl, Pockells_Wavelength, eom->calibIdx - 1);
 		eomCal = ListGetPtrToItem(eom->calib, eom->calibIdx);
 		SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_DIMMED, 0);
 		// set limits
 		SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
 		SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
-		eom->eomOutput = eomCal->d;
+		eom->outputPower 			= eomCal->d;
+		eom->pulsedOutputPower		= eomCal->d;
 		// apply voltage
-		SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->eomOutput * eomCal->maxPower);
+		SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->outputPower * eomCal->maxPower);
 		// update pockells cell voltage
-		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
+		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );
 	}
 	
 	return 0;
@@ -1129,10 +1135,12 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 					// undim pockells cell controls
 					SetCtrlAttribute(eom->eomPanHndl, Pockells_Wavelength, ATTR_DIMMED, 0);
 					SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_DIMMED, 0);
+					SetCtrlAttribute(eom->eomPanHndl, Pockells_Pulsed, ATTR_DIMMED, 0);   
 					// update pockells cell output limits if this is the first entry
 					if (nRows == 1) {
 						// update output
-						eom->eomOutput = eomCal->d;
+						eom->outputPower 		= eomCal->d;
+						eom->pulsedOutputPower  = eomCal->d;
 						// set limits
 						SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
 						SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
@@ -1186,7 +1194,7 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
 								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
 								// update UI power display
-								SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->eomOutput * eomCal->maxPower);
+								SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->outputPower * eomCal->maxPower);
 							}
 							break;
 						
@@ -1220,12 +1228,11 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 								eomCal->c = paramVal;
 								if (cell.y == eom->calibIdx)
 								// apply voltage
-								errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
+								errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
 							}
 							else
 								SetTableCellVal(panel, control, cell, eomCal->c);
 							
-							 
 							break;
 							
 						case CalibTableColIdx_dCoefficient:
@@ -1235,12 +1242,13 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 							if (CalibTableRowIsValid(eom, eventData1)) {
 								eomCal->d = paramVal;
 								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
-								if (eom->eomOutput < eomCal->d) {
-									eom->eomOutput = eomCal->d;
+								if (eom->outputPower < eomCal->d) {
+									eom->outputPower 		= eomCal->d;
+									eom->pulsedOutputPower  = eomCal->d;
 									// apply voltage
-									SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->eomOutput * eomCal->maxPower);
+									SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->outputPower * eomCal->maxPower);
 									// update pockells cell voltage
-									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
+									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
 								}
 							} else 
 								SetTableCellVal(panel, control, cell, eomCal->d);
@@ -1295,6 +1303,7 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 					if (nRows == 2) {
 						SetCtrlAttribute(eom->eomPanHndl, Pockells_Wavelength, ATTR_DIMMED, 1);
 						SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_DIMMED, 1);
+						SetCtrlAttribute(eom->eomPanHndl, Pockells_Pulsed, ATTR_DIMMED, 1);   
 						}
 					
 					break;
@@ -1349,16 +1358,41 @@ static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, vo
 					SetCtrlVal(panel, Pockells_Output, eomCal->d * eomCal->maxPower);
 					
 					// update output
-					eom->eomOutput = eomCal->d;
+					eom->outputPower 		= eomCal->d;
+					eom->pulsedOutputPower  = eomCal->d;
 					errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );
 					break;
 					
 				case Pockells_Output:
 					
-					// apply voltage to get desired beam intensity
-					GetCtrlVal(panel, control, &eom->eomOutput);
-					eom->eomOutput /= eomCal->maxPower;
-					errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
+					if (eom->isPulsed) {
+						// set voltage to get desired beam intensity
+						GetCtrlVal(panel, control, &eom->pulsedOutputPower);
+						eom->pulsedOutputPower /= eomCal->maxPower; 
+					} else {
+						// apply voltage to get desired beam intensity
+						GetCtrlVal(panel, control, &eom->outputPower);
+						eom->outputPower /= eomCal->maxPower; 
+						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+					}
+					
+					break;
+					
+				case Pockells_Pulsed:
+					
+					GetCtrlVal(panel, control, &eom->isPulsed);
+					if (eom->isPulsed) {
+						// apply pockels voltage for min transmission
+						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );
+						// update UI with current pulsed power settings
+						SetCtrlVal(panel, Pockells_Output, eom->pulsedOutputPower * eomCal->maxPower);
+					} else {
+						// apply voltage to get desired beam intensity
+						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+						// update UI
+						SetCtrlVal(panel, Pockells_Output, eom->outputPower * eomCal->maxPower);
+					}
+					
 					break;
 			}
 			
@@ -1430,7 +1464,7 @@ static void	ModulationVChan_Connected (VChan_type* self, void* VChanOwner, VChan
 	int						error	= 0;
 	char*					errMsg	= NULL;
 	
-	errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
+	errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
 	
 	return;
 	
@@ -1480,14 +1514,15 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	RepeatedWaveform_type* 		commandRepeatedWaveform		= NULL;
 	RepeatedWaveform_type* 		repeatedWaveformIN			= NULL;
 	size_t						nSamples					= 0;
-	double						commandVoltage				= GetPockellsCellVoltage(eomCal, eom->eomOutput);
+	double						voltageHigh					= GetPockellsCellVoltage(eomCal, eom->pulsedOutputPower);
+	double						voltageLow					= GetPockellsCellVoltage(eomCal, eomCal->d);
 	double						samplingRate				= 0;
 	double						nRepeats					= 0;
 	
 	
-	// if there is no Source VChan attached to the timing Sink VChan of the pockells cell, then just send constant voltage waveform
-	if (!IsVChanConnected((VChan_type*)eom->timingVChan)) {
-		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->eomOutput), &errMsg) );
+	// if there is no Source VChan attached to the timing Sink VChan of the pockells cell or not in pulsed mode, then just send constant voltage waveform
+	if (!IsVChanConnected((VChan_type*)eom->timingVChan) || !eom->isPulsed) {
+		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
 		// send NULL packet as well to signal termination of transmission
 		errChk( SendDataPacket(eom->modulationVChan, &nullDataPacket, FALSE, &errMsg) ); 
 		TaskControlIterationDone(taskControl, 0, "", FALSE);
@@ -1522,10 +1557,15 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 				return;
 		}
 		
-		// apply pockells cell command voltage to the timing signal
+		// apply pockells cell pulsed mode command voltage to the timing signal
 		nullChk( commandSignal = malloc(nSamples * sizeof(double)) );
 		for (size_t i = 0; i < nSamples; i++)
-			commandSignal[i] = (timingSignal[i] != 0) * commandVoltage;
+			if (timingSignal[i])
+				commandSignal[i] = voltageHigh;
+			else
+				commandSignal[i] = voltageLow;
+				
+			 
 		
 		// send pockells cell command waveform
 		switch (dataPacketINType) { 

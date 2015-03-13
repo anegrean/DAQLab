@@ -47,6 +47,7 @@ typedef struct {
 	TaskStates_type				subtaskState;						// Updated by parent task when informed by subtask that a state change occured.
 	TaskStates_type				previousSubTaskState;				// Previous Subtask state used for logging and debuging.
 	TaskControl_type*			subtask;							// Pointer to Subtask Controller.
+	BOOL						isOutOfDate;						// If True, state of child is not known to the parent and the parent must be updated by its child.
 } SubTask_type;
 
 typedef enum {
@@ -415,7 +416,7 @@ void SetTaskControlMode	(TaskControl_type* taskControl, TaskMode_type mode)
 {
 	taskControl->mode = mode;	
 }
-
+ 
 BOOL GetTaskControlTCDone (TaskControl_type* taskControl)
 {
 	return taskControl->tc_done;
@@ -435,7 +436,8 @@ void SetTaskControlTCStarted (TaskControl_type* taskControl,BOOL started)
 {
 	taskControl->tc_started=started;
 }
-
+   
+ 
 TaskMode_type GetTaskControlMode (TaskControl_type* taskControl)
 {
 	return taskControl->mode;
@@ -1017,6 +1019,36 @@ static void ExecutionLogEntry (TaskControl_type* taskControl, EventPacket_type* 
 }
 
 
+BOOL IsSubtaskState(SubTask_type* subtaskPtr,TaskStates_type SubTaskState,TaskStates_type comparedState)
+{
+	BOOL equalstates=FALSE;
+	
+	if (subtaskPtr->isOutOfDate = TRUE) return FALSE;  
+	equalstates=(SubTaskState == comparedState);
+	
+	return equalstates;
+}
+
+
+BOOL AreSubtasksOutofDate(TaskControl_type* taskControl)
+{
+	BOOL OutofDate=FALSE;
+	size_t nItems;
+	SubTask_type* subtaskPtr;
+	
+	nItems = ListNumItems(taskControl->subtasks); 
+	for (size_t j = 1; j <= nItems; j++) {
+		subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
+		if (subtaskPtr->isOutOfDate)  {
+			OutofDate=TRUE;
+			break;
+		}
+	}
+		
+	return OutofDate;
+}
+
+
 void CVICALLBACK TaskEventItemsInQueue (CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData)
 {
 	// Don't use the value parameter! It will be 0 when the function is called manually
@@ -1396,6 +1428,7 @@ int	TaskControlEventToSubTasks  (TaskControl_type* SenderTaskControl, TaskEvents
 	// dispatch event to all subtasks
 	for (size_t i = 1; i <= nSubTasks; i++) { 
 		subtaskPtr = ListGetPtrToItem(SenderTaskControl->subtasks, i);
+		subtaskPtr->isOutOfDate = TRUE;
 		errChk(CmtWriteTSQData(subtaskPtr->subtask->eventQ, &eventpacket, 1, 0, NULL));
 	}
 	
@@ -1420,12 +1453,8 @@ Error:
 
 int	AddSubTaskToParent (TaskControl_type* parent, TaskControl_type* child)
 {
-	SubTask_type	subtaskItem;
+	SubTask_type	subtaskItem	= {.subtask = child, .subtaskState = child->state, .previousSubTaskState = child->state, .isOutOfDate = FALSE};
 	if (!parent || !child) return -1;
-	
-	subtaskItem.subtask					= child;
-	subtaskItem.subtaskState			= child->state;
-	subtaskItem.previousSubTaskState	= child->state;
 	
 	// call UITC Active function to dim/undim UITC Task Control execution
 	BOOL	UITCFlag = FALSE;
@@ -1699,6 +1728,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->isOutOfDate = FALSE; 
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
 					
 					// if subtask is in an error state, then switch to error state
@@ -1813,6 +1843,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->isOutOfDate = FALSE;
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
 					
 					//added lex
@@ -2023,6 +2054,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->isOutOfDate = FALSE;
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
 					
 					//added lex
@@ -2233,6 +2265,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->isOutOfDate = FALSE;
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
 					
 					//added lex
@@ -2616,7 +2649,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->isOutOfDate = FALSE;  
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
 					
 					
@@ -2641,6 +2675,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					if ((subtaskPtr->subtaskState != TASK_STATE_DONE)&&(subtaskPtr->previousSubTaskState != TASK_STATE_INITIAL))
 						break; // stop here
 					
+				
 					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
 					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 
 					
@@ -3029,6 +3064,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->isOutOfDate = FALSE;  
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
 					
 					//added lex
@@ -3137,6 +3173,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->isOutOfDate = FALSE;  
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
 					
 					//added lex
@@ -3355,9 +3392,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
+					subtaskPtr->isOutOfDate = FALSE;  
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
 					
 					//added lex
+				
 					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
 					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 
 					
@@ -3497,8 +3536,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->isOutOfDate = FALSE;  
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
+					
 					
 					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
 					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 

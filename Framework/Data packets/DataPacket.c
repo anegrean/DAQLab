@@ -34,7 +34,7 @@ struct DataPacket {
 														// there is only one copy of the data in the memory. To de-allocate memory for the data, each sink must 
 														// call ReleaseDataPacket which in the end frees the memory if ctr reaches 0. 
 	Iterator_type*				currentiter;            // data belongs to this iteration 
-	DiscardPacketDataFptr_type 	discardPacketDataFptr;	// Function pointer which will be called to discard the data pointer when ctr reaches 0.
+	DiscardFptr_type 			discardPacketDataFptr;	// Function pointer which will be called to discard the data pointer when ctr reaches 0.
 };
 
 
@@ -54,7 +54,7 @@ struct DataPacket {
 //==============================================================================
 // Global functions
 
-DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void** ptrToData, Iterator_type* currentiter,DiscardPacketDataFptr_type discardPacketDataFptr) 
+DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void** ptrToData, Iterator_type* currentiter, DiscardFptr_type discardPacketDataFptr) 
 {
 	DataPacket_type* dataPacket = malloc (sizeof(DataPacket_type));
 	if (!dataPacket) return NULL;

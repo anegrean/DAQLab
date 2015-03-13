@@ -80,7 +80,7 @@ typedef struct {
 
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
 	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
@@ -2483,7 +2483,7 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					
 					// call module init function
 					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[moduleidx].className, newInstanceName, mainPanHndl);
-					
+					OKfree(newInstanceName);
 					// call module load function
 					if ( (*newModulePtr->Load) 	(newModulePtr, mainPanHndl) < 0) {
 						// dispose of module if not loaded properly
@@ -2750,11 +2750,11 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 		case EVENT_COMMIT:
 			
 			switch (control) {
-			
-				case TCPan1_Repeat:
+				
 				case TCPan1_Reset:
-				case TCPan1_Mode:
 					
+				case TCPan1_Mode:
+				case TCPan1_Repeat:  	
 					TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 					
 					break;

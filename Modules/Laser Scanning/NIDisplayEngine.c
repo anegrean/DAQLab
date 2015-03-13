@@ -298,6 +298,8 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 	// assign data structure
 	nullChk(displays[imaqHndl] = init_NIImageDisplay_type(NIDisplay, imaqHndl, callbackData) );
 	
+	displays[imaqHndl]->baseClass.imageType=imageType;
+	
 	// init IMAQ image buffer 
 	switch (imageType) {
 		case Image_UChar:
@@ -680,6 +682,9 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 	
 }
 
+
+
+
 LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {   
 	NIImageDisplay_type*	disp 			= (NIImageDisplay_type*) dwRefData;
@@ -760,11 +765,7 @@ Error:
 }
 
 
-void discard_Image_type (Image** image)
-{
-	if (!*image) return;
-	
-	imaqDispose(*image); 
-	
-	*image = NULL;
-}
+
+
+
+

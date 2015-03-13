@@ -11,6 +11,7 @@
 //==============================================================================
 // Include files
 
+#include "nivision.h"
 #include "DisplayEngine.h"
 
 //==============================================================================
@@ -125,6 +126,9 @@ Error:
 	
 }
 
+
+
+
 void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 {
 	ImageDisplay_type* 	imageDisplay = *imageDisplayPtr;
@@ -172,3 +176,6 @@ void discard_DisplayEngineClass (DisplayEngine_type** displayEnginePtr)
 	//free displayEnginePtr
 	OKfree(*displayEnginePtr); 
 }
+
+
+

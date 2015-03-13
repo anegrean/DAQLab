@@ -1425,7 +1425,7 @@ static int ApplyPockellsCellVoltage (PockellsEOM_type* eom, double voltage, char
 	Set1D(commandSignal, ApplyPockellsCellVoltage_Waveform_NSamples, voltage);
 	
 	nullChk( commandWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, 0, ApplyPockellsCellVoltage_Waveform_NSamples, (void**)&commandSignal, 0) );
-	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandWaveform, NULL, (DiscardPacketDataFptr_type) discard_RepeatedWaveform_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandWaveform, NULL, (DiscardFptr_type) discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(eom->modulationVChan, &dataPacket, FALSE, &errMsg) );
 							  
 	return 0;
@@ -1583,7 +1583,7 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 				TaskControlIterationDone(taskControl, IterateTC_Err_DataTypeNotSupported, "Incoming data type is not supported", FALSE);   
 				return;
 		}
-		nullChk( dataPacketOUT = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandRepeatedWaveform, NULL, (DiscardPacketDataFptr_type) discard_RepeatedWaveform_type) );
+		nullChk( dataPacketOUT = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandRepeatedWaveform, NULL, (DiscardFptr_type) discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(eom->modulationVChan, &dataPacketOUT, FALSE, &errMsg) );
 	
 		ReleaseDataPacket(&dataPacketIN);

@@ -7195,7 +7195,7 @@ static int CVICALLBACK Chan_CO_Pulse_Frequency_CB (int panel, int control, int e
 	
 	// send new pulse train
 	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
-	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, NULL, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, NULL, (DiscardFptr_type) discard_PulseTrain_type) );
 	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errMsg) ); 
 	
 	
@@ -7286,7 +7286,7 @@ static int CVICALLBACK Chan_CO_Pulse_Time_CB (int panel, int control, int event,
 	
 	// send new pulse train
 	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
-	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, NULL, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, NULL, (DiscardFptr_type) discard_PulseTrain_type) );
 	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errMsg) ); 
 	
 	return 0;
@@ -7372,7 +7372,7 @@ static int CVICALLBACK Chan_CO_Pulse_Ticks_CB (int panel, int control, int event
 	
 	// send new pulse train
 	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
-	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, NULL, (DiscardPacketDataFptr_type) discard_PulseTrain_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, NULL, (DiscardFptr_type) discard_PulseTrain_type) );
 	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errMsg) ); 
 	
 	return 0;
@@ -9701,7 +9701,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			// prepare data packet
 			//--------------------
 			nullChk( waveform 	= init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_double) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) ); 
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) ); 
 				
 			break;
 				
@@ -9744,7 +9744,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			//--------------------
 			
 			nullChk( waveform 	= init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_float) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
 				
 			break;
 		
@@ -9770,7 +9770,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			}
 				
 			nullChk( waveform = init_Waveform_type(Waveform_UInt, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_uInt32) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UInt, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UInt, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
 				
 			break;
 				
@@ -9794,7 +9794,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			}
 				
 			nullChk( waveform = init_Waveform_type(Waveform_UShort, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_uInt16) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
 				
 			break;
 				
@@ -9818,7 +9818,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			}
 				
 			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_uInt8) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, &waveform,  NULL,(DiscardPacketDataFptr_type) discard_Waveform_type) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
 				
 			break;
 		*/
@@ -11770,15 +11770,15 @@ static void	COPulseTrainSourceVChan_Connected (VChan_type* self, void* VChanOwne
 	switch(pulseType){
 			
 		case PulseTrain_Freq:
-			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, NULL,(DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
+			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, &pulseTrain, NULL,(DiscardFptr_type) discard_PulseTrain_type) );  
 			break;
 			
 		case PulseTrain_Time:
-			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, NULL,(DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
+			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, &pulseTrain, NULL,(DiscardFptr_type) discard_PulseTrain_type) );  
 			break;
 			
 		case PulseTrain_Ticks: 
-			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, NULL,(DiscardPacketDataFptr_type) discard_PulseTrain_type) );  
+			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, &pulseTrain, NULL,(DiscardFptr_type) discard_PulseTrain_type) );  
 			break;
 			
 	}

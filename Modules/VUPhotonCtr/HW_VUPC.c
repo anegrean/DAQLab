@@ -338,7 +338,7 @@ int ReadBuffer(int bufsize)
 					//end full block code	
 						// prepare waveform
 						nullChk( waveform 	= init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );  
-				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIterDup(gtaskControl), (DiscardPacketDataFptr_type) discard_Waveform_type));       
+				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIterDup(gtaskControl), (DiscardFptr_type) discard_Waveform_type));       
 					// send data packet with waveform
 						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
 				//	}

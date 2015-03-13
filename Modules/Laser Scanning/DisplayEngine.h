@@ -101,6 +101,9 @@ typedef ROI_type*						(*OverlayROIFptr_type)						(ImageDisplay_type* imgDispla
 	// Clears ROI overlays. ROIIdx is the 1-based ROI index from the image display ROI list. If ROIIdx is 0, all ROIs are cleared
 typedef void							(*ROIActionsFptr_type)						(ImageDisplay_type* imgDisplay, int ROIIdx, ROIActions action);
 
+	// Copies image data 
+typedef void*							(*CopyImageFptr_type)						(void* image);
+
 
 
 
@@ -121,6 +124,8 @@ struct DisplayEngine {
 	DiscardFptr_type					discardFptr;					// method to discard child class data
 	
 	DiscardFptr_type					imageDiscardFptr;				// Method to discard imageData.
+	
+	CopyImageFptr_type					imageCopyFptr;					// Method to copy image data
 	
 	DisplayImageFptr_type				displayImageFptr;
 	

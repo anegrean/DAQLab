@@ -262,13 +262,7 @@ typedef enum {
 	//------------------------------------------
 	// Images
 	//------------------------------------------
-	DL_Image_NIVision,
-	DL_Image_UChar,	
-	DL_Image_UShort,				
-	DL_Image_Short,			
-	DL_Image_UInt,				
-	DL_Image_Int,				
-	DL_Image_Float,	
+	DL_Image,
 	
 	//------------------------------------------
 	// Region Of Interest (ROI) types for images

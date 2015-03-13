@@ -18,6 +18,7 @@
 #include <formatio.h>
 #include <userint.h>
 #include "DataStorage.h"
+#include "DisplayEngine.h"
 
 //==============================================================================
 // Constants
@@ -196,7 +197,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 
 static DS_Channel_type* init_DS_Channel_type (DataStorage_type* ds, int panHndl, char VChanName[])
 {
-	DLDataTypes allowedPacketTypes[] = {DL_Waveform_UShort,DL_Image_NIVision};   	   //, WaveformPacket_UInt, WaveformPacket_Double
+	DLDataTypes allowedPacketTypes[] = {DL_Waveform_UShort,DL_Image};   	   //, WaveformPacket_UInt, WaveformPacket_Double
 	
 	DS_Channel_type* chan = malloc (sizeof(DS_Channel_type));
 	if (!chan) return NULL;
@@ -692,7 +693,16 @@ int SaveImage(char* filename,Image* image)
 {
 	int 			err=0;
 	TIFFFileOptions options;
-	char *			fileName;
+
+ 	err=imaqWriteFile(image,filename, NULL); 
+	
+	return err;
+}
+
+int SaveTiffImage(char* filename,Image* image)
+{
+	int 			err=0;
+	TIFFFileOptions options;
 
 	options.photoInterp=IMAQ_BLACK_IS_ZERO;
 	options.compressionType=IMAQ_NO_COMPRESSION;
@@ -723,6 +733,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 	char				cmtStatusMessage[CMT_MAX_MESSAGE_BUF_SIZE];
 	void*				dataPacketDataPtr;
 	DLDataTypes			dataPacketType; 
+	ImageDisplay_type*	imgDisplay;
 	Image*				image;
 	size_t 				i;
 	DS_Channel_type*	chan; 
@@ -787,13 +798,25 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 					free(fullitername);
 					CloseFile(filehandle);
 				break;
-				case DL_Image_NIVision:
+				case DL_Image:
 					//get the image
-					image=*(Image**) dataPacketDataPtr;
+					imgDisplay=*(ImageDisplay_type**) dataPacketDataPtr;
+					image=imgDisplay->image;
 					rawfilename=malloc(MAXCHAR*sizeof(char)); 
 					fullitername=CreateFullIterName(currentiter);
-					Fmt (rawfilename, "%s<%s\\%s_%s#%d.tif", ds->rawdatapath,fullitername,sourceVChanName,GetCurrentIterationIndex(currentiter));  
-					SaveImage(rawfilename,image);
+					switch (imgDisplay->imageType){
+						case Image_Float:
+							//can't create tiff from float
+							Fmt (rawfilename, "%s<%s\\%s_%s#%d.aipd", ds->rawdatapath,fullitername,sourceVChanName,GetCurrentIterationIndex(currentiter));  
+							SaveImage(rawfilename,image);
+							break;
+						default:
+							//create tiff
+							Fmt (rawfilename, "%s<%s\\%s_%s#%d.tif", ds->rawdatapath,fullitername,sourceVChanName,GetCurrentIterationIndex(currentiter));  
+							SaveTiffImage(rawfilename,image);
+							break;
+							
+					}
 					free(rawfilename);
 					free(fullitername); 
 				break;

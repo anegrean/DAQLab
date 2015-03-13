@@ -4244,7 +4244,7 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	nullChk( engine->VChanSlowAxisComNSamples	= init_SourceVChan_type(slowAxisComNSampVChanName, DL_ULongLong, engine, NULL, NULL) ); 
 	nullChk( engine->VChanFastAxisPos			= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected) ); 
 	nullChk( engine->VChanSlowAxisPos			= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected) ); 
-	nullChk( engine->VChanScanOut				= init_SourceVChan_type(imageOutVChanName, DL_Image_NIVision, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected) );
+	nullChk( engine->VChanScanOut				= init_SourceVChan_type(imageOutVChanName, DL_Image, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected) );
 	nullChk( engine->VChanShutter				= init_SourceVChan_type(shutterVChanName, DL_Waveform_UChar, engine, ShutterVChan_Connected, ShutterVChan_Disconnected) ); 
 	nullChk( engine->VChanPixelPulseTrain		= init_SourceVChan_type(pixelPulseTrainVChanName, DL_PulseTrain_Ticks, engine, NULL, NULL) ); 	
 	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_ULongLong, engine, NULL, NULL) ); 	
@@ -4440,8 +4440,8 @@ static int ReturnRectRasterToParkedPosition (RectRaster_type* engine, char** err
 	Set1D(parkedSlowAxis, nParkedSamples, ((NonResGalvoCal_type*)engine->baseClass.slowAxisCal)->parked);
 	nullChk( parkedFastAxisWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, engine->galvoSamplingRate, nParkedSamples, (void**)&parkedFastAxis, 0) );
 	nullChk( parkedSlowAxisWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, engine->galvoSamplingRate, nParkedSamples, (void**)&parkedSlowAxis, 0) );
-	nullChk( fastAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedFastAxisWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
-	nullChk( slowAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedSlowAxisWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+	nullChk( fastAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedFastAxisWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
+	nullChk( slowAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedSlowAxisWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	// send parked signal data packets
 	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &fastAxisDataPacket, FALSE, &errMsg) );
 	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &slowAxisDataPacket, FALSE, &errMsg) );
@@ -5570,7 +5570,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	nullChk( fastAxisMoveFromParked_RepWaveform = ConvertWaveformToRepeatedWaveformType(&fastAxisMoveFromParkedCompensatedWaveform, 1) );
 	
 	// send data 
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisMoveFromParked_RepWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisMoveFromParked_RepWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
 	
 	// fastAxisScan_Waveform has two line scans (one triangle wave period)
@@ -5582,7 +5582,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, 0) ); 
 	
 	// send data
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisScan_RepWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );   
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisScan_RepWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );   
 	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
 	
 	// go back to parked position if finite frame scan mode
@@ -5591,7 +5591,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( parkedVoltageSignal = malloc(sizeof(double)) );
 		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) ); 
+		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
 		// send NULL packet to signal termination of data stream
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );    
@@ -5616,7 +5616,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	nullChk( slowAxisMoveFromParked_RepWaveform = ConvertWaveformToRepeatedWaveformType(&slowAxisMoveFromParkedCompensatedWaveform, 1) );
 	
 	// send data 
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisMoveFromParked_RepWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisMoveFromParked_RepWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
 	
 	// repeat staircase waveform
@@ -5628,7 +5628,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( slowAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&slowAxisScan_Waveform, 0) ); 
 	
 	// send data
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisScan_RepWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );   
+	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisScan_RepWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );   
 	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );  
 	
 	// go back to parked position if finite frame scan mode
@@ -5637,7 +5637,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( parkedVoltageSignal = malloc(sizeof(double)) );
 		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) ); 
+		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
 		// send NULL packet to signal termination of data stream
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );    
@@ -5679,7 +5679,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32)(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
 	
 	// send pulse train info
-	nullChk( pixelPulseTrainPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, NULL, (DiscardPacketDataFptr_type)discard_PulseTrain_type) );
+	nullChk( pixelPulseTrainPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, NULL, (DiscardFptr_type)discard_PulseTrain_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &pixelPulseTrainPacket, FALSE, &errMsg) ); 
 	
 	return 0; // no error
@@ -5864,19 +5864,19 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	// Send data packets
 	//-----------------------------------------------
 	if (nStartDelayElem) {
-		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisStartDelayWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisStartDelayWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
-		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisStartDelayWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisStartDelayWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
-		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&ROIStartDelayWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&ROIStartDelayWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(scanEngine->VChanROITiming, &dataPacket, FALSE, &errMsg) );
 	}
 	
-	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisJumpWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisJumpWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
-	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisJumpWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisJumpWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
-	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&ROIJumpWaveform, NULL, (DiscardPacketDataFptr_type)discard_RepeatedWaveform_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&ROIJumpWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->VChanROITiming, &dataPacket, FALSE, &errMsg) );
 	
 	// send null packets to mark end of waveforms
@@ -6002,6 +6002,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	Iterator_type* 				currentiter		    = NULL;
 	DisplayEngine_type* 		displayEngine 		= imgBuffer->detChan->scanEngine->lsModule->displayEngine;
 	RectRasterScanSet_type*		imgSettings			= NULL;
+	DataPacket_type* 			imagePacket         = NULL;
+	ImageDisplay_type*			sendingDisplay		= NULL;	  
 	
 	do {
 		
@@ -6106,7 +6108,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 			imgBuffer->nTmpPixels  	-= rectRaster->scanSettings.width + 2 * nDeadTimePixels;
 			// reverse pixel direction of every second row
 			imgBuffer->flipRow = !imgBuffer->flipRow;
-				
+			
+			
 			if (imgBuffer->nAssembledRows == rectRaster->scanSettings.height) {
 				
 			
@@ -6147,39 +6150,24 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				errChk( (*displayEngine->displayImageFptr) (imgBuffer->detChan->imgDisplay, imgBuffer->imagePixels, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType,
 														    rectRaster->scanSettings.pixSize, 0, 0, 0) ); // TEMPORARY: X, Y & Z coordinates set to 0 for now
 				 
-				
 				  /*
-					//test lex 
-				//create image packet
-				switch (imgBuffer->pixelDataType) {
-					case DL_Waveform_UChar:
-						imaqImgType 		= IMAQ_IMAGE_U8;
-					break;
-		
-					case DL_Waveform_UShort:
-						imaqImgType 		= IMAQ_IMAGE_U16;
-					break;
-					case DL_Waveform_Short:
-						imaqImgType 		= IMAQ_IMAGE_I16; 
-					break;
-				   	case DL_Waveform_Float:
-						imaqImgType 		= IMAQ_IMAGE_SGL; 
-					break;
-				}
-					sendImage=imaqCreateImage(imaqImgType, 0); 
-					imaqDuplicate(sendImage,imgBuffer->detChan->imaqImg); 
-					
-					currentiter=GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);
-					//test
-					iterindex=GetCurrentIterationIndex(currentiter);
-					iterindex++;
-					SetCurrentIterationIndex(currentiter,iterindex);
-					nullChk( imagePacket	= init_DataPacket_type(DL_Image_NIVision, &sendImage,currentiter , (DiscardPacketDataFptr_type) discard_Image_type));       
-					// send data packet with image
-					errChk( SendDataPacket(rectRaster->baseClass.VChanScanOut, &imagePacket, 0, &errMsg) );
-				  */
+				
+				//get image from display engine
+				//sendingDisplay=(*displayEngine->getImageDisplayFptr) (imgBuffer->detChan->imgDisplay, NULL, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType); 
+				//make a copy 
+				imgBuffer->detChan->imgDisplay->image
+				currentiter=GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);
+				//test
+				iterindex=GetCurrentIterationIndex(currentiter);
+				iterindex++;
+				SetCurrentIterationIndex(currentiter,iterindex);
 			
-			
+				nullChk( imagePacket	= init_DataPacket_type(DL_Image, &sendingDisplay->, currentiter , (DiscardFptr_type) displayEngine->imageDiscardFptr));
+				// send data packet with image
+				errChk( SendDataPacket(rectRaster->baseClass.VChanScanOut, &imagePacket, 0, &errMsg) );
+				     */
+				
+				
 				// TEMPORARY: just complete iteration, and use only one channel
 				TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
 				
@@ -6279,6 +6267,12 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 			
 		// update number of pixels in temporary buffer
 		imgBuffer->nTmpPixels += nPixels - pixelDataIdx;
+	/*	
+		char* testMsg;
+		testMsg=malloc(255);
+		Fmt(testMsg,"%s<ImgBuffer %d\n",imgBuffer->nTmpPixels);
+		DLMsg(testMsg, FALSE);
+		free(testMsg);*/
 		
 	} while (TRUE);
 			
@@ -7036,7 +7030,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			nCommandSignalSamples = CALPOINTS * nSamplesPerCalPoint;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, (void**)&commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
 			
@@ -7147,7 +7141,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			nCommandSignalSamples = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, (void**)&commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) ); 
 			
@@ -7301,7 +7295,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			nCommandSignalSamples = (flybackSamples + postStepSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, (void**)&commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
 			
@@ -7423,7 +7417,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			nCommandSignalSamples = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, (void**)&commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) ); 
 			
@@ -7559,7 +7553,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			nCommandSignalSamples = nSamples;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, (void**)&commandSignal) );
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
-			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardPacketDataFptr_type)discard_Waveform_type) );
+			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
 			
@@ -7933,6 +7927,7 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 {
 	RectRaster_type* 	engine		= GetTaskControlModuleData(taskControl);
 	int					error		= 0;
+	char*				errMsg		= 0;
 	
 	// close shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorInfo) );
@@ -7941,6 +7936,15 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 		errChk( ReturnRectRasterToParkedPosition(engine, errorInfo) );
 	// update iterations
 	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	
+	// make sure the NULL packet is removed
+	size_t				nDetChans 	= ListNumItems(engine->baseClass.DetChans );
+	DetChan_type*   	detChan		= NULL;
+	DataPacket_type*	dataPacket	= NULL;
+	for (size_t i = 1; i <= nDetChans; i++) {
+		detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
+		errChk( GetDataPacket(detChan->detVChan, &dataPacket, &errMsg) );
+	}
 	
 	return 0; 
 	

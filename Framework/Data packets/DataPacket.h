@@ -31,9 +31,6 @@
 typedef struct DataPacket 		DataPacket_type;
 
 
-	// Function pointer type for discarding data from data packets if other than free()
-typedef void (*DiscardPacketDataFptr_type)	(void** data);
-
 //==============================================================================
 // External variables
 
@@ -42,7 +39,7 @@ typedef void (*DiscardPacketDataFptr_type)	(void** data);
 
 	// Adds data to a data packet. Depending on the instance counter, calling ReleaseDataPacket repeatedly, the dscardPacketDataFptr is called to discard the provided data. 
 	// If data* has been allocated with malloc then for discardPacketDataFptr provide NULL. Otherwise provide the specific data type discard function.
-DataPacket_type* 		init_DataPacket_type 				(DLDataTypes dataType, void** ptrToData, Iterator_type* currentiter,DiscardPacketDataFptr_type discardPacketDataFptr);
+DataPacket_type* 		init_DataPacket_type 				(DLDataTypes dataType, void** ptrToData, Iterator_type* currentiter, DiscardFptr_type discardPacketDataFptr);
 	// Discards a data packet.
 void					discard_DataPacket_type				(DataPacket_type** dataPacket);
 	// Sets number of times ReleaseDataPacket must be called before the data contained in the data packet is discarded

@@ -34,11 +34,14 @@
 #define CalibTableColIdx_cCoefficient		5
 #define CalibTableColIdx_dCoefficient		6
 
-// VChan base names
-#define VChanDataTimeout					1e4						// Timeout in [ms] for Sink VChans to receive data.
-#define VChan_PockellsEOM_In				"Pockells In"			// Sink VChan of Waveform_UChar or RepeatedWaveform_UChar used to time the light pulses
-#define VChan_PockellsEOM_Out				"Pockells Out"			// Source VChan of RepeatedWaveform_Double used to modulate the Pockells cell.
+//----------------------------------------
+// VChans
+//----------------------------------------
+#define PockellsEOM_VChan_Timing			"timing"				// Sink VChan of Waveform_UChar or RepeatedWaveform_UChar used to time the light pulses
+#define PockellsEOM_VChan_Command			"command"				// Source VChan of RepeatedWaveform_Double used to modulate the Pockells cell.
+#define PockellsEOM_VChan_Timing_DataTypes  {DL_Waveform_UChar, DL_RepeatedWaveform_UChar}
 
+#define VChanDataTimeout					1e4						// Timeout in [ms] for Sink VChans to receive data.
 
 //==============================================================================
 // Types
@@ -112,9 +115,7 @@ struct PockellsModule {
 //==============================================================================
 // Static functions
 
-static PockellsEOM_type* 			init_PockellsEOM_type								(char 	taskControllerName[],
-											    										 char 	timingVChanName[],
-																	 					 char	modulationVChanName[]);
+static PockellsEOM_type* 			init_PockellsEOM_type								(PockellsModule_type* eomModule, TaskControl_type** taskControllerPtr);
 
 static void							discard_PockellsEOM_type							(PockellsEOM_type** eomPtr);
 
@@ -126,7 +127,7 @@ static int							Load 												(DAQLabModule_type* mod, int workspacePanHndl)
 
 static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement);
 
-static PockellsEOM_type* 			LoadPockellsCellFromXMLData 						(ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement);
+static PockellsEOM_type* 			LoadPockellsCellFromXMLData 						(PockellsModule_type* eomModule, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement);
 
 static int 							LoadPockellsCalibrationFromXMLData 					(PockellsEOMCal_type* eomCal, ActiveXMLObj_IXMLDOMElement_ calXMLElement);
 
@@ -311,12 +312,13 @@ void discard_PockellsModule (DAQLabModule_type** mod)
 	discard_DAQLabModule(mod);
 }
 
-static PockellsEOM_type* init_PockellsEOM_type (char 	taskControllerName[],
-											    char 	timingVChanName[],
-												char	modulationVChanName[])
+static PockellsEOM_type* init_PockellsEOM_type (PockellsModule_type* eomModule, TaskControl_type** taskControllerPtr)
 {
-	int					error	= 0;
-	PockellsEOM_type*	eom 	= malloc (sizeof(PockellsEOM_type));
+	int						error					= 0;
+	PockellsEOM_type*		eom 					= malloc (sizeof(PockellsEOM_type));
+	char*					timingVChanName			= NULL;
+	char*					modulationVChanName		= NULL;
+	
 	if (!eom) return NULL;
 	
 	// init
@@ -327,31 +329,41 @@ static PockellsEOM_type* init_PockellsEOM_type (char 	taskControllerName[],
 	eom->maxSafeVoltage				= 0;
 	eom->calibIdx					= 0;
 	eom->calib						= 0;
-	eom->taskControl				= NULL;
+	eom->taskControl				= *taskControllerPtr;
+	*taskControllerPtr				= NULL;
+	SetTaskControlModuleData(eom->taskControl, eom);
 	eom->timingVChan				= NULL;
 	eom->modulationVChan			= NULL;
 	eom->DLRegistered				= FALSE;
 		// UI
 	eom->eomPanHndl					= 0;
 	eom->calibPanHndl				= 0;
-		
+	
 	// alloc
+	
+		// VChans
+	nullChk( timingVChanName  		= DLVChanName((DAQLabModule_type*)eomModule, eom->taskControl, PockellsEOM_VChan_Timing, 0) );
+	nullChk( modulationVChanName	= DLVChanName((DAQLabModule_type*)eomModule, eom->taskControl, PockellsEOM_VChan_Command, 0) );
+		
 		// DATA
 	nullChk( eom->calib				= ListCreate(sizeof(PockellsEOMCal_type)) );
-	nullChk( eom->taskControl   	= init_TaskControl_type(taskControllerName, eom, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
-									  AbortIterationTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC) );
-	// configure task controller
-	TaskControlEvent(eom->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 	
-	DLDataTypes		timingVChanDataTypes[] = {DL_Waveform_UChar, DL_RepeatedWaveform_UChar};
+	DLDataTypes		timingVChanDataTypes[] = PockellsEOM_VChan_Timing_DataTypes;
 	
 	nullChk( eom->timingVChan  		= init_SinkVChan_type(timingVChanName, timingVChanDataTypes, NumElem(timingVChanDataTypes), eom, VChanDataTimeout, NULL, NULL) );
 	nullChk( eom->modulationVChan	= init_SourceVChan_type(modulationVChanName, DL_RepeatedWaveform_Double, eom, ModulationVChan_Connected, NULL) );
 	
+	// cleanup
+	OKfree(timingVChanName);
+	OKfree(modulationVChanName);
 	
 	return eom;
 	
 Error:
+	
+	// cleanup
+	OKfree(timingVChanName);
+	OKfree(modulationVChanName);
 	
 	discard_PockellsEOM_type(&eom);
 	
@@ -501,7 +513,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 	
 	for (long i = 0; i < nCells; i++) {
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(pockellsNodeList, &xmlERRINFO, i, &pockellsNode) );
-		nullChk( eom = LoadPockellsCellFromXMLData((ActiveXMLObj_IXMLDOMElement_) pockellsNode) ); 
+		nullChk( eom = LoadPockellsCellFromXMLData(eomModule, (ActiveXMLObj_IXMLDOMElement_) pockellsNode) ); 
 		ListInsertItem(eomModule->pockellsCells, &eom, END_OF_LIST);
 		OKFreeCAHandle(pockellsNode); 
 	}
@@ -519,7 +531,7 @@ XMLError:
 	return xmlerror;
 }
 
-static PockellsEOM_type* LoadPockellsCellFromXMLData (ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement)
+static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomModule, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement)
 {
 	int 							error 							= 0;
 	HRESULT							xmlerror						= 0;
@@ -527,26 +539,27 @@ static PockellsEOM_type* LoadPockellsCellFromXMLData (ActiveXMLObj_IXMLDOMElemen
 	PockellsEOM_type*				eom								= NULL;
 	double							maxSafeVoltage					= 0;
 	int								calibIdx						= 0;
-	char*							modulationVChanName				= NULL;
-	char*							timingVChanName					= NULL;
 	char*							taskControllerName				= NULL;
+	TaskControl_type*				taskController					= NULL;
 	
 	DAQLabXMLNode 					eomAttr[] 						= {	{"MaxSafeVoltage", BasicData_Double, &maxSafeVoltage},
 											  		   		   			{"CalibrationIdx", BasicData_Int, &calibIdx},
-															   			{"ModulationVChan", BasicData_CString, &modulationVChanName},
-															   			{"TimingVChan", BasicData_CString, &timingVChanName},
 															   			{"TaskControllerName", BasicData_CString, &taskControllerName} };
 	
 	//-------------------------------------------------------------------------- 
 	// Load pockells cell data
 	//--------------------------------------------------------------------------
 	
-	errChk( DLGetXMLElementAttributes(pockellsXMLElement, eomAttr, NumElem(eomAttr)) ); 
+	errChk( DLGetXMLElementAttributes(pockellsXMLElement, eomAttr, NumElem(eomAttr)) );
 	
-	nullChk( eom = init_PockellsEOM_type(taskControllerName, timingVChanName, modulationVChanName) );
+	nullChk( taskController = init_TaskControl_type(taskControllerName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
+									  AbortIterationTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC) );
+	// configure task controller
+	TaskControlEvent(taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+	
+	nullChk( eom = init_PockellsEOM_type(eomModule, &taskController) );
+	
 	OKfree(taskControllerName);
-	OKfree(timingVChanName);
-	OKfree(modulationVChanName);
 	
 	eom->calibIdx 			= calibIdx;
 	eom->maxSafeVoltage 	= maxSafeVoltage;
@@ -659,15 +672,11 @@ static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, A
 {
 	int								error					= 0;
 	HRESULT							xmlerror				= 0;
-	char*							modulationVChanName		= GetVChanName((VChan_type*)eom->modulationVChan);
-	char*							timingVChanName			= GetVChanName((VChan_type*)eom->timingVChan);
 	char*							taskControllerName		= GetTaskControlName(eom->taskControl);
 	ERRORINFO						xmlERRINFO;
 	ActiveXMLObj_IXMLDOMElement_	calXMLElement			= 0;   // pockells cell XML calibration element
 	DAQLabXMLNode 					eomAttr[] 				= {{"MaxSafeVoltage", BasicData_Double, &eom->maxSafeVoltage},
 											  		   		   {"CalibrationIdx", BasicData_Int, &eom->calibIdx},
-															   {"ModulationVChan", BasicData_CString, modulationVChanName},
-															   {"TimingVChan", BasicData_CString, timingVChanName},
 															   {"TaskControllerName", BasicData_CString, taskControllerName}};
 	
 															   
@@ -676,8 +685,6 @@ static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, A
 	//--------------------------------------------------------------------------
 	
 	errChk( DLAddToXMLElem(xmlDOM, pockellsXMLElement, eomAttr, DL_ATTRIBUTE, NumElem(eomAttr)) );
-	OKfree(modulationVChanName);
-	OKfree(timingVChanName);
 	OKfree(taskControllerName);
 	
 	//--------------------------------------------------------------------------
@@ -756,17 +763,23 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	char*					errMsg					= NULL;
 	void*					panelData				= NULL;
 	int						panelHndl				= 0;
+	TaskControl_type*		taskController			= NULL;
+	
 	
 	// get new task controller name
-	nullChk( taskControllerName 	= DLGetUniqueTaskControllerName(TaskController_BaseName) );
-	nullChk( timingVChanName  		= DLGetUniqueVChanName(VChan_PockellsEOM_In) );
-	nullChk( modulationVChanName	= DLGetUniqueVChanName(VChan_PockellsEOM_Out) );
+	nullChk( taskControllerName = DLGetUniqueTaskControllerName(TaskController_BaseName) );
+	
+	
+	nullChk(taskController = init_TaskControl_type(taskControllerName, eom, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
+									  AbortIterationTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC) );
+	// configure task controller
+	TaskControlEvent(taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+	
+	nullChk( eom = init_PockellsEOM_type(eomModule, &taskController) );
 	
 	GetPanelAttribute(panel, ATTR_PANEL_PARENT, &workspacePanHndl);
 	// load Pockells cell panel
 	errChk(eomPanHndl = LoadPanel(workspacePanHndl, MOD_PockellsModule_UI, Pockells));
-	
-	nullChk( eom = init_PockellsEOM_type(taskControllerName, timingVChanName, modulationVChanName) );
 	
 	ListInsertItem(eomModule->pockellsCells, &eom, END_OF_LIST);
 	
@@ -811,9 +824,9 @@ static int RegisterPockellsCell (PockellsModule_type* eomModule, PockellsEOM_typ
 	if (!DLAddTaskController((DAQLabModule_type*)eomModule, eom->taskControl)) goto Error;
 		
 	// add VChans to DAQLab framework and register with task controller
+	if (AddSinkVChan(eom->taskControl, eom->timingVChan, NULL) < 0) goto Error; 
 	if (!DLRegisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->modulationVChan)) goto Error;
 	if (!DLRegisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->timingVChan)) goto Error;
-	if (AddSinkVChan(eom->taskControl, eom->timingVChan, NULL) < 0) goto Error; 
 	
 	eom->DLRegistered = TRUE;
 	return 0;

@@ -43,11 +43,12 @@
 #define ScanEngine_SourceVChan_SlowAxis_Command				"slow axis command"
 #define ScanEngine_SourceVChan_SlowAxis_Command_NSamples	"slow axis command n samples"
 #define ScanEngine_SinkVChan_SlowAxis_Position				"slow axis position"
-#define ScanEngine_SourceVChan_ImageOut						"image"
-#define ScanEngine_SinkVChan_DetectionChan					"detector"
-#define ScanEngine_SourceVChan_Shutter_Command				"shutter"
+#define ScanEngine_SourceVChan_CompositeImage				"composite image"			// Combined image channels.
+#define ScanEngine_SourceVChan_ImageChannel					"image channel"				// Assembled image from a single detection channel.
+#define ScanEngine_SinkVChan_DetectionChan					"detection channel"			// Incoming fluorescence signal to assemble an image from.
+#define ScanEngine_SourceVChan_Shutter_Command				"shutter command"
 #define ScanEngine_SourceVChan_PixelPulseTrain				"pixel pulse train"
-#define ScanEngine_SourceVChan_NPixels						"n pixels"
+#define ScanEngine_SourceVChan_NPixels						"detection channel n pixels"
 #define ScanEngine_SourceVChan_ROITiming					"ROI timing"
 
 // Default Scan Axis Calibration VChan base names. Default base names must be unique among each other!
@@ -281,12 +282,21 @@ typedef struct {
 
 //---------------------------------------------------
 
+typedef enum {
+	ScanChanColor_Grey,		 // By default, in an RGB image all components get the same value
+	ScanChanColor_Red,
+	ScanChanColor_Green,
+	ScanChanColor_Blue
+} ScanChanColorScales;
+
 
 typedef struct {
-	SinkVChan_type*				detVChan;				// Sink VChan for receiving pixel data.
-	ScanEngine_type*			scanEngine;				// Reference to scan engine to which this detection channel belongs.
+	SinkVChan_type*				detVChan;				// For receiving pixel data.
+	SourceVChan_type*			imgVChan;				// Assembled image for this channel.
+	ScanChanColorScales			color;					// Color channel assigned to this channel.
+	ScanEngine_type*			scanEngine;				// Reference to scan engine to which this scan channel belongs.
 	ImageDisplay_type*			imgDisplay;				// Handle to display images for this channel
-} DetChan_type;
+} ScanChan_type;
 
 //---------------------------------------------------------------
 // Scan Engine Class
@@ -355,15 +365,18 @@ struct ScanEngine {
 	SinkVChan_type*				VChanFastAxisPos;
 	SinkVChan_type*				VChanSlowAxisPos;
 		// Scan Engine output
-	SourceVChan_type*			VChanScanOut;
+	SourceVChan_type*			VChanCompositeImage;
 		// Mechanical shutter command
 	SourceVChan_type*			VChanShutter;
 		// Pixel pulse train
 	SourceVChan_type*			VChanPixelPulseTrain;
 		// N pixels
 	SourceVChan_type*			VChanNPixels;
-		// Detector input channels of DetChan_type* with incoming fluorescence pixel stream 
-	ListType					DetChans;
+		// Array of detector input channels of ScanChan_type* with incoming fluorescence pixel stream 
+	ScanChan_type**				scanChans;
+	uInt32						nScanChans;
+	
+	SourceVChan_type*			VChanROITiming;			// ROI timing signal (used for example to time photostimulation to jumping between pointions) of DL_RepeatedWaveform_UChar type
 	
 	//-----------------------------------
 	// Scan Settings									// For performing frame scans.
@@ -415,7 +428,7 @@ typedef struct {
 	uInt32        				skipFlybackRows;		// Number of fast-axis rows to skip at the end of each frame while the slow axis returns to the beginning of the image.
 	uInt32						rowsSkipped;			// Number of rows skipped so far.
 	DLDataTypes					pixelDataType;
-	DetChan_type*				detChan;				// Detection channel to which this image assembly buffer belongs.
+	ScanChan_type*				scanChan;				// Detection channel to which this image assembly buffer belongs.
 } RectRasterImgBuffer_type;
 
 typedef struct {
@@ -452,17 +465,11 @@ typedef struct {
 	
 	ListType					pointJumps;				// List of points to jump in-between of Point_type*. The order of point jumping is determined by the order of the elements in the list.				
 	
-	//-----------------------------------
-	// VChans											// Additional VChans specific to this child class
-	//-----------------------------------
-	
-	SourceVChan_type*			VChanROITiming;			// ROI timing signal (used for example to time photostimulation to jumping between pointions) of DL_RepeatedWaveform_UChar type
-	
 	//----------------
 	// Image buffers
 	//----------------
 	
-	RectRasterImgBuffer_type**	imgBuffers;				// Array of image buffers of RectRasterImgBuffer_type*. Number of buffers and the buffer index is taken from the list of available detection channels (baseClass.DetChans)
+	RectRasterImgBuffer_type**	imgBuffers;				// Array of image buffers of RectRasterImgBuffer_type*. Number of buffers and the buffer index is taken from the list of available detection channels (baseClass.scanChans)
 	size_t						nImgBuffers;			// Number of image buffers available.
 	
 
@@ -515,9 +522,13 @@ struct LaserScanning {
 //-------------------
 // Detection channels
 //-------------------
-static DetChan_type*				init_DetChan_type									(ScanEngine_type* scanEngine, char VChanName[]);
+static ScanChan_type*				init_ScanChan_type									(ScanEngine_type* scanEngine, uInt32 chanIdx);
 
-static void							discard_DetChan_type								(DetChan_type** detChanPtr);
+static void							discard_ScanChan_type								(ScanChan_type** scanChanPtr);
+
+static int							RegisterDLScanChan									(ScanChan_type* scanChan);
+
+static int							UnregisterDLScanChan								(ScanChan_type* scanChan);
 
 //----------------------
 // Scan axis calibration
@@ -626,26 +637,22 @@ static Waveform_type* 				NonResGalvoJumpBetweenPoints 						(NonResGalvoCal_typ
 // Scan Engines
 //-------------
 	// parent class
-static int 							init_ScanEngine_type 								(ScanEngine_type* 		engine,
-																			 	 	 	LaserScanning_type*	lsModule,
-																			 	 	 	ScanEngineEnum_type 	engineType,
-																			 	 	 	char 					fastAxisComVChanName[],
-																					 	char					fastAxisComNSampVChanName[],
-								 											 	 	 	char 					slowAxisComVChanName[], 
-																					 	char					slowAxisComNSampVChanName[],
-								 											 	 	 	char					fastAxisPosVChanName[],
-								 											 	 	 	char					slowAxisPosVChanName[],
-								 											 	 	 	char					imageOutVChanName[],
-																				 	 	char					detectorVChanName[],
-																				 	 	char					shutterVChanName[],
-																				 	 	char					pixelPulseTrainVChanName[],
-																					 	char					nPixelsVChanName[],
-																				 	 	double					pixelClockRate,
-																					 	double					pixelDelay,
-																				 	 	double					scanLensFL,
-																				 	 	double					tubeLensFL);
+static int 							init_ScanEngine_type 								(ScanEngine_type** 			engine, 
+								 														 LaserScanning_type*		lsModule,
+																						 TaskControl_type**			taskController,
+																						 ScanEngineEnum_type 		engineType,
+																						 uInt32						nScanChannels,
+																						 double						pixelClockRate,
+																						 double						pixelDelay,
+																						 double						scanLensFL,
+																						 double						tubeLensFL);	
 
-static void							discard_ScanEngine_type 							(ScanEngine_type** engine);
+static void							discard_ScanEngine_type 							(ScanEngine_type** enginePtr);
+
+	// registers scan engine VChans and task controller with DAQLab framework
+static int							DLRegisterScanEngine								(ScanEngine_type* engine);
+	// unregisters scan engine VChans task controller from DAQLab framework
+static void							DLUnregisterScanEngine								(ScanEngine_type* engine);						
 
 	//------------------------
 	// Common functionality
@@ -669,18 +676,7 @@ static RectRaster_type*				init_RectRaster_type								(LaserScanning_type*	lsMo
 																			 	 	 	char 					engineName[],
 																						BOOL					finiteFrames,
 																						size_t					nFrames,
-														   					 	 	 	char 					fastAxisComVChanName[],
-																					 	char					fastAxisComNSampVChanName[],
-								 											 	 	 	char 					slowAxisComVChanName[], 
-																					 	char					slowAxisComNSampVChanName[],
-								 											 	 	 	char					fastAxisPosVChanName[],
-								 											 	 	 	char					slowAxisPosVChanName[],
-								 											 	 	 	char					imageOutVChanName[],
-																			 	 	 	char					detectorVChanName[],
-																				 	 	char					shutterVChanName[],
-																				 	 	char					pixelPulseTrainVChanName[],
-																					 	char					nPixelsVChanName[],
-																					 	char					ROITimingVChanName[],
+																						uInt32					nScanChannels,
 																				 	 	double					galvoSamplingRate,
 																				 	 	double					pixelClockRate,
 																					 	double					pixelDelay,
@@ -696,7 +692,7 @@ static RectRaster_type*				init_RectRaster_type								(LaserScanning_type*	lsMo
 static void							discard_RectRaster_type								(ScanEngine_type** engine);
 
 	// image assembly buffer
-static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 						(DetChan_type* detChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows);
+static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 						(ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows);
 
 static void							discard_RectRasterImgBuffer_type					(RectRasterImgBuffer_type** rectRasterPtr); 
 
@@ -789,11 +785,9 @@ static BOOL							ValidScanEngineName									(char name[], void* dataPtr);
 
 	// Fast Axis Command VChan
 static void							FastAxisComVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							FastAxisComVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Slow Axis Command VChan
 static void							SlowAxisComVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							SlowAxisComVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 	// Fast Axis Position VChan
 static void							FastAxisPosVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
@@ -802,14 +796,6 @@ static void							FastAxisPosVChan_Disconnected						(VChan_type* self, void* VC
 	// Slow Axis Position VChan
 static void							SlowAxisPosVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
 static void							SlowAxisPosVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
-
-	// Image Out VChan
-static void							ImageOutVChan_Connected								(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							ImageOutVChan_Disconnected							(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
-
-	// Detection VChan
-static void							DetVChan_Connected									(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							DetVChan_Disconnected								(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan); 
 
 	// Shutter VChan
 static void							ShutterVChan_Connected								(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
@@ -1000,9 +986,8 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		ScanEngine_type**  	enginePtr;
 		for (size_t i = 1; i <= nItems; i++) {
 			enginePtr = ListGetPtrToItem(ls->scanEngines, i);
+			DLUnregisterScanEngine(*enginePtr);
 			(*(*enginePtr)->Discard)	(enginePtr);
-		       
-			
 		}
 		
 		ListDispose(ls->scanEngines);
@@ -1085,12 +1070,10 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	//----------------------------------------------------------------------
 	ScanEngine_type*	scanEngine;
 	size_t				nScanEngines 		= ListNumItems(ls->scanEngines);
-	size_t				nDetectorVChans;
 	int					scanPanHndl			= 0;	
 	int					frameScanPanHndl	= 0;	// contains the frame scan controls
 	int					newTabIdx			= 0; 
 	char*				scanEngineName		= NULL;
-	DetChan_type**		detPtr;
 	size_t				nObjectives;
 	Objective_type**	objectivePtr;
 	
@@ -1229,43 +1212,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 			// insert here more scan engine types
 		}
 		
-		// add scan engine task controller to DAQLab framework
-		DLAddTaskController((DAQLabModule_type*)ls, scanEngine->taskControl);
+		DLRegisterScanEngine(scanEngine);
 		
-		// add scan engine VChans to DAQLab framework and register with task controller
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)scanEngine->VChanFastAxisCom);
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)scanEngine->VChanFastAxisComNSamples);
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)scanEngine->VChanSlowAxisCom);
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)scanEngine->VChanSlowAxisComNSamples);
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)scanEngine->VChanFastAxisPos);
-		AddSinkVChan(scanEngine->taskControl, scanEngine->VChanFastAxisPos, NULL); 
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)scanEngine->VChanSlowAxisPos);
-		AddSinkVChan(scanEngine->taskControl, scanEngine->VChanSlowAxisPos, NULL);
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)scanEngine->VChanScanOut);
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)scanEngine->VChanShutter);
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)scanEngine->VChanPixelPulseTrain); 
-		DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)scanEngine->VChanNPixels); 
-		
-		nDetectorVChans = ListNumItems(scanEngine->DetChans);
-		for (size_t j = 1; j <= nDetectorVChans; j++) {
-			detPtr = ListGetPtrToItem(scanEngine->DetChans, j);
-			DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan);
-			AddSinkVChan(scanEngine->taskControl, (*detPtr)->detVChan, NULL);
-		}
-		
-		// register scan engine specific vChan with the DAQLab framework
-		switch (scanEngine->engineType) {
-				
-			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
-				
-				RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) scanEngine; 
-				
-				DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)rectRasterScanEngine->VChanROITiming);
-				
-				break;
-				
-		}
-	
 	}
 	
 	if (nScanEngines) {
@@ -1371,7 +1319,6 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	//--------------------------------------------------------------------------
 	ActiveXMLObj_IXMLDOMElement_	scanEnginesXMLElement; 			  	// element containing multiple scan engines
 	ActiveXMLObj_IXMLDOMElement_	scanEngineXMLElement; 			  	// scan engine element
-	ActiveXMLObj_IXMLDOMElement_	VChanNamesXMLElement;	 			// VChan names element 
 	ActiveXMLObj_IXMLDOMElement_	scanInfoXMLElement;					// Contains scan engine info;
 	ActiveXMLObj_IXMLDOMElement_	objectivesXMLElement;				// Objectives element containing multiple scan engine objectives
 	ActiveXMLObj_IXMLDOMElement_	objectiveXMLElement;				// Objectives element
@@ -1381,21 +1328,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	
 	size_t					nScanEngines 					= ListNumItems(ls->scanEngines);
 	ScanEngine_type*		scanEngine;
-	unsigned int			scanEngineType;
-	char* 					fastAxisCommandVChanName		= NULL;
-	char*					fastAxisCommandNSampVChanName	= NULL;
-	char* 					slowAxisCommandVChanName		= NULL;
-	char*					slowAxisCommandNSampVChanName	= NULL;
-	char* 					fastAxisPositionVChanName		= NULL;
-	char* 					slowAxisPositionVChanName		= NULL;
-	char* 					scanEngineOutVChanName			= NULL;
-	char*					shutterVChanName				= NULL;
-	char*					pixelPulseTrainVChanName		= NULL;
-	char*					nPixelsVChanName				= NULL;
-	DAQLabXMLNode			detectorVChanAttr;
-	size_t					nDetectionChans;
 	size_t					nObjectives;
-	DetChan_type**			detChanPtr;
 	Objective_type**		objectivePtr;
 	
 	
@@ -1405,8 +1338,6 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanEngine", &scanEngineXMLElement) );
 		// create new scan info element
 		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanInfo", &scanInfoXMLElement) );   
-		// create new VChan element with all the VChan names for the Scan Engine
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "VChannels", &VChanNamesXMLElement) );
 		// create new objectives element
 		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Objectives", &objectivesXMLElement) );
 		// initialize generic scan engine attributes
@@ -1436,6 +1367,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		
 		DAQLabXMLNode 	scanEngineAttr[] 	= {	{"Name", 						BasicData_CString, 		tcName},
 												{"FiniteFrames", 				BasicData_Bool, 		&tcMode},
+												{"NScanChannels", 				BasicData_UInt, 		&scanEngine->nScanChans},  
 												{"NFrames", 					BasicData_UInt, 		&nFrames},
 												{"ScanEngineType", 				BasicData_UInt, 		&scanEngineType},
 												{"FastAxisCalibrationName", 	BasicData_CString, 		fastAxisCalName},
@@ -1448,54 +1380,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 												
 		// save attributes
 		DLAddToXMLElem(xmlDOM, scanEngineXMLElement, scanEngineAttr, DL_ATTRIBUTE, NumElem(scanEngineAttr));
-		//OKfree(scanEngineAttr[0].pData);
 		OKfree(tcName);
-		
-		// save generic scan engine VChans:scan axis & scan engine out 
-		fastAxisCommandVChanName 		= GetVChanName((VChan_type*)scanEngine->VChanFastAxisCom);
-		fastAxisCommandNSampVChanName	= GetVChanName((VChan_type*)scanEngine->VChanFastAxisComNSamples); 
-		slowAxisCommandVChanName 		= GetVChanName((VChan_type*)scanEngine->VChanSlowAxisCom);
-		slowAxisCommandNSampVChanName	= GetVChanName((VChan_type*)scanEngine->VChanSlowAxisComNSamples);   
-		fastAxisPositionVChanName 		= GetVChanName((VChan_type*)scanEngine->VChanFastAxisPos);
-		slowAxisPositionVChanName 		= GetVChanName((VChan_type*)scanEngine->VChanSlowAxisPos);
-		scanEngineOutVChanName			= GetVChanName((VChan_type*)scanEngine->VChanScanOut);
-		shutterVChanName				= GetVChanName((VChan_type*)scanEngine->VChanShutter);
-		pixelPulseTrainVChanName		= GetVChanName((VChan_type*)scanEngine->VChanPixelPulseTrain);
-		nPixelsVChanName				= GetVChanName((VChan_type*)scanEngine->VChanNPixels);
-		
-		DAQLabXMLNode	scanEngineVChansAttr[] = {	{"FastAxisCommand", 			BasicData_CString, 		fastAxisCommandVChanName},
-													{"FastAxisCommandNSamples", 	BasicData_CString, 		fastAxisCommandNSampVChanName},
-													{"SlowAxisCommand", 			BasicData_CString, 		slowAxisCommandVChanName},
-													{"SlowAxisCommandNSamples", 	BasicData_CString, 		slowAxisCommandNSampVChanName},
-													{"FastAxisPosition", 			BasicData_CString, 		fastAxisPositionVChanName},
-													{"SlowAxisPosition",			BasicData_CString, 		slowAxisPositionVChanName},
-													{"ScanEngineOut", 				BasicData_CString, 		scanEngineOutVChanName},
-													{"Shutter", 					BasicData_CString,		 shutterVChanName},
-													{"PixelPulseTrain", 			BasicData_CString, 		pixelPulseTrainVChanName},
-													{"NPixels", 					BasicData_CString, 		nPixelsVChanName}				};		
-		
-		DLAddToXMLElem(xmlDOM, VChanNamesXMLElement, scanEngineVChansAttr, DL_ATTRIBUTE, NumElem(scanEngineVChansAttr));
-				
-		OKfree(fastAxisCommandVChanName);
-		OKfree(fastAxisCommandNSampVChanName);
-		OKfree(slowAxisCommandVChanName);
-		OKfree(slowAxisCommandNSampVChanName);
-		OKfree(fastAxisPositionVChanName);
-		OKfree(slowAxisPositionVChanName);
-		OKfree(scanEngineOutVChanName);
-		OKfree(shutterVChanName);
-		OKfree(pixelPulseTrainVChanName);
-		OKfree(nPixelsVChanName);
-		// save detector VChans
-		nDetectionChans = ListNumItems(scanEngine->DetChans);
-		for (size_t j = 0; j < nDetectionChans; j++) {
-			detChanPtr = ListGetPtrToItem(scanEngine->DetChans, j+1);
-			detectorVChanAttr.tag 		= "DetectorChannel";
-			detectorVChanAttr.type   	= BasicData_CString;
-			detectorVChanAttr.pData		= GetVChanName((VChan_type*)(*detChanPtr)->detVChan);
-			DLAddToXMLElem(xmlDOM, VChanNamesXMLElement, &detectorVChanAttr, DL_ELEMENT, 1);
-			OKfree(detectorVChanAttr.pData);
-		}
 		
 		// save objectives to objectives XML element
 		nObjectives = ListNumItems(scanEngine->objectives);
@@ -1525,24 +1410,20 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 				double					pixelDwellTime			= ((RectRaster_type*) scanEngine)->scanSettings.pixelDwellTime;
 				double					galvoSamplingRate		= ((RectRaster_type*) scanEngine)->galvoSamplingRate;
 			
-				DAQLabXMLNode			rectangleRasterAttr[] 	= { {"ImageHeight", BasicData_UInt, &height},
-																	{"ImageWidth",  BasicData_UInt, &width},
-																	{"ImageHeightOffset", BasicData_Int, &heightOffset},
-																	{"ImageWidthOffset", BasicData_Int, &widthOffset},
-																	{"PixelSize", BasicData_Double, &pixelSize},
-																	{"PixelDwellTime", BasicData_Double, &pixelDwellTime},
-																	{"GalvoSamplingRate", BasicData_Double, &galvoSamplingRate}}; 				
+				DAQLabXMLNode			rectangleRasterAttr[] 	= { {"ImageHeight", 		BasicData_UInt, 	&height},
+																	{"ImageWidth",  		BasicData_UInt, 	&width},
+																	{"ImageHeightOffset", 	BasicData_Int, 		&heightOffset},
+																	{"ImageWidthOffset", 	BasicData_Int, 		&widthOffset},
+																	{"PixelSize", 			BasicData_Double, 	&pixelSize},
+																	{"PixelDwellTime",		BasicData_Double, 	&pixelDwellTime},
+																	{"GalvoSamplingRate", 	BasicData_Double, 	&galvoSamplingRate}}; 				
 				
 				// save scan engine attributes
 				DLAddToXMLElem(xmlDOM, scanInfoXMLElement, rectangleRasterAttr, DL_ATTRIBUTE, NumElem(rectangleRasterAttr));
 				
 				break;
 		}
-		// add VChan Names element to scan engine element
-		// add new scan engine element
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, VChanNamesXMLElement, NULL) ); 
-		OKFreeCAHandle(VChanNamesXMLElement); 
-		
+	
 		// add scan info element to scan engine element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, scanInfoXMLElement, NULL) ); 
 		OKFreeCAHandle(scanInfoXMLElement); 
@@ -1631,49 +1512,33 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	// Load scan engines
 	//--------------------------------------------------------------------------
 	ActiveXMLObj_IXMLDOMElement_	scanEnginesXMLElement 			= 0;   			// element containing multiple scan engines
-	ActiveXMLObj_IXMLDOMElement_	VChansXMLElement				= 0;
 	ActiveXMLObj_IXMLDOMElement_	scanInfoXMLElement				= 0;
 	ActiveXMLObj_IXMLDOMElement_	objectivesXMLElement			= 0;
 	ActiveXMLObj_IXMLDOMNodeList_	scanEngineNodeList				= 0;
 	ActiveXMLObj_IXMLDOMNodeList_	objectivesNodeList				= 0;
-	ActiveXMLObj_IXMLDOMNodeList_	detectorVChanNodeList			= 0;
 	ActiveXMLObj_IXMLDOMNode_		scanEngineNode					= 0;
 	ActiveXMLObj_IXMLDOMNode_		objectiveNode					= 0;
-	ActiveXMLObj_IXMLDOMNode_		detectorVChanNode				= 0;
 	long							nScanEngines					= 0;
 	long							nObjectives						= 0;
-	long							nDetectorVChans					= 0;
 	unsigned int					scanEngineType					= 0;
 	char*							scanEngineName					= NULL;
 	char*							fastAxisCalibrationName			= NULL;
 	char*							slowAxisCalibrationName			= NULL;
-	char*							fastAxisCommandVChanName		= NULL;
-	char*							fastAxisCommandNSampVChanName	= NULL;
-	char*							slowAxisCommandVChanName		= NULL;
-	char*							slowAxisCommandNSampVChanName	= NULL;
-	char*							fastAxisPositionVChanName		= NULL;
-	char*							slowAxisPositionVChanName		= NULL;
-	char*							scanEngineOutVChanName			= NULL;
-	char*							detectorVChanName				= NULL;
-	char*							shutterVChanName				= NULL;
-	char*							pixelPulseTrainVChanName		= NULL;
-	char*							nPixelsVChanName				= NULL;
-	char*							ROITimingVChanName				= DLGetUniqueVChanName(ScanEngine_SourceVChan_ROITiming); // temporary, anyways these VChan names will be fixed and doesn't make sense anymore
-																														// to save them. It just add unncessary overhead.
 	double							scanLensFL						= 0;
 	double							tubeLensFL						= 0;
 	double							objectiveFL						= 0;
 	double							pixelClockRate					= 0;
 	double							pixelDelay						= 0;
 	BOOL							finiteFrames					= FALSE;
+	unsigned int					nScanChannels					= 0;
 	unsigned int					nFrames							= 0;
 	char*							assignedObjectiveName			= NULL;
 	char*							objectiveName					= NULL;
-	DetChan_type*					detChan							= NULL;
 	ScanEngine_type*				scanEngine						= NULL;
 	Objective_type*					objective						= NULL;
 	DAQLabXMLNode					scanEngineGenericAttr[] 		= {	{"Name", 						BasicData_CString, 		&scanEngineName},
 																		{"FiniteFrames", 				BasicData_Bool, 		&finiteFrames},
+																		{"NScanChannels", 				BasicData_UInt, 		&nScanChannels},
 																		{"NFrames", 					BasicData_UInt, 		&nFrames},
 																		{"ScanEngineType", 				BasicData_UInt, 		&scanEngineType},
 																		{"FastAxisCalibrationName", 	BasicData_CString, 		&fastAxisCalibrationName},
@@ -1683,17 +1548,6 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 																		{"Objective", 					BasicData_CString, 		&assignedObjectiveName},
 																		{"PixelClockRate", 				BasicData_Double, 		&pixelClockRate},
 																		{"PixelSignalDelay", 			BasicData_Double, 		&pixelDelay} };
-																	
-	DAQLabXMLNode					scanEngineVChansAttr[]			= {	{"FastAxisCommand", 			BasicData_CString, 		&fastAxisCommandVChanName},
-																		{"FastAxisCommandNSamples", 	BasicData_CString, 		&fastAxisCommandNSampVChanName},
-																		{"SlowAxisCommand", 			BasicData_CString, 		&slowAxisCommandVChanName},
-																		{"SlowAxisCommandNSamples", 	BasicData_CString, 		&slowAxisCommandNSampVChanName},  
-																		{"FastAxisPosition", 			BasicData_CString, 		&fastAxisPositionVChanName},
-																		{"SlowAxisPosition", 			BasicData_CString, 		&slowAxisPositionVChanName},
-																		{"ScanEngineOut", 				BasicData_CString, 		&scanEngineOutVChanName},
-																		{"Shutter", 					BasicData_CString, 		&shutterVChanName},
-																		{"PixelPulseTrain", 			BasicData_CString, 		&pixelPulseTrainVChanName},
-																		{"NPixels", 					BasicData_CString, 		&nPixelsVChanName} };
 																	
 	DAQLabXMLNode					objectiveAttr[]					= { {"Name", 						BasicData_CString, 		&objectiveName},
 																		{"FL", 							BasicData_Double, 		&objectiveFL} };
@@ -1707,12 +1561,8 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(scanEngineNodeList, &xmlERRINFO, i, &scanEngineNode) );
 		// get generic scan engine attributes
 		errChk( DLGetXMLNodeAttributes(scanEngineNode, scanEngineGenericAttr, NumElem(scanEngineGenericAttr)) );
-		// get scan engine VChans element
-		errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, "VChannels", &VChansXMLElement) );
 		// get scan info element
 		errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, "ScanInfo", &scanInfoXMLElement) );
-		// get scan engine VChan attributes
-		errChk( DLGetXMLElementAttributes(VChansXMLElement, scanEngineVChansAttr, NumElem(scanEngineVChansAttr)) ); 
 		// get objectives XML element
 		errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, "Objectives", &objectivesXMLElement ) );  
 		
@@ -1728,13 +1578,13 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 				double				pixelDwellTime;
 				double				galvoSamplingRate;
 				
-				DAQLabXMLNode		scanInfoAttr[]	= { {"ImageHeight", BasicData_UInt, &height},
-														{"ImageHeightOffset", BasicData_Int, &heightOffset},
-														{"ImageWidth", BasicData_UInt, &width},
-														{"ImageWidthOffset", BasicData_Int, &widthOffset},
-														{"PixelSize", BasicData_Double, &pixelSize},
-														{"PixelDwellTime", BasicData_Double, &pixelDwellTime},
-														{"GalvoSamplingRate", BasicData_Double, &galvoSamplingRate}};
+				DAQLabXMLNode		scanInfoAttr[]	= { {"ImageHeight", 		BasicData_UInt,		&height},
+														{"ImageHeightOffset", 	BasicData_Int, 		&heightOffset},
+														{"ImageWidth", 			BasicData_UInt, 	&width},
+														{"ImageWidthOffset", 	BasicData_Int, 		&widthOffset},
+														{"PixelSize", 			BasicData_Double, 	&pixelSize},
+														{"PixelDwellTime", 		BasicData_Double, 	&pixelDwellTime},
+														{"GalvoSamplingRate", 	BasicData_Double, 	&galvoSamplingRate}};
 														
 				// get scan info attributes
 				errChk( DLGetXMLElementAttributes(scanInfoXMLElement, scanInfoAttr, NumElem(scanInfoAttr)) );
@@ -1763,25 +1613,10 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 				//-----------------------------------  
 					
 				
-				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, finiteFrames, nFrames, fastAxisCommandVChanName, fastAxisCommandNSampVChanName, slowAxisCommandVChanName, slowAxisCommandNSampVChanName, fastAxisPositionVChanName,
-													  slowAxisPositionVChanName, scanEngineOutVChanName, NULL, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName, ROITimingVChanName, galvoSamplingRate, pixelClockRate, pixelDelay, height, heightOffset, width, widthOffset, 
-													  pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
+				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, finiteFrames, nFrames, nScanChannels, galvoSamplingRate, pixelClockRate, 
+							 pixelDelay, height, heightOffset, width, widthOffset, pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
 				break;
 			
-		}
-		
-		// load detector VChans
-		XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(VChansXMLElement, &xmlERRINFO, "DetectorChannel", &detectorVChanNodeList) );
-		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(detectorVChanNodeList, &xmlERRINFO, &nDetectorVChans) );
-		
-		for (long j = 0; j < nDetectorVChans; j++) {
-			XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(detectorVChanNodeList, &xmlERRINFO, j, &detectorVChanNode) );
-			XMLErrChk ( ActiveXML_IXMLDOMNode_Gettext(detectorVChanNode, &xmlERRINFO, &detectorVChanName) );
-			detChan = init_DetChan_type(scanEngine, detectorVChanName);
-			CA_FreeMemory(detectorVChanName);
-			// add detector channel to scan engine
-			ListInsertItem(scanEngine->DetChans, &detChan, END_OF_LIST);
-			OKFreeCAHandle(detectorVChanNode);
 		}
 		
 		// assign fast scan axis to scan engine
@@ -1837,29 +1672,15 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 		ListInsertItem(ls->scanEngines, &scanEngine, END_OF_LIST);
 		
 		// cleanup
-		errChk(DLDiscardXMLNodeAttributes(VChansXMLElement, scanEngineVChansAttr, NumElem(scanEngineVChansAttr)) );       
 	
 		OKFreeCAHandle(scanEngineNode);
-		OKFreeCAHandle(VChansXMLElement);
 		OKFreeCAHandle(scanInfoXMLElement);
-		OKFreeCAHandle(detectorVChanNodeList);
 		OKFreeCAHandle(objectivesXMLElement);
 		OKFreeCAHandle(objectivesNodeList);
 		OKfree(scanEngineName);
 		OKfree(assignedObjectiveName);
 		OKfree(fastAxisCalibrationName);
 		OKfree(slowAxisCalibrationName);
-		OKfree(fastAxisCommandVChanName);
-		OKfree(fastAxisCommandNSampVChanName);
-		OKfree(slowAxisCommandVChanName);
-		OKfree(slowAxisCommandNSampVChanName); 
-		OKfree(fastAxisPositionVChanName);
-		OKfree(slowAxisPositionVChanName);
-		OKfree(scanEngineOutVChanName);
-		OKfree(shutterVChanName);
-		OKfree(pixelPulseTrainVChanName);
-		OKfree(nPixelsVChanName);
-		OKfree(ROITimingVChanName);
 	}
 	
 	
@@ -1875,8 +1696,7 @@ Error:
 	OKFreeCAHandle(scanAxisCalibrationsXMLElement); 
 	OKFreeCAHandle(scanAxisCalXMLElement); 
 	OKFreeCAHandle(axisCalibrationNodeList);
-	OKFreeCAHandle(VChansXMLElement);
-
+	
 	return error;	
 }
 
@@ -2212,45 +2032,7 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	SetPanelAttribute(engine->engineSetPanHndl, ATTR_TITLE, panTitle);
 	OKfree(panTitle);
 	
-	char* VChanFastAxisComName 		= GetVChanName((VChan_type*)engine->VChanFastAxisCom);
-	char* VChanSlowAxisComName 		= GetVChanName((VChan_type*)engine->VChanSlowAxisCom);
-	char* VChanFastAxisPosName 		= GetVChanName((VChan_type*)engine->VChanFastAxisPos);
-	char* VChanSlowAxisPosName 		= GetVChanName((VChan_type*)engine->VChanSlowAxisPos);
-	char* VChanScanOutName 			= GetVChanName((VChan_type*)engine->VChanScanOut); 
-	char* VChanShutterName			= GetVChanName((VChan_type*)engine->VChanShutter);   
-	char* VChanPixelPulseTrainName	= GetVChanName((VChan_type*)engine->VChanPixelPulseTrain);   
-	
-	// update VChans from data structure
-	if (engine->VChanFastAxisCom)
-		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_FastAxisCommand, VChanFastAxisComName);
-	
-	if (engine->VChanSlowAxisCom)
-		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_SlowAxisCommand, VChanSlowAxisComName);
-	
-	if (engine->VChanFastAxisPos)
-		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_FastAxisPosition, VChanFastAxisPosName);
-	
-	if (engine->VChanSlowAxisPos)
-		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_SlowAxisPosition, VChanSlowAxisPosName);
-		
-	if (engine->VChanScanOut)
-		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ImageOut, VChanScanOutName);
-	
-	if (engine->VChanShutter)
-		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ShutterCommand, VChanShutterName);
-	
-	if (engine->VChanPixelPulseTrain)
-		SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelPulseTrain, VChanPixelPulseTrainName); 
-		
-	size_t 				nImgChans 		= ListNumItems(engine->DetChans);
-	DetChan_type** 		detChanPtrPtr;
-	char*				VChanDetName;
-	for (size_t i = 1; i <= nImgChans; i++) {
-		detChanPtrPtr = ListGetPtrToItem(engine->DetChans, i);
-		VChanDetName = GetVChanName((VChan_type*)(*detChanPtrPtr)->detVChan);
-		InsertListItem(engine->engineSetPanHndl, ScanSetPan_ImgChans, -1, VChanDetName, VChanDetName);
-		OKfree(VChanDetName);
-	}
+	InsertTableRows(engine->engineSetPanHndl, ScanSetPan_Channels, -1, engine->nScanChans, VAL_USE_MASTER_CELL_TYPE);
 	
 	// add callback to all controls in the panel
 	SetCtrlsInPanCBInfo(engine, ScanEngineSettings_CB, engine->engineSetPanHndl); 
@@ -2352,26 +2134,11 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					//------------------------------------------------------------------------------------------------------------------
 					
 					// initialize raster scan engine
-					char*	fastAxisComVChanName 		= DLGetUniqueVChanName(ScanEngine_SourceVChan_FastAxis_Command);
-					char*	fastAxisComNSampVChanName   = DLGetUniqueVChanName(ScanEngine_SourceVChan_FastAxis_Command_NSamples);
-					char*	slowAxisComVChanName 		= DLGetUniqueVChanName(ScanEngine_SourceVChan_SlowAxis_Command);
-					char*	slowAxisComNSampVChanName   = DLGetUniqueVChanName(ScanEngine_SourceVChan_SlowAxis_Command_NSamples);
-					char*	fastAxisPosVChanName 		= DLGetUniqueVChanName(ScanEngine_SinkVChan_FastAxis_Position);
-					char*	slowAxisPosVChanName		= DLGetUniqueVChanName(ScanEngine_SinkVChan_SlowAxis_Position);
-					char*	imageOutVChanName			= DLGetUniqueVChanName(ScanEngine_SourceVChan_ImageOut);
-					char*	detectionVChanName			= DLGetUniqueVChanName(ScanEngine_SinkVChan_DetectionChan);
-					char*	shutterVChanName			= DLGetUniqueVChanName(ScanEngine_SourceVChan_Shutter_Command);
-					char*	pixelPulseTrainVChanName	= DLGetUniqueVChanName(ScanEngine_SourceVChan_PixelPulseTrain); 
-					char*	nPixelsVChanName			= DLGetUniqueVChanName(ScanEngine_SourceVChan_NPixels);
-					char*	ROITimingVChanName			= DLGetUniqueVChanName(ScanEngine_SourceVChan_ROITiming);
-							
 					switch (engineType) {
 					
 						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 					
-							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, TRUE, 1, fastAxisComVChanName, fastAxisComNSampVChanName, slowAxisComVChanName, slowAxisComNSampVChanName,
-														fastAxisPosVChanName, slowAxisPosVChanName, imageOutVChanName, detectionVChanName, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName,
-														ROITimingVChanName, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
+							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, TRUE, 1, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
 							
 							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;   
 							
@@ -2403,19 +2170,6 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 							// add below more cases	
 					}
 					
-					// cleanup generated VChan names
-					OKfree(fastAxisComVChanName);
-					OKfree(fastAxisComNSampVChanName);
-					OKfree(slowAxisComVChanName);
-					OKfree(slowAxisComNSampVChanName);
-					OKfree(fastAxisPosVChanName);
-					OKfree(slowAxisPosVChanName);
-					OKfree(imageOutVChanName);
-					OKfree(detectionVChanName);
-					OKfree(shutterVChanName);
-					OKfree(pixelPulseTrainVChanName);
-					OKfree(nPixelsVChanName);
-					OKfree(ROITimingVChanName);
 					//------------------------------------------------------------------------------------------------------------------
 					newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl);  
 					// discard loaded panel and add scan control panel handle to scan engine
@@ -2492,39 +2246,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 							// insert here more scan engine types
 					}
 					
-					// add scan engine task controller to the framework
-					DLAddTaskController((DAQLabModule_type*)ls, newScanEngine->taskControl);
-					
-					// add scan engine VChans to DAQLab framework
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanFastAxisCom);
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanFastAxisComNSamples);
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanSlowAxisCom);
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanSlowAxisComNSamples);
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanFastAxisPos);
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanSlowAxisPos);
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanScanOut);
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanShutter);     
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanPixelPulseTrain); 
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)newScanEngine->VChanNPixels);
-					DetChan_type**	detPtr = ListGetPtrToItem(newScanEngine->DetChans, 1);
-					DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)(*detPtr)->detVChan);
-					
-					// register Sink VChans with the task controller
-					AddSinkVChan(newScanEngine->taskControl, (*detPtr)->detVChan, NULL);
-					AddSinkVChan(newScanEngine->taskControl, newScanEngine->VChanFastAxisPos, NULL);
-					AddSinkVChan(newScanEngine->taskControl, newScanEngine->VChanSlowAxisPos, NULL);
-					
-					// register scan engine specific VChans
-					switch (newScanEngine->engineType) {
-				
-						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
-				
-							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;
-							
-							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)rectRasterScanEngine->VChanROITiming);
-							
-							break;
-					}
+					DLRegisterScanEngine(newScanEngine);
 					
 					// add new scan engine to laser scanning module list of scan engines
 					ListInsertItem(ls->scanEngines, &newScanEngine, END_OF_LIST);
@@ -2930,48 +2652,103 @@ static int GetStepTimes (double* signal, int nsamples, double lowlevel, double h
 }
 
 //-------------------------------------------
-// DetChan_type
+// ScanChan_type
 //-------------------------------------------
-static DetChan_type* init_DetChan_type (ScanEngine_type* scanEngine, char VChanName[])
+static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanIdx)
 {
-	DetChan_type* det = malloc(sizeof(DetChan_type));
-	if (!det) return NULL;
+	int				error 			= 0;
+	ScanChan_type* 	scanChan		= malloc(sizeof(ScanChan_type));
+	char*			detVChanName	= NULL;
+	char*			imgVChanName	= NULL;
+	
+	if (!scanChan) return NULL;
 	
 	// init
 	DLDataTypes allowedPacketTypes[] 	= Allowed_Detector_Data_Types;
-	det->imgDisplay						= NULL;
-	det->detVChan						= NULL;
+	scanChan->imgDisplay				= NULL;
+	scanChan->detVChan					= NULL;
+	scanChan->imgVChan					= NULL;
+	scanChan->color						= ScanChanColor_Grey;
+	scanChan->scanEngine 				= engine;
 	
-	if ( !(det->detVChan 		= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), det, VChanDataTimeout, DetVChan_Connected, DetVChan_Disconnected)) ) goto Error;
-	det->scanEngine 			= scanEngine;
+	// incoming pixel data from detection channel
+	nullChk( detVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SinkVChan_DetectionChan, chanIdx) );
+	nullChk( scanChan->detVChan = init_SinkVChan_type(detVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), scanChan, VChanDataTimeout, NULL, NULL) );
 	
-	return det;
+	// outgoing image channel
+	nullChk( imgVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SourceVChan_ImageChannel, chanIdx) );
+	nullChk( scanChan->imgVChan = init_SourceVChan_type(imgVChanName, DL_Image, scanChan, NULL, NULL) );
+	
+	// register sink VChan with task controller
+	AddSinkVChan(engine->taskControl, scanChan->detVChan, NULL);
+	
+	// cleanup
+	OKfree(detVChanName);
+	OKfree(imgVChanName);
+	
+	return scanChan;
 	
 Error:
 	
 	// cleanup
-	discard_VChan_type((VChan_type**)&det->detVChan);
+	OKfree(detVChanName);
+	OKfree(imgVChanName);
 	
-	free(det);
+	
+	discard_ScanChan_type(&scanChan);
+	
 	return NULL;
 }
 
-static void	discard_DetChan_type (DetChan_type** detChanPtr)
+static void	discard_ScanChan_type (ScanChan_type** scanChanPtr)
 {
-	if (!*detChanPtr) return;
+	if (!*scanChanPtr) return;
 	
-	discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
+	// unregister sink VChan from task controller
+	RemoveSinkVChan((*scanChanPtr)->scanEngine->taskControl, (*scanChanPtr)->detVChan); 
+	discard_VChan_type((VChan_type**)&(*scanChanPtr)->detVChan);
+	discard_VChan_type((VChan_type**)&(*scanChanPtr)->imgVChan);
 	
-	OKfree(*detChanPtr);
+	OKfree(*scanChanPtr);
+}
+
+static int RegisterDLScanChan (ScanChan_type* scanChan)
+{
+	int	error = 0;
+	
+	// add detection and image channels to the framework
+	DLRegisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->detVChan);
+	DLRegisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->imgVChan);
+	
+	return 0;
+	
+Error:
+	
+	return error;
+}
+
+static int UnregisterDLScanChan (ScanChan_type* scanChan)
+{
+	int		error = 0;
+	
+	// remove detection and image VChans from the framework
+	DLUnregisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->detVChan);
+	DLUnregisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->imgVChan);
+	
+	return 0;
+	
+Error:
+	
+	return error;
 }
 
 static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	ScanEngine_type*		engine		= callbackData;
-	ScanAxisCal_type**		scanAxisPtr;
-	char*					newName		= NULL;
-	int						listItemIdx; 
-	int						workspacePanHndl;
+	ScanEngine_type*		engine				= callbackData;
+	ScanAxisCal_type**		scanAxisPtr			= NULL;
+	int						listItemIdx			= 0;
+	int						nRows				= 0;
+	int						workspacePanHndl	= 0;
 	
 	switch (event) {
 			
@@ -2979,58 +2756,15 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 			
 			switch (control) {
 				
-				case ScanSetPan_FastAxisCommand:
+				case ScanSetPan_AddChan:
 					
-					newName = GetStringFromControl (panel, control);
-					DLRenameVChan((VChan_type*)engine->VChanFastAxisCom, newName);
-					break;
+					engine->nScanChans++;
+					engine->scanChans = realloc(engine->scanChans, engine->nScanChans * sizeof(ScanChan_type*));
+					engine->scanChans[engine->nScanChans - 1] = init_ScanChan_type(engine, engine->nScanChans);
+					RegisterDLScanChan(engine->scanChans[engine->nScanChans - 1]);
 					
-				case ScanSetPan_SlowAxisCommand:
+					InsertTableRows(panel, ScanSetPan_Channels, -1, 1, VAL_USE_MASTER_CELL_TYPE);
 					
-					newName = GetStringFromControl (panel, control);
-					DLRenameVChan((VChan_type*)engine->VChanSlowAxisCom, newName);
-					break;
-					
-				case ScanSetPan_FastAxisPosition:
-					
-					newName = GetStringFromControl (panel, control);
-					DLRenameVChan((VChan_type*)engine->VChanFastAxisPos, newName); 
-					break;
-					
-				case ScanSetPan_SlowAxisPosition:
-					
-					newName = GetStringFromControl (panel, control);
-					DLRenameVChan((VChan_type*)engine->VChanSlowAxisPos, newName); 
-					break;
-					
-				case ScanSetPan_ImageOut:
-					
-					newName = GetStringFromControl (panel, control);
-					DLRenameVChan((VChan_type*)engine->VChanScanOut, newName);
-					break;
-					
-				case ScanSetPan_ShutterCommand:
-					
-					newName = GetStringFromControl (panel, control);
-					DLRenameVChan((VChan_type*)engine->VChanShutter, newName); 
-					break;
-					
-				case ScanSetPan_PixelPulseTrain:
-					
-					newName = GetStringFromControl (panel, control);
-					DLRenameVChan((VChan_type*)engine->VChanPixelPulseTrain, newName);  
-					break;
-					
-				case ScanSetPan_AddImgChan:
-					
-					// create new VChan with a predefined base name
-					newName = DLGetUniqueVChanName(ScanEngine_SinkVChan_DetectionChan);
-					DetChan_type* detChan = init_DetChan_type(engine, newName);
-					// insert new VChan to list control, engine list and register with framework and task controller
-					InsertListItem(panel, ScanSetPan_ImgChans, -1, newName, newName);
-					ListInsertItem(engine->DetChans, &detChan, END_OF_LIST);
-					DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)detChan->detVChan);
-					AddSinkVChan(engine->taskControl, detChan->detVChan, NULL);
 					break;
 					
 				case ScanSetPan_AddObjective:
@@ -3233,18 +2967,19 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 			
 			switch (control) {
 				
-				// discard detection channel
-				case ScanSetPan_ImgChans:
+				// discard last scan channel
+				case ScanSetPan_Channels:
 					
-					GetCtrlIndex(panel, control, &listItemIdx);
-					if (listItemIdx < 0) break; // stop here if list is empty
+					GetNumTableRows(panel, control, &nRows);
+					if (!nRows) break; // stop here if list is empty
 					
-					DetChan_type** 	detChanPtr; 
-					detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
-					DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtr)->detVChan);
-					RemoveSinkVChan(engine->taskControl, (*detChanPtr)->detVChan);
-					discard_VChan_type((VChan_type**)&(*detChanPtr)->detVChan);
-					DeleteListItem(panel, ScanSetPan_ImgChans, listItemIdx, 1);
+					UnregisterDLScanChan(engine->scanChans[nRows-1]);
+					discard_ScanChan_type(&engine->scanChans[nRows-1]);
+					
+					engine->nScanChans--;
+					engine->scanChans = realloc(engine->scanChans, engine->nScanChans * sizeof(ScanChan_type*));
+					
+					DeleteTableRows(panel, control, nRows, 1);
 					
 					// configure / unconfigure
 					if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
@@ -3289,27 +3024,8 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 			
 			break;
 			
-		case EVENT_LEFT_DOUBLE_CLICK:
-			
-			switch (control) {
-					
-				case ScanSetPan_ImgChans:
-					
-					newName = DLGetUINameInput("Rename VChan", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
-					if (!newName) return 0; // user cancelled, do nothing
-			
-					DetChan_type** 	detChanPtr; 
-					GetCtrlIndex(panel, control, &listItemIdx); 
-					detChanPtr = ListGetPtrToItem(engine->DetChans, listItemIdx+1);
-					DLRenameVChan((VChan_type*)(*detChanPtr)->detVChan, newName);
-					ReplaceListItem(panel, control, listItemIdx, newName, newName);  
-					break;
-			}
-			
-			break;
 	}
 	
-	OKfree(newName);
 	return 0;
 }
 
@@ -3332,8 +3048,9 @@ static int CVICALLBACK ScanEnginesTab_CB (int panel, int control, int event, voi
 	if (!tabPageDataPtr) return 0;
 	
 	// delete scan engine and tab page
-	ScanEngine_type**	enginePtrPtr = ListGetPtrToItem(ls->scanEngines, activeTabIdx + 1);
-	(*(*enginePtrPtr)->Discard)	(enginePtrPtr);
+	ScanEngine_type**	enginePtr = ListGetPtrToItem(ls->scanEngines, activeTabIdx + 1);
+	DLUnregisterScanEngine(*enginePtr);
+	(*(*enginePtr)->Discard) (enginePtr);
 	ListRemoveItem(ls->scanEngines, 0, activeTabIdx + 1);
 	DeleteTabPage(panel, control, activeTabIdx, 1);
 	
@@ -4166,28 +3883,43 @@ static void	NonResGalvoCal_PosVChan_Disconnected (VChan_type* self, void* VChanO
 	
 }
 
-static int init_ScanEngine_type (ScanEngine_type* 		engine, 
-								 LaserScanning_type*	lsModule,
-								 ScanEngineEnum_type 	engineType,
-								 char 					fastAxisComVChanName[],
-								 char					fastAxisComNSampVChanName[],
-								 char 					slowAxisComVChanName[], 
-								 char					slowAxisComNSampVChanName[],
-								 char					fastAxisPosVChanName[],
-								 char					slowAxisPosVChanName[],
-								 char					imageOutVChanName[],
-								 char					detectorVChanName[],
-								 char					shutterVChanName[],
-								 char					pixelPulseTrainVChanName[],
-								 char					nPixelsVChanName[],
-								 double					pixelClockRate,
-								 double					pixelDelay,
-								 double					scanLensFL,
-								 double					tubeLensFL)					
+static int init_ScanEngine_type (ScanEngine_type** 			enginePtr, 
+								 LaserScanning_type*		lsModule,
+								 TaskControl_type**			taskControllerPtr,
+								 ScanEngineEnum_type 		engineType,
+								 uInt32						nScanChannels,
+								 double						pixelClockRate,
+								 double						pixelDelay,
+								 double						scanLensFL,
+								 double						tubeLensFL)					
 {
-	int				error 							= 0;
-	DLDataTypes 	allowedScanAxisPacketTypes[] 	= {DL_Waveform_Double};
-	DetChan_type* 	detChan							= NULL;
+	int					error 									= 0;
+	ScanEngine_type*	engine									= *enginePtr;
+	DLDataTypes 		allowedScanAxisPacketTypes[] 			= {DL_Waveform_Double};
+	char*				fastAxisComVChanName					= NULL;
+	char*				fastAxisComNSampVChanName				= NULL;
+	char*				slowAxisComVChanName					= NULL;
+	char*				slowAxisComNSampVChanName				= NULL;
+	char*				fastAxisPosVChanName					= NULL;
+	char*				slowAxisPosVChanName					= NULL;
+	char*				compositeImageVChanName					= NULL;
+	char*				shutterCommandVChanName					= NULL;
+	char*				pixelPulseTrainVChanName				= NULL;
+	char*				nPixelsVChanName						= NULL;
+	char*				ROITimingVChanName						= NULL;
+	
+	// assemble default VChan names
+	nullChk( fastAxisComVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command, 0) );
+	nullChk( fastAxisComNSampVChanName 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command_NSamples, 0) );
+	nullChk( slowAxisComVChanName	 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_SlowAxis_Command, 0) );
+	nullChk( slowAxisComNSampVChanName 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_SlowAxis_Command_NSamples, 0) );
+	nullChk( fastAxisPosVChanName	 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_FastAxis_Position, 0) );
+	nullChk( slowAxisPosVChanName	 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_SlowAxis_Position, 0) );
+	nullChk( compositeImageVChanName 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_CompositeImage, 0) );
+	nullChk( shutterCommandVChanName 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_Shutter_Command, 0) );
+	nullChk( pixelPulseTrainVChanName 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelPulseTrain, 0) );
+	nullChk( nPixelsVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_NPixels, 0) );
+	nullChk( ROITimingVChanName			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROITiming, 0) );
 	
 	//------------------------
 	// init
@@ -4201,18 +3933,22 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	// reference to the laser scanning module owning the scan engine
 	engine->lsModule					= lsModule;
 	// task controller
-	engine->taskControl					= NULL; 	// added by derived scan engine classes
+	engine->taskControl					= *taskControllerPtr;
+	*taskControllerPtr					= NULL;
+	SetTaskControlModuleData(engine->taskControl, engine);
 	// VChans
 	engine->VChanFastAxisCom			= NULL;
 	engine->VChanFastAxisComNSamples	= NULL;
 	engine->VChanSlowAxisCom			= NULL;
 	engine->VChanSlowAxisComNSamples	= NULL;
 	engine->VChanFastAxisPos			= NULL;
-	engine->VChanScanOut				= NULL;
+	engine->VChanCompositeImage			= NULL;
 	engine->VChanShutter				= NULL;
 	engine->VChanPixelPulseTrain		= NULL;
 	engine->VChanNPixels				= NULL;
-	engine->DetChans 					= 0;
+	engine->VChanROITiming				= NULL;
+	engine->scanChans 					= NULL;
+	engine->nScanChans					= nScanChannels;
 	// optics
 	engine->objectives					= 0;
 	// new objective panel handle
@@ -4238,28 +3974,69 @@ static int init_ScanEngine_type (ScanEngine_type* 		engine,
 	//------------------------
 	
 	// VChans
-	nullChk( engine->VChanFastAxisCom			= init_SourceVChan_type(fastAxisComVChanName, DL_RepeatedWaveform_Double, engine, FastAxisComVChan_Connected, FastAxisComVChan_Disconnected) ); 
+	nullChk( engine->VChanFastAxisCom			= init_SourceVChan_type(fastAxisComVChanName, DL_RepeatedWaveform_Double, engine, FastAxisComVChan_Connected, NULL) ); 
 	nullChk( engine->VChanFastAxisComNSamples	= init_SourceVChan_type(fastAxisComNSampVChanName, DL_ULongLong, engine, NULL, NULL) ); 
-	nullChk( engine->VChanSlowAxisCom			= init_SourceVChan_type(slowAxisComVChanName, DL_RepeatedWaveform_Double, engine, SlowAxisComVChan_Connected, SlowAxisComVChan_Disconnected) ); 
+	nullChk( engine->VChanSlowAxisCom			= init_SourceVChan_type(slowAxisComVChanName, DL_RepeatedWaveform_Double, engine, SlowAxisComVChan_Connected, NULL) ); 
 	nullChk( engine->VChanSlowAxisComNSamples	= init_SourceVChan_type(slowAxisComNSampVChanName, DL_ULongLong, engine, NULL, NULL) ); 
 	nullChk( engine->VChanFastAxisPos			= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected) ); 
 	nullChk( engine->VChanSlowAxisPos			= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected) ); 
-	nullChk( engine->VChanScanOut				= init_SourceVChan_type(imageOutVChanName, DL_Image, engine, ImageOutVChan_Connected, ImageOutVChan_Disconnected) );
-	nullChk( engine->VChanShutter				= init_SourceVChan_type(shutterVChanName, DL_Waveform_UChar, engine, ShutterVChan_Connected, ShutterVChan_Disconnected) ); 
+	nullChk( engine->VChanCompositeImage		= init_SourceVChan_type(compositeImageVChanName, DL_Image, engine, NULL, NULL) );
+	nullChk( engine->VChanShutter				= init_SourceVChan_type(shutterCommandVChanName, DL_Waveform_UChar, engine, ShutterVChan_Connected, ShutterVChan_Disconnected) ); 
 	nullChk( engine->VChanPixelPulseTrain		= init_SourceVChan_type(pixelPulseTrainVChanName, DL_PulseTrain_Ticks, engine, NULL, NULL) ); 	
 	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_ULongLong, engine, NULL, NULL) ); 	
-	nullChk( engine->DetChans					= ListCreate(sizeof(DetChan_type*)) ); 
-	// add one detection channel to the scan engine if required
-	if (detectorVChanName) {
-		nullChk ( detChan = init_DetChan_type(engine, detectorVChanName) ); 
-		ListInsertItem(engine->DetChans, &detChan, END_OF_LIST);
-	}
+	nullChk( engine->objectives					= ListCreate(sizeof(Objective_type*)) ); 
+	nullChk( engine->VChanROITiming				= init_SourceVChan_type(ROITimingVChanName, DL_RepeatedWaveform_UChar, engine, NULL, NULL) );
 	
-	nullChk( engine->objectives					= ListCreate(sizeof(Objective_type*)) );     
+	// register Sink VChans with the task controller
+	AddSinkVChan(engine->taskControl, engine->VChanFastAxisPos, NULL);
+	AddSinkVChan(engine->taskControl, engine->VChanSlowAxisPos, NULL);
+	
+	if (nScanChannels)
+		nullChk( engine->scanChans 					= calloc(nScanChannels, sizeof(ScanChan_type*)) );
+	for (size_t i = 0; i < nScanChannels; i++)
+		nullChk( engine->scanChans[i] = init_ScanChan_type(engine, i+1) );
+	
+	// cleanup
+	OKfree(fastAxisComVChanName);
+	OKfree(fastAxisComNSampVChanName);
+	OKfree(slowAxisComVChanName);
+	OKfree(slowAxisComNSampVChanName);
+	OKfree(fastAxisPosVChanName);
+	OKfree(slowAxisPosVChanName);
+	OKfree(compositeImageVChanName);
+	OKfree(shutterCommandVChanName);
+	OKfree(pixelPulseTrainVChanName);
+	OKfree(nPixelsVChanName);
+	OKfree(ROITimingVChanName);
 	
 	return 0;
 	
 Error:
+	
+	// cleanup
+	OKfree(fastAxisComVChanName);
+	OKfree(fastAxisComNSampVChanName);
+	OKfree(slowAxisComVChanName);
+	OKfree(slowAxisComNSampVChanName);
+	OKfree(fastAxisPosVChanName);
+	OKfree(slowAxisPosVChanName);
+	OKfree(compositeImageVChanName);
+	OKfree(shutterCommandVChanName);
+	OKfree(pixelPulseTrainVChanName);
+	OKfree(nPixelsVChanName);
+	OKfree(ROITimingVChanName);
+	
+	discard_ScanEngine_type(enginePtr);
+	return error;
+}
+
+static void	discard_ScanEngine_type (ScanEngine_type** enginePtr)
+{
+	ScanEngine_type* engine = *enginePtr;
+	
+	// VChans
+	RemoveSinkVChan(engine->taskControl, engine->VChanFastAxisPos);
+	RemoveSinkVChan(engine->taskControl, engine->VChanSlowAxisPos);
 	
 	discard_VChan_type((VChan_type**)&engine->VChanFastAxisCom);
 	discard_VChan_type((VChan_type**)&engine->VChanFastAxisComNSamples);
@@ -4267,102 +4044,18 @@ Error:
 	discard_VChan_type((VChan_type**)&engine->VChanSlowAxisComNSamples);
 	discard_VChan_type((VChan_type**)&engine->VChanFastAxisPos);
 	discard_VChan_type((VChan_type**)&engine->VChanSlowAxisPos);
-	discard_VChan_type((VChan_type**)&engine->VChanScanOut);
+	discard_VChan_type((VChan_type**)&engine->VChanCompositeImage);
 	discard_VChan_type((VChan_type**)&engine->VChanShutter);
 	discard_VChan_type((VChan_type**)&engine->VChanPixelPulseTrain);
-	discard_VChan_type((VChan_type**)&engine->VChanNPixels); 
-	if (engine->DetChans) {
-		if (ListNumItems(engine->DetChans)) {
-			DetChan_type** 	detChanPtr = ListGetPtrToItem(engine->DetChans, 1);
-			discard_DetChan_type(detChanPtr);
-		}
-		ListDispose(engine->DetChans);
-	}
-	if (engine->objectives) ListDispose(engine->objectives);
-	
-	return error;
-}
-
-static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
-{
-	ScanEngine_type* engine = *scanEngine;
-	
-	//----------------------------------
-	// VChans
-	//----------------------------------
-	// fast axis command
-	if (engine->VChanFastAxisCom) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisCom);
-		discard_VChan_type((VChan_type**)&engine->VChanFastAxisCom);
-	}
-	
-	// fast axis command num samples
-	if (engine->VChanFastAxisComNSamples) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisComNSamples);
-		discard_VChan_type((VChan_type**)&engine->VChanFastAxisComNSamples);
-	}
-	
-	// slow axis command
-	if (engine->VChanSlowAxisCom) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisCom);
-		discard_VChan_type((VChan_type**)&engine->VChanSlowAxisCom);
-	}
-	
-	// slow axis command num samples
-	if (engine->VChanSlowAxisComNSamples) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisComNSamples);
-		discard_VChan_type((VChan_type**)&engine->VChanSlowAxisComNSamples);
-	}
-	
-	// fast axis position feedback
-	if (engine->VChanFastAxisPos) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisPos);
-		RemoveSinkVChan(engine->taskControl, engine->VChanFastAxisPos); 
-		discard_VChan_type((VChan_type**)&engine->VChanFastAxisPos);
-	}
-	
-	// slow axis position feedback
-	if (engine->VChanSlowAxisPos) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisPos);
-		RemoveSinkVChan(engine->taskControl, engine->VChanSlowAxisPos);
-		discard_VChan_type((VChan_type**)&engine->VChanSlowAxisPos);
-	}
-	
-	// scan engine image output
-	if (engine->VChanScanOut) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanScanOut);
-		discard_VChan_type((VChan_type**)&engine->VChanScanOut);
-	}
-	
-	// shutter command
-	if (engine->VChanShutter) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanShutter);
-		discard_VChan_type((VChan_type**)&engine->VChanShutter);
-	}
-	
-	// pixel pulse train
-	if (engine->VChanPixelPulseTrain) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelPulseTrain);
-		discard_VChan_type((VChan_type**)&engine->VChanPixelPulseTrain);
-	}
-	
-	// n pixels
-	if (engine->VChanNPixels) {
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanNPixels);
-		discard_VChan_type((VChan_type**)&engine->VChanNPixels);
-	}
+	discard_VChan_type((VChan_type**)&engine->VChanNPixels);
+	discard_VChan_type((VChan_type**)&engine->VChanROITiming); 
 	
 	// detection channels
-	size_t	nDet = ListNumItems(engine->DetChans);
-	DetChan_type** detChanPtr;
-	for (size_t i = 1; i <= nDet; i++) {
-		detChanPtr = ListGetPtrToItem(engine->DetChans, i);
-		// remove VChan from framework
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)(*detChanPtr)->detVChan);
-		RemoveSinkVChan(engine->taskControl, (*detChanPtr)->detVChan);
-		discard_DetChan_type(detChanPtr);
-	}
-	ListDispose(engine->DetChans);
+	for (size_t i = 0; i < engine->nScanChans; i++)
+		discard_ScanChan_type(&engine->scanChans[i]);
+	
+	engine->nScanChans = 0;
+	OKfree(engine->scanChans);
 	
 	// objectives
 	size_t nObjectives = ListNumItems(engine->objectives);
@@ -4373,23 +4066,106 @@ static void	discard_ScanEngine_type (ScanEngine_type** scanEngine)
 	}
 	ListDispose(engine->objectives);
 	
-	//----------------------------------
 	// Task controller
-	//----------------------------------
-	if (engine->taskControl) {
-		DLRemoveTaskController((DAQLabModule_type*)engine->lsModule, engine->taskControl); 
-		discard_TaskControl_type(&engine->taskControl);
-	}
+	discard_TaskControl_type(&engine->taskControl);
 	
-	//----------------------------------
 	// UI
-	//----------------------------------
 	
 	if (engine->engineSetPanHndl) {DiscardPanel(engine->engineSetPanHndl); engine->engineSetPanHndl = 0;}
 	if (engine->frameScanPanHndl) Combo_DiscardComboBox(engine->frameScanPanHndl, ScanTab_PixelDwell);
 	if (engine->frameScanPanHndl) Combo_DiscardComboBox(engine->frameScanPanHndl, ScanTab_Width);
 	
-	OKfree(engine);
+	OKfree(*enginePtr);
+}
+
+static int DLRegisterScanEngine (ScanEngine_type* engine)
+{
+	// add scan engine task controller to DAQLab framework
+	DLAddTaskController((DAQLabModule_type*)engine->lsModule, engine->taskControl);
+		
+	// add scan engine VChans to DAQLab framework
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisCom);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisComNSamples);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisCom);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisComNSamples);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisPos);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisPos);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanCompositeImage);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanShutter);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelPulseTrain); 
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanNPixels);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROITiming); 
+		
+	for (size_t i = 0; i < engine->nScanChans; i++)
+		RegisterDLScanChan(engine->scanChans[i]);
+	
+	
+	return 0;
+}
+	
+static void DLUnregisterScanEngine (ScanEngine_type* engine)
+{
+	//----------------------------------
+	// VChans
+	//----------------------------------
+	// fast axis command
+	if (engine->VChanFastAxisCom)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisCom);
+	
+	// fast axis command num samples
+	if (engine->VChanFastAxisComNSamples)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisComNSamples);
+	
+	// slow axis command
+	if (engine->VChanSlowAxisCom)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisCom);
+	
+	// slow axis command n samples
+	if (engine->VChanSlowAxisComNSamples)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisComNSamples);
+	
+	// fast axis position feedback
+	if (engine->VChanFastAxisPos) {
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisPos);
+		RemoveSinkVChan(engine->taskControl, engine->VChanFastAxisPos); 
+	}
+	
+	// slow axis position feedback
+	if (engine->VChanSlowAxisPos) {
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisPos);
+		RemoveSinkVChan(engine->taskControl, engine->VChanSlowAxisPos);
+	}
+	
+	// scan engine image output
+	if (engine->VChanCompositeImage)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanCompositeImage);
+	
+	// shutter command
+	if (engine->VChanShutter)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanShutter);
+	
+	// pixel pulse train
+	if (engine->VChanPixelPulseTrain)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelPulseTrain);
+	
+	// n pixels
+	if (engine->VChanNPixels)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanNPixels);
+	
+	// ROI timing
+	if (engine->VChanROITiming)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROITiming);
+	
+	// scan channels
+	for (size_t i = 0; i < engine->nScanChans; i++)
+		UnregisterDLScanChan(engine->scanChans[i]);
+		
+	//----------------------------------
+	// Task controller
+	//----------------------------------
+	if (engine->taskControl)
+		DLRemoveTaskController((DAQLabModule_type*)engine->lsModule, engine->taskControl); 
+		
 }
 
 static int OpenScanEngineShutter (ScanEngine_type* engine, BOOL openStatus, char** errorInfo)
@@ -4497,18 +4273,7 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 												char 					engineName[], 
 												BOOL					finiteFrames,
 												size_t					nFrames,
-												char 					fastAxisComVChanName[],
-												char					fastAxisComNSampVChanName[],
-												char 					slowAxisComVChanName[],
-												char					slowAxisComNSampVChanName[],
-												char					fastAxisPosVChanName[],
-												char					slowAxisPosVChanName[],
-												char					imageOutVChanName[],
-												char					detectorVChanName[],
-												char					shutterVChanName[],
-												char					pixelPulseTrainVChanName[],
-												char					nPixelsVChanName[],
-												char					ROITimingVChanName[],
+												uInt32					nScanChannels,
 												double					galvoSamplingRate,
 												double					pixelClockRate,
 												double					pixelDelay,
@@ -4521,24 +4286,25 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 												double					scanLensFL,
 												double					tubeLensFL)
 {
-	int					error 	= 0;
-	RectRaster_type*	engine 	= malloc (sizeof(RectRaster_type));
+	int					error 			= 0;
+	RectRaster_type*	engine 			= malloc (sizeof(RectRaster_type));
+	TaskControl_type*	taskController  = NULL;
+	
 	if (!engine) return NULL;
 	
 	//--------------------------------------------------------
 	// init base scan engine class
 	//--------------------------------------------------------
-	errChk( init_ScanEngine_type(&engine->baseClass, lsModule, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, fastAxisComVChanName, fastAxisComNSampVChanName, slowAxisComVChanName, slowAxisComNSampVChanName, fastAxisPosVChanName, 
-						 slowAxisPosVChanName, imageOutVChanName, detectorVChanName, shutterVChanName, pixelPulseTrainVChanName, nPixelsVChanName, pixelClockRate, pixelDelay, scanLensFL, tubeLensFL) );
-	// override discard method
-	engine->baseClass.Discard			= discard_RectRaster_type;
-	// add task controller
-	engine->baseClass.taskControl		= init_TaskControl_type(engineName, engine, DLGetCommonThreadPoolHndl(), ConfigureTC_RectRaster, UnconfigureTC_RectRaster, IterateTC_RectRaster, AbortIterationTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
-										  DoneTC_RectRaster, StoppedTC_RectRaster, TaskTreeStatus_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster);
-	SetTaskControlMode(engine->baseClass.taskControl, finiteFrames);
-	SetTaskControlIterations(engine->baseClass.taskControl, nFrames);
+	// init task controller
+	nullChk( taskController	= init_TaskControl_type(engineName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC_RectRaster, UnconfigureTC_RectRaster, IterateTC_RectRaster, AbortIterationTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
+										  DoneTC_RectRaster, StoppedTC_RectRaster, TaskTreeStatus_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster) );
+	SetTaskControlMode(taskController, finiteFrames);
+	SetTaskControlIterations(taskController, nFrames);
 	
-	if (!engine->baseClass.taskControl) {discard_RectRaster_type((ScanEngine_type**)&engine); return NULL;}
+	// init scan engine base class
+	errChk( init_ScanEngine_type((ScanEngine_type**)&engine, lsModule, &taskController, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, nScanChannels, pixelClockRate, pixelDelay, scanLensFL, tubeLensFL) );
+	// override discard method
+	engine->baseClass.Discard = discard_RectRaster_type;
 	
 	//--------------------------------------------------------
 	// init RectRaster_type
@@ -4571,11 +4337,6 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 	engine->pointJumps					= ListCreate(sizeof(Point_type*));
 	
 	//--------------------
-	// VChans
-	//--------------------
-	engine->VChanROITiming				= init_SourceVChan_type(ROITimingVChanName, DL_RepeatedWaveform_UChar, engine, NULL, NULL);
-	
-	//--------------------
 	// image buffers
 	//--------------------
 	engine->imgBuffers					= NULL;
@@ -4585,7 +4346,11 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 	
 Error:
 	
-	free(engine);
+	// cleanup
+	discard_TaskControl_type(&taskController);
+	
+	discard_RectRaster_type((ScanEngine_type**)&engine);
+	
 	return NULL;
 }
 
@@ -4596,15 +4361,6 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	//--------------------------------------------------------------------
 	// discard RectRaster_type data
 	//--------------------------------------------------------------------
-	
-	//----------------------------------
-	// VChans
-	
-	// ROI timing
-	if (rectRaster->VChanROITiming) {
-		DLUnregisterVChan((DAQLabModule_type*)rectRaster->baseClass.lsModule, (VChan_type*)rectRaster->VChanROITiming);
-		discard_VChan_type((VChan_type**)&rectRaster->VChanROITiming);
-	}
 	
 	//----------------------------------
 	// Image assembly buffers
@@ -4627,7 +4383,7 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	discard_ScanEngine_type(engine);
 }
 
-static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* detChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows)
+static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows)
 {
 #define init_RectRasterImgBuffer_type_Err_PixelDataTypeInvalid	-1
 	int 						error;
@@ -4668,7 +4424,7 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (DetChan_type* de
 	buffer->skipFlybackRows			= 0;			// calculated once scan signals are calculated
 	buffer->rowsSkipped				= 0;
 	buffer->pixelDataType			= 0;
-	buffer->detChan					= detChan;
+	buffer->scanChan				= scanChan;
 	
 	nullChk( buffer->imagePixels 	= malloc(imgWidth * imgHeight * pixelSizeBytes) );
 	
@@ -4988,7 +4744,6 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 	RectRaster_type*		scanEngine		= callbackData;
 	int						listItemIdx		= 0;
 	int						nROIs			= 0;	
-	ROI_type*				ROI				= NULL;
 	
 	switch (event) {
 		
@@ -5327,8 +5082,7 @@ static BOOL	NonResRectRasterScan_ValidConfig (RectRaster_type* scanEngine)
 {
 	// check if scan engine configuration is valid
 	BOOL	validFlag = scanEngine->baseClass.fastAxisCal && scanEngine->baseClass.slowAxisCal && scanEngine->baseClass.objectiveLens &&
-		   				(scanEngine->baseClass.pixelClockRate != 0.0) && (scanEngine->scanSettings.pixSize != 0.0) && 
-						ListNumItems(scanEngine->baseClass.DetChans);
+		   				(scanEngine->baseClass.pixelClockRate != 0.0) && (scanEngine->scanSettings.pixSize != 0.0) && scanEngine->baseClass.nScanChans;
 	if (validFlag)
 		validFlag = (scanEngine->galvoSamplingRate != 0.0) && (scanEngine->baseClass.scanLensFL != 0.0) && (scanEngine->baseClass.tubeLensFL != 0.0) &&
 					(scanEngine->baseClass.objectiveLens->objectiveFL != 0.0);
@@ -5722,7 +5476,6 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	Point_type*				pointJump						= NULL;
 	size_t					nVoltages						= 0;
 	size_t					nStartDelayElem					= 0;
-	size_t					nCycleDelayElem					= 0;
 	size_t					nCycleElem						= 0;
 	size_t					nJumpSamples					= 0;
 	size_t					nParkedSamples					= 0;
@@ -5812,11 +5565,11 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		nullChk( slowAxisStartDelaySignal = malloc(nStartDelayElem * sizeof(double)) );
 		Set1D(fastAxisStartDelaySignal, nStartDelayElem, fastAxisCal->parked);
 		Set1D(slowAxisStartDelaySignal, nStartDelayElem, slowAxisCal->parked);
-		nullChk( fastAxisStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nStartDelayElem, &fastAxisStartDelaySignal, 1.0) );
-		nullChk( slowAxisStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nStartDelayElem, &fastAxisStartDelaySignal, 1.0) );
+		nullChk( fastAxisStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nStartDelayElem, (void**)&fastAxisStartDelaySignal, 1.0) );
+		nullChk( slowAxisStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nStartDelayElem, (void**)&fastAxisStartDelaySignal, 1.0) );
 		// ROI timing signal
 		nullChk( ROIStartDelaySignal = calloc(nStartDelayElem, sizeof(unsigned char)) );
-		nullChk( ROIStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, scanEngine->galvoSamplingRate, nStartDelayElem, &ROIStartDelaySignal, 1.0) ); 
+		nullChk( ROIStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, scanEngine->galvoSamplingRate, nStartDelayElem, (void**)&ROIStartDelaySignal, 1.0) ); 
 	}
 	
 	// allocate memory for waveforms within one point jump cycle (excl. additional initial delay)
@@ -5855,10 +5608,10 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	Set1D(slowAxisJumpSignal + j, nCycleElem - j, slowAxisVoltages[nVoltages - 1]);
 	
 	// generate galvo command jump waveforms
-	nullChk( fastAxisJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nCycleElem, &fastAxisJumpSignal, (double)scanEngine->pointJumpCycles) );
-	nullChk( slowAxisJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nCycleElem, &slowAxisJumpSignal, (double)scanEngine->pointJumpCycles) );
+	nullChk( fastAxisJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nCycleElem, (void**)&fastAxisJumpSignal, (double)scanEngine->pointJumpCycles) );
+	nullChk( slowAxisJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nCycleElem, (void**)&slowAxisJumpSignal, (double)scanEngine->pointJumpCycles) );
 	// generate ROI jump timing waveform
-	nullChk( ROIJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, scanEngine->galvoSamplingRate, nCycleElem, &ROIJumpSignal, (double)scanEngine->pointJumpCycles) );
+	nullChk( ROIJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, scanEngine->galvoSamplingRate, nCycleElem, (void**)&ROIJumpSignal, (double)scanEngine->pointJumpCycles) );
 	
 	//-----------------------------------------------
 	// Send data packets
@@ -5869,7 +5622,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisStartDelayWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
 		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&ROIStartDelayWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
-		errChk( SendDataPacket(scanEngine->VChanROITiming, &dataPacket, FALSE, &errMsg) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanROITiming, &dataPacket, FALSE, &errMsg) );
 	}
 	
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisJumpWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
@@ -5877,12 +5630,12 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisJumpWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&ROIJumpWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
-	errChk( SendDataPacket(scanEngine->VChanROITiming, &dataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanROITiming, &dataPacket, FALSE, &errMsg) );
 	
 	// send null packets to mark end of waveforms
 	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );
-	errChk( SendDataPacket(scanEngine->VChanROITiming, &nullPacket, FALSE, &errMsg) );   
+	errChk( SendDataPacket(scanEngine->baseClass.VChanROITiming, &nullPacket, FALSE, &errMsg) );   
 	
 	// send number of samples in fast axis command waveform
 	nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
@@ -5999,8 +5752,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	size_t						nDeadTimePixels		= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->scanSettings.pixelDwellTime);
 	
 	size_t 						iterindex			= 0;
-	Iterator_type* 				currentiter		    = NULL;
-	DisplayEngine_type* 		displayEngine 		= imgBuffer->detChan->scanEngine->lsModule->displayEngine;
+	DisplayEngine_type* 		displayEngine 		= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
 	RectRasterScanSet_type*		imgSettings			= NULL;
 	DataPacket_type* 			imagePacket         = NULL;
 	ImageDisplay_type*			sendingDisplay		= NULL;	  
@@ -6144,18 +5896,18 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				void* 							callbackData[]					= {imgSettings};
 				DiscardFptr_type 				discardCallbackDataFunctions[] 	= {(DiscardFptr_type)discard_RectRasterScanSet_type};
 				
-				errChk( (*displayEngine->setRestoreImgSettingsFptr) (imgBuffer->detChan->imgDisplay, NumElem(restoreCBFns), restoreCBFns, callbackData, discardCallbackDataFunctions) );
+				errChk( (*displayEngine->setRestoreImgSettingsFptr) (imgBuffer->scanChan->imgDisplay, NumElem(restoreCBFns), restoreCBFns, callbackData, discardCallbackDataFunctions) );
 				
 				// send pixel array to display 
-				errChk( (*displayEngine->displayImageFptr) (imgBuffer->detChan->imgDisplay, imgBuffer->imagePixels, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType,
+				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, imgBuffer->imagePixels, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType,
 														    rectRaster->scanSettings.pixSize, 0, 0, 0) ); // TEMPORARY: X, Y & Z coordinates set to 0 for now
 				 
 				  /*
 				
 				//get image from display engine
-				//sendingDisplay=(*displayEngine->getImageDisplayFptr) (imgBuffer->detChan->imgDisplay, NULL, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType); 
+				//sendingDisplay=(*displayEngine->getImageDisplayFptr) (imgBuffer->scanChan->imgDisplay, NULL, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType); 
 				//make a copy 
-				imgBuffer->detChan->imgDisplay->image
+				imgBuffer->scanChan->imgDisplay->image
 				currentiter=GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);
 				//test
 				iterindex=GetCurrentIterationIndex(currentiter);
@@ -6164,7 +5916,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 			
 				nullChk( imagePacket	= init_DataPacket_type(DL_Image, &sendingDisplay->, currentiter , (DiscardFptr_type) displayEngine->imageDiscardFptr));
 				// send data packet with image
-				errChk( SendDataPacket(rectRaster->baseClass.VChanScanOut, &imagePacket, 0, &errMsg) );
+				errChk( SendDataPacket(rectRaster->baseClass.VChanCompositeImage, &imagePacket, 0, &errMsg) );
 				     */
 				
 				
@@ -6192,7 +5944,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 		// Receive pixel data 
 		//---------------------------------------------------------------------------
 		
-		errChk( GetDataPacket(imgBuffer->detChan->detVChan, &pixelPacket, &errMsg) );
+		errChk( GetDataPacket(imgBuffer->scanChan->detVChan, &pixelPacket, &errMsg) );
 		
 		//----------------------------------------------------------------------
 		// Process NULL packet
@@ -6453,7 +6205,7 @@ SkipPoints:
 /*
 void CVICALLBACK DisplayClose_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
-	DetChan_type*	detChan = callbackData;
+	ScanChan_type*	scanChan = callbackData;
 	
 	ImageControl_SetAttribute(panel, DisplayPan_Image, ATTR_IMAGECTRL_IMAGE, NULL);
 	HidePanel(panel);
@@ -6670,11 +6422,6 @@ Error:
 	OKfree(errMsg);
 }
 
-static void	FastAxisComVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
 // Slow Axis Command VChan
 static void	SlowAxisComVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
@@ -6706,11 +6453,6 @@ Error:
 	OKfree(errMsg);
 }
 
-static void	SlowAxisComVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
 // Fast Axis Position VChan
 static void FastAxisPosVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
@@ -6733,28 +6475,6 @@ static void	SlowAxisPosVChan_Disconnected (VChan_type* self, void* VChanOwner, V
 	
 }
 
-// Image Out VChan
-static void	ImageOutVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
-{
-	
-}
-
-static void ImageOutVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
-// Detection VChans
-static void	DetVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
-{
-	
-}
-
-static void	DetVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
 // Shutter VChan
 static void	ShutterVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
 {
@@ -6772,10 +6492,10 @@ static void	ShutterVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan
 
 static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI)
 {
-	DetChan_type*			detChan 		= callbackData;
+	ScanChan_type*			scanChan 		= callbackData;
 	ROI_type*				addedROI		= NULL;						  // reference to the ROI added to the image display
 	DisplayEngine_type*		displayEngine   = imgDisplay->displayEngine; 
-	RectRaster_type*		scanEngine		= (RectRaster_type*) detChan->scanEngine;
+	RectRaster_type*		scanEngine		= (RectRaster_type*) scanChan->scanEngine;
 	int						nListItems		= 0;
 	
 	switch (event) {
@@ -6869,9 +6589,9 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 {
 	RectRasterScanSet_type* 	previousScanSettings 		= callbackData;
 	int							error						= 0;
-	DetChan_type*				detChan						= (DetChan_type*)(*displayEngine->getImageDisplayCBDataFptr) (imgDisplay);
-	RectRasterScanSet_type*		currentScanSettings			= &((RectRaster_type*)detChan->scanEngine)->scanSettings;			
-	RectRaster_type*			scanEngine					= (RectRaster_type*)detChan->scanEngine;
+	ScanChan_type*				scanChan						= (ScanChan_type*)(*displayEngine->getImageDisplayCBDataFptr) (imgDisplay);
+	RectRasterScanSet_type*		currentScanSettings			= &((RectRaster_type*)scanChan->scanEngine)->scanSettings;			
+	RectRaster_type*			scanEngine					= (RectRaster_type*)scanChan->scanEngine;
 	
 	// assign this image display to the scan engine
 	scanEngine->baseClass.activeDisplay		= imgDisplay; 
@@ -7938,13 +7658,10 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
 	// make sure the NULL packet is removed
-	size_t				nDetChans 	= ListNumItems(engine->baseClass.DetChans );
-	DetChan_type*   	detChan		= NULL;
 	DataPacket_type*	dataPacket	= NULL;
-	for (size_t i = 1; i <= nDetChans; i++) {
-		detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
-		errChk( GetDataPacket(detChan->detVChan, &dataPacket, &errMsg) );
-	}
+	for (size_t i = 0; i < engine->baseClass.nScanChans; i++)
+		errChk( GetDataPacket(engine->baseClass.scanChans[i]->detVChan, &dataPacket, &errMsg) );
+	
 	
 	return 0; 
 	
@@ -8000,8 +7717,7 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 {
 	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
 	int						error				= 0;
-	DetChan_type*			detChan				= NULL;
-	size_t					nDetChans 			= ListNumItems(engine->baseClass.DetChans);
+	size_t					nScanChans 			= engine->baseClass.nScanChans;
 	SourceVChan_type*   	detSourceVChan		= NULL;
 	DisplayEngine_type*		displayEngine		= engine->baseClass.lsModule->displayEngine;
 	DLDataTypes				pixelDataType		= 0;
@@ -8026,9 +7742,8 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 			//--------------------------------------------------------------------------------------------------------
 	
 			// create new image assembly buffers for connected detector VChans
-			for (size_t i = 1; i <= nDetChans; i++) {
-				detChan = *(DetChan_type**) ListGetPtrToItem(engine->baseClass.DetChans, i);
-				if (!(detSourceVChan = GetSourceVChan(detChan->detVChan))) continue;	// select only connected detection channels
+			for (size_t i = 0; i < nScanChans; i++) {
+				if (!(detSourceVChan = GetSourceVChan(engine->baseClass.scanChans[i]->detVChan))) continue;	// select only connected detection channels
 		
 				pixelDataType = GetSourceVChanDataType(detSourceVChan);
 				switch (pixelDataType) {
@@ -8055,12 +7770,12 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 				}
 		
 				// get display handles for connected channels
-				nullChk( detChan->imgDisplay 	= (*displayEngine->getImageDisplayFptr) (displayEngine, detChan, engine->scanSettings.height, engine->scanSettings.width, imageType) ); 
+				nullChk(engine->baseClass.scanChans[i]->imgDisplay 	= (*displayEngine->getImageDisplayFptr) (displayEngine, &engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, imageType) ); 
 		
 				engine->nImgBuffers++;
 				// allocate memory for image assembly
 				engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
-				engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(detChan, engine->scanSettings.height, engine->scanSettings.width, pixelDataType, FALSE); 
+				engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, pixelDataType, FALSE); 
 			}
 			
 			break;

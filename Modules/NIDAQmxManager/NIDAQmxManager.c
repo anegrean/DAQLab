@@ -850,7 +850,15 @@ static int	 currDev = -1;        // currently selected device from the DAQ table
 
 static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
 
+	//---------------------------------------------------
+	// Loading DAQmx settings
+	//---------------------------------------------------
+
 static int 							LoadCfg							 		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement); 
+
+	//---------------------------------------------------
+	// Saving DAQmx settings
+	//---------------------------------------------------
 
 static int							SaveCfg									(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
@@ -1486,8 +1494,8 @@ static int SaveDeviceCfg (Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDO
 	//--------------------------------------------------------------------------------
 	
 	char*							tcName					= GetTaskControlName(dev->taskController);
-	DAQLabXMLNode 					DevAttr[] 				= {	{"NIProductClassID", BasicData_UInt, &dev->attr->productNum},
-																{"Name", BasicData_CString, tcName}	};
+	DAQLabXMLNode 					DevAttr[] 				= {	{"NIProductClassID", 	BasicData_UInt, 		&dev->attr->productNum},
+																{"Name", 				BasicData_CString, 		tcName}	};
 	
 	DLAddToXMLElem(xmlDOM, NIDAQDeviceXMLElement, DevAttr, DL_ATTRIBUTE, NumElem(DevAttr)); 
 	OKfree(tcName);
@@ -1546,15 +1554,16 @@ static int SaveAITaskCfg (ADTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj
 	uInt32							operationMode			= (uInt32)task->timing->measMode;
 	uInt32							sampleClockEdge			= (uInt32)task->timing->sampClkEdge;
 	
-	DAQLabXMLNode 					taskAttr[] 				= {	{"Timeout", BasicData_Double, &task->timeout},
-																{"OperationMode", BasicData_UInt, &operationMode},
-																{"SamplingRate", BasicData_Double, &task->timing->sampleRate},
-																{"NSamples", BasicData_ULongLong, &task->timing->nSamples},
-																{"BlockSize", BasicData_UInt, &task->timing->blockSize},
-																{"SampleClockSource", BasicData_CString, task->timing->sampClkSource},
-																{"SampleClockEdge", BasicData_UInt, &sampleClockEdge},
-																{"ReferenceClockSource", BasicData_CString, task->timing->refClkSource},
-																{"ReferenceClockFrequency", BasicData_Double, &task->timing->refClkFreq} };
+	DAQLabXMLNode 					taskAttr[] 				= {	{"Timeout", 				BasicData_Double, 		&task->timeout},
+																{"OperationMode", 			BasicData_UInt, 		&operationMode},
+																{"SamplingRate", 			BasicData_Double, 		&task->timing->sampleRate},
+																{"NSamples", 				BasicData_ULongLong, 	&task->timing->nSamples},
+																{"Oversampling",			BasicData_UInt,			&task->timing->oversampling},
+																{"BlockSize", 				BasicData_UInt, 		&task->timing->blockSize},
+																{"SampleClockSource", 		BasicData_CString, 		task->timing->sampClkSource},
+																{"SampleClockEdge", 		BasicData_UInt, 		&sampleClockEdge},
+																{"ReferenceClockSource", 	BasicData_CString, 		task->timing->refClkSource},
+																{"ReferenceClockFrequency", BasicData_Double, 		&task->timing->refClkFreq} };
 																	
 	DLAddToXMLElem(xmlDOM, AITaskXMLElement, taskAttr, DL_ATTRIBUTE, NumElem(taskAttr)); 
 	
@@ -1716,16 +1725,16 @@ static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveX
 	uInt32							slopeType				= (uInt32) taskTrig->slope;
 	uInt32							triggerCondition		= (uInt32) taskTrig->wndTrigCond;
 		// shared trigger attributes
-	DAQLabXMLNode 					sharedTrigAttr[]		= {	{"Type", BasicData_UInt, &trigType},
-																{"Source", BasicData_CString, taskTrig->trigSource} };
+	DAQLabXMLNode 					sharedTrigAttr[]		= {	{"Type", 					BasicData_UInt, 	&trigType},
+																{"Source", 					BasicData_CString, 	taskTrig->trigSource} };
 		// for both analog and digital edge triggers
-	DAQLabXMLNode 					edgeTrigAttr[]			= {	{"Slope", BasicData_UInt, &slopeType} };
+	DAQLabXMLNode 					edgeTrigAttr[]			= {	{"Slope", 					BasicData_UInt, 	&slopeType} };
 		// for analog edge trigger
-	DAQLabXMLNode 					levelTrigAttr[]			= {	{"Level", BasicData_Double, &taskTrig->level} };
+	DAQLabXMLNode 					levelTrigAttr[]			= {	{"Level", 					BasicData_Double, 	&taskTrig->level} };
 		// for analog window trigger
-	DAQLabXMLNode 					windowTrigAttr[]		= {	{"WindowTop", BasicData_Double, &taskTrig->wndTop},
-																{"WindowBottom", BasicData_Double, &taskTrig->wndBttm},
-																{"WindowTriggerCondition", BasicData_UInt, &triggerCondition} };
+	DAQLabXMLNode 					windowTrigAttr[]		= {	{"WindowTop", 				BasicData_Double, 	&taskTrig->wndTop},
+																{"WindowBottom", 			BasicData_Double, 	&taskTrig->wndBttm},
+																{"WindowTriggerCondition", 	BasicData_UInt, 	&triggerCondition} };
 
 	// add shared trigger attributes 
 	DLAddToXMLElem(xmlDOM, TriggerXMLElement, sharedTrigAttr, DL_ATTRIBUTE, NumElem(sharedTrigAttr)); 
@@ -1771,10 +1780,18 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 {
 #define SaveChannelCfg_Err_NotImplemented		-1
 	
-	int								error					= 0;
+	int								error			= 0;
 	ERRORINFO						xmlERRINFO;
 	
+	/*
+	uInt32							chanType		= (uInt32) chanSet->chanType;
+	DAQLabXMLNode 					ChanAttr		= { {"PhysicalChannelName", 	BasicData_CString, 		chanSet->name},
+														{"ChannelType",				BasicData_UInt, 		&chanType},
+														{},
+														
+	};
 	
+	*/
 	
 	return 0;
 	

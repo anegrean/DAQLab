@@ -990,9 +990,49 @@ VChan_type* DLVChanNameExists (char VChanName[], size_t* idx)
 	return VChanNameExists (VChannels, VChanName, idx); 
 }
 
-char* DLGetUniqueVChanName (char baseVChanName[])
+/// HIFN Generates a VChan Name having the form "ModuleInstanceName: TaskControllerName: VChanName idx".
+/// HIFN ModuleInstanceName, TaskControllerName and idx are optional and should be set to NULL or 0 if not used. 
+/// HIRET On success the function generates the requested name, and if there isn't sufficient memory, it returns NULL.
+char* DLVChanName (DAQLabModule_type* mod, TaskControl_type* taskController, char VChanName[], uInt32 idx)
 {
-	return GetUniqueVChanName(VChannels, baseVChanName);
+	int		error 			= 0;
+	char*	name		 	= NULL;
+	char*	tcName			= NULL;
+	char	idxString[50]	= "";
+	
+	nullChk( name = StrDup("") );
+	
+	// add module instance name
+	if (mod) {
+		nullChk( AppendString(&name, mod->instanceName, -1) );
+		nullChk( AppendString(&name, ": ", -1) );
+	}
+	
+	// add task controller name
+	if (taskController) {
+		nullChk( tcName = GetTaskControlName(taskController) );
+		nullChk( AppendString(&name, tcName, -1) );
+		OKfree(tcName);
+		nullChk( AppendString(&name, ": ", -1) );
+	}
+	
+	// add VChan name
+	nullChk( AppendString(&name, VChanName, -1) );
+	
+	// add indexing if needed
+	if (idx) {
+		Fmt(idxString, " %d", idx);
+		nullChk( AppendString(&name, idxString, -1) );
+	}
+	
+	return name;
+	
+Error:
+	
+	OKfree(name);
+	OKfree(tcName);
+	
+	return NULL;
 }
 
 /// HIFN Validate function for VChan names.
@@ -2023,7 +2063,7 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 			
 		// adjust table display
 		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_USE_LABEL_TEXT, 1);
-		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_JUSTIFY, VAL_CENTER_CENTER_JUSTIFIED);
+		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_JUSTIFY, VAL_CENTER_LEFT_JUSTIFIED);
 		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_TEXT, (VChanName = GetVChanName((VChan_type*)*sourceVChanPtr)));
 		GetTextDisplaySize(VChanName, VAL_DIALOG_META_FONT, NULL, &rowLabelWidth);
 		if (rowLabelWidth > maxRowLabelWidth) maxRowLabelWidth = rowLabelWidth;

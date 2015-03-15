@@ -98,7 +98,9 @@ BOOL				DLVChanExists						(VChan_type* VChan, size_t* idx);
 	// Searches for a given VChan name
 VChan_type*			DLVChanNameExists					(char VChanName[], size_t* idx);
 
-char*				DLGetUniqueVChanName				(char baseVChanName[]);
+	// Generates a VChan Name with the form: "ModuleInstanceName: TaskControllerName: VChanName idx" where ModuleInstanceName, TaskControllerName and idx are optional.
+	// Set idx to 0 if indexing is not needed.
+char* 				DLVChanName			 				(DAQLabModule_type* mod, TaskControl_type* taskController, char VChanName[], uInt32 idx);
 
 	// To Validate a new VChan name, pass this function as a parameter when calling DLGetUINameInput.
 BOOL				DLValidateVChanName					(char newVChanName[], void* null);

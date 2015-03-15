@@ -87,10 +87,6 @@ BOOL						VChanExists							(ListType VChanList, VChan_type* VChan, size_t* idx)
 	// If found and *idx is provided, it returns the 1-based VChan index in the list, otherwise *idx=0.
 VChan_type*					VChanNameExists						(ListType VChanList, char VChanName[], size_t* idx);
 
-	// Returns a unique VChan name among a given list of VChans. The unique VChan name has a base name and a number.
-	// VChanList of VChan_type*
-char*						GetUniqueVChanName					(ListType VChanList, char baseVChanName[]);
-
 //------------------------------------------------------------------------------
 // VChan Connections
 //------------------------------------------------------------------------------

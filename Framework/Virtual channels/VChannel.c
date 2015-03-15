@@ -383,26 +383,6 @@ VChan_type* VChanNameExists (ListType VChanList, char VChanName[], size_t* idx)
 	return NULL;
 }
 
-char* GetUniqueVChanName (ListType VChanList, char baseVChanName[])
-{
-	size_t n        = 2;
-	char*  name;   
-	char   countstr [500];
-	
-	name = StrDup(baseVChanName);
-	AppendString(&name, " 1", -1);
-	while (VChanNameExists (VChanList, name, 0)) {
-		OKfree(name);
-		name = StrDup(baseVChanName);
-		Fmt(countstr, "%s<%d", n);
-		AppendString(&name, " ", -1);
-		AppendString(&name, countstr, -1);
-		n++;
-	}
-	
-	return name;
-}
-
 //---------------------------------
 // Data Packet management functions
 //---------------------------------

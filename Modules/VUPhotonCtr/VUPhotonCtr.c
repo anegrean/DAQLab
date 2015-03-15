@@ -47,8 +47,8 @@
 
 #define ITER_TIMEOUT 			10
 
-#define VChan_Default_PulseTrainSinkChan		"VUPC Pulsetrain Sink" 
-#define HWTrig_VUPC_BaseName					"PC Start"					// for slave HW triggering 
+#define VChan_Default_PulseTrainSinkChan		"pulsetrain" 
+#define HWTrig_VUPC_BaseName					"start trigger"					// for slave HW triggering 
 
 
 #ifndef errChk
@@ -1016,7 +1016,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						
 						//add sink to receive pulsetrain settings
 						if (vupc->pulseTrainVChan==NULL){
-							char*	pulsetrainVChanName		= DLGetUniqueVChanName(VChan_Default_PulseTrainSinkChan);
+							char*	pulsetrainVChanName		= DLVChanName((DAQLabModule_type*)vupc, vupc->taskControl, VChan_Default_PulseTrainSinkChan, 0);
 							DLDataTypes allowedPacketTypes[] = {DL_PulseTrain_Freq, DL_PulseTrain_Ticks, DL_PulseTrain_Time};
 							vupc->pulseTrainVChan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance,VChanDataTimeout, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
 							// register VChan with DAQLab

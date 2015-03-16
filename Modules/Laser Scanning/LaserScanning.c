@@ -3352,7 +3352,7 @@ static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplit
 	errChk( SpInterp(cal->switchTimes->stepSize, cal->switchTimes->halfSwitch, secondDerivatives,  cal->switchTimes->n, fabs(jumpAmplitude), &halfSwitchTime) );
 	OKfree(secondDerivatives);
 	
-	*jumpTime = 2 * halfSwitchTime;  // total time for galvo to settle
+	*jumpTime = 2 * halfSwitchTime;
 	
 	return 0;
 	
@@ -7667,7 +7667,6 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 {
 	RectRaster_type* 	engine		= GetTaskControlModuleData(taskControl);
 	int					error		= 0;
-	char*				errMsg		= 0;
 	
 	// close shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorInfo) );
@@ -7677,11 +7676,25 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 	// update iterations
 	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
-	// make sure the NULL packet is removed
-	DataPacket_type*	dataPacket	= NULL;
-	for (size_t i = 0; i < engine->baseClass.nScanChans; i++)
-		errChk( GetDataPacket(engine->baseClass.scanChans[i]->detVChan, &dataPacket, &errMsg) );
+	switch(engine->baseClass.scanMode) {
+		
+		case ScanEngineMode_FrameScan:
+			
+			// make sure the NULL packet is removed
+			DataPacket_type*	dataPacket	= NULL; 
+			
+			for (size_t i = 0; i < engine->baseClass.nScanChans; i++) {
+				if (!IsVChanConnected(engine->baseClass.scanChans[i]->detVChan)) continue;
+				errChk( GetDataPacket(engine->baseClass.scanChans[i]->detVChan, &dataPacket, errorInfo) );
+			}
+			
+			break;
+			
+		case ScanEngineMode_PointJump:
+			
 	
+			break;
+	}
 	
 	return 0; 
 	
@@ -7790,7 +7803,7 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 				}
 		
 				// get display handles for connected channels
-				nullChk(engine->baseClass.scanChans[i]->imgDisplay 	= (*displayEngine->getImageDisplayFptr) (displayEngine, &engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, imageType) ); 
+				nullChk(engine->baseClass.scanChans[i]->imgDisplay 	= (*displayEngine->getImageDisplayFptr) (displayEngine, engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, imageType) ); 
 		
 				engine->nImgBuffers++;
 				// allocate memory for image assembly

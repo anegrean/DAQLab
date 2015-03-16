@@ -691,10 +691,13 @@ static RectRaster_type*				init_RectRaster_type								(LaserScanning_type*	lsMo
 
 static void							discard_RectRaster_type								(ScanEngine_type** engine);
 
-	// image assembly buffer
+	// Image assembly buffer
 static RectRasterImgBuffer_type* 	init_RectRasterImgBuffer_type 						(ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows);
 
 static void							discard_RectRasterImgBuffer_type					(RectRasterImgBuffer_type** rectRasterPtr); 
+
+	// Resets the buffer to receive another series of images. Note: this function does not resize the buffer! For this, discard the buffer and re-initialize it.
+static void 						ResetRectRasterImgBuffer 							(RectRasterImgBuffer_type* imgBuffer, BOOL flipRows); 
 
 static int CVICALLBACK 				NonResRectRasterScan_MainPan_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -4423,7 +4426,7 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (ScanChan_type* s
 	buffer->skipRows				= FALSE;
 	buffer->skipFlybackRows			= 0;			// calculated once scan signals are calculated
 	buffer->rowsSkipped				= 0;
-	buffer->pixelDataType			= 0;
+	buffer->pixelDataType			= pixelDataType;
 	buffer->scanChan				= scanChan;
 	
 	nullChk( buffer->imagePixels 	= malloc(imgWidth * imgHeight * pixelSizeBytes) );
@@ -4437,6 +4440,19 @@ Error:
 	
 	free(buffer);
 	return NULL;	
+}
+
+static void ResetRectRasterImgBuffer (RectRasterImgBuffer_type* imgBuffer, BOOL flipRows)
+{
+	imgBuffer->nImagePixels 		= 0;
+	imgBuffer->nAssembledRows   	= 0; 
+	OKfree(imgBuffer->tmpPixels);
+	imgBuffer->nTmpPixels			= 0;
+	imgBuffer->nSkipPixels			= 0;
+	imgBuffer->flipRow				= flipRows;
+	imgBuffer->skipRows				= FALSE;
+	imgBuffer->skipFlybackRows		= 0;			// calculated once scan signals are calculated
+	imgBuffer->rowsSkipped			= 0;
 }
 
 static void	discard_RectRasterImgBuffer_type (RectRasterImgBuffer_type** rectRasterPtr)
@@ -7614,6 +7630,10 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	
 	// open shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, 1, errorInfo) );
+	
+	// reset image buffers
+	for (size_t i = 0; i < engine->nImgBuffers; i++)
+		ResetRectRasterImgBuffer(engine->imgBuffers[i], FALSE);
 	
 	switch(engine->baseClass.scanMode) {
 		

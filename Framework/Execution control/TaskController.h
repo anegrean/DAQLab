@@ -290,7 +290,7 @@ typedef enum {
 												// back to INITIAL state.
 	TASK_EVENT_STOP,							// Stops Task Controller iterations and allows SubTask Controllers to complete their iterations.
 	TASK_EVENT_STOP_CONTINUOUS_TASK,			// Event sent from parent Task Controller to its continuous SubTasks to stop them.
-	TASK_EVENT_SUBTASK_STATE_CHANGED,   		// When one of the SubTask Controllers switches to another state.
+	TASK_EVENT_UPDATE_SUBTASK_STATE,   			// Used to update the state of a SubTask Controller.
 	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue.
 	TASK_EVENT_CUSTOM_MODULE_EVENT,				// To signal custom module or device events.
 	TASK_EVENT_SUBTASK_ADDED_TO_PARENT,			// When a SubTask is added to a parent Task Controller
@@ -515,14 +515,6 @@ BOOL					GetTaskControlUITCFlag				(TaskControl_type* taskControl);
 
 	// Returns TRUE if iteration must be stopped
 BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
-
-BOOL 					GetTaskControlTCDone 				(TaskControl_type* taskControl);
-void 					SetTaskControlTCDone 				(TaskControl_type* taskControl,BOOL done);
-
-
-BOOL 					GetTaskControlTCStarted 			(TaskControl_type* taskControl);
-void 					SetTaskControlTCStarted 			(TaskControl_type* taskControl,BOOL started);
-
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions

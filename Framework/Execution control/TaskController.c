@@ -30,10 +30,10 @@
 // Types
 
 typedef struct {
-	size_t						subtaskIdx;							// For a TASK_EVENT_SUBTASK_STATE_CHANGED event this is a
+	size_t						subtaskIdx;							// For a TASK_EVENT_UPDATE_SUBTASK_STATE event this is a
 																	// 1-based index of subtask (from subtasks list) which generated
 																	// the event.
-	TaskStates_type				newSubTaskState;					// For a TASK_EVENT_SUBTASK_STATE_CHANGED event this is the new state
+	TaskStates_type				newSubTaskState;					// For a TASK_EVENT_UPDATE_SUBTASK_STATE event this is the new state
 																	// of the subtask
 } SubTaskEventInfo_type;
 
@@ -53,7 +53,7 @@ typedef struct {
 typedef enum {
 	STATE_CHANGE,
 	FUNCTION_CALL,
-	CHILD_TASK_STATE_CHANGE
+	CHILD_TASK_STATE_UPDATE
 } TaskControllerActions;
 
 // Structure binding Task Controller and VChan data for passing to TSQ callback	
@@ -85,8 +85,6 @@ struct TaskControl {
 	TaskControl_type*			parenttask;							// Pointer to parent task that own this subtask. 
 																	// If this is the main task, it has no parent and this is NULL. 
 	ListType					subtasks;							// List of subtasks of SubTask_type.
-	BOOL						tc_started;							// need this to prevent race : parent should keep track if child TC has started (out of initial state)
-	BOOL						tc_done;						    // need this to prevent race : parent should keep track if child TC in a done state 
 	void*						moduleData;							// Reference to module specific data that is controlled by the task.
 	int							logPanHandle;						// Panel handle in which there is a box control for printing Task Controller execution info useful for debugging. If not used, it is set to 0
 	int							logBoxControlID;					// Box control ID for printing Task Controller execution info useful for debugging. If not used, it is set to 0.  
@@ -124,7 +122,9 @@ struct TaskControl {
 static void 								TaskEventHandler 						(TaskControl_type* taskControl); 
 
 // Use this function to change the state of a Task Controller
-static int 									ChangeState 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState);
+static void 								ChangeState 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState);
+// If True, the state of all child TCs is up to date and the same as the given state.
+static BOOL 								AllChildTCsInState 						(TaskControl_type* taskControl, TaskStates_type state); 
 // Use this function to carry out a Task Controller action using provided function pointers
 static int									FunctionCall 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskFCall_type fID, void* fCallData, char** errorInfo); 
 
@@ -417,27 +417,6 @@ void SetTaskControlMode	(TaskControl_type* taskControl, TaskMode_type mode)
 	taskControl->mode = mode;	
 }
  
-BOOL GetTaskControlTCDone (TaskControl_type* taskControl)
-{
-	return taskControl->tc_done;
-}
-
-void SetTaskControlTCDone (TaskControl_type* taskControl,BOOL done)
-{
-	taskControl->tc_done=done;
-}
-
-BOOL GetTaskControlTCStarted (TaskControl_type* taskControl)
-{
-	return taskControl->tc_started;
-}
-
-void SetTaskControlTCStarted (TaskControl_type* taskControl,BOOL started)
-{
-	taskControl->tc_started=started;
-}
-   
- 
 TaskMode_type GetTaskControlMode (TaskControl_type* taskControl)
 {
 	return taskControl->mode;
@@ -718,9 +697,6 @@ static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* ta
 static void	discard_VChanCallbackData_type (VChanCallbackData_type** a)
 {
 	if (!*a) return;
-	//added mem leak
-	
-	//end
 	
 	OKfree(*a);
 }
@@ -820,9 +796,9 @@ static char* EventToString (TaskEvents_type event)
 			
 			return StrDup("Stop continuous SubTask Controllers only"); 
 			
-		case TASK_EVENT_SUBTASK_STATE_CHANGED:
+		case TASK_EVENT_UPDATE_SUBTASK_STATE:
 			
-			return StrDup("SubTask State Changed");
+			return StrDup("SubTask State Update");
 			
 		case TASK_EVENT_DATA_RECEIVED:
 			
@@ -974,7 +950,7 @@ static void ExecutionLogEntry (TaskControl_type* taskControl, EventPacket_type* 
 			OKfree(fCallName)
 			break;
 			
-		case CHILD_TASK_STATE_CHANGE:
+		case CHILD_TASK_STATE_UPDATE:
 			
 			AppendString(&output, "Child state change", -1); 
 			break;
@@ -997,7 +973,7 @@ static void ExecutionLogEntry (TaskControl_type* taskControl, EventPacket_type* 
 		
 		AppendString(&output, ", ", -1);
 		// if subtask state change event occurs, print also previous state of the subtask that changed
-		if (action == CHILD_TASK_STATE_CHANGE)
+		if (action == CHILD_TASK_STATE_UPDATE)
 			if (((SubTaskEventInfo_type*)eventPacket->eventInfo)->subtaskIdx == i){
 				AppendString(&output, (stateName = StateToString(subtaskPtr->previousSubTaskState)), -1);
 				OKfree(stateName);
@@ -1017,37 +993,6 @@ static void ExecutionLogEntry (TaskControl_type* taskControl, EventPacket_type* 
 	SetCtrlVal(taskControl->logPanHandle, taskControl->logBoxControlID, output);
 	OKfree(output);
 }
-
-
-BOOL IsSubtaskState(SubTask_type* subtaskPtr,TaskStates_type SubTaskState,TaskStates_type comparedState)
-{
-	BOOL equalstates=FALSE;
-	
-	if (subtaskPtr->isOutOfDate = TRUE) return FALSE;  
-	equalstates=(SubTaskState == comparedState);
-	
-	return equalstates;
-}
-
-
-BOOL AreSubtasksOutofDate(TaskControl_type* taskControl)
-{
-	BOOL OutofDate=FALSE;
-	size_t nItems;
-	SubTask_type* subtaskPtr;
-	
-	nItems = ListNumItems(taskControl->subtasks); 
-	for (size_t j = 1; j <= nItems; j++) {
-		subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-		if (subtaskPtr->isOutOfDate)  {
-			OutofDate=TRUE;
-			break;
-		}
-	}
-		
-	return OutofDate;
-}
-
 
 void CVICALLBACK TaskEventItemsInQueue (CmtTSQHandle queueHandle, unsigned int event, int value, void *callbackData)
 {
@@ -1115,13 +1060,20 @@ void CVICALLBACK IterationFunctionThreadCallback (CmtThreadPoolHandle poolHandle
 int TaskControlEvent (TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventInfo,
 					  DisposeEventInfoFptr_type disposeEventInfoFptr)
 {
-	EventPacket_type eventpacket = {event, eventInfo, disposeEventInfoFptr};
+	EventPacket_type 	eventpacket = {event, eventInfo, disposeEventInfoFptr};
+	SubTask_type*		subTask		= NULL;
 	
 	int 	lockObtainedFlag;
 	int 	error;
 	
 	// get event TSQ thread lock
 	CmtGetLockEx(RecipientTaskControl->eventQThreadLock, 0, CMT_WAIT_FOREVER, &lockObtainedFlag);
+	
+	// set out of date flag for the parent's record of this child task controller state
+	if (RecipientTaskControl->parenttask) {
+		subTask = ListGetPtrToItem(RecipientTaskControl->parenttask->subtasks, RecipientTaskControl->subtaskIdx);
+		subTask->isOutOfDate = TRUE;
+	}
 	
 	if (CmtWriteTSQData(RecipientTaskControl->eventQ, &eventpacket, 1, 0, NULL)) error = 0;
 	else error = -1;
@@ -1147,29 +1099,31 @@ static void disposeTCIterDoneInfo (void* eventInfo)
 	discard_FCallReturn_type((FCallReturn_type**)&eventInfo);
 }
 
-static int ChangeState (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState)
+static void ChangeState (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState)
 {
-	int error;
-			  
 	// change state
 	taskControl->oldState   = taskControl->state;
 	taskControl->state 		= newState;
 	
-	
 	// add log entry if enabled
 	ExecutionLogEntry(taskControl, eventPacket, STATE_CHANGE, NULL);
+}
 
+static BOOL AllChildTCsInState (TaskControl_type* taskControl, TaskStates_type state)
+{
+	size_t			nSubTasks 		= ListNumItems(taskControl->subtasks);
+	SubTask_type*   subTask			= NULL;
+	BOOL			allTCsInState	= TRUE;
 	
-	// if there is a parent task, inform it of subtask state chage
-	if (taskControl->parenttask)
-		if ((error = TaskControlEvent(taskControl->parenttask, TASK_EVENT_SUBTASK_STATE_CHANGED, 
-					init_SubTaskEventInfo_type(taskControl->subtaskIdx, taskControl->state), disposeSubTaskEventInfo)) < 0) goto Error;
-		
-	return 0;
+	for (size_t i = 1; i <= nSubTasks; i++) {
+		subTask = ListGetPtrToItem(taskControl->subtasks, i);
+		if (subTask->isOutOfDate || subTask->subtaskState != state) {
+			allTCsInState = FALSE;
+			break;
+		}
+	}
 	
-	Error:
-	
-	return error;
+	return allTCsInState;
 }
 
 void AbortTaskControlExecution (TaskControl_type* taskControl)
@@ -1199,8 +1153,6 @@ int CVICALLBACK ScheduleIterateFunction (void* functionData)
 	
 	return 0;
 }
-
-
 
 
 static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskFCall_type fID, void* fCallData, char** errorInfo)
@@ -1413,7 +1365,7 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 int	TaskControlEventToSubTasks  (TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventInfo,
 								 DisposeEventInfoFptr_type disposeEventInfoFptr)
 {
-	SubTask_type* 		subtaskPtr;
+	SubTask_type* 		subTask;
 	size_t				nSubTasks 			= ListNumItems(SenderTaskControl->subtasks);
 	int			 		lockObtainedFlag	= 0;
 	int					error				= 0;
@@ -1421,21 +1373,21 @@ int	TaskControlEventToSubTasks  (TaskControl_type* SenderTaskControl, TaskEvents
 	
 	// get all subtask eventQ thread locks to place event in all queues before other events can be placed by other threads
 	for (size_t i = 1; i <= nSubTasks; i++) { 
-		subtaskPtr = ListGetPtrToItem(SenderTaskControl->subtasks, i);
-		CmtGetLockEx(subtaskPtr->subtask->eventQThreadLock, 0, CMT_WAIT_FOREVER, &lockObtainedFlag);
+		subTask = ListGetPtrToItem(SenderTaskControl->subtasks, i);
+		CmtGetLockEx(subTask->subtask->eventQThreadLock, 0, CMT_WAIT_FOREVER, &lockObtainedFlag);
 	}
 	
 	// dispatch event to all subtasks
 	for (size_t i = 1; i <= nSubTasks; i++) { 
-		subtaskPtr = ListGetPtrToItem(SenderTaskControl->subtasks, i);
-		subtaskPtr->isOutOfDate = TRUE;
-		errChk(CmtWriteTSQData(subtaskPtr->subtask->eventQ, &eventpacket, 1, 0, NULL));
+		subTask = ListGetPtrToItem(SenderTaskControl->subtasks, i);
+		subTask->isOutOfDate = TRUE;
+		errChk(CmtWriteTSQData(subTask->subtask->eventQ, &eventpacket, 1, 0, NULL));
 	}
 	
 	// release all subtask eventQ thread locks
 	for (size_t i = 1; i <= nSubTasks; i++) { 
-		subtaskPtr = ListGetPtrToItem(SenderTaskControl->subtasks, i);
-		CmtReleaseLock(subtaskPtr->subtask->eventQThreadLock);  
+		subTask = ListGetPtrToItem(SenderTaskControl->subtasks, i);
+		CmtReleaseLock(subTask->subtask->eventQThreadLock);  
 	}
 	 
 	return 0;
@@ -1444,8 +1396,8 @@ Error:
 	
 	// release all subtask eventQ thread locks
 	for (size_t i = 1; i <= nSubTasks; i++) { 
-		subtaskPtr = ListGetPtrToItem(SenderTaskControl->subtasks, i);
-		CmtReleaseLock(subtaskPtr->subtask->eventQThreadLock);  
+		subTask = ListGetPtrToItem(SenderTaskControl->subtasks, i);
+		CmtReleaseLock(subTask->subtask->eventQThreadLock);  
 	}
 	
 	return error;
@@ -1641,7 +1593,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 		
 	for (int i = 0; i < nEventItems; i++) {
 		
-	
 	// reset abort flag
 	taskControl->abortFlag = FALSE;
 	
@@ -1654,7 +1605,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CONFIGURE:
 					
 					// configure this task
-					
 					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_CONFIGURE, NULL, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
@@ -1687,7 +1637,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 						
 						// reset iterations
-						SetCurrentIterationIndex(taskControl->currentiter,0);
+						SetCurrentIterationIndex(taskControl->currentiter, 0);
 						
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
 						
@@ -1704,6 +1654,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 				case TASK_EVENT_UNCONFIGURE:
 					
+					/*
 					// unconfigure
 					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_UNCONFIGURE, NULL, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
@@ -1713,6 +1664,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
 						break;
 					}
+					*/
+					// ignore for now
 					
 					break;
 					
@@ -1722,14 +1675,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
-				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE; 
-					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
@@ -1747,13 +1700,13 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					// call data received event function
 					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
-							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
-							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
-							OKfree(errMsg);
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-							break;
-						}
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					}
 					
 					break;
 					
@@ -1798,6 +1751,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CONFIGURE: 
 					// Reconfigures Task Controller and all its SubTasks
 					
+					/*
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
 					if (TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed"); 
@@ -1806,6 +1760,16 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
 						break;
 					}
+					*/
+					
+					// send TASK_EVENT_CONFIGURE to all subtasks if there are any
+					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE posting to SubTasks failed"); 
+						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;	
+						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+						break;
+					} 
 					
 					break;
 					
@@ -1837,18 +1801,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
-				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;
-					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
-					
-					//added lex
-					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
-					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
@@ -1859,18 +1819,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;	
 					}
 					
-					// check states of all subtasks and transition to INITIAL state if all subtasks are in INITIAL state
-					BOOL InitialStateFlag = 1; // assume all subtasks are in INITIAL state
-					nItems = ListNumItems(taskControl->subtasks); 
-					for (size_t j = 1; j <= nItems; j++) {
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-						if (subtaskPtr->subtaskState != TASK_STATE_INITIAL) {
-							InitialStateFlag = 0;
-							break;
-						}
-					}
-					
-					if (InitialStateFlag) {
+					// reset task controller and set it to initial state if all child TCs are in their initial state
+					if (AllChildTCsInState(taskControl, TASK_STATE_INITIAL)) {
 						// reset device/module
 						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL, &errMsg) < 0) {
 							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
@@ -1944,7 +1894,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CONFIGURE:
 				// Reconfigures Task Controller
 					
-					// configure again only this task control
+					// configure again only this task controller
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
 					if (TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_CONFIGURE self posting failed");
@@ -2043,23 +1993,18 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_STOP:  
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 					
-					// just inform the parent that the current state is INITIAL
-					ChangeState(taskControl, &eventpacket[i], TASK_STATE_INITIAL);
+					// ignore
 					
 					break;
 					
-				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;
-					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
-					
-					//added lex
-					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
-					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
@@ -2255,22 +2200,18 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_STOP:  
 				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 					
-					ChangeState(taskControl, &eventpacket[i], TASK_STATE_IDLE);  // just inform parent
+					// ignore event
 					
 					break;
 					
-				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;
-					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
-					
-					//added lex
-					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
-					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
@@ -2295,18 +2236,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							break;
 						}
 					
-					// check states of all subtasks and transition to INITIAL state if all subtasks are in INITIAL state
-					BOOL InitialStateFlag = 1; // assume all subtasks are in INITIAL state
-					nItems = ListNumItems(taskControl->subtasks);
-					for (size_t j = 1; j <= nItems; j++) {
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-						if (subtaskPtr->subtaskState != TASK_STATE_INITIAL) {
-							InitialStateFlag = 0;
-							break;
-						}
-					}
-					
-					if (InitialStateFlag) {
+					if (AllChildTCsInState(taskControl, TASK_STATE_INITIAL)) {
 						// reset device/module
 						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL, &errMsg) <0) {
 							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
@@ -2464,13 +2394,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							nItems = ListNumItems(taskControl->subtasks); 		
 							if (nItems) {    
 								// send START event to all subtasks
-								//reset subtasks info 
-								for (size_t j = 1; j <= nItems; j++) {									 
-									subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-									SetTaskControlTCDone(subtaskPtr->subtask,FALSE);  
-									SetTaskControlTCStarted(subtaskPtr->subtask,FALSE);  
-								}
-					
 								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
 									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
@@ -2507,25 +2430,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------
 							// Start SubTasks if there are any
 							//---------------------------------------------------------------------------------------------------------------
-							nItems=ListNumItems(taskControl->subtasks);		
-							if (nItems){ 		//check this part LEX
-								// send START event to all subtasks
-									//reset num_subtasks_started, to keep track whether all child TC started
-								//reset subtasks info 
-								for (size_t j = 1; j <= nItems; j++) {									 
-									subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-									SetTaskControlTCDone(subtaskPtr->subtask,FALSE);  
-									SetTaskControlTCStarted(subtaskPtr->subtask,FALSE);  
-								}
-								
-								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
-									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
-									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
-									FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-									ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-									break;
-								}
+							
+							if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
+								taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
+								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
+								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
+								break;
 							}
+							
 							//---------------------------------------------------------------------------------------------------------------
 							// Call iteration function if needed
 							//---------------------------------------------------------------------------------------------------------------
@@ -2644,14 +2557,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 					break;
 					
-				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;  
-					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					
 					// if subtask is in an error state then switch to error state
@@ -2668,45 +2581,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// If SubTasks are not yet complete, stay in RUNNING state and wait for their completion
 					//---------------------------------------------------------------------------------------------------------------- 
 					
-					// because of a possible race condition, the parent TC of multiple child TC's have to check if all child TC's
-					// have left their done state
-					
-					// consider only transitions to TASK_STATE_DONE OR transitions from TASK_STATE_INITIAL
-					if ((subtaskPtr->subtaskState != TASK_STATE_DONE)&&(subtaskPtr->previousSubTaskState != TASK_STATE_INITIAL))
+					// consider only transitions to TASK_STATE_DONE 
+					if (subtaskPtr->subtaskState != TASK_STATE_DONE)
 						break; // stop here
 					
-				
-					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
-					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 
-					
-					// check all SubTasks
-					BOOL AllStartedFlag = TRUE;    
-					nItems = ListNumItems(taskControl->subtasks);
-					for (size_t j = 1; j <= nItems; j++) {									 
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-						if (!GetTaskControlTCStarted(subtaskPtr->subtask)){
-							AllStartedFlag = FALSE;
-							break;
-						}
-					}
-					if (!AllStartedFlag) break;
-					//skip checking if not all child TCs have started
-					
-					//all modules have started their iteration, now it is time to check if all child TCs are done   
-					// assume all subtasks are done 
-					
-					BOOL AllDoneFlag=TRUE;		
-					// check SubTasks
-					nItems = ListNumItems(taskControl->subtasks);
-					for (size_t j = 1; j <= nItems; j++) {									 
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-						if (!GetTaskControlTCDone(subtaskPtr->subtask)){
-							AllDoneFlag = FALSE;
-							break;
-						}
-					}
-		
-					if (!AllDoneFlag)  break; // stop here
+					if (!AllChildTCsInState(taskControl, TASK_STATE_DONE))  
+						break; // stop here
 					
 					//---------------------------------------------------------------------------------------------------------------- 
 					// Decide on state transition
@@ -2935,15 +2815,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//----------------------------------------------------------------------------------------------------------------
 							// Start SubTasks if there are any
 							//----------------------------------------------------------------------------------------------------------------
-							nItems=ListNumItems(taskControl->subtasks);		
+							nItems = ListNumItems(taskControl->subtasks);		
 							if (nItems) {
 								// send START event to all subtasks
-								//reset num_subtasks_started, to keep track whether all child TC started
-								for (size_t j = 1; j <= nItems; j++) {									 
-									subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-									SetTaskControlTCDone(subtaskPtr->subtask,FALSE);  
-									SetTaskControlTCStarted(subtaskPtr->subtask,FALSE);  
-								}
 								
 								if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_START, NULL, NULL) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_START posting to SubTasks failed"); 
@@ -2992,19 +2866,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							// If SubTasks are not yet complete, switch to RUNNING state and wait for their completion
 							//---------------------------------------------------------------------------------------------------------------- 
 							
-				
-							BOOL AllDoneFlag=TRUE;		
-							// check SubTasks
-							nItems = ListNumItems(taskControl->subtasks);
-							for (size_t j = 1; j <= nItems; j++) {									 
-								subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-								if (!GetTaskControlTCDone(subtaskPtr->subtask)){
-									AllDoneFlag = FALSE;
-									break;
-								}
-							}
-					
-							if (!AllDoneFlag) {
+							if (!AllChildTCsInState(taskControl, TASK_STATE_DONE)) {
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_RUNNING);
 								break;  // stop here
 							}
@@ -3058,18 +2920,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
-				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;  
-					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
-					
-					//added lex
-					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
-					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					// if subtask is in an error state then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
@@ -3167,18 +3025,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
-				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;  
-					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
-					
-					//added lex
-					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
-					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
@@ -3194,7 +3048,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					for (size_t j = 1; j <= nItems; j++) {
 						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-						if (!((subtaskPtr->subtaskState == TASK_STATE_IDLE) || (subtaskPtr->subtaskState == TASK_STATE_DONE))) {
+						if (!((subtaskPtr->subtaskState == TASK_STATE_IDLE) || (subtaskPtr->subtaskState == TASK_STATE_DONE)) || subtaskPtr->isOutOfDate) {
 							IdleOrDoneFlag = FALSE;
 							break;
 						}
@@ -3386,19 +3240,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
-				case TASK_EVENT_SUBTASK_STATE_CHANGED:
+				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
 					subtaskPtr->isOutOfDate = FALSE;  
-					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
-					
-					//added lex
-				
-					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
-					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					// if subtask is in an error state, then switch to error state
 					if (subtaskPtr->subtaskState == TASK_STATE_ERROR) {
@@ -3416,17 +3265,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					}
 					
 					// check states of all subtasks and transition to INITIAL state if all subtasks are in INITIAL state
-					BOOL InitialStateFlag = 1; // assume all subtasks are in INITIAL state
-					nItems = ListNumItems(taskControl->subtasks);
-					for (size_t j = 1; j <= nItems; j++) {
-						subtaskPtr = ListGetPtrToItem(taskControl->subtasks, j);
-						if (subtaskPtr->subtaskState != TASK_STATE_INITIAL) {
-							InitialStateFlag = 0;
-							break;
-						}
-					}
-					
-					if (InitialStateFlag) {
+					if (AllChildTCsInState(taskControl, TASK_STATE_INITIAL)) {
 						// reset device/module
 						if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_RESET, NULL, &errMsg) < 0) {
 							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
@@ -3531,18 +3370,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
-				case TASK_EVENT_SUBTASK_STATE_CHANGED: 
+				case TASK_EVENT_UPDATE_SUBTASK_STATE: 
 					
 					// update subtask state
 					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
 					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;  
-					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_CHANGE, NULL);
-					
-					
-					if (subtaskPtr->previousSubTaskState == TASK_STATE_INITIAL) SetTaskControlTCStarted(subtaskPtr->subtask,TRUE); 
-					if (subtaskPtr->subtaskState == TASK_STATE_DONE) SetTaskControlTCDone(subtaskPtr->subtask,TRUE); 
+					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					break;
 					
@@ -3585,6 +3420,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			break;
 	}
 	
+	// if there is a parent task controller, update it on the state of this child task controller
+	if (taskControl->parenttask)
+		TaskControlEvent(taskControl->parenttask, TASK_EVENT_UPDATE_SUBTASK_STATE, init_SubTaskEventInfo_type(taskControl->subtaskIdx, taskControl->state), disposeSubTaskEventInfo);
+					
 	// free memory for extra eventInfo if any
 	if (eventpacket[i].eventInfo && eventpacket[i].disposeEventInfoFptr)
 		(*eventpacket[i].disposeEventInfoFptr)(eventpacket[i].eventInfo);

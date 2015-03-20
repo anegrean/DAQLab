@@ -1,7 +1,3 @@
-#include "nivision.h"
-#include "pathctrl.h"
-#include "UI_DataStorage.h"
-
 //==============================================================================
 //
 // Title:		DataStorage.c
@@ -15,10 +11,14 @@
 //==============================================================================
 // Include files
 #include "DAQLab.h" 		// include this first
+#include "nivision.h"
+#include "pathctrl.h"
+#include "UI_DataStorage.h"
 #include <formatio.h>
 #include <userint.h>
 #include "DataStorage.h"
 #include "DisplayEngine.h"
+//#include "tiffio.h"
 
 //==============================================================================
 // Constants
@@ -60,6 +60,7 @@ struct DatStore {
 	
 	char*				basefilepath;
 	char*				rawdatapath;    //test, for saving raw data
+
 	BOOL				overwrite_files;
 	
 		// Callback to install on controls from selected panel in UI_DataStorage.uir
@@ -115,6 +116,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)  ;
 
 //==============================================================================
 // Global variables
+
+//test
+//char*				menudatapath;  
 
 //==============================================================================
 // Global functions
@@ -699,6 +703,47 @@ int SaveImage(char* filename,Image* image)
 	return err;
 }
 
+int SaveFromMenu(Image* image)
+{
+	int err=0;
+	int reply;
+	char* pathName;
+	char* filename; 
+//	TIFF* tif;
+	
+	filename=malloc(MAX_PATH*sizeof(char));
+	pathName=malloc(MAX_PATH*sizeof(char));
+	
+	reply=FileSelectPopupEx ("","*.tiff;*.png", "*.tiff;*.png", "Save Image as tiff or png", VAL_SAVE_BUTTON, 0, 0,pathName);
+	if (reply==0) {
+		//user cancelled; no saving wanted
+		return err;
+	}
+	
+	//strip extension
+	pathName=strtok(pathName,".");
+	//add .tiff
+	Fmt(filename,"%s<%s.tiff",pathName);   
+	//save image as tiff without overlays
+	err=SaveImage(pathName,image);
+	
+	Fmt(filename,"%s<%s.png",pathName);
+	//save image as png with overlays
+	err=imaqWriteVisionFile(image,filename , NULL); 
+
+	
+//	tif = TIFFOpen(pathName, "w");
+   
+ //   TIFFClose(tif);
+	
+	free(pathName);
+	free(filename);    
+	return err;
+}	
+
+
+
+
 int SaveTiffImage(char* filename,Image* image)
 {
 	int 			err=0;
@@ -800,23 +845,23 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 				break;
 				case DL_Image:
 					//get the image
-					imgDisplay=*(ImageDisplay_type**) dataPacketDataPtr;
-					image=imgDisplay->image;
+					image=*(Image**) dataPacketDataPtr;
+					
 					rawfilename=malloc(MAXCHAR*sizeof(char)); 
 					fullitername=CreateFullIterName(currentiter);
-					switch (imgDisplay->imageType){
-						case Image_Float:
+				//	switch (imgDisplay->imageType){
+				//		case Image_Float:
 							//can't create tiff from float
-							Fmt (rawfilename, "%s<%s\\%s_%s#%d.aipd", ds->rawdatapath,fullitername,sourceVChanName,GetCurrentIterationIndex(currentiter));  
-							SaveImage(rawfilename,image);
-							break;
-						default:
+				//			Fmt (rawfilename, "%s<%s\\%s_%s#%d.aipd", ds->rawdatapath,fullitername,sourceVChanName,GetCurrentIterationIndex(currentiter));  
+				//			SaveImage(rawfilename,image);
+				//			break;
+				//		default:
 							//create tiff
 							Fmt (rawfilename, "%s<%s\\%s_%s#%d.tif", ds->rawdatapath,fullitername,sourceVChanName,GetCurrentIterationIndex(currentiter));  
 							SaveTiffImage(rawfilename,image);
-							break;
+				//			break;
 							
-					}
+				//	}
 					free(rawfilename);
 					free(fullitername); 
 				break;

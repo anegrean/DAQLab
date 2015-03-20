@@ -15,6 +15,8 @@
 #include "NIDisplayEngine.h"
 #include "DisplayEngine.h"
 #include "toolbox.h"
+#include "DataStorage.h"
+
 
 
 //==============================================================================
@@ -312,6 +314,14 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 			
 		case Image_Short:
 			imaqImgType 		= IMAQ_IMAGE_I16; 
+			break;
+			
+		case Image_UInt:
+			imaqImgType 		= IMAQ_IMAGE_SGL;	 //no U32 support in IMAQ, image needs to be displayed as a float
+			break;
+			
+		case Image_Int:
+			imaqImgType 		= IMAQ_IMAGE_SGL;	 //no I32 support in IMAQ  image needs to be displayed as a float 
 			break;
 			
 		case Image_Float:
@@ -703,6 +713,9 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 			switch (wParamLowWord) {
 					
 				case NIDisplayMenu_Save:
+					//save as tiff with and without overlays
+					//popup and remember dir
+					errChk(SaveFromMenu(disp->baseClass.image));
 					
 					break;
 					

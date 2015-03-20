@@ -83,9 +83,9 @@ AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last para
 	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
-	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
-	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 },
-	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
+//	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }
+//	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
 	
 };
 
@@ -1005,7 +1005,7 @@ char* DLVChanName (DAQLabModule_type* mod, TaskControl_type* taskController, cha
 	// add module instance name
 	if (mod) {
 		nullChk( AppendString(&name, mod->instanceName, -1) );
-		nullChk( AppendString(&name, ": ", -1) );
+		nullChk( AppendString(&name, "- ", -1) );
 	}
 	
 	// add task controller name
@@ -1013,7 +1013,7 @@ char* DLVChanName (DAQLabModule_type* mod, TaskControl_type* taskController, cha
 		nullChk( tcName = GetTaskControlName(taskController) );
 		nullChk( AppendString(&name, tcName, -1) );
 		OKfree(tcName);
-		nullChk( AppendString(&name, ": ", -1) );
+		nullChk( AppendString(&name, "- ", -1) );
 	}
 	
 	// add VChan name

@@ -3316,6 +3316,55 @@ static void	discard_ChanSet_AIAO_Voltage_type (ChanSet_type** a)
 	discard_ChanSet_type(a);
 }
 
+
+void AdjustGainOffset(ChanSet_AIAO_Voltage_type* chSetPtr)
+{
+	int 		AIDataTypeIdx;
+	Dev_type*	dev				= chSetPtr->baseClass.device; 
+	double  	maxSignal;
+	
+	GetCtrlIndex(chSetPtr->baseClass.chanPanHndl, AIAOChSet_AIDataType, &AIDataTypeIdx);
+	switch (AIDataTypeIdx) {
+		case AI_UInt:
+			maxSignal=(double)UINT_MAX;
+			chSetPtr->baseClass.gain=maxSignal/(chSetPtr->Vmax-chSetPtr->Vmin);
+			SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_Gain, chSetPtr->baseClass.gain);  
+			chSetPtr->baseClass.offset=maxSignal/2;
+			SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_Offset, chSetPtr->baseClass.offset);  
+			break;
+		case AI_UShort:
+			maxSignal=(double)USHRT_MAX;
+			chSetPtr->baseClass.gain=maxSignal/(chSetPtr->Vmax-chSetPtr->Vmin);
+			SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_Gain, chSetPtr->baseClass.gain);  
+			chSetPtr->baseClass.offset=maxSignal/2;
+			SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_Offset, chSetPtr->baseClass.offset);  
+			break;
+		case AI_UChar:
+			maxSignal=(double)UCHAR_MAX;
+			chSetPtr->baseClass.gain=maxSignal/(chSetPtr->Vmax-chSetPtr->Vmin);
+			SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_Gain, chSetPtr->baseClass.gain);  
+			chSetPtr->baseClass.offset=maxSignal/2;
+			SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_Offset, chSetPtr->baseClass.offset);  
+			break;
+	}
+}
+
+  //sets gain to 1.0 and offset to 0.0
+void ResetGainOffset(ChanSet_AIAO_Voltage_type* chSetPtr)
+{
+	int 		AIDataTypeIdx;
+	Dev_type*	dev				= chSetPtr->baseClass.device; 
+	double  	maxSignal;
+	
+	
+	chSetPtr->baseClass.gain=1.0;
+	SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_Gain, chSetPtr->baseClass.gain);  
+	chSetPtr->baseClass.offset=0.0;
+	SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_Offset, chSetPtr->baseClass.offset);  
+	
+}
+
+
 // AIAO Voltage channel UI callback for setting channel properties
 static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
@@ -3362,14 +3411,21 @@ static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callb
 				//---------------------------
 				// max value
 				chSetPtr->baseClass.ScaleMax = chSetPtr->Vmax; 
-				SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMax, chSetPtr->baseClass.ScaleMax); 
 				SetCtrlAttribute(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMax, ATTR_MAX_VALUE, chSetPtr->Vmax);
 				SetCtrlAttribute(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMax, ATTR_MIN_VALUE, chSetPtr->Vmin);
+				SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMax,chSetPtr->baseClass.ScaleMax ); 		
+				
 				// min value
 				chSetPtr->baseClass.ScaleMin = chSetPtr->Vmin;
-				SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMin, chSetPtr->baseClass.ScaleMin); 
 				SetCtrlAttribute(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMin, ATTR_MAX_VALUE, chSetPtr->Vmax);
 				SetCtrlAttribute(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMin, ATTR_MIN_VALUE, chSetPtr->Vmin);
+				SetCtrlVal(chSetPtr->baseClass.chanPanHndl, AIAOChSet_ScaleMin,  chSetPtr->baseClass.ScaleMin); 
+			
+				//adjust gain and offset for int, short and char for full range
+				AdjustGainOffset(chSetPtr);
+				
+				
+						
 							
 			} else {
 				chSetPtr->Vmax = chSetPtr->aoChanAttr->Vrngs->high[rangeIdx];
@@ -3392,24 +3448,29 @@ static int ChanSetAIAOVoltage_CB (int panel, int control, int event, void *callb
 					
 				case AI_Double:
 					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_Double);
+					ResetGainOffset(chSetPtr); 
 					break;
 					
 				case AI_Float:
 					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_Float);
+					ResetGainOffset(chSetPtr); 
 					break;
 					
 				case AI_UInt:
 					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_UInt);
+					AdjustGainOffset(chSetPtr); 
 					showScaleControls = TRUE;
 					break;
 					
 				case AI_UShort:
 					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_UShort);
+					AdjustGainOffset(chSetPtr); 
 					showScaleControls = TRUE;
 					break;
 					
 				case AI_UChar:
 					SetSourceVChanDataType(chSetPtr->baseClass.srcVChan, DL_Waveform_UChar);
+					AdjustGainOffset(chSetPtr); 
 					showScaleControls = TRUE;
 					break;
 			}
@@ -9765,80 +9826,125 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 				
 			break;
 		
-			/*
+			
 		case DL_Waveform_UInt:
+			
+			
+			//----------------------
+			// process incoming data
+			//----------------------
 			
 			nullChk( waveformData_uInt32 = calloc(nItegratedSamples, sizeof(uInt32)) );
 			
-			// calculate scaling factor to transform double to uInt32 given min & max values
-			maxSignal = (double)UINT_MAX;
-			scalingFactor = maxSignal/(AIChSet->ScaleMax - AIChSet->ScaleMin);
 			
+				// add data to the integration buffer
+			memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
+			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
+			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
 			
-			for (int i = 0; i < nItegratedSamples; i++) {
-				// scale data
-				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nItegratedSamples + i) - AIChSet->ScaleMin);
-				// apply limits and transform data
-				if (scaledSignal < 0) waveformData_uInt32[i] = 0;
-				else
-					if (scaledSignal > maxSignal) waveformData_uInt32[i] = UINT_MAX;
-					else
-						waveformData_uInt32[i] = (uInt32) scaledSignal;
-			}
+			if (AIChSet->integrateFlag)
+				// integrate
+				for (i = 0; i < integration; i++) {
+					k = i;
+					for (j = 0; j < nItegratedSamples; j++) {
+						waveformData_uInt32[j] += (uInt32) (integrationBuffer[k] * AIChSet->gain + AIChSet->offset);
+						k += integration;
+					}							   
+				}
+			else
+				// jump over oversampled samples
+				for (i = 0; i < nItegratedSamples; i++)
+					waveformData_uInt32[i] = (uInt32) (integrationBuffer[i*integration] * AIChSet->gain + AIChSet->offset);
 				
-			nullChk( waveform = init_Waveform_type(Waveform_UInt, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_uInt32) );
+			
+			// shift unprocessed samples from the end of the buffer to its beginning
+			if (nRemainingSamples)
+				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(uInt32));
+			
+			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
+			
+			nullChk( waveform = init_Waveform_type(Waveform_UInt, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt32) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UInt, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
-				
+			
+			
 			break;
 				
 		case DL_Waveform_UShort:
-				
-			// calculate scaling factor to transform double to uInt16 given min & max values
-			maxSignal = (double)USHRT_MAX;
-			scalingFactor = maxSignal/(AIChSet->ScaleMax - AIChSet->ScaleMin);
-				
+			
+				//----------------------
+			// process incoming data
+			//----------------------
+			
 			nullChk( waveformData_uInt16 = calloc(nItegratedSamples, sizeof(uInt16)) );
+			
+			
+				// add data to the integration buffer
+			memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
+			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
+			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
+			
+			if (AIChSet->integrateFlag)
+				// integrate
+				for (i = 0; i < integration; i++) {
+					k = i;
+					for (j = 0; j < nItegratedSamples; j++) {
+						waveformData_uInt16[j] += (uInt16) (integrationBuffer[k] * AIChSet->gain + AIChSet->offset);
+						k += integration;
+					}							   
+				}
+			else
+				// jump over oversampled samples
+				for (i = 0; i < nItegratedSamples; i++)
+					waveformData_uInt16[i] = (uInt16) (integrationBuffer[i*integration] * AIChSet->gain + AIChSet->offset);
 				
-			for (int i = 0; i < nItegratedSamples; i++) {
-				// scale data
-				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nItegratedSamples + i) - AIChSet->ScaleMin);
-				// apply limits and transform data
-				if (scaledSignal < 0) waveformData_uInt16[i] = 0;
-				else
-					if (scaledSignal > maxSignal) waveformData_uInt16[i] = USHRT_MAX;
-					else
-						waveformData_uInt16[i] = (uInt16) scaledSignal;
-			}
-				
-			nullChk( waveform = init_Waveform_type(Waveform_UShort, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_uInt16) );
+			
+			// shift unprocessed samples from the end of the buffer to its beginning
+			if (nRemainingSamples)
+				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(uInt16));
+			
+			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
+			
+			nullChk( waveform = init_Waveform_type(Waveform_UShort, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt16) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
-				
+				 
 			break;
 				
 		case DL_Waveform_UChar:
 				
-			// calculate scaling factor to transform double to uInt8 given min & max values
-			maxSignal = (double)UCHAR_MAX;
-			scalingFactor = maxSignal/(AIChSet->ScaleMax - AIChSet->ScaleMin);
 				
 			nullChk( waveformData_uInt8 = calloc(nItegratedSamples, sizeof(uInt8)) );
 				
-			for (int i = 0; i < nItegratedSamples; i++) {
-				// scale data
-				scaledSignal= scalingFactor * (*(AIReadBuffer + chIdx * nItegratedSamples + i) - AIChSet->ScaleMin);
-				// apply limits and transform data
-				if (scaledSignal < 0) waveformData_uInt8[i] = 0;
-				else
-					if (scaledSignal > maxSignal) waveformData_uInt8[i] = UCHAR_MAX;
-					else
-						waveformData_uInt8[i] = (uInt8) scaledSignal;
-			}
+					// add data to the integration buffer
+			memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
+			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
+			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
+			
+			if (AIChSet->integrateFlag)
+				// integrate
+				for (i = 0; i < integration; i++) {
+					k = i;
+					for (j = 0; j < nItegratedSamples; j++) {
+						waveformData_uInt8[j] += (uInt8) (integrationBuffer[k] * AIChSet->gain + AIChSet->offset);
+						k += integration;
+					}							   
+				}
+			else
+				// jump over oversampled samples
+				for (i = 0; i < nItegratedSamples; i++)
+					waveformData_uInt8[i] = (uInt8) (integrationBuffer[i*integration] * AIChSet->gain + AIChSet->offset);
 				
-			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate/AIChSet->integrate, nItegratedSamples, (void**)&waveformData_uInt8) );
+			
+			// shift unprocessed samples from the end of the buffer to its beginning
+			if (nRemainingSamples)
+				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(uInt8));
+			
+			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
+				
+			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt8) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
 				
 			break;
-		*/
+		
 		
 		default:
 			
@@ -10418,8 +10524,9 @@ SkipPacket:
 			break;
 		}
 	
-	DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
-		
+	if (stopAOTaskFlag==FALSE) {
+		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
+	}
 	if (stopAOTaskFlag && (!data->writeBlocksLeftToWrite--)) {
 		int*	nActiveTasksPtr = NULL;
 		

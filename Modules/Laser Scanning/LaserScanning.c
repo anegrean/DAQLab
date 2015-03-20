@@ -63,7 +63,7 @@
 
 // Scan engine settings
 #define Max_NewScanEngine_NameLength						50
-#define Allowed_Detector_Data_Types							{DL_Waveform_UChar, DL_Waveform_UShort, DL_Waveform_Short, DL_Waveform_Float}
+#define Allowed_Detector_Data_Types							{DL_Waveform_UChar, DL_Waveform_UShort, DL_Waveform_Short, DL_Waveform_UInt,DL_Waveform_Float}
 
 // Non-resonant galvo calibration parameters
 #define	CALIBRATION_DATA_TO_STRING							"%s<%*f[j1] "
@@ -4403,6 +4403,14 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (ScanChan_type* s
 			pixelSizeBytes 		= sizeof(unsigned short);
 			break;
 			
+		case DL_Waveform_UInt:
+			pixelSizeBytes 		= sizeof(unsigned int);
+			break;
+			
+		case DL_Waveform_Int:
+			pixelSizeBytes 		= sizeof(int);
+			break;
+			
 		case DL_Waveform_Short:
 			pixelSizeBytes 		= sizeof(short); 
 			break;
@@ -5771,7 +5779,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	DisplayEngine_type* 		displayEngine 		= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
 	RectRasterScanSet_type*		imgSettings			= NULL;
 	DataPacket_type* 			imagePacket         = NULL;
-	ImageDisplay_type*			sendingDisplay		= NULL;	  
+	ImageDisplay_type*			sendingDisplay		= NULL;	
+	Image*						sendimage			= NULL;
 	
 	do {
 		
@@ -5809,6 +5818,36 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 								*((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
 						else
 							memcpy((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (short*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(short));
+					
+						break;
+						
+					case DL_Waveform_UInt:
+						
+						if (imgBuffer->flipRow)
+							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
+								*((unsigned int*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned int*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
+						else
+							memcpy((unsigned int*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (unsigned int*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(unsigned int));
+					
+						break;
+						
+					case DL_Waveform_Int:
+						
+						if (imgBuffer->flipRow)
+							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
+								*((int*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((int*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
+						else
+							memcpy((int*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (int*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(int));
+					
+						break;
+						
+					case DL_Waveform_Double:
+					
+						if (imgBuffer->flipRow)
+							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
+								*((double*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((double*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
+						else
+							memcpy((double*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (double*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(double));
 					
 						break;
 						
@@ -5859,6 +5898,21 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					
 					memmove((short*)imgBuffer->tmpPixels, (short*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(short));
 					break;
+				
+				case DL_Waveform_UInt:
+					
+					memmove((unsigned int*)imgBuffer->tmpPixels, (unsigned int*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(unsigned int));
+					break;
+					
+				case DL_Waveform_Int:
+					
+					memmove((int*)imgBuffer->tmpPixels, (int*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(int));
+					break;
+					
+				case DL_Waveform_Double:
+					
+					memmove((double*)imgBuffer->tmpPixels, (double*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(double));
+					break;
 					
 				case DL_Waveform_Float:
 					
@@ -5894,7 +5948,19 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					case DL_Waveform_Short:
 						imageType = Image_Short;    
 						break;
+						
+					case DL_Waveform_UInt:
+						imageType = Image_UInt;    
+						break;
+						
+					case DL_Waveform_Int:
+						imageType = Image_Int;    
+						break;
 			
+					case DL_Waveform_Double:
+						imageType = Image_Float;     
+						break;	
+					
 					case DL_Waveform_Float:
 						imageType = Image_Float;     
 						break;
@@ -5918,22 +5984,54 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, imgBuffer->imagePixels, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType,
 														    rectRaster->scanSettings.pixSize, 0, 0, 0) ); // TEMPORARY: X, Y & Z coordinates set to 0 for now
 				 
-				  /*
+				  
+				//make a copy
+				ImageType		imaqImgType;
 				
-				//get image from display engine
-				//sendingDisplay=(*displayEngine->getImageDisplayFptr) (imgBuffer->scanChan->imgDisplay, NULL, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType); 
-				//make a copy 
-				imgBuffer->scanChan->imgDisplay->image
-				currentiter=GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);
+				switch (imgBuffer->scanChan->imgDisplay->imageType) {
+					case Image_UChar:
+						imaqImgType 		= IMAQ_IMAGE_U8;
+						break;
+		
+					case Image_UShort:
+						imaqImgType 		= IMAQ_IMAGE_U16;
+						break;
+			
+					case Image_Short:
+						imaqImgType 		= IMAQ_IMAGE_I16; 
+						break;
+			
+					case Image_UInt:
+						imaqImgType 		= IMAQ_IMAGE_SGL;	 //no U32 support in IMAQ, image needs to be displayed as a float
+						break;
+			
+					case Image_Int:
+						imaqImgType 		= IMAQ_IMAGE_SGL;	 //no I32 support in IMAQ  image needs to be displayed as a float 
+						break;
+			
+					case Image_Float:
+						imaqImgType 		= IMAQ_IMAGE_SGL; 
+						break;
+				}
+				sendimage=imaqCreateImage(imaqImgType, 0); 
+				errChk(imaqDuplicate(sendimage, imgBuffer->scanChan->imgDisplay->image)); 
+				if (!sendimage){
+				//	test
+					break;
+				}
+				
+
+			
+				Iterator_type* currentiter=GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);
 				//test
 				iterindex=GetCurrentIterationIndex(currentiter);
 				iterindex++;
 				SetCurrentIterationIndex(currentiter,iterindex);
 			
-				nullChk( imagePacket	= init_DataPacket_type(DL_Image, &sendingDisplay->, currentiter , (DiscardFptr_type) displayEngine->imageDiscardFptr));
+				nullChk( imagePacket	= init_DataPacket_type(DL_Image, &sendimage, currentiter , (DiscardFptr_type) displayEngine->imageDiscardFptr));
 				// send data packet with image
 				errChk( SendDataPacket(rectRaster->baseClass.VChanCompositeImage, &imagePacket, 0, &errMsg) );
-				     */
+				     
 				
 				
 				// TEMPORARY: just complete iteration, and use only one channel
@@ -6016,6 +6114,12 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				
 				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(short)) );
 				memcpy((short*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (short*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(short));
+				break;
+				
+			case DL_Waveform_UInt:
+				
+				nullChk( imgBuffer->tmpPixels = realloc(imgBuffer->tmpPixels, (imgBuffer->nTmpPixels + nPixels - pixelDataIdx) * sizeof(unsigned int)) );
+				memcpy((unsigned int*)imgBuffer->tmpPixels + imgBuffer->nTmpPixels, (unsigned int*)pixelData + pixelDataIdx, (nPixels - pixelDataIdx) * sizeof(unsigned int));
 				break;
 				
 			case DL_Waveform_Float:
@@ -7791,6 +7895,14 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 			
 					case DL_Waveform_Short:
 						imageType = Image_Short;    
+						break;
+						
+					case DL_Waveform_UInt:
+						imageType = Image_UInt;    
+						break;
+						
+					case DL_Waveform_Int:
+						imageType = Image_Int;    
 						break;
 			
 					case DL_Waveform_Float:

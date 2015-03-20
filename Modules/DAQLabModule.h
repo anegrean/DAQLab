@@ -21,6 +21,7 @@
 #include "cvidef.h"
 #include <toolbox.h>
 #include "TaskController.h"
+#include "ActiveXML.h"	   //?
 
 //==============================================================================
 // Types

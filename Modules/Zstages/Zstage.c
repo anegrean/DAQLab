@@ -25,7 +25,7 @@
 
 	// Zstage UI resource
 
-#define MOD_Zstage_UI_ZStage 		"./Modules/Zstages/UI_ZStage.uir"
+#define MOD_Zstage_UI 				"./Modules/Zstages/UI_ZStage.uir"
 
 	// maximum entry length in characters for reference positions
 #define MAX_REF_POS_LENGTH			50
@@ -90,6 +90,7 @@ static void CVICALLBACK 			SettingsMenu_CB 				(int menuBar, int menuItem, void 
 // ZStage Task Controller Callbacks
 //-----------------------------------------
 
+/*
 static int							ConfigureTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int							UnconfigureTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void							IterateTC						(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
@@ -100,6 +101,7 @@ static int							DoneTC							(TaskControl_type* taskControl, BOOL const* abortF
 static int							StoppedTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void				 			ErrorTC 						(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 static int							EventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
+*/
 
 
 //==============================================================================
@@ -127,12 +129,7 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	initalloc_DAQLabModule(&zstage->baseClass, className, instanceName, workspacePanHndl);
 	
 	// initialize Task Controller
-	//
-	// TaskControl_type* tc = init_TaskControl_type (instanceName, zstage, ConfigureTC, IterateTC, StartTC, ResetTC,
-	//		    			  DoneTC, StoppedTC, NULL, EventHandler,Zstage_ErrorTC); 
-	//
-	// if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ztage); return NULL;}
-	//------------------------------------------------------------
+	zstage->taskController 			= NULL;
 	
 	//---------------------------
 	// Parent Level 0: DAQLabModule_type 
@@ -149,6 +146,7 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	zstage->baseClass.Discard 		= discard_Zstage;
 	zstage->baseClass.Load			= ZStage_Load;
 	zstage->baseClass.LoadCfg		= ZStage_LoadCfg;
+	zstage->baseClass.SaveCfg		= ZStage_SaveCfg;
 	zstage->baseClass.DisplayPanels	= DisplayPanels;
 	
 	//---------------------------
@@ -273,7 +271,7 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	char			stepsizeName[50];
 	
 	// load panel resources
-	zstage->controlPanHndl = LoadPanel(workspacePanHndl, MOD_Zstage_UI_ZStage, ZStagePan);
+	zstage->controlPanHndl = LoadPanel(workspacePanHndl, MOD_Zstage_UI, ZStagePan);
 	
 	// connect module data and user interface callbackFn to all direct controls in the panel
 	SetCtrlsInPanCBInfo(mod, ((Zstage_type*)mod)->uiCtrlsCB, zstage->controlPanHndl);
@@ -422,9 +420,9 @@ int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 								 			{"MaxPositionLimit", BasicData_Double, zstage->zMaximumLimit},
 											{"LowVelocity", BasicData_Double, zstage->lowVelocity},
 											{"MidVelocity", BasicData_Double, zstage->midVelocity},
-											{"HighVelocity", BasicData_Double, zstage->highVelocity}
-																									};
-	//--------------------------------------------------------------																								};
+											{"HighVelocity", BasicData_Double, zstage->highVelocity} };
+											
+	//--------------------------------------------------------------							
 	// get safety limits and velocities	
 	//--------------------------------------------------------------
 	DLGetXMLElementAttributes(moduleElement, zStageAttr, NumElem(zStageAttr));
@@ -583,9 +581,6 @@ static int UpdatePositionDisplay	(Zstage_type* zstage)
 	return error;
 }
 
-/// HIPAR stepSize/ in [mm]
-/// HIPAR startAbsPos/ in [mm]
-/// HIPAR endRelPos/ in [mm]
 static int UpdateZSteps (Zstage_type* zstage)
 {
 	double		nsteps;
@@ -640,9 +635,6 @@ static void	DimWhenRunning (Zstage_type* zstage, BOOL dimmed)
 	for (int i = 0; i < NumElem(UIZStageCtrls); i++) {
 		SetCtrlAttribute(zstage->controlPanHndl, UIZStageCtrls[i], ATTR_DIMMED, dimmed);
 	}
-	
-	
-	
 }
 
 //==============================================================================
@@ -1072,7 +1064,7 @@ static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callba
 	
 	// load settings panel resources if not already loaded
 	if (!zstage->setPanHndl)
-		zstage->setPanHndl = LoadPanel(parentPanHndl, MOD_Zstage_UI_ZStage, ZSetPan);
+		zstage->setPanHndl = LoadPanel(parentPanHndl, MOD_Zstage_UI, ZSetPan);
 	// add callback data and function
 	SetCtrlsInPanCBInfo(zstage, SettingsCtrls_CB, zstage->setPanHndl);
 	
@@ -1123,6 +1115,7 @@ static BOOL ValidateRefPosName (char inputStr[], void* dataPtr)
 // ZStage Task Controller Callbacks
 //-----------------------------------------
 
+/*
 static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
@@ -1192,4 +1185,4 @@ static int EventHandler (TaskControl_type* taskControl, TaskStates_type taskStat
 	return 0;
 }
 
-
+*/

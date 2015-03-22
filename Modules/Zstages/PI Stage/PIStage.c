@@ -118,8 +118,8 @@ static void							IterateTC							(TaskControl_type* taskControl, BOOL const* ab
 static int							StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int							DoneTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int							StoppedTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int							TaskTreeStatus	 					(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
-static int				 			ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							TaskTreeStatus						(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int				 			ResetTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void				 			ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 static int							ZStageEventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
 
@@ -228,7 +228,7 @@ void discard_PIStage (DAQLabModule_type** mod)
 	discard_Zstage (mod);
 }
 
-static MoveCommand_type*	init_MoveCommand_type (Zstage_move_type moveType, double moveVal)
+static MoveCommand_type* init_MoveCommand_type (Zstage_move_type moveType, double moveVal)
 {
 	MoveCommand_type* a = malloc(sizeof(MoveCommand_type));
 	if (!a) return NULL;
@@ -267,15 +267,17 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 
 static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement)
 {
+	PIStage_type* 	PIStage 	= (PIStage_type*) mod;  
+	
 	//--------------------------------------------------------
 	// Saving PI Stage specific parameters
 	//--------------------------------------------------------
-	//PIStage_type* 	PIStage 	= (PIStage_type*) mod;  
 	
 	
 	//---------------------------------------------------------
 	// Saving Z Stage generic paramenters
 	//---------------------------------------------------------
+	
 	ZStage_SaveCfg (mod, xmlDOM, moduleElement);
 	
 	return 0;
@@ -283,7 +285,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
 {
-	//PIStage_type* 	PIzstage	= (PIStage_type*) mod;
+	PIStage_type* 	PIStage	= (PIStage_type*) mod;
 	
 	//---------------------------------------------------------
 	// Loading PI Stage specific settings

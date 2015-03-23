@@ -39,14 +39,6 @@ typedef enum {
 
 typedef enum {
 	
-	XYSTAGE_LED_IDLE,
-	XYSTAGE_LED_MOVING,
-	XYSTAGE_LED_ERROR
-	
-} StageLEDStates;
-
-typedef enum {
-	
 	XYSTAGE_X_AXIS,
 	XYSTAGE_Y_AXIS,
 	
@@ -57,20 +49,24 @@ typedef enum {
 
 // Callback function types supplied by child classes
 
+// moveVal in [mm]
 typedef int (* MoveFptr_type) 				(XYStage_type* stage, StageMoveTypes moveType, StageAxes axis, double moveVal, char** errorInfo);
 
 typedef int	(* UseJoystickFptr_type)		(XYStage_type* stage, BOOL useJoystick, char** errorInfo);
 
 typedef int	(* StopFptr_type)				(XYStage_type* stage, char** errorInfo);
 
+// xNegativeLimit, xPositiveLimit, yNegativeLimit, yPositiveLimit in [mm]
 typedef int	(* GetLimitsFptr_type)			(XYStage_type* stage, double* xNegativeLimit, double* xPositiveLimit, double* yNegativeLimit, double* yPositiveLimit, char** errorInfo);
 
+// xNegativeLimit, xPositiveLimit, yNegativeLimit, yPositiveLimit in [mm]
 typedef int	(* SetLimitsFptr_type)			(XYStage_type* stage, double xNegativeLimit, double xPositiveLimit, double yNegativeLimit, double yPositiveLimit, char** errorInfo);
 
 typedef int	(* GetVelocityFptr_type)		(XYStage_type* stage, double* velocity, char** errorInfo);
 
 typedef int	(* SetVelocityFptr_type)		(XYStage_type* stage, double velocity, char** errorInfo);
 
+// xAbsPos and yAbsPos in [mm]
 typedef int	(* GetAbsPositionFptr_type)		(XYStage_type* stage, double* xAbsPos, double* yAbsPos, char** errorInfo);
 
 struct XYStage {
@@ -187,12 +183,6 @@ int					XYStage_LoadCfg					(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement
 //----------------------------------------------------------------------------------------------
 // Generic XY stage operation
 //----------------------------------------------------------------------------------------------
-
-	// Changed stage LED status
-void	 			XYStage_ChangeLEDStatus			(XYStage_type* stage, StageLEDStates state);
-
-	// Updates position display of stage from structure data
-void				XYStage_UpdatePositionDisplay	(XYStage_type* stage);
 
 	// Updates number of steps between an absolute start and relative end position given step size. If necessary it rounds up the end position 
 	// such that between the start and end positions there is an integer multiple of step sizes. These parameters are written to the structure data.

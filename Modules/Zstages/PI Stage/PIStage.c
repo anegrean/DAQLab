@@ -101,12 +101,13 @@ static int							InitHardware 						(PIStage_type* PIstage);
 static int							GetHWStageLimits					(Zstage_type* zstage, double* minimumLimit, double* maximumLimit);
 
 static int							SetHWStageLimits					(Zstage_type* zstage, double minimumLimit, double maximumLimit);
-//-----------------
-// module commands
-//-----------------
+
+//---------------------------------
+// module task controller commands
+//---------------------------------
+
 static MoveCommand_type*			init_MoveCommand_type				(Zstage_move_type moveType, double moveVal);
-static void							discard_MoveCommand_type			(MoveCommand_type** a);
-static void							dispose_MoveCommand_EventInfo		(void* eventInfo);
+static void							discard_MoveCommand_type			(MoveCommand_type** moveCommandPtr);
 
 
 //-----------------------------------------
@@ -239,19 +240,12 @@ static MoveCommand_type* init_MoveCommand_type (Zstage_move_type moveType, doubl
 	return a;
 }
 
-static void	discard_MoveCommand_type	(MoveCommand_type** a)
+static void	discard_MoveCommand_type (MoveCommand_type** moveCommandPtr)
 {
-	if (!*a) return;
-	OKfree(*a);
-	return;
+	if (!*moveCommandPtr) return;
+	
+	OKfree(*moveCommandPtr);
 }
-
-static void	dispose_MoveCommand_EventInfo (void* eventInfo)
-{
-	MoveCommand_type* command = eventInfo;
-	discard_MoveCommand_type(&command);
-}
-
 
 /// HIFN Loads PIStage motorized stage specific resources. 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl)
@@ -303,8 +297,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 /// HIFN Moves a motorized stage 
 static int Move (Zstage_type* zstage, Zstage_move_type moveType, double moveVal)
 {
-	return TaskControlEvent(zstage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, 
-					 init_MoveCommand_type(moveType, moveVal), dispose_MoveCommand_EventInfo); 
+	return TaskControlEvent(zstage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(moveType, moveVal), (DiscardFptr_type)discard_MoveCommand_type); 
 }
 
 static int UseJoystick (Zstage_type* zstage, BOOL useJoystick)

@@ -54,6 +54,19 @@ typedef struct {
 	double	y;			// position in [mm]
 } RefPosition_type;
 
+typedef struct {
+	StageMoveTypes		moveType;
+	StageAxes			axis;
+	double				moveVal;
+} MoveCommand_type;
+
+typedef enum {
+	
+	XYSTAGE_LED_IDLE,
+	XYSTAGE_LED_MOVING,
+	XYSTAGE_LED_ERROR
+	
+} StageLEDStates;
 
 
 //==============================================================================
@@ -78,6 +91,11 @@ static BOOL 							ValidateRefPosName					(char inputStr[], void* dataPtr);
 
 static int								DisplayPanels 						(DAQLabModule_type* mod, BOOL visibleFlag); 
 
+static void 							ChangeLEDStatus 					(XYStage_type* stage, StageLEDStates state); 
+
+static void 							UpdatePositionDisplay 				(XYStage_type* stage);
+
+
 //-----------------------------------------
 // XY Stage Task Controller Callbacks
 //-----------------------------------------
@@ -92,6 +110,12 @@ static int				 				ResetTC 							(TaskControl_type* taskControl, BOOL const* ab
 static void				 				ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 static int								StageEventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
 
+//------------------------------------
+// task controller module commands
+//------------------------------------
+
+static MoveCommand_type*				init_MoveCommand_type				(StageMoveTypes moveType, StageAxes axis, double moveVal);
+static void								discard_MoveCommand_type			(MoveCommand_type** moveCommandPtr);
 
 
 //==============================================================================
@@ -417,7 +441,7 @@ int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 		for (size_t i = 1; i <= nRefPos; i++) {
 			refPosPtr = ListGetPtrToItem(stage->xyRefPos, i);
 			// add reference position to listbox
-			Fmt(refPosDisplayItem, REF_POS_LABEL_FORMAT, (*refPosPtr)->name, POS_DISPLAY_PRECISION, (*refPosPtr)->x * 1000, (*refPosPtr)->y * 1000);  	// display in [um]
+			Fmt(refPosDisplayItem, REF_POS_LABEL_FORMAT, (*refPosPtr)->name, POS_DISPLAY_PRECISION, (*refPosPtr)->x * 1000, POS_DISPLAY_PRECISION, (*refPosPtr)->y * 1000);  	// display in [um]
 			InsertListItem(stage->controlPanHndl, StagePan_RefPosList, -1, refPosDisplayItem, 0);
 		}
 	} else
@@ -573,7 +597,7 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 // Generic XY stage operation
 //----------------------------------------------------------------------------------------------
 
-void XYStage_ChangeLEDStatus (XYStage_type* stage, StageLEDStates state)
+static void ChangeLEDStatus (XYStage_type* stage, StageLEDStates state)
 {
 	switch (state) {
 			
@@ -597,7 +621,7 @@ void XYStage_ChangeLEDStatus (XYStage_type* stage, StageLEDStates state)
 	
 }
 
-void XYStage_UpdatePositionDisplay (XYStage_type* stage)
+static void UpdatePositionDisplay (XYStage_type* stage)
 {
 	// display current position
 	SetCtrlVal(stage->controlPanHndl, StagePan_XAbsPos, stage->xPos * 1000);  	// convert from [mm] to [um] 
@@ -700,9 +724,9 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 	double 						moveYAbsPos			= 0;   					
 	double						moveYRelPos			= 0; 
 	char						refPosDisplayItem[MAX_REF_POS_LENGTH + 100];
-	char*						errMsg				= NULL;
 	int							error				= 0;
-	
+	char*						errMsg				= NULL;
+
 	switch (event) {
 			
 		case EVENT_COMMIT:
@@ -713,6 +737,13 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 			moveXAbsPos /= 1000;								// convert from [um] to [mm]
 			GetCtrlVal(panel, StagePan_XRelPos, &moveXRelPos);  // get value in [um]
 			moveXRelPos /= 1000;								// convert from [um] to [mm]
+			
+			GetCtrlVal(panel, StagePan_YStepSize, &yStepSize);  // get value in [um]
+			yStepSize /= 1000;									// convert from [um] to [mm]
+			GetCtrlVal(panel, StagePan_YAbsPos, &moveYAbsPos);  // get value in [um]
+			moveYAbsPos /= 1000;								// convert from [um] to [mm]
+			GetCtrlVal(panel, StagePan_YRelPos, &moveYRelPos);  // get value in [um]
+			moveYRelPos /= 1000;								// convert from [um] to [mm]
 			
 			// revert direction if needed
 			if (stage->reverseXAxis) 
@@ -730,29 +761,25 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 				case StagePan_MoveXForward:
 					
 					// move X axis in the positive direction if direction is positive, relative to current position with selected step size
-					if (stage->Move)
-						errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize, &errMsg) );
+					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_MoveXBackward:
 					
 					// move X axis in the negative direction if direction is positive, relative to current position with selected step size
-					if (stage->Move)
-						errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize, &errMsg) );
+					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_MoveYRight:
 					
 					// move Y axis in the positive direction if direction is positive, relative to current position with selected step size
-					if (stage->Move)
-						errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize, &errMsg) );
+					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_MoveYLeft:
 					
 					// move Y axis in the negative direction if direction is positive, relative to current position with selected step size
-					if (stage->Move)
-						errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize, &errMsg) );
+					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_Stop:
@@ -765,29 +792,25 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 				case StagePan_XAbsPos:
 					
 					// move to X absolute position with selected step size
-					if (stage->Move)
-						errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, moveXAbsPos, &errMsg) );
+					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, moveXAbsPos), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_YAbsPos:
 					
 					// move to Y absolute position with selected step size
-					if (stage->Move)
-						errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, moveYAbsPos, &errMsg) );
+					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, moveYAbsPos), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_XRelPos:
 					
 					// move X axis relative to current position
-					if (stage->Move)
-						errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, moveXRelPos, &errMsg) );
+					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, moveXRelPos), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_YRelPos:
 					
 					// move Y axis relative to current position
-					if (stage->Move)
-						errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, moveYRelPos, &errMsg) );
+					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, moveYRelPos), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_StartXAbsPos:
@@ -818,7 +841,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					SetCtrlAttribute(panel, StagePan_RefPosList, ATTR_DIMMED, 0);
 					
 					// add reference position to listbox
-					Fmt(refPosDisplayItem, REF_POS_LABEL_FORMAT, newRefPosName, POS_DISPLAY_PRECISION, moveXAbsPos * 1000, moveYAbsPos * 1000);  		// display in [um]
+					Fmt(refPosDisplayItem, REF_POS_LABEL_FORMAT, newRefPosName, POS_DISPLAY_PRECISION, moveXAbsPos * 1000, POS_DISPLAY_PRECISION, moveYAbsPos * 1000);  		// display in [um]
 					OKfree(newRefPosName);
 					InsertListItem(panel, StagePan_RefPosList, -1, refPosDisplayItem, 0); 
 					
@@ -915,12 +938,10 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					refPosPtr = ListGetPtrToItem(stage->xyRefPos, refPosIdx + 1);
 					
 					// move X axis to reference position
-					if (stage->Move)
-						errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, (*refPosPtr)->x, &errMsg) );
+					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, (*refPosPtr)->x), (DiscardFptr_type)discard_MoveCommand_type); 
 					
 					// move Y axis to reference position
-					if (stage->Move)
-						errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, (*refPosPtr)->y, &errMsg) );
+					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, (*refPosPtr)->y), (DiscardFptr_type)discard_MoveCommand_type); 
 					
 					break;
 			}
@@ -939,7 +960,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					(*refPosPtr)->x = stage->xPos;
 					(*refPosPtr)->y = stage->yPos;
 					// update reference position label
-					Fmt(refPosDisplayItem, REF_POS_LABEL_FORMAT, (*refPosPtr)->name, POS_DISPLAY_PRECISION, stage->xPos * 1000, stage->yPos * 1000);    // display in [um]
+					Fmt(refPosDisplayItem, REF_POS_LABEL_FORMAT, (*refPosPtr)->name, POS_DISPLAY_PRECISION, stage->xPos * 1000, POS_DISPLAY_PRECISION, stage->yPos * 1000);    // display in [um]
 					// store listbox position value in [mm] 
 					ReplaceListItem(panel, StagePan_RefPosList, refPosIdx, refPosDisplayItem, 0); 			
 					break;
@@ -1000,16 +1021,14 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							
 							SetCtrlVal(panel, control, (stage->xPos + xDirection * xStepSize) * 1000);	// convert back to [um]
 							// move relative to current position
-							if (stage->Move)
-								errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize, &errMsg) );
+							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, (stage->xPos - xDirection * xStepSize) * 1000);	// convert back to [um] 
 							// move relative to current position
-							if (stage->Move)
-								errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize, &errMsg) );
+							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 					}
@@ -1023,16 +1042,14 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							
 							SetCtrlVal(panel, control, (stage->yPos + yDirection * yStepSize) * 1000);	// convert back to [um]
 							// move relative to current position
-							if (stage->Move)
-								errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize, &errMsg) );
+							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, (stage->yPos - yDirection * yStepSize) * 1000);	// convert back to [um] 
 							// move relative to current position
-							if (stage->Move)
-								errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize, &errMsg) );
+							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 					}
@@ -1046,16 +1063,14 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							
 							SetCtrlVal(panel, control, xDirection * xStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							if (stage->Move)
-								errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize, &errMsg) );
+							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, -xDirection * xStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							if (stage->Move)
-								errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize, &errMsg) );
+							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					}
 					break;
@@ -1068,16 +1083,14 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							
 							SetCtrlVal(panel, control, yDirection * yStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							if (stage->Move)
-								errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize, &errMsg) );
+							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, -yDirection * yStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							if (stage->Move)
-								errChk( (*stage->Move)	(stage, XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize, &errMsg) );
+							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					}
 					break;
@@ -1396,10 +1409,88 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 
 static void ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[])
 {
-	
+	DLMsg(errorMsg, 1);
 }
 
 static int StageEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
+	MoveCommand_type*	moveCommand = eventData;
+	XYStage_type*		stage		= GetTaskControlModuleData(taskControl);
+	int					error		= 0;
+	
+	ChangeLEDStatus(stage, XYSTAGE_LED_MOVING);
+	
+	// move stage
+	if (stage->Move)
+		errChk( (*stage->Move)	(stage, moveCommand->moveType, moveCommand->axis, moveCommand->moveVal, errorInfo) );
+	
+	// movement assumed to be complete, check position if method given
+	if (stage->GetAbsPosition)
+		errChk( (*stage->GetAbsPosition)	(stage, &stage->xPos, &stage->yPos, errorInfo) );
+	else
+		switch (moveCommand->moveType) {
+			
+			case XYSTAGE_MOVE_REL:
+				
+				switch (moveCommand->axis) {
+						
+					case XYSTAGE_X_AXIS:
+						
+						stage->xPos += moveCommand->moveVal;  
+						break;
+						
+					case XYSTAGE_Y_AXIS:
+						
+						stage->yPos += moveCommand->moveVal;  
+						break;
+				}
+				break;
+				
+			case XYSTAGE_MOVE_ABS:
+				
+				switch (moveCommand->axis) {
+						
+					case XYSTAGE_X_AXIS:
+						
+						stage->xPos = moveCommand->moveVal;
+						break;
+						
+					case XYSTAGE_Y_AXIS:
+						
+						stage->yPos = moveCommand->moveVal;
+						break;
+				}
+				break;
+		}
+		
+	
+	ChangeLEDStatus(stage, XYSTAGE_LED_IDLE);
+	UpdatePositionDisplay(stage);
+	
 	return 0;
+	
+Error:
+	
+	ChangeLEDStatus(stage, XYSTAGE_LED_ERROR);
+	
+	return error;
+}
+
+static MoveCommand_type* init_MoveCommand_type (StageMoveTypes moveType, StageAxes axis, double moveVal)
+{
+	MoveCommand_type* moveCommand = malloc(sizeof(MoveCommand_type));
+	if (!moveCommand) return NULL;
+	
+	moveCommand->moveType 	= moveType;
+	moveCommand->axis		= axis;
+	moveCommand->moveVal	= moveVal;
+	
+	return moveCommand;
+}
+
+static void discard_MoveCommand_type (MoveCommand_type** moveCommandPtr)
+{
+	if (!*moveCommandPtr) return;
+	
+	OKfree(*moveCommandPtr);
 }

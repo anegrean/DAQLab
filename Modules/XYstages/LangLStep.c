@@ -45,7 +45,7 @@
 
 #define Stage_Config_File					"Modules\\XYstages\\Lang L-Step\\L-Step configuration.ls"
 #define Stage_Units							2			// position in [mm]
-#define Stage_WaitUntilMovementComplete		FALSE		// thread that issues movement command is blocked until movement completes
+#define Stage_WaitUntilMovementComplete		TRUE		// thread that issues movement command is blocked until movement completes
 
 
 

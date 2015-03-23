@@ -369,11 +369,10 @@ typedef int				 	(*ConfigureFptr_type) 			(TaskControl_type* taskControl, BOOL c
 // Called when a Task Controller needs to be switched to an unconfigured state which prevents it from being executed.
 typedef int				 	(*UnconfigureFptr_type) 		(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
-// Called each time a Task Controller performs an iteration of a device or module
-// This function is called in a separate thread from the Task Controller thread. The iteration can be completed either within this function call
-// or even in another thread. In either case, to signal back to the Task Controller that the iteration function is complete, send a
-// TASK_EVENT_ITERATION_DONE event using TaskControlEvent and passing for eventInfo init_FCallReturn_type (...) and for disposeEventInfoFptr
-// discard_FCallReturn_type.
+// Called each time a Task Controller performs an iteration of a device or module. This function is called in a separate thread from the Task Controller thread. 
+// The iteration can be completed either within this function call or even in another thread. 
+// In either case, to signal back to the Task Controller that the iteration function is complete call TaskControlIterationDone.
+
 typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
 // Called when an iteration must be aborted. This is similar to the use of GetTaskControlAbortIterationFlag except that this function is called back, instead
@@ -407,11 +406,7 @@ typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, int error
 typedef int					(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 // Called for passing custom module or device events that are not handled directly by the Task Controller.
-typedef int					(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
-
-// Called after receiving a task control event and eventInfo must be disposed of.
-typedef void				(*DisposeEventInfoFptr_type)	(void* eventInfo);
-
+typedef int					(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 
 //--------------------------------------------------------------------------------
@@ -552,8 +547,7 @@ char* 					GetUniqueTaskControllerName			(ListType TCList, char baseTCName[]);
 	// Pass NULL to eventInfo if there is no additional data carried by the event 
 	// Pass NULL to disposeEventInfoFptr if eventInfo should NOT be disposed after processing the event
 	// 
-int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventInfo, 
-														 	DisposeEventInfoFptr_type disposeEventInfoFptr); 
+int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventData, DiscardFptr_type discardEventDataFptr); 
 
 	// Used to signal the Task Controller that an iteration is done.
 	// Pass to errorInfo an empty string as "", if there is no error and the iteration completed succesfully. Otherwise,
@@ -562,8 +556,7 @@ int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TaskEvent
 int						TaskControlIterationDone			(TaskControl_type* taskControl, int errorID, char errorInfo[], BOOL doAnotherIteration);
 
 
-int						TaskControlEventToSubTasks  		(TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventInfo, 
-														 	DisposeEventInfoFptr_type disposeEventInfoFptr); 
+int						TaskControlEventToSubTasks  		(TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventData, DiscardFptr_type discardEventDataFptr); 
 
 	// Aborts iterations for the entire Nested Task Controller hierarchy
 void					AbortTaskControlExecution			(TaskControl_type* taskControl);

@@ -19,6 +19,7 @@
 #include "DAQLab.h"
 #include "HWTriggering.h"
 #include "Iterator.h"
+#include "DataTypes.h"
 
 //==============================================================================
 // Constants
@@ -39,8 +40,8 @@ typedef struct {
 
 typedef struct {
 	TaskEvents_type 			event;								// Task Control Event.
-	void*						eventInfo;							// Extra information per event allocated dynamically
-	DisposeEventInfoFptr_type   disposeEventInfoFptr;   			// Function pointer to dispose of the eventInfo
+	void*						eventData;							// Extra information per event allocated dynamically
+	DiscardFptr_type   			discardEventDataFptr;   			// Function pointer to dispose of the eventData
 } EventPacket_type;
 
 typedef struct {
@@ -131,23 +132,17 @@ static int									FunctionCall 							(TaskControl_type* taskControl, EventPack
 // Formats a Task Controller log entry based on the action taken
 static void									ExecutionLogEntry						(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskControllerActions action, void* info);
 
-// Task Controller iteration done return info when performing iteration in another thread
-static void									disposeTCIterDoneInfo 					(void* eventInfo);
-
-
 static char*								StateToString							(TaskStates_type state);
 static char*								EventToString							(TaskEvents_type event);
 static char*								FCallToString							(TaskFCall_type fcall);
 
-// SubTask eventInfo functions
+// SubTask eventData functions
 static SubTaskEventInfo_type* 				init_SubTaskEventInfo_type 				(size_t subtaskIdx, TaskStates_type state);
-static void									discard_SubTaskEventInfo_type 			(SubTaskEventInfo_type** a);
-static void									disposeSubTaskEventInfo					(void* eventInfo);
+static void									discard_SubTaskEventInfo_type 			(SubTaskEventInfo_type** eventDataPtr);
 
 // VChan and Task Control binding
 static VChanCallbackData_type*				init_VChanCallbackData_type				(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr);
-static void									discard_VChanCallbackData_type			(VChanCallbackData_type** a);
-static void									disposeCmtTSQVChanEventInfo				(void* eventInfo);
+static void									discard_VChanCallbackData_type			(VChanCallbackData_type** VChanCBDataPtr);
 
 // Informs recursively Task Controllers about the Task Tree status when it changes (active/inactive).
 static int									TaskTreeStatusChanged 					(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeExecution_type status, char** errorInfo);
@@ -602,23 +597,11 @@ static SubTaskEventInfo_type* init_SubTaskEventInfo_type (size_t subtaskIdx, Tas
 	return a;
 }
 
-static void discard_SubTaskEventInfo_type (SubTaskEventInfo_type** a)
+static void discard_SubTaskEventInfo_type (SubTaskEventInfo_type** eventDataPtr)
 {
-	if (!*a) return;
-	OKfree(*a);
-}
-
-static void	disposeSubTaskEventInfo	(void* eventInfo)
-{
-	SubTaskEventInfo_type* eventInfoPtr = eventInfo;
+	if (!*eventDataPtr) return;
 	
-	discard_SubTaskEventInfo_type(&eventInfoPtr);
-}
-
-static void	disposeCmtTSQVChanEventInfo (void* eventInfo)
-{
-	if (!eventInfo) return;
-	free(eventInfo);
+	OKfree(*eventDataPtr);
 }
 
 static int TaskTreeStatusChanged (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeExecution_type status, char** errorInfo)
@@ -694,16 +677,16 @@ static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* ta
 	return VChanCB;
 }
 
-static void	discard_VChanCallbackData_type (VChanCallbackData_type** a)
+static void	discard_VChanCallbackData_type (VChanCallbackData_type** VChanCBDataPtr)
 {
-	if (!*a) return;
+	if (!*VChanCBDataPtr) return;
 	
-	OKfree(*a);
+	OKfree(*VChanCBDataPtr);
 }
 
-void dispose_FCallReturn_EventInfo (void* eventInfo)
+void dispose_FCallReturn_EventInfo (void* eventData)
 {
-	FCallReturn_type* fCallReturnPtr = eventInfo;
+	FCallReturn_type* fCallReturnPtr = eventData;
 	
 	discard_FCallReturn_type(&fCallReturnPtr);
 }
@@ -974,7 +957,7 @@ static void ExecutionLogEntry (TaskControl_type* taskControl, EventPacket_type* 
 		AppendString(&output, ", ", -1);
 		// if subtask state change event occurs, print also previous state of the subtask that changed
 		if (action == CHILD_TASK_STATE_UPDATE)
-			if (((SubTaskEventInfo_type*)eventPacket->eventInfo)->subtaskIdx == i){
+			if (((SubTaskEventInfo_type*)eventPacket->eventData)->subtaskIdx == i){
 				AppendString(&output, (stateName = StateToString(subtaskPtr->previousSubTaskState)), -1);
 				OKfree(stateName);
 				AppendString(&output, "->", -1);
@@ -1035,7 +1018,7 @@ void CVICALLBACK TaskDataItemsInQueue (CmtTSQHandle queueHandle, unsigned int ev
 	} else {
 		*VChanTSQDataPtr = VChanTSQData;
 		// inform Task Controller that data was placed in an otherwise empty data queue
-		TaskControlEvent(VChanTSQData->taskControl, TASK_EVENT_DATA_RECEIVED, VChanTSQDataPtr, disposeCmtTSQVChanEventInfo);
+		TaskControlEvent(VChanTSQData->taskControl, TASK_EVENT_DATA_RECEIVED, VChanTSQDataPtr, (DiscardFptr_type)discard_VChanCallbackData_type);
 	}
 }
 
@@ -1057,10 +1040,10 @@ void CVICALLBACK IterationFunctionThreadCallback (CmtThreadPoolHandle poolHandle
 	SetSleepPolicy(VAL_SLEEP_SOME);
 }
 
-int TaskControlEvent (TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventInfo,
-					  DisposeEventInfoFptr_type disposeEventInfoFptr)
+int TaskControlEvent (TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventData,
+					  DiscardFptr_type discardEventDataFptr)
 {
-	EventPacket_type 	eventpacket = {event, eventInfo, disposeEventInfoFptr};
+	EventPacket_type 	eventpacket = {event, eventData, discardEventDataFptr};
 	SubTask_type*		subTask		= NULL;
 	
 	int 	lockObtainedFlag;
@@ -1087,16 +1070,11 @@ int TaskControlEvent (TaskControl_type* RecipientTaskControl, TaskEvents_type ev
 int	TaskControlIterationDone (TaskControl_type* taskControl, int errorID, char errorInfo[], BOOL doAnotherIteration)
 {
 	if (errorID)
-		return TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, init_FCallReturn_type(errorID, "External Task Control Iteration", errorInfo), disposeTCIterDoneInfo);
+		return TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, init_FCallReturn_type(errorID, "External Task Control Iteration", errorInfo), (DiscardFptr_type)discard_FCallReturn_type);
 	else {
 		if (doAnotherIteration) taskControl->repeat++;
 		return TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
 	}
-}
-
-static void disposeTCIterDoneInfo (void* eventInfo) 
-{
-	discard_FCallReturn_type((FCallReturn_type**)&eventInfo);
 }
 
 static void ChangeState (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskStates_type newState)
@@ -1362,14 +1340,14 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 	
 }
 
-int	TaskControlEventToSubTasks  (TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventInfo,
-								 DisposeEventInfoFptr_type disposeEventInfoFptr)
+int	TaskControlEventToSubTasks  (TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventData,
+								 DiscardFptr_type discardEventDataFptr)
 {
 	SubTask_type* 		subTask;
 	size_t				nSubTasks 			= ListNumItems(SenderTaskControl->subtasks);
 	int			 		lockObtainedFlag	= 0;
 	int					error				= 0;
-	EventPacket_type 	eventpacket 		= {event, eventInfo, disposeEventInfoFptr}; 
+	EventPacket_type 	eventpacket 		= {event, eventData, discardEventDataFptr}; 
 	
 	// get all subtask eventQ thread locks to place event in all queues before other events can be placed by other threads
 	for (size_t i = 1; i <= nSubTasks; i++) { 
@@ -1678,9 +1656,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
-					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventData)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventData)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE; 
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
@@ -1699,7 +1677,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -1713,7 +1691,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -1804,9 +1782,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
-					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventData)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventData)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
@@ -1843,7 +1821,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -1857,7 +1835,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -2000,9 +1978,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
-					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventData)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventData)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
@@ -2025,7 +2003,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -2039,7 +2017,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -2207,9 +2185,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
-					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventData)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventData)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
@@ -2258,7 +2236,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -2272,7 +2250,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -2560,9 +2538,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
-					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventData)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventData)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;  
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
@@ -2648,7 +2626,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -2662,7 +2640,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -2711,8 +2689,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Check if error occured during iteration 
 					// (which may be also because it was aborted and this caused an error for the TC)
 					//---------------------------------------------------------------------------------------------------------------   
-					if (eventpacket[i].eventInfo) {
-						FCallReturn_type* fCallReturn = eventpacket[i].eventInfo;
+					if (eventpacket[i].eventData) {
+						FCallReturn_type* fCallReturn = eventpacket[i].eventData;
 						
 						if (fCallReturn->retVal < 0) {
 							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_IterateExternThread, taskControl->taskName, fCallReturn->errorInfo); 
@@ -2923,9 +2901,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
-					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventData)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventData)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;  
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
@@ -2948,7 +2926,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 				case TASK_EVENT_DATA_RECEIVED:
 					// call data received event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -2969,7 +2947,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -3028,9 +3006,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
-					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventData)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventData)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;  
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
@@ -3085,7 +3063,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -3099,7 +3077,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -3243,9 +3221,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
-					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventData)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState; 
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventData)->newSubTaskState; 
 					subtaskPtr->isOutOfDate = FALSE;  
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
@@ -3287,7 +3265,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -3301,7 +3279,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -3373,9 +3351,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_UPDATE_SUBTASK_STATE: 
 					
 					// update subtask state
-					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->subtaskIdx);
+					subtaskPtr = ListGetPtrToItem(taskControl->subtasks, ((SubTaskEventInfo_type*)eventpacket[i].eventData)->subtaskIdx);
 					subtaskPtr->previousSubTaskState = subtaskPtr->subtaskState; // save old state for debuging purposes 
-					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventInfo)->newSubTaskState;
+					subtaskPtr->subtaskState = ((SubTaskEventInfo_type*)eventpacket[i].eventData)->newSubTaskState;
 					subtaskPtr->isOutOfDate = FALSE;  
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
@@ -3385,7 +3363,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_DATA_RECEIVED:
 					
 					// call data received event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_DATA_RECEIVED, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -3399,7 +3377,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_CUSTOM_MODULE_EVENT:
 					
 					// call custom module event function
-					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventInfo, &errMsg) < 0) {
+					if (FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_MODULE_EVENT, eventpacket[i].eventData, &errMsg) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 						OKfree(errMsg);
@@ -3422,11 +3400,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 	
 	// if there is a parent task controller, update it on the state of this child task controller
 	if (taskControl->parenttask)
-		TaskControlEvent(taskControl->parenttask, TASK_EVENT_UPDATE_SUBTASK_STATE, init_SubTaskEventInfo_type(taskControl->subtaskIdx, taskControl->state), disposeSubTaskEventInfo);
+		TaskControlEvent(taskControl->parenttask, TASK_EVENT_UPDATE_SUBTASK_STATE, init_SubTaskEventInfo_type(taskControl->subtaskIdx, taskControl->state), (DiscardFptr_type)discard_SubTaskEventInfo_type);
 					
-	// free memory for extra eventInfo if any
-	if (eventpacket[i].eventInfo && eventpacket[i].disposeEventInfoFptr)
-		(*eventpacket[i].disposeEventInfoFptr)(eventpacket[i].eventInfo);
+	// free memory for extra eventData if any
+	if (eventpacket[i].eventData && eventpacket[i].discardEventDataFptr)
+		(*eventpacket[i].discardEventDataFptr)(&eventpacket[i].eventData);
 		
 	} // process another event if there is any
 	} // check if there are more events

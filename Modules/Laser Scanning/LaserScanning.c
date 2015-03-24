@@ -1478,9 +1478,9 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	//--------------------------------------------------------------------------
 
 	ActiveXMLObj_IXMLDOMNode_		axisCalibrationNode				= 0;      
-	long							nAxisCalibrations;
-	unsigned int					axisCalibrationType;
-	DAQLabXMLNode					axisCalibrationGenericAttr[] = {{"AxisType", BasicData_UInt, &axisCalibrationType}};
+	long							nAxisCalibrations				= 0;
+	unsigned int					axisCalibrationType				= 0;
+	DAQLabXMLNode					axisCalibrationGenericAttr[] 	= {{"AxisType", BasicData_UInt, &axisCalibrationType}};
 																	 
 	errChk( DLGetSingleXMLElementFromElement(moduleElement, "ScanAxisCalibrations", &scanAxisCalibrationsXMLElement) );
 	

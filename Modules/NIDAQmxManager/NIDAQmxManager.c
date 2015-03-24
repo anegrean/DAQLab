@@ -826,6 +826,8 @@ struct NIDAQmxManager {
 		//-------------------------
 	
 	int							mainPanHndl;				// NI DAQ manager main panel
+	int*						mainPanTopPos;
+	int*						mainPanLeftPos;
 	int							taskSetPanHndl;
 	int							devListPanHndl;
 	int							menuBarHndl;
@@ -856,13 +858,15 @@ static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
 
 static int 							LoadCfg							 		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement); 
 
+static int							LoadDeviceCfg							(NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement);
+
 	//---------------------------------------------------
 	// Saving DAQmx settings
 	//---------------------------------------------------
 
 static int							SaveCfg									(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
 
-static int 							SaveDeviceCfg 							(Dev_type* dev, CAObjHandle  xmlDOM, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement); 
+static int 							SaveDeviceCfg 							(Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement); 
 
 static int 							SaveAITaskCfg 							(ADTaskSet_type* task, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement); 
 
@@ -891,6 +895,7 @@ static Dev_type* 					init_Dev_type 							(NIDAQmxManager_type* niDAQModule, De
 static void 						discard_Dev_type						(Dev_type** a);
 
 	// device detection
+static ListType 					ListAllDAQmxDevices 					(void); 
 static int 							init_DevList 							(ListType devlist, int panHndl, int tableCtrl);
 static void 						empty_DevList 							(ListType devList); 
 
@@ -1331,6 +1336,8 @@ DAQLabModule_type*	initalloc_NIDAQmxManager (DAQLabModule_type* mod, char classN
 	if (!nidaq->DAQmxDevices) {discard_DAQLabModule((DAQLabModule_type**)&nidaq); return NULL;}
 	
 	nidaq->mainPanHndl				= 0;
+	nidaq->mainPanTopPos			= NULL;
+	nidaq->mainPanLeftPos			= NULL;
 	nidaq->menuBarHndl				= 0;
 	nidaq->deleteDevMenuItemID		= 0;
 	nidaq->taskSetPanHndl			= 0;
@@ -1373,6 +1380,8 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 	if (devList) {ListDispose(devList); devList = 0;}  
 	
 	// discard UI
+	OKfree(nidaq->mainPanTopPos);
+	OKfree(nidaq->mainPanLeftPos);
 	if (nidaq->menuBarHndl) DiscardMenuBar (nidaq->menuBarHndl);        
 	if (nidaq->mainPanHndl) {DiscardPanel(nidaq->mainPanHndl); nidaq->mainPanHndl = 0;}
 	if (nidaq->taskSetPanHndl) {DiscardPanel(nidaq->taskSetPanHndl); nidaq->taskSetPanHndl = 0;}
@@ -1397,8 +1406,15 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl)
 	NIDAQmxManager_type* 	nidaq						= (NIDAQmxManager_type*) mod;  
 	int						menuItemDevicesHndl			= 0;
 	
-	// main panel 
+	// main panel and apply stored position if any 
 	errChk(nidaq->mainPanHndl = LoadPanel(workspacePanHndl, MOD_NIDAQmxManager_UI, NIDAQmxPan));
+	
+	if(nidaq->mainPanLeftPos)
+		SetPanelAttribute(nidaq->mainPanHndl, ATTR_LEFT, *nidaq->mainPanLeftPos);
+	
+	if(nidaq->mainPanTopPos)
+		SetPanelAttribute(nidaq->mainPanHndl, ATTR_TOP, *nidaq->mainPanTopPos); 
+	
 	// device list panel
 	errChk(nidaq->devListPanHndl = LoadPanel(workspacePanHndl, MOD_NIDAQmxManager_UI, DevListPan));
 	// DAQmx task settings panel
@@ -1430,12 +1446,60 @@ Error:
 
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
 {
-	NIDAQmxManager_type*	NIDAQ				 	= mod;
+	NIDAQmxManager_type*	NIDAQ				 		= mod;
+	int						error						= 0;
+	ERRORINFO				xmlERRINFO;
 	
+	//--------------------------------------------------------------------------
+	// Find devices and load their attributes
+	//--------------------------------------------------------------------------
 	
+	//--------------------------------------------------------------------------
+	// Load main panel position
+	//--------------------------------------------------------------------------
+	NIDAQ->mainPanTopPos								= malloc(sizeof(int));
+	NIDAQ->mainPanLeftPos								= malloc(sizeof(int));
+	
+	DAQLabXMLNode 			NIDAQAttr[] 				= {	{"PanTopPos", BasicData_Int, NIDAQ->mainPanTopPos},
+											  		   		{"PanLeftPos", BasicData_Int, NIDAQ->mainPanLeftPos} };
+														
+	errChk( DLGetXMLElementAttributes(moduleElement, NIDAQAttr, NumElem(NIDAQAttr)) ); 
+	
+	//--------------------------------------------------------------------------
+	// Load DAQmx devices if they are still present
+	//--------------------------------------------------------------------------
+	ActiveXMLObj_IXMLDOMNodeList_	deviceNodeList		= 0;
+	ActiveXMLObj_IXMLDOMNode_		deviceNode			= 0;      
+	long							nDevices			= 0;
+	
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(moduleElement, &xmlERRINFO, "NIDAQDevice", &deviceNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(deviceNodeList, &xmlERRINFO, &nDevices) );
+	
+	for (long i = 0; i < nDevices; i++) {
+		
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(deviceNodeList, &xmlERRINFO, i, &deviceNode) );
+		errChk( LoadDeviceCfg (NIDAQ, (ActiveXMLObj_IXMLDOMElement_) deviceNode);
+		OKFreeCAHandle(deviceNode);
+	}
+	OKFreeCAHandle(deviceNodeList);
 	
 	return 0;
+	
+Error:
+	
+	return error;
 }
+
+static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement)
+{
+	int						error				= 0;
+	ERRORINFO				xmlERRINFO;
+	DAQLabXMLNode			deviceAttr[] 		= {};
+	
+	errChk( DLGetXMLNodeAttributes(deviceNode, deviceAttr, NumElem(deviceAttr)) ); 
+	
+}
+
 
 static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement)
 {
@@ -1894,6 +1958,13 @@ static void discard_Dev_type(Dev_type** devPtr)
 // Detection of connected DAQmx devices
 //------------------------------------------------------------------------------
 
+/// HIFN Lists all installed DAQmx devices.
+/// HIRET List of DevAttr_type* elements containing the attributes of the found devices
+static ListType ListAllDAQmxDevices (void)
+{
+	
+}
+
 /// HIFN Populates table and a devlist of DevAttr_type with NIDAQmxManager devices and their properties.
 /// HIRET positive value for the number of devices found, 0 if there are no devices and negative values for error.
 static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
@@ -1926,11 +1997,6 @@ static int init_DevList (ListType devlist, int panHndl, int tableCtrl)
 	unsigned int   				nCI;          						// # Counter inputs
 	unsigned int   				nCO;          						// # Counter outputs
 								
-	// Allocate memory for pointers to work on the strings
-//	nullChk(idxnames = malloc(sizeof(char*)));
-//	nullChk(idxstr = malloc(sizeof(char*)));
-//	*idxstr = NULL;
-	
 	// Get number of table columns
 	GetNumTableColumns (panHndl, DevListPan_DAQTable, &columns);
 	

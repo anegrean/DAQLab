@@ -23,6 +23,8 @@
 #include "DataTypes.h"
 #include "HWTriggering.h"
 #include "utility.h"
+#include "toolbox.h"
+//#include "DAQLab.h"
 
 //========================================================================================================================================================================================================
 // Constants
@@ -1449,6 +1451,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	NIDAQmxManager_type*	NIDAQ				 		= mod;
 	int						error						= 0;
 	ERRORINFO				xmlERRINFO;
+	int 					xmlerror					= 0;
 	
 	//--------------------------------------------------------------------------
 	// Find devices and load their attributes
@@ -1478,7 +1481,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	for (long i = 0; i < nDevices; i++) {
 		
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(deviceNodeList, &xmlERRINFO, i, &deviceNode) );
-		errChk( LoadDeviceCfg (NIDAQ, (ActiveXMLObj_IXMLDOMElement_) deviceNode);
+		errChk( LoadDeviceCfg (NIDAQ, (ActiveXMLObj_IXMLDOMElement_) deviceNode));
 		OKFreeCAHandle(deviceNode);
 	}
 	OKFreeCAHandle(deviceNodeList);
@@ -1486,6 +1489,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	return 0;
 	
 Error:
+XMLError:
 	
 	return error;
 }
@@ -1494,10 +1498,10 @@ static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElemen
 {
 	int						error				= 0;
 	ERRORINFO				xmlERRINFO;
-	DAQLabXMLNode			deviceAttr[] 		= {};
+//	DAQLabXMLNode			deviceAttr[] 		= {};
 	
-	errChk( DLGetXMLNodeAttributes(deviceNode, deviceAttr, NumElem(deviceAttr)) ); 
-	
+//	errChk( DLGetXMLNodeAttributes(deviceNode, deviceAttr, NumElem(deviceAttr)) ); 	   removed lex
+	return error;
 }
 
 
@@ -1511,13 +1515,16 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	// Save DAQmanager main panel position
 	//--------------------------------------------------------------------------
 	
-	int								panTopPos				= 0;
-	int								panLeftPos				= 0;
-	DAQLabXMLNode 					NIDAQAttr[] 			= {	{"PanTopPos", BasicData_Int, &panTopPos},
-											  		   			{"PanLeftPos", BasicData_Int, &panLeftPos}	};
+	int*								panTopPos				;
+	int*								panLeftPos				;
+	panTopPos=malloc(sizeof(int));
+	panLeftPos=malloc(sizeof(int));				 
+	DAQLabXMLNode 					NIDAQAttr[] 			= {	{"PanTopPos", BasicData_Int, panTopPos},
+											  		   			{"PanLeftPos", BasicData_Int, panLeftPos}	};
+																
 	
-	errChk( GetPanelAttribute(NIDAQ->mainPanHndl, ATTR_LEFT, &panLeftPos) );
-	errChk( GetPanelAttribute(NIDAQ->mainPanHndl, ATTR_TOP, &panTopPos) );
+	errChk( GetPanelAttribute(NIDAQ->mainPanHndl, ATTR_LEFT, panLeftPos) );
+	errChk( GetPanelAttribute(NIDAQ->mainPanHndl, ATTR_TOP, panTopPos) );
 	DLAddToXMLElem(xmlDOM, moduleElement, NIDAQAttr, DL_ATTRIBUTE, NumElem(NIDAQAttr)); 
 	
 	//--------------------------------------------------------------------------
@@ -9805,6 +9812,8 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	float64*			AIOffsetReadBuffer		= AIReadBuffer + chIdx * nRead;
 	uInt32				i, j, k;
 	
+	Iterator_type* 		currentiter				=	GetTaskControlCurrentIterDup(dev->taskController);
+	
 	switch(GetSourceVChanDataType(AIChSet->srcVChan)) {
 				
 		case DL_Waveform_Double:
@@ -9845,7 +9854,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			// prepare data packet
 			//--------------------
 			nullChk( waveform 	= init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_double) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) ); 
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, &waveform,  currentiter,(DiscardFptr_type) discard_Waveform_type) ); 
 				
 			break;
 				
@@ -9888,7 +9897,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			//--------------------
 			
 			nullChk( waveform 	= init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_float) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, &waveform,  currentiter,(DiscardFptr_type) discard_Waveform_type) );
 				
 			break;
 		
@@ -9930,7 +9939,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
 			
 			nullChk( waveform = init_Waveform_type(Waveform_UInt, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt32) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UInt, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UInt, &waveform,  currentiter,(DiscardFptr_type) discard_Waveform_type) );
 			
 			
 			break;
@@ -9970,8 +9979,11 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			
 			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
 			
+			
+			 
+			
 			nullChk( waveform = init_Waveform_type(Waveform_UShort, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt16) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, &waveform,  currentiter,(DiscardFptr_type) discard_Waveform_type) );
 				 
 			break;
 				
@@ -10007,7 +10019,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
 				
 			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt8) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, &waveform,  currentiter,(DiscardFptr_type) discard_Waveform_type) );
 				
 			break;
 		

@@ -214,8 +214,8 @@ Iterator_type* GetRootIterator (Iterator_type* iterator)
 {
 	Iterator_type* rootIterator		= iterator;
 	
-	while (rootIterator->parent)
-		rootIterator = iterator->parent;
+	while (rootIterator->parent!=NULL)
+		rootIterator = rootIterator->parent;
 	
 	return rootIterator; 
 }

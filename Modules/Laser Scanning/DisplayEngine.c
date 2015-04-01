@@ -69,7 +69,9 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 								DisplayEngine_type* 					displayEngine,
 								ImgDisplayCBData_type					imageDisplayCBData 		)
 {
-	int		error	= 0;
+	int			error	= 0;
+	ListType	ROIlist;
+	
 	
 	//--------------------------------------
 	// init
@@ -80,17 +82,11 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 	imageDisplay->imageDisplayCBData			= imageDisplayCBData;
 	
 	// image data
-	imageDisplay->imgHeight						= 0;
-	imageDisplay->imgWidth						= 0;
-	imageDisplay->pixSize						= 0;
-	imageDisplay->imgTopLeftXCoord				= 0;
-	imageDisplay->imgTopLeftYCoord				= 0;
-	imageDisplay->imgZCoord						= 0;
-	imageDisplay->image							= NULL;
-	imageDisplay->imageType						= Image_UChar;
+	imageDisplay->imagetype						= init_Image_type(Image_UChar,NULL);
+	
 	
 	// ROI management
-	imageDisplay->ROIs							= 0;
+	
 	imageDisplay->ROITextBackground.R			= 0;
 	imageDisplay->ROITextBackground.G			= 0;	
 	imageDisplay->ROITextBackground.B			= 0;	
@@ -116,8 +112,10 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 	//--------------------------------------
 	
 	// ROI management
-	nullChk( imageDisplay->ROIs					= ListCreate(sizeof(ROI_type*)) );
+
 	
+	nullChk( ROIlist					= ListCreate(sizeof(ROI_type*)) );
+	SetImageROIs(imageDisplay->imagetype,ROIlist);       
 	return 0;
 	
 Error:
@@ -131,19 +129,21 @@ Error:
 
 void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 {
-	ImageDisplay_type* 	imageDisplay = *imageDisplayPtr;
+	ImageDisplay_type* 	imageDisplay 	= *imageDisplayPtr;
+	ListType			ROIlist			= GetImageROIs(imageDisplay->imagetype);
 	
 	if (!imageDisplay) return;
 	
 	//----------------------------------------------------------
 	// ROIs
-	size_t		nROIs 	= ListNumItems(imageDisplay->ROIs);
+	
+	size_t		nROIs 	= ListNumItems(ROIlist);
 	ROI_type** 	ROIPtr	= NULL;
 	for (size_t i = 1; i <= nROIs; i++) {
-		ROIPtr = ListGetPtrToItem(imageDisplay->ROIs, i);
+		ROIPtr = ListGetPtrToItem(ROIlist, i);
 		discard_ROI_type(ROIPtr);
 	}
-	ListDispose(imageDisplay->ROIs);
+	ListDispose(ROIlist);
 	//----------------------------------------------------------
 	
 	//----------------------------------------------------------

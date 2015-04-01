@@ -243,7 +243,8 @@ static void discard_NIImageDisplay_type (NIImageDisplay_type** displayPtr)
 	// discard child class data
 	
 	// discard image data
-	DiscardImaqImg((Image**)&display->baseClass.image);
+	Image* image=GetImageImage(display->baseClass.imagetype);
+	DiscardImaqImg((Image**)&image);
 	
 	//---------------------------------------------------
 	// discard parent class
@@ -255,19 +256,22 @@ static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, void* pixelArr
 								 double pixSize, double imgTopLeftXCoord, double imgTopLeftYCoord, double imgZCoord)
 {								
 	int		error		= 0;
+	Image*	image		= NULL;
+	
 	
 	// copy image settings
-	imgDisplay->baseClass.imgHeight 			= imgHeight;
-	imgDisplay->baseClass.imgWidth	 			= imgWidth;
-	imgDisplay->baseClass.pixSize	 			= pixSize;
-	imgDisplay->baseClass.imgTopLeftXCoord	 	= imgTopLeftXCoord;
-	imgDisplay->baseClass.imgTopLeftYCoord	 	= imgTopLeftYCoord;
-	imgDisplay->baseClass.imgZCoord	 			= imgZCoord;
-	imgDisplay->baseClass.imageType				= imageType;
+	SetImageHeight(imgDisplay->baseClass.imagetype,imgHeight);
+	SetImageWidth(imgDisplay->baseClass.imagetype,imgWidth);
+	SetImagePixSize(imgDisplay->baseClass.imagetype,pixSize);
+	SetImageTopLeftXCoord(imgDisplay->baseClass.imagetype,imgTopLeftXCoord);
+	SetImageTopLeftYCoord(imgDisplay->baseClass.imagetype,imgTopLeftYCoord);
+	SetImageZCoord(imgDisplay->baseClass.imagetype,imgZCoord);
+	SetImageType(imgDisplay->baseClass.imagetype,imageType);
 	
 	// display image
-	nullChk( imaqArrayToImage((Image*)imgDisplay->baseClass.image, pixelArray, imgWidth, imgHeight) );
-	nullChk( imaqDisplayImage((Image*)imgDisplay->baseClass.image, imgDisplay->imaqWndID, FALSE) );
+	image=GetImageImage(imgDisplay->baseClass.imagetype);
+	nullChk( imaqArrayToImage(image, pixelArray, imgWidth, imgHeight) );
+	nullChk( imaqDisplayImage(image, imgDisplay->imaqWndID, FALSE) );
 			 
 	// display IMAQ tool window
 	if (!imaqToolWindowVisibleFlag) {
@@ -289,6 +293,7 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 	ImageType		imaqImgType				= 0;
 	HWND			imaqWndHndl				= 0;	// windows handle of the imaq window
 	HMENU			imaqWndMenuHndl			= 0;	// menu bar for the imaq window
+	Image*			image					= NULL;
 	
 	// get IMAQ window handle
 	if (!imaqGetWindowHandle(&imaqHndl)) return NULL;
@@ -300,7 +305,7 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 	// assign data structure
 	nullChk(displays[imaqHndl] = init_NIImageDisplay_type(NIDisplay, imaqHndl, callbackData) );
 	
-	displays[imaqHndl]->baseClass.imageType=imageType;
+	SetImageType(displays[imaqHndl]->baseClass.imagetype,imageType);
 	
 	// init IMAQ image buffer 
 	switch (imageType) {
@@ -333,10 +338,11 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 			goto Error;
 	}
 	
-	nullChk( displays[imaqHndl]->baseClass.image = imaqCreateImage(imaqImgType, 0) );
-	// pre allocate image memory
-	nullChk( imaqSetImageSize((Image*)displays[imaqHndl]->baseClass.image, imgWidth, imgHeight) );
+	nullChk( image = imaqCreateImage(imaqImgType, 0) );
 	
+	// pre allocate image memory
+	nullChk( imaqSetImageSize(image, imgWidth, imgHeight) );
+	SetImageImage(displays[imaqHndl]->baseClass.imagetype,image);      
 	// confine image window to parent window if provided
 	if (NIDisplay->parentWindowHndl)
 		SetParent( imaqWndHndl, (HWND)NIDisplay->parentWindowHndl);
@@ -413,6 +419,7 @@ Error:
 
 static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 {
+	Image*				image				= NULL;
 	int					error 				= 0;
 	RGBValue			rgbVal 				= { .R		= ROI->rgba.R,
 												.G		= ROI->rgba.G,
@@ -445,11 +452,12 @@ static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 			textPoint.x = point.x + ROILabel_XOffset;
 			textPoint.y = point.y + ROILabel_YOffset;
 			
-			// point overlay 			
-			nullChk( imaqOverlayPoints((Image*)imgDisplay->baseClass.image, &point, 1, &rgbVal, 1, IMAQ_POINT_AS_CROSS, NULL, ROI->ROIName) );   
+			// point overlay 
+			image=GetImageImage(imgDisplay->baseClass.imagetype);
+			nullChk( imaqOverlayPoints(image, &point, 1, &rgbVal, 1, IMAQ_POINT_AS_CROSS, NULL, ROI->ROIName) );   
 			// label overlay
-			nullChk( imaqOverlayText((Image*)imgDisplay->baseClass.image, textPoint, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
-			
+			nullChk( imaqOverlayText(image, textPoint, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
+			SetImageImage(imgDisplay->baseClass.imagetype,image);
 			break;
 			
 		case ROI_Rectangle:
@@ -463,10 +471,11 @@ static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 			textPoint.y = rect.top + ROILabel_YOffset;
 			
 			// rectangle overlay
-			nullChk( imaqOverlayRect((Image*)imgDisplay->baseClass.image, rect, &rgbVal, IMAQ_DRAW_VALUE, ROI->ROIName) );
+			image=GetImageImage(imgDisplay->baseClass.imagetype); 
+			nullChk( imaqOverlayRect(image, rect, &rgbVal, IMAQ_DRAW_VALUE, ROI->ROIName) );
 			// label overlay
-			nullChk( imaqOverlayText((Image*)imgDisplay->baseClass.image, textPoint, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
-			
+			nullChk( imaqOverlayText(image, textPoint, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
+			SetImageImage(imgDisplay->baseClass.imagetype,image);   
 			break;
 			
 	}
@@ -483,6 +492,9 @@ static ROI_type* OverlayNIVisionROI (NIImageDisplay_type* imgDisplay, ROI_type* 
 {
 	int					error 				= 0;
 	ROI_type*			ROICopy				= NULL;
+	Image*				image				= NULL;
+	ListType			ROIlist;
+	
 	
 	errChk( DrawROI(imgDisplay, ROI) );
 	
@@ -490,10 +502,12 @@ static ROI_type* OverlayNIVisionROI (NIImageDisplay_type* imgDisplay, ROI_type* 
 	nullChk( ROICopy = copy_ROI_type(ROI) );
 	
 	// add ROI overlay to list
-	ListInsertItem(imgDisplay->baseClass.ROIs, &ROICopy, END_OF_LIST);
+	ROIlist=GetImageROIs(imgDisplay->baseClass.imagetype);
+	ListInsertItem(ROIlist, &ROICopy, END_OF_LIST);
 	
 	// update image
-	imaqDisplayImage((Image*)imgDisplay->baseClass.image, imgDisplay->imaqWndID, FALSE);
+	image=GetImageImage(imgDisplay->baseClass.imagetype);   
+	imaqDisplayImage(image, imgDisplay->imaqWndID, FALSE);
 	
 	return ROICopy;
 	
@@ -508,9 +522,14 @@ Error:
 static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROIActions action)
 {
 	ROI_type**	ROIPtr 	= NULL;
-	size_t		nROIs	= ListNumItems(imgDisplay->baseClass.ROIs);
+	ListType	ROIlist = GetImageROIs(imgDisplay->baseClass.imagetype); 
+	size_t		nROIs	= ListNumItems(ROIlist);
+	Image*		image	= NULL;
+	 ;
+	
+	image=GetImageImage(imgDisplay->baseClass.imagetype);
 	if (ROIIdx) {
-		ROIPtr = ListGetPtrToItem(imgDisplay->baseClass.ROIs, ROIIdx);
+		ROIPtr = ListGetPtrToItem(ROIlist, ROIIdx);
 		switch (action) {
 				
 			case ROI_Visible:
@@ -526,7 +545,7 @@ static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROI
 				
 				// clear imaq ROI group (shape and label)
 				if ((*ROIPtr)->active) {
-					imaqClearOverlay((Image*)imgDisplay->baseClass.image, (*ROIPtr)->ROIName);
+					imaqClearOverlay(image, (*ROIPtr)->ROIName);
 					(*ROIPtr)->active = FALSE;
 				}
 				
@@ -535,16 +554,16 @@ static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROI
 			case ROI_Delete:
 				
 				// clear imaq ROI group (shape and label)
-				imaqClearOverlay((Image*)imgDisplay->baseClass.image, (*ROIPtr)->ROIName);
+				imaqClearOverlay(image, (*ROIPtr)->ROIName);
 				// discard ROI data
 				discard_ROI_type(ROIPtr);
 				// remove ROI from image display list
-				ListRemoveItem(imgDisplay->baseClass.ROIs, 0, ROIIdx);
+				ListRemoveItem(ROIlist, 0, ROIIdx);
 				break;
 		}
 	} else {
 		for (size_t i = 1; i <= nROIs; i++) {
-			ROIPtr = ListGetPtrToItem(imgDisplay->baseClass.ROIs, i);
+			ROIPtr = ListGetPtrToItem(ROIlist, i);
 			
 			switch (action) {
 				
@@ -561,30 +580,32 @@ static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROI
 				
 					// clear imaq ROI group (shape and label)
 					if ((*ROIPtr)->active) {
-						imaqClearOverlay((Image*)imgDisplay->baseClass.image, (*ROIPtr)->ROIName);
+						imaqClearOverlay(image, (*ROIPtr)->ROIName);
 						(*ROIPtr)->active = FALSE;
 					}
 				
 					break;
 				
 				case ROI_Delete:
-				
+					
 					// clear imaq ROI group (shape and label)
-					imaqClearOverlay((Image*)imgDisplay->baseClass.image, (*ROIPtr)->ROIName);
+					imaqClearOverlay(image, (*ROIPtr)->ROIName);
 					// discard ROI data
 					discard_ROI_type(ROIPtr);
 					// remove ROI from image display list
-					ListRemoveItem(imgDisplay->baseClass.ROIs, 0, ROIIdx);
+					ListRemoveItem(ROIlist, 0, ROIIdx);
 					break;
 			}
 		}
 		
 		if (action == ROI_Delete)
-			ListClear(imgDisplay->baseClass.ROIs);
+			ListClear(ROIlist);
 	}
-	
+	//
+	SetImageROIs(imgDisplay->baseClass.imagetype,ROIlist);
 	// update imaq display
-	imaqDisplayImage((Image*)imgDisplay->baseClass.image, imgDisplay->imaqWndID, FALSE);
+	imaqDisplayImage(image, imgDisplay->imaqWndID, FALSE);
+	
 }
 
 static void	DiscardImaqImg (Image** image)
@@ -702,6 +723,7 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 	WORD					wParamLowWord	= LOWORD(wParam);
 	int						error			= 0;
 	char*					errMsg			= NULL;
+	Image*					image			= NULL;
 	
 	switch (msg) {
 			
@@ -715,7 +737,8 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 				case NIDisplayMenu_Save:
 					//save as tiff with and without overlays
 					//popup and remember dir
-					errChk(SaveFromMenu(disp->baseClass.image));
+					image=GetImageImage(disp->baseClass.imagetype);
+					errChk(SaveFromMenu(image));
 					
 					break;
 					

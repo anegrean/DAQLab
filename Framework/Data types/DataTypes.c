@@ -28,6 +28,21 @@
 
 //==============================================================================
 // Types
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Images
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+struct Image { 
+	int									imgHeight;						// Image height in [pix].
+	int									imgWidth;						// Image width in [pix].
+	double								pixSize;						// Image pixel size in [um].
+	double								imgTopLeftXCoord;				// Image top-left corner X-Axis coordinates in [um].
+	double								imgTopLeftYCoord;				// Image top-left corner Y-Axis coordinates in [um].
+	double								imgZCoord;						// Image z-axis (height) location in [um].
+	void*								image;							// Stores image data of imageType.
+	ImageTypes							imageType;
+	ListType							ROIs;	
+};
+
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Waveforms
@@ -407,6 +422,16 @@ void SetWaveformPhysicalUnit (Waveform_type* waveform, char unitName[])
 	waveform->unitName = StrDup(unitName); 
 }
 
+char* GetWaveformPhysicalUnit (Waveform_type* waveform)
+{
+	 return StrDup(waveform->unitName); 
+}
+
+char* GetWaveformName (Waveform_type* waveform)
+{
+	 return StrDup(waveform->waveformName); 
+}
+
 int AddWaveformDateTimestamp (Waveform_type* waveform)
 {
 	return GetCurrentDateTime(&waveform->dateTimestamp);
@@ -749,9 +774,135 @@ size_t GetRepeatedWaveformSizeofData (RepeatedWaveform_type* waveform)
 	
 }
 
-//---------------------------------------------------------------------------------------------------------  
-// Region Of Interest (ROI) types for images
-//---------------------------------------------------------------------------------------------------------
+
+
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Images
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Image_type* init_Image_type (ImageTypes imageType,void** ptrToData)
+{
+	Image_type*	image = malloc(sizeof(Image_type));
+	if (!image) return NULL;
+	
+	image->imageType			= imageType;   // imagetype
+	image->imgHeight			= 0;		   // Image height in [pix]. 
+	image->imgWidth				= 0;		   // Image width in [pix].  
+	image->imgTopLeftXCoord		= 0.0;		   // Image top-left corner X-Axis coordinates in [um].    
+	image->imgTopLeftYCoord		= 0.0;		   // Image top-left corner Y-Axis coordinates in [um]. 
+	image->imgZCoord			= 0.0;		   // Image z-axis (height) location in [um].    
+	image->image				= *ptrToData;  // assign data
+	*ptrToData					= NULL;		   // consume data
+	image->ROIs					= 0;
+	return image;
+}
+
+
+
+void discard_Image_type (Image_type** image)
+{
+	if (!*image) return;
+	
+
+	OKfree((*image)->image);
+	//free ROIs
+	
+	OKfree(*image);
+}
+
+
+
+void SetImageHeight (Image_type* image, int imgHeight)
+{
+	image->imgHeight = imgHeight; 
+}
+
+int* GetImageHeight (Image_type* image)
+{
+	 return image->imgHeight; 
+}
+
+void SetImageWidth (Image_type* image, int imgWidth)
+{
+	image->imgWidth = imgWidth; 
+}
+
+int* GetImageWidth (Image_type* image)
+{
+	 return image->imgWidth; 
+}
+
+void SetImagePixSize (Image_type* image, double pixSize)
+{
+	image->pixSize = pixSize; 
+}
+
+double GetImagePixSize (Image_type* image)
+{
+	 return image->pixSize; 
+}
+
+void SetImageTopLeftXCoord (Image_type* image, double imgTopLeftXCoord)
+{
+	image->imgTopLeftXCoord = imgTopLeftXCoord; 
+}
+
+double GetImageTopLeftXCoord (Image_type* image)
+{
+	 return image->imgTopLeftXCoord; 
+}	
+
+void SetImageTopLeftYCoord (Image_type* image, double imgTopLeftYCoord)
+{
+	image->imgTopLeftYCoord = imgTopLeftYCoord; 
+}
+
+double GetImageTopLeftYCoord (Image_type* image)
+{
+	 return image->imgTopLeftYCoord; 
+}	
+
+void SetImageZCoord (Image_type* image, double imgZCoord)
+{
+	image->imgZCoord = imgZCoord; 
+}
+
+double GetImageZCoord (Image_type* image)
+{
+	 return image->imgZCoord; 
+}
+
+void SetImageImage (Image_type* image, void* imagedata)
+{
+	image->image = imagedata; 
+}
+
+void* GetImageImage (Image_type* image)
+{
+	 return image->image; 
+}	
+
+void SetImageType (Image_type* image, ImageTypes imageType)
+{
+	image->imageType = imageType; 
+}
+
+ImageTypes* GetImageType (Image_type* image)
+{
+	 return image->imageType; 
+}
+
+void SetImageROIs (Image_type* image, ListType	ROIs)
+{
+	image->ROIs = ROIs; 
+}
+
+ListType GetImageROIs (Image_type* image)
+{
+	 return image->ROIs; 
+}
+
 
 //-------------------------
 // ROI

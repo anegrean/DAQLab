@@ -5987,8 +5987,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				  
 				//make a copy
 				ImageType		imaqImgType;
-				
-				switch (imgBuffer->scanChan->imgDisplay->imageType) {
+				ImageType		retrievedtype=GetImageType(imgBuffer->scanChan->imgDisplay);
+				switch (retrievedtype) {
 					case Image_UChar:
 						imaqImgType 		= IMAQ_IMAGE_U8;
 						break;
@@ -6014,7 +6014,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 						break;
 				}
 				sendimage=imaqCreateImage(imaqImgType, 0); 
-				errChk(imaqDuplicate(sendimage, imgBuffer->scanChan->imgDisplay->image)); 
+				Image* image=GetImageImage(imgBuffer->scanChan->imgDisplay->imagetype);
+				errChk(imaqDuplicate(sendimage, image)); 
 				if (!sendimage){
 				//	test
 					break;
@@ -6617,6 +6618,7 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 	DisplayEngine_type*		displayEngine   = imgDisplay->displayEngine; 
 	RectRaster_type*		scanEngine		= (RectRaster_type*) scanChan->scanEngine;
 	int						nListItems		= 0;
+	ListType				ROIlist;
 	
 	switch (event) {
 			
@@ -6628,7 +6630,8 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 			
 			// obtain default unique ROI name and apply it
 			OKfree(ROI->ROIName);
-			ROI->ROIName = GetDefaultUniqueROIName(imgDisplay->ROIs);
+			ROIlist=GetImageROIs(imgDisplay->imagetype); 
+			ROI->ROIName = GetDefaultUniqueROIName(ROIlist);
 			// apply ROI color
 			ROI->rgba.R = Default_ROI_R_Color; 
 			ROI->rgba.G = Default_ROI_G_Color;
@@ -6641,7 +6644,8 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 			// update scan engine if this display is assigned to it
 			if (scanEngine->baseClass.activeDisplay == imgDisplay) {
 				// insert ROI item in the UI
-				InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, addedROI->ROIName, ListNumItems(imgDisplay->ROIs));
+				
+				InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, addedROI->ROIName, ListNumItems(ROIlist));
 				
 				switch (addedROI->ROIType) {
 						
@@ -6737,11 +6741,12 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 	// update ROIs in the scan engine UI
 	ClearListCtrl(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs);
 	ListClear(scanEngine->pointJumps);
-	size_t 		nROIs 				= ListNumItems(imgDisplay->ROIs);
+	ListType	ROIlist				= GetImageROIs(imgDisplay->imagetype);
+	size_t 		nROIs 				= ListNumItems(ROIlist);
 	ROI_type*   ROI					= NULL;
 	BOOL		activeROIAvailable 	= FALSE;
 	for (size_t i = 1; i <= nROIs; i++) {
-		ROI= *(ROI_type**)ListGetPtrToItem(imgDisplay->ROIs, i);
+		ROI= *(ROI_type**)ListGetPtrToItem(ROIlist, i);
 		InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, ROI->ROIName, i);
 		
 		if (ROI->active)

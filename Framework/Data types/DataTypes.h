@@ -102,6 +102,7 @@ typedef enum {
 	//----------------------------------------------------------------------------------------------
 	// Image types
 	//----------------------------------------------------------------------------------------------   
+typedef struct Image		Image_type;  
 
 typedef enum {
 	
@@ -301,7 +302,10 @@ void						SetWaveformName							(Waveform_type* waveform, char waveformName[]);
 
 	// Sets a physical unit name for the waveform
 void						SetWaveformPhysicalUnit 				(Waveform_type* waveform, char unitName[]);
-
+	// Gets the physical unit name for the waveform      
+char* 						GetWaveformPhysicalUnit 				(Waveform_type* waveform);
+	// Gets the waveform name     
+char* 						GetWaveformName 						(Waveform_type* waveform);
 	// Adds current date timestamp to mark the beginning of the waveform
 int							AddWaveformDateTimestamp				(Waveform_type* waveform);
 
@@ -474,6 +478,53 @@ void   						SetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* pu
 
 	// gets the pulsetrain iniial delay time
 double   					GetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* pulseTrain);
+
+//---------------------------------------------------------------------------------------------------------  
+// Images
+//---------------------------------------------------------------------------------------------------------
+	// Creates a image container for void* basic data allocated with malloc.
+Image_type*					init_Image_type						(ImageTypes imageType,void** ptrToData);
+
+	// Discards the image container and its data allocated with malloc.
+void 						discard_Image_type 					(Image_type** image);
+
+void 						SetImageHeight 						(Image_type* image, int imgHeight);
+
+int* 						GetImageHeight 						(Image_type* image);
+
+void 						SetImageWidth 						(Image_type* image, int imgWidth) ;
+
+int* 						GetImageWidth 						(Image_type* image);
+
+void 						SetImagePixSize 					(Image_type* image, double pixSize);
+
+double	 					GetImagePixSize 					(Image_type* image);
+
+void 						SetImageTopLeftXCoord 				(Image_type* image, double imgTopLeftXCoord);
+
+double 						GetImageTopLeftXCoord 				(Image_type* image);
+	
+void 						SetImageTopLeftYCoord 				(Image_type* image, double imgTopLeftYCoord);
+
+double 						GetImageTopLeftYCoord 				(Image_type* image);
+	
+void 						SetImageZCoord 						(Image_type* image, double imgZCoord);
+
+double	 					GetImageZCoord 						(Image_type* image);
+
+void 						SetImageImage 						(Image_type* image, void* imagedata);
+
+void* 						GetImageImage 						(Image_type* image);
+	
+void 						SetImageType 						(Image_type* image, ImageTypes imageType);
+
+ImageTypes* 				GetImageType 						(Image_type* image);
+
+void 						SetImageROIs 						(Image_type* image, ListType	ROIs);
+
+
+ListType 					GetImageROIs 						(Image_type* image);
+
 
 //---------------------------------------------------------------------------------------------------------  
 // Region Of Interest (ROI) types for images

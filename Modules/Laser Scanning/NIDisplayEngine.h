@@ -49,7 +49,7 @@ NIDisplayEngine_type*				init_NIDisplayEngine_type		(intptr_t 						parentWindow
 																	 ErrorHandlerFptr_type			errorHandlerCBFptr);
 
 	// Disposes NI Vision Images
-void 								discard_Image_type 				(Image** image);
+//void 								discard_Image_type 		(Image** image);
 
 #ifdef __cplusplus
     }

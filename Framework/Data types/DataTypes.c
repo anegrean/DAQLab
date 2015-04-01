@@ -781,7 +781,7 @@ size_t GetRepeatedWaveformSizeofData (RepeatedWaveform_type* waveform)
 // Images
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-Image_type* init_Image_type (ImageTypes imageType,void** ptrToData)
+Image_type* init_Image_type (ImageTypes imageType)
 {
 	Image_type*	image = malloc(sizeof(Image_type));
 	if (!image) return NULL;
@@ -792,8 +792,7 @@ Image_type* init_Image_type (ImageTypes imageType,void** ptrToData)
 	image->imgTopLeftXCoord		= 0.0;		   // Image top-left corner X-Axis coordinates in [um].    
 	image->imgTopLeftYCoord		= 0.0;		   // Image top-left corner Y-Axis coordinates in [um]. 
 	image->imgZCoord			= 0.0;		   // Image z-axis (height) location in [um].    
-	image->image				= *ptrToData;  // assign data
-	*ptrToData					= NULL;		   // consume data
+	image->image				= NULL;  		// assign data
 	image->ROIs					= 0;
 	return image;
 }

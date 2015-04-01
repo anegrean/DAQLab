@@ -82,7 +82,7 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 	imageDisplay->imageDisplayCBData			= imageDisplayCBData;
 	
 	// image data
-	imageDisplay->imagetype						= init_Image_type(Image_UChar,NULL);
+	imageDisplay->imagetype						= init_Image_type(Image_UChar);
 	
 	
 	// ROI management

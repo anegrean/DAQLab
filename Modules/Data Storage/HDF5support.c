@@ -119,7 +119,7 @@ HDF5Error:
 }
 
 
-int CreateLongAttr(hid_t dataset_id,char *attr_name, long* attr_data )
+int CreateLongAttr(hid_t dataset_id,char *attr_name, long attr_data )
 {
 	herr_t      status=0;
 	hid_t     	dataspace_id;  
@@ -127,7 +127,7 @@ int CreateLongAttr(hid_t dataset_id,char *attr_name, long* attr_data )
 	
 	dataspace_id  = H5Screate(H5S_SCALAR);
     attribute_id = H5Acreate2(dataset_id, attr_name, H5T_NATIVE_LONG, dataspace_id,H5P_DEFAULT,H5P_DEFAULT);
-    statChk(H5Awrite(attribute_id, H5T_NATIVE_LONG, attr_data)); 
+    statChk(H5Awrite(attribute_id, H5T_NATIVE_LONG, &attr_data)); 
 	/* Close the attribute. */
   	statChk(H5Aclose (attribute_id));
 	/* Close the dataspace. */
@@ -140,7 +140,7 @@ HDF5Error:
    return status;
 }
 
-int CreateULongAttr(hid_t dataset_id,char *attr_name, unsigned long* attr_data )
+int CreateULongAttr(hid_t dataset_id,char *attr_name, unsigned long attr_data )
 {
 	herr_t      status=0;
 	hid_t     	dataspace_id;  
@@ -148,7 +148,7 @@ int CreateULongAttr(hid_t dataset_id,char *attr_name, unsigned long* attr_data )
 	
 	dataspace_id  = H5Screate(H5S_SCALAR);
     attribute_id = H5Acreate2(dataset_id, attr_name, H5T_NATIVE_ULONG, dataspace_id,H5P_DEFAULT,H5P_DEFAULT);
-    statChk(H5Awrite(attribute_id, H5T_NATIVE_ULONG, attr_data)); 
+    statChk(H5Awrite(attribute_id, H5T_NATIVE_ULONG, &attr_data)); 
 	/* Close the attribute. */
   	statChk(H5Aclose (attribute_id));
 	/* Close the dataspace. */
@@ -161,7 +161,7 @@ HDF5Error:
    return status;
 }
 
-int CreateLLongAttr(hid_t dataset_id,char *attr_name, long long* attr_data )
+int CreateLLongAttr(hid_t dataset_id,char *attr_name, long long attr_data )
 {
 	herr_t      status=0;
 	hid_t     	dataspace_id;  
@@ -169,7 +169,7 @@ int CreateLLongAttr(hid_t dataset_id,char *attr_name, long long* attr_data )
 	
 	dataspace_id  = H5Screate(H5S_SCALAR);
     attribute_id = H5Acreate2(dataset_id, attr_name, H5T_NATIVE_LLONG, dataspace_id,H5P_DEFAULT,H5P_DEFAULT);
-    statChk(H5Awrite(attribute_id, H5T_NATIVE_LLONG, attr_data)); 
+    statChk(H5Awrite(attribute_id, H5T_NATIVE_LLONG, &attr_data)); 
 	/* Close the attribute. */
   	statChk(H5Aclose (attribute_id));
 	/* Close the dataspace. */
@@ -182,7 +182,7 @@ HDF5Error:
    return status;
 }
 
-int CreateULLongAttr(hid_t dataset_id,char *attr_name, unsigned long long* attr_data )
+int CreateULLongAttr(hid_t dataset_id,char *attr_name, unsigned long long attr_data )
 {
 	herr_t      status=0;
 	hid_t     	dataspace_id;  
@@ -190,7 +190,7 @@ int CreateULLongAttr(hid_t dataset_id,char *attr_name, unsigned long long* attr_
 	
 	dataspace_id  = H5Screate(H5S_SCALAR);
     attribute_id = H5Acreate2(dataset_id, attr_name, H5T_NATIVE_ULLONG, dataspace_id,H5P_DEFAULT,H5P_DEFAULT);
-    statChk(H5Awrite(attribute_id, H5T_NATIVE_ULLONG, attr_data)); 
+    statChk(H5Awrite(attribute_id, H5T_NATIVE_ULLONG, &attr_data)); 
 	/* Close the attribute. */
   	statChk(H5Aclose (attribute_id));
 	/* Close the dataspace. */
@@ -204,7 +204,7 @@ HDF5Error:
 }
 
 
-int CreateIntAttr(hid_t dataset_id,char *attr_name, int* attr_data )
+int CreateIntAttr(hid_t dataset_id,char *attr_name, int attr_data )
 {
 	herr_t      status=0;
 	hid_t     	dataspace_id;  
@@ -212,7 +212,7 @@ int CreateIntAttr(hid_t dataset_id,char *attr_name, int* attr_data )
 	
 	dataspace_id  = H5Screate(H5S_SCALAR);
     attribute_id = H5Acreate2(dataset_id, attr_name, H5T_NATIVE_INT, dataspace_id,H5P_DEFAULT,H5P_DEFAULT);
-    statChk(H5Awrite(attribute_id, H5T_NATIVE_INT, attr_data)); 
+    statChk(H5Awrite(attribute_id, H5T_NATIVE_INT, &attr_data)); 
 	/* Close the attribute. */
   	statChk(H5Aclose (attribute_id));
 	/* Close the dataspace. */
@@ -226,7 +226,7 @@ HDF5Error:
 }
 
 
-int CreateUIntAttr(hid_t dataset_id,char *attr_name, unsigned int* attr_data )
+int CreateUIntAttr(hid_t dataset_id,char *attr_name, unsigned int attr_data )
 {
 	herr_t      status=0;
 	hid_t     	dataspace_id;  
@@ -234,7 +234,7 @@ int CreateUIntAttr(hid_t dataset_id,char *attr_name, unsigned int* attr_data )
 	
 	dataspace_id  = H5Screate(H5S_SCALAR);
     attribute_id = H5Acreate2(dataset_id, attr_name, H5T_NATIVE_UINT, dataspace_id,H5P_DEFAULT,H5P_DEFAULT);
-    statChk(H5Awrite(attribute_id, H5T_NATIVE_UINT, attr_data)); 
+    statChk(H5Awrite(attribute_id, H5T_NATIVE_UINT, &attr_data)); 
 	/* Close the attribute. */
   	statChk(H5Aclose (attribute_id));
 	/* Close the dataspace. */
@@ -247,7 +247,7 @@ HDF5Error:
    return status;
 }
 
-int CreateShortAttr(hid_t dataset_id,char *attr_name, long* attr_data )
+int CreateShortAttr(hid_t dataset_id,char *attr_name, long attr_data )
 {
 	herr_t      status=0;
 	hid_t     	dataspace_id;  
@@ -255,7 +255,7 @@ int CreateShortAttr(hid_t dataset_id,char *attr_name, long* attr_data )
 	
 	dataspace_id  = H5Screate(H5S_SCALAR);
     attribute_id = H5Acreate2(dataset_id, attr_name, H5T_NATIVE_SHORT, dataspace_id,H5P_DEFAULT,H5P_DEFAULT);
-    statChk(H5Awrite(attribute_id, H5T_NATIVE_SHORT, attr_data)); 
+    statChk(H5Awrite(attribute_id, H5T_NATIVE_SHORT, &attr_data)); 
 	/* Close the attribute. */
   	statChk(H5Aclose (attribute_id));
 	/* Close the dataspace. */
@@ -268,7 +268,7 @@ HDF5Error:
    return status;
 }
 
-int CreateUShortAttr(hid_t dataset_id,char *attr_name, unsigned long* attr_data )
+int CreateUShortAttr(hid_t dataset_id,char *attr_name, unsigned long attr_data )
 {
 	herr_t      status=0;
 	hid_t     	dataspace_id;  
@@ -276,7 +276,7 @@ int CreateUShortAttr(hid_t dataset_id,char *attr_name, unsigned long* attr_data 
 	
 	dataspace_id  = H5Screate(H5S_SCALAR);
     attribute_id = H5Acreate2(dataset_id, attr_name, H5T_NATIVE_USHORT, dataspace_id,H5P_DEFAULT,H5P_DEFAULT);
-    statChk(H5Awrite(attribute_id, H5T_NATIVE_USHORT, attr_data)); 
+    statChk(H5Awrite(attribute_id, H5T_NATIVE_USHORT, &attr_data)); 
 	/* Close the attribute. */
   	statChk(H5Aclose (attribute_id));
 	/* Close the dataspace. */
@@ -290,7 +290,7 @@ HDF5Error:
 }
 
 
-int CreateFloatAttr(hid_t dataset_id,char *attr_name, float* attr_data )
+int CreateFloatAttr(hid_t dataset_id,char *attr_name, float attr_data )
 {
 	herr_t      status=0;
 	hid_t     	dataspace_id;  
@@ -298,7 +298,7 @@ int CreateFloatAttr(hid_t dataset_id,char *attr_name, float* attr_data )
 	
 	dataspace_id  = H5Screate(H5S_SCALAR);
     attribute_id = H5Acreate2(dataset_id, attr_name, H5T_NATIVE_FLOAT, dataspace_id,H5P_DEFAULT,H5P_DEFAULT);
-    statChk(H5Awrite(attribute_id, H5T_NATIVE_FLOAT, attr_data)); 
+    statChk(H5Awrite(attribute_id, H5T_NATIVE_FLOAT, &attr_data)); 
 	/* Close the attribute. */
   	statChk(H5Aclose (attribute_id));
 	/* Close the dataspace. */
@@ -311,7 +311,7 @@ HDF5Error:
    return status;
 }
 
-int CreateDoubleAttr(hid_t dataset_id,char *attr_name, double* attr_data)
+int CreateDoubleAttr(hid_t dataset_id,char *attr_name, double attr_data)
 {
 	herr_t      status				= 0;
 	hid_t     	dataspace_id;  
@@ -319,7 +319,7 @@ int CreateDoubleAttr(hid_t dataset_id,char *attr_name, double* attr_data)
 	
 	dataspace_id  	= H5Screate(H5S_SCALAR);
     attribute_id 	= H5Acreate2(dataset_id, attr_name, H5T_NATIVE_DOUBLE, dataspace_id, H5P_DEFAULT,H5P_DEFAULT);
-    statChk(H5Awrite(attribute_id, H5T_NATIVE_DOUBLE, attr_data)); 
+    statChk(H5Awrite(attribute_id, H5T_NATIVE_DOUBLE, &attr_data)); 
 	/* Close the attribute. */
   	statChk(H5Aclose (attribute_id));
 	/* Close the dataspace. */
@@ -363,9 +363,9 @@ herr_t CreateDataSet(hid_t file_id,char* dataset_name)
    attr_data=21 ;
    attr_float=1.12354; 
    
-   statChk(CreateIntAttr(dataset_id,"Int_attr", &attr_data)); 
-   statChk(CreateUShortAttr(dataset_id,"Ushort_attr", &attr_data)); 
-   statChk(CreateFloatAttr(dataset_id,"Float_attr", &attr_float)); 
+   statChk(CreateIntAttr(dataset_id,"Int_attr", attr_data)); 
+   statChk(CreateUShortAttr(dataset_id,"Ushort_attr", attr_data)); 
+   statChk(CreateFloatAttr(dataset_id,"Float_attr", attr_float)); 
    statChk(CreateStringAttr(dataset_id,"Test_attr", str_data ));
 	
    //statChk(writeattribute(dataset_id,"Units",H5T_STD_I32BE,&attr_data)); 
@@ -464,7 +464,7 @@ ListType ParseIterator(Iterator_type*		currentiter)
 	parentiter = GetIteratorParent(currentiter);
 	if (parentiter==NULL) return 0;  //no parent
 	newelement=malloc(sizeof(IteratorData_type));
-	newelement->name=StrDup(GetCurrentIterationName(parentiter)); 				  
+	newelement->name=GetCurrentIterationName(parentiter); 				  
 	newelement->currentIterIdx=GetCurrentIterationIndex(parentiter);
 	ListInsertItem(parsediter,&newelement ,FRONT_OF_LIST);
 	while (parentiter!=NULL) {  
@@ -474,7 +474,7 @@ ListType ParseIterator(Iterator_type*		currentiter)
 			return parsediter;  //no parent, return current name
 		}
 		newelement=malloc(sizeof(IteratorData_type));
-		newelement->name=StrDup(GetCurrentIterationName(parentiter)); 				  
+		newelement->name=GetCurrentIterationName(parentiter); 				  
 		newelement->currentIterIdx=GetCurrentIterationIndex(parentiter);
 		ListInsertItem(parsediter,&newelement ,FRONT_OF_LIST);
 	}
@@ -516,14 +516,14 @@ int AddWaveformAttributes(hid_t dataset_id,Waveform_type* waveform)
 	 char* unitname					= GetWaveformPhysicalUnit(waveform);	// Physical SI unit such as V, A, Ohm, etc. 
 	 double datetimestamp			= GetWaveformDateTimestamp(waveform);	// Number of seconds since midnight, January 1, 1900 in the local time zone.
 	 double samplingrate			= GetWaveformSamplingRate(waveform);  	// Sampling rate in [Hz]. If 0, sampling rate is not given.   
-	 unsigned long long numsamples	= GetWaveformNumSamples(waveform);  	// Number of samples in the waveform.   
+//	 unsigned long long numsamples	= GetWaveformNumSamples(waveform);  	// Number of samples in the waveform.   
 	 
 	 
 	 if (name) errChk(CreateStringAttr(dataset_id,"Name", name));   	     
 	 if (unitname) errChk(CreateStringAttr(dataset_id,"Units", unitname));   		
-	 if (datetimestamp) errChk(CreateDoubleAttr(dataset_id,"DateTimeStamp", &datetimestamp));      
-	 errChk(CreateDoubleAttr(dataset_id,"SamplingRate", &samplingrate));    	
-	 errChk(CreateULLongAttr(dataset_id,"NumSamples",&numsamples )); 		
+	 if (datetimestamp) errChk(CreateDoubleAttr(dataset_id,"DateTimeStamp", datetimestamp));      
+	 errChk(CreateDoubleAttr(dataset_id,"SamplingRate", samplingrate));    	
+//	 errChk(CreateULLongAttr(dataset_id,"NumSamples",numsamples )); 		
 	 return error;
 Error:
 	 return error;
@@ -553,6 +553,11 @@ int WriteHDF5file(char *filename,Iterator_type*		currentiter,char* dataset_name,
    char**				groupname;
    hid_t 				mem_type_id =0;
    hid_t 				type_id		=0;
+   hid_t        		filespace;
+   hid_t				memspace;
+   hsize_t				dimsr[2];
+   hsize_t      		size[2];
+   hsize_t      		offset[2];
 	
   	
   
@@ -656,12 +661,34 @@ int WriteHDF5file(char *filename,Iterator_type*		currentiter,char* dataset_name,
    		if (dataset_id<0) {
 	   		return -1;
    		}
+		/* Write the dataset. */
+   		statChk(H5Dwrite(dataset_id, mem_type_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, dset_data));
+   		//add attributes to dataset
+   		statChk(AddWaveformAttributes(dataset_id,waveform));
    }
-   /* Write the dataset. */
-   statChk(H5Dwrite(dataset_id, mem_type_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, dset_data));
+   else {
+	   //dataset existed, have to add the data to the current data set
+	   //get the size of the dataset
+	   	filespace = H5Dget_space (dataset_id);
+    	//rank = H5Sget_simple_extent_ndims (filespace);
+    	statChk(H5Sget_simple_extent_dims (filespace, dimsr, NULL));
+    	size[0] = dimsr[0]+ dims[0];
+    	size[1] = dimsr[1];
+    	statChk(H5Dset_extent (dataset_id, size));
 
-   //add attributes to dataset
-   statChk(AddWaveformAttributes(dataset_id,waveform));
+    	/* Select a hyperslab in extended portion of dataset  */
+    	filespace = H5Dget_space (dataset_id);
+    	offset[0] = dimsr[0];
+    	offset[1] = 0;
+    	statChk(H5Sselect_hyperslab (filespace, H5S_SELECT_SET, offset, NULL,dims, NULL));  
+
+    	/* Define memory space */
+   		memspace = H5Screate_simple (1, dims, NULL); 
+
+    	/* Write the data to the extended portion of dataset  */
+    	statChk(H5Dwrite (dataset_id, mem_type_id, memspace, filespace,H5P_DEFAULT, dset_data));
+   }
+   
   
    /* Close the dataset. */
    statChk(H5Dclose(dataset_id));

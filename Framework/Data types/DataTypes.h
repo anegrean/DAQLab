@@ -483,7 +483,7 @@ double   					GetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* p
 // Images
 //---------------------------------------------------------------------------------------------------------
 	// Creates a image container for void* basic data allocated with malloc.
-Image_type*					init_Image_type						(ImageTypes imageType,void** ptrToData);
+Image_type*					init_Image_type						(ImageTypes imageType);
 
 	// Discards the image container and its data allocated with malloc.
 void 						discard_Image_type 					(Image_type** image);

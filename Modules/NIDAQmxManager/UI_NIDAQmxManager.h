@@ -168,9 +168,8 @@
 
      /* tab page panel controls */
 #define  CLKPAN_Plate                     2       /* control type: deco, callback function: (none) */
-#define  CLKPAN_RefClockSlope             3       /* control type: ring, callback function: (none) */
-#define  CLKPAN_RefClockType              4       /* control type: ring, callback function: (none) */
-#define  CLKPAN_RefClkSource              5       /* control type: string, callback function: (none) */
+#define  CLKPAN_RefClkFreq                3       /* control type: numeric, callback function: (none) */
+#define  CLKPAN_RefClkSource              4       /* control type: string, callback function: (none) */
 
      /* tab page panel controls */
 #define  Set_BlockSize                    2       /* control type: numeric, callback function: (none) */

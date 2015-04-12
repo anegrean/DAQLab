@@ -553,7 +553,8 @@ typedef struct {
 typedef struct {
 	Trig_type 					trigType;					// Trigger type.
 	char*     					trigSource;   				// Trigger source.
-	double*						samplingRate;				// Reference to task sampling rate in [Hz]
+	char*						trigRouting;				// Trigger routing.
+	double*						samplingRate;				// Reference to task sampling rate in [Hz].
 	TrigSlope_type				slope;     					// For analog and digital edge trig type.
 	double   					level; 						// For analog edge trigger.
 	double    					wndTop; 	   				// For analog window trigger.
@@ -565,14 +566,15 @@ typedef struct {
 	// UI
 	//------------------------------------
 	int							trigPanHndl;				// Trigger panel handle.
-	int							trigSlopeCtrlID;			// Trigger setting control copy IDs
-	int							trigSourceCtrlID;			// Trigger setting control copy IDs
-	int							preTrigDurationCtrlID;		// Trigger setting control copy IDs
-	int							preTrigNSamplesCtrlID;		// Trigger setting control copy IDs
-	int							levelCtrlID;				// Trigger setting control copy IDs
-	int							windowTrigCondCtrlID;		// Trigger setting control copy IDs
-	int							windowTopCtrlID;			// Trigger setting control copy IDs
-	int							windowBottomCtrlID;			// Trigger setting control copy IDs
+	int							trigSlopeCtrlID;			// Trigger settings control copy IDs
+	int							trigSourceCtrlID;			// Trigger settings control copy IDs
+	int							trigRoutingCtrlID;			// Trigger settings control copy IDs
+	int							preTrigDurationCtrlID;		// Trigger settings control copy IDs
+	int							preTrigNSamplesCtrlID;		// Trigger settings control copy IDs
+	int							levelCtrlID;				// Trigger settings control copy IDs
+	int							windowTrigCondCtrlID;		// Trigger settings control copy IDs
+	int							windowTopCtrlID;			// Trigger settings control copy IDs
+	int							windowBottomCtrlID;			// Trigger settings control copy IDs
 } TaskTrig_type;
 
 // Analog Input & Output channel type settings
@@ -1297,6 +1299,7 @@ static void 						AddReferenceTriggerToUI 				(TaskTrig_type* taskTrig);
 static int CVICALLBACK 				TriggerSlope_CB	 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerLevel_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerSource_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 				TriggerRouting_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerWindowType_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerWindowBttm_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerWindowTop_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
@@ -1949,7 +1952,8 @@ static int LoadTaskTrigCfg (TaskTrig_type* taskTrig, ActiveXMLObj_IXMLDOMElement
 	
 		// shared trigger attributes
 	DAQLabXMLNode 					sharedTrigAttr[]		= {	{"Type", 					BasicData_UInt, 	&trigType},
-																{"Source", 					BasicData_CString, 	&taskTrig->trigSource} };
+																{"Source", 					BasicData_CString, 	&taskTrig->trigSource},
+																{"Routing",					BasicData_CString,	&taskTrig->trigRouting} };
 		// for both analog and digital edge triggers
 	DAQLabXMLNode 					edgeTrigAttr[]			= {	{"Slope", 					BasicData_UInt, 	&slopeType} };
 		// for analog edge trigger
@@ -2668,7 +2672,8 @@ static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveX
 	uInt32							triggerCondition		= (uInt32) taskTrig->wndTrigCond;
 		// shared trigger attributes
 	DAQLabXMLNode 					sharedTrigAttr[]		= {	{"Type", 					BasicData_UInt, 	&trigType},
-																{"Source", 					BasicData_CString, 	taskTrig->trigSource} };
+																{"Source", 					BasicData_CString, 	taskTrig->trigSource},
+																{"Routing",					BasicData_CString,	taskTrig->trigRouting} };
 		// for both analog and digital edge triggers
 	DAQLabXMLNode 					edgeTrigAttr[]			= {	{"Slope", 					BasicData_UInt, 	&slopeType} };
 		// for analog edge trigger
@@ -4969,9 +4974,10 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 Error:
 	
 	if (!errMsg)
-		errMsg = StrDup("Out of memory or unknown error.\n");
+		errMsg = StrDup("Out of memory or unknown error.");
 	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -5172,9 +5178,10 @@ static int CVICALLBACK ChanSetAOVoltageUI_CB (int panel, int control, int event,
 Error:
 	
 	if (!errMsg)
-		errMsg = StrDup("Out of memory or unknown error.\n");
+		errMsg = StrDup("Out of memory or unknown error.");
 	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -5433,6 +5440,7 @@ static int ChanSetLineDO_CB (int panel, int control, int event, void *callbackDa
 Error:
 	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -5516,6 +5524,7 @@ static int ChanSetPortDO_CB (int panel, int control, int event, void *callbackDa
 Error:
 	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -5826,6 +5835,7 @@ static int ChanSetCO_CB (int panel, int control, int event, void *callbackData, 
 Error:
 	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -7759,27 +7769,29 @@ static TaskTrig_type* init_TaskTrig_type (Dev_type* dev, double* samplingRate)
 	TaskTrig_type* taskTrig = malloc (sizeof(TaskTrig_type));
 	if (!taskTrig) return NULL;
 	
-	taskTrig-> trigType					= Trig_None;
-	taskTrig-> device					= dev;
-	taskTrig-> trigSource				= NULL;
-	taskTrig-> slope					= TrigSlope_Rising;
-	taskTrig-> level					= 0;
-	taskTrig-> wndBttm					= 0;
-	taskTrig-> wndTop					= 0;
-	taskTrig-> wndTrigCond				= TrigWnd_Entering;
-	taskTrig-> nPreTrigSamples 			= 2;				// applies only to reference type trigger
-	taskTrig-> samplingRate				= samplingRate;
+	taskTrig->trigType					= Trig_None;
+	taskTrig->device					= dev;
+	taskTrig->trigSource				= NULL;
+	taskTrig->trigRouting				= NULL;
+	taskTrig->slope						= TrigSlope_Rising;
+	taskTrig->level						= 0;
+	taskTrig->wndBttm					= 0;
+	taskTrig->wndTop					= 0;
+	taskTrig->wndTrigCond				= TrigWnd_Entering;
+	taskTrig->nPreTrigSamples 			= 2;				// applies only to reference type trigger
+	taskTrig->samplingRate				= samplingRate;
 	
 	// UI
-	taskTrig-> trigPanHndl				= 0;
-	taskTrig-> trigSlopeCtrlID			= 0;	
-	taskTrig-> trigSourceCtrlID			= 0;
-	taskTrig-> preTrigDurationCtrlID	= 0;
-	taskTrig-> preTrigNSamplesCtrlID	= 0;
-	taskTrig-> levelCtrlID				= 0;
-	taskTrig-> windowTrigCondCtrlID		= 0;
-	taskTrig-> windowTopCtrlID			= 0;
-	taskTrig-> windowBottomCtrlID		= 0;
+	taskTrig->trigPanHndl				= 0;
+	taskTrig->trigSlopeCtrlID			= 0;	
+	taskTrig->trigSourceCtrlID			= 0;
+	taskTrig->trigRoutingCtrlID			= 0;
+	taskTrig->preTrigDurationCtrlID		= 0;
+	taskTrig->preTrigNSamplesCtrlID		= 0;
+	taskTrig->levelCtrlID				= 0;
+	taskTrig->windowTrigCondCtrlID		= 0;
+	taskTrig->windowTopCtrlID			= 0;
+	taskTrig->windowBottomCtrlID		= 0;
 	
 		
 	return taskTrig;	
@@ -7787,8 +7799,12 @@ static TaskTrig_type* init_TaskTrig_type (Dev_type* dev, double* samplingRate)
 
 static void	discard_TaskTrig_type (TaskTrig_type** taskTrigPtr)
 {
-	if (!*taskTrigPtr) return;
-	OKfree((*taskTrigPtr)->trigSource);
+	TaskTrig_type*	taskTrig = *taskTrigPtr;
+	if (!taskTrig) return;
+	
+	OKfree(taskTrig->trigSource);
+	OKfree(taskTrig->trigRouting);
+	
 	OKfree(*taskTrigPtr);
 }
 
@@ -7800,23 +7816,23 @@ static ADTaskTiming_type* init_ADTaskTiming_type (void)
 	ADTaskTiming_type* taskTiming = malloc(sizeof(ADTaskTiming_type));
 	if (!taskTiming) return NULL;
 	
-	taskTiming -> measMode					= DAQmxDefault_Task_MeasMode;
-	taskTiming -> sampleRate				= DAQmxDefault_Task_SampleRate;
-	taskTiming -> nSamples					= DAQmxDefault_Task_NSamples;
-	taskTiming -> oversampling				= 1;
-	taskTiming -> blockSize					= DAQmxDefault_Task_BlockSize;
-	taskTiming -> sampClkSource				= NULL;   								// use onboard clock for sampling
-	taskTiming -> sampClkEdge				= SampClockEdge_Rising;
-	taskTiming -> refClkSource				= NULL;									// onboard clock has no external reference to sync to
-	taskTiming -> refClkFreq				= DAQmxDefault_Task_RefClkFreq;
-	taskTiming -> nSamplesSinkVChan			= NULL;
-	taskTiming -> nSamplesSourceVChan		= NULL;
-	taskTiming -> samplingRateSinkVChan		= NULL;
-	taskTiming -> samplingRateSourceVChan	= NULL;
+	taskTiming->measMode					= DAQmxDefault_Task_MeasMode;
+	taskTiming->sampleRate					= DAQmxDefault_Task_SampleRate;
+	taskTiming->nSamples					= DAQmxDefault_Task_NSamples;
+	taskTiming->oversampling				= 1;
+	taskTiming->blockSize					= DAQmxDefault_Task_BlockSize;
+	taskTiming->sampClkSource				= NULL;   								// use onboard clock for sampling
+	taskTiming->sampClkEdge					= SampClockEdge_Rising;
+	taskTiming->refClkSource				= NULL;									// onboard clock has no external reference to sync to
+	taskTiming->refClkFreq					= DAQmxDefault_Task_RefClkFreq;
+	taskTiming->nSamplesSinkVChan			= NULL;
+	taskTiming->nSamplesSourceVChan			= NULL;
+	taskTiming->samplingRateSinkVChan		= NULL;
+	taskTiming->samplingRateSourceVChan		= NULL;
 	
 	// UI
-	taskTiming -> timingPanHndl				= 0;
-	taskTiming -> settingsPanHndl			= 0;
+	taskTiming->timingPanHndl				= 0;
+	taskTiming->settingsPanHndl				= 0;
 	
 	return taskTiming;
 }
@@ -8385,11 +8401,12 @@ Error:
 	OKfree(samplingRatePtr);
 	discard_DataPacket_type(&dataPacket); 
 	
-	if (errMsg) {
-		DLMsg(errMsg, 1);
-		OKfree(errMsg);
-	} else
-		DLMsg("Out of memory", 1);
+	if (!errMsg) 
+		errMsg = StrDup("Out of memory.");
+	
+	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
+	OKfree(errMsg);
 	
 	return 0;
 }
@@ -8454,11 +8471,12 @@ static int ADTimingSettings_CB	(int panel, int control, int event, void *callbac
 	
 Error:
 	
-	if (errMsg) {
-		DLMsg(errMsg, 1);
-		OKfree(errMsg);
-	} else
-		DLMsg("Out of memory", 1);
+	if (!errMsg) 
+		errMsg = StrDup("Out of memory.");
+	
+	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
+	OKfree(errMsg);
 	
 	return 0;
 }
@@ -8807,7 +8825,11 @@ static int DO_Timing_TaskSet_CB	(int panel, int control, int event, void *callba
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -8983,11 +9005,11 @@ Error:
 	discard_PulseTrain_type(&pulseTrain);
 	
 	if (!errMsg)
-		DLMsg("Chan_CO_Pulse_Frequency_CB Error: Out of memory", 1);	
-	else {
-		DLMsg(errMsg, 1);
-		OKfree(errMsg);
-	}
+		errMsg = StrDup("Out of memory.");
+	
+	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
+	OKfree(errMsg);
 	
 	return 0;
 }
@@ -9071,11 +9093,11 @@ Error:
 	discard_PulseTrain_type(&pulseTrain);
 	
 	if (!errMsg)
-		DLMsg("Chan_CO_Pulse_Frequency_CB Error: Out of memory", 1);	
-	else {
-		DLMsg(errMsg, 1);
-		OKfree(errMsg);
-	}
+		errMsg = StrDup("Out of memory.");
+	
+	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
+	OKfree(errMsg);
 	
 	return 0;
 }
@@ -9155,11 +9177,11 @@ Error:
 	discard_PulseTrain_type(&pulseTrain);
 	
 	if (!errMsg)
-		DLMsg("Chan_CO_Pulse_Frequency_CB Error: Out of memory", 1);	
-	else {
-		DLMsg(errMsg, 1);
-		OKfree(errMsg);
-	}
+		errMsg = StrDup("Out of memory.");
+	
+	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
+	OKfree(errMsg);
 	
 	return 0;
 }
@@ -9198,7 +9220,11 @@ static int CVICALLBACK Chan_CO_Clk_CB	(int panel, int control, int event, void *
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -9258,7 +9284,11 @@ static int CVICALLBACK Chan_CO_Trig_CB	(int panel, int control, int event, void 
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -9367,7 +9397,11 @@ static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callback
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -9601,6 +9635,16 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
 	DAQmxErrChk( DAQmxRegisterDoneEvent(dev->AITaskSet->taskHndl, 0, AIDAQmxTaskDone_CB, dev) );
 	
+	//----------------------
+	// Signal routing
+	//----------------------
+	
+	// start trigger routing
+	if (dev->AITaskSet->startTrig->trigRouting && dev->AITaskSet->startTrig->trigRouting[0])
+		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->AITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->AITaskSet->startTrig->trigRouting) );
+	else
+		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->AITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
+	
 	//----------------------  
 	// Commit AI Task
 	//----------------------  
@@ -9823,6 +9867,17 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev));
 	
+	
+	//----------------------
+	// Signal routing
+	//----------------------
+	
+	// start trigger routing
+	if (dev->AOTaskSet->startTrig->trigRouting && dev->AOTaskSet->startTrig->trigRouting[0])
+		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->AOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->AOTaskSet->startTrig->trigRouting) );
+	else
+		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->AOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
+	
 	//----------------------  
 	// Commit AO Task
 	//----------------------  
@@ -10015,6 +10070,17 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DITaskSet->taskHndl, 0, DIDAQmxTaskDone_CB, dev));
 	
 	
+	//----------------------
+	// Signal routing
+	//----------------------
+	
+	// start trigger routing
+	if (dev->DITaskSet->startTrig->trigRouting && dev->DITaskSet->startTrig->trigRouting[0])
+		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->DITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->DITaskSet->startTrig->trigRouting) );
+	else
+		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->DITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
+	
+	
 	//----------------------  
 	// Commit DI Task
 	//----------------------  
@@ -10190,7 +10256,18 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	// register DO task done event callback (which is called also if the task encounters an error)
 	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DOTaskSet->taskHndl, 0, DODAQmxTaskDone_CB, dev));
 	
-				 
+	
+	//----------------------
+	// Signal routing
+	//----------------------
+	
+	// start trigger routing
+	if (dev->DOTaskSet->startTrig->trigRouting && dev->DOTaskSet->startTrig->trigRouting[0])
+		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->DOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->DOTaskSet->startTrig->trigRouting) );
+	else
+		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->DOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
+	
+	
 	//----------------------  
 	// Commit DO Task
 	//----------------------  
@@ -13018,7 +13095,11 @@ static int CVICALLBACK TaskStartTrigType_CB (int panel, int control, int event, 
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -13029,13 +13110,14 @@ static void AddStartTriggerToUI (TaskTrig_type* taskTrig)
 	int		ctrlIdx = 0;
 	
 	// clear all possible controls except the select trigger type control
-	if (taskTrig->levelCtrlID) 			{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->levelCtrlID); taskTrig->levelCtrlID = 0;} 
-	if (taskTrig->trigSlopeCtrlID)		{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->trigSlopeCtrlID); taskTrig->trigSlopeCtrlID = 0;} 
-	if (taskTrig->trigSourceCtrlID)		{NIDAQmx_DiscardIOCtrl(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID); taskTrig->trigSourceCtrlID = 0;} 
-	if (taskTrig->windowTrigCondCtrlID)	{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->windowTrigCondCtrlID); taskTrig->windowTrigCondCtrlID = 0;} 
-	if (taskTrig->windowBottomCtrlID)	{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->windowBottomCtrlID); taskTrig->windowBottomCtrlID = 0;} 
-	if (taskTrig->windowTopCtrlID)		{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->windowTopCtrlID); taskTrig->windowTopCtrlID = 0;} 
-			
+	if (taskTrig->levelCtrlID) 					{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->levelCtrlID); taskTrig->levelCtrlID = 0;} 
+	if (taskTrig->trigSlopeCtrlID)				{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->trigSlopeCtrlID); taskTrig->trigSlopeCtrlID = 0;} 
+	if (taskTrig->trigSourceCtrlID)				{NIDAQmx_DiscardIOCtrl(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID); taskTrig->trigSourceCtrlID = 0;}
+	if (taskTrig->trigRoutingCtrlID)			{NIDAQmx_DiscardIOCtrl(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID); taskTrig->trigRoutingCtrlID = 0;} 
+	if (taskTrig->windowTrigCondCtrlID)			{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->windowTrigCondCtrlID); taskTrig->windowTrigCondCtrlID = 0;} 
+	if (taskTrig->windowBottomCtrlID)			{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->windowBottomCtrlID); taskTrig->windowBottomCtrlID = 0;} 
+	if (taskTrig->windowTopCtrlID)				{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->windowTopCtrlID); taskTrig->windowTopCtrlID = 0;}
+	
 	// load resources
 	int DigEdgeTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig1);
 	int DigPatternTrig_PanHndl 		= LoadPanel(0, MOD_NIDAQmxManager_UI, StartTrig2);
@@ -13069,7 +13151,18 @@ static void AddStartTriggerToUI (TaskTrig_type* taskTrig)
 			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
 			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 			if (taskTrig->trigSource)
-				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, taskTrig->trigSource); 
+				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, taskTrig->trigSource);
+			// trigger routing
+			taskTrig->trigRoutingCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, StartTrig1_Routing, taskTrig->trigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_DATA, taskTrig);
+			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerRouting_CB);					
+			// turn string control into terminal control to select the trigger routes
+			NIDAQmx_NewTerminalCtrl(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, 1); // multiple terminal selection 
+			// adjust trigger routing control properties
+			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
+			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+			if (taskTrig->trigRouting)
+				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, taskTrig->trigRouting);
 			break;
 					
 		case Trig_DigitalPattern:
@@ -13080,7 +13173,7 @@ static void AddStartTriggerToUI (TaskTrig_type* taskTrig)
 		case Trig_AnalogEdge:
 					
 			// trigger slope
-			taskTrig->trigSlopeCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, StartTrig3_Slope, taskTrig->trigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+			taskTrig->trigSlopeCtrlID = DuplicateCtrl(AnEdgeTrig_PanHndl, StartTrig3_Slope, taskTrig->trigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
 			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSlopeCtrlID, ATTR_CALLBACK_DATA, taskTrig);
 			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSlopeCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerSlope_CB);
 			InsertListItem(taskTrig->trigPanHndl, taskTrig->trigSlopeCtrlID, 0, "Rising", TrigSlope_Rising); 
@@ -13102,7 +13195,18 @@ static void AddStartTriggerToUI (TaskTrig_type* taskTrig)
 			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
 			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 			if (taskTrig->trigSource)
-				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, taskTrig->trigSource); 
+				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, taskTrig->trigSource);
+			// trigger routing
+			taskTrig->trigRoutingCtrlID = DuplicateCtrl(AnEdgeTrig_PanHndl, StartTrig3_Routing, taskTrig->trigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_DATA, taskTrig);
+			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerRouting_CB);					
+			// turn string control into terminal control to select the trigger routes
+			NIDAQmx_NewTerminalCtrl(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, 1); // multiple terminal selection 
+			// adjust trigger routing control properties
+			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
+			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+			if (taskTrig->trigRouting)
+				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, taskTrig->trigRouting);
 			break;
 					
 		case Trig_AnalogWindow:
@@ -13135,7 +13239,18 @@ static void AddStartTriggerToUI (TaskTrig_type* taskTrig)
 			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
 			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 			if (taskTrig->trigSource)
-				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, taskTrig->trigSource); 
+				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, taskTrig->trigSource);
+			// trigger routing
+			taskTrig->trigRoutingCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, StartTrig4_Routing, taskTrig->trigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
+			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_DATA, taskTrig);
+			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerRouting_CB);					
+			// turn string control into terminal control to select the trigger routes
+			NIDAQmx_NewTerminalCtrl(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, 1); // multiple terminal selection 
+			// adjust trigger routing control properties
+			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
+			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+			if (taskTrig->trigRouting)
+				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, taskTrig->trigRouting);
 			break;
 	}
 			
@@ -13171,7 +13286,11 @@ static int CVICALLBACK TaskReferenceTrigType_CB (int panel, int control, int eve
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -13335,22 +13454,26 @@ static void AddReferenceTriggerToUI (TaskTrig_type* taskTrig)
 
 static int CVICALLBACK TriggerSlope_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	TaskTrig_type* 		taskTrigPtr 	= callbackData;    
+	TaskTrig_type* 		taskTrig 		= callbackData;    
 	char*				errMsg			= NULL;
 	int					error			= 0;
 	
 	if (event != EVENT_COMMIT) return 0;	 // do nothing for other events
 		
-	GetCtrlVal(panel, control, &taskTrigPtr->slope);
+	GetCtrlVal(panel, control, &taskTrig->slope);
 
 	// configure device
-	errChk(ConfigDAQmxDevice(taskTrigPtr->device, &errMsg) );    
+	errChk(ConfigDAQmxDevice(taskTrig->device, &errMsg) );    
 	
 	return 0;
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -13359,22 +13482,26 @@ Error:
 
 static int CVICALLBACK TriggerLevel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	TaskTrig_type* 		taskTrigPtr 	= callbackData;    
+	TaskTrig_type* 		taskTrig 		= callbackData;    
 	char*				errMsg			= NULL;
 	int					error			= 0;
 	
 	if (event != EVENT_COMMIT) return 0;	 // do nothing for other events
 	
-	GetCtrlVal(panel, control, &taskTrigPtr->level);
+	GetCtrlVal(panel, control, &taskTrig->level);
 	
 	// configure device
-	errChk( ConfigDAQmxDevice(taskTrigPtr->device, &errMsg) );
+	errChk( ConfigDAQmxDevice(taskTrig->device, &errMsg) );
 	
 	return 0;
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -13382,7 +13509,7 @@ Error:
 
 static int CVICALLBACK TriggerSource_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	TaskTrig_type* 		taskTrigPtr 	= callbackData;    
+	TaskTrig_type* 		taskTrig 		= callbackData;    
 	char*				errMsg			= NULL;
 	int					error			= 0;
 	int			 		buffsize		= 0;
@@ -13390,18 +13517,53 @@ static int CVICALLBACK TriggerSource_CB (int panel, int control, int event, void
 	if (event != EVENT_COMMIT) return 0;	 // do nothing for other events 
 	
 	GetCtrlAttribute(panel, control, ATTR_STRING_TEXT_LENGTH, &buffsize);
-	OKfree(taskTrigPtr->trigSource);
-	taskTrigPtr->trigSource = malloc((buffsize+1) * sizeof(char)); // including ASCII null  
-	GetCtrlVal(panel, control, taskTrigPtr->trigSource);
+	OKfree(taskTrig->trigSource);
+	taskTrig->trigSource = malloc((buffsize+1) * sizeof(char)); // including ASCII null  
+	GetCtrlVal(panel, control, taskTrig->trigSource);
 	
 	// configure device
-	errChk(ConfigDAQmxDevice(taskTrigPtr->device, &errMsg) );
+	errChk(ConfigDAQmxDevice(taskTrig->device, &errMsg) );
 	
 	return 0;
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
+	OKfree(errMsg);
+	
+	return 0;
+}
+
+static int CVICALLBACK TriggerRouting_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{  	
+	TaskTrig_type* 		taskTrig 		= callbackData;    
+	char*				errMsg			= NULL;
+	int					error			= 0;
+	int			 		buffsize		= 0;
+	
+	if (event != EVENT_COMMIT) return 0;	 // do nothing for other events 
+	
+	GetCtrlAttribute(panel, control, ATTR_STRING_TEXT_LENGTH, &buffsize);
+	OKfree(taskTrig->trigRouting);
+	taskTrig->trigRouting = malloc((buffsize+1) * sizeof(char)); // including ASCII null  
+	GetCtrlVal(panel, control, taskTrig->trigRouting);
+	
+	// configure device
+	errChk(ConfigDAQmxDevice(taskTrig->device, &errMsg) );
+	
+	return 0;
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
+	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -13409,22 +13571,26 @@ Error:
 
 static int CVICALLBACK TriggerWindowType_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	TaskTrig_type* 		taskTrigPtr 	= callbackData;    
+	TaskTrig_type* 		taskTrig 	= callbackData;    
 	char*				errMsg			= NULL;
 	int					error			= 0;
 	
 	if (event != EVENT_COMMIT) return 0;	 // do nothing for other events    
   
-	GetCtrlVal(panel, control, &taskTrigPtr->wndTrigCond);
+	GetCtrlVal(panel, control, &taskTrig->wndTrigCond);
 	
 	// configure device
-	errChk(ConfigDAQmxDevice(taskTrigPtr->device, &errMsg) );
+	errChk(ConfigDAQmxDevice(taskTrig->device, &errMsg) );
 	
 	return 0;
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -13432,22 +13598,26 @@ Error:
 
 static int CVICALLBACK TriggerWindowBttm_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	TaskTrig_type* 		taskTrigPtr 	= callbackData;    
+	TaskTrig_type* 		taskTrig 	= callbackData;    
 	char*				errMsg			= NULL;
 	int					error			= 0;
 	
 	if (event != EVENT_COMMIT) return 0;	 // do nothing for other events  
 	
-	GetCtrlVal(panel, control, &taskTrigPtr->wndBttm);
+	GetCtrlVal(panel, control, &taskTrig->wndBttm);
 	
 	// configure device
-	errChk( ConfigDAQmxDevice(taskTrigPtr->device, &errMsg) );
+	errChk( ConfigDAQmxDevice(taskTrig->device, &errMsg) );
 
 	return 0;
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -13455,22 +13625,26 @@ Error:
 
 static int CVICALLBACK TriggerWindowTop_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 { 
-	TaskTrig_type* 		taskTrigPtr 	= callbackData;    
+	TaskTrig_type* 		taskTrig 	= callbackData;    
 	char*				errMsg			= NULL;
 	int					error			= 0;
 	
 	if (event != EVENT_COMMIT) return 0;	 // do nothing for other events 
 
-	GetCtrlVal(panel, control, &taskTrigPtr->wndTop);
+	GetCtrlVal(panel, control, &taskTrig->wndTop);
 	
 	// configure device
-	errChk(ConfigDAQmxDevice(taskTrigPtr->device, &errMsg) );
+	errChk(ConfigDAQmxDevice(taskTrig->device, &errMsg) );
 	
 	return 0;
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -13478,7 +13652,7 @@ Error:
 
 static int CVICALLBACK TriggerPreTrigDuration_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	TaskTrig_type* 		taskTrigPtr 	= callbackData;    
+	TaskTrig_type* 		taskTrig 	= callbackData;    
 	char*				errMsg			= NULL;
 	int					error			= 0;
 	double				duration;
@@ -13487,19 +13661,23 @@ static int CVICALLBACK TriggerPreTrigDuration_CB (int panel, int control, int ev
 	
 	GetCtrlVal(panel, control, &duration);
 	// calculate number of samples given sampling rate
-	taskTrigPtr->nPreTrigSamples = (uInt32) (*taskTrigPtr->samplingRate * duration);
-	SetCtrlVal(panel, taskTrigPtr->preTrigNSamplesCtrlID, taskTrigPtr->nPreTrigSamples);
+	taskTrig->nPreTrigSamples = (uInt32) (*taskTrig->samplingRate * duration);
+	SetCtrlVal(panel, taskTrig->preTrigNSamplesCtrlID, taskTrig->nPreTrigSamples);
 	// recalculate duration to match the number of samples and sampling rate
-	SetCtrlVal(panel, control, taskTrigPtr->nPreTrigSamples/(*taskTrigPtr->samplingRate)); 
+	SetCtrlVal(panel, control, taskTrig->nPreTrigSamples/(*taskTrig->samplingRate)); 
 	
 	// configure device
-	errChk(ConfigDAQmxDevice(taskTrigPtr->device, &errMsg) );
+	errChk(ConfigDAQmxDevice(taskTrig->device, &errMsg) );
 	
 	return 0;
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -13507,24 +13685,28 @@ Error:
 
 static int CVICALLBACK TriggerPreTrigSamples_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	TaskTrig_type* 		taskTrigPtr 	= callbackData;    
+	TaskTrig_type* 		taskTrig 	= callbackData;    
 	char*				errMsg			= NULL;
 	int					error			= 0;
 	
 	if (event != EVENT_COMMIT) return 0;	 // do nothing for other events    
 	
-	GetCtrlVal(panel, control, &taskTrigPtr->nPreTrigSamples);
+	GetCtrlVal(panel, control, &taskTrig->nPreTrigSamples);
 	// recalculate duration
-	SetCtrlVal(panel, taskTrigPtr->preTrigDurationCtrlID, taskTrigPtr->nPreTrigSamples/(*taskTrigPtr->samplingRate)); 
+	SetCtrlVal(panel, taskTrig->preTrigDurationCtrlID, taskTrig->nPreTrigSamples/(*taskTrig->samplingRate)); 
 	
 	// configure device
-	errChk(ConfigDAQmxDevice(taskTrigPtr->device, &errMsg) );
+	errChk(ConfigDAQmxDevice(taskTrig->device, &errMsg) );
 	
 	return 0;
 	
 Error:
 	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
 	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
 	OKfree(errMsg);
 	
 	return 0;
@@ -13577,11 +13759,13 @@ Error:
 	
 	OKfree(nSamplesPtr);
 	discard_DataPacket_type(&dataPacket);
-	if (errMsg) {
-		DLMsg(errMsg, 1);
-		OKfree(errMsg);
-	} else
-		DLMsg("Out of memory", 1);
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
+	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
+	OKfree(errMsg);
 }
 
 static void ADSamplingRateSinkVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
@@ -13621,11 +13805,13 @@ Error:
 	
 	OKfree(samplingRatePtr);
 	discard_DataPacket_type(&dataPacket);
-	if (errMsg) {
-		DLMsg(errMsg, 1);
-		OKfree(errMsg);
-	} else
-		DLMsg("Out of memory", 1);
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
+	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
+	OKfree(errMsg);
 	
 }
 
@@ -13690,11 +13876,13 @@ Error:
 	discard_DataPacket_type(&dataPacket);
 	
 	discard_DataPacket_type(&dataPacket);
-	if (errMsg) {
-		DLMsg(errMsg, 1);
-		OKfree(errMsg);
-	} else
-		DLMsg("COPulseTrainSourceVChan_Connected Error: Out of memory", 1);
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory.");
+	
+	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
+	OKfree(errMsg);
 	
 }
 

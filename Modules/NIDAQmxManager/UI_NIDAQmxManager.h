@@ -136,8 +136,9 @@
 #define  StartTrig1                       17
 #define  StartTrig1_Plate                 2       /* control type: deco, callback function: (none) */
 #define  StartTrig1_Slope                 3       /* control type: ring, callback function: (none) */
-#define  StartTrig1_Source                4       /* control type: string, callback function: (none) */
-#define  StartTrig1_TrigType              5       /* control type: ring, callback function: (none) */
+#define  StartTrig1_Routing               4       /* control type: string, callback function: (none) */
+#define  StartTrig1_Source                5       /* control type: string, callback function: (none) */
+#define  StartTrig1_TrigType              6       /* control type: ring, callback function: (none) */
 
 #define  StartTrig2                       18
 #define  StartTrig2_Plate                 2       /* control type: deco, callback function: (none) */
@@ -146,17 +147,19 @@
 #define  StartTrig3                       19
 #define  StartTrig3_Plate                 2       /* control type: deco, callback function: (none) */
 #define  StartTrig3_Slope                 3       /* control type: ring, callback function: (none) */
-#define  StartTrig3_Source                4       /* control type: string, callback function: (none) */
-#define  StartTrig3_Level                 5       /* control type: numeric, callback function: (none) */
-#define  StartTrig3_TrigType              6       /* control type: ring, callback function: (none) */
+#define  StartTrig3_Routing               4       /* control type: string, callback function: (none) */
+#define  StartTrig3_Source                5       /* control type: string, callback function: (none) */
+#define  StartTrig3_Level                 6       /* control type: numeric, callback function: (none) */
+#define  StartTrig3_TrigType              7       /* control type: ring, callback function: (none) */
 
 #define  StartTrig4                       20
 #define  StartTrig4_Plate                 2       /* control type: deco, callback function: (none) */
 #define  StartTrig4_Source                3       /* control type: string, callback function: (none) */
-#define  StartTrig4_TrigType              4       /* control type: ring, callback function: (none) */
-#define  StartTrig4_WndType               5       /* control type: ring, callback function: (none) */
-#define  StartTrig4_TrigWndTop            6       /* control type: numeric, callback function: (none) */
-#define  StartTrig4_TrigWndBttm           7       /* control type: numeric, callback function: (none) */
+#define  StartTrig4_Routing               4       /* control type: string, callback function: (none) */
+#define  StartTrig4_TrigType              5       /* control type: ring, callback function: (none) */
+#define  StartTrig4_WndType               6       /* control type: ring, callback function: (none) */
+#define  StartTrig4_TrigWndTop            7       /* control type: numeric, callback function: (none) */
+#define  StartTrig4_TrigWndBttm           8       /* control type: numeric, callback function: (none) */
 
 #define  TaskSetPan                       21
 #define  TaskSetPan_DAQTasks              2       /* control type: tab, callback function: (none) */

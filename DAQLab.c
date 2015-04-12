@@ -81,13 +81,13 @@ typedef struct {
 
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 //	{ MOD_LangLStep_NAME, initalloc_LangLStep, FALSE, 0},
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
-//	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
-	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }
-//	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
+	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+//	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 },
+	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
 	
 };
 
@@ -502,10 +502,10 @@ static int DAQLab_Load (void)
 		TaskControlEvent(newTaskControllerPtr, TASK_EVENT_CONFIGURE, NULL, NULL);
 		 //free  attributes
 	    errChk(DLDiscardXMLNodeAttributes(xmlTaskControllerNode, attr2, NumElem(attr2)) );
-		OKFreeCAHandle(xmlTaskControllerNode);
+		OKfreeCAHndl(xmlTaskControllerNode);
 	}
 	
-	OKFreeCAHandle(xmlUITaskControlers);
+	OKfreeCAHndl(xmlUITaskControlers);
 	
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Load DAQLab Modules and apply saved settings
@@ -572,19 +572,19 @@ static int DAQLab_Load (void)
 		
 		//free  attributes
 	   DLDiscardXMLNodeAttributes(xmlModuleNode, attrModule, NumElem(attrModule));  
-	   OKFreeCAHandle(xmlModuleNode);
+	   OKfreeCAHndl(xmlModuleNode);
 		
 	}
 	
 	    
-	OKFreeCAHandle(xmlNodeList);
-	OKFreeCAHandle(xmlModulesNode);
-	OKFreeCAHandle(xmlModulesNodeList);
+	OKfreeCAHndl(xmlNodeList);
+	OKfreeCAHndl(xmlModulesNode);
+	OKfreeCAHndl(xmlModulesNodeList);
 	
 	    
 	// discard DOM after loading all settings
-	OKFreeCAHandle(DAQLabCfg_DOMHndl);
-	OKFreeCAHandle(DAQLabCfg_RootElement);
+	OKfreeCAHndl(DAQLabCfg_DOMHndl);
+	OKfreeCAHndl(DAQLabCfg_RootElement);
 	
 	DAQLabNoSettings:
 	
@@ -623,7 +623,7 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	// create new DAQLab Config root element and append it to the DOM
 	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_CFG_DOM_ROOT_NAME, &newXMLElement) );
 	XMLErrChk ( ActiveXML_IXMLDOMDocument3_appendChild(DAQLabCfg_DOMHndl, &xmlERRINFO, newXMLElement, &DAQLabCfg_RootElement) );
-	OKFreeCAHandle(newXMLElement);   
+	OKfreeCAHndl(newXMLElement);   
 	// save Tasks and Log panel positions
 	int								taskPanTopPos;
 	int								taskPanLeftPos;
@@ -681,7 +681,7 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		// add task controller element to DAQLab root element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (DAQLabCfg_RootElement, &xmlERRINFO, newXMLElement, NULL) );
 		// free attributes memory
-		OKFreeCAHandle(newXMLElement);   
+		OKfreeCAHndl(newXMLElement);   
 		OKfree(attr2[0].pData);
 	}
 	
@@ -698,14 +698,14 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	// create "Modules" XML element and add it to the Root
 	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_MODULES_XML_TAG, &newXMLElement) );
 	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild(DAQLabCfg_RootElement, &xmlERRINFO, newXMLElement, &modulesXMLElement) );
-	OKFreeCAHandle(newXMLElement);
+	OKfreeCAHndl(newXMLElement);
 	
 	for (size_t i = 1; i <= nModules; i++) {
 		DLModulePtr = ListGetPtrToItem(DAQLabModules, i);
 		// create "Module" XML element and add it to the "Modules" element
 		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, "Module", &newXMLElement) );
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild(modulesXMLElement, &xmlERRINFO, newXMLElement, &moduleXMLElement) );
-		OKFreeCAHandle(newXMLElement);
+		OKfreeCAHndl(newXMLElement);
 		//-----------------------------------------------------------------------------------
 		// Attributes managed by the framework
 		//-----------------------------------------------------------------------------------
@@ -729,13 +729,13 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		if ((*DLModulePtr)->SaveCfg)
 			(*(*DLModulePtr)->SaveCfg)	(*DLModulePtr, DAQLabCfg_DOMHndl, moduleXMLElement);
 		
-		OKFreeCAHandle(moduleXMLElement); 
+		OKfreeCAHndl(moduleXMLElement); 
 		
 	}
 	
 	//free used handles
-	OKFreeCAHandle(modulesXMLElement); 
-	OKFreeCAHandle(DAQLabCfg_RootElement);
+	OKfreeCAHndl(modulesXMLElement); 
+	OKfreeCAHndl(DAQLabCfg_RootElement);
 	
 	return 0;
 	
@@ -790,7 +790,7 @@ static int DAQLab_Close (void)
 	errChk( DAQLab_SaveXMLDOM(DAQLAB_CFG_FILE, &DAQLabCfg_DOMHndl) ); 
 	
 	// discard DOM after saving all settings
-	OKFreeCAHandle(DAQLabCfg_DOMHndl);
+	OKfreeCAHndl(DAQLabCfg_DOMHndl);
 	
 	DiscardPanel(mainPanHndl);
 	
@@ -931,10 +931,8 @@ int DLUnregisterVChan (DAQLabModule_type* mod, VChan_type* VChan)
 	size_t			DLItemPos;
 	size_t			ModItemPos;
 	// get VChan item position in DAQLab VChan list
-	if (!DLVChanExists(VChan, &DLItemPos)) {
-		DAQLab_Msg(DAQLAB_MSG_ERR_VCHAN_NOT_FOUND, VChan, 0, 0, 0);
-		return FALSE;
-	}
+	if (!DLVChanExists(VChan, &DLItemPos))
+		return TRUE; // ignore if not found
 	
 	// get VChan item position in the Module VChan list
 	VChanExists(mod->VChans, VChan, &ModItemPos);
@@ -1492,7 +1490,7 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 				// add new element as child
 				XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, &xmlERRINFO, newXMLElement, NULL) );
 				// cleanup
-				OKFreeCAHandle(newXMLElement);
+				OKfreeCAHndl(newXMLElement);
 				
 				break;
 				
@@ -1528,34 +1526,34 @@ static int DAQLab_StringToType	(char text[], BasicDataTypes vartype, void* value
 			errChk( Scan(text, "%s>%d", (BOOL*)valuePtr) );
 			break;
 		case BasicData_Char:
-			errChk( Scan(text, "%s>%d", (char*)valuePtr) );
+			errChk( Scan(text, "%s>%d[b1]", (char*)valuePtr) );
 			break;
 		case BasicData_UChar:
-			errChk( Scan(text, "%s>%d", (unsigned char*)valuePtr) );
+			errChk( Scan(text, "%s>%d[b1u]", (unsigned char*)valuePtr) );
 			break;
 		case BasicData_Short:
-			errChk( Scan(text, "%s>%d", (short*)valuePtr) );
+			errChk( Scan(text, "%s>%d[b2]", (short*)valuePtr) );
 			break;
 		case BasicData_UShort:
-			errChk( Scan(text, "%s>%d", (unsigned short*)valuePtr) );
+			errChk( Scan(text, "%s>%d[b2u]", (unsigned short*)valuePtr) );
 			break;
 		case BasicData_Int:
-			errChk( Scan(text, "%s>%d", (int*)valuePtr) );
+			errChk( Scan(text, "%s>%d[b4]", (int*)valuePtr) );
 			break;
 		case BasicData_UInt:
-			errChk( Scan(text, "%s>%d", (unsigned int*)valuePtr) );
+			errChk( Scan(text, "%s>%d[b4u]", (unsigned int*)valuePtr) );
 			break;
 		case BasicData_Long:
-			errChk( Scan(text, "%s>%d", (long*)valuePtr) );
+			errChk( Scan(text, "%s>%d[b4]", (long*)valuePtr) );
 			break;
 		case BasicData_ULong:
-			errChk( Scan(text, "%s>%d", (unsigned long*)valuePtr) );
+			errChk( Scan(text, "%s>%d[b4u]", (unsigned long*)valuePtr) );
 			break;
 		case BasicData_LongLong:
-			errChk( Scan(text, "%s>%d", (long long*)valuePtr) );
+			errChk( Scan(text, "%s>%d[b8]", (long long*)valuePtr) );
 			break;
 		case BasicData_ULongLong:
-			errChk( Scan(text, "%s>%d", (unsigned long long*)valuePtr) );
+			errChk( Scan(text, "%s>%d[b8u]", (unsigned long long*)valuePtr) );
 			break;
 		case BasicData_Float:
 			double doubleVal;
@@ -1589,10 +1587,11 @@ int DLGetXMLElementAttributes (ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXM
 	
 	for (size_t i = 0; i < nAttributes; i++) {
 		// get attribute node
-		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttributeNode(XMLElement, &xmlERRINFO, Attributes[i].tag, &xmlAttribute) ); 
+		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttributeNode(XMLElement, &xmlERRINFO, Attributes[i].tag, &xmlAttribute) );
+		if (!xmlAttribute) continue; // ignore attributes that were not found
 		// get attribute text
 		XMLErrChk ( ActiveXML_IXMLDOMAttribute_Gettext(xmlAttribute, &xmlERRINFO, &attributeString) );
-		OKFreeCAHandle(xmlAttribute);
+		OKfreeCAHndl(xmlAttribute);
 		// convert string to values
 		errChk( DAQLab_StringToType(attributeString, Attributes[i].type, Attributes[i].pData) );
 		CA_FreeMemory(attributeString);
@@ -1629,13 +1628,13 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 		XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlERRINFO, Attributes[i].tag, &xmlAttributeNode) );
 		// get attribute node text
 		XMLErrChk ( ActiveXML_IXMLDOMNode_Gettext(xmlAttributeNode, &xmlERRINFO, &attributeString) );
-		OKFreeCAHandle(xmlAttributeNode);
+		OKfreeCAHndl(xmlAttributeNode);
 		// convert to values
 		errChk( DAQLab_StringToType (attributeString, Attributes[i].type, Attributes[i].pData) );
 		CA_FreeMemory(attributeString);
 	}
 	
-	OKFreeCAHandle(xmlNamedNodeMap); 
+	OKfreeCAHndl(xmlNamedNodeMap); 
 	
 	return 0;
 	
@@ -1669,12 +1668,12 @@ int DLDiscardXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode
 		// get attribute node
 	//	XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlERRINFO, Attributes[i].tag, &xmlAttributeNode) );
 		
-	//	OKFreeCAHandle(xmlAttributeNode);
+	//	OKfreeCAHndl(xmlAttributeNode);
 	if (Attributes[i].type==BasicData_CString)
 		OKfree(*(char**)Attributes[i].pData);
 	}
 	
-	OKFreeCAHandle(xmlNamedNodeMap); 
+	OKfreeCAHndl(xmlNamedNodeMap); 
 	
 	return 0;
 	
@@ -1691,7 +1690,6 @@ int DLDiscardXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode
 }
 
 
-
 int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElement, char elementName[], ActiveXMLObj_IXMLDOMElement_* childXMLElement)
 {
 #define DLGetSingleXMLElementFromElement_Err_NotASingleElement		-1
@@ -1699,20 +1697,21 @@ int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 	ERRORINFO							xmlERRINFO;
 	ActiveXMLObj_IXMLDOMNodeList_		xmlNodeList		= 0;
 	ActiveXMLObj_IXMLDOMNode_			xmlNode			= 0; 
-	long								nXMLElements;
+	long								nXMLElements	= 0;
 
 	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(parentXMLElement, &xmlERRINFO, elementName, &xmlNodeList) );
 	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlNodeList, &xmlERRINFO, &nXMLElements) );
-	// if there are no elements stop here
-	if (nXMLElements != 1) {
+	
+	// if there are no elements, return null element
+	if (!nXMLElements) {
 		*childXMLElement = 0;
-		return DLGetSingleXMLElementFromElement_Err_NotASingleElement;
+		return 0;
 	}
 	
 	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlNodeList, &xmlERRINFO, 0, &xmlNode) );
 	
 	// cleanup
-	if (xmlNodeList) OKFreeCAHandle(xmlNodeList);
+	if (xmlNodeList) OKfreeCAHndl(xmlNodeList);
 	
 	*childXMLElement = (ActiveXMLObj_IXMLDOMElement_) xmlNode;
 	
@@ -1721,11 +1720,12 @@ int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 XMLError: 
 	
 	// cleanup
-	if (xmlNodeList) OKFreeCAHandle(xmlNodeList);
-	if (xmlNode) OKFreeCAHandle(xmlNode); 
+	if (xmlNodeList) OKfreeCAHndl(xmlNodeList);
+	if (xmlNode) OKfreeCAHndl(xmlNode); 
 	
 	return xmlerror;
 }
+
 
 static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskControl)
 {

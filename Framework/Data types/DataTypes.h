@@ -343,7 +343,7 @@ RepeatedWaveform_type*		init_RepeatedWaveform_type				(RepeatedWaveformTypes wav
 RepeatedWaveform_type*		ConvertWaveformToRepeatedWaveformType	(Waveform_type** waveform, double repeat);	
 
 	// Discards a repeated waveform contained and its waveform data that was allocated with malloc.
-void						discard_RepeatedWaveform_type			(RepeatedWaveform_type** waveform);
+void						discard_RepeatedWaveform_type			(RepeatedWaveform_type** waveformPtr);
 
 	// Returns pointer to repeated waveform data (for one repeat)
 void**						GetRepeatedWaveformPtrToData			(RepeatedWaveform_type* waveform, size_t* nSamples);
@@ -379,7 +379,7 @@ PulseTrainTimeTiming_type* 	init_PulseTrainTimeTiming_type 			(PulseTrainModes m
 PulseTrainTickTiming_type* 	init_PulseTrainTickTiming_type 			(PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, uInt32 highTicks, 
 																	 uInt32 lowTicks, uInt32 delayTicks);
 	// Discards all pulse train types       
-void 						discard_PulseTrain_type 				(PulseTrain_type** pulseTrain);
+void 						discard_PulseTrain_type 				(PulseTrain_type** pulseTrainPtr);
 
 	//-------------------------------------
 	// General pulse train functions

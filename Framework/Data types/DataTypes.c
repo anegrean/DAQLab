@@ -32,13 +32,13 @@
 // Images
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 struct Image { 
-	int									imgHeight;						// Image height in [pix].
-	int									imgWidth;						// Image width in [pix].
-	double								pixSize;						// Image pixel size in [um].
-	double								imgTopLeftXCoord;				// Image top-left corner X-Axis coordinates in [um].
-	double								imgTopLeftYCoord;				// Image top-left corner Y-Axis coordinates in [um].
-	double								imgZCoord;						// Image z-axis (height) location in [um].
-	void*								image;							// Stores image data of imageType.
+	int									imgHeight;				// Image height in [pix].
+	int									imgWidth;				// Image width in [pix].
+	double								pixSize;				// Image pixel size in [um].
+	double								imgTopLeftXCoord;		// Image top-left corner X-Axis coordinates in [um].
+	double								imgTopLeftYCoord;		// Image top-left corner Y-Axis coordinates in [um].
+	double								imgZCoord;				// Image z-axis (height) location in [um].
+	void*								image;					// Stores image data of imageType.
 	ImageTypes							imageType;
 	ListType							ROIs;	
 };
@@ -49,13 +49,13 @@ struct Image {
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 struct Waveform {
-	WaveformTypes			waveformType;				// Waveform data type.
-	char*					waveformName;				// Name of signal represented by the waveform. 
-	char*					unitName;					// Physical SI unit such as V, A, Ohm, etc.
-	double					dateTimestamp;				// Number of seconds since midnight, January 1, 1900 in the local time zone.
-	double					samplingRate;				// Sampling rate in [Hz]. If 0, sampling rate is not given.
-	size_t					nSamples;					// Number of samples in the waveform.
-	void*					data;						// Array of waveformType elements.
+	WaveformTypes			waveformType;						// Waveform data type.
+	char*					waveformName;						// Name of signal represented by the waveform. 
+	char*					unitName;							// Physical SI unit such as V, A, Ohm, etc.
+	double					dateTimestamp;						// Number of seconds since midnight, January 1, 1900 in the local time zone.
+	double					samplingRate;						// Sampling rate in [Hz]. If 0, sampling rate is not given.
+	size_t					nSamples;							// Number of samples in the waveform.
+	void*					data;								// Array of waveformType elements.
 };
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -63,50 +63,50 @@ struct Waveform {
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 struct RepeatedWaveform {
-	RepeatedWaveformTypes	waveformType;				// Waveform data type. 
-	char*					waveformName;				// Name of signal represented by the waveform.
-	char*					unitName;					// Physical SI unit such as V, A, Ohm, etc.
-	double					dateTimestamp;				// Number of seconds since midnight, January 1, 1900 in the local time zone.  
-	double					samplingRate;				// Sampling rate in [Hz]. If 0, sampling rate is not given.
-	double					repeat;						// number of times to repeat the waveform.
-	size_t					nSamples;					// Number of samples in the waveform.
-	void*					data;						// Array of waveformType elements. 
+	RepeatedWaveformTypes	waveformType;						// Waveform data type. 
+	char*					waveformName;						// Name of signal represented by the waveform.
+	char*					unitName;							// Physical SI unit such as V, A, Ohm, etc.
+	double					dateTimestamp;						// Number of seconds since midnight, January 1, 1900 in the local time zone.  
+	double					samplingRate;						// Sampling rate in [Hz]. If 0, sampling rate is not given.
+	double					repeat;								// number of times to repeat the waveform.
+	size_t					nSamples;							// Number of samples in the waveform.
+	void*					data;								// Array of waveformType elements. 
 };
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Pulse trains
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-// parent class
+// Parent class
 struct PulseTrain {
-	PulseTrainTimingTypes		pulseType;					// timing type.  
-	PulseTrainIdleStates		idleState;					// counter output idle state
-	PulseTrainModes				mode;						// measurement mode
-	uInt64						nPulses;					// number of pulses
+	PulseTrainTimingTypes		pulseType;						// Timing type.  
+	PulseTrainIdleStates		idleState;						// Counter output idle state.
+	PulseTrainModes				mode;							// Generation mode.
+	uInt64						nPulses;						// Number of pulses.
 };
 
-// pulse train defined by frequency
+// Pulse train defined by frequency
 struct PulseTrainFreqTiming {
 	PulseTrain_type				baseClass;
-	double 						frequency;					// pulse frequencu in [Hz]   				 
-	double 						dutyCycle;					// width of the pulse divided by the period in [%]  
-	double						initialDelay;    		   	// initial delay [s] 
+	double 						frequency;						// Pulse frequencu in [Hz].
+	double 						dutyCycle;						// Width of the pulse divided by the period in [%].  
+	double						initialDelay;    		   		// Initial delay in [s].
 };
 
-// pulse train defined by pulse duration
+// Pulse train defined by pulse duration
 struct PulseTrainTimeTiming {
 	PulseTrain_type				baseClass; 
-	double 						highTime;   				// the time the pulse stays high [s]
-	double 						lowTime;    				// the time the pulse stays low [s]
-	double						initialDelay;    		    // initial delay [s]
+	double 						highTime;   					// The time the pulse stays high in [s].
+	double 						lowTime;    					// The time the pulse stays low in [s].
+	double						initialDelay;    		    	// Initial delay in [s].
 };
 
-// pulse train defined by number of ticks
+// Pulse train defined by number of ticks
 struct PulseTrainTickTiming {
 	PulseTrain_type				baseClass; 
-	uInt32 						highTicks;
-	uInt32 						lowTicks;
-	uInt32 						delayTicks;
+	uInt32 						highTicks;						// Number of ticks for high state.
+	uInt32 						lowTicks;						// Number of ticks for low state.
+	uInt32 						delayTicks;						// Number of delay ticks after receiving a start trigger.
 };
 
 
@@ -192,11 +192,11 @@ PulseTrainTickTiming_type* init_PulseTrainTickTiming_type (PulseTrainModes mode,
 	return pulseTrain;
 }
 
-void discard_PulseTrain_type (PulseTrain_type** pulseTrain)
+void discard_PulseTrain_type (PulseTrain_type** pulseTrainPtr)
 {
-	if (!*pulseTrain) return;
+	if (!*pulseTrainPtr) return;
 	
-	OKfree(*pulseTrain);
+	OKfree(*pulseTrainPtr);
 }
 
 // sets the pulsetrain idle state
@@ -702,16 +702,16 @@ RepeatedWaveform_type* ConvertWaveformToRepeatedWaveformType (Waveform_type** wa
 	return repWaveform;
 }
 
-void discard_RepeatedWaveform_type (RepeatedWaveform_type** waveform)
+void discard_RepeatedWaveform_type (RepeatedWaveform_type** waveformPtr)
 {
-	if (!*waveform) return;
+	if (!*waveformPtr) return;
 	
 	// discard data
-	OKfree((*waveform)->data);
-	OKfree((*waveform)->waveformName);
-	OKfree((*waveform)->unitName);
+	OKfree((*waveformPtr)->data);
+	OKfree((*waveformPtr)->waveformName);
+	OKfree((*waveformPtr)->unitName);
 	
-	OKfree(*waveform);
+	OKfree(*waveformPtr);
 }
 
 void** GetRepeatedWaveformPtrToData (RepeatedWaveform_type* waveform, size_t* nSamples)

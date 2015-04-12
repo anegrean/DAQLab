@@ -733,47 +733,6 @@ int SaveImage(char* filename,Image* image)
 	return err;
 }
 
-int SaveFromMenu(Image* image)
-{
-	int err=0;
-	int reply;
-	char* pathName;
-	char* filename; 
-//	TIFF* tif;
-	
-	filename=malloc(MAX_PATH*sizeof(char));
-	pathName=malloc(MAX_PATH*sizeof(char));
-	
-	reply=FileSelectPopupEx ("","*.tiff;*.png", "*.tiff;*.png", "Save Image as tiff or png", VAL_SAVE_BUTTON, 0, 0,pathName);
-	if (reply==0) {
-		//user cancelled; no saving wanted
-		return err;
-	}
-	
-	//strip extension
-	pathName=strtok(pathName,".");
-	//add .tiff
-	Fmt(filename,"%s<%s.tiff",pathName);   
-	//save image as tiff without overlays
-	err=SaveImage(pathName,image);
-	
-	Fmt(filename,"%s<%s.png",pathName);
-	//save image as png with overlays
-	err=imaqWriteVisionFile(image,filename , NULL); 
-
-	
-//	tif = TIFFOpen(pathName, "w");
-   
- //   TIFFClose(tif);
-	
-	free(pathName);
-	free(filename);    
-	return err;
-}	
-
-
-
-
 int SaveTiffImage(char* filename,Image* image)
 {
 	int 			err=0;

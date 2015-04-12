@@ -514,7 +514,7 @@ int	XYStage_LoadCfg	(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  modul
 	for (long i = 0; i < nXMLElements; i++) {
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPosNodeList, &xmlERRINFO, i, &xmlRefPosNode) );
 		DLGetXMLNodeAttributes(xmlRefPosNode, refPosAttr, NumElem(refPosAttr));
-		OKFreeCAHandle(xmlRefPosNode);
+		OKfreeCAHndl(xmlRefPosNode);
 		refPos = init_RefPosition_type(refName, refXPos, refYPos);
 		ListInsertItem(stage->xyRefPos, &refPos, END_OF_LIST);
 	}
@@ -522,9 +522,9 @@ int	XYStage_LoadCfg	(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  modul
 NoReferencePositions:
 	
 	// cleanup
-	if (xmlRefPositionsNodeList) OKFreeCAHandle(xmlRefPositionsNodeList); 
-	if (xmlRefPositionsNode) OKFreeCAHandle(xmlRefPositionsNode);
-	if (xmlRefPosNodeList) OKFreeCAHandle(xmlRefPosNodeList); 
+	if (xmlRefPositionsNodeList) OKfreeCAHndl(xmlRefPositionsNodeList); 
+	if (xmlRefPositionsNode) OKfreeCAHndl(xmlRefPositionsNode);
+	if (xmlRefPosNodeList) OKfreeCAHndl(xmlRefPosNodeList); 
 	
 	return 0;
 	

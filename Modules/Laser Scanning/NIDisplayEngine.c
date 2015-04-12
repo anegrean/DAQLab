@@ -11,6 +11,7 @@
 //==============================================================================
 // Include files
 #include "windows.h"  			// include this first!
+#include <formatio.h>
 #include "Commctrl.h"
 #include "NIDisplayEngine.h"
 #include "DisplayEngine.h"
@@ -98,6 +99,8 @@ static void 					discard_NIDisplayEngine_type 					(NIDisplayEngine_type** niVis
 
 static int						DisplayNIVisionImage							(NIImageDisplay_type* imgDisplay, void* pixelArray, int imgHeight, int imgWidth, ImageTypes imageType, 
 																				 double pixSize, double imgTopLeftXCoord, double imgTopLeftYCoord, double imgZCoord);
+	// displays a file selection popup-box and saves a given NI image as two grayscale TIFF files with ZIP compression with and without ROI flattened
+static int 						ImageSavePopup 									(Image* image);
 
 static NIImageDisplay_type*		GetNIImageDisplay								(NIDisplayEngine_type* NIDisplay, void* callbackData, int imgHeight, int imgWidth, ImageTypes imageType);
 
@@ -713,9 +716,6 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 	
 }
 
-
-
-
 LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {   
 	NIImageDisplay_type*	disp 			= (NIImageDisplay_type*) dwRefData;
@@ -738,7 +738,7 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 					//save as tiff with and without overlays
 					//popup and remember dir
 					image=GetImageImage(disp->baseClass.imagetype);
-					errChk(SaveFromMenu(image));
+					errChk(ImageSavePopup(image));
 					
 					break;
 					
@@ -800,7 +800,71 @@ Error:
 	return DefSubclassProc(hWnd, msg, wParam, lParam);
 }
 
+static int ImageSavePopup (Image* image)
+{
+#define	ImageSavePopup_Err		-1
+	int 				error							= 0;
+	int 				fileSelection					= 0;
+	char 				fullPathName[MAX_PATHNAME_LEN]	= "";
+	char*				strippedPathName				= NULL;
+	char 				fileName[MAX_PATHNAME_LEN]		= ""; 
+	Image*				imageCopy						= NULL;
+	ImageType			imgType							= 0;
+	int					imgBorderSize					= 0;
+	TIFFFileOptions		tiffOptions						= {.rowsPerStrip = 0, .photoInterp = IMAQ_BLACK_IS_ZERO, .compressionType = IMAQ_ZIP};
 
+	
+	fileSelection = FileSelectPopupEx ("","*.tiff;*.png", "*.tiff;*.png", "Save Image as tiff or png", VAL_SAVE_BUTTON, 0, 1, fullPathName);
+	
+	switch (fileSelection) {
+			
+		case VAL_NO_FILE_SELECTED:
+			
+			return 0;
+			
+		case VAL_EXISTING_FILE_SELECTED:
+		case VAL_NEW_FILE_SELECTED:
+			
+			// strip extension and add .tiff extension back
+			strippedPathName = strtok(fullPathName,".");
+			Fmt(fileName, "%s<%s.tiff", strippedPathName);
+			
+			// save image as tiff without overlays
+			nullChk( imaqWriteFile(image, fileName, NULL) ); 
+			nullChk( imaqWriteTIFFFile(image, fileName, &tiffOptions, NULL) ); 
+			
+			// make a copy of the image and flatten overlays
+			nullChk( imaqGetImageType(image, &imgType) );
+			nullChk( imaqGetBorderSize(image, &imgBorderSize) );
+			nullChk( imageCopy = imaqCreateImage(imgType, imgBorderSize) );
+			nullChk( imaqDuplicate(imageCopy, image) );
+			nullChk( imaqMergeOverlay(imageCopy, image, NULL, 0, NULL) );
+			
+			// save image with ROI overlay and "_ROI" appended to the file name
+			Fmt(fileName, "%s<%s_ROI.tiff", strippedPathName);
+			nullChk( imaqWriteTIFFFile(imageCopy, fileName, &tiffOptions, NULL) ); 
+			
+			imaqDispose(imageCopy);
+			imageCopy = NULL;
+			
+			break;
+			
+		default:   // negative values for errors
+			
+			return fileSelection;
+	}
+	
+   	return 0;
+	
+Error:
+	
+	if (imageCopy) {
+		imaqDispose(imageCopy);
+		imageCopy = NULL;
+	}
+	
+	return ImageSavePopup_Err;
+}	
 
 
 

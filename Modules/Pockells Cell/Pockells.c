@@ -515,10 +515,10 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(pockellsNodeList, &xmlERRINFO, i, &pockellsNode) );
 		nullChk( eom = LoadPockellsCellFromXMLData(eomModule, (ActiveXMLObj_IXMLDOMElement_) pockellsNode) ); 
 		ListInsertItem(eomModule->pockellsCells, &eom, END_OF_LIST);
-		OKFreeCAHandle(pockellsNode); 
+		OKfreeCAHndl(pockellsNode); 
 	}
 	
-	OKFreeCAHandle(pockellsNodeList);
+	OKfreeCAHndl(pockellsNodeList);
 	
 	return 0;
 	
@@ -579,10 +579,10 @@ static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomMo
 		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(calNodeList, &xmlERRINFO, i, &calNode) );
 		errChk( LoadPockellsCalibrationFromXMLData(&eomCal, (ActiveXMLObj_IXMLDOMElement_) calNode) ); 
 		ListInsertItem(eom->calib, &eomCal, END_OF_LIST);
-		OKFreeCAHandle(calNode); 
+		OKfreeCAHndl(calNode); 
 	}
 	
-	OKFreeCAHandle(calNodeList);
+	OKfreeCAHndl(calNodeList);
 
 	return eom;
 	
@@ -653,7 +653,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		errChk( SavePockellsCellXMLData(eom, xmlDOM, pockellsXMLElement) );
 		// add pockells cell element to the module
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, pockellsXMLElement, NULL) );
-		OKFreeCAHandle(pockellsXMLElement); 
+		OKfreeCAHndl(pockellsXMLElement); 
 	}
 	
 	
@@ -700,7 +700,7 @@ static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, A
 		errChk( SavePockellsCalibrationXMLData(eomCal, xmlDOM, calXMLElement) );
 		// add calibration element to the pockells cell element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (pockellsXMLElement, &xmlERRINFO, calXMLElement, NULL) );
-		OKFreeCAHandle(calXMLElement); 
+		OKfreeCAHndl(calXMLElement); 
 	}
 	
 	return 0;

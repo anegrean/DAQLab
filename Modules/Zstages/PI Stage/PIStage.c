@@ -78,9 +78,9 @@ int						positionTrackerTimerID = 0;
 
 static int							Load 								(DAQLabModule_type* mod, int workspacePanHndl);
 
-static int							SaveCfg								(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int							SaveCfg								(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
-static int 							LoadCfg 							(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int 							LoadCfg 							(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo);
 
 static int							Move 								(Zstage_type* zstage, Zstage_move_type moveType, double moveVal);
 
@@ -259,8 +259,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 }
 
-static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
+	int				error		= 0;
 	PIStage_type* 	PIStage 	= (PIStage_type*) mod;  
 	
 	//--------------------------------------------------------
@@ -272,14 +273,19 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	// Saving Z Stage generic paramenters
 	//---------------------------------------------------------
 	
-	ZStage_SaveCfg (mod, xmlDOM, moduleElement);
+	errChk( ZStage_SaveCfg (mod, xmlDOM, moduleElement, xmlErrorInfo) );
 	
 	return 0;
+	
+Error:
+	
+	return error;
 }
 
-static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	PIStage_type* 	PIStage	= (PIStage_type*) mod;
+	int				error		= 0;
+	PIStage_type* 	PIStage		= (PIStage_type*) mod;
 	
 	//---------------------------------------------------------
 	// Loading PI Stage specific settings
@@ -289,9 +295,13 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	//---------------------------------------------------------
 	// Loading generic Z Stage settings
 	//---------------------------------------------------------
-	ZStage_LoadCfg(mod, moduleElement); 
+	errChk( ZStage_LoadCfg(mod, moduleElement, xmlErrorInfo) ); 
 	
 	return 0;
+	
+Error:
+	
+	return error;
 }
 
 /// HIFN Moves a motorized stage 

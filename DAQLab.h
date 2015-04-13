@@ -49,8 +49,7 @@
 #define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to 
 													 // get the number of elements in an array passed as an argument!
 
-#define XMLErrChk(fCall) if (xmlerror = (fCall), xmlerror < 0) \
-{goto XMLError;} else
+
 //==============================================================================
 // Types
 
@@ -193,7 +192,7 @@ CmtThreadPoolHandle	DLGetCommonThreadPoolHndl			(void);
 // DAQLab XML management
 //-------------------------------------------------------------------------------
 	// adds multiple XML Element children or attributes for a parent XML Element
-int					DLAddToXMLElem						(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes);
+int					DLAddToXMLElem						(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes, ERRORINFO* xmlErrorInfo);
 
 	// places the value of multiple XML Attributes of an Element into user provided pointers
 int					DLGetXMLElementAttributes			(ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes);
@@ -204,6 +203,11 @@ int 				DLGetXMLNodeAttributes 				(ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXML
 int 				DLDiscardXMLNodeAttributes 			(ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes);      
 
 int					DLGetSingleXMLElementFromElement	(ActiveXMLObj_IXMLDOMElement_ parentXMLElement, char elementName[], ActiveXMLObj_IXMLDOMElement_* childXMLElement);
+
+	// saves task controller settings to XML and returns a "TaskControllerSettings" XML element
+int					DLSaveTaskControllerSettingsToXML	(TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_* taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo);
+	// loads task controller settings from a "TaskControllerSettings" XML element
+int					DLLoadTaskControllerSettingsFromXML	(TaskControl_type* taskController, ActiveXMLObj_IXMLDOMElement_ taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo);
 
 #ifdef __cplusplus
     }

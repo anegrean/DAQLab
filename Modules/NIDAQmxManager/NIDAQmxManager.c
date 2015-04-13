@@ -907,38 +907,38 @@ static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
 	// Loading DAQmx settings
 	//---------------------------------------------------
 
-static int 							LoadCfg							 		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement); 
+static int 							LoadCfg							 		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo); 
 
-static int							LoadDeviceCfg							(NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement);
+static int							LoadDeviceCfg							(NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int							LoadADTaskCfg							(ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement);
+static int							LoadADTaskCfg							(ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int							LoadCITaskCfg							(CITaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement);
+static int							LoadCITaskCfg							(CITaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int							LoadCOTaskCfg							(COTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement);
+static int							LoadCOTaskCfg							(COTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int							LoadTaskTrigCfg							(TaskTrig_type* taskTrig, ActiveXMLObj_IXMLDOMElement_ triggerXMLElement);
+static int							LoadTaskTrigCfg							(TaskTrig_type* taskTrig, ActiveXMLObj_IXMLDOMElement_ triggerXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int							LoadChannelCfg							(Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLObj_IXMLDOMElement_ channelXMLElement);
+static int							LoadChannelCfg							(Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLObj_IXMLDOMElement_ channelXMLElement, ERRORINFO* xmlErrorInfo);
 
 
 	//---------------------------------------------------
 	// Saving DAQmx settings
 	//---------------------------------------------------
 
-static int							SaveCfg									(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement);
+static int							SaveCfg									(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
-static int 							SaveDeviceCfg 							(Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement); 
+static int 							SaveDeviceCfg 							(Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement, ERRORINFO* xmlErrorInfo); 
 
-static int 							SaveADTaskCfg 							(ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement); 
+static int 							SaveADTaskCfg 							(ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement, ERRORINFO* xmlErrorInfo); 
 
-static int 							SaveCITaskCfg 							(CITaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement); 
+static int 							SaveCITaskCfg 							(CITaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement, ERRORINFO* xmlErrorInfo); 
 
-static int 							SaveCOTaskCfg 							(COTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement); 
+static int 							SaveCOTaskCfg 							(COTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement, ERRORINFO* xmlErrorInfo); 
 
-static int 							SaveTaskTrigCfg 						(TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ TriggerXMLElement);
+static int 							SaveTaskTrigCfg 						(TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ TriggerXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int 							SaveChannelCfg 							(ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ ChannelXMLElement);
+static int 							SaveChannelCfg 							(ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ ChannelXMLElement, ERRORINFO* xmlErrorInfo);
 
 static int 							DisplayPanels							(DAQLabModule_type* mod, BOOL visibleFlag); 
 
@@ -1644,11 +1644,10 @@ Error:
 	return error;
 }
 
-static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	NIDAQmxManager_type*	NIDAQ				= (NIDAQmxManager_type*) mod;
 	int						error				= 0;
-	ERRORINFO				xmlERRINFO;
+	NIDAQmxManager_type*	NIDAQ				= (NIDAQmxManager_type*) mod;
 	size_t					nInstalledDevs		= 0;
 	
 	//--------------------------------------------------------------------------
@@ -1678,14 +1677,14 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	ActiveXMLObj_IXMLDOMNode_		deviceNode			= 0;      
 	long							nXMLDevices			= 0;
 	
-	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(moduleElement, &xmlERRINFO, "NIDAQDevice", &deviceNodeList) );
-	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(deviceNodeList, &xmlERRINFO, &nXMLDevices) );
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(moduleElement, xmlErrorInfo, "NIDAQDevice", &deviceNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(deviceNodeList, xmlErrorInfo, &nXMLDevices) );
 	
 	// load device settings if at least a device is installed
 	if (nInstalledDevs)
 		for (long i = 0; i < nXMLDevices; i++) {
-			errChk( ActiveXML_IXMLDOMNodeList_Getitem(deviceNodeList, &xmlERRINFO, i, &deviceNode) );
-			errChk( LoadDeviceCfg (NIDAQ, (ActiveXMLObj_IXMLDOMElement_) deviceNode) );
+			errChk( ActiveXML_IXMLDOMNodeList_Getitem(deviceNodeList, xmlErrorInfo, i, &deviceNode) );
+			errChk( LoadDeviceCfg (NIDAQ, (ActiveXMLObj_IXMLDOMElement_) deviceNode, xmlErrorInfo) );
 			OKfreeCAHndl(deviceNode);
 		}
 	
@@ -1694,12 +1693,11 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	return 0;
 	
 Error:
-XMLError:
-	
+
 	return error;
 }
 
-static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement)
+static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement, ERRORINFO* xmlErrorInfo)
 {
 	int								error				= 0;
 	unsigned int					productNum			= 0;
@@ -1762,7 +1760,7 @@ static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElemen
 	errChk( DLGetSingleXMLElementFromElement(NIDAQDeviceXMLElement, "AITask", &taskSetXMLElement) );
 	if (taskSetXMLElement) {
 		nullChk( ADTaskSet = init_ADTaskSet_type(newDev) );
-		errChk(	LoadADTaskCfg (ADTaskSet, taskSetXMLElement) );
+		errChk(	LoadADTaskCfg (ADTaskSet, taskSetXMLElement, xmlErrorInfo) );
 		newDev->AITaskSet = ADTaskSet;
 		OKfreeCAHndl(taskSetXMLElement);
 	}
@@ -1772,7 +1770,7 @@ static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElemen
 	errChk( DLGetSingleXMLElementFromElement(NIDAQDeviceXMLElement, "AOTask", &taskSetXMLElement) );
 	if (taskSetXMLElement) {
 		nullChk( ADTaskSet = init_ADTaskSet_type(newDev) );
-		errChk(	LoadADTaskCfg (ADTaskSet, taskSetXMLElement) );
+		errChk(	LoadADTaskCfg (ADTaskSet, taskSetXMLElement, xmlErrorInfo) );
 		newDev->AOTaskSet = ADTaskSet;
 		OKfreeCAHndl(taskSetXMLElement);
 	}
@@ -1782,7 +1780,7 @@ static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElemen
 	errChk( DLGetSingleXMLElementFromElement(NIDAQDeviceXMLElement, "DITask", &taskSetXMLElement) );
 	if (taskSetXMLElement) {
 		nullChk( ADTaskSet = init_ADTaskSet_type(newDev) );
-		errChk(	LoadADTaskCfg (ADTaskSet, taskSetXMLElement) );
+		errChk(	LoadADTaskCfg (ADTaskSet, taskSetXMLElement, xmlErrorInfo) );
 		newDev->DITaskSet = ADTaskSet;
 		OKfreeCAHndl(taskSetXMLElement);
 	}
@@ -1792,7 +1790,7 @@ static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElemen
 	errChk( DLGetSingleXMLElementFromElement(NIDAQDeviceXMLElement, "DOTask", &taskSetXMLElement) );
 	if (taskSetXMLElement) {
 		nullChk( ADTaskSet = init_ADTaskSet_type(newDev) );
-		errChk(	LoadADTaskCfg (ADTaskSet, taskSetXMLElement) );
+		errChk(	LoadADTaskCfg (ADTaskSet, taskSetXMLElement, xmlErrorInfo) );
 		newDev->DOTaskSet = ADTaskSet;
 		OKfreeCAHndl(taskSetXMLElement);
 	}
@@ -1802,7 +1800,7 @@ static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElemen
 	errChk( DLGetSingleXMLElementFromElement(NIDAQDeviceXMLElement, "CITask", &taskSetXMLElement) );
 	if (taskSetXMLElement) {
 		nullChk( CITaskSet = init_CITaskSet_type(newDev) );
-		errChk(	LoadCITaskCfg (CITaskSet, taskSetXMLElement) );
+		errChk(	LoadCITaskCfg (CITaskSet, taskSetXMLElement, xmlErrorInfo) );
 		newDev->CITaskSet = CITaskSet;
 		OKfreeCAHndl(taskSetXMLElement);
 	}
@@ -1812,7 +1810,7 @@ static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElemen
 	errChk( DLGetSingleXMLElementFromElement(NIDAQDeviceXMLElement, "COTask", &taskSetXMLElement) );
 	if (taskSetXMLElement) {
 		nullChk( COTaskSet = init_COTaskSet_type(newDev) );
-		errChk(	LoadCOTaskCfg (COTaskSet, taskSetXMLElement) );
+		errChk(	LoadCOTaskCfg (COTaskSet, taskSetXMLElement, xmlErrorInfo) );
 		newDev->COTaskSet = COTaskSet;
 		OKfreeCAHndl(taskSetXMLElement);
 	}
@@ -1837,9 +1835,8 @@ Error:
 	return error;
 }
 
-static int LoadADTaskCfg (ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement)
+static int LoadADTaskCfg (ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	ERRORINFO						xmlERRINFO;
 	int								error							= 0;
 	Dev_type*						dev								= taskSet->dev;
 	ChanSet_type*					chanSet							= NULL;
@@ -1880,12 +1877,12 @@ static int LoadADTaskCfg (ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ 
 	
 	if (startTriggerXMLElement) {
 		nullChk( taskSet->startTrig = init_TaskTrig_type(dev, &taskSet->timing->sampleRate) );
-		errChk( LoadTaskTrigCfg(taskSet->startTrig, startTriggerXMLElement) );
+		errChk( LoadTaskTrigCfg(taskSet->startTrig, startTriggerXMLElement, xmlErrorInfo) );
 	}
 	
 	if (referenceTriggerXMLElement) {
 		nullChk( taskSet->referenceTrig = init_TaskTrig_type(dev, &taskSet->timing->sampleRate) );
-		errChk( LoadTaskTrigCfg(taskSet->referenceTrig, referenceTriggerXMLElement) );
+		errChk( LoadTaskTrigCfg(taskSet->referenceTrig, referenceTriggerXMLElement, xmlErrorInfo) );
 	}
 	
 	
@@ -1894,12 +1891,12 @@ static int LoadADTaskCfg (ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ 
 	//--------------------------------------------------------------------------------
 	errChk( DLGetSingleXMLElementFromElement(taskSetXMLElement, "Channels", &channelsXMLElement) );
 	
-	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(channelsXMLElement, &xmlERRINFO, "Channel", &channelNodeList) );
-	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(channelNodeList, &xmlERRINFO, &nChans) );
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(channelsXMLElement, xmlErrorInfo, "Channel", &channelNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(channelNodeList, xmlErrorInfo, &nChans) );
 	
 	for (long i = 0; i < nChans; i++) {
-		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(channelNodeList, &xmlERRINFO, i, &channelNode) );
-		errChk( LoadChannelCfg(dev, &chanSet, (ActiveXMLObj_IXMLDOMElement_) channelNode) );
+		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(channelNodeList, xmlErrorInfo, i, &channelNode) );
+		errChk( LoadChannelCfg(dev, &chanSet, (ActiveXMLObj_IXMLDOMElement_) channelNode, xmlErrorInfo) );
 		OKfreeCAHndl(channelNode);
 		ListInsertItem(taskSet->chanSet, &chanSet, END_OF_LIST);
 	}
@@ -1927,24 +1924,24 @@ Error:
 	return error;
 }
 
-static int LoadCITaskCfg (CITaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement)
+static int LoadCITaskCfg (CITaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement, ERRORINFO* xmlErrorInfo)
 {
 	return 0;
 	
 }
 
-static int LoadCOTaskCfg (COTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement)
+static int LoadCOTaskCfg (COTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement, ERRORINFO* xmlErrorInfo)
 {
 	return 0;
 	
 }
 
-static int LoadTaskTrigCfg (TaskTrig_type* taskTrig, ActiveXMLObj_IXMLDOMElement_ triggerXMLElement)
+static int LoadTaskTrigCfg (TaskTrig_type* taskTrig, ActiveXMLObj_IXMLDOMElement_ triggerXMLElement, ERRORINFO* xmlErrorInfo)
 {
 #define LoadTaskTrigCfg_Err_NotImplemented		-1
 	
 	int								error					= 0;
-	//ERRORINFO						xmlERRINFO;
+	//ERRORINFO						xmlErrorInfo;
 	
 	uInt32							trigType				= 0;
 	uInt32							slopeType				= 0;
@@ -2008,13 +2005,12 @@ Error:
 	return error;
 }
 
-static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLObj_IXMLDOMElement_ channelXMLElement)
+static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLObj_IXMLDOMElement_ channelXMLElement, ERRORINFO* xmlErrorInfo)
 {
 
   #define LoadChannelCfg_Err_NotImplemented		-1
 	
 	int								error						= 0;
-	ERRORINFO						xmlERRINFO;
 	uInt32							chanType					= 0;
 	char*							physChanName				= NULL;
 	BOOL							onDemand					= FALSE;
@@ -2368,13 +2364,13 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 			// load start trigger settings
 			if (startTriggerXMLElement) {
 				nullChk( ((ChanSet_CI_type*)*chanSetPtr)->startTrig  	= init_TaskTrig_type(dev, NULL) ); 		   // for now there's no sample rate associated with counter type trigger
-				errChk( LoadTaskTrigCfg(((ChanSet_CI_type*)*chanSetPtr)->startTrig, startTriggerXMLElement) );
+				errChk( LoadTaskTrigCfg(((ChanSet_CI_type*)*chanSetPtr)->startTrig, startTriggerXMLElement, xmlErrorInfo) );
 			}
 			
 			// load start trigger settings
 			if (referenceTriggerXMLElement) {
 				nullChk( ((ChanSet_CI_type*)*chanSetPtr)->referenceTrig  = init_TaskTrig_type(dev, NULL) );			// for now there's no sample rate associated with counter type trigger
-				errChk( LoadTaskTrigCfg(((ChanSet_CI_type*)*chanSetPtr)->startTrig, referenceTriggerXMLElement) );
+				errChk( LoadTaskTrigCfg(((ChanSet_CI_type*)*chanSetPtr)->startTrig, referenceTriggerXMLElement, xmlErrorInfo) );
 		
 			}
 			break;
@@ -2386,13 +2382,13 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 			// load start trigger settings
 			if (startTriggerXMLElement) {
 				nullChk( ((ChanSet_CO_type*)*chanSetPtr)->startTrig  	= init_TaskTrig_type(dev, NULL) ); 			// for now there's no sample rate associated with counter type trigger
-				errChk( LoadTaskTrigCfg(((ChanSet_CO_type*)*chanSetPtr)->startTrig, startTriggerXMLElement) );
+				errChk( LoadTaskTrigCfg(((ChanSet_CO_type*)*chanSetPtr)->startTrig, startTriggerXMLElement, xmlErrorInfo) );
 			}
 			
 			// load reference trigger settings
 			if (referenceTriggerXMLElement) {
 				nullChk( ((ChanSet_CO_type*)*chanSetPtr)->referenceTrig  = init_TaskTrig_type(dev, NULL) );			// for now there's no sample rate associated with counter type trigger
-				errChk( LoadTaskTrigCfg(((ChanSet_CO_type*)*chanSetPtr)->startTrig, referenceTriggerXMLElement) );
+				errChk( LoadTaskTrigCfg(((ChanSet_CO_type*)*chanSetPtr)->startTrig, referenceTriggerXMLElement, xmlErrorInfo) );
 		
 			}
 			break;
@@ -2415,27 +2411,26 @@ Error:
 
 }
 
-static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	NIDAQmxManager_type*			NIDAQ	 				= (NIDAQmxManager_type*) mod;
 	int								error					= 0;
-	ERRORINFO						xmlERRINFO;
+	NIDAQmxManager_type*			NIDAQ	 				= (NIDAQmxManager_type*) mod;
 	
 	//--------------------------------------------------------------------------
 	// Save DAQmanager main panel position
 	//--------------------------------------------------------------------------
 	
-	int*								panTopPos				;
-	int*								panLeftPos				;
-	panTopPos=malloc(sizeof(int));
-	panLeftPos=malloc(sizeof(int));				 
+	int*								panTopPos			= NULL;
+	int*								panLeftPos			= NULL;
+	nullChk( panTopPos 		= malloc(sizeof(int)) );
+	nullChk( panLeftPos 	= malloc(sizeof(int)) );				 
 	DAQLabXMLNode 					NIDAQAttr[] 			= {	{"PanTopPos", BasicData_Int, panTopPos},
 											  		   			{"PanLeftPos", BasicData_Int, panLeftPos}	};
 	
 	
 	errChk( GetPanelAttribute(NIDAQ->mainPanHndl, ATTR_LEFT, panLeftPos) );
 	errChk( GetPanelAttribute(NIDAQ->mainPanHndl, ATTR_TOP, panTopPos) );
-	DLAddToXMLElem(xmlDOM, moduleElement, NIDAQAttr, DL_ATTRIBUTE, NumElem(NIDAQAttr) ); 
+	errChk( DLAddToXMLElem(xmlDOM, moduleElement, NIDAQAttr, DL_ATTRIBUTE, NumElem(NIDAQAttr), xmlErrorInfo) ); 
 	
 	//--------------------------------------------------------------------------
 	// Save NIDAQ device configuration
@@ -2448,11 +2443,11 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	for (size_t i = 1; i <= nDevices; i++) {
 		dev = *(Dev_type**)ListGetPtrToItem(NIDAQ->DAQmxDevices, i);
 		// create new device XML element
-		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "NIDAQDevice", &NIDAQDeviceXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "NIDAQDevice", &NIDAQDeviceXMLElement) );
 		// save device config
-		errChk( SaveDeviceCfg(dev, xmlDOM, NIDAQDeviceXMLElement) );
+		errChk( SaveDeviceCfg(dev, xmlDOM, NIDAQDeviceXMLElement, xmlErrorInfo) );
 		// add device XML element to NIDAQ module
-		errChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, NIDAQDeviceXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, xmlErrorInfo, NIDAQDeviceXMLElement, NULL) );
 		// discard device XML element handle
 		OKfreeCAHndl(NIDAQDeviceXMLElement); 
 	}
@@ -2464,10 +2459,9 @@ Error:
 	return error;
 }
 
-static int SaveDeviceCfg (Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement) 
+static int SaveDeviceCfg (Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement, ERRORINFO* xmlErrorInfo) 
 {
 	int								error					= 0;
-	ERRORINFO						xmlERRINFO;
 	
 	//--------------------------------------------------------------------------------
 	// Save  	- device product ID that must match when the settings are loaded again
@@ -2479,7 +2473,7 @@ static int SaveDeviceCfg (Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDO
 																{"DeviceSerialNumber",	BasicData_UInt,		&dev->attr->serial},
 																{"Name", 				BasicData_CString, 	tcName}	};
 	
-	DLAddToXMLElem(xmlDOM, NIDAQDeviceXMLElement, DevAttr, DL_ATTRIBUTE, NumElem(DevAttr)); 
+	errChk( DLAddToXMLElem(xmlDOM, NIDAQDeviceXMLElement, DevAttr, DL_ATTRIBUTE, NumElem(DevAttr), xmlErrorInfo) ); 
 	OKfree(tcName);
 	
 	//--------------------------------------------------------------------------------
@@ -2496,11 +2490,11 @@ static int SaveDeviceCfg (Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDO
 	// AI task
 	if (dev->AITaskSet) {
 		// create new task XML element
-		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "AITask", &AITaskXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "AITask", &AITaskXMLElement) );
 		// save task config
-		errChk( SaveADTaskCfg (dev->AITaskSet, xmlDOM, AITaskXMLElement) );
+		errChk( SaveADTaskCfg (dev->AITaskSet, xmlDOM, AITaskXMLElement, xmlErrorInfo) );
 		// add task XML element to device element
-		errChk ( ActiveXML_IXMLDOMElement_appendChild (NIDAQDeviceXMLElement, &xmlERRINFO, AITaskXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (NIDAQDeviceXMLElement, xmlErrorInfo, AITaskXMLElement, NULL) );
 		// discard task XML element handle
 		OKfreeCAHndl(AITaskXMLElement);
 	}
@@ -2508,11 +2502,11 @@ static int SaveDeviceCfg (Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDO
 	// AO task
 	if (dev->AOTaskSet) {
 		// create new task XML element
-		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "AOTask", &AOTaskXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "AOTask", &AOTaskXMLElement) );
 		// save task config
-		errChk( SaveADTaskCfg (dev->AOTaskSet, xmlDOM, AOTaskXMLElement) );
+		errChk( SaveADTaskCfg (dev->AOTaskSet, xmlDOM, AOTaskXMLElement, xmlErrorInfo) );
 		// add device XML element to device element
-		errChk ( ActiveXML_IXMLDOMElement_appendChild (NIDAQDeviceXMLElement, &xmlERRINFO, AOTaskXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (NIDAQDeviceXMLElement, xmlErrorInfo, AOTaskXMLElement, NULL) );
 		// discard task XML element handle
 		OKfreeCAHndl(AOTaskXMLElement);
 	}
@@ -2524,10 +2518,9 @@ Error:
 	return error;
 }
 		
-static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement) 
+static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement, ERRORINFO* xmlErrorInfo) 
 {
 	int								error					= 0;
-	ERRORINFO						xmlERRINFO;
 	
 	//--------------------------------------------------------------------------------
 	// Save taskSet properties
@@ -2537,17 +2530,17 @@ static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXML
 	uInt32							sampleClockEdge			= (uInt32)taskSet->timing->sampClkEdge;
 	
 	DAQLabXMLNode 					taskSetAttr[] 				= {	{"Timeout", 				BasicData_Double, 		&taskSet->timeout},
-																{"OperationMode", 			BasicData_UInt, 		&operationMode},
-																{"SamplingRate", 			BasicData_Double, 		&taskSet->timing->sampleRate},
-																{"NSamples", 				BasicData_ULongLong, 	&taskSet->timing->nSamples},
-																{"Oversampling",			BasicData_UInt,			&taskSet->timing->oversampling},
-																{"BlockSize", 				BasicData_UInt, 		&taskSet->timing->blockSize},
-																{"SampleClockSource", 		BasicData_CString, 		taskSet->timing->sampClkSource},
-																{"SampleClockEdge", 		BasicData_UInt, 		&sampleClockEdge},
-																{"ReferenceClockSource", 	BasicData_CString, 		taskSet->timing->refClkSource},
-																{"ReferenceClockFrequency", BasicData_Double, 		&taskSet->timing->refClkFreq} };
+																	{"OperationMode", 			BasicData_UInt, 		&operationMode},
+																	{"SamplingRate", 			BasicData_Double, 		&taskSet->timing->sampleRate},
+																	{"NSamples", 				BasicData_ULongLong, 	&taskSet->timing->nSamples},
+																	{"Oversampling",			BasicData_UInt,			&taskSet->timing->oversampling},
+																	{"BlockSize", 				BasicData_UInt, 		&taskSet->timing->blockSize},
+																	{"SampleClockSource", 		BasicData_CString, 		taskSet->timing->sampClkSource},
+																	{"SampleClockEdge", 		BasicData_UInt, 		&sampleClockEdge},
+																	{"ReferenceClockSource", 	BasicData_CString, 		taskSet->timing->refClkSource},
+																	{"ReferenceClockFrequency", BasicData_Double, 		&taskSet->timing->refClkFreq} };
 																	
-	DLAddToXMLElem(xmlDOM, AITaskXMLElement, taskSetAttr, DL_ATTRIBUTE, NumElem(taskSetAttr)); 
+	errChk( DLAddToXMLElem(xmlDOM, AITaskXMLElement, taskSetAttr, DL_ATTRIBUTE, NumElem(taskSetAttr), xmlErrorInfo) ); 
 	
 	//--------------------------------------------------------------------------------
 	// Save taskSet triggers
@@ -2559,18 +2552,18 @@ static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXML
 	
 	// create new triggers XML element
 	if (taskSet->startTrig || taskSet->referenceTrig)
-		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Triggers", &TriggersXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Triggers", &TriggersXMLElement) );
 	
 	//----------------------
 	// Start Trigger
 	//----------------------
 	if (taskSet->startTrig) {
 		// create "StartTrigger" XML element
-		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "StartTrigger", &StartTriggerXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "StartTrigger", &StartTriggerXMLElement) );
 		// save trigger info
-		errChk( SaveTaskTrigCfg(taskSet->startTrig, xmlDOM, StartTriggerXMLElement) ); 
+		errChk( SaveTaskTrigCfg(taskSet->startTrig, xmlDOM, StartTriggerXMLElement, xmlErrorInfo) ); 
 		// add "StartTrigger" XML element to "Triggers" XML element
-		errChk ( ActiveXML_IXMLDOMElement_appendChild (TriggersXMLElement, &xmlERRINFO, StartTriggerXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (TriggersXMLElement, xmlErrorInfo, StartTriggerXMLElement, NULL) );
 		// discard "StartTrigger" XML element handle
 		OKfreeCAHndl(StartTriggerXMLElement);
 	}
@@ -2580,20 +2573,20 @@ static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXML
 	//----------------------
 	if (taskSet->referenceTrig) {
 		// create "ReferenceTrigger" XML element
-		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ReferenceTrigger", &ReferenceTriggerXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "ReferenceTrigger", &ReferenceTriggerXMLElement) );
 		// save trigger info
-		errChk( SaveTaskTrigCfg(taskSet->referenceTrig, xmlDOM, ReferenceTriggerXMLElement) );
+		errChk( SaveTaskTrigCfg(taskSet->referenceTrig, xmlDOM, ReferenceTriggerXMLElement, xmlErrorInfo) );
 		DAQLabXMLNode 	refTrigAttr[] = {{"NPreTrigSamples", BasicData_UInt, &taskSet->referenceTrig->nPreTrigSamples}};
-		errChk( DLAddToXMLElem(xmlDOM, ReferenceTriggerXMLElement, refTrigAttr, DL_ATTRIBUTE, NumElem(refTrigAttr)) ); 
+		errChk( DLAddToXMLElem(xmlDOM, ReferenceTriggerXMLElement, refTrigAttr, DL_ATTRIBUTE, NumElem(refTrigAttr), xmlErrorInfo) ); 
 		// add "ReferenceTrigger" XML element to "Triggers" XML element
-		errChk ( ActiveXML_IXMLDOMElement_appendChild (TriggersXMLElement, &xmlERRINFO, ReferenceTriggerXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (TriggersXMLElement, xmlErrorInfo, ReferenceTriggerXMLElement, NULL) );
 		// discard "ReferenceTrigger" XML element handle
 		OKfreeCAHndl(ReferenceTriggerXMLElement);
 	}
 	
 	// add "Triggers" XML element to taskSet element
 	if (taskSet->startTrig || taskSet->referenceTrig) {
-		errChk ( ActiveXML_IXMLDOMElement_appendChild (AITaskXMLElement, &xmlERRINFO, TriggersXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (AITaskXMLElement, xmlErrorInfo, TriggersXMLElement, NULL) );
 		// discard "Triggers" XML element handle
 		OKfreeCAHndl(TriggersXMLElement);
 	}
@@ -2608,22 +2601,22 @@ static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXML
 	ChanSet_type*					chanSet						= NULL;
 	
 	// create new "Channels" XML element
-	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Channels", &ChannelsXMLElement) );
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Channels", &ChannelsXMLElement) );
 	// save channels info
 	for (size_t i = 1; i <= nChannels; i++) {
 		chanSet = *(ChanSet_type**) ListGetPtrToItem(taskSet->chanSet, i);
 		// create new "Channel" element
-		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Channel", &ChannelXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Channel", &ChannelXMLElement) );
 		// save channel info
-		errChk( SaveChannelCfg(chanSet, xmlDOM, ChannelXMLElement) );
+		errChk( SaveChannelCfg(chanSet, xmlDOM, ChannelXMLElement, xmlErrorInfo) );
 		// add "Channel" element to "Channels" element
-		errChk ( ActiveXML_IXMLDOMElement_appendChild (ChannelsXMLElement, &xmlERRINFO, ChannelXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (ChannelsXMLElement, xmlErrorInfo, ChannelXMLElement, NULL) );
 		// discard "Channel" XML element handle
 		OKfreeCAHndl(ChannelXMLElement);
 	}
 	
 	// add "Channels" XML element to taskSet element
-	errChk ( ActiveXML_IXMLDOMElement_appendChild (AITaskXMLElement, &xmlERRINFO, ChannelsXMLElement, NULL) );
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (AITaskXMLElement, xmlErrorInfo, ChannelsXMLElement, NULL) );
 	// discard "Channels" XML element handle
 	OKfreeCAHndl(ChannelsXMLElement);
 	
@@ -2634,39 +2627,35 @@ Error:
 	return error;	
 }
 
-static int SaveCITaskCfg (CITaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement) 
+static int SaveCITaskCfg (CITaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement, ERRORINFO* xmlErrorInfo) 
 {
-	//int								error					= 0;
-	//ERRORINFO						xmlERRINFO;
+	int		error		= 0;
 	
 	
 	return 0;
 	
-//Error:
+Error:
 	
-	//return error;	
+	return error;	
 }
 
-static int SaveCOTaskCfg (COTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement) 
+static int SaveCOTaskCfg (COTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement, ERRORINFO* xmlErrorInfo) 
 {
-	//int								error					= 0;
-	//ERRORINFO						xmlERRINFO;
+	int		error		= 0;
 	
 	
 	return 0;
 	
-//Error:
+Error:
 	
-	//return error;	
+	return error;	
 }
 
-static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ TriggerXMLElement)
+static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ TriggerXMLElement, ERRORINFO* xmlErrorInfo)
 {
 #define SaveTaskTrigCfg_Err_NotImplemented		-1
 	
-	//int								error					= 0;
-	//ERRORINFO						xmlERRINFO;
-	
+	int								error					= 0;
 	uInt32							trigType				= (uInt32) taskTrig->trigType;
 	uInt32							slopeType				= (uInt32) taskTrig->slope;
 	uInt32							triggerCondition		= (uInt32) taskTrig->wndTrigCond;
@@ -2684,7 +2673,7 @@ static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveX
 																{"WindowTriggerCondition", 	BasicData_UInt, 	&triggerCondition} };
 
 	// add shared trigger attributes 
-	DLAddToXMLElem(xmlDOM, TriggerXMLElement, sharedTrigAttr, DL_ATTRIBUTE, NumElem(sharedTrigAttr)); 
+	errChk( DLAddToXMLElem(xmlDOM, TriggerXMLElement, sharedTrigAttr, DL_ATTRIBUTE, NumElem(sharedTrigAttr), xmlErrorInfo) ); 
 	
 	// add specific trigger attributes
 	switch (taskTrig->trigType) {
@@ -2695,7 +2684,7 @@ static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveX
 			
 		case Trig_DigitalEdge:
 			
-			DLAddToXMLElem(xmlDOM, TriggerXMLElement, edgeTrigAttr, DL_ATTRIBUTE, NumElem(edgeTrigAttr)); 
+			errChk( DLAddToXMLElem(xmlDOM, TriggerXMLElement, edgeTrigAttr, DL_ATTRIBUTE, NumElem(edgeTrigAttr), xmlErrorInfo) ); 
 			
 			break;
 			
@@ -2705,30 +2694,29 @@ static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveX
 			
 		case Trig_AnalogEdge:
 			
-			DLAddToXMLElem(xmlDOM, TriggerXMLElement, edgeTrigAttr, DL_ATTRIBUTE, NumElem(edgeTrigAttr)); 
-			DLAddToXMLElem(xmlDOM, TriggerXMLElement, levelTrigAttr, DL_ATTRIBUTE, NumElem(levelTrigAttr)); 
+			errChk( DLAddToXMLElem(xmlDOM, TriggerXMLElement, edgeTrigAttr, DL_ATTRIBUTE, NumElem(edgeTrigAttr), xmlErrorInfo) ); 
+			errChk( DLAddToXMLElem(xmlDOM, TriggerXMLElement, levelTrigAttr, DL_ATTRIBUTE, NumElem(levelTrigAttr), xmlErrorInfo) ); 
 			
 			break;
 			
 		case Trig_AnalogWindow:
 			
-			DLAddToXMLElem(xmlDOM, TriggerXMLElement, windowTrigAttr, DL_ATTRIBUTE, NumElem(windowTrigAttr)); 
+			errChk( DLAddToXMLElem(xmlDOM, TriggerXMLElement, windowTrigAttr, DL_ATTRIBUTE, NumElem(windowTrigAttr), xmlErrorInfo) ); 
 	}
 									
 	
 	return 0;
 	
-//Error:
+Error:
 	
-	//return error;
+	return error;
 }
 
-static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ ChannelXMLElement)
+static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ ChannelXMLElement, ERRORINFO* xmlErrorInfo)
 {
 #define SaveChannelCfg_Err_NotImplemented		-1
 	
 	int								error						= 0;
-	ERRORINFO						xmlERRINFO;
 	uInt32							chanType					= (uInt32) chanSet->chanType;
 	DAQLabXMLNode 					SharedChanAttr[]			= { {"PhysicalChannelName", 	BasicData_CString, 		chanSet->name},
 																	{"ChannelType",				BasicData_UInt, 		&chanType},
@@ -2739,7 +2727,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 	
 	
 	// add common channel attributes
-	errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, SharedChanAttr, DL_ATTRIBUTE, NumElem(SharedChanAttr)) );
+	errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, SharedChanAttr, DL_ATTRIBUTE, NumElem(SharedChanAttr), xmlErrorInfo) );
 	
 	// add channel specific attributes
 	switch (chanSet->chanType) {
@@ -2762,7 +2750,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 																			{"Integrate",			BasicData_Bool,		&AIVoltageChanSet->baseClass.integrateFlag} };
 																			
 																			
-				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, ChanAIVoltageAttr, DL_ATTRIBUTE, NumElem(ChanAIVoltageAttr)) );
+				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, ChanAIVoltageAttr, DL_ATTRIBUTE, NumElem(ChanAIVoltageAttr), xmlErrorInfo) );
 			}
 			break;
 			
@@ -2787,7 +2775,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 																			{"Integrate",			BasicData_Double,	&AICurrentChanSet->baseClass.integrateFlag} };
 																			
 																			
-				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, ChanAICurrentAttr, DL_ATTRIBUTE, NumElem(ChanAICurrentAttr)) );
+				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, ChanAICurrentAttr, DL_ATTRIBUTE, NumElem(ChanAICurrentAttr), xmlErrorInfo) );
 			}
 			break;
 			
@@ -2802,7 +2790,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 																			{"Terminal",			BasicData_UInt,		&AOVoltageTerminalType} };
 				
 																			
-				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, ChanAOVoltageAttr, DL_ATTRIBUTE, NumElem(ChanAOVoltageAttr)) );															
+				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, ChanAOVoltageAttr, DL_ATTRIBUTE, NumElem(ChanAOVoltageAttr), xmlErrorInfo) );															
 			}
 			break;
 			
@@ -2817,7 +2805,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 																			{"Terminal",			BasicData_UInt,		&AOCurrentTerminalType} };
 				
 																			
-				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, ChanAOCurrentAttr, DL_ATTRIBUTE, NumElem(ChanAOCurrentAttr)) );
+				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, ChanAOCurrentAttr, DL_ATTRIBUTE, NumElem(ChanAOCurrentAttr), xmlErrorInfo) );
 				
 			}
 			break;
@@ -2830,7 +2818,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				ChanSet_DIDO_type*				DIDOChanSet				= (ChanSet_DIDO_type*) chanSet;
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&DIDOChanSet->invert} };
 				
-				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, ChanDIDOAttr, DL_ATTRIBUTE, NumElem(ChanDIDOAttr)) );
+				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, ChanDIDOAttr, DL_ATTRIBUTE, NumElem(ChanDIDOAttr), xmlErrorInfo) );
 			}
 			break;
 			
@@ -2843,7 +2831,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 																			{"InitialCount",		BasicData_UInt,		&CIEdgeCountChanSet->initialCount},
 																			{"CountDirection",		BasicData_UInt,		&CICountDirection} };
 																			
-				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, CIEdgeCountAttr, DL_ATTRIBUTE, NumElem(CIEdgeCountAttr)) );
+				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, CIEdgeCountAttr, DL_ATTRIBUTE, NumElem(CIEdgeCountAttr), xmlErrorInfo) );
 			}
 			break;
 			
@@ -2889,7 +2877,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 																			{"PulseLowTime",			BasicData_Double,		&lowTime},
 																			{"PulseInitialDelay",		BasicData_Double,		&initialDelay} };
 				
-				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, COChanAttr, DL_ATTRIBUTE, NumElem(COChanAttr)) );
+				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, COChanAttr, DL_ATTRIBUTE, NumElem(COChanAttr), xmlErrorInfo) );
 			
 			}
 			break;
@@ -2913,7 +2901,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 																			{"DutyCycle",				BasicData_Double,		&dutyCycle},
 																			{"InitialDelay",			BasicData_Double,		&initialDelay} };
 				
-				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, COChanAttr, DL_ATTRIBUTE, NumElem(COChanAttr)) );
+				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, COChanAttr, DL_ATTRIBUTE, NumElem(COChanAttr), xmlErrorInfo) );
 				
 			}
 			break;
@@ -2937,7 +2925,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 																			{"LowTicks",				BasicData_UInt,			&lowTicks},
 																			{"DelayTicks",				BasicData_UInt,			&delayTicks} };
 				
-				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, COChanAttr, DL_ATTRIBUTE, NumElem(COChanAttr)) );
+				errChk( DLAddToXMLElem(xmlDOM, ChannelXMLElement, COChanAttr, DL_ATTRIBUTE, NumElem(COChanAttr), xmlErrorInfo) );
 				
 			}
 			break;
@@ -2975,16 +2963,16 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 	
 	// create new triggers XML element
 	if (startTrig || referenceTrig)
-		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Triggers", &TriggersXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Triggers", &TriggersXMLElement) );
 	
 	// start Trigger
 	if (startTrig) {
 		// create "StartTrigger" XML element
-		errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "StartTrigger", &StartTriggerXMLElement) );
+		errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "StartTrigger", &StartTriggerXMLElement) );
 		// save trigger info
-		errChk( SaveTaskTrigCfg(startTrig, xmlDOM, StartTriggerXMLElement) ); 
+		errChk( SaveTaskTrigCfg(startTrig, xmlDOM, StartTriggerXMLElement, xmlErrorInfo) ); 
 		// add "StartTrigger" XML element to "Triggers" XML element
-		errChk( ActiveXML_IXMLDOMElement_appendChild (TriggersXMLElement, &xmlERRINFO, StartTriggerXMLElement, NULL) );
+		errChk( ActiveXML_IXMLDOMElement_appendChild (TriggersXMLElement, xmlErrorInfo, StartTriggerXMLElement, NULL) );
 		// discard "StartTrigger" XML element handle
 		OKfreeCAHndl(StartTriggerXMLElement);
 	}
@@ -2992,20 +2980,20 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 	// reference Trigger
 	if (referenceTrig) {
 		// create "ReferenceTrigger" XML element
-		errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ReferenceTrigger", &ReferenceTriggerXMLElement) );
+		errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "ReferenceTrigger", &ReferenceTriggerXMLElement) );
 		// save trigger info
-		errChk( SaveTaskTrigCfg(referenceTrig, xmlDOM, ReferenceTriggerXMLElement) );
+		errChk( SaveTaskTrigCfg(referenceTrig, xmlDOM, ReferenceTriggerXMLElement, xmlErrorInfo) );
 		DAQLabXMLNode 	refTrigAttr[] = {{"NPreTrigSamples", BasicData_UInt, &referenceTrig->nPreTrigSamples}};
-		errChk( DLAddToXMLElem(xmlDOM, ReferenceTriggerXMLElement, refTrigAttr, DL_ATTRIBUTE, NumElem(refTrigAttr)) ); 
+		errChk( DLAddToXMLElem(xmlDOM, ReferenceTriggerXMLElement, refTrigAttr, DL_ATTRIBUTE, NumElem(refTrigAttr), xmlErrorInfo) ); 
 		// add "ReferenceTrigger" XML element to "Triggers" XML element
-		errChk( ActiveXML_IXMLDOMElement_appendChild (TriggersXMLElement, &xmlERRINFO, ReferenceTriggerXMLElement, NULL) );
+		errChk( ActiveXML_IXMLDOMElement_appendChild (TriggersXMLElement, xmlErrorInfo, ReferenceTriggerXMLElement, NULL) );
 		// discard "ReferenceTrigger" XML element handle
 		OKfreeCAHndl(ReferenceTriggerXMLElement);
 	}
 	
 	// add "Triggers" XML element to channel element
 	if (startTrig || referenceTrig) {
-		errChk ( ActiveXML_IXMLDOMElement_appendChild (ChannelXMLElement, &xmlERRINFO, TriggersXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (ChannelXMLElement, xmlErrorInfo, TriggersXMLElement, NULL) );
 		// discard "Triggers" XML element handle
 		OKfreeCAHndl(TriggersXMLElement);
 	}

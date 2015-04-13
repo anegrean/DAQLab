@@ -337,13 +337,13 @@ typedef enum {
 // Task Controller Iteration Execution Mode
 //---------------------------------------------------------------
 typedef enum {
-	TASK_ITERATE_BEFORE_SUBTASKS_START,		// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
+	TASK_EXECUTE_BEFORE_SUBTASKS_START,		// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
 											// IterateFptr is called and completes before sending TASK_EVENT_START to all SubTasks.
-	TASK_ITERATE_AFTER_SUBTASKS_COMPLETE,	// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
+	TASK_EXECUTE_AFTER_SUBTASKS_COMPLETE,	// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
 											// IterateFptr is called after all SubTasks reach TASK_STATE_DONE.
-	TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS  // The iteration block of the Task Controller is still running after a call to IterateFptr and after a TASK_EVENT_START 
+	TASK_EXECUTE_IN_PARALLEL_WITH_SUBTASKS  // The iteration block of the Task Controller is still running after a call to IterateFptr and after a TASK_EVENT_START 
 											// is sent to all SubTasks. The iteration block is carried out in parallel with the execution of the SubTasks.
-} TaskIterMode_type;
+} TaskExecutionMode_type;
 
 
 typedef struct TaskControl 			TaskControl_type;
@@ -470,12 +470,12 @@ void					SetTaskControlIterationTimeout		(TaskControl_type* taskControl, int tim
 int						GetTaskControlIterationTimeout		(TaskControl_type* taskControl);
 
 	// Task Controller Iteration Mode
-	// default, iterationMode = TASK_ITERATE_BEFORE_SUBTASKS_START
-int						SetTaskControlIterMode				(TaskControl_type* taskControl, TaskIterMode_type iterMode);
-TaskIterMode_type		GetTaskControlIterMode				(TaskControl_type* taskControl);
+	// default, iterationMode = TASK_EXECUTE_BEFORE_SUBTASKS_START
+void					SetTaskControlExecutionMode			(TaskControl_type* taskControl, TaskExecutionMode_type executionMode);
+TaskExecutionMode_type	GetTaskControlExecutionMode			(TaskControl_type* taskControl);
 
 // Task Controller Current Iteration    
-int						SetTaskControlCurrentIter 			(TaskControl_type* taskControl, Iterator_type* currentiter);
+void					SetTaskControlCurrentIter 			(TaskControl_type* taskControl, Iterator_type* currentIter);
 Iterator_type* 			GetTaskControlCurrentIter 			(TaskControl_type* taskControl);
 Iterator_type* 			GetTaskControlCurrentIterDup		(TaskControl_type* taskControl);
 

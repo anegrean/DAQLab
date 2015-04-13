@@ -65,7 +65,7 @@ int main (int argc, char *argv[])
 	// ZStack Task
 	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ZStackTask_ErrorHandler);
 	SetTaskControlIterations(ZStackTask, 1);
-	SetTaskControlIterMode(ZStackTask, TASK_ITERATE_BEFORE_SUBTASKS_START);
+	SetTaskControlExecutionMode(ZStackTask, TASK_EXECUTE_BEFORE_SUBTASKS_START);
 	SetTaskControlIterationsWait(ZStackTask, 0);
 	SetTaskControlLog(ZStackTask, TaskExecutionLog);
 	

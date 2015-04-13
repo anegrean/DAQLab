@@ -57,10 +57,10 @@ struct DAQLabModule {
 	int		(* Load)			(DAQLabModule_type* self, int workspacePanHndl);
 	
 		// loads config from XML node
-	int		(* LoadCfg) 		(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+	int		(* LoadCfg) 		(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo);
 	
 		// adds config to XML node
-	int		(* SaveCfg)			(DAQLabModule_type* self, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+	int		(* SaveCfg)			(DAQLabModule_type* self, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 	
 		// if visibleFlag is TRUE, displays or otherwise hides all module panels
 	int		(* DisplayPanels)	(DAQLabModule_type* self, BOOL visibleFlag);

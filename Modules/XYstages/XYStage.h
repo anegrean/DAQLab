@@ -175,10 +175,10 @@ void 				discard_XYStage 				(DAQLabModule_type** mod);
 int					XYStage_Load 					(DAQLabModule_type* mod, int workspacePanHndl);
 
 	// Saves generic settings for a XY stage
-int					XYStage_SaveCfg					(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement);
+int					XYStage_SaveCfg					(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
 	// Loads generic settings for a XY stage
-int					XYStage_LoadCfg					(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement);
+int					XYStage_LoadCfg					(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
 //----------------------------------------------------------------------------------------------
 // Generic XY stage operation

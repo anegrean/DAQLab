@@ -125,17 +125,17 @@ static void							discard_PockellsEOM_type							(PockellsEOM_type** eomPtr);
 
 static int							Load 												(DAQLabModule_type* mod, int workspacePanHndl);
 
-static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement);
+static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
-static PockellsEOM_type* 			LoadPockellsCellFromXMLData 						(PockellsModule_type* eomModule, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement);
+static PockellsEOM_type* 			LoadPockellsCellFromXMLData 						(PockellsModule_type* eomModule, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int 							LoadPockellsCalibrationFromXMLData 					(PockellsEOMCal_type* eomCal, ActiveXMLObj_IXMLDOMElement_ calXMLElement);
+static int 							LoadPockellsCalibrationFromXMLData 					(PockellsEOMCal_type* eomCal, ActiveXMLObj_IXMLDOMElement_ calXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int 							SaveCfg 											(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement);
+static int 							SaveCfg 											(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
-static int 							SavePockellsCellXMLData								(PockellsEOM_type* eom, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement);
+static int 							SavePockellsCellXMLData								(PockellsEOM_type* eom, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int 							SavePockellsCalibrationXMLData						(PockellsEOMCal_type* eomCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ calXMLElement); 
+static int 							SavePockellsCalibrationXMLData						(PockellsEOMCal_type* eomCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ calXMLElement, ERRORINFO* xmlErrorInfo); 
 
 static int 							DisplayPanels										(DAQLabModule_type* mod, BOOL visibleFlag); 
 
@@ -482,12 +482,10 @@ Error:
 	return error;
 }
 
-static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement)
+static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	PockellsModule_type*			eomModule						= (PockellsModule_type*)mod;    
 	int 							error 							= 0;
-	HRESULT							xmlerror						= 0;
-	ERRORINFO						xmlERRINFO;
+	PockellsModule_type*			eomModule						= (PockellsModule_type*)mod;    
 	eomModule->mainPanTopPos										= malloc(sizeof(int));
 	eomModule->mainPanLeftPos										= malloc(sizeof(int));
 	DAQLabXMLNode 					eomModuleAttr[]					= { {"PanTopPos", BasicData_Int, eomModule->mainPanTopPos},
@@ -508,12 +506,12 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 	long							nCells							= 0;
 	PockellsEOM_type*				eom								= NULL;
 	
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(moduleElement, &xmlERRINFO, "PockellsCell", &pockellsNodeList) );
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(pockellsNodeList, &xmlERRINFO, &nCells) );
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(moduleElement, xmlErrorInfo, "PockellsCell", &pockellsNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(pockellsNodeList, xmlErrorInfo, &nCells) );
 	
 	for (long i = 0; i < nCells; i++) {
-		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(pockellsNodeList, &xmlERRINFO, i, &pockellsNode) );
-		nullChk( eom = LoadPockellsCellFromXMLData(eomModule, (ActiveXMLObj_IXMLDOMElement_) pockellsNode) ); 
+		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(pockellsNodeList, xmlErrorInfo, i, &pockellsNode) );
+		nullChk( eom = LoadPockellsCellFromXMLData(eomModule, (ActiveXMLObj_IXMLDOMElement_) pockellsNode, xmlErrorInfo) ); 
 		ListInsertItem(eomModule->pockellsCells, &eom, END_OF_LIST);
 		OKfreeCAHndl(pockellsNode); 
 	}
@@ -525,17 +523,11 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 Error:
 	
 	return error;
-	
-XMLError:   
-	
-	return xmlerror;
 }
 
-static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomModule, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement)
+static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomModule, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement, ERRORINFO* xmlErrorInfo)
 {
 	int 							error 							= 0;
-	HRESULT							xmlerror						= 0;
-	ERRORINFO						xmlERRINFO;
 	PockellsEOM_type*				eom								= NULL;
 	double							maxSafeVoltage					= 0;
 	int								calibIdx						= 0;
@@ -572,12 +564,12 @@ static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomMo
 	long							nCals					= 0;
 	PockellsEOMCal_type				eomCal;
 	
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(pockellsXMLElement, &xmlERRINFO, "Calibration", &calNodeList) );
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(calNodeList, &xmlERRINFO, &nCals) );
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(pockellsXMLElement, xmlErrorInfo, "Calibration", &calNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(calNodeList, xmlErrorInfo, &nCals) );
 	
 	for (long i = 0; i < nCals; i++) {
-		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(calNodeList, &xmlERRINFO, i, &calNode) );
-		errChk( LoadPockellsCalibrationFromXMLData(&eomCal, (ActiveXMLObj_IXMLDOMElement_) calNode) ); 
+		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(calNodeList, xmlErrorInfo, i, &calNode) );
+		errChk( LoadPockellsCalibrationFromXMLData(&eomCal, (ActiveXMLObj_IXMLDOMElement_) calNode, xmlErrorInfo) ); 
 		ListInsertItem(eom->calib, &eomCal, END_OF_LIST);
 		OKfreeCAHndl(calNode); 
 	}
@@ -587,16 +579,13 @@ static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomMo
 	return eom;
 	
 Error:
-XMLError:   
-	
+
 	return NULL;
 }
 
-static int LoadPockellsCalibrationFromXMLData (PockellsEOMCal_type* eomCal, ActiveXMLObj_IXMLDOMElement_ calXMLElement)
+static int LoadPockellsCalibrationFromXMLData (PockellsEOMCal_type* eomCal, ActiveXMLObj_IXMLDOMElement_ calXMLElement, ERRORINFO* xmlErrorInfo)
 {
 	int 							error 							= 0;
-	HRESULT							xmlerror						= 0;
-	ERRORINFO						xmlERRINFO;
 	DAQLabXMLNode 					calAttr[] 						= {	{"Wavelength", BasicData_Double, &eomCal->wavelength},
 																		{"MaxPower", BasicData_Double, &eomCal->maxPower},
 											  		   		   			{"a", BasicData_Double, &eomCal->a},
@@ -612,21 +601,14 @@ Error:
 	
 	return error;
 	
-XMLError:   
-	
-	return xmlerror;	
-	
-	
 }
 
-static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
 	PockellsModule_type*			eomModule				= (PockellsModule_type*)mod;
 	int								error					= 0;
 	int								lsPanTopPos				= 0;
 	int								lsPanLeftPos			= 0;
-	HRESULT							xmlerror				= 0;
-	ERRORINFO						xmlERRINFO;
 	DAQLabXMLNode 					moduleAttr[] 			= {{"PanTopPos", BasicData_Int, &lsPanTopPos},
 											  		   		   {"PanLeftPos", BasicData_Int, &lsPanLeftPos}};
 	
@@ -636,7 +618,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	
 	errChk( GetPanelAttribute(eomModule->mainPanHndl, ATTR_LEFT, &lsPanLeftPos) );
 	errChk( GetPanelAttribute(eomModule->mainPanHndl, ATTR_TOP, &lsPanTopPos) );
-	errChk( DLAddToXMLElem(xmlDOM, moduleElement, moduleAttr, DL_ATTRIBUTE, NumElem(moduleAttr)) ); 
+	errChk( DLAddToXMLElem(xmlDOM, moduleElement, moduleAttr, DL_ATTRIBUTE, NumElem(moduleAttr), xmlErrorInfo) ); 
 	
 	//--------------------------------------------------------------------------
 	// Save pockells cells
@@ -648,32 +630,25 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	for (size_t i = 1; i <= nCells; i++) {
 		eom = *(PockellsEOM_type**) ListGetPtrToItem(eomModule->pockellsCells, i);
 		// create new pockells cell element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "PockellsCell", &pockellsXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "PockellsCell", &pockellsXMLElement) );
 		// add pockells cell data to the element
-		errChk( SavePockellsCellXMLData(eom, xmlDOM, pockellsXMLElement) );
+		errChk( SavePockellsCellXMLData(eom, xmlDOM, pockellsXMLElement, xmlErrorInfo) );
 		// add pockells cell element to the module
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, pockellsXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, xmlErrorInfo, pockellsXMLElement, NULL) );
 		OKfreeCAHndl(pockellsXMLElement); 
 	}
-	
 	
 	return 0;
 	
 Error:
 	
 	return error;
-	
-XMLError:   
-	
-	return xmlerror;
 }
 
-static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement)
+static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement, ERRORINFO* xmlErrorInfo)
 {
 	int								error					= 0;
-	HRESULT							xmlerror				= 0;
 	char*							taskControllerName		= GetTaskControlName(eom->taskControl);
-	ERRORINFO						xmlERRINFO;
 	ActiveXMLObj_IXMLDOMElement_	calXMLElement			= 0;   // pockells cell XML calibration element
 	DAQLabXMLNode 					eomAttr[] 				= {{"MaxSafeVoltage", BasicData_Double, &eom->maxSafeVoltage},
 											  		   		   {"CalibrationIdx", BasicData_Int, &eom->calibIdx},
@@ -684,7 +659,7 @@ static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, A
 	// Save pockells cell attributes
 	//--------------------------------------------------------------------------
 	
-	errChk( DLAddToXMLElem(xmlDOM, pockellsXMLElement, eomAttr, DL_ATTRIBUTE, NumElem(eomAttr)) );
+	errChk( DLAddToXMLElem(xmlDOM, pockellsXMLElement, eomAttr, DL_ATTRIBUTE, NumElem(eomAttr), xmlErrorInfo) );
 	OKfree(taskControllerName);
 	
 	//--------------------------------------------------------------------------
@@ -695,11 +670,11 @@ static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, A
 	for (size_t i = 1; i <= nCals; i++) {
 		eomCal = ListGetPtrToItem(eom->calib, i);
 		// create new calibration element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Calibration", &calXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Calibration", &calXMLElement) );
 		// add calibration data to the element
-		errChk( SavePockellsCalibrationXMLData(eomCal, xmlDOM, calXMLElement) );
+		errChk( SavePockellsCalibrationXMLData(eomCal, xmlDOM, calXMLElement, xmlErrorInfo) );
 		// add calibration element to the pockells cell element
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (pockellsXMLElement, &xmlERRINFO, calXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (pockellsXMLElement, xmlErrorInfo, calXMLElement, NULL) );
 		OKfreeCAHndl(calXMLElement); 
 	}
 	
@@ -708,18 +683,11 @@ static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, A
 Error:
 	
 	return error;
-	
-XMLError:   
-	
-	return xmlerror;	
-	
 }
 
-static int SavePockellsCalibrationXMLData (PockellsEOMCal_type* eomCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ calXMLElement)
+static int SavePockellsCalibrationXMLData (PockellsEOMCal_type* eomCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ calXMLElement, ERRORINFO* xmlErrorInfo)
 {
 	int								error					= 0;
-	HRESULT							xmlerror				= 0;
-	ERRORINFO						xmlERRINFO;
 	DAQLabXMLNode 					calAttr[] 				= {{"Wavelength", BasicData_Double, &eomCal->wavelength},
 															   {"MaxPower", BasicData_Double, &eomCal->maxPower},
 											  		   		   {"a", BasicData_Double, &eomCal->a},
@@ -731,18 +699,13 @@ static int SavePockellsCalibrationXMLData (PockellsEOMCal_type* eomCal, CAObjHan
 	// Save calibration attributes
 	//--------------------------------------------------------------------------
 	
-	errChk( DLAddToXMLElem(xmlDOM, calXMLElement, calAttr, DL_ATTRIBUTE, NumElem(calAttr)) );
+	errChk( DLAddToXMLElem(xmlDOM, calXMLElement, calAttr, DL_ATTRIBUTE, NumElem(calAttr), xmlErrorInfo) );
 	
 	return 0;
 	
 Error:
 	
 	return error;
-	
-XMLError:   
-	
-	return xmlerror;
-	
 }
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
@@ -992,8 +955,6 @@ static BOOL CalibTableRowIsValid (PockellsEOM_type* eom, int tableRow)
 	double					b				= 0;
 	double					c				= 0;
 	double					d				= 0;
-	size_t					nCals			= ListNumItems(eom->calib);
-	PockellsEOMCal_type*	eomCal			= NULL;  
 	
 	// do not allow null wavelengths
 	cell.x = CalibTableColIdx_Wavelength;
@@ -1298,7 +1259,7 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 							
 					DeleteListItem(eom->eomPanHndl, Pockells_Wavelength, cell.y - 1, 1);
 					GetCtrlIndex(eom->eomPanHndl, Pockells_Wavelength, &wavelengthIdx);
-					eom->calibIdx == wavelengthIdx + 1;
+					eom->calibIdx = wavelengthIdx + 1;
 							
 					if (isSelected && eom->calibIdx) {
 						// apply voltage for min transmission at the new wavelength
@@ -1430,7 +1391,6 @@ static int ApplyPockellsCellVoltage (PockellsEOM_type* eom, double voltage, char
 	double*						commandSignal			= NULL;
 	RepeatedWaveform_type*		commandWaveform			= NULL;
 	DataPacket_type*			dataPacket				= NULL;
-	DataPacket_type*			nullPacket				= NULL;
 	int							error					= 0;
 	char*						errMsg					= NULL;
 	
@@ -1496,14 +1456,14 @@ Error:
 
 static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
@@ -1627,49 +1587,49 @@ Error:
 
 static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	TaskControlIterationDone(taskControl, 0, "", FALSE);
 }
 
 static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	PockellsEOM_type* 		eom 					= GetTaskControlModuleData(taskControl);
+	//PockellsEOM_type* 		eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
@@ -1681,7 +1641,7 @@ static void ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 
 static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
-	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }

@@ -45,6 +45,7 @@
 
 #define DAQLAB_CFG_DOM_ROOT_NAME							"DAQLab_Config"
 #define DAQLAB_UITASKCONTROLLER_XML_TAG						"DAQLab_UITaskController"
+#define DAQLAB_TASKCONTROLLER_XML_TAG						"TaskControllerSettings"
 #define DAQLAB_MODULES_XML_TAG								"DAQLab_Modules"
 
 	// number of Task Controllers visible at once. If there are more, a scroll bar appears.
@@ -58,6 +59,9 @@
 	// maximum number of characters allowed for a UI Task Controller name
 #define DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS				50
 
+// Macros
+#define XMLErrChk(fCall) if (xmlerror = (fCall), xmlerror < 0) \
+{goto XMLError;} else
 
 //==============================================================================
 // Types
@@ -357,36 +361,27 @@ Error:
 /// HIRET negative value if fail
 static int DAQLab_Load (void)
 {
-	int								error 					= 0;
-	BOOL							FoundDAQLabSettingsFlag	= 0;		// if FALSE, no XML settings were found and default will be used
-	HRESULT							xmlerror;  
-	ERRORINFO						xmlERRINFO;
-	ActiveXMLObj_IXMLDOMNodeList_	xmlUITaskControlers;
-	ActiveXMLObj_IXMLDOMNode_		xmlTaskControllerNode;
-	long							nUITaskControlers;
+	int								error 								= 0;
+	BOOL							FoundDAQLabSettingsFlag				= 0;		// if FALSE, no XML settings were found and default will be used
+	HRESULT							xmlerror							= 0;  
+	ERRORINFO						xmlErrorInfo						= {.wCode = 0, .sCode = 0, .source = "", .description = "", .helpFile = "", .helpContext = 0, .errorParamPos = 0};;
+	ActiveXMLObj_IXMLDOMNodeList_	UITaskControlersXMLNodeList			= 0;
+	ActiveXMLObj_IXMLDOMNode_		UITaskControllerXMLNode				= 0;
+	ActiveXMLObj_IXMLDOMElement_	taskControllerSettingsXMLElement	= 0;
+	long							nUITaskControlers					= 0;
 									// DAQLab UI data
-	int								taskPanTopPos;
-	int								taskPanLeftPos;
-	int								logPanTopPos;
-	int								logPanLeftPos;
-	char*							UITCName				= NULL;
-	unsigned int					UITCIterations;
-	double							UITCWait;
-	BOOL							UITCMode;
-	TaskControl_type*				newTaskControllerPtr;
-	UITaskCtrl_type*				UITaskCtrlsPtr;
+	int								taskPanTopPos						= 0;
+	int								taskPanLeftPos						= 0;
+	int								logPanTopPos						= 0;
+	int								logPanLeftPos						= 0;
+	TaskControl_type*				newTaskController					= NULL;
+	UITaskCtrl_type*				UITaskCtrlsPtr						= NULL;
 									// template to load DAQLab Environment parameters
-	DAQLabXMLNode 					attr1[] = { {"TaskPanTopPos", BasicData_Int, &taskPanTopPos},
-							 					{"TaskPanLeftPos", BasicData_Int, &taskPanLeftPos},
-												{"LogPanTopPos", BasicData_Int, &logPanTopPos},
-												{"LogPanLeftPos", BasicData_Int, &logPanLeftPos} };
-									// template to load UI Task Controller parameters			
-	DAQLabXMLNode					attr2[] = {	{"Name", BasicData_CString, &UITCName},
-												{"Iterations", BasicData_UInt, &UITCIterations},
-												{"Wait", BasicData_Double, &UITCWait}, 
-												{"Mode", BasicData_Bool, &UITCMode} };
-										
-	
+	DAQLabXMLNode 					attr1[] = { {"TaskPanTopPos", 		BasicData_Int, 		&taskPanTopPos},
+							 					{"TaskPanLeftPos", 		BasicData_Int, 		&taskPanLeftPos},
+												{"LogPanTopPos", 		BasicData_Int, 		&logPanTopPos},
+												{"LogPanLeftPos",		 BasicData_Int, 	&logPanLeftPos} };
+									
 	//---------------------------------------------------------------------------------
 	// Load resources
 	//---------------------------------------------------------------------------------
@@ -462,80 +457,68 @@ static int DAQLab_Load (void)
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Load UI Task Controller settings
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(DAQLabCfg_RootElement, &xmlERRINFO, DAQLAB_UITASKCONTROLLER_XML_TAG, &xmlUITaskControlers) );
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlUITaskControlers, &xmlERRINFO, &nUITaskControlers) );
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(DAQLabCfg_RootElement, &xmlErrorInfo, DAQLAB_UITASKCONTROLLER_XML_TAG, &UITaskControlersXMLNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(UITaskControlersXMLNodeList, &xmlErrorInfo, &nUITaskControlers) );
 	for (long i = 0; i < nUITaskControlers; i++) {
+		
 		// get xml Task Controller Node
-		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlUITaskControlers, &xmlERRINFO, i, &xmlTaskControllerNode) );
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(UITaskControlersXMLNodeList, &xmlErrorInfo, i, &UITaskControllerXMLNode) );
 		
-		// read in attributes
-		errChk( DLGetXMLNodeAttributes(xmlTaskControllerNode, attr2, NumElem(attr2)) ); 
+		errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)UITaskControllerXMLNode, "TaskControllerSettings", &taskControllerSettingsXMLElement) );
 		
-		// check if Task Controller name is unique
-		if (!DLValidTaskControllerName(UITCName)) {
-			DAQLab_Msg(DAQLAB_MSG_ERR_NOT_UNIQUE_TASKCONTROLLER_NAME, UITCName, NULL, NULL, NULL);
-			return -1;
-		}
-		
-		// create new UI Task Controller
-		newTaskControllerPtr = init_TaskControl_type (UITCName, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
+		// create a new default UI Task Controller
+		newTaskController = init_TaskControl_type (NULL, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
 												 	  ResetUITC, DoneUITC, StoppedUITC, TaskTreeStatusUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 		
-		if (!newTaskControllerPtr) {
-			DLMsg("Error: Task Controller could not be created.\n\n", 1);
-			return -1;
-		}
-
+		errChk( DLLoadTaskControllerSettingsFromXML(newTaskController, taskControllerSettingsXMLElement, &xmlErrorInfo) );
+		OKfreeCAHndl(taskControllerSettingsXMLElement);
+		
 		// mark Task Controller as UITC
-		SetTaskControlUITCFlag(newTaskControllerPtr, TRUE);
-		// set UITC iterations
-		SetTaskControlIterations(newTaskControllerPtr, UITCIterations);
-		// set UITC wait between iterations
-		SetTaskControlIterationsWait(newTaskControllerPtr, UITCWait);
-		// set UITC mode (finite/continuous)
-		SetTaskControlMode(newTaskControllerPtr, UITCMode);
+		SetTaskControlUITCFlag(newTaskController, TRUE);
+		
 		// add new Task Controller to the environment and framework
-		UITaskCtrlsPtr = DAQLab_AddTaskControllerToUI(newTaskControllerPtr);
+		UITaskCtrlsPtr = DAQLab_AddTaskControllerToUI(newTaskController);
 		// attach callback data to the Task Controller
-		SetTaskControlModuleData(newTaskControllerPtr, UITaskCtrlsPtr);
+		SetTaskControlModuleData(newTaskController, UITaskCtrlsPtr);
 		// send a configure event to the Task Controller
-		TaskControlEvent(newTaskControllerPtr, TASK_EVENT_CONFIGURE, NULL, NULL);
-		 //free  attributes
-	    errChk(DLDiscardXMLNodeAttributes(xmlTaskControllerNode, attr2, NumElem(attr2)) );
-		OKfreeCAHndl(xmlTaskControllerNode);
+		TaskControlEvent(newTaskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+		
+		// cleanup
+		OKfreeCAHndl(UITaskControllerXMLNode);
 	}
 	
-	OKfreeCAHndl(xmlUITaskControlers);
+	// cleanup
+	OKfreeCAHndl(UITaskControlersXMLNodeList);
 	
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Load DAQLab Modules and apply saved settings
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	ActiveXMLObj_IXMLDOMNodeList_	xmlNodeList;																
-	ActiveXMLObj_IXMLDOMNodeList_	xmlModulesNodeList;															// Modules installed
-	ActiveXMLObj_IXMLDOMNode_		xmlModulesNode;																// "Modules" node containing module XML elements
-	ActiveXMLObj_IXMLDOMNode_		xmlModuleNode;																// "Modules" node
-	char*							moduleClassName;															// Module class name to be loaded
-	char*							moduleInstanceName;															// module instance name
-																												// DAQLab module element node to be loaded
-	long							nModules;																	// Number of modules to be loaded
+	ActiveXMLObj_IXMLDOMNodeList_	xmlModulesNodeList;																// Modules installed
+	ActiveXMLObj_IXMLDOMNode_		xmlModulesNode;																	// "Modules" node containing module XML elements
+	ActiveXMLObj_IXMLDOMNode_		xmlModuleNode;																	// "Modules" node
+	char*							moduleClassName;																// Module class name to be loaded
+	char*							moduleInstanceName;																// module instance name
+																													// DAQLab module element node to be loaded
+	long							nModules;																		// Number of modules to be loaded
 	DAQLabXMLNode					attrModule[] = {	{"ClassName", BasicData_CString, &moduleClassName},			// Common module attributes to load (same for all modules)
-														{"InstanceName", BasicData_CString, &moduleInstanceName}		// Note: module specific attributes are managed by the modules
+														{"InstanceName", BasicData_CString, &moduleInstanceName}	// Note: module specific attributes are managed by the modules
 																									  			
 																										};
 	DAQLabModule_type*				newModule;
 	
 	// get "Modules" named node list
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(DAQLabCfg_RootElement, &xmlERRINFO, DAQLAB_MODULES_XML_TAG, &xmlNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(DAQLabCfg_RootElement, &xmlErrorInfo, DAQLAB_MODULES_XML_TAG, &xmlNodeList) );
 	// get "Modules" node
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlNodeList, &xmlERRINFO, 0, &xmlModulesNode) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlNodeList, &xmlErrorInfo, 0, &xmlModulesNode) );
 	// get modules node list contained in the "Modules" node
-	XMLErrChk ( ActiveXML_IXMLDOMNode_GetchildNodes(xmlModulesNode, &xmlERRINFO, &xmlModulesNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNode_GetchildNodes(xmlModulesNode, &xmlErrorInfo, &xmlModulesNodeList) );
 	// get number of modules to be loaded
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlModulesNodeList, &xmlERRINFO, &nModules) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlModulesNodeList, &xmlErrorInfo, &nModules) );
 	// load modules and their settings
 	for (long i = 0; i < nModules; i++) {
 		// get DAQLab module node
-		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlModulesNodeList, &xmlERRINFO, i, &xmlModuleNode) );
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlModulesNodeList, &xmlErrorInfo, i, &xmlModuleNode) );
 		// get DAQlab module attributes such as class name listed in attrModules
 		DLGetXMLNodeAttributes(xmlModuleNode, attrModule, NumElem(attrModule)); 
 		// get module index from the framework to call its init function 
@@ -545,10 +528,11 @@ static int DAQLab_Load (void)
 				newModule = (*DAQLabModules_InitFunctions[j].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[j].className, moduleInstanceName, mainPanHndl);
 				// load module configuration data if specified
 				if (newModule->LoadCfg)
-					if( (*newModule->LoadCfg)	(newModule, xmlModuleNode) < 0) {
+					if( (xmlerror = (*newModule->LoadCfg) (newModule, xmlModuleNode, &xmlErrorInfo)) < 0) {
+						DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, &DAQLabCfg_DOMHndl, &xmlerror, &xmlErrorInfo, 0);
 						DAQLab_Msg(DAQLAB_MSG_ERR_LOADING_MODULE_CONFIG, moduleInstanceName, NULL, NULL, NULL);
 						// dispose of module if not loaded properly
-						(*newModule->Discard) 	(&newModule);
+						(*newModule->Discard) (&newModule);
 						continue;
 					}
 				
@@ -590,21 +574,21 @@ static int DAQLab_Load (void)
 	
 	return 0;
 	
-	Error:
+Error:
 	
 	// cleanup
-	if(TasksUI.UItaskCtrls)		ListDispose(TasksUI.UItaskCtrls);
-	if(DAQLabModules)			ListDispose(DAQLabModules);  
-	if(DAQLabTCs)				ListDispose(DAQLabTCs);  
-	if(VChannels)				ListDispose(VChannels); 
-	if (HWTrigMasters) 			ListDispose(HWTrigMasters);
-	if (HWTrigSlaves) 			ListDispose(HWTrigSlaves);
+	OKfreeList(TasksUI.UItaskCtrls);
+	OKfreeList(DAQLabModules);
+	OKfreeList(DAQLabTCs);
+	OKfreeList(VChannels);
+	OKfreeList(HWTrigMasters);
+	OKfreeList(HWTrigSlaves);
 	
 	return error;
 	
-	XMLError:
+XMLError:
 	
-	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, &DAQLabCfg_DOMHndl, &xmlerror, &xmlERRINFO, 0);
+	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, &DAQLabCfg_DOMHndl, &xmlerror, &xmlErrorInfo, 0);
 	
 	return xmlerror;
 	
@@ -613,16 +597,17 @@ static int DAQLab_Load (void)
 
 static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 {
-	int								error;
-	HRESULT							xmlerror; 
-	ERRORINFO						xmlERRINFO;
-	ActiveXMLObj_IXMLDOMElement_	newXMLElement; 
+	int								error								= 0;
+	HRESULT							xmlerror							= 0; 
+	ERRORINFO						xmlErrorInfo;
+	ActiveXMLObj_IXMLDOMElement_	newXMLElement						= 0;
+	ActiveXMLObj_IXMLDOMElement_	taskControllerSettingsXMLElement	= 0;
 	
 	// create new DOM
 	XMLErrChk ( ActiveXML_NewDOMDocument60IXMLDOMDocument3_ (NULL, 1, LOCALE_NEUTRAL, 0, &DAQLabCfg_DOMHndl) );
 	// create new DAQLab Config root element and append it to the DOM
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_CFG_DOM_ROOT_NAME, &newXMLElement) );
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_appendChild(DAQLabCfg_DOMHndl, &xmlERRINFO, newXMLElement, &DAQLabCfg_RootElement) );
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlErrorInfo, DAQLAB_CFG_DOM_ROOT_NAME, &newXMLElement) );
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_appendChild(DAQLabCfg_DOMHndl, &xmlErrorInfo, newXMLElement, &DAQLabCfg_RootElement) );
 	OKfreeCAHndl(newXMLElement);   
 	// save Tasks and Log panel positions
 	int								taskPanTopPos;
@@ -639,72 +624,47 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	errChk( GetPanelAttribute(logPanHndl, ATTR_LEFT, &logPanLeftPos) );
 	errChk( GetPanelAttribute(logPanHndl, ATTR_TOP, &logPanTopPos) );
 	
-	errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, attr1, DL_ATTRIBUTE, NumElem(attr1)) );
+	errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, attr1, DL_ATTRIBUTE, NumElem(attr1), &xmlErrorInfo) );
 	
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Save UI Task Controllers
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
-	UITaskCtrl_type**		UItaskCtrlPtrPtr;
-	DAQLabXMLNode 			attr2[4];
-	int						niter;
-	double					wait;
-	BOOL					mode;
-	size_t					nUITCs = ListNumItems(TasksUI.UItaskCtrls);
-	
+	UITaskCtrl_type*		UITaskCtrl		= NULL;
+	size_t					nUITCs 			= ListNumItems(TasksUI.UItaskCtrls);
 	for (size_t i = 1; i <= nUITCs; i++) {
-		UItaskCtrlPtrPtr = ListGetPtrToItem (TasksUI.UItaskCtrls, i);
+		UITaskCtrl = *(UITaskCtrl_type**)ListGetPtrToItem (TasksUI.UItaskCtrls, i);
 		// create new XML UITaskController element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_UITASKCONTROLLER_XML_TAG, &newXMLElement) );
-		// initialize attributes
-		// name
-		attr2[0].tag 	= "Name";
-		attr2[0].type 	= BasicData_CString;
-		attr2[0].pData	= GetTaskControlName((*UItaskCtrlPtrPtr)->taskControl);
-		// iterations
-		niter 			= GetTaskControlIterations((*UItaskCtrlPtrPtr)->taskControl);
-		attr2[1].tag 	= "Iterations";
-		attr2[1].type 	= BasicData_UInt;
-		attr2[1].pData	= &niter; 
-		// wait
-		wait 			= GetTaskControlIterationsWait((*UItaskCtrlPtrPtr)->taskControl);
-		attr2[2].tag 	= "Wait";
-		attr2[2].type 	= BasicData_Double;
-		attr2[2].pData	= &wait; 
-		// mode (finite = 1, continuous = 0)
-		mode			= GetTaskControlMode((*UItaskCtrlPtrPtr)->taskControl);
-		attr2[3].tag 	= "Mode";
-		attr2[3].type 	= BasicData_Bool;
-		attr2[3].pData	= &mode; 
-		
-		// add attributes to task controller element
-		errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, newXMLElement, attr2, DL_ATTRIBUTE, NumElem(attr2)) );
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlErrorInfo, DAQLAB_UITASKCONTROLLER_XML_TAG, &newXMLElement) );
+		// add task controller settings
+		errChk( DLSaveTaskControllerSettingsToXML(UITaskCtrl->taskControl, DAQLabCfg_DOMHndl, &taskControllerSettingsXMLElement, &xmlErrorInfo) );
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (newXMLElement, &xmlErrorInfo, taskControllerSettingsXMLElement, NULL) );
 		// add task controller element to DAQLab root element
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (DAQLabCfg_RootElement, &xmlERRINFO, newXMLElement, NULL) );
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (DAQLabCfg_RootElement, &xmlErrorInfo, newXMLElement, NULL) );
 		// free attributes memory
-		OKfreeCAHndl(newXMLElement);   
-		OKfree(attr2[0].pData);
+		OKfreeCAHndl(newXMLElement);
+		OKfreeCAHndl(taskControllerSettingsXMLElement);
 	}
 	
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Save DAQLab Modules
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
-	DAQLabModule_type**					DLModulePtr;
-	size_t								nModules = ListNumItems(DAQLabModules);
-	ActiveXMLObj_IXMLDOMElement_		modulesXMLElement;  
-	ActiveXMLObj_IXMLDOMElement_		moduleXMLElement; 
+	DAQLabModule_type*					DLModule			= NULL;
+	size_t								nModules 			= ListNumItems(DAQLabModules);
+	ActiveXMLObj_IXMLDOMElement_		modulesXMLElement	= 0;  
+	ActiveXMLObj_IXMLDOMElement_		moduleXMLElement	= 0; 
 	DAQLabXMLNode 						attr3[2];									// Common module attributes managed by the framework.
 																					// Note: module specific attributes must be saved by the module
 	
 	// create "Modules" XML element and add it to the Root
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, DAQLAB_MODULES_XML_TAG, &newXMLElement) );
-	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild(DAQLabCfg_RootElement, &xmlERRINFO, newXMLElement, &modulesXMLElement) );
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlErrorInfo, DAQLAB_MODULES_XML_TAG, &newXMLElement) );
+	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild(DAQLabCfg_RootElement, &xmlErrorInfo, newXMLElement, &modulesXMLElement) );
 	OKfreeCAHndl(newXMLElement);
 	
 	for (size_t i = 1; i <= nModules; i++) {
-		DLModulePtr = ListGetPtrToItem(DAQLabModules, i);
+		DLModule = *(DAQLabModule_type**)ListGetPtrToItem(DAQLabModules, i);
 		// create "Module" XML element and add it to the "Modules" element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlERRINFO, "Module", &newXMLElement) );
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild(modulesXMLElement, &xmlERRINFO, newXMLElement, &moduleXMLElement) );
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlErrorInfo, "Module", &newXMLElement) );
+		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild(modulesXMLElement, &xmlErrorInfo, newXMLElement, &moduleXMLElement) );
 		OKfreeCAHndl(newXMLElement);
 		//-----------------------------------------------------------------------------------
 		// Attributes managed by the framework
@@ -712,11 +672,11 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		// class name
 		attr3[0].tag    = "ClassName";
 		attr3[0].type	= BasicData_CString;
-		attr3[0].pData	= (*DLModulePtr)->className;
+		attr3[0].pData	= DLModule->className;
 		// instance name
 		attr3[1].tag    = "InstanceName";
 		attr3[1].type	= BasicData_CString;
-		attr3[1].pData	= (*DLModulePtr)->instanceName;
+		attr3[1].pData	= DLModule->instanceName;
 		
 	
 		
@@ -724,10 +684,10 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		//--------------
 		
 		// add attributes to the module element
-		errChk( DLAddToXMLElem (DAQLabCfg_DOMHndl, moduleXMLElement, attr3, DL_ATTRIBUTE, NumElem(attr3)) );
+		errChk( DLAddToXMLElem(DAQLabCfg_DOMHndl, moduleXMLElement, attr3, DL_ATTRIBUTE, NumElem(attr3), &xmlErrorInfo) );
 		// call module saving method if defined
-		if ((*DLModulePtr)->SaveCfg)
-			(*(*DLModulePtr)->SaveCfg)	(*DLModulePtr, DAQLabCfg_DOMHndl, moduleXMLElement);
+		if (DLModule->SaveCfg)
+			XMLErrChk( (*DLModule->SaveCfg) (DLModule, DAQLabCfg_DOMHndl, moduleXMLElement, &xmlErrorInfo) );
 		
 		OKfreeCAHndl(moduleXMLElement); 
 		
@@ -739,13 +699,13 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	
 	return 0;
 	
-	Error:
+Error:
 	
 	return error;
 	
-	XMLError:
+XMLError:
 	
-	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, &DAQLabCfg_DOMHndl, &xmlerror, &xmlERRINFO, 0);
+	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, &DAQLabCfg_DOMHndl, &xmlerror, &xmlErrorInfo, 0);
 	
 	return xmlerror;
 	
@@ -1273,7 +1233,7 @@ static void DAQLab_Msg (DAQLabMessageID msgID, void* data1, void* data2, void* d
 static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveXMLObj_IXMLDOMElement_* rootElement)
 {
 	HRESULT								xmlerror;
-	ERRORINFO							xmlERRINFO;
+	ERRORINFO							xmlErrorInfo;
 	VBOOL								xmlLoaded;
 	BOOL								rootElementNameOK		= FALSE;
 	BOOL								foundXMLDOMFlag			= 1;
@@ -1302,7 +1262,7 @@ static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveX
 	CA_CStringToBSTR(fileName, &bstrFileName); 
 	
 	// load XML file
-	xmlerror = ActiveXML_IXMLDOMDocument3_load (*xmlDOM, &xmlERRINFO, CA_VariantBSTR(bstrFileName), &xmlLoaded);
+	xmlerror = ActiveXML_IXMLDOMDocument3_load (*xmlDOM, &xmlErrorInfo, CA_VariantBSTR(bstrFileName), &xmlLoaded);
 	t2 = Timer();
 	
 	if (xmlLoaded == VTRUE)	{
@@ -1310,15 +1270,15 @@ static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveX
 		Fmt(timeStr, "%s<%f[p2] s.\n\n", t2 - t1);
 		DLMsg(timeStr, 0);
 	} else
-		DAQLab_Msg(DAQLAB_MSG_WARN_NO_CFG_FILE, xmlDOM, &xmlerror, &xmlERRINFO, 0);
+		DAQLab_Msg(DAQLAB_MSG_WARN_NO_CFG_FILE, xmlDOM, &xmlerror, &xmlErrorInfo, 0);
 	
 	// if file was loaded check root element name if it matches the name defined in DAQLAB_CFG_DOM_ROOT_NAME 
 	if (xmlLoaded == VARIANT_TRUE) {
 		// get document root element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_GetdocumentElement (*xmlDOM, &xmlERRINFO, rootElement) );
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_GetdocumentElement (*xmlDOM, &xmlErrorInfo, rootElement) );
 		
 		// check if root element name is correct
-		XMLErrChk ( ActiveXML_IXMLDOMElement_GettagName(*rootElement, &xmlERRINFO, &rootElementName) );
+		XMLErrChk ( ActiveXML_IXMLDOMElement_GettagName(*rootElement, &xmlErrorInfo, &rootElementName) );
 		
 		if(strcmp(rootElementName, DAQLAB_CFG_DOM_ROOT_NAME)) {
 			rootElementNameOK = FALSE;
@@ -1330,10 +1290,10 @@ static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveX
 	
 	if (xmlLoaded == VARIANT_FALSE || !rootElementNameOK) {
 		// create root element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (*xmlDOM, &xmlERRINFO, DAQLAB_CFG_DOM_ROOT_NAME, &newElement) );
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (*xmlDOM, &xmlErrorInfo, DAQLAB_CFG_DOM_ROOT_NAME, &newElement) );
 	
 		// append root element to DOM and return handle to root element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_appendChild(*xmlDOM, &xmlERRINFO, newElement, rootElement) );
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_appendChild(*xmlDOM, &xmlErrorInfo, newElement, rootElement) );
 		
 		foundXMLDOMFlag = 0;
 	} 
@@ -1342,7 +1302,7 @@ static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveX
 	
 	XMLError:
 	
-	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, xmlDOM, &xmlerror, &xmlERRINFO, 0);
+	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, xmlDOM, &xmlerror, &xmlErrorInfo, 0);
 	
 	return xmlerror;
 	
@@ -1351,7 +1311,7 @@ static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveX
 static int	DAQLab_SaveXMLDOM (const char fileName[], CAObjHandle* xmlDOM)
 {
 	HRESULT				xmlerror;
-	ERRORINFO			xmlERRINFO;
+	ERRORINFO			xmlErrorInfo;
 	BSTR				bstrFileName;
 	double				t1, t2;
 	char				timeStr[10]; 
@@ -1364,7 +1324,7 @@ static int	DAQLab_SaveXMLDOM (const char fileName[], CAObjHandle* xmlDOM)
 	t1 = Timer();
 	CA_CStringToBSTR(fileName, &bstrFileName); 
 	// write file
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_save(*xmlDOM, &xmlERRINFO, CA_VariantBSTR(bstrFileName)) );
+	XMLErrChk ( ActiveXML_IXMLDOMDocument3_save(*xmlDOM, &xmlErrorInfo, CA_VariantBSTR(bstrFileName)) );
 	
 	t2 = Timer();
 	
@@ -1377,17 +1337,16 @@ static int	DAQLab_SaveXMLDOM (const char fileName[], CAObjHandle* xmlDOM)
 	
 	XMLError:
 	
-	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, xmlDOM, &xmlerror, &xmlERRINFO, 0);
+	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, xmlDOM, &xmlerror, &xmlErrorInfo, 0);
 	
 	return xmlerror;
 }
 
 /// HIFN Adds a list of attributes or elements to an element
 /// HIPAR nodeTypeFlag/ set 1 to add elements or 0 to add attributes
-int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes)
+int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes, ERRORINFO* xmlErrorInfo)
 {
-	HRESULT							xmlerror;
-	ERRORINFO						xmlERRINFO;
+	int								error				= 0;
 	ActiveXMLObj_IXMLDOMElement_	newXMLElement		= 0;
 	VARIANT							xmlVal				= CA_VariantNULL ();
 	BSTR							bstrVal;
@@ -1399,7 +1358,7 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 			
 		if (nodeType == DL_ELEMENT)
 			// create new element
-			XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, childXMLNodes[i].tag, &newXMLElement) );
+			errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, childXMLNodes[i].tag, &newXMLElement) );
 	
 		// convert to variant
 		switch (childXMLNodes[i].type) {
@@ -1486,9 +1445,9 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 			case DL_ELEMENT:
 				
 				// set element typed value
-				XMLErrChk ( ActiveXML_IXMLDOMElement_SetnodeTypedValue(newXMLElement, &xmlERRINFO, xmlVal) );
+				errChk ( ActiveXML_IXMLDOMElement_SetnodeTypedValue(newXMLElement, xmlErrorInfo, xmlVal) );
 				// add new element as child
-				XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, &xmlERRINFO, newXMLElement, NULL) );
+				errChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, xmlErrorInfo, newXMLElement, NULL) );
 				// cleanup
 				OKfreeCAHndl(newXMLElement);
 				
@@ -1497,7 +1456,7 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 			case DL_ATTRIBUTE:
 				
 				// add attribute to element
-				XMLErrChk ( ActiveXML_IXMLDOMElement_setAttribute(parentXMLElement, &xmlERRINFO, childXMLNodes[i].tag, xmlVal) );  
+				errChk ( ActiveXML_IXMLDOMElement_setAttribute(parentXMLElement, xmlErrorInfo, childXMLNodes[i].tag, xmlVal) );  
 				
 				break;
 		}
@@ -1507,11 +1466,9 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 	
 	return 0;
 	
-	XMLError:
+Error:
 	
-	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML, &xmlDOM, &xmlerror, &xmlERRINFO, 0);
-	
-	return xmlerror;
+	return error;
 }
 
 static int DAQLab_StringToType	(char text[], BasicDataTypes vartype, void* valuePtr)
@@ -1581,16 +1538,16 @@ int DLGetXMLElementAttributes (ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXM
 {
 	int									error;
 	HRESULT								xmlerror;
-	ERRORINFO							xmlERRINFO;
+	ERRORINFO							xmlErrorInfo;
 	ActiveXMLObj_IXMLDOMAttribute_		xmlAttribute;
 	char*								attributeString;	
 	
 	for (size_t i = 0; i < nAttributes; i++) {
 		// get attribute node
-		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttributeNode(XMLElement, &xmlERRINFO, Attributes[i].tag, &xmlAttribute) );
+		XMLErrChk ( ActiveXML_IXMLDOMElement_getAttributeNode(XMLElement, &xmlErrorInfo, Attributes[i].tag, &xmlAttribute) );
 		if (!xmlAttribute) continue; // ignore attributes that were not found
 		// get attribute text
-		XMLErrChk ( ActiveXML_IXMLDOMAttribute_Gettext(xmlAttribute, &xmlERRINFO, &attributeString) );
+		XMLErrChk ( ActiveXML_IXMLDOMAttribute_Gettext(xmlAttribute, &xmlErrorInfo, &attributeString) );
 		OKfreeCAHndl(xmlAttribute);
 		// convert string to values
 		errChk( DAQLab_StringToType(attributeString, Attributes[i].type, Attributes[i].pData) );
@@ -1615,19 +1572,19 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 {
 	int									error;
 	HRESULT								xmlerror;
-	ERRORINFO							xmlERRINFO;
+	ERRORINFO							xmlErrorInfo;
 	char*								attributeString;
 	ActiveXMLObj_IXMLDOMNamedNodeMap_	xmlNamedNodeMap;	 // list of attributes
 	ActiveXMLObj_IXMLDOMNode_			xmlAttributeNode;	 // selected attribute
 	
 	// get list of attributes
-	XMLErrChk ( ActiveXML_IXMLDOMNode_Getattributes(XMLNode, &xmlERRINFO, &xmlNamedNodeMap) );  
+	XMLErrChk ( ActiveXML_IXMLDOMNode_Getattributes(XMLNode, &xmlErrorInfo, &xmlNamedNodeMap) );  
 	
 	for (size_t i = 0; i < nAttributes; i++) {
 		// get attribute node
-		XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlERRINFO, Attributes[i].tag, &xmlAttributeNode) );
+		XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlErrorInfo, Attributes[i].tag, &xmlAttributeNode) );
 		// get attribute node text
-		XMLErrChk ( ActiveXML_IXMLDOMNode_Gettext(xmlAttributeNode, &xmlERRINFO, &attributeString) );
+		XMLErrChk ( ActiveXML_IXMLDOMNode_Gettext(xmlAttributeNode, &xmlErrorInfo, &attributeString) );
 		OKfreeCAHndl(xmlAttributeNode);
 		// convert to values
 		errChk( DAQLab_StringToType (attributeString, Attributes[i].type, Attributes[i].pData) );
@@ -1656,17 +1613,15 @@ int DLDiscardXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode
 {
 	int									error;
 	HRESULT								xmlerror;
-	ERRORINFO							xmlERRINFO;
-	char*								attributeString;
+	ERRORINFO							xmlErrorInfo;
 	ActiveXMLObj_IXMLDOMNamedNodeMap_	xmlNamedNodeMap;	 // list of attributes
-	ActiveXMLObj_IXMLDOMNode_			xmlAttributeNode;	 // selected attribute
 	
 	// get list of attributes
-	XMLErrChk ( ActiveXML_IXMLDOMNode_Getattributes(XMLNode, &xmlERRINFO, &xmlNamedNodeMap) );  
+	XMLErrChk ( ActiveXML_IXMLDOMNode_Getattributes(XMLNode, &xmlErrorInfo, &xmlNamedNodeMap) );  
 	
 	for (size_t i = 0; i < nAttributes; i++) {
 		// get attribute node
-	//	XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlERRINFO, Attributes[i].tag, &xmlAttributeNode) );
+	//	XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlErrorInfo, Attributes[i].tag, &xmlAttributeNode) );
 		
 	//	OKfreeCAHndl(xmlAttributeNode);
 	if (Attributes[i].type==BasicData_CString)
@@ -1677,15 +1632,11 @@ int DLDiscardXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode
 	
 	return 0;
 	
-	XMLError:
+XMLError:
 	
 	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, &xmlerror, 0, 0, 0);
 	
 	return xmlerror;
-	
-	Error:  // conversion error
-	
-	return error;
 	
 }
 
@@ -1694,13 +1645,13 @@ int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 {
 #define DLGetSingleXMLElementFromElement_Err_NotASingleElement		-1
 	HRESULT								xmlerror;
-	ERRORINFO							xmlERRINFO;
+	ERRORINFO							xmlErrorInfo;
 	ActiveXMLObj_IXMLDOMNodeList_		xmlNodeList		= 0;
 	ActiveXMLObj_IXMLDOMNode_			xmlNode			= 0; 
 	long								nXMLElements	= 0;
 
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(parentXMLElement, &xmlERRINFO, elementName, &xmlNodeList) );
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlNodeList, &xmlERRINFO, &nXMLElements) );
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(parentXMLElement, &xmlErrorInfo, elementName, &xmlNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlNodeList, &xmlErrorInfo, &nXMLElements) );
 	
 	// if there are no elements, return null element
 	if (!nXMLElements) {
@@ -1708,7 +1659,7 @@ int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 		return 0;
 	}
 	
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlNodeList, &xmlERRINFO, 0, &xmlNode) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlNodeList, &xmlErrorInfo, 0, &xmlNode) );
 	
 	// cleanup
 	if (xmlNodeList) OKfreeCAHndl(xmlNodeList);
@@ -1726,6 +1677,73 @@ XMLError:
 	return xmlerror;
 }
 
+int DLSaveTaskControllerSettingsToXML (TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_* taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int									error 			= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		newXMLElement   = 0;
+	int									tcNIter			= GetTaskControlIterations(taskController); 
+	double								tcWait			= GetTaskControlIterationsWait(taskController);  
+	uInt32								tcExecutionMode	= (uInt32) GetTaskControlExecutionMode(taskController);		
+	BOOL								tcIterationMode	= (BOOL) GetTaskControlMode(taskController); 		// finite = 1, continuous = 0  
+	DAQLabXMLNode 						attr[] 			= { {"Name",				BasicData_CString,		GetTaskControlName(taskController)},
+															{"NIterations",			BasicData_UInt,			&tcNIter},
+															{"Wait",				BasicData_Double,		&tcWait},
+															{"ExecutionMode",		BasicData_UInt,			&tcExecutionMode},
+															{"IterationMode",		BasicData_Bool,			&tcIterationMode} };
+	
+	
+	// create new TaskController XML element
+	errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, DAQLAB_TASKCONTROLLER_XML_TAG, &newXMLElement) );
+	// add task controller settings as attributes
+	errChk( DLAddToXMLElem (xmlDOM, newXMLElement, attr, DL_ATTRIBUTE, NumElem(attr), xmlErrorInfo) );
+	
+	// cleanup
+	OKfree(attr[0].pData);
+	
+	
+	*taskControllerSettingsXMLElement = newXMLElement;
+	return 0;
+	
+Error:
+	
+	OKfreeCAHndl(newXMLElement);
+	
+	return error;
+}
+
+int DLLoadTaskControllerSettingsFromXML	(TaskControl_type* taskController, ActiveXMLObj_IXMLDOMElement_ taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int									error 				= 0;
+	char*								tcName				= NULL;
+	uInt32								tcNIter				= 0;
+	double								tcWait				= 0;
+	uInt32								tcExecutionMode		= 0;
+	BOOL								tcIterationMode		= 0;
+	DAQLabXMLNode 						attr[] 				= { {"Name",				BasicData_CString,		&tcName},
+																{"NIterations",			BasicData_UInt,			&tcNIter},
+																{"Wait",				BasicData_Double,		&tcWait},
+																{"ExecutionMode",		BasicData_UInt,			&tcExecutionMode},
+																{"IterationMode",		BasicData_Bool,			&tcIterationMode} };
+	// get task controller settings														
+	errChk( DLGetXMLElementAttributes(taskControllerSettingsXMLElement, attr, NumElem(attr)) );
+	
+	// set task controller settings
+	SetTaskControlName(taskController, tcName);
+	OKfree(tcName);
+	SetTaskControlIterations(taskController, tcNIter);
+	SetTaskControlIterationsWait(taskController, tcWait);
+	SetTaskControlExecutionMode(taskController, (TaskExecutionMode_type) tcExecutionMode);
+	SetTaskControlMode(taskController, (TaskMode_type) tcIterationMode);
+	
+	return 0;
+	
+Error:
+	
+	OKfree(tcName);
+	
+	return error;
+	
+}
 
 static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskControl)
 {
@@ -1809,11 +1827,10 @@ static UITaskCtrl_type* DAQLab_AddTaskControllerToUI (TaskControl_type* taskCont
 /// HIRET 0 for success, -1 function error, -2 cannot remove Task Controllers in the following states: RUNNING, STOPPING, ITERATING, WAITING.
 static int DAQLab_RemoveTaskControllerFromUI (int index)
 {
-	UITaskCtrl_type**	UItaskCtrlPtrPtr = ListGetPtrToItem (TasksUI.UItaskCtrls, index);
+	UITaskCtrl_type*	UITaskCtrl = *(UITaskCtrl_type**)ListGetPtrToItem (TasksUI.UItaskCtrls, index);
 	
-	if (!UItaskCtrlPtrPtr) return -1;
-	if (!*UItaskCtrlPtrPtr) return -1;
-	TaskStates_type	state = GetTaskControlState((*UItaskCtrlPtrPtr)->taskControl);
+	if (!UITaskCtrl) return -1;
+	TaskStates_type	state = GetTaskControlState(UITaskCtrl->taskControl);
 	
 	if (state != TASK_STATE_UNCONFIGURED && state != TASK_STATE_CONFIGURED && 
 		state != TASK_STATE_INITIAL && state != TASK_STATE_IDLE && state != TASK_STATE_DONE && state != TASK_STATE_ERROR)
@@ -1821,8 +1838,8 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 	
 	// remove from DAQLab framework
 	ListType tcList = ListCreate(sizeof(TaskControl_type*));
-	ListInsertItem(tcList, &(*UItaskCtrlPtrPtr)->taskControl, END_OF_LIST);
-	UITaskCtrl_type*	removedUITC;
+	ListInsertItem(tcList, &UITaskCtrl->taskControl, END_OF_LIST);
+	UITaskCtrl_type*	removedUITC = NULL;
 	ListRemoveItem(TasksUI.UItaskCtrls, &removedUITC, index);  
 	if (!DLRemoveTaskControllers (NULL, tcList))
 		return -1;
@@ -2880,10 +2897,10 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 		GetPanelHandleFromTabPage(TaskTreeManagerPanHndl, TaskPan_Switchboards, 1, &HWTrigSwitchboardPanHndl);
 		
 		// populate execution mode ring control
-		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_ITERATE_BEFORE_SUBTASKS_START, "Before Child Task Controllers Start", TASK_ITERATE_BEFORE_SUBTASKS_START);
-		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_ITERATE_AFTER_SUBTASKS_COMPLETE, "After Child Task Controllers Complete", TASK_ITERATE_AFTER_SUBTASKS_COMPLETE);
-		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS, "In parallel with Child Task Controllers", TASK_ITERATE_IN_PARALLEL_WITH_SUBTASKS);
-		// set execution mode to TASK_ITERATE_BEFORE_SUBTASKS_START 
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_EXECUTE_BEFORE_SUBTASKS_START, "Before Child Task Controllers Start", TASK_EXECUTE_BEFORE_SUBTASKS_START);
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_EXECUTE_AFTER_SUBTASKS_COMPLETE, "After Child Task Controllers Complete", TASK_EXECUTE_AFTER_SUBTASKS_COMPLETE);
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_EXECUTE_IN_PARALLEL_WITH_SUBTASKS, "In parallel with Child Task Controllers", TASK_EXECUTE_IN_PARALLEL_WITH_SUBTASKS);
+		// set execution mode to TASK_EXECUTE_BEFORE_SUBTASKS_START 
 		SetCtrlIndex(TaskTreeManagerPanHndl, TaskPan_ExecMode, 0);
 		// dim execution mode control cause the item with index 0 is the modules node
 		SetCtrlAttribute(TaskTreeManagerPanHndl, TaskPan_ExecMode, ATTR_DIMMED, 1);
@@ -3133,7 +3150,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					
 					
 					// update execution mode ring control
-					SetCtrlIndex(panel, TaskPan_ExecMode, GetTaskControlIterMode(selectedTreeNodePtr->taskControl));
+					SetCtrlIndex(panel, TaskPan_ExecMode, GetTaskControlExecutionMode(selectedTreeNodePtr->taskControl));
 					
 					break;
 					
@@ -3151,7 +3168,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			
 			int 	execMode;
 			GetCtrlVal(panel, control, &execMode);
-			SetTaskControlIterMode(selectedTreeNodePtr->taskControl, (TaskIterMode_type) execMode);
+			SetTaskControlExecutionMode(selectedTreeNodePtr->taskControl, (TaskExecutionMode_type) execMode);
 			
 			break;
 			

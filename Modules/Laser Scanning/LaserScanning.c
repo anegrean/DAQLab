@@ -601,8 +601,8 @@ static void 						discard_TriangleCal_type 							(TriangleCal_type** a);
 	// copies triangle waveform calibration data
 static TriangleCal_type* 			copy_TriangleCal_type 								(TriangleCal_type* triangleCal);
 	// saves non resonant galvo scan axis calibration data to XML
-static int 							SaveNonResGalvoCalToXML								(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  axisCalibrationsElement);
-static int 							LoadNonResGalvoCalFromXML 							(LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement);    
+static int 							SaveNonResGalvoCalToXML								(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ axisCalibrationsElement, ERRORINFO* xmlErrorInfo);
+static int 							LoadNonResGalvoCalFromXML 							(LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement, ERRORINFO* xmlErrorInfo);    
 
 	// command VChan
 static void							NonResGalvoCal_ComVChan_Connected					(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
@@ -763,9 +763,9 @@ static Waveform_type* 				StaircaseWaveform 									(double sampleRate, size_t 
 
 static int							Load 												(DAQLabModule_type* mod, int workspacePanHndl);
 
-static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
-static int 							SaveCfg 											(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+static int 							SaveCfg 											(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo);
 
 static int 							DisplayPanels										(DAQLabModule_type* mod, BOOL visibleFlag); 
 
@@ -1243,16 +1243,14 @@ Error:
 	return error;
 }
 
-static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
 	LaserScanning_type*				ls 				= (LaserScanning_type*) mod;
 	int								error			= 0;
 	int								lsPanTopPos		= 0;
 	int								lsPanLeftPos	= 0;
-	HRESULT							xmlerror		= 0;
-	ERRORINFO						xmlERRINFO;
-	DAQLabXMLNode 					lsAttr[] 		= {{"PanTopPos", BasicData_Int, &lsPanTopPos},
-											  		   {"PanLeftPos", BasicData_Int, &lsPanLeftPos}};
+	DAQLabXMLNode 					lsAttr[] 		= {	{"PanTopPos", BasicData_Int, &lsPanTopPos},
+											  		   	{"PanLeftPos", BasicData_Int, &lsPanLeftPos} };
 	
 	//--------------------------------------------------------------------------
 	// Save laser scanning module main panel position
@@ -1260,7 +1258,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	
 	errChk( GetPanelAttribute(ls->mainPanHndl, ATTR_LEFT, &lsPanLeftPos) );
 	errChk( GetPanelAttribute(ls->mainPanHndl, ATTR_TOP, &lsPanTopPos) );
-	DLAddToXMLElem(xmlDOM, moduleElement, lsAttr, DL_ATTRIBUTE, NumElem(lsAttr)); 
+	errChk( DLAddToXMLElem(xmlDOM, moduleElement, lsAttr, DL_ATTRIBUTE, NumElem(lsAttr), xmlErrorInfo) ); 
 	
 	//--------------------------------------------------------------------------
 	// Save scan axis calibrations
@@ -1269,7 +1267,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	ActiveXMLObj_IXMLDOMElement_	scanAxisCalXMLElement;  		  	// element containing calibration data
 	
 	// create scan axis calibration element
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanAxisCalibrations", &scanAxisCalibrationsXMLElement) );
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "ScanAxisCalibrations", &scanAxisCalibrationsXMLElement) );
 	
 	
 	size_t					nAxisCals 			= ListNumItems(ls->availableCals);
@@ -1279,7 +1277,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	for (size_t i = 1; i <= nAxisCals; i++) {
 		axisCalPtr = ListGetPtrToItem(ls->availableCals, i);
 		// create new axis calibration element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "AxisCalibration", &scanAxisCalXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "AxisCalibration", &scanAxisCalXMLElement) );
 		// initialize generic scan axis calibration attributes
 		scanAxisCalAttr[0].tag 		= "Name";
 		scanAxisCalAttr[0].type 	= BasicData_CString;
@@ -1289,12 +1287,12 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		scanAxisCalAttr[1].type 	= BasicData_UInt;
 		scanAxisCalAttr[1].pData	= &scanAxisType;
 		// save attributes
-		DLAddToXMLElem(xmlDOM, scanAxisCalXMLElement, scanAxisCalAttr, DL_ATTRIBUTE, NumElem(scanAxisCalAttr));  
+		errChk( DLAddToXMLElem(xmlDOM, scanAxisCalXMLElement, scanAxisCalAttr, DL_ATTRIBUTE, NumElem(scanAxisCalAttr), xmlErrorInfo) );  
 		// add scan axis specific calibration data
 		switch((*axisCalPtr)->scanAxisType) {
 				
 			case NonResonantGalvo:
-				SaveNonResGalvoCalToXML((NonResGalvoCal_type*) *axisCalPtr, xmlDOM, scanAxisCalXMLElement);
+				errChk( SaveNonResGalvoCalToXML((NonResGalvoCal_type*) *axisCalPtr, xmlDOM, scanAxisCalXMLElement, xmlErrorInfo) );
 				break;
 				
 			case ResonantGalvo:
@@ -1309,12 +1307,12 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		}
 		
 		// add new axis calibration element
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanAxisCalibrationsXMLElement, &xmlERRINFO, scanAxisCalXMLElement, NULL) );  
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (scanAxisCalibrationsXMLElement, xmlErrorInfo, scanAxisCalXMLElement, NULL) );  
 		OKfreeCAHndl(scanAxisCalXMLElement);  
 	}
 	
 	// add scan axis calibrations element to module element
-	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, scanAxisCalibrationsXMLElement, NULL) );
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, xmlErrorInfo, scanAxisCalibrationsXMLElement, NULL) );
 	OKfreeCAHndl(scanAxisCalibrationsXMLElement); 
 	
 	//--------------------------------------------------------------------------
@@ -1327,7 +1325,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	ActiveXMLObj_IXMLDOMElement_	objectiveXMLElement;				// Objectives element
 	
 	// create scan engines element
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanEngines", &scanEnginesXMLElement) );
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "ScanEngines", &scanEnginesXMLElement) );
 	
 	size_t					nScanEngines 					= ListNumItems(ls->scanEngines);
 	ScanEngine_type*		scanEngine;
@@ -1338,11 +1336,11 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	for (size_t i = 1; i <= nScanEngines; i++) {
 		scanEngine = *(ScanEngine_type**) ListGetPtrToItem(ls->scanEngines, i);
 		// create new scan engine element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanEngine", &scanEngineXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "ScanEngine", &scanEngineXMLElement) );
 		// create new scan info element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ScanInfo", &scanInfoXMLElement) );   
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "ScanInfo", &scanInfoXMLElement) );   
 		// create new objectives element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Objectives", &objectivesXMLElement) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Objectives", &objectivesXMLElement) );
 		// initialize generic scan engine attributes
 		char*			tcName				= GetTaskControlName(scanEngine->taskControl);
 		char*			fastAxisCalName		= NULL;
@@ -1382,7 +1380,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 												{"PixelSignalDelay", 			BasicData_Double, 		&scanEngine->pixDelay} 			};
 												
 		// save attributes
-		DLAddToXMLElem(xmlDOM, scanEngineXMLElement, scanEngineAttr, DL_ATTRIBUTE, NumElem(scanEngineAttr));
+		errChk( DLAddToXMLElem(xmlDOM, scanEngineXMLElement, scanEngineAttr, DL_ATTRIBUTE, NumElem(scanEngineAttr), xmlErrorInfo) );
 		OKfree(tcName);
 		
 		// save objectives to objectives XML element
@@ -1393,9 +1391,9 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 			DAQLabXMLNode	objectivesAttr[] = { 	{"Name", BasicData_CString, (*objectivePtr)->objectiveName},
 													{"FL", BasicData_Double, &(*objectivePtr)->objectiveFL}	};
 			
-			XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "Objective", &objectiveXMLElement) );
-			DLAddToXMLElem(xmlDOM, objectiveXMLElement, objectivesAttr, DL_ATTRIBUTE, NumElem(objectivesAttr)); 
-			XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (objectivesXMLElement, &xmlERRINFO, objectiveXMLElement, NULL) ); 
+			errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Objective", &objectiveXMLElement) );
+			errChk( DLAddToXMLElem(xmlDOM, objectiveXMLElement, objectivesAttr, DL_ATTRIBUTE, NumElem(objectivesAttr), xmlErrorInfo) ); 
+			errChk ( ActiveXML_IXMLDOMElement_appendChild (objectivesXMLElement, xmlErrorInfo, objectiveXMLElement, NULL) ); 
 			OKfreeCAHndl(objectiveXMLElement);   
 		}
 		
@@ -1422,26 +1420,26 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 																	{"GalvoSamplingRate", 	BasicData_Double, 	&galvoSamplingRate}}; 				
 				
 				// save scan engine attributes
-				DLAddToXMLElem(xmlDOM, scanInfoXMLElement, rectangleRasterAttr, DL_ATTRIBUTE, NumElem(rectangleRasterAttr));
+				errChk( DLAddToXMLElem(xmlDOM, scanInfoXMLElement, rectangleRasterAttr, DL_ATTRIBUTE, NumElem(rectangleRasterAttr), xmlErrorInfo) );
 				
 				break;
 		}
 	
 		// add scan info element to scan engine element
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, scanInfoXMLElement, NULL) ); 
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, xmlErrorInfo, scanInfoXMLElement, NULL) ); 
 		OKfreeCAHndl(scanInfoXMLElement); 
 		
 		// add objectives to scan engine element
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, &xmlERRINFO, objectivesXMLElement, NULL) );    
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, xmlErrorInfo, objectivesXMLElement, NULL) );    
 		OKfreeCAHndl(objectivesXMLElement);
 		
 		// add new scan engine element
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (scanEnginesXMLElement, &xmlERRINFO, scanEngineXMLElement, NULL) );  
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (scanEnginesXMLElement, xmlErrorInfo, scanEngineXMLElement, NULL) );  
 		OKfreeCAHndl(scanEngineXMLElement); 
 	}
 	
 	// add scan engines element to module element
-	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, scanEnginesXMLElement, NULL) );
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, xmlErrorInfo, scanEnginesXMLElement, NULL) );
 	OKfreeCAHndl(scanEnginesXMLElement); 
 	
 	return 0;
@@ -1450,17 +1448,12 @@ Error:
 	
 	return error;
 	
-XMLError:   
-	
-	return xmlerror;
 }
 
-static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
 	LaserScanning_type*				ls 								= (LaserScanning_type*) mod;
 	int 							error 							= 0;
-	HRESULT							xmlerror						= 0;
-	ERRORINFO						xmlERRINFO;
 	ls->mainPanTopPos												= malloc(sizeof(int));
 	ls->mainPanLeftPos												= malloc(sizeof(int));
 	DAQLabXMLNode 					lsAttr[] 						= { {"PanTopPos", BasicData_Int, ls->mainPanTopPos},
@@ -1484,18 +1477,18 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 																	 
 	errChk( DLGetSingleXMLElementFromElement(moduleElement, "ScanAxisCalibrations", &scanAxisCalibrationsXMLElement) );
 	
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(scanAxisCalibrationsXMLElement, &xmlERRINFO, "AxisCalibration", &axisCalibrationNodeList) );
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(axisCalibrationNodeList, &xmlERRINFO, &nAxisCalibrations) );
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(scanAxisCalibrationsXMLElement, xmlErrorInfo, "AxisCalibration", &axisCalibrationNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(axisCalibrationNodeList, xmlErrorInfo, &nAxisCalibrations) );
 	
 	for (long i = 0; i < nAxisCalibrations; i++) {
-		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(axisCalibrationNodeList, &xmlERRINFO, i, &axisCalibrationNode) );
+		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(axisCalibrationNodeList, xmlErrorInfo, i, &axisCalibrationNode) );
 		
 		errChk( DLGetXMLNodeAttributes(axisCalibrationNode, axisCalibrationGenericAttr, NumElem(axisCalibrationGenericAttr)) ); 
 		   
 		switch (axisCalibrationType) {
 				
 			case NonResonantGalvo:
-				LoadNonResGalvoCalFromXML(ls, (ActiveXMLObj_IXMLDOMElement_)axisCalibrationNode);   
+				errChk( LoadNonResGalvoCalFromXML(ls, (ActiveXMLObj_IXMLDOMElement_)axisCalibrationNode, xmlErrorInfo) );   
 				break;
 				
 			case ResonantGalvo:
@@ -1557,11 +1550,11 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 		
 	errChk( DLGetSingleXMLElementFromElement(moduleElement, "ScanEngines", &scanEnginesXMLElement) );
 	
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(scanEnginesXMLElement, &xmlERRINFO, "ScanEngine", &scanEngineNodeList) );
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(scanEngineNodeList, &xmlERRINFO, &nScanEngines) );
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(scanEnginesXMLElement, xmlErrorInfo, "ScanEngine", &scanEngineNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(scanEngineNodeList, xmlErrorInfo, &nScanEngines) );
 	
 	for (long i = 0; i < nScanEngines; i++) {
-		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(scanEngineNodeList, &xmlERRINFO, i, &scanEngineNode) );
+		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(scanEngineNodeList, xmlErrorInfo, i, &scanEngineNode) );
 		// get generic scan engine attributes
 		errChk( DLGetXMLNodeAttributes(scanEngineNode, scanEngineGenericAttr, NumElem(scanEngineGenericAttr)) );
 		// get scan info element
@@ -1646,11 +1639,11 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 		}
 		
 		// load objectives
-		XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(objectivesXMLElement, &xmlERRINFO, "Objective", &objectivesNodeList) );
-		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(objectivesNodeList, &xmlERRINFO, &nObjectives) );
+		errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(objectivesXMLElement, xmlErrorInfo, "Objective", &objectivesNodeList) );
+		errChk ( ActiveXML_IXMLDOMNodeList_Getlength(objectivesNodeList, xmlErrorInfo, &nObjectives) );
 		
 		for (long j = 0; j < nObjectives; j++) {
-			XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(objectivesNodeList, &xmlERRINFO, j, &objectiveNode) );
+			errChk ( ActiveXML_IXMLDOMNodeList_Getitem(objectivesNodeList, xmlErrorInfo, j, &objectiveNode) );
 			errChk( DLGetXMLNodeAttributes(objectiveNode, objectiveAttr, NumElem(objectiveAttr)) );    
 			objective = init_Objective_type(objectiveName, objectiveFL);
 			// assign objective to scan engine
@@ -1686,11 +1679,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 		OKfree(slowAxisCalibrationName);
 	}
 	
-	
-XMLError:
-	
-	error = xmlerror;
-	
+
 Error:
 	
 	OKfreeCAHndl(scanEngineNodeList); 
@@ -1703,32 +1692,29 @@ Error:
 	return error;	
 }
 
-static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  axisCalibrationsElement)
+static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ axisCalibrationsElement, ERRORINFO* xmlErrorInfo)
 {
-#define SaveNonResGalvoCalToXML_Err_OutOfMemory		-1
-	int								error 				= 0;
-	HRESULT							xmlerror;
-	ERRORINFO						xmlERRINFO;
+	int								error 					= 0;
 	ActiveXMLObj_IXMLDOMElement_	switchTimesXMLElement; 			  
 	ActiveXMLObj_IXMLDOMElement_	maxSlopesXMLElement;   		
 	ActiveXMLObj_IXMLDOMElement_	triangleCalXMLElement;
-	DAQLabXMLNode 					nrgCalAttr[] 		= {	{"CommandVMax", BasicData_Double, &nrgCal->commandVMax},
-															{"CommandAsFunctionOfPositionLinFitSlope", BasicData_Double, &nrgCal->slope},
-															{"CommandAsFunctionOfPositionLinFitOffset", BasicData_Double, &nrgCal->offset},
-															{"PositionStdDev", BasicData_Double, &nrgCal->posStdDev},
-															{"ResponseLag", BasicData_Double, &nrgCal->lag},
-															{"Resolution", BasicData_Double, &nrgCal->resolution},
-															{"MinStepSize", BasicData_Double, &nrgCal->minStepSize},
-															{"ParkedCommandV", BasicData_Double, &nrgCal->parked},
-															{"MechanicalResponse", BasicData_Double, &nrgCal->mechanicalResponse}};
+	DAQLabXMLNode 					nrgCalAttr[] 			= {	{"CommandVMax", BasicData_Double, &nrgCal->commandVMax},
+																{"CommandAsFunctionOfPositionLinFitSlope", BasicData_Double, &nrgCal->slope},
+																{"CommandAsFunctionOfPositionLinFitOffset", BasicData_Double, &nrgCal->offset},
+																{"PositionStdDev", BasicData_Double, &nrgCal->posStdDev},
+																{"ResponseLag", BasicData_Double, &nrgCal->lag},
+																{"Resolution", BasicData_Double, &nrgCal->resolution},
+																{"MinStepSize", BasicData_Double, &nrgCal->minStepSize},
+																{"ParkedCommandV", BasicData_Double, &nrgCal->parked},
+																{"MechanicalResponse", BasicData_Double, &nrgCal->mechanicalResponse}};
 	
 	// Save calibration attributes
-	DLAddToXMLElem(xmlDOM, axisCalibrationsElement, nrgCalAttr, DL_ATTRIBUTE, NumElem(nrgCalAttr)); 
+	errChk( DLAddToXMLElem(xmlDOM, axisCalibrationsElement, nrgCalAttr, DL_ATTRIBUTE, NumElem(nrgCalAttr), xmlErrorInfo) ); 
 	
 	// create calibration elements
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "SwitchTimes", &switchTimesXMLElement) );
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "MaxSlopes", &maxSlopesXMLElement) );
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "TriangleWaveform", &triangleCalXMLElement) );
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "SwitchTimes", &switchTimesXMLElement) );
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "MaxSlopes", &maxSlopesXMLElement) );
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "TriangleWaveform", &triangleCalXMLElement) );
 	
 	char*	switchTimesStepSizeStr 				= NULL;
 	char*	switchTimesHalfSwitchStr			= NULL;
@@ -1740,32 +1726,24 @@ static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xml
 	char*	triangleCalResiduaLagStr			= NULL;
 	
 	// convert switch times calibration data to string
-	switchTimesStepSizeStr = malloc (nrgCal->switchTimes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
-	if (!switchTimesStepSizeStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;}
-	switchTimesHalfSwitchStr = malloc (nrgCal->switchTimes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
-	if (!switchTimesHalfSwitchStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;} 
+	nullChk( switchTimesStepSizeStr = malloc (nrgCal->switchTimes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
+	nullChk( switchTimesHalfSwitchStr = malloc (nrgCal->switchTimes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
 	
 	Fmt(switchTimesStepSizeStr, CALIBRATION_DATA_TO_STRING, nrgCal->switchTimes->n, nrgCal->switchTimes->stepSize); 
 	Fmt(switchTimesHalfSwitchStr, CALIBRATION_DATA_TO_STRING, nrgCal->switchTimes->n, nrgCal->switchTimes->halfSwitch);
 	
 	// convert max slopes calibration data to string
-	maxSlopesSlopeStr = malloc (nrgCal->maxSlopes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
-	if (!maxSlopesSlopeStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;}   
-	maxSlopesAmplitudeStr = malloc (nrgCal->maxSlopes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
-	if (!maxSlopesAmplitudeStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;} 
+	nullChk( maxSlopesSlopeStr = malloc (nrgCal->maxSlopes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
+	nullChk( maxSlopesAmplitudeStr = malloc (nrgCal->maxSlopes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
 	
 	Fmt(maxSlopesSlopeStr, CALIBRATION_DATA_TO_STRING, nrgCal->maxSlopes->n, nrgCal->maxSlopes->slope); 
 	Fmt(maxSlopesAmplitudeStr, CALIBRATION_DATA_TO_STRING, nrgCal->maxSlopes->n, nrgCal->maxSlopes->amplitude);
 	
 	// convert triangle waveform calibration data to string
-	triangleCalCommandAmplitudeStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
-	if (!triangleCalCommandAmplitudeStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;}  
-	triangleCalActualAmplitudeStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
-	if (!triangleCalActualAmplitudeStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;} 
-	triangleCalMaxFreqStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
-	if (!triangleCalMaxFreqStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;} 
-	triangleCalResiduaLagStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1);
-	if (!triangleCalResiduaLagStr) {error = SaveNonResGalvoCalToXML_Err_OutOfMemory; goto Error;} 
+	nullChk( triangleCalCommandAmplitudeStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
+	nullChk( triangleCalActualAmplitudeStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
+	nullChk( triangleCalMaxFreqStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
+	nullChk( triangleCalResiduaLagStr = malloc (nrgCal->triangleCal->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
 	
 	Fmt(triangleCalCommandAmplitudeStr, CALIBRATION_DATA_TO_STRING, nrgCal->triangleCal->n, nrgCal->triangleCal->commandAmp); 
 	Fmt(triangleCalActualAmplitudeStr, CALIBRATION_DATA_TO_STRING, nrgCal->triangleCal->n, nrgCal->triangleCal->actualAmp);
@@ -1788,31 +1766,22 @@ static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xml
 														{"MaxFrequency", BasicData_CString, triangleCalMaxFreqStr},
 														{"ResidualLag", BasicData_CString, triangleCalResiduaLagStr} };
 	
-	DLAddToXMLElem(xmlDOM, switchTimesXMLElement, switchTimesAttr, DL_ATTRIBUTE, NumElem(switchTimesAttr));
-	DLAddToXMLElem(xmlDOM, maxSlopesXMLElement, maxSlopesAttr, DL_ATTRIBUTE, NumElem(maxSlopesAttr));
-	DLAddToXMLElem(xmlDOM, triangleCalXMLElement, triangleCalAttr, DL_ATTRIBUTE, NumElem(triangleCalAttr));
+	errChk( DLAddToXMLElem(xmlDOM, switchTimesXMLElement, switchTimesAttr, DL_ATTRIBUTE, NumElem(switchTimesAttr), xmlErrorInfo) );
+	errChk( DLAddToXMLElem(xmlDOM, maxSlopesXMLElement, maxSlopesAttr, DL_ATTRIBUTE, NumElem(maxSlopesAttr), xmlErrorInfo) );
+	errChk( DLAddToXMLElem(xmlDOM, triangleCalXMLElement, triangleCalAttr, DL_ATTRIBUTE, NumElem(triangleCalAttr), xmlErrorInfo) );
 								
 	// add calibration elements to scan axis calibration element
-	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, switchTimesXMLElement, NULL) );
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, xmlErrorInfo, switchTimesXMLElement, NULL) );
 	OKfreeCAHndl(switchTimesXMLElement); 
-	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, maxSlopesXMLElement, NULL) );
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, xmlErrorInfo, maxSlopesXMLElement, NULL) );
 	OKfreeCAHndl(maxSlopesXMLElement);
-	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, &xmlERRINFO, triangleCalXMLElement, NULL) );
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (axisCalibrationsElement, xmlErrorInfo, triangleCalXMLElement, NULL) );
 	OKfreeCAHndl(triangleCalXMLElement); 
 	
-	OKfree(switchTimesStepSizeStr);
-	OKfree(switchTimesHalfSwitchStr);
-	OKfree(maxSlopesSlopeStr);
-	OKfree(maxSlopesAmplitudeStr);
-	OKfree(triangleCalCommandAmplitudeStr);
-	OKfree(triangleCalActualAmplitudeStr);
-	OKfree(triangleCalMaxFreqStr);
-	OKfree(triangleCalResiduaLagStr);
-	
-	return 0;
-	
+
 Error:
 	
+	// cleanup
 	OKfree(switchTimesStepSizeStr);
 	OKfree(switchTimesHalfSwitchStr);
 	OKfree(maxSlopesSlopeStr);
@@ -1824,13 +1793,9 @@ Error:
 	
 	return error;
 	
-XMLError:   
-	
-	return xmlerror;
-	
 }
 
-static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement)
+static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement, ERRORINFO* xmlErrorInfo)
 {
 	int 							error 							= 0;
 	char*							axisCalibrationName				= NULL;
@@ -1898,9 +1863,9 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	SwitchTimes_type*	switchTimes = init_SwitchTimes_type();
 	
-	switchTimes->n 				= nSwitchTimes;
-	switchTimes->halfSwitch		= malloc(nSwitchTimes * sizeof(double));
-	switchTimes->stepSize		= malloc(nSwitchTimes * sizeof(double));
+	switchTimes->n 							= nSwitchTimes;
+	nullChk( switchTimes->halfSwitch		= malloc(nSwitchTimes * sizeof(double)) );
+	nullChk( switchTimes->stepSize			= malloc(nSwitchTimes * sizeof(double)) );
 	
 	Scan(switchTimesStepSizeStr, STRING_TO_CALIBRATION_DATA, switchTimes->n, switchTimes->stepSize);
 	Scan(switchTimesHalfSwitchStr, STRING_TO_CALIBRATION_DATA, switchTimes->n, switchTimes->halfSwitch);  
@@ -1911,9 +1876,9 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	MaxSlopes_type*		maxSlopes = init_MaxSlopes_type();
 	
-	maxSlopes->n 				= nMaxSlopes;
-	maxSlopes->amplitude		= malloc(nMaxSlopes * sizeof(double));
-	maxSlopes->slope			= malloc(nMaxSlopes * sizeof(double));
+	maxSlopes->n 						= nMaxSlopes;
+	nullChk( maxSlopes->amplitude		= malloc(nMaxSlopes * sizeof(double)) );
+	nullChk( maxSlopes->slope			= malloc(nMaxSlopes * sizeof(double)) );
 	
 	Scan(maxSlopesSlopeStr, STRING_TO_CALIBRATION_DATA, maxSlopes->n , maxSlopes->slope);
 	Scan(maxSlopesAmplitudeStr, STRING_TO_CALIBRATION_DATA, maxSlopes->n , maxSlopes->amplitude);  

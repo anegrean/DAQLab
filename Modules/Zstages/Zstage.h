@@ -166,10 +166,10 @@ void 				discard_Zstage 		(DAQLabModule_type** mod);
 int					ZStage_Load 		(DAQLabModule_type* mod, int workspacePanHndl);
 
 	// saves generic settings for a Z stage
-int					ZStage_SaveCfg		(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement);
+int					ZStage_SaveCfg		(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
 	// loads generic settings for a Z stage
-int					ZStage_LoadCfg		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement);
+int					ZStage_LoadCfg		(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo);
 
 #ifdef __cplusplus
     }

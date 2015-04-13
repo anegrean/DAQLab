@@ -451,8 +451,9 @@ int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 }
 
-int	XYStage_LoadCfg	(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement)
+int	XYStage_LoadCfg	(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
+	int					error	= 0;
 	XYStage_type* 		stage	= (XYStage_type*) mod;
 	
 	// allocate memory to store values
@@ -484,23 +485,21 @@ int	XYStage_LoadCfg	(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  modul
 	//--------------------------------------------------------------
 	// get saved reference positions
 	//--------------------------------------------------------------
-	HRESULT							xmlerror;
-	ERRORINFO						xmlERRINFO;
 	ActiveXMLObj_IXMLDOMNodeList_	xmlRefPositionsNodeList		= 0;
 	ActiveXMLObj_IXMLDOMNode_		xmlRefPositionsNode			= 0;
 	ActiveXMLObj_IXMLDOMNodeList_	xmlRefPosNodeList			= 0;
 	ActiveXMLObj_IXMLDOMNode_		xmlRefPosNode				= 0;
 	long							nXMLElements;
 	
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(moduleElement, &xmlERRINFO, "ReferencePositions", &xmlRefPositionsNodeList) );
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(moduleElement, xmlErrorInfo, "ReferencePositions", &xmlRefPositionsNodeList) );
 	// skip this if there are no positions stored
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlRefPositionsNodeList, &xmlERRINFO, &nXMLElements) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlRefPositionsNodeList, xmlErrorInfo, &nXMLElements) );
 	if (!nXMLElements) goto NoReferencePositions;
 	
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPositionsNodeList, &xmlERRINFO, 0, &xmlRefPositionsNode) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPositionsNodeList, xmlErrorInfo, 0, &xmlRefPositionsNode) );
 	// get reference position elements
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(xmlRefPositionsNode, &xmlERRINFO, "RefPos", &xmlRefPosNodeList) );
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlRefPosNodeList, &xmlERRINFO, &nXMLElements) );
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(xmlRefPositionsNode, xmlErrorInfo, "RefPos", &xmlRefPosNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(xmlRefPosNodeList, xmlErrorInfo, &nXMLElements) );
 	if (!nXMLElements) goto NoReferencePositions;
 	// load reference positions
 	RefPosition_type*	refPos			= NULL;
@@ -512,7 +511,7 @@ int	XYStage_LoadCfg	(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  modul
 										 	{"YPosition", 	BasicData_Double, 	&refYPos} };
 										  
 	for (long i = 0; i < nXMLElements; i++) {
-		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPosNodeList, &xmlERRINFO, i, &xmlRefPosNode) );
+		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPosNodeList, xmlErrorInfo, i, &xmlRefPosNode) );
 		DLGetXMLNodeAttributes(xmlRefPosNode, refPosAttr, NumElem(refPosAttr));
 		OKfreeCAHndl(xmlRefPosNode);
 		refPos = init_RefPosition_type(refName, refXPos, refYPos);
@@ -528,14 +527,15 @@ NoReferencePositions:
 	
 	return 0;
 	
-XMLError:   
+Error:   
 	
-	return xmlerror;
+	return error;
 	
 }
 
-int XYStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement)
+int XYStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
+	int					error			= 0;
 	XYStage_type* 		stage			= (XYStage_type*) mod;
 	DAQLabXMLNode 		StageAttr[] 	= {	{"MinXPositionLimit", 	BasicData_Double, 	stage->xMinimumLimit},
 								 			{"MaxXPositionLimit", 	BasicData_Double, 	stage->xMaximumLimit},
@@ -548,37 +548,35 @@ int XYStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IX
 											{"ReverseYAxis",		BasicData_Bool,		&stage->reverseYAxis} }; 
 											
 	// add safety limits as stage module attributes
-	DLAddToXMLElem(xmlDOM, moduleElement, StageAttr, DL_ATTRIBUTE, NumElem(StageAttr));
+	errChk( DLAddToXMLElem(xmlDOM, moduleElement, StageAttr, DL_ATTRIBUTE, NumElem(StageAttr), xmlErrorInfo) );
 	
 	// add reference positions element to module element
-	HRESULT							xmlerror;
-	ERRORINFO						xmlERRINFO;
 	ActiveXMLObj_IXMLDOMElement_	refPositionsXMLElement;
 	ActiveXMLObj_IXMLDOMElement_	refPosXMLElement;
 	RefPosition_type**				refPosPtr;
 	
-	XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "ReferencePositions", &refPositionsXMLElement) );
-	XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, &xmlERRINFO, refPositionsXMLElement, NULL) );
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "ReferencePositions", &refPositionsXMLElement) );
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, xmlErrorInfo, refPositionsXMLElement, NULL) );
 	// add reference positions
 	size_t	nPositions = ListNumItems(stage->xyRefPos);
 	for (size_t i = 1; i <= nPositions; i++) {
 		refPosPtr = ListGetPtrToItem(stage->xyRefPos, i);
 		// add new reference position element to reference positions element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, &xmlERRINFO, "RefPos", &refPosXMLElement) );
-		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (refPositionsXMLElement, &xmlERRINFO, refPosXMLElement, NULL) );
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "RefPos", &refPosXMLElement) );
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (refPositionsXMLElement, xmlErrorInfo, refPosXMLElement, NULL) );
 		// add attributes to this reference position
 		DAQLabXMLNode		refPosAttr[] 	= { {"Name", 		BasicData_CString, 	(*refPosPtr)->name}, 
 										 		{"XPosition", 	BasicData_Double, 	&(*refPosPtr)->x},
 										 		{"YPosition", 	BasicData_Double, 	&(*refPosPtr)->y} };
 		
-		DLAddToXMLElem(xmlDOM, refPosXMLElement, refPosAttr, DL_ATTRIBUTE, NumElem(refPosAttr));   
+		errChk( DLAddToXMLElem(xmlDOM, refPosXMLElement, refPosAttr, DL_ATTRIBUTE, NumElem(refPosAttr), xmlErrorInfo) );   
 	}
 	
 	return 0;
 	
-	XMLError:   
+Error:   
 	
-	return xmlerror; 
+	return error; 
 }
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)

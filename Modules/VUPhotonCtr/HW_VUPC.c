@@ -262,11 +262,8 @@ int ReadBuffer(int bufsize)
 	size_t 					ndatapoints;
 	double 					refSamplingRate	= 1000;
 	long 					errcode;
-	unsigned long 			statreg; 
 	Waveform_type* 			waveform		= NULL;
 	int						swappedi		= 0;
-	size_t					bytes_send		= 0;
-	size_t					blksize			= 0;
 	size_t					totalbytes;
 	size_t					dataindex		= 0;
 	
@@ -338,7 +335,7 @@ int ReadBuffer(int bufsize)
 					//end full block code	
 						// prepare waveform
 						nullChk( waveform 	= init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );  
-				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, &waveform, GetTaskControlCurrentIterDup(gtaskControl), (DiscardFptr_type) discard_Waveform_type));       
+				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, (void**)&waveform, GetTaskControlCurrentIterDup(gtaskControl), (DiscardFptr_type) discard_Waveform_type));       
 					// send data packet with waveform
 						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
 				//	}
@@ -810,9 +807,6 @@ Error:
 int StopDAQThread(CmtThreadPoolHandle poolHandle)
 {
 	int 	error							= 0;	
-	int 	DAQThreadFunctionStatus;
-	int 	PMTThreadFunctionStatus;   
-	int 	PMTSyncThreadFunctionStatus;   
 
 	SetAcqBusy(0);  //should stop the acq thread 
 	

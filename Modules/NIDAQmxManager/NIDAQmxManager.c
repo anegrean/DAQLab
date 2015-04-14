@@ -2452,6 +2452,9 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		OKfreeCAHndl(NIDAQDeviceXMLElement); 
 	}
 	
+	//added Lex	
+	OKfree(panTopPos); 
+	OKfree(panLeftPos);
 	return 0;
 	
 Error:

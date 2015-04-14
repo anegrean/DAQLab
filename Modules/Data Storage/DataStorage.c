@@ -776,14 +776,8 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 	char*				fullitername;
 	char*				channame;	
 	Waveform_type*		waveform;
-	char* 				charDataPtr		= NULL; 
-	unsigned char* 		ucharDataPtr	= NULL;  
-	short int* 			shortDataPtr	= NULL; 
-	unsigned short int* ushortDataPtr	= NULL; 
-	int* 				intDataPtr		= NULL;
-	unsigned int* 		uintDataPtr		= NULL; 
-	float* 				floatDataPtr	= NULL;
-	double* 			doubleDataPtr	= NULL; 
+	Image_type*			receivedimage;
+	
 			
 	if (ds->channels) {
 		numitems = ListNumItems(ds->channels); 
@@ -815,11 +809,8 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 			currentiter=GetDataPacketCurrentIter(dataPackets[i]);
 			switch (dataPacketType) {
 				case DL_Waveform_Char:
-					
 					waveform=*(Waveform_type**)dataPacketDataPtr;
-					charDataPtr = *(char**)GetWaveformPtrToData(waveform, &nElem);
-					
-					error=WriteHDF5file(ds->hdf5datafile,currentiter,sourceVChanName,charDataPtr,nElem,DL_Char,waveform) ;
+					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_Char) ; 
 					if (error<0) {
 						FmtIOErrType fmterr=GetFmtIOError();
 						AppendString(&errMsg, sinkVChanName, -1); 
@@ -827,11 +818,8 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 					}	
 				break;	
 				case DL_Waveform_UChar:
-					
 					waveform=*(Waveform_type**)dataPacketDataPtr;
-					ucharDataPtr = *(unsigned char**)GetWaveformPtrToData(waveform, &nElem);
-					
-					error=WriteHDF5file(ds->hdf5datafile,currentiter,sourceVChanName,ucharDataPtr,nElem,DL_UChar,waveform) ;
+					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_UChar) ;  
 					if (error<0) {
 						FmtIOErrType fmterr=GetFmtIOError();
 						AppendString(&errMsg, sinkVChanName, -1); 
@@ -839,11 +827,8 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 					}	
 				break;	
 				case DL_Waveform_Short:
-					
 					waveform=*(Waveform_type**)dataPacketDataPtr;
-					shortDataPtr = *(short int**)GetWaveformPtrToData(waveform, &nElem);
-					
-					error=WriteHDF5file(ds->hdf5datafile,currentiter,sourceVChanName,shortDataPtr,nElem,DL_Short,waveform) ;
+					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_Short) ;
 					if (error<0) {
 						FmtIOErrType fmterr=GetFmtIOError();
 						AppendString(&errMsg, sinkVChanName, -1); 
@@ -852,9 +837,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 				break;
 				case DL_Waveform_UShort:
 					waveform=*(Waveform_type**)dataPacketDataPtr;
-					ushortDataPtr = *(unsigned short int**)GetWaveformPtrToData(waveform, &nElem);
-					
-					error=WriteHDF5file(ds->hdf5datafile,currentiter,sourceVChanName,ushortDataPtr,nElem,DL_UShort,waveform) ;
+					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_UShort) ; 
 					if (error<0) {
 						FmtIOErrType fmterr=GetFmtIOError();
 						AppendString(&errMsg, sinkVChanName, -1); 
@@ -863,8 +846,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 				break;
 				case DL_Waveform_UInt:
 					waveform=*(Waveform_type**)dataPacketDataPtr;
-					uintDataPtr = *(int**)GetWaveformPtrToData(waveform, &nElem);
-					error=WriteHDF5file(ds->hdf5datafile,currentiter,sourceVChanName,uintDataPtr,nElem,DL_UInt,waveform) ;
+					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_UInt) ;  
 					if (error<0) {
 						FmtIOErrType fmterr=GetFmtIOError();
 						AppendString(&errMsg, sinkVChanName, -1); 
@@ -873,46 +855,16 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 				break;
 				case DL_Waveform_Int:
 					waveform=*(Waveform_type**)dataPacketDataPtr;
-					intDataPtr = *(int**)GetWaveformPtrToData(waveform, &nElem);
-					
-					error=WriteHDF5file(ds->hdf5datafile,currentiter,sourceVChanName,intDataPtr,nElem,DL_Int,waveform) ;
+					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_Int) ;    
 					if (error<0) {
 						FmtIOErrType fmterr=GetFmtIOError();
 						AppendString(&errMsg, sinkVChanName, -1); 
 						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
 					}	
 				break;
-			/*	case DL_Waveform_ULong:
-					unsigned  long* longDataPtr		= NULL;   
-					waveform=*(Waveform_type**)dataPacketDataPtr;
-					longDataPtr = *(unsigned int**)GetWaveformPtrToData(waveform, &nElem);
-					
-					error=WriteHDF5file(ds->hdf5datafile,currentiter,sourceVChanName,longDataPtr,nElem,DL_UInt) ;
-					if (error<0) {
-						FmtIOErrType fmterr=GetFmtIOError();
-						AppendString(&errMsg, sinkVChanName, -1); 
-						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					}	
-				break;  
-			    
-				case DL_Waveform_ULong:
-					unsigned  long* longDataPtr		= NULL;   
-					waveform=*(Waveform_type**)dataPacketDataPtr;
-					longDataPtr = *(unsigned int**)GetWaveformPtrToData(waveform, &nElem);
-					
-					error=WriteHDF5file(ds->hdf5datafile,currentiter,sourceVChanName,longDataPtr,nElem,DL_UInt) ;
-					if (error<0) {
-						FmtIOErrType fmterr=GetFmtIOError();
-						AppendString(&errMsg, sinkVChanName, -1); 
-						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					}	
-				break;   */
 				case DL_Waveform_Float  :
-					
 					waveform=*(Waveform_type**)dataPacketDataPtr;
-					floatDataPtr = *(int**)GetWaveformPtrToData(waveform, &nElem);
-					
-					error=WriteHDF5file(ds->hdf5datafile,currentiter,sourceVChanName,floatDataPtr,nElem,DL_Float,waveform) ;
+					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_Float) ;
 					if (error<0) {
 						FmtIOErrType fmterr=GetFmtIOError();
 						AppendString(&errMsg, sinkVChanName, -1); 
@@ -920,11 +872,8 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 					}	
 				break;
 				case DL_Waveform_Double  :
-					
 					waveform=*(Waveform_type**)dataPacketDataPtr;
-					doubleDataPtr = *(int**)GetWaveformPtrToData(waveform, &nElem);
-					
-					error=WriteHDF5file(ds->hdf5datafile,currentiter,sourceVChanName,doubleDataPtr,nElem,DL_Double,waveform) ;
+					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_Double) ;
 					if (error<0) {
 						FmtIOErrType fmterr=GetFmtIOError();
 						AppendString(&errMsg, sinkVChanName, -1); 
@@ -932,26 +881,19 @@ static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskSt
 					}	
 				break;
 				case DL_Image:
+					//saving tiff files:
 					//get the image
-					image=*(Image**) dataPacketDataPtr;
-					
+				/*	receivedimage=*(Image_type**) dataPacketDataPtr;
+					image=GetImageImage(receivedimage);
 					rawfilename=malloc(MAXCHAR*sizeof(char)); 
 					fullitername=CreateFullIterName(currentiter);
-				//	switch (imgDisplay->imageType){
-				//		case Image_Float:
-							//can't create tiff from float
-				//			Fmt (rawfilename, "%s<%s\\%s_%s#%d.aipd", ds->rawdatapath,fullitername,sourceVChanName,GetCurrentIterationIndex(currentiter));  
-				//			SaveImage(rawfilename,image);
-				//			break;
-				//		default:
-							//create tiff
-							Fmt (rawfilename, "%s<%s\\%s_%s#%d.tif", ds->rawdatapath,fullitername,sourceVChanName,GetCurrentIterationIndex(currentiter));  
-							SaveTiffImage(rawfilename,image);
-				//			break;
-							
-				//	}
 					free(rawfilename);
-					free(fullitername); 
+					free(fullitername);   */
+				
+				//saving into HDF5;
+					receivedimage=*(Image_type**) dataPacketDataPtr;
+					error=WriteHDF5Image(ds->hdf5datafile,sourceVChanName,currentiter,receivedimage) ;   
+					
 				break;
 				default:
 					//shouldn't happen!

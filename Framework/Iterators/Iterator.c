@@ -30,6 +30,7 @@ struct Iterator {
 	DiscardDataFptr_type 	discardDataFptr;		// For data type iterators only, function callback to discard data from an iterator.
 	ListType				iterObjects;			// List of iteratable data objects such as Waveform_type* or Iterator_type* elements specified by iterType.
 	Iterator_type*			parent;					// Pointer to parent iterator, otherwise  NULL if root iterator.
+	BOOL					stackdata;				// Combine generated data into a one-dimension higher stack of datasets 
 };
 
    
@@ -57,6 +58,7 @@ Iterator_type* init_Iterator_type (char name[])
 	iterator->iterObjects   		= 0;
 	iterator->discardDataFptr		= NULL;
 	iterator->parent				= NULL;
+	iterator->stackdata				= FALSE;
 	
 	if ( !(iterator->iterObjects   	= ListCreate(sizeof(void*))) )	goto Error;
 	
@@ -81,6 +83,7 @@ Iterator_type* DupIterator (Iterator_type* iterator)
 	dup->iterObjects   			= 0;						 //no need to keep track of child iter objects, so no list here
 	dup->discardDataFptr		= iterator->discardDataFptr;
 	dup->parent					= DupIterator(iterator->parent);
+	dup->stackdata				= iterator->stackdata;
 	//if ( !(dup->iterObjects   	= ListCreate(sizeof(void*))) )	goto Error; //but list must be created for discarding the iterator
 	
 	return dup;
@@ -181,6 +184,16 @@ void SetTotalIterations (Iterator_type* iterator, size_t nIterations)
 size_t GetCurrentIterationIndex(Iterator_type* iterator)
 {
 	return iterator->currentIterIdx;	
+}
+
+void SetIteratorStackData (Iterator_type* iterator, BOOL stackdata)
+{
+	iterator->stackdata = stackdata;
+}
+
+BOOL GetIteratorStackData(Iterator_type* iterator)
+{
+	return iterator->stackdata;	
 }
 
 char* GetCurrentIterationName(Iterator_type* iterator)

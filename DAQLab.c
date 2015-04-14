@@ -2803,6 +2803,8 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 	TaskControl_type* 	taskControl = callbackData;
 	BOOL             	starttask;					  	// 1 - task start, 0 - task stop 
 	double				waitDVal;
+	BOOL				stack;
+	Iterator_type* 	    currentiter;
 	
 	switch (event)
 	{
@@ -2831,6 +2833,7 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 						SetCtrlAttribute(panel, TCPan1_Wait, ATTR_DIMMED, 1);
 						SetCtrlAttribute(panel, TCPan1_Reset, ATTR_DIMMED, 1);
 						SetCtrlAttribute(panel, TCPan1_Mode, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, TCPan1_Stack, ATTR_DIMMED, 1);    
 						// undim abort button if UITC doesn't have a parent task Controller
 						if (!GetTaskControlParent(taskControl))
 							SetCtrlAttribute(panel, TCPan1_Abort, ATTR_DIMMED, 0);
@@ -2853,11 +2856,16 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 					
 				case TCPan1_Wait:
 					
-					GetCtrlVal(panel, TCPan1_Wait, &waitDVal);  
+					GetCtrlVal(panel, TCPan1_Wait, &waitDVal);
 					SetTaskControlIterationsWait(taskControl, waitDVal);
 					
 					break;
-					
+				case TCPan1_Stack:    
+					GetCtrlVal(panel, TCPan1_Stack, &stack);  
+					currentiter=GetTaskControlCurrentIter (taskControl);
+					SetTaskControlStackData(taskControl,stack);  //?needed
+					SetIteratorStackData(currentiter, stack);
+					break;
 			}
 			break;
 			
@@ -3193,6 +3201,8 @@ static int ConfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
+		// undim Iteration Stack button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Stack, ATTR_DIMMED, 0);
 	// undim Start button if UITC doesn't have a parent Task Controller
 	if (!GetTaskControlParent(controllerUIDataPtr->taskControl))
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);

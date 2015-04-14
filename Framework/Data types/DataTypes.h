@@ -112,8 +112,7 @@ typedef enum {
 	Image_UInt,						// 32 bit unsigned
 	Image_Int,						// 32 bit signed
 	Image_Float,					// 32 bit float
-	Image_NIVision,					// NI VISION
-	
+
 } ImageTypes;
 
 	//----------------------------------------------------------------------------------------------
@@ -488,6 +487,8 @@ Image_type*					init_Image_type						(ImageTypes imageType);
 	// Discards the image container and its data allocated with malloc.
 void 						discard_Image_type 					(Image_type** image);
 
+Image_type* 				copy_Image_type						(Image_type* sourceimage);
+
 void 						SetImageHeight 						(Image_type* image, int imgHeight);
 
 int* 						GetImageHeight 						(Image_type* image);
@@ -519,6 +520,8 @@ void* 						GetImageImage 						(Image_type* image);
 void 						SetImageType 						(Image_type* image, ImageTypes imageType);
 
 ImageTypes* 				GetImageType 						(Image_type* image);
+
+size_t 						GetImageSizeofData 					(Image_type* image);
 
 void 						SetImageROIs 						(Image_type* image, ListType	ROIs);
 

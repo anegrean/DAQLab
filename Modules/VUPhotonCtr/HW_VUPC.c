@@ -80,7 +80,7 @@ typedef struct _PMTregcommand {
 TaskControl_type*		gtaskControl;
 Channel_type*			gchannels[MAX_CHANNELS];
 int         			measurementmode =TASK_FINITE;  //default
-int 		 			bufsize; 
+//int 		 			bufsize; 
 unsigned int 			PMTThreadID; 
 unsigned int 			PMTThread2ID;
 PMTregcommand 			newcommand;
@@ -265,7 +265,6 @@ int ReadBuffer(int bufsize)
 	Waveform_type* 			waveform		= NULL;
 	int						swappedi		= 0;
 	size_t					totalbytes;
-	size_t					dataindex		= 0;
 	
 	
 	Samplebuffer 	= malloc(bufsize); 
@@ -665,7 +664,7 @@ int PMTStopAcq(void)
 	char*					errMsg			= NULL;
 	
 	//send null packet(s)
-	for (int i = 0; i < MAX_CHANNELS; i++)
+	for (i = 0; i < MAX_CHANNELS; i++)
 		if (gchannels[i] != NULL)
 			if (gchannels[i]->VChan != NULL)
 				errChk( SendDataPacket(gchannels[i]->VChan, &nullPacket, 0, &errMsg) );

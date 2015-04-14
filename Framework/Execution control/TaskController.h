@@ -510,6 +510,10 @@ BOOL					GetTaskControlUITCFlag				(TaskControl_type* taskControl);
 
 	// Returns TRUE if iteration must be stopped
 BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
+	//combine iterated data into a one-dimension higher stacked dataset
+void 					SetTaskControlStackData 			(TaskControl_type* taskControl, BOOL stack);
+
+BOOL 					GetTaskControlStackData				(TaskControl_type* taskControl);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions

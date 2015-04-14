@@ -79,6 +79,7 @@ struct TaskControl {
 	TaskStates_type 			oldState;							// Previous Task Controller state used for logging.
 	size_t						repeat;								// Total number of repeats. If repeat is 0, then the iteration function is not called. 
 	int							iterTimeout;						// Timeout in [s] until when TaskControlIterationDone can be called. 
+	BOOL						stack;								// Combine generated data into a one-dimension higher stack of datasets
 	 //add them to Iterator_Type?
 	TaskExecutionMode_type		executionMode;						// Determines how the iteration block of a Task Controller is executed with respect to its subtasks if any.
 	TaskMode_type				mode;								// Finite or continuous type of task controller
@@ -236,6 +237,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	tc -> nIterationsFlag					= -1;
 	tc -> iterationTimerID					= 0;
 	tc -> UITCFlag							= FALSE;
+	tc -> stack								= FALSE;
 	
 	
 	
@@ -423,6 +425,16 @@ void SetTaskControlIterationsWait (TaskControl_type* taskControl, double waitBet
 double GetTaskControlIterationsWait	(TaskControl_type* taskControl)
 {
 	return taskControl->waitBetweenIterations; 
+}
+
+void SetTaskControlStackData (TaskControl_type* taskControl, BOOL stack)
+{
+	taskControl->stack = stack;
+}
+
+BOOL GetTaskControlStackData	(TaskControl_type* taskControl)
+{
+	return taskControl->stack; 
 }
 
 void SetTaskControlModuleData (TaskControl_type* taskControl, void* moduleData)

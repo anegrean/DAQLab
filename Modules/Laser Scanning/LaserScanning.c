@@ -5744,8 +5744,10 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	DisplayEngine_type* 		displayEngine 		= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
 	RectRasterScanSet_type*		imgSettings			= NULL;
 	DataPacket_type* 			imagePacket         = NULL;
-	ImageDisplay_type*			sendingDisplay		= NULL;	
-	Image*						sendimage			= NULL;
+//	Image*						sendimage			= NULL;
+	Image_type*					sendimage			= NULL;	
+	void*						destbuffer			= NULL;
+	
 	
 	do {
 		
@@ -5903,7 +5905,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				switch (imgBuffer->pixelDataType) {
 				
 					case DL_Waveform_UChar:
-						imageType = Image_UChar;  
+						imageType = Image_UChar;
 						break;
 		
 					case DL_Waveform_UShort:
@@ -5950,51 +5952,22 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 														    rectRaster->scanSettings.pixSize, 0, 0, 0) ); // TEMPORARY: X, Y & Z coordinates set to 0 for now
 				 
 				  
-				//make a copy
-				ImageType		imaqImgType;
-				ImageType		retrievedtype=GetImageType(imgBuffer->scanChan->imgDisplay);
-				switch (retrievedtype) {
-					case Image_UChar:
-						imaqImgType 		= IMAQ_IMAGE_U8;
-						break;
-		
-					case Image_UShort:
-						imaqImgType 		= IMAQ_IMAGE_U16;
-						break;
-			
-					case Image_Short:
-						imaqImgType 		= IMAQ_IMAGE_I16; 
-						break;
-			
-					case Image_UInt:
-						imaqImgType 		= IMAQ_IMAGE_SGL;	 //no U32 support in IMAQ, image needs to be displayed as a float
-						break;
-			
-					case Image_Int:
-						imaqImgType 		= IMAQ_IMAGE_SGL;	 //no I32 support in IMAQ  image needs to be displayed as a float 
-						break;
-			
-					case Image_Float:
-						imaqImgType 		= IMAQ_IMAGE_SGL; 
-						break;
-				}
-				sendimage=imaqCreateImage(imaqImgType, 0); 
-				Image* image=GetImageImage(imgBuffer->scanChan->imgDisplay->imagetype);
-				errChk(imaqDuplicate(sendimage, image)); 
-				if (!sendimage){
-				//	test
-					break;
-				}
+				//make a copy of the image structure
+				sendimage=copy_Image_type(imgBuffer->scanChan->imgDisplay->imagetype);
+				int pixbytes=GetImageSizeofData(sendimage);
+				int imagesize=(rectRaster->scanSettings.height*rectRaster->scanSettings.width)*pixbytes;
+				destbuffer=malloc(imagesize);
+				memcpy(destbuffer,imgBuffer->imagePixels,imagesize);
+				SetImageImage(sendimage,destbuffer);
+				SetImagePixSize(sendimage,rectRaster->scanSettings.pixSize);
 				
-
-			
 				Iterator_type* currentiter=GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);
 				//test
 				iterindex=GetCurrentIterationIndex(currentiter);
 				iterindex++;
 				SetCurrentIterationIndex(currentiter,iterindex);
 			
-				nullChk( imagePacket	= init_DataPacket_type(DL_Image, &sendimage, currentiter , (DiscardFptr_type) displayEngine->imageDiscardFptr));
+				nullChk( imagePacket	= init_DataPacket_type(DL_Image, &sendimage, currentiter , discard_Image_type));  //discard_ImageDisplay_type
 				// send data packet with image
 				errChk( SendDataPacket(rectRaster->baseClass.VChanCompositeImage, &imagePacket, 0, &errMsg) );
 				     

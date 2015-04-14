@@ -246,9 +246,9 @@ static void discard_NIImageDisplay_type (NIImageDisplay_type** displayPtr)
 	// discard child class data
 	
 	// discard image data
-	Image* image=GetImageImage(display->baseClass.imagetype);
+	Image* image=GetImageImage(display->baseClass.imagetype);   
 	DiscardImaqImg((Image**)&image);
-	
+
 	//---------------------------------------------------
 	// discard parent class
 	

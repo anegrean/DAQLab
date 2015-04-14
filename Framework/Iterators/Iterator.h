@@ -109,6 +109,10 @@ int						IteratorAddWaveform			(Iterator_type* iterator, Waveform_type* waveform
 	// Adds an iterator to another iterator
 int						IteratorAddIterator			(Iterator_type* iterator, Iterator_type* iteratorToAdd);
 
+void					SetIteratorStackData 		(Iterator_type* iterator, BOOL stackdata);
+
+BOOL 					GetIteratorStackData		(Iterator_type* iterator);
+
 //---------------------------------------------------------------------------------------------------------------------------
 // Iterator iteration control
 //---------------------------------------------------------------------------------------------------------------------------

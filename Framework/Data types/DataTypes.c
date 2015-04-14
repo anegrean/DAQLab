@@ -11,6 +11,7 @@
 //==============================================================================
 // Include files
 
+#include "nivision.h"
 #include "DataTypes.h" 
 #include "DAQLabUtility.h"
 #include <ansi_c.h>
@@ -792,7 +793,7 @@ Image_type* init_Image_type (ImageTypes imageType)
 	image->imgTopLeftXCoord		= 0.0;		   // Image top-left corner X-Axis coordinates in [um].    
 	image->imgTopLeftYCoord		= 0.0;		   // Image top-left corner Y-Axis coordinates in [um]. 
 	image->imgZCoord			= 0.0;		   // Image z-axis (height) location in [um].    
-	image->image				= NULL;  		// assign data
+	image->image				= NULL;  	   // assign data
 	image->ROIs					= 0;
 	return image;
 }
@@ -801,13 +802,61 @@ Image_type* init_Image_type (ImageTypes imageType)
 
 void discard_Image_type (Image_type** image)
 {
+	size_t		nROIs;
+	ROI_type** 	ROIPtr	= NULL;
+	
 	if (!*image) return;
 	
-
+	//free image data
 	OKfree((*image)->image);
 	//free ROIs
+	nROIs	= ListNumItems((*image)->ROIs);
+	for (size_t i = 1; i <= nROIs; i++) {
+		ROIPtr = ListGetPtrToItem((*image)->ROIs, i);
+		discard_ROI_type(ROIPtr);
+	}
+	ListDispose((*image)->ROIs);
 	
 	OKfree(*image);
+}
+
+/*
+void* ImageCopy(void* sourceimage,ImageTypes imagetype)
+{
+	Image* dest=NULL;
+	int error = 0;
+	ImageType	imaqImgType;
+	ImageInfo info;
+	
+
+//	switch (imagetype){
+//		case Image_NIVision:
+			errChk(imaqGetImageInfo(sourceimage, &info));  
+			dest=imaqCreateImage(info.imageType, 0); 
+			errChk(imaqDuplicate(dest, (Image*) sourceimage)); 
+//			break;
+//	}
+	return dest; 
+Error:
+	return NULL;
+} */
+
+Image_type* copy_Image_type(Image_type* sourceimage)
+{
+	 Image_type*	image = malloc(sizeof(Image_type));
+	 if (!image) return NULL;
+	 image->imageType			= sourceimage->imageType;   
+	 image->imgHeight			= sourceimage->imgHeight;		   
+	 image->imgWidth			= sourceimage->imgWidth;		   
+	 image->imgTopLeftXCoord	= sourceimage->imgTopLeftXCoord;		       
+	 image->imgTopLeftYCoord	= sourceimage->imgTopLeftYCoord;		    
+	 image->imgZCoord			= sourceimage->imgZCoord;
+	 image->pixSize				= sourceimage->pixSize;
+//	 image->image				= ImageCopy(sourceimage->image,sourceimage->imageType);  
+	 
+	// memcpy(image->rawdata,sourceimage->rawdata,
+	 image->ROIs				= ListCopy(sourceimage->ROIs);
+	 return image;
 }
 
 
@@ -900,6 +949,36 @@ void SetImageROIs (Image_type* image, ListType	ROIs)
 ListType GetImageROIs (Image_type* image)
 {
 	 return image->ROIs; 
+}
+
+
+size_t GetImageSizeofData (Image_type* image)
+{
+	size_t dataTypeSize = 0;
+	
+	switch (image->imageType) {
+			
+		case Image_UChar:					// 8 bit unsigned
+		  	dataTypeSize = sizeof(char);
+			break;
+	
+		case Image_UShort:					// 16 bit unsigned   
+		case Image_Short:					// 16 bit signed   
+		   dataTypeSize = sizeof(short int);
+			break;
+			
+		case Image_UInt:					// 32 bit unsigned
+		case Image_Int:						// 32 bit signed
+			dataTypeSize = sizeof(int);
+			break;
+			
+		case Image_Float:					// 32 bit float   :
+			dataTypeSize = sizeof(float);
+			break;
+			
+	}
+	
+	return dataTypeSize;
 }
 
 

@@ -33,7 +33,8 @@
 // Global functions
 
 int CreateHDF5file(char *filename,char* dataset_name);
-int WriteHDF5file(char *filename,Iterator_type*		currentiter,char* dataset_name, unsigned short* dset_data,int nElem, DLDataTypes datatype,Waveform_type* waveform);
+int WriteHDF5Data(char *filename,char* dataset_name,Iterator_type*	currentiter,Waveform_type* waveform,DLDataTypes datatype) ;
+int WriteHDF5Image(char *filename,char* dataset_name,Iterator_type*	currentiter,Image_type*	receivedimage);
 
 #ifdef __cplusplus
     }

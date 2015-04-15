@@ -63,7 +63,7 @@
 
 // Scan engine settings
 #define Max_NewScanEngine_NameLength						50
-#define Allowed_Detector_Data_Types							{DL_Waveform_UChar, DL_Waveform_UShort, DL_Waveform_Short, DL_Waveform_UInt,DL_Waveform_Float}
+#define Allowed_Detector_Data_Types							{DL_Waveform_UChar, DL_Waveform_UShort, DL_Waveform_Short, DL_Waveform_Float}  // DL_Waveform_UInt is not allowed because of NI Vision
 
 // Non-resonant galvo calibration parameters
 #define	CALIBRATION_DATA_TO_STRING							"%s<%*f[j1] "
@@ -5744,7 +5744,6 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	DisplayEngine_type* 		displayEngine 		= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
 	RectRasterScanSet_type*		imgSettings			= NULL;
 	DataPacket_type* 			imagePacket         = NULL;
-//	Image*						sendimage			= NULL;
 	Image_type*					sendimage			= NULL;	
 	void*						destbuffer			= NULL;
 	
@@ -5795,26 +5794,6 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 								*((unsigned int*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned int*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
 						else
 							memcpy((unsigned int*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (unsigned int*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(unsigned int));
-					
-						break;
-						
-					case DL_Waveform_Int:
-						
-						if (imgBuffer->flipRow)
-							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
-								*((int*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((int*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
-						else
-							memcpy((int*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (int*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(int));
-					
-						break;
-						
-					case DL_Waveform_Double:
-					
-						if (imgBuffer->flipRow)
-							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
-								*((double*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((double*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
-						else
-							memcpy((double*)imgBuffer->imagePixels + imgBuffer->nImagePixels, (double*)imgBuffer->tmpPixels + nDeadTimePixels, rectRaster->scanSettings.width * sizeof(double));
 					
 						break;
 						
@@ -5871,16 +5850,6 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					memmove((unsigned int*)imgBuffer->tmpPixels, (unsigned int*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(unsigned int));
 					break;
 					
-				case DL_Waveform_Int:
-					
-					memmove((int*)imgBuffer->tmpPixels, (int*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(int));
-					break;
-					
-				case DL_Waveform_Double:
-					
-					memmove((double*)imgBuffer->tmpPixels, (double*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(double));
-					break;
-					
 				case DL_Waveform_Float:
 					
 					memmove((float*)imgBuffer->tmpPixels, (float*)imgBuffer->tmpPixels + 2 * nDeadTimePixels + rectRaster->scanSettings.width, (imgBuffer->nTmpPixels - 2 * nDeadTimePixels - rectRaster->scanSettings.width) * sizeof(float));
@@ -5901,7 +5870,6 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 			
 			if (imgBuffer->nAssembledRows == rectRaster->scanSettings.height) {
 				
-			
 				switch (imgBuffer->pixelDataType) {
 				
 					case DL_Waveform_UChar:
@@ -5920,14 +5888,6 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 						imageType = Image_UInt;    
 						break;
 						
-					case DL_Waveform_Int:
-						imageType = Image_Int;    
-						break;
-			
-					case DL_Waveform_Double:
-						imageType = Image_Float;     
-						break;	
-					
 					case DL_Waveform_Float:
 						imageType = Image_Float;     
 						break;

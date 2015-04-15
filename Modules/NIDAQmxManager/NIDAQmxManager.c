@@ -4825,7 +4825,6 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 			
 			// update device settings
 			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
-			
 			break;
 			
 		case AIVoltage_Range:
@@ -4868,11 +4867,13 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 				case Convert_To_Double:
 					
 					SetSourceVChanDataType(chanSet->baseClass.srcVChan, DL_Waveform_Double);
+					ResetAIDataTypeGainOffset(chanSet);
 					break;
 					
 				case Convert_To_Float:
 					
 					SetSourceVChanDataType(chanSet->baseClass.srcVChan, DL_Waveform_Float);
+					ResetAIDataTypeGainOffset(chanSet);
 					break;
 					
 				case Convert_To_UInt:
@@ -4901,31 +4902,38 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 			SetCtrlAttribute(panel, AIVoltage_Offset, ATTR_VISIBLE, !showScaleControls);
 			
 			DLUpdateSwitchboard();
+			
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
 			break;
 			
 		case AIVoltage_Offset:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.dataTypeConversion.offset);
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
 			break;
 			
 		case AIVoltage_Gain:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.dataTypeConversion.gain);
+			ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg);
 			break;
 			
 		case AIVoltage_Integrate:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.integrateFlag);
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
 			break;
 			
 		case AIVoltage_ScaleMin:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.dataTypeConversion.min);
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
 			break;
 			
 		case AIVoltage_ScaleMax:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.dataTypeConversion.max);
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
 			break;
 				
 		case AIVoltage_Terminal:
@@ -5265,7 +5273,7 @@ void AdjustAIDataTypeGainOffset (ChanSet_AI_Voltage_type* chSet, uInt32 oversamp
 			else
 				chSet->baseClass.dataTypeConversion.gain	= 0;
 				
-			chSet->baseClass.dataTypeConversion.offset		= - chSet->baseClass.dataTypeConversion.min * chSet->baseClass.dataTypeConversion.gain;
+			chSet->baseClass.dataTypeConversion.offset		= - chSet->baseClass.dataTypeConversion.min * oversampling * chSet->baseClass.dataTypeConversion.gain;
 			break;
 			
 		case Convert_To_UShort:
@@ -5277,7 +5285,7 @@ void AdjustAIDataTypeGainOffset (ChanSet_AI_Voltage_type* chSet, uInt32 oversamp
 			else
 				chSet->baseClass.dataTypeConversion.gain	= 0;
 			
-			chSet->baseClass.dataTypeConversion.offset		= - chSet->baseClass.dataTypeConversion.min * chSet->baseClass.dataTypeConversion.gain;
+			chSet->baseClass.dataTypeConversion.offset		= - chSet->baseClass.dataTypeConversion.min * oversampling * chSet->baseClass.dataTypeConversion.gain;
 			break;
 			
 		case Convert_To_UChar:
@@ -5289,7 +5297,7 @@ void AdjustAIDataTypeGainOffset (ChanSet_AI_Voltage_type* chSet, uInt32 oversamp
 			else
 				chSet->baseClass.dataTypeConversion.gain	= 0;
 			
-			chSet->baseClass.dataTypeConversion.offset		= - chSet->baseClass.dataTypeConversion.min * chSet->baseClass.dataTypeConversion.gain;
+			chSet->baseClass.dataTypeConversion.offset		= - chSet->baseClass.dataTypeConversion.min * oversampling * chSet->baseClass.dataTypeConversion.gain;
 			break;
 	}
 	
@@ -11602,177 +11610,89 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	uInt32				nItegratedSamples		= (nRead + dev->AITaskSet->readAIData->nIntBuffElem[chIdx]) / integration;  // number of samples integrated per channel
 	uInt32				nRemainingSamples		= (nRead + dev->AITaskSet->readAIData->nIntBuffElem[chIdx]) % integration;	// number of samples remaining to be integrated per channel
 	uInt32				nBufferSamples;
-	//float64*			AIOffsetReadBuffer		= AIReadBuffer + chIdx * nRead;
 	uInt32				i, j, k;
 	
-	Iterator_type* 		currentiter				=	GetTaskControlCurrentIterDup(dev->taskController);
+	Iterator_type* 		currentiter				= GetTaskControlCurrentIterDup(dev->taskController);
+	
+	
+	//----------------------
+	// process incoming data
+	//----------------------
+			
+	nullChk( waveformData_double = calloc(nItegratedSamples, sizeof(double)) );
+			
+	// add data to the integration buffer
+	memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
+	dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
+	nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
+			
+	if (AIChSet->integrateFlag)
+		// integrate
+		for (i = 0; i < integration; i++) {
+			k = i;
+			for (j = 0; j < nItegratedSamples; j++) {
+				waveformData_double[j] += integrationBuffer[k];
+				k += integration;
+			}							   
+		}
+	 else 
+		// jump over oversampled samples
+		for (i = 0; i < nItegratedSamples; i++)
+			waveformData_double[i] = integrationBuffer[i*integration];
+			
+			
+	// shift unprocessed samples from the end of the buffer to its beginning
+	if (nRemainingSamples)
+		memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(float64));
+			
+	dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
+	
+	//------------------------------------- 
+	// transform data and send data packet
+	//-------------------------------------
 	
 	switch(GetSourceVChanDataType(AIChSet->srcVChan)) {
 				
 		case DL_Waveform_Double:
 			
-			//----------------------
-			// process incoming data
-			//----------------------
+			for (i = 0; i < nItegratedSamples; i++)
+				waveformData_double[i] = waveformData_double[i] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset;
 			
-			nullChk( waveformData_double = calloc(nItegratedSamples, sizeof(double)) );
-			
-			// add data to the integration buffer
-			memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
-			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
-			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
-			
-			if (AIChSet->integrateFlag)
-				// integrate
-				for (i = 0; i < integration; i++) {
-					k = i;
-					for (j = 0; j < nItegratedSamples; j++) {
-						waveformData_double[j] += integrationBuffer[k] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset;
-						k += integration;
-					}							   
-				}
-			 else 
-				// jump over oversampled samples
-				for (i = 0; i < nItegratedSamples; i++)
-					waveformData_double[i] = integrationBuffer[i*integration] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset;
-			
-			
-			// shift unprocessed samples from the end of the buffer to its beginning
-			if (nRemainingSamples)
-				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(float64));
-			
-			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
-			
-			//-------------------- 
 			// prepare data packet
-			//--------------------
 			nullChk( waveform 	= init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_double) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, (void**) &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) ); 
-				
 			break;
 				
 		case DL_Waveform_Float:
 			
-			//----------------------
-			// process incoming data
-			//----------------------
-			
-			nullChk( waveformData_float = calloc(nItegratedSamples, sizeof(float)) );
-			
-			// add data to the integration buffer
-			memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
-			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
-			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
-			
-			if (AIChSet->integrateFlag)
-				// integrate
-				for (i = 0; i < integration; i++) {
-					k = i;
-					for (j = 0; j < nItegratedSamples; j++) {
-						waveformData_float[j] += (float) (integrationBuffer[k] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
-						k += integration;
-					}							   
-				}
-			else
-				// jump over oversampled samples
-				for (i = 0; i < nItegratedSamples; i++)
-					waveformData_float[i] = (float) (integrationBuffer[i*integration] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
+			nullChk( waveformData_float = malloc(nItegratedSamples * sizeof(float)) );
+			for (i = 0; i < nItegratedSamples; i++)
+				waveformData_float[i] = (float) (waveformData_double[i] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
 				
-			
-			// shift unprocessed samples from the end of the buffer to its beginning
-			if (nRemainingSamples)
-				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(float64));
-			
-			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
-				
-			//-------------------- 
 			// prepare data packet
-			//--------------------
-			
 			nullChk( waveform 	= init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_float) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, (void**) &waveform,  NULL, (DiscardFptr_type) discard_Waveform_type) );
-				
 			break;
 		
 			
 		case DL_Waveform_UInt:
 			
+			nullChk( waveformData_uInt32 = malloc(nItegratedSamples * sizeof(uInt32)) );
+			for (i = 0; i < nItegratedSamples; i++)
+				waveformData_uInt32[i] = (uInt32) (waveformData_double[i] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
 			
-			//----------------------
-			// process incoming data
-			//----------------------
-			
-			nullChk( waveformData_uInt32 = calloc(nItegratedSamples, sizeof(uInt32)) );
-			
-			
-				// add data to the integration buffer
-			memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
-			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
-			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
-			
-			if (AIChSet->integrateFlag)
-				// integrate
-				for (i = 0; i < integration; i++) {
-					k = i;
-					for (j = 0; j < nItegratedSamples; j++) {
-						waveformData_uInt32[j] += (uInt32) RoundRealToNearestInteger(integrationBuffer[k] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
-						k += integration;
-					}							   
-				}
-			else
-				// jump over oversampled samples
-				for (i = 0; i < nItegratedSamples; i++)
-					waveformData_uInt32[i] = (uInt32) RoundRealToNearestInteger(integrationBuffer[i*integration] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
-				
-			
-			// shift unprocessed samples from the end of the buffer to its beginning
-			if (nRemainingSamples)
-				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(uInt32));
-			
-			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
-			
+			// prepare data packet
 			nullChk( waveform = init_Waveform_type(Waveform_UInt, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt32) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UInt, (void**) &waveform, NULL, (DiscardFptr_type) discard_Waveform_type) );
-			
-			
 			break;
 				
 		case DL_Waveform_UShort:
 			
-			//----------------------
-			// process incoming data
-			//----------------------
+			nullChk( waveformData_uInt16 = malloc(nItegratedSamples * sizeof(uInt16)) );
+			for (i = 0; i < nItegratedSamples; i++)
+				waveformData_uInt16[i] = (uInt16) (waveformData_double[i] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
 			
-			nullChk( waveformData_uInt16 = calloc(nItegratedSamples, sizeof(uInt16)) );
-			
-			
-				// add data to the integration buffer
-			memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
-			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
-			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
-			
-			if (AIChSet->integrateFlag)
-				// integrate
-				for (i = 0; i < integration; i++) {
-					k = i;
-					for (j = 0; j < nItegratedSamples; j++) {
-						waveformData_uInt16[j] += (uInt16) RoundRealToNearestInteger(integrationBuffer[k] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
-						k += integration;
-					}							   
-				}
-			else
-				// jump over oversampled samples
-				for (i = 0; i < nItegratedSamples; i++)
-					waveformData_uInt16[i] = (uInt16) RoundRealToNearestInteger(integrationBuffer[i*integration] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
-				
-			
-			// shift unprocessed samples from the end of the buffer to its beginning
-			if (nRemainingSamples)
-				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(uInt16));
-			
-			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
-			
-			
+			// prepare data packet
 			nullChk( waveform = init_Waveform_type(Waveform_UShort, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt16) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, (void**) &waveform, NULL, (DiscardFptr_type) discard_Waveform_type) );
 				 
@@ -11780,38 +11700,13 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 				
 		case DL_Waveform_UChar:
 				
-				
-			nullChk( waveformData_uInt8 = calloc(nItegratedSamples, sizeof(uInt8)) );
-				
-					// add data to the integration buffer
-			memcpy(integrationBuffer + dev->AITaskSet->readAIData->nIntBuffElem[chIdx], AIReadBuffer + chIdx * nRead, nRead * sizeof(float64));
-			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] += nRead;
-			nBufferSamples = dev->AITaskSet->readAIData->nIntBuffElem[chIdx];
+			nullChk( waveformData_uInt8 = malloc(nItegratedSamples * sizeof(uInt8)) );
+			for (i = 0; i < nItegratedSamples; i++)
+				waveformData_uInt8[i] = (uInt8) (waveformData_double[i] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);	
 			
-			if (AIChSet->integrateFlag)
-				// integrate
-				for (i = 0; i < integration; i++) {
-					k = i;
-					for (j = 0; j < nItegratedSamples; j++) {
-						waveformData_uInt8[j] += (uInt8) RoundRealToNearestInteger(integrationBuffer[k] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
-						k += integration;
-					}							   
-				}
-			else
-				// jump over oversampled samples
-				for (i = 0; i < nItegratedSamples; i++)
-					waveformData_uInt8[i] = (uInt8) RoundRealToNearestInteger(integrationBuffer[i*integration] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
-				
-			
-			// shift unprocessed samples from the end of the buffer to its beginning
-			if (nRemainingSamples)
-				memmove(integrationBuffer, integrationBuffer + (nBufferSamples - nRemainingSamples), nRemainingSamples * sizeof(uInt8));
-			
-			dev->AITaskSet->readAIData->nIntBuffElem[chIdx] = nRemainingSamples;
-				
+			// prepare data packet
 			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt8) );
 			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, (void**) &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
-				
 			break;
 		
 		
@@ -11823,6 +11718,9 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 					
 	}
 
+	// cleanup
+	OKfree(waveformData_double);
+	
 	//-------------------------------
 	// send data packet with waveform
 	//-------------------------------

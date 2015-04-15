@@ -100,7 +100,7 @@ static void 					discard_NIDisplayEngine_type 					(NIDisplayEngine_type** niVis
 static int						DisplayNIVisionImage							(NIImageDisplay_type* imgDisplay, void* pixelArray, int imgHeight, int imgWidth, ImageTypes imageType, 
 																				 double pixSize, double imgTopLeftXCoord, double imgTopLeftYCoord, double imgZCoord);
 	// displays a file selection popup-box and saves a given NI image as two grayscale TIFF files with ZIP compression with and without ROI flattened
-static int 						ImageSavePopup 									(Image* image);
+static int 						ImageSavePopup 									(Image* image, char** errorInfo);
 
 static NIImageDisplay_type*		GetNIImageDisplay								(NIDisplayEngine_type* NIDisplay, void* callbackData, int imgHeight, int imgWidth, ImageTypes imageType);
 
@@ -737,8 +737,8 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 				case NIDisplayMenu_Save:
 					//save as tiff with and without overlays
 					//popup and remember dir
-					image=GetImageImage(disp->baseClass.imagetype);
-					errChk(ImageSavePopup(image));
+					image = GetImageImage(disp->baseClass.imagetype);
+					errChk(ImageSavePopup(image, &errMsg));
 					
 					break;
 					
@@ -792,18 +792,21 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 	return DefSubclassProc(hWnd, msg, wParam, lParam);
 	
 Error:
-	
 	// call display error handler
+	if (!errMsg)
+		errMsg = StrDup("Unknown error.\n\n");
+	
+	
 	(*disp->baseClass.displayEngine->errorHandlerCBFptr) ((ImageDisplay_type*)disp, error, errMsg);
 	OKfree(errMsg);
 	
 	return DefSubclassProc(hWnd, msg, wParam, lParam);
 }
 
-static int ImageSavePopup (Image* image)
+static int ImageSavePopup (Image* image, char** errorInfo)
 {
-#define	ImageSavePopup_Err		-1
 	int 				error							= 0;
+	char*				errMsg							= NULL;
 	int 				fileSelection					= 0;
 	char 				fullPathName[MAX_PATHNAME_LEN]	= "";
 	char*				strippedPathName				= NULL;
@@ -814,7 +817,7 @@ static int ImageSavePopup (Image* image)
 	TIFFFileOptions		tiffOptions						= {.rowsPerStrip = 0, .photoInterp = IMAQ_BLACK_IS_ZERO, .compressionType = IMAQ_ZIP};
 
 	
-	fileSelection = FileSelectPopupEx ("","*.tiff;*.png", "*.tiff;*.png", "Save Image as tiff or png", VAL_SAVE_BUTTON, 0, 1, fullPathName);
+	fileSelection = FileSelectPopupEx ("","*.tiff", "*.tiff", "Save Image as tiff", VAL_SAVE_BUTTON, 0, 1, fullPathName);
 	
 	switch (fileSelection) {
 			
@@ -830,7 +833,6 @@ static int ImageSavePopup (Image* image)
 			Fmt(fileName, "%s<%s.tiff", strippedPathName);
 			
 			// save image as tiff without overlays
-			nullChk( imaqWriteFile(image, fileName, NULL) ); 
 			nullChk( imaqWriteTIFFFile(image, fileName, &tiffOptions, NULL) ); 
 			
 			// make a copy of the image and flatten overlays
@@ -858,12 +860,18 @@ static int ImageSavePopup (Image* image)
 	
 Error:
 	
+	// cleanup
 	if (imageCopy) {
 		imaqDispose(imageCopy);
 		imageCopy = NULL;
 	}
 	
-	return ImageSavePopup_Err;
+	errMsg = imaqGetErrorText(error);
+	if (errorInfo)
+		*errorInfo = StrDup(errMsg);
+	imaqDispose(errMsg);
+	
+	return error;
 }	
 
 

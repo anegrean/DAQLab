@@ -6739,6 +6739,7 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 static void	DisplayErrorHandler_CB (ImageDisplay_type* imgDisplay, int errorID, char* errorInfo)
 {
 	DLMsg(errorInfo, 1);
+	DLMsg("\n\n", 0);
 }
 
 //---------------------------------------------------------------------

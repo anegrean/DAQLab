@@ -1049,7 +1049,7 @@ static ChanSet_AI_Voltage_type*		init_ChanSet_AI_Voltage_type 			(Dev_type* dev,
 
 static void							discard_ChanSet_AI_Voltage_type			(ChanSet_AI_Voltage_type** chanSetPtr);
 
-static int 							AddToUI_Chan_AI_Voltage 					(ChanSet_AI_Voltage_type* chanSet);
+static int 							AddToUI_Chan_AI_Voltage 				(ChanSet_AI_Voltage_type* chanSet);
 
 static int CVICALLBACK				ChanSetAIVoltageUI_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -1061,7 +1061,7 @@ static ChanSet_AI_Current_type*		init_ChanSet_AI_Current_type 			(Dev_type* dev,
 static void							discard_ChanSet_AI_Current_type			(ChanSet_AI_Current_type** chanSetPtr);                          
 
 	// adjusts AI channel data type conversion gain and offset
-void 								AdjustAIDataTypeGainOffset				(ChanSet_AI_Voltage_type* chSet);
+void 								AdjustAIDataTypeGainOffset				(ChanSet_AI_Voltage_type* chSet, uInt32 oversampling);
 void 								ResetAIDataTypeGainOffset				(ChanSet_AI_Voltage_type* chSet);
 
 
@@ -1074,7 +1074,7 @@ static ChanSet_AO_Voltage_type*		init_ChanSet_AO_Voltage_type 			(Dev_type* dev,
 
 static void							discard_ChanSet_AO_Voltage_type			(ChanSet_AO_Voltage_type** chanSetPtr);
 
-static int 							AddToUI_Chan_AO_Voltage 					(ChanSet_AO_Voltage_type* chanSet); 
+static int 							AddToUI_Chan_AO_Voltage 				(ChanSet_AO_Voltage_type* chanSet); 
 
 static int CVICALLBACK				ChanSetAOVoltageUI_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -2096,7 +2096,7 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				
 				DataTypeConversion_type			dataTypeConversion		= {.dataType = (DataTypeConversions)AIDataTypeConversion, .min = dataTypeMin, .max = dataTypeMax, .offset = dataTypeOffset, .gain = dataTypeGain};
 				
-				*chanSetPtr = (ChanSet_type*) init_ChanSet_AI_Current_type(dev, physChanName, chanAttr, integrateFlag, dataTypeConversion, IRangeIdx, (ShuntResistor_type) AIShuntResistorType, shuntResistor, (Terminal_type) terminalType);
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AI_Current_type(dev, physChanName, chanAttr, integrateFlag, dataTypeConversion, IRangeIdx, (ShuntResistor_type) AIShuntResistorType, shuntResistor, (Terminal_type) terminalType) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -4851,9 +4851,6 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 			SetCtrlAttribute(chanSet->baseClass.chanPanHndl, AIVoltage_ScaleMin, ATTR_MIN_VALUE, chanSet->VMin);
 			SetCtrlVal(chanSet->baseClass.chanPanHndl, AIVoltage_ScaleMin, chanSet->baseClass.dataTypeConversion.min); 
 			
-			//adjust gain and offset for full range
-			AdjustAIDataTypeGainOffset(chanSet);
-			
 			// update device settings
 			errChk ( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
 			break;
@@ -4871,33 +4868,28 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 				case Convert_To_Double:
 					
 					SetSourceVChanDataType(chanSet->baseClass.srcVChan, DL_Waveform_Double);
-					ResetAIDataTypeGainOffset(chanSet); 
 					break;
 					
 				case Convert_To_Float:
 					
 					SetSourceVChanDataType(chanSet->baseClass.srcVChan, DL_Waveform_Float);
-					ResetAIDataTypeGainOffset(chanSet); 
 					break;
 					
 				case Convert_To_UInt:
 					
 					SetSourceVChanDataType(chanSet->baseClass.srcVChan, DL_Waveform_UInt);
-					AdjustAIDataTypeGainOffset(chanSet); 
 					showScaleControls = TRUE;
 					break;
 					
 				case Convert_To_UShort:
 					
 					SetSourceVChanDataType(chanSet->baseClass.srcVChan, DL_Waveform_UShort);
-					AdjustAIDataTypeGainOffset(chanSet); 
 					showScaleControls = TRUE;
 					break;
 					
 				case Convert_To_UChar:
 					
 					SetSourceVChanDataType(chanSet->baseClass.srcVChan, DL_Waveform_UChar);
-					AdjustAIDataTypeGainOffset(chanSet); 
 					showScaleControls = TRUE;
 					break;
 			}
@@ -4929,13 +4921,11 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 		case AIVoltage_ScaleMin:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.dataTypeConversion.min);
-			AdjustAIDataTypeGainOffset(chanSet);
 			break;
 			
 		case AIVoltage_ScaleMax:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.dataTypeConversion.max);
-			AdjustAIDataTypeGainOffset(chanSet);
 			break;
 				
 		case AIVoltage_Terminal:
@@ -5252,7 +5242,7 @@ static void discard_ChanSet_AO_Current_type (ChanSet_AO_Current_type** chanSetPt
 // S' = S * gain + offset
 //
 // where gain = (Vmax' - Vmin')/(Vmax - Vmin) and offset = - Vmin * gain + Vmin' and Vmax != Vmin
-void AdjustAIDataTypeGainOffset (ChanSet_AI_Voltage_type* chSet)
+void AdjustAIDataTypeGainOffset (ChanSet_AI_Voltage_type* chSet, uInt32 oversampling)
 {
 	int 		AIDataTypeIdx	= 0;
 	double  	maxSignalRange	= 0;
@@ -5271,13 +5261,11 @@ void AdjustAIDataTypeGainOffset (ChanSet_AI_Voltage_type* chSet)
 			maxSignalRange 								= (double) UINT_MAX;
 			
 			if (chSet->baseClass.dataTypeConversion.max != chSet->baseClass.dataTypeConversion.min)
-				chSet->baseClass.dataTypeConversion.gain 	= maxSignalRange / (chSet->baseClass.dataTypeConversion.max - chSet->baseClass.dataTypeConversion.min);
+				chSet->baseClass.dataTypeConversion.gain 	= maxSignalRange / ((chSet->baseClass.dataTypeConversion.max - chSet->baseClass.dataTypeConversion.min) * oversampling);
 			else
 				chSet->baseClass.dataTypeConversion.gain	= 0;
 				
 			chSet->baseClass.dataTypeConversion.offset		= - chSet->baseClass.dataTypeConversion.min * chSet->baseClass.dataTypeConversion.gain;
-			SetCtrlVal(chSet->baseClass.chanPanHndl, AIVoltage_Gain, chSet->baseClass.dataTypeConversion.gain);  
-			SetCtrlVal(chSet->baseClass.chanPanHndl, AIVoltage_Offset, chSet->baseClass.dataTypeConversion.offset);  
 			break;
 			
 		case Convert_To_UShort:
@@ -5285,13 +5273,11 @@ void AdjustAIDataTypeGainOffset (ChanSet_AI_Voltage_type* chSet)
 			maxSignalRange								= (double) USHRT_MAX;
 			
 			if (chSet->baseClass.dataTypeConversion.max != chSet->baseClass.dataTypeConversion.min)
-				chSet->baseClass.dataTypeConversion.gain 	= maxSignalRange / (chSet->baseClass.dataTypeConversion.max - chSet->baseClass.dataTypeConversion.min);
+				chSet->baseClass.dataTypeConversion.gain 	= maxSignalRange / ((chSet->baseClass.dataTypeConversion.max - chSet->baseClass.dataTypeConversion.min) * oversampling);
 			else
 				chSet->baseClass.dataTypeConversion.gain	= 0;
 			
 			chSet->baseClass.dataTypeConversion.offset		= - chSet->baseClass.dataTypeConversion.min * chSet->baseClass.dataTypeConversion.gain;
-			SetCtrlVal(chSet->baseClass.chanPanHndl, AIVoltage_Gain, chSet->baseClass.dataTypeConversion.gain);  
-			SetCtrlVal(chSet->baseClass.chanPanHndl, AIVoltage_Offset, chSet->baseClass.dataTypeConversion.offset);  
 			break;
 			
 		case Convert_To_UChar:
@@ -5299,13 +5285,11 @@ void AdjustAIDataTypeGainOffset (ChanSet_AI_Voltage_type* chSet)
 			maxSignalRange 								= (double) UCHAR_MAX;
 			
 			if (chSet->baseClass.dataTypeConversion.max != chSet->baseClass.dataTypeConversion.min)
-				chSet->baseClass.dataTypeConversion.gain 	= maxSignalRange / (chSet->baseClass.dataTypeConversion.max - chSet->baseClass.dataTypeConversion.min);
+				chSet->baseClass.dataTypeConversion.gain 	= maxSignalRange / ((chSet->baseClass.dataTypeConversion.max - chSet->baseClass.dataTypeConversion.min) * oversampling);
 			else
 				chSet->baseClass.dataTypeConversion.gain	= 0;
 			
 			chSet->baseClass.dataTypeConversion.offset		= - chSet->baseClass.dataTypeConversion.min * chSet->baseClass.dataTypeConversion.gain;
-			SetCtrlVal(chSet->baseClass.chanPanHndl, AIVoltage_Gain, chSet->baseClass.dataTypeConversion.gain);  
-			SetCtrlVal(chSet->baseClass.chanPanHndl, AIVoltage_Offset, chSet->baseClass.dataTypeConversion.offset);  
 			break;
 	}
 	
@@ -9450,7 +9434,7 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 #define ConfigDAQmxAITask_Err_ChannelNotImplemented		-1
 	int 				error 			= 0;
 	char*				errMsg			= NULL;
-	ChanSet_type** 		chanSetPtr;
+	ChanSet_type* 		chanSet			= NULL;
 	
 	if (!dev->AITaskSet) return 0; 		// do nothing
 	
@@ -9468,8 +9452,8 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	BOOL 	hwTimingFlag 	= FALSE;
 	size_t	nChans 			= ListNumItems(dev->AITaskSet->chanSet);
 	for (size_t i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
-		if (!(*chanSetPtr)->onDemand) {
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		if (!chanSet->onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -9483,27 +9467,33 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->AITaskSet->taskHndl));
 	OKfree(taskName);
 	
-	// create AI channels
+	// create AI channels and adjust data type conversion
 	nChans = ListNumItems(dev->AITaskSet->chanSet);
 	for (size_t i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		
+		// adjust data type conversion
+		if (chanSet->integrateFlag)
+			AdjustAIDataTypeGainOffset(chanSet, dev->AITaskSet->timing->oversampling);
+		else
+			AdjustAIDataTypeGainOffset(chanSet, 1);
 	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtr)->onDemand) continue;
+		if (chanSet->onDemand) continue;
 		
-		switch((*chanSetPtr)->chanType) {
+		switch(chanSet->chanType) {
 			
 			case Chan_AI_Voltage:
 				
-				ChanSet_AI_Voltage_type*	AIVoltageChanSet	= *(ChanSet_AI_Voltage_type**)chanSetPtr;
-				DAQmxErrChk ( DAQmxCreateAIVoltageChan(dev->AITaskSet->taskHndl, (*chanSetPtr)->name, "", AIVoltageChanSet->terminal, AIVoltageChanSet->VMin, AIVoltageChanSet->VMax, DAQmx_Val_Volts, NULL) ); 
+				ChanSet_AI_Voltage_type*	AIVoltageChanSet	= (ChanSet_AI_Voltage_type*)chanSet;
+				DAQmxErrChk ( DAQmxCreateAIVoltageChan(dev->AITaskSet->taskHndl, chanSet->name, "", AIVoltageChanSet->terminal, AIVoltageChanSet->VMin, AIVoltageChanSet->VMax, DAQmx_Val_Volts, NULL) ); 
 				
 				break;
 				
 			case Chan_AI_Current:
 				
-				ChanSet_AI_Current_type*	AICurrentChanSet	= *(ChanSet_AI_Current_type**)chanSetPtr;
-				DAQmxErrChk ( DAQmxCreateAICurrentChan(dev->AITaskSet->taskHndl, (*chanSetPtr)->name, "", AICurrentChanSet->terminal, AICurrentChanSet->IMin, AICurrentChanSet->IMax, DAQmx_Val_Amps,
+				ChanSet_AI_Current_type*	AICurrentChanSet	= (ChanSet_AI_Current_type*)chanSet;
+				DAQmxErrChk ( DAQmxCreateAICurrentChan(dev->AITaskSet->taskHndl, chanSet->name, "", AICurrentChanSet->terminal, AICurrentChanSet->IMin, AICurrentChanSet->IMax, DAQmx_Val_Amps,
 													  AICurrentChanSet->shuntResistorType, AICurrentChanSet->shuntResistorValue, NULL) );
 							  
 				break;

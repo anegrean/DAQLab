@@ -7996,6 +7996,19 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	GetIndexFromValue(tskSet->timing->settingsPanHndl, Set_MeasMode, &ctrlIdx, tskSet->timing->measMode);
 	SetCtrlIndex(tskSet->timing->settingsPanHndl, Set_MeasMode, ctrlIdx);
 	
+	// dim/undim NSamples and Duration depending on the measurement mode
+	switch (tskSet->timing->measMode) {
+		case Operation_Finite:
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 0);
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 0); 
+			break;
+					
+		case Operation_Continuous:
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 1);
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 1); 
+			break;
+	}
+	
 	// add callback to controls in the panel
 	SetCtrlsInPanCBInfo(tskSet, ADTaskSettings_CB, tskSet->timing->settingsPanHndl);
 								

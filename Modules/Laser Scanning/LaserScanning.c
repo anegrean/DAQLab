@@ -7727,19 +7727,10 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 		
 		case ScanEngineMode_FrameScan:
 			
-			// make sure the NULL packet is removed
-			DataPacket_type*	dataPacket	= NULL; 
-			
-			for (size_t i = 0; i < engine->baseClass.nScanChans; i++) {
-				if (!IsVChanConnected(engine->baseClass.scanChans[i]->detVChan)) continue;
-				errChk( GetDataPacket(engine->baseClass.scanChans[i]->detVChan, &dataPacket, errorInfo) );
-			}
-			
 			break;
 			
 		case ScanEngineMode_PointJump:
 			
-	
 			break;
 	}
 	

@@ -464,12 +464,11 @@ TaskControl_type* GetTaskControlRootParent (TaskControl_type* taskControl)
 
 ListType GetTaskControlSubTasks (TaskControl_type* taskControl)
 {
-	size_t	nSubTasks = ListNumItems(taskControl->subtasks);
-	
-	ListType SubTasks = ListCreate(sizeof(TaskControl_type*));
+	size_t		nSubTasks 	= ListNumItems(taskControl->subtasks);
+	ListType 	SubTasks 	= ListCreate(sizeof(TaskControl_type*));
 	if (!SubTasks) return 0;
 	
-	SubTask_type*	subtaskPtr;
+	SubTask_type*	subtaskPtr = NULL;
 	for (size_t i = 1; i <= nSubTasks; i++) {
 		subtaskPtr = ListGetPtrToItem (taskControl->subtasks, i);
 		ListInsertItem(SubTasks, &subtaskPtr->subtask, END_OF_LIST);

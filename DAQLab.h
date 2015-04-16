@@ -200,8 +200,6 @@ int					DLGetXMLElementAttributes			(ActiveXMLObj_IXMLDOMElement_ XMLElement, DA
 	// places the value of multiple XML Attributes of a Node into user provided pointers
 int 				DLGetXMLNodeAttributes 				(ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes);
 
-int 				DLDiscardXMLNodeAttributes 			(ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes);      
-
 int					DLGetSingleXMLElementFromElement	(ActiveXMLObj_IXMLDOMElement_ parentXMLElement, char elementName[], ActiveXMLObj_IXMLDOMElement_* childXMLElement);
 
 	// saves task controller settings to XML and returns a "TaskControllerSettings" XML element

@@ -44,8 +44,9 @@
 #define DAQLAB_CFG_FILE										"DAQLabCfg.xml"
 
 #define DAQLAB_CFG_DOM_ROOT_NAME							"DAQLab_Config"
-#define DAQLAB_UITASKCONTROLLER_XML_TAG						"DAQLab_UITaskController"
-#define DAQLAB_TASKCONTROLLER_XML_TAG						"TaskControllerSettings"
+#define DAQLAB_UITaskController_XML_TAG						"DAQLab_UITaskController"
+#define DAQLAB_TaskController_XML_TAG						"TaskController"
+#define DAQLAB_TaskControllerSettings_XML_TAG				"TaskControllerSettings"
 #define DAQLAB_MODULES_XML_TAG								"DAQLab_Modules"
 
 	// number of Task Controllers visible at once. If there are more, a scroll bar appears.
@@ -233,6 +234,12 @@ static int					DAQLab_Load 								(void);
 
 static int					DAQLab_SaveXMLEnvironmentConfig				(void);
 
+static int 					DLSaveUITCTaskTree 							(TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ UITCTaskTreeXMLElement, ERRORINFO* xmlErrorInfo);
+
+static int 					ConnectTaskTrees 							(ActiveXMLObj_IXMLDOMElement_ UITCXMLElement, ERRORINFO* xmlErrorInfo);
+
+static TaskControl_type*	GetTaskController							(char tcName[]);
+
 static int 					DAQLab_NewXMLDOM 							(const char fileName[], CAObjHandle* xmlDOM, ActiveXMLObj_IXMLDOMElement_* rootElement);
 
 static int					DAQLab_SaveXMLDOM 							(const char fileName[], CAObjHandle* xmlDOM);
@@ -250,10 +257,6 @@ static void					DAQLab_RedrawTaskControllerUI				(void);
 static void 				UpdateVChanSwitchboard	 					(int panHandle, int tableControlID);
 
 static void 				UpdateHWTriggersSwitchboard					(int panHandle, int tableControlID);
-
-int CVICALLBACK 			VChanSwitchboard_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-
-int CVICALLBACK 			HWTriggersSwitchboard_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static void CVICALLBACK 	DAQLab_TaskMenu_CB 							(int menuBarHndl, int menuItemID, void *callbackData, int panelHndl);
 
@@ -273,13 +276,11 @@ static UITaskCtrl_type*		DAQLab_init_UITaskCtrl_type					(TaskControl_type* task
 
 static void					DAQLab_discard_UITaskCtrl_type				(UITaskCtrl_type** a);
 
-
-
 static int					DAQLab_StringToType							(char text[], BasicDataTypes vartype, void* value);
 
-static BOOL					DAQLab_ValidControllerName					(char name[], void* listPtr);
-
 static BOOL 				DAQLab_CheckValidModuleName 				(char name[], void* dataPtr);
+
+static BOOL					DAQLab_ValidControllerName 					(char name[], void* listPtr);
 
 static void					DisplayTaskTreeManager	 					(int parentPanHndl, ListType UITCs, ListType modules);
 
@@ -314,6 +315,12 @@ void CVICALLBACK 			DAQLab_ModulesMenu_CB						(int menuBarHndl, int menuItem, v
 void CVICALLBACK 			DAQLab_DisplayTaskManagerMenu_CB 			(int menuBarHndl, int menuItemID, void *callbackData, int panelHndl); 
 
 int CVICALLBACK 			DAQLab_ManageDAQLabModules_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+int CVICALLBACK 			VChanSwitchboard_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+int CVICALLBACK 			HWTriggersSwitchboard_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
+int 						DLSaveTaskControllerSettingsToXML 			(TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_* taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo);
 						
 
 
@@ -365,7 +372,7 @@ static int DAQLab_Load (void)
 	BOOL							FoundDAQLabSettingsFlag				= 0;		// if FALSE, no XML settings were found and default will be used
 	HRESULT							xmlerror							= 0;  
 	ERRORINFO						xmlErrorInfo						= {.wCode = 0, .sCode = 0, .source = "", .description = "", .helpFile = "", .helpContext = 0, .errorParamPos = 0};;
-	ActiveXMLObj_IXMLDOMNodeList_	UITaskControlersXMLNodeList			= 0;
+	ActiveXMLObj_IXMLDOMNodeList_	UITaskControllersXMLNodeList		= 0;
 	ActiveXMLObj_IXMLDOMNode_		UITaskControllerXMLNode				= 0;
 	ActiveXMLObj_IXMLDOMElement_	taskControllerSettingsXMLElement	= 0;
 	long							nUITaskControlers					= 0;
@@ -457,12 +464,12 @@ static int DAQLab_Load (void)
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Load UI Task Controller settings
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
-	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(DAQLabCfg_RootElement, &xmlErrorInfo, DAQLAB_UITASKCONTROLLER_XML_TAG, &UITaskControlersXMLNodeList) );
-	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(UITaskControlersXMLNodeList, &xmlErrorInfo, &nUITaskControlers) );
+	XMLErrChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(DAQLabCfg_RootElement, &xmlErrorInfo, DAQLAB_UITaskController_XML_TAG, &UITaskControllersXMLNodeList) );
+	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getlength(UITaskControllersXMLNodeList, &xmlErrorInfo, &nUITaskControlers) );
 	for (long i = 0; i < nUITaskControlers; i++) {
 		
 		// get xml Task Controller Node
-		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(UITaskControlersXMLNodeList, &xmlErrorInfo, i, &UITaskControllerXMLNode) );
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(UITaskControllersXMLNodeList, &xmlErrorInfo, i, &UITaskControllerXMLNode) );
 		
 		errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)UITaskControllerXMLNode, "TaskControllerSettings", &taskControllerSettingsXMLElement) );
 		
@@ -486,9 +493,6 @@ static int DAQLab_Load (void)
 		// cleanup
 		OKfreeCAHndl(UITaskControllerXMLNode);
 	}
-	
-	// cleanup
-	OKfreeCAHndl(UITaskControlersXMLNodeList);
 	
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Load DAQLab Modules and apply saved settings
@@ -555,8 +559,9 @@ static int DAQLab_Load (void)
 			}
 		
 		//free  attributes
-	   DLDiscardXMLNodeAttributes(xmlModuleNode, attrModule, NumElem(attrModule));  
-	   OKfreeCAHndl(xmlModuleNode);
+		OKfree(*(char**)attrModule[0].pData);
+		OKfree(*(char**)attrModule[1].pData);
+	   	OKfreeCAHndl(xmlModuleNode);
 		
 	}
 	
@@ -565,7 +570,24 @@ static int DAQLab_Load (void)
 	OKfreeCAHndl(xmlModulesNode);
 	OKfreeCAHndl(xmlModulesNodeList);
 	
-	    
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Connect Task Trees
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	for (long i = 0; i < nUITaskControlers; i++) {
+		
+		// get xml Task Controller Node
+		XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(UITaskControllersXMLNodeList, &xmlErrorInfo, i, &UITaskControllerXMLNode) );
+		
+		errChk( ConnectTaskTrees ((ActiveXMLObj_IXMLDOMElement_)UITaskControllerXMLNode, &xmlErrorInfo) );
+		
+		// cleanup
+		OKfreeCAHndl(UITaskControllerXMLNode);
+	}
+	
+	// cleanup
+	OKfreeCAHndl(UITaskControllersXMLNodeList);
+	
 	// discard DOM after loading all settings
 	OKfreeCAHndl(DAQLabCfg_DOMHndl);
 	OKfreeCAHndl(DAQLabCfg_RootElement);
@@ -593,7 +615,6 @@ XMLError:
 	return xmlerror;
 	
 }
-
 
 static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 {
@@ -634,10 +655,12 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 	for (size_t i = 1; i <= nUITCs; i++) {
 		UITaskCtrl = *(UITaskCtrl_type**)ListGetPtrToItem (TasksUI.UItaskCtrls, i);
 		// create new XML UITaskController element
-		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlErrorInfo, DAQLAB_UITASKCONTROLLER_XML_TAG, &newXMLElement) );
+		XMLErrChk ( ActiveXML_IXMLDOMDocument3_createElement (DAQLabCfg_DOMHndl, &xmlErrorInfo, DAQLAB_UITaskController_XML_TAG, &newXMLElement) );
 		// add task controller settings
 		errChk( DLSaveTaskControllerSettingsToXML(UITaskCtrl->taskControl, DAQLabCfg_DOMHndl, &taskControllerSettingsXMLElement, &xmlErrorInfo) );
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (newXMLElement, &xmlErrorInfo, taskControllerSettingsXMLElement, NULL) );
+		// add child TCs recursively
+		errChk( DLSaveUITCTaskTree(UITaskCtrl->taskControl, DAQLabCfg_DOMHndl, newXMLElement, &xmlErrorInfo) ); 
 		// add task controller element to DAQLab root element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (DAQLabCfg_RootElement, &xmlErrorInfo, newXMLElement, NULL) );
 		// free attributes memory
@@ -709,6 +732,135 @@ XMLError:
 	
 	return xmlerror;
 	
+}
+
+static int DLSaveUITCTaskTree (TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int									error 						= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		taskControllerXMLElement   	= 0;
+	ListType							childTCs					= 0;
+	
+	char*								tcName						= GetTaskControlName(taskController);
+	DAQLabXMLNode 						attr[] 						= { {"Name",		BasicData_CString,		tcName} }; 
+	
+	
+	// create new TaskController XML element
+	errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, DAQLAB_TaskController_XML_TAG, &taskControllerXMLElement) );
+	// add task controller attributes
+	errChk( DLAddToXMLElem (xmlDOM, taskControllerXMLElement, attr, DL_ATTRIBUTE, NumElem(attr), xmlErrorInfo) );
+	// add task controller XML element to parent element
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, xmlErrorInfo, taskControllerXMLElement, NULL) );
+	
+	// add recursively child TCs as well
+	nullChk( childTCs = GetTaskControlSubTasks(taskController) );
+	size_t				nChildTCs	= ListNumItems(childTCs);
+	TaskControl_type*	childTC		= NULL;
+	for (size_t i =	1; i <= nChildTCs; i++) {
+		childTC = *(TaskControl_type**)ListGetPtrToItem(childTCs, i);
+		errChk( DLSaveUITCTaskTree(childTC, xmlDOM, taskControllerXMLElement, xmlErrorInfo) );  
+	}
+	
+Error:
+	
+	// cleanup
+	OKfreeList(childTCs);
+	OKfree((char*)attr[0].pData); // "Name" field
+	OKfreeCAHndl(taskControllerXMLElement);
+	
+	return error;
+}
+
+static int ConnectTaskTrees (ActiveXMLObj_IXMLDOMElement_ UITCXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int								error								= 0;
+	ActiveXMLObj_IXMLDOMNodeList_	tcXMLNodeList						= 0;
+	ActiveXMLObj_IXMLDOMNodeList_	childTCXMLNodeList					= 0;
+	ActiveXMLObj_IXMLDOMNode_		parentTCXMLNode						= 0;
+	ActiveXMLObj_IXMLDOMNode_		childTCXMLNode						= 0;
+	long							nTCs								= 0;
+	long							nChildTCs							= 0;
+	char*							parentTCName						= NULL;
+	char*							childTCName							= NULL;
+	TaskControl_type*				parentTC							= NULL;
+	TaskControl_type*				childTC								= NULL;
+	DAQLabXMLNode 					parentTCAttr[]						= { {"Name",	BasicData_CString,		&parentTCName} };
+	DAQLabXMLNode 					childTCAttr[]						= { {"Name",	BasicData_CString,		&childTCName} };
+	
+	
+	// get all TC XML elements (not just child TCs but all XML elements with given tag name)
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(UITCXMLElement, xmlErrorInfo, DAQLAB_TaskController_XML_TAG, &tcXMLNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(tcXMLNodeList, xmlErrorInfo, &nTCs) );
+	for (long i = 0; i < nTCs; i++) {
+		// get parent TC xml node
+		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(tcXMLNodeList, xmlErrorInfo, i, &parentTCXMLNode) );
+		// get child TC xml node list
+		errChk( ActiveXML_IXMLDOMElement_GetchildNodes(parentTCXMLNode, xmlErrorInfo, &childTCXMLNodeList) );
+		errChk ( ActiveXML_IXMLDOMNodeList_Getlength(childTCXMLNodeList, xmlErrorInfo, &nChildTCs) );
+		// get parent TC xml attributes
+		errChk( DLGetXMLElementAttributes((ActiveXMLObj_IXMLDOMElement_)parentTCXMLNode, parentTCAttr, NumElem(parentTCAttr)) );
+		// try to get parent TC from DAQLab list, if not found, display warning
+		parentTC = GetTaskController(parentTCName);
+		if (parentTC)
+			for (long j = 0; j < nChildTCs; j++) {
+				// get child TC xml node
+				errChk ( ActiveXML_IXMLDOMNodeList_Getitem(childTCXMLNodeList, xmlErrorInfo, j, &childTCXMLNode) );
+				// get child TC xml attributes
+				errChk( DLGetXMLElementAttributes((ActiveXMLObj_IXMLDOMElement_)childTCXMLNode, childTCAttr, NumElem(childTCAttr)) );
+				// try to get child TC from DAQLab list
+				childTC = GetTaskController(childTCName);
+				// connect child TC to parent TC
+				if (childTC)
+					errChk( AddSubTaskToParent(parentTC, childTC) );
+					
+				// cleanup
+				OKfreeCAHndl(childTCXMLNode);
+				OKfree(childTCName);
+			}
+		else {
+			// display warning
+			DLMsg("Task controller ", 1);
+			DLMsg(parentTCName, 0);
+			DLMsg(" was not found.\n\n", 0);
+		}
+		
+		// cleanup
+		OKfreeCAHndl(parentTCXMLNode);
+		OKfree(parentTCName);
+		OKfreeCAHndl(childTCXMLNodeList);
+	}
+				
+	return 0;
+	
+Error:
+	
+	OKfreeCAHndl(tcXMLNodeList);
+	OKfreeCAHndl(childTCXMLNodeList);
+	OKfreeCAHndl(parentTCXMLNode);
+	OKfreeCAHndl(childTCXMLNode);
+	OKfree(parentTCName);
+	OKfree(childTCName);
+	
+				
+	return error;			
+}
+
+static TaskControl_type* GetTaskController (char tcName[])
+{
+	size_t				nTCs				= ListNumItems(DAQLabTCs);
+	TaskControl_type*	taskController		= NULL;
+	char*				existingTCName		= NULL;
+	
+	for (size_t i = 1; i <= nTCs; i++) {
+		taskController = *(TaskControl_type**) ListGetPtrToItem(DAQLabTCs, i);
+		existingTCName = GetTaskControlName(taskController);
+		if (!strcmp(existingTCName, tcName)) {
+			OKfree(existingTCName);
+			return taskController;	 	// found
+		}
+		OKfree(existingTCName);
+	}
+	
+	return NULL; 						// not found
 }
 
 static int DAQLab_Close (void)
@@ -1607,40 +1759,6 @@ int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Att
 	
 }
 
-
-
-int DLDiscardXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes)
-{
-	int									error;
-	HRESULT								xmlerror;
-	ERRORINFO							xmlErrorInfo;
-	ActiveXMLObj_IXMLDOMNamedNodeMap_	xmlNamedNodeMap;	 // list of attributes
-	
-	// get list of attributes
-	XMLErrChk ( ActiveXML_IXMLDOMNode_Getattributes(XMLNode, &xmlErrorInfo, &xmlNamedNodeMap) );  
-	
-	for (size_t i = 0; i < nAttributes; i++) {
-		// get attribute node
-	//	XMLErrChk ( ActiveXML_IXMLDOMNamedNodeMap_getNamedItem(xmlNamedNodeMap, &xmlErrorInfo, Attributes[i].tag, &xmlAttributeNode) );
-		
-	//	OKfreeCAHndl(xmlAttributeNode);
-	if (Attributes[i].type==BasicData_CString)
-		OKfree(*(char**)Attributes[i].pData);
-	}
-	
-	OKfreeCAHndl(xmlNamedNodeMap); 
-	
-	return 0;
-	
-XMLError:
-	
-	DAQLab_Msg(DAQLAB_MSG_ERR_ACTIVEXML_GETATTRIBUTES, &xmlerror, 0, 0, 0);
-	
-	return xmlerror;
-	
-}
-
-
 int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElement, char elementName[], ActiveXMLObj_IXMLDOMElement_* childXMLElement)
 {
 #define DLGetSingleXMLElementFromElement_Err_NotASingleElement		-1
@@ -1675,40 +1793,6 @@ XMLError:
 	if (xmlNode) OKfreeCAHndl(xmlNode); 
 	
 	return xmlerror;
-}
-
-int DLSaveTaskControllerSettingsToXML (TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_* taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo)
-{
-	int									error 			= 0;
-	ActiveXMLObj_IXMLDOMElement_ 		newXMLElement   = 0;
-	int									tcNIter			= GetTaskControlIterations(taskController); 
-	double								tcWait			= GetTaskControlIterationsWait(taskController);  
-	uInt32								tcExecutionMode	= (uInt32) GetTaskControlExecutionMode(taskController);		
-	BOOL								tcIterationMode	= (BOOL) GetTaskControlMode(taskController); 		// finite = 1, continuous = 0  
-	DAQLabXMLNode 						attr[] 			= { {"Name",				BasicData_CString,		GetTaskControlName(taskController)},
-															{"NIterations",			BasicData_UInt,			&tcNIter},
-															{"Wait",				BasicData_Double,		&tcWait},
-															{"ExecutionMode",		BasicData_UInt,			&tcExecutionMode},
-															{"IterationMode",		BasicData_Bool,			&tcIterationMode} };
-	
-	
-	// create new TaskController XML element
-	errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, DAQLAB_TASKCONTROLLER_XML_TAG, &newXMLElement) );
-	// add task controller settings as attributes
-	errChk( DLAddToXMLElem (xmlDOM, newXMLElement, attr, DL_ATTRIBUTE, NumElem(attr), xmlErrorInfo) );
-	
-	// cleanup
-	OKfree(attr[0].pData);
-	
-	
-	*taskControllerSettingsXMLElement = newXMLElement;
-	return 0;
-	
-Error:
-	
-	OKfreeCAHndl(newXMLElement);
-	
-	return error;
 }
 
 int DLLoadTaskControllerSettingsFromXML	(TaskControl_type* taskController, ActiveXMLObj_IXMLDOMElement_ taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo)
@@ -2622,6 +2706,40 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 	return 0;
 }
 
+int DLSaveTaskControllerSettingsToXML (TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_* taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int									error 			= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		newXMLElement   = 0;
+	int									tcNIter			= GetTaskControlIterations(taskController); 
+	double								tcWait			= GetTaskControlIterationsWait(taskController);  
+	uInt32								tcExecutionMode	= (uInt32) GetTaskControlExecutionMode(taskController);		
+	BOOL								tcIterationMode	= (BOOL) GetTaskControlMode(taskController); 		// finite = 1, continuous = 0  
+	DAQLabXMLNode 						attr[] 			= { {"Name",				BasicData_CString,		GetTaskControlName(taskController)},
+															{"NIterations",			BasicData_UInt,			&tcNIter},
+															{"Wait",				BasicData_Double,		&tcWait},
+															{"ExecutionMode",		BasicData_UInt,			&tcExecutionMode},
+															{"IterationMode",		BasicData_Bool,			&tcIterationMode} };
+	
+	
+	// create new TaskController XML element
+	errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, DAQLAB_TaskControllerSettings_XML_TAG, &newXMLElement) );
+	// add task controller settings as attributes
+	errChk( DLAddToXMLElem (xmlDOM, newXMLElement, attr, DL_ATTRIBUTE, NumElem(attr), xmlErrorInfo) );
+	
+	// cleanup
+	OKfree(attr[0].pData);
+	
+	
+	*taskControllerSettingsXMLElement = newXMLElement;
+	return 0;
+	
+Error:
+	
+	OKfreeCAHndl(newXMLElement);
+	
+	return error;
+}
+
 /// HIFN Displays a popup box where the user can give a string after which a validate function pointer is called. 
 /// HIFN If the string is not validated for example because the name already exists, then the popup box appears again until a valid name is given or until it is cancelled.
 /// HIPAR validateInputFptr/ if function returns TRUE, input is valid, otherwise not and popup is displayed again.
@@ -2664,22 +2782,17 @@ char* DLGetUINameInput (char popupWndName[], size_t maxInputLength, ValidateInpu
 	
 }
 
-static BOOL	DAQLab_ValidControllerName (char name[], void* listPtr)
-{
-	return DLValidTaskControllerName (name);
-}
-
 BOOL DLValidTaskControllerName (char name[])
 {
-	TaskControl_type**	taskControlPtrPtr;
+	TaskControl_type*	taskController		= NULL;
 	char*				nameTC				= NULL; 
 	size_t				n					= ListNumItems(DAQLabTCs);
 	
 	// check if there is already another Task Controller with the same name
 	for (size_t i = 1; i <= n; i++) {
 		OKfree(nameTC);
-		taskControlPtrPtr = ListGetPtrToItem(DAQLabTCs, i);
-		nameTC = GetTaskControlName(*taskControlPtrPtr);
+		taskController = *(TaskControl_type**)ListGetPtrToItem(DAQLabTCs, i);
+		nameTC = GetTaskControlName(taskController);
 		if (!strcmp(nameTC, name)) {
 			OKfree(nameTC);
 			return FALSE;
@@ -2692,6 +2805,11 @@ BOOL DLValidTaskControllerName (char name[])
 char* DLGetUniqueTaskControllerName	(char baseTCName[])
 {
 	return GetUniqueTaskControllerName(DAQLabTCs, baseTCName);
+}
+
+static BOOL	DAQLab_ValidControllerName (char name[], void* listPtr)
+{
+	return DLValidTaskControllerName (name);
 }
 
 static void	DAQLab_TaskMenu_AddTaskController 	(void) 

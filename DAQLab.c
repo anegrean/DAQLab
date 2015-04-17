@@ -46,6 +46,12 @@
 #define DAQLAB_CFG_DOM_ROOT_NAME							"DAQLab_Config"
 #define DAQLAB_UITaskController_XML_TAG						"DAQLab_UITaskController"
 #define DAQLAB_TaskController_XML_TAG						"TaskController"
+#define DAQLAB_Switchboard_XML_TAG							"Switchboard"
+#define DAQLAB_HWTriggers_XML_TAG							"HWTriggers"
+#define DAQLAB_HWTrigMaster_XML_TAG							"HWTrigMaster"
+#define DAQLAB_HWTrigSlave_XML_TAG							"HWTrigSlave"
+#define DAQLAB_SourceVChan_XML_TAG							"SourceVChan"
+#define DAQLAB_SinkVChan_XML_TAG							"SinkVChan"
 #define DAQLAB_TaskControllerSettings_XML_TAG				"TaskControllerSettings"
 #define DAQLAB_MODULES_XML_TAG								"DAQLab_Modules"
 
@@ -232,9 +238,17 @@ CmtThreadPoolHandle		DLThreadPoolHndl			= 0;
 
 static int					DAQLab_Load 								(void);
 
-static int					DAQLab_SaveXMLEnvironmentConfig				(void);
+static int					DAQLab_Save									(void);
 
 static int 					DLSaveUITCTaskTree 							(TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ UITCTaskTreeXMLElement, ERRORINFO* xmlErrorInfo);
+
+static int 					SaveVChanConnections 						(ListType VChans, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
+
+static int 					LoadVChanConnections 						(ListType VChans, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
+
+static int 					SaveHWTriggerConnections 					(ListType hwTrigMasters, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
+
+static int 					LoadHWTriggerConnections 					(ListType hwTrigMasters, ListType hwTrigSlaves, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
 
 static int 					ConnectTaskTrees 							(ActiveXMLObj_IXMLDOMElement_ UITCXMLElement, ERRORINFO* xmlErrorInfo);
 
@@ -588,6 +602,19 @@ static int DAQLab_Load (void)
 	// cleanup
 	OKfreeCAHndl(UITaskControllersXMLNodeList);
 	
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Connect VChans
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	errChk( LoadVChanConnections(VChannels, DAQLabCfg_RootElement, &xmlErrorInfo) );
+	
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Connect HW Triggers
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	errChk( LoadHWTriggerConnections(HWTrigMasters, HWTrigSlaves, DAQLabCfg_RootElement, &xmlErrorInfo) );
+	
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// discard DOM after loading all settings
 	OKfreeCAHndl(DAQLabCfg_DOMHndl);
 	OKfreeCAHndl(DAQLabCfg_RootElement);
@@ -616,7 +643,7 @@ XMLError:
 	
 }
 
-static int	DAQLab_SaveXMLEnvironmentConfig	(void)
+static int	DAQLab_Save	(void)
 {
 	int								error								= 0;
 	HRESULT							xmlerror							= 0; 
@@ -660,13 +687,25 @@ static int	DAQLab_SaveXMLEnvironmentConfig	(void)
 		errChk( DLSaveTaskControllerSettingsToXML(UITaskCtrl->taskControl, DAQLabCfg_DOMHndl, &taskControllerSettingsXMLElement, &xmlErrorInfo) );
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (newXMLElement, &xmlErrorInfo, taskControllerSettingsXMLElement, NULL) );
 		// add child TCs recursively
-		errChk( DLSaveUITCTaskTree(UITaskCtrl->taskControl, DAQLabCfg_DOMHndl, newXMLElement, &xmlErrorInfo) ); 
+		errChk( DLSaveUITCTaskTree(UITaskCtrl->taskControl, DAQLabCfg_DOMHndl, newXMLElement, &xmlErrorInfo) );
 		// add task controller element to DAQLab root element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (DAQLabCfg_RootElement, &xmlErrorInfo, newXMLElement, NULL) );
 		// free attributes memory
 		OKfreeCAHndl(newXMLElement);
 		OKfreeCAHndl(taskControllerSettingsXMLElement);
 	}
+	
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Save Switchboard VChan connections
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	errChk( SaveVChanConnections(VChannels, DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, &xmlErrorInfo) );
+	
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Save HW Trigger connections
+	//---------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	errChk(SaveHWTriggerConnections(HWTrigMasters, DAQLabCfg_DOMHndl, DAQLabCfg_RootElement, &xmlErrorInfo) ); 
 	
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Save DAQLab Modules
@@ -770,6 +809,353 @@ Error:
 	return error;
 }
 
+static int SaveVChanConnections (ListType VChans, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int									error 						= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		switchboardXMLElement   	= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		sourceVChanXMLElement  		= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		sinkVChanXMLElement  		= 0;
+	char*								sinkVChanName				= NULL;
+	char*								sourceVChanName				= NULL;
+	size_t								nVChans						= ListNumItems(VChans);
+	VChan_type*							vChan						= NULL;
+	SinkVChan_type*						sinkVChan					= NULL;
+	ListType							sinkVChans					= 0;   // of SinkVChan_type* elements
+	size_t								nSinkVChans					= 0;
+	
+	
+	// create Switchboard xml element
+	errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, DAQLAB_Switchboard_XML_TAG, &switchboardXMLElement) );
+	
+	// iterate over all VChan in the provided list
+	for (size_t i = 1; i <= nVChans; i++) {
+		vChan = *(VChan_type**)ListGetPtrToItem(VChans, i);
+		if (GetVChanDataFlowType(vChan) == VChan_Sink) continue; 	// select Source VChans
+		if (!IsVChanConnected(vChan)) continue;						// select connected Source VChans 
+		
+		// create Source VChan xml element
+		errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, DAQLAB_SourceVChan_XML_TAG, &sourceVChanXMLElement) );
+		nullChk( sourceVChanName = GetVChanName(vChan) );
+		DAQLabXMLNode sourceVChanAttr[] = { {"Name",		BasicData_CString,		sourceVChanName} };
+		// add attributes to source VChan xml element
+		errChk( DLAddToXMLElem(xmlDOM, sourceVChanXMLElement, sourceVChanAttr, DL_ATTRIBUTE, NumElem(sourceVChanAttr), xmlErrorInfo) );
+		// add sink VChan elements to source VChan
+		sinkVChans = GetSinkVChanList((SourceVChan_type*)vChan);
+		nSinkVChans = ListNumItems(sinkVChans);
+		for (size_t j = 1; j <= nSinkVChans; j++) {
+			sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(sinkVChans, j);
+			// create sink VChan xml element
+			errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, DAQLAB_SinkVChan_XML_TAG, &sinkVChanXMLElement) );
+			nullChk( sinkVChanName = GetVChanName((VChan_type*)sinkVChan) );
+			DAQLabXMLNode sinkVChanAttr[] = { {"Name",		BasicData_CString,		sinkVChanName} };
+			// add attributes to sink VChan xml element
+			errChk( DLAddToXMLElem(xmlDOM, sinkVChanXMLElement, sinkVChanAttr, DL_ATTRIBUTE, NumElem(sinkVChanAttr), xmlErrorInfo) );
+			// add Sink VChan xml element to Source VChan xml element
+			errChk( ActiveXML_IXMLDOMElement_appendChild (sourceVChanXMLElement, xmlErrorInfo, sinkVChanXMLElement, NULL) );
+			
+			// cleanup
+			OKfree(sinkVChanName);
+			OKfreeCAHndl(sinkVChanXMLElement);
+		}
+		
+		// add Source VChan xml element to parent Switchboard xml element
+		errChk( ActiveXML_IXMLDOMElement_appendChild (switchboardXMLElement, xmlErrorInfo, sourceVChanXMLElement, NULL) );
+		
+		// cleanup
+		OKfree(sourceVChanName);
+		OKfreeCAHndl(sourceVChanXMLElement)
+	}
+	
+	// add Switchboard xml element to parent xml element
+	errChk( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, xmlErrorInfo, switchboardXMLElement, NULL) );
+	
+	// cleanup
+	OKfreeCAHndl(switchboardXMLElement);
+	
+	return 0;
+	
+Error:
+	
+	OKfreeCAHndl(switchboardXMLElement);
+	OKfreeCAHndl(sourceVChanXMLElement);
+	OKfreeCAHndl(sinkVChanXMLElement);
+	OKfree(sourceVChanName);
+	OKfree(sinkVChanName);
+	
+	return error;
+}
+
+static int SaveHWTriggerConnections (ListType hwTrigMasters, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int									error 						= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		hwTriggersXMLElement   		= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		masterHWTriggerXMLElement  	= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		slaveHWTriggerXMLElement  	= 0;
+	char*								masterHWTriggerName			= NULL;
+	char*								slaveHWTriggerName			= NULL;
+	size_t								nMasterHWTriggers			= ListNumItems(hwTrigMasters);
+	size_t								nHWTrigSlaves				= 0;  
+	HWTrigMaster_type*					hwTrigMaster				= NULL;
+	HWTrigSlave_type*					hwTrigSlave					= NULL;
+	
+	
+	
+	// create HWTriggers xml element
+	errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, DAQLAB_HWTriggers_XML_TAG, &hwTriggersXMLElement) );
+	
+	// iterate over Master HW Triggers
+	for (size_t i = 1; i <= nMasterHWTriggers; i++) {
+		hwTrigMaster = *(HWTrigMaster_type**)ListGetPtrToItem(hwTrigMasters, i);
+		nHWTrigSlaves = GetNumHWTrigSlaves(hwTrigMaster);
+		if (!nHWTrigSlaves) continue; // select only connected Master HW Triggers
+		
+		// create Master HW Trigger xml element
+		errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, DAQLAB_HWTrigMaster_XML_TAG, &masterHWTriggerXMLElement) );
+		nullChk( masterHWTriggerName = GetHWTrigMasterName(hwTrigMaster) );
+		DAQLabXMLNode masterHWTriggerAttr[] = { {"Name",		BasicData_CString,		masterHWTriggerName} };
+		// add attributes to Master HW Trigger xml element
+		errChk( DLAddToXMLElem(xmlDOM, masterHWTriggerXMLElement, masterHWTriggerAttr, DL_ATTRIBUTE, NumElem(masterHWTriggerAttr), xmlErrorInfo) );
+		
+		for (size_t j = 1; j <= nHWTrigSlaves; j++) {
+			hwTrigSlave = GetHWTrigSlaveFromMaster(hwTrigMaster, j);
+			// create Slave HW Trigger xml element
+			errChk( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, DAQLAB_HWTrigSlave_XML_TAG, &slaveHWTriggerXMLElement) );
+			nullChk( slaveHWTriggerName = GetHWTrigSlaveName(hwTrigSlave) );
+			DAQLabXMLNode slaveHWTriggerAttr[] = { {"Name",		BasicData_CString,		slaveHWTriggerName} };
+			// add attributes to Slave HW Trigger xml element
+			errChk( DLAddToXMLElem(xmlDOM, slaveHWTriggerXMLElement, slaveHWTriggerAttr, DL_ATTRIBUTE, NumElem(slaveHWTriggerAttr), xmlErrorInfo) );
+			// add Slave HW Trigger xml element to Master HW Trigger xml element
+			errChk( ActiveXML_IXMLDOMElement_appendChild (masterHWTriggerXMLElement, xmlErrorInfo, slaveHWTriggerXMLElement, NULL) );
+			
+			// cleanup
+			OKfree(slaveHWTriggerName);
+			OKfreeCAHndl(slaveHWTriggerXMLElement);
+		}
+		
+		// add Master HW Trigger xml element to parent HWTriggers xml element
+		errChk( ActiveXML_IXMLDOMElement_appendChild (hwTriggersXMLElement, xmlErrorInfo, masterHWTriggerXMLElement, NULL) );
+		
+		// cleanup
+		OKfree(masterHWTriggerName);
+		OKfreeCAHndl(masterHWTriggerXMLElement)
+	}
+	
+	// add HWTriggers xml element to parent xml element
+	errChk( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, xmlErrorInfo, hwTriggersXMLElement, NULL) );
+	
+	// cleanup
+	OKfreeCAHndl(hwTriggersXMLElement);
+	
+	return 0;
+	
+Error:
+	
+	OKfreeCAHndl(hwTriggersXMLElement);
+	OKfreeCAHndl(masterHWTriggerXMLElement);
+	OKfreeCAHndl(slaveHWTriggerXMLElement);
+	OKfree(masterHWTriggerName);
+	OKfree(slaveHWTriggerName);
+	
+	return error;
+}
+
+static int LoadHWTriggerConnections (ListType hwTrigMasters, ListType hwTrigSlaves, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int									error 						= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		hwTrigXMLElement   			= 0;
+	ActiveXMLObj_IXMLDOMNode_			hwTrigMasterXMLNode			= 0;
+	ActiveXMLObj_IXMLDOMNode_			hwTrigSlaveXMLNode			= 0;
+	ActiveXMLObj_IXMLDOMNodeList_		hwTrigMasterXMLNodeList		= 0;
+	ActiveXMLObj_IXMLDOMNodeList_		hwTrigSlaveXMLNodeList		= 0;
+	char*								hwTrigMasterName			= NULL;
+	char*								hwTrigSlaveName				= NULL;
+	HWTrigMaster_type*					hwTrigMaster				= NULL;
+	HWTrigSlave_type*					hwTrigSlave					= NULL;
+	long								nHWTrigSlaves				= 0;
+	long								nHWTrigMasters				= 0;
+	
+	
+	// get HWTriggers xml element  from parent xml element
+	errChk( DLGetSingleXMLElementFromElement(parentXMLElement, DAQLAB_HWTriggers_XML_TAG, &hwTrigXMLElement) );
+	if (!hwTrigXMLElement) return 0;
+	
+	// get list of Master HW Trigger XML elements
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(hwTrigXMLElement, xmlErrorInfo, DAQLAB_HWTrigMaster_XML_TAG, &hwTrigMasterXMLNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(hwTrigMasterXMLNodeList, xmlErrorInfo, &nHWTrigMasters) );
+	for (long i = 0; i < nHWTrigMasters; i++) { 
+		// get Master HW Trigger XML element
+		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(hwTrigMasterXMLNodeList, xmlErrorInfo, i, &hwTrigMasterXMLNode) );
+		DAQLabXMLNode masterHWTrigAttr[] = { {"Name",		BasicData_CString,		&hwTrigMasterName} };
+		// get Source VChan XML element attributes
+		errChk( DLGetXMLElementAttributes((ActiveXMLObj_IXMLDOMElement_)hwTrigMasterXMLNode, masterHWTrigAttr, NumElem(masterHWTrigAttr)) );
+		
+		// check if Master HW Trigger with given name exists in DAQLab, if not, check another Master HW Trigger
+		if (!(hwTrigMaster = HWTrigMasterNameExists(hwTrigMasters, hwTrigMasterName, 0))) {
+			OKfreeCAHndl(hwTrigMasterXMLNode);
+			OKfree(hwTrigMasterName);
+			continue;
+		}
+		
+		// get list of Slave HW Trigger XML elements connected to this Master HW Trigger
+		errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName((ActiveXMLObj_IXMLDOMElement_)hwTrigMasterXMLNode, xmlErrorInfo, DAQLAB_HWTrigSlave_XML_TAG, &hwTrigSlaveXMLNodeList) );
+		errChk ( ActiveXML_IXMLDOMNodeList_Getlength(hwTrigSlaveXMLNodeList, xmlErrorInfo, &nHWTrigSlaves) );
+		for (long j = 0; j < nHWTrigSlaves; j++) {
+			// get Slave HW Trigger XML element
+			errChk ( ActiveXML_IXMLDOMNodeList_Getitem(hwTrigSlaveXMLNodeList, xmlErrorInfo, j, &hwTrigSlaveXMLNode) );
+			DAQLabXMLNode slaveHWTrigAttr[] = { {"Name",		BasicData_CString,		&hwTrigSlaveName} };
+			// get Slave HW Trigger XML element attributes
+			errChk( DLGetXMLElementAttributes((ActiveXMLObj_IXMLDOMElement_)hwTrigSlaveXMLNode, slaveHWTrigAttr, NumElem(slaveHWTrigAttr)) );
+		
+			// check if Slave HW Trigger with given name exists in DAQLab, if not, check another Slave HW Trigger
+			if (!(hwTrigSlave = HWTrigSlaveNameExists(hwTrigSlaves, hwTrigSlaveName, 0))) {
+				OKfreeCAHndl(hwTrigSlaveXMLNode);
+				OKfree(hwTrigSlaveName);
+				continue;
+			}
+			
+			// connect Slave HW Trigger to Master HW Trigger
+			errChk(AddHWTrigSlaveToMaster(hwTrigMaster, hwTrigSlave, NULL));
+			
+			// cleanup
+			OKfreeCAHndl(hwTrigSlaveXMLNode);
+			OKfree(hwTrigSlaveName);
+		}
+		
+		// cleanup
+		OKfreeCAHndl(hwTrigSlaveXMLNodeList);
+		OKfreeCAHndl(hwTrigMasterXMLNode);
+		OKfree(hwTrigMasterName);
+		
+	}
+	
+	// cleanup
+	OKfreeCAHndl(hwTrigMasterXMLNodeList);
+	OKfreeCAHndl(hwTrigXMLElement);
+		
+	return 0;
+	
+Error:
+	
+	OKfreeCAHndl(hwTrigXMLElement);
+	OKfreeCAHndl(hwTrigMasterXMLNode);
+	OKfreeCAHndl(hwTrigSlaveXMLNode);
+	OKfreeCAHndl(hwTrigMasterXMLNodeList);
+	OKfreeCAHndl(hwTrigSlaveXMLNodeList);
+	OKfree(hwTrigMasterName);
+	OKfree(hwTrigSlaveName);
+	
+	return error;
+}
+
+static int LoadVChanConnections (ListType VChans, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
+{
+#define  LoadVChanConnections_Err_WrongVChanDataFlow				-2
+#define  LoadVChanConnections_Err_VChansCouldNotBeConnected			-3
+	
+	int									error 						= 0;
+	ActiveXMLObj_IXMLDOMElement_ 		switchboardXMLElement   	= 0;
+	ActiveXMLObj_IXMLDOMNode_			sourceVChanXMLNode			= 0;
+	ActiveXMLObj_IXMLDOMNode_			sinkVChanXMLNode			= 0;
+	ActiveXMLObj_IXMLDOMNodeList_		sourceVChanXMLNodeList		= 0;
+	ActiveXMLObj_IXMLDOMNodeList_		sinkVChanXMLNodeList		= 0;
+	long								nSourceVChans				= 0;
+	long								nSinkVChans					= 0;
+	char*								sourceVChanName				= NULL;
+	char*								sinkVChanName				= NULL;
+	VChan_type*							vChan						= NULL;
+	SourceVChan_type*					sourceVChan					= NULL;
+	SinkVChan_type*						sinkVChan					= NULL;
+	
+	// get Switchboard xml element from parent xml element
+	errChk( DLGetSingleXMLElementFromElement(parentXMLElement, DAQLAB_Switchboard_XML_TAG, &switchboardXMLElement) );
+	if (!switchboardXMLElement) return 0;
+	
+	// get list of Source VChan XML elements
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(switchboardXMLElement, xmlErrorInfo, DAQLAB_SourceVChan_XML_TAG, &sourceVChanXMLNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(sourceVChanXMLNodeList, xmlErrorInfo, &nSourceVChans) );
+	for (long i = 0; i < nSourceVChans; i++) {
+		// get Source VChan XML element
+		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(sourceVChanXMLNodeList, xmlErrorInfo, i, &sourceVChanXMLNode) );
+		DAQLabXMLNode sourceVChanAttr[] = { {"Name",		BasicData_CString,		&sourceVChanName} };
+		// get Source VChan XML element attributes
+		errChk( DLGetXMLElementAttributes((ActiveXMLObj_IXMLDOMElement_)sourceVChanXMLNode, sourceVChanAttr, NumElem(sourceVChanAttr)) );
+		
+		// check if Source VChan with given name exists in DAQLab, if not, check another Source VChan
+		if (!(vChan = VChanNameExists(VChans, sourceVChanName, 0))) {
+			OKfreeCAHndl(sourceVChanXMLNode);
+			OKfree(sourceVChanName);
+			continue;
+		}
+		
+		// check if found vChan is indeed a Source VChan as expected
+		if (GetVChanDataFlowType(vChan) != VChan_Source) {
+			error = LoadVChanConnections_Err_WrongVChanDataFlow;
+			goto Error;
+		} else
+			sourceVChan = (SourceVChan_type*)vChan;
+			
+		
+		// get list of Sink VChan XML elements connected to this Source VChan
+		errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName((ActiveXMLObj_IXMLDOMElement_)sourceVChanXMLNode, xmlErrorInfo, DAQLAB_SinkVChan_XML_TAG, &sinkVChanXMLNodeList) );
+		errChk ( ActiveXML_IXMLDOMNodeList_Getlength(sinkVChanXMLNodeList, xmlErrorInfo, &nSinkVChans) );
+		for (long j = 0; j < nSinkVChans; j++) {
+			// get Sink VChan XML element
+			errChk ( ActiveXML_IXMLDOMNodeList_Getitem(sinkVChanXMLNodeList, xmlErrorInfo, j, &sinkVChanXMLNode) );
+			DAQLabXMLNode sinkVChanAttr[] = { {"Name",		BasicData_CString,		&sinkVChanName} };
+			// get Sink VChan XML element attributes
+			errChk( DLGetXMLElementAttributes((ActiveXMLObj_IXMLDOMElement_)sinkVChanXMLNode, sinkVChanAttr, NumElem(sinkVChanAttr)) );
+		
+			// check if Sink VChan with given name exists in DAQLab, if not, check another Sink VChan
+			if (!(vChan = VChanNameExists(VChans, sinkVChanName, 0))) {
+				OKfreeCAHndl(sinkVChanXMLNode);
+				OKfree(sinkVChanName);
+				continue;
+			}
+		
+			// check if found vChan is indeed a Source VChan as expected
+			if (GetVChanDataFlowType(vChan) != VChan_Sink) {
+				error = LoadVChanConnections_Err_WrongVChanDataFlow;
+				goto Error;
+			} else
+				sinkVChan = (SinkVChan_type*)vChan;
+				
+			// connect Sink VChan to Source VChan
+			if (!VChan_Connect(sourceVChan, sinkVChan)) {
+				error = LoadVChanConnections_Err_VChansCouldNotBeConnected;
+				goto Error;
+			}
+			
+			// cleanup
+			OKfreeCAHndl(sinkVChanXMLNode);
+			OKfree(sinkVChanName);
+		}
+		
+		// cleanup
+		OKfreeCAHndl(sinkVChanXMLNodeList);
+		OKfreeCAHndl(sourceVChanXMLNode);
+		OKfree(sourceVChanName);
+	}
+	
+	// cleanup
+	OKfreeCAHndl(sourceVChanXMLNodeList);
+	OKfreeCAHndl(switchboardXMLElement);
+		
+	return 0;
+	
+Error:
+	
+	OKfreeCAHndl(switchboardXMLElement);
+	OKfreeCAHndl(sourceVChanXMLNode);
+	OKfreeCAHndl(sinkVChanXMLNode);
+	OKfreeCAHndl(sourceVChanXMLNodeList);
+	OKfreeCAHndl(sinkVChanXMLNodeList);
+	OKfree(sourceVChanName);
+	OKfree(sinkVChanName);
+	
+	return error;
+	
+}
+
 static int ConnectTaskTrees (ActiveXMLObj_IXMLDOMElement_ UITCXMLElement, ERRORINFO* xmlErrorInfo)
 {
 	int								error								= 0;
@@ -868,7 +1254,7 @@ static int DAQLab_Close (void)
 	int		error = 0;
 	
 	
-	errChk( DAQLab_SaveXMLEnvironmentConfig() );
+	errChk( DAQLab_Save() );
 	
 	// dispose modules list
 	DAQLabModule_empty (&DAQLabModules);

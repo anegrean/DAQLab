@@ -368,14 +368,14 @@ BOOL VChanExists (ListType VChanList, VChan_type* VChan, size_t* idx)
 /// HIRET Pointer to the found VChan_type* if VChan exists, NULL otherwise. 
 VChan_type* VChanNameExists (ListType VChanList, char VChanName[], size_t* idx)
 {
-	VChan_type** 	VChanPtrPtr;
+	VChan_type* 	vChan;
 	size_t			nVChans		= ListNumItems(VChanList);
 	
 	for (size_t i = 1; i <= nVChans; i++) {
-		VChanPtrPtr = ListGetPtrToItem(VChanList, i);
-		if (!strcmp((*VChanPtrPtr)->name, VChanName)) {
+		vChan = *(VChan_type**)ListGetPtrToItem(VChanList, i);
+		if (!strcmp(vChan->name, VChanName)) {
 			if (idx) *idx = i;
-			return *VChanPtrPtr;
+			return vChan;
 		}
 	}
 	

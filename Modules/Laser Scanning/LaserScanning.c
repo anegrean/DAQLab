@@ -6611,7 +6611,7 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 {
 	RectRasterScanSet_type* 	previousScanSettings 		= callbackData;
 	int							error						= 0;
-	ScanChan_type*				scanChan						= (ScanChan_type*)(*displayEngine->getImageDisplayCBDataFptr) (imgDisplay);
+	ScanChan_type*				scanChan					= (ScanChan_type*)(*displayEngine->getImageDisplayCBDataFptr) (imgDisplay);
 	RectRasterScanSet_type*		currentScanSettings			= &((RectRaster_type*)scanChan->scanEngine)->scanSettings;			
 	RectRaster_type*			scanEngine					= (RectRaster_type*)scanChan->scanEngine;
 	
@@ -6639,12 +6639,14 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 	// update ROIs in the scan engine UI
 	ClearListCtrl(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs);
 	ListClear(scanEngine->pointJumps);
+	
 	ListType	ROIlist				= GetImageROIs(imgDisplay->imagetype);
 	size_t 		nROIs 				= ListNumItems(ROIlist);
 	ROI_type*   ROI					= NULL;
 	BOOL		activeROIAvailable 	= FALSE;
+	
 	for (size_t i = 1; i <= nROIs; i++) {
-		ROI= *(ROI_type**)ListGetPtrToItem(ROIlist, i);
+		ROI = *(ROI_type**)ListGetPtrToItem(ROIlist, i);
 		InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, ROI->ROIName, i);
 		
 		if (ROI->active)
@@ -6667,7 +6669,8 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 		}
 	}
 	
-	switch (ROI->ROIType) {
+	if (ROI)
+		switch (ROI->ROIType) {
 						
 			case ROI_Point:
 				
@@ -6676,11 +6679,17 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 				NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine); 
 				
 				if (activeROIAvailable) {
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_ParkedTime, ATTR_DIMMED, 0);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_DIMMED, 0);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Period, ATTR_DIMMED, 0);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Repeat, ATTR_DIMMED, 0);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_JumpTime, ATTR_DIMMED, 0);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_ParkedTime, ATTR_DIMMED, FALSE);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_DIMMED, FALSE);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Period, ATTR_DIMMED, FALSE);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Repeat, ATTR_DIMMED, FALSE);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_JumpTime, ATTR_DIMMED, FALSE);
+				} else {
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_ParkedTime, ATTR_DIMMED, TRUE);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_DIMMED, TRUE);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Period, ATTR_DIMMED, TRUE);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Repeat, ATTR_DIMMED, TRUE);
+					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_JumpTime, ATTR_DIMMED, TRUE);
 				}
 				
 				break;
@@ -6689,7 +6698,7 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 					
 				break;
 				
-	}
+		}
 	
 	
 	return 0;

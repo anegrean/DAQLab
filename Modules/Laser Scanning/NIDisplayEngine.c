@@ -25,10 +25,14 @@
 
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}  
 
-#define	MAX_NI_VISION_DISPLAYS			16
+#define	MAX_NI_VISION_DISPLAYS				16
 
-#define ROILabel_XOffset				3		// ROI text label offset in the X direction in pixels.
-#define ROILabel_YOffset				3		// ROI text label offset in the Y direction in pixels.
+#define ROILabel_XOffset					3		// ROI text label offset in the X direction in pixels.
+#define ROILabel_YOffset					3		// ROI text label offset in the Y direction in pixels.
+
+// Default image display settings
+#define Default_Max_Zoom					3.0		// Maximum zoom factor applied to the image to try to fill the target display area
+#define Default_WorkspaceScaling			0.5		// Factor that multiplies the workspace area yielding the display area which should not be exceeded by the displayed window
 
 //==============================================================================
 // Types
@@ -82,8 +86,6 @@ static ToolWindowOptions 		imaqTools 								= {	.showSelectionTool 			= TRUE,
 																			.reserved3					= FALSE,
 																			.reserved4					= FALSE	   };
 
-static 							imaqToolWindowVisibleFlag				= FALSE;
-
 NIImageDisplay_type**			displays								= NULL;
 
 int								nNIDisplayEngines						= 0;	// counts the number of NIDisplayEngine_type instances
@@ -135,7 +137,6 @@ NIDisplayEngine_type* init_NIDisplayEngine_type (	intptr_t 					parentWindowHndl
 													ErrorHandlerFptr_type		errorHandlerCBFptr	)
 {
 	int						error				= 0;
-	intptr_t				imaqToolWndHndl		= 0; 
 	NIDisplayEngine_type*	niVision 			= malloc(sizeof(NIDisplayEngine_type));
 	
 	if (!niVision) return NULL;
@@ -167,13 +168,14 @@ NIDisplayEngine_type* init_NIDisplayEngine_type (	intptr_t 					parentWindowHndl
 	// IMAQ tool window setup
 	nullChk( imaqSetupToolWindow(TRUE, 2, &imaqTools) );
 	nullChk( imaqSetCurrentTool(IMAQ_PAN_TOOL) );
+	imaqGetToolWindowHandle();
 	
 	// confine window to parent if any
 	niVision->parentWindowHndl = parentWindowHndl;
-	if (parentWindowHndl) {
-		nullChk( imaqToolWndHndl = (intptr_t) imaqGetToolWindowHandle() );
-		SetParent( (HWND) imaqToolWndHndl, (HWND)parentWindowHndl);
-	}
+	//if (parentWindowHndl) {
+	//	nullChk( imaqToolWndHndl = (intptr_t) imaqGetToolWindowHandle() );
+	//	SetParent( (HWND) imaqToolWndHndl, (HWND)parentWindowHndl);
+	//}
 	
 	// set up display callback
 	errChk( imaqSetEventCallback(NIImageDisplay_CB, FALSE) ); 
@@ -272,15 +274,15 @@ static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, void* pixelArr
 	SetImageType(imgDisplay->baseClass.imagetype,imageType);
 	
 	// display image
-	image=GetImageImage(imgDisplay->baseClass.imagetype);
+	image = GetImageImage(imgDisplay->baseClass.imagetype);
 	nullChk( imaqArrayToImage(image, pixelArray, imgWidth, imgHeight) );
 	nullChk( imaqDisplayImage(image, imgDisplay->imaqWndID, FALSE) );
 			 
 	// display IMAQ tool window
-	if (!imaqToolWindowVisibleFlag) {
-		imaqShowToolWindow(TRUE);
-		imaqToolWindowVisibleFlag = TRUE;
-	}
+	int		isToolWindowVisible = 0;
+	nullChk( imaqIsToolWindowVisible(&isToolWindowVisible) );
+	if (!isToolWindowVisible)
+		nullChk( imaqShowToolWindow(TRUE) );
 	
 	return 0;
 	
@@ -297,18 +299,54 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 	HWND			imaqWndHndl				= 0;	// windows handle of the imaq window
 	HMENU			imaqWndMenuHndl			= 0;	// menu bar for the imaq window
 	Image*			image					= NULL;
+	HMONITOR		hMonitor				= NULL;
+	MONITORINFO		monitorInfo				= {.cbSize = sizeof(MONITORINFO)};
+	LONG			maxWindowHeight			= 0;
+	LONG			maxWindowWidth			= 0;
+	float			imgZoom					= 0;	// final zoom factor that will be applied, not exceeding Default_Max_Zoom
+	float			heightZoom				= 0; 	// zoom factor needed to match imgHeight to maxWindowHeight*Default_WorkspaceScaling
+	float			widthZoom				= 0;	// zoom factor needed to match imgWidth to maxWindowWidth*Default_WorkspaceScaling
 	
 	// get IMAQ window handle
 	if (!imaqGetWindowHandle(&imaqHndl)) return NULL;
 	// check if an available imaq window handle was obtained
 	if (imaqHndl < 0) return NULL;
 	// get windows window handle
-	imaqWndHndl	= (HWND) imaqGetSystemWindowHandle(imaqHndl); 
+	nullChk( imaqWndHndl	= (HWND) imaqGetSystemWindowHandle(imaqHndl) ); 
+	
+	//-----------------------------------------------------------
+	// adjust window size and zoom based on the screen dimensions
+	//-----------------------------------------------------------
+	hMonitor = MonitorFromWindow(imaqWndHndl, MONITOR_DEFAULTTONEAREST);
+	if (hMonitor) {
+		nullChk( GetMonitorInfo(hMonitor, &monitorInfo) );
+		maxWindowHeight = labs(monitorInfo.rcWork.top - monitorInfo.rcWork.bottom);
+		heightZoom = (float)maxWindowHeight*(float)Default_WorkspaceScaling/(float)imgHeight;
+		maxWindowWidth = labs(monitorInfo.rcWork.left - monitorInfo.rcWork.right);
+		widthZoom = (float)maxWindowWidth*(float)Default_WorkspaceScaling/(float)imgWidth;
+		
+		// pick smallest zoom factor so that the zoomed in image does not exceed the boundaries set by Default_WorkspaceScaling
+		imgZoom = min(min(heightZoom, widthZoom), Default_Max_Zoom);
+		
+		// adjust image zoom
+		nullChk( imaqZoomWindow2(imaqHndl, imgZoom, imgZoom, IMAQ_NO_POINT) );
+		
+		// adjust window size to match displayed image size
+		RECT	targetWindowSize	 	= {.left = 0, .top = 0, .right = (LONG)((float)imgWidth*imgZoom), .bottom = (LONG)((float)imgHeight*imgZoom)};
+		DWORD	imaqWindowStyle			= (DWORD)GetWindowLong(imaqWndHndl, GWL_STYLE);
+		
+		nullChk( AdjustWindowRect(&targetWindowSize, imaqWindowStyle, TRUE) );
+		nullChk( imaqSetWindowSize(imaqHndl, abs(targetWindowSize.left - targetWindowSize.right), abs(targetWindowSize.top - targetWindowSize.bottom)) );
+		
+	}
 	
 	// assign data structure
 	nullChk(displays[imaqHndl] = init_NIImageDisplay_type(NIDisplay, imaqHndl, callbackData) );
 	
 	SetImageType(displays[imaqHndl]->baseClass.imagetype,imageType);
+	
+	// set window on top
+	nullChk( imaqBringWindowToTop(imaqHndl) );
 	
 	// init IMAQ image buffer 
 	switch (imageType) {
@@ -346,9 +384,9 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 	// pre allocate image memory
 	nullChk( imaqSetImageSize(image, imgWidth, imgHeight) );
 	SetImageImage(displays[imaqHndl]->baseClass.imagetype,image);      
-	// confine image window to parent window if provided
-	if (NIDisplay->parentWindowHndl)
-		SetParent( imaqWndHndl, (HWND)NIDisplay->parentWindowHndl);
+	// confine image window to parent window if provided  ( sometimes this freezes the UI!! )
+	//if (NIDisplay->parentWindowHndl)
+	//	SetParent( imaqWndHndl, (HWND)NIDisplay->parentWindowHndl);
 	// create menu bar
 	imaqWndMenuHndl = CreateMenu();
 	// add menu item "Save"
@@ -621,6 +659,8 @@ static void	DiscardImaqImg (Image** image)
 
 static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNumber, Tool tool, Rect rect)
 {
+	if (!displays) return;
+	
 	NIImageDisplay_type*	display 		= displays[windowNumber];
 	Point_type*				PointROI		= NULL;
 	Rect_type*				RectROI			= NULL;

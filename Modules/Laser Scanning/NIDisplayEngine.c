@@ -346,7 +346,7 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 	SetImageType(displays[imaqHndl]->baseClass.imagetype,imageType);
 	
 	// set window on top
-	nullChk( imaqBringWindowToTop(imaqHndl) );
+	nullChk( SetWindowPos(imaqWndHndl, HWND_TOPMOST, 0, 0, 0, 0, (SWP_ASYNCWINDOWPOS | SWP_DRAWFRAME | SWP_NOMOVE | SWP_NOSIZE)) );
 	
 	// init IMAQ image buffer 
 	switch (imageType) {

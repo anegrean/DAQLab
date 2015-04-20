@@ -8,235 +8,6 @@
 //
 //==============================================================================
 
-/*=====================================================================================================================================
-Nested Task Controller
-=======================================================================================================================================
-
-A Task Controller is an automation engine for executing user provided function pointers that control the
-behavior of a device or module.
-
-There are two types of Task Controllers: a) finite and b) continuous, depending on the number of iterations
-required to complete a task. The goal in carrying out a task is to move from the INITIAL state to the DONE state 
-once a START event is received and call the appropriate function pointer with each iteration.
-
-From the user perspective, a Task Controller receives the following types of events: START, STOP and PAUSE.
-A START event begins (if in INITIAL state) or continues (if in IDLE state) the iterations of a Task Controller until:
-
-- a DONE state is reached in the case of a finite Task Controller when all iterations are complete. 
-- a STOP button is pressed in the case of both finite and continuous Task Controllers which ends up in a DONE state.
-- a PAUSE button is pressed in the case of both finite and continuous Task Controllers which ends up in an IDLE state. 
-
-Commonly, complex tasks require the coordination of multiple modules or devices. A complex task can be
-modelled as a series of nested tasks, in which case the execution state of a parent task and child tasks are
-closely linked together. In the following, several examples will be discussed:
-
-------------------------
-1. Z-Stack Acquisition |
-------------------------
-
-In laser scanning microscopy, when acquiring a stack of images at different
-depths from a fluorescently labelled sample, this complex task may be represented as follows:
-
-START/STOP/CONFIG 
-	|- Z Stack (1)
-	:  		 |- Z Stage (N)
-	:		 		  |- DAQ Device (1)
-					  |- PMT Data (1)
-	:  		   		  |- Scan Engine (1) 	
-	:  		
-	:- Display (x) 
-The execution of this complex task is as follows. The parent "Z Stack" task is executed once and its completion,
-i.e. reaching a DONE state, depends on all its subtasks, in this case the "Z Stage" and "Display" SubTask Controllers to reach 
-a DONE state.
-
-As it is shown, for "Z Stage" to reach a DONE state, the task must be completed N times, corresponding to N different positions
-at which the microscope objective must be placed to acquire a framescan. At the second nesting level from the parent "Z Stack", 
-the generation of a frame scan is controlled by the "DAQ Device" and "Scan Engine" which are all carried out one time inside the 
-"Z Stage" Task Control loop. "Scan Engine", when iterated once, calculates galvo mirror scan signals which are sent to "DAQ Device" 
-that controls the galvo mirrors. "Scan Engine" does not complete its iteration until it receives all pixel data from "DAQ Device" 
-after which it can send a complete image to "Display" and by doing so, "Scan Engine" reaches a DONE state. While "Z-Stage" is a 
-Task Controller with a finite N iterations, "Display" is a continuous Task Controller that requires a STOP command to switch to a DONE state.
-This STOP command is provided by the "Z Stage" once it reaches a DONE state.
-
-----------------------------------------------
-2. Continuous Frame Scan Acquisition (Movie) |
-----------------------------------------------
-
-START/STOP/CONFIG 
-	|- Movie (1)
-	:	   |- DAQ Device (1)        
-	:      |- Scan Engine (?)	  i.e. the number of iterations is not predefined 
-	:
-	:- Display (x)
-	 
------------------------------------------
-3. 2P uncaging and dendritic inhibition |
------------------------------------------
-
-START/STOP/CONFIG
-	|- Dendritic Mapping (5)													Repeat experiment 5x at certain intervals
-	:    			   |- Pockells Module (10)									Intensity of uncaging beam is changed with each iteration
-	:				                    |- Laser Modulator (5)					Timing of laser modulator is changed with each iteration
-	:			                    	 				 |- DAQ Device 1 (1)	Galvo command, Pockells uncaging command
-	:				   						  			 |- DAQ Device 2 (1)    Laser modulation, Ephys command and recording
-	:				     		 				  		 |- Scan Engine (1)
-	:			  	   		 				  			 |- EPhys Module (1)
-	:			 	   		  
-	:
-	:- Display (x)
-
-
-DATA FLOW
-
-"Scan Engine" generates waveforms to position the galvos in the uncaging location, which may be either a point or a line. If it is a line,
-the uncaging may occur along the line and there may be multiple line scans at the same location. "Scan Engine" then sends the waveform to position 
-the galvos to "DAQ Device 1". "Scan Engine" also generates a digital waveform that corresponds to the ON/OFF pattern for the photostimulation which
-is synced with the galvo control waveforms. This digital uncaging waveform is sent to "Pockells Module" which transforms it into an analog waveform 
-that controls the Pockells cell. "Pockells Module" then sends this analog waveform to "DAQ Device 1". "EPhys Module" sends analog waveform command 
-to "DAQ Device 2" with e.g. the holding potential of the cell and receives from "DAQ Device 2" analog waveform input containing the cell's membrane 
-potential or holding current. "Laser Modulator" sends analog waveform to "DAQ Device 2" that controls the intensity of the wide-field laser 
-illumination. Finally, "EPhys Module" sends to "Display" the processed analog waveform it received from "DAQ Device 2". Also "Pockells Module" 
-and "Laser Modulator" send the uncaging and laser modulation waveform to "Display". 
-
-TASK CONTROLER EXECUTION  
-
-All Task Controllers start in an UNCONFIGURED state. The user sends a CONFIGURE command to "Dendritic Mapping" which calls its configuration 
-function and forwards the CONFIGURE command to its SubTask "Pockells Module". Since "Dendritic Mapping" has a SubTask which at 
-this point is not in an INITIAL state, it switches to a CONFIGURED state. Later, it will switch to an INITIAL state when "Pockells Module" 
-will switch to an INITIAL state. 
-
-At this point all Task Controllers are in the INITIAL state. Sending a START command to "Dendritic Mapping" will do the following:
-1. 	"Dendritic Mapping" starting function pointer will be called:
-		- cleanup of queues to make sure there are no data packets left
-
-2. 	"Dendritic Mapping" iteration function pointer will be called:
-		- no functionality
-		
-3. 	If iteration was succesful then iteration index will be incremented.
-
-4. 	If there are SubTask Controllers, the START event is forwarded to its SubTasks, in this case "Pockells Module".
-
-5. 	If more iterations are needed, state will be switched to RUNNING, otherwise to DONE. If there are no SubTasks (not this case) and
-	more iterations are needed then ITERATE event is posted to self and another iteration is performed while in the RUNNING state.
-
-At this point "Dendritic Mapping" is in a RUNNING state, while the rest of the Task Controllers are in an INITIAL state. "Pockells Module"
-receives a START event and undergoes the same events as "Dendritic Mapping" and switches to a RUNNING state. 
-
-For the "Pockells Module" the function pointers from steps 1 and 2 will do the following:
-
-1. 	"Pockells Module" starting function pointer will be called:
-		- no functionality
-
-2. 	"Pockells Module" iteration function pointer will be called:
-		- increase level of beam intensity which is applied to each digital waveform uncaging data packet that is received.
-		
-3. 	If iteration successful, iteration index is incremented
-
-4.	Send START event to "Laser Modulator"
-
-5.	"Pockells Module" state switched to RUNNING 
-		
-For the "Laser Modulator" the function pointers from steps 1 and 2 will do the following:
-
-1.	"Laser Modulator" starting function pointer will be called:
-		- opens beam block/shutter
-		
-2.	"Laser Modulator" iteration function pointer will be called:
-		- with each iteration shifts phase of sine wave modulation and sends new waveform data packet to "DAQ Device 2"
-		
-3.	If iteration was succesful then iteration index will be incremented. 
-
-4.	Send START event to "DAQ Device 1", "DAQ Device 2", "Scan Engine", "Ephys Module"
-
-5.	"Laser Modulator" state switched to RUNNING
-
-At this point "Dendritic Mapping", "Pockells Module" and "Laser Modulator" are running and the other Task Controllers are in their INITIAL state.
-
-In the diagram above, when the SubTasks of "laser Modulator" receive the START command, each SubTask Controller will process this command in a
-separate thread, thus the four Task Controllers "DAQ Device 1", "DAQ Device 2", "Scan Engine" and "Ephys Module" run in parallel in separate threads.
-
-When "DAQ Device 1" receives the START command and switches from the INITIAL to DONE state (1 iteration), it performs a similar sequence of actions as before:
-
-1. 	"DAQ Device 1" starting function pointer will be called:
-		- no functionality
-
-2. 	"DAQ Device 1" iteration function pointer will be called:
-		- Waits until there is data available in the output buffer. This data has to be received from "Scan Engine" and "Pockells Module".
-		- Starts the DAQmx Tasks and waits for their completion. Since DAQmx tasks are carried out in separate threads, to signal completion of the iteration
-		when DAQmx finished, the Task Controller thread is kept idle at this point and execution of the Task Controller resumes once 
-		ContinueTaskControlExecution is called when DAQmx finishes. 
-		(It is unclear here how a finite data generation is set up, and how to handle hardware triggerable tasks)
-																	 
-3. 	If iteration successful, iteration index is incremented, and since there are no more iterations (RUNNING state is not reached):
-		- done function pointer is called
-		- "DAQ Device 1" state is switched to DONE  
-
-
-When "DAQ Device 2" receives the START command:
-
-1.	"DAQ Device 2" starting function pointer will be called:
-		- no functionality
-		
-2.	"DAQ Device 2" iteration function pointer will be called:
-		- Waits until there is data available in the output buffer. This data has to be received from "Laser Modulator" and "EPhys Module".
-		- Starts the DAQmx Tasks and waits for their completion. Since DAQmx tasks are carried out in separate threads, to signal completion of the iteration
-		when DAQmx finished, the Task Controller thread is kept idle at this point and execution of the Task Controller resumes once 
-		ContinueTaskControlExecution is called when DAQmx finishes. 
-		(It is unclear here how a finite data generation is set up, and how to handle hardware triggerable tasks)
-		
-3. 	If iteration successful, iteration index is incremented, and since there are no more iterations (RUNNING state is not reached):
-		- done function pointer is called
-		- "DAQ Device 2" state is switched to DONE  
-
-NOTE: It is unclear how to resolve hardware timing issues between DAQ Devices and how to represent this in the Nested Task Controller scheme.
-IDEA: Introduce choice to iterate Task Controller before or after sending a START command to its subtask and perhaps the option to serialize
-Task Controllers as now SubTasks are executed in parallel. Or instead of blocking the Thread and Task Controller while waiting for the iteration to
-complete, create a new state to which the Task Controller can switch in the meantime like TASK_STATE_RUNNING_WAITING_FOR_ITERATION. Then there can
-be an option to send a START event while waiting for iteration completion, or after the iteration completed.
-
-When "Scan Engine" receives the START command:
-
-1. "Scan Engine" starting function pointer will be called:
-		- no functionality
-		
-2. "Scan Engine" iteration function pointer will be called:
-		- send data packet with galvo position to "DAQ Device 1" and data packet with uncaging modulation to "Pockells Module".
-		
-3.	If iteration successful, iteration index is incremented and "Scan Engine" state is switched to DONE (RUNNING state is not reached). 
-
-When "EPhys Module" receives the START command:
-
-1. "EPhys Module" starting function pointer will be called:
-		- no functionality
-		
-2. "EPhys Module" iteration function pointer will be called:
-		- waits until it receives data from "DAQ Device 2" and sends data packet to "Display" with the EPhys recording.
-		
-3. If iteration successful, iteration index is incremented and "DAQ Device 2" state is switched to DONE (RUNNING state is not reached).
-
-The Task Controllers at this point are in the following states:
-
-"Dendritic Mapping"	- RUNNING
-"Pockells Module"	- RUNNING
-"Laser Modulator"	- RUNNING
-"DAQ Device 1"		- INITIAL (until iteration is complete, actually there should be a more clear way to describe the state of waiting for data)
-"DAQ Device 2"		- INITIAL (same issue as for DAQ Device 1)
-"Scan Engine"		- DONE
-"EPhys Module"		- DONE
-
-Eventually "DAQ Device 1" receives data with the galvo positions from "Scan Engine" and with the uncaging waveform from "Pockells Module" which in 
-turn received the data also from "Scan Engine" and switches to a DONE state. Similarly "DAQ Device 2" receives its data from "Laser Modulator" and
-"EPhys module" and before switching to a DONE state, sends a data packet with the cell's membrane potential response to "Display".
-
-When the last SubTask of "Laser Modulator" reaches a DONE state, "Laser Modulator" is informed of this state change and checks if more iterations are 
-needed. If yes, then stays in a RUNNING state and sends to self an ITERATE event. Otherwise, it switches to a DONE state and calls its done function
-pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their iterations, they switch to a DONE state.
-
-
-
-========================================================================================================================================*/
-
-
 #ifndef __TaskController_H__
 #define __TaskController_H__
 
@@ -244,14 +15,13 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
     extern "C" {
 #endif
 
-#include "DAQLabUtility.h"
 #include <toolbox.h>
 #include "VChannel.h"
 #include "HWTriggering.h"
 #include "Iterator.h"
 
 #define TASKCONTROLLER_UI		"./Framework/Execution control/UI_TaskController.uir" 
-#define N_TASK_EVENT_QITEMS		1000		// Number of events waiting to be processed by the state machine.
+#define N_TASK_EVENT_QITEMS		1000			// Number of events waiting to be processed by the state machine.
 
 // Handy return type for functions that produce error descriptions
 
@@ -259,15 +29,15 @@ pointer. Similarly, when "Pockells Module" and "Dendritic Mapping" finish their 
 // Task Controller States
 //----------------------------------------
 typedef enum {
-	TASK_STATE_UNCONFIGURED,					// Task Controller is not configured.
+	TASK_STATE_UNCONFIGURED,					// Task Controller is not configured and cannot run until it is configured.
 	TASK_STATE_CONFIGURED,						// Task Controller is configured.
 	TASK_STATE_INITIAL,							// Initial state of Task Controller before any iterations are performed.
-	TASK_STATE_IDLE,							// Task Controller is configured.
-	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite)  or stopped.
+	TASK_STATE_IDLE,							// Task Controller performed at least one iteration and has stopped.
+	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite) or stopped.
 	TASK_STATE_RUNNING_WAITING_ITERATION,		// Task Controller is iterating but the iteration (possibly occuring in another thread) is not yet complete.
 												// Iteration is complete when a TASK_EVENT_ITERATION_DONE is received in this state.
 	TASK_STATE_STOPPING,						// Task Controller received a STOP event and waits for SubTasks to complete their iterations.
-	TASK_STATE_DONE,							// Task Controller finished required iterations if operation was finite
+	TASK_STATE_DONE,							// Task Controller finished required iterations if operation was finite.
 	TASK_STATE_ERROR
 } TaskStates_type;
 
@@ -283,13 +53,12 @@ typedef enum {
 												// state, it continues iterating the module or device.
 	TASK_EVENT_ITERATE,							// Used to signal that another iteration is needed while in a RUNNING state. This may be signalled
 												// by the Task Controller or another thread if the iteration occurs in another thread.
+	TASK_EVENT_ITERATE_ONCE,					// Performs only one iteration of the Task Controller in an IDLE or DONE state.
 	TASK_EVENT_ITERATION_DONE,					// Used to signal that an iteration completed if it was not carried out in the same thread as the call to TASK_FCALL_ITERATE.
 	TASK_EVENT_ITERATION_TIMEOUT,				// Generated when TASK_EVENT_ITERATION_DONE is not received after a given timeout. 
-	TASK_EVENT_ITERATE_ONCE,					// Performs only one iteration of the Task Controller in an IDLE or DONE state.
 	TASK_EVENT_RESET,							// Resets iteration index to 0, calls given reset function and brings State Controller 
 												// back to INITIAL state.
 	TASK_EVENT_STOP,							// Stops Task Controller iterations and allows SubTask Controllers to complete their iterations.
-	TASK_EVENT_STOP_CONTINUOUS_TASK,			// Event sent from parent Task Controller to its continuous SubTasks to stop them.
 	TASK_EVENT_UPDATE_SUBTASK_STATE,   			// Used to update the state of a SubTask Controller.
 	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue.
 	TASK_EVENT_CUSTOM_MODULE_EVENT,				// To signal custom module or device events.
@@ -301,20 +70,19 @@ typedef enum {
 // Task Controller Function Calls
 //----------------------------------------
 typedef enum {
-	TASK_FCALL_NONE,
 	TASK_FCALL_CONFIGURE,
 	TASK_FCALL_UNCONFIGURE,
 	TASK_FCALL_ITERATE,
 	TASK_FCALL_ABORT_ITERATION,
 	TASK_FCALL_START,
 	TASK_FCALL_RESET,
-	TASK_FCALL_DONE,					// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
-	TASK_FCALL_STOPPED,					// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
-	TASK_FCALL_TASK_TREE_STATUS,		// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
-	TASK_FCALL_SET_UITC_MODE,			// Called when an UITC has a parent Task Controller attached to or deattached from it.
-	TASK_FCALL_DATA_RECEIVED,			// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
+	TASK_FCALL_DONE,							// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
+	TASK_FCALL_STOPPED,							// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
+	TASK_FCALL_TASK_TREE_STATUS,				// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
+	TASK_FCALL_SET_UITC_MODE,					// Called when an UITC has a parent Task Controller attached to or deattached from it.
+	TASK_FCALL_DATA_RECEIVED,					// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
 	TASK_FCALL_ERROR,
-	TASK_FCALL_MODULE_EVENT				// Called for custom module events that are not handled directly by the Task Controller
+	TASK_FCALL_MODULE_EVENT						// Called for custom module events that are not handled directly by the Task Controller
 } TaskFCall_type;
 
 //---------------------------------------------------------------

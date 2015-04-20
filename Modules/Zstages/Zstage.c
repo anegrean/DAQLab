@@ -71,7 +71,7 @@ static void							DimWhenRunning					(Zstage_type* zstage, BOOL dimmed);
 
 static RefPosition_type*			init_RefPosition_type			(char refName[], double refVal);
 
-static void							discard_RefPosition_type		(RefPosition_type** a);
+static void							discard_RefPosition_type		(RefPosition_type** refPosPtr);
 
 static BOOL 						ValidateRefPosName				(char inputStr[], void* dataPtr);  
 
@@ -207,9 +207,9 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 /// HIFN Discards a generic Zstage_type data but does not free the structure memory.
 void discard_Zstage (DAQLabModule_type** mod)
 {
-	Zstage_type* 				zstage = (Zstage_type*) (*mod);
-	
-	RefPosition_type**	refPosPtrPtr;
+	Zstage_type* 		zstage 		= (Zstage_type*) (*mod);
+	RefPosition_type**	refPosPtr	= NULL;
+	size_t				nZRefpos	= ListNumItems(zstage->zRefPos);
 	
 	if (!zstage) return;
 	
@@ -225,9 +225,9 @@ void discard_Zstage (DAQLabModule_type** mod)
 	OKfree(zstage->zPos);
 	OKfree(zstage->startAbsPos);
 	
-	for (int i = 1; i <= ListNumItems(zstage->zRefPos); i++) {
-		refPosPtrPtr = ListGetPtrToItem(zstage->zRefPos, i);
-		discard_RefPosition_type(refPosPtrPtr);
+	for (size_t i = 1; i <= nZRefpos; i++) {
+		refPosPtr = ListGetPtrToItem(zstage->zRefPos, i);
+		discard_RefPosition_type(refPosPtr);
 	}
 	ListDispose(zstage->zRefPos);
 	
@@ -256,12 +256,12 @@ static RefPosition_type*	init_RefPosition_type (char refName[], double refVal)
 	return ref;
 }
 
-static void	discard_RefPosition_type	(RefPosition_type** a)
+static void	discard_RefPosition_type (RefPosition_type** refPosPtr)
 {
-	if (!*a) return;
+	if (!*refPosPtr) return;
 	
-	OKfree((*a)->name);
-	OKfree(*a);
+	OKfree((*refPosPtr)->name);
+	OKfree(*refPosPtr);
 }
 
 /// HIFN Loads ZStage specific resources. 

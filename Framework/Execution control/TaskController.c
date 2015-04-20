@@ -784,10 +784,6 @@ static char* EventToString (TaskEvents_type event)
 			
 			return StrDup("Stop"); 
 			
-		case TASK_EVENT_STOP_CONTINUOUS_TASK:
-			
-			return StrDup("Stop continuous SubTask Controllers only"); 
-			
 		case TASK_EVENT_UPDATE_SUBTASK_STATE:
 			
 			return StrDup("SubTask State Update");
@@ -815,10 +811,6 @@ static char* EventToString (TaskEvents_type event)
 static char* FCallToString (TaskFCall_type fcall)
 {
 	switch (fcall) {
-		
-		case TASK_FCALL_NONE:
-			
-			return StrDup("FCall None");
 		
 		case TASK_FCALL_CONFIGURE:
 			
@@ -1179,11 +1171,6 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 	
 	switch (fID) {
 		
-		case TASK_FCALL_NONE:
-			
-			if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_Invalid_fID, "FCall", "Not a valid function ID");
-			return FunctionCall_Error_Invalid_fID;			// not a valid fID, error
-			
 		case TASK_FCALL_CONFIGURE:
 			
 			if (!taskControl->ConfigureFptr) return 0;		// function not provided
@@ -1656,12 +1643,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					
 					break;
 					
-				case TASK_EVENT_STOP_CONTINUOUS_TASK:
-					
-					// ignore this command
-					
-					break;
-					
 				case TASK_EVENT_UPDATE_SUBTASK_STATE:
 					
 					// update subtask state
@@ -1779,12 +1760,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					}
 					
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_UNCONFIGURED);
-					
-					break;
-					
-				case TASK_EVENT_STOP_CONTINUOUS_TASK:
-					
-					// ignore this command
 					
 					break;
 					
@@ -1978,8 +1953,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					break;
 					
 				case TASK_EVENT_STOP:  
-				case TASK_EVENT_STOP_CONTINUOUS_TASK:
-					
+				
 					// ignore
 					
 					break;
@@ -2185,8 +2159,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					break;
 					
 				case TASK_EVENT_STOP:  
-				case TASK_EVENT_STOP_CONTINUOUS_TASK:
-					
+				
 					// ignore event
 					
 					break;
@@ -2508,9 +2481,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 							  
 					} else {
-						// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
-						if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
-							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
+						// send TASK_EVENT_STOP event to all subtasks
+						if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP, NULL, NULL) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP posting to SubTasks failed"); 
 							taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
 							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
@@ -2520,28 +2493,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, &eventpacket[i], TASK_STATE_STOPPING);
 					}
 					
-					break;
-					
-				case TASK_EVENT_STOP_CONTINUOUS_TASK:
-					
-					// send STOP command to self if continuous task controller and forward TASK_EVENT_STOP_CONTINUOUS_TASK to subtasks
-					if (taskControl->mode == TASK_CONTINUOUS) 
-						if (TaskControlEvent(taskControl, TASK_EVENT_STOP, NULL, NULL) < 0) {
-							taskControl->errorInfo  = FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TASK_EVENT_STOP self posting failed"); 
-							taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;	
-							FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-							ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR); 
-							break;
-						}
-					
-					if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
-						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
-						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
-						FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
-						ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
-						break;
-					}
-						
 					break;
 					
 				case TASK_EVENT_UPDATE_SUBTASK_STATE:
@@ -2776,9 +2727,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						} else {
 							
-							// send TASK_EVENT_STOP_CONTINUOUS_TASK event to all continuous subtasks (since they do not stop by themselves)
-							if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP_CONTINUOUS_TASK, NULL, NULL) < 0) {
-								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP_CONTINUOUS_TASK posting to SubTasks failed"); 
+							// send TASK_EVENT_STOP event to all subtasks
+							if (TaskControlEventToSubTasks(taskControl, TASK_EVENT_STOP, NULL, NULL) < 0) {
+								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSubTaskFailed, taskControl->taskName, "TASK_EVENT_STOP posting to SubTasks failed"); 
 								taskControl->errorID	= TaskEventHandler_Error_MsgPostToSubTaskFailed;
 								FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ERROR, NULL, NULL);
 								ChangeState(taskControl, &eventpacket[i], TASK_STATE_ERROR);
@@ -2900,7 +2851,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					break;
 					
 				case TASK_EVENT_STOP:
-				case TASK_EVENT_STOP_CONTINUOUS_TASK:
 				
 					taskControl->abortIterationFlag = TRUE;
 					FunctionCall(taskControl, &eventpacket[i], TASK_FCALL_ABORT_ITERATION, NULL, NULL);
@@ -3006,8 +2956,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 			switch (eventpacket[i].event) {
 				
 				case TASK_EVENT_STOP:
-				case TASK_EVENT_STOP_CONTINUOUS_TASK:
-					
+				
 					// ignore this command
 					
 					break;
@@ -3218,12 +3167,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TASK_EVENT_STOP:  
 					
 					ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);  // just inform parent 
-					
-					break;
-					
-				case TASK_EVENT_STOP_CONTINUOUS_TASK:
-					
-					ChangeState(taskControl, &eventpacket[i], TASK_STATE_DONE);  // just inform parent
 					
 					break;
 					

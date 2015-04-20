@@ -21,7 +21,7 @@
           <y:Fill color="#FFFF99" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="t" textColor="#000000" visible="true" width="81.994140625" x="97.38937317118598" y="4.0">Unconfigured</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="180.4140625" modelName="custom" textColor="#000000" visible="true" width="131.3828125" x="4.0" y="32.58415137045816">Module Event/
+          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="151.01171875" modelName="custom" textColor="#000000" visible="true" width="131.3828125" x="4.0" y="61.98649512045816">Module Event/
 1. Call Module Event();
 
 Data Received/
@@ -30,9 +30,7 @@ Data Received/
 Stop/
 
 Unconfigure/
-1. Call Unconfigure();
-
-Stop Continuous TC/<y:LabelModel>
+1. Call Unconfigure();<y:LabelModel>
               <y:SmartNodeLabelModel distance="4.0"/>
             </y:LabelModel>
             <y:ModelParameter>
@@ -50,15 +48,13 @@ Stop Continuous TC/<y:LabelModel>
           <y:Fill color="#FFFF99" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="t" textColor="#000000" visible="true" width="67.990234375" x="43.37167675239493" y="4.0">Configured</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="136.310546875" modelName="custom" textColor="#000000" visible="true" width="131.3828125" x="4.0" y="63.54112468898106">Module Event/
+          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="106.908203125" modelName="custom" textColor="#000000" visible="true" width="131.3828125" x="4.0" y="92.94346843898106">Module Event/
 1. Call Module Event();
 
 Data Received/
 1. Call Data Received();
 
-Stop/
-
-Stop Continuous TC/<y:LabelModel>
+Stop/<y:LabelModel>
               <y:SmartNodeLabelModel distance="4.0"/>
             </y:LabelModel>
             <y:ModelParameter>
@@ -113,16 +109,11 @@ Data Received/
           <y:Fill color="#FFFF99" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="t" textColor="#000000" visible="true" width="52.650390625" x="112.06124817118595" y="4.0">Running</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="209.81640625" modelName="custom" textColor="#000000" visible="true" width="255.4609375" x="3.9999999999999716" y="102.25830733181101">Module Event/
+          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="136.310546875" modelName="custom" textColor="#000000" visible="true" width="234.759765625" x="4.0" y="175.764166706811">Module Event/
 1. Call Module Event();
 
 Data Received/
 1. Call Data Received();
-
-Stop Continuous TC/
-1. If mode == Continuous TC, then 
-send Stop event to self
-2. Send Stop Continous TC event to Child TCs 
 
 HW Triggered Slave TC Armed/
 1. Update HW Triggered Slave TC status in
@@ -144,15 +135,11 @@ Master HW Triggering TC register<y:LabelModel>
           <y:Fill color="#FFFF99" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="t" textColor="#000000" visible="true" width="120.666015625" x="112.6308949607619" y="4.0">Completing Iteration</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="253.919921875" modelName="custom" textColor="#000000" visible="true" width="314.037109375" x="4.0" y="31.330715237853838">entry/
+          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="195.115234375" modelName="custom" textColor="#000000" visible="true" width="314.037109375" x="4.0" y="90.13540273785384">entry/
 1. If (nIterations != 0 || Continuous TC), then Call Iterate(), 
 else Send Iteration Done event to self;
 
 Stop/
-1. abortIterationFlag = TRUE;
-2. Call Abort Iteration ();
-
-Stop Continuous TC/
 1. abortIterationFlag = TRUE;
 2. Call Abort Iteration ();
 
@@ -177,7 +164,7 @@ Module Event/
           <y:Geometry height="310.0620025492972" width="376.6613426826027" x="1650.3522719712523" y="1445.347975843753"/>
           <y:Fill color="#FFFF99" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="t" textColor="#000000" visible="true" width="80.001953125" x="148.32969477880147" y="4.0">Waiting State</y:NodeLabel>
+          <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="t" textColor="#000000" visible="true" width="80.001953125" x="148.32969477880124" y="4.0">Waiting State</y:NodeLabel>
           <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="239.21875" modelName="custom" textColor="#000000" visible="true" width="330.080078125" x="4.0" y="66.84325254929718">Data Received/
 1. Call Data Received();
 
@@ -238,9 +225,7 @@ Data Received/
           <y:Fill color="#FFFF99" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="t" textColor="#000000" visible="true" width="55.984375" x="69.70988686270687" y="4.0">Stopping</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="136.310546875" modelName="custom" textColor="#000000" visible="true" width="131.3828125" x="3.9999999999998863" y="25.564903361966913">Stop/
-
-Stop Continuous TC/
+          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="106.908203125" modelName="custom" textColor="#000000" visible="true" width="131.3828125" x="3.9999999999998863" y="54.96724711196691">Stop/
 
 Module Event/
 1. Call Module Event();
@@ -340,7 +325,7 @@ Data Received/
           <y:Fill color="#FFFF99" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="t" textColor="#000000" visible="true" width="33.34375" x="60.694918939894706" y="4.0">Error</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="342.126953125" modelName="custom" textColor="#000000" visible="true" width="138.73046875" x="4.0" y="33.277148491628395">entry/
+          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="312.724609375" modelName="custom" textColor="#000000" visible="true" width="138.73046875" x="4.0" y="62.679492241628395">entry/
 1. Call Error();
 
 Start/
@@ -350,8 +335,6 @@ Iterate/
 Reset/
 
 Stop/
-
-Stop Continuous TC/
 
 Child TC state changed/
 1. Update Child TC state;
@@ -3421,16 +3404,12 @@ new state == Error ]<y:LabelModel>
       </data>
     </edge>
     <edge id="e117" source="n55" target="n5">
-      <data key="d9"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
-            <y:Point x="1837.6490209819633" y="1406.90072776517"/>
-            <y:Point x="1838.6829433125536" y="1406.90072776517"/>
-          </y:Path>
+          <y:Path sx="0.0" sy="0.0" tx="-1.0339223305902578" ty="0.0"/>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="standard"/>
-          <y:EdgeLabel alignment="center" backgroundColor="#FFFFFF" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="39.349609375" x="-19.674831557099196" y="39.419592963481364">[ else ]<y:LabelModel>
+          <y:EdgeLabel alignment="center" backgroundColor="#FFFFFF" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="39.349609375" x="-19.674831557099196" y="51.48708907308537">[ else ]<y:LabelModel>
               <y:SmartEdgeLabelModel autoRotationEnabled="false" defaultAngle="0.0" defaultDistance="10.0"/>
             </y:LabelModel>
             <y:ModelParameter>
@@ -3443,7 +3422,6 @@ new state == Error ]<y:LabelModel>
       </data>
     </edge>
     <edge id="e118" source="n55" target="n4">
-      <data key="d9"/>
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="165.40542064123656" ty="126.7487934279684">
@@ -3465,7 +3443,6 @@ new state == Error ]<y:LabelModel>
       </data>
     </edge>
     <edge id="e119" source="n5" target="n4">
-      <data key="d9"/>
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="171.83719243406472" ty="135.63068103391697">

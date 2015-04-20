@@ -6481,7 +6481,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					}
 					
 					
-					ChanSet_CO_type* newChan 	=  init_ChanSet_CO_type(dev, chName, chanType, "OnboardClock", DAQmxDefault_Task_RefClkFreq, pulseTrain);
+					ChanSet_CO_type* newChan 	=  init_ChanSet_CO_type(dev, chName, chanType, NULL, DAQmxDefault_Task_RefClkFreq, pulseTrain);
 						
 					// insert new channel tab
 					int chanSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOChSet);  
@@ -6663,19 +6663,17 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						
 					int clkPanHndl;
 					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_ClkTabIdx, &clkPanHndl);
-								
+					
+					// add callback to controls in the panel
+					// note: this must be done before changing the string control to a terminal control!
+					SetCtrlsInPanCBInfo(newChan, Chan_CO_Clk_CB, clkPanHndl);
+					
 					// make sure that the host controls are not dimmed before inserting terminal controls!
 					NIDAQmx_NewTerminalCtrl(clkPanHndl, CLKPAN_RefClkSource, 0); // single terminal selection
 					
 					// adjust sample clock terminal control properties
 					NIDAQmx_SetTerminalCtrlAttribute(clkPanHndl, CLKPAN_RefClkSource, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
 					NIDAQmx_SetTerminalCtrlAttribute(clkPanHndl, CLKPAN_RefClkSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
-						
-					// set default reference clock source
-					SetCtrlVal(clkPanHndl, CLKPAN_RefClkSource, "OnboardClock");
-		
-					// add callback to controls in the panel
-					SetCtrlsInPanCBInfo(newChan, Chan_CO_Clk_CB, clkPanHndl);
 						
 					//--------------------------
 					// adjust "Trigger" tab
@@ -6686,18 +6684,17 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						
 					int trigPanHndl;
 					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TriggerTabIdx, &trigPanHndl);
-								
+					
+					// add callback to controls in the panel
+					// note: this must be done before changing the string control to a terminal control!
+					SetCtrlsInPanCBInfo(newChan, Chan_CO_Trig_CB, trigPanHndl);
+					
 					// make sure that the host controls are not dimmed before inserting terminal controls!
 					NIDAQmx_NewTerminalCtrl(trigPanHndl, TrigPan_Source, 0); // single terminal selection
 					
-								
 					// adjust sample clock terminal control properties
 					NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TrigPan_Source, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
 					NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TrigPan_Source, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
-						
-					// set default start trigger source
-					newChan->startTrig->trigSource = StrDup("/Dev2/ao/StartTrigger");
-					SetCtrlVal(trigPanHndl, TrigPan_Source, "/Dev2/ao/StartTrigger");
 						
 					// insert trigger type options
 					InsertListItem(trigPanHndl, TrigPan_TrigType, -1, "None", Trig_None); 
@@ -6710,9 +6707,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					InsertListItem(trigPanHndl,TrigPan_Slope , 1, "Falling", TrigSlope_Falling);
 					newChan->startTrig->slope = TrigSlope_Rising;
 						
-					// add callback to controls in the panel
-					SetCtrlsInPanCBInfo(newChan, Chan_CO_Trig_CB, trigPanHndl);
-						
+					
 					//------------------------------------
 					// Create and register CO Source VChan
 					//------------------------------------
@@ -8577,7 +8572,7 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 			writeData -> datain_remainder 		= NULL;
 			writeData -> datain_loop      		= NULL;
 			writeData -> nullPacketReceived		= NULL;
-			writeData -> writeBlocksLeftToWrite	= 2;
+			writeData -> writeBlocksLeftToWrite	= 1;
 	
 	// datain
 	if (!(	writeData -> datain					= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
@@ -10575,9 +10570,7 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 		if (chanSet->refClkSource && chanSet->refClkSource[0]) {
 			DAQmxErrChk( DAQmxSetTimingAttribute(chanSet->taskHndl, DAQmx_RefClk_Src, chanSet->refClkSource) );
 			DAQmxErrChk( DAQmxSetTimingAttribute(chanSet->taskHndl, DAQmx_RefClk_Rate, chanSet->refClkFreq) );
-		} else
-			// if no reference clock is given, then use OnboardClock by default
-			DAQmxErrChk( DAQmxSetTimingAttribute(chanSet->taskHndl, DAQmx_RefClk_Src, "OnboardClock") );
+		}
 		
 		//----------------------
 		// Configure AI triggers
@@ -12287,9 +12280,10 @@ SkipPacket:
 			break;
 		}
 	
-	if (stopAOTaskFlag==FALSE) {
+	if (stopAOTaskFlag == FALSE) {
 		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
 	}
+	
 	if (stopAOTaskFlag && (!data->writeBlocksLeftToWrite--)) {
 		int*	nActiveTasksPtr = NULL;
 		

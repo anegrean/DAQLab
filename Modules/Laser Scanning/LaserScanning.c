@@ -49,6 +49,7 @@
 #define ScanEngine_SinkVChan_DetectionChan					"detection channel"			// Incoming fluorescence signal to assemble an image from.
 #define ScanEngine_SourceVChan_Shutter_Command				"shutter command"
 #define ScanEngine_SourceVChan_PixelPulseTrain				"pixel pulse train"
+#define ScanEngine_SourceVChan_PixelSamplingRate			"pixel sampling rate"		// 1/pixel_dwell_time = pixel sampling rate in [Hz]
 #define ScanEngine_SourceVChan_NPixels						"detection channel n pixels"
 #define ScanEngine_SourceVChan_ROITiming					"ROI timing"
 
@@ -371,6 +372,8 @@ struct ScanEngine {
 	SourceVChan_type*			VChanShutter;
 		// Pixel pulse train
 	SourceVChan_type*			VChanPixelPulseTrain;
+		// Pixel sampling rate (same as pixel pulse train except this is just the sampling rate in [Hz])
+	SourceVChan_type*			VChanPixelSamplingRate;	
 		// N pixels
 	SourceVChan_type*			VChanNPixels;
 		// Array of detector input channels of ScanChan_type* with incoming fluorescence pixel stream 
@@ -3877,21 +3880,23 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	char*				compositeImageVChanName					= NULL;
 	char*				shutterCommandVChanName					= NULL;
 	char*				pixelPulseTrainVChanName				= NULL;
+	char*				pixelSamplingRateVChanName				= NULL;
 	char*				nPixelsVChanName						= NULL;
 	char*				ROITimingVChanName						= NULL;
 	
 	// assemble default VChan names
-	nullChk( fastAxisComVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command, 0) );
-	nullChk( fastAxisComNSampVChanName 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command_NSamples, 0) );
-	nullChk( slowAxisComVChanName	 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_SlowAxis_Command, 0) );
-	nullChk( slowAxisComNSampVChanName 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_SlowAxis_Command_NSamples, 0) );
-	nullChk( fastAxisPosVChanName	 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_FastAxis_Position, 0) );
-	nullChk( slowAxisPosVChanName	 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_SlowAxis_Position, 0) );
-	nullChk( compositeImageVChanName 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_CompositeImage, 0) );
-	nullChk( shutterCommandVChanName 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_Shutter_Command, 0) );
-	nullChk( pixelPulseTrainVChanName 	= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelPulseTrain, 0) );
-	nullChk( nPixelsVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_NPixels, 0) );
-	nullChk( ROITimingVChanName			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROITiming, 0) );
+	nullChk( fastAxisComVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command, 0) );
+	nullChk( fastAxisComNSampVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command_NSamples, 0) );
+	nullChk( slowAxisComVChanName	 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_SlowAxis_Command, 0) );
+	nullChk( slowAxisComNSampVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_SlowAxis_Command_NSamples, 0) );
+	nullChk( fastAxisPosVChanName	 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_FastAxis_Position, 0) );
+	nullChk( slowAxisPosVChanName	 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_SlowAxis_Position, 0) );
+	nullChk( compositeImageVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_CompositeImage, 0) );
+	nullChk( shutterCommandVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_Shutter_Command, 0) );
+	nullChk( pixelPulseTrainVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelPulseTrain, 0) );
+	nullChk( pixelSamplingRateVChanName		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelSamplingRate, 0) );
+	nullChk( nPixelsVChanName 				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_NPixels, 0) );
+	nullChk( ROITimingVChanName				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROITiming, 0) );
 	
 	//------------------------
 	// init
@@ -3917,6 +3922,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	engine->VChanCompositeImage			= NULL;
 	engine->VChanShutter				= NULL;
 	engine->VChanPixelPulseTrain		= NULL;
+	engine->VChanPixelSamplingRate		= NULL;
 	engine->VChanNPixels				= NULL;
 	engine->VChanROITiming				= NULL;
 	engine->scanChans 					= NULL;
@@ -3955,6 +3961,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	nullChk( engine->VChanCompositeImage		= init_SourceVChan_type(compositeImageVChanName, DL_Image, engine, NULL, NULL) );
 	nullChk( engine->VChanShutter				= init_SourceVChan_type(shutterCommandVChanName, DL_Waveform_UChar, engine, ShutterVChan_Connected, ShutterVChan_Disconnected) ); 
 	nullChk( engine->VChanPixelPulseTrain		= init_SourceVChan_type(pixelPulseTrainVChanName, DL_PulseTrain_Ticks, engine, NULL, NULL) ); 	
+	nullChk( engine->VChanPixelSamplingRate		= init_SourceVChan_type(pixelSamplingRateVChanName, DL_Double, engine, NULL, NULL) ); 	
 	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_ULongLong, engine, NULL, NULL) ); 	
 	nullChk( engine->objectives					= ListCreate(sizeof(Objective_type*)) ); 
 	nullChk( engine->VChanROITiming				= init_SourceVChan_type(ROITimingVChanName, DL_RepeatedWaveform_UChar, engine, NULL, NULL) );
@@ -3978,6 +3985,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	OKfree(compositeImageVChanName);
 	OKfree(shutterCommandVChanName);
 	OKfree(pixelPulseTrainVChanName);
+	OKfree(pixelSamplingRateVChanName);
 	OKfree(nPixelsVChanName);
 	OKfree(ROITimingVChanName);
 	
@@ -3995,6 +4003,7 @@ Error:
 	OKfree(compositeImageVChanName);
 	OKfree(shutterCommandVChanName);
 	OKfree(pixelPulseTrainVChanName);
+	OKfree(pixelSamplingRateVChanName);
 	OKfree(nPixelsVChanName);
 	OKfree(ROITimingVChanName);
 	
@@ -4019,6 +4028,7 @@ static void	discard_ScanEngine_type (ScanEngine_type** enginePtr)
 	discard_VChan_type((VChan_type**)&engine->VChanCompositeImage);
 	discard_VChan_type((VChan_type**)&engine->VChanShutter);
 	discard_VChan_type((VChan_type**)&engine->VChanPixelPulseTrain);
+	discard_VChan_type((VChan_type**)&engine->VChanPixelSamplingRate);
 	discard_VChan_type((VChan_type**)&engine->VChanNPixels);
 	discard_VChan_type((VChan_type**)&engine->VChanROITiming); 
 	
@@ -4064,7 +4074,8 @@ static int DLRegisterScanEngine (ScanEngine_type* engine)
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisPos);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanCompositeImage);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanShutter);
-	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelPulseTrain); 
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelPulseTrain);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelSamplingRate);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanNPixels);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROITiming); 
 		
@@ -4119,6 +4130,10 @@ static void DLUnregisterScanEngine (ScanEngine_type* engine)
 	// pixel pulse train
 	if (engine->VChanPixelPulseTrain)
 		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelPulseTrain);
+	
+	// pixel sampling rate
+	if (engine->VChanPixelSamplingRate)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelSamplingRate);
 	
 	// n pixels
 	if (engine->VChanNPixels)
@@ -5168,9 +5183,11 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	RepeatedWaveform_type*		slowAxisScan_RepWaveform					= NULL; 
 	DataPacket_type*			galvoCommandPacket							= NULL; 
 	DataPacket_type*			pixelPulseTrainPacket						= NULL;
+	DataPacket_type*			pixelSamplingRatePacket						= NULL;
 	DataPacket_type*			nPixelsPacket								= NULL;
 	DataPacket_type*			nullPacket									= NULL;
 	PulseTrain_type*			pixelPulseTrain								= NULL;
+	double*						pixelSamplingRate							= NULL;
 	char*						errMsg										= NULL;
 	int							error 										= 0;
 	size_t						nFrames										= GetTaskControlIterations(scanEngine->baseClass.taskControl);
@@ -5412,6 +5429,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		//--------------------
 		// total number of pixels
 		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)(scanEngine->scanSettings.height + nFastAxisFlybackLines) * (uInt64)nFrames; 
+		// pixel pulse train
 		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32)(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0) );
 		
 		// send n pixels
@@ -5419,16 +5437,25 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		*nPixelsPtr = nPixels;
 		nullChk( nPixelsPacket = init_DataPacket_type(DL_ULongLong, (void**)&nPixelsPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &nPixelsPacket, FALSE, &errMsg) );    
-	}
-	else 
+		
+	} else {
 		//--------------------
 		// continuous mode
 		//--------------------
+		// pixel pulse train
 		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32)(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0) );
+	}
 	
-	// send pulse train info
+	// send pixel pulse train info
 	nullChk( pixelPulseTrainPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, NULL, (DiscardFptr_type)discard_PulseTrain_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &pixelPulseTrainPacket, FALSE, &errMsg) ); 
+	
+	// send pixel sampling rate
+	// pixel sampling rate in [Hz]
+	nullChk( pixelSamplingRate = malloc(sizeof(double)) );
+	*pixelSamplingRate = 1e+6/scanEngine->scanSettings.pixelDwellTime;
+	nullChk( pixelSamplingRatePacket = init_DataPacket_type(DL_Double, (void**)&pixelSamplingRate, NULL, NULL) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSamplingRate, &pixelSamplingRatePacket, FALSE, &errMsg) ); 
 	
 	return 0; // no error
 				  
@@ -5439,6 +5466,7 @@ Error:
 	OKfree(slowAxisCompensationSignal);
 	OKfree(parkedVoltageSignal);
 	OKfree(nGalvoSamplesPtr);
+	OKfree(pixelSamplingRate);
 	discard_Waveform_type(&fastAxisScan_Waveform);
 	discard_Waveform_type(&fastAxisMoveFromParkedWaveform);
 	discard_Waveform_type(&fastAxisMoveFromParkedCompensatedWaveform); 
@@ -5452,6 +5480,7 @@ Error:
 	discard_PulseTrain_type(&pixelPulseTrain);
 	ReleaseDataPacket(&galvoCommandPacket);
 	ReleaseDataPacket(&pixelPulseTrainPacket);
+	ReleaseDataPacket(&pixelSamplingRatePacket);
 	ReleaseDataPacket(&nPixelsPacket);
 	
 	*errorInfo = FormatMsg(NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals, "NonResRectRasterScan_GenerateScanSignals", errMsg);

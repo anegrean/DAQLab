@@ -823,7 +823,7 @@ typedef struct {
 	HWTrigMaster_type*			HWTrigMaster;				// For establishing a task start HW-trigger dependency, this being a master.
 	HWTrigSlave_type*			HWTrigSlave;				// For establishing a task start HW-trigger dependency, this being a slave.
 	WriteAOData_type*			writeAOData;				// Used for continuous AO streaming. 
-	ReadAIData_type*			readAIData;					// Used for processing of incoming AI data.
+	ReadAIData_type*			readAIData;					// Used for processing of incoming AI data. If this is not an AI task, this is NULL.
 	WriteDOData_type*			writeDOData;				// Used for continuous DO streaming.                         
 } ADTaskSet_type;
 
@@ -7965,7 +7965,7 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	GetPanelHandleFromTabPage(tskSet->panHndl, ADTskSet_Tab, DAQmxADTskSet_SettingsTabIdx, &tskSet->timing->settingsPanHndl);
 	
 	// set sampling rate
-	SetCtrlVal(tskSet->timing->settingsPanHndl, Set_SamplingRate, tskSet->timing->sampleRate / 1000);					// display in [kHz]
+	SetCtrlVal(tskSet->timing->settingsPanHndl, Set_SamplingRate, tskSet->timing->sampleRate/1000);					// display in [kHz]
 	
 	// set number of samples
 	SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DATA_TYPE, VAL_UNSIGNED_64BIT_INTEGER);
@@ -11023,13 +11023,53 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	int					error			= 0;
 	DataPacket_type*	dataPacket		= NULL;
 	void*				dataPacketData	= NULL;
-	DLDataTypes			dataPacketType;
+	DLDataTypes			dataPacketType	= 0;
 	uInt64*				nSamplesPtr		= NULL;
 	double*				samplingRatePtr	= NULL;
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
+	
+	//--------------
+	// Sampling rate (must be received before N samples!)
+	//--------------
+	if (IsVChanConnected((VChan_type*)dev->AITaskSet->timing->samplingRateSinkVChan)) { 
+		errChk( GetDataPacket(dev->AITaskSet->timing->samplingRateSinkVChan, &dataPacket, &errMsg) );
+		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
+		
+		switch (dataPacketType) {
+			case DL_Float:
+				dev->AITaskSet->timing->sampleRate = (double)**(float**)dataPacketData;
+				break;
+				
+			case DL_Double:
+				dev->AITaskSet->timing->sampleRate = **(double**)dataPacketData;
+				break;
+		}
+		
+		// if oversampling must be adjusted automatically
+		if (dev->AITaskSet->timing->oversamplingAuto) {
+			dev->AITaskSet->timing->oversampling = (uInt32)(dev->AITaskSet->timing->targetSampleRate/dev->AITaskSet->timing->sampleRate);
+			if (!dev->AITaskSet->timing->oversampling) dev->AITaskSet->timing->oversampling = 1;
+			SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Oversampling, dev->AITaskSet->timing->oversampling);
+				
+			// update also read AI data structures
+			discard_ReadAIData_type(&dev->AITaskSet->readAIData);
+			dev->AITaskSet->readAIData = init_ReadAIData_type(dev->AITaskSet->dev);
+		}
+		
+		// update sampling rate in dev structure
+		DAQmxErrChk(DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate * dev->AITaskSet->timing->oversampling));
+		// update sampling rate in UI
+		SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AITaskSet->timing->sampleRate/1000);	// display in [kHz]
+		// update duration in UI
+		SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
+		// given oversampling, adjust also the actual DAQ sampling rate display
+		SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_ActualSamplingRate, dev->AITaskSet->timing->sampleRate * dev->AITaskSet->timing->oversampling * 1e-3);	// display in [kHz]
+		// cleanup
+		ReleaseDataPacket(&dataPacket);
+	}
 	
 	//----------
 	// N samples
@@ -11067,34 +11107,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 		// n samples cannot be used for continuous tasks, empty Sink VChan if there are any elements
 		ReleaseAllDataPackets(dev->AITaskSet->timing->nSamplesSinkVChan, NULL);
 	
-	//--------------
-	// Sampling rate
-	//--------------
-	if (IsVChanConnected((VChan_type*)dev->AITaskSet->timing->samplingRateSinkVChan)) { 
-		errChk( GetDataPacket(dev->AITaskSet->timing->samplingRateSinkVChan, &dataPacket, &errMsg) );
-		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
-		
-		switch (dataPacketType) {
-			case DL_Float:
-				dev->AITaskSet->timing->sampleRate = (double)**(float**)dataPacketData;
-				break;
-				
-			case DL_Double:
-				dev->AITaskSet->timing->sampleRate = **(double**)dataPacketData;
-				break;
-		}
-		
-		// update sampling rate in dev structure
-		DAQmxErrChk(DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate * dev->AITaskSet->timing->oversampling));
-		// update sampling rate in UI
-		SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AITaskSet->timing->sampleRate);
-		// update duration in UI
-		SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
-		// cleanup
-		ReleaseDataPacket(&dataPacket);
-	}
 	
-											
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Send task settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
@@ -11247,7 +11260,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 		// update sampling rate in dev structure
 		DAQmxErrChk(DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AOTaskSet->timing->sampleRate));
 		// update sampling rate in UI
-		SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AOTaskSet->timing->sampleRate);
+		SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_SamplingRate, dev->AOTaskSet->timing->sampleRate/1000);	// display in [kHz]
 		// update duration in UI
 		SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
 		// cleanup
@@ -13989,12 +14002,35 @@ static int ADSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TCState
 			break;
 	}
 	
-	// update sampling rate in dev structure
-	DAQmxErrChk(DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampClk_Rate, tskSet->timing->sampleRate));
+	// if AI task, update oversampling if it must be adjusted automatically
+	if (tskSet->readAIData && tskSet->timing->oversamplingAuto) {
+		tskSet->timing->oversampling = (uInt32)(tskSet->timing->targetSampleRate/tskSet->timing->sampleRate);
+		if (!tskSet->timing->oversampling) tskSet->timing->oversampling = 1;
+		SetCtrlVal(tskSet->timing->settingsPanHndl, Set_Oversampling, tskSet->timing->oversampling);
+				
+		// update also read AI data structures
+		discard_ReadAIData_type(&tskSet->readAIData);
+		tskSet->readAIData = init_ReadAIData_type(tskSet->dev);
+	}
+	
+	// if AI task
+	if (tskSet->readAIData) {
+		// given oversampling, adjust also the actual DAQ sampling rate display
+		SetCtrlVal(tskSet->timing->settingsPanHndl, Set_ActualSamplingRate, tskSet->timing->sampleRate * tskSet->timing->oversampling * 1e-3);	// display in [kHz]
+		// update sampling rate in dev structure
+		DAQmxErrChk( DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampClk_Rate, tskSet->timing->sampleRate * tskSet->timing->oversampling) );
+	} else {
+		// update sampling rate in dev structure
+		DAQmxErrChk( DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampClk_Rate, tskSet->timing->sampleRate) );
+		
+	}
+	
 	// update sampling rate in UI
-	SetCtrlVal(tskSet->timing->settingsPanHndl, Set_SamplingRate, tskSet->timing->sampleRate /1000);	// display in [kHz]
+	SetCtrlVal(tskSet->timing->settingsPanHndl, Set_SamplingRate, tskSet->timing->sampleRate/1000);	// display in [kHz]
 	// update duration in UI
 	SetCtrlVal(tskSet->timing->settingsPanHndl, Set_Duration, tskSet->timing->nSamples / tskSet->timing->sampleRate);
+	
+	
 	
 	// cleanup
 	ReleaseDataPacket(&dataPacket);

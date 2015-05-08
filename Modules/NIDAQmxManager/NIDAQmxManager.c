@@ -515,8 +515,11 @@ typedef enum{
 typedef struct {
 	OperationModes 				measMode;      				// Measurement mode: finite or continuous.
 	double       				sampleRate;    				// Target sampling rate in [Hz].
+	double						targetSampleRate;			// Used in AI. This is the maximum sampling rate in [Hz] up to which the oversampling will be adjusted. The actual sampling rate used by the DAQ 
+															// card will be the oversampling factor times the final sampling rate.
 	uInt64        				nSamples;	    			// Target number of samples to be acquired in case of a finite recording.
 	uInt32						oversampling;				// Oversampling factor, used in AI. This determines the actual sampling rate and the actual number of samples to be acquired
+	BOOL						oversamplingAuto;			// Used in AI, auto-adjusts the oversampling factor based on the target DAQ sampling rate and the final sampling rate of the AI data.
 	SinkVChan_type*				nSamplesSinkVChan;			// Used for receiving number of samples to be generated/received with each iteration of the DAQmx task controller.
 															// data packets of DL_UChar, DL_UShort, DL_UInt, DL_ULong and DL_ULongLong types.
 	SourceVChan_type*			nSamplesSourceVChan;		// Used for sending number of samples for finite tasks.
@@ -1345,14 +1348,14 @@ static void							COPulseTrainSourceVChan_Connected		(VChan_type* self, void* VC
 
 
 	// AI, AO, Di & DO 
-static int							ADNSamples_DataReceivedTC				(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
-static int							ADSamplingRate_DataReceivedTC			(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int							ADNSamples_DataReceivedTC				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int							ADSamplingRate_DataReceivedTC			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 	// AO
-static int							AO_DataReceivedTC						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int							AO_DataReceivedTC						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 	// DO
-static int							DO_DataReceivedTC						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int							DO_DataReceivedTC						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 	// CO
-static int				 			CO_DataReceivedTC						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int				 			CO_DataReceivedTC						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 
 
@@ -1366,21 +1369,19 @@ static int							UnconfigureTC							(TaskControl_type* taskControl, BOOL const*
 
 static void							IterateTC								(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
-static void							AbortIterationTC						(TaskControl_type* taskControl, BOOL const* abortFlag);
-
 static int							StartTC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static int							DoneTC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static int							StoppedTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							TaskTreeStatus 							(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int							TaskTreeStatus 							(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
 
 static int				 			ResetTC 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 static void				 			ErrorTC 								(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 
-static int							ModuleEventHandler						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);  
+static int							ModuleEventHandler						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);  
 
 //========================================================================================================================================================================================================
 // Global variables
@@ -1628,7 +1629,7 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl)
 		//-------------------------------
 		
 		// configure Task Controller
-		TaskControlEvent(DAQmxDev->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+		TaskControlEvent(DAQmxDev->taskController, TC_Event_Configure, NULL, NULL);
 	
 	}
 	
@@ -1852,8 +1853,10 @@ static int LoadADTaskCfg (ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ 
 	DAQLabXMLNode 					taskAttr[] 						= {	{"Timeout", 				BasicData_Double, 		&taskSet->timeout},
 																		{"OperationMode", 			BasicData_UInt, 		&operationMode},
 																		{"SamplingRate", 			BasicData_Double, 		&taskSet->timing->sampleRate},
+																		{"TargetSamplingRate",		BasicData_Double,		&taskSet->timing->targetSampleRate},
 																		{"NSamples", 				BasicData_ULongLong, 	&taskSet->timing->nSamples},
 																		{"Oversampling",			BasicData_UInt,			&taskSet->timing->oversampling},
+																		{"OversamplingAutoAdjust",	BasicData_Bool,			&taskSet->timing->oversamplingAuto}, 
 																		{"BlockSize", 				BasicData_UInt, 		&taskSet->timing->blockSize},
 																		{"SampleClockSource", 		BasicData_CString, 		&taskSet->timing->sampClkSource},
 																		{"SampleClockEdge", 		BasicData_UInt, 		&sampleClockEdge},
@@ -2535,8 +2538,10 @@ static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXML
 	DAQLabXMLNode 					taskSetAttr[] 				= {	{"Timeout", 				BasicData_Double, 		&taskSet->timeout},
 																	{"OperationMode", 			BasicData_UInt, 		&operationMode},
 																	{"SamplingRate", 			BasicData_Double, 		&taskSet->timing->sampleRate},
+																	{"TargetSamplingRate",		BasicData_Double,		&taskSet->timing->targetSampleRate},
 																	{"NSamples", 				BasicData_ULongLong, 	&taskSet->timing->nSamples},
 																	{"Oversampling",			BasicData_UInt,			&taskSet->timing->oversampling},
+																	{"OversamplingAutoAdjust",	BasicData_Bool,			&taskSet->timing->oversamplingAuto},
 																	{"BlockSize", 				BasicData_UInt, 		&taskSet->timing->blockSize},
 																	{"SampleClockSource", 		BasicData_CString, 		taskSet->timing->sampClkSource},
 																	{"SampleClockEdge", 		BasicData_UInt, 		&sampleClockEdge},
@@ -3039,7 +3044,7 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type**
 	//-------------------------------------------------------------------------------------------------
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
-	dev -> taskController = init_TaskControl_type (taskControllerName, dev, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, AbortIterationTC, StartTC, 
+	dev -> taskController = init_TaskControl_type (taskControllerName, dev, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, StartTC, 
 						  ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC);
 	if (!dev->taskController) goto Error;
 	
@@ -7796,8 +7801,10 @@ static ADTaskTiming_type* init_ADTaskTiming_type (void)
 	
 	taskTiming->measMode					= DAQmxDefault_Task_MeasMode;
 	taskTiming->sampleRate					= DAQmxDefault_Task_SampleRate;
+	taskTiming->targetSampleRate			= DAQmxDefault_Task_SampleRate;
 	taskTiming->nSamples					= DAQmxDefault_Task_NSamples;
 	taskTiming->oversampling				= 1;
+	taskTiming->oversamplingAuto			= FALSE;
 	taskTiming->blockSize					= DAQmxDefault_Task_BlockSize;
 	taskTiming->sampClkSource				= NULL;   								// use onboard clock for sampling
 	taskTiming->sampClkEdge					= SampClockEdge_Rising;
@@ -7970,10 +7977,35 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	// set duration
 	SetCtrlVal(tskSet->timing->settingsPanHndl, Set_Duration, tskSet->timing->nSamples / tskSet->timing->sampleRate); 	// display in [s]
 	
-	// set oversampling if AI task
+	// set oversampling properties if AI task
 	if (tskSet->dev->AITaskSet == tskSet) {
-		SetCtrlVal(tskSet->timing->settingsPanHndl, Set_Oversampling, tskSet->timing->oversampling);					// set oversampling factor
+		
 		SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Oversampling, ATTR_VISIBLE, TRUE);
+		SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_AutoOversampling, ATTR_VISIBLE, TRUE);
+		SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_ActualSamplingRate, ATTR_VISIBLE, TRUE);
+		
+		SetCtrlVal(tskSet->timing->settingsPanHndl, Set_AutoOversampling, tskSet->timing->oversamplingAuto);			// set auto oversampling
+		
+		if (tskSet->timing->oversamplingAuto) {
+			SetCtrlVal(tskSet->timing->settingsPanHndl, Set_TargetSamplingRate, tskSet->timing->targetSampleRate * 1e-3);	// set target sample rate in [kHz]
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_TargetSamplingRate, ATTR_VISIBLE, TRUE);
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Oversampling, ATTR_DIMMED, TRUE);
+			// enforce oversampling
+			tskSet->timing->oversampling = (uInt32)(tskSet->timing->targetSampleRate/tskSet->timing->sampleRate);
+			if (!tskSet->timing->oversampling) tskSet->timing->oversampling = 1;
+		} else {
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_TargetSamplingRate, ATTR_VISIBLE, FALSE);
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Oversampling, ATTR_DIMMED, FALSE);
+		}
+		
+		SetCtrlVal(tskSet->timing->settingsPanHndl, Set_Oversampling, tskSet->timing->oversampling);					// set oversampling factor
+		SetCtrlVal(tskSet->timing->settingsPanHndl, Set_ActualSamplingRate, tskSet->timing->sampleRate * tskSet->timing->oversampling * 1e-3);	// display actual sampling rate in [kHz]
+		
+	} else {
+		SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Oversampling, ATTR_VISIBLE, FALSE);
+		SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_AutoOversampling, ATTR_VISIBLE, FALSE);
+		SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_ActualSamplingRate, ATTR_VISIBLE, FALSE);
+		SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_TargetSamplingRate, ATTR_VISIBLE, FALSE);
 	}
 	
 	// set measurement mode
@@ -8294,6 +8326,20 @@ static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackD
 			// adjust duration display
 			SetCtrlVal(panel, Set_Duration, tskSet->timing->nSamples / tskSet->timing->sampleRate);
 			
+			// if oversampling must be adjusted automatically
+			if (tskSet->timing->oversamplingAuto) {
+				tskSet->timing->oversampling = (uInt32)(tskSet->timing->targetSampleRate/tskSet->timing->sampleRate);
+				if (!tskSet->timing->oversampling) tskSet->timing->oversampling = 1;
+				SetCtrlVal(panel, Set_Oversampling, tskSet->timing->oversampling);
+				
+				// update also read AI data structures
+				discard_ReadAIData_type(&tskSet->readAIData);
+				tskSet->readAIData = init_ReadAIData_type(tskSet->dev);
+			}
+			
+			// given oversampling, adjust also the actual DAQ sampling rate display
+			SetCtrlVal(panel, Set_ActualSamplingRate, tskSet->timing->sampleRate * tskSet->timing->oversampling * 1e-3);	// display in [kHz]
+			
 			// send sampling rate
 			nullChk( samplingRatePtr = malloc(sizeof(double)) );
 			*samplingRatePtr = tskSet->timing->sampleRate;
@@ -8339,10 +8385,46 @@ static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackD
 		case Set_Oversampling:
 			
 			GetCtrlVal(panel, control, &tskSet->timing->oversampling);
+			// given final sampling rate, adjust also the actual DAQ sampling rate display
+			SetCtrlVal(panel, Set_ActualSamplingRate, tskSet->timing->sampleRate * tskSet->timing->oversampling * 1e-3);	// display in [kHz]
 			
 			discard_ReadAIData_type(&tskSet->readAIData);
 			tskSet->readAIData = init_ReadAIData_type(tskSet->dev);
+			break;
 			
+		case Set_AutoOversampling:
+			
+			GetCtrlVal(panel, control, &tskSet->timing->oversamplingAuto);
+			
+			if (tskSet->timing->oversamplingAuto) {
+				SetCtrlAttribute(panel, Set_Oversampling, ATTR_DIMMED, TRUE);
+				// set target sampling rate display to be equal to the product between sampling rate and oversampling
+				tskSet->timing->targetSampleRate = tskSet->timing->sampleRate * tskSet->timing->oversampling;
+				SetCtrlVal(panel, Set_TargetSamplingRate, tskSet->timing->targetSampleRate * 1e-3);		// display in [kHz]
+				SetCtrlAttribute(panel, Set_TargetSamplingRate, ATTR_VISIBLE, TRUE);
+			} else {
+				SetCtrlAttribute(panel, Set_Oversampling, ATTR_DIMMED, FALSE);
+				SetCtrlAttribute(panel, Set_TargetSamplingRate, ATTR_VISIBLE, FALSE);
+			}
+			
+			break;
+			
+		case Set_TargetSamplingRate:
+			
+			GetCtrlVal(panel, control, &tskSet->timing->targetSampleRate);	// read in [kHz]
+			tskSet->timing->targetSampleRate *= 1e3;						// convert to [Hz]
+			
+			// calculate oversampling
+			tskSet->timing->oversampling = (uInt32)(tskSet->timing->targetSampleRate/tskSet->timing->sampleRate);
+			if (!tskSet->timing->oversampling) tskSet->timing->oversampling = 1;
+			SetCtrlVal(panel, Set_Oversampling, tskSet->timing->oversampling);
+			
+			// update read AI data structures
+			discard_ReadAIData_type(&tskSet->readAIData);
+			tskSet->readAIData = init_ReadAIData_type(tskSet->dev);
+			
+			// update actual DAQ sampling rate display
+			SetCtrlVal(panel, Set_ActualSamplingRate, tskSet->timing->oversampling * tskSet->timing->sampleRate * 1e-3); 	// display in [kHz]
 			break;
 			
 		case Set_BlockSize:
@@ -9327,7 +9409,7 @@ static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callback
 				case TaskSetPan_Repeat:
 				case TaskSetPan_Wait:
 					
-					TaskControlEvent(dev->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+					TaskControlEvent(dev->taskController, TC_Event_Configure, NULL, NULL);
 					break;
 					
 			}
@@ -10796,7 +10878,7 @@ static int ClearDAQmxTasks (Dev_type* dev)
 	}
 	
 	// signal that device is not configured
-	TaskControlEvent(dev->taskController, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+	TaskControlEvent(dev->taskController, TC_Event_Unconfigure, NULL, NULL);
 	
 	return 0;
 	
@@ -11767,15 +11849,42 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
 		if ((*chanSetPtr)->onDemand) continue;
-		// forward data from the AI buffer to the VChan if the task was not aborted	
-		if (!GetTaskControlAbortIterationFlag(dev->taskController))
-			errChk( SendAIBufferData(dev, *chanSetPtr, chIdx, nRead, readBuffer, &errMsg) ); 
+		// forward data from the AI buffer to the VChan
+		errChk( SendAIBufferData(dev, *chanSetPtr, chIdx, nRead, readBuffer, &errMsg) ); 
 		// next AI channel
 		chIdx++;
 	}
 	
 	// cleanup
 	OKfree(readBuffer);
+	
+	// stop AI task if TC iteration was aborted
+	if (GetTaskControlAbortFlag(dev->taskController)) {
+		int*				nActiveTasksPtr		= NULL;
+		DataPacket_type*	nullPacket			= NULL; 
+		
+		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+		
+			errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
+			(*nActiveTasksPtr)--;
+		
+			if (!*nActiveTasksPtr)
+				TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+		
+		CmtReleaseTSVPtr(dev->nActiveTasks);
+			
+		// send NULL data packets to AI channels used in the DAQmx task
+		size_t				nChans			= ListNumItems(dev->AITaskSet->chanSet); 
+		ChanSet_type**		chanSetPtr; 
+		for (size_t i = 1; i <= nChans; i++) { 
+			chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+			// include only channels for which HW-timing is required
+			if ((*chanSetPtr)->onDemand) continue;
+			// send NULL packet to signal end of data transmission
+			errChk( SendDataPacket((*chanSetPtr)->srcVChan, &nullPacket, 0, &errMsg) );
+		}
+			
+	}
 	
 	return 0;
 	
@@ -11793,13 +11902,11 @@ Error:
 	//-------------------------
 	// cleanup
 	//-------------------------
-	// clear all device tasks
-	ClearDAQmxTasks(dev); 
+	// stop all device tasks
+	StopDAQmxTasks(dev, NULL); 
 	
 	OKfree(readBuffer); 
 
-	// terminate task controller iteration
-	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	OKfree(errMsg);
 	
 	return 0;
@@ -11843,10 +11950,11 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		
 		// Task Controller iteration is complete if all DAQmx Tasks are complete
 		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
-		(*nActiveTasksPtr)--;
 		
-		if (!*nActiveTasksPtr)
-			TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+			(*nActiveTasksPtr)--;
+		
+			if (!*nActiveTasksPtr)
+				TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 		
 		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
@@ -11877,10 +11985,11 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
 	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
-	(*nActiveTasksPtr)--;
+	
+		(*nActiveTasksPtr)--;
 		
-	if (!*nActiveTasksPtr)
-		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+		if (!*nActiveTasksPtr)
+			TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 		
 	CmtReleaseTSVPtr(dev->nActiveTasks);
 	
@@ -11902,12 +12011,10 @@ Error:
 	// cleanup
 	//-------------------------
 	// clear all device tasks
-	ClearDAQmxTasks(dev); 
+	StopDAQmxTasks(dev, NULL); 
 	
 	OKfree(readBuffer); 
 
-	// terminate task controller iteration
-	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	OKfree(errMsg);
 	
 	return 0;
@@ -11918,19 +12025,22 @@ int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyN
 	Dev_type*			dev 					= callbackData;
 	int					error					= 0;
 	char*				errMsg					= NULL;
-	bool32				taskDoneFlag			= FALSE;
+	//bool32				taskDoneFlag			= FALSE;
 	
 	// this is called back every number of samples that is set
 
-	DAQmxIsTaskDone(dev->AOTaskSet->taskHndl, &taskDoneFlag);
-	if (!taskDoneFlag) 
-		errChk( WriteAODAQmx(dev, &errMsg) );
+	//DAQmxIsTaskDone(dev->AOTaskSet->taskHndl, &taskDoneFlag);
+	//if (!taskDoneFlag) 
+	
+	errChk( WriteAODAQmx(dev, &errMsg) );
 		
 	return 0;
 	
 Error:
 	
-	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
+	// stop all tasks
+	StopDAQmxTasks(dev, NULL);
+	
 	OKfree(errMsg);
 	return 0;
 }
@@ -12284,16 +12394,17 @@ SkipPacket:
 		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
 	}
 	
-	if (stopAOTaskFlag && (!data->writeBlocksLeftToWrite--)) {
+	if (stopAOTaskFlag && (!data->writeBlocksLeftToWrite--) || GetTaskControlAbortFlag(dev->taskController)) {
 		int*	nActiveTasksPtr = NULL;
 		
 		DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
 		// Task Controller iteration is complete if all DAQmx Tasks are complete
 		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
-		(*nActiveTasksPtr)--;
 		
-		if (!*nActiveTasksPtr)
-		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+			(*nActiveTasksPtr)--;
+		
+			if (!*nActiveTasksPtr)
+				TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 		
 		CmtReleaseTSVPtr(dev->nActiveTasks);
 		
@@ -12732,7 +12843,7 @@ int CVICALLBACK ManageDevices_CB (int panel, int control, int event, void *callb
 					AddDAQmxDeviceToManager(newDAQmxDev);
 					
 					// configure Task Controller
-					TaskControlEvent(newDAQmxDev->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+					TaskControlEvent(newDAQmxDev->taskController, TC_Event_Configure, NULL, NULL);
 					
 					// undim "Delete" menu item
 					SetMenuBarAttribute(nidaq->menuBarHndl, nidaq->deleteDevMenuItemID, ATTR_DIMMED, 0);
@@ -13773,7 +13884,7 @@ Error:
 }
 
 /// HIFN Updates number of samples acquired when task controller is not active for analog and digital tasks.
-static int ADNSamples_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int ADNSamples_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	// update only if task controller is not active
 	if (taskActive) return 0;
@@ -13851,7 +13962,7 @@ Error:
 }
 
 /// HIFN Receives sampling rate info for analog and digital IO DAQmx tasks when task controller is not active.
-static int ADSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int ADSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	// update only if task controller is not active
 	if (taskActive) return 0;
@@ -13915,7 +14026,7 @@ Error:
 	return error;
 }
 
-static int AO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int AO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	Dev_type*						dev					= GetTaskControlModuleData(taskControl);
 	ChanSet_type*					chan				= GetVChanOwner((VChan_type*)sinkVChan);
@@ -14072,12 +14183,12 @@ Error:
 	return error;
 }
 
-static int DO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int DO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	return 0;
 }
 
-static int CO_DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int CO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	//Dev_type*				dev					= GetTaskControlModuleData(taskControl);
 	int						error				= 0;
@@ -14410,21 +14521,6 @@ Error:
 	OKfree(errMsg);
 }
 
-static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFlag)
-{
-	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
-	char*				errMsg		= NULL;
-	int					error		= 0;
-	
-	errChk( StopDAQmxTasks(dev, &errMsg) );
-	
-	return;
-Error:
-	
-	TaskControlIterationDone(taskControl, error, errMsg, FALSE); 
-	OKfree(errMsg);
-}
-
 static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	//Dev_type*	dev	= GetTaskControlModuleData(taskControl);
@@ -14464,7 +14560,7 @@ static int StoppedTC (TaskControl_type* taskControl,  BOOL const* abortFlag, cha
 //	return error; 
 }
 
-static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
+static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
 {
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
 	ChanSet_type**		chanSetPtr;
@@ -14590,7 +14686,7 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[]
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 }
 
-static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	//Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	

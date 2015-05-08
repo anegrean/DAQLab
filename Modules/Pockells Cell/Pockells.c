@@ -191,8 +191,6 @@ static int							UnconfigureTC										(TaskControl_type* taskControl, BOOL con
 
 static void							IterateTC											(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
-static void							AbortIterationTC									(TaskControl_type* taskControl, BOOL const* abortFlag);
-
 static int							StartTC												(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static int				 			ResetTC 											(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
@@ -201,13 +199,13 @@ static int							DoneTC												(TaskControl_type* taskControl, BOOL const* a
 
 static int							StoppedTC											(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							TaskTreeStatus 										(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int							TaskTreeStatus 										(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
 
-static int				 			DataReceivedTC										(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int				 			DataReceivedTC										(TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 static void 						ErrorTC 											(TaskControl_type* taskControl, int errorID, char* errorMsg);
 
-static int							ModuleEventHandler									(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
+static int							ModuleEventHandler									(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 //==============================================================================
 // Global variables
@@ -545,9 +543,9 @@ static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomMo
 	errChk( DLGetXMLElementAttributes(pockellsXMLElement, eomAttr, NumElem(eomAttr)) );
 	
 	nullChk( taskController = init_TaskControl_type(taskControllerName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
-									  AbortIterationTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC) );
+									  StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC) );
 	// configure task controller
-	TaskControlEvent(taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+	TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL);
 	
 	nullChk( eom = init_PockellsEOM_type(eomModule, &taskController) );
 	
@@ -734,9 +732,9 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	
 	
 	nullChk(taskController = init_TaskControl_type(taskControllerName, eom, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
-									  AbortIterationTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC) );
+									  StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC) );
 	// configure task controller
-	TaskControlEvent(taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+	TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL);
 	
 	nullChk( eom = init_PockellsEOM_type(eomModule, &taskController) );
 	
@@ -1585,13 +1583,6 @@ Error:
 	OKfree(errMsg);
 }
 
-static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFlag)
-{
-	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
-	
-	TaskControlIterationDone(taskControl, 0, "", FALSE);
-}
-
 static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
@@ -1620,14 +1611,14 @@ static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	return 0;
 }
 
-static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
+static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
@@ -1639,7 +1630,7 @@ static void ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 	
 }
 
-static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	

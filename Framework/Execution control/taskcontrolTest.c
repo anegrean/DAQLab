@@ -65,7 +65,7 @@ int main (int argc, char *argv[])
 	// ZStack Task
 	ZStackTask			= init_TaskControl_type ("Z Stack Task", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ZStackTask_ErrorHandler);
 	SetTaskControlIterations(ZStackTask, 1);
-	SetTaskControlExecutionMode(ZStackTask, TASK_EXECUTE_BEFORE_SUBTASKS_START);
+	SetTaskControlExecutionMode(ZStackTask, TC_Execute_BeforeChildTCs);
 	SetTaskControlIterationsWait(ZStackTask, 0);
 	SetTaskControlLog(ZStackTask, TaskExecutionLog);
 	
@@ -83,8 +83,8 @@ int main (int argc, char *argv[])
 	SetTaskControlLog(DevX, TaskExecutionLog);
 	
 	// Make ZStage subtask to ZStack task
-	AddSubTaskToParent(ZStackTask, ZStage);
-	//AddSubTaskToParent(ZStackTask, DevX);
+	AddChildTCToParent(ZStackTask, ZStage);
+	//AddChildTCToParent(ZStackTask, DevX);
 	
 	//AddHWSlaveTrigToMaster(ZStage, DevX); 
 	
@@ -102,14 +102,14 @@ void ZStackTask_ErrorHandler (TaskControl_type* taskControl, char* errorMsg)
 void ZStage_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {
 	//TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);    
-	//TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
+	//TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL);
 	Beep();
 }
 
 void DevX_Iterate (TaskControl_type* taskControl, size_t currentIteration, BOOL const* abortFlag)
 {  
 	TaskControlEvent(taskControl, TASK_EVENT_HWTRIG_SLAVE_ARMED, NULL, NULL);    
-	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
+	TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL);
 }
 
 int CVICALLBACK CB_ControlPan (int panel, int event, void *callbackData,
@@ -136,25 +136,25 @@ int CVICALLBACK CB_TaskController (int panel, int control, int event, void *call
 				
 				case ControlPan_StartBTTN:
 					
-					TaskControlEvent(ZStackTask, TASK_EVENT_START, NULL, NULL); 
+					TaskControlEvent(ZStackTask, TC_Event_Start, NULL, NULL); 
 					
 					break;
 					
 				case ControlPan_StopBTTN:
 					
-					TaskControlEvent(ZStackTask, TASK_EVENT_STOP, NULL, NULL); 
+					TaskControlEvent(ZStackTask, TC_Event_Stop, NULL, NULL); 
 					
 					break;
 					
 				case ControlPan_ConfigureBTTN:
 					
-					TaskControlEvent(ZStackTask, TASK_EVENT_CONFIGURE, NULL, NULL); 
+					TaskControlEvent(ZStackTask, TC_Event_Configure, NULL, NULL); 
 					
 					break;
 					
 				case ControlPan_StepBTTN:
 					
-					TaskControlEvent(ZStackTask, TASK_EVENT_ITERATE_ONCE, NULL, NULL); 
+					TaskControlEvent(ZStackTask, TC_Event_IterateOnce, NULL, NULL); 
 					
 					break;
 					

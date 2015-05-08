@@ -31,6 +31,7 @@
 
 #define MOD_LaserScanning_UI 								"./Modules/Laser Scanning/UI_LaserScanning.uir"
 #define VChanDataTimeout									1e4					// Timeout in [ms] for Sink VChans to receive data
+#define TaskControllerIterationTimeout						10					// Timeout in [s] to complete the task controller iteration function
 
 //--------------------------------------------------------------------------------
 // Default VChan names
@@ -381,10 +382,8 @@ struct ScanEngine {
 	//-----------------------------------
 	// Scan Settings									// For performing frame scans.
 	//-----------------------------------
-	double						pixelClockRate;			// Pixel clock rate in [Hz] for incoming fluorescence data from all detector channels.
-														// Note: This is not to be confused with the pixel dwell time, which is a multiple of 1/pixelClockRate.
-	double						pixDelay;				// Pixel signal delay in [us] due to processing electronics measured from the moment the signal (fluorescence) is 
-														// generated at the sample.
+	double						referenceClockFreq;		// Reference clock frequency in [Hz] that determines the smallest time unit in which the galvo and pixel sampling times can be divided.
+	double						pixDelay;				// Pixel signal delay in [us] due to processing electronics measured from the moment the signal (fluorescence) is generated at the sample.
 	
 	//-----------------------------------
 	// Optics
@@ -463,7 +462,10 @@ typedef struct {
 	double						minimumPointJumpPeriod;	// Minimum period to complete a point jump cycle in [ms].
 	uInt32						pointJumpCycles;		// Number of times to repeat a jump cycle between a series of point ROIs.
 	
-	ListType					pointJumps;				// List of points to jump in-between of Point_type*. The order of point jumping is determined by the order of the elements in the list.				
+	ListType					pointJumps;				// List of points to jump in-between of Point_type*. The order of point jumping is determined by the order of the elements in the list.
+	uInt32*						galvoJumpSkipKeepPix;	// Array of (skip, keep) pixel number pairs used to segment the incoming fluorescence signal from multiple point ROIs during point jumping.
+														// The first number of pixels to skip corresponds to the fly-in portion of the galvos from their parked position to the first point ROI.
+														// Note: for the correct alignment, also the system delay of the detection must be taken into account
 	
 	//----------------
 	// Image buffers
@@ -642,7 +644,7 @@ static int 							init_ScanEngine_type 								(ScanEngine_type** 			engine,
 																						 TaskControl_type**			taskController,
 																						 ScanEngineEnum_type 		engineType,
 																						 uInt32						nScanChannels,
-																						 double						pixelClockRate,
+																						 double						referenceClockFreq,
 																						 double						pixelDelay,
 																						 double						scanLensFL,
 																						 double						tubeLensFL);	
@@ -678,7 +680,7 @@ static RectRaster_type*				init_RectRaster_type								(LaserScanning_type*	lsMo
 																						size_t					nFrames,
 																						uInt32					nScanChannels,
 																				 	 	double					galvoSamplingRate,
-																				 	 	double					pixelClockRate,
+																				 	 	double					referenceClockFreq,
 																					 	double					pixelDelay,
 																				 	 	uInt32					scanHeight,
 																				 	 	int						scanHeightOffset,
@@ -827,8 +829,6 @@ static int							UncofigureTC_NonResGalvoCal							(TaskControl_type* taskContro
 
 static void							IterateTC_NonResGalvoCal							(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
-static void							AbortIterationTC_NonResGalvoCal						(TaskControl_type* taskControl, BOOL const* abortFlag);
-
 static int							StartTC_NonResGalvoCal								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static int							DoneTC_NonResGalvoCal								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
@@ -837,9 +837,9 @@ static int							StoppedTC_NonResGalvoCal							(TaskControl_type* taskControl, 
 
 static int				 			ResetTC_NonResGalvoCal 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							TaskTreeStatus_NonResGalvoCal 						(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int							TaskTreeStatus_NonResGalvoCal 						(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
 
-//static int				 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+//static int				 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 	// for RectRaster_type scanning
 static int							ConfigureTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
@@ -847,8 +847,6 @@ static int							ConfigureTC_RectRaster								(TaskControl_type* taskControl, B
 static int							UnconfigureTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static void							IterateTC_RectRaster								(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
-
-static void							AbortIterationTC_RectRaster							(TaskControl_type* taskControl, BOOL const* abortFlag);
 
 static int							StartTC_RectRaster									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
@@ -858,13 +856,13 @@ static int							StoppedTC_RectRaster								(TaskControl_type* taskControl, BOO
 
 static int				 			ResetTC_RectRaster 									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							TaskTreeStatus_RectRaster 							(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int							TaskTreeStatus_RectRaster 							(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
 
-//static int				 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+//static int				 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 static void 						ErrorTC_RectRaster 									(TaskControl_type* taskControl, int errorID, char* errorMsg);
 
-static int							ModuleEventHandler_RectRaster						(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
+static int							ModuleEventHandler_RectRaster						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 	// add below more task controller callbacks for different scan engine types
 
@@ -1204,11 +1202,11 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 					NonResRectRasterScan_PixelDwellTimes(rectRasterScanEngine);
 					
 					if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)scanEngine)) 
-						TaskControlEvent(scanEngine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						TaskControlEvent(scanEngine->taskControl, TC_Event_Configure, NULL, NULL);
 					else
-						TaskControlEvent(scanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+						TaskControlEvent(scanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 				} else
-					TaskControlEvent(scanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+					TaskControlEvent(scanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 				   
 				break;
 				
@@ -1376,7 +1374,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 												{"ScanLensFL", 					BasicData_Double, 		&scanEngine->scanLensFL},
 												{"TubeLensFL", 					BasicData_Double, 		&scanEngine->tubeLensFL},
 												{"Objective", 					BasicData_CString, 		objectiveName},
-												{"PixelClockRate", 				BasicData_Double, 		&scanEngine->pixelClockRate},
+												{"PixelClockRate", 				BasicData_Double, 		&scanEngine->referenceClockFreq},
 												{"PixelSignalDelay", 			BasicData_Double, 		&scanEngine->pixDelay} 			};
 												
 		// save attributes
@@ -1523,7 +1521,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	double							scanLensFL						= 0;
 	double							tubeLensFL						= 0;
 	double							objectiveFL						= 0;
-	double							pixelClockRate					= 0;
+	double							referenceClockFreq				= 0;
 	double							pixelDelay						= 0;
 	BOOL							finiteFrames					= FALSE;
 	unsigned int					nScanChannels					= 0;
@@ -1542,7 +1540,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 																		{"ScanLensFL", 					BasicData_Double, 		&scanLensFL},
 																		{"TubeLensFL", 					BasicData_Double, 		&tubeLensFL},
 																		{"Objective", 					BasicData_CString, 		&assignedObjectiveName},
-																		{"PixelClockRate", 				BasicData_Double, 		&pixelClockRate},
+																		{"PixelClockRate", 				BasicData_Double, 		&referenceClockFreq},
 																		{"PixelSignalDelay", 			BasicData_Double, 		&pixelDelay} };
 																	
 	DAQLabXMLNode					objectiveAttr[]					= { {"Name", 						BasicData_CString, 		&objectiveName},
@@ -1609,7 +1607,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 				//-----------------------------------  
 					
 				
-				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, finiteFrames, nFrames, nScanChannels, galvoSamplingRate, pixelClockRate, 
+				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, finiteFrames, nFrames, nScanChannels, galvoSamplingRate, referenceClockFreq, 
 							 pixelDelay, height, heightOffset, width, widthOffset, pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
 				break;
 			
@@ -2029,7 +2027,7 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	
 	// update galvo and pixel sampling rates
 	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_GalvoSamplingRate, ((RectRaster_type*)engine)->galvoSamplingRate/1e3); 		// convert from [Hz] to [kHz]
-	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelClockFrequency, engine->pixelClockRate/1e6);								// convert from [Hz] to [MHz] 
+	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_RefClkFreq, engine->referenceClockFreq/1e6);								// convert from [Hz] to [MHz] 
 	// update pixel delay
 	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelDelay, engine->pixDelay);													// convert from [Hz] to [MHz] 
 	
@@ -2203,11 +2201,11 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 								NonResRectRasterScan_PixelDwellTimes(rectRasterScanEngine);
 					
 								if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)newScanEngine))
-									TaskControlEvent(newScanEngine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+									TaskControlEvent(newScanEngine->taskControl, TC_Event_Configure, NULL, NULL);
 								else 
-									TaskControlEvent(newScanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+									TaskControlEvent(newScanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 							} else 
-								TaskControlEvent(newScanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+								TaskControlEvent(newScanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 								
 							break;
 				
@@ -2382,13 +2380,13 @@ static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event
 				if (scanEngine->fastAxisCal == *axisCalPtr) {
 					scanEngine->fastAxisCal = NULL;
 					// unconfigure scan engine
-					TaskControlEvent(scanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+					TaskControlEvent(scanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 				}
 				// remove slow scan axis calibration if assigned
 				if (scanEngine->slowAxisCal == *axisCalPtr) {
 					scanEngine->slowAxisCal = NULL;
 					// unconfigure scan engine
-					TaskControlEvent(scanEngine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+					TaskControlEvent(scanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 				}
 				
 				UpdateScanEngineCalibrations(scanEngine); 
@@ -2460,7 +2458,7 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							// register calibration Task Controller with the framework
 							DLAddTaskController((DAQLabModule_type*)ls, nrgCal->baseClass.taskController);
 							// configure Task Controller
-							TaskControlEvent(nrgCal->baseClass.taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+							TaskControlEvent(nrgCal->baseClass.taskController, TC_Event_Configure, NULL, NULL);
 							// register VChans with framework
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanCom);
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanComNSamples);
@@ -2712,11 +2710,12 @@ Error:
 
 static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	ScanEngine_type*		engine				= callbackData;
-	ScanAxisCal_type**		scanAxisPtr			= NULL;
-	int						listItemIdx			= 0;
-	int						nRows				= 0;
-	int						workspacePanHndl	= 0;
+	ScanEngine_type*		engine					= callbackData;
+	RectRaster_type*		rectRasterEngine		= (RectRaster_type*) engine;
+	ScanAxisCal_type**		scanAxisPtr				= NULL;
+	int						listItemIdx				= 0;
+	int						nRows					= 0;
+	int						workspacePanHndl		= 0;
 	
 	switch (event) {
 			
@@ -2759,17 +2758,17 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
 					
 					// configure/unconfigure scan engine
-					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths((RectRaster_type*)engine);
-						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
+						NonResRectRasterScan_ScanWidths(rectRasterEngine);
+						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
 					
-						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
-							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
+							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
 						else 
-							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 					} else 
-						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 						
 					break;
 					
@@ -2784,17 +2783,17 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
 					
 					// configure/unconfigure scan engine
-					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths((RectRaster_type*)engine);
-						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
+						NonResRectRasterScan_ScanWidths(rectRasterEngine);
+						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
 					
-						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
-							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
+							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
 						else 
-							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 					} else 
-						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 					
 					break;
 					
@@ -2828,18 +2827,18 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					UpdateScanEngineCalibrations(engine);
 					
 					// configure/unconfigure scan engine
-					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths((RectRaster_type*)engine);
-						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
+						NonResRectRasterScan_ScanWidths(rectRasterEngine);
+						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
 					
-						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
-							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
+							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
 						else 
-							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 						
 					} else 
-						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 						
 					break;
 					
@@ -2868,37 +2867,37 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					UpdateScanEngineCalibrations(engine);
 					
 					// configure/unconfigure scan engine
-					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths((RectRaster_type*)engine);
-						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
+						NonResRectRasterScan_ScanWidths(rectRasterEngine);
+						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
 					
-						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine)) 
-							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine)) 
+							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
 						else 
-							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 							
 					} else
-						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 						
 					break;
 					
-				case ScanSetPan_PixelClockFrequency:
+				case ScanSetPan_RefClkFreq:
 					
-					GetCtrlVal(panel, control, &engine->pixelClockRate);								// read in [MHz]
-					engine->pixelClockRate *= 1e6;														// convert to [Hz]
+					GetCtrlVal(panel, control, &engine->referenceClockFreq);								// read in [MHz]
+					engine->referenceClockFreq *= 1e6;														// convert to [Hz]
 					// configure/unconfigure scan engine
-					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
+					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths((RectRaster_type*)engine);
-						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
+						NonResRectRasterScan_ScanWidths(rectRasterEngine);
+						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
 					
-						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
-							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
+							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
 						else
-							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 					} else
-						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 					break;
 					
 				case ScanSetPan_PixelDelay:
@@ -2909,20 +2908,25 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					
 				case ScanSetPan_GalvoSamplingRate:
 					
-					GetCtrlVal(panel, control, &((RectRaster_type*) engine)->galvoSamplingRate);	// read in [kHz]
-					((RectRaster_type*) engine)->galvoSamplingRate *= 1e3;							// convert to [Hz]
-					// configure/unconfigure scan engine
-					if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
-				
-						NonResRectRasterScan_ScanWidths((RectRaster_type*)engine);
-						NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
+					GetCtrlVal(panel, control, &rectRasterEngine->galvoSamplingRate);			// read in [kHz]
+					rectRasterEngine->galvoSamplingRate *= 1e3;									// convert to [Hz]
+					// enforce the chosen galvo sampling rate to divide exactly the reference clock frequency
+					uInt32	refClkTicks = (uInt32)(engine->referenceClockFreq/rectRasterEngine->galvoSamplingRate);
+					rectRasterEngine->galvoSamplingRate = engine->referenceClockFreq/refClkTicks;
+					SetCtrlVal(panel, control, rectRasterEngine->galvoSamplingRate * 1e-3);  	// display in [kHz]
 					
-						if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
-							TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+					// configure/unconfigure scan engine
+					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
+				
+						NonResRectRasterScan_ScanWidths(rectRasterEngine);
+						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
+					
+						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
+							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
 						else
-							TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 					} else
-						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 					break;
 					
 			}
@@ -2950,10 +2954,10 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					DeleteTableRows(panel, control, nRows, 1);
 					
 					// configure / unconfigure
-					if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
-						TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+					if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
+						TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
 					else
-						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 
+						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 
 						
 					break;
 				
@@ -2982,10 +2986,10 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 						engine->objectiveLens = NULL;
 					
 					// configure / unconfigure
-					if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
-						TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+					if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
+						TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
 					else
-						TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 					
 					break;
 			}
@@ -3502,34 +3506,34 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, VChanDataTimeout + Default_ActiveNonResGalvoCal_ScanTime * 1e3, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
-	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, DLGetCommonThreadPoolHndl(), ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, AbortIterationTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
+	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, DLGetCommonThreadPoolHndl(), ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
 								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, TaskTreeStatus_NonResGalvoCal, NULL, NULL, NULL);
 	cal->baseClass.lsModule			= lsModule;
 	
 								  
 	// init ActiveNonResGalvoCal_type
-	cal->commandVMax		= 0;
-	cal->currentCal			= NonResGalvoCal_Slope_Offset;
-	cal->currIterIdx		= 0;
-	cal->slope				= NULL;	// i.e. calibration not performed yet
-	cal->offset				= NULL;
-	cal->posStdDev			= NULL;
-	cal->targetSlope		= 0;
-	cal->extraRuns			= 0;
-	cal->lag				= NULL;
-	cal->nRepeat			= 0;
-	cal->lastRun			= FALSE;
-	cal->nRampSamples		= 0;
-	cal->switchTimes		= NULL;
-	cal->maxSlopes			= NULL;
-	cal->triangleCal		= NULL;
-	cal->positionWaveform	= NULL;
-	cal->commandWaveform	= NULL;
-	cal->resolution  		= 0;
-	cal->minStepSize 		= 0;
-	cal->scanTime    		= Default_ActiveNonResGalvoCal_ScanTime;	// in [s]
-	cal->parked				= 0;
-	cal->mechanicalResponse	= 1;
+	cal->commandVMax				= 0;
+	cal->currentCal					= NonResGalvoCal_Slope_Offset;
+	cal->currIterIdx				= 0;
+	cal->slope						= NULL;	// i.e. calibration not performed yet
+	cal->offset						= NULL;
+	cal->posStdDev					= NULL;
+	cal->targetSlope				= 0;
+	cal->extraRuns					= 0;
+	cal->lag						= NULL;
+	cal->nRepeat					= 0;
+	cal->lastRun					= FALSE;
+	cal->nRampSamples				= 0;
+	cal->switchTimes				= NULL;
+	cal->maxSlopes					= NULL;
+	cal->triangleCal				= NULL;
+	cal->positionWaveform			= NULL;
+	cal->commandWaveform			= NULL;
+	cal->resolution  				= 0;
+	cal->minStepSize 				= 0;
+	cal->scanTime    				= Default_ActiveNonResGalvoCal_ScanTime;	// in [s]
+	cal->parked						= 0;
+	cal->mechanicalResponse			= 1;
 	
 	return cal;
 }
@@ -3856,7 +3860,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 								 TaskControl_type**			taskControllerPtr,
 								 ScanEngineEnum_type 		engineType,
 								 uInt32						nScanChannels,
-								 double						pixelClockRate,
+								 double						referenceClockFreq,
 								 double						pixelDelay,
 								 double						scanLensFL,
 								 double						tubeLensFL)					
@@ -3928,7 +3932,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	engine->activeDisplay				= NULL;
 	// scan engine settings panel handle
 	engine->engineSetPanHndl			= 0;
-	engine->pixelClockRate				= pixelClockRate;
+	engine->referenceClockFreq			= referenceClockFreq;
 	engine->pixDelay					= pixelDelay;
 	// optics
 	engine->scanLensFL					= scanLensFL;
@@ -4243,7 +4247,7 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 												size_t					nFrames,
 												uInt32					nScanChannels,
 												double					galvoSamplingRate,
-												double					pixelClockRate,
+												double					referenceClockFreq,
 												double					pixelDelay,
 												uInt32					scanHeight,
 												int						scanHeightOffset,
@@ -4264,13 +4268,14 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 	// init base scan engine class
 	//--------------------------------------------------------
 	// init task controller
-	nullChk( taskController	= init_TaskControl_type(engineName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC_RectRaster, UnconfigureTC_RectRaster, IterateTC_RectRaster, AbortIterationTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
+	nullChk( taskController	= init_TaskControl_type(engineName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC_RectRaster, UnconfigureTC_RectRaster, IterateTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
 										  DoneTC_RectRaster, StoppedTC_RectRaster, TaskTreeStatus_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster) );
 	SetTaskControlMode(taskController, finiteFrames);
 	SetTaskControlIterations(taskController, nFrames);
+	SetTaskControlIterationTimeout(taskController, TaskControllerIterationTimeout);
 	
 	// init scan engine base class
-	errChk( init_ScanEngine_type((ScanEngine_type**)&engine, lsModule, &taskController, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, nScanChannels, pixelClockRate, pixelDelay, scanLensFL, tubeLensFL) );
+	errChk( init_ScanEngine_type((ScanEngine_type**)&engine, lsModule, &taskController, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, nScanChannels, referenceClockFreq, pixelDelay, scanLensFL, tubeLensFL) );
 	// override discard method
 	engine->baseClass.Discard = discard_RectRaster_type;
 	
@@ -4303,6 +4308,7 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 	engine->pointJumpTime				= 0;
 	engine->pointJumpCycles				= 1;
 	engine->pointJumps					= ListCreate(sizeof(Point_type*));
+	engine->galvoJumpSkipKeepPix		= NULL;
 	
 	//--------------------
 	// image buffers
@@ -4342,8 +4348,8 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	//----------------------------------
 	// Point jump settings
 	
-	ListDispose(rectRaster->pointJumps);
-	rectRaster->pointJumps = 0;
+	OKfreeList(rectRaster->pointJumps);
+	OKfree(rectRaster->galvoJumpSkipKeepPix);
 	
 	//--------------------------------------------------------------------
 	// discard Scan Engine data
@@ -4463,11 +4469,11 @@ static int CVICALLBACK NonResRectRasterScan_MainPan_CB (int panel, int control, 
 						NonResRectRasterScan_PixelDwellTimes(scanEngine);
 					
 						if (NonResRectRasterScan_ReadyToScan(scanEngine))
-							TaskControlEvent(scanEngine->baseClass.taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+							TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Configure, NULL, NULL);
 						else
-							TaskControlEvent(scanEngine->baseClass.taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+							TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 					} else
-						TaskControlEvent(scanEngine->baseClass.taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+						TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL);
 					break;
 					
 				case RectRaster_Mode:
@@ -4673,7 +4679,7 @@ static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int cont
 					}
 					
 					// make sure dwell time is a multiple of the pixel clock rate
-					dwellTime =  ceil(dwellTime * scanEngine->baseClass.pixelClockRate) /scanEngine->baseClass.pixelClockRate;
+					dwellTime =  ceil(dwellTime * scanEngine->baseClass.referenceClockFreq) /scanEngine->baseClass.referenceClockFreq;
 					Fmt(dwellTimeString, "%s<%f[p1]", dwellTime);
 					SetCtrlVal(panel, control, dwellTimeString);	  // <--- can be taken out
 					
@@ -4881,9 +4887,9 @@ void NonResRectRasterScan_ScanWidths (RectRaster_type* scanEngine)
 	NonResGalvoCal_type*	fastAxisCal				= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
 	NonResGalvoCal_type*	slowAxisCal				= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
 
-	// enforce pixeldwelltime to be an integer multiple of 1/pixelClockRate
-	// make sure pixeldwelltime is in [us] and pixelClockRate in [Hz] 
-	scanEngine->scanSettings.pixelDwellTime = floor(scanEngine->scanSettings.pixelDwellTime * scanEngine->baseClass.pixelClockRate) / scanEngine->baseClass.pixelClockRate; // result in [us]
+	// enforce pixeldwelltime to be an integer multiple of 1/referenceClockFreq
+	// make sure pixeldwelltime is in [us] and referenceClockFreq in [Hz] 
+	scanEngine->scanSettings.pixelDwellTime = floor(scanEngine->scanSettings.pixelDwellTime * scanEngine->baseClass.referenceClockFreq) / scanEngine->baseClass.referenceClockFreq; // result in [us]
 	Fmt(dwellTimeString,"%s<%f[p3]", scanEngine->scanSettings.pixelDwellTime);
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelDwell, dwellTimeString);	// in [us]
 	
@@ -4988,7 +4994,7 @@ void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 	}
 	
 	// make sure that pixelDwell is a multiple of 1/pix_clock_rate      
-	pixelDwell 	= ceil (NonResGalvoScan_MinPixelDwellTime * (scanEngine->baseClass.pixelClockRate/1e6)) * (1e6/scanEngine->baseClass.pixelClockRate);
+	pixelDwell 	= ceil (NonResGalvoScan_MinPixelDwellTime * (scanEngine->baseClass.referenceClockFreq/1e6)) * (1e6/scanEngine->baseClass.referenceClockFreq);
 	n 		 	= (uInt32) ceil (fastAxisCal->triangleCal->deadTime * (1e3/pixelDwell));           				// dead time pixels at the beginning and end of each line
 	k		 	= (uInt32) ceil (pixelDwell * (scanEngine->galvoSamplingRate/1e6) * (scanEngine->scanSettings.width + 2*n));
 	while (pixelDwell <= NonResGalvoScan_MaxPixelDwellTime) {
@@ -5000,8 +5006,8 @@ void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 			pixelDwell = k/(scanEngine->galvoSamplingRate * (scanEngine->scanSettings.width + 2*n)) * 1e6;      // in [us]
 		}
 	
-		// check if the pixel dwell time is a multiple of 1/pixelClockRate 
-		rem = pixelDwell * (scanEngine->baseClass.pixelClockRate/1e6) - floor(pixelDwell * (scanEngine->baseClass.pixelClockRate/1e6));
+		// check if the pixel dwell time is a multiple of 1/referenceClockFreq 
+		rem = pixelDwell * (scanEngine->baseClass.referenceClockFreq/1e6) - floor(pixelDwell * (scanEngine->baseClass.referenceClockFreq/1e6));
 		if (rem == 0.0)
 			if (CheckNonResGalvoScanFreq(fastAxisCal, scanEngine->scanSettings.pixSize, pixelDwell, scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize + 2 * n * scanEngine->scanSettings.pixSize)) {
 				// add to list
@@ -5071,7 +5077,7 @@ static BOOL	NonResRectRasterScan_ValidConfig (RectRaster_type* scanEngine)
 {
 	// check if scan engine configuration is valid
 	BOOL	validFlag = scanEngine->baseClass.fastAxisCal && scanEngine->baseClass.slowAxisCal && scanEngine->baseClass.objectiveLens &&
-		   				(scanEngine->baseClass.pixelClockRate != 0.0) && (scanEngine->scanSettings.pixSize != 0.0) && scanEngine->baseClass.nScanChans;
+		   				(scanEngine->baseClass.referenceClockFreq != 0.0) && (scanEngine->scanSettings.pixSize != 0.0) && scanEngine->baseClass.nScanChans;
 	if (validFlag)
 		validFlag = (scanEngine->galvoSamplingRate != 0.0) && (scanEngine->baseClass.scanLensFL != 0.0) && (scanEngine->baseClass.tubeLensFL != 0.0) &&
 					(scanEngine->baseClass.objectiveLens->objectiveFL != 0.0);
@@ -5167,7 +5173,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	PulseTrain_type*			pixelPulseTrain								= NULL;
 	char*						errMsg										= NULL;
 	int							error 										= 0;
-	
+	size_t						nFrames										= GetTaskControlIterations(scanEngine->baseClass.taskControl);
 	uInt32 						nDeadTimePixels								= 0;	// Number of pixels at the beginning and end of each line where the motion of the galvo is not linear.
 	uInt32						nPixelsPerLine								= 0;	// Total number of pixels per line including dead time pixels for galvo turn-around.
 	uInt32						nGalvoSamplesPerLine						= 0;	// Total number of analog samples for the galvo command signal per line.
@@ -5319,7 +5325,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// fastAxisScan_Waveform has two line scans (one triangle wave period)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
 		// finite mode
-		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, (scanEngine->scanSettings.height + nFastAxisFlybackLines)/2.0 * GetTaskControlIterations(scanEngine->baseClass.taskControl)) ); 
+		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, (scanEngine->scanSettings.height + nFastAxisFlybackLines)/2.0 * nFrames) ); 
 	else 
 		// for continuous mode
 		nullChk( fastAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&fastAxisScan_Waveform, 0) ); 
@@ -5345,7 +5351,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
 		// move from parked waveform + scan waveform + one sample to return to parked position
 		*nGalvoSamplesPtr = (uInt64)((nGalvoSamplesFastAxisCompensation + nGalvoSamplesFastAxisMoveFromParkedWaveform) + 
-					   (scanEngine->scanSettings.height+nFastAxisFlybackLines) * nGalvoSamplesPerLine * GetTaskControlIterations(scanEngine->baseClass.taskControl) + 1);
+					   (scanEngine->scanSettings.height+nFastAxisFlybackLines) * nGalvoSamplesPerLine * nFrames + 1);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
@@ -5365,7 +5371,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// repeat staircase waveform
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
 		// finite mode
-		nullChk( slowAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&slowAxisScan_Waveform, GetTaskControlIterations(scanEngine->baseClass.taskControl)) ); 
+		nullChk( slowAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&slowAxisScan_Waveform, nFrames) ); 
 	else 
 		// for continuous mode
 		nullChk( slowAxisScan_RepWaveform  = ConvertWaveformToRepeatedWaveformType(&slowAxisScan_Waveform, 0) ); 
@@ -5390,8 +5396,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
 		nGalvoSamplesPtr = malloc(sizeof(uInt64));
 		// move from parked waveform + scan waveform + one sample to return to parked position
-		*nGalvoSamplesPtr = (uInt64) ((nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParked) + 
-					    GetTaskControlIterations(scanEngine->baseClass.taskControl) * nGalvoSamplesSlowAxisScanWaveform + 1);
+		*nGalvoSamplesPtr = (uInt64) ((nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParked) + nFrames * nGalvoSamplesSlowAxisScanWaveform + 1);
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
@@ -5406,8 +5411,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		// finite mode
 		//--------------------
 		// total number of pixels
-		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)(scanEngine->scanSettings.height + nFastAxisFlybackLines) * (uInt64)GetTaskControlIterations(scanEngine->baseClass.taskControl); 
-		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32)(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
+		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)(scanEngine->scanSettings.height + nFastAxisFlybackLines) * (uInt64)nFrames; 
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32)(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0) );
 		
 		// send n pixels
 		nullChk( nPixelsPtr = malloc(sizeof(uInt64)) );
@@ -5419,7 +5424,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		//--------------------
 		// continuous mode
 		//--------------------
-		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32)(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.pixelClockRate) - 2, 2, 0) );
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32)(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0) );
 	
 	// send pulse train info
 	nullChk( pixelPulseTrainPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, NULL, (DiscardFptr_type)discard_PulseTrain_type) );
@@ -5455,15 +5460,17 @@ Error:
 	return NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals;
 }
 
+/// HIFN Generates galvo command and ROI timing signals for jumping the laser beam from its parked position, through a series of points and returns it back to the parked position.
 static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanEngine, char** errorInfo)
 {
 	
 #define NonResRectRasterScan_GeneratePointJumpSignals_Err_NoPoints		-1
 	int						error							= 0;
 	char*					errMsg							= NULL;
-	size_t					nTotalPoints					= ListNumItems(scanEngine->pointJumps);   // number of point ROIs available
+	size_t					nTotalPoints					= ListNumItems(scanEngine->pointJumps);   	// number of point ROIs available
 	Point_type*				pointJump						= NULL;
-	size_t					nVoltages						= 0;
+	size_t					nPointJumps						= 0;										// number of active point jump ROIs
+	size_t					nVoltages						= 0;										// includes the number of active point jump ROIs plus twice the parked voltage
 	size_t					nStartDelayElem					= 0;
 	size_t					nCycleElem						= 0;
 	size_t					nJumpSamples					= 0;
@@ -5524,11 +5531,11 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	for (size_t i = 1; i <= nTotalPoints; i++) {
 		pointJump = *(Point_type**) ListGetPtrToItem(scanEngine->pointJumps, i);
 		if (!pointJump->baseClass.active) continue; // select only point ROIs to jump to
-		nVoltages++;
+		nPointJumps++;
 	}
 	
 	// add also the parked voltages before and after the ROI jumps and allocate memory
-	nVoltages += 2;
+	nVoltages = nPointJumps + 2;
 	nullChk(fastAxisVoltages = malloc(nVoltages * sizeof(double)) );
 	nullChk(slowAxisVoltages = malloc(nVoltages * sizeof(double)) ); 
 	
@@ -5566,15 +5573,9 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	nullChk( fastAxisJumpSignal = malloc(nCycleElem * sizeof(double)) );
 	nullChk( slowAxisJumpSignal = malloc(nCycleElem * sizeof(double)) );
 	nullChk( ROIJumpSignal = calloc(nCycleElem, sizeof(unsigned char)) );
-	
-	/*
-	// set cycle delay elements to be equal to the parked voltage
-	nCycleDelayElem = (size_t)((scanEngine->pointJumpPeriod - scanEngine->minimumPointJumpPeriod) * 1e-3 * scanEngine->galvoSamplingRate);
-	if (nCycleDelayElem) {
-		Set1D(fastAxisJumpSignal + (nCycleElem - nCycleDelayElem), nCycleDelayElem, fastAxisCal->parked);
-		Set1D(slowAxisJumpSignal + (nCycleElem - nCycleDelayElem), nCycleDelayElem, slowAxisCal->parked);
-	}
-	*/
+	// allocate memory for skipping and keeping pixels from point jumps when fluorescence recording is needed
+	OKfree(scanEngine->galvoJumpSkipKeepPix);
+	scanEngine->galvoJumpSkipKeepPix = calloc(2*nPointJumps, sizeof(uInt32));
 	
 	// set jump voltages
 	nParkedSamples = (size_t)(scanEngine->pointParkedTime * 1e-3 * scanEngine->galvoSamplingRate);
@@ -5591,6 +5592,22 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		j += nJumpSamples + nParkedSamples;
 	}
 	
+	
+	// calculate galvo skip-keep pixels to align fluorescence signals with the point jump ROIs
+	size_t skipKeepIdx = 0;
+	for (size_t i = 1; i < nCycleElem; i++) {
+		if (ROIJumpSignal[i]) {
+			scanEngine->galvoJumpSkipKeepPix[skipKeepIdx+1]++;
+		} else
+			scanEngine->galvoJumpSkipKeepPix[skipKeepIdx]++;
+		
+		if (ROIJumpSignal[i] && !ROIJumpSignal[i-1])
+			skipKeepIdx++;
+	}
+	// add start delay to first skip-pix element
+	scanEngine->galvoJumpSkipKeepPix[0] += nStartDelayElem;
+			
+	
 	// jump back to parked position
 	nJumpSamples = (size_t)(NonResRectRasterScan_JumpTime(scanEngine, fastAxisVoltages[nVoltages - 1] - fastAxisVoltages[nVoltages - 2], slowAxisVoltages[nVoltages - 1] - slowAxisVoltages[nVoltages - 2]) * 1e-3 * scanEngine->galvoSamplingRate); 
 	Set1D(fastAxisJumpSignal + j, nCycleElem - j, fastAxisVoltages[nVoltages - 1]);
@@ -5605,6 +5622,8 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	//-----------------------------------------------
 	// Send data packets
 	//-----------------------------------------------
+	
+	// start delay waveforms
 	if (nStartDelayElem) {
 		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisStartDelayWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
@@ -5614,6 +5633,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		errChk( SendDataPacket(scanEngine->baseClass.VChanROITiming, &dataPacket, FALSE, &errMsg) );
 	}
 	
+	// jump waveforms
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisJumpWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisJumpWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
@@ -5728,7 +5748,8 @@ The function is not multi-threaded.
 
 static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t imgBufferIdx, char** errorInfo)
 {
-#define NonResRectRasterScan_BuildImage_Err_WrongPixelDataType	-1 
+#define NonResRectRasterScan_BuildImage_Err_WrongPixelDataType		-1
+#define NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage	-2
 	int							error				= 0;
 	char*						errMsg				= NULL;
 	DataPacket_type*			pixelPacket			= NULL;
@@ -5921,7 +5942,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				SetImageImage(sendimage,destbuffer);
 				SetImagePixSize(sendimage,rectRaster->scanSettings.pixSize);
 				
-				Iterator_type* currentiter=GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);
+				Iterator_type* currentiter = GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);
 				//test
 				iterindex=GetCurrentIterationIndex(currentiter);
 				iterindex++;
@@ -5966,10 +5987,11 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 		// TEMPORARY for one channel only
 		// end task controller iteration
 		if (!pixelPacket) {
-			//TaskControlEvent(rectRaster->baseClass.taskControl, TASK_EVENT_STOP, NULL, NULL);
-			//TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
+			TaskControlIterationDone(rectRaster->baseClass.taskControl, NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage, "Not enough pixels were provided to complete an image", FALSE);
 			break;
 		}
+			
+		
 			
 		
 		//----------------------------------------------------------------------
@@ -6343,11 +6365,11 @@ static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void 
 				NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
 					
 				if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
-					TaskControlEvent(engine->taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
+					TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
 				else
-					TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL); 	
+					TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 			} else
-				TaskControlEvent(engine->taskControl, TASK_EVENT_UNCONFIGURE, NULL, NULL);
+				TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
 			
 			// cleanup, discard panel
 			DiscardPanel(engine->newObjectivePanHndl);
@@ -7461,17 +7483,6 @@ Error:
 	OKfree(errMsg);
 }
 
-static void AbortIterationTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag)
-{
-	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
-	
-	// cleanup
-	discard_Waveform_type(&cal->positionWaveform);
-	discard_Waveform_type(&cal->commandWaveform); 
-	
-	TaskControlIterationDone(taskControl, 0, "", FALSE);
-}
-
 static int StartTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 #define StartTC_NonResGalvoCal_Err_InvalidParameter		-1
@@ -7554,7 +7565,7 @@ static int StoppedTC_NonResGalvoCal (TaskControl_type* taskControl,  BOOL const*
 	return 0; 
 }
 
-static int TaskTreeStatus_NonResGalvoCal (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
+static int TaskTreeStatus_NonResGalvoCal (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
@@ -7615,6 +7626,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 			
 		case ScanEngineMode_PointJump:
 			
+			// for the time being...
 			TaskControlIterationDone(taskControl, 0, 0, FALSE);
 			
 			break;
@@ -7632,18 +7644,10 @@ Error:
 	OKfree(errMsg);
 }
 
-static void AbortIterationTC_RectRaster (TaskControl_type* taskControl,BOOL const* abortFlag)
-{
-	TaskControlIterationDone(taskControl, 0, "", FALSE);   
-}
-
 static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
 	int						error 				= 0;
-	
-	// reset iterations display
-	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, 0);
 	
 	// open shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, 1, errorInfo) );
@@ -7693,16 +7697,9 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 	// update iterations
 	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
-	switch(engine->baseClass.scanMode) {
-		
-		case ScanEngineMode_FrameScan:
-			
-			break;
-			
-		case ScanEngineMode_PointJump:
-			
-			break;
-	}
+	// flush leftover elements from the incoming detection pixel stream
+	for (size_t i = 0; i < engine->baseClass.nScanChans; i++)
+		ReleaseAllDataPackets(engine->baseClass.scanChans[i]->detVChan, errorInfo);
 	
 	return 0; 
 	
@@ -7754,7 +7751,7 @@ Error:
 	return error;
 }
 
-static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
+static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
 {
 	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
 	int						error				= 0;
@@ -7766,7 +7763,7 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 	
 	switch (status) {
 			
-		case TASK_TREE_STARTED:
+		case TaskTree_Started:
 			
 			//--------------------------------------------------------------------------------------------------------
 			// Discard image assembly buffers
@@ -7829,7 +7826,7 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeExe
 			
 			break;
 			
-		case TASK_TREE_FINISHED:
+		case TaskTree_Finished:
 			
 			break;
 	}
@@ -7846,7 +7843,7 @@ Error:
 }
 
 /*
-static int DataReceivedTC_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int DataReceivedTC_RectRaster (TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
@@ -7860,7 +7857,7 @@ static void ErrorTC_RectRaster (TaskControl_type* taskControl, int errorID, char
 	
 }
 
-static int ModuleEventHandler_RectRaster (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ModuleEventHandler_RectRaster (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	//RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	

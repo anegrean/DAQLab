@@ -92,11 +92,11 @@ typedef struct {
 
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+//	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
 //	{ MOD_LangLStep_NAME, initalloc_LangLStep, FALSE, 0},
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
-	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+//	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
 //	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 },
 	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
 	
@@ -312,7 +312,7 @@ static void					IterateUITC									(TaskControl_type* taskControl, BOOL const* 
 static int					StartUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					DoneUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					StoppedUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					TaskTreeStatusUITC 							(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int					TaskTreeStatusUITC 							(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
 static void					UITCActive									(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetUITC 									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorUITC 									(TaskControl_type* taskControl, int errorID, char* errorMsg);
@@ -411,7 +411,7 @@ static int DAQLab_Load (void)
 	errChk ( mainPanHndl = LoadPanel (0, DAQLAB_UI_DAQLAB, MainPan) );
 	errChk ( logPanHndl = LoadPanel (mainPanHndl, DAQLAB_UI_DAQLAB, LogPan) );
 	errChk ( TasksUI.panHndl 			= LoadPanel (mainPanHndl, DAQLAB_UI_DAQLAB, TasksPan) );
-	errChk ( TasksUI.controllerPanHndl 	= LoadPanel (mainPanHndl, TASKCONTROLLER_UI, TCPan1) );
+	errChk ( TasksUI.controllerPanHndl 	= LoadPanel (mainPanHndl, TaskControllerUI, TCPan1) );
 	
 		// Framework
 	nullChk( TasksUI.UItaskCtrls 		= ListCreate(sizeof(UITaskCtrl_type*)) );		// list with UI Task Controllers
@@ -488,7 +488,7 @@ static int DAQLab_Load (void)
 		errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)UITaskControllerXMLNode, "TaskControllerSettings", &taskControllerSettingsXMLElement) );
 		
 		// create a new default UI Task Controller
-		newTaskController = init_TaskControl_type (NULL, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
+		newTaskController = init_TaskControl_type (NULL, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, StartUITC, 
 												 	  ResetUITC, DoneUITC, StoppedUITC, TaskTreeStatusUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 		
 		errChk( DLLoadTaskControllerSettingsFromXML(newTaskController, taskControllerSettingsXMLElement, &xmlErrorInfo) );
@@ -502,7 +502,7 @@ static int DAQLab_Load (void)
 		// attach callback data to the Task Controller
 		SetTaskControlModuleData(newTaskController, UITaskCtrlsPtr);
 		// send a configure event to the Task Controller
-		TaskControlEvent(newTaskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+		TaskControlEvent(newTaskController, TC_Event_Configure, NULL, NULL);
 		
 		// cleanup
 		OKfreeCAHndl(UITaskControllerXMLNode);
@@ -791,7 +791,7 @@ static int DLSaveUITCTaskTree (TaskControl_type* taskController, CAObjHandle xml
 	errChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, xmlErrorInfo, taskControllerXMLElement, NULL) );
 	
 	// add recursively child TCs as well
-	nullChk( childTCs = GetTaskControlSubTasks(taskController) );
+	nullChk( childTCs = GetTaskControlChildTCs(taskController) );
 	size_t				nChildTCs	= ListNumItems(childTCs);
 	TaskControl_type*	childTC		= NULL;
 	for (size_t i =	1; i <= nChildTCs; i++) {
@@ -1196,7 +1196,7 @@ static int ConnectTaskTrees (ActiveXMLObj_IXMLDOMElement_ UITCXMLElement, ERRORI
 				childTC = GetTaskController(childTCName);
 				// connect child TC to parent TC
 				if (childTC)
-					errChk( AddSubTaskToParent(parentTC, childTC) );
+					errChk( AddChildTCToParent(parentTC, childTC) );
 					
 				// cleanup
 				OKfreeCAHndl(childTCXMLNode);
@@ -2202,7 +2202,7 @@ int DLLoadTaskControllerSettingsFromXML	(TaskControl_type* taskController, Activ
 	OKfree(tcName);
 	SetTaskControlIterations(taskController, tcNIter);
 	SetTaskControlIterationsWait(taskController, tcWait);
-	SetTaskControlExecutionMode(taskController, (TaskExecutionMode_type) tcExecutionMode);
+	SetTaskControlExecutionMode(taskController, (TCExecutionModes) tcExecutionMode);
 	SetTaskControlMode(taskController, (TaskMode_type) tcIterationMode);
 	
 	return 0;
@@ -2300,10 +2300,10 @@ static int DAQLab_RemoveTaskControllerFromUI (int index)
 	UITaskCtrl_type*	UITaskCtrl = *(UITaskCtrl_type**)ListGetPtrToItem (TasksUI.UItaskCtrls, index);
 	
 	if (!UITaskCtrl) return -1;
-	TaskStates_type	state = GetTaskControlState(UITaskCtrl->taskControl);
+	TCStates	state = GetTaskControlState(UITaskCtrl->taskControl);
 	
-	if (state != TASK_STATE_UNCONFIGURED && state != TASK_STATE_CONFIGURED && 
-		state != TASK_STATE_INITIAL && state != TASK_STATE_IDLE && state != TASK_STATE_DONE && state != TASK_STATE_ERROR)
+	if (state != TC_State_Unconfigured && state != TC_State_Configured && 
+		state != TC_State_Initial && state != TC_State_Idle && state != TC_State_Done && state != TC_State_Error)
 		return -2;
 	
 	// remove from DAQLab framework
@@ -3208,7 +3208,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	if (!newControllerName) return; // operation cancelled, do nothing
 	
 	// create new task controller
-	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, NULL, StartUITC, 
+	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, StartUITC, 
 												  ResetUITC, DoneUITC, StoppedUITC, TaskTreeStatusUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 	
 	OKfree(newControllerName);
@@ -3226,7 +3226,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	// mark the Task Controller as an User Interface Task Controller type
 	SetTaskControlUITCFlag(newTaskControllerPtr, TRUE);
 	// send a configure event to the Task Controller
-	TaskControlEvent(newTaskControllerPtr, TASK_EVENT_CONFIGURE, NULL, NULL);
+	TaskControlEvent(newTaskControllerPtr, TC_Event_Configure, NULL, NULL);
 	
 }
 
@@ -3318,10 +3318,13 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 				
 				case TCPan1_Reset:
 					
+					TaskControlEvent(taskControl, TC_Event_Reset, NULL, NULL);
+					break;
+					
 				case TCPan1_Mode:
 				case TCPan1_Repeat:  	
-					TaskControlEvent(taskControl, TASK_EVENT_CONFIGURE, NULL, NULL);
 					
+					TaskControlEvent(taskControl, TC_Event_Configure, NULL, NULL);
 					break;
 					
 				case TCPan1_StartStop:
@@ -3341,13 +3344,14 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 						// undim abort button if UITC doesn't have a parent task Controller
 						if (!GetTaskControlParent(taskControl))
 							SetCtrlAttribute(panel, TCPan1_Abort, ATTR_DIMMED, 0);
+						
 						// send start task event
-						TaskControlEvent(taskControl, TASK_EVENT_START, NULL, NULL);
+						TaskControlEvent(taskControl, TC_Event_Start, NULL, NULL);
 					}
 					else {
 						// dim button so the user cannot start the task again until it stops
 						SetCtrlAttribute(panel, TCPan1_StartStop, ATTR_DIMMED, 1);
-						TaskControlEvent(taskControl, TASK_EVENT_STOP, NULL, NULL);
+						TaskControlEvent(taskControl, TC_Event_Stop, NULL, NULL);
 					}
 						
 					break;
@@ -3409,10 +3413,10 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 		GetPanelHandleFromTabPage(TaskTreeManagerPanHndl, TaskPan_Switchboards, 1, &HWTrigSwitchboardPanHndl);
 		
 		// populate execution mode ring control
-		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_EXECUTE_BEFORE_SUBTASKS_START, "Before Child Task Controllers Start", TASK_EXECUTE_BEFORE_SUBTASKS_START);
-		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_EXECUTE_AFTER_SUBTASKS_COMPLETE, "After Child Task Controllers Complete", TASK_EXECUTE_AFTER_SUBTASKS_COMPLETE);
-		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TASK_EXECUTE_IN_PARALLEL_WITH_SUBTASKS, "In parallel with Child Task Controllers", TASK_EXECUTE_IN_PARALLEL_WITH_SUBTASKS);
-		// set execution mode to TASK_EXECUTE_BEFORE_SUBTASKS_START 
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TC_Execute_BeforeChildTCs, "Before Child Task Controllers Start", TC_Execute_BeforeChildTCs);
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TC_Execute_AfterChildTCsComplete, "After Child Task Controllers Complete", TC_Execute_AfterChildTCsComplete);
+		InsertListItem(TaskTreeManagerPanHndl, TaskPan_ExecMode, TC_Execute_InParallelWithChildTCs, "In parallel with Child Task Controllers", TC_Execute_InParallelWithChildTCs);
+		// set execution mode to TC_Execute_BeforeChildTCs 
 		SetCtrlIndex(TaskTreeManagerPanHndl, TaskPan_ExecMode, 0);
 		// dim execution mode control cause the item with index 0 is the modules node
 		SetCtrlAttribute(TaskTreeManagerPanHndl, TaskPan_ExecMode, ATTR_DIMMED, 1);
@@ -3509,7 +3513,7 @@ static void DisplayTaskTreeManager (int parentPanHndl, ListType UITCs, ListType 
 
 static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentIdx, TaskControl_type* taskControl)
 {
-	ListType				SubTasks		= GetTaskControlSubTasks(taskControl);
+	ListType				SubTasks		= GetTaskControlChildTCs(taskControl);
 	size_t					nSubTaskTCs		= ListNumItems(SubTasks);
 	int						childIdx;
 	TaskControl_type**		tcPtrPtr;
@@ -3605,13 +3609,13 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 						parentTaskController = NULL;
 					
 					// disconnect Task Controller that was dragged from its parent
-					RemoveSubTaskFromParent(dragTreeNodePtr->taskControl);
+					RemoveChildTCFromParentTC(dragTreeNodePtr->taskControl);
 					
 					if (relation == VAL_CHILD && targetTreeNodePtr->taskControl)
-						AddSubTaskToParent(targetTreeNodePtr->taskControl, dragTreeNodePtr->taskControl); 
+						AddChildTCToParent(targetTreeNodePtr->taskControl, dragTreeNodePtr->taskControl); 
 					else
 						if (relation == VAL_SIBLING && parentTaskController)
-							AddSubTaskToParent(parentTaskController, dragTreeNodePtr->taskControl); 
+							AddChildTCToParent(parentTaskController, dragTreeNodePtr->taskControl); 
 					
 					// allow dropped task controller to be deleted
 					dragTreeNodePtr->canBeDeleted = TRUE;
@@ -3680,7 +3684,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 			
 			int 	execMode;
 			GetCtrlVal(panel, control, &execMode);
-			SetTaskControlExecutionMode(selectedTreeNodePtr->taskControl, (TaskExecutionMode_type) execMode);
+			SetTaskControlExecutionMode(selectedTreeNodePtr->taskControl, (TCExecutionModes) execMode);
 			
 			break;
 			
@@ -3705,7 +3709,7 @@ static int ConfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
-		// undim Iteration Stack button
+	// undim Iteration Stack button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Stack, ATTR_DIMMED, 0);
 	// undim Start button if UITC doesn't have a parent Task Controller
 	if (!GetTaskControlParent(controllerUIDataPtr->taskControl))
@@ -3751,7 +3755,7 @@ static void IterateUITC	(TaskControl_type* taskControl, BOOL const* abortIterati
 	// iteration complete, update current iteration number
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)) + 1);
 	
-	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
+	TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL);
 }
 
 static int StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
@@ -3780,7 +3784,7 @@ static int DoneUITC  (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
 	// switch Stop button back to Start button
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_StartStop, 0);
-	// undim Start/Stop and Reset buttons if UITC doesn't have a parent task Controller
+	// undim Start/Stop and Configure buttons if UITC doesn't have a parent task Controller
 	if (!GetTaskControlParent(controllerUIDataPtr->taskControl)) {
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
@@ -3808,6 +3812,18 @@ static int ResetUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, 0);
 	
+	// change Task Controller name background color to gray (0x00F0F0F0)
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
+	// undim Mode button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
+	// undim Iteration Wait button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
+	// undim Iteration Stack button
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Stack, ATTR_DIMMED, 0);
+	// undim Start button if UITC doesn't have a parent Task Controller
+	if (!GetTaskControlParent(controllerUIDataPtr->taskControl))
+	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
+	
 	return 0; 
 }
 
@@ -3820,7 +3836,7 @@ static int StoppedUITC	(TaskControl_type* taskControl, BOOL const* abortFlag, ch
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
 	// switch Stop button back to Start button
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_StartStop, 0);
-	// undim Start/Stop and Reset buttons if UITC doesn't have a parent task Controller
+	// undim Start/Stop and Configure buttons if UITC doesn't have a parent task Controller
 	if (!GetTaskControlParent(controllerUIDataPtr->taskControl)) {
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 0);
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
@@ -3841,7 +3857,7 @@ static int StoppedUITC	(TaskControl_type* taskControl, BOOL const* abortFlag, ch
 	return 0; 
 }
 
-static int TaskTreeStatusUITC (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
+static int TaskTreeStatusUITC (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
@@ -3884,7 +3900,7 @@ static void ErrorUITC (TaskControl_type* taskControl, int errorID, char* errorMs
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_StartStop, ATTR_DIMMED, 1);
 	// dim Abort button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
-	// undim Reset button if UITC doesn't have a parent task Controller
+	// undim Configure button if UITC doesn't have a parent task Controller
 	if (!GetTaskControlParent(controllerUIDataPtr->taskControl))
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Reset, ATTR_DIMMED, 0);
 	
@@ -3911,18 +3927,60 @@ int CVICALLBACK CloseDAQLabModulesPan_CB (int panel, int control, int event, voi
 
 void CVICALLBACK LogPanTaskLogMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
+	size_t					nTCs 			= ListNumItems(DAQLabTCs);
+	size_t					nVChans			= ListNumItems(VChannels);
+	TaskControl_type*   	tc				= NULL;
+	VChan_type*				VChan			= NULL;
+	TCStates			tcState			= 0;
+	char*					tcName			= NULL;
+	char*					VChanName		= NULL;
+	char*					tcStateName		= NULL;
+	size_t					nTSQElements	= 0;
+	char					nElemStr[50]	= "";
+	
 	// clear log box
 	DeleteTextBoxLines(taskLogPanHndl, TaskLogPan_LogBox, 0, -1);
 	
 	// display log panel
 	DisplayPanel(taskLogPanHndl);
 	
-	// enable logging for all task controllers
-	size_t					nTCs = ListNumItems(DAQLabTCs);
-	TaskControl_type**   	tcPtr;
+	// print current states of all task controllers
+	SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, "Task Controller states:\n");
 	for (size_t i = 1; i <= nTCs; i++) {
-		tcPtr = ListGetPtrToItem(DAQLabTCs, i);
-		EnableTaskControlLogging(*tcPtr, TRUE);
+		tc = *(TaskControl_type**)ListGetPtrToItem(DAQLabTCs, i);
+		tcState 	= GetTaskControlState(tc);
+		tcName		= GetTaskControlName(tc);
+		tcStateName	= GetTaskControlStateName(tc);
+		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, tcName);
+		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, " = ");
+		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, tcStateName);
+		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, "\n");
+		OKfree(tcName);
+		OKfree(tcStateName);
+	}
+	
+	// print number of elements left unprocessed in the Sink VChans
+	SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, "\n\nUnprocessed Sink VChan elements:\n");
+	for (size_t i = 1; i <= nVChans; i++) {
+		VChan = *(VChan_type**)ListGetPtrToItem(VChannels, i);
+		if (GetVChanDataFlowType(VChan) == VChan_Source) continue; // select Sink VChans
+		
+		CmtGetTSQAttribute(GetSinkVChanTSQHndl((SinkVChan_type*)VChan), ATTR_TSQ_ITEMS_IN_QUEUE, &nTSQElements);
+		Fmt(nElemStr, "%s<%d", nTSQElements);
+		VChanName		= GetVChanName(VChan);
+		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, VChanName);
+		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, " = ");
+		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, nElemStr);
+		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, "\n");
+		OKfree(VChanName);
+	}
+	
+	
+	// enable logging for all task controllers
+	SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, "\n\nTask Controller actions:\n");
+	for (size_t i = 1; i <= nTCs; i++) {
+		tc = *(TaskControl_type**)ListGetPtrToItem(DAQLabTCs, i);
+		EnableTaskControlLogging(tc, TRUE);
 	}
 }
 

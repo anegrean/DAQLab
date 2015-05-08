@@ -91,7 +91,7 @@ struct DatStore {
 // Static functions
 static void	RedrawDSPanel (DataStorage_type* ds);
 
-static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 //-----------------------------------------
 // Data Storage Task Controller Callbacks
@@ -104,11 +104,11 @@ static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abo
 //static int				StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					TaskTreeStatus 			(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int					TaskTreeStatus 			(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
 //static void				TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
-//static int				ModuleEventHandler		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
+//static int				ModuleEventHandler		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
 //-----------------------------------------
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
@@ -464,7 +464,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	DisplayPanel(ds->mainPanHndl);
 	//default settings:
 
-	TaskControlEvent(ds->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+	TaskControlEvent(ds->taskController, TC_Event_Configure, NULL, NULL);
 
 
 Error:
@@ -546,7 +546,7 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
+static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	
@@ -584,7 +584,7 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 	DLMsg(errorMsg, 1);
 }
  /*
-static int ModuleEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl); 
 	
@@ -746,7 +746,7 @@ int SaveTiffImage(char* filename,Image* image)
 }
 
 
-static int DataReceivedTC (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)  
+static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)  
 {
 	
 	DataStorage_type*	ds					= GetTaskControlModuleData(taskControl);

@@ -275,7 +275,7 @@ int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorInfo)
 	
 	if (!nSlaves) return 0;
 	
-	fCallResult = WaitForMultipleObjects(nSlaves, master->slaveArmedHndls, TRUE, WaitForHWTrigArmedSlaves_Timeout);
+	fCallResult = WaitForMultipleObjects(nSlaves, master->slaveArmedHndls, TRUE, (DWORD) WaitForHWTrigArmedSlaves_Timeout);
 	
 	// check result
 	switch (fCallResult) {

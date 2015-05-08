@@ -100,7 +100,7 @@ static int						 	ResetTC			 				(TaskControl_type* taskControl, BOOL const* abo
 static int							DoneTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int							StoppedTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void				 			ErrorTC 						(TaskControl_type* taskControl, int errorID, char errorMsg[]);
-static int							EventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
+static int							EventHandler					(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
 */
 
 
@@ -381,7 +381,7 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	}
 	
 	// configure Z Stage Task Controller
-	TaskControlEvent(zstage->taskController, TASK_EVENT_CONFIGURE, NULL, NULL); 
+	TaskControlEvent(zstage->taskController, TC_Event_Configure, NULL, NULL); 
 	
 	// add reference positions if any
 	size_t				nRefPos										= ListNumItems(zstage->zRefPos);
@@ -614,7 +614,7 @@ static int UpdateZSteps (Zstage_type* zstage)
 	errChk( SetCtrlVal(zstage->controlPanHndl, ZStagePan_NSteps, zstage->nZSteps) );
 	
 	// configure Task Controller
-	TaskControlEvent(zstage->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+	TaskControlEvent(zstage->taskController, TC_Event_Configure, NULL, NULL);
 	
 	return 0;
 	
@@ -1137,7 +1137,7 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	
-	TaskControlEvent(taskControl, TASK_EVENT_ITERATION_DONE, NULL, NULL);
+	TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL);
 }
 
 static void	AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFlag)
@@ -1180,7 +1180,7 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[]
 	
 }
 
-static int EventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int EventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	

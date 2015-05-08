@@ -65,7 +65,7 @@
 #define  ScanSetPan_Close                 4       /* control type: command, callback function: (none) */
 #define  ScanSetPan_GalvoSamplingRate     5       /* control type: numeric, callback function: (none) */
 #define  ScanSetPan_PixelDelay            6       /* control type: numeric, callback function: (none) */
-#define  ScanSetPan_PixelClockFrequency   7       /* control type: numeric, callback function: (none) */
+#define  ScanSetPan_RefClkFreq            7       /* control type: numeric, callback function: (none) */
 #define  ScanSetPan_TubeLensFL            8       /* control type: numeric, callback function: (none) */
 #define  ScanSetPan_ScanLensFL            9       /* control type: numeric, callback function: (none) */
 #define  ScanSetPan_Plate                 10      /* control type: deco, callback function: (none) */
@@ -96,7 +96,8 @@
 #define  ROITab_Period                    4       /* control type: numeric, callback function: (none) */
 #define  ROITab_StartDelay                5       /* control type: numeric, callback function: (none) */
 #define  ROITab_JumpTime                  6       /* control type: numeric, callback function: (none) */
-#define  ROITab_ParkedTime                7       /* control type: numeric, callback function: (none) */
+#define  ROITab_PixelSamplingFactor       7       /* control type: numeric, callback function: (none) */
+#define  ROITab_ParkedTime                8       /* control type: numeric, callback function: (none) */
 
      /* tab page panel controls */
 #define  ScanTab_PixelSize                2       /* control type: numeric, callback function: (none) */

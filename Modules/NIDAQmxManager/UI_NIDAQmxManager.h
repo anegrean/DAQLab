@@ -183,12 +183,15 @@
 
      /* tab page panel controls */
 #define  Set_BlockSize                    2       /* control type: numeric, callback function: (none) */
-#define  Set_SamplingRate                 3       /* control type: numeric, callback function: (none) */
-#define  Set_Plate                        4       /* control type: deco, callback function: (none) */
-#define  Set_Duration                     5       /* control type: numeric, callback function: (none) */
-#define  Set_NSamples                     6       /* control type: numeric, callback function: (none) */
-#define  Set_MeasMode                     7       /* control type: ring, callback function: (none) */
-#define  Set_Oversampling                 8       /* control type: numeric, callback function: (none) */
+#define  Set_AutoOversampling             3       /* control type: radioButton, callback function: (none) */
+#define  Set_ActualSamplingRate           4       /* control type: numeric, callback function: (none) */
+#define  Set_TargetSamplingRate           5       /* control type: numeric, callback function: (none) */
+#define  Set_SamplingRate                 6       /* control type: numeric, callback function: (none) */
+#define  Set_Plate                        7       /* control type: deco, callback function: (none) */
+#define  Set_Duration                     8       /* control type: numeric, callback function: (none) */
+#define  Set_NSamples                     9       /* control type: numeric, callback function: (none) */
+#define  Set_MeasMode                     10      /* control type: ring, callback function: (none) */
+#define  Set_Oversampling                 11      /* control type: numeric, callback function: (none) */
 
      /* tab page panel controls */
 #define  SETPAN_Plate                     2       /* control type: deco, callback function: (none) */

@@ -105,10 +105,10 @@ static void								IterateTC							(TaskControl_type* taskControl, BOOL const* a
 static int								StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int								DoneTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int								StoppedTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int								TaskTreeStatus	 					(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int								TaskTreeStatus	 					(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
 static int				 				ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void				 				ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
-static int								StageEventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
+static int								StageEventHandler					(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 //------------------------------------
 // task controller module commands
@@ -140,8 +140,7 @@ DAQLabModule_type* initalloc_XYStage (DAQLabModule_type* mod, char className[], 
 	
 	// initialize Task Controller from child class
 	
-	stage->taskController 		= init_TaskControl_type (instanceName, stage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, NULL, 
-								  StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, StageEventHandler, ErrorTC);
+	stage->taskController 		= init_TaskControl_type (instanceName, stage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, StageEventHandler, ErrorTC);
 	
 	//---------------------------
 	// Parent Level 0: DAQLabModule_type 
@@ -429,7 +428,7 @@ int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	}
 	
 	// configure Z Stage Task Controller
-	TaskControlEvent(stage->taskController, TASK_EVENT_CONFIGURE, NULL, NULL); 
+	TaskControlEvent(stage->taskController, TC_Event_Configure, NULL, NULL); 
 	
 	// add reference positions if any
 	size_t				nRefPos										= ListNumItems(stage->xyRefPos);
@@ -688,7 +687,7 @@ void XYStage_UpdateSteps (XYStage_type* stage)
 	//SetCtrlVal(stage->controlPanHndl, StagePan_YSteps, stage->nYSteps);
 	
 	// configure Task Controller
-	TaskControlEvent(stage->taskController, TASK_EVENT_CONFIGURE, NULL, NULL);
+	TaskControlEvent(stage->taskController, TC_Event_Configure, NULL, NULL);
 	
 }
 
@@ -759,25 +758,25 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 				case StagePan_MoveXForward:
 					
 					// move X axis in the positive direction if direction is positive, relative to current position with selected step size
-					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+					TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_MoveXBackward:
 					
 					// move X axis in the negative direction if direction is positive, relative to current position with selected step size
-					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+					TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_MoveYRight:
 					
 					// move Y axis in the positive direction if direction is positive, relative to current position with selected step size
-					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+					TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_MoveYLeft:
 					
 					// move Y axis in the negative direction if direction is positive, relative to current position with selected step size
-					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+					TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_Stop:
@@ -790,25 +789,25 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 				case StagePan_XAbsPos:
 					
 					// move to X absolute position with selected step size
-					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, moveXAbsPos), (DiscardFptr_type)discard_MoveCommand_type); 
+					TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, moveXAbsPos), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_YAbsPos:
 					
 					// move to Y absolute position with selected step size
-					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, moveYAbsPos), (DiscardFptr_type)discard_MoveCommand_type); 
+					TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, moveYAbsPos), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_XRelPos:
 					
 					// move X axis relative to current position
-					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, moveXRelPos), (DiscardFptr_type)discard_MoveCommand_type); 
+					TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, moveXRelPos), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_YRelPos:
 					
 					// move Y axis relative to current position
-					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, moveYRelPos), (DiscardFptr_type)discard_MoveCommand_type); 
+					TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, moveYRelPos), (DiscardFptr_type)discard_MoveCommand_type); 
 					break;
 					
 				case StagePan_StartXAbsPos:
@@ -936,10 +935,10 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					refPosPtr = ListGetPtrToItem(stage->xyRefPos, refPosIdx + 1);
 					
 					// move X axis to reference position
-					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, (*refPosPtr)->x), (DiscardFptr_type)discard_MoveCommand_type); 
+					TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, (*refPosPtr)->x), (DiscardFptr_type)discard_MoveCommand_type); 
 					
 					// move Y axis to reference position
-					TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, (*refPosPtr)->y), (DiscardFptr_type)discard_MoveCommand_type); 
+					TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, (*refPosPtr)->y), (DiscardFptr_type)discard_MoveCommand_type); 
 					
 					break;
 			}
@@ -1019,14 +1018,14 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							
 							SetCtrlVal(panel, control, (stage->xPos + xDirection * xStepSize) * 1000);	// convert back to [um]
 							// move relative to current position
-							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+							TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, (stage->xPos - xDirection * xStepSize) * 1000);	// convert back to [um] 
 							// move relative to current position
-							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+							TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 					}
@@ -1040,14 +1039,14 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							
 							SetCtrlVal(panel, control, (stage->yPos + yDirection * yStepSize) * 1000);	// convert back to [um]
 							// move relative to current position
-							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+							TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, (stage->yPos - yDirection * yStepSize) * 1000);	// convert back to [um] 
 							// move relative to current position
-							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+							TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 					}
@@ -1061,14 +1060,14 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							
 							SetCtrlVal(panel, control, xDirection * xStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+							TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, -xDirection * xStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+							TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					}
 					break;
@@ -1081,14 +1080,14 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							
 							SetCtrlVal(panel, control, yDirection * yStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+							TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, -yDirection * yStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							TaskControlEvent(stage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
+							TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type); 
 							return 1;
 					}
 					break;
@@ -1395,7 +1394,7 @@ static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	return 0;
 }
 
-static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
+static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
 {
 	return 0;	
 }
@@ -1410,7 +1409,7 @@ static void ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[]
 	DLMsg(errorMsg, 1);
 }
 
-static int StageEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int StageEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	MoveCommand_type*	moveCommand = eventData;
 	XYStage_type*		stage		= GetTaskControlModuleData(taskControl);

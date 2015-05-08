@@ -1,7 +1,7 @@
 //==============================================================================
 //
 // Title:		TaskController.h
-// Purpose:		A short description of the implementation.
+// Purpose:		Task Controller State Machine.
 //
 // Created on:	2014.05.11. at 10:35:38 by Adrian Negrean.
 // Copyright:	VU University Amsterdam. All Rights Reserved.
@@ -20,98 +20,88 @@
 #include "HWTriggering.h"
 #include "Iterator.h"
 
-#define TASKCONTROLLER_UI		"./Framework/Execution control/UI_TaskController.uir" 
-#define N_TASK_EVENT_QITEMS		1000			// Number of events waiting to be processed by the state machine.
+#define TaskControllerUI		"./Framework/Execution control/UI_TaskController.uir" 
+#define TC_NEventQueueItems		1000			// Number of events waiting to be processed by the state machine.
 
 // Handy return type for functions that produce error descriptions
 
-//----------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller States
-//----------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 typedef enum {
-	TASK_STATE_UNCONFIGURED,					// Task Controller is not configured and cannot run until it is configured.
-	TASK_STATE_CONFIGURED,						// Task Controller is configured.
-	TASK_STATE_INITIAL,							// Initial state of Task Controller before any iterations are performed.
-	TASK_STATE_IDLE,							// Task Controller performed at least one iteration and has stopped.
-	TASK_STATE_RUNNING,							// Task Controller is being iterated until required number of iterations is reached (if finite) or stopped.
-	TASK_STATE_RUNNING_WAITING_ITERATION,		// Task Controller is iterating but the iteration (possibly occuring in another thread) is not yet complete.
-												// Iteration is complete when a TASK_EVENT_ITERATION_DONE is received in this state.
-	TASK_STATE_STOPPING,						// Task Controller received a STOP event and waits for SubTasks to complete their iterations.
-	TASK_STATE_DONE,							// Task Controller finished required iterations if operation was finite.
-	TASK_STATE_ERROR
-} TaskStates_type;
+	TC_State_Unconfigured,						// TC and/or device are not configured and cannot run.
+	TC_State_Configured,						// TC is configured for execution but one or more child TCs are not yet configured.
+	TC_State_Initial,							// TC is ready to run and has not performed yet any iterations.
+	TC_State_Idle,								// TC performed one or more iterations and has been paused. Starting it will continue iterating.
+	TC_State_Running,							// TC is active but its iteration function is not yet in progress. 
+	TC_State_IterationFunctionActive,			// TC is active and its iteration function is in progress.
+	TC_State_Stopping,							// TC is waiting to complete its iteration function and is also waiting for its child TCs to complete their iteration functions.
+	TC_State_Done,								// TC is not active and performed one or more iterations. Iterations will start again from TC_State_Initial.
+	TC_State_Error								// TC encountered an error and cannot run.
+} TCStates;
 
-//----------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller Events
-//----------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 typedef enum {
-	TASK_EVENT_CONFIGURE,						// Configures the Task Controller and its children for execution.
-	TASK_EVENT_UNCONFIGURE,						// Unconfigures the Task Controller, in which case it cannot be executed.
-	TASK_EVENT_START,							// Starts a Task Controller that is in an IDLE or PAUSED state. 
-												// In case of an IDLE state, the Task Controller returns the module or
-												// device to its initial state (iteration index = 0). In case of a PAUSED
-												// state, it continues iterating the module or device.
-	TASK_EVENT_ITERATE,							// Used to signal that another iteration is needed while in a RUNNING state. This may be signalled
-												// by the Task Controller or another thread if the iteration occurs in another thread.
-	TASK_EVENT_ITERATE_ONCE,					// Performs only one iteration of the Task Controller in an IDLE or DONE state.
-	TASK_EVENT_ITERATION_DONE,					// Used to signal that an iteration completed if it was not carried out in the same thread as the call to TASK_FCALL_ITERATE.
-	TASK_EVENT_ITERATION_TIMEOUT,				// Generated when TASK_EVENT_ITERATION_DONE is not received after a given timeout. 
-	TASK_EVENT_RESET,							// Resets iteration index to 0, calls given reset function and brings State Controller 
-												// back to INITIAL state.
-	TASK_EVENT_STOP,							// Stops Task Controller iterations and allows SubTask Controllers to complete their iterations.
-	TASK_EVENT_UPDATE_SUBTASK_STATE,   			// Used to update the state of a SubTask Controller.
-	TASK_EVENT_DATA_RECEIVED,					// When data is placed in an otherwise empty data queue.
-	TASK_EVENT_CUSTOM_MODULE_EVENT,				// To signal custom module or device events.
+	TC_Event_Unconfigure,						// Unconfigures the device/module and the TC cannot be executed.
+	TC_Event_Configure,							// Configures the TC and its child TCs for execution.
+	TC_Event_Start,								// Starts, restarts or resumes TC iterations.
+	TC_Event_IterateOnce,						// Performs only one TC iteration.
+	TC_Event_Iterate,							// [Internal event] Used to signal the TC that another iteration is needed.
+	TC_Event_IterationDone,						// Used to signal that the iteration function of a TC finished execution.
+	TC_Event_IterationTimeout,					// [Internal event] Generated when a TC iteration functions takes too long to execute.
+	TC_Event_Reset,								// Returns the TC back to its Initial state.
+	TC_Event_Stop,								// Waits until iteration functions in progress finish and stops further TC iterations for all TCs in a Task Tree.
+	TC_Event_UpdateChildTCState,   				// [Internal event] A parent TC is informed of the new state of one of its child TCs.
+	TC_Event_DataReceived,						// [Internal event] Event generated when data is written to a Sink VChan registered with the TC.
+	TC_Event_Custom,							// Used to signal custom device/module events.
 	TASK_EVENT_SUBTASK_ADDED_TO_PARENT,			// When a SubTask is added to a parent Task Controller
 	TASK_EVENT_SUBTASK_REMOVED_FROM_PARENT		// When a SubTask is disconnected from a parent task Controller
-} TaskEvents_type;
+} TCEvents;
 
-//----------------------------------------
-// Task Controller Function Calls
-//----------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Task Controller Callbacks
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 typedef enum {
-	TASK_FCALL_CONFIGURE,
-	TASK_FCALL_UNCONFIGURE,
-	TASK_FCALL_ITERATE,
-	TASK_FCALL_ABORT_ITERATION,
-	TASK_FCALL_START,
-	TASK_FCALL_RESET,
-	TASK_FCALL_DONE,							// Called for a FINITE ITERATION Task Controller after reaching a DONE state.
-	TASK_FCALL_STOPPED,							// Called when a FINITE  or CONTINUOUS ITERATION Task Controller was stopped manually.
+	TC_Callback_Configure,						// Configures the TC for execution.
+	TC_Callback_Unconfigure,					// Makes TC unavailable for execution. 
+	TC_Callback_Iterate,						// Main TC function called with each TC iteration.
+	TC_Callback_Start,							// Called before a TC starts executing.
+	TC_Callback_Reset,							// Returns the TC to its Initial state.
+	TC_Callback_Done,							// Called when either a Finite TC finished all its iterations or when a Continuous TC was stopped.
+	TC_Callback_Stopped,						// Called when a TC was stopped manually.
 	TASK_FCALL_TASK_TREE_STATUS,				// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
 	TASK_FCALL_SET_UITC_MODE,					// Called when an UITC has a parent Task Controller attached to or deattached from it.
-	TASK_FCALL_DATA_RECEIVED,					// Called when data is placed in an empty Task Controller data queue, regardless of the Task Controller state.
-	TASK_FCALL_ERROR,
-	TASK_FCALL_MODULE_EVENT						// Called for custom module events that are not handled directly by the Task Controller
-} TaskFCall_type;
+	TC_Callback_DataReceived,					// Called when data is written to a Sink VChan registered with the TC.
+	TC_Callback_Error,							// Called when a TC encountered an error.
+	TC_Callback_CustomEvent						// Called for custom events that are not handled by the TC.
+} TCCallbacks;
 
 //---------------------------------------------------------------
 // Task Controller Mode
 //---------------------------------------------------------------
 typedef enum {
-	TASK_CONTINUOUS = FALSE,
-	TASK_FINITE 	= TRUE
+	TASK_CONTINUOUS 	= FALSE,
+	TASK_FINITE 		= TRUE
 } TaskMode_type;
 
 //---------------------------------------------------------------
 // Task Tree Execution
 //---------------------------------------------------------------
 typedef enum {
-	TASK_TREE_FINISHED 	= FALSE,
-	TASK_TREE_STARTED	= TRUE
-} TaskTreeExecution_type;
+	TaskTree_Finished 	= FALSE,
+	TaskTree_Started	= TRUE
+} TaskTreeStates;
 
 //---------------------------------------------------------------
-// Task Controller Iteration Execution Mode
+// Task Controller Iteration Function Execution Mode
 //---------------------------------------------------------------
 typedef enum {
-	TASK_EXECUTE_BEFORE_SUBTASKS_START,		// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
-											// IterateFptr is called and completes before sending TASK_EVENT_START to all SubTasks.
-	TASK_EXECUTE_AFTER_SUBTASKS_COMPLETE,	// The iteration block of the Task Controller is carried out within the call to the provided IterateFptr.
-											// IterateFptr is called after all SubTasks reach TASK_STATE_DONE.
-	TASK_EXECUTE_IN_PARALLEL_WITH_SUBTASKS  // The iteration block of the Task Controller is still running after a call to IterateFptr and after a TASK_EVENT_START 
-											// is sent to all SubTasks. The iteration block is carried out in parallel with the execution of the SubTasks.
-} TaskExecutionMode_type;
+	TC_Execute_BeforeChildTCs,					// The iteration function of the TC is carried out before starting child TCs.
+	TC_Execute_AfterChildTCsComplete,			// The iteration function of the TC is carried out after all child TC iterations are done.
+	TC_Execute_InParallelWithChildTCs  			// The iteration function of the TC is carried out in parallel with the iterations of the child TCs.
+} TCExecutionModes;
 
 
 typedef struct TaskControl 			TaskControl_type;
@@ -143,10 +133,6 @@ typedef int				 	(*UnconfigureFptr_type) 		(TaskControl_type* taskControl, BOOL 
 
 typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
-// Called when an iteration must be aborted. This is similar to the use of GetTaskControlAbortIterationFlag except that this function is called back, instead
-// of polling a flag during the iteration.
-typedef void				(*AbortIterationFptr_type)		(TaskControl_type* taskControl, BOOL const* abortFlag);
-
 // Called before the first iteration starts from an INITIAL state.
 typedef int				 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
@@ -160,7 +146,7 @@ typedef int				 	(*DoneFptr_type) 				(TaskControl_type* taskControl, BOOL const
 typedef int				 	(*StoppedFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a Task Tree in which the Task Controller participates is started or stops/is stopped. This is called before the Start callback of the Task Controller.
-typedef int 				(*TaskTreeStatusFptr_type)		(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo); 
+typedef int 				(*TaskTreeStatusFptr_type)		(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo); 
 
 // Called when an UITC has a parent Task Controller attached to or detached from it, in the former case the UITC functioning as a simple Task Controller
 // without the possibility for the user to control the Task execution. This function must dim/undim UITC controls that prevent/allow the user to control
@@ -171,10 +157,10 @@ typedef void				(*SetUITCModeFptr_type)			(TaskControl_type* taskControl, BOOL U
 typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 
 // Called when data is placed in a Task Controller Sink VChan.
-typedef int					(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+typedef int					(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 // Called for passing custom module or device events that are not handled directly by the Task Controller.
-typedef int					(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
+typedef int					(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 
 //--------------------------------------------------------------------------------
@@ -186,20 +172,19 @@ typedef int					(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TaskSt
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 TaskControl_type*  	 	init_TaskControl_type				(const char					taskControllerName[],
-															void*						moduleData,
-															CmtThreadPoolHandle			tcThreadPoolHndl,
-												 	 	 	ConfigureFptr_type 			ConfigureFptr,
-															UnconfigureFptr_type		UnconfigureFptr,
-												 	 		IterateFptr_type			IterateFptr,
-															AbortIterationFptr_type		AbortIterationFptr,
-												 		 	StartFptr_type				StartFptr,
-												  		 	ResetFptr_type				ResetFptr,
-														 	DoneFptr_type				DoneFptr,
-														 	StoppedFptr_type			StoppedFptr,
-															TaskTreeStatusFptr_type		TaskTreeStatusFptr,
-															SetUITCModeFptr_type		SetUITCModeFptr,
-														 	ModuleEventFptr_type		ModuleEventFptr,
-														 	ErrorFptr_type				ErrorFptr);
+															 void*						moduleData,
+															 CmtThreadPoolHandle		tcThreadPoolHndl,
+												 	 	 	 ConfigureFptr_type 		ConfigureFptr,
+															 UnconfigureFptr_type		UnconfigureFptr,
+												 	 		 IterateFptr_type			IterateFptr,
+												 		 	 StartFptr_type				StartFptr,
+												  		 	 ResetFptr_type				ResetFptr,
+														 	 DoneFptr_type				DoneFptr,
+														 	 StoppedFptr_type			StoppedFptr,
+															 TaskTreeStatusFptr_type	TaskTreeStatusFptr,
+															 SetUITCModeFptr_type		SetUITCModeFptr,
+														 	 ModuleEventFptr_type		ModuleEventFptr,
+														 	 ErrorFptr_type				ErrorFptr);
 
 	// Disconnects a given Task Controller from its parent, disconnects all its child tasks and HW triggering and then discards the Task Controller.
 	// All child Tasks are disconnected from each other including HW triggering dependecies and VChan connections.
@@ -221,26 +206,25 @@ void 					SetTaskControlName 					(TaskControl_type* taskControl, char newName[]
 	// Returns pointer to dynamically allocated Task Controller name (null terminated string) 
 char*					GetTaskControlName					(TaskControl_type* taskControl);
 
+char*					GetTaskControlStateName				(TaskControl_type* taskControl);
+
 	// Return the state of a Task Controller
-TaskStates_type			GetTaskControlState					(TaskControl_type* taskControl);
+TCStates				GetTaskControlState					(TaskControl_type* taskControl);
 														
 	// repeats = 1 by default
 void					SetTaskControlIterations			(TaskControl_type* taskControl, size_t repeat);
 size_t					GetTaskControlIterations			(TaskControl_type* taskControl);
 
 
-	// Task Controller Iteration block completion timeout
-	// default timeout = 0, Iteration block complete after calling IterateFptr. Otherwise iteration will complete
-	// in another thread after a return from a call to IterateFptr. If timeout < 0, Task Controller will wait indefinitely to
-	// receive TASK_EVENT_ITERATION_DONE. If timeout > 0, a timeout error is generated if after timeout seconds TASK_EVENT_ITERATION_DONE
-	// is not received.
+	// Task Controller Iteration Function completion timeout. Default timeout = 10 sec. If timeout < 0, the Task Controller will wait indefinitely to
+	// receive TC_Event_IterationDone. If timeout > 0, a timeout error is generated if after timeout seconds TC_Event_IterationDone is not received.
 void					SetTaskControlIterationTimeout		(TaskControl_type* taskControl, int timeout);
 int						GetTaskControlIterationTimeout		(TaskControl_type* taskControl);
 
 	// Task Controller Iteration Mode
-	// default, iterationMode = TASK_EXECUTE_BEFORE_SUBTASKS_START
-void					SetTaskControlExecutionMode			(TaskControl_type* taskControl, TaskExecutionMode_type executionMode);
-TaskExecutionMode_type	GetTaskControlExecutionMode			(TaskControl_type* taskControl);
+	// default, iterationMode = TC_Execute_BeforeChildTCs
+void					SetTaskControlExecutionMode			(TaskControl_type* taskControl, TCExecutionModes executionMode);
+TCExecutionModes		GetTaskControlExecutionMode			(TaskControl_type* taskControl);
 
 // Task Controller Current Iteration    
 void					SetTaskControlCurrentIter 			(TaskControl_type* taskControl, Iterator_type* currentIter);
@@ -269,15 +253,15 @@ TaskControl_type*		GetTaskControlRootParent			(TaskControl_type* taskControl);
 
 	// Creates a list of SubTask Controllers of TaskControl_type* elements, given a Task Controller. 
 	// If there are no SubTasks, the list is empty. Use ListDispose to dispose of list.
-ListType				GetTaskControlSubTasks				(TaskControl_type* taskControl);
+ListType				GetTaskControlChildTCs				(TaskControl_type* taskControl);
 
 	// Describes whether a Task Controller is meant to be used as an User Interface Task Controller that allows the user to control the execution of a Task Tree.
 	// True, TC is of an UITC type, False otherwise. default = False
 void					SetTaskControlUITCFlag				(TaskControl_type* taskControl, BOOL UITCFlag);
 BOOL					GetTaskControlUITCFlag				(TaskControl_type* taskControl);
 
-	// Returns TRUE if iteration must be stopped
-BOOL					GetTaskControlAbortIterationFlag	(TaskControl_type* taskControl);
+	// Returns TRUE if iteration function must be aborted
+BOOL					GetTaskControlAbortFlag				(TaskControl_type* taskControl);
 	//combine iterated data into a one-dimension higher stacked dataset
 void 					SetTaskControlStackData 			(TaskControl_type* taskControl, BOOL stack);
 
@@ -287,9 +271,9 @@ BOOL 					GetTaskControlStackData				(TaskControl_type* taskControl);
 // Task Controller composition functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-int						AddSubTaskToParent					(TaskControl_type* parent, TaskControl_type* child);
+int						AddChildTCToParent					(TaskControl_type* parent, TaskControl_type* child);
 
-int						RemoveSubTaskFromParent				(TaskControl_type* child);
+int						RemoveChildTCFromParentTC			(TaskControl_type* child);
 
 	// Disconnects a given Task Controller from its parent, disconnects all child nodes from each other as well as any VChan or HW-triggers
 int						DisassembleTaskTreeBranch			(TaskControl_type* taskControlNode); 
@@ -319,7 +303,7 @@ char* 					GetUniqueTaskControllerName			(ListType TCList, char baseTCName[]);
 	// Pass NULL to eventInfo if there is no additional data carried by the event 
 	// Pass NULL to disposeEventInfoFptr if eventInfo should NOT be disposed after processing the event
 	// 
-int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TaskEvents_type event, void* eventData, DiscardFptr_type discardEventDataFptr); 
+int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr); 
 
 	// Used to signal the Task Controller that an iteration is done.
 	// Pass to errorInfo an empty string as "", if there is no error and the iteration completed succesfully. Otherwise,
@@ -328,7 +312,7 @@ int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TaskEvent
 int						TaskControlIterationDone			(TaskControl_type* taskControl, int errorID, char errorInfo[], BOOL doAnotherIteration);
 
 
-int						TaskControlEventToSubTasks  		(TaskControl_type* SenderTaskControl, TaskEvents_type event, void* eventData, DiscardFptr_type discardEventDataFptr); 
+int						TaskControlEventToSubTasks  		(TaskControl_type* SenderTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr); 
 
 	// Aborts iterations for the entire Nested Task Controller hierarchy
 void					AbortTaskControlExecution			(TaskControl_type* taskControl);

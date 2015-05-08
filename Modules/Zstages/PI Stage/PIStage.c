@@ -119,10 +119,10 @@ static void							IterateTC							(TaskControl_type* taskControl, BOOL const* ab
 static int							StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int							DoneTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int							StoppedTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int							TaskTreeStatus						(TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo);
+static int							TaskTreeStatus						(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
 static int				 			ResetTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void				 			ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
-static int							ZStageEventHandler					(TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
+static int							ZStageEventHandler					(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 
 //==============================================================================
@@ -149,7 +149,7 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 	initalloc_Zstage ((DAQLabModule_type*)zstage, className, instanceName, workspacePanHndl);
 	
 	// create PIStage Task Controller
-	tc = init_TaskControl_type (instanceName, PIzstage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, NULL, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ZStageEventHandler, ErrorTC);
+	tc = init_TaskControl_type (instanceName, PIzstage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ZStageEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&PIzstage); return NULL;}
 	
 	//------------------------------------------------------------
@@ -307,7 +307,7 @@ Error:
 /// HIFN Moves a motorized stage 
 static int Move (Zstage_type* zstage, Zstage_move_type moveType, double moveVal)
 {
-	return TaskControlEvent(zstage->taskController, TASK_EVENT_CUSTOM_MODULE_EVENT, init_MoveCommand_type(moveType, moveVal), (DiscardFptr_type)discard_MoveCommand_type); 
+	return TaskControlEvent(zstage->taskController, TC_Event_Custom, init_MoveCommand_type(moveType, moveVal), (DiscardFptr_type)discard_MoveCommand_type); 
 }
 
 static int UseJoystick (Zstage_type* zstage, BOOL useJoystick)
@@ -435,7 +435,7 @@ static int Stop (Zstage_type* zstage)
 	}
 	
 	// stop the Task Controller as well
-	TaskControlEvent(zstage->taskController, TASK_EVENT_STOP, NULL, NULL);
+	TaskControlEvent(zstage->taskController, TC_Event_Stop, NULL, NULL);
 	
 	return 0;
 }
@@ -864,7 +864,7 @@ static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	return 0;
 }
 
-static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type status, char** errorInfo)
+static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
 {
 	//PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	
@@ -874,6 +874,10 @@ static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeExecution_type
 static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	Zstage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	
+	// turn off error LED
+	if (zstage->StatusLED)
+		(*zstage->StatusLED) (zstage, ZSTAGE_LED_IDLE);
 	
 	if (zstage->SetStepCounter)
 		(*zstage->SetStepCounter) (zstage, 0); 
@@ -903,7 +907,7 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[]
 	
 }
 
-static int ZStageEventHandler (TaskControl_type* taskControl, TaskStates_type taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ZStageEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	MoveCommand_type*	command 		= eventData;
 	

@@ -197,16 +197,11 @@ static void discard_NIDisplayEngine_type (NIDisplayEngine_type** niVisionDisplay
 	if (!*niVisionDisplayPtr) return;
 	
 	// discard NI Vision Display specific data
+	imaqSetEventCallback(NULL, FALSE); // make sure there are no more callbacks when the window is disposed 
+	for (int i = 0; i < MAX_NI_VISION_DISPLAYS; i++)
+		discard_NIImageDisplay_type(&displays[i]);
 	
-	// if there are no more NI Vision Displays, then clean up display array
-	//cleanup anyway ?! Lex
-	
-	//if (!nNIDisplayEngines) {
-		for (int i = 0; i < MAX_NI_VISION_DISPLAYS; i++)
-			discard_NIImageDisplay_type(&displays[i]);
-		OKfree(displays);
-	//}
-	
+	OKfree(displays);
 	
 	// discard Display Engine base class data
 	discard_DisplayEngineClass((DisplayEngine_type**)niVisionDisplayPtr);
@@ -494,11 +489,11 @@ static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 			textPoint.y = point.y + ROILabel_YOffset;
 			
 			// point overlay 
-			image=GetImageImage(imgDisplay->baseClass.imagetype);
+			image = GetImageImage(imgDisplay->baseClass.imagetype);
 			nullChk( imaqOverlayPoints(image, &point, 1, &rgbVal, 1, IMAQ_POINT_AS_CROSS, NULL, ROI->ROIName) );   
 			// label overlay
 			nullChk( imaqOverlayText(image, textPoint, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
-			SetImageImage(imgDisplay->baseClass.imagetype,image);
+			SetImageImage(imgDisplay->baseClass.imagetype, image);
 			break;
 			
 		case ROI_Rectangle:
@@ -659,8 +654,6 @@ static void	DiscardImaqImg (Image** image)
 
 static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNumber, Tool tool, Rect rect)
 {
-	if (!displays) return;
-	
 	NIImageDisplay_type*	display 		= displays[windowNumber];
 	Point_type*				PointROI		= NULL;
 	Rect_type*				RectROI			= NULL;

@@ -830,7 +830,7 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
 			result=ReadBuffer(GetPMTBufsize());
 		}
 		if (gtaskControl!=NULL) {
-			abort=GetTaskControlAbortIterationFlag(gtaskControl);  
+			abort=GetTaskControlAbortFlag(gtaskControl);  
 			if (abort) {
 				TaskControlIterationDone (gtaskControl, 0,NULL,FALSE);
 				SetAcqBusy(0);

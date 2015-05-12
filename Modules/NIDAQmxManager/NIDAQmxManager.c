@@ -3046,6 +3046,9 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type**
 	//-------------------------------------------------------------------------------------------------
 	dev -> taskController = init_TaskControl_type (taskControllerName, dev, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, StartTC, 
 						  ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC);
+	// set no iteration function timeout
+	SetTaskControlIterationTimeout(dev->taskController, -1);
+	
 	if (!dev->taskController) goto Error;
 	
 	dev -> niDAQModule			= niDAQModule;
@@ -12038,12 +12041,6 @@ int32 CVICALLBACK AODAQmxTaskDataRequest_CB (TaskHandle taskHandle, int32 everyN
 	Dev_type*			dev 					= callbackData;
 	int					error					= 0;
 	char*				errMsg					= NULL;
-	//bool32				taskDoneFlag			= FALSE;
-	
-	// this is called back every number of samples that is set
-
-	//DAQmxIsTaskDone(dev->AOTaskSet->taskHndl, &taskDoneFlag);
-	//if (!taskDoneFlag) 
 	
 	errChk( WriteAODAQmx(dev, &errMsg) );
 		
@@ -12403,9 +12400,8 @@ SkipPacket:
 			break;
 		}
 	
-	if (stopAOTaskFlag == FALSE) {
-		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
-	}
+	//if (stopAOTaskFlag == FALSE)   
+	//	DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
 	
 	if (stopAOTaskFlag && (!data->writeBlocksLeftToWrite--) || GetTaskControlAbortFlag(dev->taskController)) {
 		int*	nActiveTasksPtr = NULL;
@@ -12421,7 +12417,9 @@ SkipPacket:
 		
 		CmtReleaseTSVPtr(dev->nActiveTasks);
 		
-	}
+	} else
+		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
+	
 	
 	return 0; // no error
 	
@@ -14704,6 +14702,9 @@ static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeStates status,
 		
 		// dim/undim rest of panels
 	}
+	
+	// just make sure the device is configured again before start
+	ConfigDAQmxDevice(dev, errorInfo);
 	
 	return 0;
 }

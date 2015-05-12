@@ -243,7 +243,7 @@ static void discard_NIImageDisplay_type (NIImageDisplay_type** displayPtr)
 	// discard child class data
 	
 	// discard image data
-	Image* image=GetImageImage(display->baseClass.imagetype);   
+	Image* image = GetImageImage(display->baseClass.imagetype);   
 	DiscardImaqImg((Image**)&image);
 
 	//---------------------------------------------------
@@ -734,7 +734,8 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 			// call Close callback
 			(*display->baseClass.displayEngine->imgDisplayEventCBFptr) (&display->baseClass, display->baseClass.imageDisplayCBData, ImageDisplay_Close);
 			
-			// discard image display data
+			// close window and discard image display data
+			imaqCloseWindow(windowNumber);
 			displays[display->imaqWndID] = NULL;
 			(*display->baseClass.discardFptr) ((void**)&display);
 			

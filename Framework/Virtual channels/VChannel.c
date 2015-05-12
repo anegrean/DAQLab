@@ -54,6 +54,8 @@ struct VChan {
 	
 	char*							name;					// Name of virtual chanel. 
 	VChanDataFlow_type 				dataFlow;   			// Direction of data flow into or out of the channel.
+	BOOL							isActive;				// If True, the VChan is required by the module, False otherwise. Default: True.
+	BOOL							isOpen;					// If True, data can be sent to/received from the VChan, False otherwise.
 														
 	//-----------------------	
 	// Source code connection
@@ -146,19 +148,22 @@ static int 					init_VChan_type 					(VChan_type* 					vchan,
 																VChanIsConnected_type			VChanIsConnectedFptr)
 {
 	// Data
-	vchan -> name   				= StrDup(name); 
+	vchan->name   					= StrDup(name); 
 	if (!vchan->name) return -1;
-	vchan -> dataFlow				= flowType;
-	vchan -> VChanOwner				= VChanOwner;
+	vchan->dataFlow					= flowType;
+	vchan->isActive					= TRUE;
+	vchan->isOpen					= FALSE;
+	
+	vchan->VChanOwner				= VChanOwner;
 	
 	// Callbacks
-	vchan -> Connected_CBFptr		= Connected_CBFptr;
-	vchan -> Disconnected_CBFptr	= Disconnected_CBFptr;
+	vchan->Connected_CBFptr			= Connected_CBFptr;
+	vchan->Disconnected_CBFptr		= Disconnected_CBFptr;
 	
 	// Methods
-	vchan -> DiscardFptr			= DiscardFptr;
-	vchan -> DisconnectFptr			= DisconnectFptr;
-	vchan -> VChanIsConnectedFptr	= VChanIsConnectedFptr;
+	vchan->DiscardFptr				= DiscardFptr;
+	vchan->DisconnectFptr			= DisconnectFptr;
+	vchan->VChanIsConnectedFptr		= VChanIsConnectedFptr;
 	
 	return 0;
 }
@@ -781,6 +786,21 @@ void SetVChanName (VChan_type* VChan, char newName[])
 char* GetVChanName (VChan_type* VChan)
 {
 	return StrDup(VChan->name);
+}
+
+void SetVChanActive (VChan_type* VChan, BOOL isActive)
+{
+	
+}
+
+BOOL GetVChanActive (VChan_type* VChan)
+{
+	return VChan->isActive;
+}
+
+BOOL IsVChanOpen (VChan_type* VChan)
+{
+	return VChan->isOpen;
 }
 
 /// HIFN Given a Source VChan, the function returns the name of the Sink VChan attached to the source having the 1-based index sinkIdx. If index is out of range it returns NULL.

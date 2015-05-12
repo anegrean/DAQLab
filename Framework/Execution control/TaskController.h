@@ -122,45 +122,45 @@ typedef struct TaskControl 			TaskControl_type;
 //--------------------------------------------------------------------------------
 
 // Called when a Task Controller needs to be configured based on module or device settings. 
-typedef int				 	(*ConfigureFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+typedef int				(*ConfigureFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 // Called when a Task Controller needs to be switched to an unconfigured state which prevents it from being executed.
-typedef int				 	(*UnconfigureFptr_type) 		(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*UnconfigureFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called each time a Task Controller performs an iteration of a device or module. This function is called in a separate thread from the Task Controller thread. 
 // The iteration can be completed either within this function call or even in another thread. 
 // In either case, to signal back to the Task Controller that the iteration function is complete call TaskControlIterationDone.
 
-typedef void 				(*IterateFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+typedef void 			(*IterateFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 
 // Called before the first iteration starts from an INITIAL state.
-typedef int				 	(*StartFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*StartFptr_type) 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when device or module must be returned to its initial state (iteration index = 0).
-typedef int				 	(*ResetFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*ResetFptr_type) 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called automatically when a finite Task Controller finishes required iterations or a continuous Task Controller is stopped manually.
-typedef int				 	(*DoneFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*DoneFptr_type) 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a running finite Task Controller is stopped manually, before reaching a DONE state.
-typedef int				 	(*StoppedFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*StoppedFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a Task Tree in which the Task Controller participates is started or stops/is stopped. This is called before the Start callback of the Task Controller.
-typedef int 				(*TaskTreeStatusFptr_type)		(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo); 
+typedef int 			(*TaskTreeStateChangeFptr_type)		(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo); 
 
 // Called when an UITC has a parent Task Controller attached to or detached from it, in the former case the UITC functioning as a simple Task Controller
 // without the possibility for the user to control the Task execution. This function must dim/undim UITC controls that prevent/allow the user to control
 // the task execution.
-typedef void				(*SetUITCModeFptr_type)			(TaskControl_type* taskControl, BOOL UITCActiveFlag);
+typedef void			(*SetUITCModeFptr_type)				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 
 // Called when Task Controller encounters an error, to continue Task Controller execution, a return from this function is needed.
-typedef void 				(*ErrorFptr_type) 				(TaskControl_type* taskControl, int errorID, char errorMsg[]);
+typedef void 			(*ErrorFptr_type) 					(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 
 // Called when data is placed in a Task Controller Sink VChan.
-typedef int					(*DataReceivedFptr_type)		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+typedef int				(*DataReceivedFptr_type)			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 // Called for passing custom module or device events that are not handled directly by the Task Controller.
-typedef int					(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
+typedef int				(*ModuleEventFptr_type)				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 
 //--------------------------------------------------------------------------------
@@ -171,20 +171,20 @@ typedef int					(*ModuleEventFptr_type)			(TaskControl_type* taskControl, TCStat
 // Task Controller creation/destruction functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-TaskControl_type*  	 	init_TaskControl_type				(const char					taskControllerName[],
-															 void*						moduleData,
-															 CmtThreadPoolHandle		tcThreadPoolHndl,
-												 	 	 	 ConfigureFptr_type 		ConfigureFptr,
-															 UnconfigureFptr_type		UnconfigureFptr,
-												 	 		 IterateFptr_type			IterateFptr,
-												 		 	 StartFptr_type				StartFptr,
-												  		 	 ResetFptr_type				ResetFptr,
-														 	 DoneFptr_type				DoneFptr,
-														 	 StoppedFptr_type			StoppedFptr,
-															 TaskTreeStatusFptr_type	TaskTreeStatusFptr,
-															 SetUITCModeFptr_type		SetUITCModeFptr,
-														 	 ModuleEventFptr_type		ModuleEventFptr,
-														 	 ErrorFptr_type				ErrorFptr);
+TaskControl_type*  	 	init_TaskControl_type				(const char						taskControllerName[],
+															 void*							moduleData,
+															 CmtThreadPoolHandle			tcThreadPoolHndl,
+												 	 	 	 ConfigureFptr_type 			ConfigureFptr,
+															 UnconfigureFptr_type			UnconfigureFptr,
+												 	 		 IterateFptr_type				IterateFptr,
+												 		 	 StartFptr_type					StartFptr,
+												  		 	 ResetFptr_type					ResetFptr,
+														 	 DoneFptr_type					DoneFptr,
+														 	 StoppedFptr_type				StoppedFptr,
+															 TaskTreeStateChangeFptr_type	TaskTreeStateChangeFptr,
+															 SetUITCModeFptr_type			SetUITCModeFptr,
+														 	 ModuleEventFptr_type			ModuleEventFptr,
+														 	 ErrorFptr_type					ErrorFptr);
 
 	// Disconnects a given Task Controller from its parent, disconnects all its child tasks and HW triggering and then discards the Task Controller.
 	// All child Tasks are disconnected from each other including HW triggering dependecies and VChan connections.

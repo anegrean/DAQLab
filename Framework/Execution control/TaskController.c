@@ -24,31 +24,31 @@
 //==============================================================================
 // Constants
 
-#define EVENT_BUFFER_SIZE 10										// Number of maximum events read at once from the Task Controller TSQs
+#define EVENT_BUFFER_SIZE 10											// Number of maximum events read at once from the Task Controller TSQs
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}
 
 //==============================================================================
 // Types
 
 typedef struct {
-	size_t						childTCIdx;							// For a TC_Event_UpdateChildTCState event this is a
-																	// 1-based index of childTC (from childTCs list) which generated
-																	// the event.
-	TCStates					newChildTCState;					// For a TC_Event_UpdateChildTCState event this is the new state
-																	// of the childTC
+	size_t							childTCIdx;							// For a TC_Event_UpdateChildTCState event this is a
+																		// 1-based index of childTC (from childTCs list) which generated
+																		// the event.
+	TCStates						newChildTCState;					// For a TC_Event_UpdateChildTCState event this is the new state
+																		// of the childTC
 } ChildTCEventInfo_type;
 
 typedef struct {
-	TCEvents 					event;								// Task Control Event.
-	void*						eventData;							// Extra information per event allocated dynamically
-	DiscardFptr_type   			discardEventDataFptr;   			// Function pointer to dispose of the eventData
+	TCEvents 						event;								// Task Control Event.
+	void*							eventData;							// Extra information per event allocated dynamically
+	DiscardFptr_type   				discardEventDataFptr;   			// Function pointer to dispose of the eventData
 } EventPacket_type;
 
 typedef struct {
-	TCStates					childTCState;						// Updated by parent task when informed by childTC that a state change occured.
-	TCStates					previousChildTCState;				// Previous child TC state used for logging and debuging.
-	TaskControl_type*			childTC;							// Pointer to child TC.
-	BOOL						isOutOfDate;						// If True, state of child is not known to the parent and the parent must be updated by its child.
+	TCStates						childTCState;						// Updated by parent task when informed by childTC that a state change occured.
+	TCStates						previousChildTCState;				// Previous child TC state used for logging and debuging.
+	TaskControl_type*				childTC;							// Pointer to child TC.
+	BOOL							isOutOfDate;						// If True, state of child is not known to the parent and the parent must be updated by its child.
 } ChildTCInfo_type;
 
 typedef enum {
@@ -59,59 +59,59 @@ typedef enum {
 
 // Structure binding Task Controller and VChan data for passing to TSQ callback	
 typedef struct {
-	TaskControl_type* 			taskControl;
-	SinkVChan_type* 			sinkVChan;
-	DataReceivedFptr_type		DataReceivedFptr;
-	CmtTSQCallbackID			itemsInQueueCBID;
+	TaskControl_type* 				taskControl;
+	SinkVChan_type* 				sinkVChan;
+	DataReceivedFptr_type			DataReceivedFptr;
+	CmtTSQCallbackID				itemsInQueueCBID;
 } VChanCallbackData_type;
 
 struct TaskControl {
 	// Task control data
-	char*						taskName;							// Name of Task Controller
-	size_t						childTCIdx;							// 1-based index of childTC from parent Task childTCs list. If task doesn't have a parent task then index is 0.
-	CmtTSQHandle				eventQ;								// Event queue to which the state machine reacts.
-	CmtThreadLockHandle			eventQThreadLock;					// Thread lock used to coordinate multiple writing threads sending events to the queue.
-	ListType					dataQs;								// Incoming data queues, list of VChanCallbackData_type*.
-	unsigned int				eventQThreadID;						// Thread ID in which queue events are processed.
-	CmtThreadFunctionID			threadFunctionID;					// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
-	CmtThreadPoolHandle			threadPoolHndl;						// Thread pool handle used to launch task controller threads.
-	TCStates 					state;								// Task Controller state.
-	TCStates 					oldState;							// Previous Task Controller state used for logging.
-	size_t						repeat;								// Total number of repeats. If repeat is 0, then the iteration function is not called. 
-	int							iterTimeout;						// Timeout in [s] until when TaskControlIterationDone can be called. 
-	BOOL						stack;								// Combine generated data into a one-dimension higher stack of datasets
+	char*							taskName;							// Name of Task Controller
+	size_t							childTCIdx;							// 1-based index of childTC from parent Task childTCs list. If task doesn't have a parent task then index is 0.
+	CmtTSQHandle					eventQ;								// Event queue to which the state machine reacts.
+	CmtThreadLockHandle				eventQThreadLock;					// Thread lock used to coordinate multiple writing threads sending events to the queue.
+	ListType						dataQs;								// Incoming data queues, list of VChanCallbackData_type*.
+	unsigned int					eventQThreadID;						// Thread ID in which queue events are processed.
+	CmtThreadFunctionID				threadFunctionID;					// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
+	CmtThreadPoolHandle				threadPoolHndl;						// Thread pool handle used to launch task controller threads.
+	TCStates 						state;								// Task Controller state.
+	TCStates 						oldState;							// Previous Task Controller state used for logging.
+	size_t							repeat;								// Total number of repeats. If repeat is 0, then the iteration function is not called. 
+	int								iterTimeout;						// Timeout in [s] until when TaskControlIterationDone can be called. 
+	BOOL							stack;								// Combine generated data into a one-dimension higher stack of datasets
 	 //add them to Iterator_Type?
-	TCExecutionModes		executionMode;						// Determines how the iteration block of a Task Controller is executed with respect to its childTCs if any.
-	TaskMode_type				mode;								// Finite or continuous type of task controller
-	Iterator_type* 				currentIter;						// iteration information structure
-	TaskControl_type*			parentTC;							// Pointer to parent task that own this childTC. 
-																	// If this is the main task, it has no parent and this is NULL. 
-	ListType					childTCs;							// List of childTCs of ChildTCInfo_type.
-	void*						moduleData;							// Reference to module specific data that is controlled by the task.
-	int							logPanHandle;						// Panel handle in which there is a box control for printing Task Controller execution info useful for debugging. If not used, it is set to 0
-	int							logBoxControlID;					// Box control ID for printing Task Controller execution info useful for debugging. If not used, it is set to 0.  
-	BOOL						loggingEnabled;						// If True, logging info is printed to the provided Box control.
-	char*						errorInfo;							// When switching to an error state, additional error info is written here.
-	int							errorID;							// Error code encountered when switching to an error state.
-	double						waitBetweenIterations;				// During a RUNNING state, waits specified ammount in seconds between iterations
-	BOOL						abortFlag;							// If True, it signals the provided callback functions that they must terminate.
-	BOOL						stopIterationsFlag;					// if True, no further TC iterations are performed.
-	int							nIterationsFlag;					// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
-	int							iterationTimerID;					// Keeps track of the timeout timer when iteration is performed in another thread.
-	BOOL						UITCFlag;							// If TRUE, the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
+	TCExecutionModes				executionMode;						// Determines how the iteration block of a Task Controller is executed with respect to its childTCs if any.
+	TaskMode_type					mode;								// Finite or continuous type of task controller
+	Iterator_type* 					currentIter;						// iteration information structure
+	TaskControl_type*				parentTC;							// Pointer to parent task that own this childTC. 
+																		// If this is the main task, it has no parent and this is NULL. 
+	ListType						childTCs;							// List of childTCs of ChildTCInfo_type.
+	void*							moduleData;							// Reference to module specific data that is controlled by the task.
+	int								logPanHandle;						// Panel handle in which there is a box control for printing Task Controller execution info useful for debugging. If not used, it is set to 0
+	int								logBoxControlID;					// Box control ID for printing Task Controller execution info useful for debugging. If not used, it is set to 0.  
+	BOOL							loggingEnabled;						// If True, logging info is printed to the provided Box control.
+	char*							errorInfo;							// When switching to an error state, additional error info is written here.
+	int								errorID;							// Error code encountered when switching to an error state.
+	double							waitBetweenIterations;				// During a RUNNING state, waits specified ammount in seconds between iterations
+	BOOL							abortFlag;							// If True, it signals the provided callback functions that they must terminate.
+	BOOL							stopIterationsFlag;					// if True, no further TC iterations are performed.
+	int								nIterationsFlag;					// When -1, the Task Controller is iterated continuously, 0 iteration stops and 1 one iteration.
+	int								iterationTimerID;					// Keeps track of the timeout timer when iteration is performed in another thread.
+	BOOL							UITCFlag;							// If TRUE, the Task Controller is meant to be used as an User Interface Task Controller that allows the user to control a Task Tree.
 	
 	// Event handler function pointers
-	ConfigureFptr_type			ConfigureFptr;
-	UnconfigureFptr_type		UnconfigureFptr;
-	IterateFptr_type			IterateFptr;
-	StartFptr_type				StartFptr;
-	ResetFptr_type				ResetFptr;
-	DoneFptr_type				DoneFptr;
-	StoppedFptr_type			StoppedFptr;
-	TaskTreeStatusFptr_type		TaskTreeStatusFptr;
-	SetUITCModeFptr_type		SetUITCModeFptr;
-	ModuleEventFptr_type		ModuleEventFptr;
-	ErrorFptr_type				ErrorFptr;
+	ConfigureFptr_type				ConfigureFptr;
+	UnconfigureFptr_type			UnconfigureFptr;
+	IterateFptr_type				IterateFptr;
+	StartFptr_type					StartFptr;
+	ResetFptr_type					ResetFptr;
+	DoneFptr_type					DoneFptr;
+	StoppedFptr_type				StoppedFptr;
+	TaskTreeStateChangeFptr_type	TaskTreeStateChangeFptr;
+	SetUITCModeFptr_type			SetUITCModeFptr;
+	ModuleEventFptr_type			ModuleEventFptr;
+	ErrorFptr_type					ErrorFptr;
 };
 
 //==============================================================================
@@ -145,7 +145,7 @@ static VChanCallbackData_type*				init_VChanCallbackData_type				(TaskControl_ty
 static void									discard_VChanCallbackData_type			(VChanCallbackData_type** VChanCBDataPtr);
 
 // Informs recursively Task Controllers about the Task Tree status when it changes (active/inactive).
-static int									TaskTreeStatusChanged 					(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeStates status, char** errorInfo);
+static int									TaskTreeStateChange		 				(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeStates state, char** errorInfo);
 
 // Clears recursively all data packets from the Sink VChans of all Task Controllers in a Task Tree Branch starting with the given Task Controller.
 static int									ClearTaskTreeBranchVChans				(TaskControl_type* taskControl, char** errorInfo);
@@ -175,20 +175,20 @@ int CVICALLBACK 							TaskControlIterTimeout 					(int reserved, int timerId, i
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 /// HIFN Initializes a Task controller.
-TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
-										void*						moduleData,
-										CmtThreadPoolHandle			tcThreadPoolHndl, 
-										ConfigureFptr_type 			ConfigureFptr,
-										UnconfigureFptr_type		UnconfigureFptr,
-										IterateFptr_type			IterateFptr,
-										StartFptr_type				StartFptr,
-										ResetFptr_type				ResetFptr,
-										DoneFptr_type				DoneFptr,
-										StoppedFptr_type			StoppedFptr,
-										TaskTreeStatusFptr_type		TaskTreeStatusFptr,
-										SetUITCModeFptr_type		SetUITCModeFptr,
-										ModuleEventFptr_type		ModuleEventFptr,
-										ErrorFptr_type				ErrorFptr)
+TaskControl_type* init_TaskControl_type(const char						taskControllerName[],
+										void*							moduleData,
+										CmtThreadPoolHandle				tcThreadPoolHndl, 
+										ConfigureFptr_type 				ConfigureFptr,
+										UnconfigureFptr_type			UnconfigureFptr,
+										IterateFptr_type				IterateFptr,
+										StartFptr_type					StartFptr,
+										ResetFptr_type					ResetFptr,
+										DoneFptr_type					DoneFptr,
+										StoppedFptr_type				StoppedFptr,
+										TaskTreeStateChangeFptr_type	TaskTreeStateChangeFptr,
+										SetUITCModeFptr_type			SetUITCModeFptr,
+										ModuleEventFptr_type			ModuleEventFptr,
+										ErrorFptr_type					ErrorFptr)
 {
 	int		error = 0;
 	TaskControl_type* tc = malloc (sizeof(TaskControl_type));
@@ -247,7 +247,7 @@ TaskControl_type* init_TaskControl_type(const char					taskControllerName[],
 	tc -> ResetFptr							= ResetFptr;
 	tc -> DoneFptr							= DoneFptr;
 	tc -> StoppedFptr						= StoppedFptr;
-	tc -> TaskTreeStatusFptr				= TaskTreeStatusFptr;
+	tc -> TaskTreeStateChangeFptr			= TaskTreeStateChangeFptr;
 	tc -> SetUITCModeFptr					= SetUITCModeFptr;
 	tc -> ModuleEventFptr					= ModuleEventFptr;
 	tc -> ErrorFptr							= ErrorFptr;
@@ -614,20 +614,20 @@ static void discard_ChildTCEventInfo_type (ChildTCEventInfo_type** eventDataPtr)
 	OKfree(*eventDataPtr);
 }
 
-static int TaskTreeStatusChanged (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeStates status, char** errorInfo)
+static int TaskTreeStateChange (TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskTreeStates state, char** errorInfo)
 {
 	int		error = 0;
 	if (!taskControl) return 0;
 	
 	// status change
-	if ( (error = FunctionCall(taskControl, eventPacket, TASK_FCALL_TASK_TREE_STATUS, &status, errorInfo)) < 0) return error; 
+	if ( (error = FunctionCall(taskControl, eventPacket, TASK_FCALL_TASK_TREE_STATUS, &state, errorInfo)) < 0) return error; 
 	
 	size_t			nChildTCs = ListNumItems(taskControl->childTCs);
 	ChildTCInfo_type*	subTaskPtr;
 	
 	for (size_t i = nChildTCs; i; i--) {
 		subTaskPtr = ListGetPtrToItem(taskControl->childTCs, i);
-		if ( (error = TaskTreeStatusChanged (subTaskPtr->childTC, eventPacket, status, errorInfo)) < 0) return error;
+		if ( (error = TaskTreeStateChange (subTaskPtr->childTC, eventPacket, state, errorInfo)) < 0) return error;
 	}
 	
 	return 0;
@@ -1283,9 +1283,9 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 			
 		case TASK_FCALL_TASK_TREE_STATUS:
 			
-			if (!taskControl->TaskTreeStatusFptr) return 0;	// function not provided
+			if (!taskControl->TaskTreeStateChangeFptr) return 0;	// function not provided
 			
-			if ( (fCallError = (*taskControl->TaskTreeStatusFptr)(taskControl, *(TaskTreeStates*)fCallData, &fCallErrorMsg)) < 0) {
+			if ( (fCallError = (*taskControl->TaskTreeStateChangeFptr)(taskControl, *(TaskTreeStates*)fCallData, &fCallErrorMsg)) < 0) {
 				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Task Tree Status", fCallErrorMsg);
 				OKfree(fCallErrorMsg);
 				return FunctionCall_Error_FCall_Error;
@@ -1328,7 +1328,7 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 			
 			// change Task Tree status if this is a Root Task Controller
 			if (!taskControl->parentTC) {
-				TaskTreeStatusChanged (taskControl, eventPacket, TaskTree_Finished, &fCallErrorMsg);
+				TaskTreeStateChange (taskControl, eventPacket, TaskTree_Finished, &fCallErrorMsg);
 				OKfree(fCallErrorMsg);
 			}
 			
@@ -1878,7 +1878,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 						
 						// if this is the root task controller (i.e. it doesn't have a parent) then change Task Tree status
-						if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TaskTree_Started, &errMsg) < 0) {
+						if (TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Started, &errMsg) < 0) {
 							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 							OKfree(errMsg);
@@ -2039,7 +2039,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 					
 						// if this is the root task controller (i.e. it doesn't have a parent) then change Task Tree status
-						if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TaskTree_Started, &errMsg) < 0) {
+						if (TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Started, &errMsg) < 0) {
 							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 							OKfree(errMsg);
@@ -2247,7 +2247,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// change Task Tree status
 						if(!taskControl->parentTC) 
-							if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TaskTree_Finished, &errMsg) < 0) {
+							if (TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Finished, &errMsg) < 0) {
 								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 								taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 								OKfree(errMsg);
@@ -2411,7 +2411,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// change Task Tree status
 						if(!taskControl->parentTC)
-							if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TaskTree_Finished, &errMsg) < 0) {
+							if (TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Finished, &errMsg) < 0) {
 								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 								taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 								OKfree(errMsg);
@@ -2643,7 +2643,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 							// change Task Tree status
 							if(!taskControl->parentTC)
-								if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TaskTree_Finished, &errMsg) < 0) {
+								if (TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Finished, &errMsg) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 									OKfree(errMsg);
@@ -2933,7 +2933,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						// change Task Tree status
 						if(!taskControl->parentTC)
-							if (TaskTreeStatusChanged(taskControl, &eventpacket[i], TaskTree_Finished, &errMsg) < 0) {
+							if (TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Finished, &errMsg) < 0) {
 								taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 								taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
 								OKfree(errMsg);

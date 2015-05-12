@@ -214,17 +214,17 @@ static int 						PMTController_ResetFifo			(VUPhotonCtr_type* vupc);
 // VUPhotonCtr Task Controller Callbacks
 //-----------------------------------------
 
-static int 						ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int 						UnconfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
-static void						IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
-static int						StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int						DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int						StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int						TaskTreeStatus			(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
-static void						TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
-static int				 		ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
-static void				 		ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
-static int						ModuleEventHandler		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
+static int 						ConfigureTC 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int 						UnconfigureTC 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
+static void						IterateTC						(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+static int						StartTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int						DoneTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int						StoppedTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int						TaskTreeStateChange				(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
+static void						TCActive						(TaskControl_type* taskControl, BOOL UITCActiveFlag);
+static int				 		ResetTC 						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+static void				 		ErrorTC 						(TaskControl_type* taskControl, int errorID, char* errorMsg);
+static int						ModuleEventHandler				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
 
 
 //==============================================================================
@@ -257,7 +257,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	
 	// create VUPhotonCtr Task Controller
 	tc = init_TaskControl_type (instanceName, vupc, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, StartTC, 
-												 	  ResetTC, DoneTC, StoppedTC, TaskTreeStatus, TCActive, ModuleEventHandler, ErrorTC); // module data added to the task controller below
+												 	  ResetTC, DoneTC, StoppedTC, TaskTreeStateChange, TCActive, ModuleEventHandler, ErrorTC); // module data added to the task controller below
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
 	
 	//------------------------------------------------------------
@@ -1261,7 +1261,7 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
+static int	TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	

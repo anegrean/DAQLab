@@ -312,7 +312,7 @@ static void					IterateUITC									(TaskControl_type* taskControl, BOOL const* 
 static int					StartUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					DoneUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					StoppedUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					TaskTreeStatusUITC 							(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
+static int					TaskTreeStateChangeUITC 					(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 static void					UITCActive									(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetUITC 									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorUITC 									(TaskControl_type* taskControl, int errorID, char* errorMsg);
@@ -489,7 +489,7 @@ static int DAQLab_Load (void)
 		
 		// create a new default UI Task Controller
 		newTaskController = init_TaskControl_type (NULL, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, StartUITC, 
-												 	  ResetUITC, DoneUITC, StoppedUITC, TaskTreeStatusUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
+												 	  ResetUITC, DoneUITC, StoppedUITC, TaskTreeStateChangeUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 		
 		errChk( DLLoadTaskControllerSettingsFromXML(newTaskController, taskControllerSettingsXMLElement, &xmlErrorInfo) );
 		OKfreeCAHndl(taskControllerSettingsXMLElement);
@@ -3209,7 +3209,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	
 	// create new task controller
 	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, StartUITC, 
-												  ResetUITC, DoneUITC, StoppedUITC, TaskTreeStatusUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
+												  ResetUITC, DoneUITC, StoppedUITC, TaskTreeStateChangeUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 	
 	OKfree(newControllerName);
 	
@@ -3857,13 +3857,13 @@ static int StoppedUITC	(TaskControl_type* taskControl, BOOL const* abortFlag, ch
 	return 0; 
 }
 
-static int TaskTreeStatusUITC (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
+static int TaskTreeStateChangeUITC (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
 	// ignore if this is a Root UITC
 	if (GetTaskControlParent(controllerUIDataPtr->taskControl))
-		SetPanelAttribute(controllerUIDataPtr->panHndl, ATTR_DIMMED, (int) status);
+		SetPanelAttribute(controllerUIDataPtr->panHndl, ATTR_DIMMED, (int) state);
 	
 	return 0;
 }

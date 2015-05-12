@@ -199,7 +199,7 @@ static int							DoneTC												(TaskControl_type* taskControl, BOOL const* a
 
 static int							StoppedTC											(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							TaskTreeStatus 										(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
+static int							TaskTreeStateChange 								(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 
 static int				 			DataReceivedTC										(TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
@@ -543,7 +543,7 @@ static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomMo
 	errChk( DLGetXMLElementAttributes(pockellsXMLElement, eomAttr, NumElem(eomAttr)) );
 	
 	nullChk( taskController = init_TaskControl_type(taskControllerName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
-									  StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC) );
+									  StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC) );
 	// configure task controller
 	TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL);
 	
@@ -732,7 +732,7 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	
 	
 	nullChk(taskController = init_TaskControl_type(taskControllerName, eom, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
-									  StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, ModuleEventHandler, ErrorTC) );
+									  StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC) );
 	// configure task controller
 	TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL);
 	
@@ -1611,7 +1611,7 @@ static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	return 0;
 }
 
-static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
+static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	

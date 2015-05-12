@@ -105,7 +105,7 @@ static void								IterateTC							(TaskControl_type* taskControl, BOOL const* a
 static int								StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int								DoneTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int								StoppedTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int								TaskTreeStatus	 					(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
+static int								TaskTreeStateChange	 				(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 static int				 				ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static void				 				ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 static int								StageEventHandler					(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
@@ -140,7 +140,7 @@ DAQLabModule_type* initalloc_XYStage (DAQLabModule_type* mod, char className[], 
 	
 	// initialize Task Controller from child class
 	
-	stage->taskController 		= init_TaskControl_type (instanceName, stage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStatus, NULL, StageEventHandler, ErrorTC);
+	stage->taskController 		= init_TaskControl_type (instanceName, stage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStateChange, NULL, StageEventHandler, ErrorTC);
 	
 	//---------------------------
 	// Parent Level 0: DAQLabModule_type 
@@ -1394,7 +1394,7 @@ static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	return 0;
 }
 
-static int TaskTreeStatus (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
+static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
 {
 	return 0;	
 }

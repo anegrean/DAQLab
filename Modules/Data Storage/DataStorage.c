@@ -104,7 +104,7 @@ static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abo
 //static int				StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					TaskTreeStatus 			(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
+static int					TaskTreeStateChange 	(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 //static void				TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
@@ -158,7 +158,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	
 	// create Data Storage Task Controller
 	tc = init_TaskControl_type (instanceName, ds, DLGetCommonThreadPoolHndl(), ConfigureTC, UnConfigureTC, NULL, NULL,NULL , ResetTC,
-								 DoneTC, StoppedTC, TaskTreeStatus, NULL, NULL, ErrorTC);
+								 DoneTC, StoppedTC, TaskTreeStateChange, NULL, NULL, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
 	//------------------------------------------------------------
@@ -546,13 +546,13 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static int	TaskTreeStatus (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
+static int	TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 	
 	int err=0;
 	
-	if (status) {
+	if (state) {
 		//create a new data directory
 		OKfree(ds->rawdatapath);			    // free previous path name
 		CreateRawDataDir(ds,taskControl);

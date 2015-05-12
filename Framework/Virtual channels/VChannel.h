@@ -47,11 +47,11 @@ typedef enum {
 //------------------------------------------------------------------------------
 
 	// Callback when a VChan connection is established between a Source and Sink
-typedef void	(* Connected_CBFptr_type) 		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+typedef void				(*Connected_CBFptr_type) 			(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
 
 	// Callback when a VChan connection is broken by calling VChan_Disconnect. When disconnecting
 	// a Source type VChan, this callback will be called for each Sink.
-typedef void	(* Disconnected_CBFptr_type) 	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+typedef void				(*Disconnected_CBFptr_type) 		(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
 
 
 //==============================================================================
@@ -104,49 +104,52 @@ BOOL						VChan_Disconnect					(VChan_type* VChan);
 BOOL						IsVChanConnected					(VChan_type* VChan);
 
 //------------------------------------------------------------------------------
-// VChan Set/Get
+// VChan Set/Get/Is
 //------------------------------------------------------------------------------
 
-	// Assigns new VChan name
+	// Name
 void 						SetVChanName 						(VChan_type* VChan, char newName[]);
-
-	// Returns pointer to dynamically allocated VChan name (null terminated string) 
 char*						GetVChanName						(VChan_type* VChan);
-
 char*						GetSinkVChanName					(SourceVChan_type* srcVChan, size_t sinkIdx);
 
-SinkVChan_type*				GetSinkVChan						(SourceVChan_type* srcVChan, size_t sinkIdx);
+	// Data flow
+VChanDataFlow_type			GetVChanDataFlowType				(VChan_type* VChan);
 
-SourceVChan_type*			GetSourceVChan						(SinkVChan_type* sinkVChan);
+	// VChan owner
+void*						GetVChanOwner						(VChan_type* VChan);
 
-DLDataTypes					GetSourceVChanDataType				(SourceVChan_type* srcVChan);
-
+	// Data type
 	// Changes the data types of a Source VChan. If there is a Sink VChan attached, and none of its data types are compatible 
 	// with the Source VChan, then the Sink VChan is disconnected from the Source VChan.
 void						SetSourceVChanDataType				(SourceVChan_type* srcVChan, DLDataTypes dataType);
+DLDataTypes					GetSourceVChanDataType				(SourceVChan_type* srcVChan);
 	// Changes the data types a SinkVChan accepts. If there is a Source VChan attached to the Sink VChan, and the data type
 	// of the Source VChan is incompatible with the provided types, then the Sink VChan is disconnected from the Source VChan.
 void						SetSinkVChanDataTypes				(SinkVChan_type* sinkVChan, size_t nDataTypes, DLDataTypes dataTypes[]);
 
-VChanDataFlow_type			GetVChanDataFlowType				(VChan_type* VChan);
+	// Activate/Inactivate
+void						SetVChanActive						(VChan_type* VChan, BOOL isActive);
+BOOL						GetVChanActive						(VChan_type* VChan);
 
+	// Is Opened/Closed?
+BOOL						IsVChanOpen							(VChan_type* VChan);
+
+	// Retrieve Sink & Source
+SinkVChan_type*				GetSinkVChan						(SourceVChan_type* srcVChan, size_t sinkIdx);
+SourceVChan_type*			GetSourceVChan						(SinkVChan_type* sinkVChan);
 size_t						GetNSinkVChans						(SourceVChan_type* srcVChan);
-
 ListType					GetSinkVChanList					(SourceVChan_type* srcVChan);
 
-	// Returns the thread safe queue handle of a sink VChan
+	// Sink VChan thread safe queue handle
 CmtTSQHandle				GetSinkVChanTSQHndl					(SinkVChan_type* sinkVChan);
 
-	// The maximum number of datapackets a Sink VChan can hold
+	// Maximum number of datapackets a Sink VChan can hold
 void						SetSinkVChanTSQSize					(SinkVChan_type* sinkVChan, size_t nItems);
-
 size_t						GetSinkVChanTSQSize					(SinkVChan_type* sinkVChan);
 
 	// Time in [ms] to keep on trying to read a data packet from a Sink VChan TSQ		
 void						SetSinkVChanReadTimeout				(SinkVChan_type* sinkVChan, double time);	
 double						GetSinkVChanReadTimeout				(SinkVChan_type* sinkVChan);
-
-void*						GetVChanOwner						(VChan_type* VChan);
 
 //------------------------------------------------------------------------------
 // Data Packet Management

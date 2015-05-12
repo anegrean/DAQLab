@@ -885,7 +885,7 @@ static int							StoppedTC_NonResGalvoCal							(TaskControl_type* taskControl, 
 
 static int				 			ResetTC_NonResGalvoCal 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							TaskTreeStatus_NonResGalvoCal 						(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
+static int							TaskTreeStateChange_NonResGalvoCal 					(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 
 //static int				 			DataReceivedTC_NonResGalvoCal 					(TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
@@ -904,7 +904,7 @@ static int							StoppedTC_RectRaster								(TaskControl_type* taskControl, BOO
 
 static int				 			ResetTC_RectRaster 									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							TaskTreeStatus_RectRaster 							(TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo);
+static int							TaskTreeStateChange_RectRaster 						(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 
 //static int				 			DataReceivedTC_RectRaster						(TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
@@ -3555,7 +3555,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, DLGetCommonThreadPoolHndl(), ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
-								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, TaskTreeStatus_NonResGalvoCal, NULL, NULL, NULL);
+								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, TaskTreeStateChange_NonResGalvoCal, NULL, NULL, NULL);
 	cal->baseClass.lsModule			= lsModule;
 	
 								  
@@ -4329,7 +4329,7 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 	//--------------------------------------------------------
 	// init task controller
 	nullChk( taskController	= init_TaskControl_type(engineName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC_RectRaster, UnconfigureTC_RectRaster, IterateTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
-										  DoneTC_RectRaster, StoppedTC_RectRaster, TaskTreeStatus_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster) );
+										  DoneTC_RectRaster, StoppedTC_RectRaster, TaskTreeStateChange_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster) );
 	SetTaskControlMode(taskController, finiteFrames);
 	SetTaskControlIterations(taskController, nFrames);
 	SetTaskControlIterationTimeout(taskController, TaskControllerIterationTimeout);
@@ -7719,20 +7719,20 @@ static int StoppedTC_NonResGalvoCal (TaskControl_type* taskControl,  BOOL const*
 	return 0; 
 }
 
-static int TaskTreeStatus_NonResGalvoCal (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
+static int TaskTreeStateChange_NonResGalvoCal (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
 {
 	ActiveNonResGalvoCal_type* 	cal 	= GetTaskControlModuleData(taskControl);
 	
 	// dim/undim controls
-	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_Done, ATTR_DIMMED, (int) status);
+	SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_Done, ATTR_DIMMED, (int) state);
     int calSetPanHndl;
 	GetPanelHandleFromTabPage(cal->baseClass.calPanHndl, NonResGCal_Tab, 0, &calSetPanHndl);
-	SetCtrlAttribute(calSetPanHndl, Cal_CommMaxV, ATTR_DIMMED, (int) status); 
-	SetCtrlAttribute(calSetPanHndl, Cal_ParkedV, ATTR_DIMMED, (int) status); 
-	SetCtrlAttribute(calSetPanHndl, Cal_ScanTime, ATTR_DIMMED, (int) status);
-	SetCtrlAttribute(calSetPanHndl, Cal_MinStep, ATTR_DIMMED, (int) status); 
-	SetCtrlAttribute(calSetPanHndl, Cal_Resolution, ATTR_DIMMED, (int) status);
-	SetCtrlAttribute(calSetPanHndl, Cal_MechanicalResponse, ATTR_DIMMED, (int) status);
+	SetCtrlAttribute(calSetPanHndl, Cal_CommMaxV, ATTR_DIMMED, (int) state); 
+	SetCtrlAttribute(calSetPanHndl, Cal_ParkedV, ATTR_DIMMED, (int) state); 
+	SetCtrlAttribute(calSetPanHndl, Cal_ScanTime, ATTR_DIMMED, (int) state);
+	SetCtrlAttribute(calSetPanHndl, Cal_MinStep, ATTR_DIMMED, (int) state); 
+	SetCtrlAttribute(calSetPanHndl, Cal_Resolution, ATTR_DIMMED, (int) state);
+	SetCtrlAttribute(calSetPanHndl, Cal_MechanicalResponse, ATTR_DIMMED, (int) state);
 	
 	return 0;
 }
@@ -7905,7 +7905,7 @@ Error:
 	return error;
 }
 
-static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeStates status, char** errorInfo)
+static int TaskTreeStateChange_RectRaster (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
 {
 	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
 	int						error				= 0;
@@ -7915,7 +7915,7 @@ static int TaskTreeStatus_RectRaster (TaskControl_type* taskControl, TaskTreeSta
 	DLDataTypes				pixelDataType		= 0;
 	ImageTypes				imageType			= 0;
 	
-	switch (status) {
+	switch (state) {
 			
 		case TaskTree_Started:
 			

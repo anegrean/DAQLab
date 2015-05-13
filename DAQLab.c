@@ -2516,9 +2516,9 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 	int						nCurrentRows			= 0;
 	int             		nItems;
 	int             		colWidth;
-	SourceVChan_type** 		sourceVChanPtr			= NULL;
-	VChan_type**			VChanPtr1				= NULL;
-	SinkVChan_type**		sinkVChanPtr			= NULL;
+	SourceVChan_type* 		srcVChan				= NULL;
+	VChan_type*				VChan1					= NULL;
+	SinkVChan_type*			sinkVChan				= NULL;
 	Point           		cell;
 	Rect            		cellRange;
 	BOOL					extraColumn;
@@ -2542,23 +2542,30 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 	
 	// insert source VChans as rows
 	for (size_t chanIdx = 1; chanIdx <= nVChans; chanIdx++) {
-		sourceVChanPtr = ListGetPtrToItem(VChannels, chanIdx);
+		srcVChan = *(SourceVChan_type**)ListGetPtrToItem(VChannels, chanIdx);
 		
-		if (GetVChanDataFlowType((VChan_type*)*sourceVChanPtr) != VChan_Source) continue;	// select only Source VChans
+		if (GetVChanDataFlowType((VChan_type*)srcVChan) != VChan_Source) continue;	// select only Source VChans
 		
 		nRows++;
 		if (nRows > nCurrentRows || !nCurrentRows)
 			InsertTableRows(panHandle, tableControlID, -1, 1, VAL_CELL_RING);
-			
+		
+		
 		// adjust table display
+		if (IsVChanOpen((VChan_type*)srcVChan))
+			SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_COLOR, VAL_DK_GREEN);
+		else
+			SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_COLOR, VAL_DK_RED);
+		
+		
 		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_USE_LABEL_TEXT, 1);
 		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_JUSTIFY, VAL_CENTER_LEFT_JUSTIFIED);
-		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_TEXT, (VChanName = GetVChanName((VChan_type*)*sourceVChanPtr)));
+		SetTableRowAttribute(panHandle, tableControlID, nRows, ATTR_LABEL_TEXT, (VChanName = GetVChanName((VChan_type*)srcVChan)));
 		GetTextDisplaySize(VChanName, VAL_DIALOG_META_FONT, NULL, &rowLabelWidth);
 		if (rowLabelWidth > maxRowLabelWidth) maxRowLabelWidth = rowLabelWidth;
 		OKfree(VChanName);
 			
-		nSinks = (int) GetNSinkVChans(*sourceVChanPtr);
+		nSinks = (int) GetNSinkVChans(srcVChan);
 		// keep track of required number of columns
 		if (nSinks > nColumns) 
 			nColumns = nSinks;
@@ -2569,14 +2576,20 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 			nCurrentColumns += nColumns - nCurrentColumns;
 		}
 		
-		
 		// add assigned sink VChans
 		for (int idx = 1; idx <= nSinks; idx++) {
 			cell.x = idx;	 // column
 			cell.y = nRows;  // row
-			sinkVChanPtr = ListGetPtrToItem(GetSinkVChanList(*sourceVChanPtr), idx);
+			sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(GetSinkVChanList(srcVChan), idx);
+			
+			
+			if (IsVChanOpen((VChan_type*)sinkVChan))
+				SetTableCellAttribute(panHandle, tableControlID, cell, ATTR_TEXT_COLOR, VAL_DK_GREEN);
+			else
+				SetTableCellAttribute(panHandle, tableControlID, cell, ATTR_TEXT_COLOR, VAL_DK_RED);
+			
 			InsertTableCellRingItem(panHandle, tableControlID, cell, 0, "");    
-			InsertTableCellRingItem(panHandle, tableControlID, cell, 1, (VChanName = GetVChanName((VChan_type*)*sinkVChanPtr)));
+			InsertTableCellRingItem(panHandle, tableControlID, cell, 1, (VChanName = GetVChanName((VChan_type*)sinkVChan)));
 			OKfree(VChanName);
 			// select the assigned sink VChan
 			SetTableCellValFromIndex(panHandle, tableControlID, cell, 1); 
@@ -2585,13 +2598,13 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 		// add unassigned sink VChans of the same type
 		extraColumn= FALSE;
 		for (size_t vchanIdx = 1; vchanIdx <= nVChans; vchanIdx++) {
-			VChanPtr1 = ListGetPtrToItem(VChannels, vchanIdx);
+			VChan1 = *(VChan_type**)ListGetPtrToItem(VChannels, vchanIdx);
 				
 			// select only sinks
-			if (GetVChanDataFlowType(*VChanPtr1) != VChan_Sink) continue;
+			if (GetVChanDataFlowType(VChan1) != VChan_Sink) continue;
 				
 			// select only compatible unassigned sinks
-			if (GetSourceVChan((SinkVChan_type*)*VChanPtr1) || !CompatibleVChans(*sourceVChanPtr, (SinkVChan_type*)*VChanPtr1)) continue;
+			if (GetSourceVChan((SinkVChan_type*)VChan1) || !VChansAreCompatible(srcVChan, (SinkVChan_type*)VChan1)) continue;
 			
 			// keep track of required number of columns
 			if (nSinks+1 > nColumns) 
@@ -2607,7 +2620,7 @@ static void UpdateVChanSwitchboard (int panHandle, int tableControlID)
 			cellRange.left   = 1;
 			cellRange.height = 1; 
 			cellRange.width  = nSinks+1;
-			InsertTableCellRangeRingItem(panHandle, tableControlID, cellRange, -1, (VChanName = GetVChanName(*VChanPtr1)));
+			InsertTableCellRangeRingItem(panHandle, tableControlID, cellRange, -1, (VChanName = GetVChanName(VChan1)));
 			// add empty selection to extra column and select it
 			InsertTableCellRingItem(panHandle, tableControlID, MakePoint(nSinks+1, nRows), 0, "");
 			SetTableCellValFromIndex(panHandle, tableControlID, MakePoint(nSinks+1, nRows), 0); 

@@ -11,6 +11,7 @@
 //==============================================================================
 // Include files
 #include "DAQLab.h" 		// include this first 
+#include "DAQLabUtility.h"
 #include "LangLStep.h"
 #include "LV_LangLStep4.h"
 
@@ -497,9 +498,6 @@ static int GetStageVelocity (LangLStep_type* stage, double* velocity, char** err
 	int 		error					= 0;
 	char*		errMsg					= NULL;
 	uInt8	 	commandExecuted			= FALSE;
-	
-	
-	
 	
 	
 	return 0;

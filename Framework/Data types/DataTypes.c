@@ -800,24 +800,25 @@ Image_type* init_Image_type (ImageTypes imageType)
 
 
 
-void discard_Image_type (Image_type** image)
+void discard_Image_type (Image_type** imagePtr)
 {
-	size_t		nROIs;
-	ROI_type** 	ROIPtr	= NULL;
+	Image_type*		image 	= *imagePtr;
+	size_t			nROIs	= 0;
+	ROI_type** 		ROIPtr	= NULL;
 	
-	if (!*image) return;
+	if (!image) return;
 	
 	//free image data
-	OKfree((*image)->image);
+	OKfree(image->image);
 	//free ROIs
-	nROIs	= ListNumItems((*image)->ROIs);
+	nROIs	= ListNumItems(image->ROIs);
 	for (size_t i = 1; i <= nROIs; i++) {
-		ROIPtr = ListGetPtrToItem((*image)->ROIs, i);
+		ROIPtr = ListGetPtrToItem(image->ROIs, i);
 		discard_ROI_type(ROIPtr);
 	}
-	ListDispose((*image)->ROIs);
+	ListDispose(image->ROIs);
 	
-	OKfree(*image);
+	OKfree(*imagePtr);
 }
 
 /*

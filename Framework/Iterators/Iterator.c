@@ -124,11 +124,6 @@ void discard_Iterator_type (Iterator_type** iterator,BOOL remove_list, BOOL remo
 	if ((*iterator)->name==NULL) return;
 	OKfree((*iterator)->name);
 	
-	size_t 				nObjects;
-	Iterator_type**		iterObjectPtr;
-	Iterator_type* 		parent;
-	size_t 				i;
-	
 	if (remove_list) {
 	/*	nObjects 		= ListNumItems((*iterator)->iterObjects);   
 		for (i = 1; i <= nObjects; i++) {

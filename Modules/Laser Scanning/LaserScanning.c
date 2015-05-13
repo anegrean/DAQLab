@@ -12,7 +12,8 @@
 //==============================================================================
 // Include files
 
-#include "DAQLab.h" 		// include this first   
+#include "DAQLab.h" 		// include this first  
+#include "DAQLabUtility.h"
 #include <formatio.h>  
 #include "LaserScanning.h"
 #include <userint.h>
@@ -315,10 +316,10 @@ typedef enum {
 typedef enum {
 	ScanEngineMode_FrameScan,						// Frame scans 
 	ScanEngineMode_PointJump						// Jumps between point ROIs repeatedly
-} ScanEngineModesEnum_type;
+} ScanEngineModes;
 
 typedef struct {
-	ScanEngineModesEnum_type	mode;
+	ScanEngineModes	mode;
 	char*						label;
 } ScanEngineModes_type;
 
@@ -336,7 +337,7 @@ struct ScanEngine {
 	//-----------------------------------
 	ScanEngineEnum_type			engineType;
 	
-	ScanEngineModesEnum_type	scanMode;
+	ScanEngineModes	scanMode;
 	
 	//-----------------------------------
 	// Reference to axis calibration data
@@ -609,18 +610,6 @@ static TriangleCal_type* 			copy_TriangleCal_type 								(TriangleCal_type* tri
 static int 							SaveNonResGalvoCalToXML								(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ axisCalibrationsElement, ERRORINFO* xmlErrorInfo);
 static int 							LoadNonResGalvoCalFromXML 							(LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement, ERRORINFO* xmlErrorInfo);    
 
-	// command VChan
-static void							NonResGalvoCal_ComVChan_Connected					(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							NonResGalvoCal_ComVChan_Disconnected				(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
-
-	// number of samples in calibration command waveform
-static void							NonResGalvoCal_ComNSamplesVChan_Connected			(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							NonResGalvoCal_ComNSamplesVChan_Disconnected		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-
-	// position VChan
-static void							NonResGalvoCal_PosVChan_Connected					(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							NonResGalvoCal_PosVChan_Disconnected				(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
-
 	// galvo calibration
 static int CVICALLBACK 				NonResGalvoCal_MainPan_CB							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				NonResGalvoCal_CalPan_CB							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
@@ -792,22 +781,13 @@ static BOOL							ValidScanEngineName									(char name[], void* dataPtr);
 //-----------------------------------------
 
 	// Fast Axis Command VChan
-static void							FastAxisComVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							FastAxisComVChan_StateChange						(VChan_type* self, void* VChanOwner, VChanStates state);
 
 	// Slow Axis Command VChan
-static void							SlowAxisComVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							SlowAxisComVChan_StateChange						(VChan_type* self, void* VChanOwner, VChanStates state);
 
-	// Fast Axis Position VChan
-static void							FastAxisPosVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							FastAxisPosVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
-
-	// Slow Axis Position VChan
-static void							SlowAxisPosVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							SlowAxisPosVChan_Disconnected						(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
-
-	// Shutter VChan
-static void							ShutterVChan_Connected								(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							ShutterVChan_Disconnected							(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+	// Scan engine mode switching VChan activation/deactivation
+void 								SetRectRasterScanEngineModeVChans 					(RectRaster_type* scanEngine);
 
 //-----------------------------------------
 // Display interface
@@ -2642,11 +2622,11 @@ static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanId
 	
 	// incoming pixel data from detection channel
 	nullChk( detVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SinkVChan_DetectionChan, chanIdx) );
-	nullChk( scanChan->detVChan = init_SinkVChan_type(detVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), scanChan, VChanDataTimeout, NULL, NULL) );
+	nullChk( scanChan->detVChan = init_SinkVChan_type(detVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), scanChan, VChanDataTimeout, NULL) );
 	
 	// outgoing image channel
 	nullChk( imgVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SourceVChan_ImageChannel, chanIdx) );
-	nullChk( scanChan->imgVChan = init_SourceVChan_type(imgVChanName, DL_Image, scanChan, NULL, NULL) );
+	nullChk( scanChan->imgVChan = init_SourceVChan_type(imgVChanName, DL_Image, scanChan, NULL) );
 	
 	// register sink VChan with task controller
 	AddSinkVChan(engine->taskControl, scanChan->detVChan, NULL);
@@ -3504,9 +3484,9 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	// init parent class
 	initalloc_ActiveScanAxisCal_type(&cal->baseClass);
 	if(!(cal->baseClass.calName		= StrDup(calName))) {free(cal); return NULL;}
-	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, DL_Waveform_Double, cal, NonResGalvoCal_ComVChan_Connected, NonResGalvoCal_ComVChan_Disconnected);   
-	cal->baseClass.VChanComNSamples	= init_SourceVChan_type(commandNSamplesVChanName, DL_ULongLong, cal, NonResGalvoCal_ComNSamplesVChan_Connected, NonResGalvoCal_ComNSamplesVChan_Disconnected);   
-	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, VChanDataTimeout + Default_ActiveNonResGalvoCal_ScanTime * 1e3, NonResGalvoCal_PosVChan_Connected, NonResGalvoCal_PosVChan_Disconnected);  
+	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, DL_Waveform_Double, cal, NULL);   
+	cal->baseClass.VChanComNSamples	= init_SourceVChan_type(commandNSamplesVChanName, DL_ULongLong, cal, NULL);   
+	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, VChanDataTimeout + Default_ActiveNonResGalvoCal_ScanTime * 1e3, NULL);  
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, DLGetCommonThreadPoolHndl(), ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
@@ -3823,41 +3803,6 @@ static void discard_TriangleCal_type (TriangleCal_type** a)
 	OKfree(*a);
 }
 
-// calibration command VChan connected callback
-static void	NonResGalvoCal_ComVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
-{
-	
-}
-
-// calibration command VChan disconnected callback
-static void	NonResGalvoCal_ComVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
-// used to exchange number of calibration samples in the waveform
-static void NonResGalvoCal_ComNSamplesVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
-{
-	
-}
-
-static void NonResGalvoCal_ComNSamplesVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
-// calibration position VChan connected callback
-static void	NonResGalvoCal_PosVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
-{
-	
-}
-
-// calibration position VChan disconnected callback
-static void	NonResGalvoCal_PosVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
 static int init_ScanEngine_type (ScanEngine_type** 			enginePtr, 
 								 LaserScanning_type*		lsModule,
 								 TaskControl_type**			taskControllerPtr,
@@ -3952,19 +3897,19 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	//------------------------
 	
 	// VChans
-	nullChk( engine->VChanFastAxisCom			= init_SourceVChan_type(fastAxisComVChanName, DL_RepeatedWaveform_Double, engine, FastAxisComVChan_Connected, NULL) ); 
-	nullChk( engine->VChanFastAxisComNSamples	= init_SourceVChan_type(fastAxisComNSampVChanName, DL_ULongLong, engine, NULL, NULL) ); 
-	nullChk( engine->VChanSlowAxisCom			= init_SourceVChan_type(slowAxisComVChanName, DL_RepeatedWaveform_Double, engine, SlowAxisComVChan_Connected, NULL) ); 
-	nullChk( engine->VChanSlowAxisComNSamples	= init_SourceVChan_type(slowAxisComNSampVChanName, DL_ULongLong, engine, NULL, NULL) ); 
-	nullChk( engine->VChanFastAxisPos			= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, FastAxisPosVChan_Connected, FastAxisPosVChan_Disconnected) ); 
-	nullChk( engine->VChanSlowAxisPos			= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, SlowAxisPosVChan_Connected, SlowAxisPosVChan_Disconnected) ); 
-	nullChk( engine->VChanCompositeImage		= init_SourceVChan_type(compositeImageVChanName, DL_Image, engine, NULL, NULL) );
-	nullChk( engine->VChanShutter				= init_SourceVChan_type(shutterCommandVChanName, DL_Waveform_UChar, engine, ShutterVChan_Connected, ShutterVChan_Disconnected) ); 
-	nullChk( engine->VChanPixelPulseTrain		= init_SourceVChan_type(pixelPulseTrainVChanName, DL_PulseTrain_Ticks, engine, NULL, NULL) ); 	
-	nullChk( engine->VChanPixelSamplingRate		= init_SourceVChan_type(pixelSamplingRateVChanName, DL_Double, engine, NULL, NULL) ); 	
-	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_ULongLong, engine, NULL, NULL) ); 	
+	nullChk( engine->VChanFastAxisCom			= init_SourceVChan_type(fastAxisComVChanName, DL_RepeatedWaveform_Double, engine, FastAxisComVChan_StateChange) ); 
+	nullChk( engine->VChanFastAxisComNSamples	= init_SourceVChan_type(fastAxisComNSampVChanName, DL_ULongLong, engine, NULL) ); 
+	nullChk( engine->VChanSlowAxisCom			= init_SourceVChan_type(slowAxisComVChanName, DL_RepeatedWaveform_Double, engine, SlowAxisComVChan_StateChange) ); 
+	nullChk( engine->VChanSlowAxisComNSamples	= init_SourceVChan_type(slowAxisComNSampVChanName, DL_ULongLong, engine, NULL) ); 
+	nullChk( engine->VChanFastAxisPos			= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, NULL) ); 
+	nullChk( engine->VChanSlowAxisPos			= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, NULL) ); 
+	nullChk( engine->VChanCompositeImage		= init_SourceVChan_type(compositeImageVChanName, DL_Image, engine, NULL) );
+	nullChk( engine->VChanShutter				= init_SourceVChan_type(shutterCommandVChanName, DL_Waveform_UChar, engine, NULL) ); 
+	nullChk( engine->VChanPixelPulseTrain		= init_SourceVChan_type(pixelPulseTrainVChanName, DL_PulseTrain_Ticks, engine, NULL) ); 	
+	nullChk( engine->VChanPixelSamplingRate		= init_SourceVChan_type(pixelSamplingRateVChanName, DL_Double, engine, NULL) ); 	
+	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_ULongLong, engine, NULL) ); 	
 	nullChk( engine->objectives					= ListCreate(sizeof(Objective_type*)) ); 
-	nullChk( engine->VChanROITiming				= init_SourceVChan_type(ROITimingVChanName, DL_RepeatedWaveform_UChar, engine, NULL, NULL) );
+	nullChk( engine->VChanROITiming				= init_SourceVChan_type(ROITimingVChanName, DL_RepeatedWaveform_UChar, engine, NULL) );
 	
 	// register Sink VChans with the task controller
 	AddSinkVChan(engine->taskControl, engine->VChanFastAxisPos, NULL);
@@ -4495,7 +4440,10 @@ static int CVICALLBACK NonResRectRasterScan_MainPan_CB (int panel, int control, 
 					
 					int		scanMode;
 					GetCtrlVal(panel, control, &scanMode);
-					scanEngine->baseClass.scanMode = (ScanEngineModesEnum_type) scanMode;
+					scanEngine->baseClass.scanMode = (ScanEngineModes) scanMode;
+					
+					// activate/inactivate VChans
+					SetRectRasterScanEngineModeVChans(scanEngine);
 					break;
 					
 				case RectRaster_ExecutionMode:
@@ -5977,7 +5925,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				iterindex++;
 				SetCurrentIterationIndex(currentiter,iterindex);
 			
-				nullChk( imagePacket	= init_DataPacket_type(DL_Image, &sendimage, currentiter , discard_Image_type));  //discard_ImageDisplay_type
+				nullChk( imagePacket	= init_DataPacket_type(DL_Image, (void**)&sendimage, currentiter, (DiscardFptr_type) discard_Image_type));  //discard_ImageDisplay_type
 				// send data packet with image
 				errChk( SendDataPacket(rectRaster->baseClass.VChanCompositeImage, &imagePacket, 0, &errMsg) );
 				     
@@ -6462,7 +6410,7 @@ Error:
 //-----------------------------------------
 
 // Fast Axis Command VChan
-static void	FastAxisComVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
+static void	FastAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 { 
 	ScanEngine_type*	engine				= VChanOwner;
 	double*				parkedVPtr 			= NULL;
@@ -6470,12 +6418,22 @@ static void	FastAxisComVChan_Connected (VChan_type* self, void* VChanOwner, VCha
 	char*				errMsg				= NULL;
 	DataPacket_type*	parkedDataPacket	= NULL;
 	
-	if (!engine->fastAxisCal) return; // no parked voltage available
-	
-	nullChk( parkedVPtr = malloc(sizeof(double)) );
-	*parkedVPtr = ((NonResGalvoCal_type*)engine->fastAxisCal)->parked;
-	nullChk( parkedDataPacket = init_DataPacket_type(DL_Double, (void**)&parkedVPtr, NULL, NULL) );
-	errChk( SendDataPacket(engine->VChanFastAxisCom, &parkedDataPacket, FALSE, &errMsg) );
+	switch (state) {
+		
+		case VChan_Open:
+			
+			if (!engine->fastAxisCal) return; // no parked voltage available
+			
+			nullChk( parkedVPtr = malloc(sizeof(double)) );
+			*parkedVPtr = ((NonResGalvoCal_type*)engine->fastAxisCal)->parked;
+			nullChk( parkedDataPacket = init_DataPacket_type(DL_Double, (void**)&parkedVPtr, NULL, NULL) );
+			errChk( SendDataPacket(engine->VChanFastAxisCom, &parkedDataPacket, FALSE, &errMsg) );
+			break;
+			
+		case VChan_Closed:
+			
+			break;
+	}
 	
 	return;
 	
@@ -6493,7 +6451,7 @@ Error:
 }
 
 // Slow Axis Command VChan
-static void	SlowAxisComVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
+static void	SlowAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
 	ScanEngine_type*	engine				= VChanOwner;
 	double*				parkedVPtr 			= NULL;
@@ -6501,12 +6459,23 @@ static void	SlowAxisComVChan_Connected (VChan_type* self, void* VChanOwner, VCha
 	char*				errMsg				= NULL;
 	DataPacket_type*	parkedDataPacket	= NULL;
 	
-	if (!engine->slowAxisCal) return; // no parked voltage available
+	switch (state) {
+		
+		case VChan_Open:
+			
+			if (!engine->slowAxisCal) return; // no parked voltage available
 	
-	nullChk( parkedVPtr = malloc(sizeof(double)) );
-	*parkedVPtr = ((NonResGalvoCal_type*)engine->slowAxisCal)->parked;
-	nullChk( parkedDataPacket = init_DataPacket_type(DL_Double, (void**)&parkedVPtr, NULL, NULL) );
-	errChk( SendDataPacket(engine->VChanSlowAxisCom, &parkedDataPacket, FALSE, &errMsg) );
+			nullChk( parkedVPtr = malloc(sizeof(double)) );
+			*parkedVPtr = ((NonResGalvoCal_type*)engine->slowAxisCal)->parked;
+			nullChk( parkedDataPacket = init_DataPacket_type(DL_Double, (void**)&parkedVPtr, NULL, NULL) );
+			errChk( SendDataPacket(engine->VChanSlowAxisCom, &parkedDataPacket, FALSE, &errMsg) );
+			
+			break;
+			
+		case VChan_Closed:
+			
+			break;
+	}
 	
 	return;
 	
@@ -6523,37 +6492,46 @@ Error:
 	OKfree(errMsg);
 }
 
-// Fast Axis Position VChan
-static void FastAxisPosVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
+void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 {
-	
-}
-
-static void	FastAxisPosVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
-// Slow Axis Position VChan
-static void SlowAxisPosVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
-{
-	
-}
-
-static void	SlowAxisPosVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
-// Shutter VChan
-static void	ShutterVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
-{
-	
-}
-
-static void	ShutterVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
+	switch (scanEngine->baseClass.scanMode) {
+							
+		case ScanEngineMode_FrameScan:
+							
+			// activate detection and image output VChans
+			for (size_t i = 0; i < scanEngine->nImgBuffers; i++) {
+				SetVChanActive((VChan_type*)scanEngine->imgBuffers[i]->scanChan->detVChan, TRUE);
+				SetVChanActive((VChan_type*)scanEngine->imgBuffers[i]->scanChan->imgVChan, TRUE);
+			}
+			
+			// activate composite image VChan
+			SetVChanActive(scanEngine->baseClass.VChanCompositeImage, TRUE);
+			
+			// active N Pixels VChan
+			SetVChanActive(scanEngine->baseClass.VChanNPixels, TRUE);
+			
+			// inactivate ROI timing VChan
+			SetVChanActive(scanEngine->baseClass.VChanROITiming, FALSE);
+			break;
+							
+		case ScanEngineMode_PointJump:
+			
+			// inactivate detection and image output channels
+			for (size_t i = 0; i < scanEngine->nImgBuffers; i++) {
+				SetVChanActive((VChan_type*)scanEngine->imgBuffers[i]->scanChan->detVChan, FALSE);
+				SetVChanActive((VChan_type*)scanEngine->imgBuffers[i]->scanChan->imgVChan, FALSE);
+			}
+			
+			// inactivate composite image VChan
+			SetVChanActive(scanEngine->baseClass.VChanCompositeImage, FALSE);
+			
+			// inactivate N Pixels VChan
+			SetVChanActive(scanEngine->baseClass.VChanNPixels, FALSE);
+			
+			// activate ROI timing VChan
+			SetVChanActive(scanEngine->baseClass.VChanROITiming, TRUE);
+			break;
+	}
 }
 
 //-----------------------------------------

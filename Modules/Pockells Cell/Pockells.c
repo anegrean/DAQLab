@@ -11,7 +11,8 @@
 //==============================================================================
 // Include files
 
-#include "DAQLab.h" 		// include this first 
+#include "DAQLab.h" 		// include this first
+#include "DAQLabUtility.h"
 #include <analysis.h> 
 #include <formatio.h>
 #include "UI_Pockells.h"
@@ -179,7 +180,7 @@ static double						GetPockellsCellVoltage								(PockellsEOMCal_type* eomCal, d
 //-----------------------------------------
 
 	// Modulation VChan
-static void							ModulationVChan_Connected							(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							ModulationVChan_StateChange							(VChan_type* self, void* VChanOwner, VChanStates state);
 
 //-----------------------------------------
 // Task Controller callbacks
@@ -348,8 +349,8 @@ static PockellsEOM_type* init_PockellsEOM_type (PockellsModule_type* eomModule, 
 	
 	DLDataTypes		timingVChanDataTypes[] = PockellsEOM_VChan_Timing_DataTypes;
 	
-	nullChk( eom->timingVChan  		= init_SinkVChan_type(timingVChanName, timingVChanDataTypes, NumElem(timingVChanDataTypes), eom, VChanDataTimeout, NULL, NULL) );
-	nullChk( eom->modulationVChan	= init_SourceVChan_type(modulationVChanName, DL_RepeatedWaveform_Double, eom, ModulationVChan_Connected, NULL) );
+	nullChk( eom->timingVChan  		= init_SinkVChan_type(timingVChanName, timingVChanDataTypes, NumElem(timingVChanDataTypes), eom, VChanDataTimeout, NULL) );
+	nullChk( eom->modulationVChan	= init_SourceVChan_type(modulationVChanName, DL_RepeatedWaveform_Double, eom, ModulationVChan_StateChange) );
 	
 	// cleanup
 	OKfree(timingVChanName);
@@ -1428,14 +1429,24 @@ static double GetPockellsCellVoltage (PockellsEOMCal_type* eomCal, double normal
 //-----------------------------------------
 
 // Modulation VChan
-static void	ModulationVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
+static void	ModulationVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
 	PockellsEOM_type* 		eom 	= VChanOwner;
 	PockellsEOMCal_type* 	eomCal 	= ListGetPtrToItem(eom->calib, eom->calibIdx);
 	int						error	= 0;
 	char*					errMsg	= NULL;
 	
-	errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+	switch (state) {
+			
+		case VChan_Open:
+			
+			errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+			break;
+			
+		case VChan_Closed:
+			
+			break;
+	}
 	
 	return;
 	
@@ -1492,7 +1503,7 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	
 	
 	// if there is no Source VChan attached to the timing Sink VChan of the pockells cell or not in pulsed mode, then just send constant voltage waveform
-	if (!IsVChanConnected((VChan_type*)eom->timingVChan) || !eom->isPulsed) {
+	if (!IsVChanOpen((VChan_type*)eom->timingVChan) || !eom->isPulsed) {
 		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
 		// send NULL packet as well to signal termination of transmission
 		errChk( SendDataPacket(eom->modulationVChan, &nullDataPacket, FALSE, &errMsg) ); 

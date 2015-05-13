@@ -12,6 +12,7 @@
 // Include files
 
 #include "DAQLab.h" 		// include this first
+#include "DAQLabUtility.h"
 #include <formatio.h> 
 #include <userint.h>
 #include <limits.h>
@@ -1322,25 +1323,22 @@ static int CVICALLBACK 				TriggerPreTrigSamples_CB 				(int panel, int control,
 	//----------------------
 
 	// receiving number of samples
-static void							ADNSamplesSinkVChan_Connected			(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							ADNSamplesSinkVChan_Disconnected		(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							ADNSamplesSinkVChan_StateChange			(VChan_type* self, void* VChanOwner, VChanStates state);
 	// sending number of samples
-static void							ADNSamplesSourceVChan_Connected			(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							ADNSamplesSourceVChan_StateChange		(VChan_type* self, void* VChanOwner, VChanStates state);
 	// receiving sampling rate
-static void							ADSamplingRateSinkVChan_Connected		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							ADSamplingRateSinkVChan_Disconnected	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							ADSamplingRateSinkVChan_StateChange		(VChan_type* self, void* VChanOwner, VChanStates state);
 	// sending sampling rate
-static void							ADSamplingRateSourceVChan_Connected		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							ADSamplingRateSourceVChan_StateChange	(VChan_type* self, void* VChanOwner, VChanStates state);
 
 	//----------------
 	// CO Task
 	//----------------
 
 	// receiving CO pulse train info
-static void							COPulseTrainSinkVChan_Connected			(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-static void							COPulseTrainSinkVChan_Disconnected		(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+static void							COPulseTrainSinkVChan_StateChange		(VChan_type* self, void* VChanOwner, VChanStates state);
 	// sending CO pulse train info
-static void							COPulseTrainSourceVChan_Connected		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
+static void							COPulseTrainSourceVChan_StateChange		(VChan_type* self, void* VChanOwner, VChanStates state);
 
 	//------------------------------------------------------------------- 
 	// VChan receiving data callbacks when task controller is not active
@@ -4778,27 +4776,27 @@ static int AddToUI_Chan_AI_Voltage (ChanSet_AI_Voltage_type* chanSet)
 		
 		case Convert_To_Double:
 			
-			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_Double, chanSet, NULL, NULL); 
+			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_Double, chanSet, NULL); 
 			break;
 			
 		case Convert_To_Float:
 			
-			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_Float, chanSet, NULL, NULL); 
+			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_Float, chanSet, NULL); 
 			break;
 			
 		case Convert_To_UInt:
 			
-			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UInt, chanSet, NULL, NULL); 
+			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UInt, chanSet, NULL); 
 			break;
 			
 		case Convert_To_UShort:
 			
-			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UShort, chanSet, NULL, NULL);
+			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UShort, chanSet, NULL);
 			break;
 			
 		case Convert_To_UChar:
 			
-			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UChar, chanSet, NULL, NULL);
+			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UChar, chanSet, NULL);
 			break;
 	}
 	
@@ -5096,7 +5094,7 @@ static int AddToUI_Chan_AO_Voltage (ChanSet_AO_Voltage_type* chanSet)
 	
 	DLDataTypes allowedPacketTypes[] = {DL_Waveform_Double, DL_RepeatedWaveform_Double, DL_Waveform_Float, DL_RepeatedWaveform_Float, DL_Float, DL_Double};
 							
-	chanSet->baseClass.sinkVChan = init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chanSet, VChan_Data_Receive_Timeout, NULL, NULL);  
+	chanSet->baseClass.sinkVChan = init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chanSet, VChan_Data_Receive_Timeout, NULL);  
 	DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)chanSet->baseClass.sinkVChan);
 	SetCtrlVal(chanSet->baseClass.chanPanHndl, AOVoltage_VChanName, VChanName);
 	AddSinkVChan(dev->taskController, chanSet->baseClass.sinkVChan, AO_DataReceivedTC); 
@@ -6206,7 +6204,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						// Create and register VChan
 						//--------------------------
 							
-						newChan->baseClass.baseClass.srcVChan = init_SourceVChan_type(newVChanName, DL_Waveform_Double, newChan, NULL, NULL);  
+						newChan->baseClass.baseClass.srcVChan = init_SourceVChan_type(newVChanName, DL_Waveform_Double, newChan, NULL);  
 						DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.baseClass.srcVChan);
 						SetCtrlVal(newChan->baseClass.baseClass.chanPanHndl, SETPAN_SrcVChanName, newVChanName);
 						OKfree(newVChanName);
@@ -6396,7 +6394,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						DL_RepeatedWaveform_Int,						
 						DL_RepeatedWaveform_UInt};
 						
-					newDOChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newDOChan, VChan_Data_Receive_Timeout, NULL, NULL);  
+					newDOChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newDOChan, VChan_Data_Receive_Timeout, NULL);  
 					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newDOChan->baseClass.sinkVChan);
 					
 					AddSinkVChan(dev->taskController, newDOChan->baseClass.sinkVChan, DO_DataReceivedTC); 
@@ -6735,17 +6733,17 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 						
 						case PulseTrain_Freq:
 							newChan->baseClass.srcVChan 	= init_SourceVChan_type(pulseTrainSourceVChanName, DL_PulseTrain_Freq, newChan, 
-															  						COPulseTrainSourceVChan_Connected, NULL); 
+															  						COPulseTrainSourceVChan_StateChange); 
 							break;
 								
 						case PulseTrain_Time:
 							newChan->baseClass.srcVChan		= init_SourceVChan_type(pulseTrainSourceVChanName, DL_PulseTrain_Time, newChan, 
-														  						COPulseTrainSourceVChan_Connected, NULL); 
+														  						COPulseTrainSourceVChan_StateChange); 
 							break;
 								
 						case PulseTrain_Ticks:
 							newChan->baseClass.srcVChan 	= init_SourceVChan_type(pulseTrainSourceVChanName, DL_PulseTrain_Ticks, newChan, 
-																  						COPulseTrainSourceVChan_Connected, NULL); 
+																  						COPulseTrainSourceVChan_StateChange); 
 							break;
 							
 					}
@@ -6785,7 +6783,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					}
 					
 					newChan->baseClass.sinkVChan	= init_SinkVChan_type(pulseTrainSinkVChanName, &allowedPulseTrainPacket, 1, 
-																					 newChan, VChan_Data_Receive_Timeout, COPulseTrainSinkVChan_Connected, COPulseTrainSinkVChan_Disconnected); 
+																					 newChan, VChan_Data_Receive_Timeout, COPulseTrainSinkVChan_StateChange); 
 					
 					SetCtrlVal(settingspanel, SETPAN_SinkVChanName, pulseTrainSinkVChanName);  
 					// register VChan with DAQLab
@@ -8200,7 +8198,7 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	DLDataTypes		nSamplesVChanAllowedDataTypes[] = {DL_UChar, DL_UShort, DL_UInt, DL_ULong, DL_ULongLong};
 						
 	tskSet->timing->nSamplesSinkVChan	= init_SinkVChan_type(nSamplesSinkVChanName, nSamplesVChanAllowedDataTypes, NumElem(nSamplesVChanAllowedDataTypes),
-															tskSet, VChan_Data_Receive_Timeout, ADNSamplesSinkVChan_Connected, ADNSamplesSinkVChan_Disconnected);
+															tskSet, VChan_Data_Receive_Timeout, ADNSamplesSinkVChan_StateChange);
 	OKfree(nSamplesSinkVChanName);
 	// register VChan with the framework
 	DLRegisterVChan((DAQLabModule_type*)tskSet->dev->niDAQModule, (VChan_type*)tskSet->timing->nSamplesSinkVChan);
@@ -8216,7 +8214,7 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	AppendString(&nSamplesSourceVChanName, ": ", -1);
 	AppendString(&nSamplesSourceVChanName, sourceVChanNSamplesBaseName, -1);
 						
-	tskSet->timing->nSamplesSourceVChan	= init_SourceVChan_type(nSamplesSourceVChanName, DL_ULongLong, tskSet, ADNSamplesSourceVChan_Connected, NULL);
+	tskSet->timing->nSamplesSourceVChan	= init_SourceVChan_type(nSamplesSourceVChanName, DL_ULongLong, tskSet, ADNSamplesSourceVChan_StateChange);
 	OKfree(nSamplesSourceVChanName);
 	// register VChan with the framework
 	DLRegisterVChan((DAQLabModule_type*)tskSet->dev->niDAQModule, (VChan_type*)tskSet->timing->nSamplesSourceVChan);
@@ -8233,7 +8231,7 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	DLDataTypes		samplingRateVChanAllowedDataTypes[] = {DL_Double, DL_Float};
 						
 	tskSet->timing->samplingRateSinkVChan	= init_SinkVChan_type(samplingRateSinkVChanName, samplingRateVChanAllowedDataTypes, NumElem(samplingRateVChanAllowedDataTypes),
-																	tskSet, VChan_Data_Receive_Timeout, ADSamplingRateSinkVChan_Connected, ADSamplingRateSinkVChan_Disconnected);
+																	tskSet, VChan_Data_Receive_Timeout, ADSamplingRateSinkVChan_StateChange);
 	OKfree(samplingRateSinkVChanName);
 	// register VChan with the framework
 	DLRegisterVChan((DAQLabModule_type*)tskSet->dev->niDAQModule, (VChan_type*)tskSet->timing->samplingRateSinkVChan);
@@ -8249,7 +8247,7 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	AppendString(&samplingRateSourceVChanName, ": ", -1);
 	AppendString(&samplingRateSourceVChanName, sourceVChanSamplingRateBaseName, -1);
 						
-	tskSet->timing->samplingRateSourceVChan	= init_SourceVChan_type(samplingRateSourceVChanName, DL_Double, tskSet, ADSamplingRateSourceVChan_Connected, NULL);
+	tskSet->timing->samplingRateSourceVChan	= init_SourceVChan_type(samplingRateSourceVChanName, DL_Double, tskSet, ADSamplingRateSourceVChan_StateChange);
 	OKfree(samplingRateSourceVChanName);
 	// register VChan with the framework
 	DLRegisterVChan((DAQLabModule_type*)tskSet->dev->niDAQModule, (VChan_type*)tskSet->timing->samplingRateSourceVChan);
@@ -11037,7 +11035,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	//--------------
 	// Sampling rate (must be received before N samples!)
 	//--------------
-	if (IsVChanConnected((VChan_type*)dev->AITaskSet->timing->samplingRateSinkVChan)) { 
+	if (IsVChanOpen((VChan_type*)dev->AITaskSet->timing->samplingRateSinkVChan)) { 
 		errChk( GetDataPacket(dev->AITaskSet->timing->samplingRateSinkVChan, &dataPacket, &errMsg) );
 		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
 		
@@ -11078,7 +11076,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	// N samples
 	//----------
 	if (dev->AITaskSet->timing->measMode == Operation_Finite) {
-		if (IsVChanConnected((VChan_type*)dev->AITaskSet->timing->nSamplesSinkVChan)) {
+		if (IsVChanOpen((VChan_type*)dev->AITaskSet->timing->nSamplesSinkVChan)) {
 			errChk( GetDataPacket(dev->AITaskSet->timing->nSamplesSinkVChan, &dataPacket, &errMsg) );
 			dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
 			switch (dataPacketType) {
@@ -11211,7 +11209,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	// N samples
 	//----------
 	if (dev->AOTaskSet->timing->measMode == Operation_Finite) {
-		if (IsVChanConnected((VChan_type*)dev->AOTaskSet->timing->nSamplesSinkVChan)) {
+		if (IsVChanOpen((VChan_type*)dev->AOTaskSet->timing->nSamplesSinkVChan)) {
 			errChk( GetDataPacket(dev->AOTaskSet->timing->nSamplesSinkVChan, &dataPacket, &errMsg) );
 			dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
 			switch (dataPacketType) {
@@ -11246,7 +11244,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	//--------------
 	// Sampling rate
 	//--------------
-	if (IsVChanConnected((VChan_type*)dev->AOTaskSet->timing->samplingRateSinkVChan)) { 
+	if (IsVChanOpen((VChan_type*)dev->AOTaskSet->timing->samplingRateSinkVChan)) { 
 		errChk( GetDataPacket(dev->AOTaskSet->timing->samplingRateSinkVChan, &dataPacket, &errMsg) );
 		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
 		
@@ -11492,7 +11490,7 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data and update UI settings
 	//-------------------------------------------------------------------------------------------------------------------------------
-	if (IsVChanConnected((VChan_type*)chanSetCO->baseClass.sinkVChan)) {
+	if (IsVChanOpen((VChan_type*)chanSetCO->baseClass.sinkVChan)) {
 		errChk( GetDataPacket(chanSetCO->baseClass.sinkVChan, &dataPacket, &errMsg) );
 		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
 		discard_PulseTrain_type(&chanSetCO->pulseTrain);
@@ -13725,27 +13723,29 @@ Error:
 // VChan Callbacks
 //-----------------------------------------------------------------------------------------------------
 
-static void ADNSamplesSinkVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
+static void ADNSamplesSinkVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
 	ADTaskSet_type* 	tskSet	= VChanOwner;
 	
-	// dim number of samples controls and duration
-	SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 1);
-	SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 1);
-	
+	switch (state) {
+			
+		case VChan_Open:
+			
+			// dim number of samples controls and duration
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 1);
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 1);
+			break;
+			
+		case VChan_Closed:
+			
+			// undim number of samples controls and duration
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 0);
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 0);
+			break;
+	}
 }
 
-static void	ADNSamplesSinkVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	ADTaskSet_type* 	tskSet	= VChanOwner;
-	
-	// undim number of samples controls and duration
-	SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 0);
-	SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 0);
-	
-}
-
-static void	ADNSamplesSourceVChan_Connected	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
+static void	ADNSamplesSourceVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
 	ADTaskSet_type* 	tskSet			= VChanOwner; 
 	uInt64*				nSamplesPtr		= NULL;
@@ -13753,13 +13753,23 @@ static void	ADNSamplesSourceVChan_Connected	(VChan_type* self, void* VChanOwner,
 	int					error			= 0;
 	char*				errMsg			= NULL;
 	
-	// send number of samples if task is finite
-	if (tskSet->timing->measMode != Operation_Finite) return;
+	switch (state) {
+			
+		case VChan_Open:
+			
+			// send number of samples if task is finite
+			if (tskSet->timing->measMode != Operation_Finite) return;
 	
-	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
-	*nSamplesPtr = tskSet->timing->nSamples;
-	nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, (void**) &nSamplesPtr, NULL,NULL) );
-	errChk( SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
+			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+			*nSamplesPtr = tskSet->timing->nSamples;
+			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, (void**) &nSamplesPtr, NULL,NULL) );
+			errChk( SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
+			break;
+			
+		case VChan_Closed:
+			
+			break;
+	}
 	
 	return;
 	
@@ -13776,24 +13786,26 @@ Error:
 	OKfree(errMsg);
 }
 
-static void ADSamplingRateSinkVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
+static void ADSamplingRateSinkVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
 	ADTaskSet_type* 	tskSet			= VChanOwner;
 	
-	// dim sampling rate control
-	SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 1);
+	switch (state) {
+			
+		case VChan_Open:
+			// dim sampling rate control
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 1);
+			break;
+			
+		case VChan_Closed:
+			// undim sampling rate control
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 0);
+			break;
+	}
 	
 }
 
-static void ADSamplingRateSinkVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	ADTaskSet_type* 	tskSet			= VChanOwner;
-	
-	// undim sampling rate control
-	SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_SamplingRate, ATTR_DIMMED, 0);
-}
-
-static void	ADSamplingRateSourceVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
+static void	ADSamplingRateSourceVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
 	ADTaskSet_type* 	tskSet			= VChanOwner;
 	double*				samplingRatePtr	= NULL;
@@ -13801,11 +13813,20 @@ static void	ADSamplingRateSourceVChan_Connected (VChan_type* self, void* VChanOw
 	int					error			= 0;
 	char*				errMsg			= NULL;
 	
-	
-	nullChk( samplingRatePtr = malloc(sizeof(double)) );
-	*samplingRatePtr = tskSet->timing->sampleRate;
-	nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, NULL,NULL) );
-	errChk( SendDataPacket(tskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg) );
+	switch (state) {
+			
+		case VChan_Open:
+			
+			nullChk( samplingRatePtr = malloc(sizeof(double)) );
+			*samplingRatePtr = tskSet->timing->sampleRate;
+			nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, NULL,NULL) );
+			errChk( SendDataPacket(tskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg) );
+			break;
+			
+		case VChan_Closed:
+			
+			break;
+	}
 	
 	return;
 	
@@ -13823,29 +13844,31 @@ Error:
 	
 }
 
-static void COPulseTrainSinkVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
+static void COPulseTrainSinkVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
 	ChanSet_CO_type* 		COChanSet		= GetVChanOwner(self);
-	int						timingPanHndl;
+	int						timingPanHndl	= 0;
 	
 	// dim timing UI pulse train controls
 	GetPanelHandleFromTabPage(COChanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
-	SetPanelAttribute(timingPanHndl, ATTR_DIMMED, 1);
 	
-}
-
-static void COPulseTrainSinkVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	ChanSet_CO_type* 		COChanSet		= GetVChanOwner(self);
-	int						timingPanHndl;
+	switch (state) {
+			
+		case VChan_Open:
+			
+			SetPanelAttribute(timingPanHndl, ATTR_DIMMED, 1);
+			break;
+			
+		case VChan_Closed:
+			
+			SetPanelAttribute(timingPanHndl, ATTR_DIMMED, 0);
+			break;
+	}
 	
-	// undim timing UI pulse train controls
-	GetPanelHandleFromTabPage(COChanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
-	SetPanelAttribute(timingPanHndl, ATTR_DIMMED, 0);
 }
 
 // pulsetrain command VChan connected callback
-static void	COPulseTrainSourceVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
+static void	COPulseTrainSourceVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
 	// construct pulse train packet when a connection is created with default settings and send it
 	ChanSet_CO_type* 		COChanSet		= GetVChanOwner(self);	  
@@ -13853,30 +13876,40 @@ static void	COPulseTrainSourceVChan_Connected (VChan_type* self, void* VChanOwne
 	DataPacket_type*  		dataPacket		= NULL;
 	int						error			= 0;
 	char*					errMsg			= NULL;
-	PulseTrainTimingTypes 	pulseType; 
+	PulseTrainTimingTypes 	pulseType		= 0; 
 	
-	nullChk ( pulseTrain = CopyPulseTrain(COChanSet->pulseTrain) );
-	pulseType = GetPulseTrainType(pulseTrain); 
+	switch (state) {
+			
+		case VChan_Open:
+			
+			nullChk ( pulseTrain = CopyPulseTrain(COChanSet->pulseTrain) );
+			pulseType = GetPulseTrainType(pulseTrain); 
 	
-	switch(pulseType){
+			switch(pulseType){
 			
-		case PulseTrain_Freq:
-			nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, (void**) &pulseTrain, NULL,(DiscardFptr_type) discard_PulseTrain_type) );  
+				case PulseTrain_Freq:
+					nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, (void**) &pulseTrain, NULL,(DiscardFptr_type) discard_PulseTrain_type) );  
+					break;
+			
+				case PulseTrain_Time:
+					nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, (void**) &pulseTrain, NULL,(DiscardFptr_type) discard_PulseTrain_type) );  
+					break;
+			
+				case PulseTrain_Ticks: 
+					nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**) &pulseTrain, NULL,(DiscardFptr_type) discard_PulseTrain_type) );  
+					break;
+			
+			}
+	
+			// send data packet with pulsetrain
+			errChk( SendDataPacket((SourceVChan_type*)self, &dataPacket, 0, &errMsg) );
 			break;
 			
-		case PulseTrain_Time:
-			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, (void**) &pulseTrain, NULL,(DiscardFptr_type) discard_PulseTrain_type) );  
-			break;
+		case VChan_Closed:
 			
-		case PulseTrain_Ticks: 
-			nullChk ( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**) &pulseTrain, NULL,(DiscardFptr_type) discard_PulseTrain_type) );  
 			break;
-			
 	}
 	
-	// send data packet with pulsetrain
-	errChk( SendDataPacket((SourceVChan_type*)self, &dataPacket, 0, &errMsg) );
-
 	return;
 Error:
 	
@@ -14489,21 +14522,21 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	*nActiveTasksPtr = 0;
 	
 	// AI
-	if (dev->AITaskSet)
-		if (dev->AITaskSet->taskHndl)
-			(*nActiveTasksPtr)++;
+	if (dev->AITaskSet && dev->AITaskSet->taskHndl)
+		(*nActiveTasksPtr)++;
+	
 	// AO
-	if (dev->AOTaskSet)
-		if (dev->AOTaskSet->taskHndl)
-			(*nActiveTasksPtr)++;
+	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl)
+		(*nActiveTasksPtr)++;
+	
 	// DI
-	if (dev->DITaskSet)
-		if (dev->DITaskSet->taskHndl)
-			(*nActiveTasksPtr)++;
+	if (dev->DITaskSet && dev->DITaskSet->taskHndl)
+		(*nActiveTasksPtr)++;
+	
 	// DO
-	if (dev->DOTaskSet)
-		if (dev->DOTaskSet->taskHndl)
-			(*nActiveTasksPtr)++;
+	if (dev->DOTaskSet && dev->DOTaskSet->taskHndl)
+		(*nActiveTasksPtr)++;
+	
 	// CI
 	if (dev->CITaskSet) {
 		ChanSet_CI_type* 	chanSet		= NULL;
@@ -14514,6 +14547,7 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 				(*nActiveTasksPtr)++;
 		}
 	}
+	
 	// CO
 	if (dev->COTaskSet) {
 		ChanSet_CO_type*	chanSet		= NULL;
@@ -14526,7 +14560,7 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	}
 	
 	// release active tasks counter handle
-	if ((error=CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
+	if ((error = CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
 		errMsg = FormatMsg(error, "IterateTC", "Could not release TSV handle"); 
 		goto Error;
 	}

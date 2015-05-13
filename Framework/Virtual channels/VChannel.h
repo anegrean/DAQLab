@@ -1,7 +1,7 @@
 //==============================================================================
 //
 // Title:		VChannel.h
-// Purpose:		A short description of the interface.
+// Purpose:		Virtual Channels used for data exchange between DAQLab modules.
 //
 // Created on:	18-6-2014 at 19:11:05 by Adrian Negrean.
 // Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
@@ -18,7 +18,6 @@
 //==============================================================================
 // Include files
 		
-#include "DAQLabUtility.h"
 #include "DataPacket.h"
 #include "DataTypes.h"
 
@@ -29,29 +28,25 @@
 // Types
 
 	// VChan types
-typedef struct VChan			VChan_type;					// base class
-typedef struct SinkVChan 		SinkVChan_type;
-typedef struct SourceVChan 		SourceVChan_type;
+typedef struct VChan		VChan_type;					// base class
+typedef struct SinkVChan 	SinkVChan_type;
+typedef struct SourceVChan 	SourceVChan_type;
 
-//------------------------------------------------------------------------------
+
 // Virtual channel data flow direction
-//------------------------------------------------------------------------------
-
 typedef enum {
 	VChan_Sink, 						 
 	VChan_Source
-} VChanDataFlow_type;
+} VChanDataFlows;
 
-//------------------------------------------------------------------------------
-// Callback functions
-//------------------------------------------------------------------------------
+// Virtual channel states
+typedef enum {
+	VChan_Closed	= FALSE,
+	VChan_Open		= TRUE
+} VChanStates;
 
-	// Callback when a VChan connection is established between a Source and Sink
-typedef void				(*Connected_CBFptr_type) 			(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-
-	// Callback when a VChan connection is broken by calling VChan_Disconnect. When disconnecting
-	// a Source type VChan, this callback will be called for each Sink.
-typedef void				(*Disconnected_CBFptr_type) 		(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
+// Callback when a VChan opens/closes.
+typedef void				(*VChanStateChangeCBFptr_type)		(VChan_type* self, void* VChanOwner, VChanStates state);
 
 
 //==============================================================================
@@ -61,22 +56,21 @@ typedef void				(*Disconnected_CBFptr_type) 		(VChan_type* self, void* VChanOwne
 // VChan Creation / Destruction and management functions
 //------------------------------------------------------------------------------
 
-SourceVChan_type*			init_SourceVChan_type				(char 						name[], 
-										  	  	 	 			DLDataTypes 				dataType,
-										 	  	 				void* 						VChanOwner,
-												 	 			Connected_CBFptr_type		Connected_CBFptr,
-												 	 			Disconnected_CBFptr_type	Disconnected_CBFptr);
+	// Creates a Source VChan of a certain data type.
+SourceVChan_type*			init_SourceVChan_type				(char 							name[], 
+										  	  	 	 			 DLDataTypes 					dataType,
+										 	  	 				 void* 							VChanOwner,
+												 	 			 VChanStateChangeCBFptr_type	VChanStateChangeCBFptr);
 
 	// Creates a Sink VChan which may support multiple data types. Provide an array of dataTypes of DLDataTypes elements.
-SinkVChan_type*				init_SinkVChan_type					(char 						name[], 
-										  	  	 	 			DLDataTypes					dataTypes[],
-																size_t						nDataTypes,
-										 	  	 	 			void* 						VChanOwner,
-																double						readTimeout,
-												 	 			Connected_CBFptr_type		Connected_CBFptr,
-												 	 			Disconnected_CBFptr_type	Disconnected_CBFptr);
+SinkVChan_type*				init_SinkVChan_type					(char 							name[], 
+										  	  	 	 			 DLDataTypes					dataTypes[],
+																 size_t							nDataTypes,
+										 	  	 	 			 void* 							VChanOwner,
+																 double							readTimeout,
+												 	 			 VChanStateChangeCBFptr_type	VChanStateChangeCBFptr);
 
-	// Discard common to both types of VChan. Cast SourceVChan_type** and SinkVChan_type** to VChan_type**.
+	// Discards both Sink and Source VChans.
 void 						discard_VChan_type 					(VChan_type** VChan); 
 
 	// Checks if a VChan object exists among a list of VChans of VChan_type*.
@@ -91,10 +85,10 @@ VChan_type*					VChanNameExists						(ListType VChanList, char VChanName[], size
 // VChan Connections
 //------------------------------------------------------------------------------
 
-	// Checks if the data packet types supported by the Sink and Source VChan are compatible. If compatible, returns TRUE, FALSE otherwise
-BOOL						CompatibleVChans					(SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan);
+	// Determines if VChans have compatible data types.
+BOOL						VChansAreCompatible					(SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan);
 
-	// Connects a Sink and a Source VChan .
+	// Connects a Sink and a Source VChan.
 BOOL						VChan_Connect						(SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan);
 
 	// Disconnects a VChan. 
@@ -113,7 +107,7 @@ char*						GetVChanName						(VChan_type* VChan);
 char*						GetSinkVChanName					(SourceVChan_type* srcVChan, size_t sinkIdx);
 
 	// Data flow
-VChanDataFlow_type			GetVChanDataFlowType				(VChan_type* VChan);
+VChanDataFlows				GetVChanDataFlowType				(VChan_type* VChan);
 
 	// VChan owner
 void*						GetVChanOwner						(VChan_type* VChan);
@@ -155,13 +149,12 @@ double						GetSinkVChanReadTimeout				(SinkVChan_type* sinkVChan);
 // Data Packet Management
 //------------------------------------------------------------------------------
 
-	// Releases all data packets from a Sink VChan. 
-	// If successful, returns NULL, otherwise it returns error information which must be disposed of with discard_FCallReturn_type
+	// Releases all data packets from a Sink VChan.
 int							ReleaseAllDataPackets				(SinkVChan_type* sinkVChan, char** errorInfo);
 
-	// Sends a data packet from a Source VChan to its Sink VChans. If the Source VChan also needs to use the data packet after it was sent
-	// then set sourceNeedsPacket = TRUE. This prevents the release of the data packet by the sinks alone.
-int				 			SendDataPacket 						(SourceVChan_type* source, DataPacket_type** ptrToDataPacket, BOOL sourceNeedsPacket, char** errorInfo);
+	// Sends a data packet from an open Source VChan to its active (and open) Sink VChans. If the Source VChan also needs to use the data packet after it was sent
+	// then set sourceNeedsPacket = TRUE.
+int				 			SendDataPacket 						(SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr, BOOL sourceNeedsPacket, char** errorInfo);
 
 	// Gets all data packets from a Sink VChan. The function allocates dynamically a data packet array with nPackets elements of DataPacket_type*
 	// If there are no data packets in the Sink VChan, dataPackets = NULL, nPackets = 0 and the function returns NULL (success).
@@ -169,6 +162,7 @@ int				 			SendDataPacket 						(SourceVChan_type* source, DataPacket_type** ptr
 	// For datapackets pass the address of a DataPacket_type** variable.
 int							GetAllDataPackets					(SinkVChan_type* sinkVChan, DataPacket_type*** dataPackets, size_t* nPackets, char** errorInfo);
 
+	// Attempts to get one data packet from a Sink VChan before the timeout period. 
 int				 			GetDataPacket 						(SinkVChan_type* sinkVChan, DataPacket_type** dataPacketPtr, char** errorInfo);
 
 //------------------------------------------------------------------------------ 

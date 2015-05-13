@@ -191,11 +191,6 @@ static int CVICALLBACK 			VUPCPhotonCounter_CB 			(int panel, int control, int e
 
 static BOOL 					ValidTaskControllerName			(char name[], void* dataPtr);
 
-	// pulsetrain command VChan connected callback
-static void						PulseTrainVChan_Connected 		(VChan_type* self, void* VChanOwner, VChan_type* connectedVChan);
-	// pulsetrain command VChan disconnected callback
-static void						PulseTrainVChan_Disconnected 	(VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan);
-
 static int 						PulseTrainDataReceivedTC 		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 static int 						PMT_Set_Mode 					(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
@@ -373,7 +368,7 @@ static Channel_type* init_Channel_type (VUPhotonCtr_type* vupcInstance, int panH
 	if (!chan) return NULL;
 
 	chan->vupcInstance	= vupcInstance;
-	chan->VChan			= init_SourceVChan_type(VChanName, DL_Waveform_UShort, chan, NULL, NULL);
+	chan->VChan			= init_SourceVChan_type(VChanName, DL_Waveform_UShort, chan, NULL);
 	chan->panHndl   	= panHndl;
 	chan->chanIdx		= chanIdx;
 	chan->gain			= 0;
@@ -1017,7 +1012,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						if (vupc->pulseTrainVChan==NULL){
 							char*	pulsetrainVChanName		= DLVChanName((DAQLabModule_type*)vupc, vupc->taskControl, VChan_Default_PulseTrainSinkChan, 0);
 							DLDataTypes allowedPacketTypes[] = {DL_PulseTrain_Freq, DL_PulseTrain_Ticks, DL_PulseTrain_Time};
-							vupc->pulseTrainVChan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance,VChanDataTimeout, PulseTrainVChan_Connected, PulseTrainVChan_Disconnected); 
+							vupc->pulseTrainVChan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance,VChanDataTimeout, NULL); 
 							// register VChan with DAQLab
 							DLRegisterVChan((DAQLabModule_type*)vupc, (VChan_type*)vupc->pulseTrainVChan);	
 							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVChan, PulseTrainDataReceivedTC); 
@@ -1194,7 +1189,7 @@ static void	IterateTC	(TaskControl_type* taskControl, BOOL const* abortIteration
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive pulse train settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
-	if (IsVChanConnected((VChan_type*)vupc->pulseTrainVChan)) {
+	if (IsVChanOpen((VChan_type*)vupc->pulseTrainVChan)) {
 		errChk( GetDataPacket(vupc->pulseTrainVChan, &dataPacket, &errMsg) );
 		dataPacketDataPtr 	= GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
 		pulsetrain			= *(PulseTrain_type**)dataPacketDataPtr;
@@ -1204,6 +1199,7 @@ static void	IterateTC	(TaskControl_type* taskControl, BOOL const* abortIteration
 		ReleaseDataPacket(&dataPacket);
 		dataPacket = NULL;
 	}
+	
 	Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),vupc->samplingRate,vupc->nSamples); 
 	
 	error=PMTStartAcq(GetTaskControlMode(vupc->taskControl),vupc->taskControl,vupc->channels);
@@ -1300,25 +1296,10 @@ static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState
 	return 0;
 }
 
-
-
-// pulsetrain command VChan connected callback
-static void	PulseTrainVChan_Connected (VChan_type* self, void* VChanOwner, VChan_type* connectedVChan)
-{
-	
-}
-
-// pulsetrain command VChan disconnected callback
-static void	PulseTrainVChan_Disconnected (VChan_type* self, void* VChanOwner, VChan_type* disconnectedVChan)
-{
-	
-}
-
 static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
 {
 	
 	VUPhotonCtr_type* 	vupc				= GetTaskControlModuleData(taskControl);
-	FCallReturn_type*	fCallReturn			= NULL;
 	unsigned int		nSamples;
 	int					error				= 0;
 	DataPacket_type**	dataPackets			= NULL;

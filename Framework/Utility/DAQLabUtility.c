@@ -66,7 +66,6 @@ void discard_FCallReturn_type (FCallReturn_type** fCallReturnPtr)
 	OKfree(*fCallReturnPtr);
 }
 
-
 char* FormatMsg (int messageID, char messageOrigin[], char message[])
 {
 	size_t	nChars;

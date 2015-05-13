@@ -485,7 +485,7 @@ double   					GetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* p
 Image_type*					init_Image_type						(ImageTypes imageType);
 
 	// Discards the image container and its data allocated with malloc.
-void 						discard_Image_type 					(Image_type** image);
+void 						discard_Image_type 					(Image_type** imagePtr);
 
 Image_type* 				copy_Image_type						(Image_type* sourceimage);
 

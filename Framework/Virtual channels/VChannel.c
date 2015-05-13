@@ -29,14 +29,14 @@
 //==============================================================================
 // Types
 
-// Discard VChan function pointer type
-typedef void	(* DiscardVChanFptr_type) 			(VChan_type** vchan);
+// Discard VChan
+typedef void	(* DiscardVChanFptr_type) 			(VChan_type** VChanPtr);
 
-// Disconnect VChan function pointer type
-typedef BOOL	(* DisconnectVChanFptr_type)		(VChan_type* vchan);
+// Disconnect VChan
+typedef BOOL	(* DisconnectVChanFptr_type)		(VChan_type* VChan);
 
-// Determines if a VChan is connected to other VChans or not
-typedef BOOL 	(* VChanIsConnected_type)			(VChan_type* VChan);  
+// Checks if a VChan is connected to other VChans
+typedef BOOL 	(* VChanIsConnectedFptr_type)		(VChan_type* VChan);  
 
 
 //==============================================================================
@@ -53,7 +53,7 @@ struct VChan {
 	//-----------------------
 	
 	char*							name;					// Name of virtual chanel. 
-	VChanDataFlow_type 				dataFlow;   			// Direction of data flow into or out of the channel.
+	VChanDataFlows 					dataFlow;   			// Direction of data flow into or out of the channel.
 	BOOL							isActive;				// If True, the VChan is required by the module, False otherwise. Default: True.
 	BOOL							isOpen;					// If True, data can be sent to/received from the VChan, False otherwise.
 														
@@ -70,15 +70,13 @@ struct VChan {
 	
 	DisconnectVChanFptr_type		DisconnectFptr;			// Disconnects a VChan.
 	
-	VChanIsConnected_type			VChanIsConnectedFptr;   // Determines if a VChan is connected to another VChan
+	VChanIsConnectedFptr_type		VChanIsConnectedFptr;   // Determines if a VChan is connected to another VChan
 	
 	//-----------------------
 	// Callbacks
 	//-----------------------
 	
-	Connected_CBFptr_type			Connected_CBFptr;		// Callback when another VChan has been connected to this one.
-	
-	Disconnected_CBFptr_type		Disconnected_CBFptr;   	// Callback when another VChan has been disconnected from this one.
+	VChanStateChangeCBFptr_type		VChanStateChangeCBFptr; // Callback when a VChan opens/closes
 	
 };
 
@@ -133,19 +131,52 @@ struct SourceVChan {
 //==============================================================================
 // Static functions
 
-static BOOL 				SourceVChanIsConnected 				(VChan_type* VChan);
-static BOOL 				SinkVChanIsConnected 				(VChan_type* VChan);
+static BOOL 				SourceVChanIsConnected 				(SourceVChan_type* srcVChan);
+static BOOL 				SinkVChanIsConnected 				(SinkVChan_type* sinkVChan);
+static size_t				ActiveSinkVChans					(SourceVChan_type* srcVChan);
+
+
+static BOOL SourceVChanIsConnected (SourceVChan_type* srcVChan)
+{
+	if (ListNumItems(srcVChan->sinkVChans))
+		return TRUE;
+	else
+		return FALSE;
+}
+	
+static BOOL SinkVChanIsConnected (SinkVChan_type* sinkVChan)
+{
+	if (sinkVChan->sourceVChan)
+		return TRUE;
+	else
+		return FALSE;
+}
+
+/// HIFN Returns the number of active Sink VChans connected to a Source VChan.
+static size_t ActiveSinkVChans (SourceVChan_type* srcVChan)
+{
+	SinkVChan_type*		sinkVChan 				= NULL;
+	size_t				nSinkVChans				= ListNumItems(srcVChan->sinkVChans);
+	size_t				nActiveSinkVChans		= 0;
+	
+	for (size_t i = 1; i <= nSinkVChans; i++) {
+		sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(srcVChan->sinkVChans, i);
+		if (sinkVChan->baseClass.isActive)
+			nActiveSinkVChans++;
+	}
+	
+	return nActiveSinkVChans;
+}
 
 
 static int 					init_VChan_type 					(VChan_type* 					vchan, 
 																char 							name[], 
-										 						VChanDataFlow_type 				flowType, 
+										 						VChanDataFlows 					flowType, 
 														 		void* 							VChanOwner, 	
 										 				 		DiscardVChanFptr_type 			DiscardFptr,
 										 				 		DisconnectVChanFptr_type		DisconnectFptr,
-																Connected_CBFptr_type			Connected_CBFptr,
-										 				 		Disconnected_CBFptr_type		Disconnected_CBFptr,
-																VChanIsConnected_type			VChanIsConnectedFptr)
+																VChanStateChangeCBFptr_type		VChanStateChangeCBFptr,
+																VChanIsConnectedFptr_type		VChanIsConnectedFptr)
 {
 	// Data
 	vchan->name   					= StrDup(name); 
@@ -157,8 +188,7 @@ static int 					init_VChan_type 					(VChan_type* 					vchan,
 	vchan->VChanOwner				= VChanOwner;
 	
 	// Callbacks
-	vchan->Connected_CBFptr			= Connected_CBFptr;
-	vchan->Disconnected_CBFptr		= Disconnected_CBFptr;
+	vchan->VChanStateChangeCBFptr	= VChanStateChangeCBFptr;
 	
 	// Methods
 	vchan->DiscardFptr				= DiscardFptr;
@@ -168,96 +198,112 @@ static int 					init_VChan_type 					(VChan_type* 					vchan,
 	return 0;
 }
 
-static void discard_SourceVChan_type (VChan_type** vchan)
+static void discard_SourceVChan_type (SourceVChan_type** srcVChanPtr)
 {
-	SourceVChan_type* 		src 		= *(SourceVChan_type**) vchan;
+	SourceVChan_type* 		srcVChan	= *srcVChanPtr;
 	
-	if (!*vchan) return;
+	if (!srcVChan) return;
 	
 	// disconnect source from its sinks if there are any
-	VChan_Disconnect(*vchan);
+	VChan_Disconnect((VChan_type*)srcVChan);
 	
 	// discard Source VChan specific data
-	ListDispose(src->sinkVChans);
+	ListDispose(srcVChan->sinkVChans);
 	
 	// discard base VChan data
-	OKfree((*vchan)->name);
+	OKfree(srcVChan->baseClass.name);
 	
-	OKfree(*vchan);
+	OKfree(*srcVChanPtr);
 }
 
-static void discard_SinkVChan_type (VChan_type** vchan)
+static void discard_SinkVChan_type (SinkVChan_type** sinkVChanPtr)
 {
-	SinkVChan_type* 		sink 		= *(SinkVChan_type**) vchan;
-	char*					errMsg		= NULL;
+	SinkVChan_type* 	sinkVChan	= *sinkVChanPtr;
+	char*				errMsg		= NULL;
 	
-	if (!*vchan) return;
+	if (!sinkVChan) return;
 	
 	// disconnect Sink from Source if connected
-	VChan_Disconnect(*vchan);
+	VChan_Disconnect((VChan_type*)sinkVChan);
 	
 	// release any data packets still in the VChan TSQ
-	ReleaseAllDataPackets (sink, &errMsg); 
+	ReleaseAllDataPackets (sinkVChan, &errMsg); 
 	
 	// discard data packet types array
-	OKfree(sink->dataTypes);
+	OKfree(sinkVChan->dataTypes);
 	
 	// discard Sink VChan specific data 
-	CmtDiscardTSQ(sink->tsqHndl);
+	CmtDiscardTSQ(sinkVChan->tsqHndl);
 	
 	// discard base VChan data
-	OKfree((*vchan)->name);
+	OKfree(sinkVChan->baseClass.name);
 	
-	OKfree(*vchan);
 	OKfree(errMsg);
+	OKfree(*sinkVChanPtr);
 }
 
-static BOOL disconnectSourceVChan (VChan_type* vchan)
+/// HIFN Disconnects a Source VChan from all its Sink VChans
+static BOOL disconnectSourceVChan (SourceVChan_type* srcVChan)
 {
-	if (!vchan) return FALSE;
+	if (!srcVChan) return FALSE;
 	
-	SourceVChan_type* 	src 		= (SourceVChan_type*) vchan; 
-	SinkVChan_type**	sinkPtrPtr;
+	SinkVChan_type*		sinkVChan	= NULL;
 	
-	for (int i = 1; i <= ListNumItems(src->sinkVChans); i++) {
-		sinkPtrPtr = ListGetPtrToItem(src->sinkVChans, i);
-		(*sinkPtrPtr)->sourceVChan = NULL;
-		// call sink disconnected callbacks
-		if ((*sinkPtrPtr)->baseClass.Disconnected_CBFptr)
-			(*(*sinkPtrPtr)->baseClass.Disconnected_CBFptr)	((VChan_type*)(*sinkPtrPtr), (*sinkPtrPtr)->baseClass.VChanOwner, (VChan_type*) src);
-		
-		// call source disconnected callback
-		if (src->baseClass.Disconnected_CBFptr)
-			(*src->baseClass.Disconnected_CBFptr)	((VChan_type*)src, src->baseClass.VChanOwner, (VChan_type*)(*sinkPtrPtr));
+	for (size_t i = 1; i <= ListNumItems(srcVChan->sinkVChans); i++) {
+		sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(srcVChan->sinkVChans, i);
+		sinkVChan->sourceVChan = NULL;
+		// if Sink VChan is open, close it
+		if (sinkVChan->baseClass.isOpen) {
+			sinkVChan->baseClass.isOpen = VChan_Closed;
+			if (sinkVChan->baseClass.VChanStateChangeCBFptr)
+				(*sinkVChan->baseClass.VChanStateChangeCBFptr)	((VChan_type*)sinkVChan, sinkVChan->baseClass.VChanOwner, sinkVChan->baseClass.isOpen);
+		} 
 	}
 	
-	ListClear(src->sinkVChans);
+	ListClear(srcVChan->sinkVChans);
 	
+	// if Source VChan is open, close it
+	if (srcVChan->baseClass.isOpen) {
+		srcVChan->baseClass.isOpen = VChan_Closed;
+		if (srcVChan->baseClass.VChanStateChangeCBFptr)
+			(*srcVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)srcVChan, srcVChan->baseClass.VChanOwner, srcVChan->baseClass.isOpen);
+			
+	}
+		
 	return TRUE;
 }
 
-static BOOL disconnectSinkVChan (VChan_type* vchan)
+static BOOL disconnectSinkVChan (SinkVChan_type* sinkVChan)
 {
-	SinkVChan_type* 		sink			= (SinkVChan_type*) vchan; 
-	SinkVChan_type**		sinkPtrPtr;
-	SourceVChan_type*		src				= sink->sourceVChan;
+	if (!sinkVChan) return FALSE;
 	
-	if (!src) return TRUE; // do nothing if there is no source to disconnect
-	// remove source from sink
-	sink->sourceVChan = NULL;
+	SinkVChan_type* 		connectedSinkVChan	= NULL;
+	SourceVChan_type*		srcVChan			= sinkVChan->sourceVChan;
 	
-	// call sink disconnected callback
-	if (sink->baseClass.Disconnected_CBFptr)
-			(*sink->baseClass.Disconnected_CBFptr)	((VChan_type*)sink, sink->baseClass.VChanOwner, (VChan_type*) src);
 	
-	// remove sink from source's sink list
-	for (int i = 1; i <= ListNumItems(src->sinkVChans); i++) {
-		sinkPtrPtr = ListGetPtrToItem(src->sinkVChans, i);
-		if (*sinkPtrPtr == sink) {
-			ListRemoveItem(src->sinkVChans, 0, i);
-			// call source disconnected callback
-			if (src->baseClass.Disconnected_CBFptr)
-				(*src->baseClass.Disconnected_CBFptr)	((VChan_type*)src, src->baseClass.VChanOwner, (VChan_type*)(*sinkPtrPtr));
+	if (!srcVChan) return TRUE; // do nothing if there is no source to disconnect
+	// remove Source VChan from Sink VChan
+	sinkVChan->sourceVChan = NULL;
+	
+	// if Sink VChan is open, close it
+	if (sinkVChan->baseClass.isOpen) {
+		sinkVChan->baseClass.isOpen = VChan_Closed;
+		if (sinkVChan->baseClass.VChanStateChangeCBFptr)
+			(*sinkVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)sinkVChan, sinkVChan->baseClass.VChanOwner, sinkVChan->baseClass.isOpen);
+	}
+		
+	// remove Sink VChan from Source VChan
+	for (size_t i = 1; i <= ListNumItems(srcVChan->sinkVChans); i++) {
+		connectedSinkVChan = *(SinkVChan_type**)ListGetPtrToItem(srcVChan->sinkVChans, i);
+		if (connectedSinkVChan == sinkVChan) {
+			ListRemoveItem(srcVChan->sinkVChans, 0, i);
+			// if Source VChan is open and there are no more active Sinks, then close Source VChan
+			if (srcVChan->baseClass.isOpen && !ActiveSinkVChans(srcVChan)) {
+				srcVChan->baseClass.isOpen = VChan_Closed; 
+				if (srcVChan->baseClass.VChanStateChangeCBFptr)
+					(*srcVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)srcVChan, srcVChan->baseClass.VChanOwner, srcVChan->baseClass.isOpen);
+			}
+				
 			return TRUE;
 		}
 	}
@@ -273,18 +319,22 @@ static BOOL disconnectSinkVChan (VChan_type* vchan)
 // Global functions
 
 
-SourceVChan_type* init_SourceVChan_type	(char 							name[], 
+//------------------------------------------------------------------------------
+// VChan Creation / Destruction and management functions
+//------------------------------------------------------------------------------
+
+/// HIFN Creates a Source VChan of a certain data type.
+SourceVChan_type* init_SourceVChan_type (char 							name[], 
 										 DLDataTypes 					dataType,
 										 void* 							VChanOwner,
-										 Connected_CBFptr_type			Connected_CBFptr,
-										 Disconnected_CBFptr_type		Disconnected_CBFptr)
+										 VChanStateChangeCBFptr_type	VChanStateChangeCBFptr)
 {
 	SourceVChan_type*	vchan 	= malloc(sizeof(SourceVChan_type));
 	if (!vchan) return NULL;
 	
 	// init base VChan type
-	if (init_VChan_type ((VChan_type*) vchan, name, VChan_Source, VChanOwner, 
-						 discard_SourceVChan_type, disconnectSourceVChan, Connected_CBFptr, Disconnected_CBFptr, SourceVChanIsConnected) < 0) goto Error;
+	if (init_VChan_type ((VChan_type*) vchan, name, VChan_Source, VChanOwner, (DiscardVChanFptr_type)discard_SourceVChan_type, 
+						 (DisconnectVChanFptr_type)disconnectSourceVChan, VChanStateChangeCBFptr, (VChanIsConnectedFptr_type) SourceVChanIsConnected) < 0) goto Error;
 	
 	// init list with Sink VChans
 	if (!(vchan -> sinkVChans 	= ListCreate(sizeof(SinkVChan_type*)))) goto Error;
@@ -292,21 +342,21 @@ SourceVChan_type* init_SourceVChan_type	(char 							name[],
 	// init data packet type
 	vchan->dataType = dataType;
 	
-	
 	return vchan;
-	Error:
+	
+Error:
 	
 	discard_VChan_type ((VChan_type**)&vchan);  // do this last
 	return NULL;
 }
 
-SinkVChan_type* init_SinkVChan_type	(char 						name[], 
-									 DLDataTypes	 			dataTypes[],
-									 size_t						nDataTypes,
-									 void* 						VChanOwner,
-									 double						readTimeout,
-									 Connected_CBFptr_type		Connected_CBFptr,
-									 Disconnected_CBFptr_type	Disconnected_CBFptr)
+/// HIFN Creates a Sink VChan which may support multiple data types. Provide an array of dataTypes of DLDataTypes elements.
+SinkVChan_type* init_SinkVChan_type (char 							name[], 
+									 DLDataTypes					dataTypes[],
+									 size_t							nDataTypes,
+									 void* 							VChanOwner,
+									 double							readTimeout,
+									 VChanStateChangeCBFptr_type	VChanStateChangeCBFptr)
 {
 	SinkVChan_type*	vchan 	= malloc(sizeof(SinkVChan_type));
 	if (!vchan) return NULL;
@@ -315,11 +365,10 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 	vchan->dataTypes		= NULL;
 	
 	// init base VChan type
-	if (init_VChan_type ((VChan_type*) vchan, name, VChan_Sink, VChanOwner, 
-						 discard_SinkVChan_type, disconnectSinkVChan, Connected_CBFptr, Disconnected_CBFptr, SinkVChanIsConnected) < 0) goto Error;
+	if (init_VChan_type ((VChan_type*) vchan, name, VChan_Sink, VChanOwner, (DiscardVChanFptr_type)discard_SinkVChan_type, 
+						 (DisconnectVChanFptr_type)disconnectSinkVChan, VChanStateChangeCBFptr, (VChanIsConnectedFptr_type)SinkVChanIsConnected) < 0) goto Error;
 	
 	// INIT DATA
-		
 	vchan->sourceVChan 		= NULL;
 	vchan->nDataTypes		= nDataTypes;
 	vchan->readTimeout		= readTimeout;
@@ -334,14 +383,15 @@ SinkVChan_type* init_SinkVChan_type	(char 						name[],
 	vchan->writeTimeout 	= DEFAULT_SinkVChan_QueueWriteTimeout;
 	
 	return vchan;
-	Error:
+	
+Error:
 	
 	OKfree(vchan->dataTypes);
 	discard_VChan_type ((VChan_type**)&vchan);  // do this last
 	return NULL;
-	
 }
 
+/// HIFN Discards both Sink and Source VChans.
 void discard_VChan_type (VChan_type** VChan)
 {
 	if (!*VChan) return;
@@ -355,11 +405,11 @@ void discard_VChan_type (VChan_type** VChan)
 /// HIRET TRUE if VChan exists, FALSE otherwise.  
 BOOL VChanExists (ListType VChanList, VChan_type* VChan, size_t* idx)
 {
-	VChan_type** 	VChanPtrPtr;
-	size_t			nVChans			= ListNumItems(VChanList);
+	VChan_type* 	VChanItem 	= NULL;
+	size_t			nVChans		= ListNumItems(VChanList);
 	for (size_t i = 1; i <= nVChans; i++) {
-		VChanPtrPtr = ListGetPtrToItem(VChanList, i);
-		if (*VChanPtrPtr == VChan) {
+		VChanItem = *(VChan_type**)ListGetPtrToItem(VChanList, i);
+		if (VChanItem == VChan) {
 			if (idx) *idx = i;
 			return TRUE;
 		}
@@ -373,14 +423,14 @@ BOOL VChanExists (ListType VChanList, VChan_type* VChan, size_t* idx)
 /// HIRET Pointer to the found VChan_type* if VChan exists, NULL otherwise. 
 VChan_type* VChanNameExists (ListType VChanList, char VChanName[], size_t* idx)
 {
-	VChan_type* 	vChan;
+	VChan_type* 	VChan		= NULL;
 	size_t			nVChans		= ListNumItems(VChanList);
 	
 	for (size_t i = 1; i <= nVChans; i++) {
-		vChan = *(VChan_type**)ListGetPtrToItem(VChanList, i);
-		if (!strcmp(vChan->name, VChanName)) {
+		VChan = *(VChan_type**)ListGetPtrToItem(VChanList, i);
+		if (!strcmp(VChan->name, VChanName)) {
 			if (idx) *idx = i;
-			return vChan;
+			return VChan;
 		}
 	}
 	
@@ -388,16 +438,334 @@ VChan_type* VChanNameExists (ListType VChanList, char VChanName[], size_t* idx)
 	return NULL;
 }
 
-//---------------------------------
-// Data Packet management functions
-//---------------------------------
+//------------------------------------------------------------------------------
+// VChan Connections
+//------------------------------------------------------------------------------
+
+/// HIFN Determines if VChans have compatible data types.
+/// HIRET True if compatible, False otherwise.
+BOOL VChansAreCompatible (SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan)
+{
+	for (size_t i = 0; i < sinkVChan->nDataTypes; i++)
+		if (srcVChan->dataType == sinkVChan->dataTypes[i])
+			return TRUE;
+			
+	return FALSE;		
+}
+
+/// HIFN Connects a Source VChan and Sink VChan. If the provided Sink VChan is connected to another Source VChan, it is first disconnected from that Source VChan.
+/// HIFN If both Source and Sink VChans are active then they will be opened if they are closed.
+/// HIRET True if successful, False otherwise.
+BOOL VChan_Connect (SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan)
+{
+	if (!srcVChan || !sinkVChan) return FALSE;
+	
+	SinkVChan_type* 	connectedSinkVChan  = NULL;
+	size_t				nSinks				= ListNumItems(srcVChan->sinkVChans);
+	
+	// check if the provided Sink VChan is already connected to this Source VChan
+	for (size_t i = 1; i <= nSinks; i++) {
+		connectedSinkVChan = *(SinkVChan_type**)ListGetPtrToItem(srcVChan->sinkVChans, i);
+		if (connectedSinkVChan == sinkVChan) return FALSE;
+	}
+	
+	// if Sink VChan is already connected to another Source VChan, disconnect it from that Source VChan
+	if (sinkVChan->sourceVChan) 
+		if(!VChan_Disconnect((VChan_type*)sinkVChan) ) return FALSE;  // error
+		
+	// add sink to source's list of sinks
+	if (!ListInsertItem(srcVChan->sinkVChans, &sinkVChan, END_OF_LIST)) return FALSE;  // error
+	
+	// add Source VChan to Sink VChan
+	sinkVChan->sourceVChan = srcVChan;
+	
+	// if both Sink and Source VChans are active, then open Sink VChan and also Source VChan if it is not open already
+	if (srcVChan->baseClass.isActive && sinkVChan->baseClass.isActive) {
+		// open Sink VChan 
+		sinkVChan->baseClass.isOpen = VChan_Open;
+		if (sinkVChan->baseClass.VChanStateChangeCBFptr)
+			(*sinkVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)sinkVChan, sinkVChan->baseClass.VChanOwner, sinkVChan->baseClass.isOpen);
+		
+		// open Source VChan if not open already
+		if (!srcVChan->baseClass.isOpen) {
+			srcVChan->baseClass.isOpen = VChan_Open;
+			if (srcVChan->baseClass.VChanStateChangeCBFptr)
+				(*srcVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)srcVChan, srcVChan->baseClass.VChanOwner, srcVChan->baseClass.isOpen);
+		}
+			
+	}
+	
+	return TRUE;	
+}
+
+/// HIFN Disconnects a VChan from other VChans.
+/// HIRET True if successful, False otherwise
+BOOL VChan_Disconnect (VChan_type* VChan)
+{
+	return (*VChan->DisconnectFptr)	(VChan);
+}
+
+BOOL IsVChanConnected (VChan_type* VChan)
+{
+	return (*VChan->VChanIsConnectedFptr) (VChan);
+}
+
+//------------------------------------------------------------------------------
+// VChan Set/Get/Is
+//------------------------------------------------------------------------------
+
+void SetVChanName (VChan_type* VChan, char newName[])
+{ 
+	OKfree(VChan->name);
+	VChan->name = StrDup(newName);
+}
+ 
+char* GetVChanName (VChan_type* VChan)
+{
+	return StrDup(VChan->name);
+}
+
+/// HIFN Given a Source VChan, the function returns the name of the Sink VChan attached to the source having the 1-based index sinkIdx. If index is out of range it returns NULL.
+char* GetSinkVChanName (SourceVChan_type* srcVChan, size_t sinkIdx)
+{
+	SinkVChan_type* sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(srcVChan->sinkVChans, sinkIdx);
+	
+	if (!sinkVChan) return NULL;
+	
+	return GetVChanName((VChan_type*)sinkVChan);
+}
+
+VChanDataFlows GetVChanDataFlowType (VChan_type* VChan)
+{
+	return VChan->dataFlow;
+}
+
+void* GetVChanOwner (VChan_type* VChan)
+{
+	return VChan->VChanOwner;
+}
+
+void SetSourceVChanDataType (SourceVChan_type* srcVChan, DLDataTypes dataType)
+{
+	// disconnect Sink VChans if they are incompatible
+	size_t 				nSinks 			= ListNumItems(srcVChan->sinkVChans);
+	SinkVChan_type*		sinkVChan;
+	BOOL				compatibleVChans;
+	for (size_t i = 1; i <= nSinks; i++) {
+		sinkVChan = *(SinkVChan_type**) ListGetPtrToItem(srcVChan->sinkVChans, i);
+		
+		compatibleVChans = FALSE;
+		for (size_t j = 0; j < sinkVChan->nDataTypes; j++)
+			if (srcVChan->dataType == sinkVChan->dataTypes[j]) {
+				compatibleVChans = TRUE;
+				break;
+			}
+		
+		if (!compatibleVChans)
+			VChan_Disconnect((VChan_type*)sinkVChan);
+	}
+	
+	// change Source VChan data type
+	srcVChan->dataType = dataType;
+}
+
+DLDataTypes GetSourceVChanDataType (SourceVChan_type* srcVChan)
+{
+	return srcVChan->dataType;
+}
+
+void SetSinkVChanDataTypes (SinkVChan_type* sinkVChan, size_t nDataTypes, DLDataTypes dataTypes[])
+{
+	BOOL	compatibleVChans	= FALSE;
+	
+	if (!nDataTypes) return;
+	
+	if (sinkVChan->sourceVChan) {
+		for (size_t i = 0; i < nDataTypes; i++)
+			if (dataTypes[i] == sinkVChan->sourceVChan->dataType) {
+				compatibleVChans = TRUE;
+				break;
+			}
+		
+		if (!compatibleVChans)
+			VChan_Disconnect((VChan_type*)sinkVChan);
+	}
+	
+	// copy new data types
+	OKfree(sinkVChan->dataTypes);
+	sinkVChan->nDataTypes 	= nDataTypes;
+	sinkVChan->dataTypes	= malloc(nDataTypes * sizeof(DLDataTypes));
+	memcpy(sinkVChan->dataTypes, dataTypes, nDataTypes*sizeof(DLDataTypes));
+}
+
+void SetVChanActive (VChan_type* VChan, BOOL isActive)
+{
+	// if it has the same active/inactive status, do nothing
+	if (VChan->isActive == isActive) return;
+	
+	// update active/inactive
+	VChan->isActive = isActive;
+	
+	// open/close VChans if neccessary
+	switch (VChan->dataFlow) {
+			
+		case VChan_Source:
+			
+			if (VChan->isActive) {   // Inactive -> Active
+				// Source VChan is closed. Open Source VChan if it has at least an active Sink VChan
+				if (ActiveSinkVChans((SourceVChan_type*)VChan)) {
+					VChan->isOpen = VChan_Open;
+					if (VChan->VChanStateChangeCBFptr)
+						(*VChan->VChanStateChangeCBFptr) (VChan, VChan->VChanOwner, VChan->isOpen);
+					
+				}
+				
+				// Sink VChans are closed. Open active Sink VChans.
+				SinkVChan_type*		sinkVChan 	= NULL;
+				size_t				nSinks		= ListNumItems(((SourceVChan_type*)VChan)->sinkVChans);
+				for (size_t i = 1; i <= nSinks; i++) {
+					sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(((SourceVChan_type*)VChan)->sinkVChans, i);
+					if (!sinkVChan->baseClass.isActive) continue; // skip inactive Sink VChans
+					sinkVChan->baseClass.isOpen = VChan_Open;
+					if (sinkVChan->baseClass.VChanStateChangeCBFptr)
+						(*sinkVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)sinkVChan, sinkVChan->baseClass.VChanOwner, sinkVChan->baseClass.isOpen);
+				}
+				
+			} else {	// Active -> Inactive
+				// If Source VChan is open, then close it
+				if (VChan->isOpen) {
+					VChan->isOpen = VChan_Closed;
+					if (VChan->VChanStateChangeCBFptr)
+						(*VChan->VChanStateChangeCBFptr) (VChan, VChan->VChanOwner, VChan->isOpen);
+				}
+				
+				// Close all open Sink VChans
+				SinkVChan_type*		sinkVChan 	= NULL;
+				size_t				nSinks		= ListNumItems(((SourceVChan_type*)VChan)->sinkVChans);
+				for (size_t i = 1; i <= nSinks; i++) {
+					sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(((SourceVChan_type*)VChan)->sinkVChans, i);
+					if (!sinkVChan->baseClass.isOpen) continue; // skip closed Sink VChans
+					sinkVChan->baseClass.isOpen = VChan_Closed;
+					if (sinkVChan->baseClass.VChanStateChangeCBFptr)
+						(*sinkVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)sinkVChan, sinkVChan->baseClass.VChanOwner, sinkVChan->baseClass.isOpen);
+				}
+				
+			}
+			break;
+			
+		case VChan_Sink:
+			
+			if (VChan->isActive) {  // Inactive -> Active
+				// Sink VChan is closed, open Sink VChan if a Source VChan is attached to it and is active
+				SourceVChan_type*	srcVChan = ((SinkVChan_type*)VChan)->sourceVChan;
+				if (srcVChan && srcVChan->baseClass.isActive) {
+					VChan->isOpen = VChan_Open;
+					if (VChan->VChanStateChangeCBFptr)
+						(*VChan->VChanStateChangeCBFptr) (VChan, VChan->VChanOwner, VChan->isOpen);
+				}
+				
+				// If Sink VChan has a closed active Source VChan, then open the Source VChan
+				if (srcVChan && srcVChan->baseClass.isActive && !srcVChan->baseClass.isOpen) {
+					srcVChan->baseClass.isOpen = VChan_Open;
+					if (srcVChan->baseClass.VChanStateChangeCBFptr)
+						(*srcVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)srcVChan, srcVChan->baseClass.VChanOwner, srcVChan->baseClass.isOpen);
+						
+				}
+					
+			} else { // Active -> Inactive
+				// Close Sink VChan if open
+				if (VChan->isOpen) {
+					VChan->isOpen = VChan_Closed;
+					if (VChan->VChanStateChangeCBFptr)
+						(*VChan->VChanStateChangeCBFptr) (VChan, VChan->VChanOwner, VChan->isOpen);
+				}
+				
+				// If Sink has an open Source VChan and there are no more active Sinks, then close Source VChan
+				SourceVChan_type*	srcVChan = ((SinkVChan_type*)VChan)->sourceVChan;
+				if (srcVChan && srcVChan->baseClass.isOpen && !ActiveSinkVChans(srcVChan)) {
+					srcVChan->baseClass.isOpen = VChan_Closed;
+					if (srcVChan->baseClass.VChanStateChangeCBFptr)
+						(*srcVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)srcVChan, srcVChan->baseClass.VChanOwner, srcVChan->baseClass.isOpen);
+					
+				}
+				
+			}
+			break;
+	}
+	
+}
+
+BOOL GetVChanActive (VChan_type* VChan)
+{
+	return VChan->isActive;
+}
+
+BOOL IsVChanOpen (VChan_type* VChan)
+{
+	return VChan->isOpen;
+}
+
+SinkVChan_type*	GetSinkVChan (SourceVChan_type* srcVChan, size_t sinkIdx)
+{
+	SinkVChan_type* sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(srcVChan->sinkVChans, sinkIdx);
+	
+	return sinkVChan;
+}
+
+SourceVChan_type* GetSourceVChan (SinkVChan_type* sinkVChan)
+{
+	return sinkVChan->sourceVChan;
+}
+
+size_t GetNSinkVChans (SourceVChan_type* srcVChan)
+{
+	return ListNumItems(srcVChan->sinkVChans);
+}
+
+ListType GetSinkVChanList (SourceVChan_type* srcVChan)
+{
+	return srcVChan->sinkVChans;
+}
+
+CmtTSQHandle GetSinkVChanTSQHndl (SinkVChan_type* sinkVChan)
+{
+	return sinkVChan->tsqHndl;
+}
+
+void SetSinkVChanTSQSize (SinkVChan_type* sinkVChan, size_t nItems)
+{
+	CmtSetTSQAttribute(sinkVChan->tsqHndl, ATTR_TSQ_QUEUE_SIZE, nItems); 
+}
+
+size_t GetSinkVChanTSQSize (SinkVChan_type* sinkVChan)
+{
+	size_t nItems;
+	
+	CmtGetTSQAttribute(sinkVChan->tsqHndl, ATTR_TSQ_QUEUE_SIZE, &nItems); 
+	
+	return nItems;
+}
+
+void SetSinkVChanReadTimeout (SinkVChan_type* sinkVChan, double time)
+{
+	sinkVChan->readTimeout = time;
+}
+
+double GetSinkVChanReadTimeout	(SinkVChan_type* sinkVChan)
+{
+	return sinkVChan->readTimeout;
+}
+
+//------------------------------------------------------------------------------
+// Data Packet Management
+//------------------------------------------------------------------------------
 
 int ReleaseAllDataPackets (SinkVChan_type* sinkVChan, char** errorInfo)
 {
 #define	ReleaseAllDataPackets_Err_CouldNotGetDataPackets	-1
 	
 	DataPacket_type**		dataPackets		= NULL;
-	size_t					nPackets;
+	size_t					nPackets		= 0;
 	char*					errMsg			= NULL;
 	
 	if (GetAllDataPackets (sinkVChan, &dataPackets, &nPackets, &errMsg) < 0) {
@@ -416,37 +784,39 @@ int ReleaseAllDataPackets (SinkVChan_type* sinkVChan, char** errorInfo)
 	return 0;
 }
 
-int SendDataPacket (SourceVChan_type* source, DataPacket_type** ptrToDataPacket, BOOL sourceNeedsPacket, char** errorInfo)
+int SendDataPacket (SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr, BOOL srcVChanNeedsPacket, char** errorInfo)
 {
 #define SendDataPacket_Err_TSQWrite		-1
 	
-	int		nSinks	=  ListNumItems(source->sinkVChans);
-	int		error	= 0;
+	size_t		nSinks	= ListNumItems(srcVChan->sinkVChans);
+	int			error	= 0;
 	
-	// if there are no Sink VChans, then dispose of the data and do nothing
-	if (!nSinks) {
-		if (*ptrToDataPacket) ReleaseDataPacket(ptrToDataPacket);
+	// if Source VChan is closed, then dispose of the data packet
+	if (!srcVChan->baseClass.isOpen) {
+		if (*dataPacketPtr) ReleaseDataPacket(dataPacketPtr);
 		return 0; 
 	}
 	
-	// set sinks counter
-	if (*ptrToDataPacket)
-		if (sourceNeedsPacket)
-			SetDataPacketCounter(*ptrToDataPacket, nSinks+1);
+	// set packet counter
+	// Note: Since the Source VChan is open, an active Sink VChan is also an open Sink VChan
+	if (*dataPacketPtr)
+		if (srcVChanNeedsPacket)
+			SetDataPacketCounter(*dataPacketPtr, ActiveSinkVChans(srcVChan)+1);
 		else
-			SetDataPacketCounter(*ptrToDataPacket, nSinks);
+			SetDataPacketCounter(*dataPacketPtr, ActiveSinkVChans(srcVChan));
 	
-	SinkVChan_type** 	sinkPtrPtr;
-	int					itemsWritten;
+	SinkVChan_type* 	sinkVChan		= NULL;
+	int					itemsWritten	= 0;
 	for (size_t i = 1; i <= nSinks; i++) {
-		sinkPtrPtr = ListGetPtrToItem(source->sinkVChans,i);
+		sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(srcVChan->sinkVChans,i);
+		if (!sinkVChan->baseClass.isActive) continue; // forward packet only to active Sink VChans connected to this Source VChan
 		// put data packet into Sink VChan TSQ
-		itemsWritten = CmtWriteTSQData((*sinkPtrPtr)->tsqHndl, ptrToDataPacket, 1, (*sinkPtrPtr)->writeTimeout, NULL);
+		itemsWritten = CmtWriteTSQData(sinkVChan->tsqHndl, dataPacketPtr, 1, sinkVChan->writeTimeout, NULL);
 		
 		// check if writing the items to the sink queue succeeded
 		if (itemsWritten < 0) {
 			char* 				errMsg 										= StrDup("Writing data to ");
-			char*				sinkName									= GetVChanName((VChan_type*)*sinkPtrPtr);
+			char*				sinkName									= GetVChanName((VChan_type*)sinkVChan);
 			char				cmtStatusMessage[CMT_MAX_MESSAGE_BUF_SIZE];
 			
 			AppendString(&errMsg, sinkName, -1); 
@@ -457,14 +827,14 @@ int SendDataPacket (SourceVChan_type* source, DataPacket_type** ptrToDataPacket,
 				*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
 			OKfree(errMsg);
 			OKfree(sinkName);
-			ReleaseDataPacket(ptrToDataPacket);
+			ReleaseDataPacket(dataPacketPtr);
 			error = SendDataPacket_Err_TSQWrite;
 			
 		} else
 		   // check if the number of written elements is the same as what was requested
 			if (!itemsWritten) {
 				char* 				errMsg 										= StrDup("Sink VChan ");
-				char*				sinkName									= GetVChanName((VChan_type*)*sinkPtrPtr);
+				char*				sinkName									= GetVChanName((VChan_type*)sinkVChan);
 			
 				AppendString(&errMsg, sinkName, -1); 
 				AppendString(&errMsg, " is full or write operation timed out", -1);
@@ -472,14 +842,14 @@ int SendDataPacket (SourceVChan_type* source, DataPacket_type** ptrToDataPacket,
 					*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
 				OKfree(errMsg);
 				OKfree(sinkName);
-				ReleaseDataPacket(ptrToDataPacket);
+				ReleaseDataPacket(dataPacketPtr);
 				error = SendDataPacket_Err_TSQWrite;
 			}
 		
 	}
 	
-	*ptrToDataPacket = NULL; 	// Data packet is considered to be consumed even if sending to some Sink VChans did not succeed
-								// Sink VChans that did receive the data packet, can further process it and release it.
+	*dataPacketPtr = NULL; 	// Data packet is considered to be consumed even if sending to some Sink VChans did not succeed
+							// Sink VChans that did receive the data packet, can further process it and release it.
 	
 	return error;
 }
@@ -529,7 +899,7 @@ Error:
 }
 
 /// HIFN Attempts to get one data packet from a Sink VChan before the timeout period. 
-/// HIFN On success, it return 0, otherwise negative numbers. If an error is encountered, the function returns error information.
+/// HIFN On success, it return 0, otherwise a negative numbers. If an error is encountered, the function returns error information.
 /// OUT dataPackets, nPackets
 int GetDataPacket (SinkVChan_type* sinkVChan, DataPacket_type** dataPacketPtr, char** errorInfo)
 {
@@ -565,6 +935,10 @@ CmtError:
 		*errorInfo = FormatMsg(error, "GetDataPacket", cmtErrMsg);
 	return error;
 }
+
+//------------------------------------------------------------------------------ 
+// Waveform data management
+//------------------------------------------------------------------------------ 
 
 int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, WaveformTypes* waveformType, char** errorInfo)
 {
@@ -716,229 +1090,4 @@ Error:
 	OKfree(errMsg);
 	
 	return error;
-}
-
-BOOL CompatibleVChans (SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan)
-{
-	for (size_t i = 0; i < sinkVChan->nDataTypes; i++)
-		if (srcVChan->dataType == sinkVChan->dataTypes[i])
-			return TRUE;
-			
-	return FALSE;		
-}
-
-
-/// HIFN Connects a Source and Sink VChan and if provided, calls their Connected_CBFptr callbacks to signal this event.
-/// HIFN The Source VChan's Connected_CBFptr will be called before the Sink's Connected_CBFptr. 
-/// HIRET TRUE if successful, FALSE otherwise
-BOOL VChan_Connect (SourceVChan_type* srcVChan, SinkVChan_type* sinkVChan)
-{
-	SinkVChan_type** sinkPtrPtr;
-	
-	if (!srcVChan || !sinkVChan) return FALSE;
-	// check if sink is already connected
-	for (int i = 1; i <= ListNumItems(srcVChan->sinkVChans); i++) {
-		sinkPtrPtr = ListGetPtrToItem(srcVChan->sinkVChans, i);
-		if (*sinkPtrPtr == sinkVChan) return FALSE;
-	}
-	// if sink is already connected to another source, disconnect that sink from source
-	if (sinkVChan->sourceVChan) 
-		if(!VChan_Disconnect((VChan_type*)sinkVChan) ) return FALSE;
-		
-	// add sink to source's list of sinks
-	if (!ListInsertItem(srcVChan->sinkVChans, &sinkVChan, END_OF_LIST)) return FALSE;
-	// add source reference to sink
-	sinkVChan->sourceVChan = srcVChan;
-	
-	// call source and sink connect callbacks if provided
-	if (srcVChan->baseClass.Connected_CBFptr)
-		(*srcVChan->baseClass.Connected_CBFptr)	((VChan_type*)srcVChan, srcVChan->baseClass.VChanOwner, (VChan_type*)sinkVChan);
-	
-	if (sinkVChan->baseClass.Connected_CBFptr)
-		(*sinkVChan->baseClass.Connected_CBFptr)	((VChan_type*)sinkVChan, sinkVChan->baseClass.VChanOwner, (VChan_type*)srcVChan);
-	
-	return TRUE;	
-}
-
-/// HIFN Disconnects a VChan and if provided, calls its Disconnected_CBFptr callback to signal this event.
-/// HIFN When disconnecting a Sink, its Source is detached and it is also removed from the Source's list of Sinks.
-/// HIFN When disconnecting a Source, it is removed from all its Sinks.
-/// HIRET TRUE if successful, FALSE otherwise
-BOOL VChan_Disconnect (VChan_type* VChan)
-{
-	return (*VChan->DisconnectFptr)	(VChan);
-}
-
-BOOL IsVChanConnected (VChan_type* VChan)
-{
-	return (*VChan->VChanIsConnectedFptr) (VChan);
-}
-
-//==============================================================================
-// Set/Get functions
-
-void SetVChanName (VChan_type* VChan, char newName[])
-{ 
-	OKfree(VChan->name);
-	VChan->name = StrDup(newName);
-}
- 
-char* GetVChanName (VChan_type* VChan)
-{
-	return StrDup(VChan->name);
-}
-
-void SetVChanActive (VChan_type* VChan, BOOL isActive)
-{
-	
-}
-
-BOOL GetVChanActive (VChan_type* VChan)
-{
-	return VChan->isActive;
-}
-
-BOOL IsVChanOpen (VChan_type* VChan)
-{
-	return VChan->isOpen;
-}
-
-/// HIFN Given a Source VChan, the function returns the name of the Sink VChan attached to the source having the 1-based index sinkIdx. If index is out of range it returns NULL.
-char* GetSinkVChanName (SourceVChan_type* srcVChan, size_t sinkIdx)
-{
-	SinkVChan_type** sinkVChanPtr = ListGetPtrToItem(srcVChan->sinkVChans, sinkIdx);
-	
-	if (!*sinkVChanPtr) return NULL;
-	
-	return GetVChanName((VChan_type*)*sinkVChanPtr);
-}
-
-SinkVChan_type*	GetSinkVChan (SourceVChan_type* srcVChan, size_t sinkIdx)
-{
-	SinkVChan_type** sinkVChanPtr = ListGetPtrToItem(srcVChan->sinkVChans, sinkIdx);
-	
-	return *sinkVChanPtr;
-}
-
-SourceVChan_type* GetSourceVChan (SinkVChan_type* sinkVChan)
-{
-	return sinkVChan->sourceVChan;
-}
-
-DLDataTypes GetSourceVChanDataType (SourceVChan_type* srcVChan)
-{
-	return srcVChan->dataType;
-}
-
-void SetSourceVChanDataType (SourceVChan_type* srcVChan, DLDataTypes dataType)
-{
-	// disconnect Sink VChans if they are incompatible
-	size_t 				nSinks 			= ListNumItems(srcVChan->sinkVChans);
-	SinkVChan_type*		sinkVChan;
-	BOOL				compatibleVChans;
-	for (size_t i = 1; i <= nSinks; i++) {
-		sinkVChan = *(SinkVChan_type**) ListGetPtrToItem(srcVChan->sinkVChans, i);
-		
-		compatibleVChans = FALSE;
-		for (size_t j = 0; j < sinkVChan->nDataTypes; j++)
-			if (srcVChan->dataType == sinkVChan->dataTypes[j]) {
-				compatibleVChans = TRUE;
-				break;
-			}
-		
-		if (!compatibleVChans)
-			VChan_Disconnect((VChan_type*)sinkVChan);
-	}
-	
-	// change Source VChan data type
-	srcVChan->dataType = dataType;
-}
-
-void SetSinkVChanDataTypes (SinkVChan_type* sinkVChan, size_t nDataTypes, DLDataTypes dataTypes[])
-{
-	BOOL	compatibleVChans	= FALSE;
-	
-	if (!nDataTypes) return;
-	
-	if (sinkVChan->sourceVChan) {
-		for (size_t i = 0; i < nDataTypes; i++)
-			if (dataTypes[i] == sinkVChan->sourceVChan->dataType) {
-				compatibleVChans = TRUE;
-				break;
-			}
-		
-		if (!compatibleVChans)
-			VChan_Disconnect((VChan_type*)sinkVChan);
-	}
-	
-	// copy new data types
-	OKfree(sinkVChan->dataTypes);
-	sinkVChan->nDataTypes 	= nDataTypes;
-	sinkVChan->dataTypes	= malloc(nDataTypes * sizeof(DLDataTypes));
-	memcpy(sinkVChan->dataTypes, dataTypes, nDataTypes*sizeof(DLDataTypes));
-}
-
-VChanDataFlow_type GetVChanDataFlowType (VChan_type* VChan)
-{
-	return VChan->dataFlow;
-}
-
-size_t GetNSinkVChans (SourceVChan_type* srcVChan)
-{
-	return ListNumItems(srcVChan->sinkVChans);
-}
-
-ListType GetSinkVChanList (SourceVChan_type* srcVChan)
-{
-	return srcVChan->sinkVChans;
-}
-
-CmtTSQHandle GetSinkVChanTSQHndl (SinkVChan_type* sinkVChan)
-{
-	return sinkVChan->tsqHndl;
-}
-
-void SetSinkVChanTSQSize (SinkVChan_type* sinkVChan, size_t nItems)
-{
-	CmtSetTSQAttribute(sinkVChan->tsqHndl, ATTR_TSQ_QUEUE_SIZE, nItems); 
-}
-
-size_t GetSinkVChanTSQSize (SinkVChan_type* sinkVChan)
-{
-	size_t nItems;
-	
-	CmtGetTSQAttribute(sinkVChan->tsqHndl, ATTR_TSQ_QUEUE_SIZE, &nItems); 
-	
-	return nItems;
-}
-
-void SetSinkVChanReadTimeout (SinkVChan_type* sinkVChan, double time)
-{
-	sinkVChan->readTimeout = time;
-}
-
-double GetSinkVChanReadTimeout	(SinkVChan_type* sinkVChan)
-{
-	return sinkVChan->readTimeout;
-}
-
-void* GetVChanOwner (VChan_type* VChan)
-{
-	return VChan->VChanOwner;
-}
-
-static BOOL SourceVChanIsConnected (VChan_type* VChan)
-{
-	if (ListNumItems(((SourceVChan_type*)VChan)->sinkVChans) )
-		return TRUE;
-	else
-		return FALSE;
-}
-	
-static BOOL SinkVChanIsConnected (VChan_type* VChan)
-{
-	if ( ((SinkVChan_type*)VChan)->sourceVChan )
-		return TRUE;
-	else
-		return FALSE;
 }

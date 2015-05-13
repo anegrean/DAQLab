@@ -13,6 +13,7 @@
 //==============================================================================
 // Include files
 #include "DAQLab.h" 		// include this first 
+#include "DAQLabUtility.h"
 #include <formatio.h> 
 #include <ansi_c.h> 
 #include "PIStage.h"

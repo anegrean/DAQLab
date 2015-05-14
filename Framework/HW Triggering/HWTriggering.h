@@ -81,6 +81,11 @@ HWTrigSlave_type*			GetHWTrigSlaveFromMaster		(HWTrigMaster_type* master, size_t
 	// Returns the number of HW Trig Slaves of a given HW Trig Master
 size_t						GetNumHWTrigSlaves				(HWTrigMaster_type* master);
 
+	// Activates a HW-Triggered Slave so it can receive triggers from a HW-Trigger Master to which it may be connected.
+void						SetHWTrigSlaveActive			(HWTrigSlave_type* slave, BOOL active);
+	// Checks if the HW-Triggered Slave is active and it expects triggers from a HW-Trigger Master.
+BOOL						GetHWTrigSlaveActive			(HWTrigSlave_type* slave);
+
 //--------------------------------------------------------------------
 // Connect / Disconnect HW triggered Slave to HW triggering Master 
 //--------------------------------------------------------------------

@@ -29,15 +29,17 @@
 // Types
 
 struct HWTrigMaster {
-	char*					name; 
-	ListType				slaves;					// List of HWTrigSlave_type* elements
-	HANDLE WINAPI*			slaveArmedHndls;		// Array of slave armed event objects 
+	char*					name; 						// HW-trigger Master name.
+	ListType				slaves;						// List of HWTrigSlave_type* elements.
+	size_t					nActiveSlaves;				// Number of HW-triggered slaves connected to this Master HW-trigger that expect to be triggered.
+	HANDLE WINAPI*			activeSlavesArmedHndls;		// Array of active slaves armed event object handles of length nActiveSlaves.
 };
 
 struct HWTrigSlave {
-	char*					name; 
-	HWTrigMaster_type*		master;
-	HANDLE WINAPI			armed;
+	char*					name; 						// HW-triggered Slave name.
+	HWTrigMaster_type*		master;						// Master HW-trigger of this Slave.
+	HANDLE WINAPI			armed;						// Object handle to signal if slave is armed.
+	BOOL					active;						// If True, Slave expects to be triggered, False otherwise. Default: True.
 };
 
 //==============================================================================
@@ -46,6 +48,8 @@ struct HWTrigSlave {
 //==============================================================================
 // Static functions
 
+static void				GenerateSlaveArmedHandles				(HWTrigMaster_type* master);
+
 //==============================================================================
 // Global variables
 
@@ -53,18 +57,36 @@ struct HWTrigSlave {
 // Global functions
 
 
+static void GenerateSlaveArmedHandles (HWTrigMaster_type* master)
+{
+	size_t					nSlaves 	= ListNumItems(master->slaves);
+	HWTrigSlave_type*   	slave		= NULL;
+	
+	master->nActiveSlaves = 0;
+	OKfree(master->activeSlavesArmedHndls);
+	for (size_t i = 1; i <= nSlaves; i++) {
+		slave = *(HWTrigSlave_type**)ListGetPtrToItem(master->slaves, i);
+		if (slave->active) {
+			master->nActiveSlaves++;
+			master->activeSlavesArmedHndls = realloc(master->activeSlavesArmedHndls, master->nActiveSlaves * sizeof(HANDLE));
+			master->activeSlavesArmedHndls[master->nActiveSlaves-1] = slave->armed;
+		}
+	}
+}
+
 HWTrigMaster_type* init_HWTrigMaster_type (char name[])
 {
 	HWTrigMaster_type*	master = malloc(sizeof(HWTrigMaster_type));
 	if (!master) return NULL;
 	
 	// init
-	master->slaves 				= 0;
-	master->slaveArmedHndls		= NULL;
+	master->name						= StrDup(name);
+	master->slaves 						= 0;
+	master->nActiveSlaves				= 0;
+	master->activeSlavesArmedHndls		= NULL;
 	
-	master->name	= StrDup(name);
-	
-	if ( !(master->slaves = ListCreate(sizeof(HWTrigSlave_type*))) ) goto Error;
+	// allocate
+	if ( !(master->slaves 				= ListCreate(sizeof(HWTrigSlave_type*))) ) goto Error;
 	
 	return master;
 	
@@ -78,24 +100,26 @@ Error:
 
 void discard_HWTrigMaster_type (HWTrigMaster_type** masterPtr)
 {
-	if (!*masterPtr) return;
+	HWTrigMaster_type*	master	= *masterPtr;
+	
+	if (!master) return;
 	
 	// name
-	OKfree((*masterPtr)->name);
+	OKfree(master->name);
 	
 	// slave armed event handles
-	OKfree((*masterPtr)->slaveArmedHndls);
+	OKfree(master->activeSlavesArmedHndls);
 	
 	// remove slave HW triggers
-	size_t				nSlaves = ListNumItems((*masterPtr)->slaves);
-	HWTrigSlave_type**	slavePtr;
+	size_t				nSlaves = ListNumItems(master->slaves);
+	HWTrigSlave_type*	slave	= NULL;
 	
 	for (size_t i = 1; i <= nSlaves; i++) {
-		slavePtr = ListGetPtrToItem((*masterPtr)->slaves, i);
-		(*slavePtr)->master = NULL;
+		slave = *(HWTrigSlave_type**)ListGetPtrToItem(master->slaves, i);
+		slave->master = NULL;
 	}
 	
-	ListDispose((*masterPtr)->slaves);
+	ListDispose(master->slaves);
 	
 	OKfree(*masterPtr);
 }
@@ -110,7 +134,8 @@ HWTrigSlave_type* init_HWTrigSlave_type (char name[])
 	slave->master		= NULL;
 	if ( !(slave->armed	= CreateEvent(NULL, FALSE, FALSE, NULL)) ) goto Error;
 	
-
+	slave->active		= TRUE;
+	
 	return slave;
 	
 Error:
@@ -122,29 +147,30 @@ Error:
 
 void discard_HWTrigSlave_type (HWTrigSlave_type** slavePtr)
 {
-	if (!*slavePtr) return;
+	HWTrigSlave_type*	slave = *slavePtr;
+	if (!slave) return;
 	
-	OKfree((*slavePtr)->name);
+	OKfree(slave->name);
 	
 	// remove slave from master if there is one
-	RemoveHWTrigSlaveFromMaster(*slavePtr);
+	RemoveHWTrigSlaveFromMaster(slave);
 	
 	// close armed event handle
-	CloseHandle((*slavePtr)->armed);
+	CloseHandle(slave->armed);
 	
 	OKfree(*slavePtr);
 }
 
 HWTrigMaster_type* HWTrigMasterNameExists (ListType masterList, char name[], size_t* idx)
 {
-  	HWTrigMaster_type** 	masterPtr;
+  	HWTrigMaster_type* 		master		= NULL;
 	size_t					nMasters	= ListNumItems(masterList);
 	
 	for (size_t i = 1; i <= nMasters; i++) {
-		masterPtr = ListGetPtrToItem(masterList, i);
-		if (!strcmp((*masterPtr)->name, name)) {
+		master = *(HWTrigMaster_type**)ListGetPtrToItem(masterList, i);
+		if (!strcmp(master->name, name)) {
 			if (idx) *idx = i;
-			return *masterPtr;
+			return master;
 		}
 	}
 	
@@ -154,14 +180,14 @@ HWTrigMaster_type* HWTrigMasterNameExists (ListType masterList, char name[], siz
 
 HWTrigSlave_type* HWTrigSlaveNameExists (ListType slaveList, char name[], size_t* idx)
 {
-  	HWTrigSlave_type** 		slavePtr;
+  	HWTrigSlave_type* 		slave		= NULL;
 	size_t					nSlaves		= ListNumItems(slaveList);
 	
 	for (size_t i = 1; i <= nSlaves; i++) {
-		slavePtr = ListGetPtrToItem(slaveList, i);
-		if (!strcmp((*slavePtr)->name, name)) {
+		slave = *(HWTrigSlave_type**)ListGetPtrToItem(slaveList, i);
+		if (!strcmp(slave->name, name)) {
 			if (idx) *idx = i;
-			return *slavePtr;
+			return slave;
 		}
 	}
 	
@@ -178,7 +204,6 @@ char* GetHWTrigSlaveName (HWTrigSlave_type* slave)
 {
 	return StrDup(slave->name);
 }
-
 
 HWTrigMaster_type* GetHWTrigSlaveMaster (HWTrigSlave_type* slave)
 {
@@ -197,6 +222,23 @@ size_t GetNumHWTrigSlaves (HWTrigMaster_type* master)
 	return ListNumItems(master->slaves);
 }
 
+void SetHWTrigSlaveActive (HWTrigSlave_type* slave, BOOL active)
+{
+	// set slave active/inactive if different than current state
+	if (slave->active == active) return;
+	
+	slave->active = active;
+	
+	// update master active slave handles
+	if (slave->master)
+		GenerateSlaveArmedHandles(slave->master);
+}
+
+BOOL GetHWTrigSlaveActive (HWTrigSlave_type* slave)
+{
+	return slave->active;
+}
+
 int AddHWTrigSlaveToMaster (HWTrigMaster_type* master, HWTrigSlave_type* slave, char** errorInfo)
 {
 #define AddHWTrigSlave_Err_SlaveAlreadyHasAMaster   -1
@@ -212,13 +254,11 @@ int AddHWTrigSlaveToMaster (HWTrigMaster_type* master, HWTrigSlave_type* slave, 
 	ListInsertItem(master->slaves, &slave, END_OF_LIST);
 	slave->master = master;
 	
-	// generate slave armed event handles
-	size_t					nSlaves 	= ListNumItems(master->slaves);
-	HWTrigSlave_type**   	slavePtr;
-	master->slaveArmedHndls = realloc(master->slaveArmedHndls, nSlaves * sizeof(HANDLE));
-	for (size_t i = 0; i < nSlaves; i++) {
-		slavePtr = ListGetPtrToItem(master->slaves, i+1);
-		master->slaveArmedHndls[i] = (*slavePtr)->armed;
+	// if slave is active, then add its handle to the master
+	if (slave->active) {
+		master->nActiveSlaves++;
+		master->activeSlavesArmedHndls = realloc (master->activeSlavesArmedHndls, master->nActiveSlaves * sizeof(HANDLE));
+		master->activeSlavesArmedHndls[master->nActiveSlaves-1] = slave->armed;
 	}
 	
 	return 0;
@@ -231,18 +271,14 @@ void RemoveHWTrigSlaveFromMaster (HWTrigSlave_type* slave)
 	// remove slave from master if there is one
 	ListType			slaveList   = slave->master->slaves;
 	size_t				nSlaves 	= ListNumItems(slaveList);
-	HWTrigSlave_type**	slavePtr;
+	HWTrigSlave_type*	slaveItem	= NULL;
 	
 	for (size_t i = 1; i <= nSlaves; i++) {
-		slavePtr = ListGetPtrToItem(slaveList, i);
-		if (*slavePtr == slave) {
+		slaveItem = *(HWTrigSlave_type**)ListGetPtrToItem(slaveList, i);
+		if (slaveItem == slave) {
 			ListRemoveItem(slaveList, 0, i);
-			// update slave armed event handles from master
-			slave->master->slaveArmedHndls = realloc(slave->master->slaveArmedHndls, (nSlaves-1) * sizeof(HANDLE));
-			for (size_t j = 0; j < nSlaves-1; j++) {
-				slavePtr = ListGetPtrToItem(slaveList, j+1);
-				slave->master->slaveArmedHndls[j] = (*slavePtr)->armed;
-			}
+			// update master slave armed event handles
+			GenerateSlaveArmedHandles(slave->master);
 			break;
 		}
 	}
@@ -256,13 +292,15 @@ void RemoveHWTrigMasterFromSlaves (HWTrigMaster_type* master)
 	
 	if (!nSlaves) return; // no slaves
 	
-	HWTrigSlave_type**	slavePtr;
+	HWTrigSlave_type*	slave = NULL;
 	for (size_t i = 1; i <= nSlaves; i++) {
-		slavePtr = ListGetPtrToItem(master->slaves, i);
-		(*slavePtr)->master = NULL;
+		slave = *(HWTrigSlave_type**)ListGetPtrToItem(master->slaves, i);
+		slave->master = NULL;
 	}
+	
 	ListClear(master->slaves);
-	OKfree(master->slaveArmedHndls);
+	master->nActiveSlaves = 0;
+	OKfree(master->activeSlavesArmedHndls);
 }
 
 int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorInfo)
@@ -270,12 +308,11 @@ int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorInfo)
 #define WaitForHWTrigArmedSlaves_Err_Failed		-1
 #define WaitForHWTrigArmedSlaves_Err_Timeout	-2
 	
-	DWORD 	fCallResult = 0;
-	size_t	nSlaves		= ListNumItems(master->slaves);
+	DWORD 				fCallResult 	= 0;
 	
-	if (!nSlaves) return 0;
+	if (!master->nActiveSlaves) return 0;
 	
-	fCallResult = WaitForMultipleObjects(nSlaves, master->slaveArmedHndls, TRUE, (DWORD) WaitForHWTrigArmedSlaves_Timeout);
+	fCallResult = WaitForMultipleObjects(master->nActiveSlaves, master->activeSlavesArmedHndls, TRUE, (DWORD) WaitForHWTrigArmedSlaves_Timeout);
 	
 	// check result
 	switch (fCallResult) {
@@ -305,6 +342,8 @@ int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorInfo)
 int SetHWTrigSlaveArmedStatus (HWTrigSlave_type* slave, char** errorInfo)
 {
 #define SetHWTrigSlaveArmedStatus_Err_Failed		-1
+	
+	if (!slave->active) return 0; // skip if slave is not active
 	
 	if (!SetEvent(slave->armed)) {
 		

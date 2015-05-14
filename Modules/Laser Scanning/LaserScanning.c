@@ -6510,6 +6510,12 @@ void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			// active N Pixels VChan
 			SetVChanActive(scanEngine->baseClass.VChanNPixels, TRUE);
 			
+			// active pixel sampling rate VChan
+			SetVChanActive(scanEngine->baseClass.VChanPixelSamplingRate, TRUE);
+			
+			// active pixel pulse train VChan
+			SetVChanActive(scanEngine->baseClass.VChanPixelPulseTrain, TRUE);
+			
 			// inactivate ROI timing VChan
 			SetVChanActive(scanEngine->baseClass.VChanROITiming, FALSE);
 			break;
@@ -6527,6 +6533,12 @@ void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			
 			// inactivate N Pixels VChan
 			SetVChanActive(scanEngine->baseClass.VChanNPixels, FALSE);
+			
+			// inactive pixel sampling rate VChan
+			SetVChanActive(scanEngine->baseClass.VChanPixelSamplingRate, FALSE);
+			
+			// inactive pixel pulse train VChan
+			SetVChanActive(scanEngine->baseClass.VChanPixelPulseTrain, FALSE);
 			
 			// activate ROI timing VChan
 			SetVChanActive(scanEngine->baseClass.VChanROITiming, TRUE);

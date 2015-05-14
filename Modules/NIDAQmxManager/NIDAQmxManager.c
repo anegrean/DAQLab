@@ -825,7 +825,8 @@ typedef struct {
 	HWTrigSlave_type*			HWTrigSlave;				// For establishing a task start HW-trigger dependency, this being a slave.
 	WriteAOData_type*			writeAOData;				// Used for continuous AO streaming. 
 	ReadAIData_type*			readAIData;					// Used for processing of incoming AI data. If this is not an AI task, this is NULL.
-	WriteDOData_type*			writeDOData;				// Used for continuous DO streaming.                         
+	WriteDOData_type*			writeDOData;				// Used for continuous DO streaming.
+	size_t						nOpenChannels;				// Counts the number of open VChans used for data exchange and is updated whenever a VChan is opened/closed.
 } ADTaskSet_type;
 
 // CI
@@ -1223,17 +1224,11 @@ static int 							ClearDAQmxTasks 						(Dev_type* dev);
 	// stops all DAQmx Tasks defined for the device
 static int							StopDAQmxTasks 							(Dev_type* dev, char** errorInfo); 
 	// starts DAQmx Tasks defined for the device
-static int							StartAIDAQmxTask						(Dev_type* dev, char** errorInfo);
 static int CVICALLBACK 				StartAIDAQmxTask_CB 					(void *functionData);
-static int							StartAODAQmxTask						(Dev_type* dev, char** errorInfo);
 static int CVICALLBACK 				StartAODAQmxTask_CB 					(void *functionData);
-static int							StartDIDAQmxTask						(Dev_type* dev, char** errorInfo);
 static int CVICALLBACK 				StartDIDAQmxTask_CB 					(void *functionData);
-static int							StartDODAQmxTask						(Dev_type* dev, char** errorInfo);
 static int CVICALLBACK 				StartDODAQmxTask_CB 					(void *functionData);
-static int							StartCIDAQmxTasks						(Dev_type* dev, char** errorInfo);
 static int CVICALLBACK 				StartCIDAQmxTasks_CB 					(void *functionData);
-static int							StartCODAQmxTasks						(Dev_type* dev, char** errorInfo);
 static int CVICALLBACK 				StartCODAQmxTasks_CB 					(void *functionData);
 
 //---------------------
@@ -1315,8 +1310,13 @@ static int CVICALLBACK 				TriggerPreTrigSamples_CB 				(int panel, int control,
 //----------------------------------------------------
 
 	//-----------------------------------
-	// VChan connect/disconnect callbacks
+	// VChan open/close callbacks
 	//-----------------------------------
+
+	// AI
+static void							AIDataVChan_StateChange					(VChan_type* self, void* VChanOwner, VChanStates state);
+	// AO
+static void							AODataVChan_StateChange					(VChan_type* self, void* VChanOwner, VChanStates state);
 
 	//----------------------
 	// AI, AO, DI & DO Tasks
@@ -4776,27 +4776,27 @@ static int AddToUI_Chan_AI_Voltage (ChanSet_AI_Voltage_type* chanSet)
 		
 		case Convert_To_Double:
 			
-			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_Double, chanSet, NULL); 
+			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_Double, chanSet, AIDataVChan_StateChange); 
 			break;
 			
 		case Convert_To_Float:
 			
-			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_Float, chanSet, NULL); 
+			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_Float, chanSet, AIDataVChan_StateChange); 
 			break;
 			
 		case Convert_To_UInt:
 			
-			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UInt, chanSet, NULL); 
+			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UInt, chanSet, AIDataVChan_StateChange); 
 			break;
 			
 		case Convert_To_UShort:
 			
-			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UShort, chanSet, NULL);
+			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UShort, chanSet, AIDataVChan_StateChange);
 			break;
 			
 		case Convert_To_UChar:
 			
-			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UChar, chanSet, NULL);
+			chanSet->baseClass.srcVChan = init_SourceVChan_type(VChanName, DL_Waveform_UChar, chanSet, AIDataVChan_StateChange);
 			break;
 	}
 	
@@ -5094,7 +5094,7 @@ static int AddToUI_Chan_AO_Voltage (ChanSet_AO_Voltage_type* chanSet)
 	
 	DLDataTypes allowedPacketTypes[] = {DL_Waveform_Double, DL_RepeatedWaveform_Double, DL_Waveform_Float, DL_RepeatedWaveform_Float, DL_Float, DL_Double};
 							
-	chanSet->baseClass.sinkVChan = init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chanSet, VChan_Data_Receive_Timeout, NULL);  
+	chanSet->baseClass.sinkVChan = init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chanSet, VChan_Data_Receive_Timeout, AODataVChan_StateChange);  
 	DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)chanSet->baseClass.sinkVChan);
 	SetCtrlVal(chanSet->baseClass.chanPanHndl, AOVoltage_VChanName, VChanName);
 	AddSinkVChan(dev->taskController, chanSet->baseClass.sinkVChan, AO_DataReceivedTC); 
@@ -7847,23 +7847,26 @@ static ADTaskSet_type* init_ADTaskSet_type (Dev_type* dev)
 	ADTaskSet_type* taskSet = malloc (sizeof(ADTaskSet_type));
 	if (!taskSet) return NULL;
 	
-			// init
-			taskSet->dev				= dev;
-			taskSet->chanSet			= 0;
-			taskSet->timing				= NULL;
+	// init
+	taskSet->dev				= dev;
+	taskSet->chanSet			= 0;
+	taskSet->timing				= NULL;
+	taskSet->panHndl			= 0;
+	taskSet->taskHndl			= NULL;
+	taskSet->timeout			= DAQmxDefault_Task_Timeout;
+	taskSet->startTrig			= NULL;
+	taskSet->HWTrigMaster		= NULL;
+	taskSet->HWTrigSlave		= NULL;
+	taskSet->referenceTrig		= NULL;
+	taskSet->writeAOData		= NULL;
+	taskSet->readAIData			= NULL;
+	taskSet->writeDOData		= NULL;
+	taskSet->nOpenChannels		= 0;
+	
+	// allocate
+	if (!(	taskSet->chanSet	= ListCreate(sizeof(ChanSet_type*)))) 	goto Error;
+	if (!(	taskSet->timing		= init_ADTaskTiming_type()))			goto Error;	
 			
-			taskSet->panHndl			= 0;
-			taskSet->taskHndl			= NULL;
-			taskSet->timeout			= DAQmxDefault_Task_Timeout;
-	if (!(	taskSet->chanSet			= ListCreate(sizeof(ChanSet_type*)))) 	goto Error;
-	if (!(	taskSet->timing				= init_ADTaskTiming_type()))			goto Error;	
-			taskSet->startTrig			= NULL;
-			taskSet->HWTrigMaster		= NULL;
-			taskSet->HWTrigSlave		= NULL;
-			taskSet->referenceTrig		= NULL;
-			taskSet->writeAOData		= NULL;
-			taskSet->readAIData			= NULL;
-			taskSet->writeDOData		= NULL;
 		
 	return taskSet;
 	
@@ -10996,27 +10999,6 @@ Error:
 	return StopDAQmxTasks_Err_StoppingTasks;
 }
 
-static int StartAIDAQmxTask (Dev_type* dev, char** errorInfo)
-{
-	int 	error 										= 0;
-	char	CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
-	
-	// launch AI task in a new thread if it exists
-	if (!dev->AITaskSet) return 0;
-	if (!dev->AITaskSet->taskHndl) return 0; 
-	
-	if ((error = CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAIDAQmxTask_CB, dev, NULL)) < 0) goto CmtError;
-	
-	return 0;
-	
-CmtError:
-	
-	CmtGetErrorMessage (error, CmtErrMsgBuffer);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "StartAIDAQmxTask", CmtErrMsgBuffer);   
-	return error;
-}
-							  
 int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 {
 	Dev_type*			dev				= functionData;
@@ -11165,28 +11147,6 @@ Error:
 
 }
 
-static int StartAODAQmxTask (Dev_type* dev, char** errorInfo)
-{
-	int 	error 										= 0;
-	char	CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
-	
-	// launch AO task in a new thread if it exists
-	if (!dev->AOTaskSet) return 0;
-	if (!dev->AOTaskSet->taskHndl) return 0; 
-	
-	if ((error = CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAODAQmxTask_CB, dev, NULL)) < 0) goto CmtError;
-	
-	return 0;
-	
-CmtError:
-	
-	CmtGetErrorMessage (error, CmtErrMsgBuffer);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "StartAODAQmxTask", CmtErrMsgBuffer);   
-	return error;
-	
-}
-
 int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 {
 #define StartAODAQmxTask_CB_Err_NumberOfReceivedSamplesNotTheSameAsTask		-1
@@ -11292,84 +11252,24 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	// Fill output buffer
 	//-------------------------------------------------------------------------------------------------------------------------------
 	
-	switch (dev->AOTaskSet->timing->measMode) {
+	// clear streaming data structure
+	discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
+	nullChk( dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev) );
+	// output buffer is twice the writeblock, thus write two writeblocks
+	errChk( WriteAODAQmx(dev, &errMsg) );
+	errChk( WriteAODAQmx(dev, &errMsg) );
 			
-		case Operation_Finite:
-			/*
-			// adjust output buffer size to match the number of samples to be generated   
-			DAQmxErrChk( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples) );
-			
-			// fill buffer with waveform data
-			// note: only waveform are allowed in this mode
-			size_t				nChannels 		= ListNumItems(dev->AOTaskSet->chanSet);
-			ChanSet_type** 		chanSetPtr;
-			size_t				nUsedAOChannels	= 0;
-			void**				waveformDataPtr;
-			size_t				nWaveformSamples;
-			WaveformTypes		waveformType;
-			
-			for (size_t i = 1; i <= nChannels; i++) {
-				chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
-				if ((*chanSetPtr)->onDemand) continue;
-				nUsedAOChannels++;
-				
-				// allocate memory to generate samples
-				nullChk( AOData = realloc(AOData, nUsedAOChannels * dev->AOTaskSet->timing->nSamples * sizeof(float64)) ); 
-			
-				// receive waform data, if data is not waveform, error occurs
-				errChk( ReceiveWaveform((*chanSetPtr)->sinkVChan, &AOWaveform, &waveformType, &errMsg) );
-				waveformDataPtr = GetWaveformPtrToData(AOWaveform, &nWaveformSamples); 
-				
-				// check if number of samples in the waveform is equal to the number of samples set for the task
-				if (nWaveformSamples != dev->AOTaskSet->timing->nSamples) {
-					error = StartAODAQmxTask_CB_Err_NumberOfReceivedSamplesNotTheSameAsTask;
-					errMsg = FormatMsg(error, "", "Number of received samples for finite AO is not the same as the number of samples set for the AO task");
-					goto Error;
-				}
-				
-				// copy data (only these two data types are used)
-				switch (waveformType) {
-					case Waveform_Double:
-						memcpy(AOData + ((nUsedAOChannels-1) * dev->AOTaskSet->timing->nSamples), *waveformDataPtr, dev->AOTaskSet->timing->nSamples * sizeof(float64));
-						break;
-						
-					case Waveform_Float:
-						float* floatWaveformData = (float*)*waveformDataPtr;
-						for (size_t j = 0; j < dev->AOTaskSet->timing->nSamples; j++)
-							*(AOData + ((nUsedAOChannels-1)*dev->AOTaskSet->timing->nSamples) + j) = (float64) floatWaveformData[j];
-						break;
-						
-				}
-			}
-			// write samples to AO buffer
-			int	nSamplesWritten;
-			DAQmxErrChk( DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, dev->AOTaskSet->timing->nSamples, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, AOData, &nSamplesWritten, NULL) );
-			// cleanup
-			OKfree(AOData);
-			discard_Waveform_type(&AOWaveform); 
-			break;
-			*/
-			
-		case Operation_Continuous:
-			
-			// clear streaming data structure
-			discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
-			nullChk( dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev) );
-			// output buffer is twice the writeblock, thus write two writeblocks
-			errChk( WriteAODAQmx(dev, &errMsg) );
-			errChk( WriteAODAQmx(dev, &errMsg) );
-			
-			break;
-	}
-									
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Start task as a function of HW trigger dependencies
 	//-------------------------------------------------------------------------------------------------------------------------------
 	
+	// wait for other HW triggered slaved to be armed
 	errChk(WaitForHWTrigArmedSlaves(dev->AOTaskSet->HWTrigMaster, &errMsg));
 	
+	// launch task (and arm if this task is a slave triggered task)
 	DAQmxErrChk(DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Start));
 	
+	// if this task has a master HW-trigger, then signal it that task is armed
 	errChk(SetHWTrigSlaveArmedStatus(dev->AOTaskSet->HWTrigSlave, &errMsg));
 	
 	
@@ -11397,17 +11297,7 @@ Error:
 	
 }
 
-static int StartDIDAQmxTask (Dev_type* dev, char** errorInfo)
-{
-	return 0;	
-}
-
 int CVICALLBACK StartDIDAQmxTask_CB (void *functionData)
-{
-	return 0;	
-}
-
-static int StartDODAQmxTask (Dev_type* dev, char** errorInfo)
 {
 	return 0;	
 }
@@ -11417,63 +11307,9 @@ int CVICALLBACK StartDODAQmxTask_CB (void *functionData)
 	return 0;	
 }
 
-static int StartCIDAQmxTasks (Dev_type* dev, char** errorInfo)
-{
-	int 	error 										= 0;
-	char	CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
-	
-	// launch CI tasks in a new thread if there are any
-	if (!dev->CITaskSet) return 0;
-	
-	ChanSet_CI_type* 	chanSet	= NULL;
-	size_t				nCI 	= ListNumItems(dev->CITaskSet->chanTaskSet);
-	for (size_t i = 1; i <= nCI; i++) {
-		chanSet = *(ChanSet_CI_type**) ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-		if (chanSet->taskHndl)
-			if ((error = CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCIDAQmxTasks_CB, chanSet, NULL)) < 0) goto CmtError; 
-	
-	}
-	
-	return 0;
-	
-CmtError:
-	
-	CmtGetErrorMessage (error, CmtErrMsgBuffer);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "StartCIDAQmxTask", CmtErrMsgBuffer);   
-	return error;		
-}
-
 int CVICALLBACK StartCIDAQmxTasks_CB (void *functionData)
 {
 	return 0;	
-}
-
-static int StartCODAQmxTasks (Dev_type* dev, char** errorInfo)
-{
-	int 	error 										= 0;
-	char	CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE];
-	
-	// launch CO tasks in a new thread if there are any
-	if (!dev->COTaskSet) return 0;
-	
-	ChanSet_CO_type* 	chanSet		= NULL;
-	size_t				nCO 		= ListNumItems(dev->COTaskSet->chanTaskSet);
-	for (size_t i = 1; i <= nCO; i++) {
-		chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-		if (chanSet->taskHndl)
-			if ((error = CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCODAQmxTasks_CB, chanSet, NULL)) < 0) goto CmtError; 
-	
-	}
-	
-	return 0;
-	
-CmtError:
-	
-	CmtGetErrorMessage (error, CmtErrMsgBuffer);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "StartCODAQmxTask", CmtErrMsgBuffer);   
-	return error;	
 }
 
 int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
@@ -13723,6 +13559,58 @@ Error:
 // VChan Callbacks
 //-----------------------------------------------------------------------------------------------------
 
+static void AIDataVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
+{
+	ChanSet_type* 	chanSet = VChanOwner;
+	Dev_type*		dev		= chanSet->device;
+	
+	switch (state) {
+			
+		case VChan_Open:
+			
+			dev->AITaskSet->nOpenChannels++;
+			break;
+			
+		case VChan_Closed:
+			
+			dev->AITaskSet->nOpenChannels--;
+			break;
+	}
+	
+	// Activate/Inactivate HW-triggered slave mode if task will be launched, i.e. if it has open data VChans
+	if (dev->AITaskSet->nOpenChannels)
+		SetHWTrigSlaveActive(dev->AITaskSet->HWTrigSlave, TRUE);
+	else
+		SetHWTrigSlaveActive(dev->AITaskSet->HWTrigSlave, FALSE);
+	
+}
+
+static void AODataVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
+{
+	ChanSet_type* 	chanSet = VChanOwner;
+	Dev_type*		dev		= chanSet->device;
+	
+	switch (state) {
+			
+		case VChan_Open:
+			
+			dev->AOTaskSet->nOpenChannels++;
+			break;
+			
+		case VChan_Closed:
+			
+			dev->AOTaskSet->nOpenChannels--;
+			break;
+	}
+	
+	// Activate/Inactivate HW-triggered slave mode if task will be launched, i.e. if it has open data VChans
+	if (dev->AOTaskSet->nOpenChannels)
+		SetHWTrigSlaveActive(dev->AOTaskSet->HWTrigSlave, TRUE);
+	else
+		SetHWTrigSlaveActive(dev->AOTaskSet->HWTrigSlave, FALSE);
+	
+}
+	
 static void ADNSamplesSinkVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
 	ADTaskSet_type* 	tskSet	= VChanOwner;
@@ -14499,35 +14387,36 @@ static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 
 static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
-	Dev_type*		dev				= GetTaskControlModuleData(taskControl);
-	char*			errMsg			= NULL;
-	int				error			= 0;
-	int*			nActiveTasksPtr	= NULL;	// Keeps track of the number of DAQmx tasks that must still complete
-											// before a task controller iteration is considered to be complete
+	Dev_type*		dev											= GetTaskControlModuleData(taskControl);
+	char			CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
+	char*			errMsg										= NULL;
+	int				error										= 0;
+	int*			nActiveTasksPtr								= NULL;	// Keeps track of the number of DAQmx tasks that must still complete before the iteration is considered to be complete
+	
 	
 	// update iteration display
-	
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
 	
 	//----------------------------------------
-	// Count active tasks 
+	// Launch and count active tasks 
 	//----------------------------------------
 	
 	// get active tasks counter handle
-	if ((error = CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr)) < 0) {
-		errMsg = FormatMsg(error, "IterateTC", "Could not obtain TSV handle");
-		goto Error;
-	}
+	errChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
 	
 	*nActiveTasksPtr = 0;
 	
 	// AI
-	if (dev->AITaskSet && dev->AITaskSet->taskHndl)
+	if (dev->AITaskSet && dev->AITaskSet->taskHndl && dev->AITaskSet->nOpenChannels) {
+		errChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAIDAQmxTask_CB, dev, NULL) );
 		(*nActiveTasksPtr)++;
+	}
 	
 	// AO
-	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl)
+	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl && dev->AOTaskSet->nOpenChannels) {
+		errChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAODAQmxTask_CB, dev, NULL) );
 		(*nActiveTasksPtr)++;
+	}
 	
 	// DI
 	if (dev->DITaskSet && dev->DITaskSet->taskHndl)
@@ -14543,8 +14432,10 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 		size_t 				nCI 		= ListNumItems(dev->CITaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nCI; i++) {
 			chanSet = *(ChanSet_CI_type**)ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-			if (chanSet->taskHndl)
+			if (chanSet->taskHndl) {
+				errChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCIDAQmxTasks_CB, chanSet, NULL) );
 				(*nActiveTasksPtr)++;
+			}
 		}
 	}
 	
@@ -14554,38 +14445,28 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 		size_t 				nCO 		= ListNumItems(dev->COTaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nCO; i++) {
 			chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-			if (chanSet->taskHndl)
+			if (chanSet->taskHndl) {
+				errChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCODAQmxTasks_CB, chanSet, NULL) );
 				(*nActiveTasksPtr)++;
+			}
 		}
 	}
 	
 	// release active tasks counter handle
-	if ((error = CmtReleaseTSVPtr(dev->nActiveTasks)) < 0) {
-		errMsg = FormatMsg(error, "IterateTC", "Could not release TSV handle"); 
-		goto Error;
-	}
+	errChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	
-	//----------------------------------------
-	// Launch DAQmx tasks
-	//----------------------------------------
-	// AI
-	errChk( StartAIDAQmxTask(dev, &errMsg) );
-	// AO
-	errChk( StartAODAQmxTask(dev, &errMsg) );
-	// DI
-	errChk( StartDIDAQmxTask(dev, &errMsg) );
-	// DO
-	errChk( StartDODAQmxTask(dev, &errMsg) );
-	// CI
-	errChk( StartCIDAQmxTasks(dev, &errMsg) );
-	// CO
-	errChk( StartCODAQmxTasks(dev, &errMsg) );
-		
 	return; // no error
 	
 Error:
 	
-	TaskControlIterationDone(taskControl, error, errMsg, FALSE);
+	CmtGetErrorMessage (error, CmtErrMsgBuffer);
+	if (CmtErrMsgBuffer[0])
+		errMsg = FormatMsg(error, "IterateTC", CmtErrMsgBuffer);
+	else
+		errMsg = FormatMsg(error, "IterateTC", "Out of memory or unknown error.");
+	
+	errChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	AbortTaskControlExecution(taskControl);
 	OKfree(errMsg);
 }
 

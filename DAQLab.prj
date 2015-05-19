@@ -1,15 +1,15 @@
 [Project Header]
 Version = 1302
 Pathname = "/d/ELE_DAQLab/DAQLab.prj"
-CVI Dir = "/c/program files (x86)/national instruments/cvi2013"
-CVI Shared Dir = "/C/Program Files (x86)/National Instruments/Shared/CVI"
+CVI Dir = "/c/program files/national instruments/cvi2013"
+CVI Shared Dir = "/C/Program Files/National Instruments/Shared/CVI"
 CVI Pub Local Dir = "/C/ProgramData/National Instruments/CVI2013"
 CVI Pub Global Dir = "/C/ProgramData/National Instruments/CVI"
-IVI Standard Root Dir = "/C/Program Files (x86)/IVI Foundation/IVI"
-VXIplug&play Framework Dir = "/C/Program Files (x86)/IVI Foundation/VISA/winnt"
+IVI Standard Root Dir = "/C/Program Files/IVI Foundation/IVI"
+VXIplug&play Framework Dir = "/C/Program Files/IVI Foundation/VISA/winnt"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
-Number of Files = 70
+Number of Files = 74
 Target Type = "Executable"
 Flags = 2064
 Copied From Locked InstrDrv Directory = False
@@ -48,33 +48,39 @@ FolderEx 8 Parent = 0
 Folder 9 = "Modules/Pockells Cell"
 FolderEx 9 = "Pockells Cell"
 FolderEx 9 Parent = 0
-Folder 10 = "XML"
-FolderEx 10 = "XML"
-Folder 11 = "Instrument Files"
-FolderEx 11 = "Instrument Files"
-Folder 12 = "Framework"
-FolderEx 12 = "Framework"
-Folder 13 = "Framework/Task Control"
-FolderEx 13 = "Task Control"
-FolderEx 13 Parent = 12
-Folder 14 = "Framework/Virtual Channels"
-FolderEx 14 = "Virtual Channels"
-FolderEx 14 Parent = 12
-Folder 15 = "Framework/Iterators"
-FolderEx 15 = "Iterators"
-FolderEx 15 Parent = 12
-Folder 16 = "Framework/Data Packets"
-FolderEx 16 = "Data Packets"
-FolderEx 16 Parent = 12
-Folder 17 = "Framework/Data Types"
-FolderEx 17 = "Data Types"
-FolderEx 17 Parent = 12
-Folder 18 = "Framework/HW Triggering"
-FolderEx 18 = "HW Triggering"
-FolderEx 18 Parent = 12
-Folder 19 = "Framework/Utility"
-FolderEx 19 = "Utility"
-FolderEx 19 Parent = 12
+Folder 10 = "Modules/Lasers"
+FolderEx 10 = "Lasers"
+FolderEx 10 Parent = 0
+Folder 11 = "Modules/Lasers/Coherent Chameleon"
+FolderEx 11 = "Coherent Chameleon"
+FolderEx 11 Parent = 10
+Folder 12 = "XML"
+FolderEx 12 = "XML"
+Folder 13 = "Instrument Files"
+FolderEx 13 = "Instrument Files"
+Folder 14 = "Framework"
+FolderEx 14 = "Framework"
+Folder 15 = "Framework/Task Control"
+FolderEx 15 = "Task Control"
+FolderEx 15 Parent = 14
+Folder 16 = "Framework/Virtual Channels"
+FolderEx 16 = "Virtual Channels"
+FolderEx 16 Parent = 14
+Folder 17 = "Framework/Iterators"
+FolderEx 17 = "Iterators"
+FolderEx 17 Parent = 14
+Folder 18 = "Framework/Data Packets"
+FolderEx 18 = "Data Packets"
+FolderEx 18 Parent = 14
+Folder 19 = "Framework/Data Types"
+FolderEx 19 = "Data Types"
+FolderEx 19 Parent = 14
+Folder 20 = "Framework/HW Triggering"
+FolderEx 20 = "HW Triggering"
+FolderEx 20 Parent = 14
+Folder 21 = "Framework/Utility"
+FolderEx 21 = "Utility"
+FolderEx 21 Parent = 14
 
 [File 0001]
 File Type = "Include"
@@ -414,7 +420,7 @@ Path Is Rel = True
 Path Rel To = "CVI"
 Path Rel To Override = "CVI"
 Path Rel Path = "sdk/lib/msvc/ComCtl32.Lib"
-Path = "/c/program files (x86)/national instruments/cvi2013/sdk/lib/msvc/ComCtl32.Lib"
+Path = "/c/program files/national instruments/cvi2013/sdk/lib/msvc/ComCtl32.Lib"
 Exclude = False
 Project Flags = 0
 Folder = "Modules/Laser Scanning"
@@ -622,6 +628,55 @@ File Type = "CSource"
 Res Id = 45
 Path Is Rel = True
 Path Rel To = "Project"
+Path Rel Path = "Modules/Lasers/Coherent Chameleon/CoherentCham.c"
+Path = "/d/ELE_DAQLab/Modules/Lasers/Coherent Chameleon/CoherentCham.c"
+Exclude = False
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Modules/Lasers/Coherent Chameleon"
+Folder Id = 11
+
+[File 0046]
+File Type = "Include"
+Res Id = 46
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/Lasers/Coherent Chameleon/CoherentCham.h"
+Path = "/d/ELE_DAQLab/Modules/Lasers/Coherent Chameleon/CoherentCham.h"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/Lasers/Coherent Chameleon"
+Folder Id = 11
+
+[File 0047]
+File Type = "Include"
+Res Id = 47
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/Lasers/Coherent Chameleon/UI_CoherentCham.h"
+Path = "/d/ELE_DAQLab/Modules/Lasers/Coherent Chameleon/UI_CoherentCham.h"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/Lasers/Coherent Chameleon"
+Folder Id = 11
+
+[File 0048]
+File Type = "User Interface Resource"
+Res Id = 48
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Modules/Lasers/Coherent Chameleon/UI_CoherentCham.uir"
+Path = "/d/ELE_DAQLab/Modules/Lasers/Coherent Chameleon/UI_CoherentCham.uir"
+Exclude = False
+Project Flags = 0
+Folder = "Modules/Lasers/Coherent Chameleon"
+Folder Id = 11
+
+[File 0049]
+File Type = "CSource"
+Res Id = 49
+Path Is Rel = True
+Path Rel To = "Project"
 Path Rel Path = "Modules/DAQLabModule.c"
 Path = "/d/ELE_DAQLab/Modules/DAQLabModule.c"
 Exclude = False
@@ -630,9 +685,9 @@ Project Flags = 0
 Folder = "Modules"
 Folder Id = 0
 
-[File 0046]
+[File 0050]
 File Type = "Include"
-Res Id = 46
+Res Id = 50
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/DAQLabModule.h"
@@ -642,9 +697,9 @@ Project Flags = 0
 Folder = "Modules"
 Folder Id = 0
 
-[File 0047]
+[File 0051]
 File Type = "Function Panel"
-Res Id = 47
+Res Id = 51
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "MSXML/ActiveXML.fp"
@@ -652,11 +707,11 @@ Path = "/d/ELE_DAQLab/MSXML/ActiveXML.fp"
 Exclude = False
 Project Flags = 0
 Folder = "XML"
-Folder Id = 10
+Folder Id = 12
 
-[File 0048]
+[File 0052]
 File Type = "Include"
-Res Id = 48
+Res Id = 52
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "MSXML/ActiveXML.h"
@@ -664,39 +719,38 @@ Path = "/d/ELE_DAQLab/MSXML/ActiveXML.h"
 Exclude = False
 Project Flags = 0
 Folder = "XML"
-Folder Id = 10
+Folder Id = 12
 
-[File 0049]
+[File 0053]
 File Type = "Function Panel"
-Res Id = 49
+Res Id = 53
 Path Is Rel = True
 Path Rel To = "CVI"
 Path Rel To Override = "CVI"
 Path Rel Path = "toolslib/custctrl/combobox.fp"
-Path Line0001 = "/c/program files (x86)/national instruments/cvi2013/toolslib/custctrl/combobox.f"
-Path Line0002 = "p"
+Path = "/c/program files/national instruments/cvi2013/toolslib/custctrl/combobox.fp"
 Exclude = False
 Project Flags = 0
 Folder = "Instrument Files"
-Folder Id = 11
+Folder Id = 13
 
-[File 0050]
+[File 0054]
 File Type = "Function Panel"
-Res Id = 50
+Res Id = 54
 Path Is Rel = True
 Path Rel To = "CVI"
 Path Rel To Override = "CVI Shared"
 Path Rel Path = "toolslib/custctrl/daqmxioctrl.fp"
-Path Line0001 = "/C/Program Files (x86)/National Instruments/Shared/CVI/toolslib/custctrl/daqmxio"
-Path Line0002 = "ctrl.fp"
+Path Line0001 = "/C/Program Files/National Instruments/Shared/CVI/toolslib/custctrl/daqmxioctrl.f"
+Path Line0002 = "p"
 Exclude = False
 Project Flags = 0
 Folder = "Instrument Files"
-Folder Id = 11
+Folder Id = 13
 
-[File 0051]
+[File 0055]
 File Type = "CSource"
-Res Id = 51
+Res Id = 55
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/TaskController.c"
@@ -705,11 +759,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Task Control"
-Folder Id = 13
+Folder Id = 15
 
-[File 0052]
+[File 0056]
 File Type = "Include"
-Res Id = 52
+Res Id = 56
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/TaskController.h"
@@ -717,11 +771,11 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/TaskController.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Task Control"
-Folder Id = 13
+Folder Id = 15
 
-[File 0053]
+[File 0057]
 File Type = "Include"
-Res Id = 53
+Res Id = 57
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/UI_TaskController.h"
@@ -729,11 +783,11 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Task Control"
-Folder Id = 13
+Folder Id = 15
 
-[File 0054]
+[File 0058]
 File Type = "User Interface Resource"
-Res Id = 54
+Res Id = 58
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/UI_TaskController.uir"
@@ -741,11 +795,11 @@ Path = "/d/ELE_DAQLab/Framework/Execution control/UI_TaskController.uir"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Task Control"
-Folder Id = 13
+Folder Id = 15
 
-[File 0055]
+[File 0059]
 File Type = "CSource"
-Res Id = 55
+Res Id = 59
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Virtual channels/VChannel.c"
@@ -754,11 +808,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Virtual Channels"
-Folder Id = 14
+Folder Id = 16
 
-[File 0056]
+[File 0060]
 File Type = "Include"
-Res Id = 56
+Res Id = 60
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Virtual channels/VChannel.h"
@@ -766,11 +820,11 @@ Path = "/d/ELE_DAQLab/Framework/Virtual channels/VChannel.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Virtual Channels"
-Folder Id = 14
+Folder Id = 16
 
-[File 0057]
+[File 0061]
 File Type = "CSource"
-Res Id = 57
+Res Id = 61
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Iterators/Iterator.c"
@@ -779,11 +833,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Iterators"
-Folder Id = 15
+Folder Id = 17
 
-[File 0058]
+[File 0062]
 File Type = "Include"
-Res Id = 58
+Res Id = 62
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Iterators/Iterator.h"
@@ -791,11 +845,11 @@ Path = "/d/ELE_DAQLab/Framework/Iterators/Iterator.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Iterators"
-Folder Id = 15
+Folder Id = 17
 
-[File 0059]
+[File 0063]
 File Type = "CSource"
-Res Id = 59
+Res Id = 63
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data packets/DataPacket.c"
@@ -804,11 +858,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Data Packets"
-Folder Id = 16
+Folder Id = 18
 
-[File 0060]
+[File 0064]
 File Type = "Include"
-Res Id = 60
+Res Id = 64
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data packets/DataPacket.h"
@@ -816,11 +870,11 @@ Path = "/d/ELE_DAQLab/Framework/Data packets/DataPacket.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Data Packets"
-Folder Id = 16
+Folder Id = 18
 
-[File 0061]
+[File 0065]
 File Type = "CSource"
-Res Id = 61
+Res Id = 65
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data types/DataTypes.c"
@@ -829,11 +883,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Data Types"
-Folder Id = 17
+Folder Id = 19
 
-[File 0062]
+[File 0066]
 File Type = "Include"
-Res Id = 62
+Res Id = 66
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data types/DataTypes.h"
@@ -841,11 +895,11 @@ Path = "/d/ELE_DAQLab/Framework/Data types/DataTypes.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Data Types"
-Folder Id = 17
+Folder Id = 19
 
-[File 0063]
+[File 0067]
 File Type = "CSource"
-Res Id = 63
+Res Id = 67
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/HW Triggering/HWTriggering.c"
@@ -854,11 +908,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/HW Triggering"
-Folder Id = 18
+Folder Id = 20
 
-[File 0064]
+[File 0068]
 File Type = "Include"
-Res Id = 64
+Res Id = 68
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/HW Triggering/HWTriggering.h"
@@ -866,11 +920,11 @@ Path = "/d/ELE_DAQLab/Framework/HW Triggering/HWTriggering.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/HW Triggering"
-Folder Id = 18
+Folder Id = 20
 
-[File 0065]
+[File 0069]
 File Type = "CSource"
-Res Id = 65
+Res Id = 69
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Utility/DAQLabUtility.c"
@@ -879,11 +933,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Utility"
-Folder Id = 19
+Folder Id = 21
 
-[File 0066]
+[File 0070]
 File Type = "Include"
-Res Id = 66
+Res Id = 70
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Utility/DAQLabUtility.h"
@@ -891,11 +945,11 @@ Path = "/d/ELE_DAQLab/Framework/Utility/DAQLabUtility.h"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Utility"
-Folder Id = 19
+Folder Id = 21
 
-[File 0067]
+[File 0071]
 File Type = "CSource"
-Res Id = 67
+Res Id = 71
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.c"
@@ -905,9 +959,9 @@ Compile Into Object File = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0068]
+[File 0072]
 File Type = "Include"
-Res Id = 68
+Res Id = 72
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.h"
@@ -916,9 +970,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0069]
+[File 0073]
 File Type = "Include"
-Res Id = 69
+Res Id = 73
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.h"
@@ -927,9 +981,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0070]
+[File 0074]
 File Type = "User Interface Resource"
-Res Id = 70
+Res Id = 74
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.uir"
@@ -998,7 +1052,7 @@ Numeric File Version = "1,0,0,0"
 Numeric Prod Version = "1,0,0,0"
 Comments = ""
 Comments Ex = ""
-Company Name = ""
+Company Name = "Vrije Universiteit Amsterdam"
 Company Name Ex = "%company"
 File Description = "DAQLab (Debug x86)"
 File Description Ex = "%application (%rel_dbg %arch)"
@@ -1006,7 +1060,7 @@ File Version = "1.0"
 File Version Ex = "%f1.%f2"
 Internal Name = "DAQLab"
 Internal Name Ex = "%basename"
-Legal Copyright = "Copyright ©  2015"
+Legal Copyright = "Copyright © Vrije Universiteit Amsterdam 2015"
 Legal Copyright Ex = "Copyright © %company %Y"
 Legal Trademarks = ""
 Legal Trademarks Ex = ""
@@ -1014,7 +1068,7 @@ Original Filename = "DAQLab.exe"
 Original Filename Ex = "%filename"
 Private Build = ""
 Private Build Ex = ""
-Product Name = " DAQLab"
+Product Name = "Vrije Universiteit Amsterdam DAQLab"
 Product Name Ex = "%company %application"
 Product Version = "1.0"
 Product Version Ex = "%p1.%p2"
@@ -1142,7 +1196,7 @@ Numeric File Version = "1,0,0,0"
 Numeric Prod Version = "1,0,0,0"
 Comments = ""
 Comments Ex = ""
-Company Name = ""
+Company Name = "Vrije Universiteit Amsterdam"
 Company Name Ex = "%company"
 File Description = "DAQLab (Debug x64)"
 File Description Ex = "%application (%rel_dbg %arch)"
@@ -1150,7 +1204,7 @@ File Version = "1.0"
 File Version Ex = "%f1.%f2"
 Internal Name = "DAQLab"
 Internal Name Ex = "%basename"
-Legal Copyright = "Copyright ©  2015"
+Legal Copyright = "Copyright © Vrije Universiteit Amsterdam 2015"
 Legal Copyright Ex = "Copyright © %company %Y"
 Legal Trademarks = ""
 Legal Trademarks Ex = ""
@@ -1158,7 +1212,7 @@ Original Filename = "DAQLab.exe"
 Original Filename Ex = "%filename"
 Private Build = ""
 Private Build Ex = ""
-Product Name = " DAQLab"
+Product Name = "Vrije Universiteit Amsterdam DAQLab"
 Product Name Ex = "%company %application"
 Product Version = "1.0"
 Product Version Ex = "%p1.%p2"

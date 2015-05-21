@@ -225,7 +225,7 @@ static DS_Channel_type* init_DS_Channel_type (DataStorage_type* ds, int panHndl,
 	if (!chan) return NULL;
 
 	chan->dsInstance	= ds;
-	chan->VChan			= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan,VChanDataTimeout, NULL, NULL);
+	chan->VChan			= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan,VChanDataTimeout, NULL);
 	chan->panHndl   	= panHndl;
 
 	// add new channel to data storage module list of channels
@@ -750,7 +750,6 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 {
 	
 	DataStorage_type*	ds					= GetTaskControlModuleData(taskControl);
-	FCallReturn_type*	fCallReturn			= NULL;
 	unsigned int		nSamples;
 	int					error;
 	DataPacket_type**	dataPackets			= NULL;

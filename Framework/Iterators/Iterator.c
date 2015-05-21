@@ -117,10 +117,15 @@ void RemoveFromParentIterator(Iterator_type* iterator)
 void discard_Iterator_type (Iterator_type** iteratorptr)
 {
 	Iterator_type* iterator=*iteratorptr;
+	size_t 				nObjects;
+	Iterator_type**		iterObjectPtr;
+	size_t 				i;
 	
 	if (!iterator) return;
 	if (iterator->name==NULL) return;
 	OKfree(iterator->name);
+	
+	
 	
 	nObjects 		= ListNumItems(iterator->iterObjects);   
 	for (i = 1; i <= nObjects; i++) {

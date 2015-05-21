@@ -333,8 +333,10 @@ int ReadBuffer(int bufsize)
 						memcpy(pmtdataptr, &Samplebuffer[swappedi*ndatapoints], totalbytes);
 					//end full block code	
 						// prepare waveform
-						nullChk( waveform 	= init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );  
-				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, (void**)&waveform, GetTaskControlCurrentIterDup(gtaskControl), (DiscardFptr_type) discard_Waveform_type));       
+						nullChk( waveform 	= init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );
+						Iterator_type* currentiter=GetTaskControlCurrentIter(gtaskControl);
+						TC_DS_Data_type* dsdata=GetIteratorDSdata(currentiter,WAVERANK);
+				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, (void**)&waveform,dsdata , (DiscardFptr_type) discard_Waveform_type));       
 					// send data packet with waveform
 						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
 				//	}

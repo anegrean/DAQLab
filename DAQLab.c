@@ -92,12 +92,12 @@ typedef struct {
 
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
-	{ MOD_LangLStep_NAME, initalloc_LangLStep, FALSE, 0},
+//	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+//	{ MOD_LangLStep_NAME, initalloc_LangLStep, FALSE, 0},
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
 	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
-//	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 },
+	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 },
 	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
 	
 };
@@ -3766,7 +3766,7 @@ static void IterateUITC	(TaskControl_type* taskControl, BOOL const* abortIterati
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
 	// iteration complete, update current iteration number
-	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)) + 1);
+	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)) + 1);
 	
 	TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL);
 }
@@ -3814,7 +3814,7 @@ static int DoneUITC  (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
 	// update iterations display
-	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
+	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
 	
 	return 0;
 }
@@ -3865,7 +3865,7 @@ static int StoppedUITC	(TaskControl_type* taskControl, BOOL const* abortFlag, ch
 	// undim Mode button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
 	// update iterations display
-	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
+	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
 	
 	return 0; 
 }

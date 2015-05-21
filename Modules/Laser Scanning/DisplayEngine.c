@@ -145,7 +145,7 @@ void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 	}
 	ListDispose(ROIlist);
 	//----------------------------------------------------------
-	
+//	discard_Image_type(&imageDisplay->imagetype);
 	//----------------------------------------------------------
 	// Restore callbacks
 	for (size_t i = 0; i < imageDisplay->nRestoreSettingsCBs; i++)

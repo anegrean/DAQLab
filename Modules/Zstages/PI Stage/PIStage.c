@@ -804,7 +804,7 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	Iterator_type*		currentiter 	= GetTaskControlCurrentIter(taskControl);
-	size_t 				iterindex		= GetCurrentIterationIndex(currentiter);
+	size_t 				iterindex		= GetCurrentIterIndex(currentiter);
 	int					error			= 0;
 	char*				errMsg			= NULL;
 	

@@ -39,9 +39,9 @@ typedef struct DataPacket 		DataPacket_type;
 
 	// Adds data to a data packet. Depending on the instance counter, calling ReleaseDataPacket repeatedly, the dscardPacketDataFptr is called to discard the provided data. 
 	// If data* has been allocated with malloc then for discardPacketDataFptr provide NULL. Otherwise provide the specific data type discard function.
-DataPacket_type* 		init_DataPacket_type 				(DLDataTypes dataType, void** ptrToData, Iterator_type* currentiter, DiscardFptr_type discardPacketDataFptr);
+DataPacket_type* 		init_DataPacket_type 				(DLDataTypes dataType, void** ptrToData, TC_DS_Data_type* dsdata, DiscardFptr_type discardPacketDataFptr);
 	// Discards a data packet.
-void					discard_DataPacket_type				(DataPacket_type** dataPacket);
+void					discard_DataPacket_type				(DataPacket_type** dataPacketPtr);
 	// Sets number of times ReleaseDataPacket must be called before the data contained in the data packet is discarded
 void					SetDataPacketCounter				(DataPacket_type* dataPacket, size_t count);
 	// Releases a data packet. If it is not needed anymore, it is discarded and dataPacket set to NULL.
@@ -49,9 +49,10 @@ void 					ReleaseDataPacket					(DataPacket_type** dataPacket);
 	// Returns a pointer to the data in the packet
 DLDataTypes				GetDataPacketDataType				(DataPacket_type* dataPacket);
 void**					GetDataPacketPtrToData				(DataPacket_type* dataPacket, DLDataTypes* dataType);
-	// Returns a pointer to the current iter info
-Iterator_type* 			GetDataPacketCurrentIter 			(DataPacket_type* dataPacket); 
-
+	// Returns a pointer to the data storage data
+TC_DS_Data_type* 		GetDataPacketDSData 				(DataPacket_type* dataPacket);
+// Returns a pointer to the data storage data
+void 			 		SetDataPacketDSData 				(DataPacket_type* dataPacket,TC_DS_Data_type* dsdata);
 
 #ifdef __cplusplus
     }

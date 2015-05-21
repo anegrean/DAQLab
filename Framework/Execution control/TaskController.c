@@ -304,7 +304,7 @@ void discard_TaskControl_type(TaskControl_type** taskController)
 	
 	//iteration info
 	iterator=(*taskController)->currentIter;
-	discard_Iterator_type (&iterator,TRUE,FALSE); 
+	discard_Iterator_type (&iterator); 
 
 	// child Task Controllers list
 	ListDispose((*taskController)->childTCs);
@@ -352,8 +352,15 @@ char* GetTaskControlStateName (TaskControl_type* taskControl)
 
 void SetTaskControlName (TaskControl_type* taskControl, char newName[])
 { 
+	Iterator_type* 	currentIter;
+	char* name;
+	
 	OKfree(taskControl->taskName);
 	taskControl->taskName = StrDup(newName);
+	currentIter=GetTaskControlCurrentIter(taskControl);
+	name=GetCurrentIterName(currentIter);
+	OKfree(name); 
+	SetCurrentIterName(currentIter,StrDup(newName)); 
 }
 
 TCStates	GetTaskControlState (TaskControl_type* taskControl)
@@ -363,7 +370,12 @@ TCStates	GetTaskControlState (TaskControl_type* taskControl)
 
 void SetTaskControlIterations (TaskControl_type* taskControl, size_t repeat)
 {
+	Iterator_type* 	currentIter; 
+	
 	taskControl->repeat = repeat;
+	currentIter=GetTaskControlCurrentIter(taskControl);
+	SetTotalIterations(currentIter,repeat);
+	
 }
 
 size_t GetTaskControlIterations	(TaskControl_type* taskControl)
@@ -400,13 +412,6 @@ void SetTaskControlCurrentIter (TaskControl_type* taskControl, Iterator_type* cu
 Iterator_type* GetTaskControlCurrentIter (TaskControl_type* taskControl)
 {
 	return taskControl->currentIter; 	
-}
-
-Iterator_type* GetTaskControlCurrentIterDup (TaskControl_type* taskControl)
-{
-	Iterator_type* dup = DupIterator(taskControl->currentIter);
-	
-	return dup; 	
 }
 
 void SetTaskControlMode	(TaskControl_type* taskControl, TaskMode_type mode)
@@ -888,7 +893,7 @@ static void ExecutionLogEntry (TaskControl_type* taskControl, EventPacket_type* 
 	// Iteration index
 	//---------------------------------------------------------------  
 	AppendString(&output, ",  ", -1);
-	Fmt(buf, "%s<(iteration: %d)", GetCurrentIterationIndex(taskControl->currentIter));
+	Fmt(buf, "%s<(iteration: %d)", GetCurrentIterIndex(taskControl->currentIter));
 	AppendString(&output, buf, -1);
 	
 	//---------------------------------------------------------------
@@ -1615,7 +1620,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 						
 						// reset iterations
-						SetCurrentIterationIndex(taskControl->currentIter, 0);
+						SetCurrentIterIndex(taskControl->currentIter, 0);
 						
 						ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
 						
@@ -1774,7 +1779,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 						
 						// reset iterations
-						SetCurrentIterationIndex(taskControl->currentIter,0);
+						SetCurrentIterIndex(taskControl->currentIter,0);
 						
 						
 						ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
@@ -2112,7 +2117,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 						
 						// reset iterations
-						SetCurrentIterationIndex(taskControl->currentIter,0);
+						SetCurrentIterIndex(taskControl->currentIter,0);
 						
 						ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
 						
@@ -2160,7 +2165,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 						
 						// reset iterations
-						SetCurrentIterationIndex(taskControl->currentIter,0);
+						SetCurrentIterIndex(taskControl->currentIter,0);
 						
 						ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
 					}
@@ -2227,7 +2232,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// The iterate event is self generated, when it occurs, all child TCs are in an initial or done state
 					// For a Finite TC for both repeat == 0 and repeat == 1 the TC will undergo one iteration, however when 
 					// repeat == 0, its iteration callback function will not be called.
-					size_t curriterindex = GetCurrentIterationIndex(taskControl->currentIter);
+					size_t curriterindex = GetCurrentIterIndex(taskControl->currentIter);
 					
 					if ( taskControl->mode == TASK_FINITE  &&  (curriterindex >= taskControl->repeat  ||  !taskControl->nIterationsFlag)  && curriterindex ) {			
 						//---------------------------------------------------------------------------------------------------------------- 	 
@@ -2262,7 +2267,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// If not first iteration, then wait given number of seconds before iterating    
 					//---------------------------------------------------------------------------------------------------------------
 					
-					if (GetCurrentIterationIndex(taskControl->currentIter) && taskControl->nIterationsFlag < 0)
+					if (GetCurrentIterIndex(taskControl->currentIter) && taskControl->nIterationsFlag < 0)
 						SyncWait(Timer(), taskControl->waitBetweenIterations);
 					
 					//---------------------------------------------------------------------------------------------------------------
@@ -2386,7 +2391,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 						} else 
 							// switch to IDLE or DONE state if finite task controller
-							if (GetCurrentIterationIndex(taskControl->currentIter) < taskControl->repeat) {
+							if (GetCurrentIterIndex(taskControl->currentIter) < taskControl->repeat) {
 								if (FunctionCall(taskControl, &eventpacket[i], TC_Callback_Stopped, NULL, &errMsg) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 									taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
@@ -2473,7 +2478,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------
 							// Increment iteration index
 							//---------------------------------------------------------------------------------------------------------------
-							SetCurrentIterationIndex(taskControl->currentIter, GetCurrentIterationIndex(taskControl->currentIter)+1);
+							SetCurrentIterIndex(taskControl->currentIter, GetCurrentIterIndex(taskControl->currentIter)+1);
 							if (taskControl->nIterationsFlag > 0)
 								taskControl->nIterationsFlag--;
 							
@@ -2617,7 +2622,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							} else 
 								// switch to IDLE or DONE state if finite task controller
 							
-								if ( GetCurrentIterationIndex(taskControl->currentIter) < taskControl->repeat) {
+								if ( GetCurrentIterIndex(taskControl->currentIter) < taskControl->repeat) {
 									if (FunctionCall(taskControl, &eventpacket[i], TC_Callback_Stopped, NULL, &errMsg) < 0) {
 										taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
 										taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
@@ -2700,7 +2705,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------
 							// Increment iteration index
 							//---------------------------------------------------------------------------------------------------------------
-							SetCurrentIterationIndex(taskControl->currentIter,GetCurrentIterationIndex(taskControl->currentIter)+1);
+							SetCurrentIterIndex(taskControl->currentIter,GetCurrentIterIndex(taskControl->currentIter)+1);
 							if (taskControl->nIterationsFlag > 0)
 								taskControl->nIterationsFlag--;
 							
@@ -2741,7 +2746,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						    //---------------------------------------------------------------------------------------------------------------
 							// Increment iteration index
 							//---------------------------------------------------------------------------------------------------------------
-							SetCurrentIterationIndex(taskControl->currentIter,GetCurrentIterationIndex(taskControl->currentIter)+1);
+							SetCurrentIterIndex(taskControl->currentIter,GetCurrentIterIndex(taskControl->currentIter)+1);
 							
 							if (taskControl->nIterationsFlag > 0)
 								taskControl->nIterationsFlag--;
@@ -3032,7 +3037,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					}
 						
 				    // reset iterations
-					SetCurrentIterationIndex(taskControl->currentIter,0);
+					SetCurrentIterIndex(taskControl->currentIter,0);
 					
 					// switch to INITIAL state
 					ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
@@ -3070,7 +3075,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 						
 						// reset iterations
-						SetCurrentIterationIndex(taskControl->currentIter,0);
+						SetCurrentIterIndex(taskControl->currentIter,0);
 						
 						ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
 						
@@ -3119,7 +3124,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 						
 						// reset iterations
-						SetCurrentIterationIndex(taskControl->currentIter,0);
+						SetCurrentIterIndex(taskControl->currentIter,0);
 						
 						ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
 					}
@@ -3214,7 +3219,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 						
 						// reset iterations
-						SetCurrentIterationIndex(taskControl->currentIter,0);
+						SetCurrentIterIndex(taskControl->currentIter,0);
 						
 						ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
 						
@@ -3261,7 +3266,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						}
 						
 						// reset iterations
-						SetCurrentIterationIndex(taskControl->currentIter,0);
+						SetCurrentIterIndex(taskControl->currentIter,0);
 						
 						ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
 					}

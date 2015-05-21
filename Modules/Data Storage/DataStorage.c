@@ -157,7 +157,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	ds->overwrite_files		= FALSE;
 	
 	// create Data Storage Task Controller
-	tc = init_TaskControl_type (instanceName, ds, DLGetCommonThreadPoolHndl(), ConfigureTC, UnConfigureTC, NULL, NULL,NULL , ResetTC,
+	tc = init_TaskControl_type (instanceName, ds, DLGetCommonThreadPoolHndl(), ConfigureTC, UnConfigureTC, NULL, NULL, ResetTC,
 								 DoneTC, StoppedTC, TaskTreeStateChange, NULL, NULL, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
@@ -416,8 +416,8 @@ char* CreateFullIterName(Iterator_type*		currentiter)
 	
 	parentiter = GetIteratorParent(currentiter);
 	if (parentiter==NULL) return NULL;  //no parent
-	tcname=GetCurrentIterationName(parentiter);
-	iteridx=GetCurrentIterationIndex(parentiter);
+	tcname=GetCurrentIterName(parentiter);
+	iteridx=GetCurrentIterIndex(parentiter);
 	fullname=malloc(MAXBASEFILEPATH*sizeof(char));  
 	Fmt (fullname, "%s<%s[w3]#%i",tcname,iteridx); 
 	OKfree(tcname);
@@ -427,8 +427,8 @@ char* CreateFullIterName(Iterator_type*		currentiter)
 		if (parentiter==NULL) {
 			return fullname;  //no parent, return current name
 		}
-		tcname=GetCurrentIterationName(parentiter);
-		iteridx=GetCurrentIterationIndex(parentiter);
+		tcname=GetCurrentIterName(parentiter);
+		iteridx=GetCurrentIterIndex(parentiter);
 		name=malloc(MAXBASEFILEPATH*sizeof(char));
 		Fmt (name, "%s<%s[w3]#%i",tcname,iteridx);    		
 		AddStringPrefix (&fullname,"/",-1);    
@@ -772,7 +772,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 	DS_Channel_type*	chan; 
 	DS_Channel_type**	chanPtr; 
 	int 				numitems;
-	Iterator_type*		currentiter;
+	TC_DS_Data_type*	dsdata;
 	char*				fullitername;
 	char*				channame;	
 	Waveform_type*		waveform;
@@ -806,98 +806,99 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 		}
 		else{
 			dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType); 
-			currentiter=GetDataPacketCurrentIter(dataPackets[i]);
+			dsdata=GetDataPacketDSData(dataPackets[i]);
 			switch (dataPacketType) {
-				case DL_Waveform_Char:
-					waveform=*(Waveform_type**)dataPacketDataPtr;
-					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_Char) ; 
-					if (error<0) {
-						FmtIOErrType fmterr=GetFmtIOError();
-						AppendString(&errMsg, sinkVChanName, -1); 
-						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					}	
-				break;	
-				case DL_Waveform_UChar:
-					waveform=*(Waveform_type**)dataPacketDataPtr;
-					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_UChar) ;  
-					if (error<0) {
-						FmtIOErrType fmterr=GetFmtIOError();
-						AppendString(&errMsg, sinkVChanName, -1); 
-						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					}	
-				break;	
-				case DL_Waveform_Short:
-					waveform=*(Waveform_type**)dataPacketDataPtr;
-					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_Short) ;
-					if (error<0) {
-						FmtIOErrType fmterr=GetFmtIOError();
-						AppendString(&errMsg, sinkVChanName, -1); 
-						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					}	
-				break;
-				case DL_Waveform_UShort:
-					waveform=*(Waveform_type**)dataPacketDataPtr;
-					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_UShort) ; 
-					if (error<0) {
-						FmtIOErrType fmterr=GetFmtIOError();
-						AppendString(&errMsg, sinkVChanName, -1); 
-						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					}	
-				break;
-				case DL_Waveform_UInt:
-					waveform=*(Waveform_type**)dataPacketDataPtr;
-					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_UInt) ;  
-					if (error<0) {
-						FmtIOErrType fmterr=GetFmtIOError();
-						AppendString(&errMsg, sinkVChanName, -1); 
-						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					}	
-				break;
-				case DL_Waveform_Int:
-					waveform=*(Waveform_type**)dataPacketDataPtr;
-					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_Int) ;    
-					if (error<0) {
-						FmtIOErrType fmterr=GetFmtIOError();
-						AppendString(&errMsg, sinkVChanName, -1); 
-						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					}	
-				break;
-				case DL_Waveform_Float  :
-					waveform=*(Waveform_type**)dataPacketDataPtr;
-					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_Float) ;
-					if (error<0) {
-						FmtIOErrType fmterr=GetFmtIOError();
-						AppendString(&errMsg, sinkVChanName, -1); 
-						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					}	
-				break;
-				case DL_Waveform_Double  :
-					waveform=*(Waveform_type**)dataPacketDataPtr;
-					error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,currentiter,waveform,DL_Double) ;
-					if (error<0) {
-						FmtIOErrType fmterr=GetFmtIOError();
-						AppendString(&errMsg, sinkVChanName, -1); 
-						AppendString(&errMsg, " failed. Reason: file write failed", -1); 
-					}	
-				break;
-				case DL_Image:
-					//saving tiff files:
-					//get the image
-				/*	receivedimage=*(Image_type**) dataPacketDataPtr;
-					image=GetImageImage(receivedimage);
-					rawfilename=malloc(MAXCHAR*sizeof(char)); 
-					fullitername=CreateFullIterName(currentiter);
-					free(rawfilename);
-					free(fullitername);   */
+					case DL_Waveform_Char:
+						waveform=*(Waveform_type**)dataPacketDataPtr;
 				
-				//saving into HDF5;
-					receivedimage=*(Image_type**) dataPacketDataPtr;
-					error=WriteHDF5Image(ds->hdf5datafile,sourceVChanName,currentiter,receivedimage) ;   
+						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_Char) ; 
+						if (error<0) {
+							FmtIOErrType fmterr=GetFmtIOError();
+							AppendString(&errMsg, sinkVChanName, -1); 
+							AppendString(&errMsg, " failed. Reason: file write failed", -1); 
+						}	
+					break;	
+					case DL_Waveform_UChar:
+						waveform=*(Waveform_type**)dataPacketDataPtr;
+						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_UChar) ;  
+						if (error<0) {
+							FmtIOErrType fmterr=GetFmtIOError();
+							AppendString(&errMsg, sinkVChanName, -1); 
+							AppendString(&errMsg, " failed. Reason: file write failed", -1); 
+						}	
+					break;	
+					case DL_Waveform_Short:
+						waveform=*(Waveform_type**)dataPacketDataPtr;
+						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_Short) ;
+						if (error<0) {
+							FmtIOErrType fmterr=GetFmtIOError();
+							AppendString(&errMsg, sinkVChanName, -1); 
+							AppendString(&errMsg, " failed. Reason: file write failed", -1); 
+						}	
+					break;
+					case DL_Waveform_UShort:
+						waveform=*(Waveform_type**)dataPacketDataPtr;
+						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_UShort) ; 
+						if (error<0) {
+							FmtIOErrType fmterr=GetFmtIOError();
+							AppendString(&errMsg, sinkVChanName, -1); 
+							AppendString(&errMsg, " failed. Reason: file write failed", -1); 
+						}	
+					break;
+					case DL_Waveform_UInt:
+						waveform=*(Waveform_type**)dataPacketDataPtr;
+						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_UInt) ;  
+						if (error<0) {
+							FmtIOErrType fmterr=GetFmtIOError();
+							AppendString(&errMsg, sinkVChanName, -1); 
+							AppendString(&errMsg, " failed. Reason: file write failed", -1); 
+						}	
+					break;
+					case DL_Waveform_Int:
+						waveform=*(Waveform_type**)dataPacketDataPtr;
+						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_Int) ;    
+						if (error<0) {
+							FmtIOErrType fmterr=GetFmtIOError();
+							AppendString(&errMsg, sinkVChanName, -1); 
+							AppendString(&errMsg, " failed. Reason: file write failed", -1); 
+						}	
+					break;
+					case DL_Waveform_Float  :
+						waveform=*(Waveform_type**)dataPacketDataPtr;
+						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_Float) ;
+						if (error<0) {
+							FmtIOErrType fmterr=GetFmtIOError();
+							AppendString(&errMsg, sinkVChanName, -1); 
+							AppendString(&errMsg, " failed. Reason: file write failed", -1); 
+						}	
+					break;
+					case DL_Waveform_Double  :
+						waveform=*(Waveform_type**)dataPacketDataPtr;
+						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_Double) ;
+						if (error<0) {
+							FmtIOErrType fmterr=GetFmtIOError();
+							AppendString(&errMsg, sinkVChanName, -1); 
+							AppendString(&errMsg, " failed. Reason: file write failed", -1); 
+						}	
+					break;
+					case DL_Image:
+						//saving tiff files:
+						//get the image
+						/*	receivedimage=*(Image_type**) dataPacketDataPtr;
+						image=GetImageImage(receivedimage);
+						rawfilename=malloc(MAXCHAR*sizeof(char)); 
+						fullitername=CreateFullIterName(currentiter);
+						free(rawfilename);
+						free(fullitername);   */
+				
+					//saving into HDF5;
+						receivedimage=*(Image_type**) dataPacketDataPtr;
+						error=WriteHDF5Image(ds->hdf5datafile,sourceVChanName,dsdata,receivedimage) ;   
 					
-				break;
-				default:
+					break;
+					default:
 					//shouldn't happen!
-				break;
+					break;
 			}
 			ReleaseDataPacket(&dataPackets[i]);
 		}

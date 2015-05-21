@@ -26,7 +26,7 @@
 // Constants
 
 #define MOD_DataStore_NAME 		"Data Storage"
-		
+	
 
 
 
@@ -36,6 +36,7 @@
 typedef struct DatStore		DataStorage_type;
 typedef struct DS_Channel	DS_Channel_type;
 
+
 struct DS_Channel{
 	DataStorage_type*	dsInstance;	    // reference to device that owns the channel
 	SinkVChan_type*		VChan;			// virtual channel assigned to this module
@@ -44,6 +45,9 @@ struct DS_Channel{
 	// METHODS
 	void (*Discard) 	(DS_Channel_type** channel);
 } ;
+
+
+
 							    
 
 //==============================================================================

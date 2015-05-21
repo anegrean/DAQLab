@@ -229,7 +229,6 @@ TCExecutionModes		GetTaskControlExecutionMode			(TaskControl_type* taskControl);
 // Task Controller Current Iteration    
 void					SetTaskControlCurrentIter 			(TaskControl_type* taskControl, Iterator_type* currentIter);
 Iterator_type* 			GetTaskControlCurrentIter 			(TaskControl_type* taskControl);
-Iterator_type* 			GetTaskControlCurrentIterDup		(TaskControl_type* taskControl);
 
 	// mode = TASK_FINITE by default
 void					SetTaskControlMode					(TaskControl_type* taskControl, TaskMode_type mode);

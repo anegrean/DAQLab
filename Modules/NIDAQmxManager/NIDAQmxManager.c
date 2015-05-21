@@ -11537,7 +11537,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	uInt32				nBufferSamples;
 	uInt32				i, j, k;
 	
-	Iterator_type* 		currentiter				= GetTaskControlCurrentIterDup(dev->taskController);
+	Iterator_type* 		currentiter				= GetTaskControlCurrentIter(dev->taskController);
 	
 	
 	//----------------------
@@ -11631,7 +11631,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			
 			// prepare data packet
 			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt8) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, (void**) &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, (void**) &waveform,  NULL, (DiscardFptr_type)discard_Waveform_type) );
 			break;
 		
 		
@@ -11650,6 +11650,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	// send data packet with waveform
 	//-------------------------------
 	
+	SetDataPacketDSData(dataPacket,GetIteratorDSdata(currentiter,WAVERANK));
 	errChk( SendDataPacket(AIChSet->srcVChan, &dataPacket, 0, &errMsg) );
 	
 	return 0;
@@ -14395,7 +14396,7 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	
 	
 	// update iteration display
-	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
+	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
 	
 	//----------------------------------------
 	// Launch and count active tasks 
@@ -14482,7 +14483,7 @@ static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** 
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	
 	// update iteration display
-	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations,GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
+	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations,GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
 	
 	return 0;
 }
@@ -14494,7 +14495,7 @@ static int StoppedTC (TaskControl_type* taskControl,  BOOL const* abortFlag, cha
 	Dev_type*	dev		= GetTaskControlModuleData(taskControl);
 	
 	// update iteration display
-	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
+	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
 	
 	return 0;
 	

@@ -49,8 +49,20 @@ struct IteratorData {
 //	size_t					totalIter;				// Total number of iterations
 };
 
+typedef struct OffsetData		OffsetData_type;  
+
+struct OffsetData {
+	hid_t					dataset_id;				// dataset id.  
+	hsize_t					offset[MAXRANK]; 		// 0-based iteration index used to iterate over iterObjects
+
+};
+
+
+
 //==============================================================================
 // Static global variables
+//test
+ListType 	  offsetlist;       
 
 //==============================================================================
 // Static functions
@@ -420,57 +432,12 @@ HDF5Error:
 
 
 
-herr_t CreateDataSet(hid_t file_id,char* dataset_name)
-{
-    int       	dataset_id;
-	int			dataspace_id;  /* identifiers */
-    hsize_t   	dims[2];
-    herr_t      status=0;
-	hid_t 		type_id=0;
-	int attr_data;
-	float attr_float;
-	char* str_data="Teststring";
-   
-   
- /* Create the data space for the dataset. */
-  	dims[0] = 4; 
-  	dims[1] = 6; 
-   dataspace_id = H5Screate_simple(2, dims, NULL);
-
-   /* Create the dataset. */
-   type_id=H5T_STD_I32BE;
-   
-   dataset_id = H5Dcreate2(file_id, dataset_name, type_id , dataspace_id,   	   
-                          H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-   if (dataset_id<0) return -1;
-    //test
-   attr_data=21 ;
-   attr_float=1.12354; 
-   
-   statChk(CreateIntAttr(dataset_id,"Int_attr", attr_data)); 
-   statChk(CreateUShortAttr(dataset_id,"Ushort_attr", attr_data)); 
-   statChk(CreateFloatAttr(dataset_id,"Float_attr", attr_float)); 
-   statChk(CreateStringAttr(dataset_id,"Test_attr", str_data ));
-	
-   //statChk(writeattribute(dataset_id,"Units",H5T_STD_I32BE,&attr_data)); 
-   /* End access to the dataset and release resources used by it. */
-   statChk(H5Dclose(dataset_id));
-   
-   /* Terminate access to the data space. */ 
-   statChk(H5Sclose(dataspace_id));
-   return status;
-   
-HDF5Error:
-   
-   return status;
-}
-
-
 int CreateHDF5file(char *filename,char* dataset_name) 
    {
 					 
       hid_t       file_id;   /* file identifier */
       herr_t      status=0;
+	  
 	  
       
 
@@ -478,9 +445,10 @@ int CreateHDF5file(char *filename,char* dataset_name)
       file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 	  if(file_id<0) return -1 ;
 	  
-	  //CreateRootGroup(file_id,"Data");
-	  
-	  //statChk(CreateDataSet(file_id,dataset_name));
+	  // need to keep track of the write offset for the current iteration for each dataset
+	  // create a list here
+	  ListDispose (offsetlist);   						//dispose old list
+	  offsetlist=ListCreate(IMAGERANK*sizeof(hsize_t));
 	  
       /* Terminate access to the file. */
       statChk(H5Fclose(file_id)); 
@@ -548,8 +516,8 @@ ListType ParseIterator(Iterator_type*		currentiter)
 	parentiter = GetIteratorParent(currentiter);
 	if (parentiter==NULL) return 0;  //no parent
 	newelement=malloc(sizeof(IteratorData_type));
-	newelement->name=GetCurrentIterationName(parentiter); 				  
-	newelement->currentIterIdx=GetCurrentIterationIndex(parentiter);
+	newelement->name=GetCurrentIterName(parentiter); 				  
+	newelement->currentIterIdx=GetCurrentIterIndex(parentiter);
 	newelement->stackdata=GetIteratorStackData(parentiter);  
 	ListInsertItem(parsediter,&newelement ,FRONT_OF_LIST);
 	while (parentiter!=NULL) {  
@@ -559,8 +527,8 @@ ListType ParseIterator(Iterator_type*		currentiter)
 			return parsediter;  //no parent, return current name
 		}
 		newelement=malloc(sizeof(IteratorData_type));
-		newelement->name=GetCurrentIterationName(parentiter); 				  
-		newelement->currentIterIdx=GetCurrentIterationIndex(parentiter);
+		newelement->name=GetCurrentIterName(parentiter); 				  
+		newelement->currentIterIdx=GetCurrentIterIndex(parentiter);
 		newelement->stackdata=GetIteratorStackData(parentiter);  
 		ListInsertItem(parsediter,&newelement ,FRONT_OF_LIST);
 	}
@@ -615,9 +583,114 @@ Error:
 	 return error;
 }
 
-					   
+
+
+
+int CreateHDF5Group(char* filename,TC_DS_Data_type* dsdata,hid_t* file_id,hid_t* groupid)
+{
+   	herr_t      			status=0; 
+	hid_t				    parentgroup_id;
+	hid_t* 					group_id 		= NULL;
+	char**					groupname		= NULL; 
+	char* 					pch;
+	int groupdepth =0;
+	int i=0;
+	
+   	/* Open an existing file. */
+   	*file_id = H5Fopen(filename, H5F_ACC_RDWR, H5P_DEFAULT);
+   	if (*file_id<0) {
+	   return -1; 
+   	}
+	groupname=malloc(MAXITERDEPTH*sizeof(char*));
+	
+  	pch = strtok (GetDSdataGroupname(dsdata),"/");
+  	while (pch != NULL) {
+    	groupname[groupdepth]=StrDup(pch);
+		groupdepth++;
+    	pch = strtok (NULL, "/");
+  	}
+    group_id=malloc((groupdepth+1)*sizeof(hid_t));
+   	//create groups if necessary
+   	for(i=0;i<groupdepth;i++){
+	    group_id[i]=0;
+   	}
+    
+    group_id[0]=*file_id;
+    for(i=0;i<groupdepth;i++){
+	   //datasetname shouldn't have slashes in it
+   	   groupname[i]=RemoveSlashes(groupname[i]);
+	   //open group if it exists
+	   group_id[i+1]=H5Gopen2(group_id[i], groupname[i], H5P_DEFAULT );
+	   if (group_id[i+1]<0) {
+		   //create group if it didn't exist (reply is negative)
+		   
+	   		group_id[i+1] = H5Gcreate2(group_id[i], groupname[i], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+	   		if (group_id[i+1]<0) {
+		   		return -1; 
+	   		}
+			else *groupid=group_id[i+1]; 
+	   }
+	   else *groupid=group_id[i+1]; 
+	   
+   }
+   
+   
+   /* Close all group ids except the last one */
+   for(i=0;i<groupdepth-1;i++){
+   		statChk(H5Gclose (group_id[i+1]));
+		OKfree(groupname[i]);
+   }
+   OKfree(groupname[groupdepth-1]); 
+   OKfree(groupname);
+   OKfree(group_id);
+   
+   return status;
+   
+HDF5Error:
+    /* Close the file. */
+   status=H5Fclose(file_id);
+   OKfree(groupname);
+   OKfree(group_id);  
+   
+   return status;
+}
+
+
+hsize_t* GetOffset(hid_t dataset_id)
+{
+	hsize_t* offset				 = NULL;
+	int numitems				 = ListNumItems(offsetlist);
+	OffsetData_type** offsetdata = NULL;
+	int i;
+	
+	for (i=0;i<numitems;i++){
+		offsetdata=ListGetPtrToItem(offsetlist,i);
+		if ((*offsetdata)->dataset_id==dataset_id){
+			return (*offsetdata)->offset;
+		}
+	}
+	
+	return offset;	
+}
+
+void  SetOffset(hid_t dataset_id, hsize_t* offset)
+{
+	int numitems				 = ListNumItems(offsetlist);
+	OffsetData_type** offsetdata = NULL;
+	int i;
+	
+	for (i=0;i<numitems;i++){
+		offsetdata=ListGetPtrToItem(offsetlist,i);
+		if ((*offsetdata)->dataset_id==dataset_id){
+			(*offsetdata)->offset[0]=offset[0];
+			(*offsetdata)->offset[1]=offset[1];
+		}
+	}
+}
+
+
 										   
-int WriteHDF5Data(char *filename,char* dataset_name,Iterator_type*	currentiter,Waveform_type* waveform,DLDataTypes datatype) {
+int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Waveform_type* waveform,DLDataTypes datatype) {
 
    hid_t       			file_id;
    hid_t				dataspace_id;    
@@ -625,72 +698,59 @@ int WriteHDF5Data(char *filename,char* dataset_name,Iterator_type*	currentiter,W
    herr_t      			status=0;
    int 					nElem;	
    void* 				dset_data				= *(void**)GetWaveformPtrToData(waveform, &nElem);   
-   hsize_t      		dims[1]					= {nElem};
-   hsize_t      		maxdims[1] 				= {H5S_UNLIMITED};
-   hid_t				group_id[MAXITERDEPTH];
+   
+   hid_t				group_id;
    ListType				iterset;
    size_t				i;
    int 					iterdepth;
    IteratorData_type** 	iterdata;
    hid_t       			cparms; 
-   char**				groupname				= NULL;
+   char*				groupname				= NULL;
    hid_t 				mem_type_id 			= 0;
    hid_t 				type_id					= 0;
    hid_t        		filespace;
    hid_t				memspace;
-   hsize_t				dimsr[2];
-   hsize_t      		size[2];
-   hsize_t      		offset[2];
+   
+   BOOL					are_equal				= TRUE; 
    BOOL					stackdata				= FALSE;
    hid_t				datasetindex			= 0;
    
+    //test
+   unsigned int			datarank				= GetDSDataRank(dsdata);	 //data rank, 1 for waveforms, 2 for images
    
-   /* Open an existing file. */
-   file_id = H5Fopen(filename, H5F_ACC_RDWR, H5P_DEFAULT);
-   if (file_id<0) {
-	   return -1; 
+   
+   unsigned int 		indicesrank				= GetDSDataSetRank(dsdata);  //data rank determined by the experiment, equals number of indices
+   unsigned int 		rank					= indicesrank+datarank; 
+   
+   hsize_t*				datadims 				= malloc(datarank*sizeof(hsize_t)); 
+   hsize_t*				dims 				    = malloc(rank*sizeof(hsize_t));
+   hsize_t*      		maxdims 			    = malloc(rank*sizeof(hsize_t));
+   hsize_t*				dimsr 					= malloc(rank*sizeof(hsize_t));
+   unsigned int*		indices					= GetDSdataIterIndices(dsdata);   
+   hsize_t* 			offset					= malloc(rank*sizeof(hsize_t)); 
+   hsize_t*      		size					= malloc(rank*sizeof(hsize_t));
+  // hsize_t*      		test 			        = malloc(rank*sizeof(hsize_t)); 
+   OffsetData_type*		datasetdata				= NULL;
+   hsize_t*				dataoffset;
+  
+ 
+   for(i=0;i<rank;i++){
+	  dims[i]=1;
+	  maxdims[i]=H5S_UNLIMITED;
+//	  test[i]=indices[i];
    }
    
-   //parse iterator,
-   iterset=ParseIterator(currentiter);
-   iterdepth=ListNumItems(iterset);
-   groupname=malloc(iterdepth*sizeof(char*));
-   //create groups if necessary
-   for(i=0;i<MAXITERDEPTH;i++){
-	    group_id[i]=0;
-   }
-   group_id[0]=file_id;
-   for(i=1;i<=iterdepth;i++){
-	   
-	   iterdata = ListGetPtrToItem(iterset, i);   
-	   groupname[i-1]=malloc(MAXCHAR*sizeof(char));
-	   datasetindex=(*iterdata)->currentIterIdx+1; 
-	    //create numbered groups only if stacked is zero
-	   if(!(*iterdata)->stackdata) {
-		   Fmt(groupname[i-1],"%s<%s#%i",(*iterdata)->name,(*iterdata)->currentIterIdx);
-	   }
-	   else {
-		   Fmt(groupname[i-1],"%s<%s",(*iterdata)->name); 
-		   stackdata=TRUE;
-	   }
-	   //datasetname shouldn't have slashes in it
-   	   groupname[i-1]=RemoveSlashes(groupname[i-1]);
-	   //open group if it exists
-	   group_id[i]=H5Gopen2(group_id[i-1], groupname[i-1], H5P_DEFAULT );
-	   if (group_id[i]<0) {
-		   //create group
-	   		group_id[i] = H5Gcreate2(group_id[i-1], groupname[i-1], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	   		if (group_id[i]<0) {
-		   		return -1; 
-	   		}
-	   }
-   	   
-   }
-   discardParsed(iterset);
+   
+   dims[datarank-1]=nElem;   //width
+   //test
+   datadims[0]=nElem;
+   //opens the file and the group, 
+   //creates one if necessary
+   statChk(CreateHDF5Group(filename,dsdata,&file_id,&group_id));
    
    /* Modify dataset creation properties, i.e. enable chunking  */
    cparms = H5Pcreate (H5P_DATASET_CREATE);
-   statChk(H5Pset_chunk ( cparms, 2, dims));
+   statChk(H5Pset_chunk ( cparms, rank, dims));
   
    //datatype switch
    switch (datatype){
@@ -737,20 +797,35 @@ int WriteHDF5Data(char *filename,char* dataset_name,Iterator_type*	currentiter,W
    }
    
    /* Open an existing or new dataset. */
-   dataspace_id = H5Screate_simple(2, dims, maxdims);
+   dataspace_id = H5Screate_simple(rank, dims, maxdims);
+   if (dataspace_id<0){
+	   return -1;
+   }
   
    //datasetname shouldn't have slashes in it
    dataset_name=RemoveSlashes(dataset_name);
    //open the dataset if it exists
-   dataset_id=H5Dopen2(group_id[iterdepth], dataset_name, H5P_DEFAULT );
+   dataset_id=H5Dopen2(group_id, dataset_name, H5P_DEFAULT );
    if (dataset_id<0) {
 	    //dataset doesn't exist; create one
-   		dataset_id = H5Dcreate2(group_id[iterdepth], dataset_name,type_id, dataspace_id,H5P_DEFAULT, cparms,H5P_DEFAULT);
+   		dataset_id = H5Dcreate2(group_id, dataset_name,type_id, dataspace_id,H5P_DEFAULT, cparms,H5P_DEFAULT);
    		if (dataset_id<0) {
 	   		return -1;
    		}
+		//create new entry in offsetlist
+		datasetdata=malloc(sizeof(struct OffsetData));
+		datasetdata->dataset_id=dataset_id;
+		for (i=0;i<datarank;i++){ 
+			datasetdata->offset[i]=datadims[i];	   //first data written
+		}
+		ListInsertItem(offsetlist, &datasetdata, END_OF_LIST);
+
+		
+		
 		/* Write the dataset. */
    		statChk(H5Dwrite(dataset_id, mem_type_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, dset_data));
+		
+		
    		//add attributes to dataset
    		statChk(AddWaveformAttributes(dataset_id,waveform));
    }
@@ -759,59 +834,102 @@ int WriteHDF5Data(char *filename,char* dataset_name,Iterator_type*	currentiter,W
 	   //get the size of the dataset
 	   	filespace = H5Dget_space (dataset_id);
     	statChk(H5Sget_simple_extent_dims (filespace, dimsr, NULL));
-		//check if saved size equals nr of iterations 
-		//if not, raise dim
-		if (dimsr[0]==datasetindex){
+		//check if saved size equals the indices set
+		//if so, add data to current set
+		//copy read dims into size and offset
+		
+		//workaround
+		dataoffset=GetOffset(dataset_id);
+		
+	
+		for (i=0;i<indicesrank;i++){
+			size[datarank+i]  = indices[i]+1;      //adjust size to indices   /indices start at zero; dimsr base is  one          
+			if (size[datarank+i]!=dimsr[datarank+i]) {  
+				are_equal= FALSE;  
+			}
+		}
+		if (are_equal){
 			//just add to current set
-    		size[0] = dimsr[0];
-    		size[1] = dimsr[1]+ dims[1];
+			for (i=0;i<indicesrank;i++){       
+			//	size[datarank+i]=indices[i]+1;								//already checked, are equal
+				offset[datarank+i]= size[datarank+i]-dims[datarank+i]; 		//adjust offset for multidimensional data
+			
+			}
+			for (i=0;i<datarank;i++){ 
+    			if (dataoffset[i]+ dims[i] >dimsr[i]) {
+					size[i]   = dataoffset[i]+ dims[i];	   //adjust dataset size for added data
+				}
+				else size[i]=dimsr[i];
+				offset[i] = dataoffset[i];
+				dataoffset[i]+=datadims[i];
+			}
+    		statChk(H5Dset_extent (dataset_id, size));
+			
+    		// Select a hyperslab in extended portion of dataset  //
+    		filespace = H5Dget_space (dataset_id);
+    	  
+		}
+		else {  
+			//create a larger dataset and put data there
+			for (i=0;i<indicesrank;i++){       
+				size[datarank+i]=indices[i]+1;
+				offset[datarank+i]= size[datarank+i]-dims[datarank+i];    	  
+			}
+			for (i=0;i<datarank;i++){
+				size[i]   = dimsr[i];		  //size of data equals previous data
+				offset[i] = 0;				  //new iteration, offset from beginning
+				dataoffset[i]=datadims[i];    //set data offset 
+			}
     		statChk(H5Dset_extent (dataset_id, size));
 
-    		/* Select a hyperslab in extended portion of dataset  */
+    		// Select a hyperslab in extended portion of dataset  //
     		filespace = H5Dget_space (dataset_id);
-    		offset[0] = dimsr[0];
-    		offset[1] = dimsr[1];
+    		
 		}
-		else {
-			//raise dim
-			size[0] = dimsr[0]+1;
-    		size[1] = dimsr[1];
-    		statChk(H5Dset_extent (dataset_id, size));
-
-    		/* Select a hyperslab in extended portion of dataset  */
-    		filespace = H5Dget_space (dataset_id);
-    		offset[0] = dimsr[0]; 
-    		offset[1] = dimsr[1]; 
-		}
+		
     	statChk(H5Sselect_hyperslab (filespace, H5S_SELECT_SET, offset, NULL,dims, NULL));  
 
     	/* Define memory space */
-   		memspace = H5Screate_simple (2, dims, NULL); 
+   		memspace = H5Screate_simple (rank, dims, NULL); 
 
     	/* Write the data to the extended portion of dataset  */
     	statChk(H5Dwrite (dataset_id, mem_type_id, memspace, filespace,H5P_DEFAULT, dset_data));
+		
+		//workaround
+		SetOffset(dataset_id,dataoffset); 
    }
    
   
    /* Close the dataset. */
    statChk(H5Dclose(dataset_id));
    
-   /* Close all group ids */
-   for(i=1;i<=iterdepth;i++){
-   		statChk(H5Gclose (group_id[i]));
-		free(groupname[i-1]);
-   }
-   
-   free(groupname);
+   /* Close the group ids */
+   statChk(H5Gclose (group_id));
+   //free(groupname);
    
     /* Close the dataspace. */
    statChk(H5Sclose(dataspace_id));
    /* Close the file. */
    statChk(H5Fclose(file_id));
    
+   OKfree(dims);
+   OKfree(maxdims);
+   OKfree(dimsr);
+   OKfree(indices);
+   OKfree(offset);
+   OKfree(size);
+   
    return status;
    
 HDF5Error:
+   
+   OKfree(dims);
+   OKfree(maxdims);
+   OKfree(dimsr);
+   OKfree(indices);
+   OKfree(offset);
+   OKfree(size);
+   
    return status;
 }
 
@@ -853,11 +971,11 @@ Error:
 	 return error;
 }	
 
-int WriteHDF5Image(char *filename,char* dataset_name,Iterator_type*	currentiter,Image_type*	receivedimage) 
+int WriteHDF5Image(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Image_type*	receivedimage) 
 { 
 	int   				status        =0;
 	hid_t 				file_id;
-	hid_t				group_id[MAXITERDEPTH];
+	hid_t				group_id;
 	char**				groupname				= NULL; 
 	ListType			iterset;
     size_t				i;
@@ -884,51 +1002,10 @@ int WriteHDF5Image(char *filename,char* dataset_name,Iterator_type*	currentiter,
     hsize_t      		maxstackdims[3] 		= {H5S_UNLIMITED,H5S_UNLIMITED,H5S_UNLIMITED};
 	BOOL				stackdata				= FALSE;
 	
-	/* Open an existing file. */
-   file_id = H5Fopen(filename, H5F_ACC_RDWR, H5P_DEFAULT);
-   if (file_id<0) {
-	   return -1; 
-   }
-   
-   //parse iterator,
-   iterset=ParseIterator(currentiter);
-   iterdepth=ListNumItems(iterset);
-   groupname=malloc(iterdepth*sizeof(char*));
-   //create groups if necessary
-   for(i=0;i<MAXITERDEPTH;i++){
-	    group_id[i]=0;
-   }
-  
-   group_id[0]=file_id;
-   for(i=1;i<=iterdepth;i++){
-	   iterdata = ListGetPtrToItem(iterset, i);   
-	   groupname[i-1]=malloc(MAXCHAR*sizeof(char));
-	   numimages=(*iterdata)->currentIterIdx+1;   
-	    //create numbered groups only if stacked is zero
-	   if(!(*iterdata)->stackdata) {
-		   Fmt(groupname[i-1],"%s<%s#%i",(*iterdata)->name,(*iterdata)->currentIterIdx);
-	   }
-	   else {
-		   Fmt(groupname[i-1],"%s<%s",(*iterdata)->name); 
-		   stackdata=TRUE;
-	   }
-	   //datasetname shouldn't have slashes in it
-   	   groupname[i-1]=RemoveSlashes(groupname[i-1]);
-	   //open group if it exists
-	   group_id[i]=H5Gopen2(group_id[i-1], groupname[i-1], H5P_DEFAULT );
-	   if (group_id[i]<0) {
-		   //create group if it didn't exist (reply is negative)
-		   
-	   		group_id[i] = H5Gcreate2(group_id[i-1], groupname[i-1], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	   		if (group_id[i]<0) {
-		   		return -1; 
-	   		}
-	   }
-   	   
-   }
-   discardParsed(iterset);
-   
-   
+
+   //opens the file and the group, 
+   //creates one if necessary
+   statChk(CreateHDF5Group(filename,dsdata,&file_id,&group_id));
    
    ImageTypes type=GetImageType(receivedimage);
    
@@ -974,9 +1051,9 @@ int WriteHDF5Image(char *filename,char* dataset_name,Iterator_type*	currentiter,
    		dset_data=GetImageImage(receivedimage);
    
   		 //open the dataset if it exists
-   		dataset_id=H5Dopen2(group_id[iterdepth], dataset_name, H5P_DEFAULT );
+   		dataset_id=H5Dopen2(group_id, dataset_name, H5P_DEFAULT );
    		if (dataset_id<0) {
-   				dataset_id = H5Dcreate2(group_id[iterdepth], dataset_name,type_id, dataspace_id,H5P_DEFAULT, cparms,H5P_DEFAULT);
+   				dataset_id = H5Dcreate2(group_id, dataset_name,type_id, dataspace_id,H5P_DEFAULT, cparms,H5P_DEFAULT);
    				if (dataset_id<0) {
 	   				return -1;
    				}
@@ -1017,11 +1094,9 @@ int WriteHDF5Image(char *filename,char* dataset_name,Iterator_type*	currentiter,
    /* Close the dataset. */
    statChk(H5Dclose(dataset_id));
    
-   /* Close all group ids */
-   for(i=1;i<=iterdepth;i++){
-   		statChk(H5Gclose (group_id[i]));
-		free(groupname[i-1]);
-   }
+   /* Close the group ids */
+   statChk(H5Gclose (group_id));
+   
    
    free(groupname);
    

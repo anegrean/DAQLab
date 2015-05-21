@@ -1183,7 +1183,7 @@ static void	IterateTC	(TaskControl_type* taskControl, BOOL const* abortIteration
 	PulseTrain_type*    	pulsetrain;
 
 	//display current iteration index
-	VUPC_SetStepCounter(vupc,GetCurrentIterationIndex(GetTaskControlCurrentIter(taskControl)));
+	VUPC_SetStepCounter(vupc,GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
 	
 	
 	//-------------------------------------------------------------------------------------------------------------------------------

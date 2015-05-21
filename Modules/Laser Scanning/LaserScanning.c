@@ -5919,14 +5919,18 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				SetImageImage(sendimage,destbuffer);
 				SetImagePixSize(sendimage,rectRaster->scanSettings.pixSize);
 				
-				Iterator_type* currentiter = GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);
+				Iterator_type* currentiter=GetTaskControlCurrentIter(rectRaster->baseClass.taskControl);
+				
+				
+				 
 				//test
-				iterindex=GetCurrentIterationIndex(currentiter);
+				iterindex=GetCurrentIterIndex(currentiter);
 				iterindex++;
-				SetCurrentIterationIndex(currentiter,iterindex);
+				SetCurrentIterIndex(currentiter,iterindex);
 			
-				nullChk( imagePacket	= init_DataPacket_type(DL_Image, (void**)&sendimage, currentiter, (DiscardFptr_type) discard_Image_type));  //discard_ImageDisplay_type
+				nullChk( imagePacket	= init_DataPacket_type(DL_Image, &sendimage, NULL , discard_Image_type));  //discard_ImageDisplay_type  
 				// send data packet with image
+				SetDataPacketDSData(imagePacket,GetIteratorDSdata(currentiter,WAVERANK));      
 				errChk( SendDataPacket(rectRaster->baseClass.VChanCompositeImage, &imagePacket, 0, &errMsg) );
 				     
 				
@@ -7652,14 +7656,14 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 	}
 	
 	// update iterations
-	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
 	return;
 	
 Error:
 	
 	TaskControlIterationDone(taskControl, error, errMsg, FALSE);
-	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	OKfree(errMsg);
 }
 
@@ -7714,7 +7718,7 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 	if (GetTaskControlMode(engine->baseClass.taskControl) == TASK_CONTINUOUS)
 		errChk( ReturnRectRasterToParkedPosition(engine, errorInfo) );
 	// update iterations
-	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterationIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
 	// flush leftover elements from the incoming detection pixel stream
 	for (size_t i = 0; i < engine->baseClass.nScanChans; i++)

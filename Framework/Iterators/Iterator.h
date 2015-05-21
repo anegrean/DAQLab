@@ -20,19 +20,24 @@
 
 #include "DataTypes.h"
 #include "toolbox.h"
+//#include "DataStorage.h"
 		
 //==============================================================================
 // Constants
+# define WAVERANK	1 
+# define IMAGERANK	2
+# define MAXRANK	2 //max rank of data
+
 
 //==============================================================================
 // Types
 		
 	// Base Iterator type for indexing data
 typedef struct Iterator		Iterator_type;
+typedef struct TC_DS_Data	TC_DS_Data_type; 
 
 
 typedef enum {
-	
 	Iterator_None,												// Default for newly created iterators
 	Iterator_Iterator,			  								// Iterator over other Iterator_type* iterators.
 	Iterator_Waveform,			  								// Iterator over Waveform_type* waveforms.
@@ -54,14 +59,11 @@ typedef void (*DiscardDataFptr_type) (void** PtrToData);		// Function pointer fo
 	// Creates iterator.
 Iterator_type*			init_Iterator_type			(char name[]);
 
-	// Discards a given iterator and all the data or iterators contained within recursively if remove_objects TRUE
-void					discard_Iterator_type		(Iterator_type** iterator, BOOL remove_list, BOOL remove_parent);
-
+	// Discards a given iterator and all the data or iterators contained within recursively
+void					discard_Iterator_type		(Iterator_type** iterator);
 
 
 void 					RemoveFromParentIterator	(Iterator_type* iterator);
-	// Returns a copy of the iterator
-Iterator_type* 			DupIterator 				(Iterator_type* iterator);
 
 //---------------------------------------------------------------------------------------------------------------------------
 // Set/Get functions
@@ -78,13 +80,15 @@ Iterator_type* 			GetIteratorParent 			(Iterator_type* iterator);
 size_t					GetIteratorSize				(Iterator_type* iterator);
 
 	// 	Returns the current Iteration Index
-size_t 					GetCurrentIterationIndex	(Iterator_type* iterator);
+size_t 					GetCurrentIterIndex			(Iterator_type* iterator);
 
 	// 	Sets the current Iteration Index
-void 					SetCurrentIterationIndex	(Iterator_type* iterator, size_t index);
+void 					SetCurrentIterIndex			(Iterator_type* iterator, size_t index);
 
 	// Set total number of iterations for a given iterator
 void					SetTotalIterations			(Iterator_type* iterator, size_t nIterations);
+
+size_t 					GetTotalIterations 			(Iterator_type* iterator);
 
 	// Returns the current iterator set as a list of Iterator_type* elements. The number of iterators in the list determines the dimensionality of the set.
 	// To return all current iterators apply this function to the root iterator. When not needed anymore, dispose of the list using ListDispose().
@@ -97,7 +101,9 @@ Iterator_type*			GetRootIterator				(Iterator_type* iterator);
 BOOL					IsRootIterator				(Iterator_type* iterator);
 
 	// Returns the Iterators name
-char* 					GetCurrentIterationName		(Iterator_type* iterator);
+char* 					GetCurrentIterName		    (Iterator_type* iterator);
+
+void 					SetCurrentIterName			(Iterator_type* iterator,char* name);
 
 //---------------------------------------------------------------------------------------------------------------------------
 // Iterator composition
@@ -128,7 +134,35 @@ ListType				IterateOverIterators		(Iterator_type* iterator);
 
 
 
-				
+//---------------------------------------------------------------------------------------------------------------------------
+// Data Storage data
+//---------------------------------------------------------------------------------------------------------------------------
+
+
+	//get DataStorage data from the iterator
+void					SetIteratorDSdata			(Iterator_type* iterator,TC_DS_Data_type* ds_data);
+	//set DS data 
+TC_DS_Data_type*		GetIteratorDSdata			(Iterator_type* iterator,unsigned int datarank);
+
+void					SetDSdataGroupname			(TC_DS_Data_type* dsdata,char* groupname);
+
+char*					GetDSdataGroupname			(TC_DS_Data_type* dsdata); 
+
+void 					SetDSdataIterIndices		(TC_DS_Data_type* dsdata,unsigned int* iter_indices);
+
+unsigned int* 			GetDSdataIterIndices 		(TC_DS_Data_type* dsdata);
+
+void 					SetDSDataSetRank			(TC_DS_Data_type* dsdata,unsigned int rank);
+
+unsigned int 			GetDSDataSetRank 			(TC_DS_Data_type* dsdata);
+
+unsigned int 			GetDSDataRank 				(TC_DS_Data_type* dsdata);
+
+void 					SetDSdataStackData			(TC_DS_Data_type* dsdata,BOOL stackdata);
+
+BOOL 					GetDSdataStackData 			(TC_DS_Data_type* dsdata);
+
+void 					discard_TC_DS_Data_type 	(TC_DS_Data_type** dsDataPtr);				
 
 #ifdef __cplusplus
     }

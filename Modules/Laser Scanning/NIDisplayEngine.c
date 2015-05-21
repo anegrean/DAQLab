@@ -258,7 +258,7 @@ static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, void* pixelArr
 	int		error		= 0;
 	Image*	image		= NULL;
 	
-	
+/*	
 	// copy image settings
 	SetImageHeight(imgDisplay->baseClass.imagetype,imgHeight);
 	SetImageWidth(imgDisplay->baseClass.imagetype,imgWidth);
@@ -278,7 +278,8 @@ static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, void* pixelArr
 	nullChk( imaqIsToolWindowVisible(&isToolWindowVisible) );
 	if (!isToolWindowVisible)
 		nullChk( imaqShowToolWindow(TRUE) );
-	
+
+				 */
 	return 0;
 	
 Error:

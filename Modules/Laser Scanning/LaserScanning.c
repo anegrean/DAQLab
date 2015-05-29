@@ -4133,7 +4133,7 @@ static int ReturnRectRasterToParkedPosition (RectRaster_type* engine, char** err
 {
 	double*						parkedFastAxis				= NULL;
 	double*						parkedSlowAxis				= NULL;
-	size_t						nParkedSamples				= (size_t) (engine->galvoSamplingRate * 0.1); // generate 1s long parked signal
+	size_t						nParkedSamples				= (size_t) (engine->galvoSamplingRate * 1); // generate 1s long parked signal
 	RepeatedWaveform_type*		parkedFastAxisWaveform		= NULL;
 	RepeatedWaveform_type*		parkedSlowAxisWaveform		= NULL;
 	DataPacket_type*			fastAxisDataPacket			= NULL;
@@ -4151,12 +4151,11 @@ static int ReturnRectRasterToParkedPosition (RectRaster_type* engine, char** err
 	nullChk( fastAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedFastAxisWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	nullChk( slowAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedSlowAxisWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	// send parked signal data packets
-	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &fastAxisDataPacket, FALSE, &errMsg) );
 	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &slowAxisDataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &fastAxisDataPacket, FALSE, &errMsg) );    
 	// send NULL packets to terminate AO
 	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );
-	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );
-	
+	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );  
 	return 0;
 	
 Error:
@@ -5932,7 +5931,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// send data packet with image
 				SetDataPacketDSData(imagePacket,GetIteratorDSdata(currentiter,WAVERANK));      
 				errChk( SendDataPacket(rectRaster->baseClass.VChanCompositeImage, &imagePacket, 0, &errMsg) );
-				     
+				    
 				
 				
 				// TEMPORARY: just complete iteration, and use only one channel

@@ -1493,8 +1493,10 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 	if (nidaq->taskSetPanHndl) {DiscardPanel(nidaq->taskSetPanHndl); nidaq->taskSetPanHndl = 0;}
 	if (nidaq->devListPanHndl) {DiscardPanel(nidaq->devListPanHndl); nidaq->devListPanHndl = 0;}
 	
-	
-	
+	//discard NIDAQmx_NewTerminalCtrl 
+	//
+
+//	NIDAQmx_DiscardIOCtrl(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID);
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
 	//----------------------------------------
@@ -1819,7 +1821,7 @@ static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElemen
 	
 	// cleanup
 	OKfree(taskControllerName);
-	
+
 	return 0;
 	
 Error:
@@ -1905,6 +1907,10 @@ static int LoadADTaskCfg (ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ 
 	//-------------------
 	// cleanup
 	//-------------------
+	//free  string attributes
+	OKfree(*(char**)taskAttr[8].pData);
+	OKfree(*(char**)taskAttr[10].pData);
+	
 	OKfreeCAHndl(channelsXMLElement);
 	OKfreeCAHndl(channelNodeList);
 	OKfreeCAHndl(taskTriggersXMLElement);
@@ -3036,7 +3042,9 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type**
 	if (!dev) return NULL;
 	
 	// init
-	dev -> nActiveTasks			= 0;
+	dev -> nActiveTasks=0;
+
+
 	dev -> taskController		= NULL;
 	
 	//-------------------------------------------------------------------------------------------------
@@ -3097,6 +3105,8 @@ static void discard_Dev_type(Dev_type** devPtr)
 	// active tasks thread safe variable
 	if ((*devPtr)->nActiveTasks)
 		CmtDiscardTSV((*devPtr)->nActiveTasks);
+	
+
 	
 	// DAQmx task settings
 	discard_ADTaskSet_type(&(*devPtr)->AITaskSet);
@@ -8658,7 +8668,7 @@ static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 			writeData -> datain_remainder 		= NULL;
 			writeData -> datain_loop      		= NULL;
 			writeData -> nullPacketReceived		= NULL;
-			writeData -> writeBlocksLeftToWrite	= 1;
+			writeData -> writeBlocksLeftToWrite	= 0;
 	
 	// datain
 	if (!(	writeData -> datain					= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
@@ -11896,7 +11906,8 @@ int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 {
 	Dev_type*	dev 			= callbackData;
 	int			error			= 0;
-	int*		nActiveTasksPtr;
+	int			nActiveTasks    = 0;
+	int*		nActiveTasksPtr = &nActiveTasks;
 	
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
@@ -11905,9 +11916,9 @@ int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	// stop task explicitly
 	DAQmxErrChk(DAQmxStopTask(taskHandle));
 	// clear and init writeAOData used for continuous streaming
-	//discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
-	//dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
-	//if (!dev->AOTaskSet->writeAOData) goto MemError;
+	discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
+	dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
+	if (!dev->AOTaskSet->writeAOData) goto MemError;
 	
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
 	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
@@ -11930,11 +11941,11 @@ DAQmxError:
 	ClearDAQmxTasks(dev); 
 	return 0;
 	
-//MemError:
+MemError:
 	
-	//TaskControlIterationDone(dev->taskController, -1, "Out of memory", FALSE);
-	//ClearDAQmxTasks(dev); 
-	//return 0;
+	TaskControlIterationDone(dev->taskController, -1, "Out of memory", FALSE);
+	ClearDAQmxTasks(dev); 
+	return 0;
 }
 
 int32 CVICALLBACK DIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
@@ -12037,6 +12048,10 @@ static int WriteAODAQmx (Dev_type* dev, char** errorInfo)
 	int						itemsRead									= 0;
 	int						nSamplesWritten								= 0;
 	BOOL					stopAOTaskFlag								= TRUE;
+	int*					nActiveTasksPtr 							= NULL; 
+	BOOL					writeLastBlock								= FALSE;
+	int 					LastBlockSize								= data->writeblock;  
+	div_t					numblocks									;
 
 	// cycle over channels
 	for (int i = 0; i < data->numchan; i++) {
@@ -12055,7 +12070,7 @@ static int WriteAODAQmx (Dev_type* dev, char** errorInfo)
 																			
 					if (!data->databuff_size[i]) {
 						// if NULL received and there is no data in the AO buffer, stop AO task if running
-						int*		nActiveTasksPtr	= NULL;
+						//int*		nActiveTasksPtr	= NULL;
 					
 						DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
 						// Task Controller iteration is complete if all DAQmx Tasks are complete
@@ -12228,18 +12243,39 @@ SkipPacket:
 		data->databuff_size[i] -= data->writeblock;
 	}
 	
-	// if all AO channels received a NULL packet, stop AO task
-	for (int j = 0; j < data->numchan; j++)
-		if (!data->nullPacketReceived[j]) {
-			stopAOTaskFlag = FALSE;
-			break;
+	// if in continouous mode and all AO channels received a NULL packet, stop AO task
+	if (dev->AOTaskSet->timing->measMode==Operation_Continuous){
+		for (int j = 0; j < data->numchan; j++) {
+			if (!data->nullPacketReceived[j]) {
+				stopAOTaskFlag = FALSE;
+				break;
+			}
 		}
+	}
+	else {
+		//in finite mode; stopping on correct number of samples written
+		stopAOTaskFlag = FALSE; 
+	}
+
+	if (stopAOTaskFlag){
+		//determine num blocks to write
+		for (int j = 0; j < data->numchan; j++) {  
+			numblocks=div(data->databuff_size[j],data->writeblock);
+			if (numblocks.quot==0) {
+				writeLastBlock=TRUE;
+				if (numblocks.rem<LastBlockSize) LastBlockSize=numblocks.rem;   //size of block is smallest data size of a channel
+			}
+			else {
+				 //nothing; this channel has enough data for a next writeblock
+			}
+		}
+	}
 	
-	//if (stopAOTaskFlag == FALSE)   
-	//	DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
-	
-	if (stopAOTaskFlag && (!data->writeBlocksLeftToWrite--) || GetTaskControlAbortFlag(dev->taskController)) {
+	if ((stopAOTaskFlag &&writeLastBlock) || GetTaskControlAbortFlag(dev->taskController)) {
 		int*	nActiveTasksPtr = NULL;
+		
+		//write last block with adjusted size
+		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, LastBlockSize, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL)); 
 		
 		DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
 		// Task Controller iteration is complete if all DAQmx Tasks are complete
@@ -12252,9 +12288,13 @@ SkipPacket:
 		
 		CmtReleaseTSVPtr(dev->nActiveTasks);
 		
-	} else
+		//test Lex	
+		AIDAQmxTaskDone_CB(dev->AITaskSet->taskHndl,0,dev);
+		
+	} 
+	else
 		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
-	
+				 
 	
 	return 0; // no error
 	
@@ -14392,8 +14432,9 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	char			CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
 	char*			errMsg										= NULL;
 	int				error										= 0;
-	int*			nActiveTasksPtr								= NULL;	// Keeps track of the number of DAQmx tasks that must still complete before the iteration is considered to be complete
-	
+	int  			nActiveTasks								= 0;
+	int*			nActiveTasksPtr								= &nActiveTasks;	// Keeps track of the number of DAQmx tasks that must still complete before the iteration is considered to be complete
+	int**			nActiveTasksPtrPtr						    = &nActiveTasksPtr;
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
@@ -14403,29 +14444,37 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	//----------------------------------------
 	
 	// get active tasks counter handle
-	errChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	errChk( CmtGetTSVPtr(dev->nActiveTasks, nActiveTasksPtrPtr) );
 	
-	*nActiveTasksPtr = 0;
+	nActiveTasksPtr =*nActiveTasksPtrPtr; 
+	nActiveTasks=*nActiveTasksPtr;
 	
 	// AI
 	if (dev->AITaskSet && dev->AITaskSet->taskHndl && dev->AITaskSet->nOpenChannels) {
 		errChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAIDAQmxTask_CB, dev, NULL) );
-		(*nActiveTasksPtr)++;
+		nActiveTasks++;
 	}
 	
 	// AO
 	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl && dev->AOTaskSet->nOpenChannels) {
+		//test lex
+		//quick and dirty workaround;
+		//for some reason the AODAQmxTaskDone_CB callback gets 'lost'after an iteration
+		//just re-registering it here
+		DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, NULL, dev);     
+		DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev);  
+		
 		errChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAODAQmxTask_CB, dev, NULL) );
-		(*nActiveTasksPtr)++;
+		nActiveTasks++;
 	}
 	
 	// DI
 	if (dev->DITaskSet && dev->DITaskSet->taskHndl)
-		(*nActiveTasksPtr)++;
+		nActiveTasks++;
 	
 	// DO
 	if (dev->DOTaskSet && dev->DOTaskSet->taskHndl)
-		(*nActiveTasksPtr)++;
+		nActiveTasks++;
 	
 	// CI
 	if (dev->CITaskSet) {
@@ -14435,7 +14484,7 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 			chanSet = *(ChanSet_CI_type**)ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 			if (chanSet->taskHndl) {
 				errChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCIDAQmxTasks_CB, chanSet, NULL) );
-				(*nActiveTasksPtr)++;
+				nActiveTasks++;
 			}
 		}
 	}
@@ -14448,14 +14497,13 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 			chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
 			if (chanSet->taskHndl) {
 				errChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCODAQmxTasks_CB, chanSet, NULL) );
-				(*nActiveTasksPtr)++;
+				nActiveTasks++;
 			}
 		}
 	}
-	
+	CmtSetTSV(dev->nActiveTasks,&nActiveTasks);
 	// release active tasks counter handle
 	errChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
-	
 	return; // no error
 	
 Error:
@@ -14496,6 +14544,8 @@ static int StoppedTC (TaskControl_type* taskControl,  BOOL const* abortFlag, cha
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
+	
+	
 	
 	return 0;
 	

@@ -139,7 +139,7 @@ void discard_Iterator_type (Iterator_type** iteratorptr)
 	}   
 		
 	ListDispose(iterator->iterObjects); 
-	discard_TC_DS_Data_type(iterator->ds_data);
+	if (iterator->ds_data) discard_TC_DS_Data_type(&iterator->ds_data);
 
 	OKfree(*iteratorptr);
 }   
@@ -444,8 +444,10 @@ void discard_TC_DS_Data_type (TC_DS_Data_type** dsDataPtr)
 { 
 	TC_DS_Data_type*	dsData = *dsDataPtr;
 	
-	if (!dsData) return;
-	
+	if (!dsData) {
+		OKfree(*dsDataPtr);
+		return;
+	}
 	OKfree(dsData->groupname);
 	OKfree(dsData->iter_indices); 
 	

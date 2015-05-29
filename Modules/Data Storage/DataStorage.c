@@ -320,7 +320,7 @@ void discard_DataStorage (DAQLabModule_type** mod)
 	}
 	
 	
-	
+	//ListDispose (offsetlist); 
 	ListDispose(ds->channels);  
 	
 	discard_DAQLabModule(mod);

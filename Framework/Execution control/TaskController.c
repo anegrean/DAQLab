@@ -2481,7 +2481,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							SetCurrentIterIndex(taskControl->currentIter, GetCurrentIterIndex(taskControl->currentIter)+1);
 							if (taskControl->nIterationsFlag > 0)
 								taskControl->nIterationsFlag--;
-							
+							   
 							//---------------------------------------------------------------------------------------------------------------- 
 							// Ask for another iteration and check later if iteration is needed or possible
 							//---------------------------------------------------------------------------------------------------------------- 

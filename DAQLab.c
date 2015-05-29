@@ -97,8 +97,8 @@ AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last para
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
 	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
-	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 },
-	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
+	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }
+//	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
 	
 };
 
@@ -506,6 +506,7 @@ static int DAQLab_Load (void)
 		
 		// cleanup
 		OKfreeCAHndl(UITaskControllerXMLNode);
+		
 	}
 	
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -599,7 +600,7 @@ static int DAQLab_Load (void)
 		OKfreeCAHndl(UITaskControllerXMLNode);
 	}
 	
-	// cleanup
+	// cleanup Lex
 	OKfreeCAHndl(UITaskControllersXMLNodeList);
 	
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1209,11 +1210,15 @@ static int ConnectTaskTrees (ActiveXMLObj_IXMLDOMElement_ UITCXMLElement, ERRORI
 			DLMsg(" was not found.\n\n", 0);
 		}
 		
-		// cleanup
+		
+		
 		OKfreeCAHndl(parentTCXMLNode);
 		OKfree(parentTCName);
 		OKfreeCAHndl(childTCXMLNodeList);
 	}
+	
+	// cleanup Lex
+	OKfreeCAHndl(tcXMLNodeList);
 				
 	return 0;
 	
@@ -1836,6 +1841,8 @@ static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveX
 		foundXMLDOMFlag = 0;
 	} 
 	
+	   
+	
 	return foundXMLDOMFlag;
 	
 	XMLError:
@@ -2160,6 +2167,8 @@ int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 	// if there are no elements, return null element
 	if (!nXMLElements) {
 		*childXMLElement = 0;
+		// cleanup
+		if (xmlNodeList) OKfreeCAHndl(xmlNodeList);
 		return 0;
 	}
 	

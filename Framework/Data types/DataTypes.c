@@ -816,7 +816,7 @@ void discard_Image_type (Image_type** imagePtr)
 		ROIPtr = ListGetPtrToItem(image->ROIs, i);
 		discard_ROI_type(ROIPtr);
 	}
-	ListDispose(image->ROIs);
+	if (nROIs>0) ListDispose(image->ROIs);
 	
 	OKfree(*imagePtr);
 }
@@ -844,6 +844,8 @@ Error:
 
 Image_type* copy_Image_type(Image_type* sourceimage)
 {
+	 size_t			nROIs	= 0;          
+	 
 	 Image_type*	image = malloc(sizeof(Image_type));
 	 if (!image) return NULL;
 	 image->imageType			= sourceimage->imageType;   
@@ -856,7 +858,10 @@ Image_type* copy_Image_type(Image_type* sourceimage)
 //	 image->image				= ImageCopy(sourceimage->image,sourceimage->imageType);  
 	 
 	// memcpy(image->rawdata,sourceimage->rawdata,
-	 image->ROIs				= ListCopy(sourceimage->ROIs);
+	 nROIs	= ListNumItems(image->ROIs);
+	 if (nROIs>0) image->ROIs = ListCopy(sourceimage->ROIs);
+	 else image->ROIs=0;
+	 
 	 return image;
 }
 

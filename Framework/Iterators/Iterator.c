@@ -449,7 +449,7 @@ void discard_TC_DS_Data_type (TC_DS_Data_type** dsDataPtr)
 		return;
 	}
 	OKfree(dsData->groupname);
-	OKfree(dsData->iter_indices); 
+	//OKfree(dsData->iter_indices); 
 	
 	OKfree(*dsDataPtr);
 }   

@@ -5923,9 +5923,9 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				
 				 
 				//test
-				iterindex=GetCurrentIterIndex(currentiter);
-				iterindex++;
-				SetCurrentIterIndex(currentiter,iterindex);
+			//	iterindex=GetCurrentIterIndex(currentiter);
+			//	iterindex++;
+			//	SetCurrentIterIndex(currentiter,iterindex);
 			
 				nullChk( imagePacket	= init_DataPacket_type(DL_Image, &sendimage, NULL , discard_Image_type));  //discard_ImageDisplay_type  
 				// send data packet with image

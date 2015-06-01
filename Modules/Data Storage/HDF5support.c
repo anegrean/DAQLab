@@ -33,7 +33,8 @@
 #define MAXCHAR		 260
 	
 //test
-#define IMAGE1_NAME  "image8bit"
+#define IMAGE1_NAME  		"image8bit"
+#define NUMELEMENTS_NAME 	"NumElements"
 	
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}   
 
@@ -49,20 +50,10 @@ struct IteratorData {
 //	size_t					totalIter;				// Total number of iterations
 };
 
-typedef struct OffsetData		OffsetData_type;  
-
-struct OffsetData {
-	hid_t					dataset_id;				// dataset id.  
-	hsize_t					offset[MAXRANK]; 		// 0-based iteration index used to iterate over iterObjects
-
-};
-
 
 
 //==============================================================================
 // Static global variables
-//test
-ListType 	  offsetlist;       
 
 //==============================================================================
 // Static functions
@@ -216,6 +207,134 @@ int CreateULLongAttr(hid_t dataset_id,char *attr_name, unsigned long long attr_d
    
 HDF5Error:
    
+   return status;
+}
+
+int CreateULLongAttrArr(hid_t dataset_id,char *attr_name, unsigned long long attr_data,hsize_t size )
+{
+	herr_t      status				= 0;
+	hid_t     	dataspace_id;  
+	hid_t		attribute_id;
+	hsize_t     dims[1]				= {size};
+    hsize_t     maxdims[1] 			= {H5S_UNLIMITED};
+	unsigned long long*		attr_array;
+	herr_t  	ret;                /* Return value */
+	
+	attr_array=malloc(size*sizeof(unsigned long long));
+	
+//	dataspace_id  	= H5Screate_simple(1, dims, maxdims); 
+	
+	
+	dataspace_id = H5Screate(H5S_SIMPLE);
+    ret  = H5Sset_extent_simple(dataspace_id, 1, dims, NULL);
+
+ 
+	
+	 
+	if (size==1) {
+		//create attribute
+    	attribute_id 	= H5Acreate2(dataset_id, attr_name, H5T_NATIVE_ULLONG, dataspace_id, H5P_DEFAULT,H5P_DEFAULT);
+		statChk(H5Awrite(attribute_id, H5T_NATIVE_ULLONG, &attr_data));  
+	}
+	else {
+		//open attribute
+		 attribute_id=H5Aopen( dataset_id, attr_name,NULL); 
+		 statChk(H5Aread(attribute_id,H5T_NATIVE_ULLONG,attr_array));
+		  //test
+		 H5Adelete(dataset_id,attr_name);
+		 
+		 attribute_id 	= H5Acreate2(dataset_id, attr_name, H5T_NATIVE_ULLONG, dataspace_id, H5P_DEFAULT,H5P_DEFAULT);  
+		 attr_array[size-1]=attr_data;
+		 statChk(H5Awrite(attribute_id, H5T_NATIVE_ULLONG, attr_array));      
+	}
+   
+	/* Close the attribute. */
+  	statChk(H5Aclose (attribute_id));
+	/* Close the dataspace. */
+    statChk(H5Sclose(dataspace_id)); 
+	
+	OKfree(attr_array);
+	return status;
+   
+HDF5Error:
+	
+   OKfree(attr_array);
+   return status;
+}
+
+int ReadNumElemAttr(hid_t dataset_id, int index,unsigned long long* attr_data,hsize_t size )
+{
+	herr_t      status				= 0;
+	hid_t     	dataspace_id;  
+	hid_t		attribute_id;
+	hsize_t     dims[1]				= {size};
+    hsize_t     maxdims[1] 			= {H5S_UNLIMITED};
+	unsigned long long*		attr_array;
+	herr_t  	ret;                /* Return value */
+	
+	attr_array=malloc(size*sizeof(unsigned long long));
+	
+//	dataspace_id  	= H5Screate_simple(1, dims, maxdims); 
+	
+	
+	dataspace_id = H5Screate(H5S_SIMPLE);
+    ret  = H5Sset_extent_simple(dataspace_id, 1, dims, NULL);
+
+	//open attribute
+	attribute_id=H5Aopen( dataset_id,NUMELEMENTS_NAME ,NULL); 
+	statChk(H5Aread(attribute_id,H5T_NATIVE_ULLONG,attr_array));
+	*attr_data=attr_array[index];	 
+   
+	/* Close the attribute. */
+  	statChk(H5Aclose (attribute_id));
+	/* Close the dataspace. */
+    statChk(H5Sclose(dataspace_id)); 
+	
+	OKfree(attr_array);
+	return status;
+   
+HDF5Error:
+	
+   OKfree(attr_array);
+   return status;
+}
+
+int WriteNumElemAttr(hid_t dataset_id, int index,unsigned long long attr_data,hsize_t size )
+{
+	herr_t      status				= 0;
+	hid_t     	dataspace_id;  
+	hid_t		attribute_id;
+	hsize_t     dims[1]				= {size};
+    hsize_t     maxdims[1] 			= {H5S_UNLIMITED};
+	unsigned long long*		attr_array;
+	herr_t  	ret;                /* Return value */
+	
+	attr_array=malloc(size*sizeof(unsigned long long));
+	
+//	dataspace_id  	= H5Screate_simple(1, dims, maxdims); 
+	
+	
+	dataspace_id = H5Screate(H5S_SIMPLE);
+    ret  = H5Sset_extent_simple(dataspace_id, 1, dims, NULL);
+
+	//open attribute
+	attribute_id=H5Aopen( dataset_id,NUMELEMENTS_NAME ,NULL);
+	statChk(H5Aread(attribute_id,H5T_NATIVE_ULLONG,attr_array)); 
+	attr_array[index]=attr_data;
+	statChk(H5Awrite(attribute_id,H5T_NATIVE_ULLONG,attr_array));
+		 
+   
+	/* Close the attribute. */
+  	statChk(H5Aclose (attribute_id));
+	/* Close the dataspace. */
+    statChk(H5Sclose(dataspace_id)); 
+	
+	OKfree(attr_array);
+	return status;
+   
+HDF5Error:
+	
+   OKfree(attr_array);
    return status;
 }
 
@@ -445,11 +564,6 @@ int CreateHDF5file(char *filename,char* dataset_name)
       file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 	  if(file_id<0) return -1 ;
 	  
-	  // need to keep track of the write offset for the current iteration for each dataset
-	  // create a list here
-	  ListDispose (offsetlist);   						//dispose old list
-	  offsetlist=ListCreate(IMAGERANK*sizeof(hsize_t));
-	  
       /* Terminate access to the file. */
       statChk(H5Fclose(file_id)); 
 	  
@@ -570,20 +684,28 @@ int AddWaveformAttributes(hid_t dataset_id,Waveform_type* waveform)
 	 char* unitname					= GetWaveformPhysicalUnit(waveform);	// Physical SI unit such as V, A, Ohm, etc. 
 	 double datetimestamp			= GetWaveformDateTimestamp(waveform);	// Number of seconds since midnight, January 1, 1900 in the local time zone.
 	 double samplingrate			= GetWaveformSamplingRate(waveform);  	// Sampling rate in [Hz]. If 0, sampling rate is not given.   
-//	 unsigned long long numsamples	= GetWaveformNumSamples(waveform);  	// Number of samples in the waveform.   
-	 
 	 
 	 if (name) errChk(CreateStringAttr(dataset_id,"Name", name));   	     
 	 if (unitname) errChk(CreateStringAttr(dataset_id,"Units", unitname));   		
 	 if (datetimestamp) errChk(CreateDoubleAttr(dataset_id,"DateTimeStamp", datetimestamp));      
 	 errChk(CreateDoubleAttr(dataset_id,"SamplingRate", samplingrate));    	
-//	 errChk(CreateULLongAttr(dataset_id,"NumSamples",numsamples )); 		
+		
 	 return error;
 Error:
 	 return error;
 }
 
-
+//converts all waveform information into attributes, 
+//and adds them to the dataset
+int AddWaveformArrayAttributes(hid_t dataset_id,Waveform_type* waveform,unsigned long long numelements,hsize_t size)
+{
+	 int error						= 0;
+	 
+	 errChk(CreateULLongAttrArr(dataset_id,NUMELEMENTS_NAME,numelements,size )); 		
+	 return error;
+Error:
+	 return error;
+}
 
 
 int CreateHDF5Group(char* filename,TC_DS_Data_type* dsdata,hid_t* file_id,hid_t* groupid)
@@ -656,38 +778,6 @@ HDF5Error:
 }
 
 
-hsize_t* GetOffset(hid_t dataset_id)
-{
-	hsize_t* offset				 = NULL;
-	int numitems				 = ListNumItems(offsetlist);
-	OffsetData_type** offsetdata = NULL;
-	int i;
-	
-	for (i=0;i<numitems;i++){
-		offsetdata=ListGetPtrToItem(offsetlist,i);
-		if ((*offsetdata)->dataset_id==dataset_id){
-			return (*offsetdata)->offset;
-		}
-	}
-	
-	return offset;	
-}
-
-void  SetOffset(hid_t dataset_id, hsize_t* offset)
-{
-	int numitems				 = ListNumItems(offsetlist);
-	OffsetData_type** offsetdata = NULL;
-	int i;
-	
-	for (i=0;i<numitems;i++){
-		offsetdata=ListGetPtrToItem(offsetlist,i);
-		if ((*offsetdata)->dataset_id==dataset_id){
-			(*offsetdata)->offset[0]=offset[0];
-			(*offsetdata)->offset[1]=offset[1];
-		}
-	}
-}
-
 
 										   
 int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Waveform_type* waveform,DLDataTypes datatype) {
@@ -730,9 +820,9 @@ int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Wave
    hsize_t* 			offset					= malloc(rank*sizeof(hsize_t)); 
    hsize_t*      		size					= malloc(rank*sizeof(hsize_t));
   // hsize_t*      		test 			        = malloc(rank*sizeof(hsize_t)); 
-   OffsetData_type*		datasetdata				= NULL;
-   hsize_t*				dataoffset;
-  
+  // OffsetData_type*		datasetdata				= NULL;
+  // hsize_t*				dataoffset;
+   unsigned long long   numelements;
  
    for(i=0;i<rank;i++){
 	  dims[i]=1;
@@ -813,12 +903,12 @@ int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Wave
 	   		return -1;
    		}
 		//create new entry in offsetlist
-		datasetdata=malloc(sizeof(struct OffsetData));
-		datasetdata->dataset_id=dataset_id;
-		for (i=0;i<datarank;i++){ 
-			datasetdata->offset[i]=datadims[i];	   //first data written
-		}
-		ListInsertItem(offsetlist, &datasetdata, END_OF_LIST);
+	//	datasetdata=malloc(sizeof(struct OffsetData));
+	//	datasetdata->dataset_id=dataset_id;
+	//	for (i=0;i<datarank;i++){ 
+	//		datasetdata->offset[i]=datadims[i];	   //first data written
+	//	}
+	//	ListInsertItem(offsetlist, &datasetdata, END_OF_LIST);
 
 		
 		
@@ -828,6 +918,9 @@ int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Wave
 		
    		//add attributes to dataset
    		statChk(AddWaveformAttributes(dataset_id,waveform));
+		statChk(AddWaveformArrayAttributes(dataset_id,waveform,nElem,1));  
+		
+		
    }
    else {
 	   //dataset existed, have to add the data to the current data set
@@ -838,8 +931,7 @@ int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Wave
 		//if so, add data to current set
 		//copy read dims into size and offset
 		
-		//workaround
-		dataoffset=GetOffset(dataset_id);
+		
 		
 	
 		for (i=0;i<indicesrank;i++){
@@ -849,19 +941,22 @@ int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Wave
 			}
 		}
 		if (are_equal){
+			statChk(ReadNumElemAttr(dataset_id,0,&numelements,1));   
 			//just add to current set
 			for (i=0;i<indicesrank;i++){       
 			//	size[datarank+i]=indices[i]+1;								//already checked, are equal
+				
 				offset[datarank+i]= size[datarank+i]-dims[datarank+i]; 		//adjust offset for multidimensional data
 			
 			}
-			for (i=0;i<datarank;i++){ 
-    			if (dataoffset[i]+ dims[i] >dimsr[i]) {
-					size[i]   = dataoffset[i]+ dims[i];	   //adjust dataset size for added data
+			for (i=0;i<datarank;i++){
+				
+    			if (numelements+dims[i] >dimsr[i]) {
+					size[i]   = numelements+ dims[i];	   //adjust dataset size for added data
 				}
 				else size[i]=dimsr[i];
-				offset[i] = dataoffset[i];
-				dataoffset[i]+=datadims[i];
+				offset[i] = numelements;
+				numelements+=datadims[i];
 			}
     		statChk(H5Dset_extent (dataset_id, size));
 			
@@ -878,7 +973,7 @@ int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Wave
 			for (i=0;i<datarank;i++){
 				size[i]   = dimsr[i];		  //size of data equals previous data
 				offset[i] = 0;				  //new iteration, offset from beginning
-				dataoffset[i]=datadims[i];    //set data offset 
+				numelements=datadims[i];    //set data offset 
 			}
     		statChk(H5Dset_extent (dataset_id, size));
 
@@ -894,9 +989,8 @@ int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Wave
 
     	/* Write the data to the extended portion of dataset  */
     	statChk(H5Dwrite (dataset_id, mem_type_id, memspace, filespace,H5P_DEFAULT, dset_data));
-		
-		//workaround
-		SetOffset(dataset_id,dataoffset); 
+		statChk(WriteNumElemAttr(dataset_id,offset[0],&numelements,size[1]));  
+		  
    }
    
   

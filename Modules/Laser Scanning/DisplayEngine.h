@@ -81,8 +81,7 @@ typedef void							(*ErrorHandlerFptr_type)					(ImageDisplay_type* imgDisplay, 
 //--------------------------------------
 														
 	// Displays or updates an image in a display window
-typedef int								(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, void* pixelArray, int imgHeight, int imgWidth, ImageTypes imageType, 
-																					 double pixSize, double imgTopLeftXCoord, double imgTopLeftYCoord, double imgZCoord);
+typedef int								(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type* image);
 
 	// Obtains a display handle from the display engine that can be passed to other functions like updating the image
 typedef ImageDisplay_type*				(*GetImageDisplayFptr_type)					(DisplayEngine_type* displayEngine, void* callbackData, int imgHeight, int imgWidth, ImageTypes imageType);
@@ -163,26 +162,8 @@ struct ImageDisplay {
 	
 	DisplayEngine_type*					displayEngine;					// Reference to the display engine to which this Image display belongs.
 	ImgDisplayCBData_type				imageDisplayCBData;				// Callback data associated with the image display.
-	Image_type*							imagetype;						// image data container 
-/*	
-	//----------------------------------
-	// Image data
-	//----------------------------------
-	int									imgHeight;						// Image height in [pix].
-	int									imgWidth;						// Image width in [pix].
-	double								pixSize;						// Image pixel size in [um].
-	double								imgTopLeftXCoord;				// Image top-left corner X-Axis coordinates in [um].
-	double								imgTopLeftYCoord;				// Image top-left corner Y-Axis coordinates in [um].
-	double								imgZCoord;						// Image z-axis (height) location in [um].
-	void*								image;							// Stores image data of imageType.
-	ImageTypes							imageType;
-	
-	//----------------------------------
-	// ROI management
-	//----------------------------------
-	
-	ListType							ROIs;							// List of ROIs added to the image of ROI_type*
-*/
+	Image_type*							image;							// image data container 
+
 	RGBA_type							ROITextBackground;				// Color of ROIs label background.
 	int									ROITextFontSize;				// Font size for displaying ROI labels. Default: 12
 	ROIEvents							ROIEvent;						// Parameter passed to the ROI callback.

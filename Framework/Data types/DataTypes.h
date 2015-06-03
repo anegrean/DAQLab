@@ -482,20 +482,14 @@ double   					GetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* p
 // Images
 //---------------------------------------------------------------------------------------------------------
 	// Creates a image container for void* basic data allocated with malloc.
-Image_type*					init_Image_type						(ImageTypes imageType);
+Image_type*					init_Image_type						(ImageTypes imageType, int imgHeight, int imgWidth, void** imgDataPtr);
 
 	// Discards the image container and its data allocated with malloc.
 void 						discard_Image_type 					(Image_type** imagePtr);
 
-Image_type* 				copy_Image_type						(Image_type* sourceimage);
+Image_type* 				copy_Image_type						(Image_type* imgSource);
 
-void 						SetImageHeight 						(Image_type* image, int imgHeight);
-
-int* 						GetImageHeight 						(Image_type* image);
-
-void 						SetImageWidth 						(Image_type* image, int imgWidth) ;
-
-int* 						GetImageWidth 						(Image_type* image);
+void						GetImageSize						(Image_type* image, int* widthPtr, int* heightPtr);
 
 void 						SetImagePixSize 					(Image_type* image, double pixSize);
 
@@ -503,28 +497,19 @@ double	 					GetImagePixSize 					(Image_type* image);
 
 void 						SetImageTopLeftXCoord 				(Image_type* image, double imgTopLeftXCoord);
 
-double 						GetImageTopLeftXCoord 				(Image_type* image);
-	
 void 						SetImageTopLeftYCoord 				(Image_type* image, double imgTopLeftYCoord);
 
-double 						GetImageTopLeftYCoord 				(Image_type* image);
-	
 void 						SetImageZCoord 						(Image_type* image, double imgZCoord);
 
-double	 					GetImageZCoord 						(Image_type* image);
+void						GetImageCoordinates					(Image_type* image, double* imgTopLeftXCoordPtr, double* imgTopLeftYCoordPtr, double* imgZCoordPtr);
 
-void 						SetImageImage 						(Image_type* image, void* imagedata);
-
-void* 						GetImageImage 						(Image_type* image);
+void* 						GetImagePixelArray 					(Image_type* image);
 	
-void 						SetImageType 						(Image_type* image, ImageTypes imageType);
-
-ImageTypes* 				GetImageType 						(Image_type* image);
+ImageTypes	 				GetImageType 						(Image_type* image);
 
 size_t 						GetImageSizeofData 					(Image_type* image);
 
-void 						SetImageROIs 						(Image_type* image, ListType	ROIs);
-
+void 						SetImageROIs 						(Image_type* image, ListType ROIs);
 
 ListType 					GetImageROIs 						(Image_type* image);
 

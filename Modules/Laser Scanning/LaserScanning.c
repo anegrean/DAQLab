@@ -4324,36 +4324,6 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (ScanChan_type* s
 	size_t						pixelSizeBytes 	= 0;
 	if (!buffer) return NULL;
 	
-	switch (pixelDataType) {
-		case DL_Waveform_UChar:
-			pixelSizeBytes 		= sizeof(unsigned char);   
-			break;
-		
-		case DL_Waveform_UShort:
-			pixelSizeBytes 		= sizeof(unsigned short);
-			break;
-			
-		case DL_Waveform_UInt:
-			pixelSizeBytes 		= sizeof(unsigned int);
-			break;
-			
-		case DL_Waveform_Int:
-			pixelSizeBytes 		= sizeof(int);
-			break;
-			
-		case DL_Waveform_Short:
-			pixelSizeBytes 		= sizeof(short); 
-			break;
-			
-		case DL_Waveform_Float:
-			pixelSizeBytes 		= sizeof(float); 
-			break;
-			
-		default:
-			
-			goto Error;
-	}
-	
 	// init
 	buffer->nImagePixels 			= 0;
 	buffer->nAssembledRows   		= 0;
@@ -4366,8 +4336,7 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (ScanChan_type* s
 	buffer->rowsSkipped				= 0;
 	buffer->pixelDataType			= pixelDataType;
 	buffer->scanChan				= scanChan;
-	
-	nullChk( buffer->imagePixels 	= malloc(imgWidth * imgHeight * pixelSizeBytes) );
+	buffer->imagePixels				= NULL;
 	
 	return buffer;
 	
@@ -5741,7 +5710,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	DisplayEngine_type* 		displayEngine 		= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
 	RectRasterScanSet_type*		imgSettings			= NULL;
 	DataPacket_type* 			imagePacket         = NULL;
-	Image_type*					sendimage			= NULL;	
+	Image_type*					sendimage			= NULL;
+	Image_type*					newImage			= NULL;
 	void*						destbuffer			= NULL;
 	
 	
@@ -5756,6 +5726,11 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					
 					case DL_Waveform_UChar:
 				
+						// allocate buffer memory if needed
+						if (!imgBuffer->imagePixels)
+							imgBuffer->imagePixels = malloc(rectRaster->scanSettings.width * rectRaster->scanSettings.height * sizeof(unsigned char));
+						
+						// add pixels
 						if (imgBuffer->flipRow)
 							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
 								*((unsigned char*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned char*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
@@ -5766,6 +5741,11 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					
 					case DL_Waveform_UShort:
 						
+						// allocate buffer memory if needed
+						if (!imgBuffer->imagePixels)
+							imgBuffer->imagePixels = malloc(rectRaster->scanSettings.width * rectRaster->scanSettings.height * sizeof(unsigned short));
+						
+						// add pixels
 						if (imgBuffer->flipRow)
 							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
 								*((unsigned short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
@@ -5776,6 +5756,11 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 						
 					case DL_Waveform_Short:
 						
+						// allocate buffer memory if needed
+						if (!imgBuffer->imagePixels)
+							imgBuffer->imagePixels = malloc(rectRaster->scanSettings.width * rectRaster->scanSettings.height * sizeof(short));
+						
+						// add pixels
 						if (imgBuffer->flipRow)
 							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
 								*((short*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((short*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
@@ -5786,6 +5771,11 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 						
 					case DL_Waveform_UInt:
 						
+						// allocate buffer memory if needed
+						if (!imgBuffer->imagePixels)
+							imgBuffer->imagePixels = malloc(rectRaster->scanSettings.width * rectRaster->scanSettings.height * sizeof(unsigned int));
+						
+						// add pixels
 						if (imgBuffer->flipRow)
 							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
 								*((unsigned int*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((unsigned int*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
@@ -5796,6 +5786,11 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 						
 					case DL_Waveform_Float:
 					
+						// allocate buffer memory if needed
+						if (!imgBuffer->imagePixels)
+							imgBuffer->imagePixels = malloc(rectRaster->scanSettings.width * rectRaster->scanSettings.height * sizeof(float));
+						
+						// add pixels
 						if (imgBuffer->flipRow)
 							for (uInt32 i = 0; i < rectRaster->scanSettings.width; i++)
 								*((float*)imgBuffer->imagePixels + imgBuffer->nImagePixels + i) = *((float*)imgBuffer->tmpPixels + nDeadTimePixels + rectRaster->scanSettings.width - 1 - i);
@@ -5904,40 +5899,38 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				
 				errChk( (*displayEngine->setRestoreImgSettingsFptr) (imgBuffer->scanChan->imgDisplay, NumElem(restoreCBFns), restoreCBFns, callbackData, discardCallbackDataFunctions) );
 				
-				// send pixel array to display 
-				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, imgBuffer->imagePixels, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType,
-														    rectRaster->scanSettings.pixSize, 0, 0, 0) ); // TEMPORARY: X, Y & Z coordinates set to 0 for now
+				// create image container
+				nullChk( newImage = init_Image_type(imageType, rectRaster->scanSettings.height, rectRaster->scanSettings.width, &imgBuffer->imagePixels) );  
+				SetImagePixSize(newImage, rectRaster->scanSettings.pixSize);
+				// TEMPORARY: X, Y & Z coordinates set to 0 for now
+				SetImageTopLeftXCoord(newImage, 0);
+				SetImageTopLeftYCoord(newImage, 0);
+				SetImageZCoord(newImage, 0);
+
+				// display image
+				// temporarily commented out for debug
+				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, newImage) ); 
 				 
 				  
-				//make a copy of the image structure
-				sendimage=copy_Image_type(imgBuffer->scanChan->imgDisplay->imagetype);
-				int pixbytes=GetImageSizeofData(sendimage);
-				int imagesize=(rectRaster->scanSettings.height*rectRaster->scanSettings.width)*pixbytes;
-				destbuffer=malloc(imagesize);
-				memcpy(destbuffer,imgBuffer->imagePixels,imagesize);
-				SetImageImage(sendimage,destbuffer);
-				SetImagePixSize(sendimage,rectRaster->scanSettings.pixSize);
+				// make a copy of the image structure
+				nullChk( sendimage = copy_Image_type(newImage) );
 				
-				Iterator_type* currentiter=GetTaskControlCurrentIter(rectRaster->baseClass.taskControl);
+				Iterator_type* currentiter = GetTaskControlCurrentIter(rectRaster->baseClass.taskControl);
 				
-				
-				 
 				//test
 			//	iterindex=GetCurrentIterIndex(currentiter);
 			//	iterindex++;
 			//	SetCurrentIterIndex(currentiter,iterindex);
 			
-				nullChk( imagePacket	= init_DataPacket_type(DL_Image, &sendimage, NULL , discard_Image_type));  //discard_ImageDisplay_type  
+				nullChk( imagePacket = init_DataPacket_type(DL_Image, &sendimage, NULL, discard_Image_type));
 				// send data packet with image
 				SetDataPacketDSData(imagePacket,GetIteratorDSdata(currentiter,WAVERANK));      
 				errChk( SendDataPacket(rectRaster->baseClass.VChanCompositeImage, &imagePacket, 0, &errMsg) );
 				    
 				
-				
 				// TEMPORARY: just complete iteration, and use only one channel
 				TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
 				
-			
 				
 				// reset number of elements in pixdata buffer (contents is not cleared!) new frame data will overwrite the old frame data in the buffer
 				// NOTE & WARNING: data in the imgBuffer->tmpPixels is kept since multiple images can follow and imgBuffer->tmpPixels may contain data from the next image
@@ -6572,7 +6565,7 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 			
 			// obtain default unique ROI name and apply it
 			OKfree(ROI->ROIName);
-			ROIlist=GetImageROIs(imgDisplay->imagetype); 
+			ROIlist = GetImageROIs(imgDisplay->image); 
 			ROI->ROIName = GetDefaultUniqueROIName(ROIlist);
 			// apply ROI color
 			ROI->rgba.R = Default_ROI_R_Color; 
@@ -6684,7 +6677,7 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 	ClearListCtrl(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs);
 	ListClear(scanEngine->pointJumps);
 	
-	ListType	ROIlist				= GetImageROIs(imgDisplay->imagetype);
+	ListType	ROIlist				= GetImageROIs(imgDisplay->image);
 	size_t 		nROIs 				= ListNumItems(ROIlist);
 	ROI_type*   ROI					= NULL;
 	BOOL		activeROIAvailable 	= FALSE;

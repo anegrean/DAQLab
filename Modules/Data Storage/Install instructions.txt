@@ -1,0 +1,11 @@
+1) Install HDF5 binary (version used 1.8.15) on the machine.
+2) Add hdf5 \include and \lib directories to the project.
+3) Add hdf5.lib from the the hdf5 \lib directory to the Data Storage folder in the project.
+4) Make the following changes to the installed HDF5 files:
+	a) In H5Gpublic.h and H5public.h change #include <sys\types> to #include <types>
+	b) In H5pubconf.h:
+		- set #define H5_HAVE_VISUAL_STUDIO to 0
+		- set H5_HAVE_SYS_STAT_H to 0
+		- set H5_HAVE_SYS_TIMEB_H to 0
+
+5) To get proper dll exports add to H5api_adpt.h to the end of the file just before #endif /* H5API_ADPT_H */: #define H5_DLLVAR __declspec(dllimport)

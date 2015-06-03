@@ -1,6 +1,6 @@
 //==============================================================================
 //
-// Title:		HDF5support.h.h
+// Title:		HDF5support.h
 // Purpose:		A short description of the interface.
 //
 // Created on:	30-3-2015 at 10:08:17 by Adrian Negrean.

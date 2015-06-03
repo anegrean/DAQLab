@@ -25,7 +25,8 @@
 //==============================================================================
 // Constants
 
-#define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}   
+#define OKfree(ptr) 		if (ptr) {free(ptr); ptr = NULL;}
+#define OKfreeList(list)	if (list) {ListDispose(list); list = 0;}  
 
 //==============================================================================
 // Types
@@ -33,15 +34,15 @@
 // Images
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 struct Image { 
-	int									imgHeight;				// Image height in [pix].
-	int									imgWidth;				// Image width in [pix].
-	double								pixSize;				// Image pixel size in [um].
-	double								imgTopLeftXCoord;		// Image top-left corner X-Axis coordinates in [um].
-	double								imgTopLeftYCoord;		// Image top-left corner Y-Axis coordinates in [um].
-	double								imgZCoord;				// Image z-axis (height) location in [um].
-	void*								image;					// Stores image data of imageType.
-	ImageTypes							imageType;
-	ListType							ROIs;	
+	ImageTypes							imageType;				// pixel data type.
+	int									imgHeight;				// image height in [pix].
+	int									imgWidth;				// image width in [pix].
+	void*								pixData;				// pixel array of imageType data type.
+	double								pixSize;				// image pixel size in [um].
+	double								imgTopLeftXCoord;		// image top-left corner X-Axis coordinates in [um].
+	double								imgTopLeftYCoord;		// image top-left corner Y-Axis coordinates in [um].
+	double								imgZCoord;				// image z-axis (height) location in [um].
+	ListType							ROIs;					// list of ROIs added to the image of ROI_type*.
 };
 
 
@@ -782,109 +783,99 @@ size_t GetRepeatedWaveformSizeofData (RepeatedWaveform_type* waveform)
 // Images
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-Image_type* init_Image_type (ImageTypes imageType)
+Image_type* init_Image_type (ImageTypes imageType, int imgHeight, int imgWidth, void** imgDataPtr)
 {
-	Image_type*	image = malloc(sizeof(Image_type));
+	int				error 		= 0;
+	Image_type*		image 		= malloc(sizeof(Image_type));
+	
 	if (!image) return NULL;
 	
-	image->imageType			= imageType;   // imagetype
-	image->imgHeight			= 0;		   // Image height in [pix]. 
-	image->imgWidth				= 0;		   // Image width in [pix].  
-	image->imgTopLeftXCoord		= 0.0;		   // Image top-left corner X-Axis coordinates in [um].    
-	image->imgTopLeftYCoord		= 0.0;		   // Image top-left corner Y-Axis coordinates in [um]. 
-	image->imgZCoord			= 0.0;		   // Image z-axis (height) location in [um].    
-	image->image				= NULL;  	   // assign data
+	// init
+	image->imageType			= imageType;	// imagetype
+	image->imgHeight			= imgHeight;	// image height in [pix]. 
+	image->imgWidth				= imgWidth;		// image width in [pix].
+	image->pixData				= *imgDataPtr;	// assign data
+	*imgDataPtr					= NULL;			// consume image data
+	image->imgTopLeftXCoord		= 0.0;			// image top-left corner X-Axis coordinates in [um].    
+	image->imgTopLeftYCoord		= 0.0;			// image top-left corner Y-Axis coordinates in [um]. 
+	image->imgZCoord			= 0.0;			// image z-axis (height) location in [um].    
 	image->ROIs					= 0;
+	
+	// alloc
+	nullChk( image->ROIs		= ListCreate(sizeof(ROI_type*)));
+	
 	return image;
+	
+Error:
+	
+	OKfreeList(image->ROIs);
+	free(image);
+	return NULL;
 }
-
-
 
 void discard_Image_type (Image_type** imagePtr)
 {
 	Image_type*		image 	= *imagePtr;
-	size_t			nROIs	= 0;
 	ROI_type** 		ROIPtr	= NULL;
 	
 	if (!image) return;
 	
 	//free image data
-	OKfree(image->image);
+	OKfree(image->pixData);
+	
 	//free ROIs
-	nROIs	= ListNumItems(image->ROIs);
+	size_t nROIs = ListNumItems(image->ROIs);
 	for (size_t i = 1; i <= nROIs; i++) {
 		ROIPtr = ListGetPtrToItem(image->ROIs, i);
 		discard_ROI_type(ROIPtr);
 	}
-	if (nROIs>0) ListDispose(image->ROIs);
+	OKfreeList(image->ROIs);
 	
 	OKfree(*imagePtr);
 }
 
-/*
-void* ImageCopy(void* sourceimage,ImageTypes imagetype)
+Image_type* copy_Image_type(Image_type* imgSource)
 {
-	Image* dest=NULL;
-	int error = 0;
-	ImageType	imaqImgType;
-	ImageInfo info;
+	int 			error 		= 0;
+	size_t			imgNBytes   = imgSource->imgHeight * imgSource->imgWidth * GetImageSizeofData(imgSource);
+	Image_type*		imgCopy		= NULL;
+	void*			imgDataCopy = NULL;
 	
-
-//	switch (imagetype){
-//		case Image_NIVision:
-			errChk(imaqGetImageInfo(sourceimage, &info));  
-			dest=imaqCreateImage(info.imageType, 0); 
-			errChk(imaqDuplicate(dest, (Image*) sourceimage)); 
-//			break;
-//	}
-	return dest; 
+	// copy image data
+	nullChk( imgDataCopy = malloc(imgNBytes) );
+	memcpy(imgDataCopy, imgSource->pixData, imgNBytes);
+	
+	nullChk( imgCopy = init_Image_type(imgSource->imageType, imgSource->imgHeight, imgSource->imgWidth, &imgDataCopy) ); 
+	
+	imgCopy->pixSize			= imgSource->pixSize;
+	imgCopy->imgTopLeftXCoord	= imgSource->imgTopLeftXCoord;		       
+	imgCopy->imgTopLeftYCoord	= imgSource->imgTopLeftYCoord;		    
+	imgCopy->imgZCoord			= imgSource->imgZCoord;
+	
+	// copy ROIs
+	size_t 		nROIs 	= ListNumItems(imgSource->ROIs);
+	ROI_type*   ROICopy	= NULL;
+	for (size_t i = 1; i <= nROIs; i++) {
+		nullChk( ROICopy = copy_ROI_type( *(ROI_type**) ListGetPtrToItem(imgSource->ROIs, i) ) );
+		ListInsertItem(imgCopy->ROIs, &ROICopy, END_OF_LIST);
+	}
+	
+	return imgCopy;
+	
 Error:
+	
+	OKfree(imgDataCopy);
+	discard_Image_type(&imgCopy);
 	return NULL;
-} */
-
-Image_type* copy_Image_type(Image_type* sourceimage)
-{
-	 size_t			nROIs	= 0;          
-	 
-	 Image_type*	image = malloc(sizeof(Image_type));
-	 if (!image) return NULL;
-	 image->imageType			= sourceimage->imageType;   
-	 image->imgHeight			= sourceimage->imgHeight;		   
-	 image->imgWidth			= sourceimage->imgWidth;		   
-	 image->imgTopLeftXCoord	= sourceimage->imgTopLeftXCoord;		       
-	 image->imgTopLeftYCoord	= sourceimage->imgTopLeftYCoord;		    
-	 image->imgZCoord			= sourceimage->imgZCoord;
-	 image->pixSize				= sourceimage->pixSize;
-//	 image->image				= ImageCopy(sourceimage->image,sourceimage->imageType);  
-	 
-	// memcpy(image->rawdata,sourceimage->rawdata,
-	 nROIs	= ListNumItems(image->ROIs);
-	 if (nROIs>0) image->ROIs = ListCopy(sourceimage->ROIs);
-	 else image->ROIs=0;
-	 
-	 return image;
 }
 
-
-
-void SetImageHeight (Image_type* image, int imgHeight)
+void GetImageSize (Image_type* image, int* widthPtr, int* heightPtr)
 {
-	image->imgHeight = imgHeight; 
-}
-
-int* GetImageHeight (Image_type* image)
-{
-	 return image->imgHeight; 
-}
-
-void SetImageWidth (Image_type* image, int imgWidth)
-{
-	image->imgWidth = imgWidth; 
-}
-
-int* GetImageWidth (Image_type* image)
-{
-	 return image->imgWidth; 
+	if (widthPtr)
+		*widthPtr = image->imgWidth;
+	
+	if (heightPtr)
+		*heightPtr = image->imgHeight;
 }
 
 void SetImagePixSize (Image_type* image, double pixSize)
@@ -902,47 +893,34 @@ void SetImageTopLeftXCoord (Image_type* image, double imgTopLeftXCoord)
 	image->imgTopLeftXCoord = imgTopLeftXCoord; 
 }
 
-double GetImageTopLeftXCoord (Image_type* image)
-{
-	 return image->imgTopLeftXCoord; 
-}	
-
 void SetImageTopLeftYCoord (Image_type* image, double imgTopLeftYCoord)
 {
 	image->imgTopLeftYCoord = imgTopLeftYCoord; 
 }
-
-double GetImageTopLeftYCoord (Image_type* image)
-{
-	 return image->imgTopLeftYCoord; 
-}	
 
 void SetImageZCoord (Image_type* image, double imgZCoord)
 {
 	image->imgZCoord = imgZCoord; 
 }
 
-double GetImageZCoord (Image_type* image)
+void GetImageCoordinates (Image_type* image, double* imgTopLeftXCoordPtr, double* imgTopLeftYCoordPtr, double* imgZCoordPtr)
 {
-	 return image->imgZCoord; 
+	if (imgTopLeftXCoordPtr)
+		*imgTopLeftXCoordPtr = image->imgTopLeftXCoord;
+	
+	if (imgTopLeftYCoordPtr)
+		*imgTopLeftYCoordPtr = image->imgTopLeftYCoord;
+	
+	if (imgZCoordPtr)
+		*imgZCoordPtr = image->imgZCoord;
 }
 
-void SetImageImage (Image_type* image, void* imagedata)
+void* GetImagePixelArray (Image_type* image)
 {
-	image->image = imagedata; 
-}
-
-void* GetImageImage (Image_type* image)
-{
-	 return image->image; 
+	 return image->pixData; 
 }	
 
-void SetImageType (Image_type* image, ImageTypes imageType)
-{
-	image->imageType = imageType; 
-}
-
-ImageTypes* GetImageType (Image_type* image)
+ImageTypes GetImageType (Image_type* image)
 {
 	 return image->imageType; 
 }
@@ -1149,8 +1127,8 @@ char* GetDefaultUniqueROIName (ListType ROIList)
 		
 		// check if name exists
 		nameExists = FALSE;
-		for (size_t i = 1; i <= nROIs; i++) {
-			ROI = *(ROI_type**) ListGetPtrToItem(ROIList, i);
+		for (size_t k = 1; i <= nROIs; i++) {
+			ROI = *(ROI_type**) ListGetPtrToItem(ROIList, k);
 			if (!strcmp(newName, ROI->ROIName)) {
 				nameExists = TRUE;
 				break;

@@ -82,11 +82,10 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 	imageDisplay->imageDisplayCBData			= imageDisplayCBData;
 	
 	// image data
-	imageDisplay->imagetype						= init_Image_type(Image_UChar);
+	imageDisplay->image							= NULL;
 	
 	
 	// ROI management
-	
 	imageDisplay->ROITextBackground.R			= 0;
 	imageDisplay->ROITextBackground.G			= 0;	
 	imageDisplay->ROITextBackground.B			= 0;	
@@ -107,15 +106,6 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 	imageDisplay->restoreSettingsCBsData		= NULL;
 	imageDisplay->discardCallbackDataFunctions	= NULL;
 	
-	//--------------------------------------
-	// allocate
-	//--------------------------------------
-	
-	// ROI management
-
-	
-	nullChk( ROIlist					= ListCreate(sizeof(ROI_type*)) );
-	SetImageROIs(imageDisplay->imagetype,ROIlist);       
 	return 0;
 	
 Error:
@@ -130,23 +120,11 @@ Error:
 void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 {
 	ImageDisplay_type* 	imageDisplay 	= *imageDisplayPtr;
-	ListType			ROIlist			= GetImageROIs(imageDisplay->imagetype);
 	
 	if (!imageDisplay) return;
 	
-	//----------------------------------------------------------
-	// ROIs
+	discard_Image_type(&imageDisplay->image);
 	
-	size_t		nROIs 	= ListNumItems(ROIlist);
-	ROI_type** 	ROIPtr	= NULL;
-	for (size_t i = 1; i <= nROIs; i++) {
-		ROIPtr = ListGetPtrToItem(ROIlist, i);
-		discard_ROI_type(ROIPtr);
-	}
-	ListDispose(ROIlist);
-	//----------------------------------------------------------
-	SetImageImage(imageDisplay->imagetype,NULL);
-	discard_Image_type(&imageDisplay->imagetype);
 	//----------------------------------------------------------
 	// Restore callbacks
 	for (size_t i = 0; i < imageDisplay->nRestoreSettingsCBs; i++)
@@ -174,7 +152,7 @@ void discard_DisplayEngine_type (DisplayEngine_type** displayEnginePtr)
 
 void discard_DisplayEngineClass (DisplayEngine_type** displayEnginePtr)
 {
-	//free displayEnginePtr
+	// free displayEnginePtr
 	OKfree(*displayEnginePtr); 
 }
 

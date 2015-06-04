@@ -2460,6 +2460,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// If ChildTCs are not yet complete, stay in RUNNING state and wait for their completion
 					//---------------------------------------------------------------------------------------------------------------- 
 					
+					//test Lex process only real transitions
+				//	if (childTCPtr->childTCState == childTCPtr->previousChildTCState)
+				//		break; // stop here
+					
 					// consider only transitions to TC_State_Done 
 					if (childTCPtr->childTCState != TC_State_Done)
 						break; // stop here
@@ -2472,8 +2476,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//---------------------------------------------------------------------------------------------------------------- 
 					switch (taskControl->executionMode) {
 						
-						case TC_Execute_BeforeChildTCs:
-						case TC_Execute_InParallelWithChildTCs:
+						case TC_Execute_BeforeChildTCs:			   // iteration function is not active
+						case TC_Execute_InParallelWithChildTCs:	   // iteration function is not active
 							
 							//---------------------------------------------------------------------------------------------------------------
 							// Increment iteration index
@@ -2495,7 +2499,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							}
 							
 							// stay in TC_State_Running
-							
 							break;
 							
 						case TC_Execute_AfterChildTCsComplete:

@@ -98,16 +98,16 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 //datastorage module shouldn't iterate
-//static void				IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
-//static void 				AbortIterationTC		(TaskControl_type* taskControl, BOOL const* abortFlag);
-//static int				StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static void					IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+static void 				AbortIterationTC		(TaskControl_type* taskControl, BOOL const* abortFlag);
+static int					StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					TaskTreeStateChange 	(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
-//static void				TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
+static void					TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
-//static int				ModuleEventHandler		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
+static int					ModuleEventHandler		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
 //-----------------------------------------
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
@@ -154,8 +154,8 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	ds->overwrite_files		= FALSE;
 	
 	// create Data Storage Task Controller
-	tc = init_TaskControl_type (instanceName, ds, DLGetCommonThreadPoolHndl(), ConfigureTC, UnConfigureTC, NULL, NULL, ResetTC,
-								 DoneTC, StoppedTC, TaskTreeStateChange, NULL, NULL, ErrorTC);
+	tc = init_TaskControl_type (instanceName, ds, DLGetCommonThreadPoolHndl(), ConfigureTC, UnConfigureTC, IterateTC, StartTC, ResetTC,
+								 DoneTC, StoppedTC, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
 	//------------------------------------------------------------
@@ -488,7 +488,7 @@ static int UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 	
 	return 0;
 }
- /*
+ 
 static void	IterateTC	(TaskControl_type* taskControl,  BOOL const* abortIterationFlag)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
@@ -516,7 +516,7 @@ static int	StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	 
 	return 0;
 }
- */
+ 
 
 static int DoneTC (TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo)
 {
@@ -561,12 +561,12 @@ static int	TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates st
 	return 0;
 }
 
- /*
+ 
 static void	TCActive (TaskControl_type* taskControl, BOOL UITCActiveFlag)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
 }
- */
+ 
 
 static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 {
@@ -577,7 +577,7 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 	// print error message
 	DLMsg(errorMsg, 1);
 }
- /*
+ 
 static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
 {
 	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl); 
@@ -585,7 +585,7 @@ static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState
 	return 0;
 }
 
- */
+ 
 
 
 static void	RedrawDSPanel (DataStorage_type* ds)

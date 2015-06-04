@@ -5710,7 +5710,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	DisplayEngine_type* 		displayEngine 		= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
 	RectRasterScanSet_type*		imgSettings			= NULL;
 	DataPacket_type* 			imagePacket         = NULL;
-	Image_type*					sendimage			= NULL;
+	Image_type*					sendImage			= NULL;
 	Image_type*					newImage			= NULL;
 	void*						destbuffer			= NULL;
 	
@@ -5907,22 +5907,17 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				SetImageTopLeftYCoord(newImage, 0);
 				SetImageZCoord(newImage, 0);
 
+				// make a copy of the image
+				nullChk( sendImage = copy_Image_type(newImage) );
+				
 				// display image
 				// temporarily commented out for debug
-				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, newImage) ); 
+				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, &newImage) ); 
 				 
-				  
-				// make a copy of the image structure
-				nullChk( sendimage = copy_Image_type(newImage) );
 				
 				Iterator_type* currentiter = GetTaskControlCurrentIter(rectRaster->baseClass.taskControl);
 				
-				//test
-			//	iterindex=GetCurrentIterIndex(currentiter);
-			//	iterindex++;
-			//	SetCurrentIterIndex(currentiter,iterindex);
-			
-				nullChk( imagePacket = init_DataPacket_type(DL_Image, &sendimage, NULL, discard_Image_type));
+				nullChk( imagePacket = init_DataPacket_type(DL_Image, &sendImage, NULL, discard_Image_type));
 				// send data packet with image
 				SetDataPacketDSData(imagePacket,GetIteratorDSdata(currentiter,WAVERANK));      
 				errChk( SendDataPacket(rectRaster->baseClass.VChanCompositeImage, &imagePacket, 0, &errMsg) );

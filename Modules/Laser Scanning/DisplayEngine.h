@@ -81,7 +81,7 @@ typedef void							(*ErrorHandlerFptr_type)					(ImageDisplay_type* imgDisplay, 
 //--------------------------------------
 														
 	// Displays or updates an image in a display window
-typedef int								(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type* image);
+typedef int								(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type** image);
 
 	// Obtains a display handle from the display engine that can be passed to other functions like updating the image
 typedef ImageDisplay_type*				(*GetImageDisplayFptr_type)					(DisplayEngine_type* displayEngine, void* callbackData, int imgHeight, int imgWidth, ImageTypes imageType);

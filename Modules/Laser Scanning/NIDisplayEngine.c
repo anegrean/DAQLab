@@ -100,7 +100,7 @@ static void 					discard_NIImageDisplay_type 					(NIImageDisplay_type** display
 
 static void 					discard_NIDisplayEngine_type 					(NIDisplayEngine_type** niVisionDisplayPtr);
 
-static int						DisplayNIVisionImage							(NIImageDisplay_type* imgDisplay, Image_type* image);
+static int						DisplayNIVisionImage							(NIImageDisplay_type* imgDisplay, Image_type** image);
 	// displays a file selection popup-box and saves a given NI image as two grayscale TIFF files with ZIP compression with and without ROI flattened
 static int 						ImageSavePopup 									(Image* image, char** errorInfo);
 
@@ -251,18 +251,18 @@ static void discard_NIImageDisplay_type (NIImageDisplay_type** displayPtr)
 	discard_ImageDisplay_type((ImageDisplay_type**) displayPtr);
 }
 
-static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, Image_type* image)
+static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, Image_type** image)
 {								
 	int			error		= 0;
 	int			imgWidth	= 0;
 	int			imgHeight	= 0;
-	void*		pixelArray	= GetImagePixelArray(image);
+	void*		pixelArray	= GetImagePixelArray(*image);
 	
 	// update display image
 	discard_Image_type(&imgDisplay->baseClass.image);
-	imgDisplay->baseClass.image = image;
-	
-	GetImageSize(image, &imgWidth, &imgHeight);
+	GetImageSize(*image, &imgWidth, &imgHeight);
+	imgDisplay->baseClass.image = *image;
+	*image = NULL;
 	
 	// display NI image
 	nullChk( imaqArrayToImage(imgDisplay->NIImage, pixelArray, imgWidth, imgHeight) );

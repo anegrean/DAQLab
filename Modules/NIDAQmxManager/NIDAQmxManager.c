@@ -11704,7 +11704,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	nullChk( readBuffer = malloc(nSamples * nAI * sizeof(float64)) );
 	
 	// read samples from the AI buffer
-	DAQmxErrChk( DAQmxReadAnalogF64(taskHandle, nSamples, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL) );
+	DAQmxErrChk( DAQmxReadAnalogF64(taskHandle, nSamples, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel, readBuffer, nSamples * nAI, &nRead, NULL) );
 	
 	for (size_t i = 1; i <= nChans; i++) {
 		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);

@@ -1127,7 +1127,7 @@ char* GetDefaultUniqueROIName (ListType ROIList)
 		
 		// check if name exists
 		nameExists = FALSE;
-		for (size_t k = 1; i <= nROIs; i++) {
+		for (size_t k = 1; k <= nROIs; k++) {
 			ROI = *(ROI_type**) ListGetPtrToItem(ROIList, k);
 			if (!strcmp(newName, ROI->ROIName)) {
 				nameExists = TRUE;

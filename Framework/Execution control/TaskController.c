@@ -1107,7 +1107,6 @@ static void ChangeState (TaskControl_type* taskControl, EventPacket_type* eventP
 			
 			break;
 	}
-	
 	// add log entry if enabled
 	ExecutionLogEntry(taskControl, eventPacket, STATE_CHANGE, NULL);
 }
@@ -1120,7 +1119,7 @@ static BOOL AllChildTCsInState (TaskControl_type* taskControl, TCStates state)
 	
 	for (size_t i = 1; i <= nChildTCs; i++) {
 		subTask = ListGetPtrToItem(taskControl->childTCs, i);
-		if (subTask->isOutOfDate || subTask->childTCState != state) {
+		if ((subTask->isOutOfDate) || (subTask->childTCState != state)) {
 			allTCsInState = FALSE;
 			break;
 		}
@@ -2444,7 +2443,12 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventpacket[i].eventData)->childTCIdx);
 					childTCPtr->previousChildTCState 	= childTCPtr->childTCState; // save old state for debuging purposes 
 					childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState;
-					childTCPtr->isOutOfDate 			= FALSE;  
+					childTCPtr->isOutOfDate 			= FALSE; 
+					//test lex
+					if ((childTCPtr->previousChildTCState==TC_State_Done)&&childTCPtr->childTCState==TC_State_Done){
+						//break test
+						childTCPtr->previousChildTCState=TC_State_Done;	
+					}
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					
@@ -2460,16 +2464,21 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// If ChildTCs are not yet complete, stay in RUNNING state and wait for their completion
 					//---------------------------------------------------------------------------------------------------------------- 
 					
-					//test Lex process only real transitions
-				//	if (childTCPtr->childTCState == childTCPtr->previousChildTCState)
-				//		break; // stop here
-					
 					// consider only transitions to TC_State_Done 
 					if (childTCPtr->childTCState != TC_State_Done)
 						break; // stop here
 					
 					if (!AllChildTCsInState(taskControl, TC_State_Done))  
 						break; // stop here
+					
+					//test lex
+					//put all child TC's out of date to prevent race here
+					size_t	nChildTCs 		= ListNumItems(taskControl->childTCs);
+					ChildTCInfo_type*   subTask			= NULL; 
+					for (size_t j = 1; j <= nChildTCs; j++) {
+						subTask = ListGetPtrToItem(taskControl->childTCs, j);
+						subTask->isOutOfDate = TRUE;
+					}
 					
 					//---------------------------------------------------------------------------------------------------------------- 
 					// Decide on state transition
@@ -2478,6 +2487,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						
 						case TC_Execute_BeforeChildTCs:			   // iteration function is not active
 						case TC_Execute_InParallelWithChildTCs:	   // iteration function is not active
+							
 							
 							//---------------------------------------------------------------------------------------------------------------
 							// Increment iteration index
@@ -3316,7 +3326,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 	// if there is a parent task controller, update it on the state of this child task controller
 	if (taskControl->parentTC)
 		TaskControlEvent(taskControl->parentTC, TC_Event_UpdateChildTCState, init_ChildTCEventInfo_type(taskControl->childTCIdx, taskControl->state), (DiscardFptr_type)discard_ChildTCEventInfo_type);
-					
+
 	// free memory for extra eventData if any
 	if (eventpacket[i].eventData && eventpacket[i].discardEventDataFptr)
 		(*eventpacket[i].discardEventDataFptr)(&eventpacket[i].eventData);

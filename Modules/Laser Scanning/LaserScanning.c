@@ -5921,7 +5921,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// send data packet with image
 				SetDataPacketDSData(imagePacket,GetIteratorDSdata(currentiter,WAVERANK));      
 				errChk( SendDataPacket(rectRaster->baseClass.VChanCompositeImage, &imagePacket, 0, &errMsg) );
-				    
+				   
 				
 				// TEMPORARY: just complete iteration, and use only one channel
 				TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);

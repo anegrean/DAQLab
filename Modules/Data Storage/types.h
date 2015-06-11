@@ -85,7 +85,7 @@ typedef unsigned int dev_t;
 #ifndef _OFF_T_DEFINED
 
 typedef long off_t;                    /* file offset value */
-
+typedef long _off_t;                    /* file offset value */    //added Lex
 #if     !__STDC__
 /* Non-ANSI name for compatibility */
 typedef long off_t;

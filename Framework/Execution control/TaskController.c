@@ -270,8 +270,6 @@ TaskControl_type* init_TaskControl_type(const char						taskControllerName[],
 /// HIFN Discards recursively a Task controller.
 void discard_TaskControl_type(TaskControl_type** taskController)
 {
-	Iterator_type* iterator;
-	
 	if (!*taskController) return;
 	
 	//----------------------------------------------------------------------------
@@ -303,8 +301,7 @@ void discard_TaskControl_type(TaskControl_type** taskController)
 	OKfree((*taskController)->errorInfo);
 	
 	//iteration info
-	iterator=(*taskController)->currentIter;
-	discard_Iterator_type (&iterator); 
+	discard_Iterator_type (&(*taskController)->currentIter); 
 
 	// child Task Controllers list
 	ListDispose((*taskController)->childTCs);

@@ -92,9 +92,7 @@ void discard_DataPacket_type (DataPacket_type** dataPacketPtr)
 	// discard instance counter
 	CmtDiscardTSV(dataPacket->ctr);
 									  
-	if (dataPacket->dsdata)
-		discard_TC_DS_Data_type(&dataPacket->dsdata);
-	
+	discard_TC_DS_Data_type(&dataPacket->dsdata);
 	
 	// discard data packet
 	OKfree(*dataPacketPtr);

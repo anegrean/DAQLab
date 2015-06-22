@@ -203,7 +203,7 @@ int 				DLGetXMLNodeAttributes 				(ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXML
 int					DLGetSingleXMLElementFromElement	(ActiveXMLObj_IXMLDOMElement_ parentXMLElement, char elementName[], ActiveXMLObj_IXMLDOMElement_* childXMLElement);
 
 	// saves task controller settings to XML and returns a "TaskControllerSettings" XML element
-int					DLSaveTaskControllerSettingsToXML	(TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_* taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo);
+int 				DLSaveTaskControllerSettingsToXML 	(TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ taskControllerXMLElement, ERRORINFO* xmlErrorInfo);
 	// loads task controller settings from a "TaskControllerSettings" XML element
 int					DLLoadTaskControllerSettingsFromXML	(TaskControl_type* taskController, ActiveXMLObj_IXMLDOMElement_ taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo);
 

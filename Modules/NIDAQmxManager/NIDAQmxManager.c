@@ -9733,7 +9733,7 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	//----------------------
 	
 	// start trigger routing
-	if (dev->AITaskSet->startTrig->trigRouting && dev->AITaskSet->startTrig->trigRouting[0])
+	if (dev->AITaskSet->startTrig && dev->AITaskSet->startTrig->trigRouting && dev->AITaskSet->startTrig->trigRouting[0])
 		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->AITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->AITaskSet->startTrig->trigRouting) );
 	else
 		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->AITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
@@ -9966,7 +9966,7 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	//----------------------
 	
 	// start trigger routing
-	if (dev->AOTaskSet->startTrig->trigRouting && dev->AOTaskSet->startTrig->trigRouting[0])
+	if (dev->AOTaskSet->startTrig && dev->AOTaskSet->startTrig->trigRouting && dev->AOTaskSet->startTrig->trigRouting[0])
 		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->AOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->AOTaskSet->startTrig->trigRouting) );
 	else
 		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->AOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
@@ -10168,7 +10168,7 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	//----------------------
 	
 	// start trigger routing
-	if (dev->DITaskSet->startTrig->trigRouting && dev->DITaskSet->startTrig->trigRouting[0])
+	if (dev->DITaskSet->startTrig && dev->DITaskSet->startTrig->trigRouting && dev->DITaskSet->startTrig->trigRouting[0])
 		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->DITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->DITaskSet->startTrig->trigRouting) );
 	else
 		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->DITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
@@ -10355,7 +10355,7 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	//----------------------
 	
 	// start trigger routing
-	if (dev->DOTaskSet->startTrig->trigRouting && dev->DOTaskSet->startTrig->trigRouting[0])
+	if (dev->DOTaskSet->startTrig && dev->DOTaskSet->startTrig->trigRouting && dev->DOTaskSet->startTrig->trigRouting[0])
 		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->DOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->DOTaskSet->startTrig->trigRouting) );
 	else
 		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->DOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );

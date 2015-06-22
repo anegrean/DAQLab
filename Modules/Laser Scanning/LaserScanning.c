@@ -286,11 +286,17 @@ typedef struct {
 //---------------------------------------------------
 
 typedef enum {
+	// "grey"
 	ScanChanColor_Grey,		 // By default, in an RGB image all components get the same value
+	// "red"
 	ScanChanColor_Red,
+	// "green"
 	ScanChanColor_Green,
+	// "blue"
 	ScanChanColor_Blue
 } ScanChanColorScales;
+
+#define ScanChanColor_ColIdx	1
 
 
 typedef struct {
@@ -635,7 +641,6 @@ static int 							init_ScanEngine_type 								(ScanEngine_type** 			engine,
 								 														 LaserScanning_type*		lsModule,
 																						 TaskControl_type**			taskController,
 																						 ScanEngineEnum_type 		engineType,
-																						 uInt32						nScanChannels,
 																						 double						referenceClockFreq,
 																						 double						pixelDelay,
 																						 double						scanLensFL,
@@ -670,7 +675,6 @@ static RectRaster_type*				init_RectRaster_type								(LaserScanning_type*	lsMo
 																			 	 	 	char 					engineName[],
 																						BOOL					finiteFrames,
 																						size_t					nFrames,
-																						uInt32					nScanChannels,
 																				 	 	double					galvoSamplingRate,
 																				 	 	double					referenceClockFreq,
 																					 	double					pixelDelay,
@@ -759,7 +763,11 @@ static int							Load 												(DAQLabModule_type* mod, int workspacePanHndl)
 
 static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
+static int 							LoadCfg_ScanChannels 								(ScanEngine_type* scanEngine, ActiveXMLObj_IXMLDOMElement_ scanEngineXMLElement, ERRORINFO* xmlErrorInfo);
+
 static int 							SaveCfg 											(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo);
+
+static int 							SaveCfg_ScanChannels 								(ScanEngine_type* scanEngine, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ scanEngineXMLElement, ERRORINFO* xmlErrorInfo);
 
 static int 							DisplayPanels										(DAQLabModule_type* mod, BOOL visibleFlag); 
 
@@ -1349,7 +1357,6 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		
 		DAQLabXMLNode 	scanEngineAttr[] 	= {	{"Name", 						BasicData_CString, 		tcName},
 												{"FiniteFrames", 				BasicData_Bool, 		&tcMode},
-												{"NScanChannels", 				BasicData_UInt, 		&scanEngine->nScanChans},  
 												{"NFrames", 					BasicData_UInt, 		&nFrames},
 												{"ScanEngineType", 				BasicData_UInt, 		&scanEngineType},
 												{"FastAxisCalibrationName", 	BasicData_CString, 		fastAxisCalName},
@@ -1364,13 +1371,16 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		errChk( DLAddToXMLElem(xmlDOM, scanEngineXMLElement, scanEngineAttr, DL_ATTRIBUTE, NumElem(scanEngineAttr), xmlErrorInfo) );
 		OKfree(tcName);
 		
+		// save channels
+		errChk( SaveCfg_ScanChannels(scanEngine, xmlDOM, scanEngineXMLElement, xmlErrorInfo) ); 
+		
 		// save objectives to objectives XML element
 		nObjectives = ListNumItems(scanEngine->objectives);
 		for (size_t j = 0; j < nObjectives; j++) {
 			objectivePtr = ListGetPtrToItem(scanEngine->objectives, j);
 			
-			DAQLabXMLNode	objectivesAttr[] = { 	{"Name", BasicData_CString, (*objectivePtr)->objectiveName},
-													{"FL", BasicData_Double, &(*objectivePtr)->objectiveFL}	};
+			DAQLabXMLNode	objectivesAttr[] = { {"Name", BasicData_CString, (*objectivePtr)->objectiveName},
+												 {"FL", BasicData_Double, &(*objectivePtr)->objectiveFL} };
 			
 			errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Objective", &objectiveXMLElement) );
 			errChk( DLAddToXMLElem(xmlDOM, objectiveXMLElement, objectivesAttr, DL_ATTRIBUTE, NumElem(objectivesAttr), xmlErrorInfo) ); 
@@ -1429,6 +1439,40 @@ Error:
 	
 	return error;
 	
+}
+
+static int SaveCfg_ScanChannels (ScanEngine_type* scanEngine, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ scanEngineXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int								error						= 0;
+	ActiveXMLObj_IXMLDOMElement_	scanChannelsXMLElement		= 0;
+	ActiveXMLObj_IXMLDOMElement_	scanChannelXMLElement		= 0;
+	
+	// create scan channels XML element
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "ScanChannels", &scanChannelsXMLElement) );    
+	
+	for (size_t i = 0; i < scanEngine->nScanChans; i++) {
+		// create channel element
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Channel", &scanChannelXMLElement) );
+		uInt32	chanColor = (uInt32)scanEngine->scanChans[i]->color;
+		DAQLabXMLNode	scanChannelAttr[] 	= { {"Color", BasicData_UInt, &chanColor} };
+		// save scan channel attributes
+		errChk( DLAddToXMLElem(xmlDOM, scanChannelXMLElement, scanChannelAttr, DL_ATTRIBUTE, NumElem(scanChannelAttr), xmlErrorInfo) );
+		// add scan channel XML element to scan channels XML element
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (scanChannelsXMLElement, xmlErrorInfo, scanChannelXMLElement, NULL) );  
+		OKfreeCAHndl(scanChannelXMLElement);
+	}
+	
+	// add scan channels element to scan engine element
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (scanEngineXMLElement, xmlErrorInfo, scanChannelsXMLElement, NULL) ); 
+	OKfreeCAHndl(scanChannelsXMLElement);
+	
+	return 0;
+	
+Error:
+	
+	OKfreeCAHndl(scanChannelsXMLElement);
+	OKfreeCAHndl(scanChannelXMLElement);
+	return error;
 }
 
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
@@ -1507,7 +1551,6 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	double							referenceClockFreq				= 0;
 	double							pixelDelay						= 0;
 	BOOL							finiteFrames					= FALSE;
-	unsigned int					nScanChannels					= 0;
 	unsigned int					nFrames							= 0;
 	char*							assignedObjectiveName			= NULL;
 	char*							objectiveName					= NULL;
@@ -1515,7 +1558,6 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	Objective_type*					objective						= NULL;
 	DAQLabXMLNode					scanEngineGenericAttr[] 		= {	{"Name", 						BasicData_CString, 		&scanEngineName},
 																		{"FiniteFrames", 				BasicData_Bool, 		&finiteFrames},
-																		{"NScanChannels", 				BasicData_UInt, 		&nScanChannels},
 																		{"NFrames", 					BasicData_UInt, 		&nFrames},
 																		{"ScanEngineType", 				BasicData_UInt, 		&scanEngineType},
 																		{"FastAxisCalibrationName", 	BasicData_CString, 		&fastAxisCalibrationName},
@@ -1590,7 +1632,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 				//-----------------------------------  
 					
 				
-				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, finiteFrames, nFrames, nScanChannels, galvoSamplingRate, referenceClockFreq, 
+				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, finiteFrames, nFrames, galvoSamplingRate, referenceClockFreq, 
 							 pixelDelay, height, heightOffset, width, widthOffset, pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
 				break;
 			
@@ -1619,6 +1661,9 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 			}
 		}
 		
+		// load scan channels
+		errChk( LoadCfg_ScanChannels(scanEngine, (ActiveXMLObj_IXMLDOMElement_)scanEngineNode, xmlErrorInfo) );
+		
 		// load objectives
 		errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(objectivesXMLElement, xmlErrorInfo, "Objective", &objectivesNodeList) );
 		errChk ( ActiveXML_IXMLDOMNodeList_Getlength(objectivesNodeList, xmlErrorInfo, &nObjectives) );
@@ -1630,7 +1675,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 			// assign objective to scan engine
 			if (!strcmp(objectiveName, assignedObjectiveName)) {
 				scanEngine->objectiveLens = objective;
-				// MAKE SURE THIS IS DONE AFTER READING IS TUBE LENS AND SCAN LENS FL AND SCAN AXIS SETTINGS
+				// MAKE SURE THIS IS DONE AFTER READING TUBE LENS AND SCAN LENS FL AND SCAN AXIS SETTINGS
 				// update both scan axes
 				if (scanEngine->fastAxisCal)
 					(*scanEngine->fastAxisCal->UpdateOptics) (scanEngine->fastAxisCal);
@@ -1671,6 +1716,52 @@ Error:
 	OKfreeCAHndl(axisCalibrationNodeList);
 	
 	return error;	
+}
+
+static int LoadCfg_ScanChannels (ScanEngine_type* scanEngine, ActiveXMLObj_IXMLDOMElement_ scanEngineXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int								error 						= 0;
+	ActiveXMLObj_IXMLDOMElement_	scanChannelsXMLElement		= 0;
+	ActiveXMLObj_IXMLDOMNodeList_	scanChannelsNodeList		= 0;
+	ActiveXMLObj_IXMLDOMNode_		scanChannelNode				= 0;
+	long							nScanChannels				= 0;
+	uInt32							chanColor 					= 0;
+	DAQLabXMLNode					scanChannelAttr[] 			= { {"Color", BasicData_UInt, &chanColor} };
+	
+	// get channels XML element
+	DLGetSingleXMLElementFromElement(scanEngineXMLElement, "ScanChannels", &scanChannelsXMLElement);
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(scanChannelsXMLElement, xmlErrorInfo, "Channel", &scanChannelsNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(scanChannelsNodeList, xmlErrorInfo, &nScanChannels) );
+	OKfreeCAHndl(scanChannelsXMLElement);
+	
+	scanEngine->nScanChans = (uInt32) nScanChannels; 
+	if (nScanChannels)
+		nullChk( scanEngine->scanChans = calloc(nScanChannels, sizeof(ScanChan_type*)) );
+	for (long i = 0; i < nScanChannels; i++)
+		nullChk( scanEngine->scanChans[i] = init_ScanChan_type(scanEngine, i+1) );
+	
+	// get channel attributes
+	for (long i = 0; i < nScanChannels; i++) {
+		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(scanChannelsNodeList, xmlErrorInfo, i, &scanChannelNode) );
+		errChk( DLGetXMLNodeAttributes(scanChannelNode, scanChannelAttr, NumElem(scanChannelAttr)) ); 
+		scanEngine->scanChans[i]->color = chanColor;
+		OKfreeCAHndl(scanChannelNode);
+	}
+	
+	OKfreeCAHndl(scanChannelsNodeList);
+	
+	return 0;
+	
+Error:
+	
+	OKfreeCAHndl(scanChannelsXMLElement);
+	OKfreeCAHndl(scanChannelsNodeList);
+	OKfreeCAHndl(scanChannelNode);
+	scanEngine->nScanChans = 0;
+	OKfree(scanEngine->scanChans);
+	
+	return error;
+	
 }
 
 static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ axisCalibrationsElement, ERRORINFO* xmlErrorInfo)
@@ -1981,7 +2072,18 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	SetPanelAttribute(engine->engineSetPanHndl, ATTR_TITLE, panTitle);
 	OKfree(panTitle);
 	
+	// populate channels
 	InsertTableRows(engine->engineSetPanHndl, ScanSetPan_Channels, -1, engine->nScanChans, VAL_USE_MASTER_CELL_TYPE);
+	for (size_t i = 0; i < engine->nScanChans; i++) {
+		Point			chanCell 	= {ScanChanColor_ColIdx, i+1};
+		// insert available channel colors
+		InsertTableCellRingItem(engine->engineSetPanHndl, ScanSetPan_Channels, chanCell, ScanChanColor_Grey, "grey");
+		InsertTableCellRingItem(engine->engineSetPanHndl, ScanSetPan_Channels, chanCell, ScanChanColor_Red, "red");
+		InsertTableCellRingItem(engine->engineSetPanHndl, ScanSetPan_Channels, chanCell, ScanChanColor_Green, "green");
+		InsertTableCellRingItem(engine->engineSetPanHndl, ScanSetPan_Channels, chanCell, ScanChanColor_Blue, "blue");
+		// select channel color
+		SetTableCellValFromIndex(engine->engineSetPanHndl, ScanSetPan_Channels, chanCell, (int)engine->scanChans[i]->color);
+	}
 	
 	// add callback to all controls in the panel
 	SetCtrlsInPanCBInfo(engine, ScanEngineSettings_CB, engine->engineSetPanHndl); 
@@ -2087,7 +2189,8 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					
 						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 					
-							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, TRUE, 1, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
+							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, TRUE, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 
+											0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
 							
 							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;   
 							
@@ -2714,6 +2817,41 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					RegisterDLScanChan(engine->scanChans[engine->nScanChans - 1]);
 					
 					InsertTableRows(panel, ScanSetPan_Channels, -1, 1, VAL_USE_MASTER_CELL_TYPE);
+					
+					// add default gray scale
+					GetNumTableRows(panel, ScanSetPan_Channels, &nRows);
+					Point	chanCell = {ScanChanColor_ColIdx, nRows};
+					// insert available channel colors
+					InsertTableCellRingItem(panel, ScanSetPan_Channels, chanCell, ScanChanColor_Grey, "grey");
+					InsertTableCellRingItem(panel, ScanSetPan_Channels, chanCell, ScanChanColor_Red, "red");
+					InsertTableCellRingItem(panel, ScanSetPan_Channels, chanCell, ScanChanColor_Green, "green");
+					InsertTableCellRingItem(panel, ScanSetPan_Channels, chanCell, ScanChanColor_Blue, "blue");
+					// select channel color
+					SetTableCellValFromIndex(panel, ScanSetPan_Channels, chanCell, ScanChanColor_Grey);
+					break;
+					
+				case ScanSetPan_Channels:
+					
+					// eventData1 = Row of cell where event was generated. If the event affected multiple cells, such as when you sort or paste a range of cells, eventData1 is set to 0.
+					// eventData2 = Column of cell where event was generated. If the event affected multiple cells, such as when you sort or paste a range of cells, eventData2 is set to 0.
+					
+					switch (eventData2) {
+							
+						case ScanChanColor_ColIdx: // channel color
+							
+							Point	cell 		= {eventData2, eventData1};
+							int		nChars  	= 0;
+							char*	colorLabel 	= NULL;
+							GetTableCellValLength(panel, control, cell, &nChars);
+							colorLabel = malloc((nChars+1)*sizeof(char));
+							GetTableCellVal(panel, control, cell, colorLabel);
+							if (!strcmp("grey", colorLabel)) engine->scanChans[eventData1-1]->color = ScanChanColor_Grey;
+							if (!strcmp("red", colorLabel)) engine->scanChans[eventData1-1]->color = ScanChanColor_Red;
+							if (!strcmp("green", colorLabel)) engine->scanChans[eventData1-1]->color = ScanChanColor_Green;
+							if (!strcmp("blue", colorLabel)) engine->scanChans[eventData1-1]->color = ScanChanColor_Blue;
+							OKfree(colorLabel);
+							break;
+					}
 					
 					break;
 					
@@ -3807,7 +3945,6 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 								 LaserScanning_type*		lsModule,
 								 TaskControl_type**			taskControllerPtr,
 								 ScanEngineEnum_type 		engineType,
-								 uInt32						nScanChannels,
 								 double						referenceClockFreq,
 								 double						pixelDelay,
 								 double						scanLensFL,
@@ -3871,7 +4008,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	engine->VChanNPixels				= NULL;
 	engine->VChanROITiming				= NULL;
 	engine->scanChans 					= NULL;
-	engine->nScanChans					= nScanChannels;
+	engine->nScanChans					= 0;
 	// optics
 	engine->objectives					= 0;
 	// new objective panel handle
@@ -3914,11 +4051,6 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	// register Sink VChans with the task controller
 	AddSinkVChan(engine->taskControl, engine->VChanFastAxisPos, NULL);
 	AddSinkVChan(engine->taskControl, engine->VChanSlowAxisPos, NULL);
-	
-	if (nScanChannels)
-		nullChk( engine->scanChans 					= calloc(nScanChannels, sizeof(ScanChan_type*)) );
-	for (size_t i = 0; i < nScanChannels; i++)
-		nullChk( engine->scanChans[i] = init_ScanChan_type(engine, i+1) );
 	
 	// cleanup
 	OKfree(fastAxisComVChanName);
@@ -4204,7 +4336,6 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 												char 					engineName[], 
 												BOOL					finiteFrames,
 												size_t					nFrames,
-												uInt32					nScanChannels,
 												double					galvoSamplingRate,
 												double					referenceClockFreq,
 												double					pixelDelay,
@@ -4234,7 +4365,7 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 	SetTaskControlIterationTimeout(taskController, TaskControllerIterationTimeout);
 	
 	// init scan engine base class
-	errChk( init_ScanEngine_type((ScanEngine_type**)&engine, lsModule, &taskController, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, nScanChannels, referenceClockFreq, pixelDelay, scanLensFL, tubeLensFL) );
+	errChk( init_ScanEngine_type((ScanEngine_type**)&engine, lsModule, &taskController, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, referenceClockFreq, pixelDelay, scanLensFL, tubeLensFL) );
 	// override discard method
 	engine->baseClass.Discard = discard_RectRaster_type;
 	

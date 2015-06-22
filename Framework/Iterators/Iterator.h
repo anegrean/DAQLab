@@ -60,7 +60,7 @@ typedef void (*DiscardDataFptr_type) (void** PtrToData);		// Function pointer fo
 Iterator_type*			init_Iterator_type			(char name[]);
 
 	// Discards a given iterator and all the data or iterators contained within recursively
-void					discard_Iterator_type		(Iterator_type** iterator);
+void					discard_Iterator_type		(Iterator_type** iteratorPtr);
 
 
 void 					RemoveFromParentIterator	(Iterator_type* iterator);

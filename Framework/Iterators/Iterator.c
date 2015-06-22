@@ -37,15 +37,13 @@ struct Iterator {
 	TC_DS_Data_type*		ds_data;				// pointer to DataStorage data
 };
 
-//Task controller Data Storage data, 
-//Is send inside a datapacket to the datastorage module
-//to save the data in the proper location 
+// Task controller data packet indexing and used by the the datastorage module
 struct TC_DS_Data{
-	char*			groupname;  	// to create a HDF5 group for the dataset
-	BOOL			stackeddata;	// true if data is stacked
-	unsigned int 	datasetrank;	// rank of the dataset 
-	unsigned int 	datarank;		// rank of the data (1 for waveform, 2 for Images)
-	unsigned int*	iter_indices;   // array of indices of the dataset
+	char*					groupname;  			// Create an HDF5 group for the dataset.
+	BOOL					stackeddata;			// True if data is stacked, False otherwise.
+	unsigned int 			datasetrank;			// Dataset rank. 
+	unsigned int 			datarank;				// Data element rank (1 for waveform, 2 for Images).
+	unsigned int*			iter_indices;   		// Dataset index array.
 };
 
    
@@ -55,13 +53,15 @@ struct TC_DS_Data{
 //==============================================================================
 // Static functions
 
+static TC_DS_Data_type* 			init_TC_DS_Data_type						(void);       
+
 //==============================================================================
 // Global variables
 
 //==============================================================================
 // Global functions
 
-TC_DS_Data_type* init_TC_DS_Data_type(void);
+
 
 
 Iterator_type* init_Iterator_type (char name[])
@@ -89,7 +89,31 @@ Error:
 	return NULL;
 }
 
+void discard_Iterator_type (Iterator_type** iteratorPtr)
+{
+	Iterator_type* 		iterator		= *iteratorPtr;
+	size_t 				nObjects		= 0;
+	Iterator_type**		iterObjectPtr	= NULL;
 
+	if (!iterator) return;
+	if (!iterator->name) return;
+	
+	OKfree(iterator->name);
+	
+	nObjects 		= ListNumItems(iterator->iterObjects);   
+	for (size_t i = 1; i <= nObjects; i++) {
+		iterObjectPtr = ListGetPtrToItem(iterator->iterObjects, i);
+		if (iterator->iterType == Iterator_Iterator)
+			discard_Iterator_type(iterObjectPtr);   							// discard recursively if object is another iterator
+		else
+			(*(*iterObjectPtr)->discardDataFptr)	((void**)iterObjectPtr);	// discard data if data type iterator
+	}   
+		
+	ListDispose(iterator->iterObjects); 
+	discard_TC_DS_Data_type(&iterator->ds_data);
+
+	OKfree(*iteratorPtr);
+}   
 
 
 void RemoveFromParentIterator(Iterator_type* iterator)
@@ -111,40 +135,6 @@ void RemoveFromParentIterator(Iterator_type* iterator)
 	}	
 }
 
-
-
-   
-void discard_Iterator_type (Iterator_type** iteratorptr)
-{
-	Iterator_type* iterator=*iteratorptr;
-	size_t 				nObjects;
-	Iterator_type**		iterObjectPtr;
-	size_t 				i;
-	
-	if (!iterator) return;
-	if (iterator->name==NULL) return;
-	OKfree(iterator->name);
-	
-	
-	
-	nObjects 		= ListNumItems(iterator->iterObjects);   
-	for (i = 1; i <= nObjects; i++) {
-		iterObjectPtr = ListGetPtrToItem(iterator->iterObjects, i);
-		if (iterator->iterType == Iterator_Iterator)  {
-			discard_Iterator_type(iterObjectPtr);   							// discard recursively if object is another iterator
-			
-		}
-		else
-			(*(*iterObjectPtr)->discardDataFptr)	((void**)iterObjectPtr);	// discard data if data type iterator
-	}   
-		
-	ListDispose(iterator->iterObjects); 
-	if (iterator->ds_data) discard_TC_DS_Data_type(&iterator->ds_data);
-
-	OKfree(*iteratorptr);
-}   
-
-
 IterTypes GetIteratorType (Iterator_type* iterator)
 {
 	return iterator->iterType;
@@ -155,9 +145,9 @@ Iterator_type* GetIteratorParent (Iterator_type* iterator)
 	return iterator->parent;
 }
 
-void SetIteratorType (Iterator_type* iterator,IterTypes itertype)
+void SetIteratorType (Iterator_type* iterator, IterTypes itertype)
 {
-	iterator->iterType=itertype;
+	iterator->iterType = itertype;
 }
 
 size_t GetIteratorSize (Iterator_type* iterator)
@@ -195,16 +185,15 @@ char* GetCurrentIterName(Iterator_type* iterator)
 	return StrDup(iterator->name);	
 }
 
-void SetCurrentIterName(Iterator_type* iterator,char* name)
+void SetCurrentIterName(Iterator_type* iterator, char* name)
 {
-	iterator->name=name;	
+	iterator->name = name;	
 }
 
-void  SetCurrentIterIndex	(Iterator_type* iterator,size_t index)
+void  SetCurrentIterIndex	(Iterator_type* iterator, size_t index)
 {
-	iterator->currentIterIdx=index;
+	iterator->currentIterIdx = index;
 }
-
 
 ListType GetCurrentIteratorSet	(Iterator_type* iterator)
 {
@@ -329,113 +318,124 @@ ListType IterateOverIterators (Iterator_type* iterator)
 	
 }
 
-
-void FillDSData(Iterator_type* iterator,TC_DS_Data_type* ds_data,unsigned int datarank)	    //
-{
-	int 			rank=0;
-	Iterator_type* 	parentiter;
-	Iterator_type* 	childiter; 
-	char*			tcname;
-	char*			name; 
-	size_t			iteridx;
-	char* 			fullgroupname;
-	BOOL			determining_rank=TRUE;
-	int 			indices[MAXDATARANK];   
-	size_t			totaliter;
-	BOOL			stackdata;
-
-	if (iterator==NULL) {
-		ds_data=NULL;
-		return;
-	}
-	
-	parentiter=GetIteratorParent(iterator);
-	if (parentiter==NULL) {  //no parent
-		ds_data=NULL;
-		return;
-	}
-	iteridx=GetCurrentIterIndex(iterator);  
-	totaliter=GetTotalIterations(iterator);
-	//send indices of sending tc  as well
-	indices[rank]=iteridx;	
-	rank++;  
-	
-	tcname=GetCurrentIterName(parentiter);
-	iteridx=GetCurrentIterIndex(parentiter); 
-	stackdata=GetIteratorStackData(parentiter);
-	fullgroupname=malloc(MAXGROUPNAME*sizeof(char));  
-	if (!stackdata) Fmt(fullgroupname, "%s<%s[w3]#%i",tcname,iteridx); 
-	else Fmt(fullgroupname, "%s<%s[w3]",tcname); 
-	OKfree(tcname);
-	while (parentiter!=NULL){
-		if (determining_rank&&stackdata) {
-			indices[rank]=GetCurrentIterIndex(parentiter);
-			rank++;
-		}
-		else {
-			determining_rank=FALSE;	
-		}
-		childiter=parentiter;
-		parentiter=GetIteratorParent(childiter);
-		if (parentiter==NULL) {
-			break;  //no more parent
-		}
-		tcname=GetCurrentIterName(parentiter);
-		iteridx=GetCurrentIterIndex(parentiter);
-		stackdata=GetIteratorStackData(parentiter); 
-		name=malloc(MAXGROUPNAME*sizeof(char));
-		if (!stackdata) Fmt(name, "%s<%s[w3]#%i",tcname,iteridx); 
-		else Fmt(name, "%s<%s[w3]",tcname); 		
-		AddStringPrefix (&fullgroupname,"/",-1);    
-		AddStringPrefix (&fullgroupname,name,-1);
-		OKfree(tcname);
-		OKfree(name);
-	}
-	
-	if (rank!=0){
-		OKfree(ds_data->iter_indices);
-		ds_data->iter_indices=malloc(rank*sizeof(unsigned int));
-		//rearrange rank; Most significant rank first
-		for (int i=0;i<rank; i++) ds_data->iter_indices[i]=indices[rank-i-1];
-	}
-	else ds_data->iter_indices=NULL;
-	
-	ds_data->groupname=StrDup(fullgroupname);
-	ds_data->datasetrank=rank;
-	ds_data->stackeddata=iterator->stackdata; 
-	ds_data->datarank=datarank;
-	
-	free(fullgroupname);
-	
-}
-
-
-	//get DataStorage data from the iterator
-void					SetIteratorDSdata			(Iterator_type* iterator,TC_DS_Data_type* dsdata)
+//get DataStorage data from the iterator
+void SetIteratorDSdata (Iterator_type* iterator,TC_DS_Data_type* dsdata)
 {
 	 iterator->ds_data=dsdata;
 }
 
-//set DS data 
-TC_DS_Data_type*		GetIteratorDSdata			(Iterator_type* iterator,unsigned int datarank)
+// set DS data 
+TC_DS_Data_type* GetIteratorDSdata (Iterator_type* iterator, unsigned int datarank)
 {
-	 TC_DS_Data_type* ds_data=init_TC_DS_Data_type();
-	 
-	 FillDSData(iterator,ds_data,datarank);  
-	 
-	 return ds_data;
+	int					error						= 0;
+	int 				rank						= 0;
+	TC_DS_Data_type* 	ds_data						= NULL;  
+	Iterator_type* 		parentIterator				= NULL;
+	Iterator_type* 		childIterator				= NULL; 
+	char*				tcName						= NULL;
+	char*				name						= NULL;
+	char* 				fullGroupName				= NULL;
+	size_t				iterIdx						= 0;
+	BOOL				determining_rank			= TRUE;
+	int 				indices[MAXDATARANK]		= {0};   
+	size_t				totalIter					= 0;
+	BOOL				stackData					= FALSE;
+	
+	if (!iterator)
+		return NULL;
+	
+	nullChk( ds_data = init_TC_DS_Data_type() );
+
+	parentIterator = GetIteratorParent(iterator);
+	// no parent
+	if (!parentIterator)  
+		return NULL;
+	
+	iterIdx 	= GetCurrentIterIndex(iterator);  
+	totalIter 	= GetTotalIterations(iterator);
+	
+	// send indices of sending tc as well
+	indices[rank] = iterIdx;	
+	rank++;  
+	
+	tcName			= GetCurrentIterName(parentIterator);
+	iterIdx			= GetCurrentIterIndex(parentIterator); 
+	stackData		= GetIteratorStackData(parentIterator);
+	nullChk( fullGroupName = malloc(MAXGROUPNAME * sizeof(char)) );
+	
+	if (!stackData) 
+		Fmt(fullGroupName, "%s<%s[w3]#%i",tcName,iterIdx); 
+	else 
+		Fmt(fullGroupName, "%s<%s[w3]",tcName); 
+	
+	OKfree(tcName);
+	
+	while (parentIterator) {
+		
+		if (determining_rank && stackData) {
+			indices[rank] = GetCurrentIterIndex(parentIterator);
+			rank++;
+		} else
+			determining_rank = FALSE;	
+		
+		childIterator 	= parentIterator;
+		parentIterator	= GetIteratorParent(childIterator);
+		
+		if (!parentIterator)
+			break;  //no more parent
+		
+		tcName			= GetCurrentIterName(parentIterator);
+		iterIdx			= GetCurrentIterIndex(parentIterator);
+		stackData		= GetIteratorStackData(parentIterator); 
+		nullChk( name 	= malloc(MAXGROUPNAME * sizeof(char)) );
+		
+		if (!stackData) 
+			Fmt(name, "%s<%s[w3]#%i",tcName,iterIdx); 
+		else 
+			Fmt(name, "%s<%s[w3]",tcName);
+		
+		AddStringPrefix(&fullGroupName,"/",-1);    
+		AddStringPrefix(&fullGroupName,name,-1);
+		OKfree(tcName);
+		OKfree(name);
+	}
+	
+	if (rank){
+		OKfree(ds_data->iter_indices);
+		nullChk( ds_data->iter_indices = malloc(rank*sizeof(unsigned int)) );
+		//rearrange rank; Most significant rank first
+		for (int i = 0; i < rank; i++) 
+			ds_data->iter_indices[i] = indices[rank-i-1];
+	} else 
+		ds_data->iter_indices = NULL;
+	
+	ds_data->groupname		= StrDup(fullGroupName);
+	ds_data->datasetrank	= rank;
+	ds_data->stackeddata	= iterator->stackdata; 
+	ds_data->datarank		= datarank;
+	
+	OKfree(fullGroupName);  
+	
+	return ds_data;
+	
+Error:
+	
+	OKfree(ds_data);
+	
+	return NULL;
 }
 
 
-TC_DS_Data_type* init_TC_DS_Data_type(void)
+static TC_DS_Data_type* init_TC_DS_Data_type(void)
 {
 	TC_DS_Data_type* ds_data	= malloc(sizeof(TC_DS_Data_type));
+	if (!ds_data) return NULL;
 	
 	ds_data->groupname			= NULL;
 	ds_data->stackeddata		= FALSE;
 	ds_data->datasetrank		= 0;
-	ds_data->iter_indices		= NULL;
 	ds_data->datarank			= 0;
+	ds_data->iter_indices		= NULL;
 	
 	return ds_data;
 }
@@ -444,18 +444,16 @@ void discard_TC_DS_Data_type (TC_DS_Data_type** dsDataPtr)
 { 
 	TC_DS_Data_type*	dsData = *dsDataPtr;
 	
-	if (!dsData) {
-		OKfree(*dsDataPtr);
-		return;
-	}
+	if (!dsData) return;
+	
 	OKfree(dsData->groupname);
-	//OKfree(dsData->iter_indices); 
+	OKfree(dsData->iter_indices); 
 	
 	OKfree(*dsDataPtr);
 }   
 
 
-void SetDSdataGroupname	(TC_DS_Data_type* dsdata,char* groupname)
+void SetDSdataGroupname	(TC_DS_Data_type* dsdata, char* groupname)
 {
 	dsdata->groupname=groupname;
 }

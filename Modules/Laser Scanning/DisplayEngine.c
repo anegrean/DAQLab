@@ -40,6 +40,7 @@
 void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 								DiscardFptr_type						discardFptr,
 								DisplayImageFptr_type					displayImageFptr,
+								DisplayRGBImageFptr_type				displayRGBImageFptr,
 								DiscardFptr_type						imageDiscardFptr,
 								GetImageDisplayFptr_type				getImageDisplayFptr,
 								GetImageDisplayCBDataFptr_type			getImageDisplayCBDataFptr,
@@ -51,7 +52,8 @@ void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 							 	ErrorHandlerFptr_type					errorHandlerCBFptr		)
 {
 	displayEngine->discardFptr 					= discardFptr;
-	displayEngine->displayImageFptr 			= displayImageFptr; 
+	displayEngine->displayImageFptr 			= displayImageFptr;
+	displayEngine->displayRGBImageFptr			= displayRGBImageFptr;
 	displayEngine->imageDiscardFptr				= imageDiscardFptr;
 	displayEngine->getImageDisplayFptr 			= getImageDisplayFptr;
 	displayEngine->getImageDisplayCBDataFptr	= getImageDisplayCBDataFptr;
@@ -70,7 +72,6 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 								ImgDisplayCBData_type					imageDisplayCBData 		)
 {
 	int			error	= 0;
-	ListType	ROIlist;
 	
 	
 	//--------------------------------------
@@ -89,7 +90,7 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 	imageDisplay->ROITextBackground.R			= 0;
 	imageDisplay->ROITextBackground.G			= 0;	
 	imageDisplay->ROITextBackground.B			= 0;	
-	imageDisplay->ROITextBackground.A			= 255;	// transparent
+	imageDisplay->ROITextBackground.alpha		= 255;	// transparent
 	imageDisplay->ROITextFontSize				= Default_ROI_Label_FontSize;
 	imageDisplay->ROIEvent						= ROI_Placed;
 	
@@ -107,10 +108,6 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 	imageDisplay->discardCallbackDataFunctions	= NULL;
 	
 	return 0;
-	
-Error:
-	
-	return error;
 	
 }
 

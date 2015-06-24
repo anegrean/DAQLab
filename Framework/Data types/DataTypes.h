@@ -106,28 +106,37 @@ typedef struct Image		Image_type;
 
 typedef enum {
 	
-	Image_UChar,					// 8 bit unsigned
-	Image_UShort,					// 16 bit unsigned
-	Image_Short,					// 16 bit signed
-	Image_UInt,						// 32 bit unsigned
-	Image_Int,						// 32 bit signed
-	Image_Float,					// 32 bit float
-
+	Image_UChar,					// 8 bit unsigned pixel array
+	Image_UShort,					// 16 bit unsigned pixel array
+	Image_Short,					// 16 bit signed pixel array
+	Image_UInt,						// 32 bit unsigned pixel array
+	Image_Int,						// 32 bit signed pixel array
+	Image_Float,					// 32 bit float pixel array
+	Image_RGBA,						// RGBA_type pixel array
+	Image_RGBAU64,					// RGBAU64_type pixel array
+	
 } ImageTypes;
 
 	//----------------------------------------------------------------------------------------------
 	// Color
 	//----------------------------------------------------------------------------------------------
 
+// identical to NI Vision's RGBValue_struct
 typedef struct RGBA		RGBA_type;
-
 struct RGBA {
-	
-	unsigned char R;     								// Red value of the color. 
+	unsigned char B;     								// Blue value of the color.
 	unsigned char G;     								// Green value of the color.
-    unsigned char B;     								// Blue value of the color.
-    unsigned char A; 									// Alpha value of the color (0 = transparent, 255 = opaque).
-	
+	unsigned char R;     								// Red value of the color. 
+    unsigned char alpha; 								// Alpha value of the color (0 = transparent, 255 = opaque).
+};
+
+// identical to NI Vision's RGBU64Value_struct
+typedef struct RGBAU64	RGBAU64_type;
+struct RGBAU64 {
+    unsigned short B;     								// Blue value of the color.
+    unsigned short G;     								// Green value of the color.
+    unsigned short R;     								// Red value of the color.
+    unsigned short alpha; 								// Alpha value of the color (0 = transparent, 255 = opaque).
 };
 
 	//----------------------------------------------------------------------------------------------
@@ -481,37 +490,42 @@ double   					GetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* p
 //---------------------------------------------------------------------------------------------------------  
 // Images
 //---------------------------------------------------------------------------------------------------------
-	// Creates a image container for void* basic data allocated with malloc.
-Image_type*					init_Image_type						(ImageTypes imageType, int imgHeight, int imgWidth, void** imgDataPtr);
+	// Creates an image container for void* basic data allocated with malloc.
+Image_type*					init_Image_type							(ImageTypes imageType, int imgHeight, int imgWidth, void** imgDataPtr);
 
 	// Discards the image container and its data allocated with malloc.
-void 						discard_Image_type 					(Image_type** imagePtr);
+void 						discard_Image_type 						(Image_type** imagePtr);
 
-Image_type* 				copy_Image_type						(Image_type* imgSource);
+	// Set/Get
 
-void						GetImageSize						(Image_type* image, int* widthPtr, int* heightPtr);
+void						GetImageSize							(Image_type* image, int* widthPtr, int* heightPtr);
 
-void 						SetImagePixSize 					(Image_type* image, double pixSize);
+void 						SetImagePixSize 						(Image_type* image, double pixSize);
 
-double	 					GetImagePixSize 					(Image_type* image);
+double	 					GetImagePixSize 						(Image_type* image);
 
-void 						SetImageTopLeftXCoord 				(Image_type* image, double imgTopLeftXCoord);
+void 						SetImageTopLeftXCoord 					(Image_type* image, double imgTopLeftXCoord);
 
-void 						SetImageTopLeftYCoord 				(Image_type* image, double imgTopLeftYCoord);
+void 						SetImageTopLeftYCoord 					(Image_type* image, double imgTopLeftYCoord);
 
-void 						SetImageZCoord 						(Image_type* image, double imgZCoord);
+void 						SetImageZCoord 							(Image_type* image, double imgZCoord);
 
-void						GetImageCoordinates					(Image_type* image, double* imgTopLeftXCoordPtr, double* imgTopLeftYCoordPtr, double* imgZCoordPtr);
+void						SetImageCoord							(Image_type* image, double imgTopLeftXCoord, double imgTopLeftYCoord, double imgZCoord);
 
-void* 						GetImagePixelArray 					(Image_type* image);
+void						GetImageCoordinates						(Image_type* image, double* imgTopLeftXCoordPtr, double* imgTopLeftYCoordPtr, double* imgZCoordPtr);
+
+void* 						GetImagePixelArray 						(Image_type* image);
 	
-ImageTypes	 				GetImageType 						(Image_type* image);
+ImageTypes	 				GetImageType 							(Image_type* image);
 
-size_t 						GetImageSizeofData 					(Image_type* image);
+size_t 						GetImageSizeofData 						(Image_type* image);
 
-void 						SetImageROIs 						(Image_type* image, ListType ROIs);
+void 						SetImageROIs 							(Image_type* image, ListType ROIs);
 
-ListType 					GetImageROIs 						(Image_type* image);
+ListType 					GetImageROIs 							(Image_type* image);
+
+	// Image operations
+Image_type* 				copy_Image_type							(Image_type* imgSource);
 
 
 //---------------------------------------------------------------------------------------------------------  

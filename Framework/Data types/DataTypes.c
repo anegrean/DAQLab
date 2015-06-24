@@ -903,6 +903,13 @@ void SetImageZCoord (Image_type* image, double imgZCoord)
 	image->imgZCoord = imgZCoord; 
 }
 
+void SetImageCoord (Image_type* image, double imgTopLeftXCoord, double imgTopLeftYCoord, double imgZCoord)
+{
+	image->imgTopLeftXCoord = imgTopLeftXCoord;
+	image->imgTopLeftYCoord = imgTopLeftYCoord;
+	image->imgZCoord 		= imgZCoord;
+}
+
 void GetImageCoordinates (Image_type* image, double* imgTopLeftXCoordPtr, double* imgTopLeftYCoordPtr, double* imgZCoordPtr)
 {
 	if (imgTopLeftXCoordPtr)
@@ -980,7 +987,7 @@ static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], Disc
 	ROI->rgba.R			= 0;
 	ROI->rgba.G			= 0;
 	ROI->rgba.B			= 0;
-	ROI->rgba.A			= 0;
+	ROI->rgba.alpha		= 0;
 	
 	
 	ROI->discardFptr	= discardFptr;
@@ -1092,11 +1099,11 @@ ROI_type* copy_ROI_type (ROI_type* ROI)
 	}
 	
 	// copy ROI base class properties
-	ROICopy->active = ROI->active;
-	ROICopy->rgba.A = ROI->rgba.A;
-	ROICopy->rgba.B = ROI->rgba.B;
-	ROICopy->rgba.G = ROI->rgba.G;
-	ROICopy->rgba.R = ROI->rgba.R;
+	ROICopy->active 	= ROI->active;
+	ROICopy->rgba.alpha = ROI->rgba.alpha;
+	ROICopy->rgba.B 	= ROI->rgba.B;
+	ROICopy->rgba.G 	= ROI->rgba.G;
+	ROICopy->rgba.R 	= ROI->rgba.R;
 	
 	return ROICopy;
 }

@@ -36,8 +36,7 @@ typedef struct NIImageDisplay	NIImageDisplay_type;	// Child class of ImageDispla
 // External variables
 
 //==============================================================================
-// Global functions
-		
+// Global functions			 
 
 //--------------------------------------------------------------------------------------------------------------------------
 // NI Vision Engine management

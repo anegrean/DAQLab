@@ -83,6 +83,9 @@ typedef void							(*ErrorHandlerFptr_type)					(ImageDisplay_type* imgDisplay, 
 	// Displays or updates an image in a display window
 typedef int								(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type** image);
 
+	// Displays an 8 bit RGB image in a display window regardless of the input image format
+typedef int								(*DisplayRGBImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type** imageR, Image_type** imageG, Image_type** imageB);	
+
 	// Obtains a display handle from the display engine that can be passed to other functions like updating the image
 typedef ImageDisplay_type*				(*GetImageDisplayFptr_type)					(DisplayEngine_type* displayEngine, void* callbackData, int imgHeight, int imgWidth, ImageTypes imageType);
 
@@ -127,6 +130,8 @@ struct DisplayEngine {
 	CopyImageFptr_type					imageCopyFptr;					// Method to copy image data
 	
 	DisplayImageFptr_type				displayImageFptr;
+	
+	DisplayRGBImageFptr_type			displayRGBImageFptr;
 	
 	GetImageDisplayFptr_type			getImageDisplayFptr;
 	
@@ -200,6 +205,7 @@ struct ImageDisplay {
 void									init_DisplayEngine_type					(DisplayEngine_type* 					displayEngine,
 																				 DiscardFptr_type						discardFptr,
 																				 DisplayImageFptr_type					displayImageFptr,
+																				 DisplayRGBImageFptr_type				displayRGBImageFptr,
 																				 DiscardFptr_type						imageDiscardFptr,
 																				 GetImageDisplayFptr_type				getImageDisplayFptr,
 																				 GetImageDisplayCBDataFptr_type			getImageDisplayCBDataFptr,

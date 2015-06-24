@@ -3106,8 +3106,6 @@ static void discard_Dev_type(Dev_type** devPtr)
 	if ((*devPtr)->nActiveTasks)
 		CmtDiscardTSV((*devPtr)->nActiveTasks);
 	
-
-	
 	// DAQmx task settings
 	discard_ADTaskSet_type(&(*devPtr)->AITaskSet);
 	discard_ADTaskSet_type(&(*devPtr)->AOTaskSet);

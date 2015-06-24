@@ -101,6 +101,9 @@ static void 					discard_NIImageDisplay_type 					(NIImageDisplay_type** display
 static void 					discard_NIDisplayEngine_type 					(NIDisplayEngine_type** niVisionDisplayPtr);
 
 static int						DisplayNIVisionImage							(NIImageDisplay_type* imgDisplay, Image_type** image);
+
+static int						DisplayNIVisionRGBImage							(NIImageDisplay_type* imgDisplay, Image_type** imageR, Image_type** imageG, Image_type** imageB);	
+
 	// displays a file selection popup-box and saves a given NI image as two grayscale TIFF files with ZIP compression with and without ROI flattened
 static int 						ImageSavePopup 									(Image* image, char** errorInfo);
 
@@ -147,6 +150,7 @@ NIDisplayEngine_type* init_NIDisplayEngine_type (	intptr_t 					parentWindowHndl
 	init_DisplayEngine_type(	&niVision->baseClass, 
 								(DiscardFptr_type) discard_NIDisplayEngine_type, 
 								(DisplayImageFptr_type) DisplayNIVisionImage,
+								(DisplayRGBImageFptr_type) DisplayNIVisionRGBImage,
 								(DiscardFptr_type) DiscardImaqImg,
 								(GetImageDisplayFptr_type) GetNIImageDisplay,
 								(GetImageDisplayCBDataFptr_type) GetNIImageDisplayCBData,
@@ -281,6 +285,11 @@ Error:
 	return error;
 }
 
+static int DisplayNIVisionRGBImage (NIImageDisplay_type* imgDisplay, Image_type** imageR, Image_type** imageG, Image_type** imageB)
+{
+	
+}
+
 static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, void* callbackData, int imgHeight, int imgWidth, ImageTypes imageType)
 {
 	int				imaqHndl				= 0;	// imaq window ID
@@ -359,6 +368,14 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 			
 		case Image_Float:
 			imaqImgType 		= IMAQ_IMAGE_SGL; 
+			break;
+			
+		case Image_RGBA:
+			imaqImgType 		= IMAQ_IMAGE_RGB; 
+			break;
+			
+		case Image_RGBAU64:
+			imaqImgType 		= IMAQ_IMAGE_RGB_U64; 
 			break;
 			
 		default:
@@ -449,7 +466,7 @@ static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 	RGBValue			rgbVal 				= { .R		= ROI->rgba.R,
 												.G		= ROI->rgba.G,
 												.B		= ROI->rgba.B,
-												.alpha	= ROI->rgba.A	};
+												.alpha	= ROI->rgba.alpha };
 	Point				textPoint;
 	
 	OverlayTextOptions	overlayTextOptions	= {	.fontName					="Arial",
@@ -463,7 +480,7 @@ static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 												.backgroundColor			= {imgDisplay->baseClass.ROITextBackground.R,
 														  					   imgDisplay->baseClass.ROITextBackground.G,
 																			   imgDisplay->baseClass.ROITextBackground.B,
-																			   imgDisplay->baseClass.ROITextBackground.A},
+																			   imgDisplay->baseClass.ROITextBackground.alpha},
 												.angle						= 0				};
 	
 	// overlay ROI on the image

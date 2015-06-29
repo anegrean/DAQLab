@@ -31,9 +31,18 @@
 	//----------------------------------------------------------------------------------------------
 	// Function types
 	//---------------------------------------------------------------------------------------------- 
-	
-typedef void (*DiscardFptr_type) (void** dataPtr);  // generic function type to dispose of dinamically allocated data
+
+	// Generic function type to dispose of dinamically allocated data
+typedef void (*DiscardFptr_type) (void** dataPtr);
+
+	// Generic callback
+typedef void (*CallbackFptr_type) (void* objectRef, int event, void* callbackData);
 		
+	//----------------------------------------------------------------------------------------------
+	// Callback group
+	//----------------------------------------------------------------------------------------------
+typedef struct CallbackGroup	CallbackGroup_type;
+
 	//----------------------------------------------------------------------------------------------
 	// Basic types
 	//----------------------------------------------------------------------------------------------  
@@ -552,13 +561,30 @@ void						discard_ROI_type						(ROI_type** ROIPtr);
 	// Copies a ROI
 ROI_type*					copy_ROI_type							(ROI_type* ROI);
 
+	// Discards a list of ROI_type* elements
+	
+void						DiscardROIList							(ListType* ROIListPtr);
+
+	// Copies a ROI list. ListType of ROI_type* elements.
+ListType					CopyROIList								(ListType ROIList);
+
 	// Generates a unique ROI name given an existing ROI_type* list, starting with a single letter "a", 
 	// trying each letter alphabetically, after which it increments the number of characters and starts again e.g."aa", "ab"
 char*						GetDefaultUniqueROIName					(ListType ROIList);
 
 int							SetROIName								(ROI_type* ROI, char newName[]);
 
+//----------------------------------------------------------------------------------------------
+// Callback group
+//----------------------------------------------------------------------------------------------
 
+	// Creates a callback group. Each callback function has its own dinamically allocated callback data. By providing discardCallbackDataFunctions, the callback data
+	// will be disposed of automatically when discarding the callback group. If this is not needed, then pass NULL instead of a discard function pointer.
+CallbackGroup_type*			init_CallbackGroup_type					(void* objectRef, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions);
+
+void						discard_CallbackGroup_type				(CallbackGroup_type** callbackGroupPtr);
+
+void						FireCallbackGroup						(CallbackGroup_type* callbackGroup, int event);
 
 
 

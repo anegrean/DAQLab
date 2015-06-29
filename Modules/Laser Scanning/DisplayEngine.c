@@ -44,11 +44,9 @@ void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 								DiscardFptr_type						imageDiscardFptr,
 								GetImageDisplayFptr_type				getImageDisplayFptr,
 								GetImageDisplayCBDataFptr_type			getImageDisplayCBDataFptr,
-								SetRestoreImgSettingsCBsFptr_type		setRestoreImgSettingsFptr, 
 								OverlayROIFptr_type						overlayROIFptr,
 								ROIActionsFptr_type						ROIActionsFptr,
 							 	ROIEvents_CBFptr_type					ROIEventsCBFptr,
-								ImageDisplay_CBFptr_type				imgDisplayEventCBFptr,
 							 	ErrorHandlerFptr_type					errorHandlerCBFptr		)
 {
 	displayEngine->discardFptr 					= discardFptr;
@@ -57,11 +55,9 @@ void init_DisplayEngine_type (	DisplayEngine_type* 					displayEngine,
 	displayEngine->imageDiscardFptr				= imageDiscardFptr;
 	displayEngine->getImageDisplayFptr 			= getImageDisplayFptr;
 	displayEngine->getImageDisplayCBDataFptr	= getImageDisplayCBDataFptr;
-	displayEngine->setRestoreImgSettingsFptr	= setRestoreImgSettingsFptr;
 	displayEngine->overlayROIFptr				= overlayROIFptr;
 	displayEngine->ROIActionsFptr				= ROIActionsFptr;
 	displayEngine->ROIEventsCBFptr				= ROIEventsCBFptr;
-	displayEngine->imgDisplayEventCBFptr		= imgDisplayEventCBFptr;
 	displayEngine->errorHandlerCBFptr			= errorHandlerCBFptr;
 	
 }
@@ -71,9 +67,7 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 								DisplayEngine_type* 					displayEngine,
 								ImgDisplayCBData_type					imageDisplayCBData 		)
 {
-	int			error	= 0;
-	
-	
+
 	//--------------------------------------
 	// init
 	//--------------------------------------
@@ -97,22 +91,12 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 	// methods
 	imageDisplay->discardFptr					= discardFptr;       
 	
-	//----------------------
 	// callbacks
-	//----------------------
-	
-	// restore settings
-	imageDisplay->nRestoreSettingsCBs			= 0;
-	imageDisplay->restoreSettingsCBs			= NULL;
-	imageDisplay->restoreSettingsCBsData		= NULL;
-	imageDisplay->discardCallbackDataFunctions	= NULL;
+	imageDisplay->callbacks						= NULL;
 	
 	return 0;
 	
 }
-
-
-
 
 void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 {
@@ -122,19 +106,7 @@ void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 	
 	discard_Image_type(&imageDisplay->image);
 	
-	//----------------------------------------------------------
-	// Restore callbacks
-	for (size_t i = 0; i < imageDisplay->nRestoreSettingsCBs; i++)
-		if (imageDisplay->discardCallbackDataFunctions[i])
-			(*imageDisplay->discardCallbackDataFunctions[i]) (&imageDisplay->restoreSettingsCBsData[i]);	
-		else
-			OKfree(imageDisplay->restoreSettingsCBsData[i]);
-	
-	imageDisplay->nRestoreSettingsCBs = 0;
-	OKfree(imageDisplay->discardCallbackDataFunctions);
-	OKfree(imageDisplay->restoreSettingsCBs);
-	OKfree(imageDisplay->restoreSettingsCBsData);
-	//----------------------------------------------------------
+	discard_CallbackGroup_type(&imageDisplay->callbacks);
 	
 	OKfree(*imageDisplayPtr);
 }
@@ -152,6 +124,3 @@ void discard_DisplayEngineClass (DisplayEngine_type** displayEnginePtr)
 	// free displayEnginePtr
 	OKfree(*displayEnginePtr); 
 }
-
-
-

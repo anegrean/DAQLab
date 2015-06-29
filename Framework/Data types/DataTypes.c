@@ -30,19 +30,33 @@
 
 //==============================================================================
 // Types
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Callback group
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+struct CallbackGroup {
+	void*						objectRef;				// Reference to object owing the callback group.
+	size_t 						nCBs;					// Number of callbacks to be called.
+	CallbackFptr_type* 			CBs;					// Callback array called sequencially.
+	void** 						CBsData;				// Array of callback data assigned to each callback function.
+	DiscardFptr_type* 			discardCBsData;   		// Array of callback data discard functions to automatically dispose of the callback data when the callback group is disposed. 
+																// If a function is NULL, then data is not disposed of automatically when disposing of the callback group.
+};
+
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Images
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 struct Image { 
-	ImageTypes							imageType;				// pixel data type.
-	int									imgHeight;				// image height in [pix].
-	int									imgWidth;				// image width in [pix].
-	void*								pixData;				// pixel array of imageType data type.
-	double								pixSize;				// image pixel size in [um].
-	double								imgTopLeftXCoord;		// image top-left corner X-Axis coordinates in [um].
-	double								imgTopLeftYCoord;		// image top-left corner Y-Axis coordinates in [um].
-	double								imgZCoord;				// image z-axis (height) location in [um].
-	ListType							ROIs;					// list of ROIs added to the image of ROI_type*.
+	ImageTypes					imageType;				// pixel data type.
+	int							imgHeight;				// image height in [pix].
+	int							imgWidth;				// image width in [pix].
+	void*						pixData;				// pixel array of imageType data type.
+	double						pixSize;				// image pixel size in [um].
+	double						imgTopLeftXCoord;		// image top-left corner X-Axis coordinates in [um].
+	double						imgTopLeftYCoord;		// image top-left corner Y-Axis coordinates in [um].
+	double						imgZCoord;				// image z-axis (height) location in [um].
+	ListType					ROIs;					// list of ROIs added to the image of ROI_type*.
 };
 
 
@@ -51,13 +65,13 @@ struct Image {
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 struct Waveform {
-	WaveformTypes			waveformType;						// Waveform data type.
-	char*					waveformName;						// Name of signal represented by the waveform. 
-	char*					unitName;							// Physical SI unit such as V, A, Ohm, etc.
-	double					dateTimestamp;						// Number of seconds since midnight, January 1, 1900 in the local time zone.
-	double					samplingRate;						// Sampling rate in [Hz]. If 0, sampling rate is not given.
-	size_t					nSamples;							// Number of samples in the waveform.
-	void*					data;								// Array of waveformType elements.
+	WaveformTypes				waveformType;			// Waveform data type.
+	char*						waveformName;			// Name of signal represented by the waveform. 
+	char*						unitName;				// Physical SI unit such as V, A, Ohm, etc.
+	double						dateTimestamp;			// Number of seconds since midnight, January 1, 1900 in the local time zone.
+	double						samplingRate;			// Sampling rate in [Hz]. If 0, sampling rate is not given.
+	size_t						nSamples;				// Number of samples in the waveform.
+	void*						data;					// Array of waveformType elements.
 };
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -65,14 +79,14 @@ struct Waveform {
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 struct RepeatedWaveform {
-	RepeatedWaveformTypes	waveformType;						// Waveform data type. 
-	char*					waveformName;						// Name of signal represented by the waveform.
-	char*					unitName;							// Physical SI unit such as V, A, Ohm, etc.
-	double					dateTimestamp;						// Number of seconds since midnight, January 1, 1900 in the local time zone.  
-	double					samplingRate;						// Sampling rate in [Hz]. If 0, sampling rate is not given.
-	double					repeat;								// number of times to repeat the waveform.
-	size_t					nSamples;							// Number of samples in the waveform.
-	void*					data;								// Array of waveformType elements. 
+	RepeatedWaveformTypes		waveformType;			// Waveform data type. 
+	char*						waveformName;			// Name of signal represented by the waveform.
+	char*						unitName;				// Physical SI unit such as V, A, Ohm, etc.
+	double						dateTimestamp;			// Number of seconds since midnight, January 1, 1900 in the local time zone.  
+	double						samplingRate;			// Sampling rate in [Hz]. If 0, sampling rate is not given.
+	double						repeat;					// number of times to repeat the waveform.
+	size_t						nSamples;				// Number of samples in the waveform.
+	void*						data;					// Array of waveformType elements. 
 };
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -81,34 +95,34 @@ struct RepeatedWaveform {
 
 // Parent class
 struct PulseTrain {
-	PulseTrainTimingTypes		pulseType;						// Timing type.  
-	PulseTrainIdleStates		idleState;						// Counter output idle state.
-	PulseTrainModes				mode;							// Generation mode.
-	uInt64						nPulses;						// Number of pulses.
+	PulseTrainTimingTypes		pulseType;				// Timing type.  
+	PulseTrainIdleStates		idleState;				// Counter output idle state.
+	PulseTrainModes				mode;					// Generation mode.
+	uInt64						nPulses;				// Number of pulses.
 };
 
 // Pulse train defined by frequency
 struct PulseTrainFreqTiming {
 	PulseTrain_type				baseClass;
-	double 						frequency;						// Pulse frequencu in [Hz].
-	double 						dutyCycle;						// Width of the pulse divided by the period in [%].  
-	double						initialDelay;    		   		// Initial delay in [s].
+	double 						frequency;				// Pulse frequencu in [Hz].
+	double 						dutyCycle;				// Width of the pulse divided by the period in [%].  
+	double						initialDelay;    		// Initial delay in [s].
 };
 
 // Pulse train defined by pulse duration
 struct PulseTrainTimeTiming {
 	PulseTrain_type				baseClass; 
-	double 						highTime;   					// The time the pulse stays high in [s].
-	double 						lowTime;    					// The time the pulse stays low in [s].
-	double						initialDelay;    		    	// Initial delay in [s].
+	double 						highTime;   			// The time the pulse stays high in [s].
+	double 						lowTime;    			// The time the pulse stays low in [s].
+	double						initialDelay;    		// Initial delay in [s].
 };
 
 // Pulse train defined by number of ticks
 struct PulseTrainTickTiming {
 	PulseTrain_type				baseClass; 
-	uInt32 						highTicks;						// Number of ticks for high state.
-	uInt32 						lowTicks;						// Number of ticks for low state.
-	uInt32 						delayTicks;						// Number of delay ticks after receiving a start trigger.
+	uInt32 						highTicks;				// Number of ticks for high state.
+	uInt32 						lowTicks;				// Number of ticks for low state.
+	uInt32 						delayTicks;				// Number of delay ticks after receiving a start trigger.
 };
 
 
@@ -820,17 +834,12 @@ void discard_Image_type (Image_type** imagePtr)
 	
 	if (!image) return;
 	
-	//free image data
+	// free image data
 	OKfree(image->pixData);
 	
-	//free ROIs
-	size_t nROIs = ListNumItems(image->ROIs);
-	for (size_t i = 1; i <= nROIs; i++) {
-		ROIPtr = ListGetPtrToItem(image->ROIs, i);
-		discard_ROI_type(ROIPtr);
-	}
-	OKfreeList(image->ROIs);
-	
+	// free ROIs
+	DiscardROIList(&image->ROIs);
+
 	OKfree(*imagePtr);
 }
 
@@ -934,6 +943,8 @@ ImageTypes GetImageType (Image_type* image)
 
 void SetImageROIs (Image_type* image, ListType	ROIs)
 {
+	// free previous ROIs
+	DiscardROIList(&image->ROIs);
 	image->ROIs = ROIs; 
 }
 
@@ -1108,6 +1119,47 @@ ROI_type* copy_ROI_type (ROI_type* ROI)
 	return ROICopy;
 }
 
+void DiscardROIList (ListType* ROIListPtr)
+{
+	ListType	ROIList = *ROIListPtr;
+	
+	if (!ROIList) return;
+	
+	// free ROIs
+	size_t 			nROIs 	= ListNumItems(ROIList);
+	ROI_type** 		ROIPtr	= NULL;
+	for (size_t i = 1; i <= nROIs; i++) {
+		ROIPtr = ListGetPtrToItem(ROIList, i);
+		discard_ROI_type(ROIPtr);
+	}
+	
+	OKfreeList(*ROIListPtr);
+}
+
+ListType CopyROIList (ListType ROIList)
+{
+	int				error		= 0;
+	ListType		listCopy 	= 0;
+	size_t 			nROIs 		= ListNumItems(ROIList);
+	ROI_type* 		ROI			= NULL;
+	ROI_type*		ROICopy		= NULL;
+	
+	nullChk( listCopy = ListCreate(sizeof(ROI_type*)) );
+	
+	for (size_t i = 1; i <= nROIs; i++) {
+		ROI = *(ROI_type**) ListGetPtrToItem(ROIList, i);
+		nullChk( ROICopy = copy_ROI_type(ROI) );
+		ListInsertItem(listCopy, &ROICopy, END_OF_LIST);
+	}
+	
+	return listCopy;
+	
+Error:
+	
+	DiscardROIList(&listCopy);
+	return 0;
+}
+
 char* GetDefaultUniqueROIName (ListType ROIList)
 {
 	char*		newName			= NULL;
@@ -1149,7 +1201,6 @@ char* GetDefaultUniqueROIName (ListType ROIList)
 	return newName;
 }
 
-
 int SetROIName (ROI_type* ROI, char newName[])
 {
 	int		error = 0;
@@ -1163,4 +1214,65 @@ int SetROIName (ROI_type* ROI, char newName[])
 Error:
 	
 	return error;
+}
+
+CallbackGroup_type* init_CallbackGroup_type	(void* objectRef, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions)
+{
+	int						error 	= 0;
+	CallbackGroup_type*		cbg 	= malloc(sizeof(CallbackGroup_type));
+	if (!cbg) return NULL;
+	
+	// init
+	cbg->objectRef		= objectRef;
+	cbg->nCBs 			= nCallbackFunctions;
+	cbg->CBs			= NULL;
+	cbg->CBsData		= NULL;
+	cbg->discardCBsData = NULL;
+	
+	// alloc
+	nullChk( cbg->CBs 				= malloc (nCallbackFunctions * sizeof(CallbackFptr_type)) );
+	nullChk( cbg->CBsData   		= malloc (nCallbackFunctions * sizeof(void*)) );
+	nullChk( cbg->discardCBsData	= malloc (nCallbackFunctions * sizeof(DiscardFptr_type)) );
+	
+	for (size_t i = 0; i < nCallbackFunctions; i++) {
+		cbg->CBs[i] 				= callbackFunctions[i];
+		cbg->CBsData[i]				= callbackData[i];
+		cbg->discardCBsData[i] 		= discardCallbackDataFunctions[i];
+	}
+	
+	return cbg;
+	
+Error:
+	
+	OKfree(cbg->CBs);
+	OKfree(cbg->CBsData);
+	OKfree(cbg->discardCBsData);
+	
+	free(cbg);
+	return NULL;
+}
+
+void discard_CallbackGroup_type (CallbackGroup_type** callbackGroupPtr)
+{
+	CallbackGroup_type*		cbg = *callbackGroupPtr;
+	if (!cbg) return;
+	
+	// discard restore settings callback data
+	for (size_t i = 0; i < cbg->nCBs; i++)
+		if (cbg->discardCBsData[i])
+			(*cbg->discardCBsData[i]) (&cbg->CBsData[i]);	
+	
+	OKfree(cbg->CBs);
+	OKfree(cbg->CBsData); 
+	OKfree(cbg->discardCBsData);
+
+	OKfree(*callbackGroupPtr);
+}
+
+void FireCallbackGroup (CallbackGroup_type* callbackGroup, int event)
+{
+	for (size_t i = 0; i < callbackGroup->nCBs; i++)
+		if (callbackGroup->CBs[i]) 
+			(*callbackGroup->CBs[i]) (callbackGroup->objectRef, event, callbackGroup->CBsData[i]);
+	
 }

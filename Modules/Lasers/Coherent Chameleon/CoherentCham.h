@@ -36,3 +36,6 @@
 		
 DAQLabModule_type*		initalloc_CoherentCham 			(DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl);
 void 					discard_CoherentCham	 		(DAQLabModule_type** mod);
+
+
+#endif  /* ndef __ChameleonTiSa_H__ */  

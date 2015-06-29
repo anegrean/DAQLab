@@ -8616,15 +8616,17 @@ Error:
 
 static void discard_ReadAIData_type (ReadAIData_type** readAIPtr)
 {
-	if (!*readAIPtr) return;
+	ReadAIData_type*	readAI = *readAIPtr;
 	
-	OKfree((*readAIPtr)->nIntBuffElem);
+	if (!readAI) return;
 	
-	if ((*readAIPtr)->intBuffers) {
-		for (size_t i = 0; i < (*readAIPtr)->nAI; i++)
-			OKfree((*readAIPtr)->intBuffers[i]);
+	OKfree(readAI->nIntBuffElem);
+	
+	if (readAI->intBuffers) {
+		for (size_t i = 0; i < readAI->nAI; i++)
+			OKfree(readAI->intBuffers[i]);
 		
-		OKfree((*readAIPtr)->intBuffers);
+		OKfree(readAI->intBuffers);
 	}
 	
 	OKfree(*readAIPtr);

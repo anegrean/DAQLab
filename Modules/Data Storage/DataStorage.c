@@ -32,7 +32,7 @@
 #define MAXBASEFILEPATH			MAX_PATHNAME_LEN
 
 //test
-#define  DATAFILEBASEPATH 		"C:\\Rawdata\\"
+#define DATAFILEBASEPATH 		"C:\\Rawdata\\"
 #define VChanDataTimeout							1e4					// Timeout in [ms] for Sink VChans to receive data  
 
 
@@ -57,7 +57,7 @@ struct DatStore {
 		
 	TaskControl_type*	taskController;
 	
-			//-------------------------
+		//-------------------------
 		// UI
 		//-------------------------
 
@@ -78,8 +78,8 @@ struct DatStore {
 		//-------------------------
 		// Channels
 		//-------------------------
-		// Available datastorage channel data. Of DS_Channel_type* 
-	ListType					channels;
+		// Available datastorage channels. Of DS_Channel_type* 
+	ListType			channels;
 	
 };
 
@@ -88,42 +88,26 @@ struct DatStore {
 
 //==============================================================================
 // Static functions
-static void	RedrawDSPanel (DataStorage_type* ds);
 
-static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static void					RedrawDSPanel 			(DataStorage_type* ds);
+
+static int 					DataReceivedTC 			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
 
 //-----------------------------------------
 // Data Storage Task Controller Callbacks
 //-----------------------------------------
-static int 					ConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int 					UnConfigureTC 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 //datastorage module shouldn't iterate
-static void					IterateTC				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
-static void 				AbortIterationTC		(TaskControl_type* taskControl, BOOL const* abortFlag);
-static int					StartTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					DoneTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					StoppedTC				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					TaskTreeStateChange 	(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
-static void					TCActive				(TaskControl_type* taskControl, BOOL UITCActiveFlag);
-static int				 	ResetTC 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
-static int					ModuleEventHandler		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
-//-----------------------------------------
-// DataStorage Task Controller Callbacks
 //-----------------------------------------
 
 
-
-
-static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int eventData1, int eventData2);
-static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-static int Load (DAQLabModule_type* mod, int workspacePanHndl)  ;
+static int CVICALLBACK 		UIPan_CB 				(int panel, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 		UICtrls_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int 					Load 					(DAQLabModule_type* mod, int workspacePanHndl);
 
 //==============================================================================
 // Global variables
-
-//test
-//char*				menudatapath;  
 
 //==============================================================================
 // Global functions
@@ -154,8 +138,8 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	ds->overwrite_files		= FALSE;
 	
 	// create Data Storage Task Controller
-	tc = init_TaskControl_type (instanceName, ds, DLGetCommonThreadPoolHndl(), ConfigureTC, UnConfigureTC, IterateTC, StartTC, ResetTC,
-								 DoneTC, StoppedTC, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC);
+	tc = init_TaskControl_type (instanceName, ds, DLGetCommonThreadPoolHndl(), NULL, NULL, NULL, NULL, NULL,
+								 NULL, NULL, TaskTreeStateChange, NULL, NULL, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
 	//------------------------------------------------------------
@@ -201,8 +185,6 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 
 }
 
-
-
 static DS_Channel_type* init_DS_Channel_type (DataStorage_type* ds, int panHndl, char VChanName[])
 {
 	DLDataTypes allowedPacketTypes[] = { DL_Waveform_Char,						
@@ -237,19 +219,13 @@ static void	discard_DS_Channel_type (DS_Channel_type** chan)
 	DataStorage_type* 	ds				= (*chan)->dsInstance;
 	size_t				nchannels		= ListNumItems(ds->channels);
 	size_t				chIdx			= 1;
-	int 				i;
 	char*				vchanname		= NULL;
 	char*				discvchanname		= NULL; 
 	
 	if (!*chan) return;
 
-//	if ((*chan)->panHndl) {
-//		DiscardPanel((*chan)->panHndl);
-//		(*chan)->panHndl = 0;
-//	}
-	
 	// remove channel     
-	for (i = 1; i <= nchannels; i++) {	
+	for (size_t i = 1; i <= nchannels; i++) {	
 		chanPtr = ListGetPtrToItem(ds->channels, i);
 		vchanname=GetVChanName((VChan_type*)(*chanPtr)->VChan);
 		discvchanname=GetVChanName((VChan_type*)(*chan)->VChan);
@@ -325,31 +301,24 @@ void discard_DataStorage (DAQLabModule_type** mod)
 }
 
 
-
-
-
-
-
- //creates a usable data dir, returns nonzero if failed
-int CreateRawDataDir(DataStorage_type* 	ds,TaskControl_type* taskControl)
+//creates a usable data dir, returns nonzero if failed
+int CreateRawDataDir(DataStorage_type* ds, TaskControl_type* taskControl)
 {
-	char*			  rootname; 
-	char*			  tcname;
-	char*			  rawdatapath;
-	int 			  err=0;
-	ssize_t 		  fileSize;
-	char*			  pathName;
-	BOOL			  uniquedir;
-	int				  dircounter=0;
-	char*			  dirctrstr;
-	TaskControl_type* root_tc; 
+	char*			  rootname			= NULL; 
+	int 			  err				= 0;
+	ssize_t 		  fileSize			= 0;
+	char*			  pathName			= NULL;
+	BOOL			  uniquedir			= FALSE;
+	int				  dircounter		= 0;
+	char*			  dirctrstr			= NULL;
+	TaskControl_type* root_tc			= NULL; 
 	
 	
-	if (taskControl==NULL) return -1;
+	if (!taskControl) return -1;
 	
 	//determine dir name  
-	root_tc=GetTaskControlRootParent (taskControl);
-	rootname=GetTaskControlName(root_tc);
+	root_tc		= GetTaskControlRootParent (taskControl);
+	rootname	= GetTaskControlName(root_tc);
 
 	OKfree(ds->rawdatapath);
 	ds->rawdatapath=StrDup(ds->basefilepath);
@@ -386,63 +355,57 @@ int CreateRawDataDir(DataStorage_type* 	ds,TaskControl_type* taskControl)
 			}
 			
 		}
-	}
-	else  err=MakeDir(ds->rawdatapath);  
+	} else  
+		err = MakeDir(ds->rawdatapath);  
 	
-	
-		
 	return err;
 	
 }
 
 
-char* CreateFullIterName(Iterator_type*		currentiter)
+char* CreateFullIterName(Iterator_type*	currentiter)
 {
 	
-	Iterator_type* 	  childiter;
-	Iterator_type* 	  parentiter;
-	char*			  name;
-	char*			  fullname; 
-	char*			  tcname;
-	size_t			  iteridx;
+	Iterator_type* 	  childiter		= NULL;
+	Iterator_type* 	  parentiter	= NULL;
+	char*			  name			= NULL;
+	char*			  fullname		= NULL; 
+	char*			  tcname		= NULL;
+	size_t			  iteridx		= 0;
 	
 	if (currentiter==NULL) return NULL;
 	
 	parentiter = GetIteratorParent(currentiter);
-	if (parentiter==NULL) return NULL;  //no parent
-	tcname=GetCurrentIterName(parentiter);
-	iteridx=GetCurrentIterIndex(parentiter);
-	fullname=malloc(MAXBASEFILEPATH*sizeof(char));  
+	if (!parentiter) return NULL;  //no parent
+	
+	tcname		= GetCurrentIterName(parentiter);
+	iteridx		= GetCurrentIterIndex(parentiter);
+	fullname	= malloc(MAXBASEFILEPATH*sizeof(char));  
 	Fmt (fullname, "%s<%s[w3]#%i",tcname,iteridx); 
 	OKfree(tcname);
-	while (parentiter!=NULL) {  
-		childiter=parentiter;
-		parentiter = GetIteratorParent(childiter);
-		if (parentiter==NULL) {
-			return fullname;  //no parent, return current name
-		}
-		tcname=GetCurrentIterName(parentiter);
-		iteridx=GetCurrentIterIndex(parentiter);
-		name=malloc(MAXBASEFILEPATH*sizeof(char));
+	
+	while (parentiter) {  
+		childiter	= parentiter;
+		parentiter	= GetIteratorParent(childiter);
+		if (!parentiter) return fullname;  //no parent, return current name
+		
+		tcname	= GetCurrentIterName(parentiter);
+		iteridx	= GetCurrentIterIndex(parentiter);
+		name	= malloc(MAXBASEFILEPATH*sizeof(char));
 		Fmt (name, "%s<%s[w3]#%i",tcname,iteridx);    		
 		AddStringPrefix (&fullname,"/",-1);    
 		AddStringPrefix (&fullname,name,-1);
 		OKfree(tcname);
 		OKfree(name);
 	}
-	return fullname;	
 	
+	return fullname;	
 }
-
-
-
 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 {
 	DataStorage_type* 	ds 			= (DataStorage_type*) mod;
-	int 				error		= 0; 
-	int 				numListLines=5;
-
+	
 	// load main panel
 	ds->mainPanHndl = LoadPanel(workspacePanHndl, UI_DataStorage, DSMain);
 	
@@ -459,86 +422,14 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	//default settings:
 
 	TaskControlEvent(ds->taskController, TC_Event_Configure, NULL, NULL);
-
-
-Error:
-
-	return error;
-
+	
+	return 0;
 }
-
-
 
 
 //-----------------------------------------
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
-
-  
-static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
-{
-	//DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-	
-	return 0;
-}
-
-static int UnConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
-{
-	//DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-	
-	return 0;
-}
- 
-static void	IterateTC	(TaskControl_type* taskControl,  BOOL const* abortIterationFlag)
-{
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-	
-	
-	//return immediate
-	TaskControlIterationDone (taskControl, 0, NULL,FALSE);
-
-}
-
-static void AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFlag)
-{
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);    
-}
-
-
-
-static int	StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
-{
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-	TaskControl_type*		parent;
-	char*					uiparentname;
-	
-
-	 
-	return 0;
-}
- 
-
-static int DoneTC (TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo)
-{
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-
-	return 0;
-}
-
-static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
-{
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-
-	return 0;
-}
-
-
-static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
-{
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-
-	return 0;
-}
 
 static int	TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
 {
@@ -561,53 +452,28 @@ static int	TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates st
 	return 0;
 }
 
- 
-static void	TCActive (TaskControl_type* taskControl, BOOL UITCActiveFlag)
-{
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-}
- 
-
 static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 {
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
-	int error=0;
-
-
 	// print error message
 	DLMsg(errorMsg, 1);
 }
  
-static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
-{
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl); 
-	
-	return 0;
-}
-
- 
-
-
 static void	RedrawDSPanel (DataStorage_type* ds)
 {
 	size_t		nChannels		= 0;
-	int			menubarHeight	= 0;
-	int			chanPanHeight	= 0;
-	int			chanPanWidth	= 0;
-	int			taskPanWidth	= 0;
-
+	
 	// count the number of channels in use
 	if (ds->channels) nChannels = ListNumItems(ds->channels); 
 	
-	if (nChannels>0) SetCtrlAttribute(ds->mainPanHndl,DSMain_COMMANDBUTTON_REM,ATTR_DIMMED,FALSE);
-	else SetCtrlAttribute(ds->mainPanHndl,DSMain_COMMANDBUTTON_REM,ATTR_DIMMED,TRUE); 
+	if (nChannels>0) SetCtrlAttribute(ds->mainPanHndl,DSMain_RemoveChan,ATTR_DIMMED,FALSE);
+	else SetCtrlAttribute(ds->mainPanHndl,DSMain_RemoveChan,ATTR_DIMMED,TRUE); 
 	
 
 }
 
 static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int eventData1, int eventData2)
 {
-		DataStorage_type* 	ds 			= callbackData;
+	//DataStorage_type* 	ds 			= callbackData;
 	
 	return 0;
 }
@@ -615,21 +481,19 @@ static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int e
 
 static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	DataStorage_type* 	ds 			= callbackData;
-	SinkVChan_type* 	sinkVChan;
-	DS_Channel_type*	chan		= NULL; 
-	DS_Channel_type**	chanPtr; 
-	char				buff[DAQLAB_MAX_VCHAN_NAME + 50];  
-	char*				vChanName;
-	char				channame[DAQLAB_MAX_VCHAN_NAME];
-	int 				numitems;
-	int 				checked;
-	int 				treeindex;
-	int 				i;
-	int 				channr=0;
-	int					itemIndex;
-	int 				reply;
-	char*				currentbasepath;
+	DataStorage_type* 		ds 									= callbackData;
+	DS_Channel_type*		chan								= NULL; 
+	DS_Channel_type**		chanPtr								= NULL; 
+	char					buff[DAQLAB_MAX_VCHAN_NAME + 50]	= "";  
+	char*					vChanName							= NULL;
+	char					channame[DAQLAB_MAX_VCHAN_NAME]		= "";
+	int 					numitems							= 0;
+	int 					checked								= 0;
+	int 					treeindex							= 0;
+	int 					i									= 0;
+	int 					channr								= 0;
+	int 					reply								= 0;
+	char*					currentbasepath						= NULL;
 	
 	
 	switch (event) {
@@ -637,136 +501,111 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 		case EVENT_COMMIT:
 			
 			switch (control) {
-					case DSMain_Channels: 
+					
+				case DSMain_Channels: 
+					
 					break;
 					
-					case DSMain_COMMANDBUTTON_ADD:
+				case DSMain_AddChan:
 					
-						
-						// channel checked, give new VChan name and add channel
-						vChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
-						if (!vChanName) {
-							return 0;	// action cancelled
-						}
-						// rename label in settings panel
-						sprintf(buff, "%s", vChanName);
-						GetNumListItems(panel, DSMain_Channels,&numitems);
-						InsertListItem(panel, DSMain_Channels, -1, buff,channr);        
+					// channel checked, give new VChan name and add channel
+					vChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
+					if (!vChanName) return 0;	// action cancelled
 					
-						// create channel
-						chan = init_DS_Channel_type(ds, panel, vChanName);
+					// rename label in settings panel
+					sprintf(buff, "%s", vChanName);
+					GetNumListItems(panel, DSMain_Channels,&numitems);
+					InsertListItem(panel, DSMain_Channels, -1, buff,channr);        
+					
+					// create channel
+					chan = init_DS_Channel_type(ds, panel, vChanName);
 		
-						// register VChan with DAQLab
-						DLRegisterVChan((DAQLabModule_type*)ds, (VChan_type*)chan->VChan);
-						AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC);
+					// register VChan with DAQLab
+					DLRegisterVChan((DAQLabModule_type*)ds, (VChan_type*)chan->VChan);
+					AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC);
 
-						// update main panel
-						RedrawDSPanel(ds);
-						free(vChanName);
+					// update main panel
+					RedrawDSPanel(ds);
+					free(vChanName);
 					break;
 					
-					case DSMain_COMMANDBUTTON_REM:
-						GetNumListItems(panel, DSMain_Channels,&numitems);    
-						for(treeindex=0;treeindex<numitems;treeindex++){
-							IsListItemChecked(panel,DSMain_Channels,treeindex, &checked);      
-							if (checked==1) {
-					   			// get channel name
-								GetLabelFromIndex (panel, DSMain_Channels, treeindex, channame); 
-								//get channel from list
-								if (ds->channels) {
-									numitems = ListNumItems(ds->channels); 
-										for ( i= 1; i <= numitems; i++) {
-											chanPtr = ListGetPtrToItem(ds->channels, i);
-											if (chanPtr!=NULL) chan=*chanPtr;
-											if (chan!=NULL) {
-												if (strcmp(GetVChanName(chan->VChan),channame)==0){   
-													//strings are equal; channel found
-													// discard channel data
-													discard_DS_Channel_type(&chan);
-													// update channel list 
-													DeleteListItem(panel,DSMain_Channels ,treeindex , 1);
-													return 0;
-												}
-											}
+				case DSMain_RemoveChan:
+					
+					GetNumListItems(panel, DSMain_Channels,&numitems);    
+					
+					for(treeindex = 0;treeindex < numitems; treeindex++){
+						IsListItemChecked(panel,DSMain_Channels,treeindex, &checked);      
+						if (checked == 1) {
+					   		// get channel name
+							GetLabelFromIndex (panel, DSMain_Channels, treeindex, channame); 
+							//get channel from list
+							if (ds->channels) {
+								numitems = ListNumItems(ds->channels); 
+								for (i = 1; i <= numitems; i++) {
+									chanPtr = ListGetPtrToItem(ds->channels, i);
+									if (chanPtr!=NULL) 
+										chan=*chanPtr;
+										
+									if (chan) {
+										if (!strcmp(GetVChanName((VChan_type*)chan->VChan), channame)){   
+										// strings are equal; channel found
+										// discard channel data
+										discard_DS_Channel_type(&chan);
+										// update channel list 
+										DeleteListItem(panel,DSMain_Channels ,treeindex , 1);
+										return 0;
 										}
+									}
 								}
 							}
 						}
-						// update main panel
-						RedrawDSPanel(ds);
+					}
+					// update main panel
+					RedrawDSPanel(ds);
 					break;
 					
-					case DSMain_Change:
-						currentbasepath=malloc(MAX_PATHNAME_LEN*sizeof(char));
-						GetCtrlVal(ds->mainPanHndl,DSMain_STRING,currentbasepath);
-						reply=DirSelectPopup (currentbasepath, "Select Base File Folder:", 1, 1, ds->basefilepath);
-						if (reply) SetCtrlVal(ds->mainPanHndl,DSMain_STRING,ds->basefilepath);
-						free(currentbasepath);
-						break;
-					case DSMain_STRING: 
+				case DSMain_Change:
+					
+					currentbasepath = malloc(MAX_PATHNAME_LEN*sizeof(char));
+					GetCtrlVal(ds->mainPanHndl,DSMain_STRING,currentbasepath);
+					reply=DirSelectPopup (currentbasepath, "Select Base File Folder:", 1, 1, ds->basefilepath);
+					if (reply) SetCtrlVal(ds->mainPanHndl,DSMain_STRING,ds->basefilepath);
+					free(currentbasepath);
+					break;
+					
+				case DSMain_STRING: 
+					
 						 //indicator only
 					break;
 					
-					case DSMain_CHECKBOX_OVERWRITE: 
-						 GetCtrlVal(panel,control,&ds->overwrite_files);
+				case DSMain_CHECKBOX_OVERWRITE:
+					
+					GetCtrlVal(panel,control,&ds->overwrite_files);
 					break;
 					
 			}
+			break;
+			
 	}
+	
 	return 0;
 }
-
-
-int SaveImage(char* filename,Image* image)
-{
-	int 			err=0;
-	TIFFFileOptions options;
-
- 	err=imaqWriteFile(image,filename, NULL); 
-	
-	return err;
-}
-
-int SaveTiffImage(char* filename,Image* image)
-{
-	int 			err=0;
-	TIFFFileOptions options;
-
-	options.photoInterp=IMAQ_BLACK_IS_ZERO;
-	options.compressionType=IMAQ_NO_COMPRESSION;
- 	err=imaqWriteTIFFFile(image,filename, &options, NULL); 
-	
-	return err;
-}
-
 
 static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)  
 {
 	
 	DataStorage_type*	ds											= GetTaskControlModuleData(taskControl);
-	unsigned int		nSamples									= 0;
 	int					error										= 0;
 	DataPacket_type**	dataPackets									= NULL;
 	size_t				nPackets									= 0;
-	size_t				nElem										= 0;
 	char*				sinkVChanName								= GetVChanName((VChan_type*)sinkVChan);
-	SourceVChan_type*   sourceVChan									= GetSourceVChan((VChan_type*)sinkVChan); 
+	SourceVChan_type*   sourceVChan									= GetSourceVChan(sinkVChan); 
 	char*				sourceVChanName								= GetVChanName((VChan_type*)sourceVChan);  
-	char* 				rawfilename									= NULL; 
-	int 				filehandle									= 0;
-	int 				elementsize									= 2;
 	char* 				errMsg 										= StrDup("Writing data to ");
-	char				cmtStatusMessage[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
 	void*				dataPacketDataPtr							= NULL;
 	DLDataTypes			dataPacketType								= 0; 
-	ImageDisplay_type*	imgDisplay									= NULL;
-	Image*				image										= NULL;
 	size_t 				i											= 0;
-	DS_Channel_type*	chan										= 0; 
-	int 				numitems									= 0;
 	TC_DS_Data_type*	dsdata										= NULL;
-	char*				fullitername								= NULL;
-	char*				channame									= NULL;	
 	Waveform_type*		waveform									= NULL;
 	Image_type*			receivedimage								= NULL;
 	

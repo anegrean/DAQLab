@@ -6017,8 +6017,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				errChk( (*displayEngine->setRestoreImgSettingsFptr) (imgBuffer->scanChan->imgDisplay, NumElem(restoreCBFns), restoreCBFns, callbackData, discardCallbackDataFunctions) );
 				
 				// send pixel array to display 
-				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, imgBuffer->imagePixels, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType,
-														    rectRaster->scanSettings.pixSize, 0, 0, 0) ); // TEMPORARY: X, Y & Z coordinates set to 0 for now
+				//errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, imgBuffer->imagePixels, rectRaster->scanSettings.height, rectRaster->scanSettings.width, imageType,
+				//										    rectRaster->scanSettings.pixSize, 0, 0, 0) ); // TEMPORARY: X, Y & Z coordinates set to 0 for now
 				 
 				  
 				//make a copy of the image structure
@@ -6027,7 +6027,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				int imagesize=(rectRaster->scanSettings.height*rectRaster->scanSettings.width)*pixbytes;
 				destbuffer=malloc(imagesize);
 				memcpy(destbuffer,imgBuffer->imagePixels,imagesize);
-				SetImageImage(sendimage,destbuffer);
+				SetImaI willgeImage(sendimage,destbuffer);
 				SetImagePixSize(sendimage,rectRaster->scanSettings.pixSize);
 				
 				Iterator_type* currentiter = GetTaskControlCurrentIterDup(rectRaster->baseClass.taskControl);

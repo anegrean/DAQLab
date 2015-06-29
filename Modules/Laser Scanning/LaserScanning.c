@@ -494,9 +494,15 @@ typedef struct {
 
 } RectRaster_type;
 
+// scan engine image display data binding
+typedef struct {
+	RectRaster_type*			scanEngine;
+	RectRasterScanSet_type		scanSettings;
+} RectRasterDisplayCBData_type; 
+
 // data structure binding used to launch image assembly in separate threads
 typedef struct{
-	RectRaster_type*			engine;
+	RectRaster_type*			scanEngine;
 	size_t 						imgBufferIdx;
 } RectRasterScanImgBuilderBind_type;
 
@@ -683,6 +689,10 @@ static RectRasterScanSet_type*			init_RectRasterScanSet_type							(double pixSi
 
 static void 							discard_RectRasterScanSet_type 						(RectRasterScanSet_type** scanSetPtr);
 
+	// scan engine image display callback data binding
+static RectRasterDisplayCBData_type* 	init_RectRasterDisplayCBData_type 					(RectRaster_type* scanEngine);
+static void 							discard_RectRasterDisplayCBData_type 				(RectRasterDisplayCBData_type** dataPtr);
+
 static RectRaster_type*					init_RectRaster_type								(LaserScanning_type*	lsModule, 
 																			 	 	 		char 					engineName[],
 																							BOOL					finiteFrames,
@@ -819,9 +829,9 @@ void 									SetRectRasterScanEngineModeVChans 					(RectRaster_type* scanEngin
 
 static void								ROIDisplay_CB										(ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI);
 
-static void								ImageDisplay_CB										(ImageDisplay_type* imgDisplay, void* callbackData, ImageDisplayEvents event);
+static void								ImageDisplay_CB										(ImageDisplay_type* imgDisplay, int event, void* callbackData);
 
-static int								RestoreImgSettings_CB								(DisplayEngine_type* displayEngine, ImageDisplay_type* imgDisplay, void* callbackData, char** errorInfo);
+static void								RestoreScanSettingsFromImageDisplay					(ImageDisplay_type* imgDisplay, RectRaster_type* scanEngine, RectRasterScanSet_type previousScanSettings); 
 
 static void								DisplayErrorHandler_CB								(ImageDisplay_type* imgDisplay, int errorID, char* errorInfo);
 
@@ -1236,7 +1246,6 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	GetPanelAttribute(ls->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHndl);
 	nullChk( ls->displayEngine = (DisplayEngine_type*)init_NIDisplayEngine_type(	workspaceWndHndl,
 																			   		ROIDisplay_CB,
-																					ImageDisplay_CB,
 																					DisplayErrorHandler_CB		) );
 	
 	return 0;
@@ -4355,6 +4364,22 @@ static void discard_RectRasterScanSet_type (RectRasterScanSet_type** scanSetPtr)
 	OKfree(*scanSetPtr);
 }
 
+static RectRasterDisplayCBData_type* init_RectRasterDisplayCBData_type (RectRaster_type* scanEngine)
+{
+	RectRasterDisplayCBData_type*	binding = malloc(sizeof(RectRasterDisplayCBData_type));
+	if (!binding) return NULL;
+	
+	binding->scanEngine		= scanEngine;
+	binding->scanSettings   = scanEngine->scanSettings;
+	
+	return binding;
+}
+
+static void discard_RectRasterDisplayCBData_type (RectRasterDisplayCBData_type** dataPtr)
+{
+	OKfree(*dataPtr);	
+}
+
 static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 												char 					engineName[], 
 												BOOL					finiteFrames,
@@ -4474,7 +4499,6 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (ScanChan_type* s
 {
 #define init_RectRasterImgBuffer_type_Err_PixelDataTypeInvalid	-1
 	RectRasterImgBuffer_type*	buffer 			= malloc (sizeof(RectRasterImgBuffer_type));
-	size_t						pixelSizeBytes 	= 0;
 	if (!buffer) return NULL;
 	
 	// init
@@ -4883,8 +4907,10 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 					GetCtrlIndex(panel, control, &listItemIdx);
 					if (listItemIdx < 0) break; // stop here if list is empty
 					
-					// remove ROI item from display and from scan engine list
-					(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, listItemIdx + 1, ROI_Delete);
+					// if there is an active display, remove ROI item from display and from scan engine list
+					if (scanEngine->baseClass.activeDisplay)
+						(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, listItemIdx + 1, ROI_Delete);
+					
 					DeleteListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, listItemIdx, 1);
 					ListRemoveItem(scanEngine->pointJumps, 0, listItemIdx + 1);
 					
@@ -4914,12 +4940,19 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 					
 				case ROITab_ROIs:
 					
-					if (eventData1)
-						// mark point ROI as active and make it visible
-						(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Visible);
-					else
-						// mark point ROI as inactive and hide it
-						(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Hide);
+					if (eventData1) {
+						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumps, eventData2 + 1);
+						ROI->active = TRUE;
+						// if there is an active display, mark point ROI as active and make it visible
+						if (scanEngine->baseClass.activeDisplay)
+							(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Visible);
+					} else {
+						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumps, eventData2 + 1);
+						ROI->active = FALSE;
+						// if there is an active display mark point ROI as inactive and hide it
+						if (scanEngine->baseClass.activeDisplay)
+							(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Hide);
+					}
 					
 					// calculate minimum point jump start delay
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
@@ -5856,13 +5889,10 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	RectRasterImgBuffer_type*   imgBuffer				= rectRaster->imgBuffers[imgBufferIdx];
 	size_t						nDeadTimePixels			= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->scanSettings.pixelDwellTime);
 	
-	size_t 						iterindex				= 0;
 	DisplayEngine_type* 		displayEngine 			= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
 	RectRasterScanSet_type*		imgSettings				= NULL;
 	DataPacket_type* 			imagePacket         	= NULL;
 	Image_type*					sendImage				= NULL;
-	void*						destbuffer				= NULL;
-	
 	int* 						nImageChannelsTSVPtr 	= NULL;
 	
 	
@@ -6041,24 +6071,6 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 						goto Error;
 				}
 				
-				/*
-
-				// add restore image settings callback info
-				nullChk( imgSettings = init_RectRasterScanSet_type(rectRaster->scanSettings.pixSize, rectRaster->scanSettings.height, rectRaster->scanSettings.heightOffset, 
-									   rectRaster->scanSettings.width, rectRaster->scanSettings.widthOffset, rectRaster->scanSettings.pixelDwellTime) );
-				RestoreImgSettings_CBFptr_type	restoreCBFns[] 					= {RestoreImgSettings_CB};
-				void* 							callbackData[]					= {imgSettings};
-				DiscardFptr_type 				discardCallbackDataFunctions[] 	= {(DiscardFptr_type)discard_RectRasterScanSet_type};
-				
-				errChk( (*displayEngine->setRestoreImgSettingsFptr) (imgBuffer->scanChan->imgDisplay, NumElem(restoreCBFns), restoreCBFns, callbackData, discardCallbackDataFunctions) );
-				
-				
-				// display image
-				// temporarily commented out for debug
-				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, &newImage) ); 
-				 
-				*/
-				
 				//--------------------------------------------
 				// Wait if there is already an assembled image
 				//--------------------------------------------
@@ -6092,6 +6104,23 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// TEMPORARY: X, Y & Z coordinates set to 0 for now
 				SetImageCoord(imgBuffer->image, 0, 0, 0);
 				
+				
+				//------------------------------------------------
+				// Add restore settings callbacks and ROIs
+				//------------------------------------------------
+				
+				// add restore image settings callback info
+				
+				CallbackFptr_type				CBFns[] 						= {(CallbackFptr_type)ImageDisplay_CB};
+				void* 							callbackData[]					= {init_RectRasterDisplayCBData_type(rectRaster)};
+				DiscardFptr_type 				discardCallbackDataFunctions[] 	= {(DiscardFptr_type)discard_RectRasterDisplayCBData_type};
+				
+				nullChk( imgBuffer->scanChan->imgDisplay->callbacks = init_CallbackGroup_type(imgBuffer->scanChan->imgDisplay, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
+				
+				// add stored point ROIs if any
+				SetImageROIs(imgBuffer->image, CopyROIList(rectRaster->pointJumps));
+				
+				
 				//--------------------------------------
 				// Send image for this channel if needed
 				//--------------------------------------
@@ -6100,11 +6129,16 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					// make a copy of the image
 					nullChk( sendImage = copy_Image_type(imgBuffer->image) );
 					Iterator_type* currentiter = GetTaskControlCurrentIter(rectRaster->baseClass.taskControl);
-					nullChk( imagePacket = init_DataPacket_type(DL_Image, &sendImage, NULL, discard_Image_type));
+					nullChk( imagePacket = init_DataPacket_type(DL_Image, (void**)&sendImage, NULL, discard_Image_type));
 					SetDataPacketDSData(imagePacket, GetIteratorDSdata(currentiter, WAVERANK));      
 					errChk( SendDataPacket(imgBuffer->scanChan->imgVChan, &imagePacket, 0, &errMsg) );
 				}
 				
+				//--------------------------------------
+				// Display image
+				//--------------------------------------
+				// temporarily must be commented out for debug
+				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, &imgBuffer->image) ); 
 				
 				//---------------------------------------------------
 				// Assemble composite image if all channels are ready
@@ -6115,19 +6149,21 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	
 				if (!*nImageChannelsTSVPtr) {
 		
-					errChk( NonResRectRasterScan_AssembleCompositeImage(rectRaster, &errMsg) );
+					//errChk( NonResRectRasterScan_AssembleCompositeImage(rectRaster, &errMsg) );
+					
+					// TEMPORARY
+					// discard images from all the channels
+					for (size_t i = 0; i < rectRaster->nImgBuffers; i++) {
+						discard_Image_type(&rectRaster->imgBuffers[i]->image);
+						
+					}
 		
 					// complete iteration
-					TaskControlIterationDone(binding->engine->baseClass.taskControl, 0, "", FALSE);
+					TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
 				}
 	
 				CmtReleaseTSVPtr(rectRaster->baseClass.nImageChannelsTSV);
 				
-				
-				
-				
-				
-				 
 				
 				//------------------------
 				// reset number of elements in pixdata buffer (contents is not cleared!) new frame data will overwrite the old frame data in the buffer
@@ -6255,7 +6291,7 @@ static RectRasterScanImgBuilderBind_type* init_RectRasterScanImgBuilderBind_type
 	RectRasterScanImgBuilderBind_type*	binding = malloc(sizeof(RectRasterScanImgBuilderBind_type));
 	if (!binding) return NULL;
 	
-	binding->engine 		= rectRaster;
+	binding->scanEngine		= rectRaster;
 	binding->imgBufferIdx   = imgBufferIdx;
 	
 	return binding;
@@ -6273,14 +6309,14 @@ static int CVICALLBACK NonResRectRasterScan_LaunchImageBuilder (void* functionDa
 	RectRasterScanImgBuilderBind_type*		binding 				= functionData;
 	
 	// receive pixel stream and assemble image
-	errChk( NonResRectRasterScan_BuildImage (binding->engine, binding->imgBufferIdx, &errMsg) );
+	errChk( NonResRectRasterScan_BuildImage (binding->scanEngine, binding->imgBufferIdx, &errMsg) );
 	
 	OKfree(binding);
 	return 0;
 	
 Error:
 	
-	TaskControlIterationDone(binding->engine->baseClass.taskControl, error, errMsg, FALSE);
+	TaskControlIterationDone(binding->scanEngine->baseClass.taskControl, error, errMsg, FALSE);
 	OKfree(errMsg);
 	return error;
 }
@@ -6295,8 +6331,8 @@ static int NonResRectRasterScan_AssembleCompositeImage (RectRaster_type* rectRas
 	nullChk( compositePixArray = malloc(rectRaster->scanSettings.height * rectRaster->scanSettings.width * sizeof(RGBA_type)) );
 	
 	// assign channels
-	for (chanIdx = 0; chanIdx < rectRaster->nImgBuffers; chanIdx++) {
-		chanPixArray = GetImagePixelArray(rectRaster->imgBuffers[chanIdx]->image)
+	for (size_t chanIdx = 0; chanIdx < rectRaster->nImgBuffers; chanIdx++) {
+		chanPixArray = GetImagePixelArray(rectRaster->imgBuffers[chanIdx]->image);
 		switch(rectRaster->imgBuffers[chanIdx]->scanChan->color) {
 				
 			case ScanChanColor_Grey:
@@ -6317,6 +6353,12 @@ static int NonResRectRasterScan_AssembleCompositeImage (RectRaster_type* rectRas
 			
 		}
 	}
+	
+	return 0;
+	
+Error:
+	
+	return error;
 	
 }
 
@@ -6887,51 +6929,47 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 	
 }
 
-static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, ImageDisplayEvents event)
+static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, int event, void* callbackData)
 {
-	RectRaster_type*		scanEngine = callbackData;
+	RectRasterDisplayCBData_type*	displayCBData			= callbackData;
+	RectRaster_type*				scanEngine 				= displayCBData->scanEngine;
+	RectRasterScanSet_type			previousScanSettings	= displayCBData->scanSettings;
+	
 	switch (event) {
 			
 		case ImageDisplay_Close:
 			
 			// detach image display from scan engine if it was previously assigned to it and clear ROI list
-			if (scanEngine->baseClass.activeDisplay == imgDisplay) {
-				ClearListCtrl(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs);
+			if (scanEngine->baseClass.activeDisplay == imgDisplay)
 				scanEngine->baseClass.activeDisplay = NULL;
-			}
-				
+			
+			break;
+			
+		case ImageDisplay_RestoreSettings:
+			
+			RestoreScanSettingsFromImageDisplay(imgDisplay, scanEngine, previousScanSettings);
+			
 			break;
 	}
 }
 
-static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDisplay_type* imgDisplay, void* callbackData, char** errorInfo)
+static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, RectRaster_type* scanEngine, RectRasterScanSet_type previousScanSettings)
 {
-	RectRasterScanSet_type* 	previousScanSettings 		= callbackData;
-	int							error						= 0;
-	ScanChan_type*				scanChan					= (ScanChan_type*)(*displayEngine->getImageDisplayCBDataFptr) (imgDisplay);
-	RectRasterScanSet_type*		currentScanSettings			= &((RectRaster_type*)scanChan->scanEngine)->scanSettings;			
-	RectRaster_type*			scanEngine					= (RectRaster_type*)scanChan->scanEngine;
-	
 	// assign this image display to the scan engine
 	scanEngine->baseClass.activeDisplay		= imgDisplay; 
 	
 	// assign previous scan settings
-	currentScanSettings->pixSize			= previousScanSettings->pixSize;
-	currentScanSettings->height				= previousScanSettings->height;
-	currentScanSettings->heightOffset		= previousScanSettings->heightOffset;
-	currentScanSettings->width				= previousScanSettings->width;
-	currentScanSettings->widthOffset		= previousScanSettings->widthOffset;
-	currentScanSettings->pixelDwellTime		= previousScanSettings->pixelDwellTime;
+	scanEngine->scanSettings = previousScanSettings;
 	
 	// update preferred widths and pixel dwell times
 	NonResRectRasterScan_ScanWidths(scanEngine);
 	NonResRectRasterScan_PixelDwellTimes(scanEngine);
 	
 	// update remaining controls on the scan panel
-	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, currentScanSettings->height * currentScanSettings->pixSize);
-	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_HeightOffset, currentScanSettings->heightOffset * currentScanSettings->pixSize);
-	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_WidthOffset, currentScanSettings->widthOffset * currentScanSettings->pixSize);
-	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, currentScanSettings->pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_HeightOffset, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_WidthOffset, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, scanEngine->scanSettings.pixSize);
 	
 	// update ROIs in the scan engine UI
 	ClearListCtrl(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs);
@@ -6940,10 +6978,12 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 	ListType	ROIlist				= GetImageROIs(imgDisplay->image);
 	size_t 		nROIs 				= ListNumItems(ROIlist);
 	ROI_type*   ROI					= NULL;
+	ROI_type*   ROICopy				= NULL;
 	BOOL		activeROIAvailable 	= FALSE;
 	
 	for (size_t i = 1; i <= nROIs; i++) {
 		ROI = *(ROI_type**)ListGetPtrToItem(ROIlist, i);
+		ROICopy = copy_ROI_type(ROI);
 		InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, ROI->ROIName, i);
 		
 		if (ROI->active)
@@ -6956,7 +6996,7 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 				// mark point as checked/unchecked
 				CheckListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, i - 1, ROI->active); 
 				// insert ROI item in the scan engine as well
-				ListInsertItem(scanEngine->pointJumps, &ROI, END_OF_LIST);
+				ListInsertItem(scanEngine->pointJumps, &ROICopy, END_OF_LIST);
 						
 				break;
 					
@@ -6996,9 +7036,6 @@ static int RestoreImgSettings_CB (DisplayEngine_type* displayEngine, ImageDispla
 				break;
 				
 		}
-	
-	
-	return 0;
 	
 }
 
@@ -8113,9 +8150,10 @@ static int TaskTreeStateChange_RectRaster (TaskControl_type* taskControl, TaskTr
 				engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, pixelDataType, FALSE); 
 			}
 			
+			// Taken out for now, but must be put back if composite image display is implemented
 			// get handle to display composite image if there is at least one open channel
-			if (engine->nImgBuffers)
-				engine->baseClass.compositeImgDisplay = (*displayEngine->getImageDisplayFptr) (displayEngine, engine, engine->scanSettings.height, engine->scanSettings.width, Image_RGBA) ); 
+			//if (engine->nImgBuffers)
+			//	nullChk( engine->baseClass.compositeImgDisplay = (*displayEngine->getImageDisplayFptr) (displayEngine, engine, engine->scanSettings.height, engine->scanSettings.width, Image_RGBA) ); 
 			
 			break;
 			

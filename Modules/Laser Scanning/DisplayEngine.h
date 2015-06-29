@@ -55,7 +55,8 @@ typedef enum {
 } ROIActions;
 
 typedef enum {
-	ImageDisplay_Close
+	ImageDisplay_Close,
+	ImageDisplay_RestoreSettings
 } ImageDisplayEvents;
 
 //--------------------------------------
@@ -65,16 +66,8 @@ typedef enum {
 	// ROI was placed over the image (but not added to it)
 typedef void							(*ROIEvents_CBFptr_type)					(ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI);
 
-	// General callback for various image display events
-typedef void							(*ImageDisplay_CBFptr_type)					(ImageDisplay_type* imgDisplay, void* callbackData, ImageDisplayEvents event);
-
-	// Restores the module configuration stored previously with the image (scan settings, moves stages to the stored positions, etc)
-	// each display handle can have multiple such callbacks, each with its own callback data
-typedef int								(*RestoreImgSettings_CBFptr_type)			(DisplayEngine_type* displayEngine, ImageDisplay_type* imgDisplay, void* callbackData, char** errorInfo);
-
 	// Called when a display module error occurs
 typedef void							(*ErrorHandlerFptr_type)					(ImageDisplay_type* imgDisplay, int errorID, char* errorInfo);
-
 
 //--------------------------------------
 // Methods typedefs
@@ -91,11 +84,6 @@ typedef ImageDisplay_type*				(*GetImageDisplayFptr_type)					(DisplayEngine_typ
 
 	// Returns the callback data associated with the display handle
 typedef ImgDisplayCBData_type			(*GetImageDisplayCBDataFptr_type)			(ImageDisplay_type* imgDisplay);
-
-	// Sets callbacks to a display handle to restore the image settings to the various modules/devices that contributed to the image. Each callback function has its own dinamically allocated callback data.
-	// The callback data is automatically disposed if the display handle is discarded by calling the provided discardCallbackDataFunctions. If a discard callback data function is NULL then free() is called by default.
-	// These callbacks should be set before calling DisplayImageFptr_type
-typedef int								(*SetRestoreImgSettingsCBsFptr_type)		(ImageDisplay_type* imgDisplay, size_t nCallbackFunctions, RestoreImgSettings_CBFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions);
 
 	// Places an ROI overlay over the displayed image 
 typedef ROI_type*						(*OverlayROIFptr_type)						(ImageDisplay_type* imgDisplay, ROI_type* ROI);
@@ -137,8 +125,6 @@ struct DisplayEngine {
 	
 	GetImageDisplayCBDataFptr_type		getImageDisplayCBDataFptr;
 	
-	SetRestoreImgSettingsCBsFptr_type	setRestoreImgSettingsFptr;
-	
 	OverlayROIFptr_type					overlayROIFptr;
 	
 	ROIActionsFptr_type					ROIActionsFptr;
@@ -148,8 +134,6 @@ struct DisplayEngine {
 	//---------------------------------------------------------------------------------------------------------------
 	
 	ROIEvents_CBFptr_type				ROIEventsCBFptr;
-	
-	ImageDisplay_CBFptr_type			imgDisplayEventCBFptr;
 	
 	ErrorHandlerFptr_type				errorHandlerCBFptr;
 	
@@ -182,12 +166,8 @@ struct ImageDisplay {
 	//---------------------------------------------------------------------------------------------------------------
 	// CALLBACKS (provide action to be taken by the module making use of the display engine)
 	//---------------------------------------------------------------------------------------------------------------
-	
-	// callbacks to restore image settings to the various modules
-	size_t 								nRestoreSettingsCBs;			// Number of callbacks to be called when restoring image settings.
-	RestoreImgSettings_CBFptr_type* 	restoreSettingsCBs;				// Callback array called sequncially when data must be restored from the image.
-	void** 								restoreSettingsCBsData;			// Array of callback data assigned to each restore callback function.
-	DiscardFptr_type* 					discardCallbackDataFunctions;   // Array of methods to discard the callback data once not needed anymore.
+
+	CallbackGroup_type*					callbacks;
 	
 };
 
@@ -209,11 +189,9 @@ void									init_DisplayEngine_type					(DisplayEngine_type* 					displayEngine
 																				 DiscardFptr_type						imageDiscardFptr,
 																				 GetImageDisplayFptr_type				getImageDisplayFptr,
 																				 GetImageDisplayCBDataFptr_type			getImageDisplayCBDataFptr,
-																				 SetRestoreImgSettingsCBsFptr_type		setRestoreImgSettingsFptr,
 																				 OverlayROIFptr_type					overlayROIFptr,
 																				 ROIActionsFptr_type					ROIActionsFptr,
 																				 ROIEvents_CBFptr_type					ROIEventsCBFptr,
-																				 ImageDisplay_CBFptr_type				imgDisplayEventCBFptr,
 																				 ErrorHandlerFptr_type					errorHandlerCBFptr);
 
 	// Disposes all types of display engines by invoking the specific dispose method.
@@ -230,7 +208,6 @@ int										init_ImageDisplay_type					(ImageDisplay_type*						imageDisplay,
 
 	// Discards data from a generic image display instance. Call this from the child class discard function after disposing of child-specific data.
 void									discard_ImageDisplay_type				(ImageDisplay_type**					imageDisplayPtr);
-
 
 
 #ifdef __cplusplus

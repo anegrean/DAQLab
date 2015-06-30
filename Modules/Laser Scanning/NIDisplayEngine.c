@@ -499,7 +499,7 @@ static ROI_type* OverlayNIVisionROI (NIImageDisplay_type* imgDisplay, ROI_type* 
 	errChk( DrawROI(imgDisplay, ROI) );
 	
 	// make ROI Copy
-	nullChk( ROICopy = copy_ROI_type(ROI) );
+	nullChk( ROICopy = (*ROI->copyFptr) ((void*)ROI) );
 	
 	// add ROI overlay to list
 	ListInsertItem(GetImageROIs(imgDisplay->baseClass.image), &ROICopy, END_OF_LIST);
@@ -626,7 +626,7 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 					
 				case IMAQ_SELECTION_TOOL:
 					
-					PointROI =  init_Point_type("", rect.left, rect.top);
+					PointROI =  initalloc_Point_type(NULL, "", rect.left, rect.top);
 					
 					// execute callback
 					if (display->baseClass.displayEngine->ROIEventsCBFptr)

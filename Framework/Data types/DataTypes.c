@@ -134,15 +134,15 @@ static void 				init_PulseTrain_type 					(PulseTrain_type* pulseTrain, PulseTra
 																	 PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses);
 
 	// ROI base class
-static void 				init_ROI_type							(ROI_type* ROI, ROITypes ROIType, char ROIName[], DiscardFptr_type discardFptr);
+static void 				init_ROI_type 							(ROI_type* ROI, ROITypes ROIType, char ROIName[], CopyFptr_type copyFptr, DiscardFptr_type discardFptr);
 
 static void					discard_ROIBaseClass					(ROI_type** ROIPtr);
 
 	// Point ROI
-static void 				discard_Point_type 						(Point_type** PointPtr);
+static Point_type* 			copy_Point_type 						(Point_type* point);
 
 	// Rectangle ROI
-static void 				discard_Rect_type 						(Rect_type** RectPtr);
+static Rect_type*			copy_Rect_type							(Rect_type* rect);
 
 
 //==============================================================================
@@ -830,7 +830,6 @@ Error:
 void discard_Image_type (Image_type** imagePtr)
 {
 	Image_type*		image 	= *imagePtr;
-	ROI_type** 		ROIPtr	= NULL;
 	
 	if (!image) return;
 	
@@ -863,9 +862,11 @@ Image_type* copy_Image_type(Image_type* imgSource)
 	
 	// copy ROIs
 	size_t 		nROIs 	= ListNumItems(imgSource->ROIs);
+	ROI_type*	ROI		= NULL;
 	ROI_type*   ROICopy	= NULL;
 	for (size_t i = 1; i <= nROIs; i++) {
-		nullChk( ROICopy = copy_ROI_type( *(ROI_type**) ListGetPtrToItem(imgSource->ROIs, i) ) );
+		ROI = *(ROI_type**)ListGetPtrToItem(imgSource->ROIs, i);
+		nullChk( ROICopy =  (ROI_type*) (*ROI->copyFptr) ((void*)ROI) );
 		ListInsertItem(imgCopy->ROIs, &ROICopy, END_OF_LIST);
 	}
 	
@@ -978,6 +979,14 @@ size_t GetImageSizeofData (Image_type* image)
 			dataTypeSize = sizeof(float);
 			break;
 			
+		case Image_RGBA:
+			dataTypeSize = sizeof (RGBA_type);
+			break;
+			
+		case Image_RGBAU64:
+			dataTypeSize = sizeof (RGBAU64_type);
+			break;
+			
 	}
 	
 	return dataTypeSize;
@@ -988,7 +997,7 @@ size_t GetImageSizeofData (Image_type* image)
 // ROI
 //-------------------------
 
-static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], DiscardFptr_type discardFptr)
+static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], CopyFptr_type copyFptr, DiscardFptr_type discardFptr)
 {
 	ROI->ROIType 		= ROIType;
 	ROI->ROIName		= StrDup(ROIName);
@@ -1000,7 +1009,8 @@ static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], Disc
 	ROI->rgba.B			= 0;
 	ROI->rgba.alpha		= 0;
 	
-	
+	// METHODS
+	ROI->copyFptr		= copyFptr;
 	ROI->discardFptr	= discardFptr;
 }
 
@@ -1017,14 +1027,15 @@ static void	discard_ROIBaseClass (ROI_type** ROIPtr)
 //-------------------------
 // Point
 //-------------------------
-Point_type* init_Point_type (char ROIName[], int x, int y)
+Point_type* initalloc_Point_type (Point_type* point, char ROIName[], int x, int y)
 {
-	Point_type* 	point = malloc(sizeof(Point_type));
-	if (!point) return NULL;
-	
+	if (!point) {
+		point = malloc(sizeof(Point_type));
+		if (!point) return NULL;
+	}
 	
 	// init base class
-	init_ROI_type(&point->baseClass, ROI_Point, ROIName, (DiscardFptr_type) discard_Point_type); 
+	init_ROI_type(&point->baseClass, ROI_Point, ROIName, (CopyFptr_type)copy_Point_type, (DiscardFptr_type) discard_Point_type); 
 	
 	// init point child class
 	point->x	= x;
@@ -1033,7 +1044,7 @@ Point_type* init_Point_type (char ROIName[], int x, int y)
 	return point;
 }
 			  
-static void discard_Point_type (Point_type** PointPtr)
+void discard_Point_type (Point_type** PointPtr)
 {
 	if (!*PointPtr) return;
 	
@@ -1043,17 +1054,39 @@ static void discard_Point_type (Point_type** PointPtr)
 	discard_ROIBaseClass((ROI_type**)PointPtr);
 }
 
+static Point_type* copy_Point_type (Point_type* point)
+{
+	int				error		= 0;
+	Point_type*		pointCopy 	= malloc (sizeof(Point_type));
+	if (!pointCopy) return NULL;
+	
+	// shallow copy
+	memcpy(pointCopy, point, sizeof(Point_type));
+	
+	// deep copy
+	nullChk( pointCopy->baseClass.ROIName = StrDup(point->baseClass.ROIName) );
+	
+	return pointCopy;
+	
+Error:
+	
+	free(pointCopy);
+	return NULL;
+}
+
 //-------------------------
 // Rectangle
 //-------------------------
 	
-Rect_type* init_Rect_type (char ROIName[], int top, int left, int height, int width)
+Rect_type* initalloc_Rect_type (Rect_type* rect, char ROIName[], int top, int left, int height, int width)
 {
-	Rect_type*	rect = malloc(sizeof(Rect_type));
-	if (!rect) return NULL;
+	if (!rect) {
+		rect = malloc(sizeof(Rect_type));
+		if (!rect) return NULL;
+	}
 	
 	// init base class
-	init_ROI_type(&rect->baseClass, ROI_Rectangle, ROIName, (DiscardFptr_type) discard_Rect_type); 
+	init_ROI_type(&rect->baseClass, ROI_Rectangle, ROIName, (CopyFptr_type)copy_Rect_type, (DiscardFptr_type)discard_Rect_type); 
 	
 	// init rectangle child class
 	rect->top 		= top;
@@ -1064,7 +1097,7 @@ Rect_type* init_Rect_type (char ROIName[], int top, int left, int height, int wi
 	return rect;
 }
 
-static void discard_Rect_type (Rect_type** RectPtr)
+void discard_Rect_type (Rect_type** RectPtr)
 {
 	if (!*RectPtr) return;
 	
@@ -1074,50 +1107,30 @@ static void discard_Rect_type (Rect_type** RectPtr)
 	discard_ROIBaseClass((ROI_type**)RectPtr);
 }
 
+static Rect_type* copy_Rect_type (Rect_type* rect)
+{
+	int				error		= 0;
+	Rect_type*		rectCopy 	= malloc (sizeof(Rect_type));
+	if (!rectCopy) return NULL;
+	
+	// shallow copy
+	memcpy(rectCopy, rect, sizeof(Rect_type));
+	
+	// deep copy
+	nullChk( rectCopy->baseClass.ROIName = StrDup(rect->baseClass.ROIName) );
+	
+	return rectCopy;
+	
+Error:
+	
+	free(rectCopy);
+	return NULL;
+	
+}
+
 //-------------------------     
 // All ROIs
 //-------------------------     
-
-void discard_ROI_type (ROI_type** ROIPtr)
-{
-	if (!*ROIPtr) return;
-	
-	// call ROI specific discard method
-	(*(*ROIPtr)->discardFptr) ((void**)ROIPtr);
-}
-
-ROI_type* copy_ROI_type (ROI_type* ROI)
-{
-	ROI_type*	ROICopy	= NULL;
-	
-	if (!ROI) return NULL;
-	
-	switch (ROI->ROIType) {
-			
-		case ROI_Point:
-			
-			ROICopy = (ROI_type*)init_Point_type(ROI->ROIName, ((Point_type*)ROI)->x, ((Point_type*)ROI)->y);
-			
-			break;
-			
-		case ROI_Rectangle:
-			
-			ROICopy = (ROI_type*)init_Rect_type(ROI->ROIName, ((Rect_type*)ROI)->top, ((Rect_type*)ROI)->left,
-												((Rect_type*)ROI)->height, ((Rect_type*)ROI)->width);
-			
-			break;
-			
-	}
-	
-	// copy ROI base class properties
-	ROICopy->active 	= ROI->active;
-	ROICopy->rgba.alpha = ROI->rgba.alpha;
-	ROICopy->rgba.B 	= ROI->rgba.B;
-	ROICopy->rgba.G 	= ROI->rgba.G;
-	ROICopy->rgba.R 	= ROI->rgba.R;
-	
-	return ROICopy;
-}
 
 void DiscardROIList (ListType* ROIListPtr)
 {
@@ -1130,7 +1143,7 @@ void DiscardROIList (ListType* ROIListPtr)
 	ROI_type** 		ROIPtr	= NULL;
 	for (size_t i = 1; i <= nROIs; i++) {
 		ROIPtr = ListGetPtrToItem(ROIList, i);
-		discard_ROI_type(ROIPtr);
+		(*(*ROIPtr)->discardFptr) ((void**)ROIPtr);
 	}
 	
 	OKfreeList(*ROIListPtr);
@@ -1148,7 +1161,7 @@ ListType CopyROIList (ListType ROIList)
 	
 	for (size_t i = 1; i <= nROIs; i++) {
 		ROI = *(ROI_type**) ListGetPtrToItem(ROIList, i);
-		nullChk( ROICopy = copy_ROI_type(ROI) );
+		nullChk( ROICopy = (ROI_type*) (*ROI->copyFptr) ((void*)ROI) );
 		ListInsertItem(listCopy, &ROICopy, END_OF_LIST);
 	}
 	

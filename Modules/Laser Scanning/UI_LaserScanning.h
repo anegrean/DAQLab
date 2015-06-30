@@ -46,7 +46,19 @@
 #define  NonResGCal_Done                  7       /* control type: command, callback function: (none) */
 #define  NonResGCal_SaveCalib             8       /* control type: command, callback function: (none) */
 
-#define  RectRaster                       6
+#define  PointScan                        6
+#define  PointScan_Plate                  2       /* control type: deco, callback function: (none) */
+#define  PointScan_NPulses                3       /* control type: numeric, callback function: (none) */
+#define  PointScan_PulseOFF               4       /* control type: numeric, callback function: (none) */
+#define  PointScan_PulseON                5       /* control type: numeric, callback function: (none) */
+#define  PointScan_StartDelayIncrement    6       /* control type: numeric, callback function: (none) */
+#define  PointScan_StartDelay             7       /* control type: numeric, callback function: (none) */
+#define  PointScan_StimDelay              8       /* control type: numeric, callback function: (none) */
+#define  PointScan_Hold                   9       /* control type: numeric, callback function: (none) */
+#define  PointScan_TABLE                  10      /* control type: table, callback function: (none) */
+#define  PointScan_DECORATION             11      /* control type: deco, callback function: (none) */
+
+#define  RectRaster                       7
 #define  RectRaster_Plate_3               2       /* control type: deco, callback function: (none) */
 #define  RectRaster_FramesAcquired        3       /* control type: numeric, callback function: (none) */
 #define  RectRaster_Objective             4       /* control type: ring, callback function: (none) */
@@ -55,11 +67,11 @@
 #define  RectRaster_ExecutionMode         7       /* control type: radioButton, callback function: (none) */
 #define  RectRaster_Tab                   8       /* control type: tab, callback function: (none) */
 
-#define  ScanPan                          7
+#define  ScanPan                          8
 #define  ScanPan_Plate                    2       /* control type: deco, callback function: (none) */
 #define  ScanPan_ScanEngines              3       /* control type: tab, callback function: (none) */
 
-#define  ScanSetPan                       8
+#define  ScanSetPan                       9
 #define  ScanSetPan_AddChan               2       /* control type: command, callback function: (none) */
 #define  ScanSetPan_AddObjective          3       /* control type: command, callback function: (none) */
 #define  ScanSetPan_Close                 4       /* control type: command, callback function: (none) */

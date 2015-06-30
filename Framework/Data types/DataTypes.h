@@ -33,7 +33,10 @@
 	//---------------------------------------------------------------------------------------------- 
 
 	// Generic function type to dispose of dinamically allocated data
-typedef void (*DiscardFptr_type) (void** dataPtr);
+typedef void (*DiscardFptr_type) (void** objectPtr);
+	
+	// Generic function to copy an object
+typedef void* (*CopyFptr_type) (void* object);
 
 	// Generic callback
 typedef void (*CallbackFptr_type) (void* objectRef, int event, void* callbackData);
@@ -157,10 +160,8 @@ typedef struct Point		Point_type;		 // Child class of ROI_type
 typedef struct Rect			Rect_type;		 // Child class of ROI_type
 
 typedef enum {
-	
 	ROI_Point,
 	ROI_Rectangle
-	
 } ROITypes;
 
 	// Generic ROI base class	
@@ -171,7 +172,9 @@ struct ROI {
 	RGBA_type			rgba;			// ROI color
 	BOOL				active;			// Flag to mark active ROIs, by default, TRUE.
 	// METHODS
-	DiscardFptr_type	discardFptr;  	// Overriden by child classes
+	CopyFptr_type		copyFptr;		// Overriden by child. Copies the object.
+	DiscardFptr_type	discardFptr;  	// Overriden by child. Discards the object.
+	
 };
 
 	// Point
@@ -546,20 +549,18 @@ Image_type* 				copy_Image_type							(Image_type* imgSource);
 //---------------------------
 
 	// Creates a Point ROI with default Black Opaque color.
-Point_type*					init_Point_type							(char ROIName[], int x, int y);
+Point_type*					initalloc_Point_type					(Point_type* point, char ROIName[], int x, int y);
+
+void 						discard_Point_type 						(Point_type** PointPtr);
 
 	// Creates a Rectangle with default Black Opaque color.
-Rect_type*					init_Rect_type							(char ROIName[], int top, int left, int height, int width);
+Rect_type*					initalloc_Rect_type						(Rect_type* rect, char ROIName[], int top, int left, int height, int width);
+void 						discard_Rect_type 						(Rect_type** RectPtr);
 
-	// Discards all ROIs
-void						discard_ROI_type						(ROI_type** ROIPtr);
 
 //---------------------------
 // ROI operations
 //---------------------------
-
-	// Copies a ROI
-ROI_type*					copy_ROI_type							(ROI_type* ROI);
 
 	// Discards a list of ROI_type* elements
 	

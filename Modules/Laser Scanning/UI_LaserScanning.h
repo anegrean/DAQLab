@@ -46,32 +46,14 @@
 #define  NonResGCal_Done                  7       /* control type: command, callback function: (none) */
 #define  NonResGCal_SaveCalib             8       /* control type: command, callback function: (none) */
 
-#define  PointScan                        6
-#define  PointScan_Plate                  2       /* control type: deco, callback function: (none) */
-#define  PointScan_NPulses                3       /* control type: numeric, callback function: (none) */
-#define  PointScan_PulseOFF               4       /* control type: numeric, callback function: (none) */
-#define  PointScan_PulseON                5       /* control type: numeric, callback function: (none) */
-#define  PointScan_StartDelayIncrement    6       /* control type: numeric, callback function: (none) */
-#define  PointScan_StartDelay             7       /* control type: numeric, callback function: (none) */
-#define  PointScan_StimDelay              8       /* control type: numeric, callback function: (none) */
-#define  PointScan_Hold                   9       /* control type: numeric, callback function: (none) */
-#define  PointScan_TABLE                  10      /* control type: table, callback function: (none) */
-#define  PointScan_DECORATION             11      /* control type: deco, callback function: (none) */
+#define  RectRaster                       6
+#define  RectRaster_Tab                   2       /* control type: tab, callback function: (none) */
 
-#define  RectRaster                       7
-#define  RectRaster_Plate_3               2       /* control type: deco, callback function: (none) */
-#define  RectRaster_FramesAcquired        3       /* control type: numeric, callback function: (none) */
-#define  RectRaster_Objective             4       /* control type: ring, callback function: (none) */
-#define  RectRaster_Mode                  5       /* control type: ring, callback function: (none) */
-#define  RectRaster_NFrames               6       /* control type: numeric, callback function: (none) */
-#define  RectRaster_ExecutionMode         7       /* control type: radioButton, callback function: (none) */
-#define  RectRaster_Tab                   8       /* control type: tab, callback function: (none) */
-
-#define  ScanPan                          8
+#define  ScanPan                          7
 #define  ScanPan_Plate                    2       /* control type: deco, callback function: (none) */
 #define  ScanPan_ScanEngines              3       /* control type: tab, callback function: (none) */
 
-#define  ScanSetPan                       9
+#define  ScanSetPan                       8
 #define  ScanSetPan_AddChan               2       /* control type: command, callback function: (none) */
 #define  ScanSetPan_AddObjective          3       /* control type: command, callback function: (none) */
 #define  ScanSetPan_Close                 4       /* control type: command, callback function: (none) */
@@ -104,23 +86,45 @@
 
      /* tab page panel controls */
 #define  ROITab_ROIs                      2       /* control type: listBox, callback function: (none) */
-#define  ROITab_Repeat                    3       /* control type: numeric, callback function: (none) */
-#define  ROITab_Period                    4       /* control type: numeric, callback function: (none) */
-#define  ROITab_StartDelay                5       /* control type: numeric, callback function: (none) */
-#define  ROITab_JumpTime                  6       /* control type: numeric, callback function: (none) */
-#define  ROITab_ParkedTime                7       /* control type: numeric, callback function: (none) */
+#define  ROITab_NRepeat                   3       /* control type: numeric, callback function: (none) */
+#define  ROITab_Repeat                    4       /* control type: numeric, callback function: (none) */
+#define  ROITab_Plate                     5       /* control type: deco, callback function: (none) */
+#define  ROITab_Averaging                 6       /* control type: ring, callback function: (none) */
+#define  ROITab_Mode                      7       /* control type: ring, callback function: (none) */
+#define  ROITab_NAveraging                8       /* control type: numeric, callback function: (none) */
+#define  ROITab_NPulses                   9       /* control type: numeric, callback function: (none) */
+#define  ROITab_PulseOFF                  10      /* control type: numeric, callback function: (none) */
+#define  ROITab_PulseON                   11      /* control type: numeric, callback function: (none) */
+#define  ROITab_StartDelayIncrement       12      /* control type: numeric, callback function: (none) */
+#define  ROITab_SequencePeriod            13      /* control type: numeric, callback function: (none) */
+#define  ROITab_StartDelay                14      /* control type: numeric, callback function: (none) */
+#define  ROITab_StimDelay                 15      /* control type: numeric, callback function: (none) */
+#define  ROITab_Hold                      16      /* control type: numeric, callback function: (none) */
+#define  ROITab_DECORATION_2              17      /* control type: deco, callback function: (none) */
+#define  ROITab_DECORATION_3              18      /* control type: deco, callback function: (none) */
+#define  ROITab_DECORATION                19      /* control type: deco, callback function: (none) */
+#define  ROITab_SequenceLabel             20      /* control type: textMsg, callback function: (none) */
+#define  ROITab_TEXTMSG_2                 21      /* control type: textMsg, callback function: (none) */
+#define  ROITab_TEXTMSG                   22      /* control type: textMsg, callback function: (none) */
+#define  ROITab_ParkedAtSeqEnd            23      /* control type: radioButton, callback function: (none) */
+#define  ROITab_RecordFluorescence        24      /* control type: radioButton, callback function: (none) */
 
      /* tab page panel controls */
 #define  ScanTab_PixelSize                2       /* control type: numeric, callback function: (none) */
-#define  ScanTab_Plate_2                  3       /* control type: deco, callback function: (none) */
-#define  ScanTab_Plate                    4       /* control type: deco, callback function: (none) */
-#define  ScanTab_FPS                      5       /* control type: numeric, callback function: (none) */
-#define  ScanTab_WidthOffset              6       /* control type: numeric, callback function: (none) */
-#define  ScanTab_HeightOffset             7       /* control type: numeric, callback function: (none) */
-#define  ScanTab_Width                    8       /* control type: string, callback function: (none) */
-#define  ScanTab_Height                   9       /* control type: numeric, callback function: (none) */
-#define  ScanTab_Ready                    10      /* control type: LED, callback function: (none) */
-#define  ScanTab_PixelDwell               11      /* control type: string, callback function: (none) */
+#define  ScanTab_FramesAcquired           3       /* control type: numeric, callback function: (none) */
+#define  ScanTab_NFrames                  4       /* control type: numeric, callback function: (none) */
+#define  ScanTab_ExecutionMode            5       /* control type: radioButton, callback function: (none) */
+#define  ScanTab_Objective                6       /* control type: ring, callback function: (none) */
+#define  ScanTab_Plate                    7       /* control type: deco, callback function: (none) */
+#define  ScanTab_FPS                      8       /* control type: numeric, callback function: (none) */
+#define  ScanTab_WidthOffset              9       /* control type: numeric, callback function: (none) */
+#define  ScanTab_HeightOffset             10      /* control type: numeric, callback function: (none) */
+#define  ScanTab_Width                    11      /* control type: string, callback function: (none) */
+#define  ScanTab_Height                   12      /* control type: numeric, callback function: (none) */
+#define  ScanTab_Ready                    13      /* control type: LED, callback function: (none) */
+#define  ScanTab_PixelDwell               14      /* control type: string, callback function: (none) */
+#define  ScanTab_DECORATION_4             15      /* control type: deco, callback function: (none) */
+#define  ScanTab_DECORATION_3             16      /* control type: deco, callback function: (none) */
 
 
      /* Control Arrays: */

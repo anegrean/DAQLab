@@ -108,7 +108,7 @@
 
 	// UI
 #define NonResGalvoRasterScan_FrameScanTabIDX				0
-#define NonResGalvoRasterScan_ROIsTabIDX					1
+#define NonResGalvoRasterScan_PointScanTabIDX				1
 
 	// Point ROI stimulation and recording
 #define NonResGalvoRasterScan_Default_HoldTime				5.0			// Time in [ms] during which the galvos are stationary at this point ROI.
@@ -324,19 +324,20 @@ typedef enum {
 //------------------------------------------------------------------------------------------
 // Scan engine operation mode
 #define ScanEngineMode_FrameScan_Name				"Frame scan"
-#define ScanEngineMode_PointROIs_Name				"Point jump"
+#define ScanEngineMode_PointScan_Name				"Point scan"
 typedef enum {
 	ScanEngineMode_FrameScan,								// Frame scans 
-	ScanEngineMode_PointJump								// Jumps between point ROIs repeatedly
+	ScanEngineMode_PointScan								// Jumps between point ROIs repeatedly
 } ScanEngineModes;
 
 typedef struct {
 	ScanEngineModes				mode;
 	char*						label;
+	int							tabIdx;
 } ScanEngineModes_type;
 
- ScanEngineModes_type			scanEngineModes[] = {	{ScanEngineMode_FrameScan, ScanEngineMode_FrameScan_Name}, 
-	 													{ScanEngineMode_PointJump, ScanEngineMode_PointROIs_Name}	};
+ ScanEngineModes_type			scanEngineModes[] = {	{.mode = ScanEngineMode_FrameScan, .label = ScanEngineMode_FrameScan_Name, .tabIdx = NonResGalvoRasterScan_FrameScanTabIDX}, 
+	 													{.mode = ScanEngineMode_PointScan, .label = ScanEngineMode_PointScan_Name, .tabIdx = NonResGalvoRasterScan_PointScanTabIDX}	};
 //------------------------------------------------------------------------------------------  
 typedef struct {
 	char*						objectiveName;				// Objective name.
@@ -479,9 +480,7 @@ typedef struct {
 	
 	// DATA
 	PointScan_type				settings;					// Settings for recording and stimulating the point ROI.
-	double						jumpTime;					// Time in [ms] during which galvos are repositioned between this ROI and the next ROI. If the option parkedAfterEachPoint is False, this time is equal 
-															// to the galvo jump time between ROIs. If option parkedAfterEachPoint is True, this time additionally includes a fixed time to jump to 
-															// the parked position,a variable time during which the galvos are at rest at their parked position and another fixed time to position the galvos
+	double						jumpTime;					// Time in [ms] during which galvos are repositioned between this ROI and the next ROI.
 															// to the next ROI. Note that the galvo jump time is the largest jump time between the two galvos.
 	BOOL						record;						// If True, fluorescence signals from this point are recorded.
 } PointJump_type;
@@ -493,6 +492,13 @@ typedef enum {
 	PointAveraging_All										// Performs the arithmetic average of all fluorescence pixels within the galvo hold time.
 	
 } PointAveragingMethods;
+
+typedef enum {
+	
+	PointJump_SinglePoints,									// Point ROIs are visited one at a time, with the beam jumping from and returning to the parked position.
+	PointJump_PointGroup,									// Point ROIs are visited one after the other, with the beam jumping between the points as fast as possible.
+
+} PointJumpMethods;
 
 typedef struct {
 	double						startDelay;					// Initial delay in [ms] from the global start trigger to the start of the first point jump sequence defined to be the beginning 
@@ -507,8 +513,6 @@ typedef struct {
 	BOOL						parkedAtSequenceEnd;		// If True, at the end of visiting a sequence of point ROIs, the galvos are returned to their parked position and a new sequence 
 															// is initiated from this parked position. If this option is False, at the end of a point ROI jump sequence, the galvos will jump back to 
 															// the first point in the sequence.
-	BOOL						parkedAfterEachPoint;		// The galvos are returned to their parked position after each ROI and it allows to modify the ROI jump time and add additional time between ROIs
-															// during which the galvos are at their parked position.
 	PointAveragingMethods		averagingMethod;			// Determines how fluorescence signals are processed if recording is enabled at a given ROI.
 	ListType					pointJumps;					// List of points to jump to of PointJump_type*. The order of point jumps is determined by the order of the elements in the list.
 	PointScan_type				globalPointScanSettings;	// Global settings for stimulation and recording from point ROIs.
@@ -1176,7 +1180,9 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 				
 				GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &frameScanPanHndl); 
 				
-				// update modes
+				// start in frame scan mode by default
+				
+				
 				for (size_t j = 0; j < NumElem(scanEngineModes); j++)
 					InsertListItem(scanPanHndl, RectRaster_Mode, -1, scanEngineModes[j].label, scanEngineModes[j].mode);
 				SetCtrlIndex(scanPanHndl, RectRaster_Mode, 0);
@@ -1228,7 +1234,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 		// get panel handle to the frame scan settings from the inserted scan engine
 		GetPanelHandleFromTabPage(scanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &scanEngine->frameScanPanHndl);
 		// get panel handle to the ROIs panel from the inserted scan engine
-		GetPanelHandleFromTabPage(scanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_ROIsTabIDX, &scanEngine->ROIsPanHndl);
+		GetPanelHandleFromTabPage(scanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &scanEngine->ROIsPanHndl);
 		
 		// change new scan engine tab title
 		scanEngineName = GetTaskControlName(scanEngine->taskControl); 
@@ -2323,7 +2329,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					// get panel handle to the frame scan settings from the inserted scan engine
 					GetPanelHandleFromTabPage(newScanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &newScanEngine->frameScanPanHndl);
 					// get panel handle to the ROIs panel from the inserted scan engine
-					GetPanelHandleFromTabPage(newScanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_ROIsTabIDX, &newScanEngine->ROIsPanHndl);
+					GetPanelHandleFromTabPage(newScanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &newScanEngine->ROIsPanHndl);
 			
 					// change new scan engine tab title
 					SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, engineName);  
@@ -6600,7 +6606,6 @@ static PointJumpSet_type* init_PointJumpSet_type (void)
 	pointJumpSet->minSequencePeriod						= 0;
 	pointJumpSet->nSequenceRepeat						= 1;
 	pointJumpSet->parkedAtSequenceEnd					= FALSE;
-	pointJumpSet->parkedAfterEachPoint					= FALSE;
 	pointJumpSet->averagingMethod						= PointAveraging_None;
 	pointJumpSet->pointJumps							= 0;
 	pointJumpSet->skipKeepPix							= NULL;
@@ -6965,7 +6970,7 @@ void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROITiming, FALSE);
 			break;
 							
-		case ScanEngineMode_PointJump:
+		case ScanEngineMode_PointScan:
 			
 			// inactivate detection and image output channels
 			for (size_t i = 0; i < scanEngine->nImgBuffers; i++) {
@@ -8108,7 +8113,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 			
 			break;
 			
-		case ScanEngineMode_PointJump:
+		case ScanEngineMode_PointScan:
 			
 			// for the time being...
 			TaskControlIterationDone(taskControl, 0, 0, FALSE);
@@ -8149,7 +8154,7 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 			
 			break;
 			
-		case ScanEngineMode_PointJump:
+		case ScanEngineMode_PointScan:
 			
 			// send galvo and ROI timing waveforms
 			errChk ( NonResRectRasterScan_GeneratePointJumpSignals (engine, errorInfo) );  

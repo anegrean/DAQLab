@@ -85,29 +85,29 @@
 #define  Cal_Resolution                   15      /* control type: numeric, callback function: (none) */
 
      /* tab page panel controls */
-#define  ROITab_ROIs                      2       /* control type: listBox, callback function: (none) */
-#define  ROITab_NRepeat                   3       /* control type: numeric, callback function: (none) */
-#define  ROITab_Repeat                    4       /* control type: numeric, callback function: (none) */
-#define  ROITab_Plate                     5       /* control type: deco, callback function: (none) */
-#define  ROITab_Averaging                 6       /* control type: ring, callback function: (none) */
-#define  ROITab_Mode                      7       /* control type: ring, callback function: (none) */
-#define  ROITab_NAveraging                8       /* control type: numeric, callback function: (none) */
-#define  ROITab_NPulses                   9       /* control type: numeric, callback function: (none) */
-#define  ROITab_PulseOFF                  10      /* control type: numeric, callback function: (none) */
-#define  ROITab_PulseON                   11      /* control type: numeric, callback function: (none) */
-#define  ROITab_StartDelayIncrement       12      /* control type: numeric, callback function: (none) */
-#define  ROITab_SequencePeriod            13      /* control type: numeric, callback function: (none) */
-#define  ROITab_StartDelay                14      /* control type: numeric, callback function: (none) */
-#define  ROITab_StimDelay                 15      /* control type: numeric, callback function: (none) */
-#define  ROITab_Hold                      16      /* control type: numeric, callback function: (none) */
-#define  ROITab_DECORATION_2              17      /* control type: deco, callback function: (none) */
-#define  ROITab_DECORATION_3              18      /* control type: deco, callback function: (none) */
-#define  ROITab_DECORATION                19      /* control type: deco, callback function: (none) */
-#define  ROITab_SequenceLabel             20      /* control type: textMsg, callback function: (none) */
-#define  ROITab_TEXTMSG_2                 21      /* control type: textMsg, callback function: (none) */
-#define  ROITab_TEXTMSG                   22      /* control type: textMsg, callback function: (none) */
-#define  ROITab_ParkedAtSeqEnd            23      /* control type: radioButton, callback function: (none) */
-#define  ROITab_RecordFluorescence        24      /* control type: radioButton, callback function: (none) */
+#define  PointTab_ROIs                    2       /* control type: listBox, callback function: (none) */
+#define  PointTab_NRepeat                 3       /* control type: numeric, callback function: (none) */
+#define  PointTab_Repeat                  4       /* control type: numeric, callback function: (none) */
+#define  PointTab_Plate                   5       /* control type: deco, callback function: (none) */
+#define  PointTab_Averaging               6       /* control type: ring, callback function: (none) */
+#define  PointTab_Mode                    7       /* control type: ring, callback function: (none) */
+#define  PointTab_NAveraging              8       /* control type: numeric, callback function: (none) */
+#define  PointTab_NPulses                 9       /* control type: numeric, callback function: (none) */
+#define  PointTab_PulseOFF                10      /* control type: numeric, callback function: (none) */
+#define  PointTab_PulseON                 11      /* control type: numeric, callback function: (none) */
+#define  PointTab_StartDelayIncrement     12      /* control type: numeric, callback function: (none) */
+#define  PointTab_SequencePeriod          13      /* control type: numeric, callback function: (none) */
+#define  PointTab_StartDelay              14      /* control type: numeric, callback function: (none) */
+#define  PointTab_StimDelay               15      /* control type: numeric, callback function: (none) */
+#define  PointTab_Hold                    16      /* control type: numeric, callback function: (none) */
+#define  PointTab_DECORATION_2            17      /* control type: deco, callback function: (none) */
+#define  PointTab_DECORATION_3            18      /* control type: deco, callback function: (none) */
+#define  PointTab_DECORATION              19      /* control type: deco, callback function: (none) */
+#define  PointTab_SequenceLabel           20      /* control type: textMsg, callback function: (none) */
+#define  PointTab_TEXTMSG_2               21      /* control type: textMsg, callback function: (none) */
+#define  PointTab_TEXTMSG                 22      /* control type: textMsg, callback function: (none) */
+#define  PointTab_ParkedAtSeqEnd          23      /* control type: radioButton, callback function: (none) */
+#define  PointTab_Record                  24      /* control type: radioButton, callback function: (none) */
 
      /* tab page panel controls */
 #define  ScanTab_PixelSize                2       /* control type: numeric, callback function: (none) */

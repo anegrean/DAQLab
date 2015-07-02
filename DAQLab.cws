@@ -145,7 +145,7 @@ Source Window State = "1,44,44,44,36,61,36,0,3,80,0,0,0,0,0,25,33,0,44,61,349,68
 [File 0010]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/UI_LaserScanning.uir"
 File Type = "User Interface Resource"
-Disk Date = 3518605496
+Disk Date = 3518706698
 In Projects = "1,"
 Window Top = 92
 Window Left = 42
@@ -406,13 +406,13 @@ Source Window State = "1,58,58,58,4,32,4,0,0,204,0,0,0,0,0,48,52,0,76,72,704,166
 [File 0039]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/LaserScanning.c"
 File Type = "CSource"
-Disk Date = 3518608647
+Disk Date = 3518706698
 In Projects = "1,"
-Window Top = 270
-Window Left = 156
+Window Top = 81
+Window Left = 121
 Window Released = True
-Source Window State Line0001 = "1,1183,1183,1183,16,26,26,0,0,205,0,6622,0,6650,71,70,1139,0,1184,16,899,1509,0,"
-Source Window State Line0002 = "0,"
+Source Window State Line0001 = "1,6460,6460,6460,61,64,61,0,0,184,22,4532,0,1105,20,41,4553,0,4559,55,899,1509,0"
+Source Window State Line0002 = ",3449,"
 
 [File 0040]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/LaserScanning.h"
@@ -436,7 +436,7 @@ Source Window State = "1,493,493,493,17,35,35,0,0,205,0,192,0,200,45,73,457,0,48
 [File 0042]
 Path = "/d/ELE_DAQLab/Modules/Laser Scanning/UI_LaserScanning.h"
 File Type = "Include"
-Disk Date = 3518605496
+Disk Date = 3518706698
 In Projects = "1,"
 Window Top = 122
 Window Left = 58
@@ -699,7 +699,7 @@ In Projects = "1,"
 Window Top = 437
 Window Left = 248
 Window Released = True
-Source Window State = "1,164,164,164,4,14,14,0,0,172,0,0,0,0,0,51,529,0,551,39,743,1418,0,0,"
+Source Window State = "1,164,164,164,4,14,14,0,0,172,0,0,0,0,0,51,529,0,537,23,743,1418,0,0,"
 
 [File 0071]
 Path = "/d/ELE_DAQLab/Framework/HW Triggering/HWTriggering.c"

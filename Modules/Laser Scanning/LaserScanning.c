@@ -422,7 +422,7 @@ struct ScanEngine {
 	int							newObjectivePanHndl;
 	int							scanPanHndl;				// Panel handle for the scan engine.
 	int							frameScanPanHndl;			// Panel handle for adjusting scan settings such as pixel size, etc...
-	int							ROIsPanHndl;				// Panel handle for the management of ROIs
+	int							pointScanPanHndl;			// Panel handle for the management of ROIs
 	int							engineSetPanHndl;			// Panel handle for scan engine settings such as VChans and scan axis types.
 	
 	ImageDisplay_type*			activeDisplay;				// Reference to the active image display that interacts with the scan engine
@@ -479,10 +479,8 @@ typedef struct {
 	Point_type					point;						// Point ROI.
 	
 	// DATA
-	PointScan_type				settings;					// Settings for recording and stimulating the point ROI.
 	double						jumpTime;					// Time in [ms] during which galvos are repositioned between this ROI and the next ROI.
 															// to the next ROI. Note that the galvo jump time is the largest jump time between the two galvos.
-	BOOL						record;						// If True, fluorescence signals from this point are recorded.
 } PointJump_type;
 
 typedef enum {
@@ -501,9 +499,12 @@ typedef enum {
 } PointJumpMethods;
 
 typedef struct {
+	PointJumpMethods			jumpMethod;					// Determines point jump method.
+	BOOL						record;						// If True, fluorescence signals from point ROIs are recorded while holding position.
 	double						startDelay;					// Initial delay in [ms] from the global start trigger to the start of the first point jump sequence defined to be the beginning 
 															// of the galvo hold time at the first point ROI in the first sequence. This initial delay is composed of a delay during which 
 															// the galvos are kept at their parked position and a jump time needed to position the galvos to the first point ROI.
+	double						startDelayIncrement;		// startDelay increment in [ms] with each sequence repetition.
 	double						minStartDelay;				// Minimum value for startDelay determined by the galvo jump speed in [ms].
 	double						sequenceDuration;			// Time in [ms] during which the beam jumps between all the point ROIs in a sequence. This time is measured from the start of the first point
 															// ROI holding time to the end holding time of the last point ROI in the sequence.
@@ -766,6 +767,8 @@ static RectRaster_type*					init_RectRaster_type								(LaserScanning_type*	lsM
 
 static void								discard_RectRaster_type								(ScanEngine_type** engine);
 
+static int 								InsertRectRasterScanEngineToUI 						(LaserScanning_type* ls, RectRaster_type* rectRaster);
+
 	// Image assembly buffer
 static RectRasterImgBuffer_type* 		init_RectRasterImgBuffer_type 						(ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows);
 
@@ -778,7 +781,7 @@ static int CVICALLBACK 					NonResRectRasterScan_MainPan_CB 					(int panel, int
 
 static int CVICALLBACK 					NonResRectRasterScan_FrameScanPan_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int CVICALLBACK 					NonResRectRasterScan_ROIsPan_CB		 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 					NonResRectRasterScan_PointScanPan_CB		 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static void 							NonResRectRasterScan_ScanWidths						(RectRaster_type* scanEngine);
 
@@ -818,7 +821,7 @@ static PointJumpSet_type*				init_PointJumpSet_type								(void);
 
 static void								discard_PointJumpSet_type							(PointJumpSet_type** pointJumpSetPtr);
 
-static PointJump_type* 					init_PointJump_type 								(Point_type* point, PointScan_type pointScan);
+static PointJump_type* 					init_PointJump_type 								(Point_type* point);
 static void								discard_PointJump_type								(PointJump_type** pointJumpPtr);
 static PointJump_type* 					copy_PointJump_type 								(PointJump_type* pointJump);
 
@@ -1102,6 +1105,186 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	discard_DAQLabModule(mod);
 }
 
+static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_type* rectRaster)
+{
+	int		error				= 0;
+	int		scanPanHndl			= 0;	
+	int		frameScanPanHndl	= 0;	// contains frame scan controls
+	int		pointScanPanHndl	= 0;	// contains point scan controls
+	int		newTabIdx			= 0;
+	char*	scanEngineName		= NULL; 
+	
+	scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
+				
+	// set UI to start in frame scan mode by default
+	SetActiveTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX);
+				
+	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
+	// Set up Frame Scan UI
+	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
+	
+	GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &frameScanPanHndl); 
+				
+	// update operation mode and dim N Frames if necessary
+	SetCtrlVal(frameScanPanHndl, ScanTab_ExecutionMode, !(BOOL)GetTaskControlMode(rectRaster->baseClass.taskControl));
+	if (GetTaskControlMode(rectRaster->baseClass.taskControl))
+		SetCtrlAttribute(frameScanPanHndl, ScanTab_NFrames, ATTR_DIMMED, 0);
+	else
+		SetCtrlAttribute(frameScanPanHndl, ScanTab_NFrames, ATTR_DIMMED, 1);
+					
+	// update number of frames
+	SetCtrlVal(frameScanPanHndl, ScanTab_NFrames, (unsigned int) GetTaskControlIterations(rectRaster->baseClass.taskControl));
+							
+	// update objectives
+	size_t				nObjectives			= ListNumItems(rectRaster->baseClass.objectives);
+	Objective_type*		objective			= NULL;
+	for (size_t j = 1; j <= nObjectives; j++) {
+		objective = *(Objective_type**)ListGetPtrToItem(rectRaster->baseClass.objectives, j);
+		InsertListItem(frameScanPanHndl, ScanTab_Objective, -1, objective->objectiveName, objective->objectiveFL);
+		// select assigned objective
+		if (!strcmp(objective->objectiveName, rectRaster->baseClass.objectiveLens->objectiveName))
+		SetCtrlIndex(frameScanPanHndl, ScanTab_Objective, j-1);
+	}
+				
+	// update height
+	SetCtrlVal(frameScanPanHndl, ScanTab_Height, rectRaster->scanSettings.height * rectRaster->scanSettings.pixSize);
+				
+	// update height and width offsets
+	SetCtrlVal(frameScanPanHndl, ScanTab_HeightOffset, rectRaster->scanSettings.heightOffset * rectRaster->scanSettings.pixSize); 
+	SetCtrlVal(frameScanPanHndl, ScanTab_WidthOffset, rectRaster->scanSettings.widthOffset * rectRaster->scanSettings.pixSize);
+				
+	// update pixel size & set boundaries
+	SetCtrlVal(frameScanPanHndl, ScanTab_PixelSize, rectRaster->scanSettings.pixSize);
+	SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
+	SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
+	SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
+				
+	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
+	// Set up Point Scan UI
+	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
+	
+	GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &pointScanPanHndl); 
+				
+	// populate point jump modes
+	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_SinglePoints, "Single points", PointJump_SinglePoints);
+	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_PointGroup, "Point group", PointJump_PointGroup);
+	SetCtrlIndex(pointScanPanHndl, PointTab_Mode, (int) rectRaster->pointJumpSettings->jumpMethod);
+				
+	// recording settings
+	SetCtrlVal(pointScanPanHndl, PointTab_Record, rectRaster->pointJumpSettings->record);
+				
+	// populate averaging methods
+	InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_None, "None", PointAveraging_None);
+	InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_MovingAverage, "Moving Avg.", PointAveraging_MovingAverage);
+	InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_All, "All", PointAveraging_All);
+	SetCtrlIndex(pointScanPanHndl, PointTab_Averaging, (int) rectRaster->pointJumpSettings->averagingMethod);
+	if (rectRaster->pointJumpSettings->averagingMethod == PointAveraging_MovingAverage)
+		SetCtrlAttribute(pointScanPanHndl, PointTab_NAveraging, ATTR_DIMMED, 0);
+	else
+		SetCtrlAttribute(pointScanPanHndl, PointTab_NAveraging, ATTR_DIMMED, 1);
+				
+	// populate point settings
+	SetCtrlVal(pointScanPanHndl, PointTab_Hold, rectRaster->pointJumpSettings->globalPointScanSettings.holdTime);
+	SetCtrlVal(pointScanPanHndl, PointTab_StimDelay, rectRaster->pointJumpSettings->globalPointScanSettings.stimDelay);
+	SetCtrlVal(pointScanPanHndl, PointTab_NPulses, rectRaster->pointJumpSettings->globalPointScanSettings.nStimPulses);
+	SetCtrlVal(pointScanPanHndl, PointTab_PulseON, rectRaster->pointJumpSettings->globalPointScanSettings.stimPulseONDuration);
+	SetCtrlVal(pointScanPanHndl, PointTab_PulseOFF, rectRaster->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration);
+	if (rectRaster->pointJumpSettings->globalPointScanSettings.nStimPulses > 1)
+		SetCtrlAttribute(pointScanPanHndl, PointTab_PulseOFF, ATTR_DIMMED, 0);
+	else
+		SetCtrlAttribute(pointScanPanHndl, PointTab_PulseOFF, ATTR_DIMMED, 1);
+				
+	// populate sequence settings
+	SetCtrlVal(pointScanPanHndl, PointTab_Repeat, rectRaster->pointJumpSettings->nSequenceRepeat);
+	SetCtrlVal(pointScanPanHndl, PointTab_StartDelay, rectRaster->pointJumpSettings->startDelay);
+	SetCtrlVal(pointScanPanHndl, PointTab_StartDelayIncrement, rectRaster->pointJumpSettings->startDelayIncrement);
+	SetCtrlVal(pointScanPanHndl, PointTab_SequencePeriod, rectRaster->pointJumpSettings->sequencePeriod);
+	SetCtrlVal(pointScanPanHndl, PointTab_ParkedAtSeqEnd, rectRaster->pointJumpSettings->parkedAtSequenceEnd);
+	if (!rectRaster->pointJumpSettings->parkedAtSequenceEnd)
+		// if beam is not returned to parked position at the end of a sequence, then don't allow changing the sequence period
+		// and make it equal to the minimum possible period, i.e. the beam from the last point ROI jumps directly to the first point ROI
+		SetCtrlAttribute(pointScanPanHndl, PointTab_SequencePeriod, ATTR_CTRL_MODE, VAL_INDICATOR);
+	else
+		SetCtrlAttribute(pointScanPanHndl, PointTab_SequencePeriod, ATTR_CTRL_MODE, VAL_HOT);
+					
+	// dim point scan panel since there are no points initially
+	SetPanelAttribute(pointScanPanHndl, ATTR_DIMMED, TRUE);
+	
+	
+	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
+	// Insert scan engine to UI
+	//------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl);
+	OKfreePanHndl(scanPanHndl);
+	
+	// get panel handle to the inserted scan engine panel
+	GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &rectRaster->baseClass.scanPanHndl);
+	// get panel handle to the frame scan settings from the inserted scan engine
+	GetPanelHandleFromTabPage(rectRaster->baseClass.scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &rectRaster->baseClass.frameScanPanHndl);
+	// get panel handle to the point scan panel from the inserted scan engine
+	GetPanelHandleFromTabPage(rectRaster->baseClass.scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &rectRaster->baseClass.pointScanPanHndl);
+		
+	// change new scan engine tab title
+	scanEngineName = GetTaskControlName(rectRaster->baseClass.taskControl); 
+	SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, scanEngineName);
+	OKfree(scanEngineName);
+		
+	// add scan engine pannel callback data
+	SetPanelAttribute(rectRaster->baseClass.scanPanHndl, ATTR_CALLBACK_DATA, rectRaster);
+	
+	// add callbacks to UI
+	SetCtrlsInPanCBInfo(rectRaster, NonResRectRasterScan_MainPan_CB, rectRaster->baseClass.scanPanHndl);
+	SetCtrlsInPanCBInfo(rectRaster, NonResRectRasterScan_FrameScanPan_CB, rectRaster->baseClass.frameScanPanHndl);
+	SetCtrlsInPanCBInfo(rectRaster, NonResRectRasterScan_PointScanPan_CB, rectRaster->baseClass.pointScanPanHndl);
+				
+	// make width string control into combo box
+	// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted
+	errChk( Combo_NewComboBox(rectRaster->baseClass.frameScanPanHndl, ScanTab_Width) );
+	errChk( Combo_SetComboAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_Width, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
+	
+	char widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+	Fmt(widthString, "%s<%f[p1]", rectRaster->scanSettings.width * rectRaster->scanSettings.pixSize);
+	if (rectRaster->scanSettings.width)
+		SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_Width, widthString); 
+	else
+		SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_Width, ""); 
+				
+	// make Pixel Dwell time string control into combo box
+	// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted  
+	errChk( Combo_NewComboBox(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelDwell) );
+	errChk( Combo_SetComboAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelDwell, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
+				
+	// update pixel dwell time
+	char pixelDwellString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+	Fmt(pixelDwellString, "%s<%f[p1]", rectRaster->scanSettings.pixelDwellTime);
+	if (rectRaster->scanSettings.pixelDwellTime != 0.0)
+		SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelDwell, pixelDwellString);
+	else
+		SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelDwell, "");
+				
+	// configure/unconfigure scan engine
+	// do this after adding combo boxes!
+	if (NonResRectRasterScan_ValidConfig(rectRaster)) {
+				
+		NonResRectRasterScan_ScanWidths(rectRaster);
+		NonResRectRasterScan_PixelDwellTimes(rectRaster);
+					
+		if (NonResRectRasterScan_ReadyToScan(rectRaster)) 
+			TaskControlEvent(rectRaster->baseClass.taskControl, TC_Event_Configure, NULL, NULL);
+		else
+			TaskControlEvent(rectRaster->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+	} else
+		TaskControlEvent(rectRaster->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL);
+	
+	
+	return 0;
+	
+Error:
+	
+	return error;
+}
+
 static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 {
 	LaserScanning_type*		ls					= (LaserScanning_type*) mod;
@@ -1126,7 +1309,6 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 		SetPanelAttribute(ls->mainPanHndl, ATTR_TOP, *ls->mainPanTopPos);
 	else
 		SetPanelAttribute(ls->mainPanHndl, ATTR_TOP, VAL_AUTO_CENTER); 
-	
 	
 	// add menu bar to scan panel and link it to module data
 	ls->menuBarHndl 			= NewMenuBar(ls->mainPanHndl);
@@ -1154,19 +1336,12 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	//----------------------------------------------------------------------
 	// load scan engines
 	//----------------------------------------------------------------------
-	ScanEngine_type*	scanEngine;
+	ScanEngine_type*	scanEngine			= NULL;
 	size_t				nScanEngines 		= ListNumItems(ls->scanEngines);
 	int					scanPanHndl			= 0;	
-	int					frameScanPanHndl	= 0;	// contains the frame scan controls
-	int					newTabIdx			= 0; 
-	char*				scanEngineName		= NULL;
-	size_t				nObjectives;
-	Objective_type**	objectivePtr;
-	
 	
 	for (size_t i = 1; i <= nScanEngines; i++) {
 		scanEngine = *(ScanEngine_type**)ListGetPtrToItem(ls->scanEngines, i);
-		nObjectives = ListNumItems(scanEngine->objectives);
 		// load scan pannel depending on scan engine type
 		switch (scanEngine->engineType) {
 			//------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1174,127 +1349,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 			//------------------------------------------------------------------------------------------------------------------------------------------------------ 
 			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
-				RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) scanEngine;
+				InsertRectRasterScanEngineToUI(ls, (RectRaster_type*)scanEngine);
 				
-				scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
-				
-				GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &frameScanPanHndl); 
-				
-				// start in frame scan mode by default
-				
-				
-				for (size_t j = 0; j < NumElem(scanEngineModes); j++)
-					InsertListItem(scanPanHndl, RectRaster_Mode, -1, scanEngineModes[j].label, scanEngineModes[j].mode);
-				SetCtrlIndex(scanPanHndl, RectRaster_Mode, 0);
-				
-				// update operation mode and dim N Frames if necessary
-				SetCtrlVal(scanPanHndl, RectRaster_ExecutionMode, !(BOOL)GetTaskControlMode(scanEngine->taskControl));
-				if (GetTaskControlMode(scanEngine->taskControl))
-					SetCtrlAttribute(scanPanHndl, RectRaster_NFrames, ATTR_DIMMED, 0);
-				else
-					SetCtrlAttribute(scanPanHndl, RectRaster_NFrames, ATTR_DIMMED, 1);
-					
-				// update number of frames
-				SetCtrlVal(scanPanHndl, RectRaster_NFrames, (unsigned int) GetTaskControlIterations(scanEngine->taskControl));
-							
-				// update objectives
-				for (size_t j = 1; j <= nObjectives; j++) {
-					objectivePtr = ListGetPtrToItem(scanEngine->objectives, j);
-					InsertListItem(scanPanHndl, RectRaster_Objective, -1, (*objectivePtr)->objectiveName, (*objectivePtr)->objectiveFL);
-					// select assigned objective
-					if (!strcmp((*objectivePtr)->objectiveName, scanEngine->objectiveLens->objectiveName))
-						SetCtrlIndex(scanPanHndl, RectRaster_Objective, j-1);
-				}
-				
-				// update height
-				SetCtrlVal(frameScanPanHndl, ScanTab_Height, rectRasterScanEngine->scanSettings.height * rectRasterScanEngine->scanSettings.pixSize);
-				
-				// update height and width offsets
-				SetCtrlVal(frameScanPanHndl, ScanTab_HeightOffset, rectRasterScanEngine->scanSettings.heightOffset * rectRasterScanEngine->scanSettings.pixSize); 
-				SetCtrlVal(frameScanPanHndl, ScanTab_WidthOffset, rectRasterScanEngine->scanSettings.widthOffset * rectRasterScanEngine->scanSettings.pixSize);
-				
-				// update pixel size & set boundaries
-				SetCtrlVal(frameScanPanHndl, ScanTab_PixelSize, ((RectRaster_type*)scanEngine)->scanSettings.pixSize);
-				SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
-				SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
-				SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
-				
-				break;
-				
-			// insert here more scan engine types
-		}
-		
-		newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl);
-		DiscardPanel(scanPanHndl);
-		scanPanHndl = 0;
-		frameScanPanHndl = 0;
-		
-		// get panel handle to the inserted scan engine panel
-		GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &scanEngine->scanPanHndl);
-		// get panel handle to the frame scan settings from the inserted scan engine
-		GetPanelHandleFromTabPage(scanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &scanEngine->frameScanPanHndl);
-		// get panel handle to the ROIs panel from the inserted scan engine
-		GetPanelHandleFromTabPage(scanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &scanEngine->ROIsPanHndl);
-		
-		// change new scan engine tab title
-		scanEngineName = GetTaskControlName(scanEngine->taskControl); 
-		SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, scanEngineName);
-		OKfree(scanEngineName);
-		
-		// add scan engine pannel callback data
-		SetPanelAttribute(scanEngine->scanPanHndl, ATTR_CALLBACK_DATA, scanEngine);
-		
-		// add callback function and data to scan engine controls on the main scan panel, frame scan and ROIs panels
-		switch (scanEngine->engineType) {
-				
-			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
-				
-				RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) scanEngine;  
-				
-				SetCtrlsInPanCBInfo(scanEngine, NonResRectRasterScan_MainPan_CB, scanEngine->scanPanHndl);
-				SetCtrlsInPanCBInfo(scanEngine, NonResRectRasterScan_FrameScanPan_CB, scanEngine->frameScanPanHndl);
-				SetCtrlsInPanCBInfo(scanEngine, NonResRectRasterScan_ROIsPan_CB, scanEngine->ROIsPanHndl);
-				
-				// make width string control into combo box
-				// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted
-				errChk( Combo_NewComboBox(scanEngine->frameScanPanHndl, ScanTab_Width) );
-				errChk( Combo_SetComboAttribute(scanEngine->frameScanPanHndl, ScanTab_Width, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
-				
-				// update width
-				char widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-				Fmt(widthString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.width * rectRasterScanEngine->scanSettings.pixSize);
-				if (rectRasterScanEngine->scanSettings.width)
-					SetCtrlVal(scanEngine->frameScanPanHndl, ScanTab_Width, widthString); 
-				else
-					SetCtrlVal(scanEngine->frameScanPanHndl, ScanTab_Width, ""); 
-				
-				// make Pixel Dwell time string control into combo box
-				// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted  
-				errChk( Combo_NewComboBox(scanEngine->frameScanPanHndl, ScanTab_PixelDwell) );
-				errChk( Combo_SetComboAttribute(scanEngine->frameScanPanHndl, ScanTab_PixelDwell, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
-				
-				// update pixel dwell time
-				char pixelDwellString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-				Fmt(pixelDwellString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.pixelDwellTime);
-				if (rectRasterScanEngine->scanSettings.pixelDwellTime != 0.0)
-					SetCtrlVal(scanEngine->frameScanPanHndl, ScanTab_PixelDwell, pixelDwellString);
-				else
-					SetCtrlVal(scanEngine->frameScanPanHndl, ScanTab_PixelDwell, "");
-				
-				// configure/unconfigure scan engine
-				// do this after adding combo boxes!
-				if (NonResRectRasterScan_ValidConfig(rectRasterScanEngine)) {
-				
-					NonResRectRasterScan_ScanWidths(rectRasterScanEngine);
-					NonResRectRasterScan_PixelDwellTimes(rectRasterScanEngine);
-					
-					if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)scanEngine)) 
-						TaskControlEvent(scanEngine->taskControl, TC_Event_Configure, NULL, NULL);
-					else
-						TaskControlEvent(scanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
-				} else
-					TaskControlEvent(scanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL);
-				   
 				break;
 				
 			// insert here more scan engine types
@@ -2287,110 +2343,10 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, TRUE, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 
 											0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
 							
-							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;   
-							
-							scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
-							
-							GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &frameScanPanHndl); 
-							// populate scan engine modes
-							for (size_t i = 0; i < NumElem(scanEngineModes); i++)
-								InsertListItem(scanPanHndl, RectRaster_Mode, -1, scanEngineModes[i].label, scanEngineModes[i].mode);
-							SetCtrlIndex(scanPanHndl, RectRaster_Mode, 0);
-							
-							// dim panel since the scan engine is not configured
-							SetPanelAttribute(scanPanHndl, ATTR_DIMMED, 1);
-							
-							// update height
-							SetCtrlVal(frameScanPanHndl, ScanTab_Height, rectRasterScanEngine->scanSettings.height * rectRasterScanEngine->scanSettings.pixSize);
-				
-							// update height and width offsets
-							SetCtrlVal(frameScanPanHndl, ScanTab_HeightOffset, rectRasterScanEngine->scanSettings.heightOffset * rectRasterScanEngine->scanSettings.pixSize); 
-							SetCtrlVal(frameScanPanHndl, ScanTab_WidthOffset, rectRasterScanEngine->scanSettings.widthOffset * rectRasterScanEngine->scanSettings.pixSize);
-				
-							// update pixel size
-							SetCtrlVal(frameScanPanHndl, ScanTab_PixelSize, ((RectRaster_type*)newScanEngine)->scanSettings.pixSize);
-							SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
-							SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
-							SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
+							InsertRectRasterScanEngineToUI(ls, (RectRaster_type*)newScanEngine);
 							
 							break;
 							// add below more cases	
-					}
-					
-					//------------------------------------------------------------------------------------------------------------------
-					newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl);  
-					// discard loaded panel and add scan control panel handle to scan engine
-					DiscardPanel(scanPanHndl); 
-					scanPanHndl = 0;
-					frameScanPanHndl = 0;
-					
-					// get panel handle to the inserted scan engine panel  
-					GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &newScanEngine->scanPanHndl);
-					// get panel handle to the frame scan settings from the inserted scan engine
-					GetPanelHandleFromTabPage(newScanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &newScanEngine->frameScanPanHndl);
-					// get panel handle to the ROIs panel from the inserted scan engine
-					GetPanelHandleFromTabPage(newScanEngine->scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &newScanEngine->ROIsPanHndl);
-			
-					// change new scan engine tab title
-					SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, engineName);  
-			
-					// add scan engine panel callback data
-					SetPanelAttribute(newScanEngine->scanPanHndl, ATTR_CALLBACK_DATA, newScanEngine); 
-					
-					// add callback function and data to scan engine controls
-					switch (newScanEngine->engineType) {
-				
-						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
-				
-							RectRaster_type*	rectRasterScanEngine = (RectRaster_type*) newScanEngine;  
-				
-							SetCtrlsInPanCBInfo(newScanEngine, NonResRectRasterScan_MainPan_CB, newScanEngine->scanPanHndl);
-							SetCtrlsInPanCBInfo(newScanEngine, NonResRectRasterScan_FrameScanPan_CB, newScanEngine->frameScanPanHndl);
-							SetCtrlsInPanCBInfo(newScanEngine, NonResRectRasterScan_ROIsPan_CB, newScanEngine->ROIsPanHndl);
-				
-							// make Width string control into combo box
-							// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted
-							errChk( Combo_NewComboBox(newScanEngine->frameScanPanHndl, ScanTab_Width) );
-							errChk( Combo_SetComboAttribute(newScanEngine->frameScanPanHndl, ScanTab_Width, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
-				
-							// update width
-							char widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-							Fmt(widthString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.width * rectRasterScanEngine->scanSettings.pixSize);
-							if (rectRasterScanEngine->scanSettings.width)
-								SetCtrlVal(newScanEngine->frameScanPanHndl, ScanTab_Width, widthString); 
-							else
-								SetCtrlVal(newScanEngine->frameScanPanHndl, ScanTab_Width, ""); 
-				
-							// make Pixel Dwell time string control into combo box
-							// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted  
-							errChk( Combo_NewComboBox(newScanEngine->frameScanPanHndl, ScanTab_PixelDwell) );
-							errChk( Combo_SetComboAttribute(newScanEngine->frameScanPanHndl, ScanTab_PixelDwell, ATTR_COMBO_MAX_LENGTH, NonResGalvoRasterScan_Max_ComboboxEntryLength) );
-				
-							// update pixel dwell time
-							char pixelDwellString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-							Fmt(pixelDwellString, "%s<%f[p1]", rectRasterScanEngine->scanSettings.pixelDwellTime);
-							if (rectRasterScanEngine->scanSettings.pixelDwellTime != 0.0)
-								SetCtrlVal(newScanEngine->frameScanPanHndl, ScanTab_PixelDwell, pixelDwellString);
-							else
-								SetCtrlVal(newScanEngine->frameScanPanHndl, ScanTab_PixelDwell, "");
-				
-							// configure/unconfigure scan engine
-							// do this after adding combo boxes!
-							if (NonResRectRasterScan_ValidConfig(rectRasterScanEngine)) {
-				
-								NonResRectRasterScan_ScanWidths(rectRasterScanEngine);
-								NonResRectRasterScan_PixelDwellTimes(rectRasterScanEngine);
-					
-								if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)newScanEngine))
-									TaskControlEvent(newScanEngine->taskControl, TC_Event_Configure, NULL, NULL);
-								else 
-									TaskControlEvent(newScanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
-							} else 
-								TaskControlEvent(newScanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL);
-								
-							break;
-				
-							// insert here more scan engine types
 					}
 					
 					DLRegisterScanEngine(newScanEngine);
@@ -3184,10 +3140,10 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// remove objective from scan engine settings UI 
 					DeleteListItem(panel, control, listItemIdx, 1);  
 					// remove objective from scan control UI
-					DeleteListItem(engine->scanPanHndl, RectRaster_Objective, listItemIdx, 1);
+					DeleteListItem(engine->frameScanPanHndl, ScanTab_Objective, listItemIdx, 1);
 					
 					// update chosen objective in scan engine structure
-					GetCtrlIndex(engine->scanPanHndl, RectRaster_Objective, &listItemIdx);
+					GetCtrlIndex(engine->frameScanPanHndl, ScanTab_Objective, &listItemIdx);
 					if (listItemIdx >= 0) {
 						objectivePtr = ListGetPtrToItem(engine->objectives, listItemIdx+1); 
 						engine->objectiveLens = *objectivePtr;
@@ -4107,7 +4063,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	// scan settings panel handle
 	engine->scanPanHndl					= 0;
 	engine->frameScanPanHndl			= 0;
-	engine->ROIsPanHndl					= 0;
+	engine->pointScanPanHndl			= 0;
 	engine->activeDisplay				= NULL;
 	// scan engine settings panel handle
 	engine->engineSetPanHndl			= 0;
@@ -4899,7 +4855,7 @@ static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int cont
 	return 0;
 }
 
-static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	RectRaster_type*		scanEngine		= callbackData;
 	int						listItemIdx		= 0;
@@ -4974,7 +4930,7 @@ static int CVICALLBACK NonResRectRasterScan_ROIsPan_CB (int panel, int control, 
 					if (scanEngine->baseClass.activeDisplay)
 						(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, listItemIdx + 1, ROI_Delete);
 					
-					DeleteListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, listItemIdx, 1);
+					DeleteListItem(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, listItemIdx, 1);
 					ListRemoveItem(scanEngine->pointJumps, 0, listItemIdx + 1);
 					
 					// calculate minimum point jump start delay
@@ -6500,9 +6456,9 @@ SkipPoints:
 	// update lower bound and coerce value
 	if (pointJumpSet->startDelay <= pointJumpSet->minStartDelay) {
 		pointJumpSet->startDelay = pointJumpSet->minStartDelay;
-		SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_StartDelay, pointJumpSet->startDelay);
+		SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, pointJumpSet->startDelay);
 	}
-	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_MIN_VALUE, pointJumpSet->minStartDelay);  
+	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, ATTR_MIN_VALUE, pointJumpSet->minStartDelay);  
 }
 
 // Calculates the minimum time it takes to visit all the point ROIs starting from the parked position and ending up again in the parked position
@@ -6581,13 +6537,13 @@ SkipPoints:
 	
 	// update minimum point jump period
 	rectRaster->pointJumpTime = ROIsJumpTime;
-	SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_JumpTime, ROIsJumpTime); 
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, ROITab_JumpTime, ROIsJumpTime); 
 	// if period is larger or equal to previous value, then update lower bound 
 	if (rectRaster->pointJumpPeriod <= rectRaster->minimumPointJumpPeriod) {
 		rectRaster->pointJumpPeriod = rectRaster->minimumPointJumpPeriod;
-		SetCtrlVal(rectRaster->baseClass.ROIsPanHndl, ROITab_Period, rectRaster->pointJumpPeriod);
+		SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, ROITab_Period, rectRaster->pointJumpPeriod);
 	}
-	SetCtrlAttribute(rectRaster->baseClass.ROIsPanHndl, ROITab_Period, ATTR_MIN_VALUE, rectRaster->minimumPointJumpPeriod);
+	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, ROITab_Period, ATTR_MIN_VALUE, rectRaster->minimumPointJumpPeriod);
 	
 	*/
 }
@@ -6599,7 +6555,10 @@ static PointJumpSet_type* init_PointJumpSet_type (void)
 	if (!pointJumpSet) return NULL;
 	
 	// init
+	pointJumpSet->jumpMethod							= PointJump_SinglePoints;
+	pointJumpSet->record								= FALSE;
 	pointJumpSet->startDelay							= 0;
+	pointJumpSet->startDelayIncrement					= 0;
 	pointJumpSet->minStartDelay							= 0;
 	pointJumpSet->sequenceDuration						= 0;
 	pointJumpSet->sequencePeriod						= 0;
@@ -6638,7 +6597,7 @@ static void discard_PointJumpSet_type (PointJumpSet_type** pointJumpSetPtr)
 	OKfree(*pointJumpSetPtr);
 }
 
-static PointJump_type* init_PointJump_type (Point_type* point, PointScan_type pointScan)
+static PointJump_type* init_PointJump_type (Point_type* point)
 {
 	PointJump_type*	pointJump = malloc(sizeof(PointJump_type));
 	if (!pointJump) return NULL;
@@ -6647,9 +6606,7 @@ static PointJump_type* init_PointJump_type (Point_type* point, PointScan_type po
 	initalloc_Point_type(&pointJump->point, point->baseClass.ROIName, point->x, point->y);
 	
 	// init child DATA
-	pointJump->settings 					= pointScan;
 	pointJump->jumpTime						= 0;
-	pointJump->record						= FALSE;
 	// override methods
 	pointJump->point.baseClass.discardFptr 	= (DiscardFptr_type)discard_PointJump_type;
 	pointJump->point.baseClass.copyFptr		= (CopyFptr_type)copy_PointJump_type;
@@ -6670,7 +6627,7 @@ static void	discard_PointJump_type (PointJump_type** pointJumpPtr)
 
 static PointJump_type* copy_PointJump_type (PointJump_type* pointJump)
 {
-	PointJump_type*	pointJumpCopy = init_PointJump_type(&pointJump->point, pointJump->settings);
+	PointJump_type*	pointJumpCopy = init_PointJump_type(&pointJump->point);
 	if (!pointJumpCopy) return NULL;
 	
 	// also copy these
@@ -7031,21 +6988,21 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 			if (scanEngine->baseClass.activeDisplay == imgDisplay) {
 				// insert ROI item in the UI
 				
-				InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, addedROI->ROIName, ListNumItems(ROIlist));
+				InsertListItem(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, -1, addedROI->ROIName, ListNumItems(ROIlist));
 				
 				switch (addedROI->ROIType) {
 						
 					case ROI_Point:
 						
-						PointJump_type*	pointJump = init_PointJump_type((Point_type*)ROI, scanEngine->pointJumpSettings->globalPointScanSettings); 
+						PointJump_type*	pointJump = init_PointJump_type((Point_type*)ROI); 
 						
 						// add ROI to the image
 						addedROI = (*displayEngine->overlayROIFptr) (imgDisplay, (ROI_type*)pointJump);
 			
 						
 						// mark point as checked (in use)  
-						GetNumListItems(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, &nListItems);
-						CheckListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, nListItems - 1, 1); 
+						GetNumListItems(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, &nListItems);
+						CheckListItem(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, nListItems - 1, 1); 
 						// insert ROI item in the scan engine as well
 						ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &pointJump, END_OF_LIST);
 						
@@ -7058,11 +7015,11 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 						NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 							
 						// undim controls if there are no more ROIs
-						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_ParkedTime, ATTR_DIMMED, 0);
-						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_DIMMED, 0);
-						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Period, ATTR_DIMMED, 0);
-						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Repeat, ATTR_DIMMED, 0);
-						SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_JumpTime, ATTR_DIMMED, 0);
+						SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_ParkedTime, ATTR_DIMMED, 0);
+						SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_StartDelay, ATTR_DIMMED, 0);
+						SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Period, ATTR_DIMMED, 0);
+						SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Repeat, ATTR_DIMMED, 0);
+						SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_JumpTime, ATTR_DIMMED, 0);
 						
 						break;
 						
@@ -7127,7 +7084,7 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, scanEngine->scanSettings.pixSize);
 	
 	// clear ROIs in the scan engine UI
-	ClearListCtrl(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs);
+	ClearListCtrl(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs);
 	
 	// clear ROIs from the scan engine
 	size_t					nPoints 		= ListNumItems(scanEngine->pointJumpSettings->pointJumps);
@@ -7148,7 +7105,7 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 	for (size_t i = 1; i <= nROIs; i++) {
 		ROI = *(ROI_type**)ListGetPtrToItem(ROIlist, i);
 		ROICopy = (*ROI->copyFptr) ((void*)ROI);
-		InsertListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, -1, ROI->ROIName, i);
+		InsertListItem(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, -1, ROI->ROIName, i);
 		
 		if (ROI->active)
 			activeROIAvailable = TRUE;
@@ -7158,7 +7115,7 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 			case ROI_Point:
 						
 				// mark point as checked/unchecked
-				CheckListItem(scanEngine->baseClass.ROIsPanHndl, ROITab_ROIs, i - 1, ROI->active); 
+				CheckListItem(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, i - 1, ROI->active); 
 				// insert ROI item in the scan engine as well
 				ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &ROICopy, END_OF_LIST);
 						
@@ -7180,17 +7137,17 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 				NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine); 
 				
 				if (activeROIAvailable) {
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_ParkedTime, ATTR_DIMMED, FALSE);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_DIMMED, FALSE);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Period, ATTR_DIMMED, FALSE);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Repeat, ATTR_DIMMED, FALSE);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_JumpTime, ATTR_DIMMED, FALSE);
+					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_ParkedTime, ATTR_DIMMED, FALSE);
+					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_StartDelay, ATTR_DIMMED, FALSE);
+					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Period, ATTR_DIMMED, FALSE);
+					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Repeat, ATTR_DIMMED, FALSE);
+					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_JumpTime, ATTR_DIMMED, FALSE);
 				} else {
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_ParkedTime, ATTR_DIMMED, TRUE);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_StartDelay, ATTR_DIMMED, TRUE);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Period, ATTR_DIMMED, TRUE);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_Repeat, ATTR_DIMMED, TRUE);
-					SetCtrlAttribute(scanEngine->baseClass.ROIsPanHndl, ROITab_JumpTime, ATTR_DIMMED, TRUE);
+					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_ParkedTime, ATTR_DIMMED, TRUE);
+					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_StartDelay, ATTR_DIMMED, TRUE);
+					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Period, ATTR_DIMMED, TRUE);
+					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Repeat, ATTR_DIMMED, TRUE);
+					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_JumpTime, ATTR_DIMMED, TRUE);
 				}
 				
 				break;

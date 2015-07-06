@@ -326,8 +326,8 @@ typedef enum {
 #define ScanEngineMode_FrameScan_Name				"Frame scan"
 #define ScanEngineMode_PointScan_Name				"Point scan"
 typedef enum {
-	ScanEngineMode_FrameScan,								// Frame scans 
-	ScanEngineMode_PointScan								// Jumps between point ROIs repeatedly
+	ScanEngineMode_FrameScan	= NonResGalvoRasterScan_FrameScanTabIDX,	// Frame scans 
+	ScanEngineMode_PointScan	= NonResGalvoRasterScan_PointScanTabIDX		// Jumps between point ROIs repeatedly
 } ScanEngineModes;
 
 typedef struct {
@@ -501,6 +501,7 @@ typedef enum {
 typedef struct {
 	PointJumpMethods			jumpMethod;					// Determines point jump method.
 	BOOL						record;						// If True, fluorescence signals from point ROIs are recorded while holding position.
+	BOOL						stimulate;					// If True, then optical stimulation is applied to the point ROI.
 	double						startDelay;					// Initial delay in [ms] from the global start trigger to the start of the first point jump sequence defined to be the beginning 
 															// of the galvo hold time at the first point ROI in the first sequence. This initial delay is composed of a delay during which 
 															// the galvos are kept at their parked position and a jump time needed to position the galvos to the first point ROI.
@@ -766,6 +767,8 @@ static RectRaster_type*					init_RectRaster_type								(LaserScanning_type*	lsM
 																				 	 		double					tubeLensFL);
 
 static void								discard_RectRaster_type								(ScanEngine_type** engine);
+
+static void 							SetRectRasterScanEnginePointScanStimulateUI			(RectRaster_type* rectRaster);
 
 static int 								InsertRectRasterScanEngineToUI 						(LaserScanning_type* ls, RectRaster_type* rectRaster);
 
@@ -1105,6 +1108,20 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	discard_DAQLabModule(mod);
 }
 
+static void SetRectRasterScanEnginePointScanStimulateUI (RectRaster_type* rectRaster)
+{
+	if (rectRaster->pointJumpSettings->stimulate) {
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_StimDelay, ATTR_DIMMED, FALSE);
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_NPulses, ATTR_DIMMED, FALSE);
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_PulseON, ATTR_DIMMED, FALSE);
+	} else {
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_StimDelay, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_NPulses, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_PulseON, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_PulseOFF, ATTR_DIMMED, TRUE);
+	}
+}
+
 static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_type* rectRaster)
 {
 	int		error				= 0;
@@ -1170,8 +1187,18 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_PointGroup, "Point group", PointJump_PointGroup);
 	SetCtrlIndex(pointScanPanHndl, PointTab_Mode, (int) rectRaster->pointJumpSettings->jumpMethod);
 				
-	// recording settings
+	// recording UI settings
 	SetCtrlVal(pointScanPanHndl, PointTab_Record, rectRaster->pointJumpSettings->record);
+	if (rectRaster->pointJumpSettings->record)
+		SetCtrlAttribute(pointScanPanHndl, PointTab_Averaging, ATTR_DIMMED, FALSE);
+	else {
+		SetCtrlAttribute(pointScanPanHndl, PointTab_Averaging, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(pointScanPanHndl, PointTab_NAveraging, ATTR_DIMMED, TRUE);
+	}
+	
+	// stimulate UI settings
+	SetCtrlVal(pointScanPanHndl, PointTab_Stimulate, rectRaster->pointJumpSettings->stimulate);
+	SetRectRasterScanEnginePointScanStimulateUI(rectRaster);
 				
 	// populate averaging methods
 	InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_None, "None", PointAveraging_None);
@@ -4565,66 +4592,24 @@ static void	discard_RectRasterImgBuffer_type (RectRasterImgBuffer_type** imgBuff
 static int CVICALLBACK NonResRectRasterScan_MainPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	RectRaster_type*		scanEngine		= callbackData;
-	int						listItemIdx;
-
+	
 	switch (event)
 	{
 		case EVENT_COMMIT:
 			
 			switch (control) {
 			
-				case RectRaster_Objective:
-					
-					Objective_type**	objectivePtr;
-					GetCtrlIndex(panel, control, &listItemIdx);
-					objectivePtr = ListGetPtrToItem(scanEngine->baseClass.objectives, listItemIdx+1);
-					scanEngine->baseClass.objectiveLens = *objectivePtr;
-					
-					// configure/unconfigure scan engine
-					if (NonResRectRasterScan_ValidConfig(scanEngine)) {
-				
-						NonResRectRasterScan_ScanWidths(scanEngine);
-						NonResRectRasterScan_PixelDwellTimes(scanEngine);
-					
-						if (NonResRectRasterScan_ReadyToScan(scanEngine))
-							TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Configure, NULL, NULL);
-						else
-							TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL); 	
-					} else
-						TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL);
-					break;
-					
-				case RectRaster_Mode:
+				case RectRaster_Tab:
 					
 					int		scanMode;
-					GetCtrlVal(panel, control, &scanMode);
+					
+					GetActiveTabPage(panel, control, &scanMode);
 					scanEngine->baseClass.scanMode = (ScanEngineModes) scanMode;
 					
 					// activate/inactivate VChans
 					SetRectRasterScanEngineModeVChans(scanEngine);
 					break;
 					
-				case RectRaster_ExecutionMode:
-					
-					BOOL	executionMode;
-					GetCtrlVal(panel, control, &executionMode);
-					SetTaskControlMode(scanEngine->baseClass.taskControl, (TaskMode_type)!executionMode);
-					// dim/undim N Frames
-					if (executionMode)
-						SetCtrlAttribute(panel, RectRaster_NFrames, ATTR_DIMMED, 1);
-					else
-						SetCtrlAttribute(panel, RectRaster_NFrames, ATTR_DIMMED, 0);
-					
-					break;
-					
-				case RectRaster_NFrames:
-					
-					unsigned int nFrames = 0;
-					
-					GetCtrlVal(panel, control, &nFrames);
-					SetTaskControlIterations(scanEngine->baseClass.taskControl, nFrames);
-					
-					break;
 				
 			}
 
@@ -4645,6 +4630,53 @@ static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int cont
 			
 			switch (control) {
 			
+				case ScanTab_Objective:
+					
+					Objective_type**	objectivePtr	= NULL;
+					int					listItemIdx		= 0;
+					
+					GetCtrlIndex(panel, control, &listItemIdx);
+					objectivePtr = ListGetPtrToItem(scanEngine->baseClass.objectives, listItemIdx+1);
+					scanEngine->baseClass.objectiveLens = *objectivePtr;
+					
+					// configure/unconfigure scan engine
+					if (NonResRectRasterScan_ValidConfig(scanEngine)) {
+				
+						NonResRectRasterScan_ScanWidths(scanEngine);
+						NonResRectRasterScan_PixelDwellTimes(scanEngine);
+					
+						if (NonResRectRasterScan_ReadyToScan(scanEngine))
+							TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Configure, NULL, NULL);
+						else
+							TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+					} else
+						TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL);
+					
+					break;
+					
+				case ScanTab_ExecutionMode:
+					
+					BOOL	executionMode	= FALSE;
+					GetCtrlVal(panel, control, &executionMode);
+					SetTaskControlMode(scanEngine->baseClass.taskControl, (TaskMode_type)!executionMode);
+					// dim/undim N Frames
+					if (executionMode)
+						SetCtrlAttribute(panel, ScanTab_NFrames, ATTR_DIMMED, 1);
+					else
+						SetCtrlAttribute(panel, ScanTab_NFrames, ATTR_DIMMED, 0);
+					
+					break;
+					
+				case ScanTab_NFrames:
+					
+					unsigned int nFrames = 0;
+					
+					GetCtrlVal(panel, control, &nFrames);
+					SetTaskControlIterations(scanEngine->baseClass.taskControl, nFrames);
+					
+					break;
+				
+				
 				case ScanTab_Width:
 					
 					char   		widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
@@ -4858,33 +4890,84 @@ static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int cont
 static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	RectRaster_type*		scanEngine		= callbackData;
-	int						listItemIdx		= 0;
+	int						itemIdx			= 0;
 	int						nROIs			= 0;	
 	
 	switch (event) {
 		
 		case EVENT_COMMIT:
 			
-			/*
 			switch (control) {
 					
-				case ROITab_ROIs:
+				case PointTab_Mode:
+					
+					GetCtrlIndex(panel, control, &itemIdx);
+					scanEngine->pointJumpSettings->jumpMethod = (PointJumpMethods) itemIdx;
+					
+					break;
+				
+				case PointTab_ROIs:
 					
 					break;
 					
-				case ROITab_ParkedTime:
+				case PointTab_Record:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointParkedTime);
+					GetCtrlVal(panel, control, scanEngine->pointJumpSettings->record);
+					if (rectRaster->pointJumpSettings->record)
+						SetCtrlAttribute(panel, PointTab_Averaging, ATTR_DIMMED, FALSE);
+					else {
+						SetCtrlAttribute(panel, PointTab_Averaging, ATTR_DIMMED, TRUE);
+						SetCtrlAttribute(panel, PointTab_NAveraging, ATTR_DIMMED, TRUE);
+					}
+					
+					break;
+					
+				case PointTab_Stimulate:
+					
+					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->stimulate);
+					SetRectRasterScanEnginePointScanStimulateUI(scanEngine);
+					
+					break;
+					
+				case PointTab_Hold:
+					
+					double	holdTime	= 0;
+					double	stimTime	= 0;
+					
+					GetCtrlVal(panel, control, &holdTime);
 					
 					// round up to a multiple of galvo sampling
-					scanEngine->pointParkedTime = ceil(scanEngine->pointParkedTime * 1e-3 * scanEngine->galvoSamplingRate) * 1e3/scanEngine->galvoSamplingRate;
-					SetCtrlVal(panel, control, scanEngine->pointParkedTime);
+					holdTime = ceil(holdTime * 1e-3 * scanEngine->galvoSamplingRate) * 1e3/scanEngine->galvoSamplingRate;
+					
+					// if hold time is shorter than stimulation delay plus stimulation, then make delay 0 and use only one pulse
+					stimTime = scanEngine->pointJumpSettings->globalPointScanSettings.stimDelay + scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses * 
+							   scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseONDuration + (scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses - 1) *
+							   scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration;
+					if (stimTime > holdTime) {
+						// adjust stimulation to fit within holding time
+						scanEngine->pointJumpSettings->globalPointScanSettings.stimDelay = 0;
+						SetCtrlVal(panel, PointTab_StimDelay, scanEngine->pointJumpSettings->globalPointScanSettings.stimDelay);
+						scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses = 1;
+						SetCtrlVal(panel, PointTab_NPulses, scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses);
+						scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseONDuration = holdTime;
+						SetCtrlVal(panel, PointTab_PulseON, stimPulseONDuration);
+						SetCtrlAttribute(panel, PointTab_PulseOFF, ATTR_DIMMED, TRUE);
+					}
+							   
+					
+					// update in scan engine and UI
+					scanEngine->pointJumpSettings->globalPointScanSettings.holdTime = holdTime;
+					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->globalPointScanSettings.holdTime);
 					// update minimum point jump period
 					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
 					break;
 					
-				case ROITab_StartDelay:
+				case PointTab_StimDelay:	// CONTINUE HERE!
+					
+					break;
+					
+				case PointTab_StartDelay:
 					
 					GetCtrlVal(panel, control, &scanEngine->jumpStartDelay);
 					
@@ -4894,7 +4977,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					break;
 					
-				case ROITab_Period:
+				case PointTab_Period:
 					
 					GetCtrlVal(panel, control, &scanEngine->pointJumpPeriod);
 					
@@ -4904,13 +4987,13 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					break;
 					
-				case ROITab_Repeat:
+				case PointTab_Repeat:
 					
 					GetCtrlVal(panel, control, &scanEngine->pointJumpCycles);
 					
 					break;
 			}
-			*/
+			
 			break;
 			
 		case EVENT_KEYPRESS:
@@ -4918,20 +5001,20 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 			/*
 			switch (control) {
 					
-				case ROITab_ROIs:
+				case PointTab_ROIs:
 					
 					// continue only if Del key is pressed
 					if (eventData1 != VAL_FWD_DELETE_VKEY) break;
 					
-					GetCtrlIndex(panel, control, &listItemIdx);
-					if (listItemIdx < 0) break; // stop here if list is empty
+					GetCtrlIndex(panel, control, &itemIdx);
+					if (itemIdx < 0) break; // stop here if list is empty
 					
 					// if there is an active display, remove ROI item from display and from scan engine list
 					if (scanEngine->baseClass.activeDisplay)
-						(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, listItemIdx + 1, ROI_Delete);
+						(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, itemIdx + 1, ROI_Delete);
 					
-					DeleteListItem(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, listItemIdx, 1);
-					ListRemoveItem(scanEngine->pointJumps, 0, listItemIdx + 1);
+					DeleteListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, itemIdx, 1);
+					ListRemoveItem(scanEngine->pointJumps, 0, itemIdx + 1);
 					
 					// calculate minimum point jump start delay
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
@@ -4941,11 +5024,11 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					// dim controls if there are no more active ROIs
 					GetNumCheckedItems(panel, control, &nROIs);
 					if (!nROIs) {
-						SetCtrlAttribute(panel, ROITab_ParkedTime, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, ROITab_StartDelay, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, ROITab_Period, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, ROITab_Repeat, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, ROITab_JumpTime, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, PointTab_ParkedTime, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, PointTab_StartDelay, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, PointTab_Period, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, PointTab_Repeat, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, PointTab_JumpTime, ATTR_DIMMED, 1);
 					}
 					
 					break;
@@ -4958,7 +5041,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 			/*
 			switch (control) {
 					
-				case ROITab_ROIs:
+				case PointTab_ROIs:
 					
 					if (eventData1) {
 						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumps, eventData2 + 1);
@@ -4982,17 +5065,17 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					// dim/undim controls
 					GetNumCheckedItems(panel, control, &nROIs);
 					if (nROIs) {
-						SetCtrlAttribute(panel, ROITab_ParkedTime, ATTR_DIMMED, 0);
-						SetCtrlAttribute(panel, ROITab_StartDelay, ATTR_DIMMED, 0);
-						SetCtrlAttribute(panel, ROITab_Period, ATTR_DIMMED, 0);
-						SetCtrlAttribute(panel, ROITab_Repeat, ATTR_DIMMED, 0);
-						SetCtrlAttribute(panel, ROITab_JumpTime, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, PointTab_ParkedTime, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, PointTab_StartDelay, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, PointTab_Period, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, PointTab_Repeat, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, PointTab_JumpTime, ATTR_DIMMED, 0);
 					} else {
-						SetCtrlAttribute(panel, ROITab_ParkedTime, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, ROITab_StartDelay, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, ROITab_Period, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, ROITab_Repeat, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, ROITab_JumpTime, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, PointTab_ParkedTime, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, PointTab_StartDelay, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, PointTab_Period, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, PointTab_Repeat, ATTR_DIMMED, 1);
+						SetCtrlAttribute(panel, PointTab_JumpTime, ATTR_DIMMED, 1);
 					}
 					
 					break;
@@ -6537,13 +6620,13 @@ SkipPoints:
 	
 	// update minimum point jump period
 	rectRaster->pointJumpTime = ROIsJumpTime;
-	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, ROITab_JumpTime, ROIsJumpTime); 
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_JumpTime, ROIsJumpTime); 
 	// if period is larger or equal to previous value, then update lower bound 
 	if (rectRaster->pointJumpPeriod <= rectRaster->minimumPointJumpPeriod) {
 		rectRaster->pointJumpPeriod = rectRaster->minimumPointJumpPeriod;
-		SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, ROITab_Period, rectRaster->pointJumpPeriod);
+		SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_Period, rectRaster->pointJumpPeriod);
 	}
-	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, ROITab_Period, ATTR_MIN_VALUE, rectRaster->minimumPointJumpPeriod);
+	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_Period, ATTR_MIN_VALUE, rectRaster->minimumPointJumpPeriod);
 	
 	*/
 }
@@ -6557,6 +6640,7 @@ static PointJumpSet_type* init_PointJumpSet_type (void)
 	// init
 	pointJumpSet->jumpMethod							= PointJump_SinglePoints;
 	pointJumpSet->record								= FALSE;
+	pointJumpSet->stimulate								= FALSE;
 	pointJumpSet->startDelay							= 0;
 	pointJumpSet->startDelayIncrement					= 0;
 	pointJumpSet->minStartDelay							= 0;
@@ -6632,7 +6716,6 @@ static PointJump_type* copy_PointJump_type (PointJump_type* pointJump)
 	
 	// also copy these
 	pointJumpCopy->jumpTime = pointJump->jumpTime;
-	pointJumpCopy->record = pointJump->record;
 	
 	return pointJumpCopy;
 }
@@ -6738,7 +6821,7 @@ static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void 
 						(*engine->slowAxisCal->UpdateOptics) (engine->slowAxisCal);
 				
 				// inserts new objective and selects it if there were no other objectives previously
-				InsertListItem(engine->scanPanHndl, RectRaster_Objective, -1, newObjectiveName, objectiveFL);
+				InsertListItem(engine->frameScanPanHndl, ScanTab_Objective, -1, newObjectiveName, objectiveFL);
 			}
 			OKfree(newObjectiveName);
 			
@@ -6988,7 +7071,7 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 			if (scanEngine->baseClass.activeDisplay == imgDisplay) {
 				// insert ROI item in the UI
 				
-				InsertListItem(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, -1, addedROI->ROIName, ListNumItems(ROIlist));
+				InsertListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, -1, addedROI->ROIName, ListNumItems(ROIlist));
 				
 				switch (addedROI->ROIType) {
 						
@@ -7001,8 +7084,8 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 			
 						
 						// mark point as checked (in use)  
-						GetNumListItems(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, &nListItems);
-						CheckListItem(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, nListItems - 1, 1); 
+						GetNumListItems(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, &nListItems);
+						CheckListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, nListItems - 1, 1); 
 						// insert ROI item in the scan engine as well
 						ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &pointJump, END_OF_LIST);
 						
@@ -7014,12 +7097,8 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 						// update minimum point jump period
 						NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 							
-						// undim controls if there are no more ROIs
-						SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_ParkedTime, ATTR_DIMMED, 0);
-						SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_StartDelay, ATTR_DIMMED, 0);
-						SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Period, ATTR_DIMMED, 0);
-						SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Repeat, ATTR_DIMMED, 0);
-						SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_JumpTime, ATTR_DIMMED, 0);
+						// undim panel
+						SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, 0);
 						
 						break;
 						
@@ -7084,7 +7163,7 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, scanEngine->scanSettings.pixSize);
 	
 	// clear ROIs in the scan engine UI
-	ClearListCtrl(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs);
+	ClearListCtrl(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs);
 	
 	// clear ROIs from the scan engine
 	size_t					nPoints 		= ListNumItems(scanEngine->pointJumpSettings->pointJumps);
@@ -7105,7 +7184,7 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 	for (size_t i = 1; i <= nROIs; i++) {
 		ROI = *(ROI_type**)ListGetPtrToItem(ROIlist, i);
 		ROICopy = (*ROI->copyFptr) ((void*)ROI);
-		InsertListItem(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, -1, ROI->ROIName, i);
+		InsertListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, -1, ROI->ROIName, i);
 		
 		if (ROI->active)
 			activeROIAvailable = TRUE;
@@ -7115,7 +7194,7 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 			case ROI_Point:
 						
 				// mark point as checked/unchecked
-				CheckListItem(scanEngine->baseClass.pointScanPanHndl, ROITab_ROIs, i - 1, ROI->active); 
+				CheckListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, i - 1, ROI->active); 
 				// insert ROI item in the scan engine as well
 				ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &ROICopy, END_OF_LIST);
 						
@@ -7136,20 +7215,11 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 				NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 				NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine); 
 				
-				if (activeROIAvailable) {
-					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_ParkedTime, ATTR_DIMMED, FALSE);
-					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_StartDelay, ATTR_DIMMED, FALSE);
-					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Period, ATTR_DIMMED, FALSE);
-					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Repeat, ATTR_DIMMED, FALSE);
-					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_JumpTime, ATTR_DIMMED, FALSE);
-				} else {
-					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_ParkedTime, ATTR_DIMMED, TRUE);
-					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_StartDelay, ATTR_DIMMED, TRUE);
-					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Period, ATTR_DIMMED, TRUE);
-					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_Repeat, ATTR_DIMMED, TRUE);
-					SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, ROITab_JumpTime, ATTR_DIMMED, TRUE);
-				}
-				
+				if (activeROIAvailable)
+					SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, FALSE);
+				else
+					SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, TRUE);
+					
 				break;
 				
 			default:
@@ -8079,14 +8149,14 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 	}
 	
 	// update iterations
-	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, (unsigned int) GetCurrentIterIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
 	return;
 	
 Error:
 	
 	TaskControlIterationDone(taskControl, error, errMsg, FALSE);
-	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, (unsigned int) GetCurrentIterIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	OKfree(errMsg);
 }
 
@@ -8141,7 +8211,7 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFl
 	if (GetTaskControlMode(engine->baseClass.taskControl) == TASK_CONTINUOUS)
 		errChk( ReturnRectRasterToParkedPosition(engine, errorInfo) );
 	// update iterations
-	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, (unsigned int) GetCurrentIterIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
+	SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, (unsigned int) GetCurrentIterIndex(GetTaskControlCurrentIter(engine->baseClass.taskControl)) );
 	
 	// flush leftover elements from the incoming detection pixel stream
 	for (size_t i = 0; i < engine->baseClass.nScanChans; i++)
@@ -8181,7 +8251,7 @@ static int ResetTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	int					error		= 0;
 	
 	// reset acquired frames
-	SetCtrlVal(engine->baseClass.scanPanHndl, RectRaster_FramesAcquired, 0);
+	SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, 0);
 	
 	// close shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorInfo) ); 

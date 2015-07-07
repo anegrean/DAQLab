@@ -512,7 +512,7 @@ static ROI_type* OverlayNIVisionROI (NIImageDisplay_type* imgDisplay, ROI_type* 
 Error:
 	
 	// cleanup
-	discard_ROI_type(&ROICopy);
+	(*ROICopy->discardFptr)((void**)&ROICopy);
 	
 	return NULL;
 }
@@ -551,7 +551,7 @@ static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROI
 				// clear imaq ROI group (shape and label)
 				imaqClearOverlay(imgDisplay->NIImage, (*ROIPtr)->ROIName);
 				// discard ROI data
-				discard_ROI_type(ROIPtr);
+				(*(*ROIPtr)->discardFptr)((void**)ROIPtr);
 				// remove ROI from image display list
 				ListRemoveItem(ROIlist, 0, ROIIdx);
 				break;
@@ -586,7 +586,7 @@ static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROI
 					// clear imaq ROI group (shape and label)
 					imaqClearOverlay(imgDisplay->NIImage, (*ROIPtr)->ROIName);
 					// discard ROI data
-					discard_ROI_type(ROIPtr);
+					(*(*ROIPtr)->discardFptr)((void**)ROIPtr);
 					// remove ROI from image display list
 					ListRemoveItem(ROIlist, 0, ROIIdx);
 					break;
@@ -632,7 +632,7 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 					if (display->baseClass.displayEngine->ROIEventsCBFptr)
 						(*display->baseClass.displayEngine->ROIEventsCBFptr) ((ImageDisplay_type*)display, display->baseClass.imageDisplayCBData, display->baseClass.ROIEvent, (ROI_type*) PointROI);
 					
-					discard_ROI_type((ROI_type**)&PointROI);
+					(*PointROI->baseClass.discardFptr) ((void**)&PointROI);
 					
 					break;
 					
@@ -668,13 +668,13 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 					
 				case IMAQ_RECTANGLE_TOOL:
 					
-					RectROI =  init_Rect_type("", rect.top, rect.left, rect.height, rect.width);
+					RectROI =  initalloc_Rect_type(NULL, "", rect.top, rect.left, rect.height, rect.width);
 					
 					// execute callback
 					if (display->baseClass.displayEngine->ROIEventsCBFptr)
 						(*display->baseClass.displayEngine->ROIEventsCBFptr) ((ImageDisplay_type*)display, display->baseClass.imageDisplayCBData, display->baseClass.ROIEvent,(ROI_type*) RectROI);
 					
-					discard_ROI_type((ROI_type**)&RectROI);
+					(*RectROI->baseClass.discardFptr) ((void**)&RectROI);
 					
 					break;
 					

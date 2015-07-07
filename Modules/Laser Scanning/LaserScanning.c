@@ -555,6 +555,7 @@ typedef struct {
 typedef struct {
 	RectRaster_type*			scanEngine;
 	RectRasterScanSet_type		scanSettings;
+	size_t						scanChanIdx;				// Scan Engine channel display index.
 } RectRasterDisplayCBData_type; 
 
 // data structure binding used to launch image assembly in separate threads
@@ -747,7 +748,7 @@ static RectRasterScanSet_type*			init_RectRasterScanSet_type							(double pixSi
 static void 							discard_RectRasterScanSet_type 						(RectRasterScanSet_type** scanSetPtr);
 
 	// scan engine image display callback data binding
-static RectRasterDisplayCBData_type* 	init_RectRasterDisplayCBData_type 					(RectRaster_type* scanEngine);
+static RectRasterDisplayCBData_type* 	init_RectRasterDisplayCBData_type 					(RectRaster_type* scanEngine, size_t scanChanIdx);
 static void 							discard_RectRasterDisplayCBData_type 				(RectRasterDisplayCBData_type** dataPtr);
 
 static RectRaster_type*					init_RectRaster_type								(LaserScanning_type*	lsModule, 
@@ -768,7 +769,7 @@ static RectRaster_type*					init_RectRaster_type								(LaserScanning_type*	lsM
 
 static void								discard_RectRaster_type								(ScanEngine_type** engine);
 
-static void 							SetRectRasterScanEnginePointScanStimulateUI			(RectRaster_type* rectRaster);
+static void 							SetRectRasterScanEnginePointScanStimulateUI			(int panel, BOOL stimulate);
 
 static int 								InsertRectRasterScanEngineToUI 						(LaserScanning_type* ls, RectRaster_type* rectRaster);
 
@@ -807,14 +808,6 @@ static RectRasterScanImgBuilderBind_type*	init_RectRasterScanImgBuilderBind_type
 static void								discard_RectRasterScanImgBuilderBind_type			(RectRasterScanImgBuilderBind_type** imgBuilderBindingPtr);
 static int CVICALLBACK 					NonResRectRasterScan_LaunchImageBuilder 			(void* functionData);
 static int								NonResRectRasterScan_AssembleCompositeImage			(RectRaster_type* rectRaster, char** errorInfo);
-	// convert a point ROI coordinate from a given scan setting to a command voltage for both scan axes
-static void 							NonResRectRasterScan_PointROIVoltage 				(RectRaster_type* rectRaster, Point_type* point, double* fastAxisCommandV, double* slowAxisCommandV);
-	// calculates the combined jump time for both scan axes to jump a given amplitude voltage in [V]
-static double							NonResRectRasterScan_JumpTime						(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude);
-	// sets the minimum jump delay from parked position to the first point ROI
-static void								NonResRectRasterScan_SetMinimumPointJumpStartDelay 	(RectRaster_type* rectRaster);
-	// calculates the minimum period in [ms] to complete a point jump cycle starting and ending at the parked location for both galvos
-static void 							NonResRectRasterScan_SetMinimumPointJumpPeriod 		(RectRaster_type* rectRaster);
 	// rounds a given time in [ms] to an integer of galvo sampling intervals
 static double 							NonResRectRasterScan_RoundToGalvoSampling 			(RectRaster_type* scanEngine, double time);
 
@@ -832,6 +825,15 @@ static PointJump_type* 					copy_PointJump_type 								(PointJump_type* pointJu
 
 	// generates galvo and ROI timing signals to jump between a series of points
 static int								NonResRectRasterScan_GeneratePointJumpSignals 		(RectRaster_type* scanEngine, char** errorInfo);
+	// sets the minimum jump delay from parked position to the first point ROI
+static void								NonResRectRasterScan_SetMinimumPointJumpStartDelay 	(RectRaster_type* rectRaster);
+	// calculates the minimum period in [ms] to complete a point jump cycle starting and ending at the parked location for both galvos
+static void 							NonResRectRasterScan_SetMinimumPointJumpPeriod 		(RectRaster_type* rectRaster);
+	// convert a point ROI coordinate from a given scan setting to a command voltage for both scan axes
+static void 							NonResRectRasterScan_PointROIVoltage 				(RectRaster_type* rectRaster, Point_type* point, double* fastAxisCommandV, double* slowAxisCommandV);
+	// calculates the combined jump time for both scan axes to jump a given amplitude voltage in [V]
+static double							NonResRectRasterScan_JumpTime						(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude);
+
 
 
 	// closes the display of an image panel
@@ -1110,17 +1112,17 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	discard_DAQLabModule(mod);
 }
 
-static void SetRectRasterScanEnginePointScanStimulateUI (RectRaster_type* rectRaster)
+static void SetRectRasterScanEnginePointScanStimulateUI (int panel, BOOL stimulate)
 {
-	if (rectRaster->pointJumpSettings->stimulate) {
-		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_StimDelay, ATTR_DIMMED, FALSE);
-		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_NPulses, ATTR_DIMMED, FALSE);
-		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_PulseON, ATTR_DIMMED, FALSE);
+	if (stimulate) {
+		SetCtrlAttribute(panel, PointTab_StimDelay, ATTR_DIMMED, FALSE);
+		SetCtrlAttribute(panel, PointTab_NPulses, ATTR_DIMMED, FALSE);
+		SetCtrlAttribute(panel, PointTab_PulseON, ATTR_DIMMED, FALSE);
 	} else {
-		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_StimDelay, ATTR_DIMMED, TRUE);
-		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_NPulses, ATTR_DIMMED, TRUE);
-		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_PulseON, ATTR_DIMMED, TRUE);
-		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_PulseOFF, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(panel, PointTab_StimDelay, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(panel, PointTab_NPulses, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(panel, PointTab_PulseON, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(panel, PointTab_PulseOFF, ATTR_DIMMED, TRUE);
 	}
 }
 
@@ -1182,8 +1184,11 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	// Set up Point Scan UI
 	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
 	
+	// create default point jump settings if none loaded
+	if (!rectRaster->pointJumpSettings)
+		rectRaster->pointJumpSettings = init_PointJumpSet_type();
+	
 	GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &pointScanPanHndl); 
-				
 	// populate point jump modes
 	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_SinglePoints, "Single points", PointJump_SinglePoints);
 	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_PointGroup, "Point group", PointJump_PointGroup);
@@ -1200,7 +1205,7 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	
 	// stimulate UI settings
 	SetCtrlVal(pointScanPanHndl, PointTab_Stimulate, rectRaster->pointJumpSettings->stimulate);
-	SetRectRasterScanEnginePointScanStimulateUI(rectRaster);
+	SetRectRasterScanEnginePointScanStimulateUI(pointScanPanHndl, rectRaster->pointJumpSettings->stimulate);
 				
 	// populate averaging methods
 	InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_None, "None", PointAveraging_None);
@@ -4429,13 +4434,14 @@ static void discard_RectRasterScanSet_type (RectRasterScanSet_type** scanSetPtr)
 	OKfree(*scanSetPtr);
 }
 
-static RectRasterDisplayCBData_type* init_RectRasterDisplayCBData_type (RectRaster_type* scanEngine)
+static RectRasterDisplayCBData_type* init_RectRasterDisplayCBData_type (RectRaster_type* scanEngine, size_t scanChanIdx)
 {
 	RectRasterDisplayCBData_type*	binding = malloc(sizeof(RectRasterDisplayCBData_type));
 	if (!binding) return NULL;
 	
 	binding->scanEngine		= scanEngine;
 	binding->scanSettings   = scanEngine->scanSettings;
+	binding->scanChanIdx	= scanChanIdx;
 	
 	return binding;
 }
@@ -4938,7 +4944,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 				case PointTab_Stimulate:
 					
 					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->stimulate);
-					SetRectRasterScanEnginePointScanStimulateUI(scanEngine);
+					SetRectRasterScanEnginePointScanStimulateUI(panel, scanEngine->pointJumpSettings->stimulate);
 					
 					break;
 					
@@ -5091,9 +5097,15 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					break;
 					
-				case PointTab_ParkedAtSeqEnd:	   CONTINUE HERE!!!
+				case PointTab_ParkedAtSeqEnd:	   //CONTINUE HERE!!!
 					
 					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->parkedAtSequenceEnd);
+					// switch sequence period control between indicator and control
+					if (scanEngine->pointJumpSettings->parkedAtSequenceEnd)
+						SetCtrlAttribute(panel, PointTab_SequencePeriod, ATTR_CTRL_MODE, VAL_HOT);
+					else
+						SetCtrlAttribute(panel, PointTab_SequencePeriod, ATTR_CTRL_MODE, VAL_INDICATOR);
+					
 					
 					break;
 					
@@ -5104,7 +5116,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 			
 		case EVENT_KEYPRESS:
 			
-			/*
+			
 			switch (control) {
 					
 				case PointTab_ROIs:
@@ -5120,43 +5132,38 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, itemIdx + 1, ROI_Delete);
 					
 					DeleteListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, itemIdx, 1);
-					ListRemoveItem(scanEngine->pointJumps, 0, itemIdx + 1);
+					ListRemoveItem(scanEngine->pointJumpSettings->pointJumps, 0, itemIdx + 1);
 					
 					// calculate minimum point jump start delay
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 					// calculate point jump period
 					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
-					// dim controls if there are no more active ROIs
+					// dim panel if there are no more active ROIs
 					GetNumCheckedItems(panel, control, &nROIs);
-					if (!nROIs) {
-						SetCtrlAttribute(panel, PointTab_ParkedTime, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, PointTab_StartDelay, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, PointTab_Period, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, PointTab_Repeat, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, PointTab_JumpTime, ATTR_DIMMED, 1);
-					}
+					if (!nROIs)
+						SetPanelAttribute(panel, ATTR_DIMMED, TRUE); 
 					
 					break;
 			}
-			 */
+			 
 			break;
 			
 		case EVENT_MARK_STATE_CHANGE:
 			
-			/*
+			
 			switch (control) {
 					
 				case PointTab_ROIs:
 					
 					if (eventData1) {
-						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumps, eventData2 + 1);
+						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumpSettings->pointJumps, eventData2 + 1);
 						ROI->active = TRUE;
 						// if there is an active display, mark point ROI as active and make it visible
 						if (scanEngine->baseClass.activeDisplay)
 							(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Visible);
 					} else {
-						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumps, eventData2 + 1);
+						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumpSettings->pointJumps, eventData2 + 1);
 						ROI->active = FALSE;
 						// if there is an active display mark point ROI as inactive and hide it
 						if (scanEngine->baseClass.activeDisplay)
@@ -5170,23 +5177,14 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					// dim/undim controls
 					GetNumCheckedItems(panel, control, &nROIs);
-					if (nROIs) {
-						SetCtrlAttribute(panel, PointTab_ParkedTime, ATTR_DIMMED, 0);
-						SetCtrlAttribute(panel, PointTab_StartDelay, ATTR_DIMMED, 0);
-						SetCtrlAttribute(panel, PointTab_Period, ATTR_DIMMED, 0);
-						SetCtrlAttribute(panel, PointTab_Repeat, ATTR_DIMMED, 0);
-						SetCtrlAttribute(panel, PointTab_JumpTime, ATTR_DIMMED, 0);
-					} else {
-						SetCtrlAttribute(panel, PointTab_ParkedTime, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, PointTab_StartDelay, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, PointTab_Period, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, PointTab_Repeat, ATTR_DIMMED, 1);
-						SetCtrlAttribute(panel, PointTab_JumpTime, ATTR_DIMMED, 1);
-					}
-					
+					if (nROIs)
+						SetCtrlAttribute(panel, PointTab_SequencePeriod, ATTR_DIMMED, FALSE);
+					else
+						SetCtrlAttribute(panel, PointTab_SequencePeriod, ATTR_DIMMED, TRUE);
+						
 					break;
 			}
-			*/
+			
 			break;
 	}
 	
@@ -5814,7 +5812,6 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	size_t					nCycleElem						= 0;
 	size_t					nJumpSamples					= 0;
 	size_t					nParkedSamples					= 0;
-	size_t					j								= 0;
 	double*					fastAxisVoltages				= NULL;
 	double*					slowAxisVoltages				= NULL;
 	double*					fastAxisStartDelaySignal		= NULL;
@@ -5883,6 +5880,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	slowAxisVoltages[nVoltages-1] = slowAxisCal->parked;
 	
 	// set ROI jumping voltages
+	size_t j = 0;
 	for (size_t i = 1; i <= nTotalPoints; i++) {
 		pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
 		if (!pointJump->baseClass.active) continue; // select only active point jumps
@@ -6326,7 +6324,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// add restore image settings callback info
 				
 				CallbackFptr_type				CBFns[] 						= {(CallbackFptr_type)ImageDisplay_CB};
-				void* 							callbackData[]					= {init_RectRasterDisplayCBData_type(rectRaster)};
+				void* 							callbackData[]					= {init_RectRasterDisplayCBData_type(rectRaster, imgBufferIdx)};
 				DiscardFptr_type 				discardCallbackDataFunctions[] 	= {(DiscardFptr_type)discard_RectRasterDisplayCBData_type};
 				
 				nullChk( imgBuffer->scanChan->imgDisplay->callbacks = init_CallbackGroup_type(imgBuffer->scanChan->imgDisplay, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
@@ -6610,8 +6608,8 @@ static double NonResRectRasterScan_JumpTime	(RectRaster_type* rectRaster, double
 		jumpTime = slowAxisJumpTime;
 	
 	// round up to a multiple of galvo sampling time
-	jumpTime = ceil(jumpTime * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-	
+	jumpTime = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, jumpTime);
+		
 	return jumpTime;
 }
 
@@ -7244,6 +7242,9 @@ static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, int event, void* cal
 			// detach image display from scan engine if it was previously assigned to it and clear ROI list
 			if (scanEngine->baseClass.activeDisplay == imgDisplay)
 				scanEngine->baseClass.activeDisplay = NULL;
+			
+			// clean up
+			discard_ImageDisplay_type(&scanEngine->imgBuffers[displayCBData->scanChanIdx]->scanChan->imgDisplay);
 			
 			break;
 			

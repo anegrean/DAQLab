@@ -108,7 +108,7 @@ void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 	
 	discard_CallbackGroup_type(&imageDisplay->callbacks);
 	
-	OKfree(*imageDisplayPtr);
+	//OKfree(*imageDisplayPtr);
 }
 
 void discard_DisplayEngine_type (DisplayEngine_type** displayEnginePtr)

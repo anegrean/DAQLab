@@ -726,7 +726,7 @@ static void								discard_ScanEngine_type 							(ScanEngine_type** enginePtr);
 	// registers scan engine VChans and task controller with DAQLab framework
 static int								DLRegisterScanEngine								(ScanEngine_type* engine);
 	// unregisters scan engine VChans task controller from DAQLab framework
-static void								DLUnregisterScanEngine								(ScanEngine_type* engine);						
+static void								DLUnregisterScanEngine								(ScanEngine_type* engine);
 
 	//------------------------
 	// Common functionality
@@ -784,7 +784,7 @@ static int CVICALLBACK 					NonResRectRasterScan_MainPan_CB 					(int panel, int
 
 static int CVICALLBACK 					NonResRectRasterScan_FrameScanPan_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int CVICALLBACK 					NonResRectRasterScan_PointScanPan_CB		 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 					NonResRectRasterScan_PointScanPan_CB		 		(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static void 							NonResRectRasterScan_ScanWidths						(RectRaster_type* scanEngine);
 
@@ -815,6 +815,8 @@ static double							NonResRectRasterScan_JumpTime						(RectRaster_type* rectRas
 static void								NonResRectRasterScan_SetMinimumPointJumpStartDelay 	(RectRaster_type* rectRaster);
 	// calculates the minimum period in [ms] to complete a point jump cycle starting and ending at the parked location for both galvos
 static void 							NonResRectRasterScan_SetMinimumPointJumpPeriod 		(RectRaster_type* rectRaster);
+	// rounds a given time in [ms] to an integer of galvo sampling intervals
+static double 							NonResRectRasterScan_RoundToGalvoSampling 			(RectRaster_type* scanEngine, double time);
 
 	//--------------------------------------
 	// Point jump mode
@@ -1210,6 +1212,11 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	else
 		SetCtrlAttribute(pointScanPanHndl, PointTab_NAveraging, ATTR_DIMMED, 1);
 				
+	// round point settings to galvo sampling time
+	rectRaster->pointJumpSettings->globalPointScanSettings.holdTime = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->globalPointScanSettings.holdTime);
+	rectRaster->pointJumpSettings->globalPointScanSettings.stimDelay = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->globalPointScanSettings.stimDelay);
+	rectRaster->pointJumpSettings->globalPointScanSettings.stimPulseONDuration = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->globalPointScanSettings.stimPulseONDuration);
+	rectRaster->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration); 
 	// populate point settings
 	SetCtrlVal(pointScanPanHndl, PointTab_Hold, rectRaster->pointJumpSettings->globalPointScanSettings.holdTime);
 	SetCtrlVal(pointScanPanHndl, PointTab_StimDelay, rectRaster->pointJumpSettings->globalPointScanSettings.stimDelay);
@@ -1220,7 +1227,12 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 		SetCtrlAttribute(pointScanPanHndl, PointTab_PulseOFF, ATTR_DIMMED, 0);
 	else
 		SetCtrlAttribute(pointScanPanHndl, PointTab_PulseOFF, ATTR_DIMMED, 1);
-				
+	
+	// round sequence settings to galvo sampling time
+	rectRaster->pointJumpSettings->startDelay = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->startDelay);
+	rectRaster->pointJumpSettings->startDelayIncrement = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->startDelayIncrement);
+	rectRaster->pointJumpSettings->sequencePeriod = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->sequencePeriod);
+	
 	// populate sequence settings
 	SetCtrlVal(pointScanPanHndl, PointTab_Repeat, rectRaster->pointJumpSettings->nSequenceRepeat);
 	SetCtrlVal(pointScanPanHndl, PointTab_StartDelay, rectRaster->pointJumpSettings->startDelay);
@@ -4891,7 +4903,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 {
 	RectRaster_type*		scanEngine		= callbackData;
 	int						itemIdx			= 0;
-	int						nROIs			= 0;	
+	int						nROIs			= 0;
+	double					stimTime		= 0;  
 	
 	switch (event) {
 		
@@ -4913,7 +4926,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 				case PointTab_Record:
 					
 					GetCtrlVal(panel, control, scanEngine->pointJumpSettings->record);
-					if (rectRaster->pointJumpSettings->record)
+					if (scanEngine->pointJumpSettings->record)
 						SetCtrlAttribute(panel, PointTab_Averaging, ATTR_DIMMED, FALSE);
 					else {
 						SetCtrlAttribute(panel, PointTab_Averaging, ATTR_DIMMED, TRUE);
@@ -4932,17 +4945,17 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 				case PointTab_Hold:
 					
 					double	holdTime	= 0;
-					double	stimTime	= 0;
 					
 					GetCtrlVal(panel, control, &holdTime);
 					
 					// round up to a multiple of galvo sampling
-					holdTime = ceil(holdTime * 1e-3 * scanEngine->galvoSamplingRate) * 1e3/scanEngine->galvoSamplingRate;
-					
+					holdTime = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, holdTime);
+						
 					// if hold time is shorter than stimulation delay plus stimulation, then make delay 0 and use only one pulse
 					stimTime = scanEngine->pointJumpSettings->globalPointScanSettings.stimDelay + scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses * 
 							   scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseONDuration + (scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses - 1) *
 							   scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration;
+					
 					if (stimTime > holdTime) {
 						// adjust stimulation to fit within holding time
 						scanEngine->pointJumpSettings->globalPointScanSettings.stimDelay = 0;
@@ -4950,11 +4963,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses = 1;
 						SetCtrlVal(panel, PointTab_NPulses, scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses);
 						scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseONDuration = holdTime;
-						SetCtrlVal(panel, PointTab_PulseON, stimPulseONDuration);
+						SetCtrlVal(panel, PointTab_PulseON, scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseONDuration);
 						SetCtrlAttribute(panel, PointTab_PulseOFF, ATTR_DIMMED, TRUE);
 					}
 							   
-					
 					// update in scan engine and UI
 					scanEngine->pointJumpSettings->globalPointScanSettings.holdTime = holdTime;
 					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->globalPointScanSettings.holdTime);
@@ -4963,35 +4975,129 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					break;
 					
-				case PointTab_StimDelay:	// CONTINUE HERE!
+				case PointTab_StimDelay:
+					
+					double stimDelay 	= 0;
+					
+					GetCtrlVal(panel, control, &stimDelay);
+					
+					// round up to a multiple of galvo sampling
+					stimDelay = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, stimDelay);
+						
+					// calculate resulting stimulation time and check if it fits within the holding time
+					stimTime = stimDelay + scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses * scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseONDuration + 
+							   (scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses - 1) * scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration;
+					
+					// update stimulation delay if stimulation time does not exceed holding time
+					if (stimTime <= scanEngine->pointJumpSettings->globalPointScanSettings.holdTime)
+						scanEngine->pointJumpSettings->globalPointScanSettings.stimDelay = stimDelay;
+						
+					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->globalPointScanSettings.stimDelay); 
 					
 					break;
 					
-				case PointTab_StartDelay:
+				case PointTab_NPulses:
 					
-					GetCtrlVal(panel, control, &scanEngine->jumpStartDelay);
+					uInt32	nPulses = 0;
 					
-					// round up to a multiple of galvo sampling
-					scanEngine->jumpStartDelay = ceil(scanEngine->jumpStartDelay * 1e-3 * scanEngine->galvoSamplingRate) * 1e3/scanEngine->galvoSamplingRate;
-					SetCtrlVal(panel, control, scanEngine->jumpStartDelay);
+					GetCtrlVal(panel, control, &nPulses);
+					
+					// calculate resulting stimulation time and check if it fits within the holding time
+					stimTime = scanEngine->pointJumpSettings->globalPointScanSettings.stimDelay + nPulses * scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseONDuration + 
+							   (nPulses - 1) * scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration;
+					
+					// update nPulses if stimulation time does not exceed holding time
+					if (stimTime <= scanEngine->pointJumpSettings->globalPointScanSettings.holdTime)
+						scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses = nPulses;
+						
+					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses); 
 					
 					break;
 					
-				case PointTab_Period:
+				case PointTab_PulseON:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointJumpPeriod);
+					double	pulseONDuration = 0;
 					
-					// round up to a multiple of galvo sampling
-					scanEngine->pointJumpPeriod = ceil(scanEngine->pointJumpPeriod * 1e-3 * scanEngine->galvoSamplingRate) * 1e3/scanEngine->galvoSamplingRate;
-					SetCtrlVal(panel, control, scanEngine->pointJumpPeriod);
+					GetCtrlVal(panel, control, &pulseONDuration);
+					
+					pulseONDuration = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, pulseONDuration);
+					
+					// calculate resulting stimulation time and check if it fits within the holding time
+					stimTime = scanEngine->pointJumpSettings->globalPointScanSettings.stimDelay + scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses * 
+							    pulseONDuration + (scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses - 1) * scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration;
+					
+					// update pulseON duration if stimulation time does not exceed holding time
+					if (stimTime <= scanEngine->pointJumpSettings->globalPointScanSettings.holdTime)
+						scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseONDuration = pulseONDuration;
+						
+					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseONDuration); 
+					
+					break;
+					
+				case PointTab_PulseOFF:
+					
+					double	pulseOFFDuration = 0;
+					
+					GetCtrlVal(panel, control, &pulseOFFDuration);
+					
+					pulseOFFDuration = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, pulseOFFDuration);
+					
+					// calculate resulting stimulation time and check if it fits within the holding time
+					stimTime = scanEngine->pointJumpSettings->globalPointScanSettings.stimDelay + scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses * 
+							    scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseONDuration + (scanEngine->pointJumpSettings->globalPointScanSettings.nStimPulses - 1) * pulseOFFDuration;
+					
+					// update pulseON duration if stimulation time does not exceed holding time
+					if (stimTime <= scanEngine->pointJumpSettings->globalPointScanSettings.holdTime)
+						scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration = pulseOFFDuration;
+						
+					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration); 
 					
 					break;
 					
 				case PointTab_Repeat:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointJumpCycles);
+					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->nSequenceRepeat);
 					
 					break;
+					
+				case PointTab_StartDelay:
+					
+					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->startDelay);
+					
+					// round up to a multiple of galvo sampling
+					scanEngine->pointJumpSettings->startDelay = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, scanEngine->pointJumpSettings->startDelay);
+					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->startDelay);
+					
+					break;
+				
+					
+				case PointTab_StartDelayIncrement:
+					
+					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->startDelayIncrement);
+					
+					// round up to a multiple of galvo sampling
+					scanEngine->pointJumpSettings->startDelayIncrement = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, scanEngine->pointJumpSettings->startDelayIncrement);
+					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->startDelayIncrement);
+					
+					break;
+					
+				case PointTab_SequencePeriod:
+					
+					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->sequencePeriod);
+					
+					// round up to a multiple of galvo sampling
+					scanEngine->pointJumpSettings->sequencePeriod = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, scanEngine->pointJumpSettings->sequencePeriod);
+					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->sequencePeriod);
+					
+					break;
+					
+				case PointTab_ParkedAtSeqEnd:	   CONTINUE HERE!!!
+					
+					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->parkedAtSequenceEnd);
+					
+					break;
+					
+				
 			}
 			
 			break;
@@ -6629,6 +6735,11 @@ SkipPoints:
 	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_Period, ATTR_MIN_VALUE, rectRaster->minimumPointJumpPeriod);
 	
 	*/
+}
+
+static double NonResRectRasterScan_RoundToGalvoSampling (RectRaster_type* scanEngine, double time)
+{
+	return ceil(time * 1e-3 * scanEngine->galvoSamplingRate) * 1e3/scanEngine->galvoSamplingRate;
 }
 
 static PointJumpSet_type* init_PointJumpSet_type (void)

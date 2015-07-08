@@ -52,7 +52,8 @@
 #define ScanEngine_SourceVChan_PixelPulseTrain				"pixel pulse train"
 #define ScanEngine_SourceVChan_PixelSamplingRate			"pixel sampling rate"		// 1/pixel_dwell_time = pixel sampling rate in [Hz]
 #define ScanEngine_SourceVChan_NPixels						"detection channel n pixels"
-#define ScanEngine_SourceVChan_ROITiming					"ROI timing"
+#define ScanEngine_SourceVChan_ROIHold						"ROI hold"
+#define ScanEngine_SourceVChan_ROIStimulate					"ROI stimulate"
 
 // Default Scan Axis Calibration VChan base names. Default base names must be unique among each other!
 #define ScanAxisCal_SourceVChan_Command						"scan axis cal command"
@@ -390,7 +391,14 @@ struct ScanEngine {
 	ScanChan_type**				scanChans;					// Array of detector input channels of ScanChan_type* with incoming fluorescence pixel stream. 
 	uInt32						nScanChans;
 	
-	SourceVChan_type*			VChanROITiming;				// ROI timing signal (used for example to time photostimulation to jumping between pointions) of DL_RepeatedWaveform_UChar type
+	SourceVChan_type*			VChanROIHold;				// ROI timing signal of DL_RepeatedWaveform_UChar type generated when the galvos are holding their position at a point ROI.
+															// The signal starts with the galvos in their parked resting position having a value of 0 (FALSE) and once the galvos reach
+															// a point ROI the signal has a value of 1 (TRUE) which remains TRUE until the galvos leave the point ROI to another point
+															// ROI or back to their parked position, during which the signal is again FALSE.
+															
+	SourceVChan_type*			VChanROIStimulate;			// ROI timing signal of DL_RepeatedWaveform_UChar type generated when a point ROI must be photostimulated. The signal starts 
+															// with the galvos in their parked position with a value of 0 (FALSE) and takes a value of 1 (TRUE) when photostimulation must
+															// take place. This signal can be sent for example to a Pockells module which will apply a certain stimulation intensity to it.
 	
 	SourceVChan_type*			VChanCompositeImage;		// Scan Engine composite RGB image output.
 	
@@ -830,7 +838,7 @@ static int								NonResRectRasterScan_GeneratePointJumpSignals 		(RectRaster_ty
 	// sets the minimum jump delay from parked position to the first point ROI
 static void								NonResRectRasterScan_SetMinimumPointJumpStartDelay 	(RectRaster_type* rectRaster);
 	// calculates the minimum period in [ms] to complete a point jump cycle starting and ending at the parked location for both galvos
-static void 							NonResRectRasterScan_SetMinimumPointJumpPeriod 		(RectRaster_type* rectRaster);
+//static void 							NonResRectRasterScan_SetMinimumPointJumpPeriod 		(RectRaster_type* rectRaster);
 	// convert a point ROI coordinate from a given scan setting to a command voltage for both scan axes
 static void 							NonResRectRasterScan_PointROIVoltage 				(RectRaster_type* rectRaster, Point_type* point, double* fastAxisCommandV, double* slowAxisCommandV);
 	// calculates the combined jump time for both scan axes to jump a given amplitude voltage in [V]
@@ -4045,7 +4053,8 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	char*				pixelPulseTrainVChanName				= NULL;
 	char*				pixelSamplingRateVChanName				= NULL;
 	char*				nPixelsVChanName						= NULL;
-	char*				ROITimingVChanName						= NULL;
+	char*				ROIHoldVChanName						= NULL;
+	char*				ROIStimulateVChanName					= NULL;
 	
 	// assemble default VChan names
 	nullChk( fastAxisComVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command, 0) );
@@ -4059,7 +4068,8 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	nullChk( pixelPulseTrainVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelPulseTrain, 0) );
 	nullChk( pixelSamplingRateVChanName		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelSamplingRate, 0) );
 	nullChk( nPixelsVChanName 				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_NPixels, 0) );
-	nullChk( ROITimingVChanName				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROITiming, 0) );
+	nullChk( ROIHoldVChanName				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROIHold, 0) );
+	nullChk( ROIStimulateVChanName			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROIStimulate, 0) );
 	
 	//------------------------
 	// init
@@ -4087,7 +4097,8 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	engine->VChanPixelPulseTrain		= NULL;
 	engine->VChanPixelSamplingRate		= NULL;
 	engine->VChanNPixels				= NULL;
-	engine->VChanROITiming				= NULL;
+	engine->VChanROIHold				= NULL;
+	engine->VChanROIStimulate			= NULL;
 	engine->scanChans 					= NULL;
 	engine->nScanChans					= 0;
 	// composite image display
@@ -4130,7 +4141,8 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	nullChk( engine->VChanPixelSamplingRate		= init_SourceVChan_type(pixelSamplingRateVChanName, DL_Double, engine, NULL) ); 	
 	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_ULongLong, engine, NULL) ); 	
 	nullChk( engine->objectives					= ListCreate(sizeof(Objective_type*)) ); 
-	nullChk( engine->VChanROITiming				= init_SourceVChan_type(ROITimingVChanName, DL_RepeatedWaveform_UChar, engine, NULL) );
+	nullChk( engine->VChanROIHold				= init_SourceVChan_type(ROIHoldVChanName, DL_RepeatedWaveform_UChar, engine, NULL) );
+	nullChk( engine->VChanROIStimulate			= init_SourceVChan_type(ROIStimulateVChanName, DL_RepeatedWaveform_UChar, engine, NULL) );
 	
 	// register Sink VChans with the task controller
 	AddSinkVChan(engine->taskControl, engine->VChanFastAxisPos, NULL);
@@ -4151,7 +4163,8 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	OKfree(pixelPulseTrainVChanName);
 	OKfree(pixelSamplingRateVChanName);
 	OKfree(nPixelsVChanName);
-	OKfree(ROITimingVChanName);
+	OKfree(ROIHoldVChanName);
+	OKfree(ROIStimulateVChanName);
 	
 	return 0;
 	
@@ -4169,7 +4182,8 @@ Error:
 	OKfree(pixelPulseTrainVChanName);
 	OKfree(pixelSamplingRateVChanName);
 	OKfree(nPixelsVChanName);
-	OKfree(ROITimingVChanName);
+	OKfree(ROIHoldVChanName);
+	OKfree(ROIStimulateVChanName);
 	
 	discard_ScanEngine_type(enginePtr);
 	return error;
@@ -4194,7 +4208,8 @@ static void	discard_ScanEngine_type (ScanEngine_type** enginePtr)
 	discard_VChan_type((VChan_type**)&engine->VChanPixelPulseTrain);
 	discard_VChan_type((VChan_type**)&engine->VChanPixelSamplingRate);
 	discard_VChan_type((VChan_type**)&engine->VChanNPixels);
-	discard_VChan_type((VChan_type**)&engine->VChanROITiming); 
+	discard_VChan_type((VChan_type**)&engine->VChanROIHold);
+	discard_VChan_type((VChan_type**)&engine->VChanROIStimulate); 
 	
 	// discard composite image display
 	discard_ImageDisplay_type(&engine->compositeImgDisplay);
@@ -4249,7 +4264,8 @@ static int DLRegisterScanEngine (ScanEngine_type* engine)
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelPulseTrain);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelSamplingRate);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanNPixels);
-	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROITiming); 
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROIHold);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROIStimulate); 
 		
 	for (size_t i = 0; i < engine->nScanChans; i++)
 		RegisterDLScanChan(engine->scanChans[i]);
@@ -4311,9 +4327,13 @@ static void DLUnregisterScanEngine (ScanEngine_type* engine)
 	if (engine->VChanNPixels)
 		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanNPixels);
 	
-	// ROI timing
-	if (engine->VChanROITiming)
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROITiming);
+	// ROI hold
+	if (engine->VChanROIHold)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROIHold);
+	
+	// ROI stimulate
+	if (engine->VChanROIStimulate)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROIStimulate);
 	
 	// scan channels
 	for (size_t i = 0; i < engine->nScanChans; i++)
@@ -4970,7 +4990,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					scanEngine->pointJumpSettings->globalPointScanSettings.holdTime = holdTime;
 					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->globalPointScanSettings.holdTime);
 					// update minimum point jump period
-					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
+					//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
 					break;
 					
@@ -5107,7 +5127,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					// calculate minimum point jump start delay
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 					// calculate point jump period
-					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
+					//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
 					// dim panel if there are no more active ROIs
 					GetNumCheckedItems(panel, control, &nROIs);
@@ -5143,7 +5163,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					// calculate minimum point jump start delay
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 					// calculate point jump period
-					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
+					//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
 					break;
 			}
@@ -5779,19 +5799,22 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	double*					slowAxisStartDelaySignal		= NULL;
 	double*					fastAxisJumpSignal				= NULL;
 	double*					slowAxisJumpSignal				= NULL;
-	unsigned char*			ROIStartDelaySignal				= NULL;
+	unsigned char*			ROIHoldStartDelaySignal			= NULL;
+	unsigned char*			ROIStimulateStartDelaySignal	= NULL;
 	unsigned char*			ROIJumpSignal					= NULL;
 	uInt64*					nGalvoSamplesPtr				= NULL;
 	RepeatedWaveform_type*	fastAxisStartDelayWaveform		= NULL;
 	RepeatedWaveform_type*	slowAxisStartDelayWaveform		= NULL;
 	RepeatedWaveform_type*	fastAxisJumpWaveform			= NULL;
 	RepeatedWaveform_type*	slowAxisJumpWaveform			= NULL;
-	RepeatedWaveform_type*	ROIStartDelayWaveform			= NULL;
+	RepeatedWaveform_type*	ROIHoldStartDelayWaveform		= NULL;
+	RepeatedWaveform_type*	ROIStimulateStartDelayWaveform	= NULL;
 	RepeatedWaveform_type*	ROIJumpWaveform					= NULL;
 	DataPacket_type*		dataPacket						= NULL; 
 	DataPacket_type*		nullPacket						= NULL; 
 	NonResGalvoCal_type*	fastAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
+	double					jumpTime						= 0;
 	
 	
 	//-----------------------------------------------
@@ -5807,7 +5830,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 				pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
 				if (!pointJump->baseClass.active) continue; // select only active point jumps
 				nPointJumps++;
-				if (nPointJumps < scanEngine->pointJumpSettings->currentActivePoint) continue; // select point to visit
+				if (nPointJumps < pointJumpSet->currentActivePoint) continue; // select point to visit
 				
 				nVoltages = 3;
 				nullChk(fastAxisVoltages = realloc(fastAxisVoltages, nVoltages * sizeof(double)) );
@@ -5815,6 +5838,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 				NonResRectRasterScan_PointROIVoltage(scanEngine, pointJump, &fastAxisVoltages[1], &slowAxisVoltages[1]);
 				break;
 			}
+			
 			break;
 				
 		case PointJump_PointGroup:
@@ -5830,6 +5854,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 				NonResRectRasterScan_PointROIVoltage(scanEngine, pointJump, &fastAxisVoltages[nPointJumps], &slowAxisVoltages[nPointJumps]);
 			}
 			nVoltages = nPointJumps + 2;
+			
 			break;
 	}
 	
@@ -5846,20 +5871,34 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	slowAxisVoltages[0] = slowAxisCal->parked;
 	slowAxisVoltages[nVoltages-1] = slowAxisCal->parked;
 	
-	// generate start delay waveforms
+	// generate start delay waveforms, i.e. delay in addition to the jumping time from the parked position to the first point ROI
+	// note: start delay is the delay measured from the global start signal to the time the galvos reach the first point ROI
 	nStartDelayElem = (size_t)((pointJumpSet->startDelay - pointJumpSet->minStartDelay) * 1e-3 * scanEngine->galvoSamplingRate);
 	if (nStartDelayElem) {
-		// galvo command signals
+		// allocate galvo command signals
 		nullChk( fastAxisStartDelaySignal = malloc(nStartDelayElem * sizeof(double)) );
 		nullChk( slowAxisStartDelaySignal = malloc(nStartDelayElem * sizeof(double)) );
+		// set galvo command signal to parked position
 		Set1D(fastAxisStartDelaySignal, nStartDelayElem, fastAxisCal->parked);
 		Set1D(slowAxisStartDelaySignal, nStartDelayElem, slowAxisCal->parked);
+		// generate waveforms
 		nullChk( fastAxisStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nStartDelayElem, (void**)&fastAxisStartDelaySignal, 1.0) );
 		nullChk( slowAxisStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nStartDelayElem, (void**)&fastAxisStartDelaySignal, 1.0) );
-		// ROI timing signal
-		nullChk( ROIStartDelaySignal = calloc(nStartDelayElem, sizeof(unsigned char)) );
-		nullChk( ROIStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, scanEngine->galvoSamplingRate, nStartDelayElem, (void**)&ROIStartDelaySignal, 1.0) ); 
+		// ROI hold start delay signal
+		nullChk( ROIHoldStartDelaySignal = calloc(nStartDelayElem, sizeof(unsigned char)) );
+		nullChk( ROIHoldStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, scanEngine->galvoSamplingRate, nStartDelayElem, (void**)&ROIHoldStartDelaySignal, 1.0) ); 
+		// ROI stimulate start delay signal
+		nullChk( ROIStimulateStartDelaySignal = calloc(nStartDelayElem, sizeof(unsigned char)) );
+		nullChk( ROIStimulateStartDelayWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, scanEngine->galvoSamplingRate, nStartDelayElem, (void**)&ROIStimulateStartDelaySignal, 1.0) ); 
 	}
+	
+	CONTINUE HERE AND CHANGE JUMP TIME TO A VECTOR WITH FIRST ELEMENT INCLUDING INITIAL START DELAY AND DISCARD THE SKIP-KEEP PIXELS VECTOR.
+	
+	// calculate jump time from parked position, to each ROI, including holding time and back to the parked position, excluding the initial start delay
+	for (size_t i = 0; i < nVoltages - 1; i++)
+		jumpTime += NonResRectRasterScan_JumpTime(scanEngine, fastAxisVoltages[i] - fastAxisVoltages[i+1], slowAxisVoltages[i] - slowAxisVoltages[i+1]);
+	
+	jumpTime +=  pointJumpSet->globalPointScanSettings.holdTime * (nVoltages - 2);
 	
 	// allocate memory for waveforms within one point jump cycle (excl. additional initial delay)
 	nCycleElem = (size_t)(pointJumpSet->sequencePeriod * 1e-3 * scanEngine->galvoSamplingRate);
@@ -5870,7 +5909,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	OKfree(pointJumpSet->skipKeepPix);
 	pointJumpSet->skipKeepPix = calloc(2*nPointJumps, sizeof(uInt32));
 	
-	/*
+	
 	
 	// set jump voltages
 	nParkedSamples = (size_t)(scanEngine->pointParkedTime * 1e-3 * scanEngine->galvoSamplingRate);
@@ -6606,6 +6645,7 @@ SkipPoints:
 	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, ATTR_MIN_VALUE, pointJumpSet->minStartDelay);  
 }
 
+/*
 // Calculates the minimum time it takes to visit all the point ROIs starting from the parked position and ending up again in the parked position
 static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rectRaster)
 {
@@ -6637,7 +6677,7 @@ static void NonResRectRasterScan_SetMinimumPointJumpPeriod (RectRaster_type* rec
 		break;
 	}
 	
-	/*
+	
 	// if there are no points, skip calculations
 	if (!firstPointJump) goto SkipPoints;
 	
@@ -6690,8 +6730,9 @@ SkipPoints:
 	}
 	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_Period, ATTR_MIN_VALUE, rectRaster->minimumPointJumpPeriod);
 	
-	*/
+
 }
+*/ 
 
 static double NonResRectRasterScan_RoundToGalvoSampling (RectRaster_type* scanEngine, double time)
 {
@@ -7072,8 +7113,12 @@ void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			// active pixel pulse train VChan
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanPixelPulseTrain, TRUE);
 			
-			// inactivate ROI timing VChan
-			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROITiming, FALSE);
+			// inactivate ROI hold VChan
+			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIHold, FALSE);
+			
+			// inactivate ROI stimulate VChan
+			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIStimulate, FALSE);
+			
 			break;
 							
 		case ScanEngineMode_PointScan:
@@ -7096,8 +7141,12 @@ void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			// inactive pixel pulse train VChan
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanPixelPulseTrain, FALSE);
 			
-			// activate ROI timing VChan
-			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROITiming, TRUE);
+			// activate ROI hold VChan
+			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIHold, TRUE);
+			
+			// activate ROI stimulate VChan
+			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIStimulate, TRUE);
+			
 			break;
 	}
 }

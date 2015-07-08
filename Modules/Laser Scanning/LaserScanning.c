@@ -494,8 +494,13 @@ typedef enum {
 typedef enum {
 	
 	PointJump_SinglePoints,									// Point ROIs are visited one at a time, with the beam jumping from and returning to the parked position.
-	PointJump_PointGroup,									// Point ROIs are visited one after the other, with the beam jumping between the points as fast as possible.
-
+															// If Repeat is > 1 then each point is visited several times in the same manner before moving on to the next point and if the "start delay increment"
+															// is != 0 then with each repetition, the start delay is incremented. Note that the total number of iterations of the task controller is the number of 
+															// points times the number of repetitions for each point.
+															
+	PointJump_PointGroup,									// The beam jumps between the selected point ROIs starting from parked position, then to the first point, next point, until last point and finally returns 
+															// to parked position. If Repeat > 1 then the point group is visited several times, and if "start delay increment" is != 0 then with each repetition, 
+															// the start delay is incremented. Note that in this case the number of task controller iterations is the same as the number of repetitions.
 } PointJumpMethods;
 
 typedef struct {
@@ -509,14 +514,11 @@ typedef struct {
 	double						minStartDelay;				// Minimum value for startDelay determined by the galvo jump speed in [ms].
 	double						sequenceDuration;			// Time in [ms] during which the beam jumps between all the point ROIs in a sequence. This time is measured from the start of the first point
 															// ROI holding time to the end holding time of the last point ROI in the sequence.
-	double						sequencePeriod;				// Period in [ms] at which a point jump sequence is repeated again.
 	double						minSequencePeriod;			// Minimum value of sequence period due to galvo jump speed in [ms].
 	uInt32						nSequenceRepeat;			// Number of times to repeat a sequence of ROI point jumps.
-	BOOL						parkedAtSequenceEnd;		// If True, at the end of visiting a sequence of point ROIs, the galvos are returned to their parked position and a new sequence 
-															// is initiated from this parked position. If this option is False, at the end of a point ROI jump sequence, the galvos will jump back to 
-															// the first point in the sequence.
 	PointAveragingMethods		averagingMethod;			// Determines how fluorescence signals are processed if recording is enabled at a given ROI.
 	ListType					pointJumps;					// List of points to jump to of PointJump_type*. The order of point jumps is determined by the order of the elements in the list.
+	size_t						currentActivePoint;			// 1-based index of current active point to visit when using the PointJump_SinglePoints mode.
 	PointScan_type				globalPointScanSettings;	// Global settings for stimulation and recording from point ROIs.
 	uInt32*						skipKeepPix;				// Array of (skip, keep) pixel number pairs used to segment the incoming fluorescence signal from multiple point ROIs during point jumping.
 															// The first number of pixels to skip corresponds to the fly-in portion of the galvos from their parked position to the first point ROI.
@@ -1236,21 +1238,12 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	// round sequence settings to galvo sampling time
 	rectRaster->pointJumpSettings->startDelay = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->startDelay);
 	rectRaster->pointJumpSettings->startDelayIncrement = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->startDelayIncrement);
-	rectRaster->pointJumpSettings->sequencePeriod = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->sequencePeriod);
 	
 	// populate sequence settings
 	SetCtrlVal(pointScanPanHndl, PointTab_Repeat, rectRaster->pointJumpSettings->nSequenceRepeat);
 	SetCtrlVal(pointScanPanHndl, PointTab_StartDelay, rectRaster->pointJumpSettings->startDelay);
 	SetCtrlVal(pointScanPanHndl, PointTab_StartDelayIncrement, rectRaster->pointJumpSettings->startDelayIncrement);
-	SetCtrlVal(pointScanPanHndl, PointTab_SequencePeriod, rectRaster->pointJumpSettings->sequencePeriod);
-	SetCtrlVal(pointScanPanHndl, PointTab_ParkedAtSeqEnd, rectRaster->pointJumpSettings->parkedAtSequenceEnd);
-	if (!rectRaster->pointJumpSettings->parkedAtSequenceEnd)
-		// if beam is not returned to parked position at the end of a sequence, then don't allow changing the sequence period
-		// and make it equal to the minimum possible period, i.e. the beam from the last point ROI jumps directly to the first point ROI
-		SetCtrlAttribute(pointScanPanHndl, PointTab_SequencePeriod, ATTR_CTRL_MODE, VAL_INDICATOR);
-	else
-		SetCtrlAttribute(pointScanPanHndl, PointTab_SequencePeriod, ATTR_CTRL_MODE, VAL_HOT);
-					
+	
 	// dim point scan panel since there are no points initially
 	SetPanelAttribute(pointScanPanHndl, ATTR_DIMMED, TRUE);
 	
@@ -5087,29 +5080,6 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					break;
 					
-				case PointTab_SequencePeriod:
-					
-					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->sequencePeriod);
-					
-					// round up to a multiple of galvo sampling
-					scanEngine->pointJumpSettings->sequencePeriod = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, scanEngine->pointJumpSettings->sequencePeriod);
-					SetCtrlVal(panel, control, scanEngine->pointJumpSettings->sequencePeriod);
-					
-					break;
-					
-				case PointTab_ParkedAtSeqEnd:	   //CONTINUE HERE!!!
-					
-					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->parkedAtSequenceEnd);
-					// switch sequence period control between indicator and control
-					if (scanEngine->pointJumpSettings->parkedAtSequenceEnd)
-						SetCtrlAttribute(panel, PointTab_SequencePeriod, ATTR_CTRL_MODE, VAL_HOT);
-					else
-						SetCtrlAttribute(panel, PointTab_SequencePeriod, ATTR_CTRL_MODE, VAL_INDICATOR);
-					
-					
-					break;
-					
-				
 			}
 			
 			break;
@@ -5175,13 +5145,6 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					// calculate point jump period
 					NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
-					// dim/undim controls
-					GetNumCheckedItems(panel, control, &nROIs);
-					if (nROIs)
-						SetCtrlAttribute(panel, PointTab_SequencePeriod, ATTR_DIMMED, FALSE);
-					else
-						SetCtrlAttribute(panel, PointTab_SequencePeriod, ATTR_DIMMED, TRUE);
-						
 					break;
 			}
 			
@@ -5804,8 +5767,6 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	PointJumpSet_type*		pointJumpSet					= scanEngine->pointJumpSettings;
 	size_t					nTotalPoints					= ListNumItems(scanEngine->pointJumpSettings->pointJumps);   	// number of point ROIs available
 	Point_type*				pointJump						= NULL;
-	Point_type*				firstPointJump					= NULL;
-	Point_type*				lastPointJump					= NULL;
 	size_t					nPointJumps						= 0;															// number of active point jump ROIs
 	size_t					nVoltages						= 0;															// includes the number of active point jump ROIs plus twice the parked voltage
 	size_t					nStartDelayElem					= 0;
@@ -5837,56 +5798,53 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	// Generate waveforms
 	//-----------------------------------------------
 	
-	// get first point to jump to
-	for (size_t i = 1; i <= nTotalPoints; i++) {
-		pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
-		if (!pointJump->baseClass.active) continue; // select only the first active point jump
-		firstPointJump = pointJump;
-		break;
+	switch (scanEngine->pointJumpSettings->jumpMethod) {
+			
+		case PointJump_SinglePoints:
+			
+			// set ROI jumping voltages
+			for (size_t i = 1; i <= nTotalPoints; i++) {
+				pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
+				if (!pointJump->baseClass.active) continue; // select only active point jumps
+				nPointJumps++;
+				if (nPointJumps < scanEngine->pointJumpSettings->currentActivePoint) continue; // select point to visit
+				
+				nVoltages = 3;
+				nullChk(fastAxisVoltages = realloc(fastAxisVoltages, nVoltages * sizeof(double)) );
+				nullChk(slowAxisVoltages = realloc(slowAxisVoltages, nVoltages * sizeof(double)) ); 
+				NonResRectRasterScan_PointROIVoltage(scanEngine, pointJump, &fastAxisVoltages[1], &slowAxisVoltages[1]);
+				break;
+			}
+			break;
+				
+		case PointJump_PointGroup:
+			
+			// set ROI jumping voltages
+			for (size_t i = 1; i <= nTotalPoints; i++) {
+				pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
+				if (!pointJump->baseClass.active) continue; // select only active point jumps
+				
+				nPointJumps++;
+				nullChk(fastAxisVoltages = realloc(fastAxisVoltages, (nPointJumps+2) * sizeof(double)) );
+				nullChk(slowAxisVoltages = realloc(slowAxisVoltages, (nPointJumps+2) * sizeof(double)) ); 
+				NonResRectRasterScan_PointROIVoltage(scanEngine, pointJump, &fastAxisVoltages[nPointJumps], &slowAxisVoltages[nPointJumps]);
+			}
+			nVoltages = nPointJumps + 2;
+			break;
 	}
 	
-	// if there are no points, generate error
-	if (!firstPointJump) {
+	// if there are no active points, generate error
+	if (nVoltages < 3) {
 		error = NonResRectRasterScan_GeneratePointJumpSignals_Err_NoPoints;
 		errMsg = StrDup("No points to jump to");
 		goto Error;
 	}
-	
-	// get last point to jump to
-	pointJump = NULL;
-	for (size_t i = nTotalPoints; i >= 1; i--) {
-		pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
-		if (!pointJump->baseClass.active) continue; // select only the first from last active point jump
-		lastPointJump = pointJump;
-		break;
-	}
-	
-	// count number of point ROIs to jump to
-	for (size_t i = 1; i <= nTotalPoints; i++) {
-		pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
-		if (!pointJump->baseClass.active) continue; // select only point ROIs to jump to
-		nPointJumps++;
-	}
-	
-	// add also the parked voltages before and after the ROI jumps and allocate memory
-	nVoltages = nPointJumps + 2;
-	nullChk(fastAxisVoltages = malloc(nVoltages * sizeof(double)) );
-	nullChk(slowAxisVoltages = malloc(nVoltages * sizeof(double)) ); 
 	
 	// set the first and last voltages to be the parked voltage
 	fastAxisVoltages[0] = fastAxisCal->parked;
 	fastAxisVoltages[nVoltages-1] = fastAxisCal->parked;
 	slowAxisVoltages[0] = slowAxisCal->parked;
 	slowAxisVoltages[nVoltages-1] = slowAxisCal->parked;
-	
-	// set ROI jumping voltages
-	size_t j = 0;
-	for (size_t i = 1; i <= nTotalPoints; i++) {
-		pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
-		if (!pointJump->baseClass.active) continue; // select only active point jumps
-		j++;
-		NonResRectRasterScan_PointROIVoltage(scanEngine, pointJump, &fastAxisVoltages[j], &slowAxisVoltages[j]);
-	}
 	
 	// generate start delay waveforms
 	nStartDelayElem = (size_t)((pointJumpSet->startDelay - pointJumpSet->minStartDelay) * 1e-3 * scanEngine->galvoSamplingRate);
@@ -6754,12 +6712,11 @@ static PointJumpSet_type* init_PointJumpSet_type (void)
 	pointJumpSet->startDelayIncrement					= 0;
 	pointJumpSet->minStartDelay							= 0;
 	pointJumpSet->sequenceDuration						= 0;
-	pointJumpSet->sequencePeriod						= 0;
 	pointJumpSet->minSequencePeriod						= 0;
 	pointJumpSet->nSequenceRepeat						= 1;
-	pointJumpSet->parkedAtSequenceEnd					= FALSE;
 	pointJumpSet->averagingMethod						= PointAveraging_None;
 	pointJumpSet->pointJumps							= 0;
+	pointJumpSet->currentActivePoint					= 0;
 	pointJumpSet->skipKeepPix							= NULL;
 	
 	pointJumpSet->globalPointScanSettings.holdTime		= NonResGalvoRasterScan_Default_HoldTime;

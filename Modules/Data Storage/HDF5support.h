@@ -35,7 +35,6 @@
 int CreateHDF5file(char *filename,char* dataset_name);
 int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Waveform_type* waveform,DLDataTypes datatype) ;
 int WriteHDF5Image(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Image_type*	receivedimage);
-int CreateHDF5Group(char* filename,char* parentgroupname,char*groupname);
 
 #ifdef __cplusplus
     }

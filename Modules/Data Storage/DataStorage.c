@@ -627,42 +627,49 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 					case DL_Waveform_Char:
 						
 						waveform = *(Waveform_type**)dataPacketDataPtr;
-						error = WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_Char); 
+						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_Char); 
 						break;
 					
 					case DL_Waveform_UChar:
-						waveform=*(Waveform_type**)dataPacketDataPtr;
-						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_UChar);  
+						
+						waveform = *(Waveform_type**)dataPacketDataPtr;
+						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_UChar);  
 						break;
 					
 					case DL_Waveform_Short:
-						waveform=*(Waveform_type**)dataPacketDataPtr;
-						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_Short);
+						
+						waveform = *(Waveform_type**)dataPacketDataPtr;
+						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform,DL_Short);
 						break;
 					
 					case DL_Waveform_UShort:
-						waveform=*(Waveform_type**)dataPacketDataPtr;
-						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_UShort); 
+						
+						waveform = *(Waveform_type**)dataPacketDataPtr;
+						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_UShort); 
 						break;
 					
 					case DL_Waveform_UInt:
-						waveform=*(Waveform_type**)dataPacketDataPtr;
-						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_UInt);  
+						
+						waveform = *(Waveform_type**)dataPacketDataPtr;
+						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_UInt);  
 						break;
 						
 					case DL_Waveform_Int:
-						waveform=*(Waveform_type**)dataPacketDataPtr;
-						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_Int);    
+						
+						waveform = *(Waveform_type**)dataPacketDataPtr;
+						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_Int);    
 						break;
 						
-					case DL_Waveform_Float  :
-						waveform=*(Waveform_type**)dataPacketDataPtr;
-						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_Float);
+					case DL_Waveform_Float:
+						
+						waveform = *(Waveform_type**)dataPacketDataPtr;
+						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_Float);
 						break;
 						
-					case DL_Waveform_Double  :
-						waveform=*(Waveform_type**)dataPacketDataPtr;
-						error=WriteHDF5Data(ds->hdf5datafile,sourceVChanName,dsdata,waveform,DL_Double);
+					case DL_Waveform_Double:
+						
+						waveform = *(Waveform_type**)dataPacketDataPtr;
+						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_Double);
 						break;
 					
 					case DL_Image:

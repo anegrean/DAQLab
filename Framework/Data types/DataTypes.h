@@ -549,12 +549,12 @@ Image_type* 				copy_Image_type							(Image_type* imgSource);
 //---------------------------
 
 	// Creates a Point ROI with default Black Opaque color.
-Point_type*					initalloc_Point_type					(Point_type* point, char ROIName[], int x, int y);
+Point_type*					initalloc_Point_type					(Point_type* point, char ROIName[], RGBA_type color, BOOL active, int x, int y);
 
 void 						discard_Point_type 						(Point_type** PointPtr);
 
 	// Creates a Rectangle with default Black Opaque color.
-Rect_type*					initalloc_Rect_type						(Rect_type* rect, char ROIName[], int top, int left, int height, int width);
+Rect_type*					initalloc_Rect_type						(Rect_type* rect, char ROIName[], RGBA_type color, BOOL active, int top, int left, int height, int width);
 void 						discard_Rect_type 						(Rect_type** RectPtr);
 
 

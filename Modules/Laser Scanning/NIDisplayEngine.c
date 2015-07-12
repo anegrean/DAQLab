@@ -626,7 +626,9 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 					
 				case IMAQ_SELECTION_TOOL:
 					
-					PointROI =  initalloc_Point_type(NULL, "", rect.left, rect.top);
+					RGBA_type	color = {.R = 0, .G = 0, .B = 0, .alpha = 255};
+					
+					PointROI =  initalloc_Point_type(NULL, "", color, TRUE, rect.left, rect.top);
 					
 					// execute callback
 					if (display->baseClass.displayEngine->ROIEventsCBFptr)
@@ -668,7 +670,9 @@ static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNu
 					
 				case IMAQ_RECTANGLE_TOOL:
 					
-					RectROI =  initalloc_Rect_type(NULL, "", rect.top, rect.left, rect.height, rect.width);
+					RGBA_type	color = {.R = 0, .G = 0, .B = 0, .alpha = 255};
+					
+					RectROI =  initalloc_Rect_type(NULL, "", color, TRUE, rect.top, rect.left, rect.height, rect.width);
 					
 					// execute callback
 					if (display->baseClass.displayEngine->ROIEventsCBFptr)

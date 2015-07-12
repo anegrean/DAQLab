@@ -134,7 +134,7 @@ static void 				init_PulseTrain_type 					(PulseTrain_type* pulseTrain, PulseTra
 																	 PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses);
 
 	// ROI base class
-static void 				init_ROI_type 							(ROI_type* ROI, ROITypes ROIType, char ROIName[], CopyFptr_type copyFptr, DiscardFptr_type discardFptr);
+static void 				init_ROI_type 							(ROI_type* ROI, ROITypes ROIType, char ROIName[], RGBA_type color, BOOL active, CopyFptr_type copyFptr, DiscardFptr_type discardFptr);
 
 static void					discard_ROIBaseClass					(ROI_type** ROIPtr);
 
@@ -997,17 +997,17 @@ size_t GetImageSizeofData (Image_type* image)
 // ROI
 //-------------------------
 
-static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], CopyFptr_type copyFptr, DiscardFptr_type discardFptr)
+static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], RGBA_type color, BOOL active, CopyFptr_type copyFptr, DiscardFptr_type discardFptr)
 {
 	ROI->ROIType 		= ROIType;
 	ROI->ROIName		= StrDup(ROIName);
-	ROI->active			= TRUE;
+	ROI->active			= active;
 	
 	// init color to opaque black
-	ROI->rgba.R			= 0;
-	ROI->rgba.G			= 0;
-	ROI->rgba.B			= 0;
-	ROI->rgba.alpha		= 0;
+	ROI->rgba.R			= color.R;
+	ROI->rgba.G			= color.G;
+	ROI->rgba.B			= color.B;
+	ROI->rgba.alpha		= color.alpha;
 	
 	// METHODS
 	ROI->copyFptr		= copyFptr;
@@ -1027,7 +1027,7 @@ static void	discard_ROIBaseClass (ROI_type** ROIPtr)
 //-------------------------
 // Point
 //-------------------------
-Point_type* initalloc_Point_type (Point_type* point, char ROIName[], int x, int y)
+Point_type* initalloc_Point_type (Point_type* point, char ROIName[], RGBA_type color, BOOL active, int x, int y)
 {
 	if (!point) {
 		point = malloc(sizeof(Point_type));
@@ -1035,7 +1035,7 @@ Point_type* initalloc_Point_type (Point_type* point, char ROIName[], int x, int 
 	}
 	
 	// init base class
-	init_ROI_type(&point->baseClass, ROI_Point, ROIName, (CopyFptr_type)copy_Point_type, (DiscardFptr_type) discard_Point_type); 
+	init_ROI_type(&point->baseClass, ROI_Point, ROIName, color, active, (CopyFptr_type)copy_Point_type, (DiscardFptr_type) discard_Point_type); 
 	
 	// init point child class
 	point->x	= x;
@@ -1078,7 +1078,7 @@ Error:
 // Rectangle
 //-------------------------
 	
-Rect_type* initalloc_Rect_type (Rect_type* rect, char ROIName[], int top, int left, int height, int width)
+Rect_type* initalloc_Rect_type (Rect_type* rect, char ROIName[], RGBA_type color, BOOL active, int top, int left, int height, int width)
 {
 	if (!rect) {
 		rect = malloc(sizeof(Rect_type));
@@ -1086,7 +1086,7 @@ Rect_type* initalloc_Rect_type (Rect_type* rect, char ROIName[], int top, int le
 	}
 	
 	// init base class
-	init_ROI_type(&rect->baseClass, ROI_Rectangle, ROIName, (CopyFptr_type)copy_Rect_type, (DiscardFptr_type)discard_Rect_type); 
+	init_ROI_type(&rect->baseClass, ROI_Rectangle, ROIName, color, active, (CopyFptr_type)copy_Rect_type, (DiscardFptr_type)discard_Rect_type); 
 	
 	// init rectangle child class
 	rect->top 		= top;

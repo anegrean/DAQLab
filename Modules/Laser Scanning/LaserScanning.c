@@ -367,6 +367,8 @@ struct ScanEngine {
 	//-----------------------------------
 	// Task Controller
 	//-----------------------------------
+	size_t						nFrames;					// Number of frames to acquire in finite frame scan mode, i.e. continuousAcq is False.
+	BOOL						continuousAcq;				// If True, frame acquisition is continuous, and False, finite acquisition of frames.
 	TaskControl_type*			taskControl;
 	
 	//-----------------------------------
@@ -525,6 +527,7 @@ typedef struct {
 															// ROI holding time to the end holding time of the last point ROI in the sequence.
 	double						minSequencePeriod;			// Minimum value of sequence period due to galvo jump speed in [ms].
 	uInt32						nSequenceRepeat;			// Number of times to repeat a sequence of ROI point jumps.
+	double						repeatWait;					// Additional time in [s] to wait between sequence repetitions.
 	PointAveragingMethods		averagingMethod;			// Determines how fluorescence signals are processed if recording is enabled at a given ROI.
 	ListType					pointJumps;					// List of points to jump to of PointJump_type*. The order of point jumps is determined by the order of the elements in the list.
 	size_t						currentActivePoint;			// 1-based index of current active point to visit when using the PointJump_SinglePoints mode.
@@ -727,6 +730,8 @@ static Waveform_type* 					NonResGalvoJumpBetweenPoints 						(NonResGalvoCal_ty
 static int 								init_ScanEngine_type 								(ScanEngine_type** 			engine, 
 								 														 	LaserScanning_type*			lsModule,
 																						 	TaskControl_type**			taskController,
+																							BOOL						continuousFrameScan,
+								 															size_t						nFrames,
 																						 	ScanEngineEnum_type 		engineType,
 																						 	double						referenceClockFreq,
 																						 	double						pixelDelay,
@@ -764,7 +769,7 @@ static void 							discard_RectRasterDisplayCBData_type 				(RectRasterDisplayCB
 
 static RectRaster_type*					init_RectRaster_type								(LaserScanning_type*	lsModule, 
 																			 	 	 		char 					engineName[],
-																							BOOL					finiteFrames,
+																							BOOL					continuousFrameScan,
 																							size_t					nFrames,
 																				 	 		double					galvoSamplingRate,
 																				 	 		double					referenceClockFreq,
@@ -979,7 +984,7 @@ static void 							ErrorTC_RectRaster 									(TaskControl_type* taskControl, i
 
 static int								ModuleEventHandler_RectRaster						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
 
-static void								SetRectRasterPointScanTaskControlIterations			(RectRaster_type* scanEngine);
+static void								SetRectRasterTaskControllerSettings					(RectRaster_type* scanEngine);
 
 	// add below more task controller callbacks for different scan engine types
 
@@ -1197,8 +1202,8 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	
 	scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
 				
-	// set UI to start in frame scan mode by default
-	SetActiveTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX);
+	// set UI to match scan mode (frame scan by default)
+	SetActiveTabPage(scanPanHndl, RectRaster_Tab, rectRaster->baseClass.scanMode);
 				
 	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
 	// Set up Frame Scan UI
@@ -1207,14 +1212,14 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &frameScanPanHndl); 
 				
 	// update operation mode and dim N Frames if necessary
-	SetCtrlVal(frameScanPanHndl, ScanTab_ExecutionMode, !(BOOL)GetTaskControlMode(rectRaster->baseClass.taskControl));
-	if (GetTaskControlMode(rectRaster->baseClass.taskControl))
-		SetCtrlAttribute(frameScanPanHndl, ScanTab_NFrames, ATTR_DIMMED, 0);
+	SetCtrlVal(frameScanPanHndl, ScanTab_ExecutionMode, rectRaster->baseClass.continuousAcq);
+	if (rectRaster->baseClass.continuousAcq)
+		SetCtrlAttribute(frameScanPanHndl, ScanTab_NFrames, ATTR_DIMMED, TRUE);
 	else
-		SetCtrlAttribute(frameScanPanHndl, ScanTab_NFrames, ATTR_DIMMED, 1);
+		SetCtrlAttribute(frameScanPanHndl, ScanTab_NFrames, ATTR_DIMMED, FALSE);
 					
 	// update number of frames
-	SetCtrlVal(frameScanPanHndl, ScanTab_NFrames, (unsigned int) GetTaskControlIterations(rectRaster->baseClass.taskControl));
+	SetCtrlVal(frameScanPanHndl, ScanTab_NFrames, (unsigned int) rectRaster->baseClass.nFrames);
 							
 	// update objectives
 	size_t				nObjectives			= ListNumItems(rectRaster->baseClass.objectives);
@@ -1292,6 +1297,7 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	
 	// populate sequence settings
 	SetCtrlVal(pointScanPanHndl, PointTab_Repeat, rectRaster->pointJumpSettings->nSequenceRepeat);
+	SetCtrlVal(pointScanPanHndl, PointTab_RepeatWait, rectRaster->pointJumpSettings->repeatWait);
 	SetCtrlVal(pointScanPanHndl, PointTab_StartDelay, rectRaster->pointJumpSettings->startDelayInitVal);
 	SetCtrlVal(pointScanPanHndl, PointTab_StartDelayIncrement, rectRaster->pointJumpSettings->startDelayIncrement);
 	
@@ -1574,9 +1580,8 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		char*			fastAxisCalName		= NULL;
 		char*			slowAxisCalName		= NULL;
 		char*			objectiveName		= NULL;
-		unsigned int 	nFrames				= GetTaskControlIterations(scanEngine->taskControl);
+		unsigned int 	nFrames				= scanEngine->nFrames;
 		unsigned int	scanEngineType		= scanEngine->engineType;
-		BOOL			tcMode				= GetTaskControlMode(scanEngine->taskControl);
 		
 		if (scanEngine->fastAxisCal)
 			fastAxisCalName	= scanEngine->fastAxisCal->calName;
@@ -1595,7 +1600,7 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		
 		
 		DAQLabXMLNode 	scanEngineAttr[] 	= {	{"Name", 						BasicData_CString, 		tcName},
-												{"FiniteFrames", 				BasicData_Bool, 		&tcMode},
+												{"ContinuousFrameScan",			BasicData_Bool, 		&scanEngine->continuousAcq},
 												{"NFrames", 					BasicData_UInt, 		&nFrames},
 												{"ScanEngineType", 				BasicData_UInt, 		&scanEngineType},
 												{"FastAxisCalibrationName", 	BasicData_CString, 		fastAxisCalName},
@@ -1789,14 +1794,14 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 	double							objectiveFL						= 0;
 	double							referenceClockFreq				= 0;
 	double							pixelDelay						= 0;
-	BOOL							finiteFrames					= FALSE;
 	unsigned int					nFrames							= 0;
+	BOOL							continuousFrameScan				= FALSE;
 	char*							assignedObjectiveName			= NULL;
 	char*							objectiveName					= NULL;
 	ScanEngine_type*				scanEngine						= NULL;
 	Objective_type*					objective						= NULL;
 	DAQLabXMLNode					scanEngineGenericAttr[] 		= {	{"Name", 						BasicData_CString, 		&scanEngineName},
-																		{"FiniteFrames", 				BasicData_Bool, 		&finiteFrames},
+																		{"ContinuousFrameScan", 		BasicData_Bool, 		&continuousFrameScan},
 																		{"NFrames", 					BasicData_UInt, 		&nFrames},
 																		{"ScanEngineType", 				BasicData_UInt, 		&scanEngineType},
 																		{"FastAxisCalibrationName", 	BasicData_CString, 		&fastAxisCalibrationName},
@@ -1871,7 +1876,7 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 				//-----------------------------------  
 					
 				
-				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, finiteFrames, nFrames, galvoSamplingRate, referenceClockFreq, 
+				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, continuousFrameScan, nFrames, galvoSamplingRate, referenceClockFreq, 
 							 pixelDelay, height, heightOffset, width, widthOffset, pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
 				break;
 			
@@ -2428,7 +2433,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 					
 						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 					
-							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, TRUE, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 
+							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, FALSE, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 
 											0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
 							
 							InsertRectRasterScanEngineToUI(ls, (RectRaster_type*)newScanEngine);
@@ -4076,6 +4081,8 @@ static void discard_TriangleCal_type (TriangleCal_type** a)
 static int init_ScanEngine_type (ScanEngine_type** 			enginePtr, 
 								 LaserScanning_type*		lsModule,
 								 TaskControl_type**			taskControllerPtr,
+								 BOOL						continuousFrameScan,
+								 size_t						nFrames,
 								 ScanEngineEnum_type 		engineType,
 								 double						referenceClockFreq,
 								 double						pixelDelay,
@@ -4126,6 +4133,8 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	// reference to the laser scanning module owning the scan engine
 	engine->lsModule					= lsModule;
 	// task controller
+	engine->nFrames						= nFrames;
+	engine->continuousAcq				= continuousFrameScan;
 	engine->taskControl					= *taskControllerPtr;
 	*taskControllerPtr					= NULL;
 	SetTaskControlModuleData(engine->taskControl, engine);
@@ -4509,7 +4518,7 @@ static void discard_RectRasterDisplayCBData_type (RectRasterDisplayCBData_type**
 
 static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 												char 					engineName[], 
-												BOOL					finiteFrames,
+												BOOL					continuousFrameScan,
 												size_t					nFrames,
 												double					galvoSamplingRate,
 												double					referenceClockFreq,
@@ -4535,12 +4544,11 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 	// init task controller
 	nullChk( taskController	= init_TaskControl_type(engineName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC_RectRaster, UnconfigureTC_RectRaster, IterateTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
 										  DoneTC_RectRaster, StoppedTC_RectRaster, TaskTreeStateChange_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster) );
-	SetTaskControlMode(taskController, finiteFrames);
-	SetTaskControlIterations(taskController, nFrames);
+	
 	SetTaskControlIterationTimeout(taskController, TaskControllerIterationTimeout);
 	
 	// init scan engine base class
-	errChk( init_ScanEngine_type((ScanEngine_type**)&engine, lsModule, &taskController, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, referenceClockFreq, pixelDelay, scanLensFL, tubeLensFL) );
+	errChk( init_ScanEngine_type((ScanEngine_type**)&engine, lsModule, &taskController, continuousFrameScan, nFrames, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, referenceClockFreq, pixelDelay, scanLensFL, tubeLensFL) );
 	// override discard method
 	engine->baseClass.Discard = discard_RectRaster_type;
 	
@@ -4710,14 +4718,12 @@ static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int cont
 					
 				case ScanTab_ExecutionMode:
 					
-					BOOL	executionMode	= FALSE;
-					GetCtrlVal(panel, control, &executionMode);
-					SetTaskControlMode(scanEngine->baseClass.taskControl, (TaskMode_type)!executionMode);
+					GetCtrlVal(panel, control, &scanEngine->baseClass.continuousAcq);
 					// dim/undim N Frames
-					if (executionMode)
-						SetCtrlAttribute(panel, ScanTab_NFrames, ATTR_DIMMED, 1);
+					if (scanEngine->baseClass.continuousAcq)
+						SetCtrlAttribute(panel, ScanTab_NFrames, ATTR_DIMMED, TRUE);
 					else
-						SetCtrlAttribute(panel, ScanTab_NFrames, ATTR_DIMMED, 0);
+						SetCtrlAttribute(panel, ScanTab_NFrames, ATTR_DIMMED, FALSE);
 					
 					break;
 					
@@ -4726,7 +4732,7 @@ static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int cont
 					unsigned int nFrames = 0;
 					
 					GetCtrlVal(panel, control, &nFrames);
-					SetTaskControlIterations(scanEngine->baseClass.taskControl, nFrames);
+					scanEngine->baseClass.nFrames = nFrames;
 					
 					break;
 				
@@ -5105,8 +5111,11 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->nSequenceRepeat);
 					
-					// adjust number of iterations depending on the point jump mode
-					SetRectRasterPointScanTaskControlIterations(scanEngine);
+					break;
+					
+				case PointTab_RepeatWait:
+					
+					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->repeatWait);
 					
 					break;
 					
@@ -5160,10 +5169,6 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					// calculate point jump period
 					//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
-					// adjust number of iterations depending on the point jump mode
-					SetRectRasterPointScanTaskControlIterations(scanEngine);
-					
-					
 					// dim panel if there are no more active ROIs
 					GetNumCheckedItems(panel, control, &nROIs);
 					if (!nROIs)
@@ -5199,9 +5204,6 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 					// calculate point jump period
 					//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
-					
-					// adjust number of iterations depending on the point jump mode
-					SetRectRasterPointScanTaskControlIterations(scanEngine);
 					
 					break;
 			}
@@ -6812,6 +6814,7 @@ static PointJumpSet_type* init_PointJumpSet_type (void)
 	pointJumpSet->sequenceDuration						= 0;
 	pointJumpSet->minSequencePeriod						= 0;
 	pointJumpSet->nSequenceRepeat						= 1;
+	pointJumpSet->repeatWait							= 0;
 	pointJumpSet->averagingMethod						= PointAveraging_None;
 	pointJumpSet->pointJumps							= 0;
 	pointJumpSet->currentActivePoint					= 0;
@@ -7273,9 +7276,6 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 						// update minimum point jump period
 						//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 						
-						// update task control iterations
-						SetRectRasterPointScanTaskControlIterations(scanEngine);
-							
 						// undim panel
 						SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, 0);
 					} else 
@@ -7392,9 +7392,6 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 	NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 	//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine); 
 	
-	// update task controller iterations
-	SetRectRasterPointScanTaskControlIterations(scanEngine);
-				
 	if (activeROIAvailable)
 		SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, FALSE);
 	else
@@ -8266,9 +8263,9 @@ static int TaskTreeStateChange_NonResGalvoCal (TaskControl_type* taskControl, Ta
 
 static int ConfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
-	//RectRaster_type* engine = GetTaskControlModuleData(taskControl);
+	RectRaster_type* engine = GetTaskControlModuleData(taskControl);
 	
-	//SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_Ready, 1);
+	SetRectRasterTaskControllerSettings(engine);
 	
 	return 0; 
 }
@@ -8276,8 +8273,6 @@ static int ConfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* ab
 static int UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	//RectRaster_type* engine = GetTaskControlModuleData(taskControl);
-	
-	//SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_Ready, 0);
 	
 	return 0; 
 }
@@ -8509,6 +8504,8 @@ static int TaskTreeStateChange_RectRaster (TaskControl_type* taskControl, TaskTr
 					
 	// activate/inactivate VChans
 	SetRectRasterScanEngineModeVChans(engine);
+	// change task controller settings 
+	SetRectRasterTaskControllerSettings(engine);
 	
 	switch (state) {
 			
@@ -8632,21 +8629,44 @@ static int ModuleEventHandler_RectRaster (TaskControl_type* taskControl, TCState
 	return 0;
 }
 
-static void SetRectRasterPointScanTaskControlIterations (RectRaster_type* scanEngine)
+static void SetRectRasterTaskControllerSettings (RectRaster_type* scanEngine)
 {
-	switch (scanEngine->pointJumpSettings->jumpMethod) {
-							
-		case PointJump_SinglePoints:
+	switch (scanEngine->baseClass.scanMode) {
 			
-			SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointJumpSettings->nSequenceRepeat * NonResRectRasterScan_GetNumActivePoints(scanEngine));
-				
+		case ScanEngineMode_FrameScan:
+			
+			// set iteration mode
+			SetTaskControlMode(scanEngine->baseClass.taskControl, !scanEngine->baseClass.continuousAcq);
+
+			// set waiting time between iterations
+			SetTaskControlIterationsWait(scanEngine->baseClass.taskControl, 0);
+			
+			// set number of iterations to be the number of frames to be acquired
+			SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->baseClass.nFrames);
+			
 			break;
+			
+		case ScanEngineMode_PointScan:
+			
+			// set iteration mode to finite
+			SetTaskControlMode(scanEngine->baseClass.taskControl, TASK_FINITE);
+
+			// set waiting time between iterations
+			SetTaskControlIterationsWait(scanEngine->baseClass.taskControl, scanEngine->pointJumpSettings->repeatWait);
+			
+			// set number of iterations
+			switch (scanEngine->pointJumpSettings->jumpMethod) {
 							
-		case PointJump_PointGroup:
+				case PointJump_SinglePoints:
+			
+					SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointJumpSettings->nSequenceRepeat * NonResRectRasterScan_GetNumActivePoints(scanEngine));
+					break;
 							
-			SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointJumpSettings->nSequenceRepeat);
+				case PointJump_PointGroup:
 							
+					SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointJumpSettings->nSequenceRepeat);
+					break;
+			}
 			break;
 	}
-	
 }

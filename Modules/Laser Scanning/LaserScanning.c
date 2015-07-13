@@ -46,7 +46,7 @@
 #define ScanEngine_SourceVChan_SlowAxis_Command_NSamples	"slow axis command n samples"
 #define ScanEngine_SinkVChan_SlowAxis_Position				"slow axis position"
 #define ScanEngine_SourceVChan_CompositeImage				"composite image"			// Combined image channels.
-#define ScanEngine_SourceVChan_ImageChannel					"image channel"				// Assembled image from a single detection channel.
+#define ScanEngine_SourceVChan_ImageChannel					"image channel"				// Assembled image from a single detection channel. VChan of DL_Image type for frame scan and Allowed_Detector_Data_Types for point scan.
 #define ScanEngine_SinkVChan_DetectionChan					"detection channel"			// Incoming fluorescence signal to assemble an image from.
 #define ScanEngine_SourceVChan_Shutter_Command				"shutter command"
 #define ScanEngine_SourceVChan_PixelPulseTrain				"pixel pulse train"
@@ -307,8 +307,8 @@ typedef enum {
 
 
 typedef struct {
-	SinkVChan_type*				detVChan;					// For receiving pixel data.
-	SourceVChan_type*			imgVChan;					// Assembled image for this channel.
+	SinkVChan_type*				detVChan;					// For receiving pixel data. See Allowed_Detector_Data_Types for VChan data types
+	SourceVChan_type*			outputVChan;					// Assembled image or waveform for this channel. VChan of DL_Image type for frame scan and Allowed_Detector_Data_Types for point scan.
 	ScanChanColorScales			color;						// Color channel assigned to this channel.
 	ScanEngine_type*			scanEngine;					// Reference to scan engine to which this scan channel belongs.
 	ImageDisplay_type*			imgDisplay;					// Handle to display images for this channel
@@ -464,6 +464,13 @@ typedef struct {
 	Image_type*					image;						// A completely assembled image, otherwise this is NULL.
 } RectRasterImgBuffer_type;
 
+/*
+typedef struct {
+	Waveform_type*				pointRecording;
+	ScanChan_type*				scanChan;
+}
+*/
+
 typedef struct {
 	double						pixSize;					// Image pixel size in [um].
 	uInt32						height;						// Image height in [pix] when viewed on the screen.
@@ -536,6 +543,8 @@ typedef struct {
 															// The first entry is the galvo jump time from the parked position to the first point ROI which does not include any additional start delay.
 	size_t						nJumpTimes;					// Number of jumpTimes array elements.
 	
+	
+	
 } PointJumpSet_type;
 
 typedef struct {
@@ -572,11 +581,11 @@ typedef struct {
 	size_t						scanChanIdx;				// Scan Engine channel display index.
 } RectRasterDisplayCBData_type; 
 
-// data structure binding used to launch image assembly in separate threads
+// data structure binding used to pixel assembly from different channels in separate threads
 typedef struct{
 	RectRaster_type*			scanEngine;
-	size_t 						imgBufferIdx;
-} RectRasterScanImgBuilderBind_type;
+	size_t 						channelIdx;
+} PixelAssemblyBinding_type;
 
 //----------------------
 // Module implementation
@@ -753,7 +762,9 @@ static void								DLUnregisterScanEngine								(ScanEngine_type* engine);
 static int								OpenScanEngineShutter								(ScanEngine_type* engine, BOOL openStatus, char** errorInfo);
 
 	// return both the fast and slow axis galvos to their parked position
-static int 								ReturnRectRasterToParkedPosition 					(RectRaster_type* engine, char** errorInfo);  
+static int 								ReturnRectRasterToParkedPosition 					(RectRaster_type* engine, char** errorInfo); 
+
+static PixelAssemblyBinding_type*		init_PixelAssemblyBinding_type						(RectRaster_type* rectRaster, size_t channelIdx);
 	
 	//--------------------------------------
 	// Non-Resonant Rectangle Raster Scan
@@ -825,9 +836,8 @@ static BOOL 							NonResRectRasterScan_ReadyToScan					(RectRaster_type* scanEn
 	// generates rectangular raster scan waveforms and sends them to the galvo command VChans
 static int								NonResRectRasterScan_GenerateScanSignals			(RectRaster_type* scanEngine, char** errorInfo);
 	// builds images from a continuous pixel stream
-static int 								NonResRectRasterScan_BuildImage 					(RectRaster_type* rectRaster, size_t imgBufferIdx, char** errorInfo);
-static RectRasterScanImgBuilderBind_type*	init_RectRasterScanImgBuilderBind_type			(RectRaster_type* rectRaster, size_t imgBufferIdx);
-static void								discard_RectRasterScanImgBuilderBind_type			(RectRasterScanImgBuilderBind_type** imgBuilderBindingPtr);
+static int 								NonResRectRasterScan_BuildImage 					(RectRaster_type* rectRaster, size_t bufferIdx, char** errorInfo);
+static void								discard_PixelAssemblyBinding_type			(PixelAssemblyBinding_type** imgBuilderBindingPtr);
 static int CVICALLBACK 					NonResRectRasterScan_LaunchImageBuilder 			(void* functionData);
 static int								NonResRectRasterScan_AssembleCompositeImage			(RectRaster_type* rectRaster, char** errorInfo);
 	// rounds a given time in [ms] to an integer of galvo sampling intervals
@@ -923,7 +933,9 @@ static void								FastAxisComVChan_StateChange						(VChan_type* self, void* VC
 static void								SlowAxisComVChan_StateChange						(VChan_type* self, void* VChanOwner, VChanStates state);
 
 	// Scan engine mode switching VChan activation/deactivation
-void 									SetRectRasterScanEngineModeVChans 					(RectRaster_type* scanEngine);
+static void 							SetRectRasterScanEngineModeVChans 					(RectRaster_type* scanEngine);
+
+static uInt32							GetNumOpenDetectionVChans							(RectRaster_type* scanEngine);
 
 //-----------------------------------------
 // Display interface
@@ -2855,7 +2867,7 @@ static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanId
 	int				error 			= 0;
 	ScanChan_type* 	scanChan		= malloc(sizeof(ScanChan_type));
 	char*			detVChanName	= NULL;
-	char*			imgVChanName	= NULL;
+	char*			outputVChanName	= NULL;
 	
 	if (!scanChan) return NULL;
 	
@@ -2863,7 +2875,7 @@ static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanId
 	DLDataTypes allowedPacketTypes[] 	= Allowed_Detector_Data_Types;
 	scanChan->imgDisplay				= NULL;
 	scanChan->detVChan					= NULL;
-	scanChan->imgVChan					= NULL;
+	scanChan->outputVChan				= NULL;
 	scanChan->color						= ScanChanColor_Grey;
 	scanChan->scanEngine 				= engine;
 	
@@ -2872,15 +2884,15 @@ static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanId
 	nullChk( scanChan->detVChan = init_SinkVChan_type(detVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), scanChan, VChanDataTimeout, NULL) );
 	
 	// outgoing image channel
-	nullChk( imgVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SourceVChan_ImageChannel, chanIdx) );
-	nullChk( scanChan->imgVChan = init_SourceVChan_type(imgVChanName, DL_Image, scanChan, NULL) );
+	nullChk( outputVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SourceVChan_ImageChannel, chanIdx) );
+	nullChk( scanChan->outputVChan = init_SourceVChan_type(outputVChanName, DL_Image, scanChan, NULL) );
 	
 	// register sink VChan with task controller
 	AddSinkVChan(engine->taskControl, scanChan->detVChan, NULL);
 	
 	// cleanup
 	OKfree(detVChanName);
-	OKfree(imgVChanName);
+	OKfree(outputVChanName);
 	
 	return scanChan;
 	
@@ -2888,7 +2900,7 @@ Error:
 	
 	// cleanup
 	OKfree(detVChanName);
-	OKfree(imgVChanName);
+	OKfree(outputVChanName);
 	
 	
 	discard_ScanChan_type(&scanChan);
@@ -2904,7 +2916,7 @@ static void	discard_ScanChan_type (ScanChan_type** scanChanPtr)
 	// unregister sink VChan from task controller
 	RemoveSinkVChan(scanChan->scanEngine->taskControl, scanChan->detVChan); 
 	discard_VChan_type((VChan_type**)&scanChan->detVChan);
-	discard_VChan_type((VChan_type**)&scanChan->imgVChan);
+	discard_VChan_type((VChan_type**)&scanChan->outputVChan);
 	
 	// discard image display
 	discard_ImageDisplay_type(&scanChan->imgDisplay);
@@ -2916,7 +2928,7 @@ static int RegisterDLScanChan (ScanChan_type* scanChan)
 {
 	// add detection and image channels to the framework
 	DLRegisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->detVChan);
-	DLRegisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->imgVChan);
+	DLRegisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->outputVChan);
 	
 	return 0;
 	
@@ -2926,7 +2938,7 @@ static int UnregisterDLScanChan (ScanChan_type* scanChan)
 {
 	// remove detection and image VChans from the framework
 	DLUnregisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->detVChan);
-	DLUnregisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->imgVChan);
+	DLUnregisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->outputVChan);
 	
 	return 0;
 }
@@ -6126,7 +6138,7 @@ The function is not multi-threaded.
 */
 
 
-static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t imgBufferIdx, char** errorInfo)
+static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t bufferIdx, char** errorInfo)
 {
 #define NonResRectRasterScan_BuildImage_Err_WrongPixelDataType			-1
 #define NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage		-2
@@ -6139,7 +6151,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	void*						pixelData				= NULL;		// Array of received pixels from a single pixel waveform data packet.
 	size_t						nPixels					= 0;		// Number of received pixels from a pixel data packet stored in pixelData.
 	size_t             			pixelDataIdx   			= 0;      	// The index of the processed pixel from the received pixel waveform.
-	RectRasterImgBuffer_type*   imgBuffer				= rectRaster->imgBuffers[imgBufferIdx];
+	RectRasterImgBuffer_type*   imgBuffer				= rectRaster->imgBuffers[bufferIdx];
 	size_t						nDeadTimePixels			= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->scanSettings.pixelDwellTime);
 	
 	DisplayEngine_type* 		displayEngine 			= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
@@ -6365,7 +6377,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// add restore image settings callback info
 				
 				CallbackFptr_type				CBFns[] 						= {(CallbackFptr_type)ImageDisplay_CB};
-				void* 							callbackData[]					= {init_RectRasterDisplayCBData_type(rectRaster, imgBufferIdx)};
+				void* 							callbackData[]					= {init_RectRasterDisplayCBData_type(rectRaster, bufferIdx)};
 				DiscardFptr_type 				discardCallbackDataFunctions[] 	= {(DiscardFptr_type)discard_RectRasterDisplayCBData_type};
 				
 				nullChk( imgBuffer->scanChan->imgDisplay->callbacks = init_CallbackGroup_type(imgBuffer->scanChan->imgDisplay, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
@@ -6378,13 +6390,13 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// Send image for this channel if needed
 				//--------------------------------------
 				
-				if (IsVChanOpen((VChan_type*)imgBuffer->scanChan->imgVChan)) {
+				if (IsVChanOpen((VChan_type*)imgBuffer->scanChan->outputVChan)) {
 					// make a copy of the image
 					nullChk( sendImage = copy_Image_type(imgBuffer->image) );
 					Iterator_type* currentiter = GetTaskControlCurrentIter(rectRaster->baseClass.taskControl);
 					nullChk( imagePacket = init_DataPacket_type(DL_Image, (void**)&sendImage, NULL, discard_Image_type));
 					SetDataPacketDSData(imagePacket, GetIteratorDSdata(currentiter, WAVERANK));      
-					errChk( SendDataPacket(imgBuffer->scanChan->imgVChan, &imagePacket, 0, &errMsg) );
+					errChk( SendDataPacket(imgBuffer->scanChan->outputVChan, &imagePacket, 0, &errMsg) );
 				}
 				
 				//--------------------------------------
@@ -6539,30 +6551,30 @@ Error:
 	return error;
 }
 
-static RectRasterScanImgBuilderBind_type* init_RectRasterScanImgBuilderBind_type (RectRaster_type* rectRaster, size_t imgBufferIdx)
+static PixelAssemblyBinding_type* init_PixelAssemblyBinding_type (RectRaster_type* rectRaster, size_t channelIdx)
 {
-	RectRasterScanImgBuilderBind_type*	binding = malloc(sizeof(RectRasterScanImgBuilderBind_type));
+	PixelAssemblyBinding_type*	binding = malloc(sizeof(PixelAssemblyBinding_type));
 	if (!binding) return NULL;
 	
 	binding->scanEngine		= rectRaster;
-	binding->imgBufferIdx   = imgBufferIdx;
+	binding->channelIdx   	= channelIdx;
 	
 	return binding;
 }
 
-static void discard_RectRasterScanImgBuilderBind_type (RectRasterScanImgBuilderBind_type** imgBuilderBindingPtr)
+static void discard_PixelAssemblyBinding_type (PixelAssemblyBinding_type** imgBuilderBindingPtr)
 {
 	OKfree(*imgBuilderBindingPtr);	
 }
 
 static int CVICALLBACK NonResRectRasterScan_LaunchImageBuilder (void* functionData)
 {
-	int										error					= 0;
-	char*									errMsg					= NULL;
-	RectRasterScanImgBuilderBind_type*		binding 				= functionData;
+	int								error					= 0;
+	char*							errMsg					= NULL;
+	PixelAssemblyBinding_type*		binding 				= functionData;
 	
 	// receive pixel stream and assemble image
-	errChk( NonResRectRasterScan_BuildImage (binding->scanEngine, binding->imgBufferIdx, &errMsg) );
+	errChk( NonResRectRasterScan_BuildImage (binding->scanEngine, binding->channelIdx, &errMsg) );
 	
 	OKfree(binding);
 	return 0;
@@ -7150,19 +7162,29 @@ Error:
 	OKfree(errMsg);
 }
 
-void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
+static void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 {
 
 	switch (scanEngine->baseClass.scanMode) {
 							
 		case ScanEngineMode_FrameScan:
 							
-			// activate detection and image output VChans
+			// modify scan engine detection and output channels
 			for (uInt32 i = 0; i < scanEngine->baseClass.nScanChans; i++) {
+				
+				// activate detection channels
 				SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan, TRUE);
-				SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->imgVChan, TRUE);
+				
+				// activate scan engine channel output VChan if the corresponding detection channel is open
+				if (IsVChanOpen((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan))
+					SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->outputVChan, TRUE);
+				else
+					SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->outputVChan, FALSE);
+				
+				// change scan engine channel output VChan data type to DL_Image
+				SetSourceVChanDataType(scanEngine->baseClass.scanChans[i]->outputVChan, DL_Image);
 			}
-			
+				
 			// activate composite image VChan
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanCompositeImage, TRUE);
 			
@@ -7185,10 +7207,23 @@ void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 							
 		case ScanEngineMode_PointScan:
 			
-			// inactivate detection and image output channels
+			// modify scan engine detection and output channels
+			
 			for (uInt32 i = 0; i < scanEngine->baseClass.nScanChans; i++) {
-				SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan, FALSE);
-				SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->imgVChan, FALSE);
+				
+				// activate/inactivate detection channels if recording is desired
+				if (scanEngine->pointJumpSettings->record)
+					SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan, TRUE);
+				else
+					SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan, FALSE);
+					
+				// change scan engine channel output VChan data type to match the detection channel data type and activate if the corresponding detection channel is open
+				if (IsVChanOpen((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan)) {
+					SetSourceVChanDataType(scanEngine->baseClass.scanChans[i]->outputVChan, GetSourceVChanDataType(GetSourceVChan(scanEngine->baseClass.scanChans[i]->detVChan)));
+					SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->outputVChan, TRUE);
+				} else
+					SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->outputVChan, FALSE);
+					
 			}
 			
 			// inactivate composite image VChan
@@ -7214,6 +7249,17 @@ void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			
 			break;
 	}
+}
+
+static uInt32 GetNumOpenDetectionVChans	(RectRaster_type* scanEngine)
+{
+	uInt32	nOpenChans = 0;
+	
+	for (uInt32 i = 0; i < scanEngine->baseClass.nScanChans; i++)
+		if (IsVChanOpen((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan))
+			nOpenChans++;
+	
+	return nOpenChans;
 }
 
 //-----------------------------------------
@@ -8283,7 +8329,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 	int									error 					= 0;
 	char*								errMsg					= NULL;
 	int*								nImageChannelsTSVPtr	= NULL;
-	RectRasterScanImgBuilderBind_type*	builderBinding 			= NULL;
+	PixelAssemblyBinding_type*	builderBinding 			= NULL;
 	size_t								currentSequenceRepeat	= 0;
 	Iterator_type*						currentIteration		= GetTaskControlCurrentIter(taskControl);
 
@@ -8304,7 +8350,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 			
 			// launch image assembly threads for each channel
 			for (size_t i = 0; i < engine->nImgBuffers; i++) {
-				nullChk( builderBinding = init_RectRasterScanImgBuilderBind_type(engine, i) );
+				nullChk( builderBinding = init_PixelAssemblyBinding_type(engine, i) );
 				CmtScheduleThreadPoolFunctionAdv(DLGetCommonThreadPoolHndl(), NonResRectRasterScan_LaunchImageBuilder, builderBinding, DEFAULT_THREAD_PRIORITY, NULL, 
 									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), builderBinding, RUN_IN_SCHEDULED_THREAD, NULL);	
 			}
@@ -8340,9 +8386,13 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 			// send galvo and ROI timing waveforms
 			errChk ( NonResRectRasterScan_GeneratePointJumpSignals (engine, &errMsg) );  
 			
-			// TEMPORARY
-			// for the time being just finish after sending galvo waveforms
-			TaskControlIterationDone(taskControl, 0, 0, FALSE);
+			// if there are no open detection VChans
+			if (!GetNumOpenDetectionVChans(engine)) {
+				TaskControlIterationDone(taskControl, 0, 0, FALSE);
+				break;
+			}
+			
+			
 			
 			break;
 	}

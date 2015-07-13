@@ -41,8 +41,8 @@ struct Iterator {
 struct TC_DS_Data{
 	char*					groupname;  			// Create an HDF5 group for the dataset.
 	BOOL					stackeddata;			// True if data is stacked, False otherwise.
-	unsigned int 			datasetrank;			// Dataset rank. 
-	unsigned int 			datarank;				// Data element rank (1 for waveform, 2 for Images).
+	unsigned int 			datasetrank;			// Dataset rank, i.e. # dimensions 
+	unsigned int 			datarank;				// Data element rank (1 for waveform, 2 for Images), i.e. # dimensions
 	unsigned int*			iter_indices;   		// Dataset index array.
 };
 

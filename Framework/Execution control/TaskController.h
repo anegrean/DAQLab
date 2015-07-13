@@ -327,6 +327,9 @@ void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 	// Adds a VChan to the Task Controller that is used to receive incoming data and binds it to a given callback when data is received.
 int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr); 
 
+	// Associates a SourceVChan with the Task Controller
+int						AddSourceVChan						(TaskControl_type* taskControl, SourceVChan_type* sourceVChan);
+
 	// Removes a Sink VChan assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan.
 int						RemoveSinkVChan 					(TaskControl_type* taskControl, SinkVChan_type* sinkVChan);

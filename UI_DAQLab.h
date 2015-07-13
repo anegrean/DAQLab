@@ -13,30 +13,39 @@
 
      /* Panels and Controls: */
 
-#define  LogPan                           1
+#define  DSMainPan                        1
+#define  DSMainPan_Channels               2       /* control type: listBox, callback function: (none) */
+#define  DSMainPan_DeleteChannel          3       /* control type: command, callback function: (none) */
+#define  DSMainPan_AddChannel             4       /* control type: command, callback function: (none) */
+#define  DSMainPan_Close                  5       /* control type: command, callback function: (none) */
+#define  DSMainPan_FilePath               6       /* control type: string, callback function: (none) */
+#define  DSMainPan_ChangeFilePath         7       /* control type: command, callback function: (none) */
+#define  DSMainPan_OverwriteFile          8       /* control type: radioButton, callback function: (none) */
+
+#define  LogPan                           2
 #define  LogPan_LogBox                    2       /* control type: textBox, callback function: (none) */
 
-#define  MainPan                          2       /* callback function: CB_DAQLab_MainPan */
+#define  MainPan                          3       /* callback function: CB_DAQLab_MainPan */
 
-#define  ModulesPan                       3
+#define  ModulesPan                       4
 #define  ModulesPan_Plate                 2       /* control type: deco, callback function: (none) */
 #define  ModulesPan_Loaded                3       /* control type: listBox, callback function: DAQLab_ManageDAQLabModules_CB */
 #define  ModulesPan_Available             4       /* control type: listBox, callback function: DAQLab_ManageDAQLabModules_CB */
 #define  ModulesPan_Close                 5       /* control type: command, callback function: CloseDAQLabModulesPan_CB */
 
-#define  TaskLogPan                       4
+#define  TaskLogPan                       5
 #define  TaskLogPan_LogBox                2       /* control type: textBox, callback function: (none) */
 
-#define  TaskPan                          5
+#define  TaskPan                          6
 #define  TaskPan_Plate                    2       /* control type: deco, callback function: (none) */
 #define  TaskPan_TaskTree                 3       /* control type: tree, callback function: TaskTree_CB */
 #define  TaskPan_Close                    4       /* control type: command, callback function: TaskTree_CB */
 #define  TaskPan_ExecMode                 5       /* control type: ring, callback function: TaskTree_CB */
 #define  TaskPan_Switchboards             6       /* control type: tab, callback function: (none) */
 
-#define  TasksPan                         6
+#define  TasksPan                         7
 
-#define  TCDelPan                         7       /* callback function: DAQLab_TCDelPan_CB */
+#define  TCDelPan                         8       /* callback function: DAQLab_TCDelPan_CB */
 #define  TCDelPan_Plate                   2       /* control type: deco, callback function: (none) */
 #define  TCDelPan_TaskControllers         3       /* control type: listBox, callback function: (none) */
 #define  TCDelPan_DelBTTN                 4       /* control type: command, callback function: DAQLab_DelTaskControllersBTTN_CB */

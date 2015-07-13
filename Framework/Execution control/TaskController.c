@@ -518,6 +518,11 @@ int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, Data
 	return 0;
 }
 
+CONTINUE HERE, associate source VChan to task controllers and then use the task controller hierarchy to select valid source VChans that can be used to save data or to select a subset
+of source VChans in the Switchboard that belong only to the same task tree.
+
+int	AddSourceVChan (TaskControl_type* taskControl, SourceVChan_type* sourceVChan)
+
 int	RemoveSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
 {
 #define		RemoveSinkVChan_Err_SinkNotFound				-1

@@ -26,15 +26,14 @@
 // Types
 
 struct Iterator {
+	Iterator_type*			parent;					// Pointer to parent iterator, otherwise  NULL if root iterator.
 	char*					name;					// Iterator name.  
 	IterTypes				iterType;				// Iteratable objects type.
 	size_t					currentIterIdx; 		// 0-based iteration index used to iterate over iterObjects
 	size_t					totalIter;				// Total number of iterations
 	DiscardDataFptr_type 	discardDataFptr;		// For data type iterators only, function callback to discard data from an iterator.
 	ListType				iterObjects;			// List of iteratable data objects such as Waveform_type* or Iterator_type* elements specified by iterType.
-	Iterator_type*			parent;					// Pointer to parent iterator, otherwise  NULL if root iterator.
-	BOOL					stackdata;				// Combine generated data into a one-dimension higher stack of datasets 
-	TC_DS_Data_type*		ds_data;				// pointer to DataStorage data
+	BOOL					stackdata;				// Combine generated data into a one-dimension higher stack of datasets  // TEMPORARY, must be removed!
 };
 
 // Task controller data packet indexing and used by the the datastorage module
@@ -77,7 +76,6 @@ Iterator_type* init_Iterator_type (char name[])
 	iterator->discardDataFptr		= NULL;
 	iterator->parent				= NULL;
 	iterator->stackdata				= FALSE;
-	iterator->ds_data				= init_TC_DS_Data_type();  
 	
 	if ( !(iterator->iterObjects   	= ListCreate(sizeof(void*))) )	goto Error;
 	
@@ -110,8 +108,7 @@ void discard_Iterator_type (Iterator_type** iteratorPtr)
 	}   
 		
 	ListDispose(iterator->iterObjects); 
-	discard_TC_DS_Data_type(&iterator->ds_data);
-
+	
 	OKfree(*iteratorPtr);
 }   
 
@@ -318,13 +315,7 @@ ListType IterateOverIterators (Iterator_type* iterator)
 	
 }
 
-//get DataStorage data from the iterator
-void SetIteratorDSdata (Iterator_type* iterator,TC_DS_Data_type* dsdata)
-{
-	 iterator->ds_data=dsdata;
-}
-
-// set DS data 
+// get DataStorage data from the iterator
 TC_DS_Data_type* GetIteratorDSdata (Iterator_type* iterator, unsigned int datarank)
 {
 	int					error						= 0;

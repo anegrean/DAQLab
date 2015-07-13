@@ -104,7 +104,7 @@ typedef enum {
 } TCExecutionModes;
 
 
-typedef struct TaskControl 			TaskControl_type;
+typedef struct TaskControl 		TaskControl_type;
 
 //--------------------------------------------------------------------------------
 // Task Controller Function Pointer Types
@@ -261,10 +261,6 @@ BOOL					GetTaskControlUITCFlag				(TaskControl_type* taskControl);
 
 	// Returns TRUE if iteration function must be aborted
 BOOL					GetTaskControlAbortFlag				(TaskControl_type* taskControl);
-	//combine iterated data into a one-dimension higher stacked dataset
-void 					SetTaskControlStackData 			(TaskControl_type* taskControl, BOOL stack);
-
-BOOL 					GetTaskControlStackData				(TaskControl_type* taskControl);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions

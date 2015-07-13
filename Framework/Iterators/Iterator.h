@@ -139,12 +139,10 @@ ListType				IterateOverIterators		(Iterator_type* iterator);
 //---------------------------------------------------------------------------------------------------------------------------
 
 
-	//get DataStorage data from the iterator
-void					SetIteratorDSdata			(Iterator_type* iterator,TC_DS_Data_type* ds_data);
-	//set DS data 
-TC_DS_Data_type*		GetIteratorDSdata			(Iterator_type* iterator,unsigned int datarank);
+	// get DataStorage data from the iterator
+TC_DS_Data_type*		GetIteratorDSdata			(Iterator_type* iterator, unsigned int datarank);
 
-void					SetDSdataGroupname			(TC_DS_Data_type* dsdata,char* groupname);
+void					SetDSdataGroupname			(TC_DS_Data_type* dsdata, char* groupname);
 
 char*					GetDSdataGroupname			(TC_DS_Data_type* dsdata); 
 

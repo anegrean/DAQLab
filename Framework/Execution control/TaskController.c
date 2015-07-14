@@ -72,6 +72,7 @@ struct TaskControl {
 	CmtTSQHandle					eventQ;								// Event queue to which the state machine reacts.
 	CmtThreadLockHandle				eventQThreadLock;					// Thread lock used to coordinate multiple writing threads sending events to the queue.
 	ListType						dataQs;								// Incoming data queues, list of VChanCallbackData_type*.
+	ListType						sourceVChans;						// Source VChans associated with the task controller of SourceVChan_type*.
 	unsigned int					eventQThreadID;						// Thread ID in which queue events are processed.
 	CmtThreadFunctionID				threadFunctionID;					// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
 	CmtThreadPoolHandle				threadPoolHndl;						// Thread pool handle used to launch task controller threads.
@@ -198,12 +199,14 @@ TaskControl_type* init_TaskControl_type(const char						taskControllerName[],
 	tc -> eventQ							= 0;
 	tc -> eventQThreadLock					= 0;
 	tc -> dataQs							= 0;
+	tc -> sourceVChans						= 0;
 	tc -> childTCs							= 0;
 	
 	if (CmtNewTSQ(TC_NEventQueueItems, sizeof(EventPacket_type), 0, &tc->eventQ) < 0) goto Error;
 	if (CmtNewLock(NULL, 0, &tc->eventQThreadLock) < 0) goto Error;
 	
 	nullChk( tc -> dataQs					= ListCreate(sizeof(VChanCallbackData_type*)) );
+	nullChk( tc -> sourceVChans				= ListCreate(sizeof(SourceVChan_type*)) );
 	
 	tc -> eventQThreadID					= CmtGetCurrentThreadID ();
 	tc -> threadFunctionID					= 0;
@@ -257,6 +260,7 @@ TaskControl_type* init_TaskControl_type(const char						taskControllerName[],
 	if (tc->eventQ) 				CmtDiscardTSQ(tc->eventQ);
 	if (tc->eventQThreadLock)		CmtDiscardLock(tc->eventQThreadLock);
 	if (tc->dataQs)	 				ListDispose(tc->dataQs);
+	if (tc->sourceVChans)			ListDispose(tc->sourceVChans);
 	if (tc->childTCs)    			ListDispose(tc->childTCs);
 	
 	OKfree(tc);
@@ -265,58 +269,65 @@ TaskControl_type* init_TaskControl_type(const char						taskControllerName[],
 }
 
 /// HIFN Discards recursively a Task controller.
-void discard_TaskControl_type(TaskControl_type** taskController)
+void discard_TaskControl_type(TaskControl_type** taskControllerPtr)
 {
-	if (!*taskController) return;
+	TaskControl_type*	taskController = *taskControllerPtr;	
+	
+	if (!taskController) return;
 	
 	//----------------------------------------------------------------------------
 	// Disassemble task tree branch recusively starting with the given parent node
 	//----------------------------------------------------------------------------
-	DisassembleTaskTreeBranch(*taskController);
+	DisassembleTaskTreeBranch(taskController);
 	
 	//----------------------------------------------------------------------------
 	// Discard this Task Controller
 	//----------------------------------------------------------------------------
 	
 	// name
-	OKfree((*taskController)->taskName);
+	OKfree(taskController->taskName);
 	
 	// event queue
-	CmtDiscardTSQ((*taskController)->eventQ);
+	CmtDiscardTSQ(taskController->eventQ);
+	
+	// source VChan list
+	ListDispose(taskController->sourceVChans);
 	
 	// release thread
-	if ((*taskController)->threadFunctionID) CmtReleaseThreadPoolFunctionID((*taskController)->threadPoolHndl, (*taskController)->threadFunctionID);   
+	if (taskController->threadFunctionID) CmtReleaseThreadPoolFunctionID(taskController->threadPoolHndl, taskController->threadFunctionID);   
 	
 	// event queue thread lock
-	CmtDiscardLock((*taskController)->eventQThreadLock); 
+	CmtDiscardLock(taskController->eventQThreadLock); 
 	
 	// incoming data queues (does not free the queue itself!)
-	RemoveAllSinkVChans(*taskController);
-	ListDispose((*taskController)->dataQs);
+	RemoveAllSinkVChans(taskController);
+	ListDispose(taskController->dataQs);
 	
 	// error message storage 
-	OKfree((*taskController)->errorInfo);
+	OKfree(taskController->errorInfo);
 	
 	//iteration info
-	discard_Iterator_type (&(*taskController)->currentIter); 
+	discard_Iterator_type (&taskController->currentIter); 
 
 	// child Task Controllers list
-	ListDispose((*taskController)->childTCs);
+	ListDispose(taskController->childTCs);
 	
 	// free Task Controller memory
-	OKfree(*taskController);
+	OKfree(*taskControllerPtr);
 	
 }
 
-void discard_TaskTreeBranch (TaskControl_type** taskController)
+void discard_TaskTreeBranch (TaskControl_type** taskControllerPtr)
 {
-	ChildTCInfo_type* childTCPtr;
-	while(ListNumItems((*taskController)->childTCs)){
-		childTCPtr = ListGetPtrToItem((*taskController)->childTCs, 1);
+	ChildTCInfo_type* 	childTCPtr		= NULL;
+	TaskControl_type*   taskController  = *taskControllerPtr;
+	
+	while(ListNumItems(taskController->childTCs)){
+		childTCPtr = ListGetPtrToItem(taskController->childTCs, 1);
 		discard_TaskTreeBranch(&childTCPtr->childTC);
 	} 
 	
-	discard_TaskControl_type(taskController);
+	discard_TaskControl_type(taskControllerPtr);
 }
 
 void EnableTaskControlLogging (TaskControl_type* taskControl, BOOL enableLogging)
@@ -489,11 +500,13 @@ BOOL GetTaskControlAbortFlag (TaskControl_type* taskControl)
 int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr)
 {
 #define 	AddSinkVChan_Err_OutOfMemory				-1
-#define		AddSinkVChan_Err_SinkAlreadyAssigned		-2
-#define		AddSinkVChan_Err_TaskControllerIsActive		-3				// Task Controller must not be executing when a Sink VChan is added to it
+#define		AddSinkVChan_Err_TaskControllerIsActive		-2
+#define		AddSinkVChan_Err_SinkAlreadyAssigned		-3
+	
+				// Task Controller must not be executing when a Sink VChan is added to it
 	// check if Sink VChan is already assigned to the Task Controller
-	VChanCallbackData_type**	VChanTSQDataPtr;
-	size_t 						nItems = ListNumItems(taskControl->dataQs);
+	VChanCallbackData_type**	VChanTSQDataPtr		= NULL;
+	size_t 						nItems 				= ListNumItems(taskControl->dataQs);
 	for (size_t i = 1; i <= nItems; i++) {
 		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
 		if ((*VChanTSQDataPtr)->sinkVChan == sinkVChan) return AddSinkVChan_Err_SinkAlreadyAssigned;
@@ -518,18 +531,75 @@ int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, Data
 	return 0;
 }
 
-CONTINUE HERE, associate source VChan to task controllers and then use the task controller hierarchy to select valid source VChans that can be used to save data or to select a subset
-of source VChans in the Switchboard that belong only to the same task tree.
-
 int	AddSourceVChan (TaskControl_type* taskControl, SourceVChan_type* sourceVChan)
+{
+#define 	AddSourceVChan_Err_OutOfMemory				-1
+#define		AddSourceVChan_Err_TaskControllerIsActive	-2
+#define		AddSourceVChan_Err_SourceAlreadyAssigned	-3
+
+	// check if Source VChan is already assigned to the Task Controller
+	SourceVChan_type**	VChanPtr		= NULL;
+	size_t 				nItems			= ListNumItems(taskControl->sourceVChans);
+	for (size_t i = 1; i <= nItems; i++) {
+		VChanPtr = ListGetPtrToItem(taskControl->sourceVChans, i);
+		if (*VChanPtr == sourceVChan) return AddSourceVChan_Err_SourceAlreadyAssigned;
+	}
+	
+	// check if Task Controller is currently executing
+	if (!(taskControl->state == TC_State_Unconfigured || taskControl->state == TC_State_Configured || 
+		  taskControl->state == TC_State_Initial || taskControl->state == TC_State_Done || taskControl->state == TC_State_Error))
+		return AddSourceVChan_Err_TaskControllerIsActive;
+	
+	// insert source VChan
+	if (!ListInsertItem(taskControl->sourceVChans, &sourceVChan, END_OF_LIST)) 
+		return AddSinkVChan_Err_OutOfMemory;
+	
+	return 0;
+}
+
+int RemoveSourceVChan (TaskControl_type* taskControl, SourceVChan_type* sourceVChan)
+{
+#define		RemoveSourceVChan_Err_SinkNotFound				-1
+#define		RemoveSourceVChan_Err_TaskControllerIsActive	-2
+	
+	// check if Task Controller is active
+	if (!(taskControl->state == TC_State_Unconfigured || taskControl->state == TC_State_Configured || 
+		  taskControl->state == TC_State_Initial || taskControl->state == TC_State_Done || taskControl->state == TC_State_Error))
+		return RemoveSourceVChan_Err_TaskControllerIsActive;
+	
+	SourceVChan_type**	VChanPtr		= NULL;
+	size_t 				nItems			= ListNumItems(taskControl->sourceVChans);
+	for (size_t i = 1; i <= nItems; i++) {
+		VChanPtr = ListGetPtrToItem(taskControl->sourceVChans, i);
+		if (*VChanPtr == sourceVChan) {
+			ListRemoveItem(taskControl->sourceVChans, 0, i);
+			return 0;
+		}
+	}
+	
+	return RemoveSourceVChan_Err_SinkNotFound;
+}
+
+int RemoveAllSourceVChan (TaskControl_type* taskControl)
+{
+#define		RemoveAllSourceVChan_Err_TaskControllerIsActive	-1
+	
+	// check if Task Controller is active
+	if (!(taskControl->state == TC_State_Unconfigured || taskControl->state == TC_State_Configured || 
+		  taskControl->state == TC_State_Initial || taskControl->state == TC_State_Done || taskControl->state == TC_State_Error))
+		return RemoveAllSourceVChan_Err_TaskControllerIsActive;
+	
+	ListClear(taskControl->sourceVChans);
+	return 0;
+}
 
 int	RemoveSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
 {
 #define		RemoveSinkVChan_Err_SinkNotFound				-1
 #define		RemoveSinkVChan_Err_TaskControllerIsActive		-2
 	
-	VChanCallbackData_type**	VChanTSQDataPtr;
-	size_t						nDataQs					= ListNumItems(taskControl->dataQs);
+	VChanCallbackData_type**	VChanTSQDataPtr		= NULL;
+	size_t						nDataQs				= ListNumItems(taskControl->dataQs);
 	
 	
 	// check if Task Controller is active
@@ -553,6 +623,7 @@ int	RemoveSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
 	return RemoveSinkVChan_Err_SinkNotFound;			// Sink VChan not found
 }
 
+
 int RemoveAllSinkVChans (TaskControl_type* taskControl)
 {
 #define		RemoveAllSinkVChans_Err_TaskControllerIsActive		-1
@@ -562,14 +633,12 @@ int RemoveAllSinkVChans (TaskControl_type* taskControl)
 		  taskControl->state == TC_State_Initial || taskControl->state == TC_State_Done || taskControl->state == TC_State_Error))
 		return RemoveAllSinkVChans_Err_TaskControllerIsActive;
 	
-	VChanCallbackData_type** 	VChanTSQDataPtr;
-	size_t 						nItems = ListNumItems(taskControl->dataQs);
-	
+	VChanCallbackData_type** 	VChanTSQDataPtr = NULL;
+	size_t 						nItems 			= ListNumItems(taskControl->dataQs);
 	for (size_t i = 1; i <= nItems; i++) {
 		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
 		// remove queue Task Controller callback
 		CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtr)->sinkVChan), (*VChanTSQDataPtr)->itemsInQueueCBID);
-		
 		// free memory for queue item
 		discard_VChanCallbackData_type(VChanTSQDataPtr);
 	}

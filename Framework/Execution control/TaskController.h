@@ -188,10 +188,10 @@ TaskControl_type*  	 	init_TaskControl_type				(const char						taskControllerNa
 
 	// Disconnects a given Task Controller from its parent, disconnects all its child tasks and HW triggering and then discards the Task Controller.
 	// All child Tasks are disconnected from each other including HW triggering dependecies and VChan connections.
-void 					discard_TaskControl_type			(TaskControl_type** taskController);
+void 					discard_TaskControl_type			(TaskControl_type** taskControllerPtr);
 
 	// Disconnects HW triggering, VChan connections and discards Task Controllers recursively starting with the given taskController
-void					discard_TaskTreeBranch				(TaskControl_type** taskController);
+void					discard_TaskTreeBranch				(TaskControl_type** taskControllerPtr);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller Set/Get functions
@@ -326,10 +326,6 @@ void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 
 	// Adds a VChan to the Task Controller that is used to receive incoming data and binds it to a given callback when data is received.
 int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr); 
-
-	// Associates a SourceVChan with the Task Controller
-int						AddSourceVChan						(TaskControl_type* taskControl, SourceVChan_type* sourceVChan);
-
 	// Removes a Sink VChan assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan.
 int						RemoveSinkVChan 					(TaskControl_type* taskControl, SinkVChan_type* sinkVChan);
@@ -337,6 +333,15 @@ int						RemoveSinkVChan 					(TaskControl_type* taskControl, SinkVChan_type* si
 	// Removes all Sink VChans assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan. 
 int 					RemoveAllSinkVChans 				(TaskControl_type* taskControl);
+
+	// Associates a SourceVChan with the Task Controller
+int						AddSourceVChan						(TaskControl_type* taskControl, SourceVChan_type* sourceVChan);
+
+	// Removes a Source VChan assigned to the Task Controller. Note that this function does not destroy the VChan object.
+int						RemoveSourceVChan					(TaskControl_type* taskControl, SourceVChan_type* sourceVChan);
+
+	// Removes all Source VChans assigned to the Task Controller. Note that this function does not destroy the VChan objects.
+int						RemoveAllSourceVChan				(TaskControl_type* taskControl);
 
 	// Disconnects Source VChans from all Sink VChans assigned to the Task Controller but does not remove the Sink VChans from the Task Controller.
 void					DisconnectAllSinkVChans				(TaskControl_type* taskControl);

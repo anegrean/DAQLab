@@ -33,7 +33,9 @@ struct Iterator {
 	size_t					totalIter;				// Total number of iterations
 	DiscardDataFptr_type 	discardDataFptr;		// For data type iterators only, function callback to discard data from an iterator.
 	ListType				iterObjects;			// List of iteratable data objects such as Waveform_type* or Iterator_type* elements specified by iterType.
-	BOOL					stackdata;				// Combine generated data into a one-dimension higher stack of datasets  // TEMPORARY, must be removed!
+	BOOL					stackdata;				// Combine generated data into a one-dimension higher stack of datasets  
+													// TEMPORARY, must be removed! It is the resposibility of the root iterator to stack the data or not.
+													
 };
 
 // Task controller data packet indexing and used by the the datastorage module

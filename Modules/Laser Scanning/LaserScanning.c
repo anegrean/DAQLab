@@ -462,14 +462,17 @@ typedef struct {
 	DLDataTypes					pixelDataType;
 	ScanChan_type*				scanChan;					// Detection channel to which this image assembly buffer belongs.
 	Image_type*					image;						// A completely assembled image, otherwise this is NULL.
-} RectRasterImgBuffer_type;
+} RectRasterImgBuff_type;
 
-/*
+
 typedef struct {
-	Waveform_type*				pointRecording;
-	ScanChan_type*				scanChan;
-}
-*/
+	ListType					pixelPackets;				// Incoming data packet list of DataPacket_type* with Waveform_type* pixels sampled at the galvo sampling rate.
+	uInt64						nRawPixels;					// Number of total pixels currently present in the pixelStream data packet list.
+	size_t						nSkipPixels;				// Number of pixels left to skip from the pixel stream.   
+	Waveform_type*				pointScan;					// Processed point scan with (optionally) averaging applied to it.
+	ScanChan_type*				scanChan;					// Detection channel to which this point scan buffer belongs.
+} RectRasterPointBuff_type; 
+
 
 typedef struct {
 	double						pixSize;					// Image pixel size in [um].
@@ -564,12 +567,15 @@ typedef struct {
 	
 	PointJumpSet_type*			pointJumpSettings;
 	
-	//----------------
-	// Image buffers
-	//----------------
+	//-----------------------------------
+	// Image and point scan buffers
+	//-----------------------------------
 	
-	RectRasterImgBuffer_type**	imgBuffers;					// Array of image buffers of RectRasterImgBuffer_type*. Number of buffers and the buffer index is taken from the list of available detection channels (baseClass.scanChans)
+	RectRasterImgBuff_type**	imgBuffers;					// Array of image buffers. Number of buffers and the buffer index is taken from the list of available (open) detection channels (baseClass.scanChans)
 	size_t						nImgBuffers;				// Number of image buffers available.
+	
+	RectRasterPointBuff_type**  pointBuffers;				// Array of point scan buffers. Number of buffers and the buffer index is taken from the list of available (open) detection channels (baseClass.scanChans)
+	size_t						nPointBuffers;				// Number of point scan buffers available. 
 	
 
 } RectRaster_type;
@@ -765,6 +771,7 @@ static int								OpenScanEngineShutter								(ScanEngine_type* engine, BOOL op
 static int 								ReturnRectRasterToParkedPosition 					(RectRaster_type* engine, char** errorInfo); 
 
 static PixelAssemblyBinding_type*		init_PixelAssemblyBinding_type						(RectRaster_type* rectRaster, size_t channelIdx);
+static void								discard_PixelAssemblyBinding_type					(PixelAssemblyBinding_type** pixelBindingPtr);
 	
 	//--------------------------------------
 	// Non-Resonant Rectangle Raster Scan
@@ -806,13 +813,20 @@ static void 							SetRectRasterScanEnginePointScanJumpModeUI 			(int panel, Poi
 
 static int 								InsertRectRasterScanEngineToUI 						(LaserScanning_type* ls, RectRaster_type* rectRaster);
 
-	// Image assembly buffer
-static RectRasterImgBuffer_type* 		init_RectRasterImgBuffer_type 						(ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows);
+	// Image scan pixel buffer
+static RectRasterImgBuff_type* 			init_RectRasterImgBuff_type 						(ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows);
+static void								discard_RectRasterImgBuff_type						(RectRasterImgBuff_type** imgBufferPtr); 
+	// Resets the image scan buffe. Note: this function does not resize the buffer! For this, discard the buffer and re-initialize it.
+static void 							ResetRectRasterImgBuffer 							(RectRasterImgBuff_type* imgBuffer, BOOL flipRows);
 
-static void								discard_RectRasterImgBuffer_type					(RectRasterImgBuffer_type** imgBufferPtr); 
+	// Point scan pixel buffer
+static RectRasterPointBuff_type*		init_RectRasterPointBuff_type						(ScanChan_type* scanChan);
+static void								discard_RectRasterPointBuff_type					(RectRasterPointBuff_type** pointBufferPtr);
+	// Resets the point scan buffer.
+static void 							ResetRectRasterPointBuffer 							(RectRasterPointBuff_type* pointBuffer);
 
-	// Resets the buffer to receive another series of images. Note: this function does not resize the buffer! For this, discard the buffer and re-initialize it.
-static void 							ResetRectRasterImgBuffer 							(RectRasterImgBuffer_type* imgBuffer, BOOL flipRows); 
+	// starts pixel assembly for a scan channel
+static int CVICALLBACK 					NonResRectRasterScan_LaunchPixelBuilder 			(void* functionData);
 
 //static int CVICALLBACK 					NonResRectRasterScan_MainPan_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -837,8 +851,7 @@ static BOOL 							NonResRectRasterScan_ReadyToScan					(RectRaster_type* scanEn
 static int								NonResRectRasterScan_GenerateScanSignals			(RectRaster_type* scanEngine, char** errorInfo);
 	// builds images from a continuous pixel stream
 static int 								NonResRectRasterScan_BuildImage 					(RectRaster_type* rectRaster, size_t bufferIdx, char** errorInfo);
-static void								discard_PixelAssemblyBinding_type			(PixelAssemblyBinding_type** imgBuilderBindingPtr);
-static int CVICALLBACK 					NonResRectRasterScan_LaunchImageBuilder 			(void* functionData);
+	// assembles a composite frame scan image
 static int								NonResRectRasterScan_AssembleCompositeImage			(RectRaster_type* rectRaster, char** errorInfo);
 	// rounds a given time in [ms] to an integer of galvo sampling intervals
 static double 							NonResRectRasterScan_RoundToGalvoSampling 			(RectRaster_type* scanEngine, double time);
@@ -867,6 +880,8 @@ static void 							NonResRectRasterScan_PointROIVoltage 				(RectRaster_type* re
 static double							NonResRectRasterScan_JumpTime						(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude);
 	// returns the number of active points that will be used for point jumping
 static size_t							NonResRectRasterScan_GetNumActivePoints				(RectRaster_type* rectRaster);
+	// assembles a point scan from a pixel stream
+static int 								NonResRectRasterScan_BuildPointScan					(RectRaster_type* rectRaster, size_t bufferIdx, char** errorInfo);
 
 
 
@@ -4587,11 +4602,13 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 	
 	engine->pointJumpSettings			= NULL;
 	
-	//--------------------
-	// image buffers
-	//--------------------
+	//-----------------------------
+	// image and point scan buffers
+	//-----------------------------
 	engine->imgBuffers					= NULL;
 	engine->nImgBuffers					= 0;
+	engine->pointBuffers				= NULL;
+	engine->nPointBuffers				= 0;
 
 	return engine;
 	
@@ -4614,13 +4631,19 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	//--------------------------------------------------------------------
 	
 	//----------------------------------
-	// Image assembly buffers
+	// Image and point scan buffers
 
 	for (size_t i = 0; i < rectRaster->nImgBuffers; i++)
-		discard_RectRasterImgBuffer_type(&rectRaster->imgBuffers[i]);
+		discard_RectRasterImgBuff_type(&rectRaster->imgBuffers[i]);
 	
 	OKfree(rectRaster->imgBuffers);
 	rectRaster->nImgBuffers = 0;
+	
+	for (size_t i = 0; i < rectRaster->nPointBuffers; i++)
+		discard_RectRasterPointBuff_type(&rectRaster->pointBuffers[i]);
+	
+	OKfree(rectRaster->pointBuffers);
+	rectRaster->nPointBuffers = 0;
 	
 	//----------------------------------
 	// Point jump settings
@@ -4633,10 +4656,10 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	discard_ScanEngine_type(engine);
 }
 
-static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows)
+static RectRasterImgBuff_type* init_RectRasterImgBuff_type (ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows)
 {
-#define init_RectRasterImgBuffer_type_Err_PixelDataTypeInvalid	-1
-	RectRasterImgBuffer_type*	buffer 			= malloc (sizeof(RectRasterImgBuffer_type));
+#define init_RectRasterImgBuff_type_Err_PixelDataTypeInvalid	-1
+	RectRasterImgBuff_type*	buffer 			= malloc (sizeof(RectRasterImgBuff_type));
 	if (!buffer) return NULL;
 	
 	// init
@@ -4657,7 +4680,7 @@ static RectRasterImgBuffer_type* init_RectRasterImgBuffer_type (ScanChan_type* s
 	return buffer;
 }
 
-static void ResetRectRasterImgBuffer (RectRasterImgBuffer_type* imgBuffer, BOOL flipRows)
+static void ResetRectRasterImgBuffer (RectRasterImgBuff_type* imgBuffer, BOOL flipRows)
 {
 	imgBuffer->nImagePixels 		= 0;
 	imgBuffer->nAssembledRows   	= 0; 
@@ -4671,9 +4694,9 @@ static void ResetRectRasterImgBuffer (RectRasterImgBuffer_type* imgBuffer, BOOL 
 	discard_Image_type(&imgBuffer->image);
 }
 
-static void	discard_RectRasterImgBuffer_type (RectRasterImgBuffer_type** imgBufferPtr)
+static void	discard_RectRasterImgBuff_type (RectRasterImgBuff_type** imgBufferPtr)
 {
-	RectRasterImgBuffer_type*	imgBuffer = *imgBufferPtr;
+	RectRasterImgBuff_type*	imgBuffer = *imgBufferPtr;
 	if (!imgBuffer) return;
 	
 	OKfree(imgBuffer->imagePixels);
@@ -4681,6 +4704,66 @@ static void	discard_RectRasterImgBuffer_type (RectRasterImgBuffer_type** imgBuff
 	discard_Image_type(&imgBuffer->image);
 	
 	OKfree(*imgBufferPtr)
+}
+
+static RectRasterPointBuff_type* init_RectRasterPointBuff_type (ScanChan_type* scanChan)
+{
+	int								error		= 0;
+	RectRasterPointBuff_type*		pointBuffer = malloc(sizeof(RectRasterPointBuff_type));
+	if (!pointBuffer) return NULL;
+	
+	// init
+	pointBuffer->pixelPackets		= 0;
+	pointBuffer->nRawPixels			= 0;
+	pointBuffer->nSkipPixels		= 0;
+	pointBuffer->scanChan			= scanChan;
+	pointBuffer->pointScan			= NULL;
+	
+	// alloc
+	nullChk( pointBuffer->pixelPackets = ListCreate(sizeof(DataPacket_type*)) );
+	
+	return pointBuffer;
+	
+Error:
+	
+	OKfreeList(pointBuffer->pixelPackets);
+	
+	OKfree(pointBuffer);
+	return NULL;
+}
+
+static void discard_RectRasterPointBuff_type (RectRasterPointBuff_type** pointBufferPtr)
+{
+	RectRasterPointBuff_type*	pointBuffer = *pointBufferPtr;
+	
+	// discard raw data packets
+	size_t				nPackets 		= ListNumItems(pointBuffer->pixelPackets);
+	DataPacket_type**	dataPacketPtr   = NULL;
+	for (size_t i = 1; i <= nPackets; i++) {
+		dataPacketPtr = ListGetPtrToItem(pointBuffer->pixelPackets, i);
+		ReleaseDataPacket(dataPacketPtr);
+	}
+	OKfreeList(pointBuffer->pixelPackets);
+	
+	discard_Waveform_type(&pointBuffer->pointScan);
+	
+	OKfree(*pointBufferPtr);
+}
+
+static void ResetRectRasterPointBuffer (RectRasterPointBuff_type* pointBuffer) 
+{
+	// discard raw data packets
+	size_t				nPackets 		= ListNumItems(pointBuffer->pixelPackets);
+	DataPacket_type**	dataPacketPtr   = NULL;
+	for (size_t i = 1; i <= nPackets; i++) {
+		dataPacketPtr = ListGetPtrToItem(pointBuffer->pixelPackets, i);
+		ReleaseDataPacket(dataPacketPtr);
+	}
+	ListClear(pointBuffer->pixelPackets);
+	pointBuffer->nRawPixels = 0;
+	
+	// discard point scan waveform
+	discard_Waveform_type(&pointBuffer->pointScan);
 }
 
 /*
@@ -6151,7 +6234,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 	void*						pixelData				= NULL;		// Array of received pixels from a single pixel waveform data packet.
 	size_t						nPixels					= 0;		// Number of received pixels from a pixel data packet stored in pixelData.
 	size_t             			pixelDataIdx   			= 0;      	// The index of the processed pixel from the received pixel waveform.
-	RectRasterImgBuffer_type*   imgBuffer				= rectRaster->imgBuffers[bufferIdx];
+	RectRasterImgBuff_type*   	imgBuffer				= rectRaster->imgBuffers[bufferIdx];
 	size_t						nDeadTimePixels			= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->scanSettings.pixelDwellTime);
 	
 	DisplayEngine_type* 		displayEngine 			= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
@@ -6562,19 +6645,32 @@ static PixelAssemblyBinding_type* init_PixelAssemblyBinding_type (RectRaster_typ
 	return binding;
 }
 
-static void discard_PixelAssemblyBinding_type (PixelAssemblyBinding_type** imgBuilderBindingPtr)
+static void discard_PixelAssemblyBinding_type (PixelAssemblyBinding_type** pixelBindingPtr)
 {
-	OKfree(*imgBuilderBindingPtr);	
+	OKfree(*pixelBindingPtr);	
 }
 
-static int CVICALLBACK NonResRectRasterScan_LaunchImageBuilder (void* functionData)
+static int CVICALLBACK NonResRectRasterScan_LaunchPixelBuilder (void* functionData)
 {
 	int								error					= 0;
 	char*							errMsg					= NULL;
 	PixelAssemblyBinding_type*		binding 				= functionData;
 	
-	// receive pixel stream and assemble image
-	errChk( NonResRectRasterScan_BuildImage (binding->scanEngine, binding->channelIdx, &errMsg) );
+	switch (binding->scanEngine->baseClass.scanMode) {
+			
+		case ScanEngineMode_FrameScan:
+			
+			// receive pixel stream and assemble image
+			errChk( NonResRectRasterScan_BuildImage (binding->scanEngine, binding->channelIdx, &errMsg) );
+			break;
+			
+		case ScanEngineMode_PointScan:
+			
+			errChk( NonResRectRasterScan_BuildPointScan (binding->scanEngine, binding->channelIdx, &errMsg) );
+			break;
+	}
+
+	
 	
 	OKfree(binding);
 	return 0;
@@ -6678,6 +6774,18 @@ static size_t NonResRectRasterScan_GetNumActivePoints (RectRaster_type* rectRast
 	}
 	
 	return nActivePoints;
+}
+
+static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, size_t bufferIdx, char** errorInfo)
+{
+	int							error					= 0;
+	char*						errMsg					= NULL;	
+	RectRasterPointBuff_type*	pointBuffer				= rectRaster->pointBuffers[bufferIdx];
+	
+	
+	
+	
+	return 0;
 }
 
 static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type* rectRaster)
@@ -8329,7 +8437,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 	int									error 					= 0;
 	char*								errMsg					= NULL;
 	int*								nImageChannelsTSVPtr	= NULL;
-	PixelAssemblyBinding_type*	builderBinding 			= NULL;
+	PixelAssemblyBinding_type*			pixelBinding			= NULL;
 	size_t								currentSequenceRepeat	= 0;
 	Iterator_type*						currentIteration		= GetTaskControlCurrentIter(taskControl);
 
@@ -8350,14 +8458,18 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 			
 			// launch image assembly threads for each channel
 			for (size_t i = 0; i < engine->nImgBuffers; i++) {
-				nullChk( builderBinding = init_PixelAssemblyBinding_type(engine, i) );
-				CmtScheduleThreadPoolFunctionAdv(DLGetCommonThreadPoolHndl(), NonResRectRasterScan_LaunchImageBuilder, builderBinding, DEFAULT_THREAD_PRIORITY, NULL, 
-									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), builderBinding, RUN_IN_SCHEDULED_THREAD, NULL);	
+				nullChk( pixelBinding= init_PixelAssemblyBinding_type(engine, i) );
+				CmtScheduleThreadPoolFunctionAdv(DLGetCommonThreadPoolHndl(), NonResRectRasterScan_LaunchPixelBuilder, pixelBinding, DEFAULT_THREAD_PRIORITY, NULL, 
+									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), pixelBinding, RUN_IN_SCHEDULED_THREAD, NULL);	
 			}
 			
 			break;
 			
 		case ScanEngineMode_PointScan:
+			
+			// reset point scan buffers
+			for (size_t i = 0; i < engine->nPointBuffers; i++)
+				ResetRectRasterPointBuffer(engine->pointBuffers[i]);
 			
 			switch (engine->pointJumpSettings->jumpMethod) {
 							
@@ -8392,7 +8504,12 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 				break;
 			}
 			
-			
+			// launch point scan threads for each channel
+			for (size_t i = 0; i < engine->nPointBuffers; i++) {
+				nullChk( pixelBinding = init_PixelAssemblyBinding_type(engine, i) );
+				CmtScheduleThreadPoolFunctionAdv(DLGetCommonThreadPoolHndl(), NonResRectRasterScan_LaunchPixelBuilder, pixelBinding, DEFAULT_THREAD_PRIORITY, NULL, 
+									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), pixelBinding, RUN_IN_SCHEDULED_THREAD, NULL);	
+			}
 			
 			break;
 	}
@@ -8417,7 +8534,7 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 	// open shutter
 	errChk( OpenScanEngineShutter(&engine->baseClass, 1, errorInfo) );
 	
-	// reset image buffers
+	// reset image scan buffers
 	for (size_t i = 0; i < engine->nImgBuffers; i++)
 		ResetRectRasterImgBuffer(engine->imgBuffers[i], FALSE);
 	
@@ -8570,7 +8687,7 @@ static int TaskTreeStateChange_RectRaster (TaskControl_type* taskControl, TaskTr
 					//--------------------------------------------------------------------------------------------------------
 			
 					for (size_t i = 0; i < engine->nImgBuffers; i++)
-						discard_RectRasterImgBuffer_type(&engine->imgBuffers[i]);
+						discard_RectRasterImgBuff_type(&engine->imgBuffers[i]);
 			
 					OKfree(engine->imgBuffers);
 					engine->nImgBuffers = 0;
@@ -8621,8 +8738,8 @@ static int TaskTreeStateChange_RectRaster (TaskControl_type* taskControl, TaskTr
 		
 						engine->nImgBuffers++;
 						// allocate memory for image assembly
-						engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuffer_type*));
-						engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuffer_type(engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, pixelDataType, FALSE); 
+						engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuff_type*));
+						engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuff_type(engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, pixelDataType, FALSE); 
 					}
 			
 					// Taken out for now, but must be put back if composite image display is implemented
@@ -8634,7 +8751,27 @@ static int TaskTreeStateChange_RectRaster (TaskControl_type* taskControl, TaskTr
 					
 				case ScanEngineMode_PointScan:
 					
+					//--------------------------------------------------------------------------------------------------------
+					// Discard point scan buffers
+					//--------------------------------------------------------------------------------------------------------
+			
+					for (size_t i = 0; i < engine->nPointBuffers; i++)
+						discard_RectRasterPointBuff_type(&engine->pointBuffers[i]);
+			
+					OKfree(engine->pointBuffers);
+					engine->nPointBuffers = 0;
 					
+					//--------------------------------------------------------------------------------------------------------
+					// Initialize point scan buffers
+					//--------------------------------------------------------------------------------------------------------
+					
+					for (size_t i = 0; i < nScanChans; i++) {
+						if (!IsVChanOpen(engine->baseClass.scanChans[i]->detVChan)) continue;	// select only open detection channels
+						
+						engine->nPointBuffers++;
+						engine->pointBuffers = realloc(engine->pointBuffers, engine->nPointBuffers * sizeof(RectRasterPointBuff_type*));
+						engine->pointBuffers[engine->nPointBuffers - 1] = init_RectRasterPointBuff_type(engine->baseClass.scanChans[i]);
+					}
 					
 					break;
 			}

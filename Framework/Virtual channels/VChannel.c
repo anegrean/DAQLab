@@ -854,6 +854,13 @@ int SendDataPacket (SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr,
 	return error;
 }
 
+int	SendNullPacket (SourceVChan_type* srcVChan, char** errorInfo)
+{
+	DataPacket_type*	nullPacket = NULL;
+	
+	return SendDataPacket(srcVChan, &nullPacket, FALSE, errorInfo);
+}
+
 /// HIFN Gets all data packets that are available from a Sink VChan. The function allocates dynamically a data packet array with nPackets elements of DataPacket_type*
 /// HIFN If there are no data packets in the Sink VChan, dataPackets = NULL, nPackets = 0 and the function returns immediately with 0 (success).
 /// HIFN If an error is encountered, the function returns a negative value with error information and sets dataPackets to NULL and nPackets to 0.
@@ -1028,56 +1035,57 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 	}
 	
 	// assign waveform type
-	switch (dataPacketType) {
+	if (waveformType)
+		switch (dataPacketType) {
 			
-		case DL_Waveform_Char:
-			*waveformType = Waveform_Char;
-			break;
+			case DL_Waveform_Char:
+				*waveformType = Waveform_Char;
+				break;
 				
-		case DL_Waveform_UChar:
-			*waveformType = Waveform_UChar;
-			break;
+			case DL_Waveform_UChar:
+				*waveformType = Waveform_UChar;
+				break;
 				
-		case DL_Waveform_Short:
-			*waveformType = Waveform_Short;
-			break;
+			case DL_Waveform_Short:
+				*waveformType = Waveform_Short;
+				break;
 				
-		case DL_Waveform_UShort:
-			*waveformType = Waveform_UShort;
-			break;
+			case DL_Waveform_UShort:
+				*waveformType = Waveform_UShort;
+				break;
 				
-		case DL_Waveform_Int:
-			*waveformType = Waveform_Int;
-			break;
+			case DL_Waveform_Int:
+				*waveformType = Waveform_Int;
+				break;
 				
-		case DL_Waveform_UInt:
-			*waveformType = Waveform_UInt;
-			break;
+			case DL_Waveform_UInt:
+				*waveformType = Waveform_UInt;
+				break;
 				
-		case DL_Waveform_SSize:
-			*waveformType = Waveform_SSize;
-			break;
+			case DL_Waveform_SSize:
+				*waveformType = Waveform_SSize;
+				break;
 				
-		case DL_Waveform_Size:
-			*waveformType = Waveform_Size;
-			break;
+			case DL_Waveform_Size:
+				*waveformType = Waveform_Size;
+				break;
 				
-		case DL_Waveform_Float:
-			*waveformType = Waveform_Float;
-			break;
+			case DL_Waveform_Float:
+				*waveformType = Waveform_Float;
+				break;
 				
-		case DL_Waveform_Double:
-			*waveformType = Waveform_Double;
-			break;
+			case DL_Waveform_Double:
+				*waveformType = Waveform_Double;
+				break;
 			
-		default:
+			default:
 			
 			errMsg = FormatMsg(ReceiveWaveform_Err_WrongDataType, "ReceiveWaveform", " Data packet received is not of a waveform type and cannot \
 							   be retrieved by this function");
 			ReleaseDataPacket(&dataPacket);
 			error = ReceiveWaveform_Err_WrongDataType;
 			goto Error;
-	}
+		}
 		
 	return 0;
 	

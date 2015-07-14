@@ -10908,7 +10908,6 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	int 				error				= 0;  
 	int*				nActiveTasksPtr		= NULL;
 	bool32				taskDoneFlag		= FALSE;
-	DataPacket_type*	nullPacket			= NULL;
 	char*				errMsg				= NULL;
 	
 	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
@@ -10927,7 +10926,7 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 				// include only channels for which HW-timing is required
 				if ((*chanSetPtr)->onDemand) continue;
 				// send NULL packet to signal end of data transmission
-				errChk( SendDataPacket((*chanSetPtr)->srcVChan, &nullPacket, 0, &errMsg) );
+				errChk( SendNullPacket((*chanSetPtr)->srcVChan, &errMsg) );
 			}
 			
 		}
@@ -11722,7 +11721,6 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	// stop AI task if TC iteration was aborted
 	if (GetTaskControlAbortFlag(dev->taskController)) {
 		int*				nActiveTasksPtr		= NULL;
-		DataPacket_type*	nullPacket			= NULL; 
 		
 		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
 		
@@ -11742,7 +11740,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 			// include only channels for which HW-timing is required
 			if ((*chanSetPtr)->onDemand) continue;
 			// send NULL packet to signal end of data transmission
-			errChk( SendDataPacket((*chanSetPtr)->srcVChan, &nullPacket, 0, &errMsg) );
+			errChk( SendNullPacket((*chanSetPtr)->srcVChan, &errMsg) );
 		}
 			
 	}
@@ -11787,7 +11785,6 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	ChanSet_type**		chanSetPtr				= NULL;
 	size_t				nChans					= ListNumItems(dev->AITaskSet->chanSet);
 	int*				nActiveTasksPtr			= NULL;
-	DataPacket_type*	nullPacket				= NULL;
 	size_t				chIdx					= 0;
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
@@ -11804,7 +11801,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 			if ((*chanSetPtr)->onDemand) continue;
 			
 			// send NULL packet to signal end of data transmission
-			errChk( SendDataPacket((*chanSetPtr)->srcVChan, &nullPacket, 0, &errMsg) );
+			errChk( SendNullPacket((*chanSetPtr)->srcVChan, &errMsg) ); 
 		}
 		// stop the Task
 		DAQmxErrChk( DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop) );
@@ -11836,7 +11833,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		// forward data from AI buffer to the VChan 
 		errChk( SendAIBufferData(dev, *chanSetPtr, chIdx, nRead, readBuffer, &errMsg) ); 
 		// send NULL packet to signal end of data transmission
-		errChk( SendDataPacket((*chanSetPtr)->srcVChan, &nullPacket, 0, &errMsg) );
+		errChk( SendNullPacket((*chanSetPtr)->srcVChan, &errMsg) );
 		// next AI channel
 		chIdx++;
 	}

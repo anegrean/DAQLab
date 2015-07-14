@@ -659,7 +659,6 @@ Error:
 ///  HIRET returns error, no error when 0
 int PMTStopAcq(void)
 {
-	DataPacket_type*		nullPacket		= NULL; 
 	int 					error			= 0;
 	unsigned long 			controlreg;
 	int 					i;
@@ -667,12 +666,11 @@ int PMTStopAcq(void)
 	
 	//send null packet(s)
 	for (i = 0; i < MAX_CHANNELS; i++)
-		if (gchannels[i] != NULL)
-			if (gchannels[i]->VChan != NULL)
-				errChk( SendDataPacket(gchannels[i]->VChan, &nullPacket, 0, &errMsg) );
+		if (gchannels[i] && gchannels[i]->VChan)
+			errChk( SendNullPacket(gchannels[i]->VChan, &errMsg) );
 	
 	
-	readdata=0;  //stop reading  
+	readdata = 0;  //stop reading  
 	errChk(StopDAQThread(DLGetCommonThreadPoolHndl()));
 
 	for (i=0;i<MAX_CHANNELS;i++){

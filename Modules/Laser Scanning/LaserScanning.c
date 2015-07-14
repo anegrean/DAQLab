@@ -308,7 +308,7 @@ typedef enum {
 
 typedef struct {
 	SinkVChan_type*				detVChan;					// For receiving pixel data. See Allowed_Detector_Data_Types for VChan data types
-	SourceVChan_type*			outputVChan;					// Assembled image or waveform for this channel. VChan of DL_Image type for frame scan and Allowed_Detector_Data_Types for point scan.
+	SourceVChan_type*			outputVChan;				// Assembled image or waveform for this channel. VChan of DL_Image type for frame scan and Allowed_Detector_Data_Types for point scan.
 	ScanChanColorScales			color;						// Color channel assigned to this channel.
 	ScanEngine_type*			scanEngine;					// Reference to scan engine to which this scan channel belongs.
 	ImageDisplay_type*			imgDisplay;					// Handle to display images for this channel
@@ -409,8 +409,12 @@ struct ScanEngine {
 	//-----------------------------------
 	
 	ImageDisplay_type*			compositeImgDisplay;		// Handle to display composite RGB image.
-	CmtTSVHandle				nImageChannelsTSV;			// Thread safe variable to merge all assembled image channels into a composite image, variable of int type. Initially, this
-															// variable is equal to the number of used channels and its value decreses with each channel with a complete image to 0.
+	
+	//-----------------------------------
+	// Pixel assembly thread coordination
+	//-----------------------------------
+	CmtTSVHandle				nActivePixelBuildersTSV;	// Variable of int type. Thread safe variable indicating whether all channels have completed assembling their pixels in separate threads. 
+															// Initially, this variable is equal to the number of used channels and its value decreses to 0 with each channel completing pixel assembly.
 	
 	//-----------------------------------
 	// Scan Settings										// For performing frame scans.
@@ -466,9 +470,8 @@ typedef struct {
 
 
 typedef struct {
-	ListType					pixelPackets;				// Incoming data packet list of DataPacket_type* with Waveform_type* pixels sampled at the galvo sampling rate.
-	uInt64						nRawPixels;					// Number of total pixels currently present in the pixelStream data packet list.
 	size_t						nSkipPixels;				// Number of pixels left to skip from the pixel stream.   
+	Waveform_type*				rawPixels;					// Incoming pixel stream sampled at the galvo sampling rate.
 	Waveform_type*				pointScan;					// Processed point scan with (optionally) averaging applied to it.
 	ScanChan_type*				scanChan;					// Detection channel to which this point scan buffer belongs.
 } RectRasterPointBuff_type; 
@@ -4182,7 +4185,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	engine->nScanChans					= 0;
 	// composite image display
 	engine->compositeImgDisplay			= NULL;
-	engine->nImageChannelsTSV			= 0;
+	engine->nActivePixelBuildersTSV		= 0;
 	// optics
 	engine->objectives					= 0;
 	// new objective panel handle
@@ -4228,7 +4231,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	AddSinkVChan(engine->taskControl, engine->VChanSlowAxisPos, NULL);
 	
 	// composite image thread safe variable
-	errChk( CmtNewTSV(sizeof(int), &engine->nImageChannelsTSV) ); 
+	errChk( CmtNewTSV(sizeof(int), &engine->nActivePixelBuildersTSV) ); 
 	
 	// cleanup
 	OKfree(fastAxisComVChanName);
@@ -4292,10 +4295,11 @@ static void	discard_ScanEngine_type (ScanEngine_type** enginePtr)
 	
 	// discard composite image display
 	discard_ImageDisplay_type(&engine->compositeImgDisplay);
-	// discard composite image thread safe variable
-	if (engine->nImageChannelsTSV) {
-		CmtDiscardTSV(engine->nImageChannelsTSV);
-		engine->nImageChannelsTSV = 0;
+	
+	// discard active pixel builders thread safe variable
+	if (engine->nActivePixelBuildersTSV) {
+		CmtDiscardTSV(engine->nActivePixelBuildersTSV);
+		engine->nActivePixelBuildersTSV = 0;
 	}
 	
 	// detection channels
@@ -4464,7 +4468,6 @@ static int ReturnRectRasterToParkedPosition (RectRaster_type* engine, char** err
 	RepeatedWaveform_type*		parkedSlowAxisWaveform		= NULL;
 	DataPacket_type*			fastAxisDataPacket			= NULL;
 	DataPacket_type*			slowAxisDataPacket			= NULL;
-	DataPacket_type*			nullPacket					= NULL;
 	char*						errMsg						= NULL; 
 	int							error						= 0;         
 	
@@ -4480,8 +4483,9 @@ static int ReturnRectRasterToParkedPosition (RectRaster_type* engine, char** err
 	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &slowAxisDataPacket, FALSE, &errMsg) );
 	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &fastAxisDataPacket, FALSE, &errMsg) );    
 	// send NULL packets to terminate AO
-	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );
-	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );  
+	errChk( SendNullPacket( engine->baseClass.VChanFastAxisCom, &errMsg) );
+	errChk( SendNullPacket( engine->baseClass.VChanSlowAxisCom, &errMsg) );
+	
 	return 0;
 	
 Error:
@@ -4708,43 +4712,26 @@ static void	discard_RectRasterImgBuff_type (RectRasterImgBuff_type** imgBufferPt
 
 static RectRasterPointBuff_type* init_RectRasterPointBuff_type (ScanChan_type* scanChan)
 {
-	int								error		= 0;
 	RectRasterPointBuff_type*		pointBuffer = malloc(sizeof(RectRasterPointBuff_type));
 	if (!pointBuffer) return NULL;
 	
 	// init
-	pointBuffer->pixelPackets		= 0;
-	pointBuffer->nRawPixels			= 0;
 	pointBuffer->nSkipPixels		= 0;
-	pointBuffer->scanChan			= scanChan;
+	pointBuffer->rawPixels			= NULL;
 	pointBuffer->pointScan			= NULL;
-	
-	// alloc
-	nullChk( pointBuffer->pixelPackets = ListCreate(sizeof(DataPacket_type*)) );
+	pointBuffer->scanChan			= scanChan;
 	
 	return pointBuffer;
 	
-Error:
-	
-	OKfreeList(pointBuffer->pixelPackets);
-	
-	OKfree(pointBuffer);
-	return NULL;
 }
 
 static void discard_RectRasterPointBuff_type (RectRasterPointBuff_type** pointBufferPtr)
 {
 	RectRasterPointBuff_type*	pointBuffer = *pointBufferPtr;
 	
-	// discard raw data packets
-	size_t				nPackets 		= ListNumItems(pointBuffer->pixelPackets);
-	DataPacket_type**	dataPacketPtr   = NULL;
-	for (size_t i = 1; i <= nPackets; i++) {
-		dataPacketPtr = ListGetPtrToItem(pointBuffer->pixelPackets, i);
-		ReleaseDataPacket(dataPacketPtr);
-	}
-	OKfreeList(pointBuffer->pixelPackets);
-	
+	// raw pixels
+	discard_Waveform_type(&pointBuffer->rawPixels);
+	// assembled waveform
 	discard_Waveform_type(&pointBuffer->pointScan);
 	
 	OKfree(*pointBufferPtr);
@@ -4753,14 +4740,7 @@ static void discard_RectRasterPointBuff_type (RectRasterPointBuff_type** pointBu
 static void ResetRectRasterPointBuffer (RectRasterPointBuff_type* pointBuffer) 
 {
 	// discard raw data packets
-	size_t				nPackets 		= ListNumItems(pointBuffer->pixelPackets);
-	DataPacket_type**	dataPacketPtr   = NULL;
-	for (size_t i = 1; i <= nPackets; i++) {
-		dataPacketPtr = ListGetPtrToItem(pointBuffer->pixelPackets, i);
-		ReleaseDataPacket(dataPacketPtr);
-	}
-	ListClear(pointBuffer->pixelPackets);
-	pointBuffer->nRawPixels = 0;
+	discard_Waveform_type(&pointBuffer->rawPixels);
 	
 	// discard point scan waveform
 	discard_Waveform_type(&pointBuffer->pointScan);
@@ -5608,7 +5588,6 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	DataPacket_type*			pixelPulseTrainPacket						= NULL;
 	DataPacket_type*			pixelSamplingRatePacket						= NULL;
 	DataPacket_type*			nPixelsPacket								= NULL;
-	DataPacket_type*			nullPacket									= NULL;
 	PulseTrain_type*			pixelPulseTrain								= NULL;
 	double*						pixelSamplingRate							= NULL;
 	char*						errMsg										= NULL;
@@ -5718,6 +5697,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// update galvo fly-in duration in raster scan data structure
 	scanEngine->flyInDelay = nGalvoSamplesFlyIn / scanEngine->galvoSamplingRate * 1e6;
+	
 	// calculate number of pixels to skip when assembling the images and set this for all image buffers
 	for (size_t i = 0; i < scanEngine->nImgBuffers; i++) 
 		scanEngine->imgBuffers[i]->nSkipPixels = (size_t)((scanEngine->flyInDelay - scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime);
@@ -5783,7 +5763,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
 		// send NULL packet to signal termination of data stream
-		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );    
+		errChk( SendNullPacket(scanEngine->baseClass.VChanFastAxisCom, &errMsg) );
 	}
 	
 	// send number of samples in fast axis command waveform if scan is finite
@@ -5829,7 +5809,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
 		// send NULL packet to signal termination of data stream
-		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );    
+		errChk( SendNullPacket(scanEngine->baseClass.VChanSlowAxisCom, &errMsg) );
 	}
 	
 	// send number of samples in slow axis command waveform if scan is finite
@@ -5944,7 +5924,6 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	RepeatedWaveform_type*	ROIHoldWaveform					= NULL;
 	RepeatedWaveform_type*	ROIStimulateWaveform			= NULL;
 	DataPacket_type*		dataPacket						= NULL; 
-	DataPacket_type*		nullPacket						= NULL; 
 	NonResGalvoCal_type*	fastAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
 	double					totalJumpTime					= 0;	  	// time in [ms] from the global start trigger until the point jump cycle completes.
@@ -6104,25 +6083,26 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	// fast galvo axis
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisJumpWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &nullPacket, FALSE, &errMsg) );
+	errChk( SendNullPacket(scanEngine->baseClass.VChanFastAxisCom, &errMsg) );
+	
 	
 	// slow galvo axis
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisJumpWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &nullPacket, FALSE, &errMsg) );
+	errChk( SendNullPacket(scanEngine->baseClass.VChanSlowAxisCom, &errMsg) );
 	
 	// ROI hold
 	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIHold)) {
 		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&ROIHoldWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanROIHold, &dataPacket, FALSE, &errMsg) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanROIHold, &nullPacket, FALSE, &errMsg) );
+		errChk( SendNullPacket(scanEngine->baseClass.VChanROIHold, &errMsg) );
 	}
 	
 	// ROI stimulate
 	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate)) {
 		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&ROIStimulateWaveform, NULL, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanROIStimulate, &dataPacket, FALSE, &errMsg) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanROIStimulate, &nullPacket, FALSE, &errMsg) );
+		errChk( SendNullPacket(scanEngine->baseClass.VChanROIStimulate, &errMsg) );
 	}
 	
 	// send number of galvo samples needed for the point jump
@@ -6226,22 +6206,22 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 #define NonResRectRasterScan_BuildImage_Err_WrongPixelDataType			-1
 #define NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage		-2
 	
-	int							error					= 0;
-	char*						errMsg					= NULL;
-	DataPacket_type*			pixelPacket				= NULL;
-	ImageTypes					imageType				= 0;		// Data type of assembled image
-	Waveform_type*				pixelWaveform			= NULL;   	// Incoming pixel waveform.
-	void*						pixelData				= NULL;		// Array of received pixels from a single pixel waveform data packet.
-	size_t						nPixels					= 0;		// Number of received pixels from a pixel data packet stored in pixelData.
-	size_t             			pixelDataIdx   			= 0;      	// The index of the processed pixel from the received pixel waveform.
-	RectRasterImgBuff_type*   	imgBuffer				= rectRaster->imgBuffers[bufferIdx];
-	size_t						nDeadTimePixels			= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->scanSettings.pixelDwellTime);
+	int							error						= 0;
+	char*						errMsg						= NULL;
+	DataPacket_type*			pixelPacket					= NULL;
+	ImageTypes					imageType					= 0;		// Data type of assembled image
+	Waveform_type*				pixelWaveform				= NULL;   	// Incoming pixel waveform.
+	void*						pixelData					= NULL;		// Array of received pixels from a single pixel waveform data packet.
+	size_t						nPixels						= 0;		// Number of received pixels from a pixel data packet stored in pixelData.
+	size_t             			pixelDataIdx   				= 0;      	// The index of the processed pixel from the received pixel waveform.
+	RectRasterImgBuff_type*   	imgBuffer					= rectRaster->imgBuffers[bufferIdx];
+	size_t						nDeadTimePixels				= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->scanSettings.pixelDwellTime);
 	
-	DisplayEngine_type* 		displayEngine 			= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
-	RectRasterScanSet_type*		imgSettings				= NULL;
-	DataPacket_type* 			imagePacket         	= NULL;
-	Image_type*					sendImage				= NULL;
-	int* 						nImageChannelsTSVPtr 	= NULL;
+	DisplayEngine_type* 		displayEngine 				= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
+	RectRasterScanSet_type*		imgSettings					= NULL;
+	DataPacket_type* 			imagePacket         		= NULL;
+	Image_type*					sendImage					= NULL;
+	int* 						nActivePixelBuildersTSVPtr 	= NULL;
 	
 	
 	do {
@@ -6431,14 +6411,14 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// check if wait was aborted
 				if (GetTaskControlAbortFlag(rectRaster->baseClass.taskControl)) {
 					// send iteration done event only once for all the image building threads
-					errChk( CmtGetTSVPtr(rectRaster->baseClass.nImageChannelsTSV, &nImageChannelsTSVPtr) );
-					if (*nImageChannelsTSVPtr) {
+					errChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
+					if (*nActivePixelBuildersTSVPtr) {
 						TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
-						*nImageChannelsTSVPtr = 0; // so that other threads aborting
-						CmtReleaseTSVPtr(rectRaster->baseClass.nImageChannelsTSV);
+						*nActivePixelBuildersTSVPtr = 0; // so that other threads aborting
+						CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV);
 						return 0;
 					} else {
-						CmtReleaseTSVPtr(rectRaster->baseClass.nImageChannelsTSV);
+						CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV);
 						return 0;
 					}
 				}
@@ -6492,10 +6472,10 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// Assemble composite image if all channels are ready
 				//---------------------------------------------------
 				
-				errChk( CmtGetTSVPtr(rectRaster->baseClass.nImageChannelsTSV, &nImageChannelsTSVPtr) );
-				(*nImageChannelsTSVPtr)--;
+				errChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
+				(*nActivePixelBuildersTSVPtr)--;
 	
-				if (!*nImageChannelsTSVPtr) {
+				if (!*nActivePixelBuildersTSVPtr) {
 		
 					//errChk( NonResRectRasterScan_AssembleCompositeImage(rectRaster, &errMsg) );
 					
@@ -6510,7 +6490,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
 				}
 	
-				CmtReleaseTSVPtr(rectRaster->baseClass.nImageChannelsTSV);
+				CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV);
 				
 				
 				//------------------------
@@ -6539,7 +6519,6 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 		// Process NULL packet
 		//----------------------------------------------------------------------
 		
-		// TEMPORARY for one channel only
 		// end task controller iteration
 		if (!pixelPacket) {
 			TaskControlIterationDone(rectRaster->baseClass.taskControl, NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage, "Not enough pixels were provided to complete an image", FALSE);
@@ -6778,14 +6757,55 @@ static size_t NonResRectRasterScan_GetNumActivePoints (RectRaster_type* rectRast
 
 static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, size_t bufferIdx, char** errorInfo)
 {
-	int							error					= 0;
-	char*						errMsg					= NULL;	
-	RectRasterPointBuff_type*	pointBuffer				= rectRaster->pointBuffers[bufferIdx];
+	int							error						= 0;
+	char*						errMsg						= NULL;	
+	RectRasterPointBuff_type*	pointBuffer					= rectRaster->pointBuffers[bufferIdx];
+	int* 						nActivePixelBuildersTSVPtr 	= NULL;
 	
 	
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------
+	// Receive pixel data
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	
+	errChk( ReceiveWaveform(pointBuffer->scanChan->detVChan, &pointBuffer->rawPixels, NULL, &errMsg) );
+	
+	// if no waveform is received, send null packet to output channel and complete iteration if there are no other pixel builder threads for other channels
+	if (!pointBuffer->rawPixels) {
+		
+		errChk( SendNullPacket(pointBuffer->scanChan->outputVChan, &errMsg) );
+		
+		errChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
+		(*nActivePixelBuildersTSVPtr)--;
+	
+		// complete iteration
+		if (!*nActivePixelBuildersTSVPtr)
+			TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
+		
+		CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV);
+		
+		return 0;
+	}
+	
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------
+	// Process waveform
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	 IN PRINCIPLE THE START DELAY CAN BE USED TO SKIP PIXELS, HOWEVER, THE MINIMUM START DELAY IS DIFFERENT FOR EACH POINT IF SINGLE POINT MODE IS USED, 
+		SO CALCULATING THE NUMBER OF PIXELS TO SKIP BASED ON THE DEFINITION OF THE START DELAY IS OK AS LONG AS IT CAN BE GUARANTEED FOR EACH POINT IN SINGLE POINT MODE
 	
 	return 0;
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	if (errorInfo)
+		*errorInfo = FormatMsg(error, "NonResRectRasterScan_BuildPointScan", errMsg);
+		OKfree(errMsg);
+	
+	return error;
+	
 }
 
 static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type* rectRaster)
@@ -7601,7 +7621,6 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 	int								error						= 0;
 	Waveform_type*					waveformCopy				= NULL;
 	WaveformTypes					waveformType;
-	DataPacket_type*				nullPacket					= NULL;
 	
 	switch (cal->currentCal) {
 			
@@ -7635,7 +7654,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
 			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
+			errChk( SendNullPacket(cal->baseClass.VChanCom, &errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
@@ -7746,7 +7765,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
 			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) ); 
+			errChk( SendNullPacket(cal->baseClass.VChanCom, &errMsg) );
 			
 			// send number of samples in waveform
 			nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
@@ -7900,7 +7919,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
 			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
+			errChk( SendNullPacket(cal->baseClass.VChanCom, &errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
@@ -8022,7 +8041,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
 			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) ); 
+			errChk( SendNullPacket(cal->baseClass.VChanCom, &errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
@@ -8158,7 +8177,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
 			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, NULL, (DiscardFptr_type)discard_Waveform_type) );
 			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, &nullPacket, 0, &errMsg) );
+			errChk( SendNullPacket(cal->baseClass.VChanCom, &errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
@@ -8436,7 +8455,7 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 	RectRaster_type* 					engine 					= GetTaskControlModuleData(taskControl);
 	int									error 					= 0;
 	char*								errMsg					= NULL;
-	int*								nImageChannelsTSVPtr	= NULL;
+	int*								nActivePixelBuildersTSVPtr	= NULL;
 	PixelAssemblyBinding_type*			pixelBinding			= NULL;
 	size_t								currentSequenceRepeat	= 0;
 	Iterator_type*						currentIteration		= GetTaskControlCurrentIter(taskControl);
@@ -8452,9 +8471,9 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, BOOL const* abo
 			}
 			
 			// reset composite image counter to be equal to the number of image channel buffers in use
-			CmtGetTSVPtr(engine->baseClass.nImageChannelsTSV, &nImageChannelsTSVPtr);
-			*nImageChannelsTSVPtr = engine->nImgBuffers;
-			CmtReleaseTSVPtr(engine->baseClass.nImageChannelsTSV);
+			CmtGetTSVPtr(engine->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr);
+			*nActivePixelBuildersTSVPtr = engine->nImgBuffers;
+			CmtReleaseTSVPtr(engine->baseClass.nActivePixelBuildersTSV);
 			
 			// launch image assembly threads for each channel
 			for (size_t i = 0; i < engine->nImgBuffers; i++) {

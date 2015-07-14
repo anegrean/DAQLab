@@ -156,6 +156,9 @@ int							ReleaseAllDataPackets				(SinkVChan_type* sinkVChan, char** errorInfo)
 	// then set sourceNeedsPacket = TRUE.
 int				 			SendDataPacket 						(SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr, BOOL sourceNeedsPacket, char** errorInfo);
 
+	// Sends a NULL data packet to mark the end of a transmission.
+int							SendNullPacket						(SourceVChan_type* srcVChan, char** errorInfo);
+
 	// Gets all data packets from a Sink VChan. The function allocates dynamically a data packet array with nPackets elements of DataPacket_type*
 	// If there are no data packets in the Sink VChan, dataPackets = NULL, nPackets = 0 and the function returns NULL (success).
 	// If an error is encountered, the function returns an FCallReturn_type* with error information and sets dataPackets to NULL and nPackets to 0.

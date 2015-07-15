@@ -467,7 +467,7 @@ static int DAQLab_Load (void)
 	errChk (TasksUI.menuManageItem_Delete 	= NewMenuItem(TasksUI.menuBarHndl, TasksUI.menuID_Manage, "Delete", -1, (VAL_MENUKEY_MODIFIER | 'D'), DAQLab_TaskMenu_CB, &TasksUI) );
 	// Data storage and display
 	errChk (TasksUI.menuID_Data				= NewMenu(TasksUI.menuBarHndl, "Data", -1) );
-	errChk (TasksUI.menuManageItem_Storage	= NewMenuItem(TasksUI.menuBarHndl, TasksUI.menuID_Data, "Storage", -1, (VAL_MENUKEY_MODIFIER | 'S'), DAQLab_TaskMenu_CB, &TasksUI) );
+	errChk (TasksUI.menuDataItem_Storage	= NewMenuItem(TasksUI.menuBarHndl, TasksUI.menuID_Data, "Storage", -1, (VAL_MENUKEY_MODIFIER | 'S'), DAQLab_TaskMenu_CB, &TasksUI) );
 	
 	// get height and width of Task Controller panel
 	GetPanelAttribute(TasksUI.controllerPanHndl, ATTR_HEIGHT, &TasksUI.controllerPanHeight);
@@ -1965,22 +1965,12 @@ int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLEl
 				xmlVal = CA_VariantUInt(*(unsigned int*)childXMLNodes[i].pData);
 				break;
 				
-			case BasicData_Long:
-				
-				xmlVal = CA_VariantLong(*(long*)childXMLNodes[i].pData);
-				break;
-			
-			case BasicData_ULong:
-				
-				xmlVal = CA_VariantULong(*(unsigned long*)childXMLNodes[i].pData);
-				break;
-				
-			case BasicData_LongLong:
+			case BasicData_Int64:
 				
 				xmlVal = CA_VariantLongLong(*(long long*)childXMLNodes[i].pData);
 				break;
 				
-			case BasicData_ULongLong:
+			case BasicData_UInt64:
 				
 				xmlVal = CA_VariantULongLong(*(unsigned long long*)childXMLNodes[i].pData);
 				break;
@@ -2062,16 +2052,10 @@ static int DAQLab_StringToType	(char text[], BasicDataTypes vartype, void* value
 		case BasicData_UInt:
 			errChk( Scan(text, "%s>%d[b4u]", (unsigned int*)valuePtr) );
 			break;
-		case BasicData_Long:
-			errChk( Scan(text, "%s>%d[b4]", (long*)valuePtr) );
-			break;
-		case BasicData_ULong:
-			errChk( Scan(text, "%s>%d[b4u]", (unsigned long*)valuePtr) );
-			break;
-		case BasicData_LongLong:
+		case BasicData_Int64:
 			errChk( Scan(text, "%s>%d[b8]", (long long*)valuePtr) );
 			break;
-		case BasicData_ULongLong:
+		case BasicData_UInt64:
 			errChk( Scan(text, "%s>%d[b8u]", (unsigned long long*)valuePtr) );
 			break;
 		case BasicData_Float:
@@ -3344,6 +3328,10 @@ static void DAQLab_TaskMenu_DisplayDataStorage (void)
 	SetCtrlsInPanCBInfo(NULL, DataStorage_CB, TasksUI.dataStoragePanHndl);
 	
 	DisplayPanel(TasksUI.dataStoragePanHndl);
+	
+Error:
+	
+	return;
 }
 
 static void	DAQLab_TaskMenu_DeleteTaskController (void)

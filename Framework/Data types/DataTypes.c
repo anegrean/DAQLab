@@ -484,6 +484,11 @@ size_t GetWaveformSizeofData (Waveform_type* waveform)
 			dataTypeSize = sizeof(int);
 			break;
 			
+		case Waveform_Int64:
+		case Waveform_UInt64:
+			dataTypeSize = sizeof(int64);
+			break;
+			
 		case Waveform_SSize:
 		case Waveform_Size:
 			dataTypeSize = sizeof(size_t);
@@ -603,7 +608,7 @@ int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformTo
 		case Waveform_UChar:
 			memcpy(((char*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(char)); 
 			break;
-			
+								  
 		case Waveform_Short:
 		case Waveform_UShort:
 			memcpy(((short*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(short)); 
@@ -614,6 +619,11 @@ int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformTo
 			memcpy(((int*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(int)); 
 			break;
 			
+		case Waveform_Int64:
+		case Waveform_UInt64:
+			memcpy(((int64*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(int64)); 
+			break;
+		
 		case Waveform_SSize:
 		case Waveform_Size:
 			memcpy(((size_t*)dataBuffer) + waveformToAppendTo->nSamples, waveformToAppend->data, waveformToAppend->nSamples * sizeof(size_t)); 
@@ -632,6 +642,257 @@ int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformTo
 	waveformToAppendTo->nSamples += waveformToAppend->nSamples;
 	
 	return 0;
+}
+
+int IntegrateWaveform (Waveform_type** waveformOut, Waveform_type* waveformIn, size_t startIdx, size_t endIdx, size_t nInt)
+{
+#define IntegrateWaveform_Err_NInt			-1		// nInt is < 2
+#define IntegrateWaveform_Err_Selection		-2		// (startIdx >= endIdx) and (endIdx != 0)
+#define IntegrateWaveform_Err_OutOfBounds	-3		// selection is out of waveform bounds
+
+	int			error 				= 0;
+	size_t 		nDataOutSamples		= 0;
+	int64*		dataOutInt64		= NULL;
+	uInt64*		dataOutUInt64		= NULL;
+	double*		dataOutFloat		= NULL;
+	double*		dataOutDouble		= NULL;
+	
+	// check if nInt > 1
+	if (nInt < 2) return IntegrateWaveform_Err_NInt;
+	
+	// check if endIdx > startIdx unless endIdx = 0
+	if ((startIdx >= endIdx) && endIdx) return IntegrateWaveform_Err_Selection;
+	
+	// selection waveform bounds
+	if ( (startIdx > waveformIn->nSamples - 1) || (endIdx > waveformIn->nSamples - 1)) return IntegrateWaveform_Err_OutOfBounds;
+	
+	if (endIdx)
+		nDataOutSamples = (endIdx - startIdx + 1) / nInt;
+	else
+		nDataOutSamples = waveformIn->nSamples / nInt;
+	
+	// generate empty waveform
+	if (!nDataOutSamples) {
+		void*	nullData = NULL;
+		nullChk( *waveformOut = init_Waveform_type(waveformIn->waveformType, waveformIn->samplingRate, 0, &nullData) );
+		return 0;
+	}
+	
+	switch (waveformIn->waveformType) {
+			
+		case Waveform_Char:
+			
+			char* 	dataIn_char = (char*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutInt64 = calloc(nDataOutSamples, sizeof(int64)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_char[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+			
+		case Waveform_Short:
+			
+			short* 	dataIn_short = (short*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutInt64 = calloc(nDataOutSamples, sizeof(int64)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_short[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+			
+		case Waveform_Int:
+			
+			int* 	dataIn_int = (int*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutInt64 = calloc(nDataOutSamples, sizeof(int64)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_int[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+			
+		case Waveform_Int64:
+			
+			int64* 	dataIn_int64 = (int64*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutInt64 = calloc(nDataOutSamples, sizeof(int64)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_int64[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+		case Waveform_SSize:
+			
+			ssize_t* 	dataIn_ssize = (ssize_t*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutInt64 = calloc(nDataOutSamples, sizeof(int64)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_ssize[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+			
+		case Waveform_UChar:
+			
+			unsigned char* 	dataIn_uchar = (unsigned char*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutUInt64 = calloc(nDataOutSamples, sizeof(uInt64)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_uchar[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+			
+		case Waveform_UShort:
+			
+			unsigned short* dataIn_ushort = (unsigned short*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutUInt64 = calloc(nDataOutSamples, sizeof(uInt64)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_ushort[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+		case Waveform_UInt:
+			
+			unsigned int* dataIn_uint = (unsigned int*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutUInt64 = calloc(nDataOutSamples, sizeof(uInt64)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_uint[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+			
+		case Waveform_UInt64:
+			
+			uInt64* dataIn_uint64 = (uInt64*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutUInt64 = calloc(nDataOutSamples, sizeof(uInt64)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_uint64[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+			
+		case Waveform_Size:
+			
+			size_t* dataIn_size = (size_t*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutUInt64 = calloc(nDataOutSamples, sizeof(uInt64)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_size[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+			
+		case Waveform_Float:
+			
+			float* 	dataIn_float = (float*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutFloat = calloc(nDataOutSamples, sizeof(float)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_float[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+			
+		case Waveform_Double:
+			
+			double* dataIn_double = (double*)waveformIn->data;
+			
+			// allocate memory and initialize to 0
+			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
+			
+			// integrate
+			for (size_t i = 0; i < nDataOutSamples; i++)
+				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
+					dataOutInt64[i] += dataIn_double[j];
+			
+			// output result
+			nullChk( *waveformOut = init_Waveform_type(Waveform_Int64, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutInt64) );
+			
+			break;
+			
+	}
+	
+	return 0;
+	
+Error:
+	
+	OKfree(dataOutInt64);
+	OKfree(dataOutUInt64);
+	OKfree(dataOutFloat);
+	OKfree(dataOutDouble);
+	
+	return error;
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -684,6 +945,14 @@ RepeatedWaveform_type* ConvertWaveformToRepeatedWaveformType (Waveform_type** wa
 			
 		case Waveform_UInt:
 			repWaveformType = RepeatedWaveform_UInt;
+			break;
+			
+		case Waveform_Int64:
+			repWaveformType = RepeatedWaveform_Int64;
+			break;
+			
+		case Waveform_UInt64:
+			repWaveformType = RepeatedWaveform_UInt64;
 			break;
 			
 		case Waveform_SSize:
@@ -772,6 +1041,11 @@ size_t GetRepeatedWaveformSizeofData (RepeatedWaveform_type* waveform)
 			dataTypeSize = sizeof(int);
 			break;
 			
+		case RepeatedWaveform_Int64:
+		case RepeatedWaveform_UInt64:
+			dataTypeSize = sizeof(int64);
+			break;
+		
 		case RepeatedWaveform_SSize:
 		case RepeatedWaveform_Size:
 			dataTypeSize = sizeof(size_t);
@@ -1101,7 +1375,7 @@ void discard_Rect_type (Rect_type** RectPtr)
 {
 	if (!*RectPtr) return;
 	
-	// discard Rectangle specific data
+	// discard Rectangle specific data		 
 	
 	// discard base class data
 	discard_ROIBaseClass((ROI_type**)RectPtr);

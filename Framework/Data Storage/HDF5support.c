@@ -112,7 +112,7 @@ Error:
 	return error;
 }
 
-int WriteHDF5Data(char *filename, char* dataset_name, TC_DS_Data_type* dsdata, Waveform_type* waveform, DLDataTypes datatype) 
+int WriteHDF5Data(char *filename, char* dataset_name, TC_DS_Data_type* dsdata, Waveform_type* waveform) 
 {
 	hid_t       			file_id					= 0;
 	hid_t					dataspace_id			= 0;    
@@ -163,7 +163,7 @@ int WriteHDF5Data(char *filename, char* dataset_name, TC_DS_Data_type* dsdata, W
 	errChk( H5Pset_chunk(cparms, rank, dims) );
   
 	//datatype switch
-	switch (datatype){
+	switch (GetWaveformDataType(waveform)){
 		   
 		case DL_Char:
 			
@@ -201,16 +201,16 @@ int WriteHDF5Data(char *filename, char* dataset_name, TC_DS_Data_type* dsdata, W
 			mem_type_id	= H5T_NATIVE_UINT;
 			break;
 			
-		case DL_Long:
+		case DL_Int64:
 			
 			type_id		= H5T_STD_I64BE;
-			mem_type_id	= H5T_NATIVE_LONG;
+			mem_type_id	= H5T_NATIVE_LLONG;
 			break;
 			
-		case DL_ULong:
+		case DL_UInt64:
 			
 			type_id		= H5T_STD_U64BE;
-		   	mem_type_id	= H5T_NATIVE_ULONG;
+		   	mem_type_id	= H5T_NATIVE_ULLONG;
 			break;
 			
 		case DL_Float:

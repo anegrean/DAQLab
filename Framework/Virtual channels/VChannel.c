@@ -985,6 +985,8 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 		case DL_Waveform_UShort:
 		case DL_Waveform_Int:
 		case DL_Waveform_UInt:
+		case DL_Waveform_Int64:
+		case DL_Waveform_UInt64:	
 		case DL_Waveform_SSize:
 		case DL_Waveform_Size:
 		case DL_Waveform_Float:
@@ -1060,6 +1062,14 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 				
 			case DL_Waveform_UInt:
 				*waveformType = Waveform_UInt;
+				break;
+				
+			case DL_Waveform_Int64:
+				*waveformType = Waveform_Int64;
+				break;
+				
+			case DL_Waveform_UInt64:
+				*waveformType = Waveform_UInt64;
 				break;
 				
 			case DL_Waveform_SSize:

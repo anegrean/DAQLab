@@ -60,10 +60,8 @@ typedef enum {
 	BasicData_UShort,					// 16 bits							unsigned short 
 	BasicData_Int,						// 32 bits							int    
 	BasicData_UInt,						// 32 bits							unsigned int   							
-	BasicData_Long,
-	BasicData_ULong,
-	BasicData_LongLong,
-	BasicData_ULongLong,
+	BasicData_Int64,
+	BasicData_UInt64,
 	BasicData_Float,					// 16 bits							float  
 	BasicData_Double,					// 32 bits							double
 	BasicData_CString					// null-terminated string
@@ -83,7 +81,9 @@ typedef enum {
 	Waveform_Short,						
 	Waveform_UShort,					
 	Waveform_Int,						
-	Waveform_UInt,						
+	Waveform_UInt,
+	Waveform_Int64,						
+	Waveform_UInt64,						
 	Waveform_SSize,						
 	Waveform_Size,								   			
 	Waveform_Float,						
@@ -103,7 +103,9 @@ typedef enum {
 	RepeatedWaveform_Short,						
 	RepeatedWaveform_UShort,					
 	RepeatedWaveform_Int,						
-	RepeatedWaveform_UInt,						
+	RepeatedWaveform_UInt,
+	RepeatedWaveform_Int64,						
+	RepeatedWaveform_UInt64,
 	RepeatedWaveform_SSize,						
 	RepeatedWaveform_Size,								   			
 	RepeatedWaveform_Float,						
@@ -236,10 +238,8 @@ typedef enum {
 	DL_UShort,							// 16 bits							unsigned short 
 	DL_Int,								// 32 bits							int    
 	DL_UInt,							// 32 bits							unsigned int   							
-	DL_Long,
-	DL_ULong,
-	DL_LongLong,
-	DL_ULongLong,
+	DL_Int64,
+	DL_UInt64,
 	DL_Float,							// 16 bits							float  
 	DL_Double,							// 32 bits							double 
 	
@@ -260,7 +260,9 @@ typedef enum {
 	DL_Waveform_Short,						
 	DL_Waveform_UShort,					
 	DL_Waveform_Int,						
-	DL_Waveform_UInt,						
+	DL_Waveform_UInt,
+	DL_Waveform_Int64,						
+	DL_Waveform_UInt64,
 	DL_Waveform_SSize,						
 	DL_Waveform_Size,								   			
 	DL_Waveform_Float,						
@@ -274,7 +276,9 @@ typedef enum {
 	DL_RepeatedWaveform_Short,						
 	DL_RepeatedWaveform_UShort,					
 	DL_RepeatedWaveform_Int,						
-	DL_RepeatedWaveform_UInt,						
+	DL_RepeatedWaveform_UInt,
+	DL_RepeatedWaveform_Int64,						
+	DL_RepeatedWaveform_UInt64,						
 	DL_RepeatedWaveform_SSize,						
 	DL_RepeatedWaveform_Size,								   			
 	DL_RepeatedWaveform_Float,						
@@ -351,7 +355,14 @@ WaveformTypes				GetWaveformDataType						(Waveform_type* waveform);
 int							CopyWaveform							(Waveform_type** waveformCopy, Waveform_type* waveform, char** errorInfo);
 
 	// Appends data from one waveform to another. Sampling rate, data type and physical unit must be the same.
-int 						AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_type* waveformToAppend, char** errorInfo); 
+int 						AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_type* waveformToAppend, char** errorInfo);
+
+	// Applies an nSamples integration to an entire waveform or to a part of it and returns a new waveform.
+	// The portion of the waveform used starts at element with 0-based index startIdx and ends at (including) element with 0-based index endIdx.
+	// If endIdx = 0 the entire input waveform is used. nInt is the number of samples used for integration. If the number of elements in the input is less
+	// than the number of points used for integration, then an empty waveform is returned.
+int							IntegrateWaveform						(Waveform_type** waveformOut, Waveform_type* waveformIn, size_t startIdx, size_t endIdx, size_t nInt);
+
 
 //---------------------------------------------------------------------------------------------------------  
 // Repeated Waveform 

@@ -522,9 +522,9 @@ typedef struct {
 	uInt32						oversampling;				// Oversampling factor, used in AI. This determines the actual sampling rate and the actual number of samples to be acquired
 	BOOL						oversamplingAuto;			// Used in AI, auto-adjusts the oversampling factor based on the target DAQ sampling rate and the final sampling rate of the AI data.
 	SinkVChan_type*				nSamplesSinkVChan;			// Used for receiving number of samples to be generated/received with each iteration of the DAQmx task controller.
-															// data packets of DL_UChar, DL_UShort, DL_UInt, DL_ULong and DL_ULongLong types.
+															// data packets of DL_UChar, DL_UShort, DL_UInt and DL_UInt64 types.
 	SourceVChan_type*			nSamplesSourceVChan;		// Used for sending number of samples for finite tasks.
-															// data packets of DL_ULongLong type.
+															// data packets of DL_UInt64 type.
 	SinkVChan_type*				samplingRateSinkVChan;		// Used for receiving sampling rate info with each iteration of the DAQmx task controller.  
 															// data packets of DL_Double, DL_Float types.
 	SourceVChan_type*			samplingRateSourceVChan;	// Used for sending sampling rate info.
@@ -1854,7 +1854,7 @@ static int LoadADTaskCfg (ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ 
 																		{"OperationMode", 			BasicData_UInt, 		&operationMode},
 																		{"SamplingRate", 			BasicData_Double, 		&taskSet->timing->sampleRate},
 																		{"TargetSamplingRate",		BasicData_Double,		&taskSet->timing->targetSampleRate},
-																		{"NSamples", 				BasicData_ULongLong, 	&taskSet->timing->nSamples},
+																		{"NSamples", 				BasicData_UInt64, 	&taskSet->timing->nSamples},
 																		{"Oversampling",			BasicData_UInt,			&taskSet->timing->oversampling},
 																		{"OversamplingAutoAdjust",	BasicData_Bool,			&taskSet->timing->oversamplingAuto}, 
 																		{"BlockSize", 				BasicData_UInt, 		&taskSet->timing->blockSize},
@@ -2232,7 +2232,7 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				char*							freqInputTerminal		= NULL;
 				CounterTaskTiming_type			CIFreqTaskTiming		= {.measMode = 0, .nSamples = 0, .sampleRate = 0, .refClkFreq = 0};
 				DAQLabXMLNode 					CIFreqChanAttr[]		= { {"MeasurementMode",				BasicData_UInt,			&CIFreqTaskTiming.measMode},
-																			{"NSamples",					BasicData_ULongLong,	&CIFreqTaskTiming.nSamples},
+																			{"NSamples",					BasicData_UInt64,	&CIFreqTaskTiming.nSamples},
 																			{"SamplingRate",				BasicData_Double,		&CIFreqTaskTiming.sampleRate},
 																			{"ReferenceClockFrequency", 	BasicData_Double,		&CIFreqTaskTiming.refClkFreq},
 																			{"MaxFrequency",				BasicData_Double, 		&freqMax},
@@ -2265,7 +2265,7 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				double							initialDelay			= 0;
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_ULongLong,	&nPulses},
+																			{"NPulses",					BasicData_UInt64,	&nPulses},
 																			{"ReferenceClockSource", 	BasicData_CString,		&refClkSource},
 																			{"ReferenceClockFrequency", BasicData_Double,		&refClkFreq},
 																			{"PulseHighTime",			BasicData_Double,		&highTime},
@@ -2296,7 +2296,7 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				double							initialDelay			= 0;
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_ULongLong,	&nPulses},
+																			{"NPulses",					BasicData_UInt64,	&nPulses},
 																			{"ReferenceClockSource", 	BasicData_CString,		&refClkSource},
 																			{"ReferenceClockFrequency", BasicData_Double,		&refClkFreq},
 																			{"Frequency",				BasicData_Double,		&frequency},
@@ -2328,7 +2328,7 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_ULongLong,	&nPulses},
+																			{"NPulses",					BasicData_UInt64,	&nPulses},
 																			{"ReferenceClockSource", 	BasicData_CString,		&refClkSource},
 																			{"ReferenceClockFrequency", BasicData_Double,		&refClkFreq},
 																			{"HighTicks",				BasicData_UInt,			&highTicks},
@@ -2543,7 +2543,7 @@ static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXML
 																	{"OperationMode", 			BasicData_UInt, 		&operationMode},
 																	{"SamplingRate", 			BasicData_Double, 		&taskSet->timing->sampleRate},
 																	{"TargetSamplingRate",		BasicData_Double,		&taskSet->timing->targetSampleRate},
-																	{"NSamples", 				BasicData_ULongLong, 	&taskSet->timing->nSamples},
+																	{"NSamples", 				BasicData_UInt64, 	&taskSet->timing->nSamples},
 																	{"Oversampling",			BasicData_UInt,			&taskSet->timing->oversampling},
 																	{"OversamplingAutoAdjust",	BasicData_Bool,			&taskSet->timing->oversamplingAuto},
 																	{"BlockSize", 				BasicData_UInt, 		&taskSet->timing->blockSize},
@@ -2854,7 +2854,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				uInt32							CIMeasMode				= (uInt32) CIFreqChanSet->taskTiming.measMode;
 				uInt32							CIFreqMeasMethod		= (uInt32) CIFreqChanSet->measMethod;
 				DAQLabXMLNode 					CIFreqChanAttr[]		= { {"MeasurementMode",				BasicData_UInt,			&CIMeasMode},
-																			{"NSamples",					BasicData_ULongLong,	&CIFreqChanSet->taskTiming.nSamples},
+																			{"NSamples",					BasicData_UInt64,	&CIFreqChanSet->taskTiming.nSamples},
 																			{"SamplingRate",				BasicData_Double,		&CIFreqChanSet->taskTiming.sampleRate},
 																			{"ReferenceClockFrequency", 	BasicData_Double,		&CIFreqChanSet->taskTiming.refClkFreq},
 																			{"MaxFrequency",				BasicData_Double, 		&CIFreqChanSet->freqMax},
@@ -2882,7 +2882,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_ULongLong,	&nPulses},
+																			{"NPulses",					BasicData_UInt64,	&nPulses},
 																			{"ReferenceClockSource", 	BasicData_CString,		&COChanSet->refClkSource},
 																			{"ReferenceClockFrequency", BasicData_Double,		&COChanSet->refClkFreq},
 																			{"PulseHighTime",			BasicData_Double,		&highTime},
@@ -2906,7 +2906,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_ULongLong,	&nPulses},
+																			{"NPulses",					BasicData_UInt64,	&nPulses},
 																			{"ReferenceClockSource", 	BasicData_CString,		&COChanSet->refClkSource},
 																			{"ReferenceClockFrequency", BasicData_Double,		&COChanSet->refClkFreq},
 																			{"Frequency",				BasicData_Double,		&frequency},
@@ -2930,7 +2930,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_ULongLong,	&nPulses},
+																			{"NPulses",					BasicData_UInt64,	&nPulses},
 																			{"ReferenceClockSource", 	BasicData_CString,		&COChanSet->refClkSource},
 																			{"ReferenceClockFrequency", BasicData_Double,		&COChanSet->refClkFreq},
 																			{"HighTicks",				BasicData_UInt,			&highTicks},
@@ -5370,31 +5370,36 @@ static int ChanSetLineDO_CB (int panel, int control, int event, void *callbackDa
 			// otherwise allow both RepeatedWaveform_type* and Waveform_type* data
 			if (chanset->baseClass.onDemand) {
 				
-				DLDataTypes allowedTypes[] = {	
-						DL_Waveform_Char,
-						DL_Waveform_UChar,
-						DL_Waveform_Short,
-						DL_Waveform_UShort,
-						DL_Waveform_Int,
-						DL_Waveform_UInt, };
+				DLDataTypes allowedTypes[] = {	DL_Waveform_Char,
+												DL_Waveform_UChar,
+												DL_Waveform_Short,
+												DL_Waveform_UShort,
+												DL_Waveform_Int,
+												DL_Waveform_UInt,
+											 	DL_Waveform_Int64,
+												DL_Waveform_UInt64};
 						
 				SetSinkVChanDataTypes(chanset->baseClass.sinkVChan, NumElem(allowedTypes), allowedTypes);
 				
 			} else {
 				
 				DLDataTypes allowedTypes[] = {	
-						DL_Waveform_Char,
-						DL_Waveform_UChar,
-						DL_Waveform_Short,
-						DL_Waveform_UShort,
-						DL_Waveform_Int,
-						DL_Waveform_UInt,
-						DL_RepeatedWaveform_Char,						
-						DL_RepeatedWaveform_UChar,						
-						DL_RepeatedWaveform_Short,						
-						DL_RepeatedWaveform_UShort,					
-						DL_RepeatedWaveform_Int,						
-						DL_RepeatedWaveform_UInt};
+												DL_Waveform_Char,
+												DL_Waveform_UChar,
+												DL_Waveform_Short,
+												DL_Waveform_UShort,
+												DL_Waveform_Int,
+												DL_Waveform_UInt,
+												DL_Waveform_Int64,
+												DL_Waveform_UInt64,
+												DL_RepeatedWaveform_Char,						
+												DL_RepeatedWaveform_UChar,						
+												DL_RepeatedWaveform_Short,						
+												DL_RepeatedWaveform_UShort,					
+												DL_RepeatedWaveform_Int,						
+												DL_RepeatedWaveform_UInt,
+												DL_RepeatedWaveform_Int64,
+												DL_RepeatedWaveform_UInt64};
 						
 				SetSinkVChanDataTypes(chanset->baseClass.sinkVChan, NumElem(allowedTypes), allowedTypes);
 			}
@@ -6388,19 +6393,22 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					// Create and register VChan with Task Controller and framework
 					//-------------------------------------------------------------
 							
-					DLDataTypes allowedPacketTypes[] = {	
-						DL_Waveform_Char,
-						DL_Waveform_UChar,
-						DL_Waveform_Short,
-						DL_Waveform_UShort,
-						DL_Waveform_Int,
-						DL_Waveform_UInt,
-						DL_RepeatedWaveform_Char,						
-						DL_RepeatedWaveform_UChar,						
-						DL_RepeatedWaveform_Short,						
-						DL_RepeatedWaveform_UShort,					
-						DL_RepeatedWaveform_Int,						
-						DL_RepeatedWaveform_UInt};
+					DLDataTypes allowedPacketTypes[] = { DL_Waveform_Char,
+													  	 DL_Waveform_UChar,
+														 DL_Waveform_Short,
+								 						 DL_Waveform_UShort,
+														 DL_Waveform_Int,
+								    					 DL_Waveform_UInt,
+														 DL_Waveform_Int64,
+								    					 DL_Waveform_UInt64,
+									   					 DL_RepeatedWaveform_Char,						
+													 	 DL_RepeatedWaveform_UChar,						
+														 DL_RepeatedWaveform_Short,						
+														 DL_RepeatedWaveform_UShort,					
+														 DL_RepeatedWaveform_Int,						
+														 DL_RepeatedWaveform_UInt,
+												   		 DL_RepeatedWaveform_Int64,						
+														 DL_RepeatedWaveform_UInt64};
 						
 					newDOChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newDOChan, VChan_Data_Receive_Timeout, NULL);  
 					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newDOChan->baseClass.sinkVChan);
@@ -8206,7 +8214,7 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	AppendString(&nSamplesSinkVChanName, ": ", -1);
 	AppendString(&nSamplesSinkVChanName, sinkVChanNSamplesBaseName, -1);
 						
-	DLDataTypes		nSamplesVChanAllowedDataTypes[] = {DL_UChar, DL_UShort, DL_UInt, DL_ULong, DL_ULongLong};
+	DLDataTypes		nSamplesVChanAllowedDataTypes[] = {DL_UChar, DL_UShort, DL_UInt, DL_UInt64};
 						
 	tskSet->timing->nSamplesSinkVChan	= init_SinkVChan_type(nSamplesSinkVChanName, nSamplesVChanAllowedDataTypes, NumElem(nSamplesVChanAllowedDataTypes),
 															tskSet, VChan_Data_Receive_Timeout, ADNSamplesSinkVChan_StateChange);
@@ -8225,7 +8233,7 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	AppendString(&nSamplesSourceVChanName, ": ", -1);
 	AppendString(&nSamplesSourceVChanName, sourceVChanNSamplesBaseName, -1);
 						
-	tskSet->timing->nSamplesSourceVChan	= init_SourceVChan_type(nSamplesSourceVChanName, DL_ULongLong, tskSet, ADNSamplesSourceVChan_StateChange);
+	tskSet->timing->nSamplesSourceVChan	= init_SourceVChan_type(nSamplesSourceVChanName, DL_UInt64, tskSet, ADNSamplesSourceVChan_StateChange);
 	OKfree(nSamplesSourceVChanName);
 	// register VChan with the framework
 	DLRegisterVChan((DAQLabModule_type*)tskSet->dev->niDAQModule, (VChan_type*)tskSet->timing->nSamplesSourceVChan);
@@ -8369,7 +8377,7 @@ static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackD
 			// send number of samples
 			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 			*nSamplesPtr = tskSet->timing->nSamples;
-			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, (void**)&nSamplesPtr, NULL, NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
 			
 			break;
@@ -8389,7 +8397,7 @@ static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackD
 			// send number of samples
 			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 			*nSamplesPtr = tskSet->timing->nSamples;
-			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, (void**)&nSamplesPtr, NULL, NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
 			
 			break;
@@ -11080,7 +11088,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 				case DL_UInt:
 					dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned int**)dataPacketData;
 					break;
-				case DL_ULongLong:
+				case DL_UInt64:
 					dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned long long**)dataPacketData;
 					break;
 			}
@@ -11109,7 +11117,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	//----------
 	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 	*nSamplesPtr = dev->AITaskSet->timing->nSamples;
-	dataPacket = init_DataPacket_type(DL_ULongLong, (void**) &nSamplesPtr, NULL, NULL);
+	dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, NULL, NULL);
 	errChk(SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	//--------------
@@ -11191,7 +11199,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 				case DL_UInt:
 					dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned int**)dataPacketData;
 					break;
-				case DL_ULongLong:
+				case DL_UInt64:
 					dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned long long**)dataPacketData;
 					break;
 			}
@@ -11246,7 +11254,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	//----------
 	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 	*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
-	dataPacket = init_DataPacket_type(DL_ULongLong, (void**) &nSamplesPtr, NULL, NULL);
+	dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, NULL, NULL);
 	errChk(SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	//--------------
@@ -13688,7 +13696,7 @@ static void	ADNSamplesSourceVChan_StateChange (VChan_type* self, void* VChanOwne
 	
 			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 			*nSamplesPtr = tskSet->timing->nSamples;
-			nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, (void**) &nSamplesPtr, NULL,NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, NULL,NULL) );
 			errChk( SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
 			break;
 			
@@ -13883,7 +13891,7 @@ static int ADNSamples_DataReceivedTC (TaskControl_type* taskControl, TCStates ta
 				tskSet->timing->nSamples = (uInt64)**(unsigned int**)dataPacketData;
 				break;
 				
-			case DL_ULongLong:
+			case DL_UInt64:
 				tskSet->timing->nSamples = (uInt64)**(unsigned long long**)dataPacketData;
 				break;
 		}
@@ -13901,7 +13909,7 @@ static int ADNSamples_DataReceivedTC (TaskControl_type* taskControl, TCStates ta
 		// send data
 		nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 		*nSamplesPtr = tskSet->timing->nSamples;
-		dataPacket = init_DataPacket_type(DL_ULongLong, (void**) &nSamplesPtr, NULL, NULL);
+		dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, NULL, NULL);
 		errChk(SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	} else

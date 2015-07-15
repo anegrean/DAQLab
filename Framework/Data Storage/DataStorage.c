@@ -191,8 +191,10 @@ static DS_Channel_type* init_DS_Channel_type (DataStorage_type* ds, int panHndl,
 										 DL_Waveform_UChar,						
 										 DL_Waveform_Short,						
 										 DL_Waveform_UShort,					
-										 DL_Waveform_Int,						
-										 DL_Waveform_UInt,						
+										 DL_Waveform_Int,
+										 DL_Waveform_UInt,
+										 DL_Waveform_Int64,
+										 DL_Waveform_UInt64,
 										 DL_Waveform_Float,						
 									 	 DL_Waveform_Double,
 										 DL_Image				};   	   
@@ -606,13 +608,10 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 	DLDataTypes			dataPacketType								= 0; 
 	size_t 				i											= 0;
 	TC_DS_Data_type*	dsdata										= NULL;
-	Waveform_type*		waveform									= NULL;
-	Image_type*			receivedimage								= NULL;
 	
 	// get all available data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
 	
-				
 	for (i = 0; i < nPackets; i++) {
 		if (!dataPackets[i]) {
 			
@@ -622,73 +621,31 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 			
 			dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType); 
 			dsdata = GetDataPacketDSData(dataPackets[i]);
+			
 			switch (dataPacketType) {
 					
 					case DL_Waveform_Char:
-						
-						waveform = *(Waveform_type**)dataPacketDataPtr;
-						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_Char); 
-						break;
-					
 					case DL_Waveform_UChar:
-						
-						waveform = *(Waveform_type**)dataPacketDataPtr;
-						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_UChar);  
-						break;
-					
 					case DL_Waveform_Short:
-						
-						waveform = *(Waveform_type**)dataPacketDataPtr;
-						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform,DL_Short);
-						break;
-					
 					case DL_Waveform_UShort:
-						
-						waveform = *(Waveform_type**)dataPacketDataPtr;
-						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_UShort); 
-						break;
-					
-					case DL_Waveform_UInt:
-						
-						waveform = *(Waveform_type**)dataPacketDataPtr;
-						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_UInt);  
-						break;
-						
 					case DL_Waveform_Int:
-						
-						waveform = *(Waveform_type**)dataPacketDataPtr;
-						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_Int);    
-						break;
-						
+					case DL_Waveform_UInt:
+					case DL_Waveform_Int64:
+					case DL_Waveform_UInt64:
 					case DL_Waveform_Float:
-						
-						waveform = *(Waveform_type**)dataPacketDataPtr;
-						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_Float);
-						break;
-						
 					case DL_Waveform_Double:
 						
-						waveform = *(Waveform_type**)dataPacketDataPtr;
-						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, waveform, DL_Double);
+						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, *(Waveform_type**)dataPacketDataPtr); 
 						break;
 					
 					case DL_Image:
-						//saving tiff files:
-						//get the image
-						/*	receivedimage=*(Image_type**) dataPacketDataPtr;
-						image=GetImagePixelArray(receivedimage);
-						rawfilename=malloc(MAXCHAR*sizeof(char)); 
-						fullitername=CreateFullIterName(currentiter);
-						free(rawfilename);
-						free(fullitername);   */
-				
-						//saving into HDF5;
-						receivedimage = *(Image_type**) dataPacketDataPtr;
-						error = WriteHDF5Image(ds->hdf5datafile, sourceVChanName, dsdata, receivedimage);   
+						
+						error = WriteHDF5Image(ds->hdf5datafile, sourceVChanName, dsdata, *(Image_type**)dataPacketDataPtr);   
 						break;
 						
 					default:
-						//shouldn't happen!
+						
+						// not implemented
 						break;
 			}
 			
@@ -696,11 +653,8 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 		}
 	}
 		
-	 
 	OKfree(dataPackets);				
 			
-			
-	
 Error:
 	
 	OKfree(sinkVChanName);

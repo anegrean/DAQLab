@@ -510,7 +510,7 @@ typedef enum {
 	
 	PointAveraging_None,									// No averaging is used. Pixel sampling rate is the same as the galvo sampling rate.
 	PointAveraging_MovingAverage,							// Moving average is used with given number of points. Pixel sampling rate is the same as the galvo sampling rate.
-	PointAveraging_All										// Performs the arithmetic average of all fluorescence pixels within the galvo hold time.
+	//PointAveraging_All										// Performs the arithmetic average of all fluorescence pixels within the galvo hold time.
 	
 } PointAveragingMethods;
 
@@ -1301,7 +1301,7 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	// populate averaging methods
 	InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_None, "None", PointAveraging_None);
 	InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_MovingAverage, "Moving Avg.", PointAveraging_MovingAverage);
-	InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_All, "All", PointAveraging_All);
+	//InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_All, "All", PointAveraging_All);
 	SetCtrlIndex(pointScanPanHndl, PointTab_Averaging, (int) rectRaster->pointJumpSettings->averagingMethod);
 	SetRectRasterScanEnginePointScanAveragingUI(pointScanPanHndl, rectRaster->pointJumpSettings->averagingMethod);
 				
@@ -3790,7 +3790,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	initalloc_ActiveScanAxisCal_type(&cal->baseClass);
 	if(!(cal->baseClass.calName		= StrDup(calName))) {free(cal); return NULL;}
 	cal->baseClass.VChanCom			= init_SourceVChan_type(commandVChanName, DL_Waveform_Double, cal, NULL);   
-	cal->baseClass.VChanComNSamples	= init_SourceVChan_type(commandNSamplesVChanName, DL_ULongLong, cal, NULL);   
+	cal->baseClass.VChanComNSamples	= init_SourceVChan_type(commandNSamplesVChanName, DL_UInt64, cal, NULL);   
 	cal->baseClass.VChanPos			= init_SinkVChan_type(positionVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), cal, VChanDataTimeout + Default_ActiveNonResGalvoCal_ScanTime * 1e3, NULL);  
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
@@ -4212,16 +4212,16 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	
 	// VChans
 	nullChk( engine->VChanFastAxisCom			= init_SourceVChan_type(fastAxisComVChanName, DL_RepeatedWaveform_Double, engine, FastAxisComVChan_StateChange) ); 
-	nullChk( engine->VChanFastAxisComNSamples	= init_SourceVChan_type(fastAxisComNSampVChanName, DL_ULongLong, engine, NULL) ); 
+	nullChk( engine->VChanFastAxisComNSamples	= init_SourceVChan_type(fastAxisComNSampVChanName, DL_UInt64, engine, NULL) ); 
 	nullChk( engine->VChanSlowAxisCom			= init_SourceVChan_type(slowAxisComVChanName, DL_RepeatedWaveform_Double, engine, SlowAxisComVChan_StateChange) ); 
-	nullChk( engine->VChanSlowAxisComNSamples	= init_SourceVChan_type(slowAxisComNSampVChanName, DL_ULongLong, engine, NULL) ); 
+	nullChk( engine->VChanSlowAxisComNSamples	= init_SourceVChan_type(slowAxisComNSampVChanName, DL_UInt64, engine, NULL) ); 
 	nullChk( engine->VChanFastAxisPos			= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, NULL) ); 
 	nullChk( engine->VChanSlowAxisPos			= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, NULL) ); 
 	nullChk( engine->VChanCompositeImage		= init_SourceVChan_type(compositeImageVChanName, DL_Image, engine, NULL) );
 	nullChk( engine->VChanShutter				= init_SourceVChan_type(shutterCommandVChanName, DL_Waveform_UChar, engine, NULL) ); 
 	nullChk( engine->VChanPixelPulseTrain		= init_SourceVChan_type(pixelPulseTrainVChanName, DL_PulseTrain_Ticks, engine, NULL) ); 	
 	nullChk( engine->VChanPixelSamplingRate		= init_SourceVChan_type(pixelSamplingRateVChanName, DL_Double, engine, NULL) ); 	
-	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_ULongLong, engine, NULL) ); 	
+	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_UInt64, engine, NULL) ); 	
 	nullChk( engine->objectives					= ListCreate(sizeof(Objective_type*)) ); 
 	nullChk( engine->VChanROIHold				= init_SourceVChan_type(ROIHoldVChanName, DL_RepeatedWaveform_UChar, engine, NULL) );
 	nullChk( engine->VChanROIStimulate			= init_SourceVChan_type(ROIStimulateVChanName, DL_RepeatedWaveform_UChar, engine, NULL) );
@@ -5589,7 +5589,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	DataPacket_type*			pixelSamplingRatePacket						= NULL;
 	DataPacket_type*			nPixelsPacket								= NULL;
 	PulseTrain_type*			pixelPulseTrain								= NULL;
-	double*						pixelSamplingRate							= NULL;
+	double*						pixelSamplingRatePtr						= NULL;
 	char*						errMsg										= NULL;
 	int							error 										= 0;
 	size_t						nFrames										= GetTaskControlIterations(scanEngine->baseClass.taskControl);
@@ -5772,7 +5772,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		// move from parked waveform + scan waveform + one sample to return to parked position
 		*nGalvoSamplesPtr = (uInt64)((nGalvoSamplesFastAxisCompensation + nGalvoSamplesFastAxisMoveFromParkedWaveform) + 
 					   (scanEngine->scanSettings.height+nFastAxisFlybackLines) * nGalvoSamplesPerLine * nFrames + 1);
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
+		nullChk( galvoCommandPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
 	
@@ -5817,7 +5817,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nGalvoSamplesPtr = malloc(sizeof(uInt64));
 		// move from parked waveform + scan waveform + one sample to return to parked position
 		*nGalvoSamplesPtr = (uInt64) ((nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParked) + nFrames * nGalvoSamplesSlowAxisScanWaveform + 1);
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
+		nullChk( galvoCommandPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
 	}
 	
@@ -5838,7 +5838,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		// send n pixels
 		nullChk( nPixelsPtr = malloc(sizeof(uInt64)) );
 		*nPixelsPtr = nPixels;
-		nullChk( nPixelsPacket = init_DataPacket_type(DL_ULongLong, (void**)&nPixelsPtr, NULL, NULL) );
+		nullChk( nPixelsPacket = init_DataPacket_type(DL_UInt64, (void**)&nPixelsPtr, NULL, NULL) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &nPixelsPacket, FALSE, &errMsg) );    
 		
 	} else {
@@ -5855,9 +5855,9 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// send pixel sampling rate
 	// pixel sampling rate in [Hz]
-	nullChk( pixelSamplingRate = malloc(sizeof(double)) );
-	*pixelSamplingRate = 1e+6/scanEngine->scanSettings.pixelDwellTime;
-	nullChk( pixelSamplingRatePacket = init_DataPacket_type(DL_Double, (void**)&pixelSamplingRate, NULL, NULL) );
+	nullChk( pixelSamplingRatePtr = malloc(sizeof(double)) );
+	*pixelSamplingRatePtr = 1e+6/scanEngine->scanSettings.pixelDwellTime;
+	nullChk( pixelSamplingRatePacket = init_DataPacket_type(DL_Double, (void**)&pixelSamplingRatePtr, NULL, NULL) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSamplingRate, &pixelSamplingRatePacket, FALSE, &errMsg) ); 
 	
 	return 0; // no error
@@ -5869,7 +5869,7 @@ Error:
 	OKfree(slowAxisCompensationSignal);
 	OKfree(parkedVoltageSignal);
 	OKfree(nGalvoSamplesPtr);
-	OKfree(pixelSamplingRate);
+	OKfree(pixelSamplingRatePtr);
 	discard_Waveform_type(&fastAxisScan_Waveform);
 	discard_Waveform_type(&fastAxisMoveFromParkedWaveform);
 	discard_Waveform_type(&fastAxisMoveFromParkedCompensatedWaveform); 
@@ -5916,13 +5916,17 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	double*					slowAxisVoltages				= NULL;
 	double*					fastAxisJumpSignal				= NULL;
 	double*					slowAxisJumpSignal				= NULL;
+	double*					pixelSamplingRatePtr			= NULL;
 	unsigned char*			ROIHoldSignal					= NULL;
 	unsigned char*			ROIStimulateSignal				= NULL;
 	uInt64*					nGalvoSamplesPtr				= NULL;
+	uInt64					nPixels							= 0;
+	uInt64*					nPixelsPtr						= NULL;
 	RepeatedWaveform_type*	fastAxisJumpWaveform			= NULL;
 	RepeatedWaveform_type*	slowAxisJumpWaveform			= NULL;
 	RepeatedWaveform_type*	ROIHoldWaveform					= NULL;
 	RepeatedWaveform_type*	ROIStimulateWaveform			= NULL;
+	PulseTrain_type*		pixelPulseTrain					= NULL;
 	DataPacket_type*		dataPacket						= NULL; 
 	NonResGalvoCal_type*	fastAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
@@ -6004,6 +6008,18 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	totalJumpTime +=  pointJumpSet->globalPointScanSettings.holdTime * (pointJumpSet->nJumpTimes - 1) + extraStartDelay;
 	
 	//-----------------------------------------------
+	// Calculate number of pixels to skip
+	//-----------------------------------------------
+	for (size_t i = 0; i < scanEngine->nPointBuffers; i++) 
+		scanEngine->pointBuffers[i]->nSkipPixels = (size_t)ceil(((pointJumpSet->startDelay * 1e3 + scanEngine->baseClass.pixDelay) * 1e-6 * scanEngine->galvoSamplingRate));
+	
+	//-------------------------------------------------
+	// Calculate number of pixels to record if required
+	//-------------------------------------------------
+	
+	nPixels = (uInt64)ceil(((totalJumpTime * 1e3 + scanEngine->baseClass.pixDelay) * 1e-6 * scanEngine->galvoSamplingRate));
+	
+	//-----------------------------------------------
 	// Generate galvo jump waveforms
 	//-----------------------------------------------
 	
@@ -6077,7 +6093,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		nullChk( ROIStimulateWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIStimulateSignal, 1.0) );
 	
 	//------------------------------------------------------------
-	// Send data packets and null packets to mark end of waveforms
+	// Send galvo, ROI timing and stimulation waveforms
 	//------------------------------------------------------------
 	
 	// fast galvo axis
@@ -6105,16 +6121,49 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		errChk( SendNullPacket(scanEngine->baseClass.VChanROIStimulate, &errMsg) );
 	}
 	
-	// send number of galvo samples needed for the point jump
+	//------------------------------------------------------------
+	// Send number of galvo samples needed for the point jump
+	//------------------------------------------------------------
+	
 	nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
 	// initial start delay waveform + jump waveform
 	*nGalvoSamplesPtr = (uInt64) nGalvoJumpSamples;
-	nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
+	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, NULL, NULL) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &dataPacket, FALSE, &errMsg) );
 	nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
 	*nGalvoSamplesPtr = (uInt64) nGalvoJumpSamples;
-	nullChk( dataPacket = init_DataPacket_type(DL_ULongLong, (void**)&nGalvoSamplesPtr, NULL, NULL) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errMsg) ); 
+	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, NULL, NULL) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errMsg) );
+	
+	//------------------------------------------------------------
+	// Send number of pixels to acquire if recording is needed
+	//------------------------------------------------------------
+	
+	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanNPixels)) {
+		nullChk( nPixelsPtr = malloc(sizeof(uInt64)) );
+		*nPixelsPtr = nPixels;
+		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nPixelsPtr, NULL, NULL) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &dataPacket, FALSE, &errMsg) );  
+	}
+	
+	//------------------------------------------------------------
+	// Send pixel sampling info if recording is needed
+	//------------------------------------------------------------
+	
+	// send pixel pulse train info
+	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanPixelPulseTrain)) {
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32)(scanEngine->galvoSamplingRate/scanEngine->baseClass.referenceClockFreq) - 2, 2, 0) );
+		nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, NULL, (DiscardFptr_type)discard_PulseTrain_type) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &dataPacket, FALSE, &errMsg) ); 
+	}
+	
+	// send pixel sampling rate in [Hz]
+	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanPixelSamplingRate)) {
+		nullChk( pixelSamplingRatePtr = malloc(sizeof(double)) );
+		*pixelSamplingRatePtr = scanEngine->galvoSamplingRate;
+		nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&pixelSamplingRatePtr, NULL, NULL) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSamplingRate, &dataPacket, FALSE, &errMsg) ); 
+	}
 	
 	
 	// cleanup
@@ -6133,10 +6182,13 @@ Error:
 	OKfree(ROIHoldSignal);
 	OKfree(ROIStimulateSignal);
 	OKfree(nGalvoSamplesPtr);
+	OKfree(nPixelsPtr);
+	OKfree(pixelSamplingRatePtr);
 	discard_RepeatedWaveform_type(&fastAxisJumpWaveform);
 	discard_RepeatedWaveform_type(&slowAxisJumpWaveform);
 	discard_RepeatedWaveform_type(&ROIHoldWaveform);
 	discard_RepeatedWaveform_type(&ROIStimulateWaveform);
+	discard_PulseTrain_type(&pixelPulseTrain);
 	discard_DataPacket_type(&dataPacket);
 	
 	if (!errMsg)
@@ -6790,8 +6842,16 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	// Process waveform
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	
-	 IN PRINCIPLE THE START DELAY CAN BE USED TO SKIP PIXELS, HOWEVER, THE MINIMUM START DELAY IS DIFFERENT FOR EACH POINT IF SINGLE POINT MODE IS USED, 
-		SO CALCULATING THE NUMBER OF PIXELS TO SKIP BASED ON THE DEFINITION OF THE START DELAY IS OK AS LONG AS IT CAN BE GUARANTEED FOR EACH POINT IN SINGLE POINT MODE
+	switch (rectRaster->pointJumpSettings->averagingMethod) {
+			
+		case PointAveraging_None:
+			
+			break;
+			
+		case PointAveraging_MovingAverage:
+			
+			break;
+	}
 	
 	return 0;
 	
@@ -6816,31 +6876,51 @@ static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type*
 	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
 	size_t					nTotalPoints		= ListNumItems(pointJumpSet->pointJumps);
-	Point_type*				pointJump			= NULL;
-	Point_type*				firstPointJump		= NULL;
 	
-	// get first point to jump to
+	Point_type**			pointJumps			= NULL;	// Array of point jumps from the parked position to each point ROI in case of Single Point mode or to the first point ROI in case of Point Group mode.
+	size_t					nPointJumps			= 0;	// Number of active points to jump to from pointJumps array.
+	Point_type*				pointJump			= NULL;
+	double					jumpTime			= 0;
+	
+	// get points to jump to from the parked position
 	for (size_t i = 1; i <= nTotalPoints; i++) {
 		pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
-		if (!pointJump->baseClass.active) continue; // select only the first active point jump
-		firstPointJump = pointJump;
-		break;
+		if (!pointJump->baseClass.active) continue; // select only active points
+		nPointJumps++;
+		pointJumps = realloc(pointJumps, nPointJumps * sizeof(Point_type*));
+		pointJumps[nPointJumps - 1] = pointJump;
 	}
 	
-	// if there are no points, skip calculations
-	if (!firstPointJump) goto SkipPoints;
+	switch (rectRaster->pointJumpSettings->jumpMethod) {
+		
+		case PointJump_SinglePoints:
+			
+			for (size_t i = 0; i < nPointJumps; i++) {
+				NonResRectRasterScan_PointROIVoltage(rectRaster, pointJumps[i], &fastAxisCommandV, &slowAxisCommandV);
+				jumpTime = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
+				if (jumpTime > pointJumpSet->minStartDelay)
+					pointJumpSet->minStartDelay = jumpTime;
+			}
+			break;
+			
+		case PointJump_PointGroup:
+			
+			if (nPointJumps) {
+				NonResRectRasterScan_PointROIVoltage(rectRaster, pointJumps[0], &fastAxisCommandV, &slowAxisCommandV);
+				pointJumpSet->minStartDelay = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
+			}
+			break;
+	}
 	
-	// get jump voltages from point ROI
-	NonResRectRasterScan_PointROIVoltage(rectRaster, firstPointJump, &fastAxisCommandV, &slowAxisCommandV);
-	pointJumpSet->minStartDelay = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
-	
-SkipPoints:
 	// update lower bound and coerce value
 	if (pointJumpSet->startDelayInitVal <= pointJumpSet->minStartDelay) {
 		pointJumpSet->startDelayInitVal = pointJumpSet->minStartDelay;
 		SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, pointJumpSet->startDelayInitVal);
 	}
 	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, ATTR_MIN_VALUE, pointJumpSet->minStartDelay);  
+	
+	// cleanup
+	OKfree(pointJumps);
 }
 
 /*
@@ -7357,14 +7437,21 @@ static void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			// inactivate composite image VChan
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanCompositeImage, FALSE);
 			
-			// inactivate N Pixels VChan
-			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanNPixels, FALSE);
-			
-			// inactive pixel sampling rate VChan
-			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanPixelSamplingRate, FALSE);
-			
-			// inactive pixel pulse train VChan
-			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanPixelPulseTrain, FALSE);
+			if (scanEngine->pointJumpSettings->record) { 
+				// N Pixels VChan
+				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanNPixels, TRUE);
+				// pixel sampling rate VChan
+				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanPixelSamplingRate, TRUE);
+				// pixel pulse train VChan
+				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanPixelPulseTrain, TRUE);
+			} else {
+				// N Pixels VChan
+				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanNPixels, FALSE);
+				// pixel sampling rate VChan
+				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanPixelSamplingRate, FALSE);
+				// pixel pulse train VChan
+				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanPixelPulseTrain, FALSE);
+			}
 			
 			// activate ROI hold VChan
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIHold, TRUE);
@@ -7442,10 +7529,8 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 						// insert ROI item in the scan engine as well
 						ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &pointJump, END_OF_LIST);
 						
-						// if this is the first point added, i.e. the first point to which the galvo will jump, 
-						// then calculate the initial delay, display it and set this as a lower bound in the UI
-						if (nListItems == 1)
-							NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
+						// calculate the minimum initial delay, display it and set this as a lower bound in the UI
+						NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 						
 						// update minimum point jump period
 						//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
@@ -7660,7 +7745,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = (uInt64) nCommandSignalSamples;
 			
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nCommandWaveformSamplesPtr, NULL, NULL) );
+			nullChk( commandPacket = init_DataPacket_type(DL_UInt64, (void**)&nCommandWaveformSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -7770,7 +7855,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			// send number of samples in waveform
 			nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
 			*nCommandWaveformSamplesPtr = (uInt64)nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nCommandWaveformSamplesPtr, NULL, NULL) );
+			nullChk( commandPacket = init_DataPacket_type(DL_UInt64, (void**)&nCommandWaveformSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -7924,7 +8009,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = (uInt64)nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nCommandWaveformSamplesPtr, NULL,NULL) );
+			nullChk( commandPacket = init_DataPacket_type(DL_UInt64, (void**)&nCommandWaveformSamplesPtr, NULL,NULL) );
 			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -8046,7 +8131,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = (uInt64)nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nCommandWaveformSamplesPtr, NULL, NULL) );
+			nullChk( commandPacket = init_DataPacket_type(DL_UInt64, (void**)&nCommandWaveformSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -8182,7 +8267,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const*
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = (uInt64)nCommandSignalSamples;
-			nullChk( commandPacket = init_DataPacket_type(DL_ULongLong, (void**)&nCommandWaveformSamplesPtr, NULL, NULL) );
+			nullChk( commandPacket = init_DataPacket_type(DL_UInt64, (void**)&nCommandWaveformSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------

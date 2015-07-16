@@ -11,12 +11,11 @@
 //==============================================================================
 // Include files
 
-#include "nivision.h"
+//#include "nivision.h"
 #include "DataTypes.h" 
 #include "DAQLabUtility.h"
 #include <ansi_c.h>
 #include "toolbox.h"
-#include <nidaqmx.h>
 
 
 

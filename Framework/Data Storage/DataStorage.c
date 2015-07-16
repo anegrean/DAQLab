@@ -12,7 +12,6 @@
 // Include files
 //#include "HDF5support.h"
 #include "DAQLab.h" 		// include this first
-#include "nivision.h"
 #include "pathctrl.h"
 #include "UI_DataStorage.h"
 #include <formatio.h>
@@ -20,7 +19,6 @@
 #include "DataStorage.h"
 #include "DisplayEngine.h"
 #include "HDF5support.h"
-//#include "tiffio.h"
 
 
 

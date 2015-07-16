@@ -20,13 +20,67 @@
 
 #include "cvidef.h"
 #include "toolbox.h"
-#include "nidaqmx.h"
+//#include "nidaqmx.h"
 
 //==============================================================================
 // Constants
 
 //==============================================================================
 // Types
+		
+	//----------------------------------------------------------------------------------------------
+	// Additional data types
+	//---------------------------------------------------------------------------------------------- 
+		
+// NI-DAQmx Typedefs
+#ifndef _NI_int8_DEFINED_
+#define _NI_int8_DEFINED_
+	typedef signed char        int8;
+#endif
+#ifndef _NI_uInt8_DEFINED_
+#define _NI_uInt8_DEFINED_
+	typedef unsigned char      uInt8;
+#endif
+#ifndef _NI_int16_DEFINED_
+#define _NI_int16_DEFINED_
+	typedef signed short       int16;
+#endif
+#ifndef _NI_uInt16_DEFINED_
+#define _NI_uInt16_DEFINED_
+	typedef unsigned short     uInt16;
+#endif
+#ifndef _NI_int32_DEFINED_
+#define _NI_int32_DEFINED_
+	typedef signed long        int32;
+#endif
+#ifndef _NI_uInt32_DEFINED_
+#define _NI_uInt32_DEFINED_
+	typedef unsigned long      uInt32;
+#endif
+#ifndef _NI_float32_DEFINED_
+#define _NI_float32_DEFINED_
+	typedef float              float32;
+#endif
+#ifndef _NI_float64_DEFINED_
+#define _NI_float64_DEFINED_
+	typedef double             float64;
+#endif
+#ifndef _NI_int64_DEFINED_
+#define _NI_int64_DEFINED_
+#if defined(__linux__) || defined(__APPLE__)
+	typedef long long int      int64;
+#else
+	typedef __int64            int64;
+#endif
+#endif
+#ifndef _NI_uInt64_DEFINED_
+#define _NI_uInt64_DEFINED_
+#if defined(__linux__) || defined(__APPLE__)
+	typedef unsigned long long uInt64;
+#else
+	typedef unsigned __int64   uInt64;
+#endif
+#endif
 
 	//----------------------------------------------------------------------------------------------
 	// Function types
@@ -212,15 +266,31 @@ typedef enum {
 	PulseTrain_Ticks
 } PulseTrainTimingTypes;
 
+// pulse train idle states
+#ifdef ___nidaqmx_h___
 typedef enum {
 	PulseTrainIdle_Low 		= DAQmx_Val_Low,
 	PulseTrainIdle_High		= DAQmx_Val_High
 } PulseTrainIdleStates;
+#else
+typedef enum {
+	PulseTrainIdle_Low 		= 0,
+	PulseTrainIdle_High		= 1
+} PulseTrainIdleStates;
+#endif
 
+// pulse train modes
+#ifdef ___nidaqmx_h___ 
 typedef enum {
 	PulseTrain_Finite		= DAQmx_Val_FiniteSamps,
 	PulseTrain_Continuous	= DAQmx_Val_ContSamps
 } PulseTrainModes;
+#else 
+typedef enum {
+	PulseTrain_Finite		= 0,
+	PulseTrain_Continuous	= 1
+} PulseTrainModes;
+#endif
 
 	//---------------------------------------------------------------------------------------------------------------------------------------
 	// All types

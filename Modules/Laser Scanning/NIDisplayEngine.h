@@ -19,7 +19,6 @@
 // Include files
 
 #include "cvidef.h"
-#include <nivision.h>
 #include "DisplayEngine.h"
 
 //==============================================================================

@@ -136,7 +136,7 @@ struct XYStage {
 		// Override: Optional, to change UI panel behavior. 
 		// For hardware specific functionality override other methods such as MoveX.
 	CtrlCallbackPtr				uiCtrlsCB;
-	
+																
 		// Callback to install on the panel from UI_XYtage.uir
 	PanelCallbackPtr			uiPanelCB;
 	

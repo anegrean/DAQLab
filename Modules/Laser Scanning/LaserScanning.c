@@ -20,6 +20,7 @@
 #include "combobox.h" 
 #include <analysis.h>
 #include <NIDisplayEngine.h>
+#include "WaveformDisplay.h"
 #include "UI_LaserScanning.h"
 
 									 
@@ -311,7 +312,8 @@ typedef struct {
 	SourceVChan_type*			outputVChan;				// Assembled image or waveform for this channel. VChan of DL_Image type for frame scan and Allowed_Detector_Data_Types for point scan.
 	ScanChanColorScales			color;						// Color channel assigned to this channel.
 	ScanEngine_type*			scanEngine;					// Reference to scan engine to which this scan channel belongs.
-	ImageDisplay_type*			imgDisplay;					// Handle to display images for this channel
+	ImageDisplay_type*			imgDisplay;					// Handle to display images for this channel.
+	WaveformDisplay_type*		waveDisplay;				// Handle to display waveforms for this channel.
 } ScanChan_type;
 
 //---------------------------------------------------------------
@@ -508,14 +510,6 @@ typedef struct {
 
 typedef enum {
 	
-	PointAveraging_None,									// No averaging is used. Pixel sampling rate is the same as the galvo sampling rate.
-	PointAveraging_MovingAverage,							// Moving average is used with given number of points. Pixel sampling rate is the same as the galvo sampling rate.
-	//PointAveraging_All										// Performs the arithmetic average of all fluorescence pixels within the galvo hold time.
-	
-} PointAveragingMethods;
-
-typedef enum {
-	
 	PointJump_SinglePoints,									// Point ROIs are visited one at a time, with the beam jumping from and returning to the parked position.
 															// If Repeat is > 1 then each point is visited several times in the same manner before moving on to the next point and if the "start delay increment"
 															// is != 0 then with each repetition, the start delay is incremented. Note that the total number of iterations of the task controller is the number of 
@@ -541,7 +535,8 @@ typedef struct {
 	double						minSequencePeriod;			// Minimum value of sequence period due to galvo jump speed in [ms].
 	uInt32						nSequenceRepeat;			// Number of times to repeat a sequence of ROI point jumps.
 	double						repeatWait;					// Additional time in [s] to wait between sequence repetitions.
-	PointAveragingMethods		averagingMethod;			// Determines how fluorescence signals are processed if recording is enabled at a given ROI.
+	BOOL						integrate;					// If True, samples are integrated with a given number of integration samples, False otherwise.
+	uInt32						nIntegration;				// Number of samples to use for integration.
 	ListType					pointJumps;					// List of points to jump to of PointJump_type*. The order of point jumps is determined by the order of the elements in the list.
 	size_t						currentActivePoint;			// 1-based index of current active point to visit when using the PointJump_SinglePoints mode.
 	PointScan_type				globalPointScanSettings;	// Global settings for stimulation and recording from point ROIs.
@@ -810,7 +805,7 @@ static void 							SetRectRasterScanEnginePointScanStimulateUI			(int panel, BOO
 
 static void 							SetRectRasterScanEnginePointScanRecordUI 			(int panel, BOOL record);
 
-static void 							SetRectRasterScanEnginePointScanAveragingUI			(int panel, PointAveragingMethods averagingMethod);
+static void 							SetRectRasterScanEnginePointScanIntegrationUI		(int panel, BOOL integrate);
 
 static void 							SetRectRasterScanEnginePointScanJumpModeUI 			(int panel, PointJumpMethods method);
 
@@ -1186,19 +1181,19 @@ static void SetRectRasterScanEnginePointScanStimulateUI (int panel, BOOL stimula
 static void SetRectRasterScanEnginePointScanRecordUI (int panel, BOOL record)
 {
 	if (record)
-		SetCtrlAttribute(panel, PointTab_Averaging, ATTR_DIMMED, FALSE);
+		SetCtrlAttribute(panel, PointTab_Integrate, ATTR_DIMMED, FALSE);
 	else {
-		SetCtrlAttribute(panel, PointTab_Averaging, ATTR_DIMMED, TRUE);
-		SetCtrlAttribute(panel, PointTab_NAveraging, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(panel, PointTab_Integrate, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(panel, PointTab_NIntegration, ATTR_DIMMED, TRUE);
 	}
 }
 
-static void SetRectRasterScanEnginePointScanAveragingUI (int panel, PointAveragingMethods averagingMethod)
+static void SetRectRasterScanEnginePointScanIntegrationUI (int panel, BOOL integrate)
 {
-	if (averagingMethod == PointAveraging_MovingAverage)
-		SetCtrlAttribute(panel, PointTab_NAveraging, ATTR_DIMMED, FALSE);
+	if (integrate)
+		SetCtrlAttribute(panel, PointTab_NIntegration, ATTR_DIMMED, FALSE);
 	else
-		SetCtrlAttribute(panel, PointTab_NAveraging, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(panel, PointTab_NIntegration, ATTR_DIMMED, TRUE);
 }
 
 static void SetRectRasterScanEnginePointScanJumpModeUI (int panel, PointJumpMethods method)
@@ -1298,13 +1293,11 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	SetCtrlVal(pointScanPanHndl, PointTab_Stimulate, rectRaster->pointJumpSettings->stimulate);
 	SetRectRasterScanEnginePointScanStimulateUI(pointScanPanHndl, rectRaster->pointJumpSettings->stimulate);
 				
-	// populate averaging methods
-	InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_None, "None", PointAveraging_None);
-	InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_MovingAverage, "Moving Avg.", PointAveraging_MovingAverage);
-	//InsertListItem(pointScanPanHndl, PointTab_Averaging, PointAveraging_All, "All", PointAveraging_All);
-	SetCtrlIndex(pointScanPanHndl, PointTab_Averaging, (int) rectRaster->pointJumpSettings->averagingMethod);
-	SetRectRasterScanEnginePointScanAveragingUI(pointScanPanHndl, rectRaster->pointJumpSettings->averagingMethod);
-				
+	// set integration
+	SetCtrlVal(pointScanPanHndl, PointTab_Integrate, rectRaster->pointJumpSettings->integrate);
+	SetCtrlVal(pointScanPanHndl, PointTab_Integrate, rectRaster->pointJumpSettings->nIntegration);
+	SetRectRasterScanEnginePointScanIntegrationUI(pointScanPanHndl, rectRaster->pointJumpSettings->integrate);
+	
 	// round point settings to galvo sampling time
 	rectRaster->pointJumpSettings->globalPointScanSettings.holdTime = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->globalPointScanSettings.holdTime);
 	rectRaster->pointJumpSettings->globalPointScanSettings.stimDelay = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->globalPointScanSettings.stimDelay);
@@ -2892,6 +2885,7 @@ static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanId
 	// init
 	DLDataTypes allowedPacketTypes[] 	= Allowed_Detector_Data_Types;
 	scanChan->imgDisplay				= NULL;
+	scanChan->waveDisplay				= NULL;
 	scanChan->detVChan					= NULL;
 	scanChan->outputVChan				= NULL;
 	scanChan->color						= ScanChanColor_Grey;
@@ -2938,6 +2932,9 @@ static void	discard_ScanChan_type (ScanChan_type** scanChanPtr)
 	
 	// discard image display
 	discard_ImageDisplay_type(&scanChan->imgDisplay);
+	
+	// discard waveform display
+	discard_WaveformDisplay_type(&scanChan->waveDisplay);
 	
 	OKfree(*scanChanPtr);
 }
@@ -5054,12 +5051,16 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					break;
 					
-				case PointTab_Averaging:
+				case PointTab_Integrate:
 					
-					int	averagingMethod = 0;
-					GetCtrlIndex(panel, control, &averagingMethod);
-					scanEngine->pointJumpSettings->averagingMethod = (PointAveragingMethods) averagingMethod;
-					SetRectRasterScanEnginePointScanAveragingUI(panel, scanEngine->pointJumpSettings->averagingMethod);
+					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->integrate);
+					SetRectRasterScanEnginePointScanIntegrationUI(panel, scanEngine->pointJumpSettings->integrate);
+					
+					break;
+					
+				case PointTab_NIntegration:
+					
+					GetCtrlVal(panel, control, &scanEngine->pointJumpSettings->nIntegration);
 					
 					break;
 					
@@ -6842,16 +6843,16 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	// Process waveform
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	
-	switch (rectRaster->pointJumpSettings->averagingMethod) {
+	if (rectRaster->pointJumpSettings->integrate) {
 			
-		case PointAveraging_None:
-			
-			break;
-			
-		case PointAveraging_MovingAverage:
-			
-			break;
+		
 	}
+	
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------
+	// Display waveform
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	
 	
 	return 0;
 	
@@ -7035,7 +7036,8 @@ static PointJumpSet_type* init_PointJumpSet_type (void)
 	pointJumpSet->minSequencePeriod						= 0;
 	pointJumpSet->nSequenceRepeat						= 1;
 	pointJumpSet->repeatWait							= 0;
-	pointJumpSet->averagingMethod						= PointAveraging_None;
+	pointJumpSet->integrate								= FALSE;
+	pointJumpSet->nIntegration							= 2;
 	pointJumpSet->pointJumps							= 0;
 	pointJumpSet->currentActivePoint					= 0;
 	pointJumpSet->jumpTimes								= NULL;

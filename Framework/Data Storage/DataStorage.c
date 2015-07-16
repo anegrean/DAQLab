@@ -26,7 +26,7 @@
 //==============================================================================
 // Constants
 // Data Storage UI resource
-#define UI_DataStorage			"./Modules/Data Storage/UI_DataStorage.uir"
+#define UI_DataStorage			"./Framework/Data Storage/UI_DataStorage.uir"
 #define MAXBASEFILEPATH			MAX_PATHNAME_LEN
 
 //test

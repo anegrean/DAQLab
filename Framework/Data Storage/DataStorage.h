@@ -18,7 +18,6 @@
 
 //==============================================================================
 // Include files
-//#include "nivision.h"
 #include "DAQLabModule.h"
 
 

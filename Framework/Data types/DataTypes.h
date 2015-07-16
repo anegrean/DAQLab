@@ -20,7 +20,6 @@
 
 #include "cvidef.h"
 #include "toolbox.h"
-//#include "nidaqmx.h"
 
 //==============================================================================
 // Constants
@@ -29,7 +28,7 @@
 // Types
 		
 	//----------------------------------------------------------------------------------------------
-	// Additional data types
+	// Additional data types defined in nidaqmx.h in case it's missing
 	//---------------------------------------------------------------------------------------------- 
 		
 // NI-DAQmx Typedefs
@@ -431,6 +430,7 @@ int 						AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_typ
 	// The portion of the waveform used starts at element with 0-based index startIdx and ends at (including) element with 0-based index endIdx.
 	// If endIdx = 0 the entire input waveform is used. nInt is the number of samples used for integration. If the number of elements in the input is less
 	// than the number of points used for integration, then an empty waveform is returned.
+	// The output waveform will be of Waveform_Double type
 int							IntegrateWaveform						(Waveform_type** waveformOut, Waveform_type* waveformIn, size_t startIdx, size_t endIdx, size_t nInt);
 
 

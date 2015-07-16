@@ -11,6 +11,7 @@
 //==============================================================================
 // Include files
 #include "windows.h"  			// include this first!
+#include "nivision.h"
 #include <formatio.h>
 #include "Commctrl.h"
 #include "NIDisplayEngine.h"

@@ -265,10 +265,14 @@ static void	discard_RefPosition_type (RefPosition_type** refPosPtr)
 }
 
 /// HIFN Loads ZStage specific resources. 
-int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl) 
+int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo) 
 {
+#define	ZStage_Load_Err_StageNotReferenced		-1
+	
+	int				error				= 0;
+	char*			errMsg				= NULL;
 	Zstage_type* 	zstage 				= (Zstage_type*) mod;  
-	char			stepsizeName[50];
+	char			stepsizeName[50]	= "";
 	
 	// load panel resources
 	zstage->controlPanHndl = LoadPanel(workspacePanHndl, MOD_Zstage_UI, ZStagePan);
@@ -341,8 +345,8 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 		}
 		
 	} else {
-		DLMsg("Stage position must be determined first. Aborting load operation.", 1);
-		return -1;
+		errMsg = StrDup("Stage position must be determined first");
+		goto Error;
 	}
 	
 	// dim/undim Joystick control box if such functionality is made or not available by the child class
@@ -400,7 +404,11 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 		SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_RefPosList, ATTR_DIMMED, 1);
 	
 	return 0;
-
+	
+Error:
+	
+	ReturnErrMsg("ZStage_Load");
+	return error;	
 }
 
 int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)

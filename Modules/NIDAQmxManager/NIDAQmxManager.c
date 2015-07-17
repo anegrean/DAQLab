@@ -906,7 +906,7 @@ static int	 currDev = -1;        // currently selected device from the DAQ table
 // DAQmx Module management
 //---------------------------------------------
 
-static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl);
+static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
 
 	//---------------------------------------------------
 	// Loading DAQmx settings
@@ -1508,11 +1508,14 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 //									NI DAQ module loading and device management
 //===============================================================================================================
 
-int	Load (DAQLabModule_type* mod, int workspacePanHndl)
+int	Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 {
 #define Load_Err_ChannelNotImplemented	-1
-	NIDAQmxManager_type* 	nidaq						= (NIDAQmxManager_type*) mod;  
+	
 	int						error						= 0;
+	char*					errMsg						= NULL;
+	
+	NIDAQmxManager_type* 	nidaq						= (NIDAQmxManager_type*) mod;  
 	int						menuItemDevicesHndl			= 0;
 	size_t					nDevs						= ListNumItems(nidaq->DAQmxDevices);
 	Dev_type*				DAQmxDev					= NULL;
@@ -1638,10 +1641,12 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 Error:
 	
+	// cleanup
 	OKfreePanHndl(nidaq->mainPanHndl);
 	OKfreePanHndl(nidaq->devListPanHndl);
 	OKfreePanHndl(nidaq->taskSetPanHndl); 
 	
+	ReturnErrMsg("DAQmxManager Load");
 	return error;
 }
 

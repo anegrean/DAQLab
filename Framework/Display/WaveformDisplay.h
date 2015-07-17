@@ -29,6 +29,9 @@
 		
 typedef struct WaveformDisplay   WaveformDisplay_type;
 
+// Waveform display callback function
+typedef void (*WaveformDisplayCB_type) (WaveformDisplay_type* waveformDisplay, int event, void* callbackData);
+
 typedef enum {
 	
 	WaveformDisplay_Close,
@@ -64,11 +67,23 @@ typedef enum {
 //==============================================================================
 // Global functions
 
-WaveformDisplay_type*		init_WaveformDisplay_type		(CallbackGroup_type** callbackGroupPtr);
+WaveformDisplay_type*		init_WaveformDisplay_type		(int parentPanHndl, WaveformDisplayCB_type waveformDisplayCBFptr, void* callbackData);
 void						discard_WaveformDisplay_type	(WaveformDisplay_type** waveformDisplayPtr);
 
 int							DisplayWaveform					(WaveformDisplay_type* waveformDisplay, Waveform_type** waveformPtr, 
-															 char plotTitle[], int parentPanHndl, WaveformDisplayColor waveformColor);
+															 char plotTitle[], WaveformDisplayColor waveformColor);
+
+	// Discards waveform from display and hides panel. Note: this does not discard the waveform display
+int							DiscardWaveform					(WaveformDisplay_type* waveformDisplay);
+
+//----------------------------------------------------
+// Set/Get
+//----------------------------------------------------
+
+void						SetWaveformDisplayCB			(WaveformDisplay_type* waveformDisplay, WaveformDisplayCB_type waveformDisplayCBFptr, void* callbackData);
+
+	// Returns reference to the waveform used for display. Do not modify this waveform directly.
+Waveform_type*				GetDisplayWaveform				(WaveformDisplay_type* waveformDisplay);
 
 #ifdef __cplusplus
     }

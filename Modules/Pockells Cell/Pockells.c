@@ -40,7 +40,26 @@
 //----------------------------------------
 #define PockellsEOM_VChan_Timing			"timing"				// Sink VChan of Waveform_UChar or RepeatedWaveform_UChar used to time the light pulses
 #define PockellsEOM_VChan_Command			"command"				// Source VChan of RepeatedWaveform_Double used to modulate the Pockells cell.
-#define PockellsEOM_VChan_Timing_DataTypes  {DL_Waveform_UChar, DL_RepeatedWaveform_UChar}
+#define PockellsEOM_VChan_Timing_DataTypes  {	DL_Waveform_Char, 				\
+												DL_RepeatedWaveform_Char,		\
+												DL_Waveform_UChar, 				\
+												DL_RepeatedWaveform_UChar,		\
+												DL_Waveform_Short, 				\
+												DL_RepeatedWaveform_Short,		\
+												DL_Waveform_UShort, 			\
+												DL_RepeatedWaveform_UShort,		\
+												DL_Waveform_Int, 				\
+												DL_RepeatedWaveform_Int,		\
+												DL_Waveform_UInt, 				\
+												DL_RepeatedWaveform_UInt,		\
+												DL_Waveform_Int64, 				\
+												DL_RepeatedWaveform_Int64,		\
+												DL_Waveform_UInt64, 			\
+												DL_RepeatedWaveform_UInt64,		\
+												DL_Waveform_SSize, 				\
+												DL_RepeatedWaveform_SSize,		\
+												DL_Waveform_Size, 				\
+												DL_RepeatedWaveform_Size	}   \
 
 #define VChanDataTimeout					1e4						// Timeout in [ms] for Sink VChans to receive data.
 
@@ -124,7 +143,7 @@ static void							discard_PockellsEOM_type							(PockellsEOM_type** eomPtr);
 // Module management
 //------------------
 
-static int							Load 												(DAQLabModule_type* mod, int workspacePanHndl);
+static int							Load 												(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
 
 static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
@@ -284,6 +303,8 @@ void discard_PockellsModule (DAQLabModule_type** mod)
 	// discard PockellsModule_type specific data
 	//-------------------------------------------
 	
+	OKfreePanHndl(eomModule->mainPanHndl);
+	
 	if (eomModule->menuBarHndl)  { 
 		DiscardMenuBar (eomModule->menuBarHndl); 
 		eomModule->menuBarHndl = 0; 
@@ -397,11 +418,12 @@ static void discard_PockellsEOM_type (PockellsEOM_type** eomPtr)
 // Module management
 //------------------
 
-static int Load (DAQLabModule_type* mod, int workspacePanHndl)
+static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 {
-	PockellsModule_type*	eomModule 			= (PockellsModule_type*) mod;
 	int						error				= 0;
 	char*					errMsg				= NULL;
+	
+	PockellsModule_type*	eomModule 			= (PockellsModule_type*) mod;
 	int						newMenuItem			= 0; 
 	int						eomPanHndl  		= 0;
 	
@@ -472,12 +494,10 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 Error:
 	
-	if (errMsg)
-		DLMsg(errMsg, 1);
-	
 	// cleanup
-	if (eomPanHndl) DiscardPanel(eomPanHndl);
+	OKfreePanHndl(eomPanHndl);
 	
+	ReturnErrMsg("Pockells Load");
 	return error;
 }
 
@@ -1481,6 +1501,32 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 {
 #define	IterateTC_Err_DataTypeNotSupported	-1
 	
+#define WaveformToPockellsCommand(timingSignal, dataType)								\
+	waveformIN 			= *(Waveform_type**)dataPacketINDataPtr;						\
+	timingSignal		= *(dataType**)GetWaveformPtrToData(waveformIN, &nSamples);		\
+	samplingRate 		= GetWaveformSamplingRate(waveformIN);							\
+	nullChk( commandSignal = malloc(nSamples * sizeof(double)) );						\
+	for (size_t i = 0; i < nSamples; i++)												\
+		if (timingSignal[i])															\
+			commandSignal[i] = voltageHigh;												\
+		else																			\
+			commandSignal[i] = voltageLow;												\
+	nullChk( commandRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, samplingRate, nSamples, (void**)&commandSignal, 1) );
+
+#define RepeatedWaveformToPockellsCommand(timingSignal, dataType)											\
+	repeatedWaveformIN 	= *(RepeatedWaveform_type**)dataPacketINDataPtr;									\
+	timingSignal 		= *(dataType**)GetRepeatedWaveformPtrToData(repeatedWaveformIN, &nSamples);			\
+	samplingRate 		= GetRepeatedWaveformSamplingRate(repeatedWaveformIN);								\
+	nRepeats 			= GetRepeatedWaveformRepeats(repeatedWaveformIN);									\
+	nullChk( commandSignal = malloc(nSamples * sizeof(double)) );											\
+	for (size_t i = 0; i < nSamples; i++)																	\
+		if (timingSignal[i])																				\
+			commandSignal[i] = voltageHigh;																	\
+		else																								\
+			commandSignal[i] = voltageLow;																	\
+	nullChk( commandRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, samplingRate, nSamples, (void**)&commandSignal, nRepeats) );
+	
+	
 	PockellsEOM_type* 			eom 						= GetTaskControlModuleData(taskControl);
 	PockellsEOMCal_type*		eomCal						= ListGetPtrToItem(eom->calib, eom->calibIdx);
 	int							error						= 0;
@@ -1491,7 +1537,6 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	DLDataTypes					dataPacketINType			= 0;
 	void**						dataPacketINDataPtr			= NULL;
 	double*						commandSignal				= NULL;
-	unsigned char*				timingSignal				= NULL;
 	Waveform_type*				waveformIN					= NULL;
 	RepeatedWaveform_type* 		commandRepeatedWaveform		= NULL;
 	RepeatedWaveform_type* 		repeatedWaveformIN			= NULL;
@@ -1501,6 +1546,17 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	double						samplingRate				= 0;
 	double						nRepeats					= 0;
 	
+	// timing signals of different types
+	char*		 				timingSignal_Char 			= NULL;  
+	unsigned char* 				timingSignal_UChar 			= NULL;
+	short*		 				timingSignal_Short 			= NULL;  
+	unsigned short* 			timingSignal_UShort			= NULL;
+	int*		 				timingSignal_Int 			= NULL;  
+	unsigned int*	 			timingSignal_UInt			= NULL;
+	int64*		 				timingSignal_Int64 			= NULL;  
+	uInt64*			 			timingSignal_UInt64			= NULL;
+	ssize_t*					timingSignal_SSize			= NULL;
+	size_t*						timingSignal_Size			= NULL;
 	
 	// if there is no Source VChan attached to the timing Sink VChan of the pockells cell or not in pulsed mode, then just send constant voltage waveform
 	if (!IsVChanOpen((VChan_type*)eom->timingVChan) || !eom->isPulsed) {
@@ -1518,53 +1574,121 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 		// get pockells cell timing signal
 		dataPacketINDataPtr = GetDataPacketPtrToData(dataPacketIN, &dataPacketINType);
 		switch (dataPacketINType) {
+			
+			//------------------------------------------------------------------------------
+			// WAVEFORMS	
+			//------------------------------------------------------------------------------
+			
+			case DL_Waveform_Char:   			
 				
-			case DL_Waveform_UChar:   			// Pockells output VChan is of DL_Waveform_Double type
+				WaveformToPockellsCommand(timingSignal_Char, char);
+				break;
+			
+			case DL_Waveform_UChar:   			
 				
-				waveformIN 			= *(Waveform_type**)dataPacketINDataPtr;
-				timingSignal 		= *(unsigned char**)GetWaveformPtrToData(waveformIN, &nSamples);
-				samplingRate 		= GetWaveformSamplingRate(waveformIN);
+				WaveformToPockellsCommand(timingSignal_UChar, unsigned char);
 				break;
 				
-			case DL_RepeatedWaveform_UChar:		// Pockells output VChan is of DL_RepeatedWaveform_Double type
+			case DL_Waveform_Short:   			
 				
-				repeatedWaveformIN 	= *(RepeatedWaveform_type**)dataPacketINDataPtr;
-				timingSignal 		= *(unsigned char**)GetRepeatedWaveformPtrToData(repeatedWaveformIN, &nSamples);
-				samplingRate 		= GetRepeatedWaveformSamplingRate(repeatedWaveformIN);
-				nRepeats 			= GetRepeatedWaveformRepeats(repeatedWaveformIN);
+				WaveformToPockellsCommand(timingSignal_Short, short);
 				break;
+			
+			case DL_Waveform_UShort:   			
+				
+				WaveformToPockellsCommand(timingSignal_UShort, unsigned short);
+				break;
+			
+			case DL_Waveform_Int:   			
+				
+				WaveformToPockellsCommand(timingSignal_Int, int);
+				break;
+			
+			case DL_Waveform_UInt:   			
+				
+				WaveformToPockellsCommand(timingSignal_UInt, unsigned int);
+				break;
+				
+			case DL_Waveform_Int64:   			
+				
+				WaveformToPockellsCommand(timingSignal_Int64, int64);
+				break;
+			
+			case DL_Waveform_UInt64:   			
+				
+				WaveformToPockellsCommand(timingSignal_UInt64, uInt64);
+				break;
+				
+			case DL_Waveform_SSize:   			
+				
+				WaveformToPockellsCommand(timingSignal_SSize, ssize_t);
+				break;
+			
+			case DL_Waveform_Size:   			
+				
+				WaveformToPockellsCommand(timingSignal_Size, size_t);
+				break;	
+			
+			//------------------------------------------------------------------------------
+			// REPEATED WAVEFORMS	
+			//------------------------------------------------------------------------------
+			
+			case DL_RepeatedWaveform_Char:   			
+				
+				RepeatedWaveformToPockellsCommand(timingSignal_Char, char);
+				break;
+			
+			case DL_RepeatedWaveform_UChar:   			
+				
+				RepeatedWaveformToPockellsCommand(timingSignal_UChar, unsigned char);
+				break;
+				
+			case DL_RepeatedWaveform_Short:   			
+				
+				RepeatedWaveformToPockellsCommand(timingSignal_Short, short);
+				break;
+			
+			case DL_RepeatedWaveform_UShort:   			
+				
+				RepeatedWaveformToPockellsCommand(timingSignal_UShort, unsigned short);
+				break;
+			
+			case DL_RepeatedWaveform_Int:   			
+				
+				RepeatedWaveformToPockellsCommand(timingSignal_Int, int);
+				break;
+			
+			case DL_RepeatedWaveform_UInt:   			
+				
+				RepeatedWaveformToPockellsCommand(timingSignal_UInt, unsigned int);
+				break;
+				
+			case DL_RepeatedWaveform_Int64:   			
+				
+				RepeatedWaveformToPockellsCommand(timingSignal_Int64, int64);
+				break;
+			
+			case DL_RepeatedWaveform_UInt64:   			
+				
+				RepeatedWaveformToPockellsCommand(timingSignal_UInt64, uInt64);
+				break;
+				
+			case DL_RepeatedWaveform_SSize:   			
+				
+				RepeatedWaveformToPockellsCommand(timingSignal_SSize, ssize_t);
+				break;
+			
+			case DL_RepeatedWaveform_Size:   			
+				
+				RepeatedWaveformToPockellsCommand(timingSignal_Size, size_t);
+				break;	
+			
 				
 			default:
-				TaskControlIterationDone(taskControl, IterateTC_Err_DataTypeNotSupported, "Incoming data type is not supported", FALSE);   
+				TaskControlIterationDone(taskControl, IterateTC_Err_DataTypeNotSupported, "Incoming data packet type is not supported", FALSE);   
 				return;
 		}
 		
-		// apply pockells cell pulsed mode command voltage to the timing signal
-		nullChk( commandSignal = malloc(nSamples * sizeof(double)) );
-		for (size_t i = 0; i < nSamples; i++)
-			if (timingSignal[i])
-				commandSignal[i] = voltageHigh;
-			else
-				commandSignal[i] = voltageLow;
-				
-			 
-		
-		// send pockells cell command waveform
-		switch (dataPacketINType) { 
-				
-			case DL_Waveform_UChar:
-				
-				nullChk( commandRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, samplingRate, nSamples, (void**)&commandSignal, 1) );
-				break;
-				
-			case DL_RepeatedWaveform_UChar:
-				nullChk( commandRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, samplingRate, nSamples, (void**)&commandSignal, nRepeats) );
-				break;
-				
-			default:
-				TaskControlIterationDone(taskControl, IterateTC_Err_DataTypeNotSupported, "Incoming data type is not supported", FALSE);   
-				return;
-		}
 		nullChk( dataPacketOUT = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandRepeatedWaveform, NULL, (DiscardFptr_type) discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(eom->modulationVChan, &dataPacketOUT, FALSE, &errMsg) );
 	

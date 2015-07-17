@@ -20,6 +20,7 @@
 		
 #include "ActiveXML.h"        // must be first to be included 
 #include "cvidef.h"
+#include "DAQLabUtility.h"
 #include <toolbox.h>
 #include <userint.h>
 #include <utility.h>
@@ -38,16 +39,6 @@
 #define DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS		50
 	// maximum Task Controller name length
 #define DAQLAB_MAX_TASKCONTROLLER_NAME_NCHARS		50		
-//==============================================================================
-// Macros
-
-#define OKfree(ptr) 					if (ptr) {free(ptr); ptr = NULL;}
-#define OKfreeCAHndl(objHandle)			if (objHandle) {CA_DiscardObjHandle(objHandle); objHandle = 0;}
-#define OKfreePanHndl(panelHandle)  	if (panelHandle) {DiscardPanel(panelHandle); panelHandle = 0;}
-#define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}  
-
-#define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to 
-													 // get the number of elements in an array passed as an argument!
 
 
 //==============================================================================

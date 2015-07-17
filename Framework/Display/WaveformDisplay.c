@@ -38,8 +38,9 @@ struct WaveformDisplay {
 	int						menuID_Close;
 	int						menuID_Save;
 	
-	// CALLBACKS
-	CallbackGroup_type*		callbackGroup;
+	// CALLBACK
+	WaveformDisplayCB_type	callbackFptr;
+	void*					callbackData;
 	
 };
 
@@ -58,27 +59,57 @@ static void CVICALLBACK 		WaveformDisplayMenu_CB 				(int menuBar, int menuItem,
 //==============================================================================
 // Global functions
 
-WaveformDisplay_type* init_WaveformDisplay_type (CallbackGroup_type** callbackGroupPtr)
+WaveformDisplay_type* init_WaveformDisplay_type (int parentPanHndl, WaveformDisplayCB_type waveformDisplayCBFptr, void* callbackData)
 {
-	WaveformDisplay_type*	waveDisp = malloc (sizeof(WaveformDisplay_type));
+	int						error		= 0;
+	WaveformDisplay_type*	waveDisp 	= malloc (sizeof(WaveformDisplay_type));
 	if (!waveDisp) return NULL;
+	
+	//--------------------------------
+	// Init
 	
 	// DATA
 	waveDisp->waveform			= NULL;
 	
 	// UI
+	waveDisp->plotPanHndl		= 0;
 	waveDisp->menuBarHndl		= 0;
 	waveDisp->menuID_Close		= 0;
 	waveDisp->menuID_Save		= 0;
 	
 	// CALLBACKS
-	if (callbackGroupPtr) {
-		waveDisp->callbackGroup	= *callbackGroupPtr;
-		*callbackGroupPtr		= NULL;
-	} else
-		waveDisp->callbackGroup = NULL;
+	waveDisp->callbackFptr		= waveformDisplayCBFptr;
+	waveDisp->callbackData		= callbackData;
+	
+	//--------------------------------
+	// Allocate resources
+	
+	// load waveform panel if not loaded already
+	errChk( waveDisp->plotPanHndl = LoadPanel(parentPanHndl, WaveformDisplay_UI, TSPan) );
+		
+	// add menu bar
+	errChk( waveDisp->menuBarHndl = NewMenuBar(waveDisp->plotPanHndl) );
+	SetMenuBarAttribute(waveDisp->menuBarHndl, 0, ATTR_SHOW_IMMEDIATE_ACTION_SYMBOL, 0); 
+	// Close menu bar item
+	errChk( waveDisp->menuID_Close = NewMenu(waveDisp->menuBarHndl, "Close", -1) );
+	errChk( SetMenuBarAttribute(waveDisp->menuBarHndl, waveDisp->menuID_Close, ATTR_CALLBACK_DATA, waveDisp) );
+	errChk( SetMenuBarAttribute(waveDisp->menuBarHndl, waveDisp->menuID_Close, ATTR_CALLBACK_FUNCTION_POINTER, WaveformDisplayMenu_CB) );
+	// Save menu bar item
+	errChk( waveDisp->menuID_Save = NewMenu(waveDisp->menuBarHndl, "Save", -1) );
+	errChk( SetMenuBarAttribute(waveDisp->menuBarHndl, waveDisp->menuID_Save, ATTR_CALLBACK_DATA, waveDisp) );
+	errChk( SetMenuBarAttribute(waveDisp->menuBarHndl, waveDisp->menuID_Save, ATTR_CALLBACK_FUNCTION_POINTER, WaveformDisplayMenu_CB) );	
+	
 	
 	return waveDisp;
+	
+Error:
+	
+	OKfreePanHndl(waveDisp->plotPanHndl);
+	if (waveDisp->menuBarHndl)
+		DiscardMenuBar(waveDisp->menuBarHndl);
+	
+	free(waveDisp);
+	return NULL;
 }
 
 void discard_WaveformDisplay_type (WaveformDisplay_type** waveformDisplayPtr)
@@ -88,12 +119,22 @@ void discard_WaveformDisplay_type (WaveformDisplay_type** waveformDisplayPtr)
 	
 	OKfreePanHndl(waveDisp->plotPanHndl);
 	discard_Waveform_type(&waveDisp->waveform);
-	discard_CallbackGroup_type(&waveDisp->callbackGroup);
 	
 	OKfree(*waveformDisplayPtr);
 }
 
-int DisplayWaveform (WaveformDisplay_type* waveformDisplay, Waveform_type** waveformPtr, char plotTitle[], int parentPanHndl, WaveformDisplayColor waveformColor)
+void SetWaveformDisplayCB (WaveformDisplay_type* waveformDisplay, WaveformDisplayCB_type waveformDisplayCBFptr, void* callbackData)
+{
+	waveformDisplay->callbackFptr = waveformDisplayCBFptr;
+	waveformDisplay->callbackData = callbackData;
+}
+
+Waveform_type* GetDisplayWaveform (WaveformDisplay_type* waveformDisplay)
+{
+	return waveformDisplay->waveform;
+}
+
+int DisplayWaveform (WaveformDisplay_type* waveformDisplay, Waveform_type** waveformPtr, char plotTitle[], WaveformDisplayColor waveformColor)
 {
 	int				error				= 0;
 	void*			waveformData		= NULL;
@@ -102,24 +143,6 @@ int DisplayWaveform (WaveformDisplay_type* waveformDisplay, Waveform_type** wave
 	char*			waveformName		= GetWaveformName(*waveformPtr);
 	char*			waveformUnit		= GetWaveformPhysicalUnit(*waveformPtr);
 	double			xIncrement			= 1.0;
-	
-	// load waveform panel if not loaded already
-	if (!waveformDisplay->plotPanHndl) {
-		
-		errChk( waveformDisplay->plotPanHndl = LoadPanel(parentPanHndl, WaveformDisplay_UI, TSPan) );
-		
-		// add menu bar
-		errChk (waveformDisplay->menuBarHndl		= NewMenuBar(waveformDisplay->plotPanHndl) );
-		// Close menu bar item
-		errChk (waveformDisplay->menuID_Close		= NewMenu(waveformDisplay->menuBarHndl, "Close", -1) );
-		// Save menu bar item
-		errChk (waveformDisplay->menuID_Save		= NewMenu(waveformDisplay->menuBarHndl, "Save", -1) );
-		
-		// add menu callback
-		SetMenuBarAttribute(waveformDisplay->menuBarHndl, 0, ATTR_CALLBACK_DATA, waveformDisplay);
-		SetMenuBarAttribute(waveformDisplay->menuBarHndl, 0, ATTR_CALLBACK_FUNCTION_POINTER, WaveformDisplayMenu_CB);
-	
-	}
 	
 	// clear plot
 	errChk( DeleteGraphPlot(waveformDisplay->plotPanHndl, TSPan_TSGraphPlot, -1, VAL_IMMEDIATE_DRAW) );
@@ -207,6 +230,9 @@ int DisplayWaveform (WaveformDisplay_type* waveformDisplay, Waveform_type** wave
 			errChk( PlotWaveform(waveformDisplay->plotPanHndl, TSPan_TSGraphPlot, waveformData, nSamples, VAL_DOUBLE, 1.0, 0.0, 0.0, xIncrement, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, waveformColor) );
 			break;
 	}
+	
+	// refresh plot
+	RefreshGraph(waveformDisplay->plotPanHndl, TSPan_TSGraphPlot);  
 
 	
 Error:
@@ -217,17 +243,37 @@ Error:
 	return error;
 }
 
+int DiscardWaveform (WaveformDisplay_type* waveformDisplay)
+{
+	int		error = 0;
+	// clear plot
+	errChk( DeleteGraphPlot(waveformDisplay->plotPanHndl, TSPan_TSGraphPlot, -1, VAL_IMMEDIATE_DRAW) );
+	
+	// hide panel
+	errChk( HidePanel(waveformDisplay->plotPanHndl) );
+
+Error:
+	
+	return error;
+}
+
 static void CVICALLBACK WaveformDisplayMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
 	WaveformDisplay_type*	waveformDisplay = callbackData;
 	
 	if (menuItem == waveformDisplay->menuID_Close) {
-		FireCallbackGroup(waveformDisplay->callbackGroup, WaveformDisplay_Close);
+		
+		if (waveformDisplay->callbackFptr)
+			(*waveformDisplay->callbackFptr) (waveformDisplay, WaveformDisplay_Close, waveformDisplay->callbackData);
+		
 		return;
 	}
 	
 	if (menuItem == waveformDisplay->menuID_Save) {
-		FireCallbackGroup(waveformDisplay->callbackGroup, WaveformDisplay_Save);
+		
+		if (waveformDisplay->callbackFptr)
+			(*waveformDisplay->callbackFptr) (waveformDisplay, WaveformDisplay_Save, waveformDisplay->callbackData);
+		
 		return;
 	}
 	

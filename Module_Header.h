@@ -22,7 +22,7 @@
  * Include only required module. Define compiler build option in the format
  * DAQLabModule_<module_name>
  */
-#ifdef DAQLABModule_PIStage
+#ifdef DAQLabModule_PIStage
 #include "PIStage.h"
 #else		/* PIStage not defined */
 #define	MOD_PIStage_NAME NULL
@@ -58,10 +58,17 @@
 #endif		/* NIDAQmxManager */
 		
 #ifdef DAQLabModule_LaserScanning
-#include "LaserScannig.h"
+#include "\Modules\Laser Scanning\LaserScanning.h"
 #else		/* LaserScanning not defined */ 
 #define	MOD_LaserScanning_NAME NULL
 #define	initalloc_LaserScanning NULL
+#endif		/* LaserScanning */
+
+#ifdef DAQLabModule_DataStorage
+#include "DataStorage.h"
+#else		/* DataStorage not defined */ 
+#define	MOD_DataStorage_NAME NULL
+#define	initalloc_DataStorage NULL
 #endif		/* LaserScanning */
 
 #ifdef __cplusplus

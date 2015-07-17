@@ -170,7 +170,7 @@ static void						discard_Channel_type			(Channel_type** chan);
 
 static int						InitHardware 					(VUPhotonCtr_type* vupc);
 
-static int						Load 							(DAQLabModule_type* mod, int workspacePanHndl);
+static int						Load 							(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
 
 static int						DisplayPanels					(DAQLabModule_type* mod, BOOL visibleFlag);
 
@@ -417,13 +417,15 @@ Error:
 	return error;
 }
 
-static int Load (DAQLabModule_type* mod, int workspacePanHndl)
+static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 {
-	VUPhotonCtr_type* 	vupc 				= (VUPhotonCtr_type*) mod;
-	int					menuItemSettingsHndl;
-	int					error 				= 0;
-	char				buff[50];
-	char*				name;
+	int					error 					= 0;
+	char*				errMsg					= NULL;
+	
+	VUPhotonCtr_type* 	vupc 					= (VUPhotonCtr_type*) mod;
+	int					menuItemSettingsHndl	= 0;
+	char				buff[50]				= "";
+	char*				name					= NULL;
 
 	// init VU Photon Counting hardware
 

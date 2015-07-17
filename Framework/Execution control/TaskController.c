@@ -1104,7 +1104,7 @@ int TaskControlEvent (TaskControl_type* RecipientTaskControl, TCEvents event, vo
 					  DiscardFptr_type discardEventDataFptr)
 {
 	EventPacket_type 	eventpacket = {event, eventData, discardEventDataFptr};
-	ChildTCInfo_type*		subTask		= NULL;
+	ChildTCInfo_type*	subTask		= NULL;
 	
 	int 	lockObtainedFlag;
 	int 	error;
@@ -1623,7 +1623,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 #define TaskEventHandler_Error_DataPacketsNotCleared		-9
 
 	EventPacket_type 		eventpacket[EVENT_BUFFER_SIZE];
-	ChildTCInfo_type* 			childTCPtr; 
+	ChildTCInfo_type* 		childTCPtr; 
 	char*					buff			= NULL;
 	char*					errMsg			= NULL;
 	char*					eventStr;

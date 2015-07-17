@@ -172,7 +172,7 @@ DAQLabModule_type*	initalloc_XYStage 				(DAQLabModule_type* mod, char className
 void 				discard_XYStage 				(DAQLabModule_type** mod);
 
 	// Loads generic XY stage module resources
-int					XYStage_Load 					(DAQLabModule_type* mod, int workspacePanHndl);
+int					XYStage_Load 					(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
 
 	// Saves generic settings for a XY stage
 int					XYStage_SaveCfg					(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);

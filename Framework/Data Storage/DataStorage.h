@@ -24,7 +24,7 @@
 //==============================================================================
 // Constants
 
-#define MOD_DataStore_NAME 		"Data Storage"
+#define MOD_DataStorage_NAME 		"Data Storage"
 	
 
 

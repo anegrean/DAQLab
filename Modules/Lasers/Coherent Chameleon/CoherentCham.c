@@ -71,7 +71,7 @@ static int 							LoadCfg 							(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMEl
 
 static int							SaveCfg								(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
-static int							Load 								(DAQLabModule_type* mod, int workspacePanHndl);
+static int							Load 								(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
 
 static int CVICALLBACK 				UILaserControls_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -166,10 +166,11 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	return 0;
 }
 
-static int Load (DAQLabModule_type* mod, int workspacePanHndl)
+static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 {
 	int						error	= 0;
 	char*					errMsg	= NULL;
+	
 	CoherentCham_type* 		laser 	= (CoherentCham_type*) mod;
 	
 	// load panel resources
@@ -193,24 +194,14 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 	}
 	
 	return 0;
-	
-Error:
-	
-	if (errMsg) {
-		DLMsg(errMsg, 1);
-		DLMsg("\n\n", 0);
-	}
-	
-	OKfree(errMsg);
-	
-	return error;
-	
+
 RS232Error:
 	
-	char* RS232ErrMsg = GetRS232ErrorString(error);
-	DLMsg(RS232ErrMsg, 1);
-	DLMsg("\n\n", 0);
+	errMsg = StrDup(GetRS232ErrorString(error));
+
+Error:
 	
+	ReturnErrMsg("Coherent Cham Load");
 	return error;
 }
 

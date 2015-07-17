@@ -54,7 +54,7 @@ struct DAQLabModule {
 	void	(* Discard) 		(DAQLabModule_type** self);	
 	
 		// loads module into DAQLab workspace
-	int		(* Load)			(DAQLabModule_type* self, int workspacePanHndl);
+	int		(* Load)			(DAQLabModule_type* self, int workspacePanHndl, char** errorInfo);
 	
 		// loads config from XML node
 	int		(* LoadCfg) 		(DAQLabModule_type* self, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo);

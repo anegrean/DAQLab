@@ -95,7 +95,7 @@ AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last para
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
 	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
-	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 },
+	{ MOD_DataStorage_NAME, initalloc_DataStorage, FALSE, 0 },
 	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
 };
 
@@ -390,6 +390,8 @@ Error:
 static int DAQLab_Load (void)
 {
 	int								error 								= 0;
+	char*							errMsg								= NULL;
+	
 	BOOL							FoundDAQLabSettingsFlag				= 0;		// if FALSE, no XML settings were found and default will be used
 	HRESULT							xmlerror							= 0;  
 	ERRORINFO						xmlErrorInfo						= {.wCode = 0, .sCode = 0, .source = "", .description = "", .helpFile = "", .helpContext = 0, .errorParamPos = 0};;
@@ -550,7 +552,7 @@ static int DAQLab_Load (void)
 		DLGetXMLNodeAttributes(xmlModuleNode, attrModule, NumElem(attrModule)); 
 		// get module index from the framework to call its init function 
 		for (size_t j = 0; j < NumElem(DAQLabModules_InitFunctions); j++)
-			if (!strcmp(DAQLabModules_InitFunctions[j].className, moduleClassName)) {
+			if (DAQLabModules_InitFunctions[j].className && moduleClassName && !strcmp(DAQLabModules_InitFunctions[j].className, moduleClassName)) {
 				// call module init function
 				newModule = (*DAQLabModules_InitFunctions[j].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[j].className, moduleInstanceName, workspacePanHndl);
 				// load module configuration data if specified
@@ -564,8 +566,9 @@ static int DAQLab_Load (void)
 					}
 				
 				// call module load function
-				if ( (*newModule->Load) 	(newModule, workspacePanHndl) < 0) {
-					DAQLab_Msg(DAQLAB_MSG_ERR_LOADING_MODULE, moduleInstanceName, NULL, NULL, NULL); 
+				if ( (*newModule->Load) 	(newModule, workspacePanHndl, &errMsg) < 0) {
+					DAQLab_Msg(DAQLAB_MSG_ERR_LOADING_MODULE, moduleInstanceName, errMsg, NULL, NULL);
+					OKfree(errMsg);
 					// dispose of module if not loaded properly
 					(*newModule->Discard) 	(&newModule);
 					continue;
@@ -787,7 +790,9 @@ static int DLSaveUITCTaskTree (TaskControl_type* taskController, CAObjHandle xml
 	ListType							childTCs					= 0;
 	
 	char*								tcName						= GetTaskControlName(taskController);
-	DAQLabXMLNode 						attr[] 						= { {"Name",		BasicData_CString,		tcName} }; 
+	uInt32								tcExecutionMode				= (uInt32)GetTaskControlExecutionMode(taskController);
+	DAQLabXMLNode 						attr[] 						= { {"Name",				BasicData_CString,		tcName}, 
+																		{"ExecutionMode",		BasicData_UInt,			&tcExecutionMode} }; 
 	
 	
 	// create new TaskController XML element
@@ -1174,10 +1179,12 @@ static int ConnectTaskTrees (ActiveXMLObj_IXMLDOMElement_ UITCXMLElement, ERRORI
 	long							nChildTCs							= 0;
 	char*							parentTCName						= NULL;
 	char*							childTCName							= NULL;
+	uInt32							tcExecutionMode						= 0;
 	TaskControl_type*				parentTC							= NULL;
 	TaskControl_type*				childTC								= NULL;
-	DAQLabXMLNode 					parentTCAttr[]						= { {"Name",	BasicData_CString,		&parentTCName} };
-	DAQLabXMLNode 					childTCAttr[]						= { {"Name",	BasicData_CString,		&childTCName} };
+	DAQLabXMLNode 					parentTCAttr[]						= { {"Name",			BasicData_CString,		&parentTCName} };
+	DAQLabXMLNode 					childTCAttr[]						= { {"Name",			BasicData_CString,		&childTCName},
+																			{"ExecutionMode",	BasicData_UInt,			&tcExecutionMode},	};
 	
 	
 	// get all TC XML elements (not just child TCs but all XML elements with given tag name)
@@ -1204,6 +1211,8 @@ static int ConnectTaskTrees (ActiveXMLObj_IXMLDOMElement_ UITCXMLElement, ERRORI
 				// connect child TC to parent TC
 				if (childTC)
 					errChk( AddChildTCToParent(parentTC, childTC) );
+				// set child task controller execution mode
+				SetTaskControlExecutionMode(childTC, tcExecutionMode); 
 					
 				// cleanup
 				OKfreeCAHndl(childTCXMLNode);
@@ -1264,7 +1273,12 @@ static int DAQLab_Close (void)
 {  
 	int		error = 0;
 	
+	// close task tree panel if open (no need to update VChans & task controllers as modules close)
+	OKfreePanHndl(TaskTreeManagerPanHndl);
+	VChanSwitchboardPanHndl		= 0;
+	HWTrigSwitchboardPanHndl	= 0;
 	
+	// save settings to XML
 	errChk( DAQLab_Save() );
 	
 	// dispose modules list
@@ -3053,21 +3067,23 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 	{
 		case EVENT_LEFT_DOUBLE_CLICK:
 			
-			char*					newInstanceName;
-			char*					fullModuleName;
-			char*					moduleName;
-			int						moduleidx;		// 0-based index of selected module
-			DAQLabModule_type*  	newModulePtr;
-			DAQLabModule_type**		modulePtrPtr;
-			int						nchars;
-			size_t					nInstalledModules;
+			char*					errMsg				= NULL; 
+			
+			char*					newInstanceName		= NULL;
+			char*					fullModuleName		= NULL;
+			char*					moduleName			= NULL;
+			int						moduleidx			= 0;		// 0-based index of selected module
+			DAQLabModule_type*  	newModulePtr		= NULL;
+			DAQLabModule_type**		modulePtrPtr		= NULL;
+			int						nchars				= 0;
+			size_t					nInstalledModules	= 0;
 			size_t					nAvailableModules 	= NumElem(DAQLabModules_InitFunctions);
 			
 			switch (control) {
 					
 				case ModulesPan_Available:
 					
-					GetCtrlIndex(panel, ModulesPan_Available, &moduleidx);
+					GetCtrlVal(panel, ModulesPan_Available, &moduleidx);
 					if (moduleidx < 0) return 0; // no modules listed   
 					
 					// do nothing if multiple instances are not allowed and there is already such a module installed
@@ -3089,13 +3105,17 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 					
 					// call module init function
 					newModulePtr = (*DAQLabModules_InitFunctions[moduleidx].ModuleInitFptr)	(NULL, DAQLabModules_InitFunctions[moduleidx].className, newInstanceName, workspacePanHndl);
-					OKfree(newInstanceName);
 					// call module load function
-					if ( (*newModulePtr->Load) 	(newModulePtr, workspacePanHndl) < 0) {
+					
+					if ( (*newModulePtr->Load) 	(newModulePtr, workspacePanHndl, &errMsg) < 0) {
+						DAQLab_Msg(DAQLAB_MSG_ERR_LOADING_MODULE, newInstanceName, errMsg, NULL, NULL);
+						OKfree(errMsg);
+						OKfree(newInstanceName);
 						// dispose of module if not loaded properly
 						(*newModulePtr->Discard) 	(&newModulePtr);
 						return 0;
 					}
+					OKfree(newInstanceName);
 					
 					// insert module to modules list
 					ListInsertItem(DAQLabModules, &newModulePtr, END_OF_LIST);
@@ -3139,7 +3159,7 @@ int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event
 						if (!strcmp((*modulePtrPtr)->instanceName, moduleName)) {
 							// update number of instances
 							for (size_t j = 0; j < nAvailableModules; j++)
-								if (!strcmp(DAQLabModules_InitFunctions[j].className, (*modulePtrPtr)->className)) {
+								if (DAQLabModules_InitFunctions[j].className && (*modulePtrPtr)->className && !strcmp(DAQLabModules_InitFunctions[j].className, (*modulePtrPtr)->className)) {
 									DAQLabModules_InitFunctions[j].nInstances--;
 									break;
 								}
@@ -3649,8 +3669,7 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 		case TaskPan_Close:
 			
 			if (event == EVENT_COMMIT) {
-				DiscardPanel(TaskTreeManagerPanHndl);
-				TaskTreeManagerPanHndl 		= 0;
+				OKfreePanHndl(TaskTreeManagerPanHndl);
 				VChanSwitchboardPanHndl		= 0;
 				HWTrigSwitchboardPanHndl	= 0;
 				

@@ -61,7 +61,7 @@
 // Static functions
 
 
-static int			Load 									(DAQLabModule_type* mod, int workspacePanHndl);
+static int			Load 									(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
 
 //------------------------------------------------------------------------------------------------------------
 // Stage operation
@@ -173,20 +173,20 @@ void discard_LangLStep (DAQLabModule_type** mod)
 	
 }
 
-static int Load (DAQLabModule_type* mod, int workspacePanHndl)
+static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 {
 	int		error	 = 0;
 	char*	errMsg   = NULL;
 	
 	errChk( InitStageConnection(&errMsg) );
 	
-	errChk( XYStage_Load(mod, workspacePanHndl) );
+	errChk( XYStage_Load(mod, workspacePanHndl, &errMsg) );
 	
 	return 0;
 	
 Error:
 	
-	OKfree(errMsg);
+	ReturnErrMsg("Lang LStep Load");
 	return error;
 }
 

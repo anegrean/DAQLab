@@ -291,11 +291,13 @@ static void	discard_RefPosition_type (RefPosition_type** refPosPtr)
 	OKfree(*refPosPtr);
 }
 
-int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
+int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 {
 #define XYStage_Load_Err_CurrentPositionUnknown		-1
 	
+	int				error				= 0;
 	char*			errMsg				= NULL;
+	
 	XYStage_type* 	stage 				= (XYStage_type*) mod;  
 	char			stepsizeName[100];
 	
@@ -348,12 +350,8 @@ int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	//------------------------------------------
 	
 	if (stage->GetAbsPosition)
-		if ((*stage->GetAbsPosition) (stage, &stage->xPos, &stage->yPos, &errMsg) < 0) {
-			DLMsg(errMsg, 1);
-			OKfree(errMsg);
-			return XYStage_Load_Err_CurrentPositionUnknown;
-		}
-	
+		errChk( (*stage->GetAbsPosition) (stage, &stage->xPos, &stage->yPos, &errMsg) );
+		
 	// update stage X absolute position if position has been determined
 	// make visible stepper controls and update them if position has been determined
 	SetCtrlVal(stage->controlPanHndl, StagePan_XAbsPos, stage->xPos * 1000);	  	// convert from [mm] to [um]
@@ -410,19 +408,19 @@ int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 		
 		// set low velocity
 		if (!stage->lowVelocity) {
-			stage->lowVelocity = malloc(sizeof(double));
+			nullChk( stage->lowVelocity = malloc(sizeof(double)) );
 			*stage->lowVelocity = *stage->stageVelocity;
 		}
 		
 		// set mid velocity
 		if (!stage->midVelocity) {
-			stage->midVelocity = malloc(sizeof(double));
+			nullChk( stage->midVelocity = malloc(sizeof(double)) );
 			*stage->midVelocity = *stage->stageVelocity;
 		}
 		
 		// set high velocity
 		if (!stage->highVelocity) {
-			stage->highVelocity = malloc(sizeof(double));
+			nullChk( stage->highVelocity = malloc(sizeof(double)) );
 			*stage->highVelocity = *stage->stageVelocity;
 		}
 	}
@@ -448,6 +446,10 @@ int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl)
 	
 	return 0;
 	
+Error:
+	
+	ReturnErrMsg("Generic XY Stage Load");
+	return error;
 }
 
 int	XYStage_LoadCfg	(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)

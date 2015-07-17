@@ -22,6 +22,32 @@
 
 //==============================================================================
 // Constants
+		
+		
+//==============================================================================
+// Macros
+
+#define OKfree(ptr) 					if (ptr) {free(ptr); ptr = NULL;}
+#define OKfreeCAHndl(objHandle)			if (objHandle) {CA_DiscardObjHandle(objHandle); objHandle = 0;}
+#define OKfreePanHndl(panelHandle)  	if (panelHandle) {DiscardPanel(panelHandle); panelHandle = 0;}
+#define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}  
+
+#define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to 
+													 // get the number of elements in an array passed as an argument!
+													 
+// Error handling for functions that can return an error message as a char** errorInfo parameter
+//
+// define these variables:
+//		int		error;
+//		char*	errMsg;
+// 
+// and make sure the function returns an int error code as well as has a char** errorInfo parameter
+
+#define ReturnErrMsg(FunctionName) if (!errMsg) errMsg = FormatMsg(error, FunctionName, "Unknown or out of memory");	\
+	if (errorInfo)																										\
+		*errorInfo = errMsg;																							\
+	else																												\
+		OKfree(errMsg);
 
 //==============================================================================
 // Types

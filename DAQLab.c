@@ -19,17 +19,7 @@
 #include "UI_TaskController.h"
 #include "DAQLabModule.h"
 #include "TaskController.h"
-
-
-//==============================================================================
-// Include modules
-
-#include "PIStage.h"
-#include "LangLStep.h"
-#include "VUPhotonCtr.h"
-#include "Pockells.h"
-#include "NIDAQmxManager.h"
-#include "LaserScanning.h"
+#include "Module_Header.h"
 #include "DataStorage.h"
 #include "Iterator.h" 
 
@@ -100,14 +90,13 @@ typedef struct {
 
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-//	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
-//	{ MOD_LangLStep_NAME, initalloc_LangLStep, FALSE, 0},
+	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+	{ MOD_LangLStep_NAME, initalloc_LangLStep, FALSE, 0},
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
-//	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
-	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 }
-//	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
-	
+	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+	{ MOD_DataStore_NAME, initalloc_DataStorage, FALSE, 0 },
+	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 }
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -3000,7 +2989,8 @@ void CVICALLBACK DAQLab_ModulesMenu_CB (int menuBarHndl, int menuItem, void *cal
 	moduleClassNames = ListCreate(sizeof(char*));
 	nModules = NumElem(DAQLabModules_InitFunctions);
 	for (int i = 0; i < nModules; i++)
-		ListInsertItem(moduleClassNames, &DAQLabModules_InitFunctions[i].className, END_OF_LIST);
+		if (DAQLabModules_InitFunctions[i].className != NULL)
+			ListInsertItem(moduleClassNames, &DAQLabModules_InitFunctions[i].className, END_OF_LIST);
 	
 	if (!DLUniqueStrings(moduleClassNames, &idx)) {
 		DAQLab_Msg(DAQLAB_MSG_ERR_NOT_UNIQUE_CLASS_NAME, DAQLabModules_InitFunctions[idx].className, NULL, NULL, NULL); 
@@ -3017,6 +3007,7 @@ void CVICALLBACK DAQLab_ModulesMenu_CB (int menuBarHndl, int menuItem, void *cal
 	
 	// list available modules
 	for (int i = 0; i < nModules; i++)
+		if (DAQLabModules_InitFunctions[i].className != NULL) 
 		InsertListItem(DAQLabModulesPanHndl, ModulesPan_Available, -1, DAQLabModules_InitFunctions[i].className, i);  
 	
 	// list installed modules

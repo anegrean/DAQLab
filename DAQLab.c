@@ -1209,10 +1209,11 @@ static int ConnectTaskTrees (ActiveXMLObj_IXMLDOMElement_ UITCXMLElement, ERRORI
 				// try to get child TC from DAQLab list
 				childTC = GetTaskController(childTCName);
 				// connect child TC to parent TC
-				if (childTC)
+				if (childTC) {
 					errChk( AddChildTCToParent(parentTC, childTC) );
-				// set child task controller execution mode
-				SetTaskControlExecutionMode(childTC, tcExecutionMode); 
+					// set child task controller execution mode
+					SetTaskControlExecutionMode(childTC, tcExecutionMode); 
+				}
 					
 				// cleanup
 				OKfreeCAHndl(childTCXMLNode);

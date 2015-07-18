@@ -156,6 +156,8 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 		
 	// zstage->taskController		= tc;
 	zstage->controlPanHndl			= 0;
+	zstage->controlPanTopPos		= NULL;
+	zstage->controlPanLeftPos		= NULL;
 	zstage->setPanHndl				= 0;
 	zstage->menuBarHndl				= 0;
 	zstage->menuIDSettings			= 0;
@@ -217,10 +219,13 @@ void discard_Zstage (DAQLabModule_type** mod)
 	discard_TaskControl_type(&zstage->taskController);
 	
 	// discard UI resources
-	if (zstage->controlPanHndl)
-		DiscardPanel(zstage->controlPanHndl);
-	if (zstage->setPanHndl)
-		DiscardPanel(zstage->setPanHndl);
+	OKfreePanHndl(zstage->controlPanHndl);
+	OKfree(zstage->controlPanTopPos);
+	OKfree(zstage->controlPanLeftPos);
+	
+	OKfreePanHndl(zstage->setPanHndl);
+	
+	
 	
 	OKfree(zstage->zPos);
 	OKfree(zstage->startAbsPos);
@@ -245,7 +250,7 @@ void discard_Zstage (DAQLabModule_type** mod)
 	discard_DAQLabModule(mod);
 }
 
-static RefPosition_type*	init_RefPosition_type (char refName[], double refVal)
+static RefPosition_type* init_RefPosition_type (char refName[], double refVal)
 {
 	RefPosition_type* ref = malloc (sizeof(RefPosition_type));
 	if (!ref) return NULL;
@@ -276,6 +281,11 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 	
 	// load panel resources
 	zstage->controlPanHndl = LoadPanel(workspacePanHndl, MOD_Zstage_UI, ZStagePan);
+	// set panel position
+	if (zstage->controlPanLeftPos)
+		SetPanelAttribute(zstage->controlPanHndl, ATTR_LEFT, *zstage->controlPanLeftPos);
+	if (zstage->controlPanTopPos)
+		SetPanelAttribute(zstage->controlPanHndl, ATTR_TOP, *zstage->controlPanTopPos);
 	
 	// connect module data and user interface callbackFn to all direct controls in the panel
 	SetCtrlsInPanCBInfo(mod, ((Zstage_type*)mod)->uiCtrlsCB, zstage->controlPanHndl);
@@ -418,14 +428,21 @@ int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 	
 	// allocate memory to store values
 	// Note: This must be done before initializing the attributes array!
-	zstage->zMinimumLimit 	= malloc(sizeof(double));
-	zstage->zMaximumLimit 	= malloc(sizeof(double));
-	zstage->lowVelocity		= malloc(sizeof(double));
-	zstage->midVelocity		= malloc(sizeof(double));
-	zstage->highVelocity	= malloc(sizeof(double));
+	
+	// UI
+	nullChk( zstage->controlPanLeftPos 	= malloc(sizeof(int)) );
+	nullChk( zstage->controlPanTopPos 	= malloc(sizeof(int)) );
+	// stage settings
+	nullChk( zstage->zMinimumLimit 		= malloc(sizeof(double)) );
+	nullChk( zstage->zMaximumLimit 		= malloc(sizeof(double)) );
+	nullChk( zstage->lowVelocity		= malloc(sizeof(double)) );
+	nullChk( zstage->midVelocity		= malloc(sizeof(double)) );
+	nullChk( zstage->highVelocity		= malloc(sizeof(double)) );
 	
 	// initialize attributes array
-	DAQLabXMLNode 		zStageAttr[] 	= {	{"MinPositionLimit", BasicData_Double, zstage->zMinimumLimit},
+	DAQLabXMLNode 		zStageAttr[] 	= {	{"PanTopPos", BasicData_Int, zstage->controlPanTopPos},
+											{"PanLeftPos", BasicData_Int, zstage->controlPanLeftPos},
+											{"MinPositionLimit", BasicData_Double, zstage->zMinimumLimit},
 								 			{"MaxPositionLimit", BasicData_Double, zstage->zMaximumLimit},
 											{"LowVelocity", BasicData_Double, zstage->lowVelocity},
 											{"MidVelocity", BasicData_Double, zstage->midVelocity},
@@ -491,13 +508,24 @@ int ZStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 {
 	int								error			= 0;
 	Zstage_type* 					zstage			= (Zstage_type*) mod;
-	DAQLabXMLNode 					zStageAttr[] 	= {	{"MinPositionLimit", BasicData_Double, zstage->zMinimumLimit},
+	int*							panTopPos		= NULL;
+	int*							panLeftPos		= NULL;
+	
+	nullChk( panTopPos 		= malloc(sizeof(int)) );
+	nullChk( panLeftPos 	= malloc(sizeof(int)) );	
+	
+	DAQLabXMLNode 					zStageAttr[] 	= {	{"PanTopPos", BasicData_Int, panTopPos},
+											  		   	{"PanLeftPos", BasicData_Int, panLeftPos},
+														{"MinPositionLimit", BasicData_Double, zstage->zMinimumLimit},
 								 						{"MaxPositionLimit", BasicData_Double, zstage->zMaximumLimit},
 														{"LowVelocity", BasicData_Double, zstage->lowVelocity},
 														{"MidVelocity", BasicData_Double, zstage->midVelocity},
-														{"HighVelocity", BasicData_Double, zstage->highVelocity}
-																												}; 
-	// add safety limits as zStage module attributes
+														{"HighVelocity", BasicData_Double, zstage->highVelocity} }; 
+	// get panel position
+	errChk( GetPanelAttribute(zstage->controlPanHndl, ATTR_LEFT, panLeftPos) );
+	errChk( GetPanelAttribute(zstage->controlPanHndl, ATTR_TOP, panTopPos) );
+	
+	// add zstage module attributes
 	errChk( DLAddToXMLElem(xmlDOM, moduleElement, zStageAttr, DL_ATTRIBUTE, NumElem(zStageAttr), xmlErrorInfo) );
 	
 	// add reference positions element to module element
@@ -524,11 +552,12 @@ int ZStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		refPosAttr[1].pData	= &(*refPosPtr)->val;
 		errChk( DLAddToXMLElem(xmlDOM, refPosXMLElement, refPosAttr, DL_ATTRIBUTE, NumElem(refPosAttr), xmlErrorInfo) );   
 	}
+
+Error:
 	
-	return 0;
-	
-Error:   
-	
+	// cleanup
+	OKfree(panTopPos);
+	OKfree(panLeftPos);
 	return error; 
 }
 

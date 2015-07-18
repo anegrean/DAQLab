@@ -60,6 +60,8 @@ struct Zstage {
 	
 		// Stage control panel
 	int					controlPanHndl;
+	int*				controlPanTopPos;
+	int*				controlPanLeftPos;
 	
 		// Stage settings panel
 	int					setPanHndl;

@@ -644,16 +644,25 @@ int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformTo
 
 int IntegrateWaveform (Waveform_type** waveformOut, Waveform_type* waveformIn, size_t startIdx, size_t endIdx, size_t nInt)
 {
-#define IntegrateWaveform_Err_NInt			-1		// nInt is < 2
+#define IntegrateWaveform_Err_NInt			-1		// nInt is 0
 #define IntegrateWaveform_Err_Selection		-2		// (startIdx >= endIdx) and (endIdx != 0)
 #define IntegrateWaveform_Err_OutOfBounds	-3		// selection is out of waveform bounds
+
+	// macro to integrate waveforms of different data type
+#define IntegrateWaveformType(DataType)												\
+	{	DataType* dataIn = (DataType*)waveformIn->data;								\
+		nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );			\
+		for (size_t i = 0; i < nDataOutSamples; i++)								\
+			for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)		\
+				dataOutDouble[i] += dataIn[j];										\
+		nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate/nInt, nDataOutSamples, (void**)&dataOutDouble) );}
 
 	int			error 				= 0;
 	size_t 		nDataOutSamples		= 0;
 	double*		dataOutDouble		= NULL;
 	
-	// check if nInt > 1
-	if (nInt < 2) return IntegrateWaveform_Err_NInt;
+	// check if nInt != 0
+	if (!nInt) return IntegrateWaveform_Err_NInt;
 	
 	// check if endIdx > startIdx unless endIdx = 0
 	if ((startIdx >= endIdx) && endIdx) return IntegrateWaveform_Err_Selection;
@@ -664,218 +673,64 @@ int IntegrateWaveform (Waveform_type** waveformOut, Waveform_type* waveformIn, s
 	if (endIdx)
 		nDataOutSamples = (endIdx - startIdx + 1) / nInt;
 	else
-		nDataOutSamples = waveformIn->nSamples / nInt;
+		nDataOutSamples = (waveformIn->nSamples - startIdx) / nInt;
 	
 	// generate empty waveform
 	if (!nDataOutSamples) {
 		void*	nullData = NULL;
-		nullChk( *waveformOut = init_Waveform_type(waveformIn->waveformType, waveformIn->samplingRate, 0, &nullData) );
+		nullChk( *waveformOut = init_Waveform_type(waveformIn->waveformType, waveformIn->samplingRate/nInt, 0, &nullData) );
 		return 0;
 	}
 	
 	switch (waveformIn->waveformType) {
 			
 		case Waveform_Char:
-			
-			char* 	dataIn_char = (char*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_char[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
-			break;
-			
-		case Waveform_Short:
-			
-			short* 	dataIn_short = (short*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_short[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
-			break;
-			
-		case Waveform_Int:
-			
-			int* 	dataIn_int = (int*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_int[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
-			break;
-			
-		case Waveform_Int64:
-			
-			int64* 	dataIn_int64 = (int64*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_int64[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
-		case Waveform_SSize:
-			
-			ssize_t* 	dataIn_ssize = (ssize_t*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_ssize[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
+			IntegrateWaveformType(char);
 			break;
 			
 		case Waveform_UChar:
+			IntegrateWaveformType(unsigned char);
+			break;
 			
-			unsigned char* 	dataIn_uchar = (unsigned char*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_uchar[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
+		case Waveform_Short:
+			IntegrateWaveformType(short);
 			break;
 			
 		case Waveform_UShort:
-			
-			unsigned short* dataIn_ushort = (unsigned short*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_ushort[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
+			IntegrateWaveformType(unsigned short);
 			break;
+			
+		case Waveform_Int:
+			IntegrateWaveformType(int);
+			break;
+			
 		case Waveform_UInt:
+			IntegrateWaveformType(unsigned int);
+			break;
 			
-			unsigned int* dataIn_uint = (unsigned int*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_uint[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
+		case Waveform_Int64:
+			IntegrateWaveformType(int64);
 			break;
 			
 		case Waveform_UInt64:
-			
-			uInt64* dataIn_uint64 = (uInt64*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_uint64[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
+			IntegrateWaveformType(uInt64);
+			break;
+		
+		case Waveform_SSize:
+			IntegrateWaveformType(ssize_t);
 			break;
 			
 		case Waveform_Size:
-			
-			size_t* dataIn_size = (size_t*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_size[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
+			IntegrateWaveformType(size_t);
 			break;
 			
 		case Waveform_Float:
-			
-			float* 	dataIn_float = (float*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_float[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
+			IntegrateWaveformType(float);
 			break;
 			
 		case Waveform_Double:
-			
-			double* dataIn_double = (double*)waveformIn->data;
-			
-			// allocate memory and initialize to 0
-			nullChk( dataOutDouble = calloc(nDataOutSamples, sizeof(double)) );
-			
-			// integrate
-			for (size_t i = 0; i < nDataOutSamples; i++)
-				for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)
-					dataOutDouble[i] += dataIn_double[j];
-			
-			// output result
-			nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate, nDataOutSamples, (void**)&dataOutDouble) );
-			
+			IntegrateWaveformType(double);
 			break;
-			
 	}
 	
 	return 0;

@@ -106,8 +106,7 @@
 #define  PointTab_TEXTMSG_2               20      /* control type: textMsg, callback function: (none) */
 #define  PointTab_TEXTMSG                 21      /* control type: textMsg, callback function: (none) */
 #define  PointTab_Record                  22      /* control type: radioButton, callback function: (none) */
-#define  PointTab_Integrate               23      /* control type: radioButton, callback function: (none) */
-#define  PointTab_Stimulate               24      /* control type: radioButton, callback function: (none) */
+#define  PointTab_Stimulate               23      /* control type: radioButton, callback function: (none) */
 
      /* tab page panel controls */
 #define  ScanTab_PixelSize                2       /* control type: numeric, callback function: (none) */

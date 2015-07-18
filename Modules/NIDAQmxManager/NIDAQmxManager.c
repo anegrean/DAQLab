@@ -1525,7 +1525,6 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 	
 	if(nidaq->mainPanLeftPos)
 		SetPanelAttribute(nidaq->mainPanHndl, ATTR_LEFT, *nidaq->mainPanLeftPos);
-	
 	if(nidaq->mainPanTopPos)
 		SetPanelAttribute(nidaq->mainPanHndl, ATTR_TOP, *nidaq->mainPanTopPos); 
 	
@@ -2464,7 +2463,6 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		OKfreeCAHndl(NIDAQDeviceXMLElement); 
 	}
 	
-	//added Lex	
 	OKfree(panTopPos); 
 	OKfree(panLeftPos);
 	return 0;

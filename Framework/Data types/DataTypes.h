@@ -126,6 +126,27 @@ typedef enum {
 	//----------------------------------------------------------------------------------------------  
 		
 typedef struct Waveform		Waveform_type;
+
+typedef enum {
+	
+	WaveformColor_RED			=   VAL_RED,
+	WaveformColor_GREEN			=   VAL_GREEN,
+	WaveformColor_BLUE			=   VAL_BLUE,
+	WaveformColor_CYAN			=   VAL_CYAN,
+	WaveformColor_MAGENTA		=   VAL_MAGENTA,
+	WaveformColor_YELLOW		=   VAL_YELLOW,
+	WaveformColor_DK_RED		=   VAL_DK_RED,
+	WaveformColor_DK_BLUE		=   VAL_DK_BLUE,
+	WaveformColor_DK_GREEN		=   VAL_DK_GREEN,
+	WaveformColor_DK_CYAN		=   VAL_DK_CYAN,
+	WaveformColor_DK_MAGENTA	=   VAL_DK_MAGENTA,
+	WaveformColor_DK_YELLOW		=   VAL_DK_YELLOW,
+	WaveformColor_LT_GRAY		=   VAL_LT_GRAY,
+	WaveformColor_DK_GRAY		=   VAL_DK_GRAY,
+	WaveformColor_BLACK			=   VAL_BLACK,
+	WaveformColor_WHITE			=   VAL_WHITE,
+	
+} WaveformColors;
 		
 typedef enum {
 	
@@ -390,35 +411,52 @@ Waveform_type*				init_Waveform_type						(WaveformTypes waveformType, double sa
 	// Discards the waveform container and its data allocated with malloc.
 void 						discard_Waveform_type 					(Waveform_type** waveform);
 
-	// Sets waveform name
-void						SetWaveformName							(Waveform_type* waveform, char waveformName[]);
+	// Clears a list of Waveform_type* elements and keeps the list.
+void						ClearWaveformList						(ListType waveformList);
 
-	// Sets a physical unit name for the waveform
-void						SetWaveformPhysicalUnit 				(Waveform_type* waveform, char unitName[]);
-	// Gets the physical unit name for the waveform      
-char* 						GetWaveformPhysicalUnit 				(Waveform_type* waveform);
-	// Gets the waveform name     
-char* 						GetWaveformName 						(Waveform_type* waveform);
-	// Adds current date timestamp to mark the beginning of the waveform
-int							AddWaveformDateTimestamp				(Waveform_type* waveform);
+	// Clears and discards a list of Waveform_type* elements..
+void						DiscardWaveformList						(ListType* waveformListPtr);
 
-	// Returns waveform timestamp
-double						GetWaveformDateTimestamp				(Waveform_type* waveform); 
 
-	// Returns waveform sampling rate
-double						GetWaveformSamplingRate					(Waveform_type* waveform);
-	
-	// Returns number of bytes per waveform element.
-size_t						GetWaveformSizeofData					(Waveform_type* waveform);
 
-	// Returns number of samples in the waveform.
-size_t						GetWaveformNumSamples					(Waveform_type* waveform);
+//-----------------------------------------
+// Set/Get
+//-----------------------------------------
 
 	// Returns pointer to waveform data.
 void** 						GetWaveformPtrToData 					(Waveform_type* waveform, size_t* nSamples);
 
-	// Returns waveform data type
+	// Waveform type
 WaveformTypes				GetWaveformDataType						(Waveform_type* waveform);
+
+	// Samples in the waveform.
+size_t						GetWaveformNumSamples					(Waveform_type* waveform);
+
+	// Sampling rate
+double						GetWaveformSamplingRate					(Waveform_type* waveform);
+
+	// Name
+void						SetWaveformName							(Waveform_type* waveform, char waveformName[]);
+char* 						GetWaveformName 						(Waveform_type* waveform);
+
+	// Color
+void						SetWaveformColor						(Waveform_type* waveform, WaveformColors color);
+WaveformColors				GetWaveformColor						(Waveform_type* waveform);
+
+	// Physical unit
+void						SetWaveformPhysicalUnit 				(Waveform_type* waveform, char unitName[]);
+char* 						GetWaveformPhysicalUnit 				(Waveform_type* waveform);
+
+	// Adds timestamp marking the beginning of the waveform. Function returns 0 on success and <0 if it fails.
+int							AddWaveformDateTimestamp				(Waveform_type* waveform);
+double						GetWaveformDateTimestamp				(Waveform_type* waveform); 
+
+	// Returns number of bytes per waveform element.
+size_t						GetWaveformSizeofData					(Waveform_type* waveform);
+
+//-----------------------------------------
+// Operations
+//-----------------------------------------
 
 	// Makes a waveform copy
 int							CopyWaveform							(Waveform_type** waveformCopy, Waveform_type* waveform, char** errorInfo);
@@ -445,6 +483,14 @@ RepeatedWaveform_type*		ConvertWaveformToRepeatedWaveformType	(Waveform_type** w
 
 	// Discards a repeated waveform contained and its waveform data that was allocated with malloc.
 void						discard_RepeatedWaveform_type			(RepeatedWaveform_type** waveformPtr);
+
+//-----------------------------------------
+// Set/Get
+//-----------------------------------------
+
+	// Color
+void						SetRepeatedWaveformColor				(RepeatedWaveform_type* waveform, WaveformColors color);
+WaveformColors				GetrepeatedWaveformColor				(RepeatedWaveform_type* waveform);
 
 	// Returns pointer to repeated waveform data (for one repeat)
 void**						GetRepeatedWaveformPtrToData			(RepeatedWaveform_type* waveform, size_t* nSamples);

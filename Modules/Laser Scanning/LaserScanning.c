@@ -295,7 +295,7 @@ typedef struct {
 
 typedef enum {
 	// "grey"
-	ScanChanColor_Grey,		 								// By default, in an RGB image all components get the same value
+	ScanChanColor_Grey,		// Default
 	// "red"
 	ScanChanColor_Red,
 	// "green"
@@ -2888,8 +2888,6 @@ static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanId
 	// Alloc resources
 	//--------------------
 	
-	nullChk( scanChan->waveDisplay = init_WaveformDisplay_type(engine->lsModule->baseClass.workspacePanHndl, WaveformDisplay_CB, scanChan) );
-	
 	// incoming pixel data from detection channel
 	nullChk( detVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SinkVChan_DetectionChan, chanIdx) );
 	nullChk( scanChan->detVChan = init_SinkVChan_type(detVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), scanChan, VChanDataTimeout, NULL) );
@@ -2900,6 +2898,9 @@ static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanId
 	
 	// register sink VChan with task controller
 	errChk( AddSinkVChan(engine->taskControl, scanChan->detVChan, NULL) );
+	
+	// waveform display for point recordings
+	nullChk( scanChan->waveDisplay = init_WaveformDisplay_type(engine->lsModule->baseClass.workspacePanHndl, detVChanName, WaveformDisplay_CB, scanChan) );
 	
 	// cleanup
 	OKfree(detVChanName);
@@ -6858,6 +6859,7 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	// Process waveform
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
+	
 	size_t nHoldSamples = (size_t)(rectRaster->pointJumpSettings->globalPointScanSettings.holdTime * 1e-3 * rectRaster->galvoSamplingRate);
 	errChk( IntegrateWaveform(&pointBuffer->integratedPixels, pointBuffer->rawPixels, pointBuffer->nSkipPixels, pointBuffer->nSkipPixels + nHoldSamples, rectRaster->pointJumpSettings->nIntegration) );
 	
@@ -6865,7 +6867,25 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	// Display waveform
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	
-	DisplayWaveform(pointBuffer->scanChan->waveDisplay, &pointBuffer->integratedPixels, "", WaveformDisplay_BLUE);
+	// set waveform color to match channel color
+	switch (pointBuffer->scanChan->color) {
+			
+		case ScanChanColor_Grey:
+			SetWaveformColor(pointBuffer->integratedPixels, WaveformColor_DK_GRAY);
+			break;
+		case ScanChanColor_Red:
+			SetWaveformColor(pointBuffer->integratedPixels, WaveformColor_RED);
+			break;
+		case ScanChanColor_Green:
+			SetWaveformColor(pointBuffer->integratedPixels, WaveformColor_GREEN);
+			break;
+		case ScanChanColor_Blue:
+			SetWaveformColor(pointBuffer->integratedPixels, WaveformColor_BLUE);
+			break;
+	}
+	
+	// display
+	DisplayWaveform(pointBuffer->scanChan->waveDisplay, &pointBuffer->integratedPixels);
 	
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	// Finalize point scan for this channel
@@ -7610,11 +7630,7 @@ static void WaveformDisplay_CB (WaveformDisplay_type* waveformDisplay, int event
 			
 		case WaveformDisplay_Close:
 			
-			DiscardWaveform(scanChan->waveDisplay);
-			
-			break;
-			
-		case WaveformDisplay_Save:
+			DiscardWaveforms(scanChan->waveDisplay);
 			
 			break;
 	}

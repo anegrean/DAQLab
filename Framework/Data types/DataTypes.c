@@ -64,6 +64,7 @@ struct Image {
 
 struct Waveform {
 	WaveformTypes				waveformType;			// Waveform data type.
+	WaveformColors				color;					// Color used to display waveform. WaveformColor_BLUE by default.
 	char*						waveformName;			// Name of signal represented by the waveform. 
 	char*						unitName;				// Physical SI unit such as V, A, Ohm, etc.
 	double						dateTimestamp;			// Number of seconds since midnight, January 1, 1900 in the local time zone.
@@ -78,6 +79,7 @@ struct Waveform {
 
 struct RepeatedWaveform {
 	RepeatedWaveformTypes		waveformType;			// Waveform data type. 
+	WaveformColors				color;					// Color used to display waveform. WaveformColor_BLUE by default.
 	char*						waveformName;			// Name of signal represented by the waveform.
 	char*						unitName;				// Physical SI unit such as V, A, Ohm, etc.
 	double						dateTimestamp;			// Number of seconds since midnight, January 1, 1900 in the local time zone.  
@@ -403,6 +405,7 @@ Waveform_type* init_Waveform_type (WaveformTypes waveformType, double samplingRa
 	if (!waveform) return NULL;
 	
 	waveform->waveformType 		= waveformType;
+	waveform->color				= WaveformColor_BLUE;
 	waveform->samplingRate 		= samplingRate;
 	waveform->waveformName		= NULL;
 	waveform->unitName			= NULL;
@@ -426,9 +429,37 @@ void discard_Waveform_type (Waveform_type** waveform)
 	OKfree(*waveform);
 }
 
+void ClearWaveformList (ListType waveformList)
+{
+	size_t				nWaveforms 	= ListNumItems(waveformList);
+	Waveform_type**		waveformPtr = NULL;
+	
+	for (size_t i = 1; i <= nWaveforms; i++) {
+		waveformPtr = ListGetPtrToItem(waveformList, i);
+		discard_Waveform_type(waveformPtr);
+	}
+	ListClear(waveformList);
+}
+
+void DiscardWaveformList (ListType* waveformListPtr)
+{
+	ClearWaveformList(*waveformListPtr);
+	OKfreeList(*waveformListPtr);
+}
+
 void SetWaveformName (Waveform_type* waveform, char waveformName[])
 {
 	waveform->waveformName = StrDup(waveformName);
+}
+
+void SetWaveformColor (Waveform_type* waveform, WaveformColors color)
+{
+	waveform->color = color;
+}
+
+WaveformColors GetWaveformColor (Waveform_type* waveform)
+{
+	return waveform->color;
 }
 
 void SetWaveformPhysicalUnit (Waveform_type* waveform, char unitName[])
@@ -751,6 +782,7 @@ RepeatedWaveform_type* init_RepeatedWaveform_type (RepeatedWaveformTypes wavefor
 	if (!waveform) return NULL;
 	
 	waveform->waveformType 		= waveformType;
+	waveform->color				= WaveformColor_BLUE;
 	waveform->waveformName		= NULL;
 	waveform->unitName			= NULL;
 	waveform->dateTimestamp		= 0;
@@ -843,6 +875,16 @@ void discard_RepeatedWaveform_type (RepeatedWaveform_type** waveformPtr)
 	OKfree((*waveformPtr)->unitName);
 	
 	OKfree(*waveformPtr);
+}
+
+void SetRepeatedWaveformColor (RepeatedWaveform_type* waveform, WaveformColors color)
+{
+	waveform->color = color;
+}
+
+WaveformColors GetrepeatedWaveformColor (RepeatedWaveform_type* waveform)
+{
+	return waveform->color;
 }
 
 void** GetRepeatedWaveformPtrToData (RepeatedWaveform_type* waveform, size_t* nSamples)

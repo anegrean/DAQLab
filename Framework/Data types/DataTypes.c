@@ -567,9 +567,11 @@ int CopyWaveform (Waveform_type** waveformCopy, Waveform_type* waveform, char** 
 	}
 	
 	// copy waveform attributes
+	(*waveformCopy)->color			= waveform->color;
 	(*waveformCopy)->waveformName 	= StrDup(waveform->waveformName);
 	(*waveformCopy)->unitName		= StrDup(waveform->unitName);
 	(*waveformCopy)->dateTimestamp	= waveform->dateTimestamp;
+	
 	
 	errChk( AppendWaveform(*waveformCopy, waveform, &errMsg) );
 	

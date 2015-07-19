@@ -461,7 +461,8 @@ size_t						GetWaveformSizeofData					(Waveform_type* waveform);
 	// Makes a waveform copy
 int							CopyWaveform							(Waveform_type** waveformCopy, Waveform_type* waveform, char** errorInfo);
 
-	// Appends data from one waveform to another. Sampling rate, data type and physical unit must be the same.
+	// Appends data from one waveform to another. Sampling rate, data type and physical unit must be the same. The color used for the extended waveform
+	// is the same as for the waveform to which the second waveform was appended.
 int 						AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_type* waveformToAppend, char** errorInfo);
 
 	// Applies an nSamples integration to an entire waveform or to a part of it and returns a new waveform.

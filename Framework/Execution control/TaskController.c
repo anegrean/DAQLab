@@ -81,7 +81,6 @@ struct TaskControl {
 	size_t							repeat;								// Total number of repeats. If repeat is 0, then the iteration function is not called. 
 	int								iterTimeout;						// Timeout in [s] until when TaskControlIterationDone can be called. 
 	
-	 //add them to Iterator_Type?
 	TCExecutionModes				executionMode;						// Determines how the iteration block of a Task Controller is executed with respect to its childTCs if any.
 	TaskMode_type					mode;								// Finite or continuous type of task controller
 	Iterator_type* 					currentIter;						// iteration information structure
@@ -357,29 +356,26 @@ char* GetTaskControlStateName (TaskControl_type* taskControl)
 
 void SetTaskControlName (TaskControl_type* taskControl, char newName[])
 { 
-	Iterator_type* 	currentIter;
-	char* name;
-	
 	OKfree(taskControl->taskName);
 	taskControl->taskName = StrDup(newName);
-	currentIter=GetTaskControlCurrentIter(taskControl);
-	name=GetCurrentIterName(currentIter);
-	OKfree(name); 
-	SetCurrentIterName(currentIter,StrDup(newName)); 
+	
+	// TEMPORARY: also set iterator name to match task controller name. This should be removed in the future!
+	SetCurrentIterName(taskControl->currentIter, newName); 
 }
 
-TCStates	GetTaskControlState (TaskControl_type* taskControl)
+TCStates GetTaskControlState (TaskControl_type* taskControl)
 {
 	return taskControl->state;
 }
 
 void SetTaskControlIterations (TaskControl_type* taskControl, size_t repeat)
 {
-	Iterator_type* 	currentIter; 
+	Iterator_type* 	currentIter = GetTaskControlIterator(taskControl);
 	
 	taskControl->repeat = repeat;
-	currentIter=GetTaskControlCurrentIter(taskControl);
-	SetTotalIterations(currentIter,repeat);
+	
+	// TEMPORARY: task controller should not use repeat anymore but instead it should store this value in the iterator over which it iterates
+	SetTotalIterations(currentIter, repeat);
 	
 }
 
@@ -409,12 +405,12 @@ TCExecutionModes GetTaskControlExecutionMode (TaskControl_type* taskControl)
 	return taskControl->executionMode; 	
 }
 
-void SetTaskControlCurrentIter (TaskControl_type* taskControl, Iterator_type* currentIter)
+void SetTaskControlIterator (TaskControl_type* taskControl, Iterator_type* currentIter)
 {
 	taskControl->currentIter = currentIter;
 }
 
-Iterator_type* GetTaskControlCurrentIter (TaskControl_type* taskControl)
+Iterator_type* GetTaskControlIterator (TaskControl_type* taskControl)
 {
 	return taskControl->currentIter; 	
 }
@@ -1206,7 +1202,7 @@ int CVICALLBACK ScheduleIterateFunction (void* functionData)
 {
 	TaskControl_type* taskControl = functionData;
 	
-	(*taskControl->IterateFptr)(taskControl, &taskControl->abortFlag);
+	(*taskControl->IterateFptr)(taskControl, taskControl->currentIter, &taskControl->abortFlag);
 	
 	return 0;
 }
@@ -1325,7 +1321,7 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 			
 			if (!taskControl->DoneFptr) return 0;			// function not provided
 			
-			if ( (fCallError = (*taskControl->DoneFptr)(taskControl, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
+			if ( (fCallError = (*taskControl->DoneFptr)(taskControl, taskControl->currentIter, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
 				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Done", fCallErrorMsg);
 				OKfree(fCallErrorMsg);
 				return FunctionCall_Error_FCall_Error;
@@ -1336,7 +1332,7 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 			
 			if (!taskControl->StoppedFptr) return 0;		// function not provided		 
 				
-			if ( (fCallError = (*taskControl->StoppedFptr)(taskControl, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
+			if ( (fCallError = (*taskControl->StoppedFptr)(taskControl, taskControl->currentIter, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
 				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Stopped", fCallErrorMsg);
 				OKfree(fCallErrorMsg);
 				return FunctionCall_Error_FCall_Error;
@@ -1467,7 +1463,7 @@ int	AddChildTCToParent (TaskControl_type* parent, TaskControl_type* child)
 	child->childTCIdx = ListNumItems(parent->childTCs); 
 	
 	//link iteration info
-	IteratorAddIterator	(GetTaskControlCurrentIter(parent), GetTaskControlCurrentIter(child)); 
+	IteratorAddIterator	(GetTaskControlIterator(parent), GetTaskControlIterator(child)); 
 	
 	return 0;
 }
@@ -1498,7 +1494,7 @@ int	RemoveChildTCFromParentTC (TaskControl_type* child)
 			}
 			
 			//remove iterator from parent
-			RemoveFromParentIterator(GetTaskControlCurrentIter(child));
+			RemoveFromParentIterator(GetTaskControlIterator(child));
 			
 			return 0; // found and removed
 		}

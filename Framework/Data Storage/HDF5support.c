@@ -61,7 +61,7 @@ struct IteratorData {
 	//----------------------------------
 static int 						CreateRootGroup 					(hid_t file_id, char *group_name);
 static int 						CreateRelativeGroup 				(hid_t parentgroup_id, char *group_name);
-static int 						CreateHDF5Group 					(char* filename, TC_DS_Data_type* dsdata, hid_t* file_id, hid_t* groupid);
+static int 						CreateHDF5Group 					(char* filename, DSInfo_type* dsdata, hid_t* file_id, hid_t* groupid);
 
 	//----------------------------------
 	// Attributes
@@ -112,7 +112,7 @@ Error:
 	return error;
 }
 
-int WriteHDF5Data(char *filename, char* dataset_name, TC_DS_Data_type* dsdata, Waveform_type* waveform) 
+int WriteHDF5Data(char *filename, char* dataset_name, DSInfo_type* dsdata, Waveform_type* waveform) 
 {
 	hid_t       			file_id					= 0;
 	hid_t					dataspace_id			= 0;    
@@ -383,7 +383,7 @@ Error:
 	return error;
 }
 
-static int CreateHDF5Group (char* filename, TC_DS_Data_type* dsdata, hid_t* file_id, hid_t* groupid)
+static int CreateHDF5Group (char* filename, DSInfo_type* dsdata, hid_t* file_id, hid_t* groupid)
 {
    	herr_t      			error			= 0; 
 	hid_t* 					group_id 		= NULL;
@@ -936,7 +936,7 @@ Error:
 	 return error;
 }	
 
-int WriteHDF5Image(char *filename, char* dataset_name, TC_DS_Data_type* dsdata, Image_type* receivedimage) 
+int WriteHDF5Image(char *filename, char* dataset_name, DSInfo_type* dsdata, Image_type* receivedimage) 
 { 
 	int   					error        			= 0;
 	hid_t 					file_id					= 0;

@@ -34,7 +34,7 @@
 		
 	// Base Iterator type for indexing data
 typedef struct Iterator		Iterator_type;
-typedef struct TC_DS_Data	TC_DS_Data_type; 
+typedef struct DSInfo		DSInfo_type; 
 
 
 typedef enum {
@@ -103,7 +103,7 @@ BOOL					IsRootIterator				(Iterator_type* iterator);
 	// Returns the Iterators name
 char* 					GetCurrentIterName		    (Iterator_type* iterator);
 
-void 					SetCurrentIterName			(Iterator_type* iterator,char* name);
+void 					SetCurrentIterName			(Iterator_type* iterator,char name[]);
 
 //---------------------------------------------------------------------------------------------------------------------------
 // Iterator composition
@@ -140,27 +140,28 @@ ListType				IterateOverIterators		(Iterator_type* iterator);
 
 
 	// get DataStorage data from the iterator
-TC_DS_Data_type*		GetIteratorDSdata			(Iterator_type* iterator, unsigned int datarank);
+DSInfo_type*			GetIteratorDSData			(Iterator_type* iterator, unsigned int datarank);
+void 					discard_DSInfo_type 		(DSInfo_type** dsDataPtr);
 
-void					SetDSdataGroupname			(TC_DS_Data_type* dsdata, char* groupname);
+void					SetDSdataGroupname			(DSInfo_type* dsdata, char* groupname);
 
-char*					GetDSdataGroupname			(TC_DS_Data_type* dsdata); 
+char*					GetDSdataGroupname			(DSInfo_type* dsdata); 
 
-void 					SetDSdataIterIndices		(TC_DS_Data_type* dsdata,unsigned int* iter_indices);
+void 					SetDSdataIterIndices		(DSInfo_type* dsdata,unsigned int* iter_indices);
 
-unsigned int* 			GetDSdataIterIndices 		(TC_DS_Data_type* dsdata);
+unsigned int* 			GetDSdataIterIndices 		(DSInfo_type* dsdata);
 
-void 					SetDSDataSetRank			(TC_DS_Data_type* dsdata,unsigned int rank);
+void 					SetDSDataSetRank			(DSInfo_type* dsdata,unsigned int rank);
 
-unsigned int 			GetDSDataSetRank 			(TC_DS_Data_type* dsdata);
+unsigned int 			GetDSDataSetRank 			(DSInfo_type* dsdata);
 
-unsigned int 			GetDSDataRank 				(TC_DS_Data_type* dsdata);
+unsigned int 			GetDSDataRank 				(DSInfo_type* dsdata);
 
-void 					SetDSdataStackData			(TC_DS_Data_type* dsdata,BOOL stackdata);
+void 					SetDSdataStackData			(DSInfo_type* dsdata,BOOL stackdata);
 
-BOOL 					GetDSdataStackData 			(TC_DS_Data_type* dsdata);
+BOOL 					GetDSdataStackData 			(DSInfo_type* dsdata);
 
-void 					discard_TC_DS_Data_type 	(TC_DS_Data_type** dsDataPtr);				
+				
 
 #ifdef __cplusplus
     }

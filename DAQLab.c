@@ -317,10 +317,10 @@ int 						CVICALLBACK TaskTree_CB 					(int panel, int control, int event, void 
 
 static int					ConfigureUITC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 static int					UnconfigureUITC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static void					IterateUITC									(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+static void					IterateUITC									(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag);
 static int					StartUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					DoneUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int					StoppedUITC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int					DoneUITC									(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+static int					StoppedUITC									(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
 static int					TaskTreeStateChangeUITC 					(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 static void					UITCActive									(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 static int				 	ResetUITC 									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
@@ -3421,10 +3421,9 @@ int CVICALLBACK DAQLab_DelTaskControllersBTTN_CB (int panel, int control, int ev
 static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	TaskControl_type* 	taskControl = callbackData;
-	BOOL             	starttask;					  	// 1 - task start, 0 - task stop 
-	double				waitDVal;
-	BOOL				stack;
-	Iterator_type* 	    currentiter;
+	BOOL             	starttask	= FALSE;					  	// 1 - task start, 0 - task stop 
+	double				waitDVal	= 0.0;
+	BOOL				stack		= FALSE;
 	
 	switch (event)
 	{
@@ -3487,8 +3486,7 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 				case TCPan1_Stack:
 					
 					GetCtrlVal(panel, TCPan1_Stack, &stack);  
-					currentiter = GetTaskControlCurrentIter (taskControl);
-					SetIteratorStackData(currentiter, stack);
+					SetIteratorStackData(GetTaskControlIterator(taskControl), stack);
 					break;
 			}
 			break;
@@ -3863,12 +3861,12 @@ static int UnconfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag
 	return 0;
 }
 
-static void IterateUITC	(TaskControl_type* taskControl, BOOL const* abortIterationFlag)
+static void IterateUITC	(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
 	// iteration complete, update current iteration number
-	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)) + 1);
+	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(iterator) + 1);
 	
 	TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL);
 }
@@ -3883,7 +3881,7 @@ static int StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	return 0;
 }
 
-static int DoneUITC  (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int DoneUITC  (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	BOOL				taskControllerMode;
@@ -3916,7 +3914,7 @@ static int DoneUITC  (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
 	// update iterations display
-	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
+	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(iterator));
 	
 	return 0;
 }
@@ -3942,7 +3940,7 @@ static int ResetUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	return 0; 
 }
 
-static int StoppedUITC	(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StoppedUITC	(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	BOOL				taskControllerMode;
@@ -3967,7 +3965,7 @@ static int StoppedUITC	(TaskControl_type* taskControl, BOOL const* abortFlag, ch
 	// undim Mode button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
 	// update iterations display
-	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
+	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(iterator));
 	
 	return 0; 
 }

@@ -209,15 +209,15 @@ static int							ConfigureTC											(TaskControl_type* taskControl, BOOL cons
 
 static int							UnconfigureTC										(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							IterateTC											(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+static void							IterateTC											(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag);
 
 static int							StartTC												(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
 static int				 			ResetTC 											(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							DoneTC												(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							DoneTC												(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
 
-static int							StoppedTC											(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC											(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
 
 static int							TaskTreeStateChange 								(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 
@@ -1407,34 +1407,33 @@ static int ApplyPockellsCellVoltage (PockellsEOM_type* eom, double voltage, char
 {
 #define ApplyPockellsCellVoltage_Waveform_NSamples		100
 	
+	int							error					= 0;
+	char*						errMsg					= NULL;
+	
 	double*						commandSignal			= NULL;
 	RepeatedWaveform_type*		commandWaveform			= NULL;
 	DataPacket_type*			dataPacket				= NULL;
-	int							error					= 0;
-	char*						errMsg					= NULL;
+	DSInfo_type*				dsInfo					= NULL;
 	
 	nullChk( commandSignal = malloc(ApplyPockellsCellVoltage_Waveform_NSamples * sizeof(double)) );
 	Set1D(commandSignal, ApplyPockellsCellVoltage_Waveform_NSamples, voltage);
 	
 	nullChk( commandWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, 0, ApplyPockellsCellVoltage_Waveform_NSamples, (void**)&commandSignal, 0) );
-	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandWaveform, NULL, (DiscardFptr_type) discard_RepeatedWaveform_type) );
+	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(eom->taskControl), WAVERANK) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandWaveform, &dsInfo, (DiscardFptr_type) discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(eom->modulationVChan, &dataPacket, FALSE, &errMsg) );
 							  
 	return 0;
 	
 Error:
 	
+	// cleanup
 	OKfree(commandSignal);
 	discard_RepeatedWaveform_type(&commandWaveform);
 	discard_DataPacket_type(&dataPacket);
+	discard_DSInfo_type(&dsInfo);
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
-	
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ApplyPockellsCellVoltage", errMsg);
-	OKfree(errMsg);
-	
+	ReturnErrMsg("ApplyPockellsCellVoltage");
 	return error;
 }
 
@@ -1497,7 +1496,7 @@ static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 	return 0;
 }
 
-static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
+static void IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag)
 {
 #define	IterateTC_Err_DataTypeNotSupported	-1
 	
@@ -1545,6 +1544,8 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	double						voltageLow					= GetPockellsCellVoltage(eomCal, eomCal->d);
 	double						samplingRate				= 0;
 	double						nRepeats					= 0;
+	DSInfo_type*				dsInfo						= NULL;
+	
 	
 	// timing signals of different types
 	char*		 				timingSignal_Char 			= NULL;  
@@ -1580,52 +1581,42 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 			//------------------------------------------------------------------------------
 			
 			case DL_Waveform_Char:   			
-				
 				WaveformToPockellsCommand(timingSignal_Char, char);
 				break;
 			
 			case DL_Waveform_UChar:   			
-				
 				WaveformToPockellsCommand(timingSignal_UChar, unsigned char);
 				break;
 				
 			case DL_Waveform_Short:   			
-				
 				WaveformToPockellsCommand(timingSignal_Short, short);
 				break;
 			
 			case DL_Waveform_UShort:   			
-				
 				WaveformToPockellsCommand(timingSignal_UShort, unsigned short);
 				break;
 			
 			case DL_Waveform_Int:   			
-				
 				WaveformToPockellsCommand(timingSignal_Int, int);
 				break;
 			
 			case DL_Waveform_UInt:   			
-				
 				WaveformToPockellsCommand(timingSignal_UInt, unsigned int);
 				break;
 				
 			case DL_Waveform_Int64:   			
-				
 				WaveformToPockellsCommand(timingSignal_Int64, int64);
 				break;
 			
 			case DL_Waveform_UInt64:   			
-				
 				WaveformToPockellsCommand(timingSignal_UInt64, uInt64);
 				break;
 				
 			case DL_Waveform_SSize:   			
-				
 				WaveformToPockellsCommand(timingSignal_SSize, ssize_t);
 				break;
 			
 			case DL_Waveform_Size:   			
-				
 				WaveformToPockellsCommand(timingSignal_Size, size_t);
 				break;	
 			
@@ -1634,62 +1625,52 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 			//------------------------------------------------------------------------------
 			
 			case DL_RepeatedWaveform_Char:   			
-				
 				RepeatedWaveformToPockellsCommand(timingSignal_Char, char);
 				break;
 			
 			case DL_RepeatedWaveform_UChar:   			
-				
 				RepeatedWaveformToPockellsCommand(timingSignal_UChar, unsigned char);
 				break;
 				
 			case DL_RepeatedWaveform_Short:   			
-				
 				RepeatedWaveformToPockellsCommand(timingSignal_Short, short);
 				break;
 			
 			case DL_RepeatedWaveform_UShort:   			
-				
 				RepeatedWaveformToPockellsCommand(timingSignal_UShort, unsigned short);
 				break;
 			
 			case DL_RepeatedWaveform_Int:   			
-				
 				RepeatedWaveformToPockellsCommand(timingSignal_Int, int);
 				break;
 			
 			case DL_RepeatedWaveform_UInt:   			
-				
 				RepeatedWaveformToPockellsCommand(timingSignal_UInt, unsigned int);
 				break;
 				
 			case DL_RepeatedWaveform_Int64:   			
-				
 				RepeatedWaveformToPockellsCommand(timingSignal_Int64, int64);
 				break;
 			
 			case DL_RepeatedWaveform_UInt64:   			
-				
 				RepeatedWaveformToPockellsCommand(timingSignal_UInt64, uInt64);
 				break;
 				
 			case DL_RepeatedWaveform_SSize:   			
-				
 				RepeatedWaveformToPockellsCommand(timingSignal_SSize, ssize_t);
 				break;
 			
 			case DL_RepeatedWaveform_Size:   			
-				
 				RepeatedWaveformToPockellsCommand(timingSignal_Size, size_t);
 				break;	
 			
-				
 			default:
 				TaskControlIterationDone(taskControl, IterateTC_Err_DataTypeNotSupported, "Incoming data packet type is not supported", FALSE);   
 				return;
 		}
 		
-		nullChk( dataPacketOUT = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandRepeatedWaveform, NULL, (DiscardFptr_type) discard_RepeatedWaveform_type) );
+		nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
+		nullChk( dataPacketOUT = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandRepeatedWaveform, &dsInfo, (DiscardFptr_type) discard_RepeatedWaveform_type) );
 		errChk( SendDataPacket(eom->modulationVChan, &dataPacketOUT, FALSE, &errMsg) );
 	
 		ReleaseDataPacket(&dataPacketIN);
@@ -1710,6 +1691,7 @@ Error:
 	discard_DataPacket_type(&dataPacketOUT);
 	discard_RepeatedWaveform_type(&commandRepeatedWaveform);
 	OKfree(commandSignal);
+	discard_DSInfo_type(&dsInfo);
 	
 	if (!errMsg)
 		errMsg = StrDup("Out of memory");
@@ -1732,14 +1714,14 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	//PockellsEOM_type* 		eom = GetTaskControlModuleData(taskControl);
 	

@@ -210,15 +210,25 @@ static int 						PMTController_ResetFifo			(VUPhotonCtr_type* vupc);
 //-----------------------------------------
 
 static int 						ConfigureTC 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int 						UnconfigureTC 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);      
-static void						IterateTC						(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+
+static int 						UnconfigureTC 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+
+static void						IterateTC						(TaskControl_type* taskControl, Iterator_type* iterator,BOOL const* abortIterationFlag);
+
 static int						StartTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int						DoneTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int						StoppedTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+
+static int						DoneTC							(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+
+static int						StoppedTC						(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+
 static int						TaskTreeStateChange				(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
+
 static void						TCActive						(TaskControl_type* taskControl, BOOL UITCActiveFlag);
+
 static int				 		ResetTC 						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+
 static void				 		ErrorTC 						(TaskControl_type* taskControl, int errorID, char* errorMsg);
+
 static int						ModuleEventHandler				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
 
 
@@ -273,7 +283,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	// Child Level 1: VUPhotonCtr_type
 
 		// DATA
-	SetIteratorType(GetTaskControlCurrentIter(tc),Iterator_Waveform); //this mudules produces waveforms
+	SetIteratorType(GetTaskControlIterator(tc),Iterator_Waveform); //this mudules produces waveforms
 	
 	vupc->taskControl   			= tc;
 	vupc->mainPanHndl				= 0;
@@ -1171,7 +1181,7 @@ static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 	return 0;
 }
 
-static void	IterateTC	(TaskControl_type* taskControl, BOOL const* abortIterationFlag)
+static void	IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag)
 {
 	VUPhotonCtr_type* 		vupc 				= GetTaskControlModuleData(taskControl);
 	double 					timeout				= 3.0;
@@ -1185,7 +1195,7 @@ static void	IterateTC	(TaskControl_type* taskControl, BOOL const* abortIteration
 	PulseTrain_type*    	pulsetrain;
 
 	//display current iteration index
-	VUPC_SetStepCounter(vupc,GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
+	VUPC_SetStepCounter(vupc,GetCurrentIterIndex(iterator));
 	
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
@@ -1225,7 +1235,7 @@ static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static int DoneTC	(TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo)
+static int DoneTC	(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
@@ -1242,7 +1252,7 @@ static void	TCActive (TaskControl_type* taskControl, BOOL UITCActiveFlag)
 }
 
 
-static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 

@@ -605,7 +605,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 	void*				dataPacketDataPtr							= NULL;
 	DLDataTypes			dataPacketType								= 0; 
 	size_t 				i											= 0;
-	TC_DS_Data_type*	dsdata										= NULL;
+	DSInfo_type*		dsdata										= NULL;
 	
 	// get all available data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );

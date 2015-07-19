@@ -33,8 +33,8 @@
 // Global functions
 
 int CreateHDF5file(char *filename,char* dataset_name);
-int WriteHDF5Data(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Waveform_type* waveform);
-int WriteHDF5Image(char *filename,char* dataset_name,TC_DS_Data_type* dsdata,Image_type* receivedimage);
+int WriteHDF5Data(char *filename,char* dataset_name,DSInfo_type* dsdata,Waveform_type* waveform);
+int WriteHDF5Image(char *filename,char* dataset_name,DSInfo_type* dsdata,Image_type* receivedimage);
 
 #ifdef __cplusplus
     }

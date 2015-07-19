@@ -131,7 +131,7 @@ typedef int				(*UnconfigureFptr_type) 			(TaskControl_type* taskControl, BOOL c
 // The iteration can be completed either within this function call or even in another thread. 
 // In either case, to signal back to the Task Controller that the iteration function is complete call TaskControlIterationDone.
 
-typedef void 			(*IterateFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+typedef void 			(*IterateFptr_type) 				(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag);
 
 // Called before the first iteration starts from an INITIAL state.
 typedef int				(*StartFptr_type) 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
@@ -140,10 +140,10 @@ typedef int				(*StartFptr_type) 					(TaskControl_type* taskControl, BOOL const
 typedef int				(*ResetFptr_type) 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
 
 // Called automatically when a finite Task Controller finishes required iterations or a continuous Task Controller is stopped manually.
-typedef int				(*DoneFptr_type) 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*DoneFptr_type) 					(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a running finite Task Controller is stopped manually, before reaching a DONE state.
-typedef int				(*StoppedFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*StoppedFptr_type) 				(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo); 
 
 // Called when a Task Tree in which the Task Controller participates is started or stops/is stopped. This is called before the Start callback of the Task Controller.
 typedef int 			(*TaskTreeStateChangeFptr_type)		(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo); 
@@ -227,8 +227,8 @@ void					SetTaskControlExecutionMode			(TaskControl_type* taskControl, TCExecuti
 TCExecutionModes		GetTaskControlExecutionMode			(TaskControl_type* taskControl);
 
 // Task Controller Current Iteration    
-void					SetTaskControlCurrentIter 			(TaskControl_type* taskControl, Iterator_type* currentIter);
-Iterator_type* 			GetTaskControlCurrentIter 			(TaskControl_type* taskControl);
+void					SetTaskControlIterator 				(TaskControl_type* taskControl, Iterator_type* currentIter);
+Iterator_type* 			GetTaskControlIterator 				(TaskControl_type* taskControl);
 
 	// mode = TASK_FINITE by default
 void					SetTaskControlMode					(TaskControl_type* taskControl, TaskMode_type mode);

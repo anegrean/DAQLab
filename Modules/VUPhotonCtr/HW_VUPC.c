@@ -252,24 +252,25 @@ Error:
 int ReadBuffer(int bufsize)
 {
 	int 					error			= 0;
-	int 					result;
+	int 					result			= 0;
 	DataPacket_type*  		dataPacket		= NULL;
 	char*					errMsg			= NULL;  
 	unsigned short int* 	Samplebuffer	= NULL;   
 	void*     				pmtdataptr		= NULL;
-	size_t 					numpixels;
-	size_t 					numshorts;
-	size_t 					ndatapoints;
+	size_t 					numpixels		= 0;
+	size_t 					numshorts		= 0;
+	size_t 					ndatapoints		= 0;
 	double 					refSamplingRate	= 1000;
-	long 					errcode;
+	long 					errcode			= 0;
 	Waveform_type* 			waveform		= NULL;
 	int						swappedi		= 0;
-	size_t					totalbytes;
+	size_t					totalbytes		= 0;
+	DSInfo_type* 			dsInfo			= NULL;
 	
 	
 	Samplebuffer 	= malloc(bufsize); 
 	
-	result 			= VUPCI_Read_Buffer(Samplebuffer,bufsize);
+	result 			= VUPCI_Read_Buffer(Samplebuffer, bufsize);
 	
 	if((result < 0) && (GetAcqBusy() == 0)){ //only pass errors when acq is busy  
 		OKfree(Samplebuffer);  
@@ -333,10 +334,10 @@ int ReadBuffer(int bufsize)
 						memcpy(pmtdataptr, &Samplebuffer[swappedi*ndatapoints], totalbytes);
 					//end full block code	
 						// prepare waveform
-						nullChk( waveform 	= init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );
-						Iterator_type* currentiter=GetTaskControlCurrentIter(gtaskControl);
-						TC_DS_Data_type* dsdata=GetIteratorDSdata(currentiter,WAVERANK);
-				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, (void**)&waveform,dsdata , (DiscardFptr_type) discard_Waveform_type));       
+						nullChk( waveform = init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );
+						Iterator_type* currentiter = GetTaskControlIterator(gtaskControl);
+						nullChk( dsInfo = GetIteratorDSData(currentiter, WAVERANK) );
+				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, (void**)&waveform, &dsInfo, (DiscardFptr_type) discard_Waveform_type));       
 					// send data packet with waveform
 						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
 				//	}
@@ -366,6 +367,7 @@ Error:
 	OKfree(pmtdataptr);
 	discard_Waveform_type(&waveform);
 	discard_DataPacket_type(&dataPacket);
+	discard_DSInfo_type(&dsInfo);
 	
 	if (!errMsg)
 		errMsg = StrDup("Out of memory");

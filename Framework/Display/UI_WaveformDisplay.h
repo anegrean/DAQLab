@@ -15,10 +15,12 @@
 
 #define  TSPan                            1
 #define  TSPan_Plate                      2       /* control type: deco, callback function: (none) */
-#define  TSPan_TSGraphPlot                3       /* control type: graph, callback function: (none) */
-#define  TSPan_SBReserved                 4       /* control type: textMsg, callback function: (none) */
-#define  TSPan_SBIndex                    5       /* control type: numeric, callback function: (none) */
-#define  TSPan_Update                     6       /* control type: radioButton, callback function: (none) */
+#define  TSPan_GraphPlot                  3       /* control type: graph, callback function: (none) */
+#define  TSPan_CursorY                    4       /* control type: numeric, callback function: (none) */
+#define  TSPan_CursorX                    5       /* control type: numeric, callback function: (none) */
+#define  TSPan_SBReserved                 6       /* control type: textMsg, callback function: (none) */
+#define  TSPan_SBIndex                    7       /* control type: numeric, callback function: (none) */
+#define  TSPan_Update                     8       /* control type: radioButton, callback function: (none) */
 
 
      /* Control Arrays: */

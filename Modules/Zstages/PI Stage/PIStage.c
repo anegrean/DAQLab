@@ -116,13 +116,21 @@ static void							discard_MoveCommand_type			(MoveCommand_type** moveCommandPtr)
 //-----------------------------------------
 
 static int							ConfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static void							IterateTC							(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+
+static void							IterateTC							(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag);
+
 static int							StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int							DoneTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int							StoppedTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+
+static int							DoneTC								(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+
+static int							StoppedTC							(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+
 static int							TaskTreeStateChange					(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
+
 static int				 			ResetTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+
 static void				 			ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
+
 static int							ZStageEventHandler					(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 
@@ -827,11 +835,10 @@ static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, ch
 	return 0;
 }
 
-static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
+static void IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
-	Iterator_type*		currentiter 	= GetTaskControlCurrentIter(taskControl);
-	size_t 				iterindex		= GetCurrentIterIndex(currentiter);
+	size_t 				iterindex		= GetCurrentIterIndex(iterator);
 	int					error			= 0;
 	char*				errMsg			= NULL;
 	
@@ -872,7 +879,7 @@ static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	
@@ -882,7 +889,7 @@ static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** 
 	return 0;
 }
 
-static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	

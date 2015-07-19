@@ -64,6 +64,9 @@ static int CVICALLBACK 			TSPanCtrls_CB	 					(int panel, int control, int event
 // Do not free or modify the waveforms while the graph is active as the waveform data is used for graph refresh/updating.
 static int						AddWaveformToGraph					(int panel, int control, Waveform_type* waveform); 
 
+// Updates the value of the cursor
+static void 					UpdateGraphCursors 					(int panel, int control);
+
 
 //==============================================================================
 // Global variables
@@ -153,12 +156,17 @@ WaveformDisplay_type* init_WaveformDisplay_type (int parentPanHndl, char display
 	SetCtrlAttribute(waveDisp->plotPanHndl, waveDisp->scrollbarCtrl, ATTR_CALLBACK_DATA, waveDisp);
 	
 	//-----------------------------------------
-	// Other controls callbacks
+	// Other controls
 	//-----------------------------------------
 	
+	// update
 	SetCtrlVal(waveDisp->plotPanHndl, TSPan_Update, waveDisp->update); 
 	SetCtrlAttribute(waveDisp->plotPanHndl, TSPan_Update, ATTR_CALLBACK_FUNCTION_POINTER, TSPanCtrls_CB); 
 	SetCtrlAttribute(waveDisp->plotPanHndl, TSPan_Update, ATTR_CALLBACK_DATA, waveDisp);
+	
+	// graph
+	SetCtrlAttribute(waveDisp->plotPanHndl, TSPan_GraphPlot, ATTR_CALLBACK_FUNCTION_POINTER, TSPanCtrls_CB); 
+	SetCtrlAttribute(waveDisp->plotPanHndl, TSPan_GraphPlot, ATTR_CALLBACK_DATA, waveDisp);
 	
 	
 	return waveDisp;
@@ -233,9 +241,9 @@ int DisplayWaveform (WaveformDisplay_type* waveDisp, Waveform_type** waveformPtr
 	// update plot if needed
 	if (waveDisp->update) {
 		// clear plot
-		errChk( DeleteGraphPlot(waveDisp->plotPanHndl, TSPan_TSGraphPlot, -1, VAL_IMMEDIATE_DRAW) );
+		errChk( DeleteGraphPlot(waveDisp->plotPanHndl, TSPan_GraphPlot, -1, VAL_IMMEDIATE_DRAW) );
 		// add waveform to plot
-		errChk( AddWaveformToGraph(waveDisp->plotPanHndl, TSPan_TSGraphPlot, *(Waveform_type**)ListGetPtrToItem(waveDisp->waveforms, nWaveforms)) );
+		errChk( AddWaveformToGraph(waveDisp->plotPanHndl, TSPan_GraphPlot, *(Waveform_type**)ListGetPtrToItem(waveDisp->waveforms, nWaveforms)) );
 		// update scrollbar and display
 		SetCtrlVal(waveDisp->plotPanHndl, waveDisp->scrollbarCtrl, nWaveforms);
 		SetCtrlVal(waveDisp->plotPanHndl, TSPan_SBIndex, nWaveforms);
@@ -253,7 +261,7 @@ int DiscardWaveforms (WaveformDisplay_type* waveDisp)
 	int		error = 0;
 	
 	// clear plot
-	errChk( DeleteGraphPlot(waveDisp->plotPanHndl, TSPan_TSGraphPlot, -1, VAL_IMMEDIATE_DRAW) );
+	errChk( DeleteGraphPlot(waveDisp->plotPanHndl, TSPan_GraphPlot, -1, VAL_IMMEDIATE_DRAW) );
 	// discard waveforms
 	ClearWaveformList(waveDisp->waveforms);
 	// update scrollbar maximum range and index display
@@ -312,9 +320,9 @@ static int CVICALLBACK TSPanScrollbar_CB (int panel, int control, int event, voi
 			// get waveform
 			waveform = *(Waveform_type**)ListGetPtrToItem(waveDisp->waveforms, waveformIdx);
 			// clear plot
-			errChk( DeleteGraphPlot(waveDisp->plotPanHndl, TSPan_TSGraphPlot, -1, VAL_IMMEDIATE_DRAW) );
+			errChk( DeleteGraphPlot(waveDisp->plotPanHndl, TSPan_GraphPlot, -1, VAL_IMMEDIATE_DRAW) );
 			// add waveform to plot
-			errChk( AddWaveformToGraph(waveDisp->plotPanHndl, TSPan_TSGraphPlot, waveform) );
+			errChk( AddWaveformToGraph(waveDisp->plotPanHndl, TSPan_GraphPlot, waveform) );
 			break;
 	}
 	
@@ -340,12 +348,23 @@ static int CVICALLBACK TSPanCtrls_CB (int panel, int control, int event, void *c
 					GetCtrlVal(panel, control, &waveDisp->update);
 					
 					break;
+					
 			}
-			
 			break;
+			
+		case EVENT_VAL_CHANGED:
+			
+			switch (control) {
+					
+				case TSPan_GraphPlot:
+					
+					UpdateGraphCursors(panel, control);
+					break;
+			}
+			break;
+			
 	}
-	
-	
+
 	return 0;
 }
 
@@ -361,14 +380,13 @@ static int AddWaveformToGraph (int panel, int control, Waveform_type* waveform)
 	WaveformColors	waveformColor		= GetWaveformColor(waveform);
 	double			xIncrement			= 1.0;
 	
-	// set X axis label
-	if (samplingRate == 0.0) {
-		SetCtrlAttribute(panel, control, ATTR_XNAME, "Samples");
+	waveformData = *(void**)GetWaveformPtrToData(waveform, &nSamples);
+	
+	// set X axis increment
+	if (samplingRate == 0.0)
 		xIncrement = 1.0;
-	} else {
-		SetCtrlAttribute(panel, control, ATTR_XNAME, "Time (s)");
+	else
 		xIncrement = 1/samplingRate;
-	}
 	
 	// set Y axis label
 	if (waveformName && waveformName[0]) {
@@ -384,8 +402,6 @@ static int AddWaveformToGraph (int panel, int control, Waveform_type* waveform)
 	
 	// set plot title
 	//SetCtrlAttribute(panel, control, ATTR_LABEL_TEXT, plotTitle);
-	
-	waveformData = *(void**)GetWaveformPtrToData(waveform, &nSamples);
 	
 	// plot waveforms
 	switch (GetWaveformDataType(waveform)) {
@@ -439,8 +455,31 @@ static int AddWaveformToGraph (int panel, int control, Waveform_type* waveform)
 			break;
 	}
 	
+	// adjust X axis label
+	if (samplingRate == 0.0)
+		SetCtrlAttribute(panel, control, ATTR_XNAME, "Samples");
+	else 
+		// switch to [s] if there is at least one significant digit
+		if ((size_t)(nSamples*xIncrement)) {
+			SetCtrlAttribute(panel, control, ATTR_XNAME, "Time (s)");
+			SetCtrlAttribute(panel, control, ATTR_XAXIS_GAIN, 1.0);
+		} else
+			// switch to [ms] if there is at least one significant digit
+			if ((size_t)(nSamples*xIncrement*1e3)) {
+				SetCtrlAttribute(panel, control, ATTR_XNAME, "Time (ms)");
+				SetCtrlAttribute(panel, control, ATTR_XAXIS_GAIN, 1e3);
+			} else
+				// switch to [us] if there is at least one significant digit
+				if ((size_t)(nSamples*xIncrement*1e6)) {
+					SetCtrlAttribute(panel, control, ATTR_XNAME, "Time (us)");
+					SetCtrlAttribute(panel, control, ATTR_XAXIS_GAIN, 1e6);
+				}
+		
 	// refresh plot
 	RefreshGraph(panel, control); 
+	
+	// update cursors
+	UpdateGraphCursors(panel, control);
 	
 		
 Error:
@@ -450,4 +489,16 @@ Error:
 	
 	return error;
 	
+}
+
+static void UpdateGraphCursors (int panel, int control)
+{
+	double 	cursorX		= 0;
+	double	cursorY		= 0;
+	double	xAxisGain	= 0;
+	
+	GetGraphCursor(panel, control, 1, &cursorX, &cursorY);
+	GetCtrlAttribute(panel, control, ATTR_XAXIS_GAIN, &xAxisGain);    
+	SetCtrlVal(panel, TSPan_CursorX, cursorX * xAxisGain);
+	SetCtrlVal(panel, TSPan_CursorY, cursorY);
 }

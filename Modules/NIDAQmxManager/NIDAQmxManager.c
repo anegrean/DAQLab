@@ -1365,13 +1365,13 @@ static int							ConfigureTC								(TaskControl_type* taskControl, BOOL const* 
 
 static int							UnconfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static void							IterateTC								(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+static void							IterateTC								(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag);
 
 static int							StartTC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
 
-static int							DoneTC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							DoneTC									(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
 
-static int							StoppedTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC								(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
 
 static int							TaskTreeStateChange 					(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 
@@ -8331,9 +8331,10 @@ static void	discardUI_ADTaskSet (ADTaskSet_type** taskSetPtr)
 // UI callback to adjust AI task settings
 static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	ADTaskSet_type*		tskSet 				= callbackData;
-	char*				errMsg				= NULL;
 	int					error				= 0;
+	char*				errMsg				= NULL;
+	
+	ADTaskSet_type*		tskSet 				= callbackData;
 	uInt64*				nSamplesPtr			= NULL;
 	double*				samplingRatePtr		= NULL;
 	DataPacket_type*	dataPacket			= NULL; 
@@ -11021,14 +11022,17 @@ Error:
 
 int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 {
-	Dev_type*			dev				= functionData;
-	char*				errMsg			= NULL;
-	int					error			= 0;
-	DataPacket_type*	dataPacket		= NULL;
-	void*				dataPacketData	= NULL;
-	DLDataTypes			dataPacketType	= 0;
-	uInt64*				nSamplesPtr		= NULL;
-	double*				samplingRatePtr	= NULL;
+	int						error				= 0;
+	char*					errMsg				= NULL;
+	
+	Dev_type*				dev					= functionData;
+	DataPacket_type*		dataPacket			= NULL;
+	void*					dataPacketData		= NULL;
+	DLDataTypes				dataPacketType		= 0;
+	uInt64*					nSamplesPtr			= NULL;
+	double*					samplingRatePtr		= NULL;
+	DSInfo_type*			dsInfo				= NULL;
+	Iterator_type*			iterator			= GetTaskControlIterator(dev->taskController);
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data
@@ -11120,7 +11124,8 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	//----------
 	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 	*nSamplesPtr = dev->AITaskSet->timing->nSamples;
-	dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, NULL, NULL);
+	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
+	dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, &dsInfo, NULL);
 	errChk(SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	//--------------
@@ -11128,7 +11133,8 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	//--------------
 	nullChk( samplingRatePtr = malloc(sizeof(double)) );
 	*samplingRatePtr = dev->AITaskSet->timing->sampleRate;
-	dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, NULL, NULL);
+	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
+	dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, &dsInfo, NULL);
 	errChk(SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	
@@ -11158,6 +11164,9 @@ DAQmxError:
 	
 Error:
 	
+	// cleanup
+	discard_DSInfo_type(&dsInfo);
+	
 	if (!errMsg)
 		errMsg = FormatMsg(error, "StartAIDAQmxTask_CB", "Out of memory");
 	
@@ -11170,16 +11179,20 @@ Error:
 int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 {
 #define StartAODAQmxTask_CB_Err_NumberOfReceivedSamplesNotTheSameAsTask		-1
-	Dev_type*			dev						= functionData;
-	char*				errMsg					= NULL;
+	
 	int					error					= 0;
+	char*				errMsg					= NULL;
+	
+	Dev_type*			dev						= functionData;
 	DataPacket_type*	dataPacket				= NULL;
 	void*				dataPacketData			= NULL;
-	DLDataTypes			dataPacketType;
+	DLDataTypes			dataPacketType			= 0;
 	uInt64*				nSamplesPtr				= NULL;
 	double*				samplingRatePtr			= NULL;
 	Waveform_type*		AOWaveform				= NULL;
 	float64*			AOData 					= NULL;
+	Iterator_type*		iterator				= GetTaskControlIterator(dev->taskController);
+	DSInfo_type*		dsInfo					= NULL;
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data
@@ -11257,7 +11270,8 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	//----------
 	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 	*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
-	dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, NULL, NULL);
+	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
+	dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, &dsInfo, NULL);
 	errChk(SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	//--------------
@@ -11265,7 +11279,8 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	//--------------
 	nullChk( samplingRatePtr = malloc(sizeof(double)) );
 	*samplingRatePtr = dev->AOTaskSet->timing->sampleRate;
-	dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, NULL, NULL);
+	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
+	dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, &dsInfo, NULL);
 	errChk(SendDataPacket(dev->AOTaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg));
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
@@ -11334,13 +11349,14 @@ int CVICALLBACK StartCIDAQmxTasks_CB (void *functionData)
 
 int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 {
+	int					error				= 0;
+	char*				errMsg				= NULL;
+	
 	ChanSet_CO_type*	chanSetCO			= functionData;
 	Dev_type*			dev 				= chanSetCO->baseClass.device;
 	DataPacket_type*	dataPacket			= NULL;
-	char*				errMsg				= NULL;
-	int					error				= 0;
-	void*				dataPacketData;
-	DLDataTypes			dataPacketDataType;
+	void*				dataPacketData		= NULL;
+	DLDataTypes			dataPacketDataType	= 0;
 	PulseTrain_type*	pulseTrain			= NULL;
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
@@ -11554,10 +11570,13 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	uInt32				integration				= dev->AITaskSet->timing->oversampling;
 	uInt32				nItegratedSamples		= (nRead + dev->AITaskSet->readAIData->nIntBuffElem[chIdx]) / integration;  // number of samples integrated per channel
 	uInt32				nRemainingSamples		= (nRead + dev->AITaskSet->readAIData->nIntBuffElem[chIdx]) % integration;	// number of samples remaining to be integrated per channel
-	uInt32				nBufferSamples;
-	uInt32				i, j, k;
+	uInt32				nBufferSamples			= 0;	
+	uInt32				i						= 0;
+	uInt32 				j						= 0;
+	uInt32				k						= 0;
+	Iterator_type* 		currentiter				= GetTaskControlIterator(dev->taskController);
+	DSInfo_type*		dsInfo					= NULL;		// indexing info
 	
-	Iterator_type* 		currentiter				= GetTaskControlCurrentIter(dev->taskController);
 	
 	
 	//----------------------
@@ -11605,7 +11624,8 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			
 			// prepare data packet
 			nullChk( waveform 	= init_Waveform_type(Waveform_Double, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_double) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, (void**) &waveform,  NULL,(DiscardFptr_type) discard_Waveform_type) ); 
+			nullChk( dsInfo = GetIteratorDSData(currentiter, WAVERANK) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Double, (void**) &waveform, &dsInfo,(DiscardFptr_type) discard_Waveform_type) ); 
 			break;
 				
 		case DL_Waveform_Float:
@@ -11615,8 +11635,9 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 				waveformData_float[i] = (float) (waveformData_double[i] * AIChSet->dataTypeConversion.gain + AIChSet->dataTypeConversion.offset);
 				
 			// prepare data packet
-			nullChk( waveform 	= init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_float) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, (void**) &waveform,  NULL, (DiscardFptr_type) discard_Waveform_type) );
+			nullChk( waveform = init_Waveform_type(Waveform_Float, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_float) );
+			nullChk( dsInfo = GetIteratorDSData(currentiter, WAVERANK) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_Float, (void**) &waveform, &dsInfo, (DiscardFptr_type) discard_Waveform_type) );
 			break;
 		
 			
@@ -11628,7 +11649,8 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			
 			// prepare data packet
 			nullChk( waveform = init_Waveform_type(Waveform_UInt, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt32) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UInt, (void**) &waveform, NULL, (DiscardFptr_type) discard_Waveform_type) );
+			nullChk( dsInfo = GetIteratorDSData(currentiter, WAVERANK) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UInt, (void**) &waveform, &dsInfo, (DiscardFptr_type) discard_Waveform_type) );
 			break;
 				
 		case DL_Waveform_UShort:
@@ -11639,7 +11661,8 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			
 			// prepare data packet
 			nullChk( waveform = init_Waveform_type(Waveform_UShort, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt16) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, (void**) &waveform, NULL, (DiscardFptr_type) discard_Waveform_type) );
+			nullChk( dsInfo = GetIteratorDSData(currentiter, WAVERANK) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, (void**) &waveform, &dsInfo, (DiscardFptr_type) discard_Waveform_type) );
 				 
 			break;
 				
@@ -11651,7 +11674,8 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 			
 			// prepare data packet
 			nullChk( waveform = init_Waveform_type(Waveform_UChar, dev->AITaskSet->timing->sampleRate, nItegratedSamples, (void**)&waveformData_uInt8) );
-			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, (void**) &waveform,  NULL, (DiscardFptr_type)discard_Waveform_type) );
+			nullChk( dsInfo = GetIteratorDSData(currentiter, WAVERANK) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, (void**) &waveform,  &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
 			break;
 		
 		
@@ -11670,7 +11694,6 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	// send data packet with waveform
 	//-------------------------------
 	
-	SetDataPacketDSData(dataPacket,GetIteratorDSdata(currentiter,WAVERANK));
 	errChk( SendDataPacket(AIChSet->srcVChan, &dataPacket, 0, &errMsg) );
 	
 	return 0;
@@ -11685,6 +11708,7 @@ Error:
 	OKfree(waveformData_uInt32);
 	discard_Waveform_type(&waveform);
 	discard_DataPacket_type(&dataPacket);
+	discard_DSInfo_type(&dsInfo);
 	
 	// no error message means out of memory
 	if (!errMsg)
@@ -13699,7 +13723,7 @@ static void	ADNSamplesSourceVChan_StateChange (VChan_type* self, void* VChanOwne
 	
 			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 			*nSamplesPtr = tskSet->timing->nSamples;
-			nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, NULL,NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, NULL, NULL) );
 			errChk( SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
 			break;
 			
@@ -13756,7 +13780,7 @@ static void	ADSamplingRateSourceVChan_StateChange (VChan_type* self, void* VChan
 			
 			nullChk( samplingRatePtr = malloc(sizeof(double)) );
 			*samplingRatePtr = tskSet->timing->sampleRate;
-			nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, NULL,NULL) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, NULL, NULL) );
 			errChk( SendDataPacket(tskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg) );
 			break;
 			
@@ -14434,7 +14458,7 @@ static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 	return 0; 
 }
 
-static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
+static void	IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag)
 {
 	Dev_type*		dev											= GetTaskControlModuleData(taskControl);
 	char			CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
@@ -14445,7 +14469,7 @@ static void	IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 	int**			nActiveTasksPtrPtr						    = &nActiveTasksPtr;
 	
 	// update iteration display
-	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
+	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(iterator));
 	
 	//----------------------------------------
 	// Launch and count active tasks 
@@ -14534,24 +14558,24 @@ static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	
 	// update iteration display
-	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations,GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
+	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations,GetCurrentIterIndex(iterator));
 	
 	return 0;
 }
 
-static int StoppedTC (TaskControl_type* taskControl,  BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	//int			error 	= 0;
 	//char*		errMsg	= NULL;
 	Dev_type*	dev		= GetTaskControlModuleData(taskControl);
 	
 	// update iteration display
-	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(GetTaskControlCurrentIter(taskControl)));
+	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(iterator));
 	
 	
 	

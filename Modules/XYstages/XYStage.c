@@ -101,13 +101,21 @@ static void 							UpdatePositionDisplay 				(XYStage_type* stage);
 //-----------------------------------------
 
 static int								ConfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static void								IterateTC							(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
+
+static void								IterateTC							(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag);
+
 static int								StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int								DoneTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int								StoppedTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+
+static int								DoneTC								(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+
+static int								StoppedTC							(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+
 static int								TaskTreeStateChange	 				(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
+
 static int				 				ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+
 static void				 				ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
+
 static int								StageEventHandler					(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
 
 //------------------------------------
@@ -1376,7 +1384,7 @@ static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, ch
 {
 	return 0;
 }
-static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
+static void IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag)
 {
 	TaskControlIterationDone(taskControl, 0, "", FALSE);
 }
@@ -1386,12 +1394,12 @@ static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	return 0;
 }
 
-static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	return 0;
 }

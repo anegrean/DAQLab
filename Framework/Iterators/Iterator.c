@@ -39,7 +39,7 @@ struct Iterator {
 };
 
 // Task controller data packet indexing and used by the the datastorage module
-struct TC_DS_Data{
+struct DSInfo{
 	char*					groupname;  			// Create an HDF5 group for the dataset.
 	BOOL					stackeddata;			// True if data is stacked, False otherwise.
 	unsigned int 			datasetrank;			// Dataset rank, i.e. # dimensions 
@@ -54,7 +54,7 @@ struct TC_DS_Data{
 //==============================================================================
 // Static functions
 
-static TC_DS_Data_type* 			init_TC_DS_Data_type						(void);       
+static DSInfo_type* 			init_DSInfo_type						(void);       
 
 //==============================================================================
 // Global variables
@@ -184,9 +184,10 @@ char* GetCurrentIterName(Iterator_type* iterator)
 	return StrDup(iterator->name);	
 }
 
-void SetCurrentIterName(Iterator_type* iterator, char* name)
+void SetCurrentIterName(Iterator_type* iterator, char name[])
 {
-	iterator->name = name;	
+	OKfree(iterator->name);
+	iterator->name = StrDup(name);
 }
 
 void  SetCurrentIterIndex	(Iterator_type* iterator, size_t index)
@@ -318,11 +319,11 @@ ListType IterateOverIterators (Iterator_type* iterator)
 }
 
 // get DataStorage data from the iterator
-TC_DS_Data_type* GetIteratorDSdata (Iterator_type* iterator, unsigned int datarank)
+DSInfo_type* GetIteratorDSData (Iterator_type* iterator, unsigned int datarank)
 {
 	int					error						= 0;
 	int 				rank						= 0;
-	TC_DS_Data_type* 	ds_data						= NULL;  
+	DSInfo_type* 		ds_data						= NULL;  
 	Iterator_type* 		parentIterator				= NULL;
 	Iterator_type* 		childIterator				= NULL; 
 	char*				tcName						= NULL;
@@ -337,12 +338,16 @@ TC_DS_Data_type* GetIteratorDSdata (Iterator_type* iterator, unsigned int datara
 	if (!iterator)
 		return NULL;
 	
-	nullChk( ds_data = init_TC_DS_Data_type() );
+	nullChk( ds_data = init_DSInfo_type() );
 
 	parentIterator = GetIteratorParent(iterator);
 	// no parent
-	if (!parentIterator)  
-		return NULL;
+	//if (!parentIterator)  
+	//	return NULL;
+	
+	// TEST: if the function returns a NULL it signals that it is out of memory, so using this instead
+	if (!parentIterator)
+		return ds_data;
 	
 	iterIdx 	= GetCurrentIterIndex(iterator);  
 	totalIter 	= GetTotalIterations(iterator);
@@ -395,7 +400,7 @@ TC_DS_Data_type* GetIteratorDSdata (Iterator_type* iterator, unsigned int datara
 	
 	if (rank){
 		OKfree(ds_data->iter_indices);
-		nullChk( ds_data->iter_indices = malloc(rank*sizeof(unsigned int)) );
+		nullChk( ds_data->iter_indices = malloc(rank * sizeof(unsigned int)) );
 		//rearrange rank; Most significant rank first
 		for (int i = 0; i < rank; i++) 
 			ds_data->iter_indices[i] = indices[rank-i-1];
@@ -419,9 +424,9 @@ Error:
 }
 
 
-static TC_DS_Data_type* init_TC_DS_Data_type(void)
+static DSInfo_type* init_DSInfo_type(void)
 {
-	TC_DS_Data_type* ds_data	= malloc(sizeof(TC_DS_Data_type));
+	DSInfo_type* ds_data	= malloc(sizeof(DSInfo_type));
 	if (!ds_data) return NULL;
 	
 	ds_data->groupname			= NULL;
@@ -433,9 +438,9 @@ static TC_DS_Data_type* init_TC_DS_Data_type(void)
 	return ds_data;
 }
 
-void discard_TC_DS_Data_type (TC_DS_Data_type** dsDataPtr)
+void discard_DSInfo_type (DSInfo_type** dsDataPtr)
 { 
-	TC_DS_Data_type*	dsData = *dsDataPtr;
+	DSInfo_type*	dsData = *dsDataPtr;
 	
 	if (!dsData) return;
 	
@@ -446,12 +451,12 @@ void discard_TC_DS_Data_type (TC_DS_Data_type** dsDataPtr)
 }   
 
 
-void SetDSdataGroupname	(TC_DS_Data_type* dsdata, char* groupname)
+void SetDSdataGroupname	(DSInfo_type* dsdata, char* groupname)
 {
 	dsdata->groupname=groupname;
 }
 
-char* GetDSdataGroupname (TC_DS_Data_type* dsdata)
+char* GetDSdataGroupname (DSInfo_type* dsdata)
 {
 	char* groupname =dsdata->groupname;
 	
@@ -459,43 +464,43 @@ char* GetDSdataGroupname (TC_DS_Data_type* dsdata)
 }
 
 
-void SetDSdataIterIndices	(TC_DS_Data_type* dsdata,unsigned int* iter_indices)
+void SetDSdataIterIndices	(DSInfo_type* dsdata,unsigned int* iter_indices)
 {
 	dsdata->iter_indices=iter_indices;
 }
 
-unsigned int* GetDSdataIterIndices (TC_DS_Data_type* dsdata)
+unsigned int* GetDSdataIterIndices (DSInfo_type* dsdata)
 {
 	unsigned int* iter_indices =dsdata->iter_indices;
 	
 	return iter_indices;
 }
 
-void SetDSDataSetRank	(TC_DS_Data_type* dsdata,unsigned int rank)
+void SetDSDataSetRank	(DSInfo_type* dsdata,unsigned int rank)
 {
 	dsdata->datasetrank=rank;
 }
 
-unsigned int GetDSDataSetRank (TC_DS_Data_type* dsdata)
+unsigned int GetDSDataSetRank (DSInfo_type* dsdata)
 {
 	BOOL datasetrank =dsdata->datasetrank;
 	
 	return datasetrank;
 }
 
-void SetDSdataStackData	(TC_DS_Data_type* dsdata,BOOL stackdata)
+void SetDSdataStackData	(DSInfo_type* dsdata,BOOL stackdata)
 {
 	dsdata->stackeddata = stackdata;
 }
 
-BOOL GetDSdataStackData (TC_DS_Data_type* dsdata)
+BOOL GetDSdataStackData (DSInfo_type* dsdata)
 {
 	BOOL stackdata = dsdata->stackeddata;
 	
 	return stackdata;
 }
 
-unsigned int GetDSDataRank (TC_DS_Data_type* dsdata)
+unsigned int GetDSDataRank (DSInfo_type* dsdata)
 {
 	BOOL datarank =dsdata->datarank;
 	

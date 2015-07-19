@@ -33,7 +33,7 @@ struct DataPacket {
 	CmtTSVHandle   				ctr;      				// Data Packet in-use counter. Although there are multiple sinks that can receive a data packet, 
 														// there is only one copy of the data in the memory. To de-allocate memory for the data, each sink must 
 														// call ReleaseDataPacket which in the end frees the memory if ctr reaches 0. 
-	TC_DS_Data_type*		    dsdata;                 // data storage data belongs to this iteration 
+	DSInfo_type*		    	dsdata;                 // data storage data belongs to this iteration 
 	DiscardFptr_type 			discardPacketDataFptr;	// Function pointer which will be called to discard the data pointer when ctr reaches 0.
 };
 
@@ -54,7 +54,7 @@ struct DataPacket {
 //==============================================================================
 // Global functions
 
-DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void** ptrToData, TC_DS_Data_type* dsdata, DiscardFptr_type discardPacketDataFptr) 
+DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void** ptrToData, DSInfo_type** dsDataPtr, DiscardFptr_type discardPacketDataFptr) 
 {
 	DataPacket_type* dataPacket = malloc (sizeof(DataPacket_type));
 	if (!dataPacket) return NULL;
@@ -68,12 +68,18 @@ DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void** ptrToData, T
 	*ctrTSVptr = 1;
 	CmtReleaseTSVPtr(dataPacket->ctr);
 	
-	dataPacket -> dataType 					= dataType;
-	dataPacket -> data     					= *ptrToData;
-	*ptrToData								= NULL;
-	dataPacket -> discardPacketDataFptr   	= discardPacketDataFptr;
+	dataPacket->dataType 					= dataType;
+	dataPacket->data     					= *ptrToData;
+	*ptrToData								= NULL;			// consume data
+	dataPacket->discardPacketDataFptr   	= discardPacketDataFptr;
 	
-	dataPacket -> dsdata     				= NULL;
+	// indexing info
+	if (dsDataPtr) {
+		dataPacket->dsdata     				= *dsDataPtr;
+		*dsDataPtr							= NULL; 		// consume object
+	} else
+		dataPacket->dsdata					= NULL;
+		
 	
 	return dataPacket;
 }
@@ -91,8 +97,9 @@ void discard_DataPacket_type (DataPacket_type** dataPacketPtr)
 	
 	// discard instance counter
 	CmtDiscardTSV(dataPacket->ctr);
-									  
-	discard_TC_DS_Data_type(&dataPacket->dsdata);
+	
+	// discard indexing
+	discard_DSInfo_type(&dataPacket->dsdata);
 	
 	// discard data packet
 	OKfree(*dataPacketPtr);
@@ -136,14 +143,8 @@ void** GetDataPacketPtrToData (DataPacket_type* dataPacket, DLDataTypes* dataTyp
 	return &dataPacket->data;
 }
 
-TC_DS_Data_type* GetDataPacketDSData (DataPacket_type* dataPacket)  
+DSInfo_type* GetDataPacketDSData (DataPacket_type* dataPacket)  
 {
 	return dataPacket->dsdata;
 }
-
-void SetDataPacketDSData (DataPacket_type* dataPacket,TC_DS_Data_type* dsdata)  
-{
-	dataPacket->dsdata=dsdata;
-}
-
 				  

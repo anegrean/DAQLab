@@ -32,8 +32,8 @@
 //==============================================================================
 // Types
 
-typedef struct DatStore		DataStorage_type;
-typedef struct DS_Channel	DS_Channel_type;
+typedef struct DataStorage		DataStorage_type;
+typedef struct DS_Channel		DS_Channel_type;
 
 
 struct DS_Channel{

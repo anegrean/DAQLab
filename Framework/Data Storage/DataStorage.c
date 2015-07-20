@@ -41,7 +41,7 @@
 //==============================================================================
 // Module implementation
 
-struct DatStore {
+struct DataStorage {
 
 	// SUPER, must be the first member to inherit from
 
@@ -94,7 +94,6 @@ static int 					DataReceivedTC 			(TaskControl_type* taskControl, TCStates taskS
 //-----------------------------------------
 // Data Storage Task Controller Callbacks
 //-----------------------------------------
-//datastorage module shouldn't iterate
 static int					TaskTreeStateChange 	(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
 //-----------------------------------------
@@ -102,7 +101,7 @@ static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* 
 
 static int CVICALLBACK 		UIPan_CB 				(int panel, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 		UICtrls_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-static int 					Load 					(DAQLabModule_type* mod, int workspacePanHndl);
+static int 					Load 					(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
 
 //==============================================================================
 // Global variables
@@ -402,7 +401,7 @@ char* CreateFullIterName(Iterator_type*	currentiter)
 	return fullname;	
 }
 
-static int Load (DAQLabModule_type* mod, int workspacePanHndl)
+static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 {
 	DataStorage_type* 	ds 			= (DataStorage_type*) mod;
 	
@@ -431,25 +430,47 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl)
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
 
-static int	TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
+static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
 {
-	DataStorage_type* 		ds 			= GetTaskControlModuleData(taskControl);
+	int 				error		= 0;
+	char*				errMsg		= NULL;
 	
-	int err=0;
+	DataStorage_type* 	ds 			= GetTaskControlModuleData(taskControl);
+	size_t				nChans		= ListNumItems(ds->channels);
+	DS_Channel_type*	dsChan		= NULL;
+	BOOL				storeData	= FALSE;
 	
-	if (state) {
-		//create a new data directory
+	// check if there is at least one open VChan to receive data
+	for (size_t i = 1; i <= nChans; i++) {
+		dsChan = *(DS_Channel_type**)ListGetPtrToItem(ds->channels, i);
+		if (IsVChanOpen((VChan_type*)dsChan->VChan)) {
+			storeData = TRUE;
+			break;
+		}
+	}
+	
+	if (state && storeData) {
+		
+		// create a new data directory
 		OKfree(ds->rawdatapath);			    // free previous path name
-		CreateRawDataDir(ds,taskControl);
-			//create HDF5 file
+		CreateRawDataDir(ds, taskControl);
+		
+		// create HDF5 file
 		OKfree(ds->hdf5datafile);               //free previous data file name
 		ds->hdf5datafile=malloc(MAX_PATH*sizeof(char)); 
 		Fmt(ds->hdf5datafile,"%s<%s\\data.h5",ds->rawdatapath);
-		err=CreateHDF5file(ds->hdf5datafile,"/dset");
-		if (err<0) MessagePopup("Error","Creating File");
+		error = CreateHDF5file(ds->hdf5datafile,"/dset");
+		if (error < 0) {
+			errMsg = StrDup("Error creating HDF5 file");
+			goto Error;
+		}
 	}
 	
 	return 0;
+Error:
+	
+	ReturnErrMsg("Data storage TaskTreeStateChange");
+	return error;
 }
 
 static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
@@ -465,7 +486,7 @@ static void	RedrawDSPanel (DataStorage_type* ds)
 	// count the number of channels in use
 	if (ds->channels) nChannels = ListNumItems(ds->channels); 
 	
-	if (nChannels>0) SetCtrlAttribute(ds->mainPanHndl,DSMain_RemoveChan,ATTR_DIMMED,FALSE);
+	if (nChannels > 0) SetCtrlAttribute(ds->mainPanHndl,DSMain_RemoveChan,ATTR_DIMMED,FALSE);
 	else SetCtrlAttribute(ds->mainPanHndl,DSMain_RemoveChan,ATTR_DIMMED,TRUE); 
 	
 
@@ -487,14 +508,13 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 	char					buff[DAQLAB_MAX_VCHAN_NAME + 50]	= "";  
 	char*					vChanName							= NULL;
 	char					channame[DAQLAB_MAX_VCHAN_NAME]		= "";
-	int 					numitems							= 0;
+	int 					numItems							= 0;
 	int 					checked								= 0;
 	int 					treeindex							= 0;
 	int 					i									= 0;
 	int 					channr								= 0;
 	int 					reply								= 0;
 	char*					currentbasepath						= NULL;
-	
 	
 	switch (event) {
 			
@@ -514,8 +534,9 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					
 					// rename label in settings panel
 					sprintf(buff, "%s", vChanName);
-					GetNumListItems(panel, DSMain_Channels,&numitems);
-					InsertListItem(panel, DSMain_Channels, -1, buff,channr);        
+					InsertListItem(panel, DSMain_Channels, -1, buff, channr); 
+					GetNumListItems(panel, DSMain_Channels, &numItems);
+					CheckListItem(panel, DSMain_Channels, numItems - 1, TRUE); 
 					
 					// create channel
 					chan = init_DS_Channel_type(ds, panel, vChanName);
@@ -531,17 +552,17 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					
 				case DSMain_RemoveChan:
 					
-					GetNumListItems(panel, DSMain_Channels,&numitems);    
+					GetNumListItems(panel, DSMain_Channels,&numItems);    
 					
-					for(treeindex = 0;treeindex < numitems; treeindex++){
+					for(treeindex = 0;treeindex < numItems; treeindex++){
 						IsListItemChecked(panel,DSMain_Channels,treeindex, &checked);      
 						if (checked == 1) {
 					   		// get channel name
 							GetLabelFromIndex (panel, DSMain_Channels, treeindex, channame); 
 							//get channel from list
 							if (ds->channels) {
-								numitems = ListNumItems(ds->channels); 
-								for (i = 1; i <= numitems; i++) {
+								numItems = ListNumItems(ds->channels); 
+								for (i = 1; i <= numItems; i++) {
 									chanPtr = ListGetPtrToItem(ds->channels, i);
 									if (chanPtr!=NULL) 
 										chan=*chanPtr;
@@ -584,6 +605,26 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					break;
 					
 			}
+			break;
+			
+		case EVENT_MARK_STATE_CHANGE:
+			
+			switch (control) {
+					
+				case DSMain_Channels:
+					
+					chan = *(DS_Channel_type**)ListGetPtrToItem(ds->channels, eventData2 + 1);
+					
+					if (eventData1)
+						// channels was activated
+						SetVChanActive((VChan_type*)chan->VChan, TRUE);
+					else
+						// channel was deactivated
+						SetVChanActive((VChan_type*)chan->VChan, FALSE);
+					
+					break;
+			}
+			
 			break;
 			
 	}

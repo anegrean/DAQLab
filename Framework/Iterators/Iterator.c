@@ -40,11 +40,11 @@ struct Iterator {
 
 // Task controller data packet indexing and used by the the datastorage module
 struct DSInfo{
-	char*					groupname;  			// Create an HDF5 group for the dataset.
+	char*					groupName;  			// Create an HDF5 group for the dataset.
 	BOOL					stackeddata;			// True if data is stacked, False otherwise.
 	unsigned int 			datasetrank;			// Dataset rank, i.e. # dimensions 
 	unsigned int 			datarank;				// Data element rank (1 for waveform, 2 for Images), i.e. # dimensions
-	unsigned int*			iter_indices;   		// Dataset index array.
+	unsigned int*			iterIndices;   			// Dataset index array.
 };
 
    
@@ -331,7 +331,7 @@ DSInfo_type* GetIteratorDSData (Iterator_type* iterator, unsigned int datarank)
 	char* 				fullGroupName				= NULL;
 	size_t				iterIdx						= 0;
 	BOOL				determining_rank			= TRUE;
-	int 				indices[MAXDATARANK]		= {0};   
+	unsigned int		indices[MAXDATARANK]		= {0};   
 	size_t				totalIter					= 0;
 	BOOL				stackData					= FALSE;
 	
@@ -362,9 +362,9 @@ DSInfo_type* GetIteratorDSData (Iterator_type* iterator, unsigned int datarank)
 	nullChk( fullGroupName = malloc(MAXGROUPNAME * sizeof(char)) );
 	
 	if (!stackData) 
-		Fmt(fullGroupName, "%s<%s[w3]#%i",tcName,iterIdx); 
+		Fmt(fullGroupName, "%s<%s[w3]#%i", tcName, iterIdx); 
 	else 
-		Fmt(fullGroupName, "%s<%s[w3]",tcName); 
+		Fmt(fullGroupName, "%s<%s[w3]", tcName); 
 	
 	OKfree(tcName);
 	
@@ -399,15 +399,15 @@ DSInfo_type* GetIteratorDSData (Iterator_type* iterator, unsigned int datarank)
 	}
 	
 	if (rank){
-		OKfree(ds_data->iter_indices);
-		nullChk( ds_data->iter_indices = malloc(rank * sizeof(unsigned int)) );
+		OKfree(ds_data->iterIndices);
+		nullChk( ds_data->iterIndices = malloc(rank * sizeof(unsigned int)) );
 		//rearrange rank; Most significant rank first
 		for (int i = 0; i < rank; i++) 
-			ds_data->iter_indices[i] = indices[rank-i-1];
+			ds_data->iterIndices[i] = indices[rank-i-1];
 	} else 
-		ds_data->iter_indices = NULL;
+		ds_data->iterIndices = NULL;
 	
-	ds_data->groupname		= StrDup(fullGroupName);
+	ds_data->groupName		= StrDup(fullGroupName);
 	ds_data->datasetrank	= rank;
 	ds_data->stackeddata	= iterator->stackdata; 
 	ds_data->datarank		= datarank;
@@ -419,92 +419,80 @@ DSInfo_type* GetIteratorDSData (Iterator_type* iterator, unsigned int datarank)
 Error:
 	
 	OKfree(ds_data);
-	
 	return NULL;
 }
 
 
 static DSInfo_type* init_DSInfo_type(void)
 {
-	DSInfo_type* ds_data	= malloc(sizeof(DSInfo_type));
+	DSInfo_type* ds_data		= malloc(sizeof(DSInfo_type));
 	if (!ds_data) return NULL;
 	
-	ds_data->groupname			= NULL;
+	ds_data->groupName			= NULL;
 	ds_data->stackeddata		= FALSE;
 	ds_data->datasetrank		= 0;
 	ds_data->datarank			= 0;
-	ds_data->iter_indices		= NULL;
+	ds_data->iterIndices		= NULL;
 	
 	return ds_data;
 }
 
-void discard_DSInfo_type (DSInfo_type** dsDataPtr)
+void discard_DSInfo_type (DSInfo_type** dsInfoPtr)
 { 
-	DSInfo_type*	dsData = *dsDataPtr;
+	DSInfo_type*	dsInfo = *dsInfoPtr;
+	if (!dsInfo) return;
 	
-	if (!dsData) return;
+	OKfree(dsInfo->groupName);
+	OKfree(dsInfo->iterIndices); 
 	
-	OKfree(dsData->groupname);
-	OKfree(dsData->iter_indices); 
-	
-	OKfree(*dsDataPtr);
+	OKfree(*dsInfoPtr);
 }   
 
-
-void SetDSdataGroupname	(DSInfo_type* dsdata, char* groupname)
+void SetDSInfoGroupName	(DSInfo_type* dsInfo, char groupName[])
 {
-	dsdata->groupname=groupname;
+	OKfree(dsInfo->groupName);
+	dsInfo->groupName = StrDup(groupName);
 }
 
-char* GetDSdataGroupname (DSInfo_type* dsdata)
+char* GetDSInfoGroupName (DSInfo_type* dsInfo)
 {
-	char* groupname =dsdata->groupname;
-	
-	return groupname;
+	return StrDup(dsInfo->groupName);
 }
 
-
-void SetDSdataIterIndices	(DSInfo_type* dsdata,unsigned int* iter_indices)
+void SetDSInfoIterIndices (DSInfo_type* dsInfo, unsigned int** iterIndicesPtr)
 {
-	dsdata->iter_indices=iter_indices;
+	dsInfo->iterIndices = *iterIndicesPtr;
+	*iterIndicesPtr = NULL; // consume data
 }
 
-unsigned int* GetDSdataIterIndices (DSInfo_type* dsdata)
+unsigned int* GetDSInfoIterIndices (DSInfo_type* dsInfo)
 {
-	unsigned int* iter_indices =dsdata->iter_indices;
-	
-	return iter_indices;
+	return dsInfo->iterIndices;
 }
 
-void SetDSDataSetRank	(DSInfo_type* dsdata,unsigned int rank)
+void SetDSInfoDatasetRank	(DSInfo_type* dsInfo,unsigned int rank)
 {
-	dsdata->datasetrank=rank;
+	dsInfo->datasetrank = rank;
 }
 
-unsigned int GetDSDataSetRank (DSInfo_type* dsdata)
+unsigned int GetDSInfoDatasetRank (DSInfo_type* dsInfo)
 {
-	BOOL datasetrank =dsdata->datasetrank;
-	
-	return datasetrank;
+	return dsInfo->datasetrank;
 }
 
-void SetDSdataStackData	(DSInfo_type* dsdata,BOOL stackdata)
+void SetDSInfoStackData	(DSInfo_type* dsInfo,BOOL stackdata)
 {
-	dsdata->stackeddata = stackdata;
+	dsInfo->stackeddata = stackdata;
 }
 
-BOOL GetDSdataStackData (DSInfo_type* dsdata)
+BOOL GetDSInfoStackData (DSInfo_type* dsInfo)
 {
-	BOOL stackdata = dsdata->stackeddata;
-	
-	return stackdata;
+	return dsInfo->stackeddata;
 }
 
-unsigned int GetDSDataRank (DSInfo_type* dsdata)
+unsigned int GetDSDataRank (DSInfo_type* dsInfo)
 {
-	BOOL datarank =dsdata->datarank;
-	
-	return datarank;
+	return dsInfo->datarank;
 }
 
 

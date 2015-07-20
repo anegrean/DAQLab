@@ -141,25 +141,25 @@ ListType				IterateOverIterators		(Iterator_type* iterator);
 
 	// get DataStorage data from the iterator
 DSInfo_type*			GetIteratorDSData			(Iterator_type* iterator, unsigned int datarank);
-void 					discard_DSInfo_type 		(DSInfo_type** dsDataPtr);
+void 					discard_DSInfo_type 		(DSInfo_type** dsInfoPtr);
 
-void					SetDSdataGroupname			(DSInfo_type* dsdata, char* groupname);
+void					SetDSInfoGroupName			(DSInfo_type* dsInfo, char groupName[]);
 
-char*					GetDSdataGroupname			(DSInfo_type* dsdata); 
+char*					GetDSInfoGroupName			(DSInfo_type* dsInfo); 
 
-void 					SetDSdataIterIndices		(DSInfo_type* dsdata,unsigned int* iter_indices);
+void 					SetDSInfoIterIndices		(DSInfo_type* dsInfo, unsigned int** iterIndicesPtr);
 
-unsigned int* 			GetDSdataIterIndices 		(DSInfo_type* dsdata);
+unsigned int* 			GetDSInfoIterIndices 		(DSInfo_type* dsInfo);
 
-void 					SetDSDataSetRank			(DSInfo_type* dsdata,unsigned int rank);
+void 					SetDSInfoDatasetRank		(DSInfo_type* dsInfo,unsigned int rank);
 
-unsigned int 			GetDSDataSetRank 			(DSInfo_type* dsdata);
+unsigned int 			GetDSInfoDatasetRank 		(DSInfo_type* dsInfo);
 
-unsigned int 			GetDSDataRank 				(DSInfo_type* dsdata);
+unsigned int 			GetDSDataRank 				(DSInfo_type* dsInfo);
 
-void 					SetDSdataStackData			(DSInfo_type* dsdata,BOOL stackdata);
+void 					SetDSInfoStackData			(DSInfo_type* dsInfo,BOOL stackdata);
 
-BOOL 					GetDSdataStackData 			(DSInfo_type* dsdata);
+BOOL 					GetDSInfoStackData 			(DSInfo_type* dsInfo);
 
 				
 

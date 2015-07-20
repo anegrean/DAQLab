@@ -134,14 +134,14 @@ int WriteHDF5Data(char *filename, char* dataset_name, DSInfo_type* dsdata, Wavef
 	unsigned int			datarank				= GetDSDataRank(dsdata);	 //data rank, 1 for waveforms, 2 for images
    
    
-	unsigned int 			indicesrank				= GetDSDataSetRank(dsdata);  //data rank determined by the experiment, equals number of indices
+	unsigned int 			indicesrank				= GetDSInfoDatasetRank(dsdata);  //data rank determined by the experiment, equals number of indices
 	unsigned int 			rank					= indicesrank + datarank; 
    
 	hsize_t*				datadims 				= malloc(datarank * sizeof(hsize_t)); 
 	hsize_t*				dims 				    = malloc(rank * sizeof(hsize_t));
 	hsize_t*      			maxdims 			    = malloc(rank * sizeof(hsize_t));
 	hsize_t*				dimsr 					= malloc(rank * sizeof(hsize_t));
-	unsigned int*			indices					= GetDSdataIterIndices(dsdata);   
+	unsigned int*			indices					= GetDSInfoIterIndices(dsdata);   
 	hsize_t* 				offset					= malloc(rank * sizeof(hsize_t)); 
 	hsize_t*      			size					= malloc(rank * sizeof(hsize_t));
 	unsigned long long   	numelements				= 0;
@@ -387,7 +387,8 @@ static int CreateHDF5Group (char* filename, DSInfo_type* dsdata, hid_t* file_id,
 {
    	herr_t      			error			= 0; 
 	hid_t* 					group_id 		= NULL;
-	char**					groupname		= NULL; 
+	char**					groupname		= NULL;
+	char*					tmpGroupName	= NULL;
 	char* 					pch				= NULL;
 	int 					groupdepth		= 0;
 	
@@ -397,12 +398,13 @@ static int CreateHDF5Group (char* filename, DSInfo_type* dsdata, hid_t* file_id,
    	
 	nullChk( groupname = malloc(MAXITERDEPTH * sizeof(char*)) );
 	
-  	pch = strtok (GetDSdataGroupname(dsdata),"/");
+  	pch = strtok ((tmpGroupName = GetDSInfoGroupName(dsdata)),"/");
 	while (pch != NULL) {
     	groupname[groupdepth] = StrDup(pch);
 		groupdepth++;
     	pch = strtok (NULL, "/");
 	}
+	OKfree(tmpGroupName);
 	
 	nullChk( group_id = malloc((groupdepth+1)*sizeof(hid_t)) );
 	//create groups if necessary

@@ -620,6 +620,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 			dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType); 
 			dsdata = GetDataPacketDSData(dataPackets[i]);
 			
+			
 			switch (dataPacketType) {
 					
 					case DL_Waveform_Char:
@@ -646,6 +647,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 						// not implemented
 						break;
 			}
+			
 			
 			ReleaseDataPacket(&dataPackets[i]);
 		}

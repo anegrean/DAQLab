@@ -6853,6 +6853,9 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	
 	RectRasterPointBuff_type*	pointBuffer					= rectRaster->pointBuffers[bufferIdx];
 	int* 						nActivePixelBuildersTSVPtr 	= NULL;
+	DSInfo_type*				dsInfo						= NULL;
+	DataPacket_type*			dataPacket					= NULL;
+	Waveform_type*				pixelWaveformCopy			= NULL;
 	
 	
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -6864,7 +6867,8 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	// if no waveform is received, send null packet to output channel and complete iteration if there are no other pixel builder threads for other channels
 	if (!pointBuffer->rawPixels) {
 		
-		errChk( SendNullPacket(pointBuffer->scanChan->outputVChan, &errMsg) );
+		if (IsVChanOpen((VChan_type*)pointBuffer->scanChan->outputVChan))
+			errChk( SendNullPacket(pointBuffer->scanChan->outputVChan, &errMsg) );
 		
 		errChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
 		(*nActivePixelBuildersTSVPtr)--;
@@ -6887,6 +6891,17 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	errChk( IntegrateWaveform(&pointBuffer->integratedPixels, pointBuffer->rawPixels, pointBuffer->nSkipPixels, pointBuffer->nSkipPixels + nHoldSamples, rectRaster->pointJumpSettings->nIntegration) );
 	discard_Waveform_type(&pointBuffer->rawPixels);
 	
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------
+	// Send processed waveform
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	if (IsVChanOpen((VChan_type*)pointBuffer->scanChan->outputVChan)) {
+		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(rectRaster->baseClass.taskControl), WAVERANK) );
+		errChk( CopyWaveform(&pixelWaveformCopy, pointBuffer->integratedPixels, &errMsg) );
+		nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_Double, (void**)&pixelWaveformCopy, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
+		errChk( SendDataPacket(pointBuffer->scanChan->outputVChan, &dataPacket, FALSE, &errMsg) );
+		errChk( SendNullPacket(pointBuffer->scanChan->outputVChan, &errMsg) );
+	}
 	
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	// Display waveform
@@ -6899,10 +6914,10 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 			SetWaveformColor(pointBuffer->integratedPixels, WaveformColor_DK_GRAY);
 			break;
 		case ScanChanColor_Red:
-			SetWaveformColor(pointBuffer->integratedPixels, WaveformColor_RED);
+			SetWaveformColor(pointBuffer->integratedPixels, WaveformColor_DK_RED);
 			break;
 		case ScanChanColor_Green:
-			SetWaveformColor(pointBuffer->integratedPixels, WaveformColor_GREEN);
+			SetWaveformColor(pointBuffer->integratedPixels, WaveformColor_DK_GREEN);
 			break;
 		case ScanChanColor_Blue:
 			SetWaveformColor(pointBuffer->integratedPixels, WaveformColor_BLUE);
@@ -6912,7 +6927,6 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	// display
 	DisplayWaveform(pointBuffer->scanChan->waveDisplay, &pointBuffer->integratedPixels);
 	
-	//DisplayWaveform(pointBuffer->scanChan->waveDisplay, &pointBuffer->rawPixels);
 	
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	// Finalize point scan for this channel
@@ -6930,6 +6944,11 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	return 0;
 	
 Error:
+	
+	// cleanup
+	discard_Waveform_type(&pixelWaveformCopy);
+	discard_DSInfo_type(&dsInfo);
+	discard_DataPacket_type(&dataPacket);
 	
 	ReturnErrMsg("NonResRectRasterScan_BuildPointScan");
 	return error;

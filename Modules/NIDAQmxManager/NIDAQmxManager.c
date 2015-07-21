@@ -534,6 +534,7 @@ typedef struct {
 	SampClockEdgeTypes 			sampClkEdge;   				// Sample clock active edge.
 	char*         				refClkSource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
 	double        				refClkFreq;    				// Reference clock frequency if such a clock is used.
+	char*						startSignalRouting;			// Task start signal routing.
 	
 	//------------------------------------
 	// UI
@@ -557,7 +558,6 @@ typedef struct {
 typedef struct {
 	Trig_type 					trigType;					// Trigger type.
 	char*     					trigSource;   				// Trigger source.
-	char*						trigRouting;				// Trigger routing.
 	double*						samplingRate;				// Reference to task sampling rate in [Hz].
 	TrigSlope_type				slope;     					// For analog and digital edge trig type.
 	double   					level; 						// For analog edge trigger.
@@ -572,7 +572,6 @@ typedef struct {
 	int							trigPanHndl;				// Trigger panel handle.
 	int							trigSlopeCtrlID;			// Trigger settings control copy IDs
 	int							trigSourceCtrlID;			// Trigger settings control copy IDs
-	int							trigRoutingCtrlID;			// Trigger settings control copy IDs
 	int							preTrigDurationCtrlID;		// Trigger settings control copy IDs
 	int							preTrigNSamplesCtrlID;		// Trigger settings control copy IDs
 	int							levelCtrlID;				// Trigger settings control copy IDs
@@ -1271,6 +1270,14 @@ static char* 						substr									(const char* token, char** idxstart);
 
 static BOOL							ValidTaskControllerName					(char name[], void* dataPtr);
 
+//--------------------------------------------
+// DAQmx conversion functions
+//--------------------------------------------
+
+static int32						PulseTrainIdleStates_To_DAQmxVal		(PulseTrainIdleStates idleVal);
+
+static int32						PulseTrainModes_To_DAQmxVal				(PulseTrainModes pulseMode);
+
 //---------------------------
 // DAQmx device management
 //---------------------------
@@ -1298,7 +1305,6 @@ static void 						AddReferenceTriggerToUI 				(TaskTrig_type* taskTrig);
 static int CVICALLBACK 				TriggerSlope_CB	 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerLevel_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerSource_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-static int CVICALLBACK 				TriggerRouting_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerWindowType_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerWindowBttm_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				TriggerWindowTop_CB						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
@@ -1493,10 +1499,6 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 	if (nidaq->taskSetPanHndl) {DiscardPanel(nidaq->taskSetPanHndl); nidaq->taskSetPanHndl = 0;}
 	if (nidaq->devListPanHndl) {DiscardPanel(nidaq->devListPanHndl); nidaq->devListPanHndl = 0;}
 	
-	//discard NIDAQmx_NewTerminalCtrl 
-	//
-
-//	NIDAQmx_DiscardIOCtrl(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID);
 	//----------------------------------------
 	// discard DAQLabModule_type specific data
 	//----------------------------------------
@@ -1601,7 +1603,7 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 						
 					case Chan_AO_Voltage:
 						
-						AddToUI_Chan_AO_Voltage((ChanSet_AI_Voltage_type*)chanSet);
+						AddToUI_Chan_AO_Voltage((ChanSet_AO_Voltage_type*)chanSet);
 						break;
 				
 					// add here more channel types	
@@ -1854,18 +1856,19 @@ static int LoadADTaskCfg (ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ 
 	long							nChans							= 0;
 	uInt32							operationMode					= 0;			
 	uInt32							sampleClockEdge					= 0;			
-	DAQLabXMLNode 					taskAttr[] 						= {	{"Timeout", 				BasicData_Double, 		&taskSet->timeout},
-																		{"OperationMode", 			BasicData_UInt, 		&operationMode},
-																		{"SamplingRate", 			BasicData_Double, 		&taskSet->timing->sampleRate},
-																		{"TargetSamplingRate",		BasicData_Double,		&taskSet->timing->targetSampleRate},
-																		{"NSamples", 				BasicData_UInt64, 	&taskSet->timing->nSamples},
-																		{"Oversampling",			BasicData_UInt,			&taskSet->timing->oversampling},
-																		{"OversamplingAutoAdjust",	BasicData_Bool,			&taskSet->timing->oversamplingAuto}, 
-																		{"BlockSize", 				BasicData_UInt, 		&taskSet->timing->blockSize},
-																		{"SampleClockSource", 		BasicData_CString, 		&taskSet->timing->sampClkSource},
-																		{"SampleClockEdge", 		BasicData_UInt, 		&sampleClockEdge},
-																		{"ReferenceClockSource", 	BasicData_CString, 		&taskSet->timing->refClkSource},
-																		{"ReferenceClockFrequency", BasicData_Double, 		&taskSet->timing->refClkFreq} };
+	DAQLabXMLNode 					taskAttr[] 						= {	{"Timeout", 					BasicData_Double, 		&taskSet->timeout},
+																		{"OperationMode", 				BasicData_UInt, 		&operationMode},
+																		{"SamplingRate", 				BasicData_Double, 		&taskSet->timing->sampleRate},
+																		{"TargetSamplingRate",			BasicData_Double,		&taskSet->timing->targetSampleRate},
+																		{"NSamples", 					BasicData_UInt64, 		&taskSet->timing->nSamples},
+																		{"Oversampling",				BasicData_UInt,			&taskSet->timing->oversampling},
+																		{"OversamplingAutoAdjust",		BasicData_Bool,			&taskSet->timing->oversamplingAuto}, 
+																		{"BlockSize", 					BasicData_UInt, 		&taskSet->timing->blockSize},
+																		{"SampleClockSource", 			BasicData_CString, 		&taskSet->timing->sampClkSource},
+																		{"SampleClockEdge", 			BasicData_UInt, 		&sampleClockEdge},
+																		{"ReferenceClockSource", 		BasicData_CString, 		&taskSet->timing->refClkSource},
+																		{"ReferenceClockFrequency", 	BasicData_Double, 		&taskSet->timing->refClkFreq},
+																		{"StartSignalRouting",			BasicData_CString,		&taskSet->timing->startSignalRouting}	};
 	
 	errChk( DLGetXMLElementAttributes(taskSetXMLElement, taskAttr, NumElem(taskAttr)) );
 	// assign remaining attributes
@@ -1960,8 +1963,7 @@ static int LoadTaskTrigCfg (TaskTrig_type* taskTrig, ActiveXMLObj_IXMLDOMElement
 	
 		// shared trigger attributes
 	DAQLabXMLNode 					sharedTrigAttr[]		= {	{"Type", 					BasicData_UInt, 	&trigType},
-																{"Source", 					BasicData_CString, 	&taskTrig->trigSource},
-																{"Routing",					BasicData_CString,	&taskTrig->trigRouting} };
+																{"Source", 					BasicData_CString, 	&taskTrig->trigSource} };
 		// for both analog and digital edge triggers
 	DAQLabXMLNode 					edgeTrigAttr[]			= {	{"Slope", 					BasicData_UInt, 	&slopeType} };
 		// for analog edge trigger
@@ -2120,7 +2122,7 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				unsigned int					VRangeIdx				= 0;
 				double							VMax					= 0;
 				double							VMin					= 0;
-				DataTypeConversion_type			dataTypeConversion		= {.dataType = Convert_To_Double, .min = 0, .max = 0, .offset = 0, .gain = 0};
+				//DataTypeConversion_type			dataTypeConversion		= {.dataType = Convert_To_Double, .min = 0, .max = 0, .offset = 0, .gain = 0};
 				DAQLabXMLNode 					ChanAOVoltageAttr[]		= { {"VRangeIdx",			BasicData_UInt,		&VRangeIdx},
 																			{"VMax",				BasicData_Double, 	&VMax},
 																			{"VMin",				BasicData_Double, 	&VMin},
@@ -2141,7 +2143,7 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				unsigned int					IRangeIdx				= 0;
 				double							IMax					= 0;
 				double							IMin					= 0;
-				DataTypeConversion_type			dataTypeConversion		= {.dataType = Convert_To_Double, .min = 0, .max = 0, .offset = 0, .gain = 0};
+				//DataTypeConversion_type			dataTypeConversion		= {.dataType = Convert_To_Double, .min = 0, .max = 0, .offset = 0, .gain = 0};
 				DAQLabXMLNode 					ChanAOCurrentAttr[]		= { {"IRangeIdx",			BasicData_UInt,		&IRangeIdx},
 																			{"IMax",				BasicData_Double, 	&IMax},
 																			{"IMin",				BasicData_Double, 	&IMin},
@@ -2269,7 +2271,7 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				double							initialDelay			= 0;
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_UInt64,	&nPulses},
+																			{"NPulses",					BasicData_UInt64,		&nPulses},
 																			{"ReferenceClockSource", 	BasicData_CString,		&refClkSource},
 																			{"ReferenceClockFrequency", BasicData_Double,		&refClkFreq},
 																			{"PulseHighTime",			BasicData_Double,		&highTime},
@@ -2320,7 +2322,7 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 		case Chan_CO_Pulse_Ticks:
 			{
 				COChannel_type*					chanAttr				= GetCOChannel(dev, physChanName);
-				PulseTrainFreqTiming_type*		pulseTrain				= NULL;				
+				PulseTrainTickTiming_type*		pulseTrain				= NULL;				
 				uInt32							pulseMode				= 0;
 				uInt32							idlePulseState			= 0;
 				uInt64							nPulses					= 0;
@@ -2542,18 +2544,19 @@ static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXML
 	uInt32							operationMode			= (uInt32)taskSet->timing->measMode;
 	uInt32							sampleClockEdge			= (uInt32)taskSet->timing->sampClkEdge;
 	
-	DAQLabXMLNode 					taskSetAttr[] 				= {	{"Timeout", 				BasicData_Double, 		&taskSet->timeout},
-																	{"OperationMode", 			BasicData_UInt, 		&operationMode},
-																	{"SamplingRate", 			BasicData_Double, 		&taskSet->timing->sampleRate},
-																	{"TargetSamplingRate",		BasicData_Double,		&taskSet->timing->targetSampleRate},
-																	{"NSamples", 				BasicData_UInt64, 	&taskSet->timing->nSamples},
-																	{"Oversampling",			BasicData_UInt,			&taskSet->timing->oversampling},
-																	{"OversamplingAutoAdjust",	BasicData_Bool,			&taskSet->timing->oversamplingAuto},
-																	{"BlockSize", 				BasicData_UInt, 		&taskSet->timing->blockSize},
-																	{"SampleClockSource", 		BasicData_CString, 		taskSet->timing->sampClkSource},
-																	{"SampleClockEdge", 		BasicData_UInt, 		&sampleClockEdge},
-																	{"ReferenceClockSource", 	BasicData_CString, 		taskSet->timing->refClkSource},
-																	{"ReferenceClockFrequency", BasicData_Double, 		&taskSet->timing->refClkFreq} };
+	DAQLabXMLNode 					taskSetAttr[] 				= {	{"Timeout", 					BasicData_Double, 		&taskSet->timeout},
+																	{"OperationMode", 				BasicData_UInt, 		&operationMode},
+																	{"SamplingRate", 				BasicData_Double, 		&taskSet->timing->sampleRate},
+																	{"TargetSamplingRate",			BasicData_Double,		&taskSet->timing->targetSampleRate},
+																	{"NSamples", 					BasicData_UInt64, 		&taskSet->timing->nSamples},
+																	{"Oversampling",				BasicData_UInt,			&taskSet->timing->oversampling},
+																	{"OversamplingAutoAdjust",		BasicData_Bool,			&taskSet->timing->oversamplingAuto},
+																	{"BlockSize", 					BasicData_UInt, 		&taskSet->timing->blockSize},
+																	{"SampleClockSource", 			BasicData_CString, 		taskSet->timing->sampClkSource},
+																	{"SampleClockEdge", 			BasicData_UInt, 		&sampleClockEdge},
+																	{"ReferenceClockSource", 		BasicData_CString, 		taskSet->timing->refClkSource},
+																	{"ReferenceClockFrequency", 	BasicData_Double, 		&taskSet->timing->refClkFreq},
+																	{"StartSignalRouting",			BasicData_CString,		taskSet->timing->startSignalRouting} };
 																	
 	errChk( DLAddToXMLElem(xmlDOM, AITaskXMLElement, taskSetAttr, DL_ATTRIBUTE, NumElem(taskSetAttr), xmlErrorInfo) ); 
 	
@@ -2676,8 +2679,7 @@ static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveX
 	uInt32							triggerCondition		= (uInt32) taskTrig->wndTrigCond;
 		// shared trigger attributes
 	DAQLabXMLNode 					sharedTrigAttr[]		= {	{"Type", 					BasicData_UInt, 	&trigType},
-																{"Source", 					BasicData_CString, 	taskTrig->trigSource},
-																{"Routing",					BasicData_CString,	taskTrig->trigRouting} };
+																{"Source", 					BasicData_CString, 	taskTrig->trigSource} };
 		// for both analog and digital edge triggers
 	DAQLabXMLNode 					edgeTrigAttr[]			= {	{"Slope", 					BasicData_UInt, 	&slopeType} };
 		// for analog edge trigger
@@ -2857,7 +2859,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				uInt32							CIMeasMode				= (uInt32) CIFreqChanSet->taskTiming.measMode;
 				uInt32							CIFreqMeasMethod		= (uInt32) CIFreqChanSet->measMethod;
 				DAQLabXMLNode 					CIFreqChanAttr[]		= { {"MeasurementMode",				BasicData_UInt,			&CIMeasMode},
-																			{"NSamples",					BasicData_UInt64,	&CIFreqChanSet->taskTiming.nSamples},
+																			{"NSamples",					BasicData_UInt64,		&CIFreqChanSet->taskTiming.nSamples},
 																			{"SamplingRate",				BasicData_Double,		&CIFreqChanSet->taskTiming.sampleRate},
 																			{"ReferenceClockFrequency", 	BasicData_Double,		&CIFreqChanSet->taskTiming.refClkFreq},
 																			{"MaxFrequency",				BasicData_Double, 		&CIFreqChanSet->freqMax},
@@ -2885,7 +2887,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_UInt64,	&nPulses},
+																			{"NPulses",					BasicData_UInt64,		&nPulses},
 																			{"ReferenceClockSource", 	BasicData_CString,		&COChanSet->refClkSource},
 																			{"ReferenceClockFrequency", BasicData_Double,		&COChanSet->refClkFreq},
 																			{"PulseHighTime",			BasicData_Double,		&highTime},
@@ -2909,7 +2911,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_UInt64,	&nPulses},
+																			{"NPulses",					BasicData_UInt64,		&nPulses},
 																			{"ReferenceClockSource", 	BasicData_CString,		&COChanSet->refClkSource},
 																			{"ReferenceClockFrequency", BasicData_Double,		&COChanSet->refClkFreq},
 																			{"Frequency",				BasicData_Double,		&frequency},
@@ -2933,7 +2935,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_UInt64,	&nPulses},
+																			{"NPulses",					BasicData_UInt64,		&nPulses},
 																			{"ReferenceClockSource", 	BasicData_CString,		&COChanSet->refClkSource},
 																			{"ReferenceClockFrequency", BasicData_Double,		&COChanSet->refClkFreq},
 																			{"HighTicks",				BasicData_UInt,			&highTicks},
@@ -5659,6 +5661,8 @@ static ChanSet_CI_EdgeCount_type* init_ChanSet_CI_EdgeCount_type (Dev_type* dev,
 	
 	chanSet->initialCount		= initialCount;
 	chanSet->countDirection		= countDirection;
+	
+	return chanSet;
 }
 
 static void discard_ChanSet_CI_EdgeCount_type (ChanSet_CI_EdgeCount_type** chanSetPtr)
@@ -6586,7 +6590,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// init CO generation mode
 							InsertListItem(timingPanHndl, COFreqPan_Mode, -1, "Finite", Operation_Finite);
 							InsertListItem(timingPanHndl, COFreqPan_Mode, -1, "Continuous", Operation_Continuous);
-							GetIndexFromValue(timingPanHndl, COFreqPan_Mode, &ctrlIdx, GetPulseTrainMode(newChan->pulseTrain)); 
+							GetIndexFromValue(timingPanHndl, COFreqPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
 							SetCtrlIndex(timingPanHndl, COFreqPan_Mode, ctrlIdx);
 							
 							// init CO N Pulses
@@ -6629,7 +6633,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// init CO generation mode
 							InsertListItem(timingPanHndl, COTimePan_Mode, -1, "Finite", Operation_Finite);
 							InsertListItem(timingPanHndl, COTimePan_Mode, -1, "Continuous", Operation_Continuous);
-							GetIndexFromValue(timingPanHndl, COTimePan_Mode, &ctrlIdx, GetPulseTrainMode(newChan->pulseTrain)); 
+							GetIndexFromValue(timingPanHndl, COTimePan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
 							SetCtrlIndex(timingPanHndl, COTimePan_Mode, ctrlIdx);
 							
 							// init CO N Pulses
@@ -6672,7 +6676,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// init CO generation mode
 							InsertListItem(timingPanHndl, COTicksPan_Mode, -1, "Finite", Operation_Finite);
 							InsertListItem(timingPanHndl, COTicksPan_Mode, -1, "Continuous", Operation_Continuous);
-							GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, GetPulseTrainMode(newChan->pulseTrain)); 
+							GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
 							SetCtrlIndex(timingPanHndl, COTicksPan_Mode, ctrlIdx);
 							
 							// init CO N Pulses
@@ -7775,7 +7779,6 @@ static TaskTrig_type* init_TaskTrig_type (Dev_type* dev, double* samplingRate)
 	taskTrig->trigType					= Trig_None;
 	taskTrig->device					= dev;
 	taskTrig->trigSource				= NULL;
-	taskTrig->trigRouting				= NULL;
 	taskTrig->slope						= TrigSlope_Rising;
 	taskTrig->level						= 0;
 	taskTrig->wndBttm					= 0;
@@ -7788,7 +7791,6 @@ static TaskTrig_type* init_TaskTrig_type (Dev_type* dev, double* samplingRate)
 	taskTrig->trigPanHndl				= 0;
 	taskTrig->trigSlopeCtrlID			= 0;	
 	taskTrig->trigSourceCtrlID			= 0;
-	taskTrig->trigRoutingCtrlID			= 0;
 	taskTrig->preTrigDurationCtrlID		= 0;
 	taskTrig->preTrigNSamplesCtrlID		= 0;
 	taskTrig->levelCtrlID				= 0;
@@ -7806,7 +7808,6 @@ static void	discard_TaskTrig_type (TaskTrig_type** taskTrigPtr)
 	if (!taskTrig) return;
 	
 	OKfree(taskTrig->trigSource);
-	OKfree(taskTrig->trigRouting);
 	
 	OKfree(*taskTrigPtr);
 }
@@ -7834,6 +7835,7 @@ static ADTaskTiming_type* init_ADTaskTiming_type (void)
 	taskTiming->nSamplesSourceVChan			= NULL;
 	taskTiming->samplingRateSinkVChan		= NULL;
 	taskTiming->samplingRateSourceVChan		= NULL;
+	taskTiming->startSignalRouting			= NULL;
 	
 	// UI
 	taskTiming->timingPanHndl				= 0;
@@ -7842,18 +7844,20 @@ static ADTaskTiming_type* init_ADTaskTiming_type (void)
 	return taskTiming;
 }
 
-static void discard_ADTaskTiming_type	(ADTaskTiming_type** taskTimingPtr)
+static void discard_ADTaskTiming_type (ADTaskTiming_type** taskTimingPtr)
 {
-	if (!*taskTimingPtr) return;
+	ADTaskTiming_type*	taskTiming = *taskTimingPtr;
+	if (!taskTiming) return;
 	
-	OKfree((*taskTimingPtr)->sampClkSource);
-	OKfree((*taskTimingPtr)->refClkSource);
+	OKfree(taskTiming->sampClkSource);
+	OKfree(taskTiming->refClkSource);
+	OKfree(taskTiming->startSignalRouting);
 	
 	// VChans
-	discard_VChan_type((VChan_type**)&(*taskTimingPtr)->nSamplesSinkVChan);
-	discard_VChan_type((VChan_type**)&(*taskTimingPtr)->samplingRateSinkVChan);
-	discard_VChan_type((VChan_type**)&(*taskTimingPtr)->nSamplesSourceVChan);
-	discard_VChan_type((VChan_type**)&(*taskTimingPtr)->samplingRateSourceVChan);
+	discard_VChan_type((VChan_type**)&taskTiming->nSamplesSinkVChan);
+	discard_VChan_type((VChan_type**)&taskTiming->samplingRateSinkVChan);
+	discard_VChan_type((VChan_type**)&taskTiming->nSamplesSourceVChan);
+	discard_VChan_type((VChan_type**)&taskTiming->samplingRateSourceVChan);
 	
 	OKfree(*taskTimingPtr);
 }
@@ -7946,6 +7950,9 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	//--------------------------
 	// load UI resources
 	//--------------------------
+	
+	int ctrlIdx		= 0; 
+	
 	int ADTaskSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, ADTskSet); 
 	
 	// insert panel to UI and keep track of the task settings panel handle
@@ -8034,7 +8041,7 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	// set measurement mode
 	InsertListItem(tskSet->timing->settingsPanHndl, Set_MeasMode, -1, "Finite", Operation_Finite);
 	InsertListItem(tskSet->timing->settingsPanHndl, Set_MeasMode, -1, "Continuous", Operation_Continuous);
-	int ctrlIdx;    
+	  
 	GetIndexFromValue(tskSet->timing->settingsPanHndl, Set_MeasMode, &ctrlIdx, tskSet->timing->measMode);
 	SetCtrlIndex(tskSet->timing->settingsPanHndl, Set_MeasMode, ctrlIdx);
 	
@@ -8070,22 +8077,36 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_SampleClkSource, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_SampleClkSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 					
-	// set default sample clock source
-	tskSet->timing->sampClkSource = StrDup("OnboardClock");
-	SetCtrlVal(tskSet->timing->timingPanHndl, Timing_SampleClkSource, "OnboardClock");
+	// set default sample clock source if none was loaded
+	if (!tskSet->timing->sampClkSource)
+		tskSet->timing->sampClkSource = StrDup("OnboardClock");
+	
+	SetCtrlVal(tskSet->timing->timingPanHndl, Timing_SampleClkSource, tskSet->timing->sampClkSource);
 					
 	// adjust reference clock terminal control properties
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_RefClkSource, NIDAQmx_IOCtrl_Limit_To_Device, 0);
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_RefClkSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 					
 	// set default reference clock source (none)
-	SetCtrlVal(tskSet->timing->timingPanHndl, Timing_RefClkSource, "");
+	if (!tskSet->timing->refClkSource)
+		tskSet->timing->refClkSource = StrDup("");
+		
+	SetCtrlVal(tskSet->timing->timingPanHndl, Timing_RefClkSource, tskSet->timing->refClkSource);
 					
 	// set ref clock freq and timeout to default
 	SetCtrlVal(tskSet->timing->timingPanHndl, Timing_RefClkFreq, tskSet->timing->refClkFreq / 1e6);		// display in [MHz]						
 	SetCtrlVal(tskSet->timing->timingPanHndl, Timing_Timeout, tskSet->timeout);							// display in [s]
 	
-								
+	// adjust signal routing control properties
+	NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_StartRouting, 0); 					// single terminal selection
+	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_StartRouting, NIDAQmx_IOCtrl_Limit_To_Device, 0);
+	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_StartRouting, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+	
+	if (!tskSet->timing->startSignalRouting)
+		tskSet->timing->startSignalRouting = StrDup("");
+	
+	SetCtrlVal(tskSet->timing->timingPanHndl, Timing_StartRouting, tskSet->timing->startSignalRouting);
+	
 	//--------------------------
 	// adjust "Trigger" tab
 	//--------------------------
@@ -8129,7 +8150,6 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 		}
 		
 		// select trigger type
-		int ctrlIdx = 0;
 		GetIndexFromValue(startTrigPanHndl, trigTypeCtrlID, &ctrlIdx, tskSet->startTrig->trigType);
 		SetCtrlIndex(startTrigPanHndl, trigTypeCtrlID, ctrlIdx); 
 		
@@ -8176,7 +8196,6 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 		}
 		
 		// select trigger type
-		int ctrlIdx = 0;
 		GetIndexFromValue(referenceTrigPanHndl, trigTypeCtrlID, &ctrlIdx, tskSet->referenceTrig->trigType);
 		SetCtrlIndex(referenceTrigPanHndl, trigTypeCtrlID, ctrlIdx); 
 		
@@ -8535,6 +8554,16 @@ static int ADTimingSettings_CB	(int panel, int control, int event, void *callbac
 				OKfree(tskSet->timing->refClkSource);
 				tskSet->timing->refClkSource = malloc((buffsize+1) * sizeof(char)); // including ASCII null
 				GetCtrlVal(panel, control, tskSet->timing->refClkSource);
+			}
+			break;
+			
+		case Timing_StartRouting:
+			{	
+				int buffsize = 0;
+				GetCtrlAttribute(panel, control, ATTR_STRING_TEXT_LENGTH, &buffsize);
+				OKfree(tskSet->timing->startSignalRouting);
+				tskSet->timing->startSignalRouting = malloc((buffsize+1) * sizeof(char)); // including ASCII null
+				GetCtrlVal(panel, control, tskSet->timing->startSignalRouting);
 			}
 			break;
 			
@@ -9021,8 +9050,7 @@ static void discard_COTaskSet_type (COTaskSet_type** taskSetPtr)
 		ListDispose(taskSet->chanTaskSet);
 	}
 	
-	OKfree(taskSetPtr);
-	
+	OKfree(*taskSetPtr);
 }
 
 static int CVICALLBACK Chan_CO_Pulse_Frequency_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -9744,9 +9772,8 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	// Signal routing
 	//----------------------
 	
-	// start trigger routing
-	if (dev->AITaskSet->startTrig && dev->AITaskSet->startTrig->trigRouting && dev->AITaskSet->startTrig->trigRouting[0])
-		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->AITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->AITaskSet->startTrig->trigRouting) );
+	if (dev->AITaskSet->timing->startSignalRouting && dev->AITaskSet->timing->startSignalRouting[0])
+		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->AITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->AITaskSet->timing->startSignalRouting) );
 	else
 		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->AITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
 	
@@ -9977,9 +10004,8 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	// Signal routing
 	//----------------------
 	
-	// start trigger routing
-	if (dev->AOTaskSet->startTrig && dev->AOTaskSet->startTrig->trigRouting && dev->AOTaskSet->startTrig->trigRouting[0])
-		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->AOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->AOTaskSet->startTrig->trigRouting) );
+	if (dev->AOTaskSet->timing->startSignalRouting && dev->AOTaskSet->timing->startSignalRouting[0])
+		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->AOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->AOTaskSet->timing->startSignalRouting) );
 	else
 		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->AOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
 	
@@ -10179,9 +10205,8 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	// Signal routing
 	//----------------------
 	
-	// start trigger routing
-	if (dev->DITaskSet->startTrig && dev->DITaskSet->startTrig->trigRouting && dev->DITaskSet->startTrig->trigRouting[0])
-		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->DITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->DITaskSet->startTrig->trigRouting) );
+	if (dev->DITaskSet->timing->startSignalRouting && dev->DITaskSet->timing->startSignalRouting[0])
+		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->DITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->DITaskSet->timing->startSignalRouting) );
 	else
 		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->DITaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
 	
@@ -10366,9 +10391,8 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	// Signal routing
 	//----------------------
 	
-	// start trigger routing
-	if (dev->DOTaskSet->startTrig && dev->DOTaskSet->startTrig->trigRouting && dev->DOTaskSet->startTrig->trigRouting[0])
-		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->DOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->DOTaskSet->startTrig->trigRouting) );
+	if (dev->DOTaskSet->timing->startSignalRouting && dev->DOTaskSet->timing->startSignalRouting[0])
+		DAQmxErrChk( DAQmxSetExportedSignalAttribute(dev->DOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm, dev->DOTaskSet->timing->startSignalRouting) );
 	else
 		DAQmxErrChk( DAQmxResetExportedSignalAttribute(dev->DOTaskSet->taskHndl, DAQmx_Exported_StartTrig_OutputTerm) );
 	
@@ -10647,14 +10671,14 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 				
 			case Chan_CO_Pulse_Frequency:
 				
-				DAQmxErrChk ( DAQmxCreateCOPulseChanFreq(chanSet->taskHndl, chanSet->baseClass.name, "", DAQmx_Val_Hz, GetPulseTrainIdleState(chanSet->pulseTrain), 
+				DAQmxErrChk ( DAQmxCreateCOPulseChanFreq(chanSet->taskHndl, chanSet->baseClass.name, "", DAQmx_Val_Hz, PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), 
 														 GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)chanSet->pulseTrain), GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)chanSet->pulseTrain), 
 														 (GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)chanSet->pulseTrain)/100)) );
 				break;
 				
 			case Chan_CO_Pulse_Time:
 				     
-				DAQmxErrChk ( DAQmxCreateCOPulseChanTime(chanSet->taskHndl, chanSet->baseClass.name, "", DAQmx_Val_Seconds , GetPulseTrainIdleState(chanSet->pulseTrain), 
+				DAQmxErrChk ( DAQmxCreateCOPulseChanTime(chanSet->taskHndl, chanSet->baseClass.name, "", DAQmx_Val_Seconds, PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), 
 													GetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)chanSet->pulseTrain), GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)chanSet->pulseTrain), 
 													GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)chanSet->pulseTrain)) );
 				break;
@@ -10662,7 +10686,7 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 			case Chan_CO_Pulse_Ticks:
 				
 				DAQmxErrChk ( DAQmxCreateCOPulseChanTicks(chanSet->taskHndl, chanSet->baseClass.name, "", chanSet->referenceTrig->trigSource,
-							 GetPulseTrainIdleState(chanSet->pulseTrain), GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain), GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain),
+							 PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain), GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain),
 							 GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain)) );
 	
 				break;
@@ -10740,7 +10764,7 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 			}
 		
 		
-		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSet->taskHndl, GetPulseTrainMode(chanSet->pulseTrain), GetPulseTrainNPulses(chanSet->pulseTrain)) );
+		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSet->taskHndl, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(chanSet->pulseTrain)), GetPulseTrainNPulses(chanSet->pulseTrain)) );
 		DAQmxErrChk ( DAQmxSetTrigAttribute(chanSet->taskHndl, DAQmx_StartTrig_Retriggerable, TRUE) );    
 		
 		// register CO task done event callback
@@ -10909,6 +10933,7 @@ static int ClearDAQmxTasks (Dev_type* dev)
 	return 0;
 	
 Error:
+	
 	DisplayLastDAQmxLibraryError();
 	return error;
 }
@@ -11388,12 +11413,12 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 		
 		// set idle state
 		idleState = GetPulseTrainIdleState(chanSetCO->pulseTrain);
-		DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_IdleState, idleState) );
+		DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_IdleState, PulseTrainIdleStates_To_DAQmxVal(idleState)) );
 		// generation mode
 		pulseMode = GetPulseTrainMode(chanSetCO->pulseTrain);
 		// timing
 		nPulses = GetPulseTrainNPulses(chanSetCO->pulseTrain);
-		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, pulseMode, nPulses) );
+		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, PulseTrainModes_To_DAQmxVal(pulseMode), nPulses) );
 		
 		switch (dataPacketDataType) {
 			case DL_PulseTrain_Freq:
@@ -11422,7 +11447,7 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 				// n pulses
 				SetCtrlVal(timingPanHndl, COFreqPan_NPulses, nPulses);
 				// pulse mode (daqmx settings set before)
-				GetIndexFromValue(timingPanHndl, COFreqPan_Mode, &ctrlIdx, pulseMode); 
+				GetIndexFromValue(timingPanHndl, COFreqPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(pulseMode)); 
 				SetCtrlIndex(timingPanHndl, COFreqPan_Mode, ctrlIdx);
 				break;
 				
@@ -11452,7 +11477,7 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 				// n pulses
 				SetCtrlVal(timingPanHndl, COTimePan_NPulses, nPulses);
 				// pulse mode (daqmx settings set before)
-				GetIndexFromValue(timingPanHndl, COTimePan_Mode, &ctrlIdx, pulseMode); 
+				GetIndexFromValue(timingPanHndl, COTimePan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(pulseMode)); 
 				SetCtrlIndex(timingPanHndl, COTimePan_Mode, ctrlIdx);
 				break;
 			
@@ -11482,7 +11507,7 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 				// n pulses
 				SetCtrlVal(timingPanHndl, COTicksPan_NPulses, nPulses);
 				// pulse mode (daqmx settings set before)
-				GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, pulseMode); 
+				GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, (pulseMode)); 
 				SetCtrlIndex(timingPanHndl, COTicksPan_Mode, ctrlIdx);
 				break;
 		}
@@ -12604,6 +12629,34 @@ static BOOL	ValidTaskControllerName	(char name[], void* dataPtr)
 	return DLValidTaskControllerName(name);
 }
 
+//--------------------------------------------
+// DAQmx conversion functions
+//--------------------------------------------
+
+static int32 PulseTrainIdleStates_To_DAQmxVal (PulseTrainIdleStates idleVal)
+{
+	switch (idleVal) {
+			
+		case PulseTrainIdle_Low:
+			return DAQmx_Val_Low;
+			
+		case PulseTrainIdle_High:
+			return DAQmx_Val_High;
+	}
+}
+
+static int32 PulseTrainModes_To_DAQmxVal (PulseTrainModes pulseMode)
+{
+	switch (pulseMode) {
+			
+		case PulseTrain_Finite:
+			return DAQmx_Val_FiniteSamps;
+			
+		case PulseTrain_Continuous:
+			return DAQmx_Val_ContSamps;
+	}
+}
+
 //------------------------------------------------------------------------------------------------------------
 // DAQmx device management
 //------------------------------------------------------------------------------------------------------------
@@ -13028,7 +13081,6 @@ static void AddStartTriggerToUI (TaskTrig_type* taskTrig)
 	if (taskTrig->levelCtrlID) 					{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->levelCtrlID); taskTrig->levelCtrlID = 0;} 
 	if (taskTrig->trigSlopeCtrlID)				{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->trigSlopeCtrlID); taskTrig->trigSlopeCtrlID = 0;} 
 	if (taskTrig->trigSourceCtrlID)				{NIDAQmx_DiscardIOCtrl(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID); taskTrig->trigSourceCtrlID = 0;}
-	if (taskTrig->trigRoutingCtrlID)			{NIDAQmx_DiscardIOCtrl(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID); taskTrig->trigRoutingCtrlID = 0;} 
 	if (taskTrig->windowTrigCondCtrlID)			{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->windowTrigCondCtrlID); taskTrig->windowTrigCondCtrlID = 0;} 
 	if (taskTrig->windowBottomCtrlID)			{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->windowBottomCtrlID); taskTrig->windowBottomCtrlID = 0;} 
 	if (taskTrig->windowTopCtrlID)				{DiscardCtrl(taskTrig->trigPanHndl, taskTrig->windowTopCtrlID); taskTrig->windowTopCtrlID = 0;}
@@ -13067,17 +13119,7 @@ static void AddStartTriggerToUI (TaskTrig_type* taskTrig)
 			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 			if (taskTrig->trigSource)
 				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, taskTrig->trigSource);
-			// trigger routing
-			taskTrig->trigRoutingCtrlID = DuplicateCtrl(DigEdgeTrig_PanHndl, StartTrig1_Routing, taskTrig->trigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
-			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_DATA, taskTrig);
-			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerRouting_CB);					
-			// turn string control into terminal control to select the trigger routes
-			NIDAQmx_NewTerminalCtrl(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, 1); // multiple terminal selection 
-			// adjust trigger routing control properties
-			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
-			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
-			if (taskTrig->trigRouting)
-				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, taskTrig->trigRouting);
+			
 			break;
 					
 		case Trig_DigitalPattern:
@@ -13111,17 +13153,7 @@ static void AddStartTriggerToUI (TaskTrig_type* taskTrig)
 			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 			if (taskTrig->trigSource)
 				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, taskTrig->trigSource);
-			// trigger routing
-			taskTrig->trigRoutingCtrlID = DuplicateCtrl(AnEdgeTrig_PanHndl, StartTrig3_Routing, taskTrig->trigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
-			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_DATA, taskTrig);
-			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerRouting_CB);					
-			// turn string control into terminal control to select the trigger routes
-			NIDAQmx_NewTerminalCtrl(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, 1); // multiple terminal selection 
-			// adjust trigger routing control properties
-			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
-			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
-			if (taskTrig->trigRouting)
-				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, taskTrig->trigRouting);
+			
 			break;
 					
 		case Trig_AnalogWindow:
@@ -13155,17 +13187,7 @@ static void AddStartTriggerToUI (TaskTrig_type* taskTrig)
 			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 			if (taskTrig->trigSource)
 				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID, taskTrig->trigSource);
-			// trigger routing
-			taskTrig->trigRoutingCtrlID = DuplicateCtrl(AnWindowTrig_PanHndl, StartTrig4_Routing, taskTrig->trigPanHndl, 0, VAL_KEEP_SAME_POSITION, VAL_KEEP_SAME_POSITION); 
-			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_DATA, taskTrig);
-			SetCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, ATTR_CALLBACK_FUNCTION_POINTER, TriggerRouting_CB);					
-			// turn string control into terminal control to select the trigger routes
-			NIDAQmx_NewTerminalCtrl(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, 1); // multiple terminal selection 
-			// adjust trigger routing control properties
-			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_Limit_To_Device, 0);
-			NIDAQmx_SetTerminalCtrlAttribute(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
-			if (taskTrig->trigRouting)
-				SetCtrlVal(taskTrig->trigPanHndl, taskTrig->trigRoutingCtrlID, taskTrig->trigRouting);
+			
 			break;
 	}
 			
@@ -13435,37 +13457,6 @@ static int CVICALLBACK TriggerSource_CB (int panel, int control, int event, void
 	OKfree(taskTrig->trigSource);
 	taskTrig->trigSource = malloc((buffsize+1) * sizeof(char)); // including ASCII null  
 	GetCtrlVal(panel, control, taskTrig->trigSource);
-	
-	// configure device
-	errChk(ConfigDAQmxDevice(taskTrig->device, &errMsg) );
-	
-	return 0;
-	
-Error:
-	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
-	
-	return 0;
-}
-
-static int CVICALLBACK TriggerRouting_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
-{  	
-	TaskTrig_type* 		taskTrig 		= callbackData;    
-	char*				errMsg			= NULL;
-	int					error			= 0;
-	int			 		buffsize		= 0;
-	
-	if (event != EVENT_COMMIT) return 0;	 // do nothing for other events 
-	
-	GetCtrlAttribute(panel, control, ATTR_STRING_TEXT_LENGTH, &buffsize);
-	OKfree(taskTrig->trigRouting);
-	taskTrig->trigRouting = malloc((buffsize+1) * sizeof(char)); // including ASCII null  
-	GetCtrlVal(panel, control, taskTrig->trigRouting);
 	
 	// configure device
 	errChk(ConfigDAQmxDevice(taskTrig->device, &errMsg) );
@@ -14262,12 +14253,12 @@ static int CO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState,
 		
 	// set idle state
 	idleState = GetPulseTrainIdleState(chanSetCO->pulseTrain);
-	DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_IdleState, idleState) );
+	DAQmxErrChk( DAQmxSetChanAttribute(chanSetCO->taskHndl, chanSetCO->baseClass.name, DAQmx_CO_Pulse_IdleState, PulseTrainIdleStates_To_DAQmxVal(idleState)) );
 	// generation mode
 	pulseMode = GetPulseTrainMode(chanSetCO->pulseTrain);
 	// timing
 	nPulses = GetPulseTrainNPulses(chanSetCO->pulseTrain);
-	DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, pulseMode, nPulses) );
+	DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, PulseTrainModes_To_DAQmxVal(pulseMode), nPulses) );
 		
 	switch (dataPacketType) {
 		case DL_PulseTrain_Freq:
@@ -14296,7 +14287,7 @@ static int CO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState,
 			// n pulses
 			SetCtrlVal(timingPanHndl, COFreqPan_NPulses, nPulses);
 			// pulse mode (daqmx settings set before)
-			GetIndexFromValue(timingPanHndl, COFreqPan_Mode, &ctrlIdx, pulseMode); 
+			GetIndexFromValue(timingPanHndl, COFreqPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(pulseMode)); 
 			SetCtrlIndex(timingPanHndl, COFreqPan_Mode, ctrlIdx);
 			break;
 				
@@ -14326,7 +14317,7 @@ static int CO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState,
 			// n pulses
 			SetCtrlVal(timingPanHndl, COTimePan_NPulses, nPulses);
 			// pulse mode (daqmx settings set before)
-			GetIndexFromValue(timingPanHndl, COTimePan_Mode, &ctrlIdx, pulseMode); 
+			GetIndexFromValue(timingPanHndl, COTimePan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(pulseMode)); 
 			SetCtrlIndex(timingPanHndl, COTimePan_Mode, ctrlIdx);
 			break;
 			
@@ -14356,7 +14347,7 @@ static int CO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState,
 			// n pulses
 			SetCtrlVal(timingPanHndl, COTicksPan_NPulses, nPulses);
 			// pulse mode (daqmx settings set before)
-			GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, pulseMode); 
+			GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(pulseMode)); 
 			SetCtrlIndex(timingPanHndl, COTicksPan_Mode, ctrlIdx);
 			break;
 	}

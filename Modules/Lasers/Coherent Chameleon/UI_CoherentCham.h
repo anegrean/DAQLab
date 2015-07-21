@@ -13,11 +13,15 @@
 
      /* Panels and Controls: */
 
-#define  LaserPan                         1
-#define  LaserPan_Wavelength              2       /* control type: numeric, callback function: (none) */
-#define  LaserPan_Status                  3       /* control type: LED, callback function: (none) */
-#define  LaserPan_ModeLockSearch          4       /* control type: radioButton, callback function: (none) */
-#define  LaserPan_Shutter                 5       /* control type: textButton, callback function: (none) */
+#define  MainPan                          1
+#define  MainPan_Plate                    2       /* control type: deco, callback function: (none) */
+#define  MainPan_Power                    3       /* control type: numeric, callback function: (none) */
+#define  MainPan_Wavelength               4       /* control type: numeric, callback function: (none) */
+#define  MainPan_PumpPeakHold             5       /* control type: radioButton, callback function: (none) */
+#define  MainPan_Shutter                  6       /* control type: textButton, callback function: (none) */
+#define  MainPan_StatusString             7       /* control type: string, callback function: (none) */
+#define  MainPan_OnOff                    8       /* control type: textButton, callback function: (none) */
+#define  MainPan_Modelocked               9       /* control type: LED, callback function: (none) */
 
 #define  SetPan                           2
 

@@ -287,30 +287,17 @@ typedef enum {
 } PulseTrainTimingTypes;
 
 // pulse train idle states
-#ifdef ___nidaqmx_h___
 typedef enum {
-	PulseTrainIdle_Low 		= DAQmx_Val_Low,
-	PulseTrainIdle_High		= DAQmx_Val_High
+	PulseTrainIdle_Low 		= FALSE,
+	PulseTrainIdle_High		= TRUE
 } PulseTrainIdleStates;
-#else
-typedef enum {
-	PulseTrainIdle_Low 		= 0,
-	PulseTrainIdle_High		= 1
-} PulseTrainIdleStates;
-#endif
 
 // pulse train modes
-#ifdef ___nidaqmx_h___ 
 typedef enum {
-	PulseTrain_Finite		= DAQmx_Val_FiniteSamps,
-	PulseTrain_Continuous	= DAQmx_Val_ContSamps
+	PulseTrain_Finite		= FALSE,
+	PulseTrain_Continuous	= TRUE
 } PulseTrainModes;
-#else 
-typedef enum {
-	PulseTrain_Finite		= 0,
-	PulseTrain_Continuous	= 1
-} PulseTrainModes;
-#endif
+
 
 	//---------------------------------------------------------------------------------------------------------------------------------------
 	// All types
@@ -543,7 +530,7 @@ PulseTrain_type* 			CopyPulseTrain							(PulseTrain_type* pulsetrain);
 	// sets the pulse train idle state
 void   						SetPulseTrainIdleState					(PulseTrain_type* pulseTrain, PulseTrainIdleStates idleState);
 
-	// gets thepulsetrain idle state   
+	// gets the pulsetrain idle state   
 PulseTrainIdleStates	 	GetPulseTrainIdleState					(PulseTrain_type* pulseTrain);
 
 	// sets the pulsetrain number of pulses

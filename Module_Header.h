@@ -22,54 +22,87 @@
  * Include only required module. Define compiler build option in the format
  * DAQLabModule_<module_name>
  */
+
+//------------------------------------------------------
+// PIStage Z stage
+//------------------------------------------------------
 #ifdef DAQLabModule_PIStage
-#include "PIStage.h"
-#else		/* PIStage not defined */
-#define	MOD_PIStage_NAME NULL
-#define	initalloc_PIStage NULL
-#endif		/* PIStage */
+	#include "PIStage.h"
+#else		// PIStage not defined
+	#define	MOD_PIStage_NAME NULL
+	#define	initalloc_PIStage NULL
+#endif		
 
+//------------------------------------------------------
+// LangLStep XY stage
+//------------------------------------------------------
 #ifdef DAQLabModule_LangLStep
-#include "LangLStep.h"
-#else		/* LangLStep not defined */
-#define	MOD_LangLStep_NAME	NULL
-#define	initalloc_LangLStep	NULL
-#endif		/* LangLstep */
-		
-#ifdef DAQLabModule_VUPhotonCtr
-#include "VUPhotonCtr.h"		  
-#else		/* VUPhoton not defined */
-#define	MOD_VUPhotonCtr_NAME NULL
-#define	initalloc_VUPhotonCtr NULL
-#endif		/* VUPhoton */
-		
-#ifdef DAQLabModule_Pockells
-#include "Pockells.h"
-#else		/* Pockells not defined */
-#define MOD_Pockells_NAME NULL
-#define initalloc_PockellsModule NULL
-#endif		/* Pockells */
-		
-#ifdef DAQLabModule_NIDAQmxManager
-#include "NIDAQmxManager.h"		   
-#else		/* NIDAQmxManager not defined */
-#define	MOD_NIDAQmxManager_NAME NULL
-#define	initalloc_NIDAQmxManager NULL
-#endif		/* NIDAQmxManager */
-		
-#ifdef DAQLabModule_LaserScanning
-#include "\Modules\Laser Scanning\LaserScanning.h"
-#else		/* LaserScanning not defined */ 
-#define	MOD_LaserScanning_NAME NULL
-#define	initalloc_LaserScanning NULL
-#endif		/* LaserScanning */
+	#include "LangLStep.h"
+#else		// not defined
+	#define	MOD_LangLStep_NAME	NULL
+	#define	initalloc_LangLStep	NULL
+#endif		
 
+//------------------------------------------------------
+// VU Photon Counter
+//------------------------------------------------------
+#ifdef DAQLabModule_VUPhotonCtr
+	#include "VUPhotonCtr.h"		  
+#else		// not defined
+	#define	MOD_VUPhotonCtr_NAME NULL
+	#define	initalloc_VUPhotonCtr NULL
+#endif		
+
+//------------------------------------------------------
+// Pockells cell modulator
+//------------------------------------------------------
+#ifdef DAQLabModule_Pockells
+	#include "Pockells.h"
+#else		// not defined
+	#define MOD_Pockells_NAME NULL
+	#define initalloc_PockellsModule NULL
+#endif
+
+//------------------------------------------------------
+// NI DAQmx support
+//------------------------------------------------------
+#ifdef DAQLabModule_NIDAQmxManager
+	#include "NIDAQmxManager.h"		   
+#else		// not defined
+	#define	MOD_NIDAQmxManager_NAME NULL
+	#define	initalloc_NIDAQmxManager NULL
+#endif
+
+//------------------------------------------------------
+// Laser scanning
+//------------------------------------------------------
+#ifdef DAQLabModule_LaserScanning
+	#include "\Modules\Laser Scanning\LaserScanning.h"
+#else		// not defined
+	#define	MOD_LaserScanning_NAME NULL
+	#define	initalloc_LaserScanning NULL
+#endif
+
+//------------------------------------------------------
+// Data storage (will be part of framework)
+//------------------------------------------------------
 #ifdef DAQLabModule_DataStorage
-#include "DataStorage.h"
-#else		/* DataStorage not defined */ 
-#define	MOD_DataStorage_NAME NULL
-#define	initalloc_DataStorage NULL
-#endif		/* LaserScanning */
+	#include "DataStorage.h"
+#else		// not defined
+	#define	MOD_DataStorage_NAME NULL
+	#define	initalloc_DataStorage NULL
+#endif
+
+//------------------------------------------------------
+// Coherent Chameleon Laser
+//------------------------------------------------------
+#ifdef DAQLabModule_CoherentCham
+	#include "CoherentCham.h"
+#else		// not defined
+	#define	MOD_CoherentCham_NAME NULL
+	#define	initalloc_CoherentCham NULL
+#endif	
+
 
 #ifdef __cplusplus
     }

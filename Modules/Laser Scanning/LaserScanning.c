@@ -941,6 +941,9 @@ static void								FastAxisComVChan_StateChange						(VChan_type* self, void* VC
 	// Slow Axis Command VChan
 static void								SlowAxisComVChan_StateChange						(VChan_type* self, void* VChanOwner, VChanStates state);
 
+	// Detection Channels
+static void								DetectionVChan_StateChange							(VChan_type* self, void* VChanOwner, VChanStates state); 
+
 	// Scan engine mode switching VChan activation/deactivation
 static void 							SetRectRasterScanEngineModeVChans 					(RectRaster_type* scanEngine);
 
@@ -2890,7 +2893,7 @@ static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanId
 	
 	// incoming pixel data from detection channel
 	nullChk( detVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SinkVChan_DetectionChan, chanIdx) );
-	nullChk( scanChan->detVChan = init_SinkVChan_type(detVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), scanChan, VChanDataTimeout, NULL) );
+	nullChk( scanChan->detVChan = init_SinkVChan_type(detVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), scanChan, VChanDataTimeout, DetectionVChan_StateChange) );
 	
 	// outgoing image channel
 	nullChk( outputVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SourceVChan_ImageChannel, chanIdx) );
@@ -6535,6 +6538,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				void* 							callbackData[]					= {init_RectRasterDisplayCBData_type(rectRaster, bufferIdx)};
 				DiscardFptr_type 				discardCallbackDataFunctions[] 	= {(DiscardFptr_type)discard_RectRasterDisplayCBData_type};
 				
+				discard_CallbackGroup_type(&imgBuffer->scanChan->imgDisplay->callbacks);
 				nullChk( imgBuffer->scanChan->imgDisplay->callbacks = init_CallbackGroup_type(imgBuffer->scanChan->imgDisplay, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
 				
 				// add stored point ROIs if any
@@ -7455,6 +7459,26 @@ Error:
 	OKfree(errMsg);
 }
 
+// Detection channel
+static void DetectionVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
+{
+	ScanChan_type* 	scanChan = VChanOwner;
+	switch (state) {
+			
+		case VChan_Closed:
+			
+			SetVChanActive((VChan_type*)scanChan->outputVChan, FALSE);
+			
+			break;
+			
+		case VChan_Open:
+			
+			SetVChanActive((VChan_type*)scanChan->outputVChan, TRUE);
+			
+			break;
+	}
+}
+
 static void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 {
 
@@ -7468,11 +7492,13 @@ static void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 				// activate detection channels
 				SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan, TRUE);
 				
+				/*
 				// activate scan engine channel output VChan if the corresponding detection channel is open
 				if (IsVChanOpen((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan))
 					SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->outputVChan, TRUE);
 				else
 					SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->outputVChan, FALSE);
+				*/
 				
 				// change scan engine channel output VChan data type to DL_Image
 				SetSourceVChanDataType(scanEngine->baseClass.scanChans[i]->outputVChan, DL_Image);

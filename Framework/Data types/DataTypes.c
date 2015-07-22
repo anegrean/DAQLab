@@ -411,6 +411,13 @@ Waveform_type* init_Waveform_type (WaveformTypes waveformType, double samplingRa
 	waveform->unitName			= NULL;
 	waveform->dateTimestamp		= 0;
 	waveform->nSamples			= nSamples;
+	
+	// by default add timestamp at point of waveform creation
+	if (GetCurrentDateTime(&waveform->dateTimestamp) <0) {
+		free(waveform);
+		return NULL;
+	}
+	
 	waveform->data				= *ptrToData;  // assign data
 	*ptrToData					= NULL;		   // consume data
 	

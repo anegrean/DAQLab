@@ -718,8 +718,8 @@ static int ClearTaskTreeBranchVChans (TaskControl_type* taskControl, char** erro
 	
 	errChk( ClearAllSinkVChans(taskControl, errorInfo) );
 	
-	size_t			nChildTCs	 = ListNumItems(taskControl->childTCs);
-	ChildTCInfo_type*	subTaskPtr;
+	size_t				nChildTCs	 	= ListNumItems(taskControl->childTCs);
+	ChildTCInfo_type*	subTaskPtr		= NULL;
 	
 	for (size_t i = nChildTCs; i; i--) {
 		subTaskPtr = ListGetPtrToItem(taskControl->childTCs, i);

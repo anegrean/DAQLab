@@ -9,7 +9,7 @@ IVI Standard Root Dir = "/C/Program Files (x86)/IVI Foundation/IVI"
 VXIplug&play Framework Dir = "/C/Program Files (x86)/IVI Foundation/VISA/winnt"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
-Number of Files = 78
+Number of Files = 83
 Target Type = "Executable"
 Flags = 2064
 Copied From Locked InstrDrv Directory = False
@@ -42,45 +42,48 @@ FolderEx 6 Parent = 0
 Folder 7 = "Modules/Laser Scanning"
 FolderEx 7 = "Laser Scanning"
 FolderEx 7 Parent = 0
-Folder 8 = "Modules/Data Storage"
-FolderEx 8 = "Data Storage"
+Folder 8 = "Modules/Pockells Cell"
+FolderEx 8 = "Pockells Cell"
 FolderEx 8 Parent = 0
-Folder 9 = "Modules/Pockells Cell"
-FolderEx 9 = "Pockells Cell"
+Folder 9 = "Modules/Lasers"
+FolderEx 9 = "Lasers"
 FolderEx 9 Parent = 0
-Folder 10 = "Modules/Lasers"
-FolderEx 10 = "Lasers"
-FolderEx 10 Parent = 0
-Folder 11 = "Modules/Lasers/Coherent Chameleon"
-FolderEx 11 = "Coherent Chameleon"
-FolderEx 11 Parent = 10
-Folder 12 = "XML"
-FolderEx 12 = "XML"
-Folder 13 = "Instrument Files"
-FolderEx 13 = "Instrument Files"
-Folder 14 = "Framework"
-FolderEx 14 = "Framework"
+Folder 10 = "Modules/Lasers/Coherent Chameleon"
+FolderEx 10 = "Coherent Chameleon"
+FolderEx 10 Parent = 9
+Folder 11 = "XML"
+FolderEx 11 = "XML"
+Folder 12 = "Instrument Files"
+FolderEx 12 = "Instrument Files"
+Folder 13 = "Framework"
+FolderEx 13 = "Framework"
+Folder 14 = "Framework/Data Storage"
+FolderEx 14 = "Data Storage"
+FolderEx 14 Parent = 13
 Folder 15 = "Framework/Task Control"
 FolderEx 15 = "Task Control"
-FolderEx 15 Parent = 14
+FolderEx 15 Parent = 13
 Folder 16 = "Framework/Virtual Channels"
 FolderEx 16 = "Virtual Channels"
-FolderEx 16 Parent = 14
+FolderEx 16 Parent = 13
 Folder 17 = "Framework/Iterators"
 FolderEx 17 = "Iterators"
-FolderEx 17 Parent = 14
+FolderEx 17 Parent = 13
 Folder 18 = "Framework/Data Packets"
 FolderEx 18 = "Data Packets"
-FolderEx 18 Parent = 14
+FolderEx 18 Parent = 13
 Folder 19 = "Framework/Data Types"
 FolderEx 19 = "Data Types"
-FolderEx 19 Parent = 14
+FolderEx 19 Parent = 13
 Folder 20 = "Framework/HW Triggering"
 FolderEx 20 = "HW Triggering"
-FolderEx 20 Parent = 14
+FolderEx 20 Parent = 13
 Folder 21 = "Framework/Utility"
 FolderEx 21 = "Utility"
-FolderEx 21 Parent = 14
+FolderEx 21 Parent = 13
+Folder 22 = "Framework/Display"
+FolderEx 22 = "Display"
+FolderEx 22 Parent = 13
 
 [File 0001]
 File Type = "Include"
@@ -101,7 +104,7 @@ Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.lib"
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.lib"
-Exclude = True
+Exclude = False
 Project Flags = 0
 Folder = "Modules/Z Stages/PI Stage"
 Folder Id = 2
@@ -113,7 +116,7 @@ Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/Zstages/PI Stage/PIStage.c"
 Path = "/d/ELE_DAQLab/Modules/Zstages/PI Stage/PIStage.c"
-Exclude = True
+Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Modules/Z Stages/PI Stage"
@@ -187,7 +190,7 @@ Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/XYstages/LangLStep.c"
 Path = "/d/ELE_DAQLab/Modules/XYstages/LangLStep.c"
-Exclude = True
+Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Modules/XY Stages/Lang L-Step"
@@ -222,9 +225,9 @@ File Type = "Library"
 Res Id = 12
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/XYstages/Lang L-Step/LV_langLStep4.lib"
-Path = "/d/ELE_DAQLab/Modules/XYstages/Lang L-Step/LV_langLStep4.lib"
-Exclude = True
+Path Rel Path = "Modules/XYstages/Lang L-Step/LV_LangLStep4.lib"
+Path = "/d/ELE_DAQLab/Modules/XYstages/Lang L-Step/LV_LangLStep4.lib"
+Exclude = False
 Project Flags = 0
 Folder = "Modules/XY Stages/Lang L-Step"
 Folder Id = 4
@@ -530,12 +533,12 @@ File Type = "CSource"
 Res Id = 37
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/Data Storage/DataStorage.c"
-Path = "/d/ELE_DAQLab/Modules/Data Storage/DataStorage.c"
+Path Rel Path = "Modules/Pockells Cell/Pockells.c"
+Path = "/d/ELE_DAQLab/Modules/Pockells Cell/Pockells.c"
 Exclude = False
 Compile Into Object File = False
 Project Flags = 0
-Folder = "Modules/Data Storage"
+Folder = "Modules/Pockells Cell"
 Folder Id = 8
 
 [File 0038]
@@ -543,112 +546,16 @@ File Type = "Include"
 Res Id = 38
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Modules/Data Storage/DataStorage.h"
-Path = "/d/ELE_DAQLab/Modules/Data Storage/DataStorage.h"
-Exclude = False
-Project Flags = 0
-Folder = "Modules/Data Storage"
-Folder Id = 8
-
-[File 0039]
-File Type = "Library"
-Res Id = 39
-Path Is Rel = False
-Path = "/c/Program Files (x86)/HDF_Group/HDF5/1.8.15/lib/hdf5.lib"
-Exclude = False
-Project Flags = 0
-Folder = "Modules/Data Storage"
-Folder Id = 8
-
-[File 0040]
-File Type = "CSource"
-Res Id = 40
-Path Is Rel = True
-Path Rel To = "Project"
-Path Rel Path = "Modules/Data Storage/HDF5support.c"
-Path = "/d/ELE_DAQLab/Modules/Data Storage/HDF5support.c"
-Exclude = False
-Compile Into Object File = False
-Project Flags = 0
-Folder = "Modules/Data Storage"
-Folder Id = 8
-
-[File 0041]
-File Type = "Include"
-Res Id = 41
-Path Is Rel = True
-Path Rel To = "Project"
-Path Rel Path = "Modules/Data Storage/HDF5support.h"
-Path = "/d/ELE_DAQLab/Modules/Data Storage/HDF5support.h"
-Exclude = False
-Project Flags = 0
-Folder = "Modules/Data Storage"
-Folder Id = 8
-
-[File 0042]
-File Type = "Include"
-Res Id = 42
-Path Is Rel = True
-Path Rel To = "Project"
-Path Rel Path = "Modules/Data Storage/types.h"
-Path = "/d/ELE_DAQLab/Modules/Data Storage/types.h"
-Exclude = False
-Project Flags = 0
-Folder = "Modules/Data Storage"
-Folder Id = 8
-
-[File 0043]
-File Type = "Include"
-Res Id = 43
-Path Is Rel = True
-Path Rel To = "Project"
-Path Rel Path = "Modules/Data Storage/UI_DataStorage.h"
-Path = "/d/ELE_DAQLab/Modules/Data Storage/UI_DataStorage.h"
-Exclude = False
-Project Flags = 0
-Folder = "Modules/Data Storage"
-Folder Id = 8
-
-[File 0044]
-File Type = "User Interface Resource"
-Res Id = 44
-Path Is Rel = True
-Path Rel To = "Project"
-Path Rel Path = "Modules/Data Storage/UI_DataStorage.uir"
-Path = "/d/ELE_DAQLab/Modules/Data Storage/UI_DataStorage.uir"
-Exclude = False
-Project Flags = 0
-Folder = "Modules/Data Storage"
-Folder Id = 8
-
-[File 0045]
-File Type = "CSource"
-Res Id = 45
-Path Is Rel = True
-Path Rel To = "Project"
-Path Rel Path = "Modules/Pockells Cell/Pockells.c"
-Path = "/d/ELE_DAQLab/Modules/Pockells Cell/Pockells.c"
-Exclude = False
-Compile Into Object File = False
-Project Flags = 0
-Folder = "Modules/Pockells Cell"
-Folder Id = 9
-
-[File 0046]
-File Type = "Include"
-Res Id = 46
-Path Is Rel = True
-Path Rel To = "Project"
 Path Rel Path = "Modules/Pockells Cell/Pockells.h"
 Path = "/d/ELE_DAQLab/Modules/Pockells Cell/Pockells.h"
 Exclude = False
 Project Flags = 0
 Folder = "Modules/Pockells Cell"
-Folder Id = 9
+Folder Id = 8
 
-[File 0047]
+[File 0039]
 File Type = "Include"
-Res Id = 47
+Res Id = 39
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/Pockells Cell/UI_Pockells.h"
@@ -656,11 +563,11 @@ Path = "/d/ELE_DAQLab/Modules/Pockells Cell/UI_Pockells.h"
 Exclude = False
 Project Flags = 0
 Folder = "Modules/Pockells Cell"
-Folder Id = 9
+Folder Id = 8
 
-[File 0048]
+[File 0040]
 File Type = "User Interface Resource"
-Res Id = 48
+Res Id = 40
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/Pockells Cell/UI_Pockells.uir"
@@ -668,11 +575,11 @@ Path = "/d/ELE_DAQLab/Modules/Pockells Cell/UI_Pockells.uir"
 Exclude = False
 Project Flags = 0
 Folder = "Modules/Pockells Cell"
-Folder Id = 9
+Folder Id = 8
 
-[File 0049]
+[File 0041]
 File Type = "CSource"
-Res Id = 49
+Res Id = 41
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/Lasers/Coherent Chameleon/CoherentCham.c"
@@ -681,11 +588,11 @@ Exclude = False
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Modules/Lasers/Coherent Chameleon"
-Folder Id = 11
+Folder Id = 10
 
-[File 0050]
+[File 0042]
 File Type = "Include"
-Res Id = 50
+Res Id = 42
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/Lasers/Coherent Chameleon/CoherentCham.h"
@@ -693,11 +600,11 @@ Path = "/d/ELE_DAQLab/Modules/Lasers/Coherent Chameleon/CoherentCham.h"
 Exclude = False
 Project Flags = 0
 Folder = "Modules/Lasers/Coherent Chameleon"
-Folder Id = 11
+Folder Id = 10
 
-[File 0051]
+[File 0043]
 File Type = "Include"
-Res Id = 51
+Res Id = 43
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/Lasers/Coherent Chameleon/UI_CoherentCham.h"
@@ -705,11 +612,11 @@ Path = "/d/ELE_DAQLab/Modules/Lasers/Coherent Chameleon/UI_CoherentCham.h"
 Exclude = False
 Project Flags = 0
 Folder = "Modules/Lasers/Coherent Chameleon"
-Folder Id = 11
+Folder Id = 10
 
-[File 0052]
+[File 0044]
 File Type = "User Interface Resource"
-Res Id = 52
+Res Id = 44
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/Lasers/Coherent Chameleon/UI_CoherentCham.uir"
@@ -717,11 +624,11 @@ Path = "/d/ELE_DAQLab/Modules/Lasers/Coherent Chameleon/UI_CoherentCham.uir"
 Exclude = False
 Project Flags = 0
 Folder = "Modules/Lasers/Coherent Chameleon"
-Folder Id = 11
+Folder Id = 10
 
-[File 0053]
+[File 0045]
 File Type = "CSource"
-Res Id = 53
+Res Id = 45
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/DAQLabModule.c"
@@ -732,9 +639,9 @@ Project Flags = 0
 Folder = "Modules"
 Folder Id = 0
 
-[File 0054]
+[File 0046]
 File Type = "Include"
-Res Id = 54
+Res Id = 46
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Modules/DAQLabModule.h"
@@ -744,9 +651,9 @@ Project Flags = 0
 Folder = "Modules"
 Folder Id = 0
 
-[File 0055]
+[File 0047]
 File Type = "Function Panel"
-Res Id = 55
+Res Id = 47
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "MSXML/ActiveXML.fp"
@@ -754,11 +661,11 @@ Path = "/d/ELE_DAQLab/MSXML/ActiveXML.fp"
 Exclude = False
 Project Flags = 0
 Folder = "XML"
-Folder Id = 12
+Folder Id = 11
 
-[File 0056]
+[File 0048]
 File Type = "Include"
-Res Id = 56
+Res Id = 48
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "MSXML/ActiveXML.h"
@@ -766,11 +673,11 @@ Path = "/d/ELE_DAQLab/MSXML/ActiveXML.h"
 Exclude = False
 Project Flags = 0
 Folder = "XML"
-Folder Id = 12
+Folder Id = 11
 
-[File 0057]
+[File 0049]
 File Type = "Function Panel"
-Res Id = 57
+Res Id = 49
 Path Is Rel = True
 Path Rel To = "CVI"
 Path Rel To Override = "CVI"
@@ -780,11 +687,11 @@ Path Line0002 = "p"
 Exclude = False
 Project Flags = 0
 Folder = "Instrument Files"
-Folder Id = 13
+Folder Id = 12
 
-[File 0058]
+[File 0050]
 File Type = "Function Panel"
-Res Id = 58
+Res Id = 50
 Path Is Rel = True
 Path Rel To = "CVI"
 Path Rel To Override = "CVI Shared"
@@ -794,7 +701,103 @@ Path Line0002 = "ctrl.fp"
 Exclude = False
 Project Flags = 0
 Folder = "Instrument Files"
-Folder Id = 13
+Folder Id = 12
+
+[File 0051]
+File Type = "CSource"
+Res Id = 51
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data Storage/DataStorage.c"
+Path = "/d/ELE_DAQLab/Framework/Data Storage/DataStorage.c"
+Exclude = False
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Framework/Data Storage"
+Folder Id = 14
+
+[File 0052]
+File Type = "Include"
+Res Id = 52
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data Storage/DataStorage.h"
+Path = "/d/ELE_DAQLab/Framework/Data Storage/DataStorage.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Data Storage"
+Folder Id = 14
+
+[File 0053]
+File Type = "Library"
+Res Id = 53
+Path Is Rel = False
+Path = "/c/Program Files (x86)/HDF_Group/HDF5/1.8.15/lib/hdf5.lib"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Data Storage"
+Folder Id = 14
+
+[File 0054]
+File Type = "CSource"
+Res Id = 54
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data Storage/HDF5support.c"
+Path = "/d/ELE_DAQLab/Framework/Data Storage/HDF5support.c"
+Exclude = False
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Framework/Data Storage"
+Folder Id = 14
+
+[File 0055]
+File Type = "Include"
+Res Id = 55
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data Storage/HDF5support.h"
+Path = "/d/ELE_DAQLab/Framework/Data Storage/HDF5support.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Data Storage"
+Folder Id = 14
+
+[File 0056]
+File Type = "Include"
+Res Id = 56
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data Storage/types.h"
+Path = "/d/ELE_DAQLab/Framework/Data Storage/types.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Data Storage"
+Folder Id = 14
+
+[File 0057]
+File Type = "Include"
+Res Id = 57
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data Storage/UI_DataStorage.h"
+Path = "/d/ELE_DAQLab/Framework/Data Storage/UI_DataStorage.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Data Storage"
+Folder Id = 14
+
+[File 0058]
+File Type = "User Interface Resource"
+Res Id = 58
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Data Storage/UI_DataStorage.uir"
+Path = "/d/ELE_DAQLab/Framework/Data Storage/UI_DataStorage.uir"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Data Storage"
+Folder Id = 14
 
 [File 0059]
 File Type = "CSource"
@@ -996,8 +999,57 @@ Folder = "Framework/Utility"
 Folder Id = 21
 
 [File 0075]
-File Type = "CSource"
+File Type = "Include"
 Res Id = 75
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Display/UI_WaveformDisplay.h"
+Path = "/d/ELE_DAQLab/Framework/Display/UI_WaveformDisplay.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Display"
+Folder Id = 22
+
+[File 0076]
+File Type = "User Interface Resource"
+Res Id = 76
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Display/UI_WaveformDisplay.uir"
+Path = "/d/ELE_DAQLab/Framework/Display/UI_WaveformDisplay.uir"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Display"
+Folder Id = 22
+
+[File 0077]
+File Type = "CSource"
+Res Id = 77
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Display/WaveformDisplay.c"
+Path = "/d/ELE_DAQLab/Framework/Display/WaveformDisplay.c"
+Exclude = False
+Compile Into Object File = False
+Project Flags = 0
+Folder = "Framework/Display"
+Folder Id = 22
+
+[File 0078]
+File Type = "Include"
+Res Id = 78
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Framework/Display/WaveformDisplay.h"
+Path = "/d/ELE_DAQLab/Framework/Display/WaveformDisplay.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Display"
+Folder Id = 22
+
+[File 0079]
+File Type = "CSource"
+Res Id = 79
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.c"
@@ -1007,9 +1059,9 @@ Compile Into Object File = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0076]
+[File 0080]
 File Type = "Include"
-Res Id = 76
+Res Id = 80
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "DAQLab.h"
@@ -1018,9 +1070,20 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0077]
+[File 0081]
 File Type = "Include"
-Res Id = 77
+Res Id = 81
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Module_Header.h"
+Path = "/d/ELE_DAQLab/Module_Header.h"
+Exclude = False
+Project Flags = 0
+Folder = "Not In A Folder"
+
+[File 0082]
+File Type = "Include"
+Res Id = 82
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.h"
@@ -1029,9 +1092,9 @@ Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0078]
+[File 0083]
 File Type = "User Interface Resource"
-Res Id = 78
+Res Id = 83
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.uir"
@@ -1054,7 +1117,7 @@ Show Warning IDs in Build Output = False
 Selected Warning Level = "Extended"
 Warning List None = "0,1,2,3,4,9,84,105,106,107,108,109,110,111"
 Warning List Common = ""
-Warning List Extended = ""
+Warning List Extended = "-15"
 Warning List All = ""
 Warning Mode = 0
 Enable Unreferenced Identifiers Warning = True
@@ -1070,7 +1133,9 @@ Stack Reserve = 1048576
 Stack Commit = 4096
 Image Base Address = 4194304
 Image Base Address x64 = 4194304
-Compiler Defines = "/DWIN32_LEAN_AND_MEAN"
+Compiler Defines Line0001 = "/DWIN32_LEAN_AND_MEAN /DDAQLabModule_NIDAQmxManager /DDAQLabModule_LaserScanning"
+Compiler Defines Line0002 = " /DDAQLabModule_DataStorage /DDAQLabModule_Pockells /DDAQLabModule_LangLStep /DD"
+Compiler Defines Line0003 = "AQLabModule_PIStage /DDAQLabModule_CoherentCham"
 Sign = False
 Sign Store = ""
 Sign Certificate = ""

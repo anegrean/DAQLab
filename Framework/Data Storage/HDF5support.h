@@ -25,6 +25,14 @@
 
 //==============================================================================
 // Types
+		
+typedef enum {
+	
+	Compression_None,
+	Compression_GZIP, 	// GNU ZIP
+	Compression_SZIP 	// scientific zip, license free only for non-commercial use
+	
+} CompressionMethods;
 
 //==============================================================================
 // External variables
@@ -32,9 +40,11 @@
 //==============================================================================
 // Global functions
 
-int CreateHDF5file(char *filename,char* dataset_name);
-int WriteHDF5Data(char *filename,char* dataset_name,DSInfo_type* dsdata,Waveform_type* waveform);
-int WriteHDF5Image(char *filename,char* dataset_name,DSInfo_type* dsdata,Image_type* receivedimage);
+int 				CreateHDF5File					(char fileName[], char datasetName[]);
+
+int 				WriteHDF5Waveform				(char fileName[], char datasetName[], DSInfo_type* dsInfo, Waveform_type* waveform, CompressionMethods compression);
+
+int 				WriteHDF5Image					(char fileName[], char datasetName[], DSInfo_type* dsInfo, Image_type* image, CompressionMethods compression);
 
 #ifdef __cplusplus
     }

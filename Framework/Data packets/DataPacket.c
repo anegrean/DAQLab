@@ -33,7 +33,7 @@ struct DataPacket {
 	CmtTSVHandle   				ctr;      				// Data Packet in-use counter. Although there are multiple sinks that can receive a data packet, 
 														// there is only one copy of the data in the memory. To de-allocate memory for the data, each sink must 
 														// call ReleaseDataPacket which in the end frees the memory if ctr reaches 0. 
-	DSInfo_type*		    	dsdata;                 // data storage data belongs to this iteration 
+	DSInfo_type*		    	dsInfo;                 // data storage data belongs to this iteration 
 	DiscardFptr_type 			discardPacketDataFptr;	// Function pointer which will be called to discard the data pointer when ctr reaches 0.
 };
 
@@ -75,10 +75,10 @@ DataPacket_type* init_DataPacket_type (DLDataTypes dataType, void** ptrToData, D
 	
 	// indexing info
 	if (dsDataPtr) {
-		dataPacket->dsdata     				= *dsDataPtr;
+		dataPacket->dsInfo     				= *dsDataPtr;
 		*dsDataPtr							= NULL; 		// consume object
 	} else
-		dataPacket->dsdata					= NULL;
+		dataPacket->dsInfo					= NULL;
 		
 	
 	return dataPacket;
@@ -99,7 +99,7 @@ void discard_DataPacket_type (DataPacket_type** dataPacketPtr)
 	CmtDiscardTSV(dataPacket->ctr);
 	
 	// discard indexing
-	discard_DSInfo_type(&dataPacket->dsdata);
+	discard_DSInfo_type(&dataPacket->dsInfo);
 	
 	// discard data packet
 	OKfree(*dataPacketPtr);
@@ -145,6 +145,6 @@ void** GetDataPacketPtrToData (DataPacket_type* dataPacket, DLDataTypes* dataTyp
 
 DSInfo_type* GetDataPacketDSData (DataPacket_type* dataPacket)  
 {
-	return dataPacket->dsdata;
+	return dataPacket->dsInfo;
 }
 				  

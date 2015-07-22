@@ -62,8 +62,8 @@ struct DataStorage {
 	int					mainPanHndl;
 	
 	char*				basefilepath;
-	char*				rawdatapath;    // test, for saving raw data
-	char*				hdf5datafile;   // name of hdf5 data file 
+	char*				rawDataPath;    // test, for saving raw data
+	char*				hdf5DataFileName;   // name of hdf5 data file 
 	BOOL				overwrite_files;
 	
 		// Callback to install on controls from selected panel in UI_DataStorage.uir
@@ -117,8 +117,8 @@ static int 					Load 					(DAQLabModule_type* mod, int workspacePanHndl, char** 
 /// HIRET NULL if only initialization was performed.
 DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl)
 {
-	DataStorage_type* 	ds;
-	TaskControl_type*	tc;
+	DataStorage_type* 	ds		= NULL;
+	TaskControl_type*	tc		= NULL;
 	
 	if (!mod) {
 		ds = malloc (sizeof(DataStorage_type));
@@ -130,8 +130,8 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	initalloc_DAQLabModule(&ds->baseClass, className, instanceName, workspacePanHndl);
 	
 	ds->basefilepath		= StrDup(DATAFILEBASEPATH);
-	ds->rawdatapath 		= NULL;
-	ds->hdf5datafile		= NULL;
+	ds->rawDataPath 		= NULL;
+	ds->hdf5DataFileName		= NULL;
 	ds->overwrite_files		= FALSE;
 	
 	// create Data Storage Task Controller
@@ -192,15 +192,17 @@ static DS_Channel_type* init_DS_Channel_type (DataStorage_type* ds, int panHndl,
 										 DL_Waveform_UInt,
 										 DL_Waveform_Int64,
 										 DL_Waveform_UInt64,
+										 DL_Waveform_SSize,						
+										 DL_Waveform_Size,
 										 DL_Waveform_Float,						
 									 	 DL_Waveform_Double,
-										 DL_Image				};   	   
+									     DL_Image };   	   
 	
 	DS_Channel_type* chan = malloc (sizeof(DS_Channel_type));
 	if (!chan) return NULL;
 
 	chan->dsInstance	= ds;
-	chan->VChan			= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan,VChanDataTimeout, NULL);
+	chan->VChan			= init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan, VChanDataTimeout, NULL);
 	chan->panHndl   	= panHndl;
 
 	// add new channel to data storage module list of channels
@@ -257,8 +259,8 @@ static void	discard_DS_Channel_type (DS_Channel_type** chan)
 /// HIFN Discards DataStorage data but does not free the structure memory.
 void discard_DataStorage (DAQLabModule_type** mod)
 {
-	DataStorage_type* 		ds 			= (DataStorage_type*) (*mod);
-
+	DataStorage_type* 		ds 		= (DataStorage_type*) (*mod);
+	
 	if (!ds) return;
 	
 	//---------------------------------------
@@ -266,19 +268,12 @@ void discard_DataStorage (DAQLabModule_type** mod)
 	//---------------------------------------
 	// main panel and panels loaded into it (channels and task control)
 	
-	if (ds->mainPanHndl) {
-		DiscardPanel(ds->mainPanHndl);
-		ds->mainPanHndl = 0;
-	}
+	OKfreePanHndl(ds->mainPanHndl);
 	
 	// discard Task Controller
 	DLRemoveTaskController((DAQLabModule_type*)ds, ds->taskController);
 	discard_TaskControl_type(&ds->taskController);
 
-	//----------------------------------------
-	// discard DAQLabModule_type specific data
-	//----------------------------------------
-	
 	if (ds->channels) {
 		size_t 				nItems = ListNumItems(ds->channels);
 		DS_Channel_type**   channelPtr;
@@ -288,15 +283,18 @@ void discard_DataStorage (DAQLabModule_type** mod)
 		}
 	}
 	
+	// ListDispose (offsetlist); 
+	OKfreeList(ds->channels);
 	
-	//ListDispose (offsetlist); 
-	ListDispose(ds->channels);  
+	OKfree(ds->basefilepath);
+	OKfree(ds->rawDataPath); 
+	OKfree(ds->hdf5DataFileName);  
+	
+	//----------------------------------------
+	// discard DAQLabModule_type specific data
+	//----------------------------------------
 	
 	discard_DAQLabModule(mod);
-	
-	if (ds->basefilepath) OKfree(ds->basefilepath);
-	if (ds->rawdatapath) OKfree(ds->rawdatapath); 
-	if (ds->hdf5datafile) OKfree(ds->hdf5datafile);   
 }
 
 
@@ -319,17 +317,17 @@ int CreateRawDataDir(DataStorage_type* ds, TaskControl_type* taskControl)
 	root_tc		= GetTaskControlRootParent (taskControl);
 	rootname	= GetTaskControlName(root_tc);
 
-	OKfree(ds->rawdatapath);
-	ds->rawdatapath=StrDup(ds->basefilepath);
-	AppendString(&ds->rawdatapath,"\\",-1);
-	AppendString(&ds->rawdatapath,rootname,-1);
+	OKfree(ds->rawDataPath);
+	ds->rawDataPath=StrDup(ds->basefilepath);
+	AppendString(&ds->rawDataPath,"\\",-1);
+	AppendString(&ds->rawDataPath,rootname,-1);
 	free(rootname);
 
 	
-	if (FileExists (ds->rawdatapath, &fileSize)){
+	if (FileExists (ds->rawDataPath, &fileSize)){
 		if(ds->overwrite_files){
 		//clear dir
-			pathName=StrDup(ds->rawdatapath);
+			pathName=StrDup(ds->rawDataPath);
 			AppendString(&pathName, "*.*", -1);	//create file name
 			DeleteFile(pathName); 
 			free(pathName);
@@ -338,7 +336,7 @@ int CreateRawDataDir(DataStorage_type* ds, TaskControl_type* taskControl)
 		//create unique dir
 			uniquedir=FALSE;
 			while (!uniquedir){
-				pathName=StrDup(ds->rawdatapath); 
+				pathName=StrDup(ds->rawDataPath); 
 				dircounter++;
 				dirctrstr=malloc(MAXBASEFILEPATH*sizeof(char));
 				Fmt(dirctrstr,"%s<_%i",dircounter);
@@ -346,16 +344,16 @@ int CreateRawDataDir(DataStorage_type* ds, TaskControl_type* taskControl)
 				OKfree(dirctrstr); 
 				if (FileExists (pathName, &fileSize)!=1) {
 					uniquedir=TRUE;
-					OKfree(ds->rawdatapath);    
-					ds->rawdatapath=StrDup(pathName);
-					err=MakeDir(ds->rawdatapath);
+					OKfree(ds->rawDataPath);    
+					ds->rawDataPath=StrDup(pathName);
+					err=MakeDir(ds->rawDataPath);
 				}
 				free(pathName);
 			}
 			
 		}
 	} else  
-		err = MakeDir(ds->rawdatapath);  
+		err = MakeDir(ds->rawDataPath);  
 	
 	return err;
 	
@@ -452,14 +450,14 @@ static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates st
 	if (state && storeData) {
 		
 		// create a new data directory
-		OKfree(ds->rawdatapath);			    // free previous path name
+		OKfree(ds->rawDataPath);			    // free previous path name
 		CreateRawDataDir(ds, taskControl);
 		
 		// create HDF5 file
-		OKfree(ds->hdf5datafile);               //free previous data file name
-		ds->hdf5datafile=malloc(MAX_PATH*sizeof(char)); 
-		Fmt(ds->hdf5datafile,"%s<%s\\data.h5",ds->rawdatapath);
-		error = CreateHDF5file(ds->hdf5datafile,"/dset");
+		OKfree(ds->hdf5DataFileName);               //free previous data file name
+		nullChk( ds->hdf5DataFileName = malloc(MAX_PATH * sizeof(char)) ); 
+		Fmt(ds->hdf5DataFileName,"%s<%s\\data.h5", ds->rawDataPath);
+		error = CreateHDF5File(ds->hdf5DataFileName,"/dset");
 		if (error < 0) {
 			errMsg = StrDup("Error creating HDF5 file");
 			goto Error;
@@ -467,7 +465,12 @@ static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates st
 	}
 	
 	return 0;
+	
 Error:
+	
+	// cleanup
+	OKfree(ds->rawDataPath);
+	OKfree(ds->hdf5DataFileName);
 	
 	ReturnErrMsg("Data storage TaskTreeStateChange");
 	return error;
@@ -634,33 +637,33 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 
 static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)  
 {
+	int						error					= 0;
+	char* 					errMsg 					= StrDup("Writing data to ");
 	
-	DataStorage_type*	ds											= GetTaskControlModuleData(taskControl);
-	int					error										= 0;
-	DataPacket_type**	dataPackets									= NULL;
-	size_t				nPackets									= 0;
-	char*				sinkVChanName								= GetVChanName((VChan_type*)sinkVChan);
-	SourceVChan_type*   sourceVChan									= GetSourceVChan(sinkVChan); 
-	char*				sourceVChanName								= GetVChanName((VChan_type*)sourceVChan);  
-	char* 				errMsg 										= StrDup("Writing data to ");
-	void*				dataPacketDataPtr							= NULL;
-	DLDataTypes			dataPacketType								= 0; 
-	size_t 				i											= 0;
-	DSInfo_type*		dsdata										= NULL;
+	DataStorage_type*		ds						= GetTaskControlModuleData(taskControl);
+	DataPacket_type**		dataPackets				= NULL;
+	size_t					nPackets				= 0;
+	char*					sinkVChanName			= GetVChanName((VChan_type*)sinkVChan);
+	SourceVChan_type*   	sourceVChan				= GetSourceVChan(sinkVChan); 
+	char*					sourceVChanName			= GetVChanName((VChan_type*)sourceVChan);  
+	
+	void*					dataPacketDataPtr		= NULL;
+	DLDataTypes				dataPacketType			= 0; 
+	size_t 					i						= 0;
+	DSInfo_type*			dsInfo					= NULL;
 	
 	// get all available data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
 	
 	for (i = 0; i < nPackets; i++) {
-		if (!dataPackets[i]) {
+		if (!dataPackets[i] || !ds->hdf5DataFileName || !ds->hdf5DataFileName[0]) {
 			
 			ReleaseDataPacket(&dataPackets[i]); 
 			
 		} else {
 			
-			dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType); 
-			dsdata = GetDataPacketDSData(dataPackets[i]);
-			
+			dataPacketDataPtr 	= GetDataPacketPtrToData(dataPackets[i], &dataPacketType); 
+			dsInfo				= GetDataPacketDSData(dataPackets[i]);
 			
 			switch (dataPacketType) {
 					
@@ -675,12 +678,12 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 					case DL_Waveform_Float:
 					case DL_Waveform_Double:
 						
-						error = WriteHDF5Data(ds->hdf5datafile, sourceVChanName, dsdata, *(Waveform_type**)dataPacketDataPtr); 
+						error = WriteHDF5Waveform(ds->hdf5DataFileName, sourceVChanName, dsInfo, *(Waveform_type**)dataPacketDataPtr, Compression_GZIP); 
 						break;
 					
 					case DL_Image:
 						
-						error = WriteHDF5Image(ds->hdf5datafile, sourceVChanName, dsdata, *(Image_type**)dataPacketDataPtr);   
+						error = WriteHDF5Image(ds->hdf5DataFileName, sourceVChanName, dsInfo, *(Image_type**)dataPacketDataPtr, Compression_GZIP);   
 						break;
 						
 					default:
@@ -688,7 +691,6 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 						// not implemented
 						break;
 			}
-			
 			
 			ReleaseDataPacket(&dataPackets[i]);
 		}

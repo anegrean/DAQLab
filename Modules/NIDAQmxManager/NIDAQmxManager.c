@@ -11751,9 +11751,10 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	if (GetTaskControlAbortFlag(dev->taskController)) {
 		int*				nActiveTasksPtr		= NULL;
 		
+		errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
+		
 		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
 		
-			errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
 			(*nActiveTasksPtr)--;
 		
 			if (!*nActiveTasksPtr)
@@ -12297,7 +12298,7 @@ SkipPacket:
 		}
 	}
 	
-	if ((stopAOTaskFlag &&writeLastBlock) || GetTaskControlAbortFlag(dev->taskController)) {
+	if ((stopAOTaskFlag && writeLastBlock) || GetTaskControlAbortFlag(dev->taskController)) {
 		int*	nActiveTasksPtr = NULL;
 		
 		// write last block with adjusted size
@@ -12313,9 +12314,6 @@ SkipPacket:
 				TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 		
 		CmtReleaseTSVPtr(dev->nActiveTasks);
-		
-		//test Lex	
-		AIDAQmxTaskDone_CB(dev->AITaskSet->taskHndl,0,dev);
 		
 	} 
 	else

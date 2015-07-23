@@ -808,6 +808,9 @@ typedef struct {
 									 						// WARNING: this does not apply when looping is ON. In this case when receiving a new data packet, a full cycle is generated before switching.
 	
 	BOOL*         				datain_loop;	   			// Data will be looped regardless of repeat value until new data packet is provided
+	BOOL*						nullPacketReceived;			// Array of BOOL equal to the number of DO channels. If TRUE, then the DO channel received a NULL packet and it will keep on generating
+															// the last value until all DO channels have also received a NULL packet.
+	int							writeBlocksLeftToWrite;		// Number of writeblocks left to write before the DO task stops. This guarantees that the last value of a given waveform is generated before the stop.
 } WriteDOData_type;
 
 // AI, AO, DI & DO DAQmx task settings
@@ -8678,90 +8681,85 @@ static void discard_ReadAIData_type (ReadAIData_type** readAIPtr)
 //------------------------------------------------------------------------------
 static WriteAOData_type* init_WriteAOData_type (Dev_type* dev)
 {
-	ChanSet_type**		chanSetPtr;
-	size_t				nAO				= 0;
-	size_t				i;
+	size_t				nChans		= ListNumItems(dev->AOTaskSet->chanSet); 
+	ChanSet_type*		chanSet		= NULL;
+	size_t				nAO			= 0;
+	WriteAOData_type* 	writeData	= malloc(sizeof(WriteAOData_type));
 	
-	// count number of AO channels using HW-timing
-	size_t	nChans	= ListNumItems(dev->AOTaskSet->chanSet); 	
-	for (i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
-		if (!(*chanSetPtr)->onDemand) nAO++;
-	}
-	
-	WriteAOData_type* 	writeData				= malloc(sizeof(WriteAOData_type));
 	if (!writeData) return NULL;
 	
-	
-	
-			writeData -> writeblock				= dev->AOTaskSet->timing->blockSize;
-			writeData -> numchan				= nAO;
+	// count number of open AO channels using HW-timing
+	for (size_t i = 1; i <= nChans; i++) {	
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+		if (!chanSet->onDemand && IsVChanOpen((VChan_type*)chanSet->sinkVChan)) nAO++;
+	}
 	
 	// init
-			writeData -> datain           		= NULL;
-			writeData -> databuff         		= NULL;
-			writeData -> dataout          		= NULL;
-			writeData -> sinkVChans        		= NULL;
-			writeData -> datain_size      		= NULL;
-			writeData -> databuff_size    		= NULL;
-			writeData -> idx              		= NULL;
-			writeData -> datain_repeat    		= NULL;
-			writeData -> datain_remainder 		= NULL;
-			writeData -> datain_loop      		= NULL;
-			writeData -> nullPacketReceived		= NULL;
-			writeData -> writeBlocksLeftToWrite	= 0;
+	writeData->writeblock					= dev->AOTaskSet->timing->blockSize;
+	writeData->numchan						= nAO;
+	writeData->datain           			= NULL;
+	writeData->databuff         			= NULL;
+	writeData->dataout          			= NULL;
+	writeData->sinkVChans        			= NULL;
+	writeData->datain_size      			= NULL;
+	writeData->databuff_size    			= NULL;
+	writeData->idx              			= NULL;
+	writeData->datain_repeat    			= NULL;
+	writeData->datain_remainder 			= NULL;
+	writeData->datain_loop      			= NULL;
+	writeData->nullPacketReceived			= NULL;
+	writeData->writeBlocksLeftToWrite		= 0;
 	
 	// datain
-	if (!(	writeData -> datain					= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
-	for (i = 0; i < nAO; i++) writeData->datain[i] = NULL;
+	if (!(	writeData->datain				= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
+	for (size_t i = 0; i < nAO; i++) writeData->datain[i] = NULL;
 	
 	// databuff
-	if (!(	writeData -> databuff   			= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
-	for (i = 0; i < nAO; i++) writeData->databuff[i] = NULL;
+	if (!(	writeData->databuff   			= malloc(nAO * sizeof(float64*))) && nAO)							goto Error;
+	for (size_t i = 0; i < nAO; i++) writeData->databuff[i] = NULL;
 	
 	// dataout
-	if (!(	writeData -> dataout 				= malloc(nAO * writeData->writeblock * sizeof(float64))) && nAO)	goto Error;
+	if (!(	writeData->dataout 				= malloc(nAO * writeData->writeblock * sizeof(float64))) && nAO)	goto Error;
 	
 	// sink VChans
-	if (!(	writeData -> sinkVChans				= malloc(nAO * sizeof(SinkVChan_type*))) && nAO)					goto Error;
+	if (!(	writeData->sinkVChans			= malloc(nAO * sizeof(SinkVChan_type*))) && nAO)					goto Error;
 	
-	nChans		= ListNumItems(dev->AOTaskSet->chanSet); 
-	size_t k 	= 0;
-	for (i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
-		if (!(*chanSetPtr)->onDemand) {
-			writeData->sinkVChans[k] = (*chanSetPtr)->sinkVChan;
+	size_t k = 0;
+	for (size_t i = 1; i <= nChans; i++) {	
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+		if (!chanSet->onDemand && IsVChanOpen((VChan_type*)chanSet->sinkVChan)) {
+			writeData->sinkVChans[k] = chanSet->sinkVChan;
 			k++;
 		}
 	}
 	
 	// datain_size
-	if (!(	writeData -> datain_size 			= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
-	for (i = 0; i < nAO; i++) writeData->datain_size[i] = 0;
+	if (!(	writeData->datain_size 			= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
+	for (size_t i = 0; i < nAO; i++) writeData->datain_size[i] = 0;
 		
 	// databuff_size
-	if (!(	writeData -> databuff_size 			= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
-	for (i = 0; i < nAO; i++) writeData->databuff_size[i] = 0;
+	if (!(	writeData->databuff_size 		= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
+	for (size_t i = 0; i < nAO; i++) writeData->databuff_size[i] = 0;
 		
 	// idx
-	if (!(	writeData -> idx 					= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
-	for (i = 0; i < nAO; i++) writeData->idx[i] = 0;
+	if (!(	writeData->idx 					= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
+	for (size_t i = 0; i < nAO; i++) writeData->idx[i] = 0;
 		
 	// datain_repeat
-	if (!(	writeData -> datain_repeat 			= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
-	for (i = 0; i < nAO; i++) writeData->datain_repeat[i] = 0;
+	if (!(	writeData->datain_repeat 		= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
+	for (size_t i = 0; i < nAO; i++) writeData->datain_repeat[i] = 0;
 		
 	// datain_remainder
-	if (!(	writeData -> datain_remainder 		= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
-	for (i = 0; i < nAO; i++) writeData->datain_remainder[i] = 0;
+	if (!(	writeData->datain_remainder 	= malloc(nAO * sizeof(size_t))) && nAO)								goto Error;
+	for (size_t i = 0; i < nAO; i++) writeData->datain_remainder[i] = 0;
 		
 	// datain_loop
-	if (!(	writeData -> datain_loop 			= malloc(nAO * sizeof(BOOL))) && nAO)								goto Error;
-	for (i = 0; i < nAO; i++) writeData->datain_loop[i] = FALSE;
+	if (!(	writeData->datain_loop 			= malloc(nAO * sizeof(BOOL))) && nAO)								goto Error;
+	for (size_t i = 0; i < nAO; i++) writeData->datain_loop[i] = FALSE;
 	
 	// nullPacketReceived
-	if (!(	writeData -> nullPacketReceived		= malloc(nAO * sizeof(BOOL))) && nAO)								goto Error;
-	for (i = 0; i < nAO; i++) writeData->nullPacketReceived[i] = FALSE;
+	if (!(	writeData->nullPacketReceived	= malloc(nAO * sizeof(BOOL))) && nAO)								goto Error;
+	for (size_t i = 0; i < nAO; i++) writeData->nullPacketReceived[i] = FALSE;
 	
 	return writeData;
 	
@@ -8774,24 +8772,26 @@ Error:
 
 static void	discard_WriteAOData_type (WriteAOData_type** writeDataPtr)
 {
-	if (!*writeDataPtr) return;
+	WriteAOData_type*	writeData = *writeDataPtr;
 	
-	for (size_t i = 0; i < (*writeDataPtr)->numchan; i++) {
-		OKfree((*writeDataPtr)->datain[i]);	    
-		OKfree((*writeDataPtr)->databuff[i]);   
+	if (!writeData) return;
+	
+	for (size_t i = 0; i < writeData->numchan; i++) {
+		OKfree(writeData->datain[i]);	    
+		OKfree(writeData->databuff[i]);   
 	}
+	OKfree(writeData->databuff);
+	OKfree(writeData->datain); 
 	
-	OKfree((*writeDataPtr)->databuff);
-	OKfree((*writeDataPtr)->datain); 
-	OKfree((*writeDataPtr)->dataout);
-	OKfree((*writeDataPtr)->sinkVChans);
-	OKfree((*writeDataPtr)->datain_size);
-	OKfree((*writeDataPtr)->databuff_size);
-	OKfree((*writeDataPtr)->idx);
-	OKfree((*writeDataPtr)->datain_repeat);
-	OKfree((*writeDataPtr)->datain_remainder);
-	OKfree((*writeDataPtr)->datain_loop);
-	OKfree((*writeDataPtr)->nullPacketReceived)
+	OKfree(writeData->dataout);
+	OKfree(writeData->sinkVChans);
+	OKfree(writeData->datain_size);
+	OKfree(writeData->databuff_size);
+	OKfree(writeData->idx);
+	OKfree(writeData->datain_repeat);
+	OKfree(writeData->datain_remainder);
+	OKfree(writeData->datain_loop);
+	OKfree(writeData->nullPacketReceived);
 	
 	OKfree(*writeDataPtr);
 }
@@ -8801,91 +8801,108 @@ static void	discard_WriteAOData_type (WriteAOData_type** writeDataPtr)
 //------------------------------------------------------------------------------
 static WriteDOData_type* init_WriteDOData_type (Dev_type* dev)
 {
-	ChanSet_type**		chanSetPtr;
-	size_t				nDO				= 0;
-	
-	// count number of DO channels using HW-timing
-	size_t	nChans	= ListNumItems(dev->DOTaskSet->chanSet); 	
-	for (size_t i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
-		if (!(*chanSetPtr)->onDemand) nDO++;
-	}
-	// return NULL if there are no channels using HW-timing
-	if (!nDO) return NULL;
-	
+	size_t				nChans		= ListNumItems(dev->DOTaskSet->chanSet); 
+	ChanSet_type*		chanSet		= NULL;
+	size_t				nDO			= 0;
 	WriteDOData_type* 	writeData	= malloc(sizeof(WriteDOData_type));
+	
 	if (!writeData) return NULL;
 	
-	
-	
-			writeData -> writeblock			= dev->DOTaskSet->timing->blockSize;
-			writeData -> numchan			= nDO;
+	// count number of DO channels using HW-timing
+	for (size_t i = 1; i <= nChans; i++) {	
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+		if (!chanSet->onDemand && IsVChanOpen((VChan_type*)chanSet->sinkVChan)) nDO++;
+	}
 	
 	// init
-			writeData -> datain           	= NULL;
-			writeData -> databuff         	= NULL;
-			writeData -> dataout          	= NULL;
-			writeData -> sinkVChans        	= NULL;
-			writeData -> datain_size      	= NULL;
-			writeData -> databuff_size    	= NULL;
-			writeData -> idx              	= NULL;
-			writeData -> datain_repeat    	= NULL;
-			writeData -> datain_remainder 	= NULL;
-			writeData -> datain_loop      	= NULL;
+	writeData->writeblock					= dev->DOTaskSet->timing->blockSize;
+	writeData->numchan						= nDO;
+	writeData->datain           			= NULL;
+	writeData->databuff         			= NULL;
+	writeData->dataout          			= NULL;
+	writeData->sinkVChans        			= NULL;
+	writeData->datain_size      			= NULL;
+	writeData->databuff_size    			= NULL;
+	writeData->idx              			= NULL;
+	writeData->datain_repeat    			= NULL;
+	writeData->datain_remainder 			= NULL;
+	writeData->datain_loop      			= NULL;
+	writeData->nullPacketReceived			= NULL;
+	writeData->writeBlocksLeftToWrite		= 0;
 	
 	// datain
-	if (!(	writeData -> datain				= malloc(nDO * sizeof(uInt32*)))) 							goto Error;
+	if (!(	writeData->datain				= malloc(nDO * sizeof(uInt32*))) && nDO) 							goto Error;
 	for (size_t i = 0; i < nDO; i++) writeData->datain[i] = NULL;
 	
 	// databuff
-	if (!(	writeData -> databuff   		= malloc(nDO * sizeof(uInt32*)))) 							goto Error;
+	if (!(	writeData->databuff   			= malloc(nDO * sizeof(uInt32*))) && nDO) 							goto Error;
 	for (size_t i = 0; i < nDO; i++) writeData->databuff[i] = NULL;
 	
 	// dataout
-	if (!(	writeData -> dataout 			= malloc(nDO * writeData->writeblock * sizeof(uInt32))))	goto Error;
+	if (!(	writeData->dataout 				= malloc(nDO * writeData->writeblock * sizeof(uInt32))) && nDO)		goto Error;
 	
 	// sink VChans
-	if (!(	writeData -> sinkVChans			= malloc(nDO * sizeof(SinkVChan_type*))))					goto Error;
+	if (!(	writeData->sinkVChans			= malloc(nDO * sizeof(SinkVChan_type*))) && nDO)					goto Error;
 	
-	nChans		= ListNumItems(dev->DOTaskSet->chanSet); 
-	size_t k 	= 0;
+	size_t k = 0;
 	for (size_t i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
-		if (!(*chanSetPtr)->onDemand) {
-			writeData->sinkVChans[k] = (*chanSetPtr)->sinkVChan;
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+		if (!chanSet->onDemand && IsVChanOpen((VChan_type*)chanSet->sinkVChan)) {
+			writeData->sinkVChans[k] = chanSet->sinkVChan;
 			k++;
 		}
 	}
 	
 	// datain_size
-	if (!(	writeData -> datain_size 		= malloc(nDO * sizeof(size_t))))							goto Error;
+	if (!(	writeData->datain_size 			= malloc(nDO * sizeof(size_t))) && nDO)								goto Error;
 	for (size_t i = 0; i < nDO; i++) writeData->datain_size[i] = 0;
 		
 	// databuff_size
-	if (!(	writeData -> databuff_size 		= malloc(nDO * sizeof(size_t))))							goto Error;
+	if (!(	writeData->databuff_size 		= malloc(nDO * sizeof(size_t))) && nDO)								goto Error;
 	for (size_t i = 0; i < nDO; i++) writeData->databuff_size[i] = 0;
 		
 	// idx
-	if (!(	writeData -> idx 				= malloc(nDO * sizeof(size_t))))							goto Error;
+	if (!(	writeData->idx 					= malloc(nDO * sizeof(size_t))) && nDO)								goto Error;
 	for (size_t i = 0; i < nDO; i++) writeData->idx[i] = 0;
 		
 	// datain_repeat
-	if (!(	writeData -> datain_repeat 		= malloc(nDO * sizeof(size_t))))							goto Error;
+	if (!(	writeData->datain_repeat 		= malloc(nDO * sizeof(size_t))) && nDO)								goto Error;
 	for (size_t i = 0; i < nDO; i++) writeData->datain_repeat[i] = 0;
 		
 	// datain_remainder
-	if (!(	writeData -> datain_remainder 	= malloc(nDO * sizeof(size_t))))							goto Error;
+	if (!(	writeData->datain_remainder 	= malloc(nDO * sizeof(size_t))) && nDO)								goto Error;
 	for (size_t i = 0; i < nDO; i++) writeData->datain_remainder[i] = 0;
 		
 	// datain_loop
-	if (!(	writeData -> datain_loop 		= malloc(nDO * sizeof(BOOL))))								goto Error;
-	for (size_t i = 0; i < nDO; i++) writeData->datain_loop[i] = 0;
+	if (!(	writeData->datain_loop 			= malloc(nDO * sizeof(BOOL))) && nDO)								goto Error;
+	for (size_t i = 0; i < nDO; i++) writeData->datain_loop[i] = FALSE;
+	
+	// nullPacketReceived
+	if (!(	writeData->nullPacketReceived	= malloc(nDO * sizeof(BOOL))) && nDO)								goto Error;
+	for (size_t i = 0; i < nDO; i++) writeData->nullPacketReceived[i] = FALSE;
 	
 	return writeData;
 	
 Error:
-	OKfree(writeData->datain);
+	
+	discard_WriteDOData_type(&writeData);
+	
+	return NULL;
+}
+
+static void	discard_WriteDOData_type (WriteDOData_type** writeDataPtr)
+{
+	WriteDOData_type*	writeData = *writeDataPtr;
+	
+	if (!writeData) return;
+	
+	for (size_t i = 0; i < writeData->numchan; i++) {
+		OKfree(writeData->datain[i]);
+		OKfree(writeData->databuff[i]);
+	}
 	OKfree(writeData->databuff);
+	OKfree(writeData->datain); 
+	
 	OKfree(writeData->dataout);
 	OKfree(writeData->sinkVChans);
 	OKfree(writeData->datain_size);
@@ -8894,28 +8911,7 @@ Error:
 	OKfree(writeData->datain_repeat);
 	OKfree(writeData->datain_remainder);
 	OKfree(writeData->datain_loop);
-	
-	OKfree(writeData);
-	return NULL;
-}
-
-static void	discard_WriteDOData_type (WriteDOData_type** writeDataPtr)
-{
-	if (!*writeDataPtr) return;
-	
-	for (size_t i = 0; i < (*writeDataPtr)->numchan; i++) {
-		OKfree((*writeDataPtr)->datain[i]);
-		OKfree((*writeDataPtr)->databuff[i]);
-	}
-	
-	OKfree((*writeDataPtr)->dataout);
-	OKfree((*writeDataPtr)->sinkVChans);
-	OKfree((*writeDataPtr)->datain_size);
-	OKfree((*writeDataPtr)->databuff_size);
-	OKfree((*writeDataPtr)->idx);
-	OKfree((*writeDataPtr)->datain_repeat);
-	OKfree((*writeDataPtr)->datain_remainder);
-	OKfree((*writeDataPtr)->datain_loop);
+	OKfree(writeData->nullPacketReceived);
 	
 	OKfree(*writeDataPtr);
 }
@@ -9571,8 +9567,10 @@ Error:
 static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 {
 #define ConfigDAQmxAITask_Err_ChannelNotImplemented		-1
+	
 	int 				error 			= 0;
 	char*				errMsg			= NULL;
+	
 	ChanSet_type* 		chanSet			= NULL;
 	
 	if (!dev->AITaskSet) return 0; 		// do nothing
@@ -9592,7 +9590,7 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	size_t	nChans 			= ListNumItems(dev->AITaskSet->chanSet);
 	for (size_t i = 1; i <= nChans; i++) {	
 		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AITaskSet->chanSet, i);
-		if (!chanSet->onDemand) {
+		if (!chanSet->onDemand && IsVChanOpen((VChan_type*)chanSet->srcVChan)) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -9617,8 +9615,8 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 		else
 			AdjustAIDataTypeGainOffset(chanSet, 1);
 	
-		// include in the task only channel for which HW-timing is required
-		if (chanSet->onDemand) continue;
+		// include in the task only channel for which HW-timing is required and which are open
+		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 		
 		switch(chanSet->chanType) {
 			
@@ -9790,17 +9788,12 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	nullChk(errMsg = malloc((buffsize+1)*sizeof(char)));
+	nullChk(errMsg = malloc((buffsize+1) * sizeof(char)));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
-	
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ConfigDAQmxAITask", errMsg);
-	OKfree(errMsg);
+	ReturnErrMsg("ConfigDAQmxAITask");
 	return error;
 }
 
@@ -9811,7 +9804,8 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	
 	int 				error 			= 0;
 	char*				errMsg			= NULL;
-	ChanSet_type** 		chanSetPtr;
+	
+	ChanSet_type* 		chanSet			= NULL;
 	
 	if (!dev->AOTaskSet) return 0; 		// do nothing
 	
@@ -9829,8 +9823,8 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	BOOL 	hwTimingFlag 	= FALSE;
 	size_t	nChans			= ListNumItems(dev->AOTaskSet->chanSet);
 	for (size_t i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
-		if (!(*chanSetPtr)->onDemand) {
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+		if (!chanSet->onDemand && IsVChanOpen((VChan_type*)chanSet->sinkVChan)) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -9847,25 +9841,25 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	// create AO channels
 	nChans			= ListNumItems(dev->AOTaskSet->chanSet);
 	for (size_t i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 	
 		// include in the task only channels for which HW-timing is required
-		if ((*chanSetPtr)->onDemand) continue;
+		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->sinkVChan)) continue;
 		
 		// create channel
-		switch((*chanSetPtr)->chanType) {
+		switch(chanSet->chanType) {
 			
 			case Chan_AO_Voltage:
 				
-				ChanSet_AO_Voltage_type*	AOVoltageChanSet = *(ChanSet_AO_Voltage_type**)chanSetPtr;
-				DAQmxErrChk (DAQmxCreateAOVoltageChan(dev->AOTaskSet->taskHndl, (*chanSetPtr)->name, "", AOVoltageChanSet->VMin, AOVoltageChanSet->VMax, DAQmx_Val_Volts, NULL)); 
+				ChanSet_AO_Voltage_type*	AOVoltageChanSet = (ChanSet_AO_Voltage_type*)chanSet;
+				DAQmxErrChk (DAQmxCreateAOVoltageChan(dev->AOTaskSet->taskHndl, chanSet->name, "", AOVoltageChanSet->VMin, AOVoltageChanSet->VMax, DAQmx_Val_Volts, NULL)); 
 				
 				break;
 				
 			case Chan_AO_Current:
 				
-				ChanSet_AO_Current_type*	AOCurrentChanSet = *(ChanSet_AO_Current_type**)chanSetPtr;
-				DAQmxErrChk (DAQmxCreateAOCurrentChan(dev->AOTaskSet->taskHndl, (*chanSetPtr)->name, "", AOCurrentChanSet->IMin, AOCurrentChanSet->IMax, DAQmx_Val_Amps, NULL));
+				ChanSet_AO_Current_type*	AOCurrentChanSet = (ChanSet_AO_Current_type*)chanSet;
+				DAQmxErrChk (DAQmxCreateAOCurrentChan(dev->AOTaskSet->taskHndl, chanSet->name, "", AOCurrentChanSet->IMin, AOCurrentChanSet->IMax, DAQmx_Val_Amps, NULL));
 							  
 				break;
 			/*	
@@ -9927,7 +9921,6 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 			DAQmxErrChk ( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, 2 * dev->AOTaskSet->timing->blockSize));
 			break;
 	}
-	
 	
 	//----------------------
 	// Configure AO triggers
@@ -9993,7 +9986,7 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	//----------------------
 	// register AO data request callback if task is continuous
 	//if (dev->AOTaskSet->timing->measMode == Operation_Continuous)
-		DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev)); 
+	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev)); 
 	// register AO task done event callback
 	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
@@ -10021,25 +10014,20 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	
 DAQmxError:
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	nullChk( errMsg = malloc((buffsize+1)*sizeof(char)) );
+	nullChk( errMsg = malloc((buffsize+1) * sizeof(char)) );
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
-	
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ConfigDAQmxAOTask", errMsg);
-	OKfree(errMsg);
-	
+	ReturnErrMsg("ConfigDAQmxAOTask");
 	return error;
 }
 
 static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 {
-	int 				error 			= 0;
-	ChanSet_type** 		chanSetPtr;
+	int 				error 		= 0;
+	char*				errMsg		= NULL;		
+	ChanSet_type* 		chanSet		= NULL;
 	
 	if (!dev->DITaskSet) return 0; 		// do nothing
 	
@@ -10053,8 +10041,8 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	BOOL 	hwTimingFlag 	= FALSE;
 	size_t	nChans			= ListNumItems(dev->DITaskSet->chanSet);
 	for (size_t i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
-		if (!(*chanSetPtr)->onDemand) {
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->DITaskSet->chanSet, i);
+		if (!chanSet->onDemand && IsVChanOpen((VChan_type*)chanSet->srcVChan)) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -10071,12 +10059,12 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	// create DI channels
 	nChans	= ListNumItems(dev->DITaskSet->chanSet); 
 	for (size_t i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->DITaskSet->chanSet, i);
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->DITaskSet->chanSet, i);
 	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtr)->onDemand) continue;
+		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 		
-		DAQmxErrChk (DAQmxCreateDIChan(dev->DITaskSet->taskHndl, (*chanSetPtr)->name, "", DAQmx_Val_ChanForAllLines)); 
+		DAQmxErrChk (DAQmxCreateDIChan(dev->DITaskSet->taskHndl, chanSet->name, "", DAQmx_Val_ChanForAllLines)); 
 	}
 				 
 	// sample clock source
@@ -10222,8 +10210,9 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 	return 0;
 
 DAQmxError:
+	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
+	errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
 	if (errorInfo)
 		*errorInfo = FormatMsg(error, "ConfigDAQmxDITask", errMsg);
@@ -10233,10 +10222,11 @@ DAQmxError:
 
 static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 {
-	int 				error 			= 0;
-	ChanSet_type** 		chanSetPtr;
+#define ConfigDAQmxDOTask_Err_OutOfMemory	-1  
+	int 				error 		= 0;
 	
-	#define ConfigDAQmxDOTask_Err_OutOfMemory				-1 
+	ChanSet_type* 		chanSet		= NULL;
+	
 	
 	if (!dev->DOTaskSet) return 0; 		// do nothing
 	
@@ -10255,8 +10245,8 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	BOOL 	hwTimingFlag 	= FALSE;
 	size_t	nChans			= ListNumItems(dev->DOTaskSet->chanSet);
 	for (size_t i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
-		if (!(*chanSetPtr)->onDemand) {
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+		if (!chanSet->onDemand && IsVChanOpen((VChan_type*)chanSet->sinkVChan) ) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -10273,12 +10263,12 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	// create DO channels
 	nChans	= ListNumItems(dev->DOTaskSet->chanSet);
 	for (size_t i = 1; i <= nChans; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->DOTaskSet->chanSet, i);
 	
 		// include in the task only channel for which HW-timing is required
-		if ((*chanSetPtr)->onDemand) continue;
+		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->sinkVChan)) continue;
 		
-		DAQmxErrChk (DAQmxCreateDOChan(dev->DOTaskSet->taskHndl, (*chanSetPtr)->name, "", DAQmx_Val_ChanForAllLines)); 
+		DAQmxErrChk (DAQmxCreateDOChan(dev->DOTaskSet->taskHndl, chanSet->name, "", DAQmx_Val_ChanForAllLines)); 
 	}
 				 
 	// sample clock source
@@ -10429,6 +10419,7 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 	
 	int 				error 			= 0;
 	char*				errMsg			= NULL;
+	
 	ChanSet_type* 		chanSet			= NULL;
 	size_t				nCIChan			= 0;
 	char*				refClkSrc		= NULL;
@@ -10448,7 +10439,7 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 	BOOL 	hwTimingFlag 	= FALSE;
 	for (size_t i = 1; i <= nCIChan; i++) {	
 		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-		if (!chanSet->onDemand) {
+		if (!chanSet->onDemand && IsVChanOpen((VChan_type*)chanSet->srcVChan)) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -10462,7 +10453,7 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 	
 		// include in the task only channel for which HW-timing is required
-		if (chanSet->onDemand) continue;
+		if (chanSet->onDemand && !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 		
 		switch (chanSet->chanType) {
 				
@@ -10623,6 +10614,7 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 #define ConfigDAQmxCOTask_Err_ChanNotImplemented		-1 
 	
 	int 				error 			= 0;
+	
 	ChanSet_CO_type*	chanSet			= NULL;
 	size_t				nCOChan			= 0;
 	char*				taskName		= NULL;
@@ -10645,7 +10637,7 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 	BOOL 	hwTimingFlag 	= FALSE;
 	for (size_t i = 1; i <= nCOChan; i++) {	
 		chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-		if (!chanSet->baseClass.onDemand) {
+		if (!chanSet->baseClass.onDemand && IsVChanOpen((VChan_type*)chanSet->baseClass.sinkVChan)) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -10658,7 +10650,7 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 	for (size_t i = 1; i <= nCOChan; i++) {	
 		chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
 		// include in the task only channel for which HW-timing is required
-		if (chanSet->baseClass.onDemand) continue;
+		if (chanSet->baseClass.onDemand && !IsVChanOpen((VChan_type*)chanSet->baseClass.sinkVChan)) continue;
 		
 		// create DAQmx CO task for each counter 
 		taskName = GetTaskControlName(dev->taskController);
@@ -13625,6 +13617,9 @@ Error:
 
 static void AIDataVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
+	int				error	= 0;
+	char*			errMsg	= NULL;
+	
 	ChanSet_type* 	chanSet = VChanOwner;
 	Dev_type*		dev		= chanSet->device;
 	
@@ -13647,10 +13642,26 @@ static void AIDataVChan_StateChange (VChan_type* self, void* VChanOwner, VChanSt
 	else
 		SetHWTrigSlaveActive(dev->AITaskSet->HWTrigSlave, FALSE);
 	
+	// update device settings
+	errChk( ConfigDAQmxAITask(dev, &errMsg) );
+	
+	return;
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = StrDup("AIDataVChan_StateChange: Unknown error or out of memory.\n\n");
+	
+	DLMsg(errMsg, 1);
+	OKfree(errMsg);
+	return;
 }
 
 static void AODataVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
+	int				error	= 0;
+	char*			errMsg	= NULL;
+	
 	ChanSet_type* 	chanSet = VChanOwner;
 	Dev_type*		dev		= chanSet->device;
 	
@@ -13672,6 +13683,20 @@ static void AODataVChan_StateChange (VChan_type* self, void* VChanOwner, VChanSt
 		SetHWTrigSlaveActive(dev->AOTaskSet->HWTrigSlave, TRUE);
 	else
 		SetHWTrigSlaveActive(dev->AOTaskSet->HWTrigSlave, FALSE);
+	
+	// update device settings
+	errChk( ConfigDAQmxAOTask(dev, &errMsg) );
+	
+	return;
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = StrDup("AIDataVChan_StateChange: Unknown error or out of memory.\n\n");
+	
+	DLMsg(errMsg, 1);
+	OKfree(errMsg);
+	return;
 	
 }
 	

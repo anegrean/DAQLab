@@ -42,6 +42,7 @@
 // Default Scan Engine VChan base names. Default base names must be unique among each other!
 #define ScanEngine_SourceVChan_FastAxis_Command				"fast axis command"
 #define ScanEngine_SourceVChan_FastAxis_Command_NSamples	"fast axis command n samples"
+#define ScanEngine_SourceVChan_Galvo_Command_SamplingRate	"galvo command sampling rate"
 #define ScanEngine_SinkVChan_FastAxis_Position				"fast axis position" 
 #define ScanEngine_SourceVChan_SlowAxis_Command				"slow axis command"
 #define ScanEngine_SourceVChan_SlowAxis_Command_NSamples	"slow axis command n samples"
@@ -381,7 +382,9 @@ struct ScanEngine {
 	SourceVChan_type*			VChanSlowAxisCom;
 	
 	SourceVChan_type*			VChanFastAxisComNSamples;   // Command signals waveform n samples.
-	SourceVChan_type*			VChanSlowAxisComNSamples;	
+	SourceVChan_type*			VChanSlowAxisComNSamples;
+	
+	SourceVChan_type*			VChanGalvoComSamplingRate;	// Sampling rate in [Hz] for the galvo command signal for both scan axes.
 	
 	SinkVChan_type*				VChanFastAxisPos;			// Position feedback signals (optional for some scan axis types)
 	SinkVChan_type*				VChanSlowAxisPos;
@@ -940,6 +943,9 @@ static void								FastAxisComVChan_StateChange						(VChan_type* self, void* VC
 
 	// Slow Axis Command VChan
 static void								SlowAxisComVChan_StateChange						(VChan_type* self, void* VChanOwner, VChanStates state);
+
+	// Galvo sampling rate for both scan axes
+static void								GalvoComSampleRateVChan_StateChange 				(VChan_type* self, void* VChanOwner, VChanStates state);
 
 	// Detection Channels
 static void								DetectionVChan_StateChange							(VChan_type* self, void* VChanOwner, VChanStates state); 
@@ -4124,6 +4130,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	DLDataTypes 		allowedScanAxisPacketTypes[] 			= {DL_Waveform_Double};
 	char*				fastAxisComVChanName					= NULL;
 	char*				fastAxisComNSampVChanName				= NULL;
+	char*				galvoComSamplingRateVChanName			= NULL;
 	char*				slowAxisComVChanName					= NULL;
 	char*				slowAxisComNSampVChanName				= NULL;
 	char*				fastAxisPosVChanName					= NULL;
@@ -4137,19 +4144,20 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	char*				ROIStimulateVChanName					= NULL;
 	
 	// assemble default VChan names
-	nullChk( fastAxisComVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command, 0) );
-	nullChk( fastAxisComNSampVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command_NSamples, 0) );
-	nullChk( slowAxisComVChanName	 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_SlowAxis_Command, 0) );
-	nullChk( slowAxisComNSampVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_SlowAxis_Command_NSamples, 0) );
-	nullChk( fastAxisPosVChanName	 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_FastAxis_Position, 0) );
-	nullChk( slowAxisPosVChanName	 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_SlowAxis_Position, 0) );
-	nullChk( compositeImageVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_CompositeImage, 0) );
-	nullChk( shutterCommandVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_Shutter_Command, 0) );
-	nullChk( pixelPulseTrainVChanName 		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelPulseTrain, 0) );
-	nullChk( pixelSamplingRateVChanName		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelSamplingRate, 0) );
-	nullChk( nPixelsVChanName 				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_NPixels, 0) );
-	nullChk( ROIHoldVChanName				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROIHold, 0) );
-	nullChk( ROIStimulateVChanName			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROIStimulate, 0) );
+	nullChk( fastAxisComVChanName 				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command, 0) );
+	nullChk( fastAxisComNSampVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command_NSamples, 0) );
+	nullChk( slowAxisComVChanName	 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_SlowAxis_Command, 0) );
+	nullChk( slowAxisComNSampVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_SlowAxis_Command_NSamples, 0) );
+	nullChk( galvoComSamplingRateVChanName		= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_Galvo_Command_SamplingRate, 0) );
+	nullChk( fastAxisPosVChanName	 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_FastAxis_Position, 0) );
+	nullChk( slowAxisPosVChanName	 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_SlowAxis_Position, 0) );
+	nullChk( compositeImageVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_CompositeImage, 0) );
+	nullChk( shutterCommandVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_Shutter_Command, 0) );
+	nullChk( pixelPulseTrainVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelPulseTrain, 0) );
+	nullChk( pixelSamplingRateVChanName			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelSamplingRate, 0) );
+	nullChk( nPixelsVChanName 					= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_NPixels, 0) );
+	nullChk( ROIHoldVChanName					= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROIHold, 0) );
+	nullChk( ROIStimulateVChanName				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROIStimulate, 0) );
 	
 	//------------------------
 	// init
@@ -4173,6 +4181,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	engine->VChanFastAxisComNSamples	= NULL;
 	engine->VChanSlowAxisCom			= NULL;
 	engine->VChanSlowAxisComNSamples	= NULL;
+	engine->VChanGalvoComSamplingRate	= NULL;
 	engine->VChanFastAxisPos			= NULL;
 	engine->VChanCompositeImage			= NULL;
 	engine->VChanShutter				= NULL;
@@ -4215,6 +4224,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	nullChk( engine->VChanFastAxisComNSamples	= init_SourceVChan_type(fastAxisComNSampVChanName, DL_UInt64, engine, NULL) ); 
 	nullChk( engine->VChanSlowAxisCom			= init_SourceVChan_type(slowAxisComVChanName, DL_RepeatedWaveform_Double, engine, SlowAxisComVChan_StateChange) ); 
 	nullChk( engine->VChanSlowAxisComNSamples	= init_SourceVChan_type(slowAxisComNSampVChanName, DL_UInt64, engine, NULL) ); 
+	nullChk( engine->VChanGalvoComSamplingRate	= init_SourceVChan_type(galvoComSamplingRateVChanName, DL_Double, engine, GalvoComSampleRateVChan_StateChange) ); 
 	nullChk( engine->VChanFastAxisPos			= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, NULL) ); 
 	nullChk( engine->VChanSlowAxisPos			= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, NULL) ); 
 	nullChk( engine->VChanCompositeImage		= init_SourceVChan_type(compositeImageVChanName, DL_Image, engine, NULL) );
@@ -4238,6 +4248,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 	OKfree(fastAxisComNSampVChanName);
 	OKfree(slowAxisComVChanName);
 	OKfree(slowAxisComNSampVChanName);
+	OKfree(galvoComSamplingRateVChanName);
 	OKfree(fastAxisPosVChanName);
 	OKfree(slowAxisPosVChanName);
 	OKfree(compositeImageVChanName);
@@ -4257,6 +4268,7 @@ Error:
 	OKfree(fastAxisComNSampVChanName);
 	OKfree(slowAxisComVChanName);
 	OKfree(slowAxisComNSampVChanName);
+	OKfree(galvoComSamplingRateVChanName);
 	OKfree(fastAxisPosVChanName);
 	OKfree(slowAxisPosVChanName);
 	OKfree(compositeImageVChanName);
@@ -4283,6 +4295,7 @@ static void	discard_ScanEngine_type (ScanEngine_type** enginePtr)
 	discard_VChan_type((VChan_type**)&engine->VChanFastAxisComNSamples);
 	discard_VChan_type((VChan_type**)&engine->VChanSlowAxisCom);
 	discard_VChan_type((VChan_type**)&engine->VChanSlowAxisComNSamples);
+	discard_VChan_type((VChan_type**)&engine->VChanGalvoComSamplingRate);
 	discard_VChan_type((VChan_type**)&engine->VChanFastAxisPos);
 	discard_VChan_type((VChan_type**)&engine->VChanSlowAxisPos);
 	discard_VChan_type((VChan_type**)&engine->VChanCompositeImage);
@@ -4340,6 +4353,7 @@ static int DLRegisterScanEngine (ScanEngine_type* engine)
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisComNSamples);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisCom);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisComNSamples);
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanGalvoComSamplingRate);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisPos);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisPos);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanCompositeImage);
@@ -4377,6 +4391,10 @@ static void DLUnregisterScanEngine (ScanEngine_type* engine)
 	// slow axis command n samples
 	if (engine->VChanSlowAxisComNSamples)
 		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisComNSamples);
+	
+	// galvo command sampling rate
+	if (engine->VChanGalvoComSamplingRate)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanGalvoComSamplingRate);
 	
 	// fast axis position feedback
 	if (engine->VChanFastAxisPos) {
@@ -5598,6 +5616,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	double*						fastAxisCompensationSignal					= NULL;
 	double*						slowAxisCompensationSignal					= NULL; 
 	double*						parkedVoltageSignal							= NULL;
+	double*						galvoSamplingRatePtr						= NULL;
 	uInt64*						nGalvoSamplesPtr							= NULL;
 	uInt64* 					nPixelsPtr									= NULL;
 	Waveform_type* 				fastAxisScan_Waveform						= NULL;
@@ -5610,10 +5629,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	RepeatedWaveform_type*		slowAxisMoveFromParked_RepWaveform			= NULL;
 	RepeatedWaveform_type*		fastAxisScan_RepWaveform					= NULL;
 	RepeatedWaveform_type*		slowAxisScan_RepWaveform					= NULL; 
-	DataPacket_type*			galvoCommandPacket							= NULL; 
-	DataPacket_type*			pixelPulseTrainPacket						= NULL;
-	DataPacket_type*			pixelSamplingRatePacket						= NULL;
-	DataPacket_type*			nPixelsPacket								= NULL;
+	DataPacket_type*			dataPacket									= NULL; 
 	PulseTrain_type*			pixelPulseTrain								= NULL;
 	double*						pixelSamplingRatePtr						= NULL;
 	size_t						nFrames										= GetTaskControlIterations(scanEngine->baseClass.taskControl);
@@ -5629,7 +5645,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	double						flybackTime									= 0;	// Slow-axis fly back time in [ms] after completing a framescan.
 	uInt32						nFastAxisFlybackLines						= 0;
-	DSInfo_type*			dsInfo										= NULL;
+	DSInfo_type*				dsInfo										= NULL;
 
 	
 //============================================================================================================================================================================================
@@ -5765,8 +5781,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// send data 
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisMoveFromParked_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisMoveFromParked_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
 	
 	// fastAxisScan_Waveform has two line scans (one triangle wave period)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
@@ -5778,8 +5794,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// send data
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisScan_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );   
-	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisScan_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );   
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );    
 	
 	// go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
@@ -5788,8 +5804,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
-		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &galvoCommandPacket, FALSE, &errMsg) );    
+		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
+		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );    
 		// send NULL packet to signal termination of data stream
 		errChk( SendNullPacket(scanEngine->baseClass.VChanFastAxisCom, &errMsg) );
 	}
@@ -5801,8 +5817,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		*nGalvoSamplesPtr = (uInt64)((nGalvoSamplesFastAxisCompensation + nGalvoSamplesFastAxisMoveFromParkedWaveform) + 
 					   (scanEngine->scanSettings.height+nFastAxisFlybackLines) * nGalvoSamplesPerLine * nFrames + 1);
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
+		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &dataPacket, FALSE, &errMsg) );    
 	}
 	
 	//---------------------------------------------------------------------------------------------------------------------------
@@ -5815,8 +5831,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// send data 
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisMoveFromParked_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisMoveFromParked_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
 	
 	// repeat staircase waveform
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
@@ -5828,8 +5844,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// send data
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-	nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisScan_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );   
-	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );  
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisScan_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );   
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );  
 	
 	// go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
@@ -5838,21 +5854,28 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
-		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &galvoCommandPacket, FALSE, &errMsg) );
+		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
+		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
 		// send NULL packet to signal termination of data stream
 		errChk( SendNullPacket(scanEngine->baseClass.VChanSlowAxisCom, &errMsg) );
 	}
 	
 	// send number of samples in slow axis command waveform if scan is finite
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
-		nGalvoSamplesPtr = malloc(sizeof(uInt64));
+		nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
 		// move from parked waveform + scan waveform + one sample to return to parked position
 		*nGalvoSamplesPtr = (uInt64) ((nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParked) + nFrames * nGalvoSamplesSlowAxisScanWaveform + 1);
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( galvoCommandPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &galvoCommandPacket, FALSE, &errMsg) );    
+		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errMsg) );    
 	}
+	
+	// Galvo sampling rate for both scan axes
+	nullChk( galvoSamplingRatePtr = malloc(sizeof(double)) );
+	*galvoSamplingRatePtr = scanEngine->galvoSamplingRate;
+	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&galvoSamplingRatePtr, NULL, NULL) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errMsg) );    
+	
 	
 	//---------------------------------------------------------------------------------------------------------------------------
 	// 													Pixel timing info
@@ -5872,8 +5895,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( nPixelsPtr = malloc(sizeof(uInt64)) );
 		*nPixelsPtr = nPixels;
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( nPixelsPacket = init_DataPacket_type(DL_UInt64, (void**)&nPixelsPtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &nPixelsPacket, FALSE, &errMsg) );    
+		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nPixelsPtr, &dsInfo, NULL) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &dataPacket, FALSE, &errMsg) );    
 		
 	} else {
 		//--------------------
@@ -5885,16 +5908,16 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	
 	// send pixel pulse train info
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-	nullChk( pixelPulseTrainPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, &dsInfo, (DiscardFptr_type)discard_PulseTrain_type) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &pixelPulseTrainPacket, FALSE, &errMsg) ); 
+	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, &dsInfo, (DiscardFptr_type)discard_PulseTrain_type) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &dataPacket, FALSE, &errMsg) ); 
 	
 	// send pixel sampling rate
 	// pixel sampling rate in [Hz]
 	nullChk( pixelSamplingRatePtr = malloc(sizeof(double)) );
 	*pixelSamplingRatePtr = 1e+6/scanEngine->scanSettings.pixelDwellTime;
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-	nullChk( pixelSamplingRatePacket = init_DataPacket_type(DL_Double, (void**)&pixelSamplingRatePtr, &dsInfo, NULL) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSamplingRate, &pixelSamplingRatePacket, FALSE, &errMsg) ); 
+	nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&pixelSamplingRatePtr, &dsInfo, NULL) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSamplingRate, &dataPacket, FALSE, &errMsg) ); 
 	
 	return 0; // no error
 				  
@@ -5904,6 +5927,7 @@ Error:
 	OKfree(fastAxisCompensationSignal);
 	OKfree(slowAxisCompensationSignal);
 	OKfree(parkedVoltageSignal);
+	OKfree(galvoSamplingRatePtr);
 	OKfree(nGalvoSamplesPtr);
 	OKfree(pixelSamplingRatePtr);
 	discard_Waveform_type(&fastAxisScan_Waveform);
@@ -5917,10 +5941,7 @@ Error:
 	discard_RepeatedWaveform_type(&fastAxisScan_RepWaveform);
 	discard_RepeatedWaveform_type(&slowAxisScan_RepWaveform);
 	discard_PulseTrain_type(&pixelPulseTrain);
-	ReleaseDataPacket(&galvoCommandPacket);
-	ReleaseDataPacket(&pixelPulseTrainPacket);
-	ReleaseDataPacket(&pixelSamplingRatePacket);
-	ReleaseDataPacket(&nPixelsPacket);
+	ReleaseDataPacket(&dataPacket);
 	discard_DSInfo_type(&dsInfo);
 	
 	*errorInfo = FormatMsg(NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals, "NonResRectRasterScan_GenerateScanSignals", errMsg);
@@ -5957,6 +5978,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	unsigned short*			ROIHoldSignal					= NULL;
 	unsigned short*			ROIStimulateSignal				= NULL;
 	uInt64*					nGalvoSamplesPtr				= NULL;
+	double*					galvoSamplingRatePtr			= NULL;
 	uInt64					nPixels							= 0;
 	uInt64*					nPixelsPtr						= NULL;
 	RepeatedWaveform_type*	fastAxisJumpWaveform			= NULL;
@@ -6181,6 +6203,15 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errMsg) );
 	
 	//------------------------------------------------------------
+	// Send galvo sampling rate
+	//------------------------------------------------------------
+	
+	nullChk( galvoSamplingRatePtr = malloc(sizeof(double)) );
+	*galvoSamplingRatePtr = scanEngine->galvoSamplingRate;
+	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&galvoSamplingRatePtr, NULL, NULL) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errMsg) ); 
+	
+	//------------------------------------------------------------
 	// Send number of pixels to acquire if recording is needed
 	//------------------------------------------------------------
 	
@@ -6230,6 +6261,7 @@ Error:
 	OKfree(ROIHoldSignal);
 	OKfree(ROIStimulateSignal);
 	OKfree(nGalvoSamplesPtr);
+	OKfree(galvoSamplingRatePtr);
 	OKfree(nPixelsPtr);
 	OKfree(pixelSamplingRatePtr);
 	discard_RepeatedWaveform_type(&fastAxisJumpWaveform);
@@ -7420,11 +7452,12 @@ Error:
 // Slow Axis Command VChan
 static void	SlowAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
-	ScanEngine_type*	engine				= VChanOwner;
-	double*				parkedVPtr 			= NULL;
-	int					error				= 0;
-	char*				errMsg				= NULL;
-	DataPacket_type*	parkedDataPacket	= NULL;
+	int					error			= 0;
+	char*				errMsg			= NULL;
+	
+	ScanEngine_type*	engine			= VChanOwner;
+	double*				parkedVPtr 		= NULL;
+	DataPacket_type*	dataPacket		= NULL;
 	
 	switch (state) {
 		
@@ -7434,8 +7467,8 @@ static void	SlowAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VC
 	
 			nullChk( parkedVPtr = malloc(sizeof(double)) );
 			*parkedVPtr = ((NonResGalvoCal_type*)engine->slowAxisCal)->parked;
-			nullChk( parkedDataPacket = init_DataPacket_type(DL_Double, (void**)&parkedVPtr, NULL, NULL) );
-			errChk( SendDataPacket(engine->VChanSlowAxisCom, &parkedDataPacket, FALSE, &errMsg) );
+			nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&parkedVPtr, NULL, NULL) );
+			errChk( SendDataPacket(engine->VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
 			
 			break;
 			
@@ -7450,7 +7483,7 @@ Error:
 	
 	// cleanup
 	OKfree(parkedVPtr);
-	discard_DataPacket_type(&parkedDataPacket);
+	discard_DataPacket_type(&dataPacket);
 	
 	if (!errMsg)
 		errMsg = StrDup("Out of memory");
@@ -7458,6 +7491,47 @@ Error:
 	DLMsg(errMsg, TRUE);
 	OKfree(errMsg);
 }
+
+static void	GalvoComSampleRateVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
+{
+	int					error				= 0;
+	char*				errMsg				= NULL;
+	
+	RectRaster_type*	engine				= VChanOwner;
+	double*				samplingRatePtr 	= NULL;
+	DataPacket_type*	dataPacket			= NULL;
+	
+	switch (state) {
+		
+		case VChan_Open:
+			
+			nullChk( samplingRatePtr = malloc(sizeof(double)) );
+			*samplingRatePtr = engine->galvoSamplingRate;
+			nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&samplingRatePtr, NULL, NULL) );
+			errChk( SendDataPacket(engine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errMsg) );
+			
+			break;
+			
+		case VChan_Closed:
+			
+			break;
+	}
+	
+	return;
+	
+Error:
+	
+	// cleanup
+	OKfree(samplingRatePtr);
+	discard_DataPacket_type(&dataPacket);
+	
+	if (!errMsg)
+		errMsg = StrDup("Out of memory");
+	
+	DLMsg(errMsg, TRUE);
+	OKfree(errMsg);
+}
+
 
 // Detection channel
 static void DetectionVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)

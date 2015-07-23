@@ -24,6 +24,11 @@
 #define  MainPan_Modelocked               9       /* control type: LED, callback function: (none) */
 
 #define  SetPan                           2
+#define  SetPan_COMPort                   2       /* control type: numeric, callback function: (none) */
+#define  SetPan_COMStopBits               3       /* control type: ring, callback function: (none) */
+#define  SetPan_COMDataBits               4       /* control type: ring, callback function: (none) */
+#define  SetPan_COMParity                 5       /* control type: ring, callback function: (none) */
+#define  SetPan_COMBaudRate               6       /* control type: ring, callback function: (none) */
 
 
      /* Control Arrays: */

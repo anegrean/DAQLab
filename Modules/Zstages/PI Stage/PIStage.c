@@ -158,7 +158,8 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 	initalloc_Zstage ((DAQLabModule_type*)zstage, className, instanceName, workspacePanHndl);
 	
 	// create PIStage Task Controller
-	tc = init_TaskControl_type (instanceName, PIzstage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStateChange, NULL, ZStageEventHandler, ErrorTC);
+	tc = init_TaskControl_type (instanceName, PIzstage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, StartTC, 
+								ResetTC, DoneTC, StoppedTC, NULL, TaskTreeStateChange, NULL, ZStageEventHandler, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&PIzstage); return NULL;}
 	
 	//------------------------------------------------------------

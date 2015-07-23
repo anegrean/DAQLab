@@ -108,6 +108,7 @@ struct TaskControl {
 	ResetFptr_type					ResetFptr;
 	DoneFptr_type					DoneFptr;
 	StoppedFptr_type				StoppedFptr;
+	IterationStopFptr_type			IterationStopFptr;
 	TaskTreeStateChangeFptr_type	TaskTreeStateChangeFptr;
 	SetUITCModeFptr_type			SetUITCModeFptr;
 	ModuleEventFptr_type			ModuleEventFptr;
@@ -185,6 +186,7 @@ TaskControl_type* init_TaskControl_type(const char						taskControllerName[],
 										ResetFptr_type					ResetFptr,
 										DoneFptr_type					DoneFptr,
 										StoppedFptr_type				StoppedFptr,
+										IterationStopFptr_type			IterationStopFptr,
 										TaskTreeStateChangeFptr_type	TaskTreeStateChangeFptr,
 										SetUITCModeFptr_type			SetUITCModeFptr,
 										ModuleEventFptr_type			ModuleEventFptr,
@@ -246,6 +248,7 @@ TaskControl_type* init_TaskControl_type(const char						taskControllerName[],
 	tc -> ResetFptr							= ResetFptr;
 	tc -> DoneFptr							= DoneFptr;
 	tc -> StoppedFptr						= StoppedFptr;
+	tc -> IterationStopFptr					= IterationStopFptr;
 	tc -> TaskTreeStateChangeFptr			= TaskTreeStateChangeFptr;
 	tc -> SetUITCModeFptr					= SetUITCModeFptr;
 	tc -> ModuleEventFptr					= ModuleEventFptr;
@@ -488,6 +491,11 @@ BOOL GetTaskControlUITCFlag	(TaskControl_type* taskControl)
 BOOL GetTaskControlAbortFlag (TaskControl_type* taskControl)
 {
 	return taskControl->abortFlag;
+}
+
+BOOL GetTaskControlIterationStopFlag (TaskControl_type* taskControl)
+{
+	return taskControl->stopIterationsFlag;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -899,6 +907,10 @@ static char* FCallToString (TCCallbacks fcall)
 		case TC_Callback_Stopped:
 			
 			return StrDup("FCall Stopped");
+			
+		case TC_Callback_IterationStop:
+			
+			return StrDup("FCall Iteration Stop");
 			
 		case TASK_FCALL_TASK_TREE_STATUS:
 			
@@ -1338,6 +1350,17 @@ static int FunctionCall (TaskControl_type* taskControl, EventPacket_type* eventP
 				return FunctionCall_Error_FCall_Error;
 			}
 			return 0;										// success
+			
+		case TC_Callback_IterationStop:
+			
+			if (!taskControl->IterationStopFptr) return 0;	// function not provided		 
+				
+			if ( (fCallError = (*taskControl->IterationStopFptr)(taskControl, taskControl->currentIter, &taskControl->abortFlag, &fCallErrorMsg)) < 0) {
+				if (errorInfo) *errorInfo = FormatMsg(FunctionCall_Error_FCall_Error, "FCall Iteration Stop", fCallErrorMsg);
+				OKfree(fCallErrorMsg);
+				return FunctionCall_Error_FCall_Error;
+			}
+			return 0;
 			
 		case TASK_FCALL_TASK_TREE_STATUS:
 			
@@ -2860,6 +2883,14 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				case TC_Event_Stop:
 				
 					taskControl->stopIterationsFlag = TRUE; // interation function in progress completes normally and no further iterations are requested.
+					
+					if (FunctionCall(taskControl, &eventpacket[i], TC_Callback_IterationStop, NULL, &errMsg) < 0) {
+						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+						taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+						OKfree(errMsg);
+						ChangeState(taskControl, &eventpacket[i], TC_State_Error);
+						break;
+					}
 					break;
 					
 				case TC_Event_UpdateChildTCState:

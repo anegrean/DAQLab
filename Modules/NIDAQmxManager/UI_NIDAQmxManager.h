@@ -174,11 +174,6 @@
 #define  Chan_ChanSet                     2       /* control type: tab, callback function: (none) */
 
      /* tab page panel controls */
-#define  CLKPAN_Plate                     2       /* control type: deco, callback function: (none) */
-#define  CLKPAN_RefClkFreq                3       /* control type: numeric, callback function: (none) */
-#define  CLKPAN_RefClkSource              4       /* control type: string, callback function: (none) */
-
-     /* tab page panel controls */
 #define  Set_BlockSize                    2       /* control type: numeric, callback function: (none) */
 #define  Set_AutoOversampling             3       /* control type: radioButton, callback function: (none) */
 #define  Set_ActualSamplingRate           4       /* control type: numeric, callback function: (none) */
@@ -191,18 +186,16 @@
 #define  Set_Oversampling                 11      /* control type: numeric, callback function: (none) */
 
      /* tab page panel controls */
-#define  SETPAN_Plate                     2       /* control type: deco, callback function: (none) */
-#define  SETPAN_SinkVChanName             3       /* control type: string, callback function: (none) */
-#define  SETPAN_SrcVChanName              4       /* control type: string, callback function: (none) */
-#define  SETPAN_Timeout                   5       /* control type: numeric, callback function: (none) */
-
-     /* tab page panel controls */
 #define  Timing_RefClkSource              2       /* control type: string, callback function: (none) */
 #define  Timing_Plate                     3       /* control type: deco, callback function: (none) */
 #define  Timing_StartRouting              4       /* control type: string, callback function: (none) */
 #define  Timing_SampleClkSource           5       /* control type: string, callback function: (none) */
 #define  Timing_RefClkFreq                6       /* control type: numeric, callback function: (none) */
 #define  Timing_Timeout                   7       /* control type: numeric, callback function: (none) */
+
+     /* tab page panel controls */
+#define  TimingPan_Plate                  2       /* control type: deco, callback function: (none) */
+#define  TimingPan_ClockSource            3       /* control type: string, callback function: (none) */
 
      /* tab page panel controls */
 #define  Trig_TrigSet                     2       /* control type: tab, callback function: (none) */
@@ -212,6 +205,11 @@
 #define  TrigPan_Slope                    3       /* control type: ring, callback function: (none) */
 #define  TrigPan_TrigType                 4       /* control type: ring, callback function: (none) */
 #define  TrigPan_Source                   5       /* control type: string, callback function: (none) */
+
+     /* tab page panel controls */
+#define  VChanPan_Plate                   2       /* control type: deco, callback function: (none) */
+#define  VChanPan_SinkVChanName           3       /* control type: string, callback function: (none) */
+#define  VChanPan_SrcVChanName            4       /* control type: string, callback function: (none) */
 
 
      /* Control Arrays: */

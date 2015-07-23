@@ -262,7 +262,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	
 	// create VUPhotonCtr Task Controller
 	tc = init_TaskControl_type (instanceName, vupc, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, StartTC, 
-												 	  ResetTC, DoneTC, StoppedTC, TaskTreeStateChange, TCActive, ModuleEventHandler, ErrorTC); // module data added to the task controller below
+												 	  ResetTC, DoneTC, StoppedTC, NULL, TaskTreeStateChange, TCActive, ModuleEventHandler, ErrorTC); // module data added to the task controller below
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
 	
 	//------------------------------------------------------------

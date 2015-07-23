@@ -148,7 +148,8 @@ DAQLabModule_type* initalloc_XYStage (DAQLabModule_type* mod, char className[], 
 	
 	// initialize Task Controller from child class
 	
-	stage->taskController 		= init_TaskControl_type (instanceName, stage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStateChange, NULL, StageEventHandler, ErrorTC);
+	stage->taskController 		= init_TaskControl_type (instanceName, stage, DLGetCommonThreadPoolHndl(), ConfigureTC, NULL, IterateTC, StartTC, ResetTC, DoneTC, StoppedTC, 
+								  NULL, TaskTreeStateChange, NULL, StageEventHandler, ErrorTC);
 	
 	//---------------------------
 	// Parent Level 0: DAQLabModule_type 

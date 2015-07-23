@@ -564,7 +564,7 @@ static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomMo
 	errChk( DLGetXMLElementAttributes(pockellsXMLElement, eomAttr, NumElem(eomAttr)) );
 	
 	nullChk( taskController = init_TaskControl_type(taskControllerName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
-									  StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC) );
+									  StartTC, ResetTC, DoneTC, StoppedTC, NULL, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC) );
 	// configure task controller
 	TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL);
 	
@@ -753,7 +753,7 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	
 	
 	nullChk(taskController = init_TaskControl_type(taskControllerName, eom, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
-									  StartTC, ResetTC, DoneTC, StoppedTC, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC) );
+									  StartTC, ResetTC, DoneTC, StoppedTC, NULL, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC) );
 	// configure task controller
 	TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL);
 	

@@ -136,7 +136,7 @@ DAQLabModule_type*	initalloc_DataStorage (DAQLabModule_type* mod, char className
 	
 	// create Data Storage Task Controller
 	tc = init_TaskControl_type (instanceName, ds, DLGetCommonThreadPoolHndl(), NULL, NULL, NULL, NULL, NULL,
-								 NULL, NULL, TaskTreeStateChange, NULL, NULL, ErrorTC);
+								 NULL, NULL, NULL, TaskTreeStateChange, NULL, NULL, ErrorTC);
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&ds); return NULL;}
 	
 	//------------------------------------------------------------

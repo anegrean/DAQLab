@@ -734,8 +734,7 @@ typedef struct {
 	HWTrigMaster_type*			HWTrigMaster;				// If this task is a master HW trigger, otherwise NULL.
 	HWTrigSlave_type*			HWTrigSlave;				// If this task is a slave HW trigger, otherwise NULL.
 	PulseTrain_type*			pulseTrain;					// Pulse train info.
-	char*         				refClkSource;  				// Reference clock source used to sync internal clock, if NULL internal clock has no reference clock. 
-	double        				refClkFreq;    				// Reference clock frequency if such a clock is used.
+	char*         				clockSource;  				// Clock source used for CO ticks output. If NULL, internal clock has no reference clock. note: Clock source for CO Frequency and Co Time is Implicit.
 } ChanSet_CO_type;
 
 //--------------------
@@ -848,7 +847,7 @@ typedef struct {
 	int							panHndl;					// Panel handle to task settings.
 	TaskHandle					taskHndl;					// DAQmx task handle for hw-timed CO.
 	ListType 					chanTaskSet;     			// Channel and task settings. Of ChanSet_CO_type*
-	double        				timeout;       				// Task timeout [s]
+	//double        				timeout;       				// Task timeout [s]
 } COTaskSet_type;
 
 // DAQ Task definition
@@ -1116,7 +1115,7 @@ static ChanSet_CI_Frequency_type* 	init_ChanSet_CI_Frequency_type 			(Dev_type* 
 static void 						discard_ChanSet_CI_Frequency_type 		(ChanSet_CI_Frequency_type** chanSetPtr);
 
 	// CO
-static ChanSet_CO_type* 			init_ChanSet_CO_type 					(Dev_type* dev, char physChanName[], Channel_type chanType, char referenceClkSource[], double referenceClkFrequency, PulseTrain_type* pulseTrain);
+static ChanSet_CO_type* 			init_ChanSet_CO_type 					(Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain);
 static void 						discard_ChanSet_CO_type 				(ChanSet_CO_type** chanSetPtr);
 static int 							ChanSetCO_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);	// <---------- check & cleanup!!!
 
@@ -1381,6 +1380,8 @@ static int							StartTC									(TaskControl_type* taskControl, BOOL const* abo
 static int							DoneTC									(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
 
 static int							StoppedTC								(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+
+static int 							IterationStopTC 						(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
 
 static int							TaskTreeStateChange 					(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
 
@@ -2267,24 +2268,20 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				uInt32							pulseMode				= 0;
 				uInt32							idlePulseState			= 0;
 				uInt64							nPulses					= 0;
-				char*							refClkSource			= NULL;
-				double							refClkFreq				= 0;
 				double							highTime				= 0;
 				double							lowTime					= 0;
 				double							initialDelay			= 0;
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
 																			{"NPulses",					BasicData_UInt64,		&nPulses},
-																			{"ReferenceClockSource", 	BasicData_CString,		&refClkSource},
-																			{"ReferenceClockFrequency", BasicData_Double,		&refClkFreq},
 																			{"PulseHighTime",			BasicData_Double,		&highTime},
 																			{"PulseLowTime",			BasicData_Double,		&lowTime},
 																			{"PulseInitialDelay",		BasicData_Double,		&initialDelay}};
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTimeTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTime, lowTime, initialDelay) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, refClkSource, refClkFreq, (PulseTrain_type*)pulseTrain) );
-				OKfree(refClkSource);
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain) );
+				
 				// reserve channel
 				chanAttr->inUse = TRUE;
 				
@@ -2298,24 +2295,19 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				uInt32							pulseMode				= 0;
 				uInt32							idlePulseState			= 0;
 				uInt64							nPulses					= 0;
-				char*							refClkSource			= NULL;
-				double							refClkFreq				= 0;
 				double							frequency				= 0;
 				double							dutyCycle				= 0;
 				double							initialDelay			= 0;
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_UInt64,	&nPulses},
-																			{"ReferenceClockSource", 	BasicData_CString,		&refClkSource},
-																			{"ReferenceClockFrequency", BasicData_Double,		&refClkFreq},
+																			{"NPulses",					BasicData_UInt64,		&nPulses},
 																			{"Frequency",				BasicData_Double,		&frequency},
 																			{"DutyCycle",				BasicData_Double,		&dutyCycle},
 																			{"InitialDelay",			BasicData_Double,		&initialDelay} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainFreqTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, dutyCycle, frequency, initialDelay) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, refClkSource, refClkFreq, (PulseTrain_type*)pulseTrain) );
-				OKfree(refClkSource);
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 				
@@ -2329,25 +2321,23 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 				uInt32							pulseMode				= 0;
 				uInt32							idlePulseState			= 0;
 				uInt64							nPulses					= 0;
-				char*							refClkSource			= NULL;
-				double							refClkFreq				= 0;
+				char*							clockSource				= NULL;
 				uInt32							highTicks				= 0;
 				uInt32							lowTicks				= 0;
 				uInt32							delayTicks				= 0;
 				
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
-																			{"NPulses",					BasicData_UInt64,	&nPulses},
-																			{"ReferenceClockSource", 	BasicData_CString,		&refClkSource},
-																			{"ReferenceClockFrequency", BasicData_Double,		&refClkFreq},
+																			{"NPulses",					BasicData_UInt64,		&nPulses},
+																			{"ClockSource", 			BasicData_CString,		&clockSource},
 																			{"HighTicks",				BasicData_UInt,			&highTicks},
 																			{"LowTicks",				BasicData_UInt,			&lowTicks},
 																			{"DelayTicks",				BasicData_UInt,			&delayTicks} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTickTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTicks, lowTicks, delayTicks) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, refClkSource, refClkFreq, (PulseTrain_type*)pulseTrain) );
-				OKfree(refClkSource);
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, (PulseTrain_type*)pulseTrain) );
+				OKfree(clockSource);
 				// reserve channel
 				chanAttr->inUse = TRUE;
 				
@@ -2891,8 +2881,6 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
 																			{"NPulses",					BasicData_UInt64,		&nPulses},
-																			{"ReferenceClockSource", 	BasicData_CString,		&COChanSet->refClkSource},
-																			{"ReferenceClockFrequency", BasicData_Double,		&COChanSet->refClkFreq},
 																			{"PulseHighTime",			BasicData_Double,		&highTime},
 																			{"PulseLowTime",			BasicData_Double,		&lowTime},
 																			{"PulseInitialDelay",		BasicData_Double,		&initialDelay} };
@@ -2915,8 +2903,6 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
 																			{"NPulses",					BasicData_UInt64,		&nPulses},
-																			{"ReferenceClockSource", 	BasicData_CString,		&COChanSet->refClkSource},
-																			{"ReferenceClockFrequency", BasicData_Double,		&COChanSet->refClkFreq},
 																			{"Frequency",				BasicData_Double,		&frequency},
 																			{"DutyCycle",				BasicData_Double,		&dutyCycle},
 																			{"InitialDelay",			BasicData_Double,		&initialDelay} };
@@ -2939,8 +2925,7 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
 																			{"NPulses",					BasicData_UInt64,		&nPulses},
-																			{"ReferenceClockSource", 	BasicData_CString,		&COChanSet->refClkSource},
-																			{"ReferenceClockFrequency", BasicData_Double,		&COChanSet->refClkFreq},
+																			{"ClockSource", 			BasicData_CString,		&COChanSet->clockSource},
 																			{"HighTicks",				BasicData_UInt,			&highTicks},
 																			{"LowTicks",				BasicData_UInt,			&lowTicks},
 																			{"DelayTicks",				BasicData_UInt,			&delayTicks} };
@@ -3050,7 +3035,7 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type**
 	if (!dev) return NULL;
 	
 	// init
-	dev -> nActiveTasks=0;
+	dev -> nActiveTasks			= 0;
 
 
 	dev -> taskController		= NULL;
@@ -3059,7 +3044,7 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type**
 	// Task Controller
 	//-------------------------------------------------------------------------------------------------
 	dev -> taskController = init_TaskControl_type (taskControllerName, dev, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, StartTC, 
-						  ResetTC, DoneTC, StoppedTC, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC);
+						  ResetTC, DoneTC, StoppedTC, IterationStopTC, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC);
 	// set no iteration function timeout
 	SetTaskControlIterationTimeout(dev->taskController, -1);
 	
@@ -5686,7 +5671,7 @@ static int ChanSetCIEdge_CB (int panel, int control, int event, void *callbackDa
 	
 	switch(control) {
 			
-		case SETPAN_SrcVChanName:
+		case VChanPan_SrcVChanName:
 			
 			
 			newName = GetStringFromControl (panel, control);
@@ -5695,7 +5680,7 @@ static int ChanSetCIEdge_CB (int panel, int control, int event, void *callbackDa
 			
 			break;
 			
-		case SETPAN_SinkVChanName:
+		case VChanPan_SinkVChanName:
 			
 			newName = GetStringFromControl (panel, control);
 			DLRenameVChan((VChan_type*)chSet->baseClass.baseClass.sinkVChan, newName);
@@ -5752,7 +5737,7 @@ static void discard_ChanSet_CI_Frequency_type (ChanSet_CI_Frequency_type** chanS
 //------------------------------------------------------------------------------
 // ChanSet_CO_type
 //------------------------------------------------------------------------------
-static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], Channel_type chanType, char referenceClkSource[], double referenceClkFrequency, PulseTrain_type* pulseTrain)
+static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain)
 {
 	ChanSet_CO_type*	chanSet = malloc (sizeof(ChanSet_CO_type));
 	if (!chanSet) return NULL;
@@ -5767,8 +5752,7 @@ static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[]
 	chanSet->HWTrigMaster	= NULL;
 	chanSet->HWTrigSlave	= NULL;
 	chanSet->pulseTrain 	= pulseTrain;
-	chanSet->refClkSource	= StrDup(referenceClkSource);
-	chanSet->refClkFreq		= referenceClkFrequency;
+	chanSet->clockSource	= StrDup(clockSource);
 	
 	return chanSet;
 	
@@ -5816,16 +5800,7 @@ static int ChanSetCO_CB (int panel, int control, int event, void *callbackData, 
 	
 	switch(control) {
 			
-		case SETPAN_Timeout:
-			
-			GetCtrlVal(panel, control, &COChan->baseClass.device->COTaskSet->timeout);
-			
-			// configure CO task
-			errChk ( ConfigDAQmxCOTask(COChan->baseClass.device, &errMsg) ); 
-			
-			break;
-		
-		case SETPAN_SrcVChanName:
+		case VChanPan_SrcVChanName:
 			
 			newName = GetStringFromControl (panel, control);
 			DLRenameVChan((VChan_type*)COChan->baseClass.srcVChan, newName);
@@ -5833,7 +5808,7 @@ static int ChanSetCO_CB (int panel, int control, int event, void *callbackData, 
 			
 			break;
 			
-		case SETPAN_SinkVChanName:
+		case VChanPan_SinkVChanName:
 			
 			newName = GetStringFromControl (panel, control);
 			DLRenameVChan((VChan_type*)COChan->baseClass.sinkVChan, newName);
@@ -6229,7 +6204,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							
 						newChan->baseClass.baseClass.srcVChan = init_SourceVChan_type(newVChanName, DL_Waveform_Double, newChan, NULL);  
 						DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newChan->baseClass.baseClass.srcVChan);
-						SetCtrlVal(newChan->baseClass.baseClass.chanPanHndl, SETPAN_SrcVChanName, newVChanName);
+						SetCtrlVal(newChan->baseClass.baseClass.chanPanHndl, VChanPan_SrcVChanName, newVChanName);
 						OKfree(newVChanName);
 							
 						//---------------------------------------
@@ -6513,7 +6488,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					}
 					
 					
-					ChanSet_CO_type* newChan 	=  init_ChanSet_CO_type(dev, chName, chanType, NULL, DAQmxDefault_Task_RefClkFreq, pulseTrain);
+					ChanSet_CO_type* newChan 	=  init_ChanSet_CO_type(dev, chName, chanType, NULL, pulseTrain);
 						
 					// insert new channel tab
 					int chanSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOChSet);  
@@ -6539,19 +6514,19 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					
 					int settingsPanHndl;
 					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_SettingsTabIdx, &settingsPanHndl);
-					GetCtrlVal(settingsPanHndl, SETPAN_Timeout, &dev->COTaskSet->timeout);
+					//GetCtrlVal(settingsPanHndl, TimingPan_Timeout, &dev->COTaskSet->timeout);
 						
 					// add callback to controls in the panel
 					SetCtrlsInPanCBInfo(newChan, ChanSetCO_CB, settingsPanHndl);   
 								
 					//--------------------------
-					// adjust "Timing" tab
+					// adjust "Pulse" tab
 					//--------------------------
 					
-					// delete empty Timing tab
+					// delete empty Pulse tab
 					DeleteTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, 1); 
 					
-					int 					timingPanHndl	= 0;	
+					int 					pulsePanHndl	= 0;	
 					int 					COPulsePanHndl	= 0;
 					PulseTrainIdleStates	idleState		= 0;
 					int 					ctrlIdx			= 0;
@@ -6563,41 +6538,41 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COFreqPan);
 							InsertPanelAsTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
 							DiscardPanel(COPulsePanHndl);
-							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Timing");
-							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
+							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Pulse");
+							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &pulsePanHndl);
 							
 							// add control callbacks
-							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Frequency_CB, timingPanHndl);
+							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Frequency_CB, pulsePanHndl);
 							
 							// init idle state
 							idleState = GetPulseTrainIdleState(newChan->pulseTrain);
 							switch (idleState) {
 								
 								case PulseTrainIdle_Low:
-									SetCtrlIndex(timingPanHndl, COFreqPan_IdleState, 0);
+									SetCtrlIndex(pulsePanHndl, COFreqPan_IdleState, 0);
 									break;
 								case PulseTrainIdle_High:
-									SetCtrlIndex(timingPanHndl, COFreqPan_IdleState, 1);
+									SetCtrlIndex(pulsePanHndl, COFreqPan_IdleState, 1);
 									break;
 							}
 							
 							// init frequency
-							SetCtrlVal(timingPanHndl, COFreqPan_Frequency, GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)newChan->pulseTrain)); 					// display in [Hz]
+							SetCtrlVal(pulsePanHndl, COFreqPan_Frequency, GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)newChan->pulseTrain)); 					// display in [Hz]
 							
 							// init duty cycle
-							SetCtrlVal(timingPanHndl, COFreqPan_DutyCycle, GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)newChan->pulseTrain)); 				// display in [%]
+							SetCtrlVal(pulsePanHndl, COFreqPan_DutyCycle, GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)newChan->pulseTrain)); 				// display in [%]
 							
 							// init initial delay
-							SetCtrlVal(timingPanHndl, COFreqPan_InitialDelay, GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)newChan->pulseTrain)*1e3); 	// display in [ms]
+							SetCtrlVal(pulsePanHndl, COFreqPan_InitialDelay, GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)newChan->pulseTrain)*1e3); 	// display in [ms]
 							
 							// init CO generation mode
-							InsertListItem(timingPanHndl, COFreqPan_Mode, -1, "Finite", Operation_Finite);
-							InsertListItem(timingPanHndl, COFreqPan_Mode, -1, "Continuous", Operation_Continuous);
-							GetIndexFromValue(timingPanHndl, COFreqPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
-							SetCtrlIndex(timingPanHndl, COFreqPan_Mode, ctrlIdx);
+							InsertListItem(pulsePanHndl, COFreqPan_Mode, -1, "Finite", Operation_Finite);
+							InsertListItem(pulsePanHndl, COFreqPan_Mode, -1, "Continuous", Operation_Continuous);
+							GetIndexFromValue(pulsePanHndl, COFreqPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
+							SetCtrlIndex(pulsePanHndl, COFreqPan_Mode, ctrlIdx);
 							
 							// init CO N Pulses
-							SetCtrlVal(timingPanHndl, COFreqPan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
+							SetCtrlVal(pulsePanHndl, COFreqPan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
 							
 							break;
 									
@@ -6606,41 +6581,41 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COTimePan);
 							InsertPanelAsTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
 							DiscardPanel(COPulsePanHndl);
-							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Timing");
-							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
+							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Pulse");
+							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &pulsePanHndl);
 							
 							// add control callbacks
-							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Time_CB, timingPanHndl);
+							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Time_CB, pulsePanHndl);
 							
 							// init idle state
 							idleState = GetPulseTrainIdleState(newChan->pulseTrain);
 							switch (idleState) {
 								
 								case PulseTrainIdle_Low:
-									SetCtrlIndex(timingPanHndl, COTimePan_IdleState, 0);
+									SetCtrlIndex(pulsePanHndl, COTimePan_IdleState, 0);
 									break;
 								case PulseTrainIdle_High:
-									SetCtrlIndex(timingPanHndl, COTimePan_IdleState, 1);
+									SetCtrlIndex(pulsePanHndl, COTimePan_IdleState, 1);
 									break;
 							}
 							
 							// init high time
-							SetCtrlVal(timingPanHndl, COTimePan_HighTime, GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 			// display in [ms]
+							SetCtrlVal(pulsePanHndl, COTimePan_HighTime, GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 			// display in [ms]
 							
 							// init low time
-							SetCtrlVal(timingPanHndl, COTimePan_LowTime, GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 				// display in [ms]
+							SetCtrlVal(pulsePanHndl, COTimePan_LowTime, GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 				// display in [ms]
 							
 							// init initial delay
-							SetCtrlVal(timingPanHndl, COTimePan_InitialDelay, GetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 	// display in [ms]
+							SetCtrlVal(pulsePanHndl, COTimePan_InitialDelay, GetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 	// display in [ms]
 							
 							// init CO generation mode
-							InsertListItem(timingPanHndl, COTimePan_Mode, -1, "Finite", Operation_Finite);
-							InsertListItem(timingPanHndl, COTimePan_Mode, -1, "Continuous", Operation_Continuous);
-							GetIndexFromValue(timingPanHndl, COTimePan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
-							SetCtrlIndex(timingPanHndl, COTimePan_Mode, ctrlIdx);
+							InsertListItem(pulsePanHndl, COTimePan_Mode, -1, "Finite", Operation_Finite);
+							InsertListItem(pulsePanHndl, COTimePan_Mode, -1, "Continuous", Operation_Continuous);
+							GetIndexFromValue(pulsePanHndl, COTimePan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
+							SetCtrlIndex(pulsePanHndl, COTimePan_Mode, ctrlIdx);
 							
 							// init CO N Pulses
-							SetCtrlVal(timingPanHndl, COTimePan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
+							SetCtrlVal(pulsePanHndl, COTimePan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
 									
 							break;
 									
@@ -6649,63 +6624,70 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COTicksPan);
 							InsertPanelAsTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
 							DiscardPanel(COPulsePanHndl);
-							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Timing");
-							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl);
+							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Pulse");
+							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &pulsePanHndl);
 							
 							// add control callbacks
-							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Ticks_CB, timingPanHndl);
+							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Ticks_CB, pulsePanHndl);
 							
 							// init idle state
 							idleState = GetPulseTrainIdleState(newChan->pulseTrain);
 							switch (idleState) {
 								
 								case PulseTrainIdle_Low:
-									SetCtrlIndex(timingPanHndl, COTicksPan_IdleState, 0);
+									SetCtrlIndex(pulsePanHndl, COTicksPan_IdleState, 0);
 									break;
 								case PulseTrainIdle_High:
-									SetCtrlIndex(timingPanHndl, COTicksPan_IdleState, 1);
+									SetCtrlIndex(pulsePanHndl, COTicksPan_IdleState, 1);
 									break;
 							}
 							
 							// init high ticks
-							SetCtrlVal(timingPanHndl, COTicksPan_HighTicks, GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));
+							SetCtrlVal(pulsePanHndl, COTicksPan_HighTicks, GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));
 							
 							// init low ticks
-							SetCtrlVal(timingPanHndl, COTicksPan_LowTicks, GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));
+							SetCtrlVal(pulsePanHndl, COTicksPan_LowTicks, GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));
 							
 							// init initial delay ticks
-							SetCtrlVal(timingPanHndl, COTicksPan_InitialDelay, GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));   
+							SetCtrlVal(pulsePanHndl, COTicksPan_InitialDelay, GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));   
 							
 							// init CO generation mode
-							InsertListItem(timingPanHndl, COTicksPan_Mode, -1, "Finite", Operation_Finite);
-							InsertListItem(timingPanHndl, COTicksPan_Mode, -1, "Continuous", Operation_Continuous);
-							GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
-							SetCtrlIndex(timingPanHndl, COTicksPan_Mode, ctrlIdx);
+							InsertListItem(pulsePanHndl, COTicksPan_Mode, -1, "Finite", Operation_Finite);
+							InsertListItem(pulsePanHndl, COTicksPan_Mode, -1, "Continuous", Operation_Continuous);
+							GetIndexFromValue(pulsePanHndl, COTicksPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
+							SetCtrlIndex(pulsePanHndl, COTicksPan_Mode, ctrlIdx);
 							
 							// init CO N Pulses
-							SetCtrlVal(timingPanHndl, COTicksPan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
+							SetCtrlVal(pulsePanHndl, COTicksPan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
 							
 							break;
 					}
 
 					//--------------------------
-					// adjust "Clk" tab
+					// adjust "Timing" tab
 					//--------------------------
 					// get timing tab panel handle
 						
-					int clkPanHndl;
-					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_ClkTabIdx, &clkPanHndl);
+					int 	timingPanHndl = 0;
+					
+					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_ClkTabIdx, &timingPanHndl);
 					
 					// add callback to controls in the panel
 					// note: this must be done before changing the string control to a terminal control!
-					SetCtrlsInPanCBInfo(newChan, Chan_CO_Clk_CB, clkPanHndl);
+					SetCtrlsInPanCBInfo(newChan, Chan_CO_Clk_CB, timingPanHndl);
 					
 					// make sure that the host controls are not dimmed before inserting terminal controls!
-					NIDAQmx_NewTerminalCtrl(clkPanHndl, CLKPAN_RefClkSource, 0); // single terminal selection
+					NIDAQmx_NewTerminalCtrl(timingPanHndl, TimingPan_ClockSource, 0); // single terminal selection
 					
 					// adjust sample clock terminal control properties
-					NIDAQmx_SetTerminalCtrlAttribute(clkPanHndl, CLKPAN_RefClkSource, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
-					NIDAQmx_SetTerminalCtrlAttribute(clkPanHndl, CLKPAN_RefClkSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+					NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, TimingPan_ClockSource, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
+					NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, TimingPan_ClockSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+					
+					// if CO channel type is ticks then undim clock source control, and dim it otherwise (do this after inserting the custom control)
+					if (chanType == Chan_CO_Pulse_Ticks)
+						SetCtrlAttribute(timingPanHndl, TimingPan_ClockSource, ATTR_DIMMED, FALSE);
+					else
+						SetCtrlAttribute(timingPanHndl, TimingPan_ClockSource, ATTR_DIMMED, TRUE);
 						
 					//--------------------------
 					// adjust "Trigger" tab
@@ -6774,7 +6756,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							
 					}
 					
-					SetCtrlVal(settingspanel, SETPAN_SrcVChanName, pulseTrainSourceVChanName);  	
+					SetCtrlVal(settingspanel, VChanPan_SrcVChanName, pulseTrainSourceVChanName);  	
 					// register Source VChan with DAQLab
 					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) newChan->baseClass.srcVChan);
 					
@@ -6811,7 +6793,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					newChan->baseClass.sinkVChan	= init_SinkVChan_type(pulseTrainSinkVChanName, &allowedPulseTrainPacket, 1, 
 																					 newChan, VChan_Data_Receive_Timeout, COPulseTrainSinkVChan_StateChange); 
 					
-					SetCtrlVal(settingspanel, SETPAN_SinkVChanName, pulseTrainSinkVChanName);  
+					SetCtrlVal(settingspanel, VChanPan_SinkVChanName, pulseTrainSinkVChanName);  
 					// register VChan with DAQLab
 					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) newChan->baseClass.sinkVChan);	
 					AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, CO_DataReceivedTC); 
@@ -9013,7 +8995,7 @@ static COTaskSet_type* init_COTaskSet_type (Dev_type* dev)
 	if (!taskSet) return NULL;
 	
 	// init
-	taskSet->timeout				= DAQmxDefault_Task_Timeout;
+	//taskSet->timeout				= DAQmxDefault_Task_Timeout;
 	taskSet->chanTaskSet			= 0;
 	taskSet->dev					= dev;
 	taskSet->panHndl				= 0;
@@ -9309,7 +9291,7 @@ Error:
 	return 0;
 }
 
-static int CVICALLBACK Chan_CO_Clk_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK Chan_CO_Clk_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	ChanSet_CO_type* 	selectedChan 	= callbackData; 
 	char*				errMsg			= NULL;
@@ -9320,20 +9302,18 @@ static int CVICALLBACK Chan_CO_Clk_CB	(int panel, int control, int event, void *
 	
 	switch (control) { 
 			
-		case CLKPAN_RefClkSource:
+		case TimingPan_ClockSource:
 			
-			OKfree(selectedChan->refClkSource);
+			OKfree(selectedChan->clockSource);
 			GetCtrlValStringLength(panel, control, &buffSize);
-			selectedChan->refClkSource = malloc((buffSize+1) * sizeof(char)); // including ASCII null
-			GetCtrlVal(panel, control, selectedChan->refClkSource);
+			selectedChan->clockSource = malloc((buffSize+1) * sizeof(char)); // including ASCII null
+			GetCtrlVal(panel, control, selectedChan->clockSource);
 			break;
 			
-		case CLKPAN_RefClkFreq:
+	//	case TimingPan_Timeout:
 			
-			GetCtrlVal(panel, control, &selectedChan->refClkFreq); 	// read in [MHz]
-			selectedChan->refClkFreq *= 1e6;						// comvert to [Hz]
-			break;
-			
+	//		GetCtrlVal(panel, control, &selectedChan->baseClass.device->COTaskSet->timeout);
+	//		break;
 	}
 	
 	// configure CO task
@@ -10422,8 +10402,6 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 	
 	ChanSet_type* 		chanSet			= NULL;
 	size_t				nCIChan			= 0;
-	char*				refClkSrc		= NULL;
-	char*				sampleClkSrc	= NULL;
 	char* 				taskName		= NULL;
 	
 	
@@ -10468,43 +10446,40 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 				DAQmxErrChk(DAQmxCreateTask(taskName, &chCIFreq->baseClass.taskHndl) );
 				OKfree(taskName);
 				
-				sampleClkSrc 	= chCIFreq->taskTiming.sampClkSource;
-				refClkSrc 		= chCIFreq->taskTiming.refClkSource;
-				
-				DAQmxErrChk (DAQmxCreateCIFreqChan(chCIFreq->baseClass.taskHndl, chanSet->name, "", chCIFreq->freqMin, chCIFreq->freqMax, DAQmx_Val_Hz, 
-												   chCIFreq->baseClass.activeEdge, chCIFreq->measMethod, chCIFreq->measTime, chCIFreq->divisor, NULL));
+				DAQmxErrChk ( DAQmxCreateCIFreqChan(chCIFreq->baseClass.taskHndl, chanSet->name, "", chCIFreq->freqMin, chCIFreq->freqMax, DAQmx_Val_Hz, 
+												   chCIFreq->baseClass.activeEdge, chCIFreq->measMethod, chCIFreq->measTime, chCIFreq->divisor, NULL) );
 				
 				// use another terminal for the counter if other than default
 				if (chCIFreq->freqInputTerminal)
-				DAQmxErrChk (DAQmxSetChanAttribute(chCIFreq->baseClass.taskHndl, chanSet->name, DAQmx_CI_Freq_Term, chCIFreq->freqInputTerminal));
+				DAQmxErrChk ( DAQmxSetChanAttribute(chCIFreq->baseClass.taskHndl, chanSet->name, DAQmx_CI_Freq_Term, chCIFreq->freqInputTerminal) );
 				
 				// sample clock source
 				// if no sample clock is given, then use OnboardClock by default
-				if (sampleClkSrc || sampleClkSrc[0])
-					DAQmxErrChk (DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, sampleClkSrc));
+				if (chCIFreq->taskTiming.sampClkSource || chCIFreq->taskTiming.sampClkSource[0])
+					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, chCIFreq->taskTiming.sampClkSource) );
 				else
-					DAQmxErrChk (DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 					
 				// sample clock edge
-				DAQmxErrChk (DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreq->taskTiming.sampClkEdge));
+				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreq->taskTiming.sampClkEdge) );
 	
 				// sampling rate
-				DAQmxErrChk (DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Rate, chCIFreq->taskTiming.sampleRate));
+				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Rate, chCIFreq->taskTiming.sampleRate) );
 	
 				// set operation mode: finite, continuous
-				DAQmxErrChk (DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampMode, chCIFreq->taskTiming.measMode));
+				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampMode, chCIFreq->taskTiming.measMode) );
 	
 				// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-				DAQmxErrChk (DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk));
+				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) );
 				
 				// set number of samples per channel for finite acquisition
 				if (chCIFreq->taskTiming.measMode == Operation_Finite)
-					DAQmxErrChk (DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampPerChan, chCIFreq->taskTiming.nSamples));
+					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampPerChan, chCIFreq->taskTiming.nSamples) );
 	
 				// if a reference clock is given, use it to synchronize the internal clock
-				if (refClkSrc && refClkSrc[0]) {  //chCIFreq->taskTiming->refClkSource
-					DAQmxErrChk (DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Src, refClkSrc));	  //chCIFreq->taskTiming->refClkSource
-					DAQmxErrChk (DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Rate, chCIFreq->taskTiming.refClkFreq));
+				if (chCIFreq->taskTiming.refClkSource && chCIFreq->taskTiming.refClkSource[0]) {  
+					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Src, chCIFreq->taskTiming.refClkSource) );
+					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Rate, chCIFreq->taskTiming.refClkFreq) );
 				}
 	
 				//----------------------
@@ -10677,9 +10652,15 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 				
 			case Chan_CO_Pulse_Ticks:
 				
-				DAQmxErrChk ( DAQmxCreateCOPulseChanTicks(chanSet->taskHndl, chanSet->baseClass.name, "", chanSet->referenceTrig->trigSource,
+				if (chanSet->clockSource && chanSet->clockSource[0])
+					DAQmxErrChk ( DAQmxCreateCOPulseChanTicks(chanSet->taskHndl, chanSet->baseClass.name, "", chanSet->clockSource,
+								 PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain), GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain),
+								 GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain)) );
+				else
+					DAQmxErrChk ( DAQmxCreateCOPulseChanTicks(chanSet->taskHndl, chanSet->baseClass.name, "", "OnboardClock",
 							 PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain), GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain),
 							 GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain)) );
+	
 	
 				break;
 				
@@ -10690,14 +10671,8 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 				return ConfigDAQmxCOTask_Err_ChanNotImplemented;
 		}
 		
-		// if a reference clock is given, use it to synchronize the internal clock
-		if (chanSet->refClkSource && chanSet->refClkSource[0]) {
-			DAQmxErrChk( DAQmxSetTimingAttribute(chanSet->taskHndl, DAQmx_RefClk_Src, chanSet->refClkSource) );
-			DAQmxErrChk( DAQmxSetTimingAttribute(chanSet->taskHndl, DAQmx_RefClk_Rate, chanSet->refClkFreq) );
-		}
-		
 		//----------------------
-		// Configure AI triggers
+		// Configure CO triggers
 		//----------------------
 		// configure start trigger
 		if (chanSet->startTrig)
@@ -10709,7 +10684,7 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 			
 				case Trig_AnalogEdge:
 					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0])
-						DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope, dev->AITaskSet->startTrig->level));  
+						DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->slope, chanSet->startTrig->level));  
 					break;
 			
 				case Trig_AnalogWindow:
@@ -10935,9 +10910,11 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 #define StopDAQmxTasks_Err_StoppingTasks	-1
 	
 	int 				error				= 0;  
+	char*				errMsg				= NULL;  
+	
 	int*				nActiveTasksPtr		= NULL;
 	bool32				taskDoneFlag		= FALSE;
-	char*				errMsg				= NULL;
+	
 	
 	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
 	// AI task
@@ -11499,7 +11476,7 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 				// n pulses
 				SetCtrlVal(timingPanHndl, COTicksPan_NPulses, nPulses);
 				// pulse mode (daqmx settings set before)
-				GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, (pulseMode)); 
+				GetIndexFromValue(timingPanHndl, COTicksPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(pulseMode)); 
 				SetCtrlIndex(timingPanHndl, COTicksPan_Mode, ctrlIdx);
 				break;
 		}
@@ -12323,7 +12300,7 @@ SkipPacket:
 	if ((stopAOTaskFlag &&writeLastBlock) || GetTaskControlAbortFlag(dev->taskController)) {
 		int*	nActiveTasksPtr = NULL;
 		
-		//write last block with adjusted size
+		// write last block with adjusted size
 		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, LastBlockSize, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL)); 
 		
 		DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
@@ -14586,26 +14563,60 @@ static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL 
 
 static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
-	//int			error 	= 0;
-	//char*		errMsg	= NULL;
 	Dev_type*	dev		= GetTaskControlModuleData(taskControl);
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(iterator));
 	
+	return 0;
+}
+
+static int IterationStopTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
+{
+	int 				error				= 0;  
+	char*				errMsg				= NULL; 
 	
+	Dev_type*	dev					= GetTaskControlModuleData(taskControl);
+	int*		nActiveTasksPtr		= NULL;
+	bool32		taskDoneFlag		= FALSE;
+	
+	
+	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+	
+	// stop CO tasks explicitely
+	if (dev->COTaskSet) {
+		ChanSet_CO_type* 	chanSet	= NULL;
+		size_t				nChans	= ListNumItems(dev->COTaskSet->chanTaskSet);
+	   	for (size_t i = 1; i <= nChans; i++) {	
+			chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);	
+			if (chanSet->taskHndl) {
+				DAQmxErrChk( DAQmxIsTaskDone(chanSet->taskHndl, &taskDoneFlag) ); 
+				if (!taskDoneFlag ) {
+					DAQmxErrChk( DAQmxStopTask(chanSet->taskHndl) );
+					(*nActiveTasksPtr)--;
+				}
+			}
+		}
+	}
+	
+	// check if iteration can be set to done
+	if (!*nActiveTasksPtr)
+		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
+		
+	CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	return 0;
+
+DAQmxError:
 	
-//Error:
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	nullChk(errMsg = malloc((buffsize+1) * sizeof(char)));
+	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
 	
-//	if (!errMsg)
-//		errMsg = StrDup("Out of memory");
+Error:
 	
-//	*errorInfo = FormatMsg(error, "StoppedTC", errMsg);   
-//	OKfree(errMsg);
-	
-//	return error; 
+	ReturnErrMsg("DAQmx IterationStopTC");
+	return error;
 }
 
 static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)

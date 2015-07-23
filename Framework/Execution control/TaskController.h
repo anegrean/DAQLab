@@ -71,6 +71,7 @@ typedef enum {
 	TC_Callback_Reset,							// Returns the TC to its Initial state.
 	TC_Callback_Done,							// Called when either a Finite TC finished all its iterations or when a Continuous TC was stopped.
 	TC_Callback_Stopped,						// Called when a TC was stopped manually.
+	TC_Callback_IterationStop,					// Called when a TC receives a TC_Event_Stop event while its iteration function is active. Use this carefully in conjuction with GetTaskControlIterationStopFlag () to stop ongoing processes and terminate the iteration.
 	TASK_FCALL_TASK_TREE_STATUS,				// Called when a Task Controller needs to dim or undim certain module controls and allow/prevent user interaction.
 	TASK_FCALL_SET_UITC_MODE,					// Called when an UITC has a parent Task Controller attached to or deattached from it.
 	TC_Callback_DataReceived,					// Called when data is written to a Sink VChan registered with the TC.
@@ -145,6 +146,12 @@ typedef int				(*DoneFptr_type) 					(TaskControl_type* taskControl, Iterator_ty
 // Called when a running finite Task Controller is stopped manually, before reaching a DONE state.
 typedef int				(*StoppedFptr_type) 				(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo); 
 
+// Called when the task controller receives a TC_Event_Stop while its iteration function is active and needs to terminate its iteration. After shutting down ongoing
+// operations, call if necessary TaskControlIterationDone ().
+// Note: This is similar to using GetTaskControlIterationStopFlag () which returns a flag. Do not make use of both methods at the same time to stop an ogoing process.
+
+typedef int				(*IterationStopFptr_type) 			(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo); 
+
 // Called when a Task Tree in which the Task Controller participates is started or stops/is stopped. This is called before the Start callback of the Task Controller.
 typedef int 			(*TaskTreeStateChangeFptr_type)		(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo); 
 
@@ -181,6 +188,7 @@ TaskControl_type*  	 	init_TaskControl_type				(const char						taskControllerNa
 												  		 	 ResetFptr_type					ResetFptr,
 														 	 DoneFptr_type					DoneFptr,
 														 	 StoppedFptr_type				StoppedFptr,
+															 IterationStopFptr_type			IterationStopFptr,
 															 TaskTreeStateChangeFptr_type	TaskTreeStateChangeFptr,
 															 SetUITCModeFptr_type			SetUITCModeFptr,
 														 	 ModuleEventFptr_type			ModuleEventFptr,
@@ -261,6 +269,11 @@ BOOL					GetTaskControlUITCFlag				(TaskControl_type* taskControl);
 
 	// Returns TRUE if iteration function must be aborted
 BOOL					GetTaskControlAbortFlag				(TaskControl_type* taskControl);
+
+	// Returns TRUE if an active iteration received a TC_Event_Stop and the iteration must be stopped. After shutting down ongoing
+	// operations, call if necessary TaskControlIterationDone ().
+	// Note: This is similar to using the IterationStopFptr_type callback. Do not make use of both methods at the same time to stop an ogoing process.
+BOOL					GetTaskControlIterationStopFlag		(TaskControl_type* taskControl);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions

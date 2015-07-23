@@ -501,7 +501,7 @@ static int DAQLab_Load (void)
 		
 		// create a new default UI Task Controller
 		newTaskController = init_TaskControl_type (NULL, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, StartUITC, 
-												 	  ResetUITC, DoneUITC, StoppedUITC, TaskTreeStateChangeUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
+												 	  ResetUITC, DoneUITC, StoppedUITC, NULL, TaskTreeStateChangeUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 		
 		errChk( DLLoadTaskControllerSettingsFromXML(newTaskController, (ActiveXMLObj_IXMLDOMElement_)UITaskControllerXMLNode, &xmlErrorInfo) );
 		
@@ -3304,7 +3304,7 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	
 	// create new task controller
 	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, StartUITC, 
-												  ResetUITC, DoneUITC, StoppedUITC, TaskTreeStateChangeUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
+												  ResetUITC, DoneUITC, StoppedUITC, NULL, TaskTreeStateChangeUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
 	
 	OKfree(newControllerName);
 	
@@ -3445,8 +3445,6 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 					
 				case TCPan1_StartStop:
 					
-					//test lex
-					//CVIProfSetCurrentThreadProfiling (TRUE);
 					Ttaskstart=Timer();     
 					
 					GetCtrlVal(panel,control,&starttask);

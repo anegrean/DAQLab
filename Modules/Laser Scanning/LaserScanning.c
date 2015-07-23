@@ -51,7 +51,7 @@
 #define ScanEngine_SourceVChan_ImageChannel					"image channel"				// Assembled image from a single detection channel. VChan of DL_Image type for frame scan and Allowed_Detector_Data_Types for point scan.
 #define ScanEngine_SinkVChan_DetectionChan					"detection channel"			// Incoming fluorescence signal to assemble an image from.
 #define ScanEngine_SourceVChan_Shutter_Command				"shutter command"
-#define ScanEngine_SourceVChan_PixelPulseTrain				"pixel pulse train"
+#define ScanEngine_SourceVChan_PixelPulseTrain				"pixel pulse train"			// Source VChan of DL_PulseTrain_Ticks type
 #define ScanEngine_SourceVChan_PixelSamplingRate			"pixel sampling rate"		// 1/pixel_dwell_time = pixel sampling rate in [Hz]
 #define ScanEngine_SourceVChan_NPixels						"detection channel n pixels"
 #define ScanEngine_SourceVChan_ROIHold						"ROI hold"
@@ -3801,7 +3801,7 @@ static ActiveNonResGalvoCal_type* init_ActiveNonResGalvoCal_type (LaserScanning_
 	cal->baseClass.scanAxisType  	= NonResonantGalvo;
 	cal->baseClass.Discard			= discard_ActiveNonResGalvoCal_type; // override
 	cal->baseClass.taskController	= init_TaskControl_type(calName, cal, DLGetCommonThreadPoolHndl(), ConfigureTC_NonResGalvoCal, UncofigureTC_NonResGalvoCal, IterateTC_NonResGalvoCal, StartTC_NonResGalvoCal, ResetTC_NonResGalvoCal, 
-								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, TaskTreeStateChange_NonResGalvoCal, NULL, NULL, NULL);
+								  DoneTC_NonResGalvoCal, StoppedTC_NonResGalvoCal, NULL, TaskTreeStateChange_NonResGalvoCal, NULL, NULL, NULL);
 	cal->baseClass.lsModule			= lsModule;
 	
 								  
@@ -4594,7 +4594,7 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 	//--------------------------------------------------------
 	// init task controller
 	nullChk( taskController	= init_TaskControl_type(engineName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC_RectRaster, UnconfigureTC_RectRaster, IterateTC_RectRaster, StartTC_RectRaster, ResetTC_RectRaster, 
-										  DoneTC_RectRaster, StoppedTC_RectRaster, TaskTreeStateChange_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster) );
+										  DoneTC_RectRaster, StoppedTC_RectRaster, NULL, TaskTreeStateChange_RectRaster, NULL, ModuleEventHandler_RectRaster, ErrorTC_RectRaster) );
 	
 	SetTaskControlIterationTimeout(taskController, TaskControllerIterationTimeout);
 	

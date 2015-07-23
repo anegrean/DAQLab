@@ -137,13 +137,14 @@ Data Received/
           <y:Fill color="#FFFF99" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" modelName="internal" modelPosition="t" textColor="#000000" visible="true" width="144.677734375" x="67.6611328125" y="4.0">Iteration Function Active</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="195.115234375" modelName="custom" textColor="#000000" visible="true" width="241.3515625" x="4.0" y="22.383364823162083">entry/
+          <y:NodeLabel alignment="left" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="209.81640625" modelName="custom" textColor="#000000" visible="true" width="241.3515625" x="4.0" y="7.682192948162083">entry/
 1. If (nIterations != 0 || Continuous TC), then 
 Call Iterate(), else 
 Send Iteration Done event to self;
 
 Stop/
 1. stopIterationsFlag = TRUE;
+2. Call IterationStop();
 
 Data Received/
 1. Call DataReceived();

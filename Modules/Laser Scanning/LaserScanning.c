@@ -916,9 +916,13 @@ static int 								LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXML
 
 static int 								LoadCfg_ScanChannels 								(ScanEngine_type* scanEngine, ActiveXMLObj_IXMLDOMElement_ scanEngineXMLElement, ERRORINFO* xmlErrorInfo);
 
+static int								LoadCfg_PointScan									(RectRaster_type* scanEngine, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
+
 static int 								SaveCfg 											(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo);
 
 static int 								SaveCfg_ScanChannels 								(ScanEngine_type* scanEngine, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ scanEngineXMLElement, ERRORINFO* xmlErrorInfo);
+
+static int								SaveCfg_PointScan									(RectRaster_type* scanEngine, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
 
 static int 								DisplayPanels										(DAQLabModule_type* mod, BOOL visibleFlag); 
 
@@ -1316,7 +1320,7 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	SetCtrlVal(pointScanPanHndl, PointTab_PulseON, rectRaster->pointJumpSettings->globalPointScanSettings.stimPulseONDuration);
 	SetCtrlVal(pointScanPanHndl, PointTab_PulseOFF, rectRaster->pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration);
 	
-	// round sequence settings to galvo sampling time
+	// round jump settings to galvo sampling time
 	rectRaster->pointJumpSettings->startDelayInitVal = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->startDelayInitVal);
 	rectRaster->pointJumpSettings->startDelayIncrement = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointJumpSettings->startDelayIncrement);
 	
@@ -1688,6 +1692,9 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 				// save scan engine attributes
 				errChk( DLAddToXMLElem(xmlDOM, scanInfoXMLElement, rectangleRasterAttr, DL_ATTRIBUTE, NumElem(rectangleRasterAttr), xmlErrorInfo) );
 				
+				// save point scan settings
+				errChk( SaveCfg_PointScan((RectRaster_type*)scanEngine, xmlDOM, scanEngineXMLElement, xmlErrorInfo) );
+				
 				break;
 		}
 	
@@ -1747,6 +1754,55 @@ Error:
 	
 	OKfreeCAHndl(scanChannelsXMLElement);
 	OKfreeCAHndl(scanChannelXMLElement);
+	return error;
+}
+
+static int SaveCfg_PointScan (RectRaster_type* scanEngine, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int								error						= 0;
+	
+	PointJumpSet_type*				pointJumpSettings			= scanEngine->pointJumpSettings;
+	ActiveXMLObj_IXMLDOMElement_	jumpSettingsXMLElement		= 0;
+	ActiveXMLObj_IXMLDOMElement_	pointSettingsXMLElement		= 0;
+	
+	uInt32							jumpMethod					= pointJumpSettings->jumpMethod;
+	
+	DAQLabXMLNode					jumpSettingsAttr[] 			= { {"Repeat",					BasicData_UInt,		&pointJumpSettings->nSequenceRepeat},
+																	{"StartDelay",				BasicData_Double,	&pointJumpSettings->startDelayInitVal},
+																	{"StartDelayIncrement",		BasicData_Double,	&pointJumpSettings->startDelayIncrement},
+																	{"RepeatWait",				BasicData_Double,	&pointJumpSettings->repeatWait},
+																	{"PointJumpMode", 			BasicData_UInt, 	&jumpMethod},
+																	{"Record",					BasicData_Bool,		&pointJumpSettings->record},
+																	{"NIntegrate",				BasicData_UInt,		&pointJumpSettings->nIntegration},
+																	{"Stimulate",				BasicData_Bool,		&pointJumpSettings->stimulate} };
+	
+	DAQLabXMLNode					pointSettingsAttr[] 		= { {"Hold", 					BasicData_Double, 	&pointJumpSettings->globalPointScanSettings.holdTime},
+																	{"StimulationDelay",		BasicData_Double,	&pointJumpSettings->globalPointScanSettings.stimDelay},
+																	{"NPulses",					BasicData_UInt,		&pointJumpSettings->globalPointScanSettings.nStimPulses},
+																	{"PulseONDuration",			BasicData_Double,	&pointJumpSettings->globalPointScanSettings.stimPulseONDuration},
+																	{"PulseOFFDuration",		BasicData_Double,	&pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration} };
+	
+	
+	// create jump settings XML element
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "JumpSettings", &jumpSettingsXMLElement) );
+	// save jump settings attributes
+	errChk( DLAddToXMLElem(xmlDOM, jumpSettingsXMLElement, jumpSettingsAttr, DL_ATTRIBUTE, NumElem(jumpSettingsAttr), xmlErrorInfo) );
+	
+	// create point settings XML element
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "PointSettings", &pointSettingsXMLElement) );
+	// save jump settings attributes
+	errChk( DLAddToXMLElem(xmlDOM, pointSettingsXMLElement, pointSettingsAttr, DL_ATTRIBUTE, NumElem(pointSettingsAttr), xmlErrorInfo) );
+	
+	// add jump and point settings XML elements to the parent XML element
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, xmlErrorInfo, jumpSettingsXMLElement, NULL) ); 
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, xmlErrorInfo, pointSettingsXMLElement, NULL) ); 
+	
+Error:
+	
+	// cleanup
+	OKfreeCAHndl(jumpSettingsXMLElement);
+	OKfreeCAHndl(pointSettingsXMLElement);
+	
 	return error;
 }
 
@@ -1909,6 +1965,9 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  module
 				
 				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, continuousFrameScan, nFrames, galvoSamplingRate, referenceClockFreq, 
 							 pixelDelay, height, heightOffset, width, widthOffset, pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
+				
+				// load point scan settings
+				errChk( LoadCfg_PointScan((RectRaster_type*)scanEngine, (ActiveXMLObj_IXMLDOMElement_)scanEngineNode, xmlErrorInfo) );
 				break;
 			
 		}
@@ -2004,7 +2063,7 @@ static int LoadCfg_ScanChannels (ScanEngine_type* scanEngine, ActiveXMLObj_IXMLD
 	DAQLabXMLNode					scanChannelAttr[] 			= { {"Color", BasicData_UInt, &chanColor} };
 	
 	// get channels XML element
-	DLGetSingleXMLElementFromElement(scanEngineXMLElement, "ScanChannels", &scanChannelsXMLElement);
+	errChk( DLGetSingleXMLElementFromElement(scanEngineXMLElement, "ScanChannels", &scanChannelsXMLElement) );
 	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(scanChannelsXMLElement, xmlErrorInfo, "Channel", &scanChannelsNodeList) );
 	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(scanChannelsNodeList, xmlErrorInfo, &nScanChannels) );
 	OKfreeCAHndl(scanChannelsXMLElement);
@@ -2037,6 +2096,62 @@ Error:
 	
 	return error;
 	
+}
+
+static int LoadCfg_PointScan (RectRaster_type* scanEngine, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
+{
+	int								error 						= 0;
+	
+	ActiveXMLObj_IXMLDOMElement_	jumpSettingsXMLElement		= 0;
+	ActiveXMLObj_IXMLDOMElement_	pointSettingsXMLElement		= 0;
+	
+	PointJumpSet_type*				pointJumpSettings			= NULL;
+	
+	// get jump settings XML element
+	errChk( DLGetSingleXMLElementFromElement(parentXMLElement, "JumpSettings", &jumpSettingsXMLElement) );
+	
+	// get point settings XML element
+	errChk( DLGetSingleXMLElementFromElement(parentXMLElement, "PointSettings", &pointSettingsXMLElement) );
+	
+	// skip loading point jump settings if either element is missing
+	if (!jumpSettingsXMLElement || !pointSettingsXMLElement) goto SkipLoad;
+	
+	// allocate memory for new point jump settings
+	nullChk( pointJumpSettings = init_PointJumpSet_type() );
+	
+	uInt32							jumpMethod					= 0;
+	DAQLabXMLNode					jumpSettingsAttr[] 			= { {"Repeat",					BasicData_UInt,		&pointJumpSettings->nSequenceRepeat},
+																	{"StartDelay",				BasicData_Double,	&pointJumpSettings->startDelayInitVal},
+																	{"StartDelayIncrement",		BasicData_Double,	&pointJumpSettings->startDelayIncrement},
+																	{"RepeatWait",				BasicData_Double,	&pointJumpSettings->repeatWait},
+																	{"PointJumpMode", 			BasicData_UInt, 	&jumpMethod},
+																	{"Record",					BasicData_Bool,		&pointJumpSettings->record},
+																	{"NIntegrate",				BasicData_UInt,		&pointJumpSettings->nIntegration},
+																	{"Stimulate",				BasicData_Bool,		&pointJumpSettings->stimulate} };
+	
+	DAQLabXMLNode					pointSettingsAttr[] 		= { {"Hold", 					BasicData_Double, 	&pointJumpSettings->globalPointScanSettings.holdTime},
+																	{"StimulationDelay",		BasicData_Double,	&pointJumpSettings->globalPointScanSettings.stimDelay},
+																	{"NPulses",					BasicData_UInt,		&pointJumpSettings->globalPointScanSettings.nStimPulses},
+																	{"PulseONDuration",			BasicData_Double,	&pointJumpSettings->globalPointScanSettings.stimPulseONDuration},
+																	{"PulseOFFDuration",		BasicData_Double,	&pointJumpSettings->globalPointScanSettings.stimPulseOFFDuration} };
+	
+	// get settings
+	errChk( DLGetXMLElementAttributes(jumpSettingsXMLElement, jumpSettingsAttr, NumElem(jumpSettingsAttr)) ); 
+	errChk( DLGetXMLElementAttributes(pointSettingsXMLElement, pointSettingsAttr, NumElem(pointSettingsAttr)) );
+	pointJumpSettings->jumpMethod = jumpMethod;
+	
+	// replace existing settings if there are any
+	discard_PointJumpSet_type(&scanEngine->pointJumpSettings);
+	scanEngine->pointJumpSettings = pointJumpSettings;
+
+SkipLoad:
+Error:
+		
+	// cleanup
+	OKfreeCAHndl(jumpSettingsXMLElement);
+	OKfreeCAHndl(pointSettingsXMLElement);
+	
+	return error;																
 }
 
 static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ axisCalibrationsElement, ERRORINFO* xmlErrorInfo)
@@ -6594,7 +6709,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// Display image
 				//--------------------------------------
 				// temporarily must be commented out for debug
-				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, &imgBuffer->image) ); 
+				//errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, &imgBuffer->image) ); 
+				discard_Image_type(&imgBuffer->image);
 				
 				//---------------------------------------------------
 				// Assemble composite image if all channels are ready

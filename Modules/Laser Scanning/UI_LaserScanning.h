@@ -100,13 +100,11 @@
 #define  PointTab_StimDelay               14      /* control type: numeric, callback function: (none) */
 #define  PointTab_Hold                    15      /* control type: numeric, callback function: (none) */
 #define  PointTab_DECORATION_2            16      /* control type: deco, callback function: (none) */
-#define  PointTab_DECORATION_3            17      /* control type: deco, callback function: (none) */
-#define  PointTab_DECORATION              18      /* control type: deco, callback function: (none) */
-#define  PointTab_SequenceLabel           19      /* control type: textMsg, callback function: (none) */
-#define  PointTab_TEXTMSG_2               20      /* control type: textMsg, callback function: (none) */
-#define  PointTab_TEXTMSG                 21      /* control type: textMsg, callback function: (none) */
-#define  PointTab_Record                  22      /* control type: radioButton, callback function: (none) */
-#define  PointTab_Stimulate               23      /* control type: radioButton, callback function: (none) */
+#define  PointTab_DECORATION              17      /* control type: deco, callback function: (none) */
+#define  PointTab_TEXTMSG_2               18      /* control type: textMsg, callback function: (none) */
+#define  PointTab_TEXTMSG                 19      /* control type: textMsg, callback function: (none) */
+#define  PointTab_Stimulate               20      /* control type: radioButton, callback function: (none) */
+#define  PointTab_Record                  21      /* control type: radioButton, callback function: (none) */
 
      /* tab page panel controls */
 #define  ScanTab_PixelSize                2       /* control type: numeric, callback function: (none) */

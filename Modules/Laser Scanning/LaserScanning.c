@@ -78,7 +78,7 @@
 #define CALPOINTS 											50
 #define SLOPE_OFFSET_DELAY									0.01		// Time to wait in [s] after a galvo step is made before estimating slope and offset parameters					
 #define RELERR 												0.05
-#define MINSNR												5
+#define MINSNR												10
 #define POSSAMPLES											200 		// Number of AI samples to read and average for one measurement of the galvo position
 #define POSTRAMPTIME										20.0		// Recording time in [ms] after a ramp signal is applied
 #define MAXFLYBACKTIME										20.0		// Maximum expected galvo flyback time in [ms].
@@ -90,7 +90,7 @@
 #define VAL_OVLD_ERR -8000
 #define Default_ActiveNonResGalvoCal_ScanTime				2.0			// Scan time in [s] to test if using triangle waveform scan	there is an overload		
 
-#define Default_ScanAxisCal_SampleRate						5e5			// Default sampling rate for galvo command and position in [Hz]
+#define Default_ScanAxisCal_SampleRate						1e5			// Default sampling rate for galvo command and position in [Hz]
 
 //-----------------------------------------------------------------------
 // Non-resonant galvo raster scan default & min max settings
@@ -187,7 +187,8 @@ struct ScanAxisCal {
 typedef struct{
 	size_t 					n;						// Number of steps.
 	double* 				stepSize;  				// Amplitude in [V] Pk-Pk of the command signal.
-	double* 				switchTime;				// Time in [ms] to make a jump of stepSize and settle within chosen step resolution.  
+	double* 				switchTime;				// Time in [ms] to make a jump of stepSize and settle within chosen step resolution.
+	double*					delay;					// Delay in [ms] from command onset until the galvo starts switching its position.
 } SwitchTimes_type;
 
 typedef struct{
@@ -673,7 +674,7 @@ static int CVICALLBACK 					NewScanAxisCalib_CB									(int panel, int control,
 
 static int 								FindSlope											(double* signal, size_t nsamples, double samplingRate, double signalStdDev, size_t nRep, double sloperelerr, double* maxslope); 
 static int 								MeasureLag											(double* signal1, double* signal2, int nelem); 
-static int 								GetStepTime 										(double* signal, size_t nSamples, double samplingRate, double lowLevel, double highLevel, double threshold, double* stepTimePtr, char** errInfo);
+static int 								GetStepTime 										(double* signal, size_t nSamples, double samplingRate, double lowLevel, double highLevel, double threshold, double* stepTimePtr, double* delayPtr, char** errInfo);
 
 	//-----------------------------------------
 	// Non-resonant galvo axis calibration data
@@ -697,7 +698,7 @@ static BOOL 							ValidateNewScanAxisCal								(char inputStr[], void* dataPtr
 	// switch times data
 static SwitchTimes_type* 				init_SwitchTimes_type								(void);
 
-static void 							discard_SwitchTimes_type 							(SwitchTimes_type** a);
+static void 							discard_SwitchTimes_type 							(SwitchTimes_type** switchTimesPtr);
 
 	// copies switch times data
 static SwitchTimes_type*				copy_SwitchTimes_type								(SwitchTimes_type* switchTimes);
@@ -706,7 +707,7 @@ static SwitchTimes_type*				copy_SwitchTimes_type								(SwitchTimes_type* swit
 
 static MaxSlopes_type* 					init_MaxSlopes_type 								(void);
 
-static void 							discard_MaxSlopes_type 								(MaxSlopes_type** a);
+static void 							discard_MaxSlopes_type 								(MaxSlopes_type** maxSlopesPtr);
 	// copies max slopes data
 static MaxSlopes_type* 					copy_MaxSlopes_type 								(MaxSlopes_type* maxSlopes);
 
@@ -735,8 +736,8 @@ static void								MaxTriangleWaveformScan								(NonResGalvoCal_type* cal, dou
 	// Moves the galvo between two positions given by startVoltage and endVoltage in [V] given a sampleRate in [Hz] and calibration data.
 	// The command signal is a ramp such that the galvo lags behind the command signal with a constant lag
 static Waveform_type* 					NonResGalvoMoveBetweenPoints 						(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
-static int 								NonResGalvoPointJumpTime 							(NonResGalvoCal_type* cal, double jumpAmplitude, double* jumpTime);
-static Waveform_type* 					NonResGalvoJumpBetweenPoints 						(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
+static int 								NonResGalvoPointJumpTime 							(NonResGalvoCal_type* cal, double jumpAmplitude, double* switchTimePtr, double* delayPtr);
+//static Waveform_type* 					NonResGalvoJumpBetweenPoints 						(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
 
 //-------------
 // Scan Engines
@@ -875,7 +876,7 @@ static void								NonResRectRasterScan_SetMinimumPointJumpStartDelay 	(RectRast
 	// convert a point ROI coordinate from a given scan setting to a command voltage for both scan axes
 static void 							NonResRectRasterScan_PointROIVoltage 				(RectRaster_type* rectRaster, Point_type* point, double* fastAxisCommandV, double* slowAxisCommandV);
 	// calculates the combined jump time for both scan axes to jump a given amplitude voltage in [V]
-static double							NonResRectRasterScan_JumpTime						(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude);
+static int 								NonResRectRasterScan_JumpTime 						(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude, double* jumpTimePtr, double* delayPtr);
 	// returns the number of active points that will be used for point jumping
 static size_t							NonResRectRasterScan_GetNumActivePoints				(RectRaster_type* rectRaster);
 	// assembles a point scan from a pixel stream
@@ -2181,6 +2182,7 @@ static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xml
 	
 	char*	switchTimesStepSizeStr 				= NULL;
 	char*	switchTimesSwitchTimeStr			= NULL;
+	char*	switchTimesDelayStr					= NULL;
 	char*	maxSlopesSlopeStr					= NULL;
 	char*	maxSlopesAmplitudeStr				= NULL;
 	char*	triangleCalCommandAmplitudeStr		= NULL;
@@ -2191,9 +2193,11 @@ static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xml
 	// convert switch times calibration data to string
 	nullChk( switchTimesStepSizeStr = malloc (nrgCal->switchTimes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
 	nullChk( switchTimesSwitchTimeStr = malloc (nrgCal->switchTimes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
+	nullChk( switchTimesDelayStr = malloc (nrgCal->switchTimes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
 	
 	Fmt(switchTimesStepSizeStr, CALIBRATION_DATA_TO_STRING, nrgCal->switchTimes->n, nrgCal->switchTimes->stepSize); 
 	Fmt(switchTimesSwitchTimeStr, CALIBRATION_DATA_TO_STRING, nrgCal->switchTimes->n, nrgCal->switchTimes->switchTime);
+	Fmt(switchTimesDelayStr, CALIBRATION_DATA_TO_STRING, nrgCal->switchTimes->n, nrgCal->switchTimes->delay);
 	
 	// convert max slopes calibration data to string
 	nullChk( maxSlopesSlopeStr = malloc (nrgCal->maxSlopes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
@@ -2214,9 +2218,10 @@ static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xml
 	Fmt(triangleCalResiduaLagStr, CALIBRATION_DATA_TO_STRING, nrgCal->triangleCal->n, nrgCal->triangleCal->resLag);
 	
 	// add calibration data to XML elements
-	DAQLabXMLNode 			switchTimesAttr[] 		= {	{"NElements", BasicData_UInt, &nrgCal->switchTimes->n},
-														{"StepSize", BasicData_CString, switchTimesStepSizeStr},
-														{"SwitchTime", BasicData_CString, switchTimesSwitchTimeStr} };
+	DAQLabXMLNode 			switchTimesAttr[] 		= {	{"NElements", 	BasicData_UInt, 	&nrgCal->switchTimes->n},
+														{"StepSize", 	BasicData_CString, 	switchTimesStepSizeStr},
+														{"SwitchTime", 	BasicData_CString, 	switchTimesSwitchTimeStr},
+														{"Delay",		BasicData_CString,	switchTimesDelayStr}};
 														
 	DAQLabXMLNode 			maxSlopesAttr[] 		= {	{"NElements", BasicData_UInt, &nrgCal->maxSlopes->n},
 														{"Slope", BasicData_CString, maxSlopesSlopeStr},
@@ -2247,6 +2252,7 @@ Error:
 	// cleanup
 	OKfree(switchTimesStepSizeStr);
 	OKfree(switchTimesSwitchTimeStr);
+	OKfree(switchTimesDelayStr);
 	OKfree(maxSlopesSlopeStr);
 	OKfree(maxSlopesAmplitudeStr);
 	OKfree(triangleCalCommandAmplitudeStr);
@@ -2293,32 +2299,34 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	char*							switchTimesStepSizeStr 			= NULL;
 	char*							switchTimesSwitchTimeStr		= NULL;
-	unsigned int					nSwitchTimes;
+	char*							switchTimesDelayStr				= NULL;
+	unsigned int					nSwitchTimes					= 0;
 	char*							maxSlopesSlopeStr				= NULL;
 	char*							maxSlopesAmplitudeStr			= NULL;
-	unsigned int					nMaxSlopes;
+	unsigned int					nMaxSlopes						= 0;
 	char*							triangleCalCommandAmplitudeStr	= NULL;
 	char*							triangleCalActualAmplitudeStr	= NULL;
 	char*							triangleCalMaxFreqStr			= NULL;
 	char*							triangleCalResiduaLagStr		= NULL;
-	unsigned int					nTriangleCal;
-	double							deadTime;
+	unsigned int					nTriangleCal					= 0;
+	double							deadTime						= 0;
 	
 	// get calibration data from XML elements
-	DAQLabXMLNode 					switchTimesAttr[] 				= {	{"NElements", BasicData_UInt, &nSwitchTimes},
-																		{"StepSize", BasicData_CString, &switchTimesStepSizeStr},
-																		{"SwitchTime", BasicData_CString, &switchTimesSwitchTimeStr} };
+	DAQLabXMLNode 					switchTimesAttr[] 				= {	{"NElements", 			BasicData_UInt, 	&nSwitchTimes},
+																		{"StepSize", 			BasicData_CString, 	&switchTimesStepSizeStr},
+																		{"SwitchTime", 			BasicData_CString, 	&switchTimesSwitchTimeStr},
+																		{"Delay",				BasicData_CString, 	&switchTimesDelayStr}};
 														
-	DAQLabXMLNode 					maxSlopesAttr[] 				= {	{"NElements", BasicData_UInt, &nMaxSlopes},
-																		{"Slope", BasicData_CString, &maxSlopesSlopeStr},
-																		{"Amplitude", BasicData_CString, &maxSlopesAmplitudeStr} };
+	DAQLabXMLNode 					maxSlopesAttr[] 				= {	{"NElements", 			BasicData_UInt, 	&nMaxSlopes},
+																		{"Slope", 				BasicData_CString, 	&maxSlopesSlopeStr},
+																		{"Amplitude", 			BasicData_CString, 	&maxSlopesAmplitudeStr} };
 														
-	DAQLabXMLNode 					triangleCalAttr[] 				= {	{"NElements", BasicData_UInt, &nTriangleCal}, 
-																		{"DeadTime", BasicData_Double, &deadTime},
-																		{"CommandAmplitude", BasicData_CString, &triangleCalCommandAmplitudeStr},
-																		{"ActualAmplitude", BasicData_CString, &triangleCalActualAmplitudeStr},
-																		{"MaxFrequency", BasicData_CString, &triangleCalMaxFreqStr},
-																		{"ResidualLag", BasicData_CString, &triangleCalResiduaLagStr} };
+	DAQLabXMLNode 					triangleCalAttr[] 				= {	{"NElements", 			BasicData_UInt, 	&nTriangleCal}, 
+																		{"DeadTime", 			BasicData_Double,	&deadTime},
+																		{"CommandAmplitude", 	BasicData_CString, 	&triangleCalCommandAmplitudeStr},
+																		{"ActualAmplitude", 	BasicData_CString, 	&triangleCalActualAmplitudeStr},
+																		{"MaxFrequency", 		BasicData_CString, 	&triangleCalMaxFreqStr},
+																		{"ResidualLag", 		BasicData_CString, 	&triangleCalResiduaLagStr} };
 	
 	// switch times
 	errChk( DLGetXMLElementAttributes(switchTimesXMLElement, switchTimesAttr, NumElem(switchTimesAttr)) );
@@ -2328,10 +2336,12 @@ static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj
 	
 	switchTimes->n 							= nSwitchTimes;
 	nullChk( switchTimes->switchTime		= malloc(nSwitchTimes * sizeof(double)) );
+	nullChk( switchTimes->delay				= malloc(nSwitchTimes * sizeof(double)) );
 	nullChk( switchTimes->stepSize			= malloc(nSwitchTimes * sizeof(double)) );
 	
 	Scan(switchTimesStepSizeStr, STRING_TO_CALIBRATION_DATA, switchTimes->n, switchTimes->stepSize);
-	Scan(switchTimesSwitchTimeStr, STRING_TO_CALIBRATION_DATA, switchTimes->n, switchTimes->switchTime);  
+	Scan(switchTimesSwitchTimeStr, STRING_TO_CALIBRATION_DATA, switchTimes->n, switchTimes->switchTime);
+	Scan(switchTimesDelayStr, STRING_TO_CALIBRATION_DATA, switchTimes->n, switchTimes->delay);  
 	
 	// max slopes
 	errChk( DLGetXMLElementAttributes(maxSlopesXMLElement, maxSlopesAttr, NumElem(maxSlopesAttr)) );
@@ -2378,6 +2388,7 @@ Error:
 	OKfree(axisCalibrationName);
 	OKfree(switchTimesStepSizeStr);
 	OKfree(switchTimesSwitchTimeStr);
+	OKfree(switchTimesDelayStr);
 	OKfree(maxSlopesSlopeStr);
 	OKfree(maxSlopesAmplitudeStr);
 	OKfree(triangleCalCommandAmplitudeStr);
@@ -2385,9 +2396,9 @@ Error:
 	OKfree(triangleCalMaxFreqStr);
 	OKfree(triangleCalResiduaLagStr);
 	
-	if (switchTimesXMLElement) OKfreeCAHndl(switchTimesXMLElement);
-	if (maxSlopesXMLElement) OKfreeCAHndl(maxSlopesXMLElement); 
-	if (triangleCalXMLElement) OKfreeCAHndl(triangleCalXMLElement);   
+	OKfreeCAHndl(switchTimesXMLElement);
+	OKfreeCAHndl(maxSlopesXMLElement); 
+	OKfreeCAHndl(triangleCalXMLElement);   
 	
 	return error;	
 }
@@ -2962,17 +2973,18 @@ static int MeasureLag(double* signal1, double* signal2, int nelem)
 }
 
 /// HIFN Analyzes a step response signal to calculate the step time in [ms] needed to cross two thresholds between a low-level and a high level.
-static int GetStepTime (double* signal, size_t nSamples, double samplingRate, double lowLevel, double highLevel, double threshold, double* stepTimePtr, char** errorInfo)
+static int GetStepTime (double* signal, size_t nSamples, double samplingRate, double lowLevel, double highLevel, double threshold, double* stepTimePtr, double* delayPtr, char** errorInfo)
 {
 #define GetStepTime_Err_Levels						-1
 #define GetStepTime_Err_LowLevelCrossingNotFound	-2
 #define GetStepTime_Err_HighLevelCrossingNotFound	-3
+#define GetStepTime_Err_LevelCrossingOrder			-4
 	
 	int		error		= 0;
 	char*	errMsg		= NULL;
 	
 	BOOL 	crossed		= FALSE; 		// flag showing if threshold was crossed 
-	//size_t	lowIdx		= 0;
+	size_t	lowIdx		= 0;
 	size_t	highIdx		= 0;
 	
 	
@@ -2984,39 +2996,6 @@ static int GetStepTime (double* signal, size_t nSamples, double samplingRate, do
 	}
 	
 	threshold = fabs(threshold); 		// make sure it's positive	
-	
-	/*
-	crossed = FALSE;
-	for (size_t i = 0; i < nSamples; i++) 
-		if (signal[i] > lowLevel + threshold) { 
-			lowIdx = i; 
-			crossed = TRUE; 
-			break;
-		}
-	
-	if (!crossed) { 
-		error 	= GetStepTime_Err_LowLevelCrossingNotFound;
-		errMsg 	= StrDup("Could not find low level crossing of signal");
-		goto Error;
-	}
-	
-	crossed = FALSE;
-	for (size_t i = nSamples - 1; i > 0; i--) 
-		if (signal[i] < highLevel - threshold) { 
-			highIdx = i; 
-			crossed = TRUE; 
-			break;
-		}
-	
-	if (!crossed) { 
-		error 	= GetStepTime_Err_HighLevelCrossingNotFound;
-		errMsg 	= StrDup("Could not find low level crossing of signal");
-		goto Error;
-	}
-	
-	*stepTimePtr = abs(highIdx - lowIdx) * 1e3/samplingRate;
-	
-	*/
 	
 	// calculate a simple high level crossing from the left side
 	for (size_t i = 0; i < nSamples; i++) 
@@ -3032,7 +3011,30 @@ static int GetStepTime (double* signal, size_t nSamples, double samplingRate, do
 		goto Error;
 	}
 	
-	*stepTimePtr = highIdx * 1e3/samplingRate;  
+	// calculate low level crossing
+	crossed = FALSE;
+	for (size_t i = 0; i < nSamples; i++) 
+		if (signal[i] > lowLevel + threshold) { 
+			lowIdx = i; 
+			crossed = TRUE; 
+			break;
+		}
+	
+	if (!crossed) { 
+		error 	= GetStepTime_Err_LowLevelCrossingNotFound;
+		errMsg 	= StrDup("Could not find low level crossing of signal");
+		goto Error;
+	}
+	
+	if (highIdx < lowIdx) { 
+		error 	= GetStepTime_Err_LevelCrossingOrder;
+		errMsg 	= StrDup("High level crossing occurs before low level crossing");
+		goto Error;
+	}
+		
+	*stepTimePtr = (highIdx-lowIdx) * 1e3/samplingRate;  
+	
+	*delayPtr = lowIdx * 1e3/samplingRate; 
 	
 	return 0;
 	
@@ -3760,10 +3762,8 @@ Error:
 
 // Estimates from the galvo calibration data, the time it takes the galvo to jump and settle in [ms] given a jump amplitude in [V].
 // If estimation is successful, the function return 0 and negative values otherwise.
-static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplitude, double* jumpTime)
+static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplitude, double* switchTimePtr, double* delayPtr)
 {
-#define NonResGalvoPointJumpTime_Err_JumpAmplitudeOutOfRange	-1
-	
 	int				error				= 0;
 	
 	double 			min					= 0;
@@ -3772,20 +3772,25 @@ static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplit
 	int    			maxIdx				= 0;
 	double* 		secondDerivatives	= NULL;
 	
-	// check if jump amplitude is within calibration range   
+	// make sure that jump amplitude is bounded to the calibration limits
+	// Warning: if jump amplitude is outside of these limits, incorrect results are possible
 	errChk( MaxMin1D(cal->switchTimes->stepSize, cal->switchTimes->n, &max, &maxIdx, &min, &minIdx) );
-	if ((fabs(jumpAmplitude) < min) || (fabs(jumpAmplitude) > max)) 
-		return NonResGalvoPointJumpTime_Err_JumpAmplitudeOutOfRange;
-	
+	if (fabs(jumpAmplitude) < min)
+		jumpAmplitude = min;
+	else
+		if (fabs(jumpAmplitude) > max)
+			jumpAmplitude = max;
+			
 	nullChk( secondDerivatives = malloc(cal->switchTimes->n * sizeof(double)) );
 	
-	// interpolate half-switch times vs. amplitude measurements
+	// interpolate switch times vs. amplitude measurements
 	errChk( Spline(cal->switchTimes->stepSize, cal->switchTimes->switchTime, cal->switchTimes->n, 0, 0, secondDerivatives) );
-	errChk( SpInterp(cal->switchTimes->stepSize, cal->switchTimes->switchTime, secondDerivatives,  cal->switchTimes->n, fabs(jumpAmplitude), jumpTime) );
-	OKfree(secondDerivatives);
+	errChk( SpInterp(cal->switchTimes->stepSize, cal->switchTimes->switchTime, secondDerivatives,  cal->switchTimes->n, fabs(jumpAmplitude), switchTimePtr) );
 	
-	return 0;
-	
+	// interpolate delay vs. amplitude measurements
+	errChk( Spline(cal->switchTimes->stepSize, cal->switchTimes->delay, cal->switchTimes->n, 0, 0, secondDerivatives) );
+	errChk( SpInterp(cal->switchTimes->stepSize, cal->switchTimes->delay, secondDerivatives,  cal->switchTimes->n, fabs(jumpAmplitude), delayPtr) );
+
 Error:
 	
 	OKfree(secondDerivatives);
@@ -3809,6 +3814,7 @@ startV _________________			:<----------->:
 				     
 */
 // sampleRate in [Hz], startVoltage and endVoltage in [V], startDelay and endDelay in [s]
+/*
 static Waveform_type* NonResGalvoJumpBetweenPoints (NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay)
 {
 	int				error				= 0;
@@ -3844,6 +3850,7 @@ Error:
 	
 	return NULL;
 }
+*/
 
 //returns -1 on error,0 if scan speed out of range, 1 if desiredspeed is within range
 // scanSize in [um], pixelDwellTime in [us], pixelSize in [um]
@@ -4108,27 +4115,34 @@ static SwitchTimes_type* init_SwitchTimes_type(void)
 	switchTimes->n          	= 0;
 	switchTimes->stepSize   	= NULL;
 	switchTimes->switchTime 	= NULL;	
+	switchTimes->delay		 	= NULL;	
 	
 	return switchTimes;
 }
 
-static void discard_SwitchTimes_type (SwitchTimes_type** a)
+static void discard_SwitchTimes_type (SwitchTimes_type** switchTimesPtr)
 {
-	if (!(*a)) return;
+	SwitchTimes_type*	switchTimes = *switchTimesPtr;
 	
-	OKfree((*a)->stepSize);
-	OKfree((*a)->switchTime);
-	OKfree(*a);
+	if (!switchTimes) return;
+	
+	OKfree(switchTimes->stepSize);
+	OKfree(switchTimes->switchTime);
+	OKfree(switchTimes->delay);
+	
+	OKfree(*switchTimesPtr);
 }
 
 static SwitchTimes_type* copy_SwitchTimes_type (SwitchTimes_type* switchTimes)
 {
+	int					error			= 0;
 	SwitchTimes_type*	switchTimesCopy = malloc(sizeof(SwitchTimes_type));
 	if (!switchTimesCopy) return NULL;
 	
 	// init
 	switchTimesCopy->n 				= switchTimes->n;
 	switchTimesCopy->switchTime		= NULL;
+	switchTimesCopy->delay			= NULL;
 	switchTimesCopy->stepSize		= NULL;
 	
 	
@@ -4136,13 +4150,17 @@ static SwitchTimes_type* copy_SwitchTimes_type (SwitchTimes_type* switchTimes)
 	// copy
 	//----------- 
 	if (!switchTimesCopy->n) return switchTimesCopy; 
-		// switchTime
-	switchTimesCopy->switchTime 	= malloc(switchTimes->n * sizeof(double));
-	if (!switchTimesCopy->switchTime) goto Error;
+	
+	// switchTime
+	nullChk( switchTimesCopy->switchTime 	= malloc(switchTimes->n * sizeof(double)) );
 	memcpy(switchTimesCopy->switchTime, switchTimes->switchTime, switchTimes->n * sizeof(double));
-		// stepSize
-	switchTimesCopy->stepSize 		= malloc(switchTimes->n * sizeof(double));
-	if (!switchTimesCopy->stepSize) goto Error;
+	
+	// delay
+	nullChk( switchTimesCopy->delay 	= malloc(switchTimes->n * sizeof(double)) );
+	memcpy(switchTimesCopy->delay, switchTimes->delay, switchTimes->n * sizeof(double));
+	
+	// stepSize
+	nullChk( switchTimesCopy->stepSize 		= malloc(switchTimes->n * sizeof(double)) );
 	memcpy(switchTimesCopy->stepSize, switchTimes->stepSize, switchTimes->n * sizeof(double));
 	
 	return switchTimesCopy;
@@ -4152,6 +4170,7 @@ Error:
 	OKfree(switchTimesCopy->switchTime);
 	OKfree(switchTimesCopy->stepSize);
 	OKfree(switchTimesCopy);
+	
 	return NULL;
 }
 
@@ -4246,13 +4265,16 @@ static MaxSlopes_type* init_MaxSlopes_type (void)
 	return maxSlopes;
 }
 
-static void discard_MaxSlopes_type (MaxSlopes_type** a)
+static void discard_MaxSlopes_type (MaxSlopes_type** maxSlopesPtr)
 {
-	if (!(*a)) return; 
+	MaxSlopes_type* maxSlopes = *maxSlopesPtr;
 	
-	OKfree((*a)->slope);
-	OKfree((*a)->amplitude);
-	OKfree(*a);
+	if (!maxSlopes) return; 
+	
+	OKfree(maxSlopes->slope);
+	OKfree(maxSlopes->amplitude);
+	
+	OKfree(*maxSlopesPtr);
 }
 
 static TriangleCal_type* init_TriangleCal_type (void)
@@ -5812,6 +5834,8 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	double						slowAxisStepVoltage							= 0;	// Slow axis staircase step voltage in [V]. 
 	
 	double						flybackTime									= 0;	// Slow-axis fly back time in [ms] after completing a framescan.
+	double						flybackSwitchTime							= 0;
+	double						flybackSwitchDelay							= 0;	
 	uInt32						nFastAxisFlybackLines						= 0;
 	DSInfo_type*				dsInfo										= NULL;
 
@@ -5835,7 +5859,9 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	slowAxisAmplitude 		= (scanEngine->scanSettings.height - 1) * slowAxisStepVoltage;
 	slowAxisStartVoltage 	= scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement - slowAxisAmplitude/2;
 	
-	NonResGalvoPointJumpTime((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal, slowAxisAmplitude, &flybackTime);  
+	NonResGalvoPointJumpTime((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal, slowAxisAmplitude, &flybackSwitchTime, &flybackSwitchDelay);  
+	flybackTime = flybackSwitchTime + flybackSwitchDelay;
+	
 	nFastAxisFlybackLines 	= (uInt32) ceil(flybackTime*1e3/lineDuration);
 	// store this value in the image buffers
 	for (size_t i = 0; i < scanEngine->nImgBuffers; i++)
@@ -6135,7 +6161,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	size_t					nGalvoJumpSamples				= 0;		// number of galvo samples during a galvo jump cycle.
 	size_t					nExtraStartDelaySamples			= 0;		// number of galvo samples to keep the galvos at their parked position after the golbal start time point.
 	size_t					nHoldSamples					= 0;		// number of galvo samples during a point ROI hold period.
-	size_t					nGalvoLagSamples				= 0;		// number of galvo lag samples for both galvos to react to a command signal (value is the greater of the two).
+	//size_t					nGalvoLagSamples				= 0;		// number of galvo lag samples for both galvos to react to a command signal (value is the greater of the two).
 	size_t					nStimPulseONSamples				= 0;		// number of galvo samples during a stimulation pulse ON period.
 	size_t					nStimPulseOFFSamples			= 0;		// number of galvo samples during a stimulation pulse OFF period.
 	size_t					nStimPulseDelaySamples			= 0; 		// number of galvo samples from the start of a point ROI hold period to the onset of stimulation.
@@ -6158,7 +6184,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	DataPacket_type*		dataPacket						= NULL; 
 	NonResGalvoCal_type*	fastAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
-	double					galvoLag						= 0;
+	//double					galvoLag						= 0;
 	double					totalJumpTime					= 0;	  	// time in [ms] from the global start trigger until the point jump cycle completes.
 	double					extraStartDelay					= 0;		// time in [ms] from the global start trigger before the galvos initiate their jumps.
 	Iterator_type*			iterator						= GetTaskControlIterator(scanEngine->baseClass.taskControl);
@@ -6223,11 +6249,13 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	// Calculate galvo jump times
 	//-----------------------------------------------
 	
+	/*
 	// get the largest galvo lag between the X and Y axis (i.e. the delay between applying a command signal and having the galvo react to it)
 	if (fastAxisCal->lag > slowAxisCal->lag)
 		galvoLag = fastAxisCal->lag;
 	else
 		galvoLag = slowAxisCal->lag;
+	*/
 	
 	// calculate jump times from parked position, to each ROI and then back again to the parked position
 	OKfree(pointJumpSet->jumpTimes);
@@ -6235,11 +6263,9 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	pointJumpSet->jumpTimes = calloc(pointJumpSet->nJumpTimes, sizeof(double));
 	
 	for (size_t i = 0; i < pointJumpSet->nJumpTimes; i++) {
-		pointJumpSet->jumpTimes[i] = NonResRectRasterScan_JumpTime(scanEngine, fastAxisVoltages[i] - fastAxisVoltages[i+1], slowAxisVoltages[i] - slowAxisVoltages[i+1]);
+		errChk( NonResRectRasterScan_JumpTime(scanEngine, fastAxisVoltages[i] - fastAxisVoltages[i+1], slowAxisVoltages[i] - slowAxisVoltages[i+1], &pointJumpSet->jumpTimes[i], NULL) );
 		totalJumpTime += pointJumpSet->jumpTimes[i];
 	}
-	
-	
 	
 	extraStartDelay = pointJumpSet->startDelay - pointJumpSet->minStartDelay;
 	
@@ -6280,7 +6306,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	// calculate number of samples during galvo position holding time at a point ROI
 	nExtraStartDelaySamples	= (size_t)RoundRealToNearestInteger(extraStartDelay * 1e-3 * scanEngine->galvoSamplingRate);
 	nHoldSamples 			= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.holdTime * 1e-3 * scanEngine->galvoSamplingRate);
-	nGalvoLagSamples		= (size_t)RoundRealToNearestInteger(galvoLag * 1e-3 * scanEngine->galvoSamplingRate);
+	//nGalvoLagSamples		= (size_t)RoundRealToNearestInteger(galvoLag * 1e-3 * scanEngine->galvoSamplingRate);
 	nStimPulseONSamples 	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimPulseONDuration * 1e-3 * scanEngine->galvoSamplingRate);
 	nStimPulseOFFSamples 	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimPulseOFFDuration * 1e-3 * scanEngine->galvoSamplingRate);
 	nStimPulseDelaySamples	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimDelay * 1e-3 * scanEngine->galvoSamplingRate);
@@ -6308,7 +6334,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		// set ROI stimulate signal
 		if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate))
 			for (uInt32 pulse = 0; pulse < pointJumpSet->globalPointScanSettings.nStimPulses; pulse++)
-				for (size_t j = nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples+nStimPulseOFFSamples); 
+				for (size_t j = nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples + nStimPulseOFFSamples); 
 					j < nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples+nStimPulseOFFSamples) + nStimPulseONSamples; j++)
 					ROIStimulateSignal[j] = TRUE;
 		
@@ -7024,28 +7050,44 @@ static void NonResRectRasterScan_PointROIVoltage (RectRaster_type* rectRaster, P
 	
 }
 
-static double NonResRectRasterScan_JumpTime	(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude)
+static int NonResRectRasterScan_JumpTime (RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude, double* jumpTimePtr, double* delayPtr)
 {
-	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
-	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
-	double					jumpTime			= 0;
-	double					fastAxisJumpTime	= 0;
-	double					slowAxisJumpTime	= 0;
+	int						error					= 0;
+	
+	NonResGalvoCal_type*	fastAxisCal				= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
+	NonResGalvoCal_type*	slowAxisCal				= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
+	double					jumpTime				= 0;
+	double					fastAxisSwitchTime		= 0;
+	double					fastAxisSwitchDelay		= 0;
+	double					slowAxisSwitchTime		= 0;
+	double					slowAxisSwitchDelay		= 0;
+	double					fastAxisJumpTime		= 0;
+	double					slowAxisJumpTime		= 0;
 	
 	// fast axis jump time
-	NonResGalvoPointJumpTime(fastAxisCal, fastAxisAmplitude, &fastAxisJumpTime);
+	errChk( NonResGalvoPointJumpTime(fastAxisCal, fastAxisAmplitude, &fastAxisSwitchTime, &fastAxisSwitchDelay) );
+	fastAxisJumpTime = fastAxisSwitchTime + fastAxisSwitchDelay; 
 	// slow axis jump time
-	NonResGalvoPointJumpTime(slowAxisCal, slowAxisAmplitude, &slowAxisJumpTime);
-	// set jump time to be the largest jump time of the two scan axes
-	if (fastAxisJumpTime > slowAxisJumpTime)
-		jumpTime = fastAxisJumpTime;
-	else
-		jumpTime = slowAxisJumpTime;
+	errChk( NonResGalvoPointJumpTime(slowAxisCal, slowAxisAmplitude, &slowAxisSwitchTime, &slowAxisSwitchDelay) );
+	slowAxisJumpTime = slowAxisSwitchTime + slowAxisSwitchDelay;
 	
-	// round up to a multiple of galvo sampling time
-	jumpTime = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, jumpTime);
-		
-	return jumpTime;
+	// set jump time to be the largest jump time of the two scan axes (i.e. the jump time includes the switch delay and switch time)
+	if (jumpTimePtr)
+		if (fastAxisJumpTime > slowAxisJumpTime)
+			*jumpTimePtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, fastAxisJumpTime);  
+		else
+			*jumpTimePtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, slowAxisJumpTime);
+	
+	// set switch delay to be the smallest of the two scan axes (i.e. during this time both galvos are within their initial position given a calibration resolution)
+	if (delayPtr)
+		if (fastAxisSwitchDelay < slowAxisSwitchDelay)
+			*delayPtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, fastAxisSwitchDelay);
+		else
+			*delayPtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, slowAxisSwitchDelay);
+	
+Error:	
+	
+	return error;
 }
 
 static size_t NonResRectRasterScan_GetNumActivePoints (RectRaster_type* rectRaster)
@@ -7172,6 +7214,7 @@ Error:
 
 static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type* rectRaster)
 {
+	int						error				= 0;
 	PointJumpSet_type*		pointJumpSet		= rectRaster->pointJumpSettings;
 	double					fastAxisCommandV	= 0;
 	double					slowAxisCommandV	= 0;
@@ -7183,7 +7226,6 @@ static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type*
 	size_t					nPointJumps			= 0;	// Number of active points to jump to from pointJumps array.
 	Point_type*				pointJump			= NULL;
 	double					jumpTime			= 0;
-	double					galvoLag			= 0;
 	
 	// get points to jump to from the parked position
 	for (size_t i = 1; i <= nTotalPoints; i++) {
@@ -7194,12 +7236,6 @@ static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type*
 		pointJumps[nPointJumps - 1] = pointJump;
 	}
 	
-	// get the largest galvo lag between the X and Y axis (i.e. the delay between applying a command signal and having the galvo react to it)
-	if (fastAxisCal->lag > slowAxisCal->lag)
-		galvoLag = fastAxisCal->lag;
-	else
-		galvoLag = slowAxisCal->lag;
-	
 	switch (rectRaster->pointJumpSettings->jumpMethod) {
 		
 		case PointJump_SinglePoints:
@@ -7207,9 +7243,9 @@ static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type*
 			pointJumpSet->minStartDelay = 0;
 			for (size_t i = 0; i < nPointJumps; i++) {
 				NonResRectRasterScan_PointROIVoltage(rectRaster, pointJumps[i], &fastAxisCommandV, &slowAxisCommandV);
-				jumpTime = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
-				if (jumpTime + galvoLag > pointJumpSet->minStartDelay)
-					pointJumpSet->minStartDelay = jumpTime + galvoLag;
+				errChk( NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV, &jumpTime, NULL) );
+				if (jumpTime > pointJumpSet->minStartDelay)
+					pointJumpSet->minStartDelay = jumpTime;
 			}
 			break;
 			
@@ -7217,8 +7253,8 @@ static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type*
 			
 			if (nPointJumps) {
 				NonResRectRasterScan_PointROIVoltage(rectRaster, pointJumps[0], &fastAxisCommandV, &slowAxisCommandV);
-				jumpTime = NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV);
-				pointJumpSet->minStartDelay = jumpTime + galvoLag;
+				errChk( NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV, &jumpTime, NULL) );
+				pointJumpSet->minStartDelay = jumpTime;
 			}
 			break;
 	}
@@ -7229,6 +7265,9 @@ static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type*
 		SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, pointJumpSet->startDelayInitVal);
 	}
 	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, ATTR_MIN_VALUE, pointJumpSet->minStartDelay);  
+
+	
+Error:
 	
 	// cleanup
 	OKfree(pointJumps);
@@ -8323,8 +8362,8 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 				int calibPanHndl;
 				GetPanelHandleFromTabPage(cal->baseClass.calPanHndl, NonResGCal_Tab, 0, &calibPanHndl);
 				
-				// slope
-				SetCtrlVal(calibPanHndl, Cal_ResponseLag, *cal->lag);
+				// lag
+				SetCtrlVal(calibPanHndl, Cal_ResponseLag, *cal->lag * 1e3);   // display in [us]
 				SetCtrlAttribute(calibPanHndl, Cal_ResponseLag, ATTR_DIMMED, 0);
 				
 			} else {
@@ -8435,41 +8474,15 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// calculate corrected position signal based on scaling and offset
 			for (size_t i = 0; i < postStepSamples; i++) averageResponse[i] = *cal->slope * averageResponse[i] + *cal->offset;
 			
-			/*
-			// find 50% crossing point where response is halfway between the applied step
-			for (size_t i = 0; i < postStepSamples; i++) 
-				if (averageResponse[i] > 0) { 
-					cal->switchTimes->n++;
-					cal->switchTimes->stepSize = realloc (cal->switchTimes->stepSize, cal->switchTimes->n * sizeof(double));
-					cal->switchTimes->stepSize[cal->switchTimes->n - 1] = 2*cal->commandVMax * amplitudeFactor;
-					cal->switchTimes->switchTime = realloc (cal->switchTimes->switchTime, cal->switchTimes->n * sizeof(double));
-					cal->switchTimes->switchTime[cal->switchTimes->n - 1] = i / *cal->baseClass.comSampRate * 1000;
-						
-					// plot switching time
-					double x, y;
-					PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 2 * cal->commandVMax * amplitudeFactor, cal->switchTimes->switchTime[cal->switchTimes->n - 1]  * 1000 , VAL_ASTERISK, VAL_BLUE);
-					GetGraphCursor(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 1, &x, &y);
-					SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorX, x);
-					SetCtrlVal(cal->baseClass.calPanHndl, NonResGCal_CursorY, y);
-						
-					break;
-				}
-			*/
 			cal->switchTimes->n++;
 			cal->switchTimes->stepSize = realloc (cal->switchTimes->stepSize, cal->switchTimes->n * sizeof(double));
 			cal->switchTimes->stepSize[cal->switchTimes->n - 1] = 2*cal->commandVMax * amplitudeFactor;
 			cal->switchTimes->switchTime = realloc (cal->switchTimes->switchTime, cal->switchTimes->n * sizeof(double));
+			cal->switchTimes->delay = realloc (cal->switchTimes->delay, cal->switchTimes->n * sizeof(double));
 			
-			errChk( GetStepTime(averageResponse, postStepSamples, *cal->baseClass.comSampRate, -cal->commandVMax * amplitudeFactor, cal->commandVMax * amplitudeFactor, cal->resolution, &cal->switchTimes->switchTime[cal->switchTimes->n - 1], &errMsg) );
-			// check if step time is larger than the galvo lag, and if so, give error
-			if (cal->switchTimes->switchTime[cal->switchTimes->n - 1] < *cal->lag) {
-				TaskControlIterationDone(cal->baseClass.taskController, IterateTC_NonResGalvoCal_Err_SwitchTimeShorterThanGalvoLag, "Galvo switch time is shorter than the galvo lag", FALSE);
-				break;
-			}
+			errChk( GetStepTime(averageResponse, postStepSamples, *cal->baseClass.comSampRate, -cal->commandVMax * amplitudeFactor, cal->commandVMax * amplitudeFactor, cal->resolution, 
+								&cal->switchTimes->switchTime[cal->switchTimes->n - 1], &cal->switchTimes->delay[cal->switchTimes->n - 1], &errMsg) );
 			
-			// subtract galvo lag
-			cal->switchTimes->switchTime[cal->switchTimes->n - 1] -= *cal->lag;
-				
 			// plot switching time
 			double x, y;
 			PlotPoint(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, 2 * cal->commandVMax * amplitudeFactor, cal->switchTimes->switchTime[cal->switchTimes->n - 1]  * 1000 , VAL_ASTERISK, VAL_BLUE);

@@ -8599,7 +8599,7 @@ static ReadAIData_type* init_ReadAIData_type (Dev_type* dev)
 {
 	ReadAIData_type*	readAI 		= NULL;
 	size_t				nAITotal	= ListNumItems(dev->AITaskSet->chanSet);
-	ChanSet_type**		chanSetPtr	= NULL;
+	ChanSet_type*		chanSet		= NULL;
 	size_t				nAI			= 0; 
 	size_t				chIdx		= 0;
 	
@@ -8609,8 +8609,9 @@ static ReadAIData_type* init_ReadAIData_type (Dev_type* dev)
 	
 	// count number of AI channels using HW-timing
 	for (size_t i = 1; i <= nAITotal; i++) {	
-		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
-		if (!(*chanSetPtr)->onDemand) nAI++;
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
+		nAI++;
 	}
 	
 	// init
@@ -8624,10 +8625,10 @@ static ReadAIData_type* init_ReadAIData_type (Dev_type* dev)
 	if ( !(readAI->nIntBuffElem = calloc(nAI, sizeof(uInt32))) ) goto Error;
 	if ( !(readAI->intBuffers 	= calloc(nAI, sizeof(float64*))) ) goto Error;
 	for (size_t i = 1; i <= nAITotal; i++) {
-		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
-		if ((*chanSetPtr)->onDemand) continue;
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 		
-		if ( !(readAI->intBuffers[chIdx] = calloc(dev->AITaskSet->timing->oversampling + dev->AITaskSet->timing->blockSize, sizeof(float64))) ) goto Error;
+		if ( !(readAI->intBuffers[chIdx] = calloc(dev->AITaskSet->timing->oversampling * dev->AITaskSet->timing->blockSize, sizeof(float64))) ) goto Error;
 		
 		chIdx++;
 	}
@@ -10925,14 +10926,14 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 			(*nActiveTasksPtr)--;
 			
 			// send NULL data packets to AI channels used in the DAQmx task
-			size_t				nChans			= ListNumItems(dev->AITaskSet->chanSet); 
-			ChanSet_type**		chanSetPtr; 
+			size_t				nChans		= ListNumItems(dev->AITaskSet->chanSet); 
+			ChanSet_type*		chanSet		= NULL; 
 			for (size_t i = 1; i <= nChans; i++) { 
-				chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+				chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 				// include only channels for which HW-timing is required
-				if ((*chanSetPtr)->onDemand) continue;
+				if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 				// send NULL packet to signal end of data transmission
-				errChk( SendNullPacket((*chanSetPtr)->srcVChan, &errMsg) );
+				errChk( SendNullPacket(chanSet->srcVChan, &errMsg) );
 			}
 			
 		}
@@ -11723,7 +11724,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	int					nRead;
 	int					error					= 0;
 	char*				errMsg					= NULL;
-	ChanSet_type**		chanSetPtr				= NULL;
+	ChanSet_type*		chanSet					= NULL;
 	size_t				nChans					= ListNumItems(dev->AITaskSet->chanSet);
 	size_t				chIdx					= 0;
 	
@@ -11735,11 +11736,11 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	DAQmxErrChk( DAQmxReadAnalogF64(taskHandle, nSamples, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel, readBuffer, nSamples * nAI, &nRead, NULL) );
 	
 	for (size_t i = 1; i <= nChans; i++) {
-		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
-		if ((*chanSetPtr)->onDemand) continue;
+		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 		// forward data from the AI buffer to the VChan
-		errChk( SendAIBufferData(dev, *chanSetPtr, chIdx, nRead, readBuffer, &errMsg) ); 
+		errChk( SendAIBufferData(dev, chanSet, chIdx, nRead, readBuffer, &errMsg) ); 
 		// next AI channel
 		chIdx++;
 	}
@@ -11763,14 +11764,12 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		CmtReleaseTSVPtr(dev->nActiveTasks);
 			
 		// send NULL data packets to AI channels used in the DAQmx task
-		size_t				nChans			= ListNumItems(dev->AITaskSet->chanSet); 
-		ChanSet_type**		chanSetPtr; 
 		for (size_t i = 1; i <= nChans; i++) { 
-			chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+			chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 			// include only channels for which HW-timing is required
-			if ((*chanSetPtr)->onDemand) continue;
+			if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 			// send NULL packet to signal end of data transmission
-			errChk( SendNullPacket((*chanSetPtr)->srcVChan, &errMsg) );
+			errChk( SendNullPacket(chanSet->srcVChan, &errMsg) );
 		}
 			
 	}
@@ -11812,7 +11811,7 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	int					error					= 0;
 	char*				errMsg					= NULL;
 	int					nRead					= 0;
-	ChanSet_type**		chanSetPtr				= NULL;
+	ChanSet_type*		chanSet					= NULL;
 	size_t				nChans					= ListNumItems(dev->AITaskSet->chanSet);
 	int*				nActiveTasksPtr			= NULL;
 	size_t				chIdx					= 0;
@@ -11826,12 +11825,12 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	// if there are no samples left in the buffer, send NULL data packet and stop here, otherwise read them out
 	if (!nSamples) {
 		for (size_t i = 1; i <= nChans; i++) {
-			chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+			chanSet = *(ChanSet_type**)ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 			// include only channels for which HW-timing is required
-			if ((*chanSetPtr)->onDemand) continue;
+			if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 			
 			// send NULL packet to signal end of data transmission
-			errChk( SendNullPacket((*chanSetPtr)->srcVChan, &errMsg) ); 
+			errChk( SendNullPacket(chanSet->srcVChan, &errMsg) ); 
 		}
 		// stop the Task
 		DAQmxErrChk( DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop) );
@@ -11857,13 +11856,13 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	DAQmxErrChk( DAQmxReadAnalogF64(taskHandle, -1, dev->AITaskSet->timeout, DAQmx_Val_GroupByChannel , readBuffer, nSamples * nAI, &nRead, NULL) );
 	
 	for (size_t i = 1; i <= nChans; i++) {
-		chanSetPtr = ListGetPtrToItem(dev->AITaskSet->chanSet, i);
+		chanSet = *(ChanSet_type**) ListGetPtrToItem(dev->AITaskSet->chanSet, i);
 		// include only channels for which HW-timing is required
-		if ((*chanSetPtr)->onDemand) continue;
+		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 		// forward data from AI buffer to the VChan 
-		errChk( SendAIBufferData(dev, *chanSetPtr, chIdx, nRead, readBuffer, &errMsg) ); 
+		errChk( SendAIBufferData(dev, chanSet, chIdx, nRead, readBuffer, &errMsg) ); 
 		// send NULL packet to signal end of data transmission
-		errChk( SendNullPacket((*chanSetPtr)->srcVChan, &errMsg) );
+		errChk( SendNullPacket(chanSet->srcVChan, &errMsg) );
 		// next AI channel
 		chIdx++;
 	}

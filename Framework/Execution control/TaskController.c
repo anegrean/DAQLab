@@ -151,6 +151,8 @@ static int									TaskTreeStateChange		 				(TaskControl_type* taskControl, Eve
 // Clears recursively all data packets from the Sink VChans of all Task Controllers in a Task Tree Branch starting with the given Task Controller.
 static int									ClearTaskTreeBranchVChans				(TaskControl_type* taskControl, char** errorInfo);
 
+static void									SetChildTCsOutOfDate					(TaskControl_type* taskControl);
+
 //==============================================================================
 // Global variables
 
@@ -739,6 +741,17 @@ static int ClearTaskTreeBranchVChans (TaskControl_type* taskControl, char** erro
 Error:
 	
 	return error;
+}
+
+static void SetChildTCsOutOfDate (TaskControl_type* taskControl)
+{
+	size_t				nChildTCs 		= ListNumItems(taskControl->childTCs);
+	ChildTCInfo_type*   childTCInfo		= NULL;
+	
+	for (size_t i = 1; i <= nChildTCs; i++) {
+		childTCInfo = ListGetPtrToItem(taskControl->childTCs, i);
+		childTCInfo->isOutOfDate = TRUE;
+	}
 }
 
 static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr)
@@ -1494,8 +1507,8 @@ int	AddChildTCToParent (TaskControl_type* parent, TaskControl_type* child)
 int	RemoveChildTCFromParentTC (TaskControl_type* child)
 {
 	if (!child || !child->parentTC) return -1;
-	ChildTCInfo_type* 	childTCPtr;
-	size_t			nChildTCs	= ListNumItems(child->parentTC->childTCs);
+	ChildTCInfo_type* 	childTCPtr	= NULL;
+	size_t				nChildTCs	= ListNumItems(child->parentTC->childTCs);
 	for (size_t i = 1; i <= nChildTCs; i++) {
 		childTCPtr = ListGetPtrToItem(child->parentTC->childTCs, i);
 		if (child == childTCPtr->childTC) {
@@ -1992,6 +2005,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Iterate Task Controller
 					//---------------------------------------------------------------------------------------------------------------
 					
+					//SetChildTCsOutOfDate(taskControl);
+					
 					if (TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TC_Event_Iterate posting to self failed");
 						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
@@ -1999,7 +2014,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
-									
 					//---------------------------------------------------------------------------------------------------------------
 					// Switch to RUNNING state
 					//---------------------------------------------------------------------------------------------------------------
@@ -2153,6 +2167,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//---------------------------------------------------------------------------------------------------------------
 					// Switch to RUNNING state and iterate Task Controller
 					//---------------------------------------------------------------------------------------------------------------
+					
+					//SetChildTCsOutOfDate(taskControl);
 					
 					if (TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TC_Event_Iterate posting to self failed"); 
@@ -2521,11 +2537,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					childTCPtr->previousChildTCState 	= childTCPtr->childTCState; // save old state for debuging purposes 
 					childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState;
 					childTCPtr->isOutOfDate 			= FALSE; 
-					//test lex
-					if ((childTCPtr->previousChildTCState==TC_State_Done)&&childTCPtr->childTCState==TC_State_Done){
-						//break test
-						childTCPtr->previousChildTCState=TC_State_Done;	
-					}
+					
 					ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					
@@ -2548,14 +2560,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					if (!AllChildTCsInState(taskControl, TC_State_Done))  
 						break; // stop here
 					
-					//test lex
-					//put all child TC's out of date to prevent race here
-					size_t	nChildTCs 		= ListNumItems(taskControl->childTCs);
-					ChildTCInfo_type*   subTask			= NULL; 
-					for (size_t j = 1; j <= nChildTCs; j++) {
-						subTask = ListGetPtrToItem(taskControl->childTCs, j);
-						subTask->isOutOfDate = TRUE;
-					}
+					// put all child TC's out of date to prevent race here
+					SetChildTCsOutOfDate(taskControl);
 					
 					//---------------------------------------------------------------------------------------------------------------- 
 					// Decide on state transition
@@ -2804,6 +2810,9 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------- 
 							
 							if (!taskControl->stopIterationsFlag) {
+								
+								//SetChildTCsOutOfDate(taskControl); 
+								
 								if (TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TC_Event_Iterate posting to self failed"); 
 									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
@@ -2845,7 +2854,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							// Ask for another iteration and check later if iteration is needed or possible
 							//---------------------------------------------------------------------------------------------------------------- 
 							
-							if (!taskControl->stopIterationsFlag) { 
+							if (!taskControl->stopIterationsFlag) {
+								
+								//SetChildTCsOutOfDate(taskControl); 
+								
 								if (TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TC_Event_Iterate posting to self failed"); 
 									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;

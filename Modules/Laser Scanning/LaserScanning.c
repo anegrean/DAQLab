@@ -545,6 +545,8 @@ typedef struct {
 	size_t						currentActivePoint;			// 1-based index of current active point to visit when using the PointJump_SinglePoints mode.
 	PointScan_type				globalPointScanSettings;	// Global settings for stimulation and recording from point ROIs.
 	double*						jumpTimes;					// Array of galvo jump times between ROIs in [ms]. The first entry is the galvo jump time from the parked position to the first point ROI which does not include any additional start delay.
+															// Note: a jump time is the sum of a galvo response delay and a switching time between two ROIs.
+	double*						responseDelays;				// Array of galvo response delays in [ms] to a jump command. This value together with the switching time makes up a jump time.
 	size_t						nJumpTimes;					// Number of jumpTimes array elements.
 	
 } PointJumpSet_type;
@@ -672,7 +674,7 @@ static int CVICALLBACK 					NewScanAxisCalib_CB									(int panel, int control,
 
 static int 								FindSlope											(double* signal, size_t nsamples, double samplingRate, double signalStdDev, size_t nRep, double sloperelerr, double* maxslope); 
 static int 								MeasureLag											(double* signal1, double* signal2, int nelem); 
-static int 								GetStepTime 										(double* signal, size_t nSamples, double samplingRate, double lowLevel, double highLevel, double threshold, double* stepTimePtr, double* delayPtr, char** errInfo);
+static int 								GetStepTime 										(double* signal, size_t nSamples, double samplingRate, double lowLevel, double highLevel, double threshold, double* stepTimePtr, double* responseDelayPtr, char** errInfo);
 
 	//-----------------------------------------
 	// Non-resonant galvo axis calibration data
@@ -734,7 +736,7 @@ static void								MaxTriangleWaveformScan								(NonResGalvoCal_type* cal, dou
 	// Moves the galvo between two positions given by startVoltage and endVoltage in [V] given a sampleRate in [Hz] and calibration data.
 	// The command signal is a ramp such that the galvo lags behind the command signal with a constant lag
 static Waveform_type* 					NonResGalvoMoveBetweenPoints 						(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
-static int 								NonResGalvoPointJumpTime 							(NonResGalvoCal_type* cal, double jumpAmplitude, double* switchTimePtr, double* delayPtr);
+static int 								NonResGalvoPointJumpTime 							(NonResGalvoCal_type* cal, double jumpAmplitude, double* switchTimePtr, double* responseDelayPtr);
 //static Waveform_type* 					NonResGalvoJumpBetweenPoints 						(NonResGalvoCal_type* cal, double sampleRate, double startVoltage, double endVoltage, double startDelay, double endDelay);
 
 //-------------
@@ -874,7 +876,7 @@ static void								NonResRectRasterScan_SetMinimumPointJumpStartDelay 	(RectRast
 	// convert a point ROI coordinate from a given scan setting to a command voltage for both scan axes
 static void 							NonResRectRasterScan_PointROIVoltage 				(RectRaster_type* rectRaster, Point_type* point, double* fastAxisCommandV, double* slowAxisCommandV);
 	// calculates the combined jump time for both scan axes to jump a given amplitude voltage in [V]
-static int 								NonResRectRasterScan_JumpTime 						(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude, double* jumpTimePtr, double* delayPtr);
+static int 								NonResRectRasterScan_JumpTime 						(RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude, double* jumpTimePtr, double* responseDelayPtr);
 	// returns the number of active points that will be used for point jumping
 static size_t							NonResRectRasterScan_GetNumActivePoints				(RectRaster_type* rectRaster);
 	// assembles a point scan from a pixel stream
@@ -2971,7 +2973,7 @@ static int MeasureLag(double* signal1, double* signal2, int nelem)
 }
 
 /// HIFN Analyzes a step response signal to calculate the step time in [ms] needed to cross two thresholds between a low-level and a high level.
-static int GetStepTime (double* signal, size_t nSamples, double samplingRate, double lowLevel, double highLevel, double threshold, double* stepTimePtr, double* delayPtr, char** errorInfo)
+static int GetStepTime (double* signal, size_t nSamples, double samplingRate, double lowLevel, double highLevel, double threshold, double* stepTimePtr, double* responseDelayPtr, char** errorInfo)
 {
 #define GetStepTime_Err_Levels						-1
 #define GetStepTime_Err_LowLevelCrossingNotFound	-2
@@ -3032,7 +3034,7 @@ static int GetStepTime (double* signal, size_t nSamples, double samplingRate, do
 		
 	*stepTimePtr = (highIdx-lowIdx) * 1e3/samplingRate;  
 	
-	*delayPtr = lowIdx * 1e3/samplingRate; 
+	*responseDelayPtr = lowIdx * 1e3/samplingRate; 
 	
 	return 0;
 	
@@ -3760,7 +3762,7 @@ Error:
 
 // Estimates from the galvo calibration data, the time it takes the galvo to jump and settle in [ms] given a jump amplitude in [V].
 // If estimation is successful, the function return 0 and negative values otherwise.
-static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplitude, double* switchTimePtr, double* delayPtr)
+static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplitude, double* switchTimePtr, double* responseDelayPtr)
 {
 	int				error				= 0;
 	
@@ -3787,7 +3789,7 @@ static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplit
 	
 	// interpolate delay vs. amplitude measurements
 	errChk( Spline(cal->switchTimes->stepSize, cal->switchTimes->delay, cal->switchTimes->n, 0, 0, secondDerivatives) );
-	errChk( SpInterp(cal->switchTimes->stepSize, cal->switchTimes->delay, secondDerivatives,  cal->switchTimes->n, fabs(jumpAmplitude), delayPtr) );
+	errChk( SpInterp(cal->switchTimes->stepSize, cal->switchTimes->delay, secondDerivatives,  cal->switchTimes->n, fabs(jumpAmplitude), responseDelayPtr) );
 
 Error:
 	
@@ -6159,7 +6161,6 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	size_t					nGalvoJumpSamples				= 0;		// number of galvo samples during a galvo jump cycle.
 	size_t					nExtraStartDelaySamples			= 0;		// number of galvo samples to keep the galvos at their parked position after the golbal start time point.
 	size_t					nHoldSamples					= 0;		// number of galvo samples during a point ROI hold period.
-	//size_t					nGalvoLagSamples				= 0;		// number of galvo lag samples for both galvos to react to a command signal (value is the greater of the two).
 	size_t					nStimPulseONSamples				= 0;		// number of galvo samples during a stimulation pulse ON period.
 	size_t					nStimPulseOFFSamples			= 0;		// number of galvo samples during a stimulation pulse OFF period.
 	size_t					nStimPulseDelaySamples			= 0; 		// number of galvo samples from the start of a point ROI hold period to the onset of stimulation.
@@ -6182,7 +6183,6 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	DataPacket_type*		dataPacket						= NULL; 
 	NonResGalvoCal_type*	fastAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
-	//double					galvoLag						= 0;
 	double					totalJumpTime					= 0;	  	// time in [ms] from the global start trigger until the point jump cycle completes.
 	double					extraStartDelay					= 0;		// time in [ms] from the global start trigger before the galvos initiate their jumps.
 	Iterator_type*			iterator						= GetTaskControlIterator(scanEngine->baseClass.taskControl);
@@ -6247,21 +6247,16 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	// Calculate galvo jump times
 	//-----------------------------------------------
 	
-	/*
-	// get the largest galvo lag between the X and Y axis (i.e. the delay between applying a command signal and having the galvo react to it)
-	if (fastAxisCal->lag > slowAxisCal->lag)
-		galvoLag = fastAxisCal->lag;
-	else
-		galvoLag = slowAxisCal->lag;
-	*/
-	
-	// calculate jump times from parked position, to each ROI and then back again to the parked position
+	// calculate jump times and galvo response delays
 	OKfree(pointJumpSet->jumpTimes);
-	pointJumpSet->nJumpTimes = nVoltages-1;
-	pointJumpSet->jumpTimes = calloc(pointJumpSet->nJumpTimes, sizeof(double));
+	OKfree(pointJumpSet->responseDelays);
+	
+	pointJumpSet->nJumpTimes 		= nVoltages-1;
+	pointJumpSet->jumpTimes 		= calloc(pointJumpSet->nJumpTimes, sizeof(double));
+	pointJumpSet->responseDelays 	= calloc(pointJumpSet->nJumpTimes, sizeof(double));
 	
 	for (size_t i = 0; i < pointJumpSet->nJumpTimes; i++) {
-		errChk( NonResRectRasterScan_JumpTime(scanEngine, fastAxisVoltages[i] - fastAxisVoltages[i+1], slowAxisVoltages[i] - slowAxisVoltages[i+1], &pointJumpSet->jumpTimes[i], NULL) );
+		errChk( NonResRectRasterScan_JumpTime(scanEngine, fastAxisVoltages[i] - fastAxisVoltages[i+1], slowAxisVoltages[i] - slowAxisVoltages[i+1], &pointJumpSet->jumpTimes[i], &pointJumpSet->responseDelays[i]) );
 		totalJumpTime += pointJumpSet->jumpTimes[i];
 	}
 	
@@ -6304,7 +6299,6 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	// calculate number of samples during galvo position holding time at a point ROI
 	nExtraStartDelaySamples	= (size_t)RoundRealToNearestInteger(extraStartDelay * 1e-3 * scanEngine->galvoSamplingRate);
 	nHoldSamples 			= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.holdTime * 1e-3 * scanEngine->galvoSamplingRate);
-	//nGalvoLagSamples		= (size_t)RoundRealToNearestInteger(galvoLag * 1e-3 * scanEngine->galvoSamplingRate);
 	nStimPulseONSamples 	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimPulseONDuration * 1e-3 * scanEngine->galvoSamplingRate);
 	nStimPulseOFFSamples 	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimPulseOFFDuration * 1e-3 * scanEngine->galvoSamplingRate);
 	nStimPulseDelaySamples	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimDelay * 1e-3 * scanEngine->galvoSamplingRate);
@@ -7048,7 +7042,7 @@ static void NonResRectRasterScan_PointROIVoltage (RectRaster_type* rectRaster, P
 	
 }
 
-static int NonResRectRasterScan_JumpTime (RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude, double* jumpTimePtr, double* delayPtr)
+static int NonResRectRasterScan_JumpTime (RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude, double* jumpTimePtr, double* responseDelayPtr)
 {
 	int						error					= 0;
 	
@@ -7077,11 +7071,11 @@ static int NonResRectRasterScan_JumpTime (RectRaster_type* rectRaster, double fa
 			*jumpTimePtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, slowAxisJumpTime);
 	
 	// set switch delay to be the smallest of the two scan axes (i.e. during this time both galvos are within their initial position given a calibration resolution)
-	if (delayPtr)
+	if (responseDelayPtr)
 		if (fastAxisSwitchDelay < slowAxisSwitchDelay)
-			*delayPtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, fastAxisSwitchDelay);
+			*responseDelayPtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, fastAxisSwitchDelay);
 		else
-			*delayPtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, slowAxisSwitchDelay);
+			*responseDelayPtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, slowAxisSwitchDelay);
 	
 Error:	
 	
@@ -7387,6 +7381,7 @@ static PointJumpSet_type* init_PointJumpSet_type (void)
 	pointJumpSet->pointJumps							= 0;
 	pointJumpSet->currentActivePoint					= 0;
 	pointJumpSet->jumpTimes								= NULL;
+	pointJumpSet->responseDelays						= NULL;
 	
 	pointJumpSet->globalPointScanSettings.holdTime		= NonResGalvoRasterScan_Default_HoldTime;
 	pointJumpSet->globalPointScanSettings.nStimPulses	= 1;
@@ -7412,6 +7407,7 @@ static void discard_PointJumpSet_type (PointJumpSet_type** pointJumpSetPtr)
 	
 	OKfreeList(pointJumpSet->pointJumps);
 	OKfree(pointJumpSet->jumpTimes);
+	OKfree(pointJumpSet->responseDelays);
 	
 	OKfree(*pointJumpSetPtr);
 }

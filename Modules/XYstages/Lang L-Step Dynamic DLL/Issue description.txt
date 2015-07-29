@@ -1,0 +1,12 @@
+1. Issue description
+--------------------------------------------
+
+The goal is to operate a motorized stage from the main DAQLab software by making use of vendor provided DLL API. Static linking of the DLL to the project works fine. However, what was attempted here is to link the DLL dynamically by making use of the Windows LoadLibrary() function.
+
+In LangLStep.c function Load on line 210 after calling LoadLibrary, a DLL handle is obtained after which in InitStageConnection() multiple library calls are made which all work fine. Next however, in XYStage_Load (), user interface resources required to operate the stage are loaded, but after the Load () function completes and DAQLab will display the user interface (stage main control panel), the program crashes with:
+
+FATAL RUN-TIME ERROR:   "d:\ELE_DAQLab\Modules\XYstages\XYStage.c", line 317, col 5, thread id 0x00002AA0:   The program has caused a 'Double' fault at 0x68641D99.
+
+If a DisplayPanel() is called right after loading the stage main control panel (StagePan) in XYStage_Load then the software crashes soon afterwards (after a few more lines of code).
+
+If instead LoadLibrary () in LangLStep.c Load() function on line 210 is commented out, then this error dissapears. Also if instead of loading the provided panel (StagePan) but instead an empty panel, then all works fine, even if the DLL has been previously dinamically linked. However, by placing a control in this test panel will cause again the error to appear.

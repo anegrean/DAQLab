@@ -27,10 +27,21 @@
 //==============================================================================
 // Macros
 
+#ifndef	OKfree
 #define OKfree(ptr) 					if (ptr) {free(ptr); ptr = NULL;}
+#endif
+		
+#ifndef	OKfreeCAHndl
 #define OKfreeCAHndl(objHandle)			if (objHandle) {CA_DiscardObjHandle(objHandle); objHandle = 0;}
+#endif
+		
+#ifndef OKfreePanHndl
 #define OKfreePanHndl(panelHandle)  	if (panelHandle) {DiscardPanel(panelHandle); panelHandle = 0;}
-#define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}  
+#endif
+		
+#ifndef OKfreeList
+#define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}
+#endif
 
 #define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to 
 													 // get the number of elements in an array passed as an argument!
@@ -43,11 +54,18 @@
 // 
 // and make sure the function returns an int error code as well as has a char** errorInfo parameter
 
+#ifndef ReturnErrMsg
 #define ReturnErrMsg(FunctionName) if (!errMsg) errMsg = FormatMsg(error, FunctionName, "Unknown or out of memory");	\
 	if (errorInfo)																										\
 		*errorInfo = errMsg;																							\
 	else																												\
 		OKfree(errMsg);
+#endif
+													 
+#ifndef nullWinChk
+#define nullWinChk(fCall) if ((fCall) == 0) \
+{winError = GetLastError(); goto WinError;} else
+#endif
 
 //==============================================================================
 // Types

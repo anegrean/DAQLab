@@ -338,6 +338,8 @@ void CVICALLBACK 			DAQLab_ModulesMenu_CB						(int menuBarHndl, int menuItem, v
 
 void CVICALLBACK 			DAQLab_DisplayTaskManagerMenu_CB 			(int menuBarHndl, int menuItemID, void *callbackData, int panelHndl); 
 
+void CVICALLBACK 			DAQLab_SaveCfg_CB 							(int menuBarHndl, int menuItemID, void *callbackData, int panelHndl); 
+
 int CVICALLBACK 			DAQLab_ManageDAQLabModules_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 int CVICALLBACK 			VChanSwitchboard_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
@@ -2991,6 +2993,33 @@ static void CVICALLBACK DAQLab_TaskMenu_CB (int menuBarHndl, int menuItemID, voi
 void CVICALLBACK DAQLab_DisplayTaskManagerMenu_CB (int menuBarHndl, int menuItemID, void *callbackData, int panelHndl)
 {
 	DisplayTaskTreeManager(workspacePanHndl, TasksUI.UItaskCtrls, DAQLabModules);
+}
+
+void CVICALLBACK DAQLab_SaveCfg_CB (int menuBarHndl, int menuItemID, void *callbackData, int panelHndl)
+{
+	int		fileSelection						= 0;
+	char 	fullPathName[MAX_PATHNAME_LEN]		= "";
+	
+	fileSelection = FileSelectPopupEx ("","*.xml", "*.xml", "Save DAQLab configuration", VAL_SAVE_BUTTON, 0, 1, fullPathName);
+	
+	switch (fileSelection) {
+			
+		case VAL_NO_FILE_SELECTED:
+			
+			return 0;
+			
+		case VAL_EXISTING_FILE_SELECTED:
+		case VAL_NEW_FILE_SELECTED:
+			
+			//DAQLab_Save
+			
+			return 0;
+			
+		default:
+			
+			return 0;	
+	}
+	
 }
 
 void CVICALLBACK DAQLab_ModulesMenu_CB (int menuBarHndl, int menuItem, void *callbackData, int panelHndl)

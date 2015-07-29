@@ -2005,8 +2005,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// Iterate Task Controller
 					//---------------------------------------------------------------------------------------------------------------
 					
-					//SetChildTCsOutOfDate(taskControl);
-					
 					if (TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TC_Event_Iterate posting to self failed");
 						taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
@@ -2167,8 +2165,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					//---------------------------------------------------------------------------------------------------------------
 					// Switch to RUNNING state and iterate Task Controller
 					//---------------------------------------------------------------------------------------------------------------
-					
-					//SetChildTCsOutOfDate(taskControl);
 					
 					if (TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL) < 0) {
 						taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TC_Event_Iterate posting to self failed"); 
@@ -2811,8 +2807,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							
 							if (!taskControl->stopIterationsFlag) {
 								
-								//SetChildTCsOutOfDate(taskControl); 
-								
 								if (TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TC_Event_Iterate posting to self failed"); 
 									taskControl->errorID	= TaskEventHandler_Error_MsgPostToSelfFailed;
@@ -2855,8 +2849,6 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 							//---------------------------------------------------------------------------------------------------------------- 
 							
 							if (!taskControl->stopIterationsFlag) {
-								
-								//SetChildTCsOutOfDate(taskControl); 
 								
 								if (TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL) < 0) {
 									taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_MsgPostToSelfFailed, taskControl->taskName, "TC_Event_Iterate posting to self failed"); 

@@ -70,6 +70,8 @@
 #define  MainMenu                         2
 #define  MainMenu_Modules                 2       /* callback function: DAQLab_ModulesMenu_CB */
 #define  MainMenu_TaskManager             3       /* callback function: DAQLab_DisplayTaskManagerMenu_CB */
+#define  MainMenu_Config                  4
+#define  MainMenu_Config_Save             5       /* callback function: DAQLab_SaveCfg_CB */
 
 #define  TaskLog                          3
 #define  TaskLog_Close                    2       /* callback function: TaskLogMenuClose_CB */
@@ -83,6 +85,7 @@ int  CVICALLBACK DAQLab_DelTaskControllersBTTN_CB(int panel, int control, int ev
 void CVICALLBACK DAQLab_DisplayTaskManagerMenu_CB(int menubar, int menuItem, void *callbackData, int panel);
 int  CVICALLBACK DAQLab_ManageDAQLabModules_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 void CVICALLBACK DAQLab_ModulesMenu_CB(int menubar, int menuItem, void *callbackData, int panel);
+void CVICALLBACK DAQLab_SaveCfg_CB(int menubar, int menuItem, void *callbackData, int panel);
 int  CVICALLBACK DAQLab_TCDelPan_CB(int panel, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK HWTriggersSwitchboard_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 void CVICALLBACK LogPanTaskLogMenu_CB(int menubar, int menuItem, void *callbackData, int panel);

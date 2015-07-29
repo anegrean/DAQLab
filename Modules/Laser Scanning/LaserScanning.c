@@ -525,6 +525,7 @@ typedef enum {
 } PointJumpMethods;
 
 typedef struct {
+	
 	PointJumpMethods			jumpMethod;					// Determines point jump method.
 	BOOL						record;						// If True, fluorescence signals from point ROIs are recorded while holding position.
 	BOOL						stimulate;					// If True, then optical stimulation is applied to the point ROI.
@@ -543,11 +544,8 @@ typedef struct {
 	ListType					pointJumps;					// List of points to jump to of PointJump_type*. The order of point jumps is determined by the order of the elements in the list.
 	size_t						currentActivePoint;			// 1-based index of current active point to visit when using the PointJump_SinglePoints mode.
 	PointScan_type				globalPointScanSettings;	// Global settings for stimulation and recording from point ROIs.
-	double*						jumpTimes;					// Array of galvo jump times in [ms] used to segment the incoming fluorescence signal from multiple point ROIs during point jumping.
-															// The first entry is the galvo jump time from the parked position to the first point ROI which does not include any additional start delay.
+	double*						jumpTimes;					// Array of galvo jump times between ROIs in [ms]. The first entry is the galvo jump time from the parked position to the first point ROI which does not include any additional start delay.
 	size_t						nJumpTimes;					// Number of jumpTimes array elements.
-	
-	
 	
 } PointJumpSet_type;
 

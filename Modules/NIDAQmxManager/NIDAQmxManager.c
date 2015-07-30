@@ -11941,6 +11941,7 @@ int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	
 	// stop task explicitly
 	DAQmxErrChk(DAQmxStopTask(taskHandle));
+	
 	// clear and init writeAOData used for continuous streaming
 	discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
 	dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
@@ -11964,13 +11965,11 @@ DAQmxError:
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
 	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	free(errMsg);
-	ClearDAQmxTasks(dev); 
 	return 0;
 	
 MemError:
 	
 	TaskControlIterationDone(dev->taskController, -1, "Out of memory", FALSE);
-	ClearDAQmxTasks(dev); 
 	return 0;
 }
 
@@ -12038,10 +12037,7 @@ DAQmxError:
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
 	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	OKfree(errMsg);
-	ClearDAQmxTasks(dev); 
 	return 0;
-	
-
 }
 
 //--------------------------------------------------------------------------------------------

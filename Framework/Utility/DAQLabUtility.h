@@ -55,11 +55,14 @@
 // and make sure the function returns an int error code as well as has a char** errorInfo parameter
 
 #ifndef ReturnErrMsg
-#define ReturnErrMsg(FunctionName) if (!errMsg) errMsg = FormatMsg(error, FunctionName, "Unknown or out of memory");	\
-	if (errorInfo)																										\
-		*errorInfo = errMsg;																							\
-	else																												\
-		OKfree(errMsg);
+#define ReturnErrMsg(FunctionName) 																	\
+	if (error < 0) {																				\
+		if (!errMsg) errMsg = FormatMsg(error, FunctionName, "Unknown error or out of memory.");	\
+		if (errorInfo)																				\
+			*errorInfo = errMsg;																	\
+		else																						\
+			OKfree(errMsg);																			\
+	};
 #endif
 													 
 #ifndef nullWinChk

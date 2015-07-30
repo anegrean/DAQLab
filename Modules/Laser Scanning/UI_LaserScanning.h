@@ -55,18 +55,20 @@
 
 #define  ScanSetPan                       8
 #define  ScanSetPan_AddChan               2       /* control type: command, callback function: (none) */
-#define  ScanSetPan_AddObjective          3       /* control type: command, callback function: (none) */
-#define  ScanSetPan_Close                 4       /* control type: command, callback function: (none) */
-#define  ScanSetPan_GalvoSamplingRate     5       /* control type: numeric, callback function: (none) */
-#define  ScanSetPan_PixelDelay            6       /* control type: numeric, callback function: (none) */
-#define  ScanSetPan_RefClkFreq            7       /* control type: numeric, callback function: (none) */
-#define  ScanSetPan_TubeLensFL            8       /* control type: numeric, callback function: (none) */
-#define  ScanSetPan_ScanLensFL            9       /* control type: numeric, callback function: (none) */
-#define  ScanSetPan_Plate                 10      /* control type: deco, callback function: (none) */
-#define  ScanSetPan_Objectives            11      /* control type: listBox, callback function: (none) */
-#define  ScanSetPan_SlowAxisCal           12      /* control type: ring, callback function: (none) */
-#define  ScanSetPan_FastAxisCal           13      /* control type: ring, callback function: (none) */
-#define  ScanSetPan_Channels              14      /* control type: table, callback function: (none) */
+#define  ScanSetPan_CenterGalvos          3       /* control type: command, callback function: (none) */
+#define  ScanSetPan_ParkGalvos            4       /* control type: command, callback function: (none) */
+#define  ScanSetPan_AddObjective          5       /* control type: command, callback function: (none) */
+#define  ScanSetPan_Close                 6       /* control type: command, callback function: (none) */
+#define  ScanSetPan_GalvoSamplingRate     7       /* control type: numeric, callback function: (none) */
+#define  ScanSetPan_PixelDelay            8       /* control type: numeric, callback function: (none) */
+#define  ScanSetPan_RefClkFreq            9       /* control type: numeric, callback function: (none) */
+#define  ScanSetPan_TubeLensFL            10      /* control type: numeric, callback function: (none) */
+#define  ScanSetPan_ScanLensFL            11      /* control type: numeric, callback function: (none) */
+#define  ScanSetPan_Plate                 12      /* control type: deco, callback function: (none) */
+#define  ScanSetPan_Objectives            13      /* control type: listBox, callback function: (none) */
+#define  ScanSetPan_SlowAxisCal           14      /* control type: ring, callback function: (none) */
+#define  ScanSetPan_FastAxisCal           15      /* control type: ring, callback function: (none) */
+#define  ScanSetPan_Channels              16      /* control type: table, callback function: (none) */
 
      /* tab page panel controls */
 #define  Cal_MechanicalResponse           2       /* control type: numeric, callback function: (none) */

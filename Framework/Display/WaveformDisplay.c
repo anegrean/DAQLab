@@ -13,8 +13,10 @@
 //==============================================================================
 // Include files
 
+#include "DAQLab.h"
 #include "WaveformDisplay.h"
 #include "UI_WaveformDisplay.h"
+#include "HDF5support.h"
 
 //==============================================================================
 // Constants
@@ -284,7 +286,11 @@ Error:
 
 static void CVICALLBACK WaveformDisplayMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
-	WaveformDisplay_type*	waveDisp = callbackData;
+	int						error		= 0;
+	char*					errMsg		= NULL;
+	
+	WaveformDisplay_type*	waveDisp 	= callbackData;
+	
 	
 	if (menuItem == waveDisp->menuID_Close) {
 		
@@ -296,11 +302,37 @@ static void CVICALLBACK WaveformDisplayMenu_CB (int menuBar, int menuItem, void 
 	
 	if (menuItem == waveDisp->menuID_Save) {
 		
+		int 		fileSelection					= 0;
+		char 		fullPathName[MAX_PATHNAME_LEN]	= "";
+	
+		fileSelection = FileSelectPopupEx ("","*.h5", "*.h5", "Save waveforms", VAL_SAVE_BUTTON, 0, 1, fullPathName);    
 		
+		
+		switch (fileSelection) {
+			
+			case VAL_NO_FILE_SELECTED:
+			
+				return;
+			
+			case VAL_EXISTING_FILE_SELECTED:
+				
+				// do nothing if user cancells file overwrite
+				if (!ConfirmPopup("Save waveforms", "Overwrite existing file?")) return;
+				
+			case VAL_NEW_FILE_SELECTED:
+				
+				errChk( WriteHDF5WaveformList(fullPathName, waveDisp->waveforms, Compression_GZIP, &errMsg) );
+				
+				return;
+		}
 		
 		return;
 	}
 	
+Error:
+	
+	DLMsg(errMsg, 1);
+	OKfree(errMsg);
 }
 
 // callback for operating the scrollbar control placed in TSPan

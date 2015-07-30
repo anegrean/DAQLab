@@ -13,7 +13,16 @@
 
      /* Panels and Controls: */
 
-#define  MainPan                          1
+#define  COMSetPan                        1
+#define  COMSetPan_Plate                  2       /* control type: deco, callback function: (none) */
+#define  COMSetPan_Port                   3       /* control type: numeric, callback function: (none) */
+#define  COMSetPan_StopBits               4       /* control type: ring, callback function: (none) */
+#define  COMSetPan_DataBits               5       /* control type: ring, callback function: (none) */
+#define  COMSetPan_Parity                 6       /* control type: ring, callback function: (none) */
+#define  COMSetPan_BaudRate               7       /* control type: ring, callback function: (none) */
+#define  COMSetPan_OKBttn                 8       /* control type: command, callback function: (none) */
+
+#define  MainPan                          2
 #define  MainPan_Plate                    2       /* control type: deco, callback function: (none) */
 #define  MainPan_Power                    3       /* control type: numeric, callback function: (none) */
 #define  MainPan_Wavelength               4       /* control type: numeric, callback function: (none) */
@@ -22,13 +31,6 @@
 #define  MainPan_StatusString             7       /* control type: string, callback function: (none) */
 #define  MainPan_OnOff                    8       /* control type: textButton, callback function: (none) */
 #define  MainPan_Modelocked               9       /* control type: LED, callback function: (none) */
-
-#define  SetPan                           2
-#define  SetPan_COMPort                   2       /* control type: numeric, callback function: (none) */
-#define  SetPan_COMStopBits               3       /* control type: ring, callback function: (none) */
-#define  SetPan_COMDataBits               4       /* control type: ring, callback function: (none) */
-#define  SetPan_COMParity                 5       /* control type: ring, callback function: (none) */
-#define  SetPan_COMBaudRate               6       /* control type: ring, callback function: (none) */
 
 
      /* Control Arrays: */

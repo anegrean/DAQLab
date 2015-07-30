@@ -18,11 +18,18 @@
 #include "hdf5.h"
 #include "hdf5_hl.h"
 #include "Iterator.h"
-#include "HDF5support.h" 
-
+#include "HDF5support.h"
+#include "DAQLabUtility.h"
+#include <stdio.h>
+#include <stdlib.h>
+								   
 
 #ifndef errChk
 #define errChk(fCall) if (error = (fCall), error < 0) {goto Error;} else
+#endif
+	
+#ifndef hdf5ErrChk
+#define hdf5ErrChk(fCall) if (error = (fCall), error < 0) {goto HDF5Error;} else
 #endif
 
 #ifndef OKfree
@@ -132,13 +139,14 @@ Error:
 	return error;
 }
 
-int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo, Waveform_type* waveform, CompressionMethods compression) 
+int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo, Waveform_type* waveform, CompressionMethods compression, char** errorInfo) 
 {
 	//=============================================================================================
 	// INITIALIZATION (no fail)
 	//=============================================================================================
 	
 	herr_t      			error					= 0;
+	char*					errMsg					= NULL;
 	
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	// data
@@ -173,6 +181,10 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 	
 	BOOL					are_equal				= TRUE; 
 	unsigned long long   	numelements				= 0;
+	
+	//=============================================================================================
+	// MEMORY ALLOCATION (can fail)
+	//=============================================================================================
  
 	// mem alloc
 	nullChk( dims		= malloc(totalRank * sizeof(hsize_t)) );
@@ -192,8 +204,8 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 	dims[dataRank-1] = nElem;   // number of elements in the wavefornm = width of dataspace
 	
 	// modify dataset creation properties, i.e. enable chunking
-	errChk( propertyListID = H5Pcreate (H5P_DATASET_CREATE) );
-	errChk( H5Pset_chunk(propertyListID, totalRank, dims) );
+	hdf5ErrChk( propertyListID = H5Pcreate (H5P_DATASET_CREATE) );
+	hdf5ErrChk( H5Pset_chunk(propertyListID, totalRank, dims) );
 	
 	// add compression if requested
 	switch (compression) {
@@ -204,7 +216,7 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 			
 		case Compression_GZIP:
 			
-			errChk( H5Pset_deflate (propertyListID, GZIP_CompressionLevel) );
+			hdf5ErrChk( H5Pset_deflate (propertyListID, GZIP_CompressionLevel) );
 			break;
 			
 		case Compression_SZIP:
@@ -212,17 +224,17 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 			unsigned int szipOptionsMask 		= H5_SZIP_NN_OPTION_MASK;
 			unsigned int szipPixelsPerBlock  	= SZIP_PixelsPerBlock;
 			
-			errChk( H5Pset_szip (propertyListID, szipOptionsMask, szipPixelsPerBlock) );
+			hdf5ErrChk( H5Pset_szip (propertyListID, szipOptionsMask, szipPixelsPerBlock) );
 			break;
 	}
   
 	// convert waveform type to HDF5 types
 	WaveformDataTypeToHDF5(GetWaveformDataType(waveform), &typeID, &memTypeID); 
    
-	// Create data space
-	errChk( dataSpaceID = H5Screate_simple(totalRank, dims, maxDims) );
+	// create data space
+	hdf5ErrChk( dataSpaceID = H5Screate_simple(totalRank, dims, maxDims) );
 	
-	// Dataset name shouldn't have slashes in it
+	// dataset name shouldn't have slashes in it
 	datasetName = RemoveSlashes(datasetName);
 	
 	// Open the dataset if it exists
@@ -232,14 +244,14 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 		// Dataset doesn't exist. A new one is created
 		//-----------------------------------------------
 		
-		errChk( datasetID = H5Dcreate2(groupID, datasetName, typeID, dataSpaceID,H5P_DEFAULT, propertyListID,H5P_DEFAULT) );
+		hdf5ErrChk( datasetID = H5Dcreate2(groupID, datasetName, typeID, dataSpaceID,H5P_DEFAULT, propertyListID,H5P_DEFAULT) );
 		
 		// write the dataset
-   		errChk( H5Dwrite(datasetID, memTypeID, H5S_ALL, H5S_ALL, H5P_DEFAULT, waveformData) );
+   		hdf5ErrChk( H5Dwrite(datasetID, memTypeID, H5S_ALL, H5S_ALL, H5P_DEFAULT, waveformData) );
 		
-   		//add attributes to dataset
+   		// add attributes to dataset
    		errChk( AddWaveformAttr(datasetID, waveform) );
-		errChk( AddWaveformAttrArr(datasetID,nElem,1) );  
+		errChk( AddWaveformAttrArr(datasetID, nElem, 1) );  
 		
 	} else {
 		//------------------------------------------------
@@ -247,9 +259,9 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 		//------------------------------------------------
 		
 		// get the size of the dataset
-	   	errChk( fileSpaceID = H5Dget_space (datasetID) );
+	   	hdf5ErrChk( fileSpaceID = H5Dget_space (datasetID) );
 		// get dataspace dimension size and maximum size. 
-    	errChk( H5Sget_simple_extent_dims (fileSpaceID, dimsr, NULL) );
+    	hdf5ErrChk( H5Sget_simple_extent_dims (fileSpaceID, dimsr, NULL) );
 		//check if saved size equals the indices set
 		//if so, add data to current set
 		//copy read dims into size and offset
@@ -278,10 +290,10 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 			offset[0] = numelements;      
 			numelements += nElem;
 			
-    		errChk(H5Dset_extent (datasetID, size));
+    		hdf5ErrChk(H5Dset_extent (datasetID, size));
 			
     		// Select a hyperslab in extended portion of dataset
-    		errChk( fileSpaceID = H5Dget_space (datasetID) );
+    		hdf5ErrChk( fileSpaceID = H5Dget_space (datasetID) );
     	  
 		} else { 
 			
@@ -296,56 +308,194 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 			offset[0] 	= 0;			// new iteration, offset from beginning
 			numelements	= nElem;    	// set data offset 
 			
-    		errChk(H5Dset_extent (datasetID, size));
+    		hdf5ErrChk( H5Dset_extent (datasetID, size) );
 
     		// Select a hyperslab in extended portion of dataset  //
-    		errChk( fileSpaceID = H5Dget_space (datasetID) );
+    		hdf5ErrChk( fileSpaceID = H5Dget_space (datasetID) );
     		
 		}
 		
-    	errChk( H5Sselect_hyperslab (fileSpaceID, H5S_SELECT_SET, offset, NULL, dims, NULL) );  
+    	hdf5ErrChk( H5Sselect_hyperslab (fileSpaceID, H5S_SELECT_SET, offset, NULL, dims, NULL) );  
 
     	// Define memory space
    		memSpaceID = H5Screate_simple (totalRank, dims, NULL); 
 
     	// Write the data to the extended portion of dataset
-    	errChk( H5Dwrite(datasetID, memTypeID, memSpaceID, fileSpaceID,H5P_DEFAULT, waveformData) );
+    	hdf5ErrChk( H5Dwrite(datasetID, memTypeID, memSpaceID, fileSpaceID,H5P_DEFAULT, waveformData) );
 		errChk( AddWaveformAttrArr(datasetID, numelements, size[1]) );     
-   }
+	}
    
-  
-   // Close the dataset
-   errChk(H5Dclose(datasetID));
+	// Close the dataset
+	hdf5ErrChk(H5Dclose(datasetID));
    
-   // Close the group ids
-   errChk(H5Gclose (groupID));
+	// Close the group ids
+	hdf5ErrChk(H5Gclose (groupID));
    
-   // Close the dataspace
-   errChk(H5Sclose(dataSpaceID));
+	// Close the dataspace
+	hdf5ErrChk(H5Sclose(dataSpaceID));
    
-   // Close the file
-   errChk(H5Fclose(fileID));
+	// Close the file
+	hdf5ErrChk(H5Fclose(fileID));
    
-   OKfree(dims);
-   OKfree(maxDims);
-   OKfree(dimsr);
-   OKfree(offset);
-   OKfree(size);
+	OKfree(dims);
+	OKfree(maxDims);
+	OKfree(dimsr);
+	OKfree(offset);
+	OKfree(size);
    
-   return error;
+	return 0;
+
+HDF5Error:
+   
+	OKfree(dims);
+	OKfree(maxDims);
+	OKfree(dimsr);
+	OKfree(offset);
+	OKfree(size);
+   			 
+	/*
+	FILE* tmpFile = tmpfile();			<--- wrong FILE type as defined by CVI's implementation of stdio compared to what H5Eprint
+	H5Eprint(H5E_DEFAULT, tmpFile);
+	fseek(tmpFile, 0, SEEK_END);
+	long fsize = ftell(tmpFile);
+	fseek(tmpFile, 0, SEEK_SET);
+	errMsg = malloc((fsize+1) * sizeof(char));
+	fread(errMsg, fsize, 1, tmpFile);
+	fclose(tmpFile);
+    ReturnErrMsg("Data Storage WriteHDF5Waveform");
+	*/
+	
+	ReturnErrMsg("Data Storage WriteHDF5Waveform");
+	return error;
    
 Error:
    
-   OKfree(dims);
-   OKfree(maxDims);
-   OKfree(dimsr);
-   OKfree(offset);
-   OKfree(size);
+	OKfree(dims);
+	OKfree(maxDims);
+	OKfree(dimsr);
+	OKfree(offset);
+	OKfree(size);
    
-   return error;
+	ReturnErrMsg("Data Storage WriteHDF5Waveform");
+	return error;
 }
 
-int WriteHDF5Image(char fileName[], char datasetName[], DSInfo_type* dsInfo, Image_type* image, CompressionMethods compression) 
+int WriteHDF5WaveformList (char fileName[], ListType waveformList, CompressionMethods compression, char** errorInfo)
+{
+#define WriteHDF5WaveformList_Err_NoFileName	-1
+	
+	herr_t      			error					= 0;
+	char*					errMsg					= NULL;
+	
+	size_t					nWaveforms				= ListNumItems(waveformList);
+	Waveform_type*			waveform				= NULL;
+	void* 					waveformData			= NULL;
+	char					datasetName[100]		= "";
+	
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------
+	// HDF5
+	
+	hid_t       			fileID					= 0;
+	hid_t 					memTypeID 				= 0;
+	hid_t 					typeID					= 0;
+	hid_t       			propertyListID			= 0;
+	hid_t					dataSpaceID 			= 0;
+	hid_t					datasetID				= 0;
+	
+	hsize_t					dims[1] 			    = {0};				 // number of elements in the waveform
+	hsize_t      			maxDims[1] 				= {H5S_UNLIMITED};
+	
+	//-----------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	// if there are no waveforms to be saved, then do nothing
+	if (!nWaveforms) return 0;
+	
+	// check if a file name was given
+	if (!fileName || !fileName[0]) {
+		error 	= WriteHDF5WaveformList_Err_NoFileName;
+		errMsg 	= StrDup("No file name was provided.");
+		goto Error;
+	}
+	
+	// create file
+   	hdf5ErrChk( fileID = H5Fcreate(fileName, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT) );
+	// create dataset creation property list
+	hdf5ErrChk( propertyListID = H5Pcreate (H5P_DATASET_CREATE) );
+	
+	// create data set for each waveform and add it to the file
+	for (size_t i = 1; i <= nWaveforms; i++) {
+		waveform 		= *(Waveform_type**)ListGetPtrToItem(waveformList, i);
+		waveformData	= *(void**)GetWaveformPtrToData(waveform, &dims[0]); 
+		
+		// modify the dataset creation property list to enable chunking
+		hdf5ErrChk( H5Pset_chunk(propertyListID, 1, dims) );
+	
+		// add compression if requested
+		switch (compression) {
+		
+			case Compression_None:
+			
+				break;
+			
+			case Compression_GZIP:
+			
+				hdf5ErrChk( H5Pset_deflate (propertyListID, GZIP_CompressionLevel) );
+				break;
+			
+			case Compression_SZIP:
+			
+				unsigned int szipOptionsMask 		= H5_SZIP_NN_OPTION_MASK;
+				unsigned int szipPixelsPerBlock  	= SZIP_PixelsPerBlock;
+			
+				hdf5ErrChk( H5Pset_szip (propertyListID, szipOptionsMask, szipPixelsPerBlock) );
+				break;
+		}
+		
+		// convert waveform type to HDF5 types
+		WaveformDataTypeToHDF5(GetWaveformDataType(waveform), &typeID, &memTypeID);
+		
+		// create data space
+		hdf5ErrChk( dataSpaceID = H5Screate_simple(1, dims, maxDims) );
+		
+		// create data set
+		Fmt(datasetName, "%d", i);
+		hdf5ErrChk( datasetID = H5Dcreate(fileID, datasetName, typeID, dataSpaceID, H5P_DEFAULT, propertyListID, H5P_DEFAULT) );
+		
+		// add attributes to the dataset
+   		errChk( AddWaveformAttr(datasetID, waveform) );
+		
+		// write waveform data to the dataset
+   		hdf5ErrChk( H5Dwrite(datasetID, memTypeID, H5S_ALL, H5S_ALL, H5P_DEFAULT, waveformData) );
+		
+		// close the dataspace
+		if (dataSpaceID > 0) {H5Sclose(dataSpaceID); dataSpaceID = 0;}
+		// close dataset
+		if (datasetID > 0) {H5Dclose(datasetID); datasetID = 0;}
+	}
+	
+	
+HDF5Error:
+	
+	if (error < 0)
+		errMsg 	= StrDup("HDF5 error");  
+	
+Error:
+	
+	// close dataset creation property list
+	if (propertyListID > 0) {H5Pclose(propertyListID); propertyListID = 0;}
+	// close the dataspace
+	if (dataSpaceID > 0) {H5Sclose(dataSpaceID); dataSpaceID = 0;}
+	// close data set
+	if (datasetID > 0) {H5Dclose(datasetID); datasetID = 0;}
+	
+	// close file
+	if (fileID > 0) {H5Fclose(fileID); fileID = 0;}
+	
+	ReturnErrMsg("WriteHDF5WaveformList");
+	return error;
+}
+
+int WriteHDF5Image(char fileName[], char datasetName[], DSInfo_type* dsInfo, Image_type* image, CompressionMethods compression, char** errorInfo) 
 { 
 	int   					error        			= 0;
 	

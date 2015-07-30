@@ -638,7 +638,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)  
 {
 	int						error					= 0;
-	char* 					errMsg 					= StrDup("Writing data to ");
+	char* 					errMsg 					= NULL;
 	
 	DataStorage_type*		ds						= GetTaskControlModuleData(taskControl);
 	DataPacket_type**		dataPackets				= NULL;
@@ -678,12 +678,12 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 					case DL_Waveform_Float:
 					case DL_Waveform_Double:
 						
-						error = WriteHDF5Waveform(ds->hdf5DataFileName, sourceVChanName, dsInfo, *(Waveform_type**)dataPacketDataPtr, Compression_GZIP); 
+						errChk( WriteHDF5Waveform(ds->hdf5DataFileName, sourceVChanName, dsInfo, *(Waveform_type**)dataPacketDataPtr, Compression_GZIP, &errMsg) );  
 						break;
 					
 					case DL_Image:
 						
-						error = WriteHDF5Image(ds->hdf5DataFileName, sourceVChanName, dsInfo, *(Image_type**)dataPacketDataPtr, Compression_GZIP);   
+						errChk( WriteHDF5Image(ds->hdf5DataFileName, sourceVChanName, dsInfo, *(Image_type**)dataPacketDataPtr, Compression_GZIP, &errMsg) );
 						break;
 						
 					default:
@@ -696,13 +696,13 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 		}
 	}
 		
-	OKfree(dataPackets);				
-			
 Error:
 	
+	OKfree(dataPackets);
 	OKfree(sinkVChanName);
-	OKfree(sourceVChanName); 
-	OKfree(errMsg);
+	OKfree(sourceVChanName);
+	
+	ReturnErrMsg("Data Storage DataReceivedTC");
 	return error;
 }
 

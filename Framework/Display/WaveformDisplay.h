@@ -61,7 +61,7 @@ int							DiscardWaveforms				(WaveformDisplay_type* waveDisp);
 void						SetWaveformDisplayCB			(WaveformDisplay_type* waveDisp, WaveformDisplayCB_type waveDispCBFptr, void* callbackData);
 
 	// Returns a list of Waveform_type* elements used for display. Do not modify this list directly.
-ListType					GetDisplayWaveform				(WaveformDisplay_type* waveDisp);
+ListType					GetDisplayWaveformList				(WaveformDisplay_type* waveDisp);
 
 #ifdef __cplusplus
     }

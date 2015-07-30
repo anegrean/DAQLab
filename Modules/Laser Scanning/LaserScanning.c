@@ -350,6 +350,13 @@ typedef struct {
 	double						objectiveFL;				// Objective focal length in [mm].
 } Objective_type;
 
+typedef enum {
+	
+	ScanAxis_Fast,
+	ScanAxis_Slow
+	
+} RasterScanAxes;
+
 struct ScanEngine {
 	//-----------------------------------
 	// Scan engine type
@@ -459,6 +466,7 @@ struct ScanEngine {
 //------------------------
 // Rectangular raster scan
 //------------------------
+
 typedef struct {
 	void*						imagePixels;				// Pixel array for the image assembled so far. Array contains nImagePixels
 	uInt64						nImagePixels;				// Total number of pixels in imagePixels. Maximum Array size is imgWidth*imgHeight
@@ -768,12 +776,9 @@ static void								DLUnregisterScanEngine								(ScanEngine_type* engine);
 	// opens/closes scan engine laser shutter
 static int								OpenScanEngineShutter								(ScanEngine_type* engine, BOOL openStatus, char** errorInfo);
 
-	// return both the fast and slow axis galvos to their parked position
-static int 								ReturnRectRasterToParkedPosition 					(RectRaster_type* engine, char** errorInfo); 
+	// sends a voltage command to one of the scan axes
+static int 								SendScanAxisCommand									(ScanEngine_type* engine, RasterScanAxes scanAxis, double voltage, char** errorInfo);
 
-static PixelAssemblyBinding_type*		init_PixelAssemblyBinding_type						(RectRaster_type* rectRaster, size_t channelIdx);
-static void								discard_PixelAssemblyBinding_type					(PixelAssemblyBinding_type** pixelBindingPtr);
-	
 	//--------------------------------------
 	// Non-Resonant Rectangle Raster Scan
 	//--------------------------------------
@@ -823,6 +828,12 @@ static RectRasterPointBuff_type*		init_RectRasterPointBuff_type						(ScanChan_t
 static void								discard_RectRasterPointBuff_type					(RectRasterPointBuff_type** pointBufferPtr);
 	// Resets the point scan buffer.
 static void 							ResetRectRasterPointBuffer 							(RectRasterPointBuff_type* pointBuffer);
+
+	// return both the fast and slow axis galvos to their parked position
+static int 								ReturnRectRasterToParkedPosition 					(RectRaster_type* engine, char** errorInfo); 
+
+static PixelAssemblyBinding_type*		init_PixelAssemblyBinding_type						(RectRaster_type* rectRaster, size_t channelIdx);
+static void								discard_PixelAssemblyBinding_type					(PixelAssemblyBinding_type** pixelBindingPtr);
 
 	// starts pixel assembly for a scan channel
 static int CVICALLBACK 					NonResRectRasterScan_LaunchPixelBuilder 			(void* functionData);
@@ -3143,6 +3154,9 @@ static int UnregisterDLScanChan (ScanChan_type* scanChan)
 
 static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+	int						error					= 0;
+	char*					errMsg					= NULL;
+	
 	ScanEngine_type*		engine					= callbackData;
 	RectRaster_type*		rectRasterEngine		= (RectRaster_type*) engine;
 	ScanAxisCal_type**		scanAxisPtr				= NULL;
@@ -3371,7 +3385,6 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 				case ScanSetPan_PixelDelay:
 					
 					GetCtrlVal(panel, control, &engine->pixDelay);
-					
 					break;
 					
 				case ScanSetPan_GalvoSamplingRate:
@@ -3395,6 +3408,24 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
 					} else
 						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+					break;
+					
+				case ScanSetPan_ParkGalvos:
+					
+					// send fast axis to parked position
+					if (engine->fastAxisCal)
+						errChk( SendScanAxisCommand(engine, ScanAxis_Fast, ((NonResGalvoCal_type*)engine->fastAxisCal)->parked, &errMsg) );
+					// send slow axis to parked position
+					if (engine->slowAxisCal)
+						errChk( SendScanAxisCommand(engine, ScanAxis_Slow, ((NonResGalvoCal_type*)engine->slowAxisCal)->parked, &errMsg) );
+					break;
+					
+				case ScanSetPan_CenterGalvos:
+					
+					// send fast axis to parked position
+					errChk( SendScanAxisCommand(engine, ScanAxis_Fast, 0.0, &errMsg) );
+					// send slow axis to parked position
+					errChk( SendScanAxisCommand(engine, ScanAxis_Slow, 0.0, &errMsg) );
 					break;
 					
 			}
@@ -3467,6 +3498,14 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 	}
 	
 	return 0;
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = StrDup("Unknown error or out of memory.\n\n");
+	
+	DLMsg(errMsg, 1);
+	OKfree(errMsg);
 }
 
 static int CVICALLBACK ScanEnginesTab_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -4666,6 +4705,48 @@ Error:
 	
 	ReturnErrMsg("OpenScanEngineShutter");
 	return error;
+}
+
+static int SendScanAxisCommand (ScanEngine_type* engine, RasterScanAxes scanAxis, double voltage, char** errorInfo)
+{
+	int						error 			= 0;
+	char*					errMsg			= NULL;
+	
+	double*					signal			= NULL; 
+	DataPacket_type*		dataPacket		= NULL;
+	
+	switch(scanAxis) {
+			
+		case ScanAxis_Fast:
+			
+			if (IsVChanOpen((VChan_type*)engine->VChanFastAxisCom)) {
+				nullChk( signal = malloc(sizeof(double)) );
+				*signal = voltage;
+				nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&signal, NULL, NULL) );
+				errChk( SendDataPacket(engine->VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
+			}
+			break;
+			
+		case ScanAxis_Slow:
+			
+			if (IsVChanOpen((VChan_type*)engine->VChanSlowAxisCom)) {
+				nullChk( signal = malloc(sizeof(double)) );
+				*signal = voltage;
+				nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&signal, NULL, NULL) );
+				errChk( SendDataPacket(engine->VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
+			}
+			break;
+	}
+
+	return 0;
+	
+Error:
+	
+	OKfree(signal);
+	discard_DataPacket_type(&dataPacket);
+	
+	ReturnErrMsg("SendScanAxisCommand");
+	return error;	
 }
 
 static int ReturnRectRasterToParkedPosition (RectRaster_type* engine, char** errorInfo) 
@@ -6281,13 +6362,13 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	// Calculate number of pixels to skip
 	//-----------------------------------------------
 	for (size_t i = 0; i < scanEngine->nPointBuffers; i++) 
-		scanEngine->pointBuffers[i]->nSkipPixels = (size_t)ceil(((pointJumpSet->startDelay * 1e3 + scanEngine->baseClass.pixDelay) * 1e-6 * scanEngine->galvoSamplingRate));
+		scanEngine->pointBuffers[i]->nSkipPixels = (size_t)RoundRealToNearestInteger(((pointJumpSet->startDelay * 1e3 + scanEngine->baseClass.pixDelay) * 1e-6 * scanEngine->galvoSamplingRate));
 	
 	//-------------------------------------------------
 	// Calculate number of pixels to record if required
 	//-------------------------------------------------
 	
-	nPixels = (uInt64)ceil(((totalJumpTime * 1e3 + scanEngine->baseClass.pixDelay) * 1e-6 * scanEngine->galvoSamplingRate));
+	nPixels = (uInt64)RoundRealToNearestInteger(((totalJumpTime * 1e3 + scanEngine->baseClass.pixDelay) * 1e-6 * scanEngine->galvoSamplingRate));
 	
 	//-----------------------------------------------
 	// Generate galvo jump waveforms
@@ -7649,11 +7730,10 @@ Error:
 // Fast Axis Command VChan
 static void	FastAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 { 
-	ScanEngine_type*	engine				= VChanOwner;
-	double*				parkedVPtr 			= NULL;
 	int					error				= 0;
 	char*				errMsg				= NULL;
-	DataPacket_type*	parkedDataPacket	= NULL;
+	
+	ScanEngine_type*	engine				= VChanOwner;
 	
 	switch (state) {
 		
@@ -7661,10 +7741,7 @@ static void	FastAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VC
 			
 			if (!engine->fastAxisCal) return; // no parked voltage available
 			
-			nullChk( parkedVPtr = malloc(sizeof(double)) );
-			*parkedVPtr = ((NonResGalvoCal_type*)engine->fastAxisCal)->parked;
-			nullChk( parkedDataPacket = init_DataPacket_type(DL_Double, (void**)&parkedVPtr, NULL, NULL) );
-			errChk( SendDataPacket(engine->VChanFastAxisCom, &parkedDataPacket, FALSE, &errMsg) );
+			errChk( SendScanAxisCommand(engine, ScanAxis_Fast, ((NonResGalvoCal_type*)engine->fastAxisCal)->parked, &errMsg) );
 			break;
 			
 		case VChan_Closed:
@@ -7676,12 +7753,8 @@ static void	FastAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VC
 	
 Error:
 	
-	// cleanup
-	OKfree(parkedVPtr);
-	discard_DataPacket_type(&parkedDataPacket);
-	
 	if (!errMsg)
-		errMsg = StrDup("Out of memory");
+		errMsg = StrDup("Unknown error or out of memory");
 	
 	DLMsg(errMsg, TRUE);
 	OKfree(errMsg);
@@ -8134,8 +8207,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 
 	ActiveNonResGalvoCal_type* 		cal 						= GetTaskControlModuleData(taskControl);
 	double*							commandSignal				= NULL;
-	double**						commandSignalPtr			= NULL;
-	double**						positionSignalPtr			= NULL;
+	double*							positionSignal				= NULL;
 	DataPacket_type*				commandPacket				= NULL;
 	char*							errMsg						= NULL;
 	uInt64*							nCommandWaveformSamplesPtr  = NULL;
@@ -8196,8 +8268,8 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
 			
 			//get pointer to galvo position signal
-			positionSignalPtr 	= (double**) GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
-			commandSignalPtr	= (double**) GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
+			positionSignal	 	= *(double**) GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
+			commandSignal		= *(double**) GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
 			
 			// check if number of received samples is different than the number of sent samples
 			if (nPositionSignalSamples != nCommandSignalSamples) {
@@ -8217,7 +8289,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// analyze galvo response  
 			for (size_t i = 0; i < CALPOINTS; i++) {
 				// get average position and signal StdDev
-				StdDev(*positionSignalPtr + i*nSamplesPerCalPoint + nDelaySamples, POSSAMPLES, &Pos[i], &PosStdDev[i]);
+				StdDev(positionSignal + i*nSamplesPerCalPoint + nDelaySamples, POSSAMPLES, &Pos[i], &PosStdDev[i]);
 				Comm[i] = 2*cal->commandVMax * i /(CALPOINTS - 1) - cal->commandVMax; 
 			}
 				
@@ -8308,8 +8380,8 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
 			
 			//get pointer to galvo position signal
-			positionSignalPtr 	= (double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
-			commandSignalPtr	= (double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
+			positionSignal 	= *(double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
+			commandSignal	= *(double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
 			
 			// check if number of received samples is different than the number of sent samples
 			if (nPositionSignalSamples != nCommandSignalSamples) {
@@ -8325,7 +8397,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// sum up ramp responses
 			for (size_t i = 0; i < cal->nRepeat; i++)
 				for (size_t j = 0; j < cal->nRampSamples + postRampSamples; j++)
-					averageResponse[j] += (*positionSignalPtr)[i*(flybackSamples + cal->nRampSamples + postRampSamples)+flybackSamples+j];
+					averageResponse[j] += positionSignal[i * (flybackSamples + cal->nRampSamples + postRampSamples) + flybackSamples + j];
 				
 			// average ramp responses
 			for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] /= cal->nRepeat;
@@ -8352,7 +8424,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_XNAME, "Time (ms)");
 			SetCtrlAttribute(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, ATTR_YNAME, "Galvo signals (V)");
 			// plot waveforms
-			PlotWaveform(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, *commandSignalPtr+flybackSamples, cal->nRampSamples + postRampSamples, VAL_DOUBLE, 1.0, 0, 0, 1000/ *cal->baseClass.comSampRate, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, VAL_BLUE);
+			PlotWaveform(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, commandSignal + flybackSamples, cal->nRampSamples + postRampSamples, VAL_DOUBLE, 1.0, 0, 0, 1000/ *cal->baseClass.comSampRate, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, VAL_BLUE);
 			PlotWaveform(cal->baseClass.calPanHndl, NonResGCal_GalvoPlot, averageResponse, cal->nRampSamples + postRampSamples, VAL_DOUBLE, 1.0, 0, 0, 1000/ *cal->baseClass.comSampRate, VAL_THIN_LINE, VAL_NO_POINT, VAL_SOLID, 1, VAL_RED);
 			
 			double x, y;
@@ -8368,7 +8440,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 				cal->currIterIdx = 0;
 				cal->currentCal++; 
 				cal->lastRun = FALSE;
-				*cal->lag = MeasureLag(*commandSignalPtr+flybackSamples, averageResponse, cal->nRampSamples + postRampSamples) * 1000/ *cal->baseClass.comSampRate; // response lag in [ms]
+				*cal->lag = MeasureLag(commandSignal + flybackSamples, averageResponse, cal->nRampSamples + postRampSamples) * 1000/ *cal->baseClass.comSampRate; // response lag in [ms]
 				// update results
 				int calibPanHndl;
 				GetPanelHandleFromTabPage(cal->baseClass.calPanHndl, NonResGCal_Tab, 0, &calibPanHndl);
@@ -8463,8 +8535,8 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
 			
 			//get pointer to galvo position signal
-			positionSignalPtr 	= (double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
-			commandSignalPtr	= (double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
+			positionSignal 	= *(double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
+			commandSignal	= *(double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
 			
 			// check if number of received samples is different than the number of sent samples
 			if (nPositionSignalSamples != nCommandSignalSamples) {
@@ -8478,7 +8550,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// sum up step responses
 			for (size_t i = 0; i < cal->nRepeat; i++)
 				for (size_t j = 0; j < postStepSamples; j++)
-					averageResponse[j] += (*positionSignalPtr)[i * (flybackSamples + postStepSamples) + flybackSamples + j];
+					averageResponse[j] += positionSignal[i * (flybackSamples + postStepSamples) + flybackSamples + j];
 			// average ramp responses
 			for (size_t i = 0; i < postStepSamples; i++) averageResponse[i] /= cal->nRepeat;
 				
@@ -8585,8 +8657,8 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
 			
 			//get pointer to galvo position signal
-			positionSignalPtr	= (double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
-			commandSignalPtr	= (double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
+			positionSignal	= *(double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
+			commandSignal	= *(double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
 			
 			// check if number of received samples is different than the number of sent samples
 			if (nPositionSignalSamples != nCommandSignalSamples) {
@@ -8601,7 +8673,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// sum up ramp responses
 			for (size_t i = 0; i < cal->nRepeat; i++)
 				for (size_t j = 0; j < cal->nRampSamples + postRampSamples; j++)
-					averageResponse[j] += (*positionSignalPtr)[i * (flybackSamples + cal->nRampSamples + postRampSamples) + flybackSamples + j];
+					averageResponse[j] += positionSignal[i * (flybackSamples + cal->nRampSamples + postRampSamples) + flybackSamples + j];
 			// average ramp responses
 			for (size_t i = 0; i < cal->nRampSamples + postRampSamples; i++) averageResponse[i] /= cal->nRepeat;
 				
@@ -8723,8 +8795,8 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
 			
 			//get pointer to galvo position signal
-			positionSignalPtr 	= (double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
-			commandSignalPtr	= (double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
+			positionSignal 	= *(double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
+			commandSignal	= *(double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
 			
 			// check if number of received samples is different than the number of sent samples
 			if (nPositionSignalSamples != nCommandSignalSamples) {
@@ -8739,7 +8811,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 				
 			// check if there is overload
 			for (size_t i = 0; i < nSamples; i++) 
-				if (((*positionSignalPtr)[i] < - funcAmp/2 * 1.5 - 10 * *cal->posStdDev) || ((*positionSignalPtr)[i] > funcAmp/2 * 1.5 + 10 * *cal->posStdDev)) {
+				if ((positionSignal[i] < - funcAmp/2 * 1.5 - 10 * *cal->posStdDev) || (positionSignal[i] > funcAmp/2 * 1.5 + 10 * *cal->posStdDev)) {
 					overloadFlag = TRUE;
 					break;
 				}
@@ -8756,7 +8828,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 				// sum up triangle wave response taking into account the lag between command and response
 				for (size_t i = 0; i < nCycles; i++)
 					for (size_t j = 0; j < cycleSamples; j++)
-						averageResponse[j] += (*positionSignalPtr)[i * cycleSamples + delta + j];
+						averageResponse[j] += positionSignal[i * cycleSamples + delta + j];
 				// average ramp responses
 				for (size_t i = 0; i < cycleSamples; i++) averageResponse[i] /= nCycles;
 			
@@ -8791,7 +8863,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 					cal->triangleCal->maxFreq = realloc(cal->triangleCal->maxFreq, cal->triangleCal->n * sizeof(double));   
 					cal->triangleCal->maxFreq[cal->triangleCal->n - 1] = maxSlope * 1000/(2 * funcAmp);  // maximum triangle function frequency! 
 					cal->triangleCal->resLag = realloc(cal->triangleCal->resLag, cal->triangleCal->n * sizeof(double));  
-					cal->triangleCal->resLag[cal->triangleCal->n - 1] = MeasureLag(*commandSignalPtr, averageResponse, cycleSamples) * 1000/ *cal->baseClass.comSampRate;
+					cal->triangleCal->resLag[cal->triangleCal->n - 1] = MeasureLag(commandSignal, averageResponse, cycleSamples) * 1000/ *cal->baseClass.comSampRate;
 					cal->triangleCal->deadTime += nTotalSamplesDelay / *cal->baseClass.comSampRate * 1000 ; // delay in ms 
 						
 					// plot

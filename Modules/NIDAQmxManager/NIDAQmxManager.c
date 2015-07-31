@@ -14722,7 +14722,8 @@ static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates st
 	}
 	
 	// just make sure the device is configured again before start
-	ConfigDAQmxDevice(dev, errorInfo);
+	if (state == TaskTree_Started)
+		ConfigDAQmxDevice(dev, errorInfo);
 	
 	return 0;
 }

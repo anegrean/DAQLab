@@ -1856,6 +1856,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;	
 					}
 					
+					// consider only transitions from other states to TC_State_Initial 
+					if (!(childTCPtr->childTCState == TC_State_Initial && childTCPtr->previousChildTCState != TC_State_Initial))
+						break; // stop here
+					
 					// reset task controller and set it to initial state if all child TCs are in their initial state
 					if (AllChildTCsInState(taskControl, TC_State_Initial)) {
 						// reset device/module
@@ -2242,6 +2246,10 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						break;
 					}
 					
+					// consider only transitions from other states to TC_State_Initial 
+					if (!(childTCPtr->childTCState == TC_State_Initial && childTCPtr->previousChildTCState != TC_State_Initial))
+						break; // stop here
+					
 					if (AllChildTCsInState(taskControl, TC_State_Initial)) {
 						// reset device/module
 						if (FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errMsg) <0) {
@@ -2549,15 +2557,15 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					// If ChildTCs are not yet complete, stay in RUNNING state and wait for their completion
 					//---------------------------------------------------------------------------------------------------------------- 
 					
-					// consider only transitions to TC_State_Done 
-					if (childTCPtr->childTCState != TC_State_Done)
+					// consider only transitions from other states to TC_State_Done 
+					if (!(childTCPtr->childTCState == TC_State_Done && childTCPtr->previousChildTCState != TC_State_Done))
 						break; // stop here
 					
 					if (!AllChildTCsInState(taskControl, TC_State_Done))  
 						break; // stop here
 					
 					// put all child TC's out of date to prevent race here
-					SetChildTCsOutOfDate(taskControl);
+					//SetChildTCsOutOfDate(taskControl);
 					
 					//---------------------------------------------------------------------------------------------------------------- 
 					// Decide on state transition
@@ -3213,6 +3221,11 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 						ChangeState(taskControl, &eventpacket[i], TC_State_Configured);
 						break;
 					}
+					
+					
+					// consider only transitions from other states to TC_State_Initial 
+					if (!(childTCPtr->childTCState == TC_State_Initial && childTCPtr->previousChildTCState != TC_State_Initial))
+						break; // stop here
 					
 					// check states of all childTCs and transition to INITIAL state if all childTCs are in INITIAL state
 					if (AllChildTCsInState(taskControl, TC_State_Initial)) {

@@ -27,21 +27,10 @@
 //==============================================================================
 // Macros
 
-#ifndef	OKfree
 #define OKfree(ptr) 					if (ptr) {free(ptr); ptr = NULL;}
-#endif
-		
-#ifndef	OKfreeCAHndl
 #define OKfreeCAHndl(objHandle)			if (objHandle) {CA_DiscardObjHandle(objHandle); objHandle = 0;}
-#endif
-		
-#ifndef OKfreePanHndl
 #define OKfreePanHndl(panelHandle)  	if (panelHandle) {DiscardPanel(panelHandle); panelHandle = 0;}
-#endif
-		
-#ifndef OKfreeList
-#define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}
-#endif
+#define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}  
 
 #define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to 
 													 // get the number of elements in an array passed as an argument!
@@ -54,22 +43,27 @@
 // 
 // and make sure the function returns an int error code as well as has a char** errorInfo parameter
 
-#ifndef ReturnErrMsg
-#define ReturnErrMsg(FunctionName) 																	\
-	if (error < 0) {																				\
-		if (!errMsg) errMsg = FormatMsg(error, FunctionName, "Unknown error or out of memory.");	\
-		if (errorInfo)																				\
-			*errorInfo = errMsg;																	\
-		else																						\
-			OKfree(errMsg);																			\
-	};
-#endif
+#define ReturnErrMsg(FunctionName) if (!errMsg) errMsg = FormatMsg(error, FunctionName, "Unknown or out of memory");	\
+	if (errorInfo)																										\
+		*errorInfo = errMsg;																							\
+	else																												\
+		OKfree(errMsg);
+					
+/* Log Messages that is only printed when _CVI_DEBUG_ is set and it is within 
+ * _DEBUG_LEVEL_
+ */
+#define LOG_MSG(level, f)		if (_CVI_DEBUG_ & level <= _DEBUG_LEVEL_) { 				\
+									printf("(%s: %d) " f "\n", __FILE__, __LINE__); 		\
+								}
 													 
-#ifndef nullWinChk
-#define nullWinChk(fCall) if ((fCall) == 0) \
-{winError = GetLastError(); goto WinError;} else
-#endif
-
+#define LOG_MSG1(level, f, v)	if (_CVI_DEBUG_ & level <= _DEBUG_LEVEL_) { 				\
+									printf("(%s: %d) " f "\n", __FILE__, __LINE__, v); 		\
+								}
+													 
+#define LOG_MSG2(level, f, v1, v2)	if (_CVI_DEBUG_ & level <= _DEBUG_LEVEL_) { 			\
+									printf("(%s: %d) " f "\n", __FILE__, __LINE__, v1, v2); \
+								}
+													 
 //==============================================================================
 // Types
 

@@ -30,10 +30,11 @@
 // Pockells calibration table column indices
 #define CalibTableColIdx_Wavelength			1
 #define CalibTableColIdx_MaxPower			2
-#define CalibTableColIdx_aCoefficient		3
-#define CalibTableColIdx_bCoefficient		4
-#define CalibTableColIdx_cCoefficient		5
-#define CalibTableColIdx_dCoefficient		6
+#define CalibTableColIdx_CurrentPower		3
+#define CalibTableColIdx_aCoefficient		4
+#define CalibTableColIdx_bCoefficient		5
+#define CalibTableColIdx_cCoefficient		6
+#define CalibTableColIdx_dCoefficient		7
 
 //----------------------------------------
 // VChans
@@ -912,6 +913,11 @@ static void AddCalibTableEntry (PockellsEOM_type* eom, PockellsEOMCal_type* eomC
 	SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eomCal->wavelength);
 	cell.x = CalibTableColIdx_MaxPower;
 	SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eomCal->maxPower);
+	cell.x = CalibTableColIdx_CurrentPower;
+	if (eom->isPulsed)
+		SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eom->pulsedOutputPower * eomCal->maxPower);
+	else
+		SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eom->outputPower * eomCal->maxPower);
 	cell.x = CalibTableColIdx_aCoefficient;
 	SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eomCal->a);
 	cell.x = CalibTableColIdx_bCoefficient;
@@ -1152,8 +1158,7 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 					
 				case Calib_Close:
 					
-					DiscardPanel(eom->calibPanHndl);
-					eom->calibPanHndl = 0;
+					OKfreePanHndl(eom->calibPanHndl);
 					break;
 					
 				case Calib_Table:
@@ -1188,7 +1193,36 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
 								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
 								// update UI power display
-								SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->outputPower * eomCal->maxPower);
+								if (eom->isPulsed)
+									SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->pulsedOutputPower * eomCal->maxPower);
+								else
+									SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->outputPower * eomCal->maxPower);
+							}
+							break;
+							
+						case CalibTableColIdx_CurrentPower:
+							
+							double	currentPower 	= 0;
+							Point	maxPowerCell	= {.x = CalibTableColIdx_MaxPower, .y = cell.y};
+							
+							GetTableCellVal(panel, control, cell, &currentPower);
+							
+							if (eom->isPulsed)
+								eomCal->maxPower = currentPower/eom->pulsedOutputPower;
+							else
+								eomCal->maxPower = currentPower/eom->outputPower;
+							
+							SetTableCellVal(panel, control, maxPowerCell, eomCal->maxPower); 
+							// change scaling for pockells cell control
+							if (cell.y == eom->calibIdx) {
+								// set limits
+								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MIN_VALUE, eomCal->d * eomCal->maxPower);
+								SetCtrlAttribute(eom->eomPanHndl, Pockells_Output, ATTR_MAX_VALUE, eomCal->maxPower);
+								// update UI power display
+								if (eom->isPulsed)
+									SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->pulsedOutputPower * eomCal->maxPower);
+								else
+									SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->outputPower * eomCal->maxPower);
 							}
 							
 							break;
@@ -1223,7 +1257,10 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 								eomCal->c = paramVal;
 								if (cell.y == eom->calibIdx)
 								// apply voltage
-								errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+								if (eom->isPulsed)
+									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->pulsedOutputPower), &errMsg) );
+								else
+									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
 							}
 							else
 								SetTableCellVal(panel, control, cell, eomCal->c);
@@ -1331,6 +1368,7 @@ static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, vo
 	int						wavelengthIdx	= 0;
 	int						error			= 0;
 	char*					errMsg			= NULL;
+	Point					cell			= {.x = 0, .y = 0};
 	
 	
 	switch (event) {
@@ -1364,11 +1402,25 @@ static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, vo
 					if (eom->isPulsed) {
 						// set voltage to get desired beam intensity
 						GetCtrlVal(panel, control, &eom->pulsedOutputPower);
-						eom->pulsedOutputPower /= eomCal->maxPower; 
+						eom->pulsedOutputPower /= eomCal->maxPower;
+						
+						if (eom->calibPanHndl) {
+							cell.x = CalibTableColIdx_CurrentPower;
+							cell.y = wavelengthIdx + 1;
+							SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eom->pulsedOutputPower * eomCal->maxPower);
+						}
+						
 					} else {
 						// apply voltage to get desired beam intensity
 						GetCtrlVal(panel, control, &eom->outputPower);
-						eom->outputPower /= eomCal->maxPower; 
+						eom->outputPower /= eomCal->maxPower;
+						
+						if (eom->calibPanHndl) {
+							cell.x = CalibTableColIdx_CurrentPower;
+							cell.y = wavelengthIdx + 1;
+							SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eom->outputPower * eomCal->maxPower);
+						}
+						
 						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
 					}
 					

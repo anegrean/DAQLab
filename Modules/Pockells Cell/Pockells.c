@@ -1181,6 +1181,7 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 						case CalibTableColIdx_MaxPower:
 							
 							GetTableCellVal(panel, control, cell, &eomCal->maxPower);
+							
 							// change scaling for pockells cell control
 							if (cell.y == eom->calibIdx) {
 								// set limits
@@ -1189,6 +1190,7 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 								// update UI power display
 								SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->outputPower * eomCal->maxPower);
 							}
+							
 							break;
 						
 						case CalibTableColIdx_aCoefficient:
@@ -1330,15 +1332,16 @@ static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, vo
 	int						error			= 0;
 	char*					errMsg			= NULL;
 	
-	// update index of assigned calibration
-	GetCtrlIndex(panel, Pockells_Wavelength, &wavelengthIdx);
-	if (wavelengthIdx < 0) return 0; // no calibrations
-	eom->calibIdx = wavelengthIdx + 1;
-	eomCal = ListGetPtrToItem(eom->calib, eom->calibIdx);
 	
 	switch (event) {
 			
 		case EVENT_COMMIT:
+			
+			// update index of assigned calibration
+			GetCtrlIndex(panel, Pockells_Wavelength, &wavelengthIdx);
+			if (wavelengthIdx < 0) return 0; // no calibrations
+			eom->calibIdx = wavelengthIdx + 1;
+			eomCal = ListGetPtrToItem(eom->calib, eom->calibIdx);
 			
 			switch (control) {
 					

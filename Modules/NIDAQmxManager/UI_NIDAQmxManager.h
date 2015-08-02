@@ -105,8 +105,8 @@
 #define  RefTrig1_Slope                   3       /* control type: ring, callback function: (none) */
 #define  RefTrig1_TrigType                4       /* control type: ring, callback function: (none) */
 #define  RefTrig1_Duration                5       /* control type: numeric, callback function: (none) */
-#define  RefTrig1_NSamples                6       /* control type: numeric, callback function: (none) */
-#define  RefTrig1_Source                  7       /* control type: string, callback function: (none) */
+#define  RefTrig1_Source                  6       /* control type: string, callback function: (none) */
+#define  RefTrig1_NSamples                7       /* control type: numeric, callback function: (none) */
 
 #define  RefTrig2                         14
 #define  RefTrig2_Plate                   2       /* control type: deco, callback function: (none) */

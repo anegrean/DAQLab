@@ -8160,7 +8160,7 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 	NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 	//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine); 
 	
-	if (activeROIAvailable)
+	if (nROIs)
 		SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, FALSE);
 	else
 		SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, TRUE);

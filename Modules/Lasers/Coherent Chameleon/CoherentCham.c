@@ -69,7 +69,7 @@
 // COM settings
 //--------------------------------
 
-#define COMPort_ReplyTimeout				1.0					// Timeout to wait for a reply from the laser in [s]
+#define COMPort_ReplyTimeout				10.0				// Timeout to wait for a reply from the laser in [s]
 #define COMPort_Timeout						0.02				// Timeout in [s] for read and write operations
 #define COMPort_NBytes						50					// Number of bytes to read at once
 	
@@ -263,8 +263,10 @@ void discard_CoherentCham (DAQLabModule_type** mod)
 	}
 	
 	// close RS232 COM port
-	if (laser->COMPortInfo->portNumber)
+	if (laser->COMPortInfo->portNumber) {
 		CloseCom(laser->COMPortInfo->portNumber);
+		laser->COMPortInfo->portNumber = 0;
+	}
 	
 	discard_COMPortSettings_type(&laser->COMPortInfo);
 	
@@ -564,11 +566,24 @@ static int CVICALLBACK UISerialCOMSettings_CB (int panel, int control, int event
 					
 				case COMSetPan_Port:										  
 					
-					// close port in case it is open
-					if (laser->COMPortInfo->portNumber)
-						RS232ErrChk( CloseCom(laser->COMPortInfo->portNumber) );
+					int	newPortNumber = 0;
 					
-					GetCtrlVal(panel, control, &laser->COMPortInfo->portNumber);
+					GetCtrlVal(panel, control, &newPortNumber);
+					
+					// stop async timer polling the laser if there is not port number
+					if (!newPortNumber) {
+						DiscardAsyncTimer(laser->statusTimerID); 
+						laser->statusTimerID = 0;
+					}
+					
+					// close port in case it is open
+					if (laser->COMPortInfo->portNumber) {
+						RS232ErrChk( CloseCom(laser->COMPortInfo->portNumber) );
+						laser->COMPortInfo->portNumber = 0;
+					}
+					
+					// assign new port number and initialize polling
+					laser->COMPortInfo->portNumber = newPortNumber;
 					errChk( InitLaserCOM(laser, &errMsg) );
 					break;
 					

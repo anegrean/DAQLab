@@ -1,0 +1,21 @@
+Stopping a task controller from iterating in continuous mode often causes the error "Iterate event is invalid for Done state". This is not seen when settings the task controller to finite iterations, presumably because in Idle state iterate events are ignored. The iterate event that causes this problem is sent from the Iteration Function Active State.
+
+OK
+-------------------------
+tc2,  (iteration: 18), (state: Iteration Function Active),  (event: Stop),  (action: FCall Iteration Stop),  (child states: {})
+tc2,  (iteration: 19), (state: Iteration Function Active->Running),  (event: Iteration Done),  (action: State change),  (child states: {})
+tc2,  (iteration: 19), (state: Running),  (event: Stop),  (action: FCall Done),  (child states: {})
+tc2,  (iteration: 19), (state: Running->Done),  (event: Stop),  (action: State change),  (child states: {})
+tc2,  (iteration: 19), (state: Done),  (event: Stop),  (action: FCall Task Tree Status),  (child states: {})
+
+
+Not OK
+-------------------------
+tc2,  (iteration: 19), (state: Running->Iteration Function Active),  (event: Iterate),  (action: State change),  (child states: {})
+tc2,  (iteration: 20), (state: Iteration Function Active->Running),  (event: Iteration Done),  (action: State change),  (child states: {})
+tc2,  (iteration: 20), (state: Running),  (event: Stop),  (action: FCall Done),  (child states: {})
+tc2,  (iteration: 20), (state: Running->Done),  (event: Stop),  (action: State change),  (child states: {})
+tc2,  (iteration: 20), (state: Done),  (event: Stop),  (action: FCall Task Tree Status),  (child states: {})
+tc2,  (iteration: 20), (state: Error),  (event: Iterate),  (action: FCall Error),  (child states: {})
+tc2,  (iteration: 20), (state: Error),  (event: Iterate),  (action: FCall Task Tree Status),  (child states: {})
+tc2,  (iteration: 20), (state: Done->Error),  (event: Iterate),  (action: State change),  (child states: {})

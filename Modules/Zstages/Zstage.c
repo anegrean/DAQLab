@@ -136,10 +136,7 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	
 		// DATA
 			
-			// adding Task Controller to module list
-			
-	// ListInsertItem(zstage->baseClass.taskControllers, &tc, END_OF_LIST);  
-												 
+	
 		// METHODS
 	
 			// overriding methods
@@ -413,6 +410,9 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 	} else
 		SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_RefPosList, ATTR_DIMMED, 1);
 	
+	// register task controller with framework
+	DLAddTaskController((DAQLabModule_type*)zstage, zstage->taskController);
+	
 	return 0;
 	
 Error:
@@ -622,9 +622,10 @@ static int UpdatePositionDisplay	(Zstage_type* zstage)
 
 static int UpdateZSteps (Zstage_type* zstage)
 {
-	double		nsteps;
-	double 		stepSize;
 	int			error		= 0;
+	
+	long		nSteps		= 0;
+	double 		stepSize	= 0;
 	
 	// get step size
 	GetCtrlVal(zstage->controlPanHndl, ZStagePan_ZStepSize, &stepSize);  				// in [um]
@@ -641,9 +642,13 @@ static int UpdateZSteps (Zstage_type* zstage)
 	zstage->endRelPos		/= 1000;													// convert to [mm]
 	
 	// calculate steps and adjust end position to be multiple of stepSize
-	nsteps					= ceil(zstage->endRelPos/stepSize);
-	zstage->nZSteps			= (size_t) fabs(nsteps);
-	zstage->endRelPos 		= nsteps * stepSize;
+	nSteps					= RoundRealToNearestInteger(zstage->endRelPos/stepSize);
+	if (nSteps)
+		zstage->nZSteps		= fabs(nSteps)+1;
+	else
+		zstage->nZSteps		= 0;
+		
+	zstage->endRelPos 		= nSteps * stepSize;
 	
 	// display values
 	errChk( SetCtrlVal(zstage->controlPanHndl, ZStagePan_StartAbsPos, *zstage->startAbsPos * 1000) );		// convert from [mm] to [um]

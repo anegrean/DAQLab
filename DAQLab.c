@@ -166,9 +166,6 @@ typedef struct {
 
 //==============================================================================
 // Static global variables
-// test lex
-double Ttaskstart; 
-
 
 
 	// DAQLab XML ActiveX server controller handle for DOM XML management
@@ -3474,7 +3471,6 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 					
 				case TCPan1_StartStop:
 					
-					Ttaskstart=Timer();     
 					
 					GetCtrlVal(panel,control,&starttask);
 					if (starttask) {
@@ -3894,7 +3890,7 @@ static void IterateUITC	(TaskControl_type* taskControl, Iterator_type* iterator,
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
 	// iteration complete, update current iteration number
-	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(iterator) + 1);
+	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(iterator)+1);
 	
 	TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL);
 }
@@ -3912,15 +3908,8 @@ static int StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 static int DoneUITC  (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
-	BOOL				taskControllerMode;
 	char				buf[100];
-	double 				TotalTime;
-	
-	//test lex
-	TotalTime=Timer()-Ttaskstart;
-	Fmt(buf, "%s<Total Time:%f[p2]\n", TotalTime);    
-	DLMsg(buf,0);
-	
+
 	// change Task Controller name background color from green (0x002BD22F) to gray (0x00F0F0F0)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
 	// switch Stop button back to Start button
@@ -3934,8 +3923,7 @@ static int DoneUITC  (TaskControl_type* taskControl, Iterator_type* iterator, BO
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
 	
 	// undim Repeat button if task is finite
-	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Mode, &taskControllerMode);  
-	if (!taskControllerMode == TASK_FINITE)
+	if (GetTaskControlMode(taskControl) == TASK_FINITE)
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
 	// undim Mode button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
@@ -3957,6 +3945,9 @@ static int ResetUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
 	// undim Mode button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
+	// undim Repeat button if finite
+	if (GetTaskControlMode(taskControl) == TASK_FINITE)
+		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
 	// undim Iteration Stack button
@@ -3971,7 +3962,6 @@ static int ResetUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 static int StoppedUITC	(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
-	BOOL				taskControllerMode;
 	
 	// change Task Controller name background color from green (0x002BD22F) to gray (0x00F0F0F0)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
@@ -3984,16 +3974,21 @@ static int StoppedUITC	(TaskControl_type* taskControl, Iterator_type* iterator, 
 	}
 	// dim Abort button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Abort, ATTR_DIMMED, 1);
+	
+	// Taken out because Task Controller is in an IDLE state and these should not be changed since pressing Start execution will continue
+	/*
 	// undim Repeat button if task is finite 
 	GetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_Mode, &taskControllerMode);  
 	if (!taskControllerMode == TASK_FINITE)
 		SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Repeat, ATTR_DIMMED, 0);
+	
 	// undim Iteration Wait button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Wait, ATTR_DIMMED, 0);
 	// undim Mode button
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Mode, ATTR_DIMMED, 0);
+	*/
 	// update iterations display
-	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(iterator));
+	//SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(iterator));
 	
 	return 0; 
 }

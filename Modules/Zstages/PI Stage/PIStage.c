@@ -168,9 +168,7 @@ DAQLabModule_type*	initalloc_PIStage	(DAQLabModule_type* mod, char className[], 
 	// Parent Level 0: DAQLabModule_type 
 	
 		// DATA
-	
-		// adding Task Controller to module list
-	ListInsertItem(zstage->baseClass.taskControllers, &tc, END_OF_LIST); 
+		
 	
 		//METHODS
 	
@@ -780,6 +778,10 @@ static int SetHWStageLimits	(Zstage_type* zstage, double minimumLimit, double ma
 		return -1;	
 	}
 	
+	// Taken out because it is not handy to have the Z-stage move to its reference position each time the software starts
+	// i.e. if the software crashes during an experiment, then the focal plane is lost.
+	
+	/*
 	// reference axis again
 	// check if there are limit switches
 	if (!PI_qLIM(PIStage->PIStageID, PIStage->assignedAxis, &HasLimitSwitchesFlag)) {
@@ -817,6 +819,7 @@ static int SetHWStageLimits	(Zstage_type* zstage, double minimumLimit, double ma
 	} while (!ReadyFlag);
 		
 	Sleep(PIStage_SETTLING_TIMEOUT * 1000);	// make sure stage settles before reading position
+	*/
 	
 	return 0;
 }
@@ -831,7 +834,7 @@ static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, ch
 	
 	// set number of Task Controller iterations
 	// first iteration the stage doesn't move from the starting position, therefore for nZSteps there will be nZSteps+1 iterations
-	SetTaskControlIterations(taskControl, zstage->nZSteps + 1);
+	SetTaskControlIterations(taskControl, zstage->nZSteps);
 	
 	return 0;
 }
@@ -882,7 +885,12 @@ static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 
 static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
-	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	PIStage_type* 		zstage 		= GetTaskControlModuleData(taskControl);
+	size_t 				iterindex	= GetCurrentIterIndex(iterator);
+	
+	// update iteration counter
+	if (zstage->baseClass.SetStepCounter)
+		(*zstage->baseClass.SetStepCounter) (zstage, iterindex);
 	
 	// undim items
 	(*zstage->baseClass.DimWhenRunning) ((Zstage_type*)zstage, FALSE);
@@ -892,7 +900,12 @@ static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL 
 
 static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
 {
-	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	PIStage_type* 		zstage 		= GetTaskControlModuleData(taskControl);
+	size_t 				iterindex	= GetCurrentIterIndex(iterator);
+	
+	// update iteration counter
+	if (zstage->baseClass.SetStepCounter)
+		(*zstage->baseClass.SetStepCounter) (zstage, iterindex);
 	
 	// undim items
 	(*zstage->baseClass.DimWhenRunning) ((Zstage_type*)zstage, FALSE);

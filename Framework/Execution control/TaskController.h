@@ -214,10 +214,12 @@ void 					SetTaskControlName 					(TaskControl_type* taskControl, char newName[]
 	// Returns pointer to dynamically allocated Task Controller name (null terminated string) 
 char*					GetTaskControlName					(TaskControl_type* taskControl);
 
-char*					GetTaskControlStateName				(TaskControl_type* taskControl);
+	// Obtains the current state of a Task Controller. A call to this function blocks ongoing state transitions and if TC state knowledge is not needed anymore,
+	// this call must be followed each time it is called by GetTaskControlState_ReleaseLock. On success returns 0, on failure a negative number.
+int 					GetTaskControlState_GetLock 		(TaskControl_type* taskControl, TCStates* tcStatePtr, BOOL* lockObtained);
+	// Releases GetTaskControlState lock so state transitions may resume. On success returns 0 and lockObtained is set back to FALSE. On failure returns a negative value and lockObtained remains TRUE. 
+int						GetTaskControlState_ReleaseLock		(TaskControl_type* taskControl, BOOL* lockObtained);
 
-	// Return the state of a Task Controller
-TCStates				GetTaskControlState					(TaskControl_type* taskControl);
 														
 	// repeats = 1 by default
 void					SetTaskControlIterations			(TaskControl_type* taskControl, size_t repeat);
@@ -274,6 +276,16 @@ BOOL					GetTaskControlAbortFlag				(TaskControl_type* taskControl);
 	// operations, call if necessary TaskControlIterationDone ().
 	// Note: This is similar to using the IterationStopFptr_type callback. Do not make use of both methods at the same time to stop an ogoing process.
 BOOL					GetTaskControlIterationStopFlag		(TaskControl_type* taskControl);
+
+	// Checks if a Task Controller is in use, i.e. if it is in any of the following states: Idle, Running, IterationFunctionActive, Stopping.
+	// A call to this function blocks ongoing state transitions and if TC use knowledge is not needed anymore, this call must be followed each time 
+	// it is called by GetTaskControlState_ReleaseLock. On success returns 0 and sets lockObtained to TRUE, on failure returns a negative number and sets lockObtained to FALSE.
+int 					IsTaskControllerInUse_GetLock 		(TaskControl_type* taskControl, BOOL* inUsePtr, BOOL* lockObtained);
+	// Releases isTaskControllerInUse lock so state transitions maye resume. On success returns 0 and lockObtained is set back to FALSE. On failure returns a negative value and lockObtained remains TRUE. 
+int 					IsTaskControllerInUse_ReleaseLock 	(TaskControl_type* taskControl, BOOL* lockObtained);
+
+	// Converts a task Controller state ID into a string
+char*					TaskControlStateToString			(TCStates state);
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller composition functions
@@ -338,26 +350,26 @@ void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Adds a VChan to the Task Controller that is used to receive incoming data and binds it to a given callback when data is received.
-int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr); 
+int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, char** errorInfo); 
 	// Removes a Sink VChan assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan.
-int						RemoveSinkVChan 					(TaskControl_type* taskControl, SinkVChan_type* sinkVChan);
+int						RemoveSinkVChan 					(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, char** errorInfo);
 
 	// Removes all Sink VChans assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan. 
-int 					RemoveAllSinkVChans 				(TaskControl_type* taskControl);
+int 					RemoveAllSinkVChans 				(TaskControl_type* taskControl, char** errorInfo);
 
 	// Associates a SourceVChan with the Task Controller
-int						AddSourceVChan						(TaskControl_type* taskControl, SourceVChan_type* sourceVChan);
+int						AddSourceVChan						(TaskControl_type* taskControl, SourceVChan_type* sourceVChan, char** errorInfo);
 
 	// Removes a Source VChan assigned to the Task Controller. Note that this function does not destroy the VChan object.
-int						RemoveSourceVChan					(TaskControl_type* taskControl, SourceVChan_type* sourceVChan);
+int						RemoveSourceVChan					(TaskControl_type* taskControl, SourceVChan_type* sourceVChan, char** errorInfo);
 
 	// Removes all Source VChans assigned to the Task Controller. Note that this function does not destroy the VChan objects.
-int						RemoveAllSourceVChan				(TaskControl_type* taskControl);
+int						RemoveAllSourceVChan				(TaskControl_type* taskControl, char** errorInfo);
 
 	// Disconnects Source VChans from all Sink VChans assigned to the Task Controller but does not remove the Sink VChans from the Task Controller.
-void					DisconnectAllSinkVChans				(TaskControl_type* taskControl);
+int						DisconnectAllSinkVChans				(TaskControl_type* taskControl, char** errorInfo);
 
 	// Clears all data packets from all the Sink VChans of a Task Controller
 int						ClearAllSinkVChans					(TaskControl_type* taskControl, char** errorInfo);

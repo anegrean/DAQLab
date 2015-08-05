@@ -18,8 +18,6 @@
 
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}
 
-#define Default_ROI_Label_FontSize		12			// in points
-
 //==============================================================================
 // Types
 
@@ -66,7 +64,9 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 								DisplayEngine_type* 					displayEngine,
 								ImgDisplayCBData_type					imageDisplayCBData 		)
 {
-
+	int				error 		= 0;
+	Image_type**	imagePtr	= NULL;
+	
 	//--------------------------------------
 	// init
 	//--------------------------------------
@@ -74,40 +74,51 @@ int init_ImageDisplay_type	(	ImageDisplay_type*						imageDisplay,
 	// image display data binding
 	imageDisplay->displayEngine					= displayEngine;
 	imageDisplay->imageDisplayCBData			= imageDisplayCBData;
-	
 	// image data
-	imageDisplay->image							= NULL;
-	
-	
-	// ROI management
-	imageDisplay->ROITextBackground.R			= 0;
-	imageDisplay->ROITextBackground.G			= 0;	
-	imageDisplay->ROITextBackground.B			= 0;	
-	imageDisplay->ROITextBackground.alpha		= 255;	// transparent
-	imageDisplay->ROITextFontSize				= Default_ROI_Label_FontSize;
+	imageDisplay->imageTSV						= 0;
 	imageDisplay->ROIEvent						= ROI_Placed;
-	
 	// methods
 	imageDisplay->discardFptr					= discardFptr;       
-	
 	// callbacks
 	imageDisplay->callbacks						= NULL;
 	
-	return 0;
+	//--------------------------------------
+	// alloc (can fail)
+	//--------------------------------------
 	
+	errChk( CmtNewTSV(sizeof(Image_type*), &imageDisplay->imageTSV) );
+	// init image
+	errChk( CmtGetTSVPtr(imageDisplay->imageTSV, &imagePtr) );
+	*imagePtr = NULL;
+	CmtReleaseTSVPtr(imageDisplay->imageTSV);
+	
+Error:
+	
+	return error;
 }
 
 void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 {
-	ImageDisplay_type* 	imageDisplay 	= *imageDisplayPtr;
+	ImageDisplay_type* 		imageDisplay 	= *imageDisplayPtr;
+	Image_type**			imagePtr		= NULL;
 	
 	if (!imageDisplay) return;
 	
-	discard_Image_type(&imageDisplay->image);
+	// dispose image
+	if( CmtGetTSVPtr(imageDisplay->imageTSV, &imagePtr)  < 0) goto SkipDiscardImage;
+	discard_Image_type(imagePtr);
+	CmtReleaseTSVPtr(imageDisplay->imageTSV);
+	SkipDiscardImage:
+	
+	// discard image TSV
+	if (imageDisplay->imageTSV) {
+		CmtDiscardTSV(imageDisplay->imageTSV);
+		imageDisplay->imageTSV = 0;
+	}
 	
 	discard_CallbackGroup_type(&imageDisplay->callbacks);
 	
-	//OKfree(*imageDisplayPtr);
+	OKfree(*imageDisplayPtr);
 }
 
 void discard_DisplayEngine_type (DisplayEngine_type** displayEnginePtr)

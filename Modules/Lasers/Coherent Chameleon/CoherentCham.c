@@ -275,6 +275,7 @@ void discard_CoherentCham (DAQLabModule_type** mod)
 	OKfree(laser->mainPanTopPos);
 	OKfreePanHndl(laser->mainPanHndl);
 	OKfreePanHndl(laser->serialCOMSetPanHndl);
+	if (laser->menuBarHndl) {DiscardMenuBar(laser->menuBarHndl); laser->menuBarHndl = 0;}
 	
 	//------------------------------------------------------------
 	// discard parent class

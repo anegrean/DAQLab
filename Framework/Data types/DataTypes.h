@@ -190,7 +190,15 @@ typedef enum {
 	//----------------------------------------------------------------------------------------------
 	// Image types
 	//----------------------------------------------------------------------------------------------   
-typedef struct Image		Image_type;  
+typedef struct Image				Image_type; 
+
+	// transform method to use for displaying image
+typedef enum {
+	
+	ImageDisplayTransform_Linear,		// Display uses linear remapping. 
+	ImageDisplayTransform_Logarithmic   // Display uses logarithmic remapping. Enhances contrast for small pixel values and reduces contrast for large pixel values. 
+	
+} ImageDisplayTransforms;
 
 typedef enum {
 	
@@ -231,9 +239,9 @@ struct RGBAU64 {
 	// Region Of Interest (ROI) types for images
 	//----------------------------------------------------------------------------------------------
 
-typedef struct ROI 			ROI_type;		 // Base class
-typedef struct Point		Point_type;		 // Child class of ROI_type
-typedef struct Rect			Rect_type;		 // Child class of ROI_type
+typedef struct ROI 			ROI_type;			 // Base class
+typedef struct Point		Point_type;		 	// Child class of ROI_type
+typedef struct Rect			Rect_type;		 	// Child class of ROI_type
 
 typedef enum {
 	ROI_Point,
@@ -245,11 +253,13 @@ struct ROI {
 	// DATA
 	ROITypes			ROIType;
 	char*				ROIName;
-	RGBA_type			rgba;			// ROI color
-	BOOL				active;			// Flag to mark active ROIs, by default, TRUE.
+	RGBA_type			rgba;					// ROI color
+	BOOL				active;					// Flag to mark active ROIs, by default, TRUE.
+	RGBA_type			textBackground;			// Color of ROIs label background.
+	int					textFontSize;			// Font size for displaying ROI labels. Default: 12
 	// METHODS
-	CopyFptr_type		copyFptr;		// Overriden by child. Copies the object.
-	DiscardFptr_type	discardFptr;  	// Overriden by child. Discards the object.
+	CopyFptr_type		copyFptr;				// Overriden by child. Copies the object.
+	DiscardFptr_type	discardFptr;  			// Overriden by child. Discards the object.
 	
 };
 
@@ -650,6 +660,10 @@ size_t 						GetImageSizeofData 						(Image_type* image);
 void 						SetImageROIs 							(Image_type* image, ListType ROIs);
 
 ListType 					GetImageROIs 							(Image_type* image);
+
+void						SetImageDisplayTransform				(Image_type* image, ImageDisplayTransforms dispTransformFunc);
+
+ImageDisplayTransforms		GetImageDisplayTransform				(Image_type* image);
 
 	// Image operations
 Image_type* 				copy_Image_type							(Image_type* imgSource);

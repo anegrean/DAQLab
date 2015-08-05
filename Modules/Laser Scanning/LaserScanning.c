@@ -7983,11 +7983,26 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 	DisplayEngine_type*		displayEngine   = imgDisplay->displayEngine; 
 	RectRaster_type*		scanEngine		= (RectRaster_type*) scanChan->scanEngine;
 	int						nListItems		= 0;
-	ListType				ROIlist;
+	ListType				ROIlist			= 0;
+	Image_type**			imagePtr		= NULL;
+	
+	// obtain lock to image
+	if( CmtGetTSVPtr(imgDisplay->imageTSV, &imagePtr)  < 0) goto TSVError;
 	
 	switch (event) {
 			
 		case ROI_Placed:
+			
+			switch (ROI->ROIType) {
+				
+				case ROI_Point:
+					
+					break;
+				
+				case ROI_Rectangle:
+					
+					break;
+			}
 			
 			break;
 			
@@ -7995,7 +8010,7 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 			
 			// obtain default unique ROI name and apply it
 			OKfree(ROI->ROIName);
-			ROIlist = GetImageROIs(imgDisplay->image); 
+			ROIlist = GetImageROIs(*imagePtr); 
 			ROI->ROIName = GetDefaultUniqueROIName(ROIlist);
 			// apply ROI color
 			ROI->rgba.R 		= Default_ROI_R_Color; 
@@ -8049,8 +8064,14 @@ static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, RO
 			break;
 		
 	}
+
+	// release lock to image
+	CmtReleaseTSVPtr(imgDisplay->imageTSV);
 	
+	return;
 	
+TSVError:
+	return;
 }
 
 static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, int event, void* callbackData)
@@ -8067,8 +8088,8 @@ static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, int event, void* cal
 			if (scanEngine->baseClass.activeDisplay == imgDisplay)
 				scanEngine->baseClass.activeDisplay = NULL;
 			
-			// clean up, taken out cause imgBuffer can be NULL if point scan was previously used
-			discard_ImageDisplay_type(&scanEngine->baseClass.scanChans[displayCBData->scanChanIdx]->imgDisplay);
+			//discard_ImageDisplay_type(&scanEngine->baseClass.scanChans[displayCBData->scanChanIdx]->imgDisplay);
+			scanEngine->baseClass.scanChans[displayCBData->scanChanIdx]->imgDisplay = NULL; // display is discarded by Display module
 			
 			break;
 			
@@ -8096,6 +8117,11 @@ static void WaveformDisplay_CB (WaveformDisplay_type* waveformDisplay, int event
 
 static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, RectRaster_type* scanEngine, RectRasterScanSet_type previousScanSettings)
 {
+	Image_type**		imagePtr	= NULL;
+	
+	// obtain image lock
+	if( CmtGetTSVPtr(imgDisplay->imageTSV, &imagePtr)  < 0) goto TSVError;
+	
 	// assign this image display to the scan engine
 	scanEngine->baseClass.activeDisplay		= imgDisplay; 
 	
@@ -8125,7 +8151,7 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 	}
 	ListClear(scanEngine->pointJumpSettings->pointJumps);
 	
-	ListType	ROIlist				= GetImageROIs(imgDisplay->image);
+	ListType	ROIlist				= GetImageROIs(*imagePtr);
 	size_t 		nROIs 				= ListNumItems(ROIlist);
 	ROI_type*   ROI					= NULL;
 	ROI_type*   ROICopy				= NULL;
@@ -8164,8 +8190,15 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 		SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, FALSE);
 	else
 		SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, TRUE);
-					
 	
+	
+	CmtReleaseTSVPtr(imgDisplay->imageTSV);
+	
+	return;
+	
+TSVError:
+	
+	return;
 	
 }
 

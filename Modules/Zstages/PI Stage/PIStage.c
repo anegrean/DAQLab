@@ -778,10 +778,7 @@ static int SetHWStageLimits	(Zstage_type* zstage, double minimumLimit, double ma
 		return -1;	
 	}
 	
-	// Taken out because it is not handy to have the Z-stage move to its reference position each time the software starts
-	// i.e. if the software crashes during an experiment, then the focal plane is lost.
 	
-	/*
 	// reference axis again
 	// check if there are limit switches
 	if (!PI_qLIM(PIStage->PIStageID, PIStage->assignedAxis, &HasLimitSwitchesFlag)) {
@@ -819,7 +816,7 @@ static int SetHWStageLimits	(Zstage_type* zstage, double minimumLimit, double ma
 	} while (!ReadyFlag);
 		
 	Sleep(PIStage_SETTLING_TIMEOUT * 1000);	// make sure stage settles before reading position
-	*/
+	
 	
 	return 0;
 }
@@ -876,9 +873,11 @@ Error:
 static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
 {
 	PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
+	size_t				nSteps = GetTaskControlIterations(taskControl);
 	
 	// dim items
-	(*zstage->baseClass.DimWhenRunning) ((Zstage_type*)zstage, TRUE);
+	if (nSteps)
+		(*zstage->baseClass.DimWhenRunning) ((Zstage_type*)zstage, TRUE);
 	
 	return 0;
 }

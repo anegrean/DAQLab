@@ -3680,12 +3680,13 @@ static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentId
 
 int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	static TaskTreeNode_type*	dragTreeNodePtr;
-	static TaskTreeNode_type*   targetTreeNodePtr;
-	static int					relation;
-	int 						nodeListIdx; 
-	int							selectedNodeIdx;
-	TaskTreeNode_type*			selectedTreeNodePtr; 
+	static TaskTreeNode_type*	dragTreeNodePtr			= NULL;
+	static TaskTreeNode_type*   targetTreeNodePtr		= NULL;
+	static int					relation				= 0;
+	int 						nodeListIdx				= 0; 
+	int							selectedNodeIdx			= 0;
+	TaskTreeNode_type*			selectedTreeNodePtr		= NULL; 
+	TCStates					tcState					= 0;
 	
 	switch (control) {
 			
@@ -3709,6 +3710,10 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 					GetValueFromIndex(panel, control, eventData2, &nodeListIdx);
 					dragTreeNodePtr = ListGetPtrToItem(TaskTreeNodes, nodeListIdx);
 					if (!dragTreeNodePtr->taskControl) return 1; // swallow drag event
+					
+					// if Task Controller is active, do not allow it to be dragged
+					tcState = GetTaskControlState(dragTreeNodePtr->taskControl);
+					if (tcState == TC_State_Idle || tcState == TC_State_Running || tcState == TC_State_IterationFunctionActive || tcState == TC_State_Stopping
 					
 					break;
 					
@@ -4086,7 +4091,7 @@ void CVICALLBACK LogPanTaskLogMenu_CB (int menuBar, int menuItem, void *callback
 		tc = *(TaskControl_type**)ListGetPtrToItem(DAQLabTCs, i);
 		tcState 	= GetTaskControlState(tc);
 		tcName		= GetTaskControlName(tc);
-		tcStateName	= GetTaskControlStateName(tc);
+		tcStateName	= TaskControlStateToString(tcState);
 		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, tcName);
 		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, " = ");
 		SetCtrlVal(taskLogPanHndl, TaskLogPan_LogBox, tcStateName);

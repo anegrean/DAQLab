@@ -151,10 +151,9 @@ struct ImageDisplay {
 	
 	DisplayEngine_type*					displayEngine;					// Reference to the display engine to which this Image display belongs.
 	ImgDisplayCBData_type				imageDisplayCBData;				// Callback data associated with the image display.
-	Image_type*							image;							// image data container 
+	//Image_type*							image;						// image data container 
+	CmtTSVHandle						imageTSV;						// Thread safe variable of Image_type*
 
-	RGBA_type							ROITextBackground;				// Color of ROIs label background.
-	int									ROITextFontSize;				// Font size for displaying ROI labels. Default: 12
 	ROIEvents							ROIEvent;						// Parameter passed to the ROI callback.
 	
 	//---------------------------------------------------------------------------------------------------------------

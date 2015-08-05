@@ -219,10 +219,9 @@ void discard_Zstage (DAQLabModule_type** mod)
 	OKfreePanHndl(zstage->controlPanHndl);
 	OKfree(zstage->controlPanTopPos);
 	OKfree(zstage->controlPanLeftPos);
+	if (zstage->menuBarHndl) {DiscardMenuBar(zstage->menuBarHndl); zstage->menuBarHndl = 0;}
 	
 	OKfreePanHndl(zstage->setPanHndl);
-	
-	
 	
 	OKfree(zstage->zPos);
 	OKfree(zstage->startAbsPos);

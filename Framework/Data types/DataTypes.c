@@ -55,6 +55,7 @@ struct Image {
 	double						imgTopLeftYCoord;		// image top-left corner Y-Axis coordinates in [um].
 	double						imgZCoord;				// image z-axis (height) location in [um].
 	ListType					ROIs;					// list of ROIs added to the image of ROI_type*.
+	ImageDisplayTransforms		dispTransformFunc;		// function to use for mapping pixel values to display.
 };
 
 
@@ -975,17 +976,20 @@ Image_type* init_Image_type (ImageTypes imageType, int imgHeight, int imgWidth, 
 	
 	if (!image) return NULL;
 	
+	//-----------------------------------------------------------
 	// init
-	image->imageType			= imageType;	// imagetype
-	image->imgHeight			= imgHeight;	// image height in [pix]. 
-	image->imgWidth				= imgWidth;		// image width in [pix].
-	image->pixData				= *imgDataPtr;	// assign data
-	*imgDataPtr					= NULL;			// consume image data
-	image->imgTopLeftXCoord		= 0.0;			// image top-left corner X-Axis coordinates in [um].    
-	image->imgTopLeftYCoord		= 0.0;			// image top-left corner Y-Axis coordinates in [um]. 
-	image->imgZCoord			= 0.0;			// image z-axis (height) location in [um].    
-	image->ROIs					= 0;
+	image->imageType					= imageType;						// imagetype
+	image->imgHeight					= imgHeight;						// image height in [pix]. 
+	image->imgWidth						= imgWidth;							// image width in [pix].
+	image->pixData						= *imgDataPtr;						// assign data
+	*imgDataPtr							= NULL;								// consume image data
+	image->imgTopLeftXCoord				= 0.0;								// image top-left corner X-Axis coordinates in [um].    
+	image->imgTopLeftYCoord				= 0.0;								// image top-left corner Y-Axis coordinates in [um]. 
+	image->imgZCoord					= 0.0;								// image z-axis (height) location in [um].    
+	image->ROIs							= 0;								// ROI list
+	image->dispTransformFunc			= ImageDisplayTransform_Linear;		// used to map pixels to the display.
 	
+	//-----------------------------------------------------------
 	// alloc
 	nullChk( image->ROIs		= ListCreate(sizeof(ROI_type*)));
 	
@@ -1125,6 +1129,15 @@ ListType GetImageROIs (Image_type* image)
 	 return image->ROIs; 
 }
 
+void SetImageDisplayTransform (Image_type* image, ImageDisplayTransforms dispTransformFunc)
+{
+	image->dispTransformFunc = dispTransformFunc;
+}
+
+ImageDisplayTransforms GetImageDisplayTransform (Image_type* image)
+{
+	return image->dispTransformFunc;
+}
 
 size_t GetImageSizeofData (Image_type* image)
 {
@@ -1170,15 +1183,21 @@ size_t GetImageSizeofData (Image_type* image)
 
 static void init_ROI_type (ROI_type* ROI, ROITypes ROIType, char ROIName[], RGBA_type color, BOOL active, CopyFptr_type copyFptr, DiscardFptr_type discardFptr)
 {
-	ROI->ROIType 		= ROIType;
-	ROI->ROIName		= StrDup(ROIName);
-	ROI->active			= active;
+	ROI->ROIType 					= ROIType;
+	ROI->ROIName					= StrDup(ROIName);
+	ROI->active						= active;
 	
 	// init color to opaque black
-	ROI->rgba.R			= color.R;
-	ROI->rgba.G			= color.G;
-	ROI->rgba.B			= color.B;
-	ROI->rgba.alpha		= color.alpha;
+	ROI->rgba.R						= color.R;
+	ROI->rgba.G						= color.G;
+	ROI->rgba.B						= color.B;
+	ROI->rgba.alpha					= color.alpha;
+	
+	ROI->textBackground.R			= 0;
+	ROI->textBackground.G			= 0;	
+	ROI->textBackground.B			= 0;	
+	ROI->textBackground.alpha		= 255;	// transparent
+	ROI->textFontSize				= 12;
 	
 	// METHODS
 	ROI->copyFptr		= copyFptr;

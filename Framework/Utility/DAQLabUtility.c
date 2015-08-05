@@ -3,8 +3,8 @@
 // Title:		DAQLabUtility.c
 // Purpose:		A short description of the implementation.
 //
-// Created on:	14-8-2014 at 22:25:52 by Adrian.
-// Copyright:	. All Rights Reserved.
+// Created on:	14-8-2014 at 22:25:52 by Adrian Negrean.
+// Copyright:	VU University Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 

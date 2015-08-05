@@ -3,8 +3,8 @@
 // Title:		NIDisplayEngine.h
 // Purpose:		A short description of the interface.
 //
-// Created on:	3-2-2015 at 17:41:58 by Adrian.
-// Copyright:	. All Rights Reserved.
+// Created on:	3-2-2015 at 17:41:58 by Adrian Negrean.
+// Copyright:	VU University Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 

@@ -40,7 +40,7 @@ struct LangLStep {
 	XYStage_type 	baseClass;
 
 	// DATA
-		
+	HINSTANCE 		lstepLibHndl;	// DLL handle	
 	
 	// METHODS
 	

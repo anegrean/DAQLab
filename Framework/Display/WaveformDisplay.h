@@ -3,8 +3,8 @@
 // Title:		WaveformDisplay.h
 // Purpose:		A short description of the interface.
 //
-// Created on:	16-7-2015 at 13:16:19 by Adrian.
-// Copyright:	. All Rights Reserved.
+// Created on:	16-7-2015 at 13:16:19 by Adrian Negrean.
+// Copyright:	VU University Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 

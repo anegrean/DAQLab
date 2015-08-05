@@ -76,7 +76,8 @@ struct TaskControl {
 	unsigned int					eventQThreadID;						// Thread ID in which queue events are processed.
 	CmtThreadFunctionID				threadFunctionID;					// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
 	CmtThreadPoolHandle				threadPoolHndl;						// Thread pool handle used to launch task controller threads.
-	TCStates 						state;								// Task Controller state.
+	CmtTSVHandle					stateTSV;							// Task Controller state, thread safe variable of TCStates.
+	//TCStates 						state;								// Task Controller state.
 	TCStates 						oldState;							// Previous Task Controller state used for logging.
 	size_t							repeat;								// Total number of repeats. If repeat is 0, then the iteration function is not called. 
 	int								iterTimeout;						// Timeout in [s] until when TaskControlIterationDone can be called. 
@@ -133,7 +134,6 @@ static int									FunctionCall 							(TaskControl_type* taskControl, EventPack
 // Formats a Task Controller log entry based on the action taken
 static void									ExecutionLogEntry						(TaskControl_type* taskControl, EventPacket_type* eventPacket, TaskControllerActions action, void* info);
 
-static char*								StateToString							(TCStates state);
 static char*								EventToString							(TCEvents event);
 static char*								FCallToString							(TCCallbacks fcall);
 
@@ -194,55 +194,54 @@ TaskControl_type* init_TaskControl_type(const char						taskControllerName[],
 										ModuleEventFptr_type			ModuleEventFptr,
 										ErrorFptr_type					ErrorFptr)
 {
-	int		error = 0;
-	TaskControl_type* tc = malloc (sizeof(TaskControl_type));
+	int					error 			= 0;
+	TCStates* 			tcStateTSVPtr 	= NULL; 
+	
+	TaskControl_type* 	tc 				= malloc (sizeof(TaskControl_type));
+	
 	if (!tc) return NULL;
 	
-	// init
-	tc -> eventQ							= 0;
-	tc -> eventQThreadLock					= 0;
-	tc -> dataQs							= 0;
-	tc -> sourceVChans						= 0;
-	tc -> childTCs							= 0;
+	//-------------------------------------------------------------------------------------------------------------------
+	// Initialization
+	//-------------------------------------------------------------------------------------------------------------------
 	
-	if (CmtNewTSQ(TC_NEventQueueItems, sizeof(EventPacket_type), 0, &tc->eventQ) < 0) goto Error;
-	if (CmtNewLock(NULL, 0, &tc->eventQThreadLock) < 0) goto Error;
+	//--------------------------------------
+	// task controller data
 	
-	nullChk( tc -> dataQs					= ListCreate(sizeof(VChanCallbackData_type*)) );
-	nullChk( tc -> sourceVChans				= ListCreate(sizeof(SourceVChan_type*)) );
+	tc->eventQ								= 0;
+	tc->eventQThreadLock					= 0;
+	tc->dataQs								= 0;
+	tc->sourceVChans						= 0;
+	tc->childTCs							= 0;
+	tc->taskName							= NULL;
+	tc->eventQThreadID						= CmtGetCurrentThreadID ();
+	tc->threadFunctionID					= 0;
+	tc->moduleData							= moduleData;
+	tc->threadPoolHndl						= tcThreadPoolHndl;
+	tc->childTCIdx							= 0;
+	tc->stateTSV							= 0;
+	tc->oldState							= TC_State_Unconfigured;
+	tc->repeat								= 1;
+	tc->iterTimeout							= 10;								
+	tc->executionMode						= TC_Execute_BeforeChildTCs;
+	tc->mode								= TASK_FINITE;
+	tc->currentIter							= NULL;
+	tc->parentTC							= NULL;
+	tc->logPanHandle						= 0;
+	tc->logBoxControlID						= 0;
+	tc->loggingEnabled						= FALSE;
+	tc->errorInfo							= NULL;
+	tc->errorID								= 0;
+	tc->waitBetweenIterations				= 0;
+	tc->abortFlag							= FALSE;
+	tc->stopIterationsFlag					= FALSE;
+	tc->nIterationsFlag						= -1;
+	tc->iterationTimerID					= 0;
+	tc->UITCFlag							= FALSE;
 	
-	tc -> eventQThreadID					= CmtGetCurrentThreadID ();
-	tc -> threadFunctionID					= 0;
-	// process items in queue events in the same thread that is used to initialize the task control (generally main thread)
-	CmtInstallTSQCallback(tc->eventQ, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskEventItemsInQueue, tc, tc->eventQThreadID, NULL); 
+	//--------------------------------------
+	// task controller callbacks
 	
-	nullChk( tc -> childTCs					= ListCreate(sizeof(ChildTCInfo_type)) );
-	
-	tc -> taskName 							= StrDup(taskControllerName);
-	tc -> moduleData						= moduleData;
-	tc -> threadPoolHndl					= tcThreadPoolHndl;
-	tc -> childTCIdx						= 0;
-	tc -> state								= TC_State_Unconfigured;
-	tc -> oldState							= TC_State_Unconfigured;
-	tc -> repeat							= 1;
-	tc -> iterTimeout						= 10;								
-	tc -> executionMode						= TC_Execute_BeforeChildTCs;
-	tc -> mode								= TASK_FINITE;
-	tc -> currentIter					    = init_Iterator_type(taskControllerName);   
-	tc -> parentTC							= NULL;
-	tc -> logPanHandle						= 0;
-	tc -> logBoxControlID					= 0;
-	tc -> loggingEnabled					= FALSE;
-	tc -> errorInfo							= NULL;
-	tc -> errorID							= 0;
-	tc -> waitBetweenIterations				= 0;
-	tc -> abortFlag							= FALSE;
-	tc -> stopIterationsFlag				= FALSE;
-	tc -> nIterationsFlag					= -1;
-	tc -> iterationTimerID					= 0;
-	tc -> UITCFlag							= FALSE;
-	
-	// task controller function pointers
 	tc -> ConfigureFptr 					= ConfigureFptr;
 	tc -> UnconfigureFptr					= UnconfigureFptr;
 	tc -> IterateFptr						= IterateFptr;
@@ -255,17 +254,49 @@ TaskControl_type* init_TaskControl_type(const char						taskControllerName[],
 	tc -> SetUITCModeFptr					= SetUITCModeFptr;
 	tc -> ModuleEventFptr					= ModuleEventFptr;
 	tc -> ErrorFptr							= ErrorFptr;
-	      
+	
+	//-------------------------------------------------------------------------------------------------------------------
+	// Allocation (may fail)
+	//-------------------------------------------------------------------------------------------------------------------
+	
+	errChk( CmtNewTSV(sizeof(TCStates), &tc->stateTSV) );
+	errChk( CmtNewTSQ(TC_NEventQueueItems, sizeof(EventPacket_type), 0, &tc->eventQ) );
+	errChk( CmtNewLock(NULL, 0, &tc->eventQThreadLock) );
+	nullChk( tc->dataQs						= ListCreate(sizeof(VChanCallbackData_type*)) );
+	nullChk( tc->sourceVChans				= ListCreate(sizeof(SourceVChan_type*)) );
+	nullChk( tc->childTCs					= ListCreate(sizeof(ChildTCInfo_type)) );
+	// process items in queue events in the same thread that is used to initialize the task control (generally main thread)
+	errChk( CmtInstallTSQCallback(tc->eventQ, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskEventItemsInQueue, tc, tc->eventQThreadID, NULL) ); 
+	nullChk( tc->taskName 					= StrDup(taskControllerName) );
+	nullChk( tc -> currentIter				= init_Iterator_type(taskControllerName) );
+	
+	//--------------------------------------------------------------------------------------------------------------------
+	// Initialize task controller state
+	//--------------------------------------------------------------------------------------------------------------------
+	
+	errChk( CmtGetTSVPtr(tc->stateTSV, &tcStateTSVPtr) );
+	*tcStateTSVPtr = TC_State_Unconfigured;
+	errChk( CmtReleaseTSVPtr(tc->stateTSV) );
+	tcStateTSVPtr = NULL;
 	
 	return tc;
 	
-	Error:
+Error:
 	
-	if (tc->eventQ) 				CmtDiscardTSQ(tc->eventQ);
-	if (tc->eventQThreadLock)		CmtDiscardLock(tc->eventQThreadLock);
-	if (tc->dataQs)	 				ListDispose(tc->dataQs);
-	if (tc->sourceVChans)			ListDispose(tc->sourceVChans);
-	if (tc->childTCs)    			ListDispose(tc->childTCs);
+	//----------------------------
+	// cleanup
+	//----------------------------
+	
+	// release state TSV lock if obtained
+	if (tcStateTSVPtr) {CmtReleaseTSVPtr(tc->stateTSV); tcStateTSVPtr = NULL;}
+	// discard state TSV
+	if (tc->stateTSV)				{CmtDiscardTSV(tc->stateTSV); tc->stateTSV = 0;}
+	
+	if (tc->eventQ) 				{CmtDiscardTSQ(tc->eventQ); tc->eventQ = 0;}
+	if (tc->eventQThreadLock)		{CmtDiscardLock(tc->eventQThreadLock); tc->eventQThreadLock = 0;}
+	if (tc->dataQs)	 				{ListDispose(tc->dataQs); tc->dataQs = 0;}
+	if (tc->sourceVChans)			{ListDispose(tc->sourceVChans); tc->sourceVChans = 0;}
+	if (tc->childTCs)    			{ListDispose(tc->childTCs); tc->childTCs = 0;}
 	
 	OKfree(tc);
 	
@@ -304,7 +335,7 @@ void discard_TaskControl_type(TaskControl_type** taskControllerPtr)
 	CmtDiscardLock(taskController->eventQThreadLock); 
 	
 	// incoming data queues (does not free the queue itself!)
-	RemoveAllSinkVChans(taskController);
+	RemoveAllSinkVChans(taskController, NULL);
 	ListDispose(taskController->dataQs);
 	
 	// error message storage 
@@ -354,11 +385,6 @@ char* GetTaskControlName (TaskControl_type* taskControl)
 	return StrDup(taskControl->taskName);
 }
 
-char* GetTaskControlStateName (TaskControl_type* taskControl)
-{
-	return StateToString(taskControl->state);
-}
-
 void SetTaskControlName (TaskControl_type* taskControl, char newName[])
 { 
 	OKfree(taskControl->taskName);
@@ -368,9 +394,34 @@ void SetTaskControlName (TaskControl_type* taskControl, char newName[])
 	SetCurrentIterName(taskControl->currentIter, newName); 
 }
 
-TCStates GetTaskControlState (TaskControl_type* taskControl)
+int GetTaskControlState_GetLock (TaskControl_type* taskControl, TCStates* tcStatePtr, BOOL* lockObtained)
 {
-	return taskControl->state;
+	int			error			= 0;
+	
+	TCStates*	tcStateTSVPtr 	= NULL;
+	
+	*lockObtained = FALSE;
+	errChk( CmtGetTSVPtr(taskControl->stateTSV, &tcStateTSVPtr) );
+	*lockObtained = TRUE;
+	
+	*tcStatePtr = *tcStateTSVPtr;
+	
+Error:
+	
+	return error;
+}
+
+int GetTaskControlState_ReleaseLock (TaskControl_type* taskControl, BOOL* lockObtained)
+{
+	int			error			= 0;
+	
+	*lockObtained = TRUE;
+	errChk( CmtReleaseTSVPtr(taskControl->stateTSV) );
+	*lockObtained = FALSE;
+	
+Error:
+	
+	return error;
 }
 
 void SetTaskControlIterations (TaskControl_type* taskControl, size_t repeat)
@@ -500,169 +551,447 @@ BOOL GetTaskControlIterationStopFlag (TaskControl_type* taskControl)
 	return taskControl->stopIterationsFlag;
 }
 
+int IsTaskControllerInUse_GetLock (TaskControl_type* taskControl, BOOL* inUsePtr, BOOL* lockObtained)
+{
+	int			error			= 0;
+	
+	TCStates*	tcStateTSVPtr 	= NULL;
+	
+	*lockObtained = FALSE;
+	errChk( CmtGetTSVPtr(taskControl->stateTSV, &tcStateTSVPtr) );
+	*lockObtained = TRUE;
+	
+	*inUsePtr = (*tcStateTSVPtr == TC_State_Idle || *tcStateTSVPtr == TC_State_Running || *tcStateTSVPtr == TC_State_IterationFunctionActive || *tcStateTSVPtr == TC_State_Stopping);
+	
+Error:
+	
+	return error;
+}
+
+int IsTaskControllerInUse_ReleaseLock (TaskControl_type* taskControl, BOOL* lockObtained)
+{
+	int			error			= 0;
+	
+	*lockObtained = TRUE;
+	errChk( CmtReleaseTSVPtr(taskControl->stateTSV) );
+	*lockObtained = FALSE;
+	
+Error:
+	
+	return error;
+}
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr)
+int	AddSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, char** errorInfo)
 {
-#define 	AddSinkVChan_Err_OutOfMemory				-1
-#define		AddSinkVChan_Err_TaskControllerIsActive		-2
-#define		AddSinkVChan_Err_SinkAlreadyAssigned		-3
+#define		AddSinkVChan_Err_TaskControllerIsInUse		-1
+#define		AddSinkVChan_Err_SinkAlreadyAssigned		-2
 	
-				// Task Controller must not be executing when a Sink VChan is added to it
-	// check if Sink VChan is already assigned to the Task Controller
-	VChanCallbackData_type**	VChanTSQDataPtr		= NULL;
-	size_t 						nItems 				= ListNumItems(taskControl->dataQs);
+	int							error					= 0;
+	char*						errMsg					= 0;
+	
+	VChanCallbackData_type*		currentVChanTSQData		= NULL;
+	VChanCallbackData_type*		newVChanTSQData			= NULL;
+	size_t 						nItems 					= ListNumItems(taskControl->dataQs);
+	BOOL						tcIsInUse				= FALSE;
+	BOOL						tcIsInUseLockObtained 	= FALSE;
+	CmtTSQHandle				tsqID 					= GetSinkVChanTSQHndl(sinkVChan);
+	char*						tcName					= NULL;
+	char*						VChanName				= NULL;
+	
+	
+	// Check if Sink VChan is already assigned to the Task Controller
 	for (size_t i = 1; i <= nItems; i++) {
-		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
-		if ((*VChanTSQDataPtr)->sinkVChan == sinkVChan) return AddSinkVChan_Err_SinkAlreadyAssigned;
-	}
-	
-	// check if Task Controller is currently executing
-	if (!(taskControl->state == TC_State_Unconfigured || taskControl->state == TC_State_Configured || 
-		  taskControl->state == TC_State_Initial || taskControl->state == TC_State_Done || taskControl->state == TC_State_Error))
-		return AddSinkVChan_Err_TaskControllerIsActive;
-	
-	CmtTSQHandle				tsqID 				= GetSinkVChanTSQHndl(sinkVChan);
-	VChanCallbackData_type*		VChanTSQData		= init_VChanCallbackData_type(taskControl, sinkVChan, DataReceivedFptr);
-	
-	if (!VChanTSQData) return AddSinkVChan_Err_OutOfMemory;
-	if (!ListInsertItem(taskControl->dataQs, &VChanTSQData, END_OF_LIST)) 
-		return AddSinkVChan_Err_OutOfMemory;
-	
-	// add callback
-	// process queue events in the same thread that is used to initialize the task control (generally main thread)
-	CmtInstallTSQCallback(tsqID, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskDataItemsInQueue, VChanTSQData, taskControl -> eventQThreadID, &VChanTSQData->itemsInQueueCBID);
-	
-	return 0;
-}
-
-int	AddSourceVChan (TaskControl_type* taskControl, SourceVChan_type* sourceVChan)
-{
-#define 	AddSourceVChan_Err_OutOfMemory				-1
-#define		AddSourceVChan_Err_TaskControllerIsActive	-2
-#define		AddSourceVChan_Err_SourceAlreadyAssigned	-3
-
-	// check if Source VChan is already assigned to the Task Controller
-	SourceVChan_type**	VChanPtr		= NULL;
-	size_t 				nItems			= ListNumItems(taskControl->sourceVChans);
-	for (size_t i = 1; i <= nItems; i++) {
-		VChanPtr = ListGetPtrToItem(taskControl->sourceVChans, i);
-		if (*VChanPtr == sourceVChan) return AddSourceVChan_Err_SourceAlreadyAssigned;
-	}
-	
-	// check if Task Controller is currently executing
-	if (!(taskControl->state == TC_State_Unconfigured || taskControl->state == TC_State_Configured || 
-		  taskControl->state == TC_State_Initial || taskControl->state == TC_State_Done || taskControl->state == TC_State_Error))
-		return AddSourceVChan_Err_TaskControllerIsActive;
-	
-	// insert source VChan
-	if (!ListInsertItem(taskControl->sourceVChans, &sourceVChan, END_OF_LIST)) 
-		return AddSinkVChan_Err_OutOfMemory;
-	
-	return 0;
-}
-
-int RemoveSourceVChan (TaskControl_type* taskControl, SourceVChan_type* sourceVChan)
-{
-#define		RemoveSourceVChan_Err_SinkNotFound				-1
-#define		RemoveSourceVChan_Err_TaskControllerIsActive	-2
-	
-	// check if Task Controller is active
-	if (!(taskControl->state == TC_State_Unconfigured || taskControl->state == TC_State_Configured || 
-		  taskControl->state == TC_State_Initial || taskControl->state == TC_State_Done || taskControl->state == TC_State_Error))
-		return RemoveSourceVChan_Err_TaskControllerIsActive;
-	
-	SourceVChan_type**	VChanPtr		= NULL;
-	size_t 				nItems			= ListNumItems(taskControl->sourceVChans);
-	for (size_t i = 1; i <= nItems; i++) {
-		VChanPtr = ListGetPtrToItem(taskControl->sourceVChans, i);
-		if (*VChanPtr == sourceVChan) {
-			ListRemoveItem(taskControl->sourceVChans, 0, i);
-			return 0;
+		currentVChanTSQData = *(VChanCallbackData_type**)ListGetPtrToItem(taskControl->dataQs, i);
+		if (currentVChanTSQData->sinkVChan == sinkVChan) {
+			error = AddSinkVChan_Err_SinkAlreadyAssigned;
+			nullChk( errMsg  = StrDup("Sink VChan ") );
+			nullChk( VChanName = GetVChanName((VChan_type*)sinkVChan) );
+			nullChk( AppendString(&errMsg, VChanName, -1) );
+			nullChk( AppendString(&errMsg, " has been already assigned to ", -1) );
+			nullChk( tcName = GetTaskControlName(taskControl) );
+			nullChk( AppendString(&errMsg, tcName, -1) );
+			goto Error;
 		}
 	}
 	
-	return RemoveSourceVChan_Err_SinkNotFound;
+	// Check if Task Controller is currently executing
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, &tcIsInUseLockObtained) ); 
+	
+	if (tcIsInUse) {
+		error = AddSinkVChan_Err_TaskControllerIsInUse;
+		nullChk( errMsg = StrDup("Sink VChan ") );
+		nullChk( VChanName = GetVChanName((VChan_type*)sinkVChan) );
+		nullChk( AppendString(&errMsg, VChanName, -1) );
+		nullChk( AppendString(&errMsg, " cannot be assigned to ", -1) );    
+		nullChk( tcName = GetTaskControlName(taskControl) );
+		nullChk( AppendString(&errMsg, tcName, -1) );
+		nullChk( AppendString(&errMsg, " while it is in use", -1) );
+		goto Error;
+	}
+	
+	nullChk( newVChanTSQData = init_VChanCallbackData_type(taskControl, sinkVChan, DataReceivedFptr) );
+	// Add Task Controller TSQ callback. Process queue events in the same thread that is used to initialize the task control (generally main thread)
+	errChk( CmtInstallTSQCallback(tsqID, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskDataItemsInQueue, newVChanTSQData, taskControl->eventQThreadID, &newVChanTSQData->itemsInQueueCBID) );
+	
+	nullChk( ListInsertItem(taskControl->dataQs, &newVChanTSQData, END_OF_LIST) );
+	newVChanTSQData = NULL; // added to the list
+
+	// release lock
+	errChk( IsTaskControllerInUse_ReleaseLock(taskControl, &tcIsInUseLockObtained) );
+	
+	return 0; // success
+	
+Error:
+	
+	// try to release lock
+	if (tcIsInUseLockObtained)
+		IsTaskControllerInUse_ReleaseLock(taskControl, &tcIsInUseLockObtained);
+	
+	discard_VChanCallbackData_type(&newVChanTSQData);
+	OKfree(tcName);
+	OKfree(VChanName);
+	
+	ReturnErrMsg("AddSinkVChan");
+	return error;
 }
 
-int RemoveAllSourceVChan (TaskControl_type* taskControl)
+int	AddSourceVChan (TaskControl_type* taskControl, SourceVChan_type* sourceVChan, char** errorInfo)
 {
-#define		RemoveAllSourceVChan_Err_TaskControllerIsActive	-1
+#define		AddSourceVChan_Err_TaskControllerIsInUse	-1
+#define		AddSourceVChan_Err_SourceAlreadyAssigned	-2
+
+	int					error					= 0;
+	char*				errMsg					= NULL;
 	
-	// check if Task Controller is active
-	if (!(taskControl->state == TC_State_Unconfigured || taskControl->state == TC_State_Configured || 
-		  taskControl->state == TC_State_Initial || taskControl->state == TC_State_Done || taskControl->state == TC_State_Error))
-		return RemoveAllSourceVChan_Err_TaskControllerIsActive;
+	SourceVChan_type*	srcVChan				= NULL;
+	size_t 				nItems					= ListNumItems(taskControl->sourceVChans);
+	BOOL				tcIsInUse				= FALSE;
+	BOOL				tcIsInUseLockObtained 	= FALSE;
+	char*				tcName					= NULL;
+	char*				VChanName				= NULL;
+	
+	// Check if Source VChan is already assigned to the Task Controller
+	for (size_t i = 1; i <= nItems; i++) {
+		srcVChan = *(SourceVChan_type**)ListGetPtrToItem(taskControl->sourceVChans, i);
+		if (srcVChan == sourceVChan) {
+			error 	= AddSourceVChan_Err_SourceAlreadyAssigned;
+			nullChk( errMsg  = StrDup("Source VChan ") );
+			nullChk( VChanName = GetVChanName((VChan_type*)sourceVChan) );
+			nullChk( AppendString(&errMsg, VChanName, -1) );
+			nullChk( AppendString(&errMsg, " has been already assigned to ", -1) );
+			nullChk( tcName = GetTaskControlName(taskControl) );
+			nullChk( AppendString(&errMsg, tcName, -1) );
+			goto Error;
+		}
+	}
+	
+	// Check if Task Controller is currently executing
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, &tcIsInUseLockObtained) );
+	
+	if (tcIsInUse) {
+		error = AddSourceVChan_Err_TaskControllerIsInUse;
+		nullChk( errMsg = StrDup("Source VChan ") );
+		nullChk( VChanName = GetVChanName((VChan_type*)sourceVChan) );
+		nullChk( AppendString(&errMsg, VChanName, -1) );
+		nullChk( AppendString(&errMsg, " cannot be assigned to ", -1) );
+		nullChk( tcName = GetTaskControlName(taskControl) );
+		nullChk( AppendString(&errMsg, tcName, -1) );
+		nullChk( AppendString(&errMsg, " while it is in use", -1) );
+		goto Error;
+	}
+	
+	// insert source VChan
+	nullChk( ListInsertItem(taskControl->sourceVChans, &sourceVChan, END_OF_LIST) );
+	
+Error:
+	
+	// release lock
+	if (tcIsInUseLockObtained) 
+		IsTaskControllerInUse_ReleaseLock(taskControl, &tcIsInUseLockObtained);
+	
+	OKfree(tcName);
+	OKfree(VChanName);
+	
+	ReturnErrMsg("AddSourceVChan");
+	return error;
+}
+
+int RemoveSourceVChan (TaskControl_type* taskControl, SourceVChan_type* sourceVChan, char** errorInfo)
+{
+#define		RemoveSourceVChan_Err_TaskControllerIsInUse		-1 
+#define		RemoveSourceVChan_Err_SourceVChanNotFound		-2
+
+	int					error					= 0;
+	char*				errMsg					= NULL;
+	
+	SourceVChan_type*	srcVChanItem			= NULL;
+	size_t 				nItems					= ListNumItems(taskControl->sourceVChans);
+	BOOL				tcIsInUse				= FALSE;
+	BOOL				tcIsInUseLockObtained 	= FALSE;
+	char*				tcName					= NULL;
+	char*				VChanName				= NULL;
+	size_t				srcVChanIdx				= 0;
+	
+	
+	// Check if Task Controller is currently executing
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, &tcIsInUseLockObtained) );
+	
+	if (tcIsInUse) {
+		error = RemoveSourceVChan_Err_TaskControllerIsInUse;
+		nullChk( errMsg = StrDup("Source VChan ") );
+		nullChk( VChanName = GetVChanName((VChan_type*)sourceVChan) );
+		nullChk( AppendString(&errMsg, VChanName, -1) );
+		nullChk( AppendString(&errMsg, " cannot be removed from ", -1) );
+		nullChk( tcName = GetTaskControlName(taskControl) );
+		nullChk( AppendString(&errMsg, tcName, -1) );
+		nullChk( AppendString(&errMsg, " while it is in use", -1) );
+		goto Error;
+	}
+	
+	for (size_t i = 1; i <= nItems; i++) {
+		srcVChanItem = *(SourceVChan_type**)ListGetPtrToItem(taskControl->sourceVChans, i);
+		if (srcVChanItem == sourceVChan) {
+			srcVChanIdx = i;
+			break;
+		}
+	}
+	
+	if (srcVChanIdx)
+		ListRemoveItem(taskControl->sourceVChans, 0, srcVChanIdx);
+	else {
+		error = RemoveSourceVChan_Err_SourceVChanNotFound;
+		nullChk( errMsg = StrDup("Source VChan ") );
+		nullChk( VChanName = GetVChanName((VChan_type*)sourceVChan) );
+		nullChk( AppendString(&errMsg, VChanName, -1) );
+		nullChk( AppendString(&errMsg, " has not been assigned to ", -1) );
+		nullChk( tcName = GetTaskControlName(taskControl) );
+		nullChk( AppendString(&errMsg, tcName, -1) );
+		nullChk( AppendString(&errMsg, " and cannot be removed", -1) );
+		goto Error;
+	}
+	
+Error:
+	
+	// release lock
+	if (tcIsInUseLockObtained) 
+		IsTaskControllerInUse_ReleaseLock(taskControl, &tcIsInUseLockObtained);
+	
+	OKfree(tcName);
+	OKfree(VChanName);
+	
+	ReturnErrMsg("RemoveSourceVChan");
+	return error;
+}
+
+int RemoveAllSourceVChan (TaskControl_type* taskControl, char** errorInfo)
+{
+#define		RemoveAllSourceVChan_Err_TaskControllerIsInUse	-1
+	
+	int			error 					= 0;
+	char*		errMsg					= NULL;
+	
+	char*		tcName					= NULL;
+	BOOL		tcIsInUse				= FALSE;
+	BOOL		tcIsInUseLockObtained 	= FALSE;
+	
+	// Check if Task Controller is in use
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, &tcIsInUseLockObtained) );
+	
+	if (tcIsInUse) {
+		error = RemoveAllSourceVChan_Err_TaskControllerIsInUse;
+		nullChk( errMsg = StrDup("Source VChannels cannot be removed from ") );
+		nullChk( tcName = GetTaskControlName(taskControl) );
+		nullChk( AppendString(&errMsg, tcName, -1) );
+		nullChk( AppendString(&errMsg, " while it is in use", -1) );
+		goto Error;
+	}
 	
 	ListClear(taskControl->sourceVChans);
-	return 0;
+	
+Error:
+	
+	OKfree(tcName);
+	
+	// release lock
+	if (tcIsInUseLockObtained) 
+		IsTaskControllerInUse_ReleaseLock(taskControl, &tcIsInUseLockObtained);
+	
+	ReturnErrMsg("RemoveAllSourceVChan");
+	return error;
 }
 
-int	RemoveSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan)
+int	RemoveSinkVChan (TaskControl_type* taskControl, SinkVChan_type* sinkVChan, char** errorInfo)
 {
-#define		RemoveSinkVChan_Err_SinkNotFound				-1
-#define		RemoveSinkVChan_Err_TaskControllerIsActive		-2
+#define		RemoveSinkVChan_Err_TaskControllerIsInUse		-1 
+#define		RemoveSinkVChan_Err_SinkVChanNotFound			-2
+
+	int							error 					= 0;
+	char*						errMsg					= NULL;
 	
-	VChanCallbackData_type**	VChanTSQDataPtr		= NULL;
-	size_t						nDataQs				= ListNumItems(taskControl->dataQs);
+	VChanCallbackData_type**	VChanTSQDataPtr			= NULL;
+	size_t						nDataQs					= ListNumItems(taskControl->dataQs);
+	char*						tcName					= NULL; 
+	char*						VChanName				= NULL;
+	BOOL						tcIsInUse				= FALSE;
+	BOOL						tcIsInUseLockObtained 	= FALSE;
+	size_t						foundVChanIdx			= 0;
+	SinkVChan_type*				foundSinkVChan			= NULL;
+	CmtTSQCallbackID			tsqCBID					= 0;
 	
 	
-	// check if Task Controller is active
-	if (!(taskControl->state == TC_State_Unconfigured || taskControl->state == TC_State_Configured || 
-		  taskControl->state == TC_State_Initial || taskControl->state == TC_State_Done || taskControl->state == TC_State_Error))
-		return RemoveSinkVChan_Err_TaskControllerIsActive;
+	// Check if Task Controller is in use
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, &tcIsInUseLockObtained) );
 	
+	if (tcIsInUse) {
+		error = RemoveSinkVChan_Err_TaskControllerIsInUse;
+		nullChk( errMsg = StrDup("Sink VChan ") );
+		nullChk( VChanName = GetVChanName((VChan_type*)sinkVChan) );
+		nullChk( AppendString(&errMsg, VChanName, -1) );
+		nullChk( AppendString(&errMsg, " cannot be removed from ", -1) );
+		nullChk( tcName = GetTaskControlName(taskControl) );
+		nullChk( AppendString(&errMsg, tcName, -1) );
+		nullChk( AppendString(&errMsg, " while it is in use", -1) );
+		goto Error;
+	}
+	
+	// Remove Sink VChan from Task Controller
 	for (size_t i = 1; i <= nDataQs; i++) {
 		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
 		if ((*VChanTSQDataPtr)->sinkVChan == sinkVChan) {
-			// remove queue Task Controller callback
-			CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtr)->sinkVChan), (*VChanTSQDataPtr)->itemsInQueueCBID);
-			// free memory for queue item
-			discard_VChanCallbackData_type(VChanTSQDataPtr);
-			// and remove from queue
-			ListRemoveItem(taskControl->dataQs, 0, i);
-			return 0; 	// Sink VChan found and removed
+			foundVChanIdx 	= i;
+			foundSinkVChan  = (*VChanTSQDataPtr)->sinkVChan;
+			tsqCBID			= (*VChanTSQDataPtr)->itemsInQueueCBID;
+			break;
 		}
 	}
 	
-	return RemoveSinkVChan_Err_SinkNotFound;			// Sink VChan not found
+	if (foundVChanIdx) {
+		// remove queue Task Controller callback
+		errChk( CmtUninstallTSQCallback(GetSinkVChanTSQHndl(foundSinkVChan), tsqCBID) );
+		// free memory for queue item
+		discard_VChanCallbackData_type(VChanTSQDataPtr);
+		// and remove from queue
+		ListRemoveItem(taskControl->dataQs, 0, foundVChanIdx);
+	} else {
+		error = RemoveSinkVChan_Err_SinkVChanNotFound;
+		nullChk( errMsg = StrDup("Sink VChan ") );
+		nullChk( VChanName = GetVChanName((VChan_type*)sinkVChan) );
+		nullChk( AppendString(&errMsg, VChanName, -1) );
+		nullChk( AppendString(&errMsg, " has not been assigned to ", -1) );
+		nullChk( tcName = GetTaskControlName(taskControl) );
+		nullChk( AppendString(&errMsg, tcName, -1) );
+		nullChk( AppendString(&errMsg, " and cannot be removed", -1) );
+		goto Error;
+		
+	}
+	
+Error:
+	
+	// release lock
+	if (tcIsInUseLockObtained) 
+		IsTaskControllerInUse_ReleaseLock(taskControl, &tcIsInUseLockObtained);
+	
+	OKfree(tcName);
+	OKfree(VChanName);
+	
+	ReturnErrMsg("RemoveSinkVChan");
+	return error;
 }
 
-
-int RemoveAllSinkVChans (TaskControl_type* taskControl)
+int RemoveAllSinkVChans (TaskControl_type* taskControl, char** errorInfo)
 {
-#define		RemoveAllSinkVChans_Err_TaskControllerIsActive		-1
+#define		RemoveAllSinkVChans_Err_TaskControllerIsInUse		-1
 	
-	// check if Task Controller is active
-	if (!(taskControl->state == TC_State_Unconfigured || taskControl->state == TC_State_Configured || 
-		  taskControl->state == TC_State_Initial || taskControl->state == TC_State_Done || taskControl->state == TC_State_Error))
-		return RemoveAllSinkVChans_Err_TaskControllerIsActive;
+	int							error 					= 0;
+	char*						errMsg					= NULL;
 	
-	VChanCallbackData_type** 	VChanTSQDataPtr = NULL;
-	size_t 						nItems 			= ListNumItems(taskControl->dataQs);
+	char*						tcName					= NULL;
+	VChanCallbackData_type** 	VChanTSQDataPtr 		= NULL;
+	size_t 						nItems 					= ListNumItems(taskControl->dataQs);
+	BOOL						tcIsInUse				= FALSE;
+	BOOL						tcIsInUseLockObtained 	= FALSE;
+	
+	// Check if Task Controller is in use
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, &tcIsInUseLockObtained) );
+	
+	if (tcIsInUse) {
+		error = RemoveAllSinkVChans_Err_TaskControllerIsInUse;
+		nullChk( errMsg = StrDup("Sink VChannels cannot be removed from ") );
+		nullChk( tcName = GetTaskControlName(taskControl) );
+		nullChk( AppendString(&errMsg, tcName, -1) );
+		nullChk( AppendString(&errMsg, " while it is in use", -1) );
+		goto Error;
+	}
+	
+	// Remove Sink VChans from the Task Controller
 	for (size_t i = 1; i <= nItems; i++) {
 		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
 		// remove queue Task Controller callback
-		CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtr)->sinkVChan), (*VChanTSQDataPtr)->itemsInQueueCBID);
+		errChk( CmtUninstallTSQCallback(GetSinkVChanTSQHndl((*VChanTSQDataPtr)->sinkVChan), (*VChanTSQDataPtr)->itemsInQueueCBID) );
 		// free memory for queue item
 		discard_VChanCallbackData_type(VChanTSQDataPtr);
 	}
 	
 	ListClear(taskControl->dataQs);
 	
-	return 0;
+Error:
+	
+	OKfree(tcName);
+	
+	// release lock
+	if (tcIsInUseLockObtained) 
+		IsTaskControllerInUse_ReleaseLock(taskControl, &tcIsInUseLockObtained);
+	
+	ReturnErrMsg("RemoveAllSinkVChans");
+	return error;
 }
 
-void DisconnectAllSinkVChans (TaskControl_type* taskControl)
+int DisconnectAllSinkVChans (TaskControl_type* taskControl, char** errorInfo)
 {
-	VChanCallbackData_type** 	VChanTSQDataPtr;
-	size_t 						nItems = ListNumItems(taskControl->dataQs);
+#define		DisconnectAllSinkVChans_Err_TaskControllerIsInUse	-1
+	
+	int							error 					= 0;
+	char*						errMsg					= NULL;
+	
+	char*						tcName					= NULL;
+	BOOL						tcIsInUse				= FALSE;
+	BOOL						tcIsInUseLockObtained 	= FALSE;
+	VChanCallbackData_type** 	VChanTSQDataPtr			= NULL;
+	size_t 						nItems 					= ListNumItems(taskControl->dataQs);
+	
+	
+	// Check if Task Controller is in use
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, &tcIsInUseLockObtained) );
+	
+	if (tcIsInUse) {
+		error = DisconnectAllSinkVChans_Err_TaskControllerIsInUse;
+		nullChk( errMsg = StrDup("Sink VChannels assigned to ") );
+		nullChk( tcName = GetTaskControlName(taskControl) );
+		nullChk( AppendString(&errMsg, tcName, -1) );
+		nullChk( AppendString(&errMsg, " cannot be disconnected from their Sinks while task controller is in use", -1) );
+		goto Error;
+	}
+	
+	// Disconnect Sink VChans from their Source VChans
 	for (size_t i = 1; i <= nItems; i++) {
 		VChanTSQDataPtr = ListGetPtrToItem(taskControl->dataQs, i);
 		// disconnect Sink from Source
 		VChan_Disconnect((VChan_type*)(*VChanTSQDataPtr)->sinkVChan);
 	}
+	
+Error:
+	
+	OKfree(tcName);
+	
+	// release lock
+	if (tcIsInUseLockObtained) 
+		IsTaskControllerInUse_ReleaseLock(taskControl, &tcIsInUseLockObtained);
+	
+	ReturnErrMsg("DisconnectAllSinkVChans");
+	return error;
 }
 
 static ChildTCEventInfo_type* init_ChildTCEventInfo_type (size_t childTCIdx, TCStates state)
@@ -781,7 +1110,7 @@ void dispose_FCallReturn_EventInfo (void* eventData)
 	discard_FCallReturn_type(&fCallReturnPtr);
 }
 
-static char* StateToString (TCStates state)
+char* TaskControlStateToString (TCStates state)
 {
 	switch (state) {
 		
@@ -953,12 +1282,12 @@ static void ExecutionLogEntry (TaskControl_type* taskControl, EventPacket_type* 
 {
 	if (!taskControl->loggingEnabled) return;
 		
-	ChildTCInfo_type*	childTCPtr;
-	char* 			output 			= StrDup("");
-	char*			eventName		= NULL;
-	char*			stateName		= NULL;
-	char*			fCallName		= NULL;
-	char    		buf[50];
+	ChildTCInfo_type*	childTCPtr		= NULL;
+	char* 				output 			= StrDup("");
+	char*				eventName		= NULL;
+	char*				stateName		= NULL;
+	char*				fCallName		= NULL;
+	char    			buf[50]			= "";
 	
 	//---------------------------------------------------------------
 	// Task Controller Name
@@ -981,11 +1310,11 @@ static void ExecutionLogEntry (TaskControl_type* taskControl, EventPacket_type* 
 	AppendString(&output, ", (state: ", -1);
 	// if this is a state change, then print old state as well
 	if (action == STATE_CHANGE) {
-		AppendString(&output, (stateName = StateToString(taskControl->oldState)), -1);
+		AppendString(&output, (stateName = TaskControlStateToString(taskControl->oldState)), -1);
 		OKfree(stateName);
 		AppendString(&output, "->", -1);
 	}
-	AppendString(&output, (stateName = StateToString(taskControl->state)), -1);
+	AppendString(&output, (stateName = TaskControlStateToString(taskControl->state)), -1);
 	OKfree(stateName);
 	AppendString(&output, ")", -1);
 	
@@ -1040,12 +1369,12 @@ static void ExecutionLogEntry (TaskControl_type* taskControl, EventPacket_type* 
 		// if childTC state change event occurs, print also previous state of the childTC that changed
 		if (action == CHILD_TASK_STATE_UPDATE)
 			if (((ChildTCEventInfo_type*)eventPacket->eventData)->childTCIdx == i){
-				AppendString(&output, (stateName = StateToString(childTCPtr->previousChildTCState)), -1);
+				AppendString(&output, (stateName = TaskControlStateToString(childTCPtr->previousChildTCState)), -1);
 				OKfree(stateName);
 				AppendString(&output, "->", -1);
 			}
 				
-		AppendString(&output, (stateName = StateToString(childTCPtr->childTCState)), -1);
+		AppendString(&output, (stateName = TaskControlStateToString(childTCPtr->childTCState)), -1);
 		OKfree(stateName);
 		AppendString(&output, ")", -1);
 		if (i < nChildTCs)
@@ -1186,6 +1515,7 @@ static void ChangeState (TaskControl_type* taskControl, EventPacket_type* eventP
 			
 			break;
 	}
+	
 	// add log entry if enabled
 	ExecutionLogEntry(taskControl, eventPacket, STATE_CHANGE, NULL);
 }
@@ -1778,7 +2108,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				default:
 					
 					eventStr 	= EventToString(eventpacket[i].event);
-					stateStr 	= StateToString(taskControl->state);	 	
+					stateStr 	= TaskControlStateToString(taskControl->state);	 	
 					nchars 		= snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff 		= malloc ((nchars+1)*sizeof(char));
 					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
@@ -1909,7 +2239,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				default:
 					
 					eventStr 	= EventToString(eventpacket[i].event);
-					stateStr 	= StateToString(taskControl->state);	 	
+					stateStr 	= TaskControlStateToString(taskControl->state);	 	
 					nchars 		= snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff 		= malloc ((nchars+1)*sizeof(char));
 					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
@@ -2083,7 +2413,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				default:
 					
 					eventStr = EventToString(eventpacket[i].event);
-					stateStr = StateToString(taskControl->state);	 	
+					stateStr = TaskControlStateToString(taskControl->state);	 	
 					nchars = snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff = malloc ((nchars+1)*sizeof(char));
 					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
@@ -2297,7 +2627,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				default:
 					
 					eventStr 		= EventToString(eventpacket[i].event);
-					stateStr 		= StateToString(taskControl->state);	 	
+					stateStr 		= TaskControlStateToString(taskControl->state);	 	
 					nchars 			= snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff 			= malloc ((nchars+1)*sizeof(char));
 					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
@@ -2317,6 +2647,34 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 		 
 			switch (eventpacket[i].event) {
 				
+					
+				case TC_Event_Configure:
+					
+					if (!taskControl->repeat) {
+						// configure again this TC
+						if (FunctionCall(taskControl, &eventpacket[i], TC_Callback_Configure, NULL, &errMsg) < 0) {
+							taskControl->errorInfo 	= FormatMsg(TaskEventHandler_Error_FunctionCallFailed, taskControl->taskName, errMsg);
+							taskControl->errorID	= TaskEventHandler_Error_FunctionCallFailed;
+							OKfree(errMsg);
+							ChangeState(taskControl, &eventpacket[i], TC_State_Error);
+							break;
+						}
+					} else {
+						eventStr 		= EventToString(eventpacket[i].event);
+						stateStr 		= TaskControlStateToString(taskControl->state);	 	
+						nchars 			= snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
+						buff 			= malloc ((nchars+1)*sizeof(char));
+						snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
+						OKfree(eventStr);
+						OKfree(stateStr);
+					
+						taskControl->errorInfo  = FormatMsg(TaskEventHandler_Error_InvalidEventInState, taskControl->taskName, buff); 
+						taskControl->errorID	= TaskEventHandler_Error_InvalidEventInState;
+						OKfree(buff);
+						ChangeState(taskControl, &eventpacket[i], TC_State_Error); 
+					}
+					break;
+					
 				case TC_Event_Iterate:
 					
 					//---------------------------------------------------------------------------------------------------------------
@@ -2651,7 +3009,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				default:
 					
 					eventStr 		= EventToString(eventpacket[i].event);
-					stateStr 		= StateToString(taskControl->state);	 	
+					stateStr 		= TaskControlStateToString(taskControl->state);	 	
 					nchars 			= snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff 			= malloc ((nchars+1)*sizeof(char));
 					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
@@ -2978,7 +3336,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 					}
 					
 					eventStr 		= EventToString(eventpacket[i].event);
-					stateStr 		= StateToString(taskControl->state);	 	
+					stateStr 		= TaskControlStateToString(taskControl->state);	 	
 					nchars 			= snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff 			= malloc ((nchars+1)*sizeof(char));
 					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
@@ -3088,7 +3446,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				default:
 					
 					eventStr 		= EventToString(eventpacket[i].event);
-					stateStr 		= StateToString(taskControl->state);	 	
+					stateStr 		= TaskControlStateToString(taskControl->state);	 	
 					nchars 			= snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff 			= malloc ((nchars+1)*sizeof(char));
 					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);
@@ -3275,7 +3633,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 				default:
 					
 					eventStr 		= EventToString(eventpacket[i].event);
-					stateStr 		= StateToString(taskControl->state);	 	
+					stateStr 		= TaskControlStateToString(taskControl->state);	 	
 					nchars 			= snprintf(buff, 0, "%s event is invalid for %s state", eventStr, stateStr);
 					buff 			= malloc ((nchars+1)*sizeof(char));
 					snprintf(buff, nchars+1, "%s event is invalid for %s state", eventStr, stateStr);

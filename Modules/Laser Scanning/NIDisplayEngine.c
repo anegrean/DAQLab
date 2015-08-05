@@ -3,8 +3,8 @@
 // Title:		NIDisplayEngine.c
 // Purpose:		A short description of the implementation.
 //
-// Created on:	3-2-2015 at 17:41:58 by Adrian.
-// Copyright:	. All Rights Reserved.
+// Created on:	3-2-2015 at 17:41:58 by Adrian Negrean.
+// Copyright:	VU University Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 
@@ -24,7 +24,8 @@
 //==============================================================================
 // Constants
 
-#define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}  
+#define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}
+#define OKfreeIMAQ(ptr) if (ptr) {imaqDispose(ptr); ptr = NULL;}
 
 #define	MAX_NI_VISION_DISPLAYS				16
 
@@ -42,7 +43,11 @@
 
 typedef enum {
 	NIDisplayMenu_Save,
-	NIDisplayMenu_Restore
+	NIDisplayMenu_Restore,
+	NIDisplayMenu_Image,
+	NIDisplayMenu_Image_Equalize,
+	NIDisplayMenu_Image_Equalize_Linear,
+	NIDisplayMenu_Image_Equalize_Logarithmic,	
 } NIDisplayMenuItems;
 
 typedef enum {
@@ -108,7 +113,7 @@ static void 					discard_NIImageDisplay_type 					(NIImageDisplay_type** display
 
 static void 					discard_NIDisplayEngine_type 					(NIDisplayEngine_type** niVisionDisplayPtr);
 
-static int						DisplayNIVisionImage							(NIImageDisplay_type* imgDisplay, Image_type** image);
+static int						DisplayNIVisionImage							(NIImageDisplay_type* imgDisplay, Image_type** newImagePtr);
 
 static int						DisplayNIVisionRGBImage							(NIImageDisplay_type* imgDisplay, Image_type** imageR, Image_type** imageG, Image_type** imageB);	
 
@@ -119,7 +124,7 @@ static NIImageDisplay_type*		GetNIImageDisplay								(NIDisplayEngine_type* NID
 
 static ImgDisplayCBData_type	GetNIImageDisplayCBData							(NIImageDisplay_type* imgDisplay);
 
-static int 						DrawROI 										(NIImageDisplay_type* imgDisplay, ROI_type* ROI);
+static int 						DrawROI 										(Image* image, ROI_type* ROI);
 
 static ROI_type*				OverlayNIVisionROI								(NIImageDisplay_type* imgDisplay, ROI_type* ROI);
 
@@ -133,6 +138,12 @@ static void IMAQ_CALLBACK		NIImageDisplay_CB								(WindowEventType type, int w
 
 	// For processing custom NI Vision window events
 LRESULT CALLBACK 				CustomNIImageDisplay_CB							(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+
+	// Applies a display transform function to the image. On success returns nonzero value, on failure returns 0.
+static int						ApplyDisplayTransform							(Image* image, ImageDisplayTransforms dispTransformFunc);
+
+	// Converts Image_type to NI image. Pass an existing (allocated) NI image of the same size as the image to be converted. On success return nonzero, on failure returns 0.
+static int						ConvertImageTypeToNIImage						(Image* NIImage, Image_type* image);
 
 //==============================================================================
 // Global variables
@@ -256,32 +267,26 @@ static void discard_NIImageDisplay_type (NIImageDisplay_type** displayPtr)
 	discard_ImageDisplay_type((ImageDisplay_type**) displayPtr);
 }
 
-static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, Image_type** image)
+static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, Image_type** newImagePtr)
 {								
-	int			error		= 0;
-	int			imgWidth	= 0;
-	int			imgHeight	= 0;
-	void*		pixelArray	= GetImagePixelArray(*image);
+	int					error				= 0;
+	Image_type**		currentImagePtr		= NULL;
+	Image_type*			testImg				= NULL;
 	
-	// update display image
-	discard_Image_type(&imgDisplay->baseClass.image);
-	GetImageSize(*image, &imgWidth, &imgHeight);
-	imgDisplay->baseClass.image = *image;
-	*image = NULL;
+	if( CmtGetTSVPtr(imgDisplay->baseClass.imageTSV, &currentImagePtr)  < 0) goto TSVError;
 	
-	// convert pixel array to image
-	nullChk( imaqArrayToImage(imgDisplay->NIImage, pixelArray, imgWidth, imgHeight) );
+	testImg = *currentImagePtr;
 	
-	// draw ROIs
-	ListType	ROIList	= GetImageROIs(imgDisplay->baseClass.image);
-	size_t		nROIs	= ListNumItems(ROIList);
-	ROI_type*	ROI 	= NULL;
+	// apply current image transform if there was any to the new image
+	if (*currentImagePtr)
+		SetImageDisplayTransform(*newImagePtr, GetImageDisplayTransform(*currentImagePtr));
 	
-	for (size_t i = 1; i <= nROIs; i++) {
-		ROI = *(ROI_type**) ListGetPtrToItem(ROIList, i);
-		if (ROI->active)
-			errChk( DrawROI(imgDisplay, ROI) );
-	}
+	// discard current image and assign new image
+	discard_Image_type(currentImagePtr);
+	*currentImagePtr = *newImagePtr;
+	*newImagePtr = NULL;
+	
+	errChk( ConvertImageTypeToNIImage(imgDisplay->NIImage, *currentImagePtr) );
 	
 	// display NI image
 	nullChk( imaqDisplayImage(imgDisplay->NIImage, imgDisplay->imaqWndID, FALSE) );
@@ -292,9 +297,13 @@ static int DisplayNIVisionImage (NIImageDisplay_type* imgDisplay, Image_type** i
 	if (!isToolWindowVisible)
 		nullChk( imaqShowToolWindow(TRUE) );
 		    
-	return 0;
-	
+
 Error:
+	
+	CmtReleaseTSVPtr(imgDisplay->baseClass.imageTSV);
+	return error;
+	
+TSVError:
 	
 	return error;
 }
@@ -312,6 +321,8 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 	ImageType		imaqImgType				= 0;
 	HWND			imaqWndHndl				= 0;	// windows handle of the imaq window
 	HMENU			imaqWndMenuHndl			= 0;	// menu bar for the imaq window
+	HMENU			imageMenuHndl			= 0;	// submenu handle for "Image" menu item in the imaq window
+	HMENU			equalizeMenuHndl		= 0;	// submenu handle for "Image->Equalize" menu item in the imaq window
 	HMONITOR		hMonitor				= NULL;
 	MONITORINFO		monitorInfo				= {.cbSize = sizeof(MONITORINFO)};
 	LONG			maxWindowHeight			= 0;
@@ -404,7 +415,11 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 	// confine image window to parent window if provided  ( sometimes this freezes the UI!! )
 	//if (NIDisplay->parentWindowHndl)
 	//	SetParent( imaqWndHndl, (HWND)NIDisplay->parentWindowHndl);
-	// create menu bar
+	
+	//--------------------------------------------------------------------------------------------------------
+	// Create menu bar and add menu items
+	//--------------------------------------------------------------------------------------------------------
+	
 	imaqWndMenuHndl = CreateMenu();
 	// add menu item "Save"
 	AppendMenu(imaqWndMenuHndl, MF_STRING, NIDisplayMenu_Save, "&Save");
@@ -413,6 +428,30 @@ static NIImageDisplay_type* GetNIImageDisplay (NIDisplayEngine_type* NIDisplay, 
 	
 	// add menu bar to the imaq window
 	SetMenu(imaqWndHndl, imaqWndMenuHndl);
+	
+	//-------------------------------------------------------------------------
+	// Add Menu->Image menu and add menu items
+	//-------------------------------------------------------------------------
+	
+	// "Image" menu
+	imageMenuHndl = CreateMenu();
+	
+	// add menu item "Image" to imaq Menu
+	AppendMenu(imaqWndMenuHndl, MF_STRING | MF_POPUP, (UINT_PTR)imageMenuHndl, "&Image");
+	
+	//-------------------------------------------------------------------------
+	// Add Menu->Image->Equalize popup menu and add menu items
+	//-------------------------------------------------------------------------
+	
+	equalizeMenuHndl = CreatePopupMenu();
+	// add menu item "Linear"
+	AppendMenu(equalizeMenuHndl, MF_STRING, NIDisplayMenu_Image_Equalize_Linear, "&Linear");
+	// add menu item "Logarithmic"
+	AppendMenu(equalizeMenuHndl, MF_STRING, NIDisplayMenu_Image_Equalize_Logarithmic, "&Logarithmic");
+	
+	// add menu item "Equalize" to Menu->Image
+	AppendMenu(imageMenuHndl, MF_STRING | MF_POPUP, (UINT_PTR)equalizeMenuHndl, "&Equalize");
+	
 	
 	// add custom window callback function
 	SetWindowSubclass(imaqWndHndl, CustomNIImageDisplay_CB, 0, (DWORD_PTR)displays[imaqHndl]);
@@ -433,7 +472,7 @@ static ImgDisplayCBData_type GetNIImageDisplayCBData (NIImageDisplay_type* imgDi
 	return imgDisplay->baseClass.imageDisplayCBData;
 }
 
-static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
+static int DrawROI (Image* image, ROI_type* ROI)
 {
 	int					error 				= 0;
 	RGBValue			rgbVal 				= { .R		= ROI->rgba.R,
@@ -443,17 +482,17 @@ static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 	Point				textPoint;
 	
 	OverlayTextOptions	overlayTextOptions	= {	.fontName					="Arial",
-						 						.fontSize					= imgDisplay->baseClass.ROITextFontSize,
+						 						.fontSize					= ROI->textFontSize,
 												.bold						= FALSE,
 												.italic						= FALSE,
 												.underline					= FALSE,
 												.strikeout					= FALSE,
 												.horizontalTextAlignment	= IMAQ_LEFT,
 												.verticalTextAlignment		= IMAQ_TOP,
-												.backgroundColor			= {imgDisplay->baseClass.ROITextBackground.R,
-														  					   imgDisplay->baseClass.ROITextBackground.G,
-																			   imgDisplay->baseClass.ROITextBackground.B,
-																			   imgDisplay->baseClass.ROITextBackground.alpha},
+												.backgroundColor			= {ROI->textBackground.R,
+														  					   ROI->textBackground.G,
+																			   ROI->textBackground.B,
+																			   ROI->textBackground.alpha},
 												.angle						= 0				};
 	
 	// overlay ROI on the image
@@ -468,9 +507,9 @@ static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 			textPoint.y = point.y + ROILabel_YOffset;
 			
 			// point overlay 
-			nullChk( imaqOverlayPoints(imgDisplay->NIImage, &point, 1, &rgbVal, 1, IMAQ_POINT_AS_CROSS, NULL, ROI->ROIName) );   
+			nullChk( imaqOverlayPoints(image, &point, 1, &rgbVal, 1, IMAQ_POINT_AS_CROSS, NULL, ROI->ROIName) );   
 			// label overlay
-			nullChk( imaqOverlayText(imgDisplay->NIImage, textPoint, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
+			nullChk( imaqOverlayText(image, textPoint, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
 			break;
 			
 		case ROI_Rectangle:
@@ -484,9 +523,9 @@ static int DrawROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 			textPoint.y = rect.top + ROILabel_YOffset;
 			
 			// rectangle overlay
-			nullChk( imaqOverlayRect(imgDisplay->NIImage, rect, &rgbVal, IMAQ_DRAW_VALUE, ROI->ROIName) );
+			nullChk( imaqOverlayRect(image, rect, &rgbVal, IMAQ_DRAW_VALUE, ROI->ROIName) );
 			// label overlay
-			nullChk( imaqOverlayText(imgDisplay->NIImage, textPoint, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
+			nullChk( imaqOverlayText(image, textPoint, ROI->ROIName, &rgbVal, &overlayTextOptions, ROI->ROIName) ); 
 			break;
 			
 	}
@@ -501,16 +540,23 @@ Error:
 
 static ROI_type* OverlayNIVisionROI (NIImageDisplay_type* imgDisplay, ROI_type* ROI)
 {
-	int					error 				= 0;
-	ROI_type*			ROICopy				= NULL;
+	int					error 			= 0;
+	ROI_type*			ROICopy			= NULL;
+	Image_type**		imagePtr		= NULL;
 	
-	errChk( DrawROI(imgDisplay, ROI) );
+	// get image lock
+	if( CmtGetTSVPtr(imgDisplay->baseClass.imageTSV, &imagePtr)  < 0) goto TSVError;
+	
+	errChk( DrawROI(imgDisplay->NIImage, ROI) );
 	
 	// make ROI Copy
 	nullChk( ROICopy = (*ROI->copyFptr) ((void*)ROI) );
 	
 	// add ROI overlay to list
-	ListInsertItem(GetImageROIs(imgDisplay->baseClass.image), &ROICopy, END_OF_LIST);
+	ListInsertItem(GetImageROIs(*imagePtr), &ROICopy, END_OF_LIST);
+	
+	// release image lock
+	CmtReleaseTSVPtr(imgDisplay->baseClass.imageTSV);
 	
 	// update image
 	imaqDisplayImage(imgDisplay->NIImage, imgDisplay->imaqWndID, FALSE);
@@ -523,13 +569,21 @@ Error:
 	(*ROICopy->discardFptr)((void**)&ROICopy);
 	
 	return NULL;
+	
+TSVError:
+	
+	return NULL;
 }
 
 static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROIActions action)
 {
-	ROI_type**	ROIPtr 	= NULL;
-	ListType	ROIlist = GetImageROIs(imgDisplay->baseClass.image); 
-	size_t		nROIs	= ListNumItems(ROIlist);
+	ROI_type**		ROIPtr 		= NULL;
+	Image_type**	imagePtr	= NULL;
+	
+	if( CmtGetTSVPtr(imgDisplay->baseClass.imageTSV, &imagePtr)  < 0) goto TSVError;
+	
+	ListType		ROIlist 	= GetImageROIs(*imagePtr);
+	size_t			nROIs		= ListNumItems(ROIlist);
 	
 	if (ROIIdx) {
 		ROIPtr = ListGetPtrToItem(ROIlist, ROIIdx);
@@ -538,7 +592,7 @@ static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROI
 			case ROI_Visible:
 				
 				if (!(*ROIPtr)->active) {
-					DrawROI(imgDisplay, *ROIPtr);
+					DrawROI(imgDisplay->NIImage, *ROIPtr);
 					(*ROIPtr)->active = TRUE;
 				}
 				
@@ -573,7 +627,7 @@ static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROI
 				case ROI_Visible:
 				
 					if (!(*ROIPtr)->active) {
-						DrawROI(imgDisplay, *ROIPtr);
+						DrawROI(imgDisplay->NIImage, *ROIPtr);
 						(*ROIPtr)->active = TRUE;
 					}
 				
@@ -601,23 +655,26 @@ static void NIVisionROIActions (NIImageDisplay_type* imgDisplay, int ROIIdx, ROI
 			}
 		}
 		
-		//if (action == ROI_Delete)
-		//	ListClear(ROIlist);
 	}
 	
-	//SetImageROIs(imgDisplay->baseClass.image, ROIlist);
+	// release lock
+	CmtReleaseTSVPtr(imgDisplay->baseClass.imageTSV);
 	
 	// update imaq display
 	imaqDisplayImage(imgDisplay->NIImage, imgDisplay->imaqWndID, FALSE);
 	
+	return;
+	
+TSVError:
+
+	return;
 }
 
 static void	DiscardImaqImg (Image** image)
 {
 	if (!*image) return;
 	
-	imaqDispose(*image);
-	*image = NULL;
+	OKfreeIMAQ(*image);
 }
 
 static void IMAQ_CALLBACK NIImageDisplay_CB (WindowEventType event, int windowNumber, Tool tool, Rect rect)
@@ -729,6 +786,8 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 	WORD					wParamLowWord	= LOWORD(wParam);
 	int						error			= 0;
 	char*					errMsg			= NULL;
+	Image_type**			imagePtr		= NULL;
+	BOOL					imageLocked		= FALSE;
 	
 	switch (msg) {
 			
@@ -749,6 +808,42 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 					
 					// broadcast RestoreSettings event to callbacks
 					FireCallbackGroup(disp->baseClass.callbacks, ImageDisplay_RestoreSettings);
+					break;
+					
+				case NIDisplayMenu_Image_Equalize_Linear:
+					
+					// obtain image lock
+					if( CmtGetTSVPtr(disp->baseClass.imageTSV, &imagePtr)  < 0) goto TSVError;
+					imageLocked = TRUE;
+					
+					// convert image
+					SetImageDisplayTransform(*imagePtr, ImageDisplayTransform_Linear);
+					errChk( ConvertImageTypeToNIImage(disp->NIImage, *imagePtr) );
+					
+					// release image lock
+					CmtReleaseTSVPtr(disp->baseClass.imageTSV);
+					imageLocked = FALSE;
+					
+					// display image
+					nullChk( imaqDisplayImage(disp->NIImage, disp->imaqWndID, FALSE) );
+					break;
+					
+				case NIDisplayMenu_Image_Equalize_Logarithmic:
+					
+					// obtain image lock
+					if( CmtGetTSVPtr(disp->baseClass.imageTSV, &imagePtr)  < 0) goto TSVError;
+					imageLocked = TRUE; 
+					
+					// convert image
+					SetImageDisplayTransform(*imagePtr, ImageDisplayTransform_Logarithmic);
+					errChk( ConvertImageTypeToNIImage(disp->NIImage, *imagePtr) );
+					
+					// release image lock 
+					CmtReleaseTSVPtr(disp->baseClass.imageTSV);
+					imageLocked = FALSE;
+					
+					// display image
+					nullChk( imaqDisplayImage(disp->NIImage, disp->imaqWndID, FALSE) );
 					break;
 			}
 			
@@ -790,9 +885,18 @@ LRESULT CALLBACK CustomNIImageDisplay_CB (HWND hWnd, UINT msg, WPARAM wParam, LP
 			break;
 	}
 	
+TSVError:
+	
 	return DefSubclassProc(hWnd, msg, wParam, lParam);
 	
 Error:
+	
+	// release image lock if locked
+	if (imageLocked) {
+		CmtReleaseTSVPtr(disp->baseClass.imageTSV);
+		imageLocked = FALSE;
+	}
+		
 	// call display error handler
 	if (!errMsg)
 		errMsg = StrDup("Unknown error.\n\n");
@@ -802,6 +906,68 @@ Error:
 	OKfree(errMsg);
 	
 	return DefSubclassProc(hWnd, msg, wParam, lParam);
+}
+
+static int ApplyDisplayTransform (Image* image, ImageDisplayTransforms dispTransformFunc)
+{
+	int					error		= 0;
+	
+	QuantifyReport*		imageReport	= NULL;
+	
+	// get global image statistics (note: could take more time than just getting min and max which are the only parameters needed)
+	nullChk( imageReport = imaqQuantify(image, NULL) );
+	
+	// apply transform
+	switch (dispTransformFunc) {
+			
+		case ImageDisplayTransform_Linear:
+			
+			nullChk( imaqMathTransform(image, image, IMAQ_TRANSFORM_LINEAR, imageReport->global.min, imageReport->global.max, 0, NULL) );
+			break;
+			
+		case ImageDisplayTransform_Logarithmic:
+			
+			nullChk( imaqMathTransform(image, image, IMAQ_TRANSFORM_LOG, imageReport->global.min, imageReport->global.max, 0, NULL) );
+			break;
+	}
+	
+Error:
+	
+	// cleanup
+	OKfreeIMAQ(imageReport);
+	
+	return error;
+}
+
+static int ConvertImageTypeToNIImage (Image* NIImage, Image_type* image)
+{
+	int			error		= 0;   
+	
+	int			imgWidth	= 0;
+	int			imgHeight	= 0;
+	void*		pixelArray	= GetImagePixelArray(image);
+	ListType	ROIList		= GetImageROIs(image);
+	size_t		nROIs		= ListNumItems(ROIList);
+	ROI_type*	ROI 		= NULL;
+	
+	GetImageSize(image, &imgWidth, &imgHeight);
+	
+	// convert pixel array to image
+	nullChk( imaqArrayToImage(NIImage, pixelArray, imgWidth, imgHeight) );
+	
+	// draw ROIs
+	for (size_t i = 1; i <= nROIs; i++) {
+		ROI = *(ROI_type**) ListGetPtrToItem(ROIList, i);
+		if (ROI->active)
+			errChk( DrawROI(NIImage, ROI) );
+	}
+	
+	// apply display transform 
+	errChk( ApplyDisplayTransform(NIImage, GetImageDisplayTransform(image)) );
+	
+Error:
+	
+	return error;
 }
 
 static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, char** errorInfo)
@@ -879,9 +1045,7 @@ static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, ch
 					break;
 			}
 			
-			imaqDispose(imageCopy);
-			imageCopy = NULL;
-			
+			OKfreeIMAQ(imageCopy);
 			break;
 			
 		default:   // negative values for errors
@@ -894,15 +1058,12 @@ static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, ch
 Error:
 	
 	// cleanup
-	if (imageCopy) {
-		imaqDispose(imageCopy);
-		imageCopy = NULL;
-	}
+	OKfreeIMAQ(imageCopy);
 	
 	errMsg = imaqGetErrorText(error);
 	if (errorInfo)
 		*errorInfo = StrDup(errMsg);
-	imaqDispose(errMsg);
+	OKfreeIMAQ(errMsg);
 	
 	return error;
 }	

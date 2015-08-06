@@ -119,14 +119,15 @@ typedef struct {
 	WScript_t	cur_script;			/* Current Script */
 	
 	/* UI */
-	int	main_panel_handle;			/* Main Script Panel */
-	int	container_panel_handle; 	/* Container Script Panel */ 
-	int	startElement_panel_handle;  /* Start Element Panel Handle */
-	int	actionElement_panel_handle; /* Action Element Panel Handle */
-	int	condElement_panel_handle;	/* Conditional Element Panel Handle */
-	int	repeatElement_panel_handle; /* Repeat Element Panel Handle */
-	int stopElement_panel_handle;	/* Stop Element Panel Handle */
-	int waitElement_panel_handle;	/* Wait Element Panel Handle */
+	int		main_panel_handle;			/* Main Script Panel */
+	int		container_panel_handle; 	/* Container Script Panel */ 
+	int		startElement_panel_handle;  /* Start Element Panel Handle */
+	int		actionElement_panel_handle; /* Action Element Panel Handle */
+	int		condElement_panel_handle;	/* Conditional Element Panel Handle */
+	int		repeatElement_panel_handle; /* Repeat Element Panel Handle */
+	int 	stopElement_panel_handle;	/* Stop Element Panel Handle */
+	int 	waitElement_panel_handle;	/* Wait Element Panel Handle */
+	size_t	element_panel_height;		/* Height of script element panel */
 } WhiskerScript_t;
 //==============================================================================
 // External variables
@@ -134,6 +135,7 @@ typedef struct {
 //==============================================================================
 // Global functions
 int	init_display_script(void *function_data);
+void discard_script_elements(WScript_t *cur_script);
 int discard_cur_script(WScript_t *cur_script);
 int discard_script_module(WhiskerScript_t *whisker_script);
 void redraw_script_elements(WScript_t *cur_script);

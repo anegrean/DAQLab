@@ -110,7 +110,7 @@ is_deditec_error()
 	{
 
 		DapiGetLastErrorText((unsigned char*) msg, sizeof(msg));
-		printf("Error Code = %x * Message = %s\n", 0, msg);
+		LOG_MSG2(5, "Error Code = %x * Message = %s\n", 0, msg);
 
 		DapiClearLastError();
 

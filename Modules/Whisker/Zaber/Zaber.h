@@ -23,10 +23,15 @@
 
 //==============================================================================
 // Constants
+#define	ZABER_DEV			0
+#define ZABER_X_DEV			1
+#define ZABER_Y_DEV			2
 #define DEVICE_NAME_LEN		6					/* Device name length including '\0' character */
 #define MIN					0					
 #define MAX					1
 #define CMD_LEN				32					/* Command length */
+#define RESPONSE_LEN		256					/* Device Response length */
+#define RESPONSE_DATA_LEN	128					/* Response data length */
 //==============================================================================
 // Types
 		
@@ -50,10 +55,12 @@ typedef struct {
 int  init_zaber_device(zaber_device_t *z_dev);
 int  close_zaber_device(zaber_device_t *z_dev);
 
-int	 send_MoveABS_cmd(z_port port, uint32_t abs_position);
-int  send_MoveRel_cmd(z_port port, int device, int position);
-void get_available_COMport(char *comport[]);
-
+int			send_MoveABS_cmd(z_port port, uint32_t abs_position);
+int			send_MoveRel_cmd(z_port port, int device, int position);
+void 		get_available_COMport(char *comport[]);
+int			get_device_data(z_port port, int device, char	*sub_cmd);
+void		set_device_data(z_port port, int device, char *sub_cmd, uint32_t value);
+		
 #ifdef __cplusplus
     }
 #endif

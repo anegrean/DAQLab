@@ -134,6 +134,23 @@ WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, in
 					SetCtrlAttribute(whisker_script->main_panel_handle, ScriptPan_ScriptRun,
 							ATTR_DIMMED, 0);
 					break;
+					
+				case ScriptPan_ScriptDelete:	/* Delete only script elements */
+					
+					if (cur_script->script_elements == NULL ||
+					   		cur_script->num_elements <= 0) {
+						MessagePopup("Delete Script", "No Elements to delete!");
+						return -1;
+					}
+					
+					ret = ConfirmPopup ("Delete Script", "Are you sure you want to "
+														"delete current script?");
+					if (ret == 0) {		/* Cancelled Operation */
+						return 0;	
+					}
+					
+					discard_script_elements(cur_script);
+					break;
 			}
 			
 			break;
@@ -160,92 +177,27 @@ ScriptAddElement_CB(int panel, int control, int event, void *callbackData, int e
 			
 			switch (index) {
 				case START: /* Start Element */
-					/* Allocate memory for new element 
-					StartElement_t	*start_element = NULL;
-					nullChk(start_element = (StartElement_t *)malloc(sizeof(StartElement_t)));
-					element = (ScriptElement_t *)start_element;
-				
-					Set Element type and duplicate corresponding panel
-					start_element->base_class.MAGIC_NUM = START;
-					errChk(start_element->base_class.panel_handle = DuplicatePanel(whisker_script->container_panel_handle, 
-																	whisker_script->startElement_panel_handle, "", 0, 0));
-					*/
 					nullChk(element = init_StartElement(whisker_script, NULL));
-					
-					
 					break;
 					
 				case ACTION: /* Action Element */
-					/* Allocate memory for new element 
-					ActionElement_t	*action_element = NULL;
-					nullChk(action_element = (ActionElement_t *)malloc(sizeof(ActionElement_t)));
-					element = (ScriptElement_t *)action_element;
-				
-					action_element->base_class.MAGIC_NUM = ACTION;
-					errChk(action_element->base_class.panel_handle = DuplicatePanel(whisker_script->container_panel_handle, 
-																	whisker_script->actionElement_panel_handle, "", 0, 0));
-					*/
 					nullChk(element = init_ActionElement(whisker_script, NULL));
-					
 					break;
 					
 				case CONDITION: /* Condition Element */
-					/* Allocate memory for new element 
-					ConditionElement_t	*condition_element = NULL;
-					nullChk(condition_element = (ConditionElement_t *)malloc(sizeof(ConditionElement_t)));
-					element = (ScriptElement_t *)condition_element;
-				
-					condition_element->base_class.MAGIC_NUM = CONDITION;
-					errChk(condition_element->base_class.panel_handle = DuplicatePanel(whisker_script->container_panel_handle, 
-																	whisker_script->condElement_panel_handle, "", 0, 0));
-					*/
 					nullChk(element = init_ConditionElement(whisker_script, NULL));
-					
 					break;
 					
 				case REPEAT: /* Repeat Element */
-					/* Allocate memory for new element 
-					RepeatElement_t	*repeat_element = NULL;
-					nullChk(repeat_element = (RepeatElement_t *)malloc(sizeof(RepeatElement_t)));
-					element = (ScriptElement_t *)repeat_element;
-				
-					/* Set Element type and duplicate corresponding panel 
-					repeat_element->base_class.MAGIC_NUM = REPEAT;
-					errChk(repeat_element->base_class.panel_handle = DuplicatePanel(whisker_script->container_panel_handle, 
-																	whisker_script->repeatElement_panel_handle, "", 0, 0));
-					*/
 					nullChk(element = init_RepeatElement(whisker_script, NULL));
-					
 					break;
 					
 				case STOP: /* Stop Element */
-					 /* Allocate memory for new element 
-					StopElement_t	*stop_element = NULL;
-					nullChk(stop_element = (StopElement_t *)malloc(sizeof(StopElement_t)));
-					element = (ScriptElement_t *)stop_element;
-				
-					/* Set Element type and duplicate corresponding panel
-					stop_element->base_class.MAGIC_NUM = STOP;
-					errChk(stop_element->base_class.panel_handle = DuplicatePanel(whisker_script->container_panel_handle, 
-																	whisker_script->stopElement_panel_handle, "", 0, 0));
-					 */
 					nullChk(element = init_StopElement(whisker_script, NULL));
-					
 					break;
 					
 				case WAIT: /* Wait Element */
-					/* Allocate memory for new element 
-					WaitElement_t	*wait_element = NULL;
-					nullChk(wait_element = (WaitElement_t *)malloc(sizeof(WaitElement_t)));
-					element = (ScriptElement_t *)wait_element;
-				
-					/* Set Element type and duplicate corresponding panel
-					wait_element->base_class.MAGIC_NUM = WAIT;
-					errChk(wait_element->base_class.panel_handle = DuplicatePanel(whisker_script->container_panel_handle, 
-																	whisker_script->waitElement_panel_handle, "", 0, 0));
-					*/
 					nullChk(element = init_WaitElement(whisker_script, NULL));
-					
 					break;
 			}
 			

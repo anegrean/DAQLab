@@ -29,6 +29,11 @@
 #define MOD_Whisker_UI		"./Modules/Whisker/UI_Whisker.uir"
 #define MOD_Whisker_Name 	"Rat Whisker"
 #define FILE_PATH_LEN		256
+
+		/* Tab Index */
+#define TAB_DROP_IN			0
+#define TAB_DROP_OUT		1
+#define TAB_AIR_PUFF		2
 		
 //==============================================================================
 // Types
@@ -47,6 +52,9 @@ typedef struct {
  */
 typedef struct {
 	int	main_panel_handle;		/* UI: Main Panel */
+	int	tab_air_puff;			/* Air Puff Tab page */
+	int	tab_drop_in;			/* Drop IN Tab page */
+	int	tab_drop_out;			/* Drop Out Tab Page */
 	int	XYSetting_panel_handle; /* XY setting Panel handle */
 } WhiskerUI_t;
 

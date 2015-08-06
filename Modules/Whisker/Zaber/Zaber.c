@@ -38,9 +38,8 @@ inline void print_decoded_reply(struct za_reply decoded_reply);
 void
 poll_until_idle(z_port port)
 {
-    char reply[256] = { 0 };
+    char reply[RESPONSE_LEN] = { 0 };
 	struct za_reply decoded_reply;
-    //const struct timespec ts = { 0, 100000000 }; /* 100mil nanosec = 100ms */
     
 	/* We use za_decode() to decode this string into more manageable parts,
 	 * sorting them into the fields of a za_reply struct, then we test
@@ -79,9 +78,11 @@ inline void
 print_decoded_reply(struct za_reply decoded_reply)
 {
 	/* TODO: Log this without printf */
-	printf("%c %d %d %s %s %s %s\n", decoded_reply.message_type, decoded_reply.device_address,
+	if (_CVI_DEBUG_) {
+		printf("%c %d %d %s %s %s %s\n", decoded_reply.message_type, decoded_reply.device_address,
 		   			decoded_reply.axis_number, decoded_reply.reply_flags, decoded_reply.device_status,
 					decoded_reply.warning_flags, decoded_reply.response_data);
+	}
 }
 
 inline void
@@ -129,21 +130,42 @@ send_MoveABS_cmd(z_port port, uint32_t abs_position)
 	return 0;
 }
 
+/* Get device settings and return values in integer.
+ * All functions assume that connection is already
+ * made with the device and port is valid.
+ */
 int
 get_device_data(z_port port, int device, char	*sub_cmd)
 {
 	char	cmd[CMD_LEN];
-	char	response_data[128];
+	char	response_data[RESPONSE_DATA_LEN];
 	
-	//sprintf(cmd, "/%d get %s\n", device, sub_cmd);
-	sprintf(cmd, "/00 0 get peripheralid\n"); 
+	sprintf(cmd, "/%d get %s\n", device, sub_cmd);
+	//sprintf(cmd, "/get maxspeed\n"); 
 	
-	LOG_MSG1(9, "Get Limit command %s", cmd);
+	LOG_MSG1(9, "Get device data command %s", cmd);
+	
+	/* Draining previos responses from zaber device is neccessary
+	 * Otherwise, you wont get the desired response immediately.
+	 */
+	za_drain(port);
 	send_cmd(port, cmd, response_data);
 	
-	/* Do processing on received data, like converting it to int and return */
-	//
-	return 0;
+	/* Return converted value */
+	return (uint32_t)atoi(response_data);
+}
+
+void
+set_device_data(z_port port, int device, char *sub_cmd, uint32_t value)
+{
+	char	cmd[CMD_LEN];
+	
+	sprintf(cmd, "%d set %s %d\n", device, sub_cmd, value);
+	LOG_MSG1(9, "Set device data command %s", cmd);
+	
+	send_cmd(port, cmd, NULL);
+	
+	return;
 }
 
 /* Init zaber device */
@@ -154,7 +176,7 @@ init_zaber_device(zaber_device_t *z_dev)
 	int		ret = 0;
 	
 	if (za_connect(&z_dev->port, z_dev->device_name) != Z_SUCCESS) {
-		printf("Could not connect to device %s.\n", z_dev->device_name);
+		LOG_MSG1(5, "Could not connect to device %s.\n", z_dev->device_name);
 		return -1;
 	}
 	
@@ -174,7 +196,7 @@ init_zaber_device(zaber_device_t *z_dev)
 	za_send(z_dev->port, "/home\n");
 	za_receive(z_dev->port, reply, sizeof(reply));
 	if (reply[0] == '\0') {
-		printf("Read no reply from device %s. "
+		LOG_MSG1(5, "Read no reply from device %s. "
 				"It may be running at a different baud rate "
 				"and/or in the binary protocol.\n", z_dev->device_name);
 		return -1;
@@ -184,7 +206,7 @@ init_zaber_device(zaber_device_t *z_dev)
 	
 	/* Get all device properties
 	 */
-	get_device_data(z_dev->port, 2, "x");
+	//LOG_MSG1(9, "Get data return value %u", get_device_data(z_dev->port, 2, "limit.max"));
 	
 	z_dev->VALID_DEVICE = TRUE;
 	LOG_MSG(9, "Zaber device connected successfuly\n");

@@ -49,9 +49,8 @@ int za_connect(z_port *port, const char *port_name)
 	}
 
 	SYSCALL(GetCommState(*port, &dcb));
-	printf("COM State : Baud Rate %d binary mode %d", dcb.BaudRate, dcb.fBinary);
 	dcb.DCBlength = sizeof(DCB);
-	dcb.BaudRate = 115200;
+	dcb.BaudRate = 115200;	/* ASCII protocol */
 	dcb.fBinary = TRUE;  /* Binary Mode (skip EOF check) */
 	//dcb.BaudRate = 9600;
 	//dcb.fBinary = FALSE;

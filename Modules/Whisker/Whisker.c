@@ -132,7 +132,15 @@ Load(DAQLabModule_type* mod, int workspacePanHndl)
 	char			IO_channel[7] = { 0 };
 	
 	/* load panel resources */
-	errChk(whisker_m->whisker_ui.main_panel_handle = LoadPanel(workspacePanHndl, MOD_Whisker_UI, MainPanel));
+	errChk(whisker_m->whisker_ui.main_panel_handle = LoadPanel(0, MOD_Whisker_UI, MainPanel));
+	
+	/* Get Tab panel handles */
+	GetPanelHandleFromTabPage(whisker_m->whisker_ui.main_panel_handle, MainPanel_IOChannelTab, TAB_DROP_IN,
+							    &(whisker_m->whisker_ui.tab_drop_in));
+	GetPanelHandleFromTabPage(whisker_m->whisker_ui.main_panel_handle, MainPanel_IOChannelTab, TAB_DROP_OUT,
+							    &(whisker_m->whisker_ui.tab_drop_out));
+	GetPanelHandleFromTabPage(whisker_m->whisker_ui.main_panel_handle, MainPanel_IOChannelTab, TAB_AIR_PUFF,
+							    &(whisker_m->whisker_ui.tab_air_puff));
 	
 	/* Set control attribute of entire module UI */
 	set_ctrl_attribute(whisker_m);
@@ -153,18 +161,17 @@ Load(DAQLabModule_type* mod, int workspacePanHndl)
 	whisker_m->de_dev.handle = 0; /* TODO: Fail to understand why global varibale is not initialized to zero
  								   * Compiler dependent operation. Thus, do not rely on it */
 	
-	
 	/* Insert IO channels list into AIR_PUFF, DROP_IN, DROP_OUT UI.
 	 * One can do it from UI, but 32 * 3 entries have to entered manually.
 	 * However, it's a one time job in UI.
 	 */
 	for (int i = 0; i < TOT_IO_CH; i++) {
-		sprintf(IO_channel, "I/O %d", i);
-		InsertListItem(whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_AirPuff, i,
+		sprintf(IO_channel, "CH %d", i+1);	/* Show Channels to User */
+		InsertListItem(whisker_m->whisker_ui.tab_air_puff, TabAirPuff_IO_AirPuff, i,
 					   IO_channel, i);
-		InsertListItem(whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_DropOut, i,
+		InsertListItem(whisker_m->whisker_ui.tab_drop_out, TabDropOut_IO_DropOut, i,
 					   IO_channel, i);
-		InsertListItem(whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_DropIN, i,
+		InsertListItem(whisker_m->whisker_ui.tab_drop_in, TabDropIn_IO_DropIN, i,
 					   IO_channel, i);
 		InsertListItem(whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_ZAxis, i,
 					   IO_channel, i);
@@ -207,17 +214,21 @@ set_ctrl_attribute(Whisker_t *whisker_m)
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYAbs, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYRight, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYLeft, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_ZUp, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_ZDown, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYArrowLeft, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYArrowRight, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYArrowUp, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYArrowDown, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_ZArrowUp, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_ZArrowDown, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	
 	/* Port Buttons */
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_PortOpen, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_PortClose, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	
 	/* IO channel ring controls */
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_DropIN, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_DropOut, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_AirPuff, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_in, TabDropIn_IO_DropIN, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_out, TabDropOut_IO_DropOut, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_air_puff, TabAirPuff_IO_AirPuff, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_ZAxis, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	
 	/* Buttons */
@@ -228,14 +239,19 @@ set_ctrl_attribute(Whisker_t *whisker_m)
 	
 	/* Check boxes */
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_CheckSync, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_Check_AirPuff, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_Check_DropIN, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_Check_DropOut, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_air_puff, TabAirPuff_Check_AirPuff, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_in, TabDropIn_Check_DropIN, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_out, TabDropOut_Check_DropOut, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	
 	/* Toggle buttons */
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_Toggle_DropIN, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_Toggle_DropOut, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_Toggle_AirPuff, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_in, TabDropIn_Toggle_DropIN, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_out, TabDropOut_Toggle_DropOut, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_air_puff, TabAirPuff_Toggle_AirPuff, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_in, TabDropIn_Toggle_Inter_DropIN, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_out, TabDropOut_Toggle_Inter_DropOut, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.tab_air_puff, TabAirPuff_Toggle_Inter_AirPuff, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	
 	
 	/* XY setting button that launches Setting Panel */
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYSetting, ATTR_CALLBACK_DATA, (void *)whisker_m);

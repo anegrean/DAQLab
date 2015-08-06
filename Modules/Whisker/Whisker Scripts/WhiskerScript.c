@@ -98,8 +98,8 @@ int
 init_display_script(void *function_data)
 {
 	//Whisker_t	*whisker_m = (Whisker_t *)function_data;
-	int		error = 0;
-	char	IO_channel[7] = { 0 };
+	int			error = 0;
+	char		IO_channel[7] = { 0 };
 	
 	if (whisker_script != NULL) {
 		LOG_MSG(9, "whisker_script is not NULL");
@@ -145,16 +145,12 @@ init_display_script(void *function_data)
 	setscript_ctrl_attribute(whisker_script);
 	
 	/* Set I/O Channels */
-	InsertListItem(whisker_script->actionElement_panel_handle, ActionEle_EleIO_CH, 0,
-					   "Default", 0);
-	InsertListItem(whisker_script->condElement_panel_handle, CondEle_EleIO_CH, 0,
-					   "Default", 0);
 	for (int i = 0; i < TOT_IO_CH; i++) {
-		sprintf(IO_channel, "I/O %d", i);
-		InsertListItem(whisker_script->actionElement_panel_handle, ActionEle_EleIO_CH, i+1,
-					   IO_channel, i+1);
-		InsertListItem(whisker_script->condElement_panel_handle, CondEle_EleIO_CH, i+1,
-					   IO_channel, i+1);
+		sprintf(IO_channel, "CH %d", i+1);	/* Show Channels to user */
+		InsertListItem(whisker_script->actionElement_panel_handle, ActionEle_EleIO_CH, i,
+					   IO_channel, i);
+		InsertListItem(whisker_script->condElement_panel_handle, CondEle_EleIO_CH, i,
+					   IO_channel, i);
 	}
 	
 	/* Adjust Container Panel Position 
@@ -163,12 +159,37 @@ init_display_script(void *function_data)
 	SetPanelAttribute(whisker_script->container_panel_handle, ATTR_TOP, 95);
 	SetPanelAttribute(whisker_script->container_panel_handle, ATTR_LEFT, 15);
 	
+	/* Get only element panel height which is required to scroll the script
+	 * when it is running.
+	 */
+	GetPanelAttribute(whisker_script->condElement_panel_handle, 
+					  				ATTR_HEIGHT, &(whisker_script->element_panel_height));
+	
 	/* Display Panel */
 	DisplayPanel(whisker_script->main_panel_handle);
 	DisplayPanel(whisker_script->container_panel_handle);
 	
 Error:
 	return error;
+}
+
+void
+discard_script_elements(WScript_t *cur_script)
+{
+	ScriptElement_t	*element = NULL;
+	
+	while (ListNumItems(cur_script->script_elements)) {
+		ListRemoveItem(cur_script->script_elements, &element, FRONT_OF_LIST);
+		
+		/* Discard Panel */
+		DiscardPanel(element->panel_handle);
+		
+		/* Free element */
+		OKfree(element);
+	}
+	
+	cur_script->num_elements = 0;
+	return;
 }
 
 /* Discard panels, free elements and free list */
@@ -182,15 +203,8 @@ discard_cur_script(WScript_t *cur_script)
 		return -1;	
 	}
 	
-	while (ListNumItems(cur_script->script_elements)) {
-		ListRemoveItem(cur_script->script_elements, &element, FRONT_OF_LIST);
-		
-		/* Discard Panel */
-		DiscardPanel(element->panel_handle);
-		
-		/* Free element */
-		OKfree(element);
-	}
+	/* Discard elements from the list */
+	discard_script_elements(cur_script);
 	
 	/* Free list */
 	OKfreeList(cur_script->script_elements);
@@ -207,6 +221,7 @@ discard_script_module()
 	/* Discard Panels.
 	 * When discard parent panel, all its childrens are discarded.
 	 */
+	discard_cur_script(&(whisker_script->cur_script));	/* Discard if current script is active */
 	DiscardPanel(whisker_script->main_panel_handle);
 	CmtDiscardLock(whisker_script->cur_script.lock);
 	OKfree(whisker_script);
@@ -225,7 +240,7 @@ setscript_ctrl_attribute(WhiskerScript_t *whisker_script)
 	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptRun, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptPause, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptStop, ATTR_CALLBACK_DATA, (void *)whisker_script);
-	
+	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	
 	/* Add callback data to script elements panel */
 	SetCtrlAttribute (whisker_script->startElement_panel_handle, StartEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
@@ -597,7 +612,7 @@ get_logfile_path(WhiskerScript_t *whisker_script)
 		SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_LogFile, 
 				   									cur_script->log_file.file_path);
 	}
-	return;
+	return 0;
 }
  
 
@@ -618,7 +633,9 @@ script_runner(void *thread_data)
 	
 	GetCtrlVal(whisker_script->main_panel_handle, ScriptPan_LogCheck, &value);
 	if (value) {
-		get_logfile_path(whisker_script);
+		if (-1 == get_logfile_path(whisker_script)) {
+			return -1;
+		}
 	} else {
 		/* Invalidate logging */
 		cur_script->log_file.VALID_FILE = FALSE;
@@ -659,6 +676,14 @@ script_runner(void *thread_data)
 			continue;
 		}
 		CmtReleaseLock(cur_script->lock);
+		
+		/* Before calling runner function, just scroll element appropriately.
+		 * Element Panel height is retrieved in init function and maintained
+		 * in whisker_script. We could get the height in local variable
+		 * but there is no issue in maintaining in global structure.
+		 */
+		SetPanelAttribute(whisker_script->container_panel_handle, ATTR_VSCROLL_OFFSET, 
+			(whisker_script->element_panel_height + INTER_ELEMENT_SPACING) * (i-1));
 		
 		ListGetItem(cur_script->script_elements, &element, i);
 		element->runner_function(element, whisker_script, &i);
@@ -1020,7 +1045,7 @@ action_runner(void *element, void *whisker_script, int *index)
 	
 	
 	SetCtrlVal(action_element->base_class.panel_handle, ActionEle_LED, 1);
-	set_with_timer(&(whisker_m->de_dev), (action_element->IO_Channel - 1), ON, /* 0: default */
+	set_with_timer(&(whisker_m->de_dev), action_element->IO_Channel, ON,
 				   								action_element->duration);
 	SetCtrlVal(action_element->base_class.panel_handle, ActionEle_LED, 0);
 	return;	
@@ -1085,7 +1110,7 @@ condition_runner(void *element, void *whisker_script, int *index)
 	SetCtrlVal(cond_element->base_class.panel_handle, CondEle_LED, 1);
 	
 	/* Test input on cond_element->IO_channel */
-	 input_value = get_input_value(&whisker_m->de_dev, (cond_element->IO_channel - 1)); /* 0: Default */
+	 input_value = get_input_value(&whisker_m->de_dev, cond_element->IO_channel);
 	 
 	 if (cond_element->value == input_value) {
 		*index = cond_element->true_step;
@@ -1098,7 +1123,7 @@ condition_runner(void *element, void *whisker_script, int *index)
 	/* Log message to file and text box */
 	sprintf(log_msg, "Condition : I/O Channel %d Value %d goto step %d", 
 							cond_element->IO_channel, cond_element->value, *index + 1);
-	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, "Condition");
+	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, log_msg);
 	
 	SetCtrlVal(cond_element->base_class.panel_handle, CondEle_LED, 0);
 	return;

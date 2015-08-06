@@ -53,20 +53,22 @@
 #define  ScriptPan_ScriptLog              2       /* control type: textBox, callback function: (none) */
 #define  ScriptPan_ScriptDefault          3       /* control type: command, callback function: (none) */
 #define  ScriptPan_ScriptQuit             4       /* control type: command, callback function: WhiskerScriptButton_CB */
-#define  ScriptPan_ScriptSave             5       /* control type: command, callback function: WhiskerScriptButton_CB */
-#define  ScriptPan_ScriptLoad             6       /* control type: command, callback function: WhiskerScriptButton_CB */
-#define  ScriptPan_ScriptNew              7       /* control type: command, callback function: WhiskerScriptButton_CB */
-#define  ScriptPan_ScriptElement          8       /* control type: ring, callback function: (none) */
-#define  ScriptPan_ScriptAdd              9       /* control type: command, callback function: ScriptAddElement_CB */
-#define  ScriptPan_SPLITTER_2             10      /* control type: splitter, callback function: (none) */
-#define  ScriptPan_SPLITTER_3             11      /* control type: splitter, callback function: (none) */
-#define  ScriptPan_SPLITTER               12      /* control type: splitter, callback function: (none) */
-#define  ScriptPan_NewScript              13      /* control type: textMsg, callback function: (none) */
-#define  ScriptPan_LogCheck               14      /* control type: radioButton, callback function: (none) */
-#define  ScriptPan_ScriptPause            15      /* control type: pictButton, callback function: WhiskerScriptButton_CB */
-#define  ScriptPan_ScriptStop             16      /* control type: pictButton, callback function: WhiskerScriptButton_CB */
-#define  ScriptPan_ScriptRun              17      /* control type: pictButton, callback function: WhiskerScriptButton_CB */
-#define  ScriptPan_LogFile                18      /* control type: textMsg, callback function: (none) */
+#define  ScriptPan_ScriptDelete           5       /* control type: pictButton, callback function: WhiskerScriptButton_CB */
+#define  ScriptPan_ScriptSave             6       /* control type: command, callback function: WhiskerScriptButton_CB */
+#define  ScriptPan_ScriptLoad             7       /* control type: command, callback function: WhiskerScriptButton_CB */
+#define  ScriptPan_ScriptNew              8       /* control type: command, callback function: WhiskerScriptButton_CB */
+#define  ScriptPan_ScriptElement          9       /* control type: ring, callback function: (none) */
+#define  ScriptPan_ScriptAdd              10      /* control type: command, callback function: ScriptAddElement_CB */
+#define  ScriptPan_SPLITTER_2             11      /* control type: splitter, callback function: (none) */
+#define  ScriptPan_SPLITTER_3             12      /* control type: splitter, callback function: (none) */
+#define  ScriptPan_SPLITTER               13      /* control type: splitter, callback function: (none) */
+#define  ScriptPan_NewScript              14      /* control type: textMsg, callback function: (none) */
+#define  ScriptPan_LogCheck               15      /* control type: radioButton, callback function: (none) */
+#define  ScriptPan_ScriptPause            16      /* control type: pictButton, callback function: WhiskerScriptButton_CB */
+#define  ScriptPan_ScriptStop             17      /* control type: pictButton, callback function: WhiskerScriptButton_CB */
+#define  ScriptPan_ScriptRun              18      /* control type: pictButton, callback function: WhiskerScriptButton_CB */
+#define  ScriptPan_LogFile                19      /* control type: textMsg, callback function: (none) */
+#define  ScriptPan_LickGraph              20      /* control type: strip, callback function: (none) */
 
 #define  StartEle                         6
 #define  StartEle_SPLITTER                2       /* control type: splitter, callback function: (none) */

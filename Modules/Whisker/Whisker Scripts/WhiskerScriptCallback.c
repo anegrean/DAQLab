@@ -12,6 +12,7 @@
 // Include files
 #include "DAQLab.h"
 #include "WhiskerScript.h"
+#include "Whisker.h"
 #include "UI_Scripts.h"
 
 //==============================================================================
@@ -67,6 +68,9 @@ WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, in
 					/* TODO: UnDim other controls */
 					SetCtrlAttribute(panel, ScriptPan_ScriptElement, ATTR_DIMMED, 0);
 					SetCtrlAttribute(panel, ScriptPan_ScriptAdd, ATTR_DIMMED, 0);
+					
+					/* Set File Name to <New Script> */
+					SetCtrlVal(panel, ScriptPan_ScriptName, NEW_SCRIPT_NAME);
 					
 					break;
 					
@@ -150,6 +154,10 @@ WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, in
 					}
 					
 					discard_script_elements(cur_script);
+					break;
+					
+				case ScriptPan_ScriptImportSetting:	/* Import settings from whisker UI */
+					import_settings(whisker_script);
 					break;
 			}
 			

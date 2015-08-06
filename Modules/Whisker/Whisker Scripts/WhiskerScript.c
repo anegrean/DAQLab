@@ -13,6 +13,7 @@
 #include "DAQLab.h"
 #include "Whisker.h"
 #include "WhiskerScript.h"
+#include "UI_Whisker.h"
 #include "UI_Scripts.h"
 #include "CVIXML.h"
 
@@ -241,6 +242,7 @@ setscript_ctrl_attribute(WhiskerScript_t *whisker_script)
 	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptPause, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptStop, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptImportSetting, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	
 	/* Add callback data to script elements panel */
 	SetCtrlAttribute (whisker_script->startElement_panel_handle, StartEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
@@ -429,8 +431,11 @@ save_script(WhiskerScript_t	*whisker_script)
         if (!ret) {
 			goto Error;
 		}
-        /* TODO: Set file path to UI display */
+        /* Set file path to UI display */
 		cur_script->xml_script.VALID_FILE = TRUE;
+		SplitPath(cur_script->xml_script.file_path, NULL, NULL, cur_script->xml_script.file_name);
+		SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_ScriptName, 
+			   									cur_script->xml_script.file_name);
 	} else {
 		/* Delete file and create new file path */
 		/* This is because, loaded file can be modified, like delete
@@ -482,10 +487,16 @@ load_script(WhiskerScript_t	*whisker_script)
 	ret = FileSelectPopup("", "*.xml", "", "Select a Script File",
                                    VAL_LOAD_BUTTON, 0, 1, 1, 0, cur_script->xml_script.file_path);
     if (!ret) {
+		/* As we have already discarded a script we should change UI */
+		SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_ScriptName, NO_SCRIPT_NAME);
+		SetCtrlAttribute(whisker_script->main_panel_handle, ScriptPan_ScriptAdd, ATTR_DIMMED, 1);
 		return;
 	}
-    /* TODO: Set file path to UI display */
+    /* Set file path to UI display */
 	cur_script->xml_script.VALID_FILE = TRUE;
+	SplitPath(cur_script->xml_script.file_path, NULL, NULL, cur_script->xml_script.file_name);
+	SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_ScriptName, 
+			   									cur_script->xml_script.file_name);
 	
 	/* Load XML Document and root element */
 	XMLErrChk(CVIXMLLoadDocument (cur_script->xml_script.file_path, &script_doc));
@@ -694,6 +705,16 @@ script_runner(void *thread_data)
 	cur_script->run_status = STOPPED;
 	CmtReleaseLock(cur_script->lock);
 	
+	/* Repeat Elements counter value reached ntimes value. So reset it. 
+	 * TODO: Coudn't find better way
+	 */
+	for (i = 0; i <= cur_script->num_elements; i++) {
+		ListGetItem(cur_script->script_elements, &element, i);
+		if (element->MAGIC_NUM == REPEAT) {
+			((RepeatElement_t *)element)->counter = 0; 
+		}
+	}
+	
 	/* Undim other invalid options
 	 * New, Save, Load, Add
 	 */
@@ -741,6 +762,65 @@ save_and_print_LogMsg(WhiskerScript_t *whisker_script, char	*str)
 		fprintf(cur_script->log_file.file_handle, "%s \n", msg);
 	}
 	return;
+}
+
+/* Import Script Elements from Whisker UI */
+void
+import_settings(WhiskerScript_t	*whisker_script)
+{
+	WScript_t		*cur_script = (WScript_t *)&(whisker_script->cur_script);
+	Whisker_t		*whisker_m = (Whisker_t *)whisker_script->whisker_m;
+	ScriptElement_t	*element = NULL;
+	ActionElement_t	*action_element = NULL;
+	int				ch, duration;
+	
+	/* Empty Script check */
+	if (cur_script->num_elements == 0 || cur_script->script_elements == NULL) {
+		MessagePopup("Import Setting", "Empty Script!");
+		return;
+	}
+	
+	/* Iterate through each script elements and if it is action element then
+	 * based on action import setting from whisker UI or module */
+	for (int i = 1; i <= cur_script->num_elements; i++) {
+		/* Get Element one by one */
+		ListGetItem(cur_script->script_elements, &element, i);
+		
+		/* Action Element */
+		if (element->MAGIC_NUM == ACTION) {
+			action_element = (ActionElement_t *)element;
+			
+			switch (action_element->action) {
+				case AIRPUFF:
+					ch = whisker_m->de_dev.IO_Channel[AIR_PUFF_CH];
+					GetCtrlVal(whisker_m->whisker_ui.tab_air_puff, TabAirPuff_Num_AirPuff, 
+							   									&duration);
+					break;
+					
+				case DROPOUT:
+					ch = whisker_m->de_dev.IO_Channel[DROP_OUT_CH];
+					GetCtrlVal(whisker_m->whisker_ui.tab_drop_out, TabDropOut_Num_DropOut, 
+							   									&duration);
+					break;
+					
+				case DROPIN:
+					ch = whisker_m->de_dev.IO_Channel[DROP_IN_CH];
+					GetCtrlVal(whisker_m->whisker_ui.tab_drop_in, TabDropIn_Num_DropIN, 
+							   									&duration);
+					break;
+			}
+			action_element->IO_Channel = ch;
+			action_element->duration = duration;
+			
+			/* Update UI */
+			SetCtrlVal(element->panel_handle, ActionEle_EleIO_CH, ch);
+			SetCtrlVal(element->panel_handle, ActionEle_EleDuration, duration);
+		}
+			
+	}
+	
+	return;
+	
 }
 
 /*********************************************************************

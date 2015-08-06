@@ -51,7 +51,7 @@
 
 #define  ScriptPan                        5
 #define  ScriptPan_ScriptLog              2       /* control type: textBox, callback function: (none) */
-#define  ScriptPan_ScriptDefault          3       /* control type: command, callback function: (none) */
+#define  ScriptPan_ScriptImportSetting    3       /* control type: command, callback function: WhiskerScriptButton_CB */
 #define  ScriptPan_ScriptQuit             4       /* control type: command, callback function: WhiskerScriptButton_CB */
 #define  ScriptPan_ScriptDelete           5       /* control type: pictButton, callback function: WhiskerScriptButton_CB */
 #define  ScriptPan_ScriptSave             6       /* control type: command, callback function: WhiskerScriptButton_CB */
@@ -69,6 +69,7 @@
 #define  ScriptPan_ScriptRun              18      /* control type: pictButton, callback function: WhiskerScriptButton_CB */
 #define  ScriptPan_LogFile                19      /* control type: textMsg, callback function: (none) */
 #define  ScriptPan_LickGraph              20      /* control type: strip, callback function: (none) */
+#define  ScriptPan_ScriptName             21      /* control type: textMsg, callback function: (none) */
 
 #define  StartEle                         6
 #define  StartEle_SPLITTER                2       /* control type: splitter, callback function: (none) */

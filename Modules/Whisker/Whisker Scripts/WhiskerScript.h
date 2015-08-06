@@ -24,6 +24,9 @@
 #define	ELEMENT_NAME_LEN	 	32
 #define INTER_ELEMENT_SPACING 	10
 #define FILE_PATH_LEN			256
+#define FILE_NAME_LEN			64
+#define	NEW_SCRIPT_NAME			"<New Script>"
+#define NO_SCRIPT_NAME			"<No Script>"
 
 /* Element type of script */		
 typedef enum {
@@ -54,6 +57,7 @@ typedef enum {
 
 typedef struct {
 	char	file_path[FILE_PATH_LEN];	/* XML file path */
+	char	file_name[FILE_NAME_LEN];	/* Extracted file name */
 	int		VALID_FILE;					/* If XML file path is valid */
 	FILE	*file_handle;				/* File handle */
 } FilePath_t;
@@ -141,6 +145,7 @@ int discard_script_module(WhiskerScript_t *whisker_script);
 void redraw_script_elements(WScript_t *cur_script);
 void save_script(WhiskerScript_t *whisker_script);
 void load_script(WhiskerScript_t	*whisker_script);
+void import_settings(WhiskerScript_t	*whisker_script);
 int CVICALLBACK script_runner(void *thread_data);
 
 ScriptElement_t* init_StartElement(WhiskerScript_t *whisker_script, int *value);

@@ -42,7 +42,7 @@
 	
 #define NUMTHREADS		10																			  
 		
-#define MAXBYTES		0x100000  //1Mb    
+#define MAXBUFSIZE		0x40000    
 		
 #define MAXCHAR 255  //testval for filename
 
@@ -93,7 +93,7 @@ int 					iterationnr;              				// current iteration number, passed in da
 DefineThreadSafeScalarVar(int,PMTCommandFlag,0);				// do a PMT controller register command in pmt thread
 DefineThreadSafeScalarVar(unsigned long,PMTControllerData,0); 	// current PMT controller data
 DefineThreadSafeScalarVar(int ,PMTBufsize,0); 	    			// pmt buffer size        
-DefineThreadSafeScalarVar(unsigned int,PMTnewbufsizeflag,0); 	// newbufsize flag
+//DefineThreadSafeScalarVar(unsigned int,PMTnewbufsizeflag,0); 	// newbufsize flag
 DefineThreadSafeScalarVar(unsigned int,AcqBusy,0); 	            // acquisition is busy 
 DefineThreadSafeScalarVar(unsigned int,ReadyForReading,0); 	    // acquisition thread is ready for reading
 
@@ -126,7 +126,7 @@ void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples)
 	if (mode==TASK_CONTINUOUS) {   
 		// continuous mode, bufsize based on sample freq
 		if (samplerate_in_khz>500) {
-			bufsize=0x40000;  
+			bufsize=MAXBUFSIZE;  
 		}
 		else if (samplerate_in_khz>250) {
 			bufsize=0x20000;  
@@ -147,10 +147,11 @@ void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples)
 		// finite mode, bufsize based on sample requested samples
 	 	nrsamples_in_iteration=itsamples;
 		// 8 bytes per sample (pixel)
-	 	bufsize=8*itsamples;  
+	 	bufsize=8*itsamples;
+		if (bufsize>MAXBUFSIZE) bufsize=MAXBUFSIZE;   //use max bufsize
 	 }
 	 SetPMTBufsize(bufsize);  
-	 SetPMTnewbufsizeflag(1);
+	 //SetPMTnewbufsizeflag(1);
 }
 
 int ReadPMTReg(unsigned long regaddress,unsigned long *regval)
@@ -206,12 +207,12 @@ int PMTController_Init(void)
 	InitializePMTCommandFlag();
 	InitializePMTControllerData();
 	InitializePMTBufsize();   
-	InitializePMTnewbufsizeflag(); 
+	//InitializePMTnewbufsizeflag(); 
 	InitializeReadyForReading();
 	
 	SetPMTCommandFlag(0);
 	SetPMTBufsize(0);   
-	SetPMTnewbufsizeflag(0);
+//	SetPMTnewbufsizeflag(0);
 	SetAcqBusy(0);
 	SetReadyForReading(0);
 	
@@ -236,7 +237,7 @@ int PMTController_Finalize(void)
 	 UninitializePMTCommandFlag();
 	 UninitializePMTControllerData();
 	 UninitializePMTBufsize();   
-	 UninitializePMTnewbufsizeflag();  
+//	 UninitializePMTnewbufsizeflag();  
 	 UninitializeReadyForReading();
 	 
 	 //clear control register, make sure PMT's are disabled
@@ -354,6 +355,12 @@ int ReadBuffer(int bufsize)
 				nrsamples = 0;
 				PMTStopAcq(); 
 				TaskControlIterationDone(gtaskControl, 0, "", FALSE);   
+			}
+			else {
+				if (((nrsamples_in_iteration-nrsamples)*8)<MAXBUFSIZE) {
+			    //read last portion of the data, but reduce read size
+				SetPMTBufsize((nrsamples_in_iteration-nrsamples)*8);
+				}
 			}
 		}
 	}

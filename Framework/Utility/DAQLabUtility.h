@@ -15,6 +15,14 @@
     extern "C" {
 #endif
 
+#ifndef	_CVI_DEBUG_
+#define	_CVI_DEBUG_	0
+#endif
+		
+#ifndef	_DEBUG_LEVEL_
+#define	_DEBUG_LEVEL_ -1
+#endif
+		
 //==============================================================================
 // Include files
 
@@ -52,15 +60,15 @@
 /* Log Messages that is only printed when _CVI_DEBUG_ is set and it is within 
  * _DEBUG_LEVEL_
  */
-#define LOG_MSG(level, f)		if (_CVI_DEBUG_ & level <= _DEBUG_LEVEL_) { 				\
+#define LOG_MSG(level, f)		if (_CVI_DEBUG_ && level <= _DEBUG_LEVEL_) { 				\
 									printf("(%s: %d) " f "\n", __FILE__, __LINE__); 		\
 								}
 													 
-#define LOG_MSG1(level, f, v)	if (_CVI_DEBUG_ & level <= _DEBUG_LEVEL_) { 				\
+#define LOG_MSG1(level, f, v)	if (_CVI_DEBUG_ && level <= _DEBUG_LEVEL_) { 				\
 									printf("(%s: %d) " f "\n", __FILE__, __LINE__, v); 		\
 								}
 													 
-#define LOG_MSG2(level, f, v1, v2)	if (_CVI_DEBUG_ & level <= _DEBUG_LEVEL_) { 			\
+#define LOG_MSG2(level, f, v1, v2)	if (_CVI_DEBUG_ && level <= _DEBUG_LEVEL_) { 			\
 									printf("(%s: %d) " f "\n", __FILE__, __LINE__, v1, v2); \
 								}
 													 

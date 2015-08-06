@@ -67,7 +67,7 @@ typedef enum {
 typedef void							(*ROIEvents_CBFptr_type)					(ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI);
 
 	// Called when a display module error occurs
-typedef void							(*ErrorHandlerFptr_type)					(ImageDisplay_type* imgDisplay, int errorID, char* errorInfo);
+typedef void							(*ErrorHandlerFptr_type)					(ImageDisplay_type* imgDisplay, int errorID, char* errorMsg);
 
 //--------------------------------------
 // Methods typedefs

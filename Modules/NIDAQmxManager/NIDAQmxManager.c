@@ -25,7 +25,17 @@
 #include "HWTriggering.h"
 #include "utility.h"
 #include "toolbox.h"
-//#include "DAQLab.h"
+
+//========================================================================================================================================================================================================
+// Macros
+
+// DAQmxErrChk
+#define DAQmxErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) \
+{goto DAQmxError;} else
+	
+// Cmt library error macro
+#define CmtErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) \ 
+{goto CmtError;} else
 
 //========================================================================================================================================================================================================
 // Constants
@@ -84,10 +94,6 @@
 #define DAQmxCICOTskSet_TimingTabIdx					1
 #define DAQmxCICOTskSet_ClkTabIdx						2  
 #define DAQmxCICOTskSet_TriggerTabIdx					3
-	// DAQmx error macro
-#define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto DAQmxError; else
-	// Cmt library error macro
-#define CmtErrChk(functionCall) if( (error=(functionCall)) < 0 ) goto CmtError; else
 	// Shared error codes
 #define WriteAODAQmx_Err_DataUnderflow 					-1
 
@@ -907,7 +913,7 @@ static int	 currDev = -1;        // currently selected device from the DAQ table
 // DAQmx Module management
 //---------------------------------------------
 
-static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
+static int							Load 									(DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg);
 
 	//---------------------------------------------------
 	// Loading DAQmx settings
@@ -1097,8 +1103,8 @@ static ChanSet_DIDO_type*			init_ChanSet_DIDO_type					(Dev_type* dev, char phys
 static void							discard_ChanSet_DIDO_type				(ChanSet_type** chanSetPtr);
 static int 							ChanSetLineDO_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
 static int 							ChanSetPortDO_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
-int 								ReadDirectDigitalOut					(char* chan, uInt32* data);																	// <---------- check & cleanup!!!
-int 								DirectDigitalOut 						(char* chan, uInt32 data, BOOL invert, double timeout);										// <---------- check & cleanup!!!
+static int 							ReadDirectDigitalOut					(char* chan, uInt32* data, char** errorMsg);
+static int 							DirectDigitalOut 						(char* chan, uInt32 data, BOOL invert, double timeout, char** errorMsg);
 void 								SetPortControls							(int panel, uInt32 data);																	// <---------- check & cleanup!!!
 
 	// CI base class
@@ -1126,7 +1132,7 @@ static ListType						GetPhysChanPropertyList					(char chanName[], int chanPrope
 // Channel management
 //-------------------
 static void							PopulateChannels						(Dev_type* dev);
-static int							AddDAQmxChannel							(Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type ioMode, int ioType, char chName[], char** errorInfo);
+static int							AddDAQmxChannel							(Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type ioMode, int ioType, char chName[], char** errorMsg);
 static int 							RemoveDAQmxAIChannel_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int 							RemoveDAQmxAOChannel_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
 static int 							RemoveDAQmxDIChannel_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 	// <---- add functionality!
@@ -1210,20 +1216,19 @@ static int 							DAQmxDevTaskSet_CB 						(int panel, int control, int event, v
 //-----------------------
 // DAQmx tasks management
 //-----------------------
-static int							ConfigDAQmxDevice						(Dev_type* dev, char** errorInfo); 	 // configures all tasks on the device
-static int							ConfigDAQmxAITask 						(Dev_type* dev, char** errorInfo);
-static int							ConfigDAQmxAOTask 						(Dev_type* dev, char** errorInfo);
-static int							ConfigDAQmxDITask 						(Dev_type* dev, char** errorInfo);
-static int							ConfigDAQmxDOTask 						(Dev_type* dev, char** errorInfo);
-static int							ConfigDAQmxCITask 						(Dev_type* dev, char** errorInfo);
-static int							ConfigDAQmxCOTask 						(Dev_type* dev, char** errorInfo);
-static void 						DisplayLastDAQmxLibraryError 			(void);
+static int							ConfigDAQmxDevice						(Dev_type* dev, char** errorMsg); 	 // configures all tasks on the device
+static int							ConfigDAQmxAITask 						(Dev_type* dev, char** errorMsg);
+static int							ConfigDAQmxAOTask 						(Dev_type* dev, char** errorMsg);
+static int							ConfigDAQmxDITask 						(Dev_type* dev, char** errorMsg);
+static int							ConfigDAQmxDOTask 						(Dev_type* dev, char** errorMsg);
+static int							ConfigDAQmxCITask 						(Dev_type* dev, char** errorMsg);
+static int							ConfigDAQmxCOTask 						(Dev_type* dev, char** errorMsg);
 	// clears all CI DAQmx tasks
-static int 							ClearDAQmxCITasks 						(Dev_type* dev, char** errorInfo);
+static int 							ClearDAQmxCITasks 						(Dev_type* dev, char** errorMsg);
 	// clears all DAQmx Tasks defined for the device
-static int 							ClearDAQmxTasks 						(Dev_type* dev); 
+static int 							ClearDAQmxTasks 						(Dev_type* dev, char** errorMsg); 
 	// stops all DAQmx Tasks defined for the device
-static int							StopDAQmxTasks 							(Dev_type* dev, char** errorInfo); 
+static int							StopDAQmxTasks 							(Dev_type* dev, char** errorMsg); 
 	// starts DAQmx Tasks defined for the device
 static int CVICALLBACK 				StartAIDAQmxTask_CB 					(void *functionData);
 static int CVICALLBACK 				StartAODAQmxTask_CB 					(void *functionData);
@@ -1236,7 +1241,7 @@ static int CVICALLBACK 				StartCODAQmxTasks_CB 					(void *functionData);
 // DAQmx task callbacks
 //---------------------
 	// AI
-static int 							SendAIBufferData 						(Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx, int nRead, float64* AIReadBuffer, char** errorInfo); 
+static int 							SendAIBufferData 						(Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx, int nRead, float64* AIReadBuffer, char** errorMsg); 
 int32 CVICALLBACK 					AIDAQmxTaskDataAvailable_CB 			(TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData);
 int32 CVICALLBACK 					AIDAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 status, void *callbackData);
 
@@ -1259,7 +1264,7 @@ int32 CVICALLBACK 					CODAQmxTaskDone_CB 						(TaskHandle taskHandle, int32 st
 // DAQmx module and VChan data exchange
 //-------------------------------------
 	// AO
-static int				 			WriteAODAQmx 							(Dev_type* dev, char** errorInfo); 
+static int				 			WriteAODAQmx 							(Dev_type* dev, char** errorMsg); 
 
 	// DO
 //FCallReturn_type*   				WriteDODAQmx							(Dev_type* dev); 					// <------------------ cleanup!!!
@@ -1354,14 +1359,14 @@ static void							COPulseTrainSourceVChan_StateChange		(VChan_type* self, void* 
 
 
 	// AI, AO, Di & DO 
-static int							ADNSamples_DataReceivedTC				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
-static int							ADSamplingRate_DataReceivedTC			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int							ADNSamples_DataReceivedTC				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
+static int							ADSamplingRate_DataReceivedTC			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 	// AO
-static int							AO_DataReceivedTC						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int							AO_DataReceivedTC						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 	// DO
-static int							DO_DataReceivedTC						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int							DO_DataReceivedTC						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 	// CO
-static int				 			CO_DataReceivedTC						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int				 			CO_DataReceivedTC						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 
 
 
@@ -1369,27 +1374,27 @@ static int				 			CO_DataReceivedTC						(TaskControl_type* taskControl, TCState
 // NIDAQmx Device Task Controller Callbacks
 //---------------------------------------------------- 
 
-static int							ConfigureTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							ConfigureTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
-static int							UnconfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							UnconfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
 static void							IterateTC								(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag);
 
-static int							StartTC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							StartTC									(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
-static int							DoneTC									(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+static int							DoneTC									(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);
 
-static int							StoppedTC								(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC								(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);
 
-static int 							IterationStopTC 						(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+static int 							IterationStopTC 						(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);
 
-static int							TaskTreeStateChange 					(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
+static int							TaskTreeStateChange 					(TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg);
 
-static int				 			ResetTC 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+static int				 			ResetTC 								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg); 
 
 static void				 			ErrorTC 								(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 
-static int							ModuleEventHandler						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);  
+static int							ModuleEventHandler						(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorMsg);  
 
 //========================================================================================================================================================================================================
 // Global variables
@@ -1514,12 +1519,11 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 //									NI DAQ module loading and device management
 //===============================================================================================================
 
-int	Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
+int	Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
 #define Load_Err_ChannelNotImplemented	-1
 	
-	int						error						= 0;
-	char*					errMsg						= NULL;
+INIT_ERROR_INFO	
 	
 	NIDAQmxManager_type* 	nidaq						= (NIDAQmxManager_type*) mod;  
 	int						menuItemDevicesHndl			= 0;
@@ -1585,7 +1589,7 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 					// add here more channel types	
 					
 					default:
-						error = Load_Err_ChannelNotImplemented;
+						errorInfo.error = Load_Err_ChannelNotImplemented;
 						goto Error;
 				}
 			}
@@ -1613,7 +1617,7 @@ int	Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 					// add here more channel types	
 					
 					default:
-						error = Load_Err_ChannelNotImplemented;
+						errorInfo.error = Load_Err_ChannelNotImplemented;
 						goto Error;
 				}
 			}
@@ -1651,13 +1655,14 @@ Error:
 	OKfreePanHndl(nidaq->devListPanHndl);
 	OKfreePanHndl(nidaq->taskSetPanHndl); 
 	
-	ReturnErrMsg("DAQmxManager Load");
-	return error;
+RETURN_ERROR_INFO
 }
 
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	int						error				= 0;
+INIT_ERROR_INFO
+
+	
 	NIDAQmxManager_type*	NIDAQ				= (NIDAQmxManager_type*) mod;
 	size_t					nInstalledDevs		= 0;
 	
@@ -1705,12 +1710,13 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 	
 Error:
 
-	return error;
+	return errorInfo.error;
 }
 
 static int LoadDeviceCfg (NIDAQmxManager_type* NIDAQ, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error				= 0;
+INIT_ERROR_INFO	
+	
 	unsigned int					productNum			= 0;
 	unsigned int					serial				= 0;
 	char*							taskControllerName	= NULL;
@@ -1843,12 +1849,13 @@ Error:
 	discard_DevAttr_type(&deviceAttrCopy);
 	discard_Dev_type(&newDev);
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int LoadADTaskCfg (ADTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error							= 0;
+INIT_ERROR_INFO
+
 	Dev_type*						dev								= taskSet->dev;
 	ChanSet_type*					chanSet							= NULL;
 	ActiveXMLObj_IXMLDOMElement_	channelsXMLElement				= 0;
@@ -1939,7 +1946,7 @@ Error:
 	OKfreeCAHndl(startTriggerXMLElement);
 	OKfreeCAHndl(referenceTriggerXMLElement);
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int LoadCITaskCfg (CITaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement, ERRORINFO* xmlErrorInfo)
@@ -1957,8 +1964,9 @@ static int LoadCOTaskCfg (COTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ 
 static int LoadTaskTrigCfg (TaskTrig_type* taskTrig, ActiveXMLObj_IXMLDOMElement_ triggerXMLElement, ERRORINFO* xmlErrorInfo)
 {
 #define LoadTaskTrigCfg_Err_NotImplemented		-1
+
+INIT_ERROR_INFO
 	
-	int								error					= 0;
 	//ERRORINFO						xmlErrorInfo;
 	
 	uInt32							trigType				= 0;
@@ -2019,15 +2027,16 @@ static int LoadTaskTrigCfg (TaskTrig_type* taskTrig, ActiveXMLObj_IXMLDOMElement
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLObj_IXMLDOMElement_ channelXMLElement, ERRORINFO* xmlErrorInfo)
 {
-
-  #define LoadChannelCfg_Err_NotImplemented		-1
+#define LoadChannelCfg_Err_NotImplemented		-1
 	
-	int								error						= 0;
+INIT_ERROR_INFO
+	
+	
 	uInt32							chanType					= 0;
 	char*							physChanName				= NULL;
 	BOOL							onDemand					= FALSE;
@@ -2413,13 +2422,14 @@ static int LoadChannelCfg (Dev_type* dev, ChanSet_type** chanSetPtr, ActiveXMLOb
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 
 }
 
 static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error					= 0;
+INIT_ERROR_INFO
+	
 	NIDAQmxManager_type*			NIDAQ	 				= (NIDAQmxManager_type*) mod;
 	
 	//--------------------------------------------------------------------------
@@ -2464,12 +2474,12 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int SaveDeviceCfg (Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ NIDAQDeviceXMLElement, ERRORINFO* xmlErrorInfo) 
 {
-	int								error					= 0;
+INIT_ERROR_INFO	
 	
 	//--------------------------------------------------------------------------------
 	// Save  	- device product ID that must match when the settings are loaded again
@@ -2523,12 +2533,12 @@ static int SaveDeviceCfg (Dev_type* dev, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDO
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 		
 static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement, ERRORINFO* xmlErrorInfo) 
 {
-	int								error					= 0;
+INIT_ERROR_INFO
 	
 	//--------------------------------------------------------------------------------
 	// Save taskSet properties
@@ -2635,38 +2645,31 @@ static int SaveADTaskCfg (ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXML
 	
 Error:
 	
-	return error;	
+	return errorInfo.error;	
 }
 
 static int SaveCITaskCfg (CITaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement, ERRORINFO* xmlErrorInfo) 
 {
-	int		error		= 0;
+//INIT_ERROR_INFO
 	
 	
 	return 0;
-	
-Error:
-	
-	return error;	
 }
 
 static int SaveCOTaskCfg (COTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement, ERRORINFO* xmlErrorInfo) 
 {
-	int		error		= 0;
+//INIT_ERROR_INFO
 	
 	
 	return 0;
-	
-Error:
-	
-	return error;	
 }
 
 static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ TriggerXMLElement, ERRORINFO* xmlErrorInfo)
 {
 #define SaveTaskTrigCfg_Err_NotImplemented		-1
 	
-	int								error					= 0;
+INIT_ERROR_INFO	
+	
 	uInt32							trigType				= (uInt32) taskTrig->trigType;
 	uInt32							slopeType				= (uInt32) taskTrig->slope;
 	uInt32							triggerCondition		= (uInt32) taskTrig->wndTrigCond;
@@ -2719,14 +2722,15 @@ static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveX
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ ChannelXMLElement, ERRORINFO* xmlErrorInfo)
 {
 #define SaveChannelCfg_Err_NotImplemented		-1
+
+INIT_ERROR_INFO
 	
-	int								error						= 0;
 	uInt32							chanType					= (uInt32) chanSet->chanType;
 	DAQLabXMLNode 					SharedChanAttr[]			= { {"PhysicalChannelName", 	BasicData_CString, 		chanSet->name},
 																	{"ChannelType",				BasicData_UInt, 		&chanType},
@@ -3008,13 +3012,15 @@ static int SaveChannelCfg (ChanSet_type* chanSet, CAObjHandle xmlDOM, ActiveXMLO
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 {
+INIT_ERROR_INFO
+
 	NIDAQmxManager_type* 	nidaq	= (NIDAQmxManager_type*) mod;
-	int						error	= 0;
+	
 	
 	if (visibleFlag)
 		errChk(DisplayPanel(nidaq->mainPanHndl));  
@@ -3022,7 +3028,7 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 		errChk(HidePanel(nidaq->mainPanHndl));
 	
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 //------------------------------------------------------------------------------
@@ -3118,7 +3124,8 @@ static void discard_Dev_type(Dev_type** devPtr)
 /// HIRET List of DevAttr_type* elements containing the attributes of the found devices if successful, or 0 if function failed.
 static ListType ListAllDAQmxDevices (void)
 {
-	int							error			= 0;
+INIT_ERROR_INFO
+
 	int 						bufferSize  	= 0;
 	ListType					devList			= 0;
 	DevAttr_type* 				devAttr			= NULL;
@@ -3627,7 +3634,7 @@ static void DiscardDeviceList (ListType* devList)
 
 static DevAttr_type* init_DevAttr_type(void)
 {
-	int 			error 			= 0;
+INIT_ERROR_INFO
 	
 	DevAttr_type* 	attr 			= malloc (sizeof(DevAttr_type));
 	if (!attr) return NULL;
@@ -4807,19 +4814,15 @@ static int AddToUI_Chan_AI_Voltage (ChanSet_AI_Voltage_type* chanSet)
 	OKfree(VChanName);
 							
 	return 0;
-	
-Error:
-	
-	
-	return error;
 }
 
 // AI Voltage channel UI callback for setting channel properties
 static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	ChanSet_AI_Voltage_type*	chanSet				= (ChanSet_AI_Voltage_type*) callbackData;
-	int							error				= 0;
-	char*						errMsg				= NULL;
+INIT_ERROR_INFO
+
+	ChanSet_AI_Voltage_type*	chanSet		= (ChanSet_AI_Voltage_type*) callbackData;
+	
 	
 
 	if (event != EVENT_COMMIT) return 0;	// filter only commit events
@@ -4831,7 +4834,7 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 			GetCtrlVal(panel, control, &chanSet->baseClass.onDemand);
 			
 			// update device settings
-			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 			
 		case AIVoltage_Range:
@@ -4858,7 +4861,7 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 			SetCtrlVal(chanSet->baseClass.chanPanHndl, AIVoltage_ScaleMin, chanSet->baseClass.dataTypeConversion.min); 
 			
 			// update device settings
-			errChk ( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
+			errChk ( ConfigDAQmxAITask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 			
 		case AIVoltage_AIDataType:
@@ -4910,37 +4913,37 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 			
 			DLUpdateSwitchboard();
 			
-			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 			
 		case AIVoltage_Offset:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.dataTypeConversion.offset);
-			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 			
 		case AIVoltage_Gain:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.dataTypeConversion.gain);
-			ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg);
+			ConfigDAQmxAITask(chanSet->baseClass.device, &errorInfo.errMsg);
 			break;
 			
 		case AIVoltage_Integrate:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.integrateFlag);
-			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 			
 		case AIVoltage_ScaleMin:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.dataTypeConversion.min);
-			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 			
 		case AIVoltage_ScaleMax:
 			
 			GetCtrlVal(panel, control, &chanSet->baseClass.dataTypeConversion.max);
-			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
+			errChk( ConfigDAQmxAITask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 				
 		case AIVoltage_Terminal:
@@ -4951,7 +4954,7 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 			chanSet->terminal = (Terminal_type) terminalType;
 			
 			// update device settings
-			errChk ( ConfigDAQmxAITask(chanSet->baseClass.device, &errMsg) );
+			errChk ( ConfigDAQmxAITask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 			
 		case AIVoltage_VChanName:
@@ -4969,12 +4972,7 @@ static int CVICALLBACK ChanSetAIVoltageUI_CB (int panel, int control, int event,
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory or unknown error.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
+PRINT_ERROR_INFO
 	
 	return 0;
 }
@@ -5011,7 +5009,8 @@ static void discard_ChanSet_AO_Voltage_type (ChanSet_AO_Voltage_type** chanSetPt
 
 static int AddToUI_Chan_AO_Voltage (ChanSet_AO_Voltage_type* chanSet)
 {
-	int					error			= 0;
+INIT_ERROR_INFO	
+	
 	int 				chanSetPanHndl  = 0;
 	int 				chanPanHndl		= 0; 
 	int    				newTabIdx		= 0;  
@@ -5098,23 +5097,22 @@ static int AddToUI_Chan_AO_Voltage (ChanSet_AO_Voltage_type* chanSet)
 	chanSet->baseClass.sinkVChan = init_SinkVChan_type(VChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chanSet, VChan_Data_Receive_Timeout, AODataVChan_StateChange);  
 	DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)chanSet->baseClass.sinkVChan);
 	SetCtrlVal(chanSet->baseClass.chanPanHndl, AOVoltage_VChanName, VChanName);
-	AddSinkVChan(dev->taskController, chanSet->baseClass.sinkVChan, AO_DataReceivedTC); 
+	errChk( AddSinkVChan(dev->taskController, chanSet->baseClass.sinkVChan, AO_DataReceivedTC, NULL) ); 
 	OKfree(VChanName);
 							
 	return 0;
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 	
 }
 
 static int CVICALLBACK ChanSetAOVoltageUI_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	ChanSet_AO_Voltage_type*	chanSet				= (ChanSet_AO_Voltage_type*) callbackData;
+INIT_ERROR_INFO	
 	
-	int							error				= 0;
-	char*						errMsg				= NULL;
+	ChanSet_AO_Voltage_type*	chanSet				= (ChanSet_AO_Voltage_type*) callbackData;
 	
 	if (event != EVENT_COMMIT) return 0;   // filter only commit events
 	
@@ -5133,7 +5131,7 @@ static int CVICALLBACK ChanSetAOVoltageUI_CB (int panel, int control, int event,
 			}
 			
 			// update device settings
-			errChk ( ConfigDAQmxAOTask(chanSet->baseClass.device, &errMsg) );
+			errChk ( ConfigDAQmxAOTask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 			
 		case AOVoltage_Range:
@@ -5144,7 +5142,7 @@ static int CVICALLBACK ChanSetAOVoltageUI_CB (int panel, int control, int event,
 			chanSet->VMin = chanSet->chanAttr->Vrngs->low[chanSet->chanAttr->Vrngs->selectedRange];
 			
 			// update device settings
-			errChk ( ConfigDAQmxAOTask(chanSet->baseClass.device, &errMsg) );
+			errChk ( ConfigDAQmxAOTask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 			
 		case AOVoltage_Terminal:
@@ -5155,7 +5153,7 @@ static int CVICALLBACK ChanSetAOVoltageUI_CB (int panel, int control, int event,
 			chanSet->terminal = (Terminal_type) terminalType;
 			
 			// update device settings
-			errChk ( ConfigDAQmxAOTask(chanSet->baseClass.device, &errMsg) );
+			errChk ( ConfigDAQmxAOTask(chanSet->baseClass.device, &errorInfo.errMsg) );
 			break;
 			
 		case AOVoltage_VChanName:
@@ -5173,13 +5171,8 @@ static int CVICALLBACK ChanSetAOVoltageUI_CB (int panel, int control, int event,
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory or unknown error.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
-	
+PRINT_ERROR_INFO
+
 	return 0;
 }
 
@@ -5348,9 +5341,9 @@ static void discard_ChanSet_DIDO_type (ChanSet_type** chanSetPtr)
 // DO channel UI callback for setting properties
 static int ChanSetLineDO_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+
 	ChanSet_DIDO_type*  	chanset			= callbackData; 
-	char*					errMsg			= NULL; 
-	int						error			= 0;
 	uInt32 					lineVal			= 0;  // line value
 
 	if (event != EVENT_COMMIT) return 0;
@@ -5398,7 +5391,7 @@ static int ChanSetLineDO_CB (int panel, int control, int event, void *callbackDa
 			}
 			
 			// configure DO task
-			errChk (ConfigDAQmxDOTask(chanset->baseClass.device, &errMsg) );   
+			errChk (ConfigDAQmxDOTask(chanset->baseClass.device, &errorInfo.errMsg) );   
 			
 			break;
 		
@@ -5415,7 +5408,7 @@ static int ChanSetLineDO_CB (int panel, int control, int event, void *callbackDa
 			GetCtrlVal(panel,DIDOLChSet_Invert,&chanset->invert);
 			
 			// configure DO task
-			errChk(ConfigDAQmxDOTask(chanset->baseClass.device, &errMsg) );
+			errChk(ConfigDAQmxDOTask(chanset->baseClass.device, &errorInfo.errMsg) );
 			
 			break;
 			
@@ -5428,15 +5421,12 @@ static int ChanSetLineDO_CB (int panel, int control, int event, void *callbackDa
     GetCtrlVal(panel, DIDOLChSet_OutputBTTN, &lineVal);       
 	
 	// update output
- 	DirectDigitalOut(chanset->baseClass.name, lineVal, chanset->invert, DAQmxDefault_Task_Timeout);
+ 	errChk (DirectDigitalOut(chanset->baseClass.name, lineVal, chanset->invert, DAQmxDefault_Task_Timeout, &errorInfo.errMsg) );
 	
-	return 0;
 	
 Error:
 	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
+PRINT_ERROR_INFO
 	
 	return 0;
 }
@@ -5444,9 +5434,9 @@ Error:
 // DO channel UI callback for setting properties
 static int ChanSetPortDO_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+
 	ChanSet_DIDO_type*  chanset 	= callbackData; 
-	char*				errMsg		= NULL; 
-	int					error		= 0;
 	uInt32 				data 		= 0;     	// port value
 	uInt32 				lineval		= 0;  		// line value
 	
@@ -5467,7 +5457,7 @@ static int ChanSetPortDO_CB (int panel, int control, int event, void *callbackDa
 			GetCtrlVal(panel,DIDOPChSet_Invert, &chanset->invert);  
 			
 			// configure DO task
-			errChk(ConfigDAQmxDOTask(chanset->baseClass.device, &errMsg) );
+			errChk(ConfigDAQmxDOTask(chanset->baseClass.device, &errorInfo.errMsg) );
 			
 			break;
 			
@@ -5511,73 +5501,67 @@ static int ChanSetPortDO_CB (int panel, int control, int event, void *callbackDa
 	GetCtrlVal(panel,DIDOPChSet_RADIOBUTTON_0,&lineval);
 	data+=lineval;
 		
-	 // update output
- 	DirectDigitalOut(chanset->baseClass.name, data, chanset->invert, DAQmxDefault_Task_Timeout);
-	
-	return 0;
+	// update output
+ 	errChk( DirectDigitalOut(chanset->baseClass.name, data, chanset->invert, DAQmxDefault_Task_Timeout, &errorInfo.errMsg) );
 	
 Error:
 	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
-	
+PRINT_ERROR_INFO
+
 	return 0;
 }
 
-int ReadDirectDigitalOut(char* chan,uInt32* data)
+static int ReadDirectDigitalOut(char* chan, uInt32* data, char** errorMsg)
 {
-	int 		error=0;
-	TaskHandle  taskHandle=0;
-	int32		written;
+INIT_ERROR_INFO
 
-	DAQmxErrChk (DAQmxCreateTask("",&taskHandle));
-	DAQmxErrChk (DAQmxCreateDOChan(taskHandle,chan,"",DAQmx_Val_ChanForAllLines));
-	DAQmxErrChk (DAQmxStartTask(taskHandle));
-	DAQmxErrChk (DAQmxReadDigitalU32(taskHandle,1,10.0,DAQmx_Val_GroupByChannel,data,1,&written,NULL));
+	TaskHandle  taskHandle	= 0;
+	int32		nRead		= 0;
+
+	DAQmxErrChk( DAQmxCreateTask("", &taskHandle) );
+	DAQmxErrChk( DAQmxCreateDOChan(taskHandle, chan, "", DAQmx_Val_ChanForAllLines) );
+	DAQmxErrChk( DAQmxStartTask(taskHandle) );
+	DAQmxErrChk( DAQmxReadDigitalU32(taskHandle, 1, 10.0, DAQmx_Val_GroupByChannel, data, 1, &nRead, NULL) );
+	DAQmxErrChk( DAQmxClearTask(taskHandle) );
+	
+	return 0;
 	
 DAQmxError:
-	if( DAQmxFailed(error) )
-		error=-1;
 	
-	if( taskHandle!=0 ) {
-		/*********************************************/
-		// DAQmx Stop Code
-		/*********************************************/
-		DAQmxStopTask(taskHandle);
-		DAQmxClearTask(taskHandle);
-	}
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	nullChk( errorInfo.errMsg = malloc((buffsize+1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize+1);
 	
+Error:
 	
-	return error;
+RETURN_ERROR_INFO
 }
 
-int DirectDigitalOut (char* chan,uInt32 data,BOOL invert, double timeout)
+static int DirectDigitalOut (char* chan,uInt32 data,BOOL invert, double timeout, char** errorMsg)
 {
-	int 		error=0;
-	TaskHandle  taskHandle=0;
-	int32		written;
+INIT_ERROR_INFO
 
-	if (invert) data=~data;   //invert data
-	DAQmxErrChk (DAQmxCreateTask("", &taskHandle));
-	DAQmxErrChk (DAQmxCreateDOChan(taskHandle, chan, "", DAQmx_Val_ChanForAllLines));
-	DAQmxErrChk (DAQmxStartTask(taskHandle));
-	DAQmxErrChk (DAQmxWriteDigitalU32(taskHandle,1,1,timeout,DAQmx_Val_GroupByChannel,&data,&written,NULL));
+	TaskHandle  taskHandle	= 0;
+	int32		nWritten	= 0;
+
+	if (invert) data =~data;   //invert data
+	
+	DAQmxErrChk( DAQmxCreateTask("", &taskHandle) );
+	DAQmxErrChk( DAQmxCreateDOChan(taskHandle, chan, "", DAQmx_Val_ChanForAllLines) );
+	DAQmxErrChk( DAQmxStartTask(taskHandle) );
+	DAQmxErrChk( DAQmxWriteDigitalU32(taskHandle, 1, 1, timeout, DAQmx_Val_GroupByChannel, &data, &nWritten, NULL) );
+	
+	return 0;
 	
 DAQmxError:
 	
-	if( DAQmxFailed(error) )
-		error=-1;
+	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
+	nullChk(errorInfo.errMsg = malloc((buffsize+1) * sizeof(char)));
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize+1);
 	
-	if( taskHandle!=0 ) {
-		/*********************************************/
-		// DAQmx Stop Code
-		/*********************************************/
-		DAQmxStopTask(taskHandle);
-		DAQmxClearTask(taskHandle);
-	}
+Error:
 	
-	return error;
+RETURN_ERROR_INFO
 }
 
 void SetPortControls(int panel,uInt32 data)
@@ -5717,10 +5701,6 @@ static ChanSet_CI_Frequency_type* init_ChanSet_CI_Frequency_type (Dev_type* dev,
 	
 	return chanSet;
 	
-Error:
-	
-	OKfree(chanSet);
-	return NULL;
 }
 
 static void discard_ChanSet_CI_Frequency_type (ChanSet_CI_Frequency_type** chanSetPtr)
@@ -5755,11 +5735,6 @@ static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[]
 	chanSet->clockSource	= StrDup(clockSource);
 	
 	return chanSet;
-	
-Error:
-	
-	OKfree(chanSet);
-	return NULL;
 }
 
 static void discard_ChanSet_CO_type (ChanSet_CO_type** chanSetPtr)
@@ -5791,10 +5766,11 @@ static void discard_ChanSet_CO_type (ChanSet_CO_type** chanSetPtr)
 // CO channel UI callback for setting properties
 static int ChanSetCO_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+//INIT_ERROR_INFO	
+	
 	ChanSet_CO_type*	COChan 			= callbackData;
 	char*				newName 		= NULL;
-	char*				errMsg			= NULL;
-	int					error			= 0;
+	
 	
 	if (event != EVENT_COMMIT) return 0;	// do nothing
 	
@@ -5816,14 +5792,6 @@ static int ChanSetCO_CB (int panel, int control, int event, void *callbackData, 
 			
 			break;
 	}
-	
-	return 0;
-	
-Error:
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
 	
 	return 0;
 }
@@ -6039,16 +6007,17 @@ static void	PopulateChannels (Dev_type* dev)
 	
 }
 
-static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type ioMode, int ioType, char chName[], char** errorInfo)
+static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type ioMode, int ioType, char chName[], char** errorMsg)
 {
 #define AddDAQmxChannel_Err_TaskConfigFailed	-1
+
+INIT_ERROR_INFO
+	
 	char* 		newVChanName	= NULL;	
 	int 		panHndl			= 0;
 	int    		newTabIdx		= 0;
 	void*   	callbackData	= NULL; 
 	int 		chanPanHndl		= 0; 
-	int			error			= 0;
-	char*		errMsg			= NULL;
 	char* 		shortChanName	= NULL;
 	
 	switch (ioVal) {
@@ -6099,7 +6068,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					// Configure AI task on device
 					//-------------------------------------- 
 							
-					errChk( ConfigDAQmxAITask(dev, &errMsg) );
+					errChk( ConfigDAQmxAITask(dev, &errorInfo.errMsg) );
 					break;
 							
 			
@@ -6125,7 +6094,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					// Configure DI task on device
 					//-------------------------------------- 
 							
-					errChk( ConfigDAQmxDITask(dev, &errMsg) );
+					errChk( ConfigDAQmxDITask(dev, &errorInfo.errMsg) );
 					break;
 			
 				case DAQmxCounter:
@@ -6218,7 +6187,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					// Configure CI tasks on device
 					//-------------------------------------- 
 							
-					errChk( ConfigDAQmxCITask(dev, &errMsg) );
+					errChk( ConfigDAQmxCITask(dev, &errorInfo.errMsg) );
 					
 					break;
 			
@@ -6282,7 +6251,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					// Configure AO task on device
 					//-------------------------------------- 
 							
-					errChk( ConfigDAQmxAOTask(dev, &errMsg) );
+					errChk( ConfigDAQmxAOTask(dev, &errorInfo.errMsg) );
 					
 					break;
 			
@@ -6340,7 +6309,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							// add callback data to the controls in the panel
 							SetCtrlsInPanCBInfo(newDOChan, ChanSetLineDO_CB, newDOChan->baseClass.chanPanHndl);
 							// read current output state and set the control properly
-							errChk( ReadDirectDigitalOut(newDOChan->baseClass.name, &data) );
+							errChk( ReadDirectDigitalOut(newDOChan->baseClass.name, &data, &errorInfo.errMsg) );
 							SetCtrlVal(newDOChan->baseClass.chanPanHndl,DIDOLChSet_OutputBTTN,data);           
 							break;
 								
@@ -6365,7 +6334,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 							SetCtrlsInPanCBInfo(newDOChan, ChanSetPortDO_CB, newDOChan->baseClass.chanPanHndl);
 						
 							//read current output state and set the control properly
-							errChk( ReadDirectDigitalOut(newDOChan->baseClass.name,&data) );
+							errChk( ReadDirectDigitalOut(newDOChan->baseClass.name, &data, &errorInfo.errMsg) );
 							SetPortControls(newDOChan->baseClass.chanPanHndl,data);  
 						
 							break;
@@ -6398,7 +6367,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					newDOChan->baseClass.sinkVChan = init_SinkVChan_type(newVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), newDOChan, VChan_Data_Receive_Timeout, NULL);  
 					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)newDOChan->baseClass.sinkVChan);
 					
-					AddSinkVChan(dev->taskController, newDOChan->baseClass.sinkVChan, DO_DataReceivedTC); 
+					errChk( AddSinkVChan(dev->taskController, newDOChan->baseClass.sinkVChan, DO_DataReceivedTC, &errorInfo.errMsg) ); 
 					OKfree(newVChanName);
 							
 					//---------------------------------------
@@ -6410,7 +6379,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					// Configure DO task on device
 					//-------------------------------------- 
 							
-					errChk( ConfigDAQmxDOTask(dev, &errMsg) );
+					errChk( ConfigDAQmxDOTask(dev, &errorInfo.errMsg) );
 					
 					break;
 					
@@ -6796,7 +6765,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					SetCtrlVal(settingspanel, VChanPan_SinkVChanName, pulseTrainSinkVChanName);  
 					// register VChan with DAQLab
 					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) newChan->baseClass.sinkVChan);	
-					AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, CO_DataReceivedTC); 
+					errChk( AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, CO_DataReceivedTC, &errorInfo.errMsg) ); 
 					
 					// cleanup
 					OKfree(pulseTrainSinkVChanName);
@@ -6828,7 +6797,7 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 					// Configure CO task on device
 					//-------------------------------------- 
 							
-					errChk( ConfigDAQmxCOTask(dev, &errMsg) );
+					errChk( ConfigDAQmxCOTask(dev, &errorInfo.errMsg) );
 					
 					break;
 			
@@ -6838,15 +6807,9 @@ static int AddDAQmxChannel (Dev_type* dev, DAQmxIO_type ioVal, DAQmxIOMode_type 
 			}
 		}
 	
-	return 0;
-
 Error:
 
-	if (errorInfo)
-		*errorInfo = FormatMsg(AddDAQmxChannel_Err_TaskConfigFailed, "AddDAQmxChannel", errMsg);
-	OKfree(errMsg);
-
-	return error;
+RETURN_ERROR_INFO	
 }
 
 static int RemoveDAQmxAIChannel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -6918,6 +6881,8 @@ static int RemoveDAQmxAIChannel_CB (int panel, int control, int event, void *cal
 
 static int RemoveDAQmxAOChannel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+	
 	switch (event) {
 		
 		case EVENT_KEYPRESS: 
@@ -6947,10 +6912,10 @@ static int RemoveDAQmxAOChannel_CB (int panel, int control, int event, void *cal
 			for (size_t i = 1; i <= nChans; i++) {	
 				chanSetPtr = ListGetPtrToItem(dev->AOTaskSet->chanSet, i);
 				if (*chanSetPtr == aoChanPtr) {
+					// detach from Task Controller										 
+					errChk( RemoveSinkVChan(dev->taskController, (*chanSetPtr)->sinkVChan, &errorInfo.errMsg) );
 					// remove from framework
 					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtr)->sinkVChan);
-					// detach from Task Controller										 
-					RemoveSinkVChan(dev->taskController, (*chanSetPtr)->sinkVChan);
 					// discard channel data structure
 					(*(*chanSetPtr)->discardFptr)	((void**)chanSetPtr);
 					ListRemoveItem(dev->AOTaskSet->chanSet, 0, i);
@@ -6982,7 +6947,11 @@ static int RemoveDAQmxAOChannel_CB (int panel, int control, int event, void *cal
 			break;
 	}
 	
-	return 0;
+Error:
+	
+PRINT_ERROR_INFO
+
+	return 0;	
 }
 
 static int RemoveDAQmxDIChannel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -7065,6 +7034,8 @@ static int RemoveDAQmxDIChannel_CB (int panel, int control, int event, void *cal
 
 static int RemoveDAQmxDOChannel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+	
 	switch (event) {
 		
 		case EVENT_KEYPRESS: 
@@ -7109,7 +7080,7 @@ static int RemoveDAQmxDOChannel_CB (int panel, int control, int event, void *cal
 					// remove from framework
 					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)(*chanSetPtr)->sinkVChan);
 					// detach from Task Controller										 
-					RemoveSinkVChan(dev->taskController, (*chanSetPtr)->sinkVChan);
+					errChk( RemoveSinkVChan(dev->taskController, (*chanSetPtr)->sinkVChan, &errorInfo.errMsg) );
 					// discard channel data structure
 					(*(*chanSetPtr)->discardFptr)	((void**)chanSetPtr);
 					ListRemoveItem(dev->DOTaskSet->chanSet, 0, i);
@@ -7141,6 +7112,10 @@ static int RemoveDAQmxDOChannel_CB (int panel, int control, int event, void *cal
 			break;
 	}
 	
+Error:
+
+PRINT_ERROR_INFO
+
 	return 0;
 }
 
@@ -7214,6 +7189,8 @@ static int RemoveDAQmxCIChannel_CB (int panel, int control, int event, void *cal
 
 static int RemoveDAQmxCOChannel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+	
 	switch (event) {
 		
 		case EVENT_KEYPRESS: 
@@ -7251,7 +7228,7 @@ static int RemoveDAQmxCOChannel_CB (int panel, int control, int event, void *cal
 					// remove Sink VChan from framework
 					DLUnregisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*)chanSet->baseClass.sinkVChan);
 					// detach from Task Controller										 
-					RemoveSinkVChan(dev->taskController, chanSet->baseClass.sinkVChan);
+					errChk( RemoveSinkVChan(dev->taskController, chanSet->baseClass.sinkVChan, &errorInfo.errMsg) );
 					// remove HW triggers from framework
 					DLUnregisterHWTrigMaster(chanSet->HWTrigMaster);
 					DLUnregisterHWTrigSlave(chanSet->HWTrigSlave);
@@ -7283,6 +7260,10 @@ static int RemoveDAQmxCOChannel_CB (int panel, int control, int event, void *cal
 			break;
 	}
 	
+Error:
+	
+PRINT_ERROR_INFO
+
 	return 0;
 }
 
@@ -7932,6 +7913,8 @@ static void	discard_ADTaskSet_type (ADTaskSet_type** taskSetPtr)
 static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[], CVICtrlCBFptr_type removeDAQmxChanCBFptr, int taskTriggerUsage, 
 							 char sinkVChanNSamplesBaseName[], char sourceVChanNSamplesBaseName[], char sinkVChanSamplingRateBaseName[], char sourceVChanSamplingRateBaseName[], char HWTrigBaseName[])
 {
+INIT_ERROR_INFO
+	
 	//--------------------------
 	// load UI resources
 	//--------------------------
@@ -8229,7 +8212,7 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	// register VChan with the framework
 	DLRegisterVChan((DAQLabModule_type*)tskSet->dev->niDAQModule, (VChan_type*)tskSet->timing->nSamplesSinkVChan);
 	// register VChan with the DAQmx task controller
-	AddSinkVChan(tskSet->dev->taskController, tskSet->timing->nSamplesSinkVChan, ADNSamples_DataReceivedTC);
+	errChk( AddSinkVChan(tskSet->dev->taskController, tskSet->timing->nSamplesSinkVChan, ADNSamples_DataReceivedTC, NULL) );
 						
 	//-------------------------------------------------------------------------
 	// add nSamples Source VChan to send number of required samples
@@ -8262,7 +8245,7 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	// register VChan with the framework
 	DLRegisterVChan((DAQLabModule_type*)tskSet->dev->niDAQModule, (VChan_type*)tskSet->timing->samplingRateSinkVChan);
 	// register VChan with the DAQmx task controller
-	AddSinkVChan(tskSet->dev->taskController, tskSet->timing->samplingRateSinkVChan, ADSamplingRate_DataReceivedTC);
+	errChk( AddSinkVChan(tskSet->dev->taskController, tskSet->timing->samplingRateSinkVChan, ADSamplingRate_DataReceivedTC, NULL) );
 						
 	//-------------------------------------------------------------------------
 	// add samplingRate Source VChan to pick-up sampling rate
@@ -8293,6 +8276,10 @@ static void	newUI_ADTaskSet (ADTaskSet_type* tskSet, char taskSettingsTabName[],
 	// register HW Triggers with framework
 	DLRegisterHWTrigMaster(tskSet->HWTrigMaster);
 	DLRegisterHWTrigSlave(tskSet->HWTrigSlave);
+	
+Error:
+	
+	return;
 }
 
 static void	discardUI_ADTaskSet (ADTaskSet_type** taskSetPtr)
@@ -8306,7 +8293,7 @@ static void	discardUI_ADTaskSet (ADTaskSet_type** taskSetPtr)
 	DLUnregisterVChan((DAQLabModule_type*)taskSet->dev->niDAQModule, (VChan_type*)taskSet->timing->nSamplesSinkVChan);
 	DLUnregisterVChan((DAQLabModule_type*)taskSet->dev->niDAQModule, (VChan_type*)taskSet->timing->nSamplesSourceVChan);
 	// detach from Task Controller										 
-	RemoveSinkVChan(taskSet->dev->taskController, taskSet->timing->nSamplesSinkVChan);
+	RemoveSinkVChan(taskSet->dev->taskController, taskSet->timing->nSamplesSinkVChan, NULL);
 				
 	//------------------------------------------
 	// remove Sink & Source sampling rate VChan
@@ -8316,7 +8303,7 @@ static void	discardUI_ADTaskSet (ADTaskSet_type** taskSetPtr)
 	DLUnregisterVChan((DAQLabModule_type*)taskSet->dev->niDAQModule, (VChan_type*)taskSet->timing->samplingRateSinkVChan);
 	DLUnregisterVChan((DAQLabModule_type*)taskSet->dev->niDAQModule, (VChan_type*)taskSet->timing->samplingRateSourceVChan);
 	// detach from Task Controller										 
-	RemoveSinkVChan(taskSet->dev->taskController, taskSet->timing->samplingRateSinkVChan);
+	RemoveSinkVChan(taskSet->dev->taskController, taskSet->timing->samplingRateSinkVChan, NULL);
 				
 	//------------------------------------------
 	// remove HW triggers from framework
@@ -8335,8 +8322,7 @@ static void	discardUI_ADTaskSet (ADTaskSet_type** taskSetPtr)
 // UI callback to adjust AI task settings
 static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	int					error				= 0;
-	char*				errMsg				= NULL;
+INIT_ERROR_INFO
 	
 	ADTaskSet_type*		tskSet 				= callbackData;
 	uInt64*				nSamplesPtr			= NULL;
@@ -8372,7 +8358,7 @@ static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackD
 			nullChk( samplingRatePtr = malloc(sizeof(double)) );
 			*samplingRatePtr = tskSet->timing->sampleRate;
 			nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&samplingRatePtr, NULL, NULL) );
-			errChk( SendDataPacket(tskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg) );
+			errChk( SendDataPacket(tskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg) );
 			
 			break;
 			
@@ -8386,7 +8372,7 @@ static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackD
 			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 			*nSamplesPtr = tskSet->timing->nSamples;
 			nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nSamplesPtr, NULL, NULL) );
-			errChk( SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
+			errChk( SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg) );
 			
 			break;
 			
@@ -8406,7 +8392,7 @@ static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackD
 			nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
 			*nSamplesPtr = tskSet->timing->nSamples;
 			nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nSamplesPtr, NULL, NULL) );
-			errChk( SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg) );
+			errChk( SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg) );
 			
 			break;
 			
@@ -8482,16 +8468,16 @@ static int ADTaskSettings_CB	(int panel, int control, int event, void *callbackD
 	
 	// update device settings
 	if (tskSet->dev->AITaskSet == tskSet)
-		errChk ( ConfigDAQmxAITask(tskSet->dev, &errMsg) );
+		errChk ( ConfigDAQmxAITask(tskSet->dev, &errorInfo.errMsg) );
 	
 	if (tskSet->dev->AOTaskSet == tskSet)
-		errChk ( ConfigDAQmxAOTask(tskSet->dev, &errMsg) );
+		errChk ( ConfigDAQmxAOTask(tskSet->dev, &errorInfo.errMsg) );
 	
 	if (tskSet->dev->DITaskSet == tskSet)
-		errChk ( ConfigDAQmxDITask(tskSet->dev, &errMsg) );
+		errChk ( ConfigDAQmxDITask(tskSet->dev, &errorInfo.errMsg) );
 	
 	if (tskSet->dev->DOTaskSet == tskSet)
-		errChk ( ConfigDAQmxDOTask(tskSet->dev, &errMsg) );
+		errChk ( ConfigDAQmxDOTask(tskSet->dev, &errorInfo.errMsg) );
 	
 	return 0;
 	
@@ -8502,21 +8488,16 @@ Error:
 	OKfree(samplingRatePtr);
 	discard_DataPacket_type(&dataPacket); 
 	
-	if (!errMsg) 
-		errMsg = StrDup("Out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
+PRINT_ERROR_INFO
 	
 	return 0;
 }
 
 static int ADTimingSettings_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+
 	ADTaskSet_type*		tskSet 			= callbackData;  
-	char*				errMsg			= NULL;
-	int					error			= 0;
 	
 	if (event != EVENT_COMMIT) return 0;
 	
@@ -8567,28 +8548,21 @@ static int ADTimingSettings_CB	(int panel, int control, int event, void *callbac
 	
 	// update device settings
 	if (tskSet->dev->AITaskSet == tskSet)
-		errChk ( ConfigDAQmxAITask(tskSet->dev, &errMsg) );
+		errChk ( ConfigDAQmxAITask(tskSet->dev, &errorInfo.errMsg) );
 	
 	if (tskSet->dev->AOTaskSet == tskSet)
-		errChk ( ConfigDAQmxAOTask(tskSet->dev, &errMsg) );
+		errChk ( ConfigDAQmxAOTask(tskSet->dev, &errorInfo.errMsg) );
 	
 	if (tskSet->dev->DITaskSet == tskSet)
-		errChk ( ConfigDAQmxDITask(tskSet->dev, &errMsg) );
+		errChk ( ConfigDAQmxDITask(tskSet->dev, &errorInfo.errMsg) );
 	
 	if (tskSet->dev->DOTaskSet == tskSet)
-		errChk ( ConfigDAQmxDOTask(tskSet->dev, &errMsg) );
-	
-	return 0;
+		errChk ( ConfigDAQmxDOTask(tskSet->dev, &errorInfo.errMsg) );
 	
 Error:
 	
-	if (!errMsg) 
-		errMsg = StrDup("Out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
-	
+PRINT_ERROR_INFO
+
 	return 0;
 }
 
@@ -8901,9 +8875,9 @@ static void	discard_WriteDOData_type (WriteDOData_type** writeDataPtr)
 
 static int DO_Timing_TaskSet_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+
 	Dev_type*			dev 			= callbackData;
-	char*				errMsg			= NULL;
-	int					error			= 0;
 	
 	if (event != EVENT_COMMIT) return 0;
 	
@@ -8926,19 +8900,12 @@ static int DO_Timing_TaskSet_CB	(int panel, int control, int event, void *callba
 	}
 	
 	// configure DO
-	errChk ( ConfigDAQmxDOTask(dev, &errMsg) );  
-	
-	return 0;
+	errChk ( ConfigDAQmxDOTask(dev, &errorInfo.errMsg) );  
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
-	
+PRINT_ERROR_INFO
+
 	return 0;
 }
 
@@ -9034,10 +9001,10 @@ static void discard_COTaskSet_type (COTaskSet_type** taskSetPtr)
 
 static int CVICALLBACK Chan_CO_Pulse_Frequency_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO	
+	
 	ChanSet_CO_type* 	selectedChan 	= callbackData;
 	DataPacket_type*  	dataPacket		= NULL;
-	char*				errMsg			= NULL;
-	int					error			= 0;
 	int					generationMode;
 	double 				frequency;
 	double				dutyCycle;
@@ -9094,12 +9061,12 @@ static int CVICALLBACK Chan_CO_Pulse_Frequency_CB (int panel, int control, int e
 	}
 	
 	// configure CO task
-	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
+	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errorInfo.errMsg) );
 	
 	// send new pulse train
 	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
 	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Freq, (void**) &pulseTrain, NULL, (DiscardFptr_type) discard_PulseTrain_type) );
-	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errMsg) ); 
+	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errorInfo.errMsg) ); 
 	
 	
 	return 0;
@@ -9110,22 +9077,17 @@ Error:
 	discard_DataPacket_type(&dataPacket);
 	discard_PulseTrain_type(&pulseTrain);
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
+PRINT_ERROR_INFO
 	
 	return 0;
 }
 
 static int CVICALLBACK Chan_CO_Pulse_Time_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+
 	ChanSet_CO_type* 	selectedChan 	= callbackData;
 	DataPacket_type*  	dataPacket		= NULL;
-	char*				errMsg			= NULL;
-	int					error			= 0;
 	int					generationMode;
 	double				time;
 	double				initialDelay;
@@ -9183,12 +9145,12 @@ static int CVICALLBACK Chan_CO_Pulse_Time_CB (int panel, int control, int event,
 	}
 	
 	// configure CO task
-	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
+	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errorInfo.errMsg) );
 	
 	// send new pulse train
 	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
 	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Time, (void**) &pulseTrain, NULL, (DiscardFptr_type) discard_PulseTrain_type) );
-	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errMsg) ); 
+	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errorInfo.errMsg) ); 
 	
 	return 0;
 	
@@ -9198,26 +9160,21 @@ Error:
 	discard_DataPacket_type(&dataPacket);
 	discard_PulseTrain_type(&pulseTrain);
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
+PRINT_ERROR_INFO	
 	
 	return 0;
 }
 
 static int CVICALLBACK Chan_CO_Pulse_Ticks_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+
 	ChanSet_CO_type* 	selectedChan 	= callbackData;
 	DataPacket_type*  	dataPacket		= NULL;
-	char*				errMsg			= NULL;
-	int					error			= 0;
-	int					generationMode;
-	int					ticks;
-	int 				idleState;
-	uInt64				nPulses;
+	int					generationMode	= 0;
+	int					ticks			= 0;
+	int 				idleState		= 0;
+	uInt64				nPulses			= 0;
 	PulseTrain_type* 	pulseTrain		= NULL;
 	
 	if (event != EVENT_COMMIT) return 0;
@@ -9267,12 +9224,12 @@ static int CVICALLBACK Chan_CO_Pulse_Ticks_CB (int panel, int control, int event
 	}
 	
 	// configure CO task
-	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
+	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errorInfo.errMsg) );
 	
 	// send new pulse train
 	nullChk( pulseTrain	= CopyPulseTrain(selectedChan->pulseTrain) ); 
 	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**) &pulseTrain, NULL, (DiscardFptr_type) discard_PulseTrain_type) );
-	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errMsg) ); 
+	errChk( SendDataPacket(selectedChan->baseClass.srcVChan, &dataPacket, 0, &errorInfo.errMsg) ); 
 	
 	return 0;
 	
@@ -9282,21 +9239,16 @@ Error:
 	discard_DataPacket_type(&dataPacket);
 	discard_PulseTrain_type(&pulseTrain);
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
+PRINT_ERROR_INFO	
 	
 	return 0;
 }
 
 static int CVICALLBACK Chan_CO_Clk_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+
 	ChanSet_CO_type* 	selectedChan 	= callbackData; 
-	char*				errMsg			= NULL;
-	int					error			= 0;
 	int 				buffSize 		= 0; 
 	
 	if (event != EVENT_COMMIT) return 0;
@@ -9318,27 +9270,22 @@ static int CVICALLBACK Chan_CO_Clk_CB (int panel, int control, int event, void *
 	}
 	
 	// configure CO task
-	errChk(ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
+	errChk(ConfigDAQmxCOTask(selectedChan->baseClass.device, &errorInfo.errMsg) );
 	
 	return 0;
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
-	
+PRINT_ERROR_INFO
+
 	return 0;
 }
 
 static int CVICALLBACK Chan_CO_Trig_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+
 	ChanSet_CO_type* 			selectedChan 		= callbackData; 
-	char*						errMsg				= NULL;
-	int							error				= 0;
 	int 						buffsize 			= 0; 
 	int 						intval;
 	
@@ -9382,18 +9329,13 @@ static int CVICALLBACK Chan_CO_Trig_CB	(int panel, int control, int event, void 
 	}
 	
 	// configure CO task
-	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errMsg) );
+	errChk( ConfigDAQmxCOTask(selectedChan->baseClass.device, &errorInfo.errMsg) );
 	
 	return 0;
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
+PRINT_ERROR_INFO	
 	
 	return 0;
 	
@@ -9401,12 +9343,12 @@ Error:
 
 static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+
 	Dev_type* 		dev	 		= (Dev_type*) callbackData;
-	int				ioVal;
-	int				ioMode;
-	int				ioType;
-	char*			errMsg		= NULL;
-	int				error		= 0;
+	int				ioVal		= 0;
+	int				ioMode		= 0;
+	int				ioType		= 0;
 	
 	switch (event)
 	{
@@ -9470,7 +9412,7 @@ static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callback
 					GetCtrlVal(panel, TaskSetPan_IOType, &ioType);
 					
 					// add channel
-					errChk( AddDAQmxChannel(dev, ioVal, ioMode, ioType, chanName, &errMsg) );
+					errChk( AddDAQmxChannel(dev, ioVal, ioMode, ioType, chanName, &errorInfo.errMsg) );
 					
 					// refresh available channels
 					PopulateChannels(dev);
@@ -9497,16 +9439,9 @@ static int DAQmxDevTaskSet_CB (int panel, int control, int event, void *callback
 			break;
 	}
 	
-	return 0;
-	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
+PRINT_ERROR_INFO	
 	
 	return 0;
 }
@@ -9515,42 +9450,38 @@ Error:
 // DAQmx Device Task Configuration
 //---------------------------------------------------------------------------------------------------------------
 
-static int ConfigDAQmxDevice (Dev_type* dev, char** errorInfo)
+static int ConfigDAQmxDevice (Dev_type* dev, char** errorMsg)
 {
-	int		error		= 0;
+INIT_ERROR_INFO	
 	
 	// Configure AI DAQmx Task
-	errChk( ConfigDAQmxAITask(dev, errorInfo) );
+	errChk( ConfigDAQmxAITask(dev, &errorInfo.errMsg) );
 	
 	// Configure AO DAQmx Task
-	errChk( ConfigDAQmxAOTask(dev, errorInfo) );
+	errChk( ConfigDAQmxAOTask(dev, &errorInfo.errMsg) );
 	
 	// Configure DI DAQmx Task
-	errChk( ConfigDAQmxDITask(dev, errorInfo) );
+	errChk( ConfigDAQmxDITask(dev, &errorInfo.errMsg) );
 	
 	// Configure DO DAQmx Task
-	errChk( ConfigDAQmxDOTask(dev, errorInfo) );
+	errChk( ConfigDAQmxDOTask(dev, &errorInfo.errMsg) );
 	
 	// Configure CI DAQmx Task
-	errChk( ConfigDAQmxCITask(dev, errorInfo) );
+	errChk( ConfigDAQmxCITask(dev, &errorInfo.errMsg) );
 	
 	// Configure CO DAQmx Task
-	errChk( ConfigDAQmxCOTask(dev, errorInfo) );
-	
-	return 0;
+	errChk( ConfigDAQmxCOTask(dev, &errorInfo.errMsg) );
 	
 Error:
 	
-	ClearDAQmxTasks(dev);
-	return error;
+RETURN_ERROR_INFO	
 }
 
-static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
+static int ConfigDAQmxAITask (Dev_type* dev, char** errorMsg)
 {
 #define ConfigDAQmxAITask_Err_ChannelNotImplemented		-1
-	
-	int 				error 			= 0;
-	char*				errMsg			= NULL;
+
+INIT_ERROR_INFO
 	
 	ChanSet_type* 		chanSet			= NULL;
 	
@@ -9558,7 +9489,7 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 	
 	// clear AI task if any
 	if (dev->AITaskSet->taskHndl) {
-		DAQmxErrChk(DAQmxClearTask(dev->AITaskSet->taskHndl));
+		DAQmxErrChk( DAQmxClearTask(dev->AITaskSet->taskHndl) );
 		dev->AITaskSet->taskHndl = NULL;
 	}
 	
@@ -9619,9 +9550,9 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 			// add here more channel type cases
 			
 			default:
-				if (errorInfo)
-					*errorInfo = FormatMsg(ConfigDAQmxAITask_Err_ChannelNotImplemented, "ConfigDAQmxAITask", "Channel type not implemented");
-				return ConfigDAQmxAITask_Err_ChannelNotImplemented; 
+				errorInfo.error 	= ConfigDAQmxAITask_Err_ChannelNotImplemented; 
+				errorInfo.errMsg	= StrDup("Channel type not implemented.");
+				goto Error;
 		}
 	}
 	
@@ -9769,22 +9700,20 @@ static int ConfigDAQmxAITask (Dev_type* dev, char** errorInfo)
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	nullChk(errMsg = malloc((buffsize+1) * sizeof(char)));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	nullChk(errorInfo.errMsg = malloc((buffsize+1) * sizeof(char)));
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize+1);
 	
 Error:
 	
-	ReturnErrMsg("ConfigDAQmxAITask");
-	return error;
+RETURN_ERROR_INFO
 }
 
-static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
+static int ConfigDAQmxAOTask (Dev_type* dev, char** errorMsg)
 {
 #define ConfigDAQmxAOTask_Err_OutOfMemory				-1
 #define ConfigDAQmxAOTask_Err_ChannelNotImplemented		-2
-	
-	int 				error 			= 0;
-	char*				errMsg			= NULL;
+
+INIT_ERROR_INFO
 	
 	ChanSet_type* 		chanSet			= NULL;
 	
@@ -9852,9 +9781,10 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 			*/
 			
 			default:
-				if (errorInfo)
-				*errorInfo = FormatMsg(ConfigDAQmxAOTask_Err_ChannelNotImplemented, "ConfigDAQmxAOTask", "Channel type not implemented");
-				return ConfigDAQmxAOTask_Err_ChannelNotImplemented;
+				
+				errorInfo.error 	= ConfigDAQmxAOTask_Err_ChannelNotImplemented;
+				nullChk( errorInfo.errMsg	= StrDup("Channel type not implemented") );
+				goto Error;
 		}
 	}
 	
@@ -9994,20 +9924,20 @@ static int ConfigDAQmxAOTask (Dev_type* dev, char** errorInfo)
 	return 0;
 	
 DAQmxError:
+	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	nullChk( errMsg = malloc((buffsize+1) * sizeof(char)) );
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	nullChk( errorInfo.errMsg = malloc((buffsize+1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize+1);
 	
 Error:
 	
-	ReturnErrMsg("ConfigDAQmxAOTask");
-	return error;
+RETURN_ERROR_INFO
 }
 
-static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
+static int ConfigDAQmxDITask (Dev_type* dev, char** errorMsg)
 {
-	int 				error 		= 0;
-	char*				errMsg		= NULL;		
+INIT_ERROR_INFO
+
 	ChanSet_type* 		chanSet		= NULL;
 	
 	if (!dev->DITaskSet) return 0; 		// do nothing
@@ -10193,21 +10123,19 @@ static int ConfigDAQmxDITask (Dev_type* dev, char** errorInfo)
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ConfigDAQmxDITask", errMsg);
-	free(errMsg);
-	return error;	
+	nullChk( errorInfo.errMsg = malloc((buffsize+1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize+1);
+	
+Error:
+	
+RETURN_ERROR_INFO
 }
 
-static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
+static int ConfigDAQmxDOTask (Dev_type* dev, char** errorMsg)
 {
-#define ConfigDAQmxDOTask_Err_OutOfMemory	-1  
-	int 				error 		= 0;
+INIT_ERROR_INFO	
 	
 	ChanSet_type* 		chanSet		= NULL;
-	
 	
 	if (!dev->DOTaskSet) return 0; 		// do nothing
 	
@@ -10219,9 +10147,8 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	
 	// clear and init writeDOData used for continuous streaming
 	discard_WriteDOData_type(&dev->DOTaskSet->writeDOData);
-	dev->DOTaskSet->writeDOData = init_WriteDOData_type(dev);
-	if (!dev->DOTaskSet->writeDOData) goto MemError;
-						 
+	nullChk ( dev->DOTaskSet->writeDOData = init_WriteDOData_type(dev) );
+	
 	// check if there is at least one DO task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
 	size_t	nChans			= ListNumItems(dev->DOTaskSet->chanSet);
@@ -10378,28 +10305,22 @@ static int ConfigDAQmxDOTask (Dev_type* dev, char** errorInfo)
 	
 	return 0;
 	
-MemError:
-	
-	if (errorInfo)
-		*errorInfo = FormatMsg (ConfigDAQmxDOTask_Err_OutOfMemory, "ConfigDAQmxAOTask", "Out of memory");
-	return ConfigDAQmxDOTask_Err_OutOfMemory;
-
 DAQmxError:
+	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ConfigDAQmxDOTask", errMsg);
-	free(errMsg);
-	return error;
+	nullChk( errorInfo.errMsg = malloc((buffsize+1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize+1);
+	
+Error:
+	
+RETURN_ERROR_INFO	
 }
 
-static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
+static int ConfigDAQmxCITask (Dev_type* dev, char** errorMsg)
 {
 #define ConfigDAQmxCITask_Err_ChanNotImplemented		-1 
 	
-	int 				error 			= 0;
-	char*				errMsg			= NULL;
+INIT_ERROR_INFO	
 	
 	ChanSet_type* 		chanSet			= NULL;
 	size_t				nCIChan			= 0;
@@ -10412,7 +10333,7 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 	nCIChan = ListNumItems(dev->CITaskSet->chanTaskSet); 
 	
 	// clear CI tasks
-	errChk( ClearDAQmxCITasks(dev, &errMsg) );
+	errChk( ClearDAQmxCITasks(dev, &errorInfo.errMsg) );
 	
 	// check if there is at least one CI task that requires HW-timing
 	BOOL 	hwTimingFlag 	= FALSE;
@@ -10549,47 +10470,36 @@ static int ConfigDAQmxCITask (Dev_type* dev, char** errorInfo)
 				DAQmxErrChk( DAQmxTaskControl(chCIFreq->baseClass.taskHndl, DAQmx_Val_Task_Verify) );
 				DAQmxErrChk( DAQmxTaskControl(chCIFreq->baseClass.taskHndl, DAQmx_Val_Task_Reserve) );
 				DAQmxErrChk( DAQmxTaskControl(chCIFreq->baseClass.taskHndl, DAQmx_Val_Task_Commit) );
-				
 				break;
 				
 			default:
-				if (errorInfo)
-					*errorInfo = FormatMsg(ConfigDAQmxCITask_Err_ChanNotImplemented, "ConfigDAQmxCITask", "Channel type not implemented");
-				return ConfigDAQmxCITask_Err_ChanNotImplemented;
+				
+				errorInfo.error 	= ConfigDAQmxCITask_Err_ChanNotImplemented;
+				errorInfo.errMsg	= StrDup("Channel type not implemented.");
+				goto Error;
 		}
 		
 	}
 				 
-	
 	return 0;
 
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ConfigDAQmxCITask", errMsg);
-	free(errMsg);
-	return error;
-	
+	nullChk (errorInfo.errMsg = malloc((buffsize+1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize+1);
+
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Unknown error");
-	
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ConfigDAQmxCITask", errMsg);
-	free(errMsg);
-	return error; 
+RETURN_ERROR_INFO	
 }
 
 
-static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
+static int ConfigDAQmxCOTask (Dev_type* dev, char** errorMsg)
 {
 #define ConfigDAQmxCOTask_Err_ChanNotImplemented		-1 
 	
-	int 				error 			= 0;
+INIT_ERROR_INFO
 	
 	ChanSet_CO_type*	chanSet			= NULL;
 	size_t				nCOChan			= 0;
@@ -10667,9 +10577,9 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 				
 			default:
 				
-				if (errorInfo)
-					*errorInfo = FormatMsg(ConfigDAQmxCOTask_Err_ChanNotImplemented, "ConfigDAQmxCOTask", "Channel type not implemented");
-				return ConfigDAQmxCOTask_Err_ChanNotImplemented;
+				errorInfo.error 	= ConfigDAQmxCOTask_Err_ChanNotImplemented;
+				errorInfo.errMsg	= StrDup("Channel type not implemented");
+				goto Error;
 		}
 		
 		//----------------------
@@ -10755,39 +10665,22 @@ static int ConfigDAQmxCOTask (Dev_type* dev, char** errorInfo)
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ConfigDAQmxCOTask", errMsg);
-	free(errMsg);
-	return error;
-}
-
-
-static void DisplayLastDAQmxLibraryError (void)
-{
-	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	char* errMsg = malloc((buffsize+1)*sizeof(char));
-	if (!errMsg) {
-		DLMsg("Error: Out of memory.\n\n", 1);
-		return;
-	}
+	nullChk( errorInfo.errMsg = malloc((buffsize+1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize + 1);
 	
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	free(errMsg);
+Error:
+	
+RETURN_ERROR_INFO	
 }
 
-static int ClearDAQmxCITasks (Dev_type* dev, char** errorInfo) 
+static int ClearDAQmxCITasks (Dev_type* dev, char** errorMsg) 
 {
 #define ClearDAQmxCITasks_Err_ChanNotImplemented		-1
 	
-	int				error			= 0;
+INIT_ERROR_INFO
+	
 	ChanSet_type* 	chanSet			= NULL;
 	size_t			nCIChan			= 0;
-	char*			errMsg			= NULL;
-	
 	
 	if (!dev->CITaskSet) return 0;	// do nothing
 	
@@ -10818,8 +10711,8 @@ static int ClearDAQmxCITasks (Dev_type* dev, char** errorInfo)
 				
 			default:
 				
-				errMsg = StrDup("Channel not implemented");
-				error = ClearDAQmxCITasks_Err_ChanNotImplemented; 
+				errorInfo.error 	= ClearDAQmxCITasks_Err_ChanNotImplemented; 
+				errorInfo.errMsg 	= StrDup("Channel not implemented");
 				goto Error;
 		}
 		
@@ -10831,24 +10724,17 @@ static int ClearDAQmxCITasks (Dev_type* dev, char** errorInfo)
 DAQmxError:
 	
 	int buffSize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	errMsg = malloc((buffSize+1) * sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffSize + 1);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ClearDAQmxCITasks", errMsg);
-	free(errMsg);
-	return error;
+	nullChk( errorInfo.errMsg = malloc((buffSize + 1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffSize + 1);
 	
 Error:
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ClearDAQmxCITasks", errMsg);
-	free(errMsg);
-	return error;
+	
+RETURN_ERROR_INFO
 }
 
-static int ClearDAQmxTasks (Dev_type* dev)
+static int ClearDAQmxTasks (Dev_type* dev, char** errorMsg)
 {
-	int 	error       = 0;
-	char*	errMsg		= NULL;
+INIT_ERROR_INFO	
 	
 	if (!dev) return 0;	// do nothing
 	
@@ -10898,31 +10784,28 @@ static int ClearDAQmxTasks (Dev_type* dev)
 	// signal that device is not configured
 	TaskControlEvent(dev->taskController, TC_Event_Unconfigure, NULL, NULL);
 	
-	return 0;
-	
 Error:
 	
-	DisplayLastDAQmxLibraryError();
-	return error;
+RETURN_ERROR_INFO
 }
 
-static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
+static int StopDAQmxTasks (Dev_type* dev, char** errorMsg)
 {
 #define StopDAQmxTasks_Err_StoppingTasks	-1
 	
-	int 				error				= 0;  
-	char*				errMsg				= NULL;  
+INIT_ERROR_INFO	
 	
-	int*				nActiveTasksPtr		= NULL;
-	bool32				taskDoneFlag		= FALSE;
+	int*		nActiveTasksPtr								= NULL;
+	bool32		taskDoneFlag								= FALSE;
+	char		CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
 	
 	
-	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
 	// AI task
 	if (dev->AITaskSet && dev->AITaskSet->taskHndl) {
-		DAQmxIsTaskDone(dev->AITaskSet->taskHndl, &taskDoneFlag); 
+		DAQmxErrChk( DAQmxIsTaskDone(dev->AITaskSet->taskHndl, &taskDoneFlag) );
 		if (!taskDoneFlag ) {
-			errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
+			DAQmxErrChk( DAQmxStopTask(dev->AITaskSet->taskHndl) );
 			(*nActiveTasksPtr)--;
 			
 			// send NULL data packets to AI channels used in the DAQmx task
@@ -10933,7 +10816,7 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 				// include only channels for which HW-timing is required
 				if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 				// send NULL packet to signal end of data transmission
-				errChk( SendNullPacket(chanSet->srcVChan, &errMsg) );
+				errChk( SendNullPacket(chanSet->srcVChan, &errorInfo.errMsg) );
 			}
 			
 		}
@@ -10941,27 +10824,27 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	
 	// AO task (stop if finite; continuous task stopping happens on receiving a NULL packet and is handled by WriteAODAQmx)
 	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl && dev->AOTaskSet->timing->measMode == Operation_Finite) {
-		DAQmxIsTaskDone(dev->AOTaskSet->taskHndl, &taskDoneFlag); 
+		DAQmxErrChk( DAQmxIsTaskDone(dev->AOTaskSet->taskHndl, &taskDoneFlag) ); 
 		if (!taskDoneFlag ) {
-			errChk(DAQmxStopTask(dev->AOTaskSet->taskHndl));
+			DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
 			(*nActiveTasksPtr)--; 
 		}
 	}
 	
 	// DI task
 	if (dev->DITaskSet && dev->DITaskSet->taskHndl) {
-		DAQmxIsTaskDone(dev->DITaskSet->taskHndl, &taskDoneFlag); 
+		DAQmxErrChk( DAQmxIsTaskDone(dev->DITaskSet->taskHndl, &taskDoneFlag) ); 
 		if (!taskDoneFlag ) {
-			errChk(DAQmxStopTask(dev->DITaskSet->taskHndl));
+			DAQmxErrChk( DAQmxStopTask(dev->DITaskSet->taskHndl) );
 			(*nActiveTasksPtr)--;
 		}
 	}
 	
 	// DO task
 	if (dev->DOTaskSet && dev->DOTaskSet->taskHndl) {
-		DAQmxIsTaskDone(dev->DOTaskSet->taskHndl, &taskDoneFlag); 
+		DAQmxErrChk( DAQmxIsTaskDone(dev->DOTaskSet->taskHndl, &taskDoneFlag) );
 		if (!taskDoneFlag ) {
-			errChk(DAQmxStopTask(dev->DOTaskSet->taskHndl));
+			DAQmxErrChk( DAQmxStopTask(dev->DOTaskSet->taskHndl) );
 			(*nActiveTasksPtr)--;
 		}
 	}
@@ -10973,9 +10856,9 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	   	for (size_t i = 1; i <= nChans; i++) {	
 			chanSet = *(ChanSet_CI_type**)ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 			if (chanSet->taskHndl) {
-				DAQmxIsTaskDone(chanSet->taskHndl, &taskDoneFlag); 
+				DAQmxErrChk( DAQmxIsTaskDone(chanSet->taskHndl, &taskDoneFlag) ); 
 				if (!taskDoneFlag ) {
-					errChk( DAQmxStopTask(chanSet->taskHndl) );
+					DAQmxErrChk( DAQmxStopTask(chanSet->taskHndl) );
 					(*nActiveTasksPtr)--;
 				}
 			}
@@ -10989,9 +10872,9 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	   	for (size_t i = 1; i <= nChans; i++) {	
 			chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);	
 			if (chanSet->taskHndl) {
-				DAQmxIsTaskDone(chanSet->taskHndl, &taskDoneFlag); 
+				DAQmxErrChk( DAQmxIsTaskDone(chanSet->taskHndl, &taskDoneFlag) ); 
 				if (!taskDoneFlag ) {
-					errChk( DAQmxStopTask(chanSet->taskHndl) );
+					DAQmxErrChk( DAQmxStopTask(chanSet->taskHndl) );
 					(*nActiveTasksPtr)--;
 				}
 			}
@@ -11001,24 +10884,31 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorInfo)
 	if (!*nActiveTasksPtr)
 		TaskControlIterationDone(dev->taskController, 0, "", FALSE);
 		
-	CmtReleaseTSVPtr(dev->nActiveTasks);
+	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	
 	return 0;
 	
-Error:
+DAQmxError:
+	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	if (errorInfo)
-		*errorInfo = FormatMsg(StopDAQmxTasks_Err_StoppingTasks, "StopDAQmxTasks", errMsg);
-	OKfree(errMsg);
-	return StopDAQmxTasks_Err_StoppingTasks;
+	nullChk( errorInfo.errMsg = malloc((buffsize + 1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize + 1);
+	goto Error;
+
+CmtError:
+	
+	errChk( CmtGetErrorMessage(errorInfo.error, CmtErrMsgBuffer) );
+	nullChk( errorInfo.errMsg = StrDup(CmtErrMsgBuffer) );
+	goto Error;
+	
+Error:
+	
+RETURN_ERROR_INFO	
 }
 
 int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 {
-	int						error				= 0;
-	char*					errMsg				= NULL;
+INIT_ERROR_INFO	
 	
 	Dev_type*				dev					= functionData;
 	DataPacket_type*		dataPacket			= NULL;
@@ -11037,7 +10927,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	// Sampling rate (must be received before N samples!)
 	//--------------
 	if (IsVChanOpen((VChan_type*)dev->AITaskSet->timing->samplingRateSinkVChan)) { 
-		errChk( GetDataPacket(dev->AITaskSet->timing->samplingRateSinkVChan, &dataPacket, &errMsg) );
+		errChk( GetDataPacket(dev->AITaskSet->timing->samplingRateSinkVChan, &dataPacket, &errorInfo.errMsg) );
 		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
 		
 		switch (dataPacketType) {
@@ -11078,7 +10968,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	//----------
 	if (dev->AITaskSet->timing->measMode == Operation_Finite) {
 		if (IsVChanOpen((VChan_type*)dev->AITaskSet->timing->nSamplesSinkVChan)) {
-			errChk( GetDataPacket(dev->AITaskSet->timing->nSamplesSinkVChan, &dataPacket, &errMsg) );
+			errChk( GetDataPacket(dev->AITaskSet->timing->nSamplesSinkVChan, &dataPacket, &errorInfo.errMsg) );
 			dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
 			switch (dataPacketType) {
 				case DL_UChar:
@@ -11121,7 +11011,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	*nSamplesPtr = dev->AITaskSet->timing->nSamples;
 	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 	dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, &dsInfo, NULL);
-	errChk(SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
+	errChk(SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg));
 	
 	//--------------
 	// Sampling rate
@@ -11130,7 +11020,7 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	*samplingRatePtr = dev->AITaskSet->timing->sampleRate;
 	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 	dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, &dsInfo, NULL);
-	errChk(SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg));
+	errChk(SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg));
 	
 	
 	// reset AI data processing structure
@@ -11141,11 +11031,11 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 	// Start task as a function of HW trigger dependencies
 	//-------------------------------------------------------------------------------------------------------------------------------
 	
-	errChk(WaitForHWTrigArmedSlaves(dev->AITaskSet->HWTrigMaster, &errMsg));
+	errChk(WaitForHWTrigArmedSlaves(dev->AITaskSet->HWTrigMaster, &errorInfo.errMsg));
 	
 	DAQmxErrChk(DAQmxTaskControl(dev->AITaskSet->taskHndl, DAQmx_Val_Task_Start));
 	
-	errChk(SetHWTrigSlaveArmedStatus(dev->AITaskSet->HWTrigSlave, &errMsg));
+	errChk(SetHWTrigSlaveArmedStatus(dev->AITaskSet->HWTrigSlave, &errorInfo.errMsg));
 	
 	
 	return 0;
@@ -11153,8 +11043,8 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	nullChk( errorInfo.errMsg = malloc((buffsize+1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize + 1);
 	// fall through
 	
 Error:
@@ -11162,21 +11052,19 @@ Error:
 	// cleanup
 	discard_DSInfo_type(&dsInfo);
 	
-	if (!errMsg)
-		errMsg = FormatMsg(error, "StartAIDAQmxTask_CB", "Out of memory");
+	if (!errorInfo.errMsg)
+		errorInfo.errMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or out of memory.");
 	
-	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
-	OKfree(errMsg);
+	TaskControlIterationDone(dev->taskController, errorInfo.error, errorInfo.errMsg, FALSE);
+	OKfree(errorInfo.errMsg);
 	return 0;
-
 }
 
 int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 {
 #define StartAODAQmxTask_CB_Err_NumberOfReceivedSamplesNotTheSameAsTask		-1
-	
-	int					error					= 0;
-	char*				errMsg					= NULL;
+
+INIT_ERROR_INFO
 	
 	Dev_type*			dev						= functionData;
 	DataPacket_type*	dataPacket				= NULL;
@@ -11198,7 +11086,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	//----------
 	if (dev->AOTaskSet->timing->measMode == Operation_Finite) {
 		if (IsVChanOpen((VChan_type*)dev->AOTaskSet->timing->nSamplesSinkVChan)) {
-			errChk( GetDataPacket(dev->AOTaskSet->timing->nSamplesSinkVChan, &dataPacket, &errMsg) );
+			errChk( GetDataPacket(dev->AOTaskSet->timing->nSamplesSinkVChan, &dataPacket, &errorInfo.errMsg) );
 			dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
 			switch (dataPacketType) {
 				case DL_UChar:
@@ -11233,7 +11121,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	// Sampling rate
 	//--------------
 	if (IsVChanOpen((VChan_type*)dev->AOTaskSet->timing->samplingRateSinkVChan)) { 
-		errChk( GetDataPacket(dev->AOTaskSet->timing->samplingRateSinkVChan, &dataPacket, &errMsg) );
+		errChk( GetDataPacket(dev->AOTaskSet->timing->samplingRateSinkVChan, &dataPacket, &errorInfo.errMsg) );
 		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType);
 		
 		switch (dataPacketType) {
@@ -11267,7 +11155,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
 	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 	dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, &dsInfo, NULL);
-	errChk(SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errMsg));
+	errChk(SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg));
 	
 	//--------------
 	// Sampling rate
@@ -11276,7 +11164,7 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	*samplingRatePtr = dev->AOTaskSet->timing->sampleRate;
 	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 	dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, &dsInfo, NULL);
-	errChk(SendDataPacket(dev->AOTaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errMsg));
+	errChk(SendDataPacket(dev->AOTaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg));
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Fill output buffer
@@ -11286,21 +11174,21 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 	discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
 	nullChk( dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev) );
 	// output buffer is twice the writeblock, thus write two writeblocks
-	errChk( WriteAODAQmx(dev, &errMsg) );
-	errChk( WriteAODAQmx(dev, &errMsg) );
+	errChk( WriteAODAQmx(dev, &errorInfo.errMsg) );
+	errChk( WriteAODAQmx(dev, &errorInfo.errMsg) );
 			
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Start task as a function of HW trigger dependencies
 	//-------------------------------------------------------------------------------------------------------------------------------
 	
 	// wait for other HW triggered slaved to be armed
-	errChk(WaitForHWTrigArmedSlaves(dev->AOTaskSet->HWTrigMaster, &errMsg));
+	errChk(WaitForHWTrigArmedSlaves(dev->AOTaskSet->HWTrigMaster, &errorInfo.errMsg));
 	
 	// launch task (and arm if this task is a slave triggered task)
 	DAQmxErrChk(DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Start));
 	
 	// if this task has a master HW-trigger, then signal it that task is armed
-	errChk(SetHWTrigSlaveArmedStatus(dev->AOTaskSet->HWTrigSlave, &errMsg));
+	errChk(SetHWTrigSlaveArmedStatus(dev->AOTaskSet->HWTrigSlave, &errorInfo.errMsg));
 	
 	
 	return 0;
@@ -11308,8 +11196,8 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	nullChk( errorInfo.errMsg = malloc((buffsize + 1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize + 1);
 	// fall through
 	
 Error:
@@ -11318,13 +11206,12 @@ Error:
 	OKfree(AOData);
 	discard_Waveform_type(&AOWaveform);
 	
-	if (!errMsg)
-		errMsg = FormatMsg(error, "StartAODAQmxTask_CB", "Out of memory");
+	if (!errorInfo.errMsg)
+		errorInfo.errMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or out of memory");
 	
-	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
-	OKfree(errMsg);
+	TaskControlIterationDone(dev->taskController, errorInfo.error, errorInfo.errMsg, FALSE);
+	OKfree(errorInfo.errMsg);
 	return 0;
-	
 }
 
 int CVICALLBACK StartDIDAQmxTask_CB (void *functionData)
@@ -11344,8 +11231,7 @@ int CVICALLBACK StartCIDAQmxTasks_CB (void *functionData)
 
 int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 {
-	int					error				= 0;
-	char*				errMsg				= NULL;
+INIT_ERROR_INFO
 	
 	ChanSet_CO_type*	chanSetCO			= functionData;
 	Dev_type*			dev 				= chanSetCO->baseClass.device;
@@ -11358,28 +11244,28 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 	// Receive task settings data and update UI settings
 	//-------------------------------------------------------------------------------------------------------------------------------
 	if (IsVChanOpen((VChan_type*)chanSetCO->baseClass.sinkVChan)) {
-		errChk( GetDataPacket(chanSetCO->baseClass.sinkVChan, &dataPacket, &errMsg) );
+		errChk( GetDataPacket(chanSetCO->baseClass.sinkVChan, &dataPacket, &errorInfo.errMsg) );
 		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
 		discard_PulseTrain_type(&chanSetCO->pulseTrain);
 		nullChk( chanSetCO->pulseTrain = CopyPulseTrain(*(PulseTrain_type**)dataPacketData) ); 
 	
 		// get channel panel handle to adjust UI settings
-		int						timingPanHndl;
+		int						timingPanHndl	= 0;
 		
 		GetPanelHandleFromTabPage(chanSetCO->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &timingPanHndl); 
 		
-		double 					initialDelay;
-		double					frequency;
-		double					dutyCycle;
-		double					lowTime;
-		double					highTime;
-		uInt32					initialDelayTicks;
-		uInt32					lowTicks;
-		uInt32					highTicks;
-		PulseTrainIdleStates	idleState;
-		PulseTrainModes			pulseMode;
-		uInt64					nPulses;
-		int						ctrlIdx;
+		double 					initialDelay		= 0;
+		double					frequency			= 0;
+		double					dutyCycle			= 0;
+		double					lowTime				= 0;
+		double					highTime			= 0;
+		uInt32					initialDelayTicks	= 0;
+		uInt32					lowTicks			= 0;
+		uInt32					highTicks			= 0;
+		PulseTrainIdleStates	idleState			= 0;
+		PulseTrainModes			pulseMode			= 0;
+		uInt64					nPulses				= 0;
+		int						ctrlIdx				= 0;
 		
 		// set idle state
 		idleState = GetPulseTrainIdleState(chanSetCO->pulseTrain);
@@ -11510,17 +11396,17 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 		
 	}
 	
-	errChk( SendDataPacket(chanSetCO->baseClass.srcVChan, &dataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(chanSetCO->baseClass.srcVChan, &dataPacket, FALSE, &errorInfo.errMsg) );
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Start task as a function of HW trigger dependencies
 	//-------------------------------------------------------------------------------------------------------------------------------
 	
-	errChk(WaitForHWTrigArmedSlaves(chanSetCO->HWTrigMaster, &errMsg));
+	errChk(WaitForHWTrigArmedSlaves(chanSetCO->HWTrigMaster, &errorInfo.errMsg));
 	
 	DAQmxErrChk(DAQmxTaskControl(chanSetCO->taskHndl, DAQmx_Val_Task_Start));
 	
-	errChk(SetHWTrigSlaveArmedStatus(chanSetCO->HWTrigSlave, &errMsg));
+	errChk(SetHWTrigSlaveArmedStatus(chanSetCO->HWTrigSlave, &errorInfo.errMsg));
 	
 	
 	return 0;
@@ -11528,8 +11414,8 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 DAQmxError:
 	
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	errMsg = malloc((buffsize+1)*sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
+	nullChk( errorInfo.errMsg = malloc((buffsize + 1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize + 1);
 	// fall through
 	
 Error:
@@ -11537,23 +11423,24 @@ Error:
 	// cleanup
 	discard_PulseTrain_type(&pulseTrain);
 	
-	if (!errMsg)
-		errMsg = FormatMsg(error, "StartCODAQmxTask_CB", "Out of memory");
+	if (!errorInfo.errMsg)
+		errorInfo.errMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or out of memory");
 	
-	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
-	OKfree(errMsg);
+	TaskControlIterationDone(dev->taskController, errorInfo.error, errorInfo.errMsg, FALSE);
+	OKfree(errorInfo.errMsg);
 	return 0;
-	
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 // DAQmx task callbacks
 //---------------------------------------------------------------------------------------------------------------------
 
-static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx, int nRead, float64* AIReadBuffer, char** errorInfo) 
+static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx, int nRead, float64* AIReadBuffer, char** errorMsg) 
 {
-	int					error					= 0;
-	char*				errMsg					= NULL;
+#define SendAIBufferData_Err_NotImplemented		-1
+	
+INIT_ERROR_INFO
+
 	double*				waveformData_double		= NULL;
 	float*				waveformData_float		= NULL;
 	uInt8*				waveformData_uInt8		= NULL;
@@ -11676,8 +11563,8 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 		
 		default:
 			
-			errMsg = StrDup("Must be implemented correctly still!"); 
-			error = -1;
+			errorInfo.error		= SendAIBufferData_Err_NotImplemented;
+			errorInfo.errMsg 	= StrDup("Not implemented"); 
 			goto Error;
 					
 	}
@@ -11689,7 +11576,7 @@ static int SendAIBufferData (Dev_type* dev, ChanSet_type* AIChSet, size_t chIdx,
 	// send data packet with waveform
 	//-------------------------------
 	
-	errChk( SendDataPacket(AIChSet->srcVChan, &dataPacket, 0, &errMsg) );
+	errChk( SendDataPacket(AIChSet->srcVChan, &dataPacket, 0, &errorInfo.errMsg) );
 	
 	return 0;
 	
@@ -11705,25 +11592,17 @@ Error:
 	discard_DataPacket_type(&dataPacket);
 	discard_DSInfo_type(&dsInfo);
 	
-	// no error message means out of memory
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
-	
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "SendAIBufferData", errMsg);
-	OKfree(errMsg);
-	
-	return error;
+RETURN_ERROR_INFO	
 }
 
 int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 everyNsamplesEventType, uInt32 nSamples, void *callbackData)
 {
+INIT_ERROR_INFO
+	
 	Dev_type*			dev 					= callbackData;
 	float64*    		readBuffer				= NULL;				// temporary buffer to place data into
-	uInt32				nAI;
-	int					nRead;
-	int					error					= 0;
-	char*				errMsg					= NULL;
+	uInt32				nAI						= 0;
+	int					nRead					= 0;
 	ChanSet_type*		chanSet					= NULL;
 	size_t				nChans					= ListNumItems(dev->AITaskSet->chanSet);
 	size_t				chIdx					= 0;
@@ -11740,7 +11619,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 		// include only channels for which HW-timing is required
 		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 		// forward data from the AI buffer to the VChan
-		errChk( SendAIBufferData(dev, chanSet, chIdx, nRead, readBuffer, &errMsg) ); 
+		errChk( SendAIBufferData(dev, chanSet, chIdx, nRead, readBuffer, &errorInfo.errMsg) ); 
 		// next AI channel
 		chIdx++;
 	}
@@ -11752,7 +11631,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 	if (GetTaskControlAbortFlag(dev->taskController)) {
 		int*				nActiveTasksPtr		= NULL;
 		
-		errChk(DAQmxStopTask(dev->AITaskSet->taskHndl));
+		DAQmxErrChk( DAQmxStopTask(dev->AITaskSet->taskHndl) );
 		
 		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
 		
@@ -11769,7 +11648,7 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 			// include only channels for which HW-timing is required
 			if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 			// send NULL packet to signal end of data transmission
-			errChk( SendNullPacket(chanSet->srcVChan, &errMsg) );
+			errChk( SendNullPacket(chanSet->srcVChan, &errorInfo.errMsg) );
 		}
 			
 	}
@@ -11779,13 +11658,13 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 DAQmxError:
 	
 	int errMsgBuffSize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	errMsg = malloc((errMsgBuffSize+1) * sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, errMsgBuffSize+1);
+	nullChk( errorInfo.errMsg = malloc((errMsgBuffSize + 1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, errMsgBuffSize + 1);
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = FormatMsg(error, "AIDAQmxTaskDataAvailable_CB", "Out of memory");
+	if (!errorInfo.errMsg)
+		errorInfo.errMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or o	ut of memory");
 	
 	//-------------------------
 	// cleanup
@@ -11795,7 +11674,7 @@ Error:
 	
 	OKfree(readBuffer); 
 
-	OKfree(errMsg);
+	OKfree(errorInfo.errMsg);
 	
 	return 0;
 }
@@ -11804,12 +11683,12 @@ Error:
 // It is not called if task stops after calling DAQmxClearTask or DAQmxStopTask.
 int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void *callbackData)
 {
+INIT_ERROR_INFO
+
 	Dev_type*			dev 					= callbackData;
 	uInt32				nSamples				= 0;						// number of samples per channel in the AI buffer
 	float64*    		readBuffer				= NULL;						// temporary buffer to place data into       
 	uInt32				nAI						= 0;
-	int					error					= 0;
-	char*				errMsg					= NULL;
 	int					nRead					= 0;
 	ChanSet_type*		chanSet					= NULL;
 	size_t				nChans					= ListNumItems(dev->AITaskSet->chanSet);
@@ -11860,9 +11739,9 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 		// include only channels for which HW-timing is required
 		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 		// forward data from AI buffer to the VChan 
-		errChk( SendAIBufferData(dev, chanSet, chIdx, nRead, readBuffer, &errMsg) ); 
+		errChk( SendAIBufferData(dev, chanSet, chIdx, nRead, readBuffer, &errorInfo.errMsg) ); 
 		// send NULL packet to signal end of data transmission
-		errChk( SendNullPacket(chanSet->srcVChan, &errMsg) );
+		errChk( SendNullPacket(chanSet->srcVChan, &errorInfo.errMsg) );
 		// next AI channel
 		chIdx++;
 	}
@@ -11886,13 +11765,13 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 DAQmxError:
 	
 	int errMsgBuffSize = DAQmxGetExtendedErrorInfo(NULL, 0);
-	errMsg = malloc((errMsgBuffSize+1) * sizeof(char));
-	DAQmxGetExtendedErrorInfo(errMsg, errMsgBuffSize+1);
+	nullChk( errorInfo.errMsg = malloc((errMsgBuffSize + 1) * sizeof(char)) );
+	DAQmxGetExtendedErrorInfo(errorInfo.errMsg, errMsgBuffSize+1);
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = FormatMsg(error, "AIDAQmxTaskDone_CB", "Out of memory");
+	if (!errorInfo.errMsg)
+		errorInfo.errMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or out of memory");
 	
 	//-------------------------
 	// cleanup
@@ -11902,7 +11781,7 @@ Error:
 	
 	OKfree(readBuffer); 
 
-	OKfree(errMsg);
+	OKfree(errorInfo.errMsg);
 	
 	return 0;
 }
@@ -11944,8 +11823,7 @@ int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 	
 	// clear and init writeAOData used for continuous streaming
 	discard_WriteAOData_type(&dev->AOTaskSet->writeAOData);
-	dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev);
-	if (!dev->AOTaskSet->writeAOData) goto MemError;
+	nullChk( dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev) );
 	
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
 	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
@@ -11965,11 +11843,6 @@ DAQmxError:
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
 	TaskControlIterationDone(dev->taskController, error, errMsg, FALSE);
 	free(errMsg);
-	return 0;
-	
-MemError:
-	
-	TaskControlIterationDone(dev->taskController, -1, "Out of memory", FALSE);
 	return 0;
 }
 
@@ -12045,7 +11918,7 @@ DAQmxError:
 //--------------------------------------------------------------------------------------------
 
 /// HIFN Writes writeblock number of samples to the AO task.
-static int WriteAODAQmx (Dev_type* dev, char** errorInfo) 
+static int WriteAODAQmx (Dev_type* dev, char** errorMsg) 
 {
 #define	WriteAODAQmx_Err_WaitingForDataTimeout		-1
 #define WriteAODAQmx_Err_DataTypeNotSupported		-2
@@ -12322,8 +12195,8 @@ DAQmxError:
 	buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
 	DAQmxErrMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(DAQmxErrMsg, buffsize+1);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "WriteAODAQmx", DAQmxErrMsg);
+	if (errorMsg)
+		*errorMsg = FormatMsg(error, "WriteAODAQmx", DAQmxErrMsg);
 	OKfree(DAQmxErrMsg);
 	ReleaseDataPacket(&dataPacket);
 	return error;
@@ -12331,15 +12204,15 @@ DAQmxError:
 CmtError:
 	
 	CmtGetErrorMessage (error, CmtErrMsgBuffer);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "WriteAODAQmx", CmtErrMsgBuffer); 
+	if (errorMsg)
+		*errorMsg = FormatMsg(error, "WriteAODAQmx", CmtErrMsgBuffer); 
 	ReleaseDataPacket(&dataPacket);
 	return error;
 	
 Error:
 	
-	if (errorInfo)
-		*errorInfo = errMsg;
+	if (errorMsg)
+		*errorMsg = errMsg;
 	else
 		OKfree(errMsg);
 	
@@ -12349,7 +12222,7 @@ Error:
 
 /*
 /// HIFN Writes writeblock number of samples to the DO task.
-static int WriteDODAQmx(Dev_type* dev, char** errorInfo) 
+static int WriteDODAQmx(Dev_type* dev, char** errorMsg) 
 {
 #define	WriteDODAQmx_Err_WaitingForDataTimeout		-1
 #define WriteDODAQmx_Err_DataTypeNotSupported		-2
@@ -13875,7 +13748,7 @@ Error:
 }
 
 /// HIFN Updates number of samples acquired when task controller is not active for analog and digital tasks.
-static int ADNSamples_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int ADNSamples_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg)
 {
 	// update only if task controller is not active
 	if (taskActive) return 0;
@@ -13945,7 +13818,7 @@ Error:
 	ReleaseDataPacket(&dataPacket);
 	OKfree(nSamplesPtr);
 	
-	*errorInfo = FormatMsg(error, "ADNSamples_DataReceivedTC", errMsg);
+	*errorMsg = FormatMsg(error, "ADNSamples_DataReceivedTC", errMsg);
 	OKfree(errMsg);
 	
 	return error;
@@ -13953,7 +13826,7 @@ Error:
 }
 
 /// HIFN Receives sampling rate info for analog and digital IO DAQmx tasks when task controller is not active.
-static int ADSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int ADSamplingRate_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg)
 {
 	// update only if task controller is not active
 	if (taskActive) return 0;
@@ -14034,13 +13907,13 @@ Error:
 	ReleaseDataPacket(&dataPacket);
 	OKfree(samplingRatePtr);
 	
-	*errorInfo = FormatMsg(error, "ADSamplingRate_DataReceivedTC", errMsg);
+	*errorMsg = FormatMsg(error, "ADSamplingRate_DataReceivedTC", errMsg);
 	OKfree(errMsg);
 	
 	return error;
 }
 
-static int AO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int AO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg)
 {
 	Dev_type*						dev					= GetTaskControlModuleData(taskControl);
 	ChanSet_type*					chan				= GetVChanOwner((VChan_type*)sinkVChan);
@@ -14179,7 +14052,7 @@ DAQmxError:
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0);
 	errMsg = malloc((buffsize+1)*sizeof(char));
 	DAQmxGetExtendedErrorInfo(errMsg, buffsize+1);
-	*errorInfo = FormatMsg(error, "AO_DataReceivedTC", errMsg);
+	*errorMsg = FormatMsg(error, "AO_DataReceivedTC", errMsg);
 	OKfree(errMsg);
 	
 	// fall through
@@ -14197,12 +14070,12 @@ Error:
 	return error;
 }
 
-static int DO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int DO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg)
 {
 	return 0;
 }
 
-static int CO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int CO_DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg)
 {
 	//Dev_type*				dev					= GetTaskControlModuleData(taskControl);
 	int						error				= 0;
@@ -14389,7 +14262,7 @@ Error:
 	// cleanup
 	discard_DataPacket_type(&dataPacket);
 	
-	*errorInfo = FormatMsg(error, "CO_DataReceivedTC", errMsg);
+	*errorMsg = FormatMsg(error, "CO_DataReceivedTC", errMsg);
 	OKfree(errMsg);
 	return error;
 }
@@ -14398,7 +14271,7 @@ Error:
 // NIDAQmx Device Task Controller Callbacks
 //---------------------------------------------------------------------------------------------------------------------------------------
 
-static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
 	int					error		= 0;
@@ -14428,7 +14301,7 @@ static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, ch
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, 0);
 	
 	// configure device again
-	errChk( ConfigDAQmxDevice(dev, errorInfo) );
+	errChk( ConfigDAQmxDevice(dev, errorMsg) );
 	
 	return 0;
 	
@@ -14437,7 +14310,7 @@ Error:
 	return error;
 }
 
-static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	//Dev_type*	dev	= GetTaskControlModuleData(taskControl); 
 	
@@ -14537,14 +14410,14 @@ Error:
 	OKfree(errMsg);
 }
 
-static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	//Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	
@@ -14554,7 +14427,7 @@ static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL 
 	return 0;
 }
 
-static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
 	Dev_type*	dev		= GetTaskControlModuleData(taskControl);
 	
@@ -14564,7 +14437,7 @@ static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BO
 	return 0;
 }
 
-static int IterationStopTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
+static int IterationStopTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
 	int 				error				= 0;  
 	char*				errMsg				= NULL; 
@@ -14608,11 +14481,11 @@ DAQmxError:
 	
 Error:
 	
-	ReturnErrMsg("DAQmx IterationStopTC");
+	ReturnErrMsg();
 	return error;
 }
 
-static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
+static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
 {
 	Dev_type*			dev			= GetTaskControlModuleData(taskControl);
 	ChanSet_type**		chanSetPtr;
@@ -14723,12 +14596,12 @@ static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates st
 	
 	// just make sure the device is configured again before start
 	if (state == TaskTree_Started)
-		ConfigDAQmxDevice(dev, errorInfo);
+		ConfigDAQmxDevice(dev, errorMsg);
 	
 	return 0;
 }
 
-static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	
@@ -14742,7 +14615,7 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[]
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 }
 
-static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorMsg)
 {
 	//Dev_type*	dev	= GetTaskControlModuleData(taskControl);
 	

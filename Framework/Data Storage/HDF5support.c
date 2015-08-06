@@ -139,7 +139,7 @@ Error:
 	return error;
 }
 
-int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo, Waveform_type* waveform, CompressionMethods compression, char** errorInfo) 
+int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo, Waveform_type* waveform, CompressionMethods compression, char** errorMsg) 
 {
 	//=============================================================================================
 	// INITIALIZATION (no fail)
@@ -365,7 +365,7 @@ HDF5Error:
     ReturnErrMsg("Data Storage WriteHDF5Waveform");
 	*/
 	
-	ReturnErrMsg("Data Storage WriteHDF5Waveform");
+	ReturnErrMsg();
 	return error;
    
 Error:
@@ -376,11 +376,11 @@ Error:
 	OKfree(offset);
 	OKfree(size);
    
-	ReturnErrMsg("Data Storage WriteHDF5Waveform");
+	ReturnErrMsg();
 	return error;
 }
 
-int WriteHDF5WaveformList (char fileName[], ListType waveformList, CompressionMethods compression, char** errorInfo)
+int WriteHDF5WaveformList (char fileName[], ListType waveformList, CompressionMethods compression, char** errorMsg)
 {
 #define WriteHDF5WaveformList_Err_NoFileName	-1
 	
@@ -491,11 +491,11 @@ Error:
 	// close file
 	if (fileID > 0) {H5Fclose(fileID); fileID = 0;}
 	
-	ReturnErrMsg("WriteHDF5WaveformList");
+	ReturnErrMsg();
 	return error;
 }
 
-int WriteHDF5Image(char fileName[], char datasetName[], DSInfo_type* dsInfo, Image_type* image, CompressionMethods compression, char** errorInfo) 
+int WriteHDF5Image(char fileName[], char datasetName[], DSInfo_type* dsInfo, Image_type* image, CompressionMethods compression, char** errorMsg) 
 { 
 	int   					error        			= 0;
 	

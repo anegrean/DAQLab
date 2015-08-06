@@ -123,10 +123,10 @@ typedef struct TaskControl 		TaskControl_type;
 //--------------------------------------------------------------------------------
 
 // Called when a Task Controller needs to be configured based on module or device settings. 
-typedef int				(*ConfigureFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+typedef int				(*ConfigureFptr_type) 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
 // Called when a Task Controller needs to be switched to an unconfigured state which prevents it from being executed.
-typedef int				(*UnconfigureFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*UnconfigureFptr_type) 			(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg); 
 
 // Called each time a Task Controller performs an iteration of a device or module. This function is called in a separate thread from the Task Controller thread. 
 // The iteration can be completed either within this function call or even in another thread. 
@@ -135,25 +135,25 @@ typedef int				(*UnconfigureFptr_type) 			(TaskControl_type* taskControl, BOOL c
 typedef void 			(*IterateFptr_type) 				(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag);
 
 // Called before the first iteration starts from an INITIAL state.
-typedef int				(*StartFptr_type) 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*StartFptr_type) 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg); 
 
 // Called when device or module must be returned to its initial state (iteration index = 0).
-typedef int				(*ResetFptr_type) 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*ResetFptr_type) 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg); 
 
 // Called automatically when a finite Task Controller finishes required iterations or a continuous Task Controller is stopped manually.
-typedef int				(*DoneFptr_type) 					(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*DoneFptr_type) 					(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg); 
 
 // Called when a running finite Task Controller is stopped manually, before reaching a DONE state.
-typedef int				(*StoppedFptr_type) 				(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*StoppedFptr_type) 				(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg); 
 
 // Called when the task controller receives a TC_Event_Stop while its iteration function is active and needs to terminate its iteration. After shutting down ongoing
 // operations, call if necessary TaskControlIterationDone ().
 // Note: This is similar to using GetTaskControlIterationStopFlag () which returns a flag. Do not make use of both methods at the same time to stop an ogoing process.
 
-typedef int				(*IterationStopFptr_type) 			(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo); 
+typedef int				(*IterationStopFptr_type) 			(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg); 
 
 // Called when a Task Tree in which the Task Controller participates is started or stops/is stopped. This is called before the Start callback of the Task Controller.
-typedef int 			(*TaskTreeStateChangeFptr_type)		(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo); 
+typedef int 			(*TaskTreeStateChangeFptr_type)		(TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg); 
 
 // Called when an UITC has a parent Task Controller attached to or detached from it, in the former case the UITC functioning as a simple Task Controller
 // without the possibility for the user to control the Task execution. This function must dim/undim UITC controls that prevent/allow the user to control
@@ -164,10 +164,10 @@ typedef void			(*SetUITCModeFptr_type)				(TaskControl_type* taskControl, BOOL U
 typedef void 			(*ErrorFptr_type) 					(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 
 // Called when data is placed in a Task Controller Sink VChan.
-typedef int				(*DataReceivedFptr_type)			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+typedef int				(*DataReceivedFptr_type)			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 
 // Called for passing custom module or device events that are not handled directly by the Task Controller.
-typedef int				(*ModuleEventFptr_type)				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
+typedef int				(*ModuleEventFptr_type)				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorMsg);
 
 
 //--------------------------------------------------------------------------------
@@ -280,7 +280,7 @@ BOOL					GetTaskControlIterationStopFlag		(TaskControl_type* taskControl);
 	// Checks if a Task Controller is in use, i.e. if it is in any of the following states: Idle, Running, IterationFunctionActive, Stopping.
 	// A call to this function blocks ongoing state transitions and if TC use knowledge is not needed anymore, this call must be followed each time 
 	// it is called by GetTaskControlState_ReleaseLock. On success returns 0 and sets lockObtained to TRUE, on failure returns a negative number and sets lockObtained to FALSE.
-int 					IsTaskControllerInUse_GetLock 		(TaskControl_type* taskControl, BOOL* inUsePtr, BOOL* lockObtained);
+int 					IsTaskControllerInUse_GetLock 		(TaskControl_type* taskControl, BOOL* inUsePtr, TCStates* tcState, BOOL* lockObtained);
 	// Releases isTaskControllerInUse lock so state transitions maye resume. On success returns 0 and lockObtained is set back to FALSE. On failure returns a negative value and lockObtained remains TRUE. 
 int 					IsTaskControllerInUse_ReleaseLock 	(TaskControl_type* taskControl, BOOL* lockObtained);
 
@@ -291,12 +291,12 @@ char*					TaskControlStateToString			(TCStates state);
 // Task Controller composition functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
-int						AddChildTCToParent					(TaskControl_type* parent, TaskControl_type* child);
+int						AddChildTCToParent					(TaskControl_type* parentTC, TaskControl_type* childTC, char** errorMsg);
 
-int						RemoveChildTCFromParentTC			(TaskControl_type* child);
+int						RemoveChildTCFromParentTC			(TaskControl_type* childTC, char** errorMsg);
 
 	// Disconnects a given Task Controller from its parent, disconnects all child nodes from each other as well as any VChan or HW-triggers
-int						DisassembleTaskTreeBranch			(TaskControl_type* taskControlNode); 
+int						DisassembleTaskTreeBranch			(TaskControl_type* taskControlNode, char** errorMsg); 
 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -326,10 +326,10 @@ char* 					GetUniqueTaskControllerName			(ListType TCList, char baseTCName[]);
 int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr); 
 
 	// Used to signal the Task Controller that an iteration is done.
-	// Pass to errorInfo an empty string as "", if there is no error and the iteration completed succesfully. Otherwise,
+	// Pass to errorMsg an empty string as "", if there is no error and the iteration completed succesfully. Otherwise,
 	// pass an error message string. Pass 0 to errorID if there is no error, otherwise pass an error code. If another iteration is asked besides the already set number of
 	// iterations in case of a Finite Task Controller, then pass doAnotherIteration = TRUE. Like so, a finite number of iterations can be performed conditionally.
-int						TaskControlIterationDone			(TaskControl_type* taskControl, int errorID, char errorInfo[], BOOL doAnotherIteration);
+int						TaskControlIterationDone			(TaskControl_type* taskControl, int errorID, char errorMsg[], BOOL doAnotherIteration);
 
 
 int						TaskControlEventToSubTasks  		(TaskControl_type* SenderTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr); 
@@ -350,29 +350,32 @@ void					dispose_FCallReturn_EventInfo		(void* eventInfo);
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Adds a VChan to the Task Controller that is used to receive incoming data and binds it to a given callback when data is received.
-int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, char** errorInfo); 
+int						AddSinkVChan						(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, char** errorMsg); 
 	// Removes a Sink VChan assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan.
-int						RemoveSinkVChan 					(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, char** errorInfo);
+int						RemoveSinkVChan 					(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, char** errorMsg);
 
 	// Removes all Sink VChans assigned to the Task Controller. Note that this function does not destroy the VChan object nor does it disconnect it from an incoming
 	// Source VChan. 
-int 					RemoveAllSinkVChans 				(TaskControl_type* taskControl, char** errorInfo);
+int 					RemoveAllSinkVChans 				(TaskControl_type* taskControl, char** errorMsg);
 
 	// Associates a SourceVChan with the Task Controller
-int						AddSourceVChan						(TaskControl_type* taskControl, SourceVChan_type* sourceVChan, char** errorInfo);
+int						AddSourceVChan						(TaskControl_type* taskControl, SourceVChan_type* sourceVChan, char** errorMsg);
 
 	// Removes a Source VChan assigned to the Task Controller. Note that this function does not destroy the VChan object.
-int						RemoveSourceVChan					(TaskControl_type* taskControl, SourceVChan_type* sourceVChan, char** errorInfo);
+int						RemoveSourceVChan					(TaskControl_type* taskControl, SourceVChan_type* sourceVChan, char** errorMsg);
 
 	// Removes all Source VChans assigned to the Task Controller. Note that this function does not destroy the VChan objects.
-int						RemoveAllSourceVChan				(TaskControl_type* taskControl, char** errorInfo);
+int						RemoveAllSourceVChan				(TaskControl_type* taskControl, char** errorMsg);
 
 	// Disconnects Source VChans from all Sink VChans assigned to the Task Controller but does not remove the Sink VChans from the Task Controller.
-int						DisconnectAllSinkVChans				(TaskControl_type* taskControl, char** errorInfo);
+int						DisconnectAllSinkVChans				(TaskControl_type* taskControl, char** errorMsg);
+
+	// Disconnects Sink VChans from all Source VChans assigned to the Task Controller but does not remove the Source VChans from the Task Controller.
+int						DisconnectAllSourceVChans			(TaskControl_type* taskControl, char** errorMsg);
 
 	// Clears all data packets from all the Sink VChans of a Task Controller
-int						ClearAllSinkVChans					(TaskControl_type* taskControl, char** errorInfo);
+int						ClearAllSinkVChans					(TaskControl_type* taskControl, char** errorMsg);
 
 
 #ifdef __cplusplus

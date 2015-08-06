@@ -91,16 +91,16 @@ static void CVICALLBACK 			SettingsMenu_CB 				(int menuBar, int menuItem, void 
 //-----------------------------------------
 
 /*
-static int							ConfigureTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int							UnconfigureTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							ConfigureTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
+static int							UnconfigureTC					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 static void							IterateTC						(TaskControl_type* taskControl, BOOL const* abortIterationFlag);
 static void							AbortIterationTC				(TaskControl_type* taskControl, BOOL const* abortFlag);  
-static int						 	StartTC			 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int						 	ResetTC			 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
-static int							DoneTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
-static int							StoppedTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int						 	StartTC			 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
+static int						 	ResetTC			 				(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg); 
+static int							DoneTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
+static int							StoppedTC						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 static void				 			ErrorTC 						(TaskControl_type* taskControl, int errorID, char errorMsg[]);
-static int							EventHandler					(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
+static int							EventHandler					(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorMsg);
 */
 
 
@@ -266,12 +266,12 @@ static void	discard_RefPosition_type (RefPosition_type** refPosPtr)
 }
 
 /// HIFN Loads ZStage specific resources. 
-int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo) 
+int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg) 
 {
 #define	ZStage_Load_Err_StageNotReferenced		-1
+
+INIT_ERROR_INFO
 	
-	int				error				= 0;
-	char*			errMsg				= NULL;
 	Zstage_type* 	zstage 				= (Zstage_type*) mod;  
 	char			stepsizeName[50]	= "";
 	
@@ -307,7 +307,7 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 	SetCtrlAttribute(zstage->controlPanHndl, ZStagePan_EndRelPos, ATTR_PRECISION, POS_DISPLAY_PRECISION);
 	
 	// populate Z step sizes
-	for (int i = 0; i < NumElem(ZStepSizes); i++) {
+	for (size_t i = 0; i < NumElem(ZStepSizes); i++) {
 		Fmt(stepsizeName, "%s<%f[p*]", POS_DISPLAY_PRECISION, ZStepSizes[i]);
 		InsertListItem(zstage->controlPanHndl, ZStagePan_ZStepSize, -1, stepsizeName, ZStepSizes[i]);   
 	}
@@ -351,7 +351,8 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 		}
 		
 	} else {
-		errMsg = StrDup("Stage position must be determined first");
+		errorInfo.error 	= ZStage_Load_Err_StageNotReferenced;
+		errorInfo.errMsg 	= StrDup("Stage position must be determined first");
 		goto Error;
 	}
 	
@@ -416,13 +417,13 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 	
 Error:
 	
-	ReturnErrMsg("ZStage_Load");
-	return error;	
+RETURN_ERROR_INFO	
 }
 
 int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	int					error			= 0;
+INIT_ERROR_INFO
+
 	Zstage_type* 		zstage			= (Zstage_type*) mod;
 	
 	// allocate memory to store values
@@ -481,7 +482,7 @@ int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 	DAQLabXMLNode		refPosAttr[2] 	= { {"Name", 		BasicData_CString, 		&refName }, 
 											{"Position", 	BasicData_Double, 		&refVal} };
 											
-	for (size_t i = 0; i < nXMLElements; i++) {
+	for (long i = 0; i < nXMLElements; i++) {
 		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPosNodeList, xmlErrorInfo, i, &xmlRefPosNode) );
 		DLGetXMLNodeAttributes(xmlRefPosNode, refPosAttr, NumElem(refPosAttr));
 		OKfreeCAHndl(xmlRefPosNode);
@@ -500,12 +501,13 @@ NoReferencePositions:
 	
 Error:   
 	
-	return error;
+	return errorInfo.error;
 }
 
 int ZStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error			= 0;
+INIT_ERROR_INFO
+
 	Zstage_type* 					zstage			= (Zstage_type*) mod;
 	int*							panTopPos		= NULL;
 	int*							panLeftPos		= NULL;
@@ -557,28 +559,32 @@ Error:
 	// cleanup
 	OKfree(panTopPos);
 	OKfree(panLeftPos);
-	return error; 
+	
+	return errorInfo.error; 
 }
 
-static int DisplayPanels	(DAQLabModule_type* mod, BOOL visibleFlag)
+static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 {
+INIT_ERROR_INFO
+
 	Zstage_type* 	zstage		= (Zstage_type*) mod; 
-	int 			error 		= 0;
+	
 	
 	if (visibleFlag)
 		errChk(	DisplayPanel(zstage->controlPanHndl) );
 	else
 		errChk( HidePanel(zstage->controlPanHndl) );
 	
-	Error:
-	return error;
+Error:
+	
+	return errorInfo.error;
 }
 
 static int ChangeLEDStatus (Zstage_type* zstage, Zstage_LED_type status)
 {
-	int error = 0;
+INIT_ERROR_INFO	
 	
-	switch (status) {
+	switch (status) {																	   
 			
 		case ZSTAGE_LED_IDLE:
 			
@@ -600,28 +606,28 @@ static int ChangeLEDStatus (Zstage_type* zstage, Zstage_LED_type status)
 	
 	return 0;
 	
-	Error:
+Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
-static int UpdatePositionDisplay	(Zstage_type* zstage)
+static int UpdatePositionDisplay (Zstage_type* zstage)
 {
-	int error = 0;
+INIT_ERROR_INFO
 	
 	// display current position
 	errChk( SetCtrlVal(zstage->controlPanHndl, ZStagePan_ZAbsPos, *zstage->zPos * 1000) );  // convert from [mm] to [um] 
 	// reset relative position
 	errChk( SetCtrlVal(zstage->controlPanHndl, ZStagePan_ZRelPos, 0.0) );
-	return 0;
 	
-	Error:
-	return error;
+Error:
+	
+	return errorInfo.error;
 }
 
 static int UpdateZSteps (Zstage_type* zstage)
 {
-	int			error		= 0;
+INIT_ERROR_INFO	
 	
 	long		nSteps		= 0;
 	double 		stepSize	= 0;
@@ -657,11 +663,9 @@ static int UpdateZSteps (Zstage_type* zstage)
 	// configure Task Controller
 	TaskControlEvent(zstage->taskController, TC_Event_Configure, NULL, NULL);
 	
-	return 0;
+Error:
 	
-	Error:
-	
-	return error;
+	return errorInfo.error;
 }
 
 static void SetStepCounter	(Zstage_type* zstage, size_t val)
@@ -1159,14 +1163,14 @@ static BOOL ValidateRefPosName (char inputStr[], void* dataPtr)
 //-----------------------------------------
 
 /*
-static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
@@ -1187,28 +1191,28 @@ static void	AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFl
 	
 }
 
-static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
@@ -1221,7 +1225,7 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[]
 	
 }
 
-static int EventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int EventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorMsg)
 {
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	

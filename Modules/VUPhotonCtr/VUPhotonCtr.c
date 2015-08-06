@@ -170,7 +170,7 @@ static void						discard_Channel_type			(Channel_type** chan);
 
 static int						InitHardware 					(VUPhotonCtr_type* vupc);
 
-static int						Load 							(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
+static int						Load 							(DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg);
 
 static int						DisplayPanels					(DAQLabModule_type* mod, BOOL visibleFlag);
 
@@ -191,7 +191,7 @@ static int CVICALLBACK 			VUPCPhotonCounter_CB 			(int panel, int control, int e
 
 static BOOL 					ValidTaskControllerName			(char name[], void* dataPtr);
 
-static int 						PulseTrainDataReceivedTC 		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int 						PulseTrainDataReceivedTC 		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 
 static int 						PMT_Set_Mode 					(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
 static int 						PMT_Set_Fan 					(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
@@ -209,27 +209,27 @@ static int 						PMTController_ResetFifo			(VUPhotonCtr_type* vupc);
 // VUPhotonCtr Task Controller Callbacks
 //-----------------------------------------
 
-static int 						ConfigureTC 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int 						ConfigureTC 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
-static int 						UnconfigureTC 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+static int 						UnconfigureTC 					(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg); 
 
 static void						IterateTC						(TaskControl_type* taskControl, Iterator_type* iterator,BOOL const* abortIterationFlag);
 
-static int						StartTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int						StartTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
-static int						DoneTC							(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+static int						DoneTC							(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);
 
-static int						StoppedTC						(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+static int						StoppedTC						(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);
 
-static int						TaskTreeStateChange				(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
+static int						TaskTreeStateChange				(TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg);
 
 static void						TCActive						(TaskControl_type* taskControl, BOOL UITCActiveFlag);
 
-static int				 		ResetTC 						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo); 
+static int				 		ResetTC 						(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg); 
 
 static void				 		ErrorTC 						(TaskControl_type* taskControl, int errorID, char* errorMsg);
 
-static int						ModuleEventHandler				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo); 
+static int						ModuleEventHandler				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorMsg); 
 
 
 //==============================================================================
@@ -355,7 +355,7 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	// discard pulsetrain SinkVChan   
 	if (vupc->pulseTrainVChan) {
 		DLUnregisterVChan((DAQLabModule_type*)vupc, ((VChan_type*) vupc->pulseTrainVChan));
-		RemoveSinkVChan(vupc->taskControl, vupc->pulseTrainVChan);
+		RemoveSinkVChan(vupc->taskControl, vupc->pulseTrainVChan, NULL);
 		discard_VChan_type((VChan_type**)&vupc->pulseTrainVChan);
 	}
 	
@@ -427,7 +427,7 @@ Error:
 	return error;
 }
 
-static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
+static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
 	int					error 					= 0;
 	char*				errMsg					= NULL;
@@ -932,12 +932,12 @@ Error:
 
 static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	VUPhotonCtr_type* 	vupc 		=   callbackData;
-	char*				vChanName;
-	char				buff[DAQLAB_MAX_VCHAN_NAME + 50];
-	double 				duration;
-	int 				nsamples;
-	int 				mode;
+	VUPhotonCtr_type* 	vupc 								= callbackData;
+	char*				vChanName							= NULL;
+	char				buff[DAQLAB_MAX_VCHAN_NAME + 50]	= "";
+	double 				duration							= 0;
+	int 				nsamples							= 0;
+	int 				mode								= 0;
 
 	switch (event) {
 
@@ -961,7 +961,6 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 					GetCtrlVal(panel,VUPCSet_NSamples,&nsamples);   
 					*vupc->refNSamples=nsamples;
 					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->PixClkFreq,*vupc->refNSamples);
-					
 					break;
 
 				case VUPCSet_Duration:
@@ -1027,7 +1026,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 							vupc->pulseTrainVChan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance,VChanDataTimeout, NULL); 
 							// register VChan with DAQLab
 							DLRegisterVChan((DAQLabModule_type*)vupc, (VChan_type*)vupc->pulseTrainVChan);	
-							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVChan, PulseTrainDataReceivedTC); 
+							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVChan, PulseTrainDataReceivedTC, NULL); 
 							free(pulsetrainVChanName);
 						}
 						// update main panel
@@ -1135,10 +1134,10 @@ static BOOL ValidTaskControllerName	(char name[], void* dataPtr)
 	return DLValidTaskControllerName(name);
 }
 
-void HWIterationDone(TaskControl_type* taskControl,int errorID, char errorInfo[])
+void HWIterationDone(TaskControl_type* taskControl,int errorID, char errorMsg[])
 {
 	//hardware informs that the current iteration is done	
-	TaskControlIterationDone (taskControl, errorID, errorInfo,TRUE);	//?
+	TaskControlIterationDone (taskControl, errorID, errorMsg,TRUE);	//?
 }
 
 void HWError(void)
@@ -1165,7 +1164,7 @@ void CVICALLBACK MenuSettings_CB (int menuBar, int menuItem, void *callbackData,
 // VUPhotonCtr Task Controller Callbacks
 //-----------------------------------------
 
-static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	
@@ -1174,7 +1173,7 @@ static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, ch
 }
 
 
-static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	
@@ -1225,7 +1224,7 @@ Error:
 }
 
 
-static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
@@ -1235,7 +1234,7 @@ static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 	return 0;
 }
 
-static int DoneTC	(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC	(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
@@ -1252,7 +1251,7 @@ static void	TCActive (TaskControl_type* taskControl, BOOL UITCActiveFlag)
 }
 
 
-static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
@@ -1262,14 +1261,14 @@ static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BO
 	return 0;
 }
 
-static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 
 	return 0;
 }
 
-static int	TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
+static int	TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	
@@ -1301,14 +1300,14 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 
 }
 
-static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);    
 	
 	return 0;
 }
 
-static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg)
 {
 	
 	VUPhotonCtr_type* 	vupc				= GetTaskControlModuleData(taskControl);

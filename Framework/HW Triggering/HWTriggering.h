@@ -90,7 +90,7 @@ BOOL						GetHWTrigSlaveActive			(HWTrigSlave_type* slave);
 // Connect / Disconnect HW triggered Slave to HW triggering Master 
 //--------------------------------------------------------------------
 
-int							AddHWTrigSlaveToMaster			(HWTrigMaster_type* master, HWTrigSlave_type* slave, char** errorInfo);
+int							AddHWTrigSlaveToMaster			(HWTrigMaster_type* master, HWTrigSlave_type* slave, char** errorMsg);
 
 void 						RemoveHWTrigSlaveFromMaster 	(HWTrigSlave_type* slave);
 
@@ -100,9 +100,9 @@ void						RemoveHWTrigMasterFromSlaves	(HWTrigMaster_type* master);
 // HW triggered Slave and HW triggering Master coordination
 //--------------------------------------------------------------------
 
-int 						WaitForHWTrigArmedSlaves 		(HWTrigMaster_type* master, char** errorInfo);
+int 						WaitForHWTrigArmedSlaves 		(HWTrigMaster_type* master, char** errorMsg);
 
-int 						SetHWTrigSlaveArmedStatus 		(HWTrigSlave_type* slave, char** errorInfo);
+int 						SetHWTrigSlaveArmedStatus 		(HWTrigSlave_type* slave, char** errorMsg);
 
 
 #ifdef __cplusplus

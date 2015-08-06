@@ -19,8 +19,8 @@
 // Include files
 		
 #include "ActiveXML.h"        // must be first to be included 
+#include "DAQLabUtility.h" 
 #include "cvidef.h"
-#include "DAQLabUtility.h"
 #include <toolbox.h>
 #include <userint.h>
 #include <utility.h>
@@ -38,7 +38,25 @@
 	// maximum DAQLab module instance name length
 #define DAQLAB_MAX_MODULEINSTANCE_NAME_NCHARS		50
 	// maximum Task Controller name length
-#define DAQLAB_MAX_TASKCONTROLLER_NAME_NCHARS		50		
+#define DAQLAB_MAX_TASKCONTROLLER_NAME_NCHARS		50	
+	
+//==============================================================================
+// Macros
+	
+// print error info in the worspace log box	
+#define PRINT_ERROR_INFO \
+	if (errorInfo.error < 0) { \
+		if (!errorInfo.errMsg) \
+			DLMsg("Unknown error or out of memory.\n\n", 1); \
+		else { \
+			AppendString(&errorInfo.errMsg, "\n\n", -1); \
+			DLMsg(errorInfo.errMsg, 1); \
+		} \
+		OKfree(errorInfo.errMsg); \
+	} \
+		
+		
+	
 
 
 //==============================================================================

@@ -50,24 +50,24 @@ typedef enum {
 // Callback function types supplied by child classes
 
 // moveVal in [mm]
-typedef int (* MoveFptr_type) 				(XYStage_type* stage, StageMoveTypes moveType, StageAxes axis, double moveVal, char** errorInfo);
+typedef int (* MoveFptr_type) 				(XYStage_type* stage, StageMoveTypes moveType, StageAxes axis, double moveVal, char** errorMsg);
 
-typedef int	(* UseJoystickFptr_type)		(XYStage_type* stage, BOOL useJoystick, char** errorInfo);
+typedef int	(* UseJoystickFptr_type)		(XYStage_type* stage, BOOL useJoystick, char** errorMsg);
 
-typedef int	(* StopFptr_type)				(XYStage_type* stage, char** errorInfo);
-
-// xNegativeLimit, xPositiveLimit, yNegativeLimit, yPositiveLimit in [mm]
-typedef int	(* GetLimitsFptr_type)			(XYStage_type* stage, double* xNegativeLimit, double* xPositiveLimit, double* yNegativeLimit, double* yPositiveLimit, char** errorInfo);
+typedef int	(* StopFptr_type)				(XYStage_type* stage, char** errorMsg);
 
 // xNegativeLimit, xPositiveLimit, yNegativeLimit, yPositiveLimit in [mm]
-typedef int	(* SetLimitsFptr_type)			(XYStage_type* stage, double xNegativeLimit, double xPositiveLimit, double yNegativeLimit, double yPositiveLimit, char** errorInfo);
+typedef int	(* GetLimitsFptr_type)			(XYStage_type* stage, double* xNegativeLimit, double* xPositiveLimit, double* yNegativeLimit, double* yPositiveLimit, char** errorMsg);
 
-typedef int	(* GetVelocityFptr_type)		(XYStage_type* stage, double* velocity, char** errorInfo);
+// xNegativeLimit, xPositiveLimit, yNegativeLimit, yPositiveLimit in [mm]
+typedef int	(* SetLimitsFptr_type)			(XYStage_type* stage, double xNegativeLimit, double xPositiveLimit, double yNegativeLimit, double yPositiveLimit, char** errorMsg);
 
-typedef int	(* SetVelocityFptr_type)		(XYStage_type* stage, double velocity, char** errorInfo);
+typedef int	(* GetVelocityFptr_type)		(XYStage_type* stage, double* velocity, char** errorMsg);
+
+typedef int	(* SetVelocityFptr_type)		(XYStage_type* stage, double velocity, char** errorMsg);
 
 // xAbsPos and yAbsPos in [mm]
-typedef int	(* GetAbsPositionFptr_type)		(XYStage_type* stage, double* xAbsPos, double* yAbsPos, char** errorInfo);
+typedef int	(* GetAbsPositionFptr_type)		(XYStage_type* stage, double* xAbsPos, double* yAbsPos, char** errorMsg);
 
 struct XYStage {
 	
@@ -172,7 +172,7 @@ DAQLabModule_type*	initalloc_XYStage 				(DAQLabModule_type* mod, char className
 void 				discard_XYStage 				(DAQLabModule_type** mod);
 
 	// Loads generic XY stage module resources
-int					XYStage_Load 					(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
+int					XYStage_Load 					(DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg);
 
 	// Saves generic settings for a XY stage
 int					XYStage_SaveCfg					(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);

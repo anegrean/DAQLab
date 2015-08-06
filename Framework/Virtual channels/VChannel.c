@@ -760,7 +760,7 @@ double GetSinkVChanReadTimeout	(SinkVChan_type* sinkVChan)
 // Data Packet Management
 //------------------------------------------------------------------------------
 
-int ReleaseAllDataPackets (SinkVChan_type* sinkVChan, char** errorInfo)
+int ReleaseAllDataPackets (SinkVChan_type* sinkVChan, char** errorMsg)
 {
 #define	ReleaseAllDataPackets_Err_CouldNotGetDataPackets	-1
 	
@@ -769,8 +769,8 @@ int ReleaseAllDataPackets (SinkVChan_type* sinkVChan, char** errorInfo)
 	char*					errMsg			= NULL;
 	
 	if (GetAllDataPackets (sinkVChan, &dataPackets, &nPackets, &errMsg) < 0) {
-		if (errorInfo)
-			*errorInfo = FormatMsg(ReleaseAllDataPackets_Err_CouldNotGetDataPackets, "ReleaseAllDataPackets", errMsg);
+		if (errorMsg)
+			*errorMsg = FormatMsg(ReleaseAllDataPackets_Err_CouldNotGetDataPackets, "ReleaseAllDataPackets", errMsg);
 		OKfree(errMsg);
 		return ReleaseAllDataPackets_Err_CouldNotGetDataPackets;
 	}
@@ -784,7 +784,7 @@ int ReleaseAllDataPackets (SinkVChan_type* sinkVChan, char** errorInfo)
 	return 0;
 }
 
-int SendDataPacket (SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr, BOOL srcVChanNeedsPacket, char** errorInfo)
+int SendDataPacket (SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr, BOOL srcVChanNeedsPacket, char** errorMsg)
 {
 #define SendDataPacket_Err_TSQWrite		-1
 	
@@ -823,8 +823,8 @@ int SendDataPacket (SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr,
 			AppendString(&errMsg, " failed. Reason: ", -1); 
 			CmtGetErrorMessage(itemsWritten, cmtStatusMessage);
 			AppendString(&errMsg, cmtStatusMessage, -1); 
-			if (errorInfo)
-				*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
+			if (errorMsg)
+				*errorMsg = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
 			OKfree(errMsg);
 			OKfree(sinkName);
 			ReleaseDataPacket(dataPacketPtr);
@@ -838,8 +838,8 @@ int SendDataPacket (SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr,
 			
 				AppendString(&errMsg, sinkName, -1); 
 				AppendString(&errMsg, " is full or write operation timed out", -1);
-				if (errorInfo)
-					*errorInfo = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
+				if (errorMsg)
+					*errorMsg = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
 				OKfree(errMsg);
 				OKfree(sinkName);
 				ReleaseDataPacket(dataPacketPtr);
@@ -854,11 +854,11 @@ int SendDataPacket (SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr,
 	return error;
 }
 
-int	SendNullPacket (SourceVChan_type* srcVChan, char** errorInfo)
+int	SendNullPacket (SourceVChan_type* srcVChan, char** errorMsg)
 {
 	DataPacket_type*	nullPacket = NULL;
 	
-	return SendDataPacket(srcVChan, &nullPacket, FALSE, errorInfo);
+	return SendDataPacket(srcVChan, &nullPacket, FALSE, errorMsg);
 }
 
 /// HIFN Gets all data packets that are available from a Sink VChan. The function allocates dynamically a data packet array with nPackets elements of DataPacket_type*
@@ -866,7 +866,7 @@ int	SendNullPacket (SourceVChan_type* srcVChan, char** errorInfo)
 /// HIFN If an error is encountered, the function returns a negative value with error information and sets dataPackets to NULL and nPackets to 0.
 /// HIRET 0 if successful, and negative error code otherwise.
 /// OUT dataPackets, nPackets
-int GetAllDataPackets (SinkVChan_type* sinkVChan, DataPacket_type*** dataPackets, size_t* nPackets, char** errorInfo)
+int GetAllDataPackets (SinkVChan_type* sinkVChan, DataPacket_type*** dataPackets, size_t* nPackets, char** errorMsg)
 {
 #define GetAllDataPackets_Err_OutOfMem			-1
 #define GetAllDataPackets_Err_ReadDataPackets	-2  
@@ -885,8 +885,8 @@ int GetAllDataPackets (SinkVChan_type* sinkVChan, DataPacket_type*** dataPackets
 	// get data packets
 	*dataPackets = malloc (*nPackets * sizeof(DataPacket_type*));
 	if (!*dataPackets) {
-		if (errorInfo)
-			*errorInfo 	= FormatMsg(GetAllDataPackets_Err_OutOfMem, "GetAllDataPackets", "Out of memory");
+		if (errorMsg)
+			*errorMsg 	= FormatMsg(GetAllDataPackets_Err_OutOfMem, "GetAllDataPackets", "Out of memory");
 		*nPackets 	= 0;
 		return GetAllDataPackets_Err_OutOfMem;
 	}
@@ -900,15 +900,15 @@ Error:
 	CmtGetErrorMessage (error, errMsg);
 	OKfree(*dataPackets);
 	*nPackets 	= 0;
-	if (errorInfo)
-		*errorInfo 	= FormatMsg(GetAllDataPackets_Err_ReadDataPackets, "GetAllDataPackets", errMsg);
+	if (errorMsg)
+		*errorMsg 	= FormatMsg(GetAllDataPackets_Err_ReadDataPackets, "GetAllDataPackets", errMsg);
 	return GetAllDataPackets_Err_ReadDataPackets;
 }
 
 /// HIFN Attempts to get one data packet from a Sink VChan before the timeout period. 
 /// HIFN On success, it return 0, otherwise a negative numbers. If an error is encountered, the function returns error information.
 /// OUT dataPackets, nPackets
-int GetDataPacket (SinkVChan_type* sinkVChan, DataPacket_type** dataPacketPtr, char** errorInfo)
+int GetDataPacket (SinkVChan_type* sinkVChan, DataPacket_type** dataPacketPtr, char** errorMsg)
 {
 #define GetDataPacket_Err_Timeout	-1
 	
@@ -926,8 +926,8 @@ int GetDataPacket (SinkVChan_type* sinkVChan, DataPacket_type** dataPacketPtr, c
 		errMsg = StrDup("Waiting for ");
 		AppendString(&errMsg, sinkVChan->baseClass.name, -1);
 		AppendString(&errMsg, " Sink VChan data timed out", -1);
-		if (errorInfo)
-			*errorInfo = FormatMsg(GetDataPacket_Err_Timeout, "GetDataPacket", errMsg);
+		if (errorMsg)
+			*errorMsg = FormatMsg(GetDataPacket_Err_Timeout, "GetDataPacket", errMsg);
 		OKfree(errMsg);
 		return GetDataPacket_Err_Timeout;
 	}
@@ -938,8 +938,8 @@ CmtError:
 	
 	char	cmtErrMsg[CMT_MAX_MESSAGE_BUF_SIZE];
 	CmtGetErrorMessage (error, cmtErrMsg);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "GetDataPacket", cmtErrMsg);
+	if (errorMsg)
+		*errorMsg = FormatMsg(error, "GetDataPacket", cmtErrMsg);
 	return error;
 }
 
@@ -947,7 +947,7 @@ CmtError:
 // Waveform data management
 //------------------------------------------------------------------------------ 
 
-int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, WaveformTypes* waveformType, char** errorInfo)
+int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, WaveformTypes* waveformType, char** errorMsg)
 {
 #define		ReceiveWaveform_Err_NoWaveform			-1
 #define		ReceiveWaveform_Err_WrongDataType		-2
@@ -1103,8 +1103,8 @@ Error:
 	
 	ReleaseDataPacket(&dataPacket);
 	discard_Waveform_type(waveform);
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "ReceiveWaveform", errMsg);
+	if (errorMsg)
+		*errorMsg = FormatMsg(error, "ReceiveWaveform", errMsg);
 	OKfree(errMsg);
 	
 	return error;

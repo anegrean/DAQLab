@@ -20,7 +20,7 @@
 #endif
 		
 #ifndef	_DEBUG_LEVEL_
-#define	_DEBUG_LEVEL_ -1
+#define	_DEBUG_LEVEL_ 	-1
 #endif
 		
 //==============================================================================
@@ -30,8 +30,41 @@
 
 //==============================================================================
 // Constants
+
+//=====================================================		
+// USAGE
+//=====================================================
 		
 		
+//-------------------------------------------------------------------------------
+// Error checking macros
+//-------------------------------------------------------------------------------
+
+typedef struct {
+	int			result;
+	int			error;
+	int			line;
+	char*		errMsg;
+} ErrorInfo_type;
+
+#ifndef INIT_ERROR_INFO
+#define INIT_ERROR_INFO	ErrorInfo_type errorInfo = {.result = 0, .error = 0, .line = 0, .errMsg = NULL};	
+#endif
+
+#ifdef errChk
+#undef errChk
+#endif
+		
+#define errChk(fCall) if (errorInfo.result = (fCall), errorInfo.line = __LINE__, errorInfo.result < 0) \
+{errorInfo.error = errorInfo.result; goto Error;} else
+
+#ifdef nullChk
+#undef nullChk
+#endif
+		
+#define nullChk(fCall) if (errorInfo.line = __LINE__, !(fCall)) \
+{errorInfo.error = UIEOutOfMemory; goto Error;} else
+
 //==============================================================================
 // Macros
 
@@ -40,22 +73,19 @@
 #define OKfreePanHndl(panelHandle)  	if (panelHandle) {DiscardPanel(panelHandle); panelHandle = 0;}
 #define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}  
 
-#define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to 
-													 // get the number of elements in an array passed as an argument!
-													 
-// Error handling for functions that can return an error message as a char** errorInfo parameter
-//
-// define these variables:
-//		int		error;
-//		char*	errMsg;
-// 
-// and make sure the function returns an int error code as well as has a char** errorInfo parameter
-
-#define ReturnErrMsg(FunctionName) if (!errMsg) errMsg = FormatMsg(error, FunctionName, "Unknown or out of memory");	\
-	if (errorInfo)																										\
-		*errorInfo = errMsg;																							\
-	else																												\
-		OKfree(errMsg);
+#define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to get the number of elements in an array passed as an argument!
+												 
+#define RETURN_ERROR_INFO \
+	if (errorInfo.error < 0) \
+		if (errorMsg) { \
+			if (errorInfo.errMsg) \
+				*errorMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, errorInfo.errMsg); \
+			else \
+				*errorMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or out of memory"); \
+		} else \
+			OKfree(errorInfo.errMsg); \
+	return errorInfo.error;
+	
 					
 /* Log Messages that is only printed when _CVI_DEBUG_ is set and it is within 
  * _DEBUG_LEVEL_
@@ -78,7 +108,7 @@
 // Used to return meaningful error information
 typedef struct FCallReturn {
 	int						retVal;			// Value returned by function call.
-	char*					errorInfo;		// In case of error, additional info.
+	char*					errorMsg;		// In case of error, additional info.
 } FCallReturn_type;
 
 //==============================================================================
@@ -93,7 +123,7 @@ FCallReturn_type*	init_FCallReturn_type			(int valFCall, const char errorOrigin[
 void				discard_FCallReturn_type		(FCallReturn_type** fCallReturnPtr);
 
 // Formats error and warning messages ( errors: msgID < 0, message: msgID = 0, warning: msgID > 0 )
-char* 				FormatMsg 						(int messageID, char messageOrigin[], char message[]);
+char* 				FormatMsg 						(int messageID, char fileName[], char functionName[], int lineNumber, char message[]);
 
 #ifdef __cplusplus
     }

@@ -165,7 +165,7 @@ DAQLabModule_type*	initalloc_Zstage 	(DAQLabModule_type* mod, char className[], 
 void 				discard_Zstage 		(DAQLabModule_type** mod);
 
 	// loads generic Z stage module resources
-int					ZStage_Load 		(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
+int					ZStage_Load 		(DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg);
 
 	// saves generic settings for a Z stage
 int					ZStage_SaveCfg		(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);

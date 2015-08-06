@@ -144,7 +144,7 @@ static void							discard_PockellsEOM_type							(PockellsEOM_type** eomPtr);
 // Module management
 //------------------
 
-static int							Load 												(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
+static int							Load 												(DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg);
 
 static int 							LoadCfg 											(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo);
 
@@ -167,7 +167,7 @@ static int							RegisterPockellsCell								(PockellsModule_type* eomModule, Po
 	// unregisters a Pockells cell from the framework
 static int							UnregisterPockellsCell								(PockellsModule_type* eomModule, PockellsEOM_type* eom);
 	// initializes new pockells cell UI 
-static int							InitNewPockellsCellUI								(PockellsModule_type* eomModule, PockellsEOM_type* eom, int eomNewPanHndl, char** errorInfo);
+static int							InitNewPockellsCellUI								(PockellsModule_type* eomModule, PockellsEOM_type* eom, int eomNewPanHndl, char** errorMsg);
 	// opens the calibration window for a given pockells cell
 static void CVICALLBACK 			PockellsCellCalibration_CB 							(int menuBar, int menuItem, void *callbackData, int panel);
 	// adds a calibration table entry
@@ -189,7 +189,7 @@ static int CVICALLBACK 				CalibPan_CB											(int panel, int control, int ev
 
 static int CVICALLBACK 				PockellsControl_CB									(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 	// applies a command voltage to the Pockells cell
-static int 							ApplyPockellsCellVoltage 							(PockellsEOM_type* eom, double voltage, char** errorInfo);
+static int 							ApplyPockellsCellVoltage 							(PockellsEOM_type* eom, double voltage, char** errorMsg);
 	// calculates the command voltage to apply to the pockells cell given a certain calibration to generate the desired output power.
 static double						GetPockellsCellVoltage								(PockellsEOMCal_type* eomCal, double normalizedPower);
 	
@@ -206,27 +206,27 @@ static void							ModulationVChan_StateChange							(VChan_type* self, void* VCh
 // Task Controller callbacks
 //-----------------------------------------
 
-static int							ConfigureTC											(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							ConfigureTC											(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
-static int							UnconfigureTC										(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							UnconfigureTC										(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
 static void							IterateTC											(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag);
 
-static int							StartTC												(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int							StartTC												(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
-static int				 			ResetTC 											(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int				 			ResetTC 											(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
-static int							DoneTC												(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+static int							DoneTC												(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);
 
-static int							StoppedTC											(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+static int							StoppedTC											(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);
 
-static int							TaskTreeStateChange 								(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
+static int							TaskTreeStateChange 								(TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg);
 
-static int				 			DataReceivedTC										(TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int				 			DataReceivedTC										(TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 
 static void 						ErrorTC 											(TaskControl_type* taskControl, int errorID, char* errorMsg);
 
-static int							ModuleEventHandler									(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo);
+static int							ModuleEventHandler									(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorMsg);
 
 //==============================================================================
 // Global variables
@@ -419,7 +419,7 @@ static void discard_PockellsEOM_type (PockellsEOM_type** eomPtr)
 // Module management
 //------------------
 
-static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
+static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
 	int						error				= 0;
 	char*					errMsg				= NULL;
@@ -498,7 +498,7 @@ Error:
 	// cleanup
 	OKfreePanHndl(eomPanHndl);
 	
-	ReturnErrMsg("Pockells Load");
+	ReturnErrMsg();
 	return error;
 }
 
@@ -801,45 +801,47 @@ Error:
 
 static int RegisterPockellsCell (PockellsModule_type* eomModule, PockellsEOM_type* eom)
 {
+	int		error	= 0;
+	
 	if (eom->DLRegistered) return 0; // already registered
 	
 	// add task controller to DAQLab framework
-	if (!DLAddTaskController((DAQLabModule_type*)eomModule, eom->taskControl)) goto Error;
+	nullChk( DLAddTaskController((DAQLabModule_type*)eomModule, eom->taskControl) );
 		
 	// add VChans to DAQLab framework and register with task controller
-	if (AddSinkVChan(eom->taskControl, eom->timingVChan, NULL) < 0) goto Error; 
-	if (!DLRegisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->modulationVChan)) goto Error;
-	if (!DLRegisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->timingVChan)) goto Error;
+	errChk( AddSinkVChan(eom->taskControl, eom->timingVChan, NULL, NULL) );
+	nullChk( DLRegisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->modulationVChan) );
+	nullChk( DLRegisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->timingVChan) );
 	
 	eom->DLRegistered = TRUE;
-	return 0;
 	
 Error:
 	
-	return -1;
+	return error;
 }
 
 static int UnregisterPockellsCell (PockellsModule_type* eomModule, PockellsEOM_type* eom)
 {
+	int		error 	= 0;
+	
 	if (!eom) return 0;
 	if (!eom->DLRegistered) return 0; // not registered yet
 	
 	// remove VChan from DAQLab framework and unregister from task controller
-	if (!DLUnregisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->timingVChan)) goto Error;
-	if (RemoveSinkVChan(eom->taskControl, eom->timingVChan) < 0) goto Error;
-	if (!DLUnregisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->modulationVChan)) goto Error;
+	nullChk( DLUnregisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->timingVChan) );
+	errChk( RemoveSinkVChan(eom->taskControl, eom->timingVChan, NULL) );
+	nullChk( DLUnregisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->modulationVChan) );
 	// unregister task controller
-	if (!DLRemoveTaskController((DAQLabModule_type*)eomModule, eom->taskControl)) goto Error;
+	nullChk( DLRemoveTaskController((DAQLabModule_type*)eomModule, eom->taskControl) );
 	
 	eom->DLRegistered = FALSE;
-	return 0;
 	
 Error:
 	
-	return -1;
+	return error;
 }
 
-static int InitNewPockellsCellUI (PockellsModule_type* eomModule, PockellsEOM_type* eom, int eomNewPanHndl, char** errorInfo)
+static int InitNewPockellsCellUI (PockellsModule_type* eomModule, PockellsEOM_type* eom, int eomNewPanHndl, char** errorMsg)
 {
 	int						nTabs			= 0;
 	char*					eomName			= NULL;
@@ -892,8 +894,8 @@ Error:
 	if (!errMsg)
 		errMsg = StrDup("Out of memory");
 	
-	if (errorInfo)
-		*errorInfo = FormatMsg(error, "InitNewPockellsCellUI", errMsg);
+	if (errorMsg)
+		*errorMsg = FormatMsg(error, "InitNewPockellsCellUI", errMsg);
 	OKfree(errMsg);
 	
 	return error;
@@ -1458,7 +1460,7 @@ Error:
 	return 0;
 }
 
-static int ApplyPockellsCellVoltage (PockellsEOM_type* eom, double voltage, char** errorInfo)
+static int ApplyPockellsCellVoltage (PockellsEOM_type* eom, double voltage, char** errorMsg)
 {
 #define ApplyPockellsCellVoltage_Waveform_NSamples		100
 	
@@ -1488,7 +1490,7 @@ Error:
 	discard_DataPacket_type(&dataPacket);
 	discard_DSInfo_type(&dsInfo);
 	
-	ReturnErrMsg("ApplyPockellsCellVoltage");
+	ReturnErrMsg();
 	return error;
 }
 
@@ -1537,14 +1539,14 @@ Error:
 // Task Controller callbacks
 //-----------------------------------------
 
-static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
@@ -1755,42 +1757,42 @@ Error:
 	OKfree(errMsg);
 }
 
-static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
 	//PockellsEOM_type* 		eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
+static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
-static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)
+static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	
@@ -1802,7 +1804,7 @@ static void ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 	
 }
 
-static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorMsg)
 {
 	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
 	

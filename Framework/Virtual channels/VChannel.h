@@ -150,23 +150,23 @@ double						GetSinkVChanReadTimeout				(SinkVChan_type* sinkVChan);
 //------------------------------------------------------------------------------
 
 	// Releases all data packets from a Sink VChan.
-int							ReleaseAllDataPackets				(SinkVChan_type* sinkVChan, char** errorInfo);
+int							ReleaseAllDataPackets				(SinkVChan_type* sinkVChan, char** errorMsg);
 
 	// Sends a data packet from an open Source VChan to its active (and open) Sink VChans. If the Source VChan also needs to use the data packet after it was sent
 	// then set sourceNeedsPacket = TRUE.
-int				 			SendDataPacket 						(SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr, BOOL sourceNeedsPacket, char** errorInfo);
+int				 			SendDataPacket 						(SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr, BOOL sourceNeedsPacket, char** errorMsg);
 
 	// Sends a NULL data packet to mark the end of a transmission.
-int							SendNullPacket						(SourceVChan_type* srcVChan, char** errorInfo);
+int							SendNullPacket						(SourceVChan_type* srcVChan, char** errorMsg);
 
 	// Gets all data packets from a Sink VChan. The function allocates dynamically a data packet array with nPackets elements of DataPacket_type*
 	// If there are no data packets in the Sink VChan, dataPackets = NULL, nPackets = 0 and the function returns NULL (success).
 	// If an error is encountered, the function returns an FCallReturn_type* with error information and sets dataPackets to NULL and nPackets to 0.
 	// For datapackets pass the address of a DataPacket_type** variable.
-int							GetAllDataPackets					(SinkVChan_type* sinkVChan, DataPacket_type*** dataPackets, size_t* nPackets, char** errorInfo);
+int							GetAllDataPackets					(SinkVChan_type* sinkVChan, DataPacket_type*** dataPackets, size_t* nPackets, char** errorMsg);
 
 	// Attempts to get one data packet from a Sink VChan before the timeout period. 
-int				 			GetDataPacket 						(SinkVChan_type* sinkVChan, DataPacket_type** dataPacketPtr, char** errorInfo);
+int				 			GetDataPacket 						(SinkVChan_type* sinkVChan, DataPacket_type** dataPacketPtr, char** errorMsg);
 
 //------------------------------------------------------------------------------ 
 // Waveform data management
@@ -175,7 +175,7 @@ int				 			GetDataPacket 						(SinkVChan_type* sinkVChan, DataPacket_type** dat
 	// Receives waveform data from a Sink VChan which is assembled from multiple data packets until a NULL packets is encountered. The function returns the 
 	// dynamically allocated waveform in case there is waveform data or NULL if the first data packet read from the VChan is NULL. On success, the function 
 	// return 0 and negative number plus an error message if it fails.
-int							ReceiveWaveform						(SinkVChan_type* sinkVChan, Waveform_type** waveform, WaveformTypes* waveformType, char** errorInfo);
+int							ReceiveWaveform						(SinkVChan_type* sinkVChan, Waveform_type** waveform, WaveformTypes* waveformType, char** errorMsg);
 
 #ifdef __cplusplus
     }

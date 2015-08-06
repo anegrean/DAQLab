@@ -239,14 +239,14 @@ BOOL GetHWTrigSlaveActive (HWTrigSlave_type* slave)
 	return slave->active;
 }
 
-int AddHWTrigSlaveToMaster (HWTrigMaster_type* master, HWTrigSlave_type* slave, char** errorInfo)
+int AddHWTrigSlaveToMaster (HWTrigMaster_type* master, HWTrigSlave_type* slave, char** errorMsg)
 {
 #define AddHWTrigSlave_Err_SlaveAlreadyHasAMaster   -1
 	
 	// check if slave already has a master
 	if (slave->master) {
-		if (errorInfo)
-			*errorInfo = FormatMsg(AddHWTrigSlave_Err_SlaveAlreadyHasAMaster, "AddHWTrigSlave", "HW triggered Slave already has a HW triggering Master assigned");
+		if (errorMsg)
+			*errorMsg = FormatMsg(AddHWTrigSlave_Err_SlaveAlreadyHasAMaster, "AddHWTrigSlave", "HW triggered Slave already has a HW triggering Master assigned");
 		return AddHWTrigSlave_Err_SlaveAlreadyHasAMaster; 
 	}
 	
@@ -303,7 +303,7 @@ void RemoveHWTrigMasterFromSlaves (HWTrigMaster_type* master)
 	OKfree(master->activeSlavesArmedHndls);
 }
 
-int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorInfo)
+int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorMsg)
 {
 #define WaitForHWTrigArmedSlaves_Err_Failed		-1
 #define WaitForHWTrigArmedSlaves_Err_Timeout	-2
@@ -319,8 +319,8 @@ int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorInfo)
 			
 		case WAIT_TIMEOUT:
 			
-			if (errorInfo)
-				*errorInfo = FormatMsg(WaitForHWTrigArmedSlaves_Err_Timeout, "WaitForHWTrigArmedSlaves", "Waiting for all HW triggered slaves timed out");
+			if (errorMsg)
+				*errorMsg = FormatMsg(WaitForHWTrigArmedSlaves_Err_Timeout, "WaitForHWTrigArmedSlaves", "Waiting for all HW triggered slaves timed out");
 				
 			return WaitForHWTrigArmedSlaves_Err_Timeout; 
 			
@@ -330,8 +330,8 @@ int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorInfo)
 			// process here windows error message
 			char	errMsg[500];
 			Fmt(errMsg, "%s< WaitForMultipleObjects windows SDK function failed with error code %d", error);
-			if (errorInfo)
-				*errorInfo = FormatMsg(WaitForHWTrigArmedSlaves_Err_Failed, "WaitForHWTrigArmedSlaves", errMsg);
+			if (errorMsg)
+				*errorMsg = FormatMsg(WaitForHWTrigArmedSlaves_Err_Failed, "WaitForHWTrigArmedSlaves", errMsg);
 			
 			return WaitForHWTrigArmedSlaves_Err_Failed;
 	}
@@ -339,7 +339,7 @@ int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorInfo)
 	return 0; // no error
 }
 
-int SetHWTrigSlaveArmedStatus (HWTrigSlave_type* slave, char** errorInfo)
+int SetHWTrigSlaveArmedStatus (HWTrigSlave_type* slave, char** errorMsg)
 {
 #define SetHWTrigSlaveArmedStatus_Err_Failed		-1
 	
@@ -351,8 +351,8 @@ int SetHWTrigSlaveArmedStatus (HWTrigSlave_type* slave, char** errorInfo)
 		// process here windows error message
 		char	errMsg[500];
 		Fmt(errMsg, "%s< SetEvent windows SDK function failed with error code %d", error);
-		if (errorInfo)
-			*errorInfo = FormatMsg(SetHWTrigSlaveArmedStatus_Err_Failed, "SetHWTrigSlaveArmedStatus", errMsg);
+		if (errorMsg)
+			*errorMsg = FormatMsg(SetHWTrigSlaveArmedStatus_Err_Failed, "SetHWTrigSlaveArmedStatus", errMsg);
 			
 		return SetHWTrigSlaveArmedStatus_Err_Failed;
 	}

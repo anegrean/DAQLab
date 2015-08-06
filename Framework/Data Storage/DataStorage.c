@@ -89,19 +89,19 @@ struct DataStorage {
 
 static void					RedrawDSPanel 			(DataStorage_type* ds);
 
-static int 					DataReceivedTC 			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo);
+static int 					DataReceivedTC 			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 
 //-----------------------------------------
 // Data Storage Task Controller Callbacks
 //-----------------------------------------
-static int					TaskTreeStateChange 	(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
+static int					TaskTreeStateChange 	(TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg);
 static void				 	ErrorTC 				(TaskControl_type* taskControl, int errorID, char* errorMsg);
 //-----------------------------------------
 
 
 static int CVICALLBACK 		UIPan_CB 				(int panel, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 		UICtrls_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-static int 					Load 					(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
+static int 					Load 					(DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg);
 
 //==============================================================================
 // Global variables
@@ -399,7 +399,7 @@ char* CreateFullIterName(Iterator_type*	currentiter)
 	return fullname;	
 }
 
-static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
+static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
 	DataStorage_type* 	ds 			= (DataStorage_type*) mod;
 	
@@ -428,7 +428,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 // DataStorage Task Controller Callbacks
 //-----------------------------------------
 
-static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
+static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
 {
 	int 				error		= 0;
 	char*				errMsg		= NULL;
@@ -472,7 +472,7 @@ Error:
 	OKfree(ds->rawDataPath);
 	OKfree(ds->hdf5DataFileName);
 	
-	ReturnErrMsg("Data storage TaskTreeStateChange");
+	ReturnErrMsg();
 	return error;
 }
 
@@ -505,6 +505,9 @@ static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int e
 
 static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+	int						error								= 0;
+	char*					errMsg								= NULL;
+	
 	DataStorage_type* 		ds 									= callbackData;
 	DS_Channel_type*		chan								= NULL; 
 	DS_Channel_type**		chanPtr								= NULL; 
@@ -545,9 +548,9 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					chan = init_DS_Channel_type(ds, panel, vChanName);
 		
 					// register VChan with DAQLab
+					errChk( AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC, &errMsg) );
 					DLRegisterVChan((DAQLabModule_type*)ds, (VChan_type*)chan->VChan);
-					AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC);
-
+					
 					// update main panel
 					RedrawDSPanel(ds);
 					free(vChanName);
@@ -633,9 +636,18 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 	}
 	
 	return 0;
+	
+Error:
+	
+	if (!errMsg)
+		errMsg = StrDup("Unknown error or out of memory");
+	DLMsg(errMsg, 1);
+	DLMsg("\n\n", 0);
+	OKfree(errMsg);
+	return 0;
 }
 
-static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorInfo)  
+static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg)  
 {
 	int						error					= 0;
 	char* 					errMsg 					= NULL;
@@ -702,7 +714,7 @@ Error:
 	OKfree(sinkVChanName);
 	OKfree(sourceVChanName);
 	
-	ReturnErrMsg("Data Storage DataReceivedTC");
+	ReturnErrMsg();
 	return error;
 }
 

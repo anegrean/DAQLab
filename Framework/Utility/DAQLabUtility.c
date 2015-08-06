@@ -50,9 +50,9 @@ FCallReturn_type* init_FCallReturn_type (int valFCall, const char errorOrigin[],
 		Msg		= malloc((nchars+1)*sizeof(char));
 		if (!Msg) {free(result); return NULL;}
 		snprintf(Msg, nchars+1, "<%s Error. Reason: %s>", errorOrigin, errorDescription);
-		result -> errorInfo	= Msg;
+		result -> errorMsg	= Msg;
 	} else
-		result -> errorInfo = NULL;
+		result -> errorMsg = NULL;
 	
 	return result;
 }
@@ -62,50 +62,51 @@ void discard_FCallReturn_type (FCallReturn_type** fCallReturnPtr)
 {
 	if (!*fCallReturnPtr) return;
 	
-	OKfree((*fCallReturnPtr)->errorInfo);
+	OKfree((*fCallReturnPtr)->errorMsg);
 	OKfree(*fCallReturnPtr);
 }
 
-char* FormatMsg (int messageID, char messageOrigin[], char message[])
+char* FormatMsg (int messageID, char fileName[], char functionName[], int lineNumber, char message[])
 {
-	size_t	nChars;
+#define	FormatMsg_Message  	"<File \"%s\", Function \"%s\", Line %d: %s>\n"
+#define	FormatMsg_Error	 	"<File \"%s\", Function \"%s\", Line %d, Error %d, Reason:\n\t  %s>"	
+#define	FormatMsg_Warning 	"<File \"%s\", Function \"%s\", Line %d, Warning %d, Reason:\n\t  %s>"
+	
+	size_t	nChars		= 0;
 	char*   msg			= NULL;
-	char*	msgText		= message;
-	char*	msgOrigin	= messageOrigin;
 	
-	// check message origin
-	if (!messageOrigin)
-		msgOrigin = "Unknown";
-	else
-		if (!messageOrigin[0])
-			msgOrigin = "Unknown";
+	// check file name
+	if (!fileName || !fileName[0])
+		fileName = "unknown";
 	
-	// check message text
-	if (!message)
-		msgText = "Unknown";
-	else
-		if (!message[0])
-			msgText = "Unknown";
+	// check function name
+	if (!functionName || !functionName[0])
+		functionName = "unknown";
+	
+	if (!message || !message[0])
+		message = "unknown";
 	
 	if (!messageID) {
+		
 		// no error or warning, just a message
-		nChars 		= snprintf(msg, 0, "<%s: %s>", msgOrigin, msgText); 
-		msg		 	= malloc((nChars+1) * sizeof(char));
+		nChars = snprintf(msg, 0, FormatMsg_Message, fileName, functionName, lineNumber, message); 
+		msg = malloc((nChars+1) * sizeof(char));
 		if (!msg) return NULL;
-		snprintf(msg, nChars+1, "<%s: %s>", msgOrigin, msgText);
+		snprintf(msg, nChars+1, FormatMsg_Message, fileName, functionName, lineNumber, message);
+		
 	} else
 		if (messageID < 0) {
 			// error message
-			nChars 		= snprintf(msg, 0, "<%s Error ID: %d, Reason:\n\t %s>", msgOrigin, messageID, msgText); 
-			msg		 	= malloc((nChars+1) * sizeof(char));
+			nChars = snprintf(msg, 0, FormatMsg_Error, fileName, functionName, lineNumber, messageID, message); 
+			msg = malloc((nChars+1) * sizeof(char));
 			if (!msg) return NULL;
-			snprintf(msg, nChars+1, "<%s Error ID: %d, Reason:\n\t %s>", msgOrigin, messageID, msgText); 
+			snprintf(msg, nChars+1, FormatMsg_Error, fileName, functionName, lineNumber, messageID, message);
 		} else {
 			// warning message
-			nChars 		= snprintf(msg, 0, "<%s Warning ID: %d, Reason:\n\t %s>", msgOrigin, messageID, msgText); 
-			msg		 	= malloc((nChars+1) * sizeof(char));
+			nChars = snprintf(msg, 0, FormatMsg_Warning, fileName, functionName, lineNumber, messageID, message); 
+			msg = malloc((nChars+1) * sizeof(char));
 			if (!msg) return NULL;
-			snprintf(msg, nChars+1, "<%s Warning ID: %d, Reason:\n\t %s>", msgOrigin, messageID, msgText); 
+			snprintf(msg, nChars+1, FormatMsg_Warning, fileName, functionName, lineNumber, messageID, message);
 		}
 	
 	return msg;

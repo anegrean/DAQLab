@@ -25,7 +25,7 @@
 #define MOD_CoherentCham_UI					"./Modules/Lasers/Coherent Chameleon/UI_CoherentCham.uir"
 #define LaserStatusQuerryInterval			1.0	// in [s]
 
-#define RS232ErrChk(fCall) if (error = (fCall), error < 0) \
+#define RS232ErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.error < 0) \
 {goto RS232Error;} else
 	
 // Default Laser COM port settings
@@ -152,10 +152,10 @@ static int							SaveCfg								(DAQLabModule_type* mod, CAObjHandle xmlDOM, Act
 	// saves serial COM settings by adding a COM settings XML element to a given parent XML element 
 static int							SaveCfg_SerialCOM					(COMPortSettings_type* COMSettingsPtr, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int							Load 								(DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo);
+static int							Load 								(DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg);
 
 	// initializes the communication with the laser
-static int 							InitLaserCOM						(CoherentCham_type* laser, char** errorInfo);
+static int 							InitLaserCOM						(CoherentCham_type* laser, char** errorMsg);
 
 static int CVICALLBACK 				UILaserControls_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -164,10 +164,10 @@ static int CVICALLBACK 				UISerialCOMSettings_CB				(int panel, int control, in
 static void CVICALLBACK 			SettingsMenu_CB 					(int menuBar, int menuItem, void *callbackData, int panel);
 
 // querries the laser status and updates the UI
-static int							GetLaserStatus						(CoherentCham_type* laser, char** errorInfo);
+static int							GetLaserStatus						(CoherentCham_type* laser, char** errorMsg);
 static void 						UpdateLaserUI 						(CoherentCham_type* laser);
 int CVICALLBACK 					LaserStatusAsyncTimer_CB 			(int reserved, int timerId, int event, void *callbackData, int eventData1, int eventData2);
-static int 							SendLaserCommand 					(int COMPortNumber, char mesage[], char* replyBuffer, char** errorInfo);
+static int 							SendLaserCommand 					(int COMPortNumber, char message[], char* replyBuffer, char** errorMsg);
 
 // Serial COM
 static COMPortSettings_type*		init_COMPortSettings_type			(int portNumber, long baudRate, int parity, int dataBits, int stopBits);
@@ -285,7 +285,7 @@ void discard_CoherentCham (DAQLabModule_type** mod)
 
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error 						= 0;
+INIT_ERROR_INFO	
 	
 	CoherentCham_type* 				laser 						= (CoherentCham_type*) mod;     
 	ActiveXMLObj_IXMLDOMElement_	COMSettingsXMLElement		= 0;
@@ -295,7 +295,6 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 	
 	DAQLabXMLNode					laserAttr[]					= {	{"PanLeftPos", 	BasicData_Int, laser->mainPanLeftPos},
 											  						{"PanTopPos", 	BasicData_Int, laser->mainPanTopPos} };
-	
 	
 	// load laser attributes
 	errChk( DLGetXMLElementAttributes(moduleElement, laserAttr, NumElem(laserAttr)) );
@@ -310,12 +309,12 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 SkipCOMSettings:
 Error:
 	
-	return error;	
+	return errorInfo.error;	
 }
 
 static int LoadCfg_SerialCOM (COMPortSettings_type* COMSettingsPtr, ActiveXMLObj_IXMLDOMElement_ COMSettingsXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int					error 				= 0; 
+INIT_ERROR_INFO	
 	
 	int					baudRate			= 0;
 	DAQLabXMLNode		COMSettingsAttr[]	= { {"Port", 		BasicData_Int,	&COMSettingsPtr->portNumber},
@@ -330,12 +329,12 @@ static int LoadCfg_SerialCOM (COMPortSettings_type* COMSettingsPtr, ActiveXMLObj
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	int						error			= 0;
+INIT_ERROR_INFO
 	
 	CoherentCham_type* 		laser 			= (CoherentCham_type*) mod; 
 	int						panLeftPos		= 0;
@@ -355,12 +354,13 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int SaveCfg_SerialCOM (COMPortSettings_type* COMSettingsPtr, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error						= 0;
+INIT_ERROR_INFO	
+	
 	ActiveXMLObj_IXMLDOMElement_	COMSettingsXMLElement		= 0;
 	int								baudRate					= COMSettingsPtr->baudRate;
 	DAQLabXMLNode					COMSettingsAttr[]			= { {"Port", 		BasicData_Int,	&COMSettingsPtr->portNumber},
@@ -380,13 +380,12 @@ Error:
 	// cleanup
 	OKfreeCAHndl(COMSettingsXMLElement);
 	
-	return error;
+	return errorInfo.error;
 }
 
-static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
+static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
-	int						error	= 0;
-	char*					errMsg	= NULL;
+INIT_ERROR_INFO	
 	
 	CoherentCham_type* 		laser 	= (CoherentCham_type*) mod;
 	
@@ -413,21 +412,19 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
 	if (!laser->COMPortInfo)
 		nullChk( laser->COMPortInfo = init_COMPortSettings_type(Default_COMPort_Number, Default_COMPort_BaudRate, Default_COMPort_Parity, Default_COMPort_DataBits, Default_COMPort_StopBits) );
 	
-	errChk( InitLaserCOM(laser, &errMsg) );
+	errChk( InitLaserCOM(laser, &errorInfo.errMsg) );
 	
 	DisplayPanel(laser->mainPanHndl);
 	
 Error:
 	
-	ReturnErrMsg("Coherent Cham Load");
-	return error;
+RETURN_ERROR_INFO
 }
 
-static int InitLaserCOM (CoherentCham_type* laser, char** errorInfo)
+static int InitLaserCOM (CoherentCham_type* laser, char** errorMsg)
 {
-	int		error			= 0;
-	char*	errMsg			= NULL;
-	
+INIT_ERROR_INFO
+
 	char	command[100] 	= "";
 	char	response[100] 	= "";
 	
@@ -441,25 +438,25 @@ static int InitLaserCOM (CoherentCham_type* laser, char** errorInfo)
 		RS232ErrChk( FlushInQ(laser->COMPortInfo->portNumber) );
 		// set prompt off
 		Fmt(command, RS232_SetPrompt, 0);
-		errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, response, errorInfo) );
+		errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, response, errorMsg) );
 		// set laser echo off
 		Fmt(command, RS232_SetEcho, 0);
-		errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, response, errorInfo) );
+		errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, response, errorMsg) );
 		// querry tuning range only once here and set values
-		errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetMaxWavelength, response, errorInfo) );
+		errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetMaxWavelength, response, errorMsg) );
 		errChk( Scan(response, "%d\r\n", &laser->laserStatus.maxWavelength) );
-		errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetMinWavelength, response, errorInfo) );
+		errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetMinWavelength, response, errorMsg) );
 		errChk( Scan(response, "%d\r\n", &laser->laserStatus.minWavelength) );
 		// set min and max wavelength limits on the UI control
 		errChk( SetCtrlAttribute(laser->mainPanHndl, MainPan_Wavelength, ATTR_MIN_VALUE, laser->laserStatus.minWavelength) );
 		errChk( SetCtrlAttribute(laser->mainPanHndl, MainPan_Wavelength, ATTR_MAX_VALUE, laser->laserStatus.maxWavelength) );
 		// get laser wavelength
-		errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetWavelength, response, errorInfo) );
+		errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetWavelength, response, errorMsg) );
 		errChk( Scan(response, "%d\r\n", &laser->laserStatus.wavelength) );
 		SetCtrlVal(laser->mainPanHndl, MainPan_Wavelength, laser->laserStatus.wavelength);   
 		
 		// get status
-		errChk( GetLaserStatus(laser, errorInfo) );
+		errChk( GetLaserStatus(laser, errorMsg) );
 		// update UI
 		UpdateLaserUI(laser);
 		
@@ -476,20 +473,18 @@ static int InitLaserCOM (CoherentCham_type* laser, char** errorInfo)
 	
 RS232Error:
 	
-	errMsg = StrDup(GetRS232ErrorString(error));
+	errorInfo.errMsg = StrDup(GetRS232ErrorString(errorInfo.error));
 
 Error:
 	
 	SetPanelAttribute(laser->mainPanHndl, ATTR_DIMMED, TRUE);   
 	
-	ReturnErrMsg("Coherent Cham Load");
-	return error;	
+RETURN_ERROR_INFO
 }
 
 static int CVICALLBACK UILaserControls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	int					error 	= 0;
-	char*				errMsg	= NULL;
+INIT_ERROR_INFO
 	
 	CoherentCham_type* 	laser	= callbackData;
 	
@@ -507,7 +502,7 @@ static int CVICALLBACK UILaserControls_CB (int panel, int control, int event, vo
 					BOOL	laserOn = 0;
 					GetCtrlVal(panel, control, &laserOn);
 					Fmt(command, RS232_SetLaserStatus, laserOn);
-					errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, reply, &errMsg) );
+					errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, reply, &errorInfo.errMsg) );
 					break;	
 				
 				case MainPan_Wavelength:
@@ -515,7 +510,7 @@ static int CVICALLBACK UILaserControls_CB (int panel, int control, int event, vo
 					uInt32	newWavelength = 0;
 					GetCtrlVal(panel, control, &newWavelength);
 					Fmt(command, RS232_SetWavelength, newWavelength);
-					errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, reply, &errMsg) );
+					errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, reply, &errorInfo.errMsg) );
 					break;
 					
 				case MainPan_Shutter:
@@ -523,7 +518,7 @@ static int CVICALLBACK UILaserControls_CB (int panel, int control, int event, vo
 					BOOL	shutter = FALSE;
 					GetCtrlVal(panel, control, &shutter);
 					Fmt(command, RS232_SetShutter, shutter);
-					errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, reply, &errMsg) );
+					errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, reply, &errorInfo.errMsg) );
 					break;
 					
 				case MainPan_PumpPeakHold:
@@ -531,7 +526,7 @@ static int CVICALLBACK UILaserControls_CB (int panel, int control, int event, vo
 					BOOL	pumpPeakHold = FALSE;
 					GetCtrlVal(panel, control, &pumpPeakHold);
 					Fmt(command, RS232_SetPumpPeakHold, pumpPeakHold);
-					errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, reply, &errMsg) );
+					errChk( SendLaserCommand(laser->COMPortInfo->portNumber, command, reply, &errorInfo.errMsg) );
 					break;
 			}
 			
@@ -542,20 +537,13 @@ static int CVICALLBACK UILaserControls_CB (int panel, int control, int event, vo
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Unknown error or out of memory.");
-	
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
-	
+PRINT_ERROR_INFO
 	return 0;
 }
 
 static int CVICALLBACK UISerialCOMSettings_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	int					error 	= 0;
-	char*				errMsg	= NULL;
+INIT_ERROR_INFO
 	
 	CoherentCham_type* 	laser	= callbackData;
 	
@@ -585,7 +573,7 @@ static int CVICALLBACK UISerialCOMSettings_CB (int panel, int control, int event
 					
 					// assign new port number and initialize polling
 					laser->COMPortInfo->portNumber = newPortNumber;
-					errChk( InitLaserCOM(laser, &errMsg) );
+					errChk( InitLaserCOM(laser, &errorInfo.errMsg) );
 					break;
 					
 				case COMSetPan_BaudRate:
@@ -623,22 +611,18 @@ static int CVICALLBACK UISerialCOMSettings_CB (int panel, int control, int event
 	
 RS232Error:
 	
-	errMsg = StrDup(GetRS232ErrorString(error));
-	AppendString(&errMsg, ".\n\n", -1);
-	
+	errorInfo.errMsg = StrDup(GetRS232ErrorString(errorInfo.error));
+
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Unknown error or out of memory.\n\n");
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
-	
+PRINT_ERROR_INFO	
 	return 0;
 }
 
 static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
-	int						error		= 0;
+INIT_ERROR_INFO
+
 	CoherentCham_type* 		laser 		= callbackData;
 	
 	// load serial COM settings panel if not loaded already
@@ -658,6 +642,7 @@ static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callba
 	
 Error:
 	
+PRINT_ERROR_INFO
 	return;
 }
 
@@ -709,14 +694,12 @@ static void UpdateLaserUI (CoherentCham_type* laser)
 
 int CVICALLBACK LaserStatusAsyncTimer_CB (int reserved, int timerId, int event, void *callbackData, int eventData1, int eventData2)
 {
-	int						error 				= 0;
-	char*					errMsg				= NULL;
+INIT_ERROR_INFO	
 	
-	CoherentCham_type* 		laser 				= callbackData;
-	
+	CoherentCham_type* 	laser 	= callbackData;
 	
 	// querry laser status
-	errChk( GetLaserStatus(laser, &errMsg) );
+	errChk( GetLaserStatus(laser, &errorInfo.errMsg) );
 	// update UI
 	UpdateLaserUI(laser);
 	
@@ -724,84 +707,75 @@ int CVICALLBACK LaserStatusAsyncTimer_CB (int reserved, int timerId, int event, 
 	
 Error:
 	
-	// print error message
-	if (!errMsg)
-		errMsg = StrDup("Laser status update error: unknown or out of memory.");
-		
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
-	
-	return error;
+PRINT_ERROR_INFO	
+	return 0;
 }
 
-static int GetLaserStatus (CoherentCham_type* laser, char** errorInfo)
+static int GetLaserStatus (CoherentCham_type* laser, char** errorMsg)
 {
-	int		error			= 0;
+INIT_ERROR_INFO
+
 	char	readBuffer[100]	= "";
 	
 	// get laser status
-	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetLaserStatus, readBuffer, errorInfo) );
+	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetLaserStatus, readBuffer, errorMsg) );
 	errChk( Scan(readBuffer, "%d\r\n", &laser->laserStatus.status) );
 	
 	// get laser shutter
-	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetShutter, readBuffer, errorInfo) );
+	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetShutter, readBuffer, errorMsg) );
 	errChk( Scan(readBuffer, "%d\r\n", &laser->laserStatus.shutter) );
 	
 	// get laser wavelength
-	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetWavelength, readBuffer, errorInfo) );
+	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetWavelength, readBuffer, errorMsg) );
 	errChk( Scan(readBuffer, "%d\r\n", &laser->laserStatus.wavelength) );
 	
 	// get pump peak hold
-	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetPumpPeakHold, readBuffer, errorInfo) );
+	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetPumpPeakHold, readBuffer, errorMsg) );
 	errChk( Scan(readBuffer, "%d\r\n", &laser->laserStatus.pumpPeakHold) );
 	
 	// get alignment mode
-	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetAlignmentMode, readBuffer, errorInfo) );
+	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetAlignmentMode, readBuffer, errorMsg) );
 	errChk( Scan(readBuffer, "%d\r\n", &laser->laserStatus.alignmentMode) );
 	
 	// get alignment wavelength
-	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetAlignmentModeWavelength, readBuffer, errorInfo) );
+	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetAlignmentModeWavelength, readBuffer, errorMsg) );
 	errChk( Scan(readBuffer, "%d\r\n", &laser->laserStatus.alignmentWavelength) );
 	
 	// get actual laser power
-	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetLaserPower, readBuffer, errorInfo) );
+	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetLaserPower, readBuffer, errorMsg) );
 	errChk( Scan(readBuffer, "%d\r\n", &laser->laserStatus.power) );
 	
 	// get tuning status
-	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetTuning, readBuffer, errorInfo) );
+	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetTuning, readBuffer, errorMsg) );
 	errChk( Scan(readBuffer, "%d\r\n", &laser->laserStatus.tuning) );
 	
 	// get operating status string
-	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetOperatingStatusString, readBuffer, errorInfo) );
+	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetOperatingStatusString, readBuffer, errorMsg) );
 	errChk( Scan(readBuffer, "%s\r\n", laser->laserStatus.statusString) );
 	
 	// get modelocking
-	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetModelocking, readBuffer, errorInfo) );
+	errChk( SendLaserCommand(laser->COMPortInfo->portNumber, RS232_GetModelocking, readBuffer, errorMsg) );
 	errChk( Scan(readBuffer, "%d\r\n", &laser->laserStatus.modelocked) );
-	
-	
-	return 0;
 	
 Error:	
 	
-	return error;
+RETURN_ERROR_INFO	
 }
 
 // pass a reply buffer sufficiently large for the laser reply to fit and make sure the buffer is initialized to 0.
-static int SendLaserCommand (int COMPortNumber, char mesage[], char* replyBuffer, char** errorInfo)
+static int SendLaserCommand (int COMPortNumber, char message[], char* replyBuffer, char** errorMsg)
 {
 #define	SendLaserCommand_ReplyTimeout		-1		// laser does not reply within the default timeout period COMPort_ReplyTimeout
 #define SendLaserCommand_LaserCommandError	-2		// laser does not understand the command or command has wrong parameters.
 
-	int		error		= 0;
-	char*	errMsg		= NULL;
+INIT_ERROR_INFO
+	
 	int		nChars		= 0;
 	double	startTime	= 0; 
 	BOOL	timeout		= FALSE;
 	
 	// send
-	RS232ErrChk( ComWrt(COMPortNumber, mesage, strlen(mesage)) );
+	RS232ErrChk( ComWrt(COMPortNumber, message, strlen(message)) );
 	
 	// receive
 	startTime = Timer();
@@ -812,15 +786,15 @@ static int SendLaserCommand (int COMPortNumber, char mesage[], char* replyBuffer
 	
 	// check for reply timeout error
 	if (timeout) {
-		error 	= SendLaserCommand_ReplyTimeout;
-		errMsg 	= StrDup("Laser reply timeout. Check if laser is connected or if COM port settings are correct.");
+		errorInfo.error 	= SendLaserCommand_ReplyTimeout;
+		errorInfo.errMsg 	= StrDup("Laser reply timeout. Check if laser is connected or if COM port settings are correct.");
 		goto Error;
 	}
 	
 	// check for laser error reply
 	if (nChars && (strstr(replyBuffer, "Error") || strstr(replyBuffer, "ERROR"))) {
-		error 	= SendLaserCommand_LaserCommandError;
-		errMsg 	= StrDup("Wrong command or parameters.");
+		errorInfo.error 	= SendLaserCommand_LaserCommandError;
+		errorInfo.errMsg 	= StrDup("Wrong command or parameters.");
 		goto Error;
 	}
 	
@@ -828,12 +802,11 @@ static int SendLaserCommand (int COMPortNumber, char mesage[], char* replyBuffer
 	
 RS232Error:
 	
-	errMsg = StrDup(GetRS232ErrorString(error));
+	errorInfo.errMsg = StrDup(GetRS232ErrorString(errorInfo.error));
 
 Error:
 	
-	ReturnErrMsg("Coherent Chameleon communication");
-	return error;
+RETURN_ERROR_INFO
 }
 
 static COMPortSettings_type* init_COMPortSettings_type (int portNumber, long baudRate, int parity, int dataBits, int stopBits)

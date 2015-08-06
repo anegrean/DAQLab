@@ -100,23 +100,23 @@ static void 							UpdatePositionDisplay 				(XYStage_type* stage);
 // XY Stage Task Controller Callbacks
 //-----------------------------------------
 
-static int								ConfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int								ConfigureTC							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
 static void								IterateTC							(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag);
 
-static int								StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int								StartTC								(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
-static int								DoneTC								(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+static int								DoneTC								(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);
 
-static int								StoppedTC							(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo);
+static int								StoppedTC							(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);
 
-static int								TaskTreeStateChange	 				(TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo);
+static int								TaskTreeStateChange	 				(TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg);
 
-static int				 				ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo);
+static int				 				ResetTC 							(TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg);
 
 static void				 				ErrorTC 							(TaskControl_type* taskControl, int errorID, char errorMsg[]);
 
-static int								StageEventHandler					(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo);
+static int								StageEventHandler					(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorMsg);
 
 //------------------------------------
 // task controller module commands
@@ -300,12 +300,11 @@ static void	discard_RefPosition_type (RefPosition_type** refPosPtr)
 	OKfree(*refPosPtr);
 }
 
-int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo)
+int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
 #define XYStage_Load_Err_CurrentPositionUnknown		-1
 	
-	int				error				= 0;
-	char*			errMsg				= NULL;
+INIT_ERROR_INFO	
 	
 	XYStage_type* 	stage 				= (XYStage_type*) mod;  
 	char			stepsizeName[100];
@@ -359,7 +358,7 @@ int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo
 	//------------------------------------------
 	
 	if (stage->GetAbsPosition)
-		errChk( (*stage->GetAbsPosition) (stage, &stage->xPos, &stage->yPos, &errMsg) );
+		errChk( (*stage->GetAbsPosition) (stage, &stage->xPos, &stage->yPos, &errorInfo.errMsg) );
 		
 	// update stage X absolute position if position has been determined
 	// make visible stepper controls and update them if position has been determined
@@ -439,31 +438,29 @@ int XYStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorInfo
 	
 	// add reference positions if any
 	size_t				nRefPos										= ListNumItems(stage->xyRefPos);
-	char				refPosDisplayItem[MAX_REF_POS_LENGTH + 100]; 
-	RefPosition_type**	refPosPtr;
+	char				refPosDisplayItem[MAX_REF_POS_LENGTH + 100]	= ""; 
+	RefPosition_type*	refPos										= NULL;
 	if (nRefPos) {
 		// undim ref pos listbox
 		SetCtrlAttribute(stage->controlPanHndl, StagePan_RefPosList, ATTR_DIMMED, 0);
 		for (size_t i = 1; i <= nRefPos; i++) {
-			refPosPtr = ListGetPtrToItem(stage->xyRefPos, i);
+			refPos = *(RefPosition_type**)ListGetPtrToItem(stage->xyRefPos, i);
 			// add reference position to listbox
-			Fmt(refPosDisplayItem, REF_POS_LABEL_FORMAT, (*refPosPtr)->name, POS_DISPLAY_PRECISION, (*refPosPtr)->x * 1000, POS_DISPLAY_PRECISION, (*refPosPtr)->y * 1000);  	// display in [um]
+			Fmt(refPosDisplayItem, REF_POS_LABEL_FORMAT, refPos->name, POS_DISPLAY_PRECISION, refPos->x * 1000, POS_DISPLAY_PRECISION, refPos->y * 1000);  	// display in [um]
 			InsertListItem(stage->controlPanHndl, StagePan_RefPosList, -1, refPosDisplayItem, 0);
 		}
 	} else
 		SetCtrlAttribute(stage->controlPanHndl, StagePan_RefPosList, ATTR_DIMMED, 1);
 	
-	return 0;
-	
 Error:
 	
-	ReturnErrMsg("Generic XY Stage Load");
-	return error;
+RETURN_ERROR_INFO
 }
 
 int	XYStage_LoadCfg	(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	int					error	= 0;
+INIT_ERROR_INFO
+
 	XYStage_type* 		stage	= (XYStage_type*) mod;
 	
 	// allocate memory to store values
@@ -539,13 +536,14 @@ NoReferencePositions:
 	
 Error:   
 	
-	return error;
+	return errorInfo.error;
 	
 }
 
 int XYStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	int					error			= 0;
+INIT_ERROR_INFO
+	
 	XYStage_type* 		stage			= (XYStage_type*) mod;
 	DAQLabXMLNode 		StageAttr[] 	= {	{"MinXPositionLimit", 	BasicData_Double, 	stage->xMinimumLimit},
 								 			{"MaxXPositionLimit", 	BasicData_Double, 	stage->xMaximumLimit},
@@ -582,11 +580,9 @@ int XYStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IX
 		errChk( DLAddToXMLElem(xmlDOM, refPosXMLElement, refPosAttr, DL_ATTRIBUTE, NumElem(refPosAttr), xmlErrorInfo) );   
 	}
 	
-	return 0;
-	
 Error:   
 	
-	return error; 
+	return errorInfo.error; 
 }
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
@@ -720,6 +716,8 @@ void XYStage_DimWhenRunning (XYStage_type* stage, BOOL dimmed)
 
 static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO	
+	
 	XYStage_type* 				stage 				= callbackData;
 	int							refPosIdx			= 0;									// 0-based index of ref pos selected in the list
 	RefPosition_type**			refPosPtr			= NULL;
@@ -732,9 +730,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 	double 						moveYAbsPos			= 0;   					
 	double						moveYRelPos			= 0; 
 	char						refPosDisplayItem[MAX_REF_POS_LENGTH + 100];
-	int							error				= 0;
-	char*						errMsg				= NULL;
-
+	
 	switch (event) {
 			
 		case EVENT_COMMIT:
@@ -794,7 +790,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					
 					// stop stage motion
 					if (stage->Stop)
-						errChk( (*stage->Stop)	(stage, &errMsg) );
+						errChk( (*stage->Stop)	(stage, &errorInfo.errMsg) );
 					break;
 				
 				case StagePan_XAbsPos:
@@ -867,7 +863,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					GetCtrlVal(panel, control, &useJoystick);
 					
 					if (stage->UseJoystick)
-						errChk( (*stage->UseJoystick)	(stage, useJoystick, &errMsg) );
+						errChk( (*stage->UseJoystick)	(stage, useJoystick, &errorInfo.errMsg) );
 					break;
 					
 				case StagePan_LockYStepSize:
@@ -896,13 +892,13 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					if (!stage->SetVelocity) break; // do nothing if there is no such functionality implemented by the child class
 					
 					if (velIdx == 0 && stage->lowVelocity)
-						errChk( (*stage->SetVelocity) (stage, *stage->lowVelocity, &errMsg) );
+						errChk( (*stage->SetVelocity) (stage, *stage->lowVelocity, &errorInfo.errMsg) );
 					else
 						if (velIdx == 1 && stage->midVelocity)
-						errChk( (*stage->SetVelocity) (stage, *stage->midVelocity, &errMsg) );
+						errChk( (*stage->SetVelocity) (stage, *stage->midVelocity, &errorInfo.errMsg) );
 						else
 							if (velIdx == 2 && stage->highVelocity)
-								errChk( (*stage->SetVelocity)	(stage, *stage->highVelocity, &errMsg) );
+								errChk( (*stage->SetVelocity)	(stage, *stage->highVelocity, &errorInfo.errMsg) );
 					
 					break;
 					
@@ -1173,12 +1169,9 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 			}
 	}
 	
-	return 0;
-	
 Error:
 	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
+PRINT_ERROR_INFO
 	return 0;
 }
 
@@ -1238,9 +1231,9 @@ static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callba
 
 static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERROR_INFO
+
 	XYStage_type* 	stage 	= callbackData;
-	int				error	= 0;
-	char*			errMsg	= NULL;	
 	
 	switch (event) {
 		
@@ -1277,7 +1270,7 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 					
 					// if given, call hardware specific function to set these limits
 					if (stage->SetLimits)
-						if ( (error = (*stage->SetLimits) (stage, newXMinLimit, newXMaxLimit, newYMinLimit, newYMaxLimit, &errMsg)) < 0) {
+						if ( (errorInfo.error = (*stage->SetLimits) (stage, newXMinLimit, newXMaxLimit, newYMinLimit, newYMaxLimit, &errorInfo.errMsg)) < 0) {
 							// error setting new limits, return to old values
 							SetCtrlVal(panel, SetPan_XMinLimit, *stage->xMinimumLimit * 1000);		// convert from [mm] to [um]
 							SetCtrlVal(panel, SetPan_XMaxLimit, *stage->xMaximumLimit * 1000);		// convert from [mm] to [um]
@@ -1305,7 +1298,7 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 										// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(stage->controlPanHndl, StagePan_StageVel, &velIdx);
 						if (velIdx == 0 && stage->SetVelocity)
-							errChk( (*stage->SetVelocity) (stage, *stage->lowVelocity, &errMsg) );
+							errChk( (*stage->SetVelocity) (stage, *stage->lowVelocity, &errorInfo.errMsg) );
 					}
 					break;
 					
@@ -1320,7 +1313,7 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 										// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(stage->controlPanHndl, StagePan_StageVel, &velIdx);
 						if (velIdx == 1 && stage->SetVelocity)
-							errChk( (*stage->SetVelocity) (stage, *stage->midVelocity, &errMsg) );
+							errChk( (*stage->SetVelocity) (stage, *stage->midVelocity, &errorInfo.errMsg) );
 					}
 					break;
 					
@@ -1334,7 +1327,7 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 										// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(stage->controlPanHndl, StagePan_StageVel, &velIdx);
 						if (velIdx == 0 && stage->SetVelocity)
-							errChk( (*stage->SetVelocity) (stage, *stage->highVelocity, &errMsg) );
+							errChk( (*stage->SetVelocity) (stage, *stage->highVelocity, &errorInfo.errMsg) );
 					}
 					break;
 					
@@ -1353,12 +1346,9 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 			break;
 	}
 	
-	return 0;
-	
 Error:
 	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
+PRINT_ERROR_INFO
 	return 0;
 }
    
@@ -1381,7 +1371,7 @@ static BOOL ValidateRefPosName (char inputStr[], void* dataPtr)
 // Task Controller Callbacks
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	return 0;
 }
@@ -1390,27 +1380,27 @@ static void IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, B
 	TaskControlIterationDone(taskControl, 0, "", FALSE);
 }
 
-static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	return 0;
 }
 
-static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
+static int DoneTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
 	return 0;
 }
 
-static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorInfo)
+static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
 	return 0;
 }
 
-static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorInfo)
+static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
 {
 	return 0;	
 }
 
-static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorInfo)
+static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	return 0;	
 }
@@ -1420,21 +1410,22 @@ static void ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[]
 	DLMsg(errorMsg, 1);
 }
 
-static int StageEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorInfo)
+static int StageEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorMsg)
 {
+INIT_ERROR_INFO
+
 	MoveCommand_type*	moveCommand = eventData;
 	XYStage_type*		stage		= GetTaskControlModuleData(taskControl);
-	int					error		= 0;
-	
+
 	ChangeLEDStatus(stage, XYSTAGE_LED_MOVING);
 	
 	// move stage
 	if (stage->Move)
-		errChk( (*stage->Move)	(stage, moveCommand->moveType, moveCommand->axis, moveCommand->moveVal, errorInfo) );
+		errChk( (*stage->Move)	(stage, moveCommand->moveType, moveCommand->axis, moveCommand->moveVal, &errorInfo.errMsg) );
 	
 	// movement assumed to be complete, check position if method given
 	if (stage->GetAbsPosition)
-		errChk( (*stage->GetAbsPosition)	(stage, &stage->xPos, &stage->yPos, errorInfo) );
+		errChk( (*stage->GetAbsPosition)	(stage, &stage->xPos, &stage->yPos, &errorInfo.errMsg) );
 	else
 		switch (moveCommand->moveType) {
 			
@@ -1481,7 +1472,7 @@ Error:
 	
 	ChangeLEDStatus(stage, XYSTAGE_LED_ERROR);
 	
-	return error;
+	return errorInfo.error;
 }
 
 static MoveCommand_type* init_MoveCommand_type (StageMoveTypes moveType, StageAxes axis, double moveVal)

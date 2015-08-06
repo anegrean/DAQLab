@@ -118,7 +118,7 @@ static int						DisplayNIVisionImage							(NIImageDisplay_type* imgDisplay, Ima
 static int						DisplayNIVisionRGBImage							(NIImageDisplay_type* imgDisplay, Image_type** imageR, Image_type** imageG, Image_type** imageB);	
 
 	// displays a file selection popup-box and saves a given NI image as two grayscale TIFF files with ZIP compression with and without ROI flattened
-static int 						ImageSavePopup 									(Image* image, NIDisplayFileSaveFormats fileFormat, char** errorInfo);
+static int 						ImageSavePopup 									(Image* image, NIDisplayFileSaveFormats fileFormat, char** errorMsg);
 
 static NIImageDisplay_type*		GetNIImageDisplay								(NIDisplayEngine_type* NIDisplay, void* callbackData, int imgHeight, int imgWidth, ImageTypes imageType);
 
@@ -970,7 +970,7 @@ Error:
 	return error;
 }
 
-static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, char** errorInfo)
+static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, char** errorMsg)
 {
 	int 				error							= 0;
 	char*				errMsg							= NULL;
@@ -1061,8 +1061,8 @@ Error:
 	OKfreeIMAQ(imageCopy);
 	
 	errMsg = imaqGetErrorText(error);
-	if (errorInfo)
-		*errorInfo = StrDup(errMsg);
+	if (errorMsg)
+		*errorMsg = StrDup(errMsg);
 	OKfreeIMAQ(errMsg);
 	
 	return error;

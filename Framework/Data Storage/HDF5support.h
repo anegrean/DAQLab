@@ -43,12 +43,12 @@ typedef enum {
 int 				CreateHDF5File					(char fileName[], char datasetName[]);
 
 	// Writes a waveform given data storage info
-int 				WriteHDF5Waveform				(char fileName[], char datasetName[], DSInfo_type* dsInfo, Waveform_type* waveform, CompressionMethods compression, char** errorInfo);
+int 				WriteHDF5Waveform				(char fileName[], char datasetName[], DSInfo_type* dsInfo, Waveform_type* waveform, CompressionMethods compression, char** errorMsg);
 
 	// Writes a list of waveforms of Waveform_type*
-int					WriteHDF5WaveformList			(char fileName[], ListType waveformList, CompressionMethods compression, char** errorInfo);
+int					WriteHDF5WaveformList			(char fileName[], ListType waveformList, CompressionMethods compression, char** errorMsg);
 
-int 				WriteHDF5Image					(char fileName[], char datasetName[], DSInfo_type* dsInfo, Image_type* image, CompressionMethods compression, char** errorInfo);
+int 				WriteHDF5Image					(char fileName[], char datasetName[], DSInfo_type* dsInfo, Image_type* image, CompressionMethods compression, char** errorMsg);
 
 #ifdef __cplusplus
     }

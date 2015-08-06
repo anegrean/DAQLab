@@ -468,329 +468,329 @@ HRESULT CVIFUNC ActiveXML_ActiveFreeThreadedDOMDocument40IXMLDOMDocument2_ (cons
                                                                             CAObjHandle *objectHandle);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetnodeName (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetnodeValue (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_SetnodeValue (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetnodeType (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetparentNode (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetchildNodes (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetfirstChild (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetlastChild (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetpreviousSibling (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetnextSibling (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getattributes (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_insertBefore (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ newChild,
                                                          VARIANT refChild,
                                                          ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_replaceChild (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ newChild,
                                                          ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                          ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_removeChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ childNode,
                                                         ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_appendChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ newChild,
                                                         ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_hasChildNodes (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetownerDocument (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_cloneNode (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VBOOL deep,
                                                       ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetnodeTypeString (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Gettext (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Settext (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getspecified (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getdefinition (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetdataType (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_SetdataType (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getxml (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_transformNode (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                           char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_selectNodes (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *queryString,
                                                         ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_selectSingleNode (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              const char *queryString,
                                                              ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getparsed (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetnamespaceURI (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getprefix (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetbaseName (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_transformNodeToObject (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                   VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getdoctype (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMDocumentType_ *documentType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getimplementation (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMImplementation_ *impl);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetdocumentElement (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMElement_ *DOMElement);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_SetByRefdocumentElement (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     ActiveXMLObj_IXMLDOMElement_ DOMElement);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_createElement (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           const char *tagName,
                                                           ActiveXMLObj_IXMLDOMElement_ *element);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_createDocumentFragment (CAObjHandle objectHandle,
-                                                                   ERRORINFO *errorInfo,
+                                                                   ERRORINFO *errorMsg,
                                                                    ActiveXMLObj_IXMLDOMDocumentFragment_ *docFrag);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_createTextNode (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *data,
                                                            ActiveXMLObj_IXMLDOMText_ *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_createComment (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           const char *data,
                                                           ActiveXMLObj_IXMLDOMComment_ *comment);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_createCDATASection (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                const char *data,
                                                                ActiveXMLObj_IXMLDOMCDATASection_ *cdata);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_createProcessingInstruction (CAObjHandle objectHandle,
-                                                                        ERRORINFO *errorInfo,
+                                                                        ERRORINFO *errorMsg,
                                                                         const char *target,
                                                                         const char *data,
                                                                         ActiveXMLObj_IXMLDOMProcessingInstruction_ *pi);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_createAttribute (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             const char *name,
                                                             ActiveXMLObj_IXMLDOMAttribute_ *attribute);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_createEntityReference (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   const char *name,
                                                                   ActiveXMLObj_IXMLDOMEntityReference_ *entityRef);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_getElementsByTagName (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  const char *tagName,
                                                                  ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_createNode (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT type,
                                                        const char *name,
                                                        const char *namespaceURI,
                                                        ActiveXMLObj_IXMLDOMNode_ *node);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_nodeFromID (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *idString,
                                                        ActiveXMLObj_IXMLDOMNode_ *node);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_load (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  VARIANT xmlSource,
                                                  VBOOL *isSuccessful);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetreadyState (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           long *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetparseError (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMParseError_ *errorObj);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Geturl (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **urlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getasync (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VBOOL *isAsync);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Setasync (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VBOOL isAsync);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_abort (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo);
+                                                  ERRORINFO *errorMsg);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_loadXML (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     const char *bstrXML,
                                                     VBOOL *isSuccessful);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_save (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  VARIANT destination);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetvalidateOnParse (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VBOOL *isValidating);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_SetvalidateOnParse (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VBOOL isValidating);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetresolveExternals (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 VBOOL *isResolving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_SetresolveExternals (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 VBOOL isResolving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_GetpreserveWhiteSpace (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   VBOOL *isPreserving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_SetpreserveWhiteSpace (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   VBOOL isPreserving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Setonreadystatechange (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   VARIANT newValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Setondataavailable (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VARIANT newValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Setontransformnode (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VARIANT newValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getnamespaces (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMSchemaCollection *namespaceCollection);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_Getschemas (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT *otherCollection);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_SetByRefschemas (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT otherCollection);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_validate (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMParseError_ *errorObj);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_setProperty (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *name,
                                                         VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument2_getProperty (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *name,
                                                         VARIANT *value);
 
@@ -833,3137 +833,3137 @@ HRESULT CVIFUNC ActiveXML_ActiveFreeThreadedDOMDocument60IXMLDOMDocument3_ (cons
                                                                             CAObjHandle *objectHandle);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetnodeName (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetnodeValue (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_SetnodeValue (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetnodeType (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetparentNode (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetchildNodes (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetfirstChild (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetlastChild (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetpreviousSibling (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetnextSibling (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getattributes (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_insertBefore (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ newChild,
                                                          VARIANT refChild,
                                                          ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_replaceChild (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ newChild,
                                                          ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                          ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_removeChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ childNode,
                                                         ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_appendChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ newChild,
                                                         ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_hasChildNodes (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetownerDocument (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_cloneNode (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VBOOL deep,
                                                       ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetnodeTypeString (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Gettext (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Settext (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getspecified (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getdefinition (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetdataType (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_SetdataType (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getxml (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_transformNode (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                           char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_selectNodes (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *queryString,
                                                         ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_selectSingleNode (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              const char *queryString,
                                                              ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getparsed (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetnamespaceURI (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getprefix (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetbaseName (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_transformNodeToObject (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                   VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getdoctype (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMDocumentType_ *documentType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getimplementation (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMImplementation_ *impl);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetdocumentElement (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMElement_ *DOMElement);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_SetByRefdocumentElement (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     ActiveXMLObj_IXMLDOMElement_ DOMElement);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_createElement (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           const char *tagName,
                                                           ActiveXMLObj_IXMLDOMElement_ *element);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_createDocumentFragment (CAObjHandle objectHandle,
-                                                                   ERRORINFO *errorInfo,
+                                                                   ERRORINFO *errorMsg,
                                                                    ActiveXMLObj_IXMLDOMDocumentFragment_ *docFrag);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_createTextNode (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *data,
                                                            ActiveXMLObj_IXMLDOMText_ *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_createComment (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           const char *data,
                                                           ActiveXMLObj_IXMLDOMComment_ *comment);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_createCDATASection (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                const char *data,
                                                                ActiveXMLObj_IXMLDOMCDATASection_ *cdata);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_createProcessingInstruction (CAObjHandle objectHandle,
-                                                                        ERRORINFO *errorInfo,
+                                                                        ERRORINFO *errorMsg,
                                                                         const char *target,
                                                                         const char *data,
                                                                         ActiveXMLObj_IXMLDOMProcessingInstruction_ *pi);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_createAttribute (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             const char *name,
                                                             ActiveXMLObj_IXMLDOMAttribute_ *attribute);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_createEntityReference (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   const char *name,
                                                                   ActiveXMLObj_IXMLDOMEntityReference_ *entityRef);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_getElementsByTagName (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  const char *tagName,
                                                                  ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_createNode (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT type,
                                                        const char *name,
                                                        const char *namespaceURI,
                                                        ActiveXMLObj_IXMLDOMNode_ *node);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_nodeFromID (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *idString,
                                                        ActiveXMLObj_IXMLDOMNode_ *node);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_load (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  VARIANT xmlSource,
                                                  VBOOL *isSuccessful);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetreadyState (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           long *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetparseError (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMParseError_ *errorObj);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Geturl (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **urlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getasync (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VBOOL *isAsync);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Setasync (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VBOOL isAsync);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_abort (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo);
+                                                  ERRORINFO *errorMsg);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_loadXML (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     const char *bstrXML,
                                                     VBOOL *isSuccessful);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_save (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  VARIANT destination);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetvalidateOnParse (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VBOOL *isValidating);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_SetvalidateOnParse (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VBOOL isValidating);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetresolveExternals (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 VBOOL *isResolving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_SetresolveExternals (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 VBOOL isResolving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_GetpreserveWhiteSpace (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   VBOOL *isPreserving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_SetpreserveWhiteSpace (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   VBOOL isPreserving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Setonreadystatechange (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   VARIANT newValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Setondataavailable (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VARIANT newValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Setontransformnode (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VARIANT newValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getnamespaces (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMSchemaCollection *namespaceCollection);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_Getschemas (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT *otherCollection);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_SetByRefschemas (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT otherCollection);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_validate (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMParseError_ *errorObj);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_setProperty (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *name,
                                                         VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_getProperty (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *name,
                                                         VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_validateNode (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ node,
                                                          ActiveXMLObj_IXMLDOMParseError_ *errorObj);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument3_importNode (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ node,
                                                        VBOOL deep,
                                                        ActiveXMLObj_IXMLDOMNode_ *clone);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMImplementation_hasFeature (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             const char *feature,
                                                             const char *version,
                                                             VBOOL *hasFeature);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetnodeName (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetnodeValue (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_SetnodeValue (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetnodeType (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetparentNode (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetchildNodes (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetfirstChild (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetlastChild (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetpreviousSibling (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetnextSibling (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_Getattributes (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_insertBefore (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     ActiveXMLObj_IXMLDOMNode_ newChild,
                                                     VARIANT refChild,
                                                     ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_replaceChild (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     ActiveXMLObj_IXMLDOMNode_ newChild,
                                                     ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                     ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_removeChild (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    ActiveXMLObj_IXMLDOMNode_ childNode,
                                                    ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_appendChild (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    ActiveXMLObj_IXMLDOMNode_ newChild,
                                                    ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_hasChildNodes (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetownerDocument (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_cloneNode (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  VBOOL deep,
                                                  ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetnodeTypeString (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_Gettext (CAObjHandle objectHandle,
-                                               ERRORINFO *errorInfo, char **text);
+                                               ERRORINFO *errorMsg, char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_Settext (CAObjHandle objectHandle,
-                                               ERRORINFO *errorInfo,
+                                               ERRORINFO *errorMsg,
                                                const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_Getspecified (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_Getdefinition (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetdataType (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_SetdataType (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_Getxml (CAObjHandle objectHandle,
-                                              ERRORINFO *errorInfo,
+                                              ERRORINFO *errorMsg,
                                               char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_transformNode (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                      char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_selectNodes (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    const char *queryString,
                                                    ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_selectSingleNode (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *queryString,
                                                         ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_Getparsed (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetnamespaceURI (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_Getprefix (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_GetbaseName (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNode_transformNodeToObject (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                              VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNodeList_Getitem (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    long index,
                                                    ActiveXMLObj_IXMLDOMNode_ *listItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNodeList_Getlength (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      long *listLength);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNodeList_nextNode (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     ActiveXMLObj_IXMLDOMNode_ *nextItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNodeList_reset (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo);
+                                                 ERRORINFO *errorMsg);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNodeList_Get_newEnum (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        LPUNKNOWN *ppUnk);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNamedNodeMap_getNamedItem (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             const char *name,
                                                             ActiveXMLObj_IXMLDOMNode_ *namedItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNamedNodeMap_setNamedItem (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ newItem,
                                                             ActiveXMLObj_IXMLDOMNode_ *nameItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNamedNodeMap_removeNamedItem (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                const char *name,
                                                                ActiveXMLObj_IXMLDOMNode_ *namedItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNamedNodeMap_Getitem (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        long index,
                                                        ActiveXMLObj_IXMLDOMNode_ *listItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNamedNodeMap_Getlength (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          long *listLength);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNamedNodeMap_getQualifiedItem (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 const char *baseName,
                                                                 const char *namespaceURI,
                                                                 ActiveXMLObj_IXMLDOMNode_ *qualifiedItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNamedNodeMap_removeQualifiedItem (CAObjHandle objectHandle,
-                                                                   ERRORINFO *errorInfo,
+                                                                   ERRORINFO *errorMsg,
                                                                    const char *baseName,
                                                                    const char *namespaceURI,
                                                                    ActiveXMLObj_IXMLDOMNode_ *qualifiedItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNamedNodeMap_nextNode (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ *nextItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNamedNodeMap_reset (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo);
+                                                     ERRORINFO *errorMsg);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNamedNodeMap_Get_newEnum (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            LPUNKNOWN *ppUnk);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetnodeName (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetnodeValue (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_SetnodeValue (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetnodeType (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetparentNode (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetchildNodes (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetfirstChild (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetlastChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetpreviousSibling (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetnextSibling (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Getattributes (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_insertBefore (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ newChild,
                                                         VARIANT refChild,
                                                         ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_replaceChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ newChild,
                                                         ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                         ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_removeChild (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ childNode,
                                                        ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_appendChild (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ newChild,
                                                        ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_hasChildNodes (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetownerDocument (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_cloneNode (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VBOOL deep,
                                                      ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetnodeTypeString (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Gettext (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Settext (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Getspecified (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Getdefinition (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetdataType (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_SetdataType (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Getxml (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_transformNode (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                          char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_selectNodes (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *queryString,
                                                        ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_selectSingleNode (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             const char *queryString,
                                                             ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Getparsed (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetnamespaceURI (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Getprefix (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetbaseName (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_transformNodeToObject (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                  VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Getdoctype (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLObj_IXMLDOMDocumentType_ *documentType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Getimplementation (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMImplementation_ *impl);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetdocumentElement (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMElement_ *DOMElement);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_SetByRefdocumentElement (CAObjHandle objectHandle,
-                                                                   ERRORINFO *errorInfo,
+                                                                   ERRORINFO *errorMsg,
                                                                    ActiveXMLObj_IXMLDOMElement_ DOMElement);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_createElement (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          const char *tagName,
                                                          ActiveXMLObj_IXMLDOMElement_ *element);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_createDocumentFragment (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   ActiveXMLObj_IXMLDOMDocumentFragment_ *docFrag);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_createTextNode (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           const char *data,
                                                           ActiveXMLObj_IXMLDOMText_ *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_createComment (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          const char *data,
                                                          ActiveXMLObj_IXMLDOMComment_ *comment);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_createCDATASection (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               const char *data,
                                                               ActiveXMLObj_IXMLDOMCDATASection_ *cdata);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_createProcessingInstruction (CAObjHandle objectHandle,
-                                                                       ERRORINFO *errorInfo,
+                                                                       ERRORINFO *errorMsg,
                                                                        const char *target,
                                                                        const char *data,
                                                                        ActiveXMLObj_IXMLDOMProcessingInstruction_ *pi);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_createAttribute (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *name,
                                                            ActiveXMLObj_IXMLDOMAttribute_ *attribute);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_createEntityReference (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  const char *name,
                                                                  ActiveXMLObj_IXMLDOMEntityReference_ *entityRef);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_getElementsByTagName (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 const char *tagName,
                                                                 ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_createNode (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VARIANT type,
                                                       const char *name,
                                                       const char *namespaceURI,
                                                       ActiveXMLObj_IXMLDOMNode_ *node);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_nodeFromID (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       const char *idString,
                                                       ActiveXMLObj_IXMLDOMNode_ *node);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_load (CAObjHandle objectHandle,
-                                                ERRORINFO *errorInfo,
+                                                ERRORINFO *errorMsg,
                                                 VARIANT xmlSource,
                                                 VBOOL *isSuccessful);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetreadyState (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          long *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetparseError (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMParseError_ *errorObj);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Geturl (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   char **urlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Getasync (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VBOOL *isAsync);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Setasync (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VBOOL isAsync);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_abort (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo);
+                                                 ERRORINFO *errorMsg);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_loadXML (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    const char *bstrXML,
                                                    VBOOL *isSuccessful);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_save (CAObjHandle objectHandle,
-                                                ERRORINFO *errorInfo,
+                                                ERRORINFO *errorMsg,
                                                 VARIANT destination);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetvalidateOnParse (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VBOOL *isValidating);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_SetvalidateOnParse (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VBOOL isValidating);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetresolveExternals (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VBOOL *isResolving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_SetresolveExternals (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VBOOL isResolving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_GetpreserveWhiteSpace (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  VBOOL *isPreserving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_SetpreserveWhiteSpace (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  VBOOL isPreserving);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Setonreadystatechange (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  VARIANT newValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Setondataavailable (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VARIANT newValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocument_Setontransformnode (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VARIANT newValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetnodeName (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetnodeValue (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_SetnodeValue (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetnodeType (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetparentNode (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetchildNodes (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetfirstChild (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetlastChild (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetpreviousSibling (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetnextSibling (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Getattributes (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_insertBefore (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ newChild,
                                                             VARIANT refChild,
                                                             ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_replaceChild (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ newChild,
                                                             ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                             ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_removeChild (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMNode_ childNode,
                                                            ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_appendChild (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMNode_ newChild,
                                                            ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_hasChildNodes (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetownerDocument (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_cloneNode (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VBOOL deep,
                                                          ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetnodeTypeString (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Gettext (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Settext (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Getspecified (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Getdefinition (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetdataType (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_SetdataType (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Getxml (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_transformNode (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                              char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_selectNodes (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *queryString,
                                                            ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_selectSingleNode (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 const char *queryString,
                                                                 ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Getparsed (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetnamespaceURI (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Getprefix (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_GetbaseName (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_transformNodeToObject (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                      VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Getname (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **rootName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Getentities (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMNamedNodeMap_ *entityMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentType_Getnotations (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNamedNodeMap_ *notationMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetnodeName (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetnodeValue (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_SetnodeValue (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetnodeType (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetparentNode (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetchildNodes (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetfirstChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetlastChild (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetpreviousSibling (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetnextSibling (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_Getattributes (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_insertBefore (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ newChild,
                                                        VARIANT refChild,
                                                        ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_replaceChild (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ newChild,
                                                        ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                        ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_removeChild (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLObj_IXMLDOMNode_ childNode,
                                                       ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_appendChild (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLObj_IXMLDOMNode_ newChild,
                                                       ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_hasChildNodes (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetownerDocument (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_cloneNode (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VBOOL deep,
                                                     ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetnodeTypeString (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_Gettext (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_Settext (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_Getspecified (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_Getdefinition (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetdataType (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_SetdataType (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_Getxml (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_transformNode (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                         char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_selectNodes (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       const char *queryString,
                                                       ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_selectSingleNode (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *queryString,
                                                            ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_Getparsed (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetnamespaceURI (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_Getprefix (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GetbaseName (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_transformNodeToObject (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                 VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_GettagName (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      char **tagName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_getAttribute (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *name,
                                                        VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_setAttribute (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *name,
                                                        VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_removeAttribute (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           const char *name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_getAttributeNode (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *name,
                                                            ActiveXMLObj_IXMLDOMAttribute_ *attributeNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_setAttributeNode (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMAttribute_ DOMAttribute,
                                                            ActiveXMLObj_IXMLDOMAttribute_ *attributeNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_removeAttributeNode (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMAttribute_ DOMAttribute,
                                                               ActiveXMLObj_IXMLDOMAttribute_ *attributeNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_getElementsByTagName (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                const char *tagName,
                                                                ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMElement_normalize (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo);
+                                                    ERRORINFO *errorMsg);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetnodeName (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetnodeValue (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_SetnodeValue (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetnodeType (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetparentNode (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetchildNodes (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetfirstChild (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetlastChild (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetpreviousSibling (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetnextSibling (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Getattributes (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_insertBefore (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ newChild,
                                                          VARIANT refChild,
                                                          ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_replaceChild (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ newChild,
                                                          ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                          ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_removeChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ childNode,
                                                         ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_appendChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ newChild,
                                                         ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_hasChildNodes (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetownerDocument (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_cloneNode (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VBOOL deep,
                                                       ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetnodeTypeString (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Gettext (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Settext (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Getspecified (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Getdefinition (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetdataType (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_SetdataType (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Getxml (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_transformNode (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                           char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_selectNodes (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *queryString,
                                                         ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_selectSingleNode (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              const char *queryString,
                                                              ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Getparsed (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetnamespaceURI (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Getprefix (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_GetbaseName (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_transformNodeToObject (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                   VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Getname (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     char **attributeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Getvalue (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VARIANT *attributeValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMAttribute_Setvalue (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VARIANT attributeValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetnodeName (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetnodeValue (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_SetnodeValue (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetnodeType (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetparentNode (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetchildNodes (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetfirstChild (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetlastChild (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetpreviousSibling (CAObjHandle objectHandle,
-                                                                      ERRORINFO *errorInfo,
+                                                                      ERRORINFO *errorMsg,
                                                                       ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetnextSibling (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_Getattributes (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_insertBefore (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNode_ newChild,
                                                                 VARIANT refChild,
                                                                 ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_replaceChild (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNode_ newChild,
                                                                 ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                                 ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_removeChild (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMNode_ childNode,
                                                                ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_appendChild (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMNode_ newChild,
                                                                ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_hasChildNodes (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetownerDocument (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_cloneNode (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VBOOL deep,
                                                              ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetnodeTypeString (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_Gettext (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_Settext (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_Getspecified (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_Getdefinition (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetdataType (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_SetdataType (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_Getxml (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_transformNode (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                  char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_selectNodes (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                const char *queryString,
                                                                ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_selectSingleNode (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     const char *queryString,
                                                                     ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_Getparsed (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetnamespaceURI (CAObjHandle objectHandle,
-                                                                   ERRORINFO *errorInfo,
+                                                                   ERRORINFO *errorMsg,
                                                                    char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_Getprefix (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_GetbaseName (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMDocumentFragment_transformNodeToObject (CAObjHandle objectHandle,
-                                                                         ERRORINFO *errorInfo,
+                                                                         ERRORINFO *errorMsg,
                                                                          ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                          VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetnodeName (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetnodeValue (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_SetnodeValue (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetnodeType (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetparentNode (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetchildNodes (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetfirstChild (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetlastChild (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetpreviousSibling (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetnextSibling (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Getattributes (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_insertBefore (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     ActiveXMLObj_IXMLDOMNode_ newChild,
                                                     VARIANT refChild,
                                                     ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_replaceChild (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     ActiveXMLObj_IXMLDOMNode_ newChild,
                                                     ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                     ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_removeChild (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    ActiveXMLObj_IXMLDOMNode_ childNode,
                                                    ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_appendChild (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    ActiveXMLObj_IXMLDOMNode_ newChild,
                                                    ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_hasChildNodes (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetownerDocument (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_cloneNode (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  VBOOL deep,
                                                  ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetnodeTypeString (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Gettext (CAObjHandle objectHandle,
-                                               ERRORINFO *errorInfo, char **text);
+                                               ERRORINFO *errorMsg, char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Settext (CAObjHandle objectHandle,
-                                               ERRORINFO *errorInfo,
+                                               ERRORINFO *errorMsg,
                                                const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Getspecified (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Getdefinition (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetdataType (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_SetdataType (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Getxml (CAObjHandle objectHandle,
-                                              ERRORINFO *errorInfo,
+                                              ERRORINFO *errorMsg,
                                               char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_transformNode (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                      char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_selectNodes (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    const char *queryString,
                                                    ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_selectSingleNode (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *queryString,
                                                         ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Getparsed (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetnamespaceURI (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Getprefix (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_GetbaseName (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_transformNodeToObject (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                              VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Getdata (CAObjHandle objectHandle,
-                                               ERRORINFO *errorInfo, char **data);
+                                               ERRORINFO *errorMsg, char **data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Setdata (CAObjHandle objectHandle,
-                                               ERRORINFO *errorInfo,
+                                               ERRORINFO *errorMsg,
                                                const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_Getlength (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  long *dataLength);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_substringData (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      long offset, long count,
                                                      char **data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_appendData (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_insertData (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   long offset, const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_deleteData (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   long offset, long count);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_replaceData (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    long offset, long count,
                                                    const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMText_splitText (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  long offset,
                                                  ActiveXMLObj_IXMLDOMText_ *rightHandTextNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetnodeName (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetnodeValue (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_SetnodeValue (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetnodeType (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetparentNode (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetchildNodes (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetfirstChild (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetlastChild (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetpreviousSibling (CAObjHandle objectHandle,
-                                                                   ERRORINFO *errorInfo,
+                                                                   ERRORINFO *errorMsg,
                                                                    ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetnextSibling (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Getattributes (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_insertBefore (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ newChild,
                                                              VARIANT refChild,
                                                              ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_replaceChild (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ newChild,
                                                              ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                              ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_removeChild (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ childNode,
                                                             ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_appendChild (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ newChild,
                                                             ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_hasChildNodes (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetownerDocument (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_cloneNode (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           VBOOL deep,
                                                           ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetnodeTypeString (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Gettext (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Settext (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Getspecified (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Getdefinition (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetdataType (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_SetdataType (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Getxml (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_transformNode (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                               char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_selectNodes (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             const char *queryString,
                                                             ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_selectSingleNode (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  const char *queryString,
                                                                  ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Getparsed (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetnamespaceURI (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Getprefix (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_GetbaseName (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_transformNodeToObject (CAObjHandle objectHandle,
-                                                                      ERRORINFO *errorInfo,
+                                                                      ERRORINFO *errorMsg,
                                                                       ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                       VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Getdata (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         char **data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Setdata (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_Getlength (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           long *dataLength);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_substringData (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               long offset,
                                                               long count,
                                                               char **data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_appendData (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_insertData (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            long offset,
                                                            const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_deleteData (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            long offset,
                                                            long count);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCharacterData_replaceData (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             long offset,
                                                             long count,
                                                             const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetnodeName (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetnodeValue (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_SetnodeValue (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetnodeType (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetparentNode (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetchildNodes (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetfirstChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetlastChild (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetpreviousSibling (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetnextSibling (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Getattributes (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_insertBefore (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ newChild,
                                                        VARIANT refChild,
                                                        ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_replaceChild (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ newChild,
                                                        ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                        ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_removeChild (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLObj_IXMLDOMNode_ childNode,
                                                       ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_appendChild (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLObj_IXMLDOMNode_ newChild,
                                                       ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_hasChildNodes (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetownerDocument (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_cloneNode (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VBOOL deep,
                                                     ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetnodeTypeString (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Gettext (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Settext (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Getspecified (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Getdefinition (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetdataType (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_SetdataType (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Getxml (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_transformNode (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                         char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_selectNodes (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       const char *queryString,
                                                       ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_selectSingleNode (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *queryString,
                                                            ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Getparsed (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetnamespaceURI (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Getprefix (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_GetbaseName (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_transformNodeToObject (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                 VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Getdata (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   char **data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Setdata (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_Getlength (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     long *dataLength);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_substringData (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         long offset, long count,
                                                         char **data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_appendData (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_insertData (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      long offset,
                                                      const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_deleteData (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      long offset, long count);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMComment_replaceData (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       long offset, long count,
                                                       const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetnodeName (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetnodeValue (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_SetnodeValue (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetnodeType (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetparentNode (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetchildNodes (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetfirstChild (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetlastChild (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetpreviousSibling (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetnextSibling (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Getattributes (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_insertBefore (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ newChild,
                                                             VARIANT refChild,
                                                             ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_replaceChild (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ newChild,
                                                             ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                             ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_removeChild (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMNode_ childNode,
                                                            ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_appendChild (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMNode_ newChild,
                                                            ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_hasChildNodes (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetownerDocument (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_cloneNode (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VBOOL deep,
                                                          ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetnodeTypeString (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Gettext (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Settext (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Getspecified (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Getdefinition (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetdataType (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_SetdataType (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Getxml (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_transformNode (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                              char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_selectNodes (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            const char *queryString,
                                                            ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_selectSingleNode (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 const char *queryString,
                                                                 ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Getparsed (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetnamespaceURI (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Getprefix (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_GetbaseName (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_transformNodeToObject (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                      VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Getdata (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Setdata (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_Getlength (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          long *dataLength);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_substringData (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              long offset,
                                                              long count,
                                                              char **data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_appendData (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_insertData (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           long offset,
                                                           const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_deleteData (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           long offset,
                                                           long count);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_replaceData (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            long offset,
                                                            long count,
                                                            const char *data);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMCDATASection_splitText (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          long offset,
                                                          ActiveXMLObj_IXMLDOMText_ *rightHandTextNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetnodeName (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetnodeValue (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_SetnodeValue (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetnodeType (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetparentNode (CAObjHandle objectHandle,
-                                                                      ERRORINFO *errorInfo,
+                                                                      ERRORINFO *errorMsg,
                                                                       ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetchildNodes (CAObjHandle objectHandle,
-                                                                      ERRORINFO *errorInfo,
+                                                                      ERRORINFO *errorMsg,
                                                                       ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetfirstChild (CAObjHandle objectHandle,
-                                                                      ERRORINFO *errorInfo,
+                                                                      ERRORINFO *errorMsg,
                                                                       ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetlastChild (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetpreviousSibling (CAObjHandle objectHandle,
-                                                                           ERRORINFO *errorInfo,
+                                                                           ERRORINFO *errorMsg,
                                                                            ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetnextSibling (CAObjHandle objectHandle,
-                                                                       ERRORINFO *errorInfo,
+                                                                       ERRORINFO *errorMsg,
                                                                        ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Getattributes (CAObjHandle objectHandle,
-                                                                      ERRORINFO *errorInfo,
+                                                                      ERRORINFO *errorMsg,
                                                                       ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_insertBefore (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      ActiveXMLObj_IXMLDOMNode_ newChild,
                                                                      VARIANT refChild,
                                                                      ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_replaceChild (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      ActiveXMLObj_IXMLDOMNode_ newChild,
                                                                      ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                                      ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_removeChild (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     ActiveXMLObj_IXMLDOMNode_ childNode,
                                                                     ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_appendChild (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     ActiveXMLObj_IXMLDOMNode_ newChild,
                                                                     ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_hasChildNodes (CAObjHandle objectHandle,
-                                                                      ERRORINFO *errorInfo,
+                                                                      ERRORINFO *errorMsg,
                                                                       VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetownerDocument (CAObjHandle objectHandle,
-                                                                         ERRORINFO *errorInfo,
+                                                                         ERRORINFO *errorMsg,
                                                                          ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_cloneNode (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   VBOOL deep,
                                                                   ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetnodeTypeString (CAObjHandle objectHandle,
-                                                                          ERRORINFO *errorInfo,
+                                                                          ERRORINFO *errorMsg,
                                                                           char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Gettext (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Settext (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Getspecified (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Getdefinition (CAObjHandle objectHandle,
-                                                                      ERRORINFO *errorInfo,
+                                                                      ERRORINFO *errorMsg,
                                                                       ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                                          ERRORINFO *errorInfo,
+                                                                          ERRORINFO *errorMsg,
                                                                           VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                                          ERRORINFO *errorInfo,
+                                                                          ERRORINFO *errorMsg,
                                                                           VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetdataType (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_SetdataType (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Getxml (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_transformNode (CAObjHandle objectHandle,
-                                                                      ERRORINFO *errorInfo,
+                                                                      ERRORINFO *errorMsg,
                                                                       ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                       char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_selectNodes (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     const char *queryString,
                                                                     ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_selectSingleNode (CAObjHandle objectHandle,
-                                                                         ERRORINFO *errorInfo,
+                                                                         ERRORINFO *errorMsg,
                                                                          const char *queryString,
                                                                          ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Getparsed (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetnamespaceURI (CAObjHandle objectHandle,
-                                                                        ERRORINFO *errorInfo,
+                                                                        ERRORINFO *errorMsg,
                                                                         char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Getprefix (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_GetbaseName (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_transformNodeToObject (CAObjHandle objectHandle,
-                                                                              ERRORINFO *errorInfo,
+                                                                              ERRORINFO *errorMsg,
                                                                               ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                               VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Gettarget (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Getdata (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 char **value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMProcessingInstruction_Setdata (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 const char *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetnodeName (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetnodeValue (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_SetnodeValue (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetnodeType (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetparentNode (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetchildNodes (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetfirstChild (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetlastChild (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetpreviousSibling (CAObjHandle objectHandle,
-                                                                     ERRORINFO *errorInfo,
+                                                                     ERRORINFO *errorMsg,
                                                                      ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetnextSibling (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_Getattributes (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_insertBefore (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMNode_ newChild,
                                                                VARIANT refChild,
                                                                ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_replaceChild (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMNode_ newChild,
                                                                ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                                ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_removeChild (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNode_ childNode,
                                                               ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_appendChild (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNode_ newChild,
                                                               ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_hasChildNodes (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetownerDocument (CAObjHandle objectHandle,
-                                                                   ERRORINFO *errorInfo,
+                                                                   ERRORINFO *errorMsg,
                                                                    ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_cloneNode (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VBOOL deep,
                                                             ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetnodeTypeString (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_Gettext (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_Settext (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_Getspecified (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_Getdefinition (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                                    ERRORINFO *errorInfo,
+                                                                    ERRORINFO *errorMsg,
                                                                     VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetdataType (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_SetdataType (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_Getxml (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_transformNode (CAObjHandle objectHandle,
-                                                                ERRORINFO *errorInfo,
+                                                                ERRORINFO *errorMsg,
                                                                 ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                 char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_selectNodes (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               const char *queryString,
                                                               ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_selectSingleNode (CAObjHandle objectHandle,
-                                                                   ERRORINFO *errorInfo,
+                                                                   ERRORINFO *errorMsg,
                                                                    const char *queryString,
                                                                    ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_Getparsed (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetnamespaceURI (CAObjHandle objectHandle,
-                                                                  ERRORINFO *errorInfo,
+                                                                  ERRORINFO *errorMsg,
                                                                   char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_Getprefix (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_GetbaseName (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntityReference_transformNodeToObject (CAObjHandle objectHandle,
-                                                                        ERRORINFO *errorInfo,
+                                                                        ERRORINFO *errorMsg,
                                                                         ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                         VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError_GeterrorCode (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           long *errorCode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError_Geturl (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     char **urlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError_Getreason (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **reasonString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError_GetsrcText (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         char **sourceString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError_Getline (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      long *lineNumber);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError_Getlinepos (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         long *linePosition);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError_Getfilepos (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         long *filePosition);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetnodeName (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetnodeValue (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_SetnodeValue (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetnodeType (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetparentNode (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetchildNodes (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetfirstChild (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetlastChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetpreviousSibling (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetnextSibling (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_Getattributes (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_insertBefore (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ newChild,
                                                         VARIANT refChild,
                                                         ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_replaceChild (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ newChild,
                                                         ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                         ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_removeChild (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ childNode,
                                                        ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_appendChild (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ newChild,
                                                        ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_hasChildNodes (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetownerDocument (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_cloneNode (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VBOOL deep,
                                                      ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetnodeTypeString (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_Gettext (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_Settext (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_Getspecified (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_Getdefinition (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo,
+                                                             ERRORINFO *errorMsg,
                                                              VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetdataType (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_SetdataType (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_Getxml (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_transformNode (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                          char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_selectNodes (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        const char *queryString,
                                                        ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_selectSingleNode (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             const char *queryString,
                                                             ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_Getparsed (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetnamespaceURI (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_Getprefix (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetbaseName (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_transformNodeToObject (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                  VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetpublicId (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT *publicId);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMNotation_GetsystemId (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VARIANT *systemId);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetnodeName (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetnodeValue (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_SetnodeValue (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VARIANT value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetnodeType (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLType_DOMNodeType *type);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetparentNode (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ *parent);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetchildNodes (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNodeList_ *childList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetfirstChild (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ *firstChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetlastChild (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLObj_IXMLDOMNode_ *lastChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetpreviousSibling (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ *previousSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetnextSibling (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         ActiveXMLObj_IXMLDOMNode_ *nextSibling);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_Getattributes (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNamedNodeMap_ *attributeMap);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_insertBefore (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLObj_IXMLDOMNode_ newChild,
                                                       VARIANT refChild,
                                                       ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_replaceChild (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       ActiveXMLObj_IXMLDOMNode_ newChild,
                                                       ActiveXMLObj_IXMLDOMNode_ oldChild,
                                                       ActiveXMLObj_IXMLDOMNode_ *outOldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_removeChild (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ childNode,
                                                      ActiveXMLObj_IXMLDOMNode_ *oldChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_appendChild (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ newChild,
                                                      ActiveXMLObj_IXMLDOMNode_ *outNewChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_hasChildNodes (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        VBOOL *hasChild);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetownerDocument (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           ActiveXMLObj_IXMLDOMDocument_ *XMLDOMDocument);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_cloneNode (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    VBOOL deep,
                                                    ActiveXMLObj_IXMLDOMNode_ *cloneRoot);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetnodeTypeString (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            char **nodeType);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_Gettext (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  char **text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_Settext (CAObjHandle objectHandle,
-                                                 ERRORINFO *errorInfo,
+                                                 ERRORINFO *errorMsg,
                                                  const char *text);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_Getspecified (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       VBOOL *isSpecified);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_Getdefinition (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ *definitionNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetnodeTypedValue (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            VARIANT *typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_SetnodeTypedValue (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            VARIANT typedValue);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetdataType (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VARIANT *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_SetdataType (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      const char *dataTypeName);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_Getxml (CAObjHandle objectHandle,
-                                                ERRORINFO *errorInfo,
+                                                ERRORINFO *errorMsg,
                                                 char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_transformNode (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                        char **xmlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_selectNodes (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      const char *queryString,
                                                      ActiveXMLObj_IXMLDOMNodeList_ *resultList);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_selectSingleNode (CAObjHandle objectHandle,
-                                                          ERRORINFO *errorInfo,
+                                                          ERRORINFO *errorMsg,
                                                           const char *queryString,
                                                           ActiveXMLObj_IXMLDOMNode_ *resultNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_Getparsed (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    VBOOL *isParsed);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetnamespaceURI (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          char **namespaceURI);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_Getprefix (CAObjHandle objectHandle,
-                                                   ERRORINFO *errorInfo,
+                                                   ERRORINFO *errorMsg,
                                                    char **prefixString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetbaseName (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      char **nameString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_transformNodeToObject (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMNode_ stylesheet,
                                                                VARIANT outputObject);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetpublicId (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VARIANT *publicId);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetsystemId (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      VARIANT *systemId);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMEntity_GetnotationName (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          char **name);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_GeterrorCode (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            long *errorCode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_Geturl (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      char **urlString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_Getreason (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         char **reasonString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_GetsrcText (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          char **sourceString);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_Getline (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       long *lineNumber);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_Getlinepos (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          long *linePosition);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_Getfilepos (CAObjHandle objectHandle,
-                                                         ERRORINFO *errorInfo,
+                                                         ERRORINFO *errorMsg,
                                                          long *filePosition);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_GeterrorXPath (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             char **xpathexpr);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_GetallErrors (CAObjHandle objectHandle,
-                                                           ERRORINFO *errorInfo,
+                                                           ERRORINFO *errorMsg,
                                                            ActiveXMLObj_IXMLDOMParseErrorCollection_ *allErrors);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_errorParameters (CAObjHandle objectHandle,
-                                                              ERRORINFO *errorInfo,
+                                                              ERRORINFO *errorMsg,
                                                               long index,
                                                               char **param);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseError2_GeterrorParametersCount (CAObjHandle objectHandle,
-                                                                      ERRORINFO *errorInfo,
+                                                                      ERRORINFO *errorMsg,
                                                                       long *count);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseErrorCollection_Getitem (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                long index,
                                                                ActiveXMLObj_IXMLDOMParseError2_ *error);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseErrorCollection_Getlength (CAObjHandle objectHandle,
-                                                                 ERRORINFO *errorInfo,
+                                                                 ERRORINFO *errorMsg,
                                                                  long *length);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseErrorCollection_Getnext (CAObjHandle objectHandle,
-                                                               ERRORINFO *errorInfo,
+                                                               ERRORINFO *errorMsg,
                                                                ActiveXMLObj_IXMLDOMParseError2_ *error);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseErrorCollection_reset (CAObjHandle objectHandle,
-                                                             ERRORINFO *errorInfo);
+                                                             ERRORINFO *errorMsg);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMParseErrorCollection_Get_newEnum (CAObjHandle objectHandle,
-                                                                   ERRORINFO *errorInfo,
+                                                                   ERRORINFO *errorMsg,
                                                                    LPUNKNOWN *ppUnk);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_Getitem (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     long index,
                                                     ActiveXMLObj_IXMLDOMNode_ *listItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_Getlength (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo,
+                                                      ERRORINFO *errorMsg,
                                                       long *listLength);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_nextNode (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ *nextItem);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_reset (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo);
+                                                  ERRORINFO *errorMsg);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_Get_newEnum (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         LPUNKNOWN *ppUnk);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_Getexpr (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     char **expression);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_Setexpr (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     const char *expression);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_Getcontext (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ *ppNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_SetByRefcontext (CAObjHandle objectHandle,
-                                                            ERRORINFO *errorInfo,
+                                                            ERRORINFO *errorMsg,
                                                             ActiveXMLObj_IXMLDOMNode_ ppNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_peekNode (CAObjHandle objectHandle,
-                                                     ERRORINFO *errorInfo,
+                                                     ERRORINFO *errorMsg,
                                                      ActiveXMLObj_IXMLDOMNode_ *ppNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_matches (CAObjHandle objectHandle,
-                                                    ERRORINFO *errorInfo,
+                                                    ERRORINFO *errorMsg,
                                                     ActiveXMLObj_IXMLDOMNode_ pNode,
                                                     ActiveXMLObj_IXMLDOMNode_ *ppNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_removeNext (CAObjHandle objectHandle,
-                                                       ERRORINFO *errorInfo,
+                                                       ERRORINFO *errorMsg,
                                                        ActiveXMLObj_IXMLDOMNode_ *ppNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_removeAll (CAObjHandle objectHandle,
-                                                      ERRORINFO *errorInfo);
+                                                      ERRORINFO *errorMsg);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_clone (CAObjHandle objectHandle,
-                                                  ERRORINFO *errorInfo,
+                                                  ERRORINFO *errorMsg,
                                                   ActiveXMLObj_IXMLDOMSelection_ *ppNode);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_getProperty (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *name,
                                                         VARIANT *value);
 
 HRESULT CVIFUNC ActiveXML_IXMLDOMSelection_setProperty (CAObjHandle objectHandle,
-                                                        ERRORINFO *errorInfo,
+                                                        ERRORINFO *errorMsg,
                                                         const char *name,
                                                         VARIANT value);
 #ifdef __cplusplus

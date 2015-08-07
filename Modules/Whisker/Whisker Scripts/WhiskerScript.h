@@ -21,10 +21,13 @@
 //==============================================================================
 // Constants
 #define MOD_WhiskerScript_UI 	"./Modules/Whisker/Whisker Scripts/UI_Scripts.uir"
+
+#define	XML_ELEMENT_VALUE		128		/* Message text OR 8 Number of digits in the value + '\0'*/
 #define	ELEMENT_NAME_LEN	 	32
 #define INTER_ELEMENT_SPACING 	10
-#define FILE_PATH_LEN			256
+#define FILE_PATH_LEN			128
 #define FILE_NAME_LEN			64
+#define MSG_LEN					128
 #define	NEW_SCRIPT_NAME			"<New Script>"
 #define NO_SCRIPT_NAME			"<No Script>"
 
@@ -35,7 +38,9 @@ typedef enum {
 	CONDITION,
 	REPEAT,
 	STOP,
-	WAIT
+	WAIT,
+	MESSAGE,
+	SOUND
 } ElementType_t;
 
 /* Type of action to take */
@@ -108,6 +113,17 @@ typedef struct {
 	int				delay;		/* Delay for wait operation */
 } WaitElement_t; 				/* Wait Element */
 
+typedef struct {
+	ScriptElement_t	base_class; 	/* Base Class */
+	char			text[MSG_LEN];	/* Message String */
+} MessageElement_t;				/* Message Element */
+
+typedef struct {
+	ScriptElement_t	base_class;		/* Base Class */
+	FilePath_t		file_path;		/* File path */
+} SoundElement_t;					/* Sound Element */
+
+
 /* Actual script which stores elements list */
 typedef struct {
 	ListType			script_elements;	/* Stores script elements */
@@ -131,6 +147,8 @@ typedef struct {
 	int		repeatElement_panel_handle; /* Repeat Element Panel Handle */
 	int 	stopElement_panel_handle;	/* Stop Element Panel Handle */
 	int 	waitElement_panel_handle;	/* Wait Element Panel Handle */
+	int		msgElement_panel_handle;	/* Message Element Panel Handle */
+	int		soundElement_panel_handle;	/* Sound Element Panel Handle */
 	size_t	element_panel_height;		/* Height of script element panel */
 } WhiskerScript_t;
 //==============================================================================
@@ -148,12 +166,15 @@ void load_script(WhiskerScript_t	*whisker_script);
 void import_settings(WhiskerScript_t	*whisker_script);
 int CVICALLBACK script_runner(void *thread_data);
 
-ScriptElement_t* init_StartElement(WhiskerScript_t *whisker_script, int *value);
-ScriptElement_t* init_ActionElement(WhiskerScript_t *whisker_script, int *value);
-ScriptElement_t* init_RepeatElement(WhiskerScript_t *whisker_script, int *value);
-ScriptElement_t* init_StopElement(WhiskerScript_t *whisker_script, int *value);
-ScriptElement_t* init_ConditionElement(WhiskerScript_t *whisker_script, int *value);
-ScriptElement_t* init_WaitElement(WhiskerScript_t *whisker_script, int *value);
+ScriptElement_t* init_StartElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_ActionElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_RepeatElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_StopElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_ConditionElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_WaitElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_MessageElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_SoundElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+
 
 #ifdef __cplusplus
     }

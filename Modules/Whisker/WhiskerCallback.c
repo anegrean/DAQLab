@@ -607,7 +607,6 @@ XYSettings_CB(int panel, int control, int event, void *callbackData, int eventDa
 						whisker_ui->XYSetting_panel_handle = 0;
 						break;
 				}
-				
 			break;
 	}
 	

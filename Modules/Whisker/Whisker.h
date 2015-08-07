@@ -34,7 +34,7 @@
 #define TAB_DROP_IN			0
 #define TAB_DROP_OUT		1
 #define TAB_AIR_PUFF		2
-		
+
 //==============================================================================
 // Types
 

@@ -39,7 +39,16 @@
 
 #define  ContainPan                       3
 
-#define  RepEle                           4
+#define  MsgEle                           4
+#define  MsgEle_SPLITTER                  2       /* control type: splitter, callback function: (none) */
+#define  MsgEle_EleName                   3       /* control type: textMsg, callback function: (none) */
+#define  MsgEle_EleNum                    4       /* control type: textMsg, callback function: (none) */
+#define  MsgEle_EleDelete                 5       /* control type: pictButton, callback function: MsgElementButtons_CB */
+#define  MsgEle_EleApply                  6       /* control type: pictButton, callback function: MsgElementButtons_CB */
+#define  MsgEle_LED                       7       /* control type: LED, callback function: (none) */
+#define  MsgEle_EleText                   8       /* control type: string, callback function: (none) */
+
+#define  RepEle                           5
 #define  RepEle_SPLITTER                  2       /* control type: splitter, callback function: (none) */
 #define  RepEle_EleName                   3       /* control type: textMsg, callback function: (none) */
 #define  RepEle_EleStep                   4       /* control type: numeric, callback function: (none) */
@@ -49,7 +58,7 @@
 #define  RepEle_LED                       8       /* control type: LED, callback function: (none) */
 #define  RepEle_EleNTimes                 9       /* control type: numeric, callback function: (none) */
 
-#define  ScriptPan                        5
+#define  ScriptPan                        6
 #define  ScriptPan_ScriptLog              2       /* control type: textBox, callback function: (none) */
 #define  ScriptPan_ScriptImportSetting    3       /* control type: command, callback function: WhiskerScriptButton_CB */
 #define  ScriptPan_ScriptQuit             4       /* control type: command, callback function: WhiskerScriptButton_CB */
@@ -67,11 +76,22 @@
 #define  ScriptPan_ScriptPause            16      /* control type: pictButton, callback function: WhiskerScriptButton_CB */
 #define  ScriptPan_ScriptStop             17      /* control type: pictButton, callback function: WhiskerScriptButton_CB */
 #define  ScriptPan_ScriptRun              18      /* control type: pictButton, callback function: WhiskerScriptButton_CB */
-#define  ScriptPan_LogFile                19      /* control type: textMsg, callback function: (none) */
+#define  ScriptPan_ScriptName             19      /* control type: textMsg, callback function: (none) */
 #define  ScriptPan_LickGraph              20      /* control type: strip, callback function: (none) */
-#define  ScriptPan_ScriptName             21      /* control type: textMsg, callback function: (none) */
+#define  ScriptPan_LogFile                21      /* control type: textMsg, callback function: (none) */
 
-#define  StartEle                         6
+#define  SoundEle                         7
+#define  SoundEle_SPLITTER                2       /* control type: splitter, callback function: (none) */
+#define  SoundEle_EleName                 3       /* control type: textMsg, callback function: (none) */
+#define  SoundEle_EleNum                  4       /* control type: textMsg, callback function: (none) */
+#define  SoundEle_EleDelete               5       /* control type: pictButton, callback function: SoundElementButtons_CB */
+#define  SoundEle_EleApply                6       /* control type: pictButton, callback function: SoundElementButtons_CB */
+#define  SoundEle_LED                     7       /* control type: LED, callback function: (none) */
+#define  SoundEle_ElePlay                 8       /* control type: command, callback function: SoundElementButtons_CB */
+#define  SoundEle_EleLoad                 9       /* control type: command, callback function: SoundElementButtons_CB */
+#define  SoundEle_ElePath                 10      /* control type: string, callback function: (none) */
+
+#define  StartEle                         8
 #define  StartEle_SPLITTER                2       /* control type: splitter, callback function: (none) */
 #define  StartEle_EleName                 3       /* control type: textMsg, callback function: (none) */
 #define  StartEle_EleDelay                4       /* control type: numeric, callback function: (none) */
@@ -80,7 +100,7 @@
 #define  StartEle_EleApply                7       /* control type: pictButton, callback function: StartElementButtons_CB */
 #define  StartEle_LED                     8       /* control type: LED, callback function: (none) */
 
-#define  StopEle                          7
+#define  StopEle                          9
 #define  StopEle_SPLITTER                 2       /* control type: splitter, callback function: (none) */
 #define  StopEle_EleName                  3       /* control type: textMsg, callback function: (none) */
 #define  StopEle_EleDelay                 4       /* control type: numeric, callback function: (none) */
@@ -89,7 +109,7 @@
 #define  StopEle_EleApply                 7       /* control type: pictButton, callback function: StopElementButtons_CB */
 #define  StopEle_LED                      8       /* control type: LED, callback function: (none) */
 
-#define  WaitEle                          8
+#define  WaitEle                          10
 #define  WaitEle_SPLITTER                 2       /* control type: splitter, callback function: (none) */
 #define  WaitEle_EleName                  3       /* control type: textMsg, callback function: (none) */
 #define  WaitEle_EleDelay                 4       /* control type: numeric, callback function: (none) */
@@ -113,8 +133,10 @@
 
 int  CVICALLBACK ActionElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK CondElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK MsgElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK RepeatElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK ScriptAddElement_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK SoundElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK StartElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK StopElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK WaitElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);

@@ -207,6 +207,15 @@ ScriptAddElement_CB(int panel, int control, int event, void *callbackData, int e
 				case WAIT: /* Wait Element */
 					nullChk(element = init_WaitElement(whisker_script, NULL));
 					break;
+					
+				case MESSAGE: /* Message Element */
+					nullChk(element = init_MessageElement(whisker_script, NULL));
+					break;
+					
+				case SOUND:	/* Sound Element */
+					nullChk(element = init_SoundElement(whisker_script, NULL));
+					break;
+					
 			}
 			
 			/* Set Panel Attributes */
@@ -485,4 +494,106 @@ WaitElementButtons_CB(int panel, int control, int event, void *callbackData, int
 	
 	return 0;
 }
+
+/* Message Element Button Control Callback */
+int  CVICALLBACK 
+MsgElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)callbackData;
+	ScriptElement_t	*element = NULL;
+	char			seq_num[3];
+	int				index = 0;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			GetCtrlVal(panel, MsgEle_EleNum, seq_num);
+			index = atoi(seq_num);
+			
+			switch (control) {
+				case MsgEle_EleDelete:
+					ListRemoveItem(whisker_script->cur_script.script_elements, &element, index);
+					whisker_script->cur_script.num_elements -= 1;
+					
+					/* Discard Panel */
+					DiscardPanel(element->panel_handle);
+					OKfree(element);
+					
+					/* Redraw UI */
+					redraw_script_elements(&(whisker_script->cur_script));
+					break;
+				
+				case MsgEle_EleApply:
+					ListGetItem(whisker_script->cur_script.script_elements, &element, index);
+					MessageElement_t *message_element = (MessageElement_t *)element;
+					
+					/* Get Text Message */
+					GetCtrlVal(panel, MsgEle_EleText, message_element->text);
+					break;
+			}
+			break;
+	}
+	
+	return 0;
+}
+
+/* Sound Element panel Callback */
+int  CVICALLBACK 
+SoundElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)callbackData;
+	ScriptElement_t	*element = NULL;
+	char			seq_num[3];
+	int				index = 0;
+	int				ret = 0;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			GetCtrlVal(panel, SoundEle_EleNum, seq_num);
+			index = atoi(seq_num);
+			ListGetItem(whisker_script->cur_script.script_elements, &element, index);
+			SoundElement_t *sound_element = (SoundElement_t *)element;
+			
+			switch (control) {
+				case SoundEle_EleDelete:   /* TODO: Create MACRO or inline function for following statements */
+					ListRemoveItem(whisker_script->cur_script.script_elements, &element, index);
+					whisker_script->cur_script.num_elements -= 1;
+					
+					/* Discard Panel */
+					DiscardPanel(element->panel_handle);
+					OKfree(element);
+					
+					/* Redraw UI */
+					redraw_script_elements(&(whisker_script->cur_script));
+					break;
+				
+				case SoundEle_EleApply:
+					/* Get Text Message */
+					GetCtrlVal(panel, SoundEle_ElePath, sound_element->file_path.file_path);
+					sound_element->file_path.VALID_FILE = TRUE;
+					break;
+					
+				case SoundEle_EleLoad:	/* Load Sound file */
+					ret = FileSelectPopup("", "*.wav", "", "Select a File",
+                               VAL_LOAD_BUTTON, 0, 0, 1, 0, sound_element->file_path.file_path);
+            		if (ret) {
+            			SetCtrlVal(panel, SoundEle_ElePath, sound_element->file_path.file_path);
+						sound_element->file_path.VALID_FILE = TRUE;
+					}
+					break;
+					
+				case SoundEle_ElePlay:	/* Play Sound File */
+					if (sound_element->file_path.VALID_FILE == FALSE) {
+						MessagePopup("Play Sound", "Please load proper sound file!");
+						return -1;
+					}
+					
+					sndPlaySound(sound_element->file_path.file_path, SND_SYNC);
+					break;
+			}
+			break;
+	}
+	
+	return 0;
+}
+
 

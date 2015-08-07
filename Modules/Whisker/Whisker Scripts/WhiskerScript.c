@@ -23,14 +23,15 @@
 #define TOT_IO_CH			32
 #define ERR_MSG_SIZE		128
 
-#define	XML_ELEMENT_VALUE		9			/* 8 Number of digits in the value + '\0'*/
-#define MAX_CHILD_ELEMENTS		5			/* Condition Element has maximum childrens */
-#define START_ELEMENT_CHILDS	2
+#define MAX_CHILD_ELEMENTS		5		/* Condition Element has maximum childrens */
+#define START_ELEMENT_CHILDS	2			
 #define ACTION_ELEMENT_CHILDS	4
 #define COND_ELEMENT_CHILDS		5
 #define REPEAT_ELEMENT_CHILDS	3
 #define STOP_ELEMENT_CHILDS		2
 #define WAIT_ELEMENT_CHILDS		2
+#define MSG_ELEMENT_CHILDS		2
+#define SOUND_ELEMENT_CHILDS	2
 
 #define ATTR_ID				"ID"
 #define XML_ROOT_ELEMENT	"Script"
@@ -40,6 +41,8 @@
 #define REPEAT_ELEMENT_TAG	"Repeat"
 #define STOP_ELEMENT_TAG	"Stop"
 #define WAIT_ELEMENT_TAG	"Wait"
+#define MSG_ELEMENT_TAG		"Message"
+#define SOUND_ELEMENT_TAG	"Sound"
 
 #define SEQ_NO_TAG			"Seq_No"
 #define DELAY_TAG			"Delay"
@@ -51,10 +54,14 @@
 #define FALSE_TAG			"False"
 #define NTIMES_TAG			"NTimes"
 #define STEP_TAG			"Step"
+#define TEXT_TAG			"Text"
+#define FILE_PATH_TAG		"FilePath"
 
-#define LOG_MSG_LEN			256
-#define LOG_TITLE			"ID\t\tType\t\tParams\n"
-#define LOG_HYPHEN			"-------\t\t-----------------\t\t------------------"
+#define LOG_MSG_LEN				256
+#define LOG_TITLE				"ID\t\tType\t\tParams\n"
+#define LOG_HYPHEN				"-------\t\t-----------------\t\t------------------"
+#define LOG_NUM_LINES			100
+#define LOG_NUM_DELETE_LINES    10		/* 10% of LOG_NUM_LINES */
 
 const char	*Action_String[] = {
 			"AIRPUFF",
@@ -66,7 +73,7 @@ const char	*Action_String[] = {
 
 //==============================================================================
 // Static global variables
-
+static size_t	log_lines_counter = 0;		/* counter: number of log lines that text box can hold */
 //==============================================================================
 // Static functions
 
@@ -77,7 +84,7 @@ WhiskerScript_t *whisker_script = NULL;
 // Global functions
 inline void setscript_ctrl_attribute(WhiskerScript_t *whisker_script);
 static int add_XMLElement_toRoot(CVIXMLElement *par_element, char *tag[], char value[][XML_ELEMENT_VALUE], int index);
-static int get_XMLElement_childvalues(CVIXMLElement *xml_element, int *value, int num_child);
+static int get_XMLElement_childvalues(CVIXMLElement *xml_element, char value[][XML_ELEMENT_VALUE], int num_child);
 
 void start_runner(void *element, void *whisker_script, int *index);
 void action_runner(void *element, void *whisker_script, int *index);
@@ -85,6 +92,8 @@ void condition_runner(void *element, void *whisker_script, int *index);
 void repeat_runner(void *element, void *whisker_script, int *index);
 void stop_runner(void *element, void *whisker_script, int *index);
 void wait_runner(void *element, void *whisker_script, int *index);
+void message_runner(void *element, void *whisker_script, int *index);
+void sound_runner(void *element, void *whisker_script, int *index);
 inline void save_and_print_LogMsg(WhiskerScript_t *whisker_script, char	*msg);
 
 static void DisplayActiveXErrorMessageOnFailure(HRESULT error);
@@ -140,8 +149,12 @@ init_display_script(void *function_data)
 	errChk(whisker_script->stopElement_panel_handle = LoadPanel(whisker_script->container_panel_handle, 
 										  				MOD_WhiskerScript_UI, StopEle));
 	errChk(whisker_script->waitElement_panel_handle = LoadPanel(whisker_script->container_panel_handle, 
-										  			MOD_WhiskerScript_UI, WaitEle));
-	
+										  				MOD_WhiskerScript_UI, WaitEle));
+	errChk(whisker_script->msgElement_panel_handle = LoadPanel(whisker_script->container_panel_handle,
+														MOD_WhiskerScript_UI, MsgEle));
+	errChk(whisker_script->soundElement_panel_handle = LoadPanel(whisker_script->container_panel_handle,
+														MOD_WhiskerScript_UI, SoundEle));
+																				   
 	/* Set Ctrl attibute */
 	setscript_ctrl_attribute(whisker_script);
 	
@@ -263,6 +276,14 @@ setscript_ctrl_attribute(WhiskerScript_t *whisker_script)
 	SetCtrlAttribute (whisker_script->waitElement_panel_handle, WaitEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	SetCtrlAttribute (whisker_script->waitElement_panel_handle, WaitEle_EleApply, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	
+	SetCtrlAttribute (whisker_script->msgElement_panel_handle, MsgEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	SetCtrlAttribute (whisker_script->msgElement_panel_handle, MsgEle_EleApply, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	
+	SetCtrlAttribute (whisker_script->soundElement_panel_handle, SoundEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	SetCtrlAttribute (whisker_script->soundElement_panel_handle, SoundEle_EleApply, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	SetCtrlAttribute (whisker_script->soundElement_panel_handle, SoundEle_EleLoad, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	SetCtrlAttribute (whisker_script->soundElement_panel_handle, SoundEle_ElePlay, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	
 	return;
 }
 
@@ -299,6 +320,10 @@ redraw_script_elements(WScript_t *cur_script)
 			SetCtrlVal(element->panel_handle, StopEle_EleNum, seq_num);	
 		} else if (element->MAGIC_NUM == WAIT) {
 			SetCtrlVal(element->panel_handle, WaitEle_EleNum, seq_num);	
+		} else if (element->MAGIC_NUM == MESSAGE) {
+			SetCtrlVal(element->panel_handle, MsgEle_EleNum, seq_num);
+		} else if (element->MAGIC_NUM == SOUND) {
+			SetCtrlVal(element->panel_handle, SoundEle_EleNum, seq_num);
 		}
 						 
 		GetPanelAttribute(element->panel_handle, ATTR_HEIGHT, &height_element_panel);
@@ -321,8 +346,7 @@ save_script(WhiskerScript_t	*whisker_script)
 	CVIXMLElement	root_element = NULL;
 	HRESULT         error = S_OK;
 	char			*tag[MAX_CHILD_ELEMENTS + 1 + 1];	/* Childs + Parent + NULL */
-	char			value[MAX_CHILD_ELEMENTS + 1][XML_ELEMENT_VALUE];
-	
+	char			value[MAX_CHILD_ELEMENTS + 1][XML_ELEMENT_VALUE];	/* TODO: Need dynamic allocation */
 	
 	if (cur_script->num_elements < 1) {	/* No elements in the script */
 		MessagePopup("Save XML", "Script Should have atleast one element!");
@@ -418,6 +442,32 @@ save_script(WhiskerScript_t	*whisker_script)
 				sprintf(value[2], "%d", ((WaitElement_t *)element)->delay);
 				
 				break;
+				
+			case MESSAGE:	/* Add Message Element */
+				/* Set tag */
+				tag[0] = MSG_ELEMENT_TAG;	tag[1] = SEQ_NO_TAG;
+				tag[2] = TEXT_TAG;			tag[3] = NULL;
+				
+				/* Set Value. Tag index and value index should match */
+				sprintf(value[0], "%d", element->MAGIC_NUM);
+				sprintf(value[1], "%d", i);
+				strncpy(value[2], ((MessageElement_t *)element)->text, 
+														XML_ELEMENT_VALUE - 1);
+											
+				break;
+				
+			case SOUND:		/* Add sound Element */
+				/* Set Tag */
+				tag[0] = SOUND_ELEMENT_TAG;	tag[1] = SEQ_NO_TAG;
+				tag[2] = FILE_PATH_TAG;		tag[3] = NULL;
+				
+				/* Set Value. Tag index and value index should match */
+				sprintf(value[0], "%d", element->MAGIC_NUM);
+				sprintf(value[1], "%d", i);
+				strncpy(value[2], ((SoundElement_t *)element)->file_path.file_path, 
+														XML_ELEMENT_VALUE - 1);
+											
+				break;
 		}
 		
 		/* Add tag and value to script element */
@@ -473,7 +523,7 @@ load_script(WhiskerScript_t	*whisker_script)
 	ElementType_t	MAGIC_NUM;
 	HRESULT         error = S_OK;
 	int				num_XMLelements = 0;
-	int				value[MAX_CHILD_ELEMENTS];
+	char			value[MAX_CHILD_ELEMENTS][XML_ELEMENT_VALUE];	/* TODO: Need dynamic allocation */
 	
 	if (cur_script->script_elements != NULL) {
 		ret = ConfirmPopup ("Load Script", "Discard existing script?");
@@ -549,6 +599,17 @@ load_script(WhiskerScript_t	*whisker_script)
 				XMLErrChk(get_XMLElement_childvalues(&xml_element, value, WAIT_ELEMENT_CHILDS));
 				nullChk(element = init_WaitElement(whisker_script, value));
 				break;
+				
+			case MESSAGE:
+				XMLErrChk(get_XMLElement_childvalues(&xml_element, value, MSG_ELEMENT_CHILDS));
+				nullChk(element = init_MessageElement(whisker_script, value));
+				break;
+				
+			case SOUND:
+				XMLErrChk(get_XMLElement_childvalues(&xml_element, value, SOUND_ELEMENT_CHILDS));
+				nullChk(element = init_SoundElement(whisker_script, value));
+				break;
+				
 		}
 		/* Set Panel Attributes */
 		SetPanelAttribute(element->panel_handle, ATTR_TITLEBAR_VISIBLE, 0);
@@ -673,6 +734,7 @@ script_runner(void *thread_data)
 							ATTR_DIMMED, 0);
 	
 	/* Reset Log Box */
+	log_lines_counter = 0;
 	ResetTextBox (whisker_script->main_panel_handle, ScriptPan_ScriptLog, "");
 	save_and_print_LogMsg(whisker_script, LOG_TITLE);
 	save_and_print_LogMsg(whisker_script, LOG_HYPHEN); 
@@ -761,6 +823,15 @@ save_and_print_LogMsg(WhiskerScript_t *whisker_script, char	*str)
 	if (cur_script->log_file.VALID_FILE == TRUE) {
 		fprintf(cur_script->log_file.file_handle, "%s \n", msg);
 	}
+	
+	/* Adjust lines in log text box */
+	log_lines_counter++;
+	if (log_lines_counter > LOG_NUM_LINES) {
+		DeleteTextBoxLines(whisker_script->main_panel_handle, ScriptPan_ScriptLog, 
+						   2 /* Number of header lines */, LOG_NUM_DELETE_LINES);
+		log_lines_counter -= LOG_NUM_DELETE_LINES;
+	}
+	
 	return;
 }
 
@@ -830,7 +901,7 @@ import_settings(WhiskerScript_t	*whisker_script)
 void *
 init_Element(WhiskerScript_t *whisker_script, size_t element_size, int panel_handle)
 {
-	ScriptElement_t	*element = (ScriptElement_t *)malloc(element_size);
+	ScriptElement_t	*element = (ScriptElement_t *)calloc(1, element_size);
 	
 	if (element == NULL) {
 		return NULL;	
@@ -848,7 +919,7 @@ init_Element(WhiskerScript_t *whisker_script, size_t element_size, int panel_han
 }
 
 ScriptElement_t *
-init_StartElement(WhiskerScript_t *whisker_script, int *value)
+init_StartElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE])
 {
 	StartElement_t	*start_element = (StartElement_t *)init_Element(whisker_script, 
 									 		sizeof(StartElement_t),
@@ -862,16 +933,17 @@ init_StartElement(WhiskerScript_t *whisker_script, int *value)
 	start_element->base_class.runner_function = start_runner;
 																
 	if (value != NULL) { /* Init Start Element with supplied values */
-		start_element->delay = value[1];	/* 0th index for delay */
+		start_element->delay = atoi(value[1]);	/* 0th index for delay */
 		/* Update UI */
-		SetCtrlVal(start_element->base_class.panel_handle, StartEle_EleDelay, value[1]);
+		SetCtrlVal(start_element->base_class.panel_handle, StartEle_EleDelay, 
+				   										start_element->delay);
 	}
 	
 	return (ScriptElement_t *)start_element;
 }
 
 ScriptElement_t *
-init_ActionElement(WhiskerScript_t *whisker_script, int *value)
+init_ActionElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE])
 {
 	ActionElement_t	*action_element = (ActionElement_t *)init_Element(whisker_script, 
 									  		sizeof(ActionElement_t),
@@ -885,21 +957,24 @@ init_ActionElement(WhiskerScript_t *whisker_script, int *value)
 	action_element->base_class.runner_function = action_runner;
 	
 	if (value != NULL) {
-		action_element->action = value[1];
-		action_element->duration = (Action_t *) value[2];
-		action_element->IO_Channel = value[3];
+		action_element->action = atoi(value[1]);
+		action_element->duration = (Action_t *) atoi(value[2]);
+		action_element->IO_Channel = atoi(value[3]);
 		
 		/* Update UI */
-		SetCtrlVal(action_element->base_class.panel_handle, ActionEle_EleCommand, value[1]);
-		SetCtrlVal(action_element->base_class.panel_handle, ActionEle_EleDuration, value[2]);
-		SetCtrlVal(action_element->base_class.panel_handle, ActionEle_EleIO_CH, value[3]);
+		SetCtrlVal(action_element->base_class.panel_handle, ActionEle_EleCommand, 
+				   										action_element->action);
+		SetCtrlVal(action_element->base_class.panel_handle, ActionEle_EleDuration,
+				  										action_element->duration);
+		SetCtrlVal(action_element->base_class.panel_handle, ActionEle_EleIO_CH,
+				  										action_element->IO_Channel);
 	}						
 	
 	return (ScriptElement_t *)action_element;
 }
 
 ScriptElement_t *
-init_ConditionElement(WhiskerScript_t *whisker_script, int *value)
+init_ConditionElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE])
 {
 	ConditionElement_t	*condition_element = (ConditionElement_t *)init_Element(whisker_script, 
 													sizeof(ConditionElement_t),
@@ -913,24 +988,27 @@ init_ConditionElement(WhiskerScript_t *whisker_script, int *value)
 	condition_element->base_class.runner_function = condition_runner;
 	
 	if (value != NULL) {
-		condition_element->IO_channel = value[1];
-		condition_element->value = value[2];
-		condition_element->true_step = value[3];
-		condition_element->false_step = value[4];
+		condition_element->IO_channel = atoi(value[1]);
+		condition_element->value = atoi(value[2]);
+		condition_element->true_step = atoi(value[3]);
+		condition_element->false_step = atoi(value[4]);
 		
 		/* Update UI */
-		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleIO_CH, value[1]);
-		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleValue, value[2]);
-		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleTrue, value[3]);
-		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleFalse, value[4]);
-		
+		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleIO_CH, 
+				   								condition_element->IO_channel);
+		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleValue,
+				  								condition_element->value);
+		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleTrue,
+				  								condition_element->true_step);
+		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleFalse,
+				  								condition_element->false_step);  
 	}
 		
 	return (ScriptElement_t *)condition_element;
 }
 
 ScriptElement_t *
-init_RepeatElement(WhiskerScript_t *whisker_script, int *value)
+init_RepeatElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE])
 {
 	RepeatElement_t	*repeat_element = (RepeatElement_t *)init_Element(whisker_script, 
 												sizeof(RepeatElement_t),
@@ -945,19 +1023,21 @@ init_RepeatElement(WhiskerScript_t *whisker_script, int *value)
 	repeat_element->counter = 0;
 	
 	if (value != NULL) {
-		repeat_element->ntimes = value[1];
-		repeat_element->repeat_step = value[2];
+		repeat_element->ntimes = atoi(value[1]);
+		repeat_element->repeat_step = atoi(value[2]);
 		
 		/* Update UI */
-		SetCtrlVal(repeat_element->base_class.panel_handle, RepEle_EleNTimes, value[1]);
-		SetCtrlVal(repeat_element->base_class.panel_handle, RepEle_EleStep, value[2]);
+		SetCtrlVal(repeat_element->base_class.panel_handle, RepEle_EleNTimes, 
+				   								repeat_element->ntimes);
+		SetCtrlVal(repeat_element->base_class.panel_handle, RepEle_EleStep, 
+				   								repeat_element->repeat_step);
 	}
 		
 	return (ScriptElement_t *)repeat_element;
 }
 
 ScriptElement_t *
-init_StopElement(WhiskerScript_t *whisker_script, int *value)
+init_StopElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE])
 {
 	StopElement_t	*stop_element = (StopElement_t *)init_Element(whisker_script, 
 												sizeof(StopElement_t),
@@ -970,16 +1050,17 @@ init_StopElement(WhiskerScript_t *whisker_script, int *value)
 	stop_element->base_class.MAGIC_NUM = STOP;
 	stop_element->base_class.runner_function = stop_runner;
 	
-	if (value != NULL) { /* Init Start Element with supplied values */
-		stop_element->delay = value[1];	/* 0th index for delay */
-		SetCtrlVal(stop_element->base_class.panel_handle, StopEle_EleDelay, value[1]);
+	if (value != NULL) { /* Init Stop Element with supplied values */
+		stop_element->delay = atoi(value[1]);	/* 0th index for delay */
+		SetCtrlVal(stop_element->base_class.panel_handle, StopEle_EleDelay, 
+				   									stop_element->delay);
 	}
 	
 	return (ScriptElement_t *)stop_element;
 }
 
 ScriptElement_t *
-init_WaitElement(WhiskerScript_t *whisker_script, int *value)
+init_WaitElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE])
 {
 	WaitElement_t	*wait_element = (WaitElement_t *)init_Element(whisker_script, 
 												sizeof(WaitElement_t),
@@ -992,12 +1073,76 @@ init_WaitElement(WhiskerScript_t *whisker_script, int *value)
 	wait_element->base_class.MAGIC_NUM = WAIT;
 	wait_element->base_class.runner_function = wait_runner;
 	
-	if (value != NULL) { /* Init Start Element with supplied values */
-		wait_element->delay = value[1];	/* 0th index for delay */
-		SetCtrlVal(wait_element->base_class.panel_handle, WaitEle_EleDelay, value[1]);
+	if (value != NULL) { /* Init Wait Element with supplied values */
+		wait_element->delay = atoi(value[1]);	/* 0th index for delay */
+		SetCtrlVal(wait_element->base_class.panel_handle, WaitEle_EleDelay,
+				  								wait_element->delay);
 	}
 	
 	return (ScriptElement_t *)wait_element;
+}
+
+ScriptElement_t *
+init_MessageElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE])
+{
+	MessageElement_t *message_element = (MessageElement_t *)init_Element(whisker_script, 
+												sizeof(MessageElement_t),
+									 			whisker_script->msgElement_panel_handle);
+	
+	if (message_element == NULL) {
+		return NULL;
+	}
+	
+	message_element->base_class.MAGIC_NUM = MESSAGE;
+	message_element->base_class.runner_function = message_runner;
+	
+	/* XXX: NI BUG Report # 423491
+	 * Occurs only in DEBUG build.
+	 * When a structure is dynamically allocated and if any field in the structure 
+	 * is accessed through its address, it gives run time fatal error.
+	 * Workaround : UNCHECKED(address)
+	 * WARN: Make sure you use it only when you are completely sure of memory
+ 	 * access.
+	 */
+	if (value != NULL) { /* Init Message Element with supplied values */
+		strncpy(UNCHECKED(message_element->text), value[1], XML_ELEMENT_VALUE - 1);
+		SetCtrlVal(message_element->base_class.panel_handle, MsgEle_EleText,
+				   							UNCHECKED(message_element->text));
+	}
+	
+	return (ScriptElement_t *)message_element;
+}
+
+ScriptElement_t *
+init_SoundElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE])
+{
+	SoundElement_t *sound_element = (SoundElement_t *)init_Element(whisker_script, 
+												sizeof(SoundElement_t),
+									 			whisker_script->soundElement_panel_handle);
+	
+	if (sound_element == NULL) {
+		return NULL;
+	}
+	
+	sound_element->base_class.MAGIC_NUM = SOUND;
+	sound_element->base_class.runner_function = sound_runner;
+	
+	/* XXX: NI BUG Report # 423491
+	 * Occurs only in DEBUG build.
+	 * When a structure is allocated and if any field in the structure is
+	 * accessed through its address, it gives run time fatal error.
+	 * Workaround : UNCHECKED(address)
+	 * WARN: Make sure you use it only when you are completely sure of memory
+ 	 * access.
+	 */
+	if (value != NULL) { /* Init Message Element with supplied values */
+		strncpy(UNCHECKED(sound_element->file_path.file_path), value[1], XML_ELEMENT_VALUE - 1);
+		SetCtrlVal(sound_element->base_class.panel_handle, SoundEle_ElePath,
+				   							UNCHECKED(sound_element->file_path.file_path));
+		sound_element->file_path.VALID_FILE = TRUE;
+	}
+	
+	return (ScriptElement_t *)sound_element;
 }
 
 
@@ -1061,7 +1206,7 @@ Error:
 }
 
 static int
-get_XMLElement_childvalues(CVIXMLElement *xml_element, int *value, int num_child)
+get_XMLElement_childvalues(CVIXMLElement *xml_element, char value[][XML_ELEMENT_VALUE], int num_child)
 {
 	CVIXMLElement	child_element = NULL;
 	HRESULT			error = S_OK;
@@ -1071,7 +1216,7 @@ get_XMLElement_childvalues(CVIXMLElement *xml_element, int *value, int num_child
 		XMLErrChk(CVIXMLGetChildElementByIndex(*xml_element, i, &child_element));
 		XMLErrChk(CVIXMLGetElementValue (child_element, xml_value));
 		RemoveSurroundingWhiteSpace (xml_value);		  
-		value[i] = atoi(xml_value);
+		strncpy(value[i], xml_value, XML_ELEMENT_VALUE - 1);
 		CVIXMLDiscardElement(child_element);
 	}
 	
@@ -1229,6 +1374,39 @@ repeat_runner(void *element, void *whisker_script, int *index)
 	SetCtrlVal(repeat_element->base_class.panel_handle, RepEle_LED, 0);
 	return;
 }
+
+void
+message_runner(void *element, void *whisker_script, int *index)
+{
+	Whisker_t			*whisker_m = (Whisker_t *)
+							((WhiskerScript_t *)whisker_script)->whisker_m;	
+	MessageElement_t	*message_element = (MessageElement_t *)element;
+
+	SetCtrlVal(message_element->base_class.panel_handle, MsgEle_LED, 1);
+	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, message_element->text);
+	SetCtrlVal(message_element->base_class.panel_handle, MsgEle_LED, 0);
+	return;
+}
+
+void
+sound_runner(void *element, void *whisker_script, int *index)
+{
+	Whisker_t			*whisker_m = (Whisker_t *)
+							((WhiskerScript_t *)whisker_script)->whisker_m;
+	SoundElement_t		*sound_element = (SoundElement_t *)element;
+	
+	/* Log message to file and text box */
+	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, "Playing Sound..");
+	
+	SetCtrlVal(sound_element->base_class.panel_handle, SoundEle_LED, 1);
+	/* Play sound */
+	if (sound_element->file_path.VALID_FILE == TRUE) {
+		sndPlaySound(sound_element->file_path.file_path, SND_SYNC);
+	}
+	SetCtrlVal(sound_element->base_class.panel_handle, SoundEle_LED, 0);
+	return;
+}
+	
 
 
 

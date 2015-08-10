@@ -101,6 +101,16 @@ typedef struct {
 #define LOG_MSG2(level, f, v1, v2)	if (_CVI_DEBUG_ && level <= _DEBUG_LEVEL_) { 			\
 									printf("(%s: %d) " f "\n", __FILE__, __LINE__, v1, v2); \
 								}
+						   
+/* XXX: NI BUG Report # 423491
+ * Occurs only in DEBUG build.
+ * When a structure is allocated and if any field in the structure is accessed 
+ * through its address without initialization, it gives run time fatal error.
+ * Workaround : guard adrress using UNCHECKED(address).
+ * WARN: Make sure you use it only when you are completely sure of memory
+ * access.
+ */
+#define UNCHECKED(x)	((void*)(uintptr_t)(x))
 													 
 //==============================================================================
 // Types

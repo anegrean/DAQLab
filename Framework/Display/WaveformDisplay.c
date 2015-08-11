@@ -78,7 +78,8 @@ static void 					UpdateGraphCursors 					(int panel, int control);
 
 WaveformDisplay_type* init_WaveformDisplay_type (int parentPanHndl, char displayTitle[], WaveformDisplayCB_type waveDispCBFptr, void* callbackData)
 {
-	int						error		= 0;
+INIT_ERR
+
 	WaveformDisplay_type*	waveDisp 	= malloc (sizeof(WaveformDisplay_type));
 	if (!waveDisp) return NULL;
 	
@@ -170,7 +171,6 @@ WaveformDisplay_type* init_WaveformDisplay_type (int parentPanHndl, char display
 	SetCtrlAttribute(waveDisp->plotPanHndl, TSPan_GraphPlot, ATTR_CALLBACK_FUNCTION_POINTER, TSPanCtrls_CB); 
 	SetCtrlAttribute(waveDisp->plotPanHndl, TSPan_GraphPlot, ATTR_CALLBACK_DATA, waveDisp);
 	
-	
 	return waveDisp;
 	
 Error:
@@ -223,7 +223,8 @@ ListType GetDisplayWaveformList (WaveformDisplay_type* waveDisp)
 
 int DisplayWaveform (WaveformDisplay_type* waveDisp, Waveform_type** waveformPtr)
 {
-	int				error				= 0;
+INIT_ERR
+
 	size_t			nWaveforms			= 0;	 	// number of waveforms contained by the waveform display
 	
 	// add new waveform to list
@@ -255,12 +256,12 @@ int DisplayWaveform (WaveformDisplay_type* waveDisp, Waveform_type** waveformPtr
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 int DiscardWaveforms (WaveformDisplay_type* waveDisp)
 {
-	int		error = 0;
+INIT_ERR
 	
 	// clear plot
 	errChk( DeleteGraphPlot(waveDisp->plotPanHndl, TSPan_GraphPlot, -1, VAL_IMMEDIATE_DRAW) );
@@ -281,13 +282,12 @@ int DiscardWaveforms (WaveformDisplay_type* waveDisp)
 
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static void CVICALLBACK WaveformDisplayMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
-	int						error		= 0;
-	char*					errMsg		= NULL;
+INIT_ERR
 	
 	WaveformDisplay_type*	waveDisp 	= callbackData;
 	
@@ -321,7 +321,7 @@ static void CVICALLBACK WaveformDisplayMenu_CB (int menuBar, int menuItem, void 
 				
 			case VAL_NEW_FILE_SELECTED:
 				
-				errChk( WriteHDF5WaveformList(fullPathName, waveDisp->waveforms, Compression_GZIP, &errMsg) );
+				errChk( WriteHDF5WaveformList(fullPathName, waveDisp->waveforms, Compression_GZIP, &errorInfo.errMsg) );
 				
 				return;
 		}
@@ -331,14 +331,14 @@ static void CVICALLBACK WaveformDisplayMenu_CB (int menuBar, int menuItem, void 
 	
 Error:
 	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
+PRINT_ERR
 }
 
 // callback for operating the scrollbar control placed in TSPan
 static int CVICALLBACK TSPanScrollbar_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	int						error			= 0;
+INIT_ERR
+
 	WaveformDisplay_type*	waveDisp 		= callbackData; 
 	uInt32					waveformIdx		= 0;
 	Waveform_type*			waveform		= NULL;
@@ -362,6 +362,8 @@ static int CVICALLBACK TSPanScrollbar_CB (int panel, int control, int event, voi
 	
 Error:
 	
+PRINT_ERR
+
 	return 0;
 }
 
@@ -402,7 +404,7 @@ static int CVICALLBACK TSPanCtrls_CB (int panel, int control, int event, void *c
 
 static int AddWaveformToGraph (int panel, int control, Waveform_type* waveform)
 {
-	int				error				= 0;
+INIT_ERR
 	
 	void*			waveformData		= NULL;
 	size_t			nSamples			= 0;
@@ -513,14 +515,12 @@ static int AddWaveformToGraph (int panel, int control, Waveform_type* waveform)
 	// update cursors
 	UpdateGraphCursors(panel, control);
 	
-		
 Error:
 	
 	OKfree(waveformName);
 	OKfree(waveformUnit);
 	
-	return error;
-	
+	return errorInfo.error;
 }
 
 static void UpdateGraphCursors (int panel, int control)

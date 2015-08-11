@@ -40,7 +40,7 @@ typedef enum {
 //==============================================================================
 // Global functions
 
-int 				CreateHDF5File					(char fileName[], char datasetName[]);
+int 				CreateHDF5File					(char fileName[], char datasetName[], char** errorMsg);
 
 	// Writes a waveform given data storage info
 int 				WriteHDF5Waveform				(char fileName[], char datasetName[], DSInfo_type* dsInfo, Waveform_type* waveform, CompressionMethods compression, char** errorMsg);

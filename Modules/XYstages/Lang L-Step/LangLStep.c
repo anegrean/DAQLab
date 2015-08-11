@@ -48,17 +48,17 @@
 #define LStepWinError		-1
 #define LStepAPIError		-2
 	
-#define LSTEP_RETURN_ERROR_INFO \
+#define LSTEP_RETURN_ERR \
 		return 0; \
 	WinError: \
 		errorInfo.error		= LStepWinError; \
-		RETURN_ERROR_INFO \
+		RETURN_ERR \
 	Error: \
-		RETURN_ERROR_INFO \
+		RETURN_ERR \
 	LStepError: \
 		errorInfo.error 	= LStepAPIError; \
 		errorInfo.errMsg 	= GetLStepErrorMsg(lstepError); \
-		RETURN_ERROR_INFO 
+		RETURN_ERR 
 		
 	
 
@@ -208,7 +208,7 @@ void discard_LangLStep (DAQLabModule_type** mod)
 static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
 // return codes -1 and -2 are reserved for Windows and LStep API errors
-INIT_ERROR_INFO
+INIT_ERR
 	
 	int					lstepError	= 0;
 	DWORD				winError	= 0;
@@ -223,7 +223,7 @@ INIT_ERROR_INFO
 	
 	errChk( XYStage_Load(mod, workspacePanHndl, &errorInfo.errMsg) );
 
-LSTEP_RETURN_ERROR_INFO
+LSTEP_RETURN_ERR
 }
 
 //------------------------------------------------------------------------------------------------------------
@@ -239,7 +239,7 @@ static int InitStageConnection (LangLStep_type* stage, char** errorMsg)
 #define InitStage_Err_ConfigParamNotSent	-5
 #define InitStage_Err_SetStageUnits			-6
 
-INIT_ERROR_INFO
+INIT_ERR
 	
 	int			lstepError				= 0;
 	DWORD		winError				= 0;
@@ -262,14 +262,14 @@ INIT_ERROR_INFO
 	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_SetDimensions") );
 	LStepErrChk( (*(PSetDimensions)procAddr) (Stage_Units, Stage_Units, Stage_Units, Stage_Units) );
 
-LSTEP_RETURN_ERROR_INFO
+LSTEP_RETURN_ERR
 }
 
 
 static int CloseStageConnection	(LangLStep_type* stage, char** errorMsg)
 {
 // return codes -1 and -2 are reserved for Windows and LStep API errors
-INIT_ERROR_INFO
+INIT_ERR
 	
 	int			lstepError				= 0;
 	DWORD		winError				= 0;
@@ -280,13 +280,13 @@ INIT_ERROR_INFO
 	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_Disconnect") );
 	LStepErrChk( (*(PDisconnect)procAddr) () );
 	
-LSTEP_RETURN_ERROR_INFO 
+LSTEP_RETURN_ERR 
 }
 
 static int MoveStage (LangLStep_type* stage, StageMoveTypes moveType, StageAxes axis, double moveVal, char** errorMsg)
 {
 // return codes -1 and -2 are reserved for Windows and LStep API errors
-INIT_ERROR_INFO
+INIT_ERR
 	
 	int			lstepError				= 0;
 	DWORD		winError				= 0;
@@ -332,13 +332,13 @@ INIT_ERROR_INFO
 			break;
 	}
 	
-LSTEP_RETURN_ERROR_INFO	
+LSTEP_RETURN_ERR	
 }
 
 static int StopStage (LangLStep_type* stage, char** errorMsg)
 {
 // return codes -1 and -2 are reserved for Windows and LStep API errors
-INIT_ERROR_INFO
+INIT_ERR
 	
 	int			lstepError				= 0;
 	DWORD		winError				= 0;
@@ -348,13 +348,13 @@ INIT_ERROR_INFO
 	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_StopAxes") );
 	LStepErrChk( (*(PStopAxes)procAddr) () );
 	
-LSTEP_RETURN_ERROR_INFO	
+LSTEP_RETURN_ERR	
 }
 
 static int SetStageLimits (LangLStep_type* stage, double xNegativeLimit, double xPositiveLimit, double yNegativeLimit, double yPositiveLimit, char** errorMsg)
 {
 // return codes -1 and -2 are reserved for Windows and LStep API errors
-INIT_ERROR_INFO
+INIT_ERR
 
 	int			lstepError				= 0;
 	DWORD		winError				= 0;
@@ -369,13 +369,13 @@ INIT_ERROR_INFO
 	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_SetLimit") );
 	LStepErrChk( (*(PSetLimit)procAddr) (XYSTAGE_Y_AXIS + 1, yNegativeLimit, yPositiveLimit) );
 	
-LSTEP_RETURN_ERROR_INFO	
+LSTEP_RETURN_ERR	
 }
 
 static int GetStageLimits (LangLStep_type* stage, double* xNegativeLimit, double* xPositiveLimit, double* yNegativeLimit, double* yPositiveLimit, char** errorMsg)
 {
 // return codes -1 and -2 are reserved for Windows and LStep API errors
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	int			lstepError				= 0;
 	DWORD		winError				= 0;
@@ -387,13 +387,13 @@ INIT_ERROR_INFO
 	
 	
 	
-LSTEP_RETURN_ERROR_INFO
+LSTEP_RETURN_ERR
 }
 
 static int SetStageVelocity (LangLStep_type* stage, double velocity, char** errorMsg)
 {
 // return codes -1 and -2 are reserved for Windows and LStep API errors
-INIT_ERROR_INFO
+INIT_ERR
 	
 	int			lstepError				= 0;
 	DWORD		winError				= 0;
@@ -403,13 +403,13 @@ INIT_ERROR_INFO
 	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_SetVel") );
 	LStepErrChk( (*(PSetVel)procAddr) (velocity, velocity, velocity, velocity) );
 	
-LSTEP_RETURN_ERROR_INFO
+LSTEP_RETURN_ERR
 }
 
 static int GetStageVelocity (LangLStep_type* stage, double* velocity, char** errorMsg)
 {
 // return codes -1 and -2 are reserved for Windows and LStep API errors
-INIT_ERROR_INFO
+INIT_ERR
 	
 	int			lstepError				= 0;
 	DWORD		winError				= 0;
@@ -418,13 +418,13 @@ INIT_ERROR_INFO
 	
 	// add code here
 	
-LSTEP_RETURN_ERROR_INFO
+LSTEP_RETURN_ERR
 }
 
 static int GetStageAbsPosition (LangLStep_type* stage, double* xAbsPos, double* yAbsPos, char** errorMsg)
 {
 // return codes -1 and -2 are reserved for Windows and LStep API errors
-INIT_ERROR_INFO
+INIT_ERR
 
 	int			lstepError				= 0;
 	DWORD		winError				= 0;
@@ -442,7 +442,7 @@ INIT_ERROR_INFO
 	*xAbsPos = xPos;
 	*yAbsPos = yPos;
 	
-LSTEP_RETURN_ERROR_INFO
+LSTEP_RETURN_ERR
 }
 
 static char* GetLStepErrorMsg (int errorCode)

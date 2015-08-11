@@ -27,7 +27,22 @@
 
 //==============================================================================
 // Constants
-#define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto Error; else 
+#define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) {goto Error;} else 
+
+// Cmt library error macro
+#define CmtErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) \ 
+{goto CmtError;} else
+
+// obtains Cmt error description and jumps to Error
+#define Cmt_ERR { \
+	if (errorInfo.error < 0) { \
+		char CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE] = ""; \
+		errChk( CmtGetErrorMessage(errorInfo.error, CmtErrMsgBuffer) ); \
+		nullChk( errorInfo.errMsg = StrDup(CmtErrMsgBuffer) ); \
+	} \
+	goto Error; \
+}
+
 	// maximum number of characters to represent a double precision number
 #define MAX_DOUBLE_NCHARS									30
 
@@ -815,7 +830,7 @@ static void 							SetRectRasterScanEnginePointScanRecordUI 			(int panel, BOOL 
 
 static void 							SetRectRasterScanEnginePointScanJumpModeUI 			(int panel, PointJumpMethods method);
 
-static int 								InsertRectRasterScanEngineToUI 						(LaserScanning_type* ls, RectRaster_type* rectRaster);
+static int 								InsertRectRasterScanEngineToUI 						(LaserScanning_type* ls, RectRaster_type* rectRaster, char** errorMsg);
 
 	// Image scan pixel buffer
 static RectRasterImgBuff_type* 			init_RectRasterImgBuff_type 						(ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows);
@@ -844,9 +859,9 @@ static int CVICALLBACK 					NonResRectRasterScan_FrameScanPan_CB 				(int panel,
 
 static int CVICALLBACK 					NonResRectRasterScan_PointScanPan_CB		 		(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static void 							NonResRectRasterScan_ScanWidths						(RectRaster_type* scanEngine);
+static int 								NonResRectRasterScan_ScanWidths						(RectRaster_type* scanEngine,  char** errorMsg);
 
-static void								NonResRectRasterScan_PixelDwellTimes				(RectRaster_type* scanEngine);
+static int								NonResRectRasterScan_PixelDwellTimes				(RectRaster_type* scanEngine, char** errorMsg);
 
 	// determines whether a given rectangular ROI falls within a circular perimeter with radius
 static BOOL 							RectROIInsideCircle									(double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double circleRadius);
@@ -1231,9 +1246,10 @@ static void SetRectRasterScanEnginePointScanJumpModeUI (int panel, PointJumpMeth
 	
 }
 
-static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_type* rectRaster)
+static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_type* rectRaster, char** errorMsg)
 {
-	int		error				= 0;
+INIT_ERR
+
 	int		scanPanHndl			= 0;	
 	int		frameScanPanHndl	= 0;	// contains frame scan controls
 	int		pointScanPanHndl	= 0;	// contains point scan controls
@@ -1403,29 +1419,26 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 	// do this after adding combo boxes!
 	if (NonResRectRasterScan_ValidConfig(rectRaster)) {
 				
-		NonResRectRasterScan_ScanWidths(rectRaster);
-		NonResRectRasterScan_PixelDwellTimes(rectRaster);
+		errChk( NonResRectRasterScan_ScanWidths(rectRaster, &errorInfo.errMsg) );
+		errChk( NonResRectRasterScan_PixelDwellTimes(rectRaster, &errorInfo.errMsg) );
 					
 		if (NonResRectRasterScan_ReadyToScan(rectRaster)) 
-			TaskControlEvent(rectRaster->baseClass.taskControl, TC_Event_Configure, NULL, NULL);
+			errChk( TaskControlEvent(rectRaster->baseClass.taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 		else
-			TaskControlEvent(rectRaster->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+			errChk( TaskControlEvent(rectRaster->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) ); 	
 	} else
-		TaskControlEvent(rectRaster->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL);
+		errChk( TaskControlEvent(rectRaster->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 	
-	
-	return 0;
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
-	int 					error 					= 0;
-	char*					errMsg					= NULL;
-	
+INIT_ERR
+
 	LaserScanning_type*		ls						= (LaserScanning_type*) mod;
 	int						newMenuItem				= 0;
 	int						settingsMenuItemHndl	= 0;
@@ -1487,7 +1500,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 			case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 				
 				// add UI
-				InsertRectRasterScanEngineToUI(ls, (RectRaster_type*)scanEngine);
+				errChk( InsertRectRasterScanEngineToUI(ls, (RectRaster_type*)scanEngine, &errorInfo.errMsg) );
 				
 				// configure VChans depending on scan engine mode
 				SetRectRasterScanEngineModeVChans((RectRaster_type*)scanEngine);
@@ -1521,14 +1534,14 @@ Error:
 	// cleanup
 	OKfreePanHndl(ls->mainPanHndl);
 	
-	ReturnErrMsg();
-	return error;
+RETURN_ERR
 }
 
 static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
+INIT_ERR
+
 	LaserScanning_type*				ls 				= (LaserScanning_type*) mod;
-	int								error			= 0;
 	int								lsPanTopPos		= 0;
 	int								lsPanLeftPos	= 0;
 	DAQLabXMLNode 					lsAttr[] 		= {	{"PanTopPos", BasicData_Int, &lsPanTopPos},
@@ -1728,17 +1741,17 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 	errChk ( ActiveXML_IXMLDOMElement_appendChild (moduleElement, xmlErrorInfo, scanEnginesXMLElement, NULL) );
 	OKfreeCAHndl(scanEnginesXMLElement); 
 	
-	return 0;
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 	
 }
 
 static int SaveCfg_ScanChannels (ScanEngine_type* scanEngine, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ scanEngineXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error						= 0;
+INIT_ERR
+
 	ActiveXMLObj_IXMLDOMElement_	scanChannelsXMLElement		= 0;
 	ActiveXMLObj_IXMLDOMElement_	scanChannelXMLElement		= 0;
 	
@@ -1767,12 +1780,12 @@ Error:
 	
 	OKfreeCAHndl(scanChannelsXMLElement);
 	OKfreeCAHndl(scanChannelXMLElement);
-	return error;
+	return errorInfo.error;
 }
 
 static int SaveCfg_PointScan (RectRaster_type* scanEngine, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error						= 0;
+INIT_ERR
 	
 	PointJumpSet_type*				pointJumpSettings			= scanEngine->pointJumpSettings;
 	ActiveXMLObj_IXMLDOMElement_	jumpSettingsXMLElement		= 0;
@@ -1816,13 +1829,14 @@ Error:
 	OKfreeCAHndl(jumpSettingsXMLElement);
 	OKfreeCAHndl(pointSettingsXMLElement);
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
+INIT_ERR
+
 	LaserScanning_type*				ls 								= (LaserScanning_type*) mod;
-	int 							error 							= 0;
 	ls->mainPanTopPos												= malloc(sizeof(int));
 	ls->mainPanLeftPos												= malloc(sizeof(int));
 	DAQLabXMLNode 					lsAttr[] 						= { {"PanTopPos", BasicData_Int, ls->mainPanTopPos},
@@ -2062,12 +2076,13 @@ Error:
 	OKfreeCAHndl(scanAxisCalXMLElement); 
 	OKfreeCAHndl(axisCalibrationNodeList);
 	
-	return error;	
+	return errorInfo.error;	
 }
 
 static int LoadCfg_ScanChannels (ScanEngine_type* scanEngine, ActiveXMLObj_IXMLDOMElement_ scanEngineXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error 						= 0;
+INIT_ERR
+
 	ActiveXMLObj_IXMLDOMElement_	scanChannelsXMLElement		= 0;
 	ActiveXMLObj_IXMLDOMNodeList_	scanChannelsNodeList		= 0;
 	ActiveXMLObj_IXMLDOMNode_		scanChannelNode				= 0;
@@ -2107,13 +2122,12 @@ Error:
 	scanEngine->nScanChans = 0;
 	OKfree(scanEngine->scanChans);
 	
-	return error;
-	
+	return errorInfo.error;
 }
 
 static int LoadCfg_PointScan (RectRaster_type* scanEngine, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error 						= 0;
+INIT_ERR
 	
 	ActiveXMLObj_IXMLDOMElement_	jumpSettingsXMLElement		= 0;
 	ActiveXMLObj_IXMLDOMElement_	pointSettingsXMLElement		= 0;
@@ -2164,12 +2178,13 @@ Error:
 	OKfreeCAHndl(jumpSettingsXMLElement);
 	OKfreeCAHndl(pointSettingsXMLElement);
 	
-	return error;																
+	return errorInfo.error;																
 }
 
 static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ axisCalibrationsElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error 					= 0;
+INIT_ERR
+
 	ActiveXMLObj_IXMLDOMElement_	switchTimesXMLElement; 			  
 	ActiveXMLObj_IXMLDOMElement_	maxSlopesXMLElement;   		
 	ActiveXMLObj_IXMLDOMElement_	triangleCalXMLElement;
@@ -2271,13 +2286,13 @@ Error:
 	OKfree(triangleCalMaxFreqStr);
 	OKfree(triangleCalResiduaLagStr);
 	
-	return error;
-	
+	return errorInfo.error;
 }
 
 static int LoadNonResGalvoCalFromXML (LaserScanning_type* lsModule, ActiveXMLObj_IXMLDOMElement_ axisCalibrationElement, ERRORINFO* xmlErrorInfo)
 {
-	int 							error 							= 0;
+INIT_ERR
+
 	char*							axisCalibrationName				= NULL;
 	double							commandVMax;
 	double							slope;
@@ -2411,17 +2426,18 @@ Error:
 	OKfreeCAHndl(maxSlopesXMLElement); 
 	OKfreeCAHndl(triangleCalXMLElement);   
 	
-	return error;	
+	return errorInfo.error;	
 }
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 {
+INIT_ERR
+
 	LaserScanning_type*			ls				= (LaserScanning_type*) mod;
-	int							error			= 0;
 	size_t						nEngines		= ListNumItems(ls->scanEngines);
 	size_t						nActiveCals		= ListNumItems(ls->activeCal);
-	ScanEngine_type**			enginePtr;
-	ActiveScanAxisCal_type**	activeCalPtr;
+	ScanEngine_type**			enginePtr		= NULL;
+	ActiveScanAxisCal_type**	activeCalPtr	= NULL;
 	
 	
 	// laser scanning module panels
@@ -2439,7 +2455,7 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 		
 	
 	// scan engine settings panels
-	for(size_t i = 1; i <= nEngines; i++) {
+	for (size_t i = 1; i <= nEngines; i++) {
 		enginePtr = ListGetPtrToItem(ls->scanEngines, i);
 		
 		if ((*enginePtr)->engineSetPanHndl)
@@ -2455,7 +2471,7 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 	}
 	
 Error:
-	return error;	
+	return errorInfo.error;	
 }
 
 void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
@@ -2562,6 +2578,8 @@ static void CVICALLBACK NewScanEngineMenu_CB (int menuBar, int menuItem, void *c
 
 static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERR
+
 	LaserScanning_type*		ls 		= callbackData;
 	
 	switch (event) {
@@ -2601,7 +2619,7 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, FALSE, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 
 											0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
 							
-							InsertRectRasterScanEngineToUI(ls, (RectRaster_type*)newScanEngine);
+							errChk( InsertRectRasterScanEngineToUI(ls, (RectRaster_type*)newScanEngine, &errorInfo.errMsg) );
 							
 							break;
 							// add below more cases	
@@ -2633,6 +2651,10 @@ static int CVICALLBACK NewScanEngine_CB (int panel, int control, int event, void
 			break;
 	}
 	
+Error:
+	
+PRINT_ERR
+
 	return 0;
 	
 }
@@ -2708,6 +2730,8 @@ static void UpdateAvailableCalibrations (LaserScanning_type* lsModule)
 
 static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERR
+
 	LaserScanning_type*		ls 			= callbackData;
 	
 	switch (event) {
@@ -2770,13 +2794,13 @@ static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event
 				if (scanEngine->fastAxisCal == *axisCalPtr) {
 					scanEngine->fastAxisCal = NULL;
 					// unconfigure scan engine
-					TaskControlEvent(scanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+					errChk( TaskControlEvent(scanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 				}
 				// remove slow scan axis calibration if assigned
 				if (scanEngine->slowAxisCal == *axisCalPtr) {
 					scanEngine->slowAxisCal = NULL;
 					// unconfigure scan engine
-					TaskControlEvent(scanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+					errChk( TaskControlEvent(scanEngine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 				}
 				
 				UpdateScanEngineCalibrations(scanEngine); 
@@ -2796,14 +2820,17 @@ static int CVICALLBACK ManageScanAxisCalib_CB (int panel, int control, int event
 			break;
 	}
 	
+Error:
+	
+PRINT_ERR
+	
 	return 0;
 }
 
 static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	int							error						= 0;
-	char*						errMsg  					= NULL;
-	
+INIT_ERR
+
 	LaserScanning_type*			ls 							= callbackData;
 	char* 						calTCName					= NULL;
 	char* 						commandVChanName			= NULL;
@@ -2858,13 +2885,13 @@ static int CVICALLBACK NewScanAxisCalib_CB (int panel, int control, int event, v
 							// register calibration Task Controller with the framework
 							DLAddTaskController((DAQLabModule_type*)ls, nrgCal->baseClass.taskController);
 							// configure Task Controller
-							TaskControlEvent(nrgCal->baseClass.taskController, TC_Event_Configure, NULL, NULL);
+							errChk( TaskControlEvent(nrgCal->baseClass.taskController, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 							// register VChans with framework
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanCom);
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanComNSamples);
 							DLRegisterVChan((DAQLabModule_type*)ls, (VChan_type*)nrgCal->baseClass.VChanPos);
 							// register sink VChan with task controller
-							errChk( AddSinkVChan(nrgCal->baseClass.taskController, nrgCal->baseClass.VChanPos, NULL, &errMsg) );
+							errChk( AddSinkVChan(nrgCal->baseClass.taskController, nrgCal->baseClass.VChanPos, NULL, &errorInfo.errMsg) );
 							// add new galvo calibration to laser scanning module list
 							nullChk( ListInsertItem(ls->activeCal, &nrgCal, END_OF_LIST) );
 							//----------------------------------------------------------
@@ -2916,11 +2943,9 @@ Error:
 	OKfree(commandNSamplesVChanName);
 	OKfree(positionVChanName);
 	
-	if (!errMsg)
-		errMsg = StrDup("Unknown or out of memory.\n\n");
-	DLMsg(errMsg, 1);
-	
-	return error;
+PRINT_ERR
+
+	return 0;
 }
 
 /// HIFN Finds the maximum slope in [V/ms] from a given galvo response.
@@ -3001,20 +3026,16 @@ static int GetStepTime (double* signal, size_t nSamples, double samplingRate, do
 #define GetStepTime_Err_HighLevelCrossingNotFound	-3
 #define GetStepTime_Err_LevelCrossingOrder			-4
 	
-	int		error		= 0;
-	char*	errMsg		= NULL;
-	
+INIT_ERR
+
 	BOOL 	crossed		= FALSE; 		// flag showing if threshold was crossed 
 	size_t	lowIdx		= 0;
 	size_t	highIdx		= 0;
 	
 	
 	// check if levels are correctly given
-	if (lowLevel > highLevel) { 
-		error 	= GetStepTime_Err_Levels;
-		errMsg 	= StrDup("Low level must be smaller than High level");
-		goto Error;
-	}
+	if (lowLevel > highLevel)
+		SET_ERR(GetStepTime_Err_Levels, "Low level must be smaller than High level");
 	
 	threshold = fabs(threshold); 		// make sure it's positive	
 	
@@ -3026,11 +3047,8 @@ static int GetStepTime (double* signal, size_t nSamples, double samplingRate, do
 			break;
 		}
 	
-	if (!crossed) { 
-		error 	= GetStepTime_Err_HighLevelCrossingNotFound;
-		errMsg 	= StrDup("Could not find low level crossing of signal");
-		goto Error;
-	}
+	if (!crossed)
+		SET_ERR(GetStepTime_Err_HighLevelCrossingNotFound, "Could not find low level crossing of signal");
 	
 	// calculate low level crossing
 	crossed = FALSE;
@@ -3041,27 +3059,19 @@ static int GetStepTime (double* signal, size_t nSamples, double samplingRate, do
 			break;
 		}
 	
-	if (!crossed) { 
-		error 	= GetStepTime_Err_LowLevelCrossingNotFound;
-		errMsg 	= StrDup("Could not find low level crossing of signal");
-		goto Error;
-	}
+	if (!crossed)
+		SET_ERR(GetStepTime_Err_LowLevelCrossingNotFound, "Could not find low level crossing of signal");
 	
-	if (highIdx < lowIdx) { 
-		error 	= GetStepTime_Err_LevelCrossingOrder;
-		errMsg 	= StrDup("High level crossing occurs before low level crossing");
-		goto Error;
-	}
+	if (highIdx < lowIdx)
+		SET_ERR(GetStepTime_Err_LevelCrossingOrder, "High level crossing occurs before low level crossing");
 		
 	*stepTimePtr = (highIdx-lowIdx) * 1e3/samplingRate;  
 	
 	*responseDelayPtr = lowIdx * 1e3/samplingRate; 
 	
-	return 0;
-	
 Error:
-	ReturnErrMsg();
-	return error;
+
+	RETURN_ERR
 }
 
 //-------------------------------------------
@@ -3069,7 +3079,7 @@ Error:
 //-------------------------------------------
 static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanIdx)
 {
-	int				error 			= 0;
+INIT_ERR
 	
 	ScanChan_type* 	scanChan		= malloc(sizeof(ScanChan_type));
 	char*			detVChanName	= NULL;
@@ -3165,8 +3175,7 @@ static int UnregisterDLScanChan (ScanChan_type* scanChan)
 
 static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	int						error					= 0;
-	char*					errMsg					= NULL;
+INIT_ERR
 	
 	ScanEngine_type*		engine					= callbackData;
 	RectRaster_type*		rectRasterEngine		= (RectRaster_type*) engine;
@@ -3253,15 +3262,15 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// configure/unconfigure scan engine
 					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths(rectRasterEngine);
-						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
+						errChk( NonResRectRasterScan_ScanWidths(rectRasterEngine, &errorInfo.errMsg) );
+						errChk( NonResRectRasterScan_PixelDwellTimes(rectRasterEngine, &errorInfo.errMsg) );
 					
 						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
-							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 						else 
-							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) ); 	
 					} else 
-						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+						errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 						
 					break;
 					
@@ -3278,15 +3287,15 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// configure/unconfigure scan engine
 					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths(rectRasterEngine);
-						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
+						errChk( NonResRectRasterScan_ScanWidths(rectRasterEngine, &errorInfo.errMsg) );
+						errChk( NonResRectRasterScan_PixelDwellTimes(rectRasterEngine, &errorInfo.errMsg) );
 					
 						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
-							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 						else 
-							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) ); 	
 					} else 
-						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+						errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 					
 					break;
 					
@@ -3322,16 +3331,16 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// configure/unconfigure scan engine
 					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths(rectRasterEngine);
-						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
+						errChk( NonResRectRasterScan_ScanWidths(rectRasterEngine, &errorInfo.errMsg) );
+						errChk( NonResRectRasterScan_PixelDwellTimes(rectRasterEngine, &errorInfo.errMsg) );
 					
 						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
-							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 						else 
-							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) ); 	
 						
 					} else 
-						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+						errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 						
 					break;
 					
@@ -3362,16 +3371,16 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// configure/unconfigure scan engine
 					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths(rectRasterEngine);
-						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
+						errChk( NonResRectRasterScan_ScanWidths(rectRasterEngine, &errorInfo.errMsg) );
+						errChk( NonResRectRasterScan_PixelDwellTimes(rectRasterEngine, &errorInfo.errMsg) );
 					
 						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine)) 
-							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 						else 
-							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) ); 	
 							
 					} else
-						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+						errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 						
 					break;
 					
@@ -3382,15 +3391,15 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// configure/unconfigure scan engine
 					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths(rectRasterEngine);
-						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
+						errChk( NonResRectRasterScan_ScanWidths(rectRasterEngine, &errorInfo.errMsg) );
+						errChk( NonResRectRasterScan_PixelDwellTimes(rectRasterEngine, &errorInfo.errMsg) );
 					
 						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
-							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 						else
-							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) ); 	
 					} else
-						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+						errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 					break;
 					
 				case ScanSetPan_PixelDelay:
@@ -3410,33 +3419,33 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					// configure/unconfigure scan engine
 					if (NonResRectRasterScan_ValidConfig(rectRasterEngine)) {
 				
-						NonResRectRasterScan_ScanWidths(rectRasterEngine);
-						NonResRectRasterScan_PixelDwellTimes(rectRasterEngine);
+						errChk( NonResRectRasterScan_ScanWidths(rectRasterEngine, &errorInfo.errMsg) );
+						errChk( NonResRectRasterScan_PixelDwellTimes(rectRasterEngine, &errorInfo.errMsg) );
 					
 						if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
-							TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 						else
-							TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+							errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) ); 	
 					} else
-						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+						errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 					break;
 					
 				case ScanSetPan_ParkGalvos:
 					
 					// send fast axis to parked position
 					if (engine->fastAxisCal)
-						errChk( SendScanAxisCommand(engine, ScanAxis_Fast, ((NonResGalvoCal_type*)engine->fastAxisCal)->parked, &errMsg) );
+						errChk( SendScanAxisCommand(engine, ScanAxis_Fast, ((NonResGalvoCal_type*)engine->fastAxisCal)->parked, &errorInfo.errMsg) );
 					// send slow axis to parked position
 					if (engine->slowAxisCal)
-						errChk( SendScanAxisCommand(engine, ScanAxis_Slow, ((NonResGalvoCal_type*)engine->slowAxisCal)->parked, &errMsg) );
+						errChk( SendScanAxisCommand(engine, ScanAxis_Slow, ((NonResGalvoCal_type*)engine->slowAxisCal)->parked, &errorInfo.errMsg) );
 					break;
 					
 				case ScanSetPan_CenterGalvos:
 					
 					// send fast axis to parked position
-					errChk( SendScanAxisCommand(engine, ScanAxis_Fast, 0.0, &errMsg) );
+					errChk( SendScanAxisCommand(engine, ScanAxis_Fast, 0.0, &errorInfo.errMsg) );
 					// send slow axis to parked position
-					errChk( SendScanAxisCommand(engine, ScanAxis_Slow, 0.0, &errMsg) );
+					errChk( SendScanAxisCommand(engine, ScanAxis_Slow, 0.0, &errorInfo.errMsg) );
 					break;
 					
 			}
@@ -3465,9 +3474,9 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					
 					// configure / unconfigure
 					if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
-						TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
+						errChk( TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 					else
-						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 
+						errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) ); 
 						
 					break;
 				
@@ -3497,9 +3506,9 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 					
 					// configure / unconfigure
 					if (NonResRectRasterScan_ReadyToScan(rectRasterEngine))
-						TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
+						errChk( TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 					else
-						TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+						errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 					
 					break;
 			}
@@ -3508,16 +3517,11 @@ static int CVICALLBACK ScanEngineSettings_CB (int panel, int control, int event,
 			
 	}
 	
-	return 0;
-	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Unknown error or out of memory.\n\n");
-	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
-	return error;
+PRINT_ERR
+
+	return 0;
 }
 
 static int CVICALLBACK ScanEnginesTab_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -3557,8 +3561,7 @@ static int CVICALLBACK ScanEnginesTab_CB (int panel, int control, int event, voi
 
 static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	int								error			= 0;
-	char*							errMsg			= NULL;
+INIT_ERR
 	
 	ActiveNonResGalvoCal_type*		activeNRGCal 	= callbackData;
 	
@@ -3598,7 +3601,7 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 					
 					TaskControl_type*	calTC = activeNRGCal->baseClass.taskController; 
 					
-					errChk( DisassembleTaskTreeBranch(calTC, &errMsg ) );
+					errChk( DisassembleTaskTreeBranch(calTC, &errorInfo.errMsg) );
 					
 					// unregister calibration VChans
 					DLUnregisterVChan((DAQLabModule_type*)activeNRGCal->baseClass.lsModule, (VChan_type*)activeNRGCal->baseClass.VChanCom);
@@ -3638,16 +3641,12 @@ static int CVICALLBACK NonResGalvoCal_MainPan_CB (int panel, int control, int ev
 
 			break;
 	}
-	return 0;
-	
+
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Unknown or out of memory.\n\n");
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
-	
-	return error;
+PRINT_ERR
+
+	return 0;
 }
 
 static int CVICALLBACK NonResGalvoCal_CalPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -3827,7 +3826,7 @@ Error:
 // If estimation is successful, the function return 0 and negative values otherwise.
 static int NonResGalvoPointJumpTime (NonResGalvoCal_type* cal, double jumpAmplitude, double* switchTimePtr, double* responseDelayPtr)
 {
-	int				error				= 0;
+INIT_ERR
 	
 	double 			min					= 0;
 	double 			max					= 0;
@@ -3858,7 +3857,7 @@ Error:
 	
 	OKfree(secondDerivatives);
 	
-	return error;
+	return errorInfo.error;
 }
 
 /* 
@@ -4198,7 +4197,8 @@ static void discard_SwitchTimes_type (SwitchTimes_type** switchTimesPtr)
 
 static SwitchTimes_type* copy_SwitchTimes_type (SwitchTimes_type* switchTimes)
 {
-	int					error			= 0;
+INIT_ERR
+
 	SwitchTimes_type*	switchTimesCopy = malloc(sizeof(SwitchTimes_type));
 	if (!switchTimesCopy) return NULL;
 	
@@ -4239,6 +4239,7 @@ Error:
 
 static MaxSlopes_type* copy_MaxSlopes_type (MaxSlopes_type* maxSlopes)
 {
+
 	MaxSlopes_type*	maxSlopesCopy = malloc(sizeof(MaxSlopes_type));
 	if (!maxSlopesCopy) return NULL;
 	
@@ -4377,7 +4378,8 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 								 double						scanLensFL,
 								 double						tubeLensFL)					
 {
-	int					error 									= 0;
+INIT_ERR	
+	
 	ScanEngine_type*	engine									= *enginePtr;
 	DLDataTypes 		allowedScanAxisPacketTypes[] 			= {DL_Waveform_Double};
 	char*				fastAxisComVChanName					= NULL;
@@ -4532,7 +4534,7 @@ Error:
 	OKfree(ROIStimulateVChanName);
 	
 	discard_ScanEngine_type(enginePtr);
-	return error;
+	return errorInfo.error;
 }
 
 static void	discard_ScanEngine_type (ScanEngine_type** enginePtr)
@@ -4702,8 +4704,7 @@ static void DLUnregisterScanEngine (ScanEngine_type* engine)
 
 static int OpenScanEngineShutter (ScanEngine_type* engine, BOOL openStatus, char** errorMsg)
 {
-	int						error 						= 0;
-	char*					errMsg						= NULL;
+INIT_ERR
 	
 	unsigned char*			shutterCommand				= NULL;
 	DataPacket_type*		shutterDataPacket			= NULL;
@@ -4716,7 +4717,7 @@ static int OpenScanEngineShutter (ScanEngine_type* engine, BOOL openStatus, char
 	*shutterCommand					= (unsigned char) openStatus;
 	nullChk( shutterDataPacket		= init_DataPacket_type(DL_UChar, (void**)&shutterCommand, &dsInfo, NULL) );
 	
-	errChk( SendDataPacket(engine->VChanShutter, &shutterDataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(engine->VChanShutter, &shutterDataPacket, FALSE, &errorInfo.errMsg) );
 	
 	return 0;
 	
@@ -4727,14 +4728,12 @@ Error:
 	discard_DataPacket_type(&shutterDataPacket);
 	discard_DSInfo_type(&dsInfo);
 	
-	ReturnErrMsg();
-	return error;
+RETURN_ERR
 }
 
 static int SendScanAxisCommand (ScanEngine_type* engine, RasterScanAxes scanAxis, double voltage, char** errorMsg)
 {
-	int						error 			= 0;
-	char*					errMsg			= NULL;
+INIT_ERR
 	
 	double*					signal			= NULL; 
 	DataPacket_type*		dataPacket		= NULL;
@@ -4747,7 +4746,7 @@ static int SendScanAxisCommand (ScanEngine_type* engine, RasterScanAxes scanAxis
 				nullChk( signal = malloc(sizeof(double)) );
 				*signal = voltage;
 				nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&signal, NULL, NULL) );
-				errChk( SendDataPacket(engine->VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
+				errChk( SendDataPacket(engine->VChanFastAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );
 			}
 			break;
 			
@@ -4757,7 +4756,7 @@ static int SendScanAxisCommand (ScanEngine_type* engine, RasterScanAxes scanAxis
 				nullChk( signal = malloc(sizeof(double)) );
 				*signal = voltage;
 				nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&signal, NULL, NULL) );
-				errChk( SendDataPacket(engine->VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
+				errChk( SendDataPacket(engine->VChanSlowAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );
 			}
 			break;
 	}
@@ -4769,14 +4768,12 @@ Error:
 	OKfree(signal);
 	discard_DataPacket_type(&dataPacket);
 	
-	ReturnErrMsg();
-	return error;	
+RETURN_ERR
 }
 
 static int ReturnRectRasterToParkedPosition (RectRaster_type* engine, char** errorMsg) 
 {
-	int							error						= 0;
-	char*						errMsg						= NULL; 
+INIT_ERR
 	
 	double*						parkedFastAxis				= NULL;
 	double*						parkedSlowAxis				= NULL;
@@ -4799,11 +4796,11 @@ static int ReturnRectRasterToParkedPosition (RectRaster_type* engine, char** err
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(engine->baseClass.taskControl), WAVERANK) );
 	nullChk( slowAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedSlowAxisWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	// send parked signal data packets
-	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &slowAxisDataPacket, FALSE, &errMsg) );
-	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &fastAxisDataPacket, FALSE, &errMsg) );    
+	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &slowAxisDataPacket, FALSE, &errorInfo.errMsg) );
+	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &fastAxisDataPacket, FALSE, &errorInfo.errMsg) );    
 	// send NULL packets to terminate AO
-	errChk( SendNullPacket( engine->baseClass.VChanFastAxisCom, &errMsg) );
-	errChk( SendNullPacket( engine->baseClass.VChanSlowAxisCom, &errMsg) );
+	errChk( SendNullPacket( engine->baseClass.VChanFastAxisCom, &errorInfo.errMsg) );
+	errChk( SendNullPacket( engine->baseClass.VChanSlowAxisCom, &errorInfo.errMsg) );
 	
 	return 0;
 	
@@ -4818,9 +4815,7 @@ Error:
 	discard_DataPacket_type(&slowAxisDataPacket);
 	discard_DSInfo_type(&dsInfo);
 	
-	ReturnErrMsg();
-	return error;
-	
+RETURN_ERR	
 }
 
 static RectRasterScanSet_type* init_RectRasterScanSet_type (double pixSize, uInt32 height, int heightOffset, uInt32 width, int widthOffset, double pixelDwellTime)
@@ -4877,7 +4872,8 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 												double					scanLensFL,
 												double					tubeLensFL)
 {
-	int					error 			= 0;
+INIT_ERR
+
 	RectRaster_type*	engine 			= malloc (sizeof(RectRaster_type));
 	TaskControl_type*	taskController  = NULL;
 	
@@ -5085,6 +5081,8 @@ static int CVICALLBACK NonResRectRasterScan_MainPan_CB (int panel, int control, 
 
 static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERR
+
 	RectRaster_type*		scanEngine		= callbackData;
 	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
 	NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
@@ -5107,15 +5105,15 @@ static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int cont
 					// configure/unconfigure scan engine
 					if (NonResRectRasterScan_ValidConfig(scanEngine)) {
 				
-						NonResRectRasterScan_ScanWidths(scanEngine);
-						NonResRectRasterScan_PixelDwellTimes(scanEngine);
+						errChk( NonResRectRasterScan_ScanWidths(scanEngine, &errorInfo.errMsg) );
+						errChk( NonResRectRasterScan_PixelDwellTimes(scanEngine, &errorInfo.errMsg) );
 					
 						if (NonResRectRasterScan_ReadyToScan(scanEngine))
-							TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Configure, NULL, NULL);
+							errChk( TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 						else
-							TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+							errChk( TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) ); 	
 					} else
-						TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL);
+						errChk( TaskControlEvent(scanEngine->baseClass.taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 					
 					break;
 					
@@ -5187,7 +5185,7 @@ static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int cont
 					Fmt(widthString, "%s<%f[p1]", width);  
 					SetCtrlVal(panel, control, widthString); 
 					// update pixel dwell times
-					NonResRectRasterScan_PixelDwellTimes(scanEngine); 
+					errChk( NonResRectRasterScan_PixelDwellTimes(scanEngine, &errorInfo.errMsg) ); 
 					
 					break;
 					
@@ -5301,7 +5299,7 @@ static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int cont
 					
 					scanEngine->scanSettings.pixelDwellTime = dwellTime;
 					// update preferred widths and pixel dwell times
-					NonResRectRasterScan_ScanWidths(scanEngine);
+					errChk( NonResRectRasterScan_ScanWidths(scanEngine, &errorInfo.errMsg) );
 				
 					break;
 					
@@ -5338,15 +5336,19 @@ static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int cont
 					// adjust width offset control to be multiple of new pixel size
 					SetCtrlVal(panel, ScanTab_WidthOffset, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
 					// update preferred widths
-					NonResRectRasterScan_ScanWidths(scanEngine);
+					errChk( NonResRectRasterScan_ScanWidths(scanEngine, &errorInfo.errMsg) );
 					// update preferred pixel dwell times
-					NonResRectRasterScan_PixelDwellTimes(scanEngine);
+					errChk( NonResRectRasterScan_PixelDwellTimes(scanEngine, &errorInfo.errMsg) );
 					
 					break;
 			}
 			break;
 	}
 	
+Error:
+	
+PRINT_ERR
+
 	return 0;
 }
 
@@ -5625,22 +5627,25 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 	return 0;
 }
 
-static void NonResRectRasterScan_ScanWidths (RectRaster_type* scanEngine)
+static int NonResRectRasterScan_ScanWidths (RectRaster_type* scanEngine, char** errorMsg)
 {  
-	int						error 					= 0;
-	size_t   				blank;
-	size_t   				deadTimePixels;
+INIT_ERR
+
+	size_t   				blank					= 0;
+	size_t   				deadTimePixels			= 0;
 	BOOL     				inFOVFlag             	= 1; 
 	size_t   				i                     	= 1;	// counts how many galvo samples of 1/galvoSampleRate duration fit in a line scan
-	double   				pixelsPerLine;
-	double   				rem;
-	char     				dwellTimeString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-	char					widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-	ListType 				Widths               	= ListCreate(sizeof(double));
-	double					ROIWidth;
+	double   				pixelsPerLine			= 0;
+	double   				rem						= 0;;
+	char     				dwellTimeString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1]	= "";
+	char					widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1]		= "";
+	ListType 				Widths               	= 0;
+	double					ROIWidth				= 0;
 	NonResGalvoCal_type*	fastAxisCal				= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
 	NonResGalvoCal_type*	slowAxisCal				= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
 
+	nullChk( Widths = ListCreate(sizeof(double)) );
+	
 	// enforce pixeldwelltime to be an integer multiple of 1/referenceClockFreq
 	// make sure pixeldwelltime is in [us] and referenceClockFreq in [Hz] 
 	scanEngine->scanSettings.pixelDwellTime = floor(scanEngine->scanSettings.pixelDwellTime * scanEngine->baseClass.referenceClockFreq) / scanEngine->baseClass.referenceClockFreq; // result in [us]
@@ -5689,11 +5694,11 @@ static void NonResRectRasterScan_ScanWidths (RectRaster_type* scanEngine)
 	
 	// select value from the list that is closest to the old width value
 	size_t 		nElem 				= ListNumItems(Widths);
-	double   	diffOld;
-	double   	diffNew;
-	double   	widthItem; 				// in [um]
+	double   	diffOld				= 0;
+	double   	diffNew				= 0;
+	double   	widthItem			= 0;	// in [um]
 	double		targetROIWidth 		= scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize;
-	size_t     	itemPos;
+	size_t     	itemPos				= 0;
 	if (nElem) {
 		ListGetItem(Widths, &widthItem, 1);
 		diffOld = fabs(widthItem - targetROIWidth);
@@ -5719,21 +5724,25 @@ static void NonResRectRasterScan_ScanWidths (RectRaster_type* scanEngine)
 	ListDispose(Widths);
 	
 Error:
-	return;
+
+RETURN_ERR
 }
 
-static void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
+static int NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine, char** errorMsg)
 {
-	int						error						= 0;
-	char					dwellTimeString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+INIT_ERR
+
+	char					dwellTimeString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1] = "";
 	double    				pixelDwell                  = 0;
-	double    				pixelDwellOld;
-	uInt32    				k                           = 1;  // Counts how many galvo samples of 1/galvo_sample_rate duration fit in a line scan
-	uInt32    				n; 							      // Counts how many pixel dwell times fit in the deadtime, note that the total dead time per line is twice this value
-	double    				rem;
-	ListType  				dwellTimes				  	= ListCreate(sizeof(double));
+	double    				pixelDwellOld				= 0;
+	uInt32    				k                           = 1;	// counts how many galvo samples of 1/galvo_sample_rate duration fit in a line scan
+	uInt32    				n							= 0;	// counts how many pixel dwell times fit in the deadtime, note that the total dead time per line is twice this value
+	double    				rem							= 0;
+	ListType  				dwellTimes				  	= 0;
 	NonResGalvoCal_type*	fastAxisCal					= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;    
 	
+	
+	nullChk( dwellTimes = ListCreate(sizeof(double)) );
 	// empty list of preferred dwell times
 	errChk( Combo_DeleteComboItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelDwell, 0, -1) );
 	
@@ -5744,7 +5753,7 @@ static void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 	if (!scanEngine->scanSettings.width) {
 		scanEngine->scanSettings.pixelDwellTime = 0;
 		ListDispose(dwellTimes);
-		return;
+		return 0;
 	}
 	
 	// make sure that pixelDwell is a multiple of 1/pix_clock_rate      
@@ -5803,7 +5812,7 @@ static void NonResRectRasterScan_PixelDwellTimes (RectRaster_type* scanEngine)
 	
 Error:
 	
-	return;
+RETURN_ERR
 }
 																	
 // Determines whether a given rectangular ROI with given width and height as well as offsets is falling within a circular region with given radius.
@@ -5903,8 +5912,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 {
 #define NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals		-1
 	
-	int							error 										= 0;
-	char*						errMsg										= NULL;
+INIT_ERR
 	
 	// init dynamically allocated signals
 	double*						fastAxisCommandSignal						= NULL;
@@ -6052,7 +6060,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( fastAxisCompensationSignal = malloc(nGalvoSamplesFastAxisCompensation * sizeof(double)) );
 		errChk( Set1D(fastAxisCompensationSignal, nGalvoSamplesFastAxisCompensation, ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked) ); 
 		nullChk( fastAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double, scanEngine->galvoSamplingRate, nGalvoSamplesFastAxisCompensation, (void**)&fastAxisCompensationSignal) );
-		errChk( AppendWaveform(fastAxisMoveFromParkedCompensatedWaveform, fastAxisMoveFromParkedWaveform, &errMsg) );
+		errChk( AppendWaveform(fastAxisMoveFromParkedCompensatedWaveform, fastAxisMoveFromParkedWaveform, &errorInfo.errMsg) );
 		discard_Waveform_type(&fastAxisMoveFromParkedWaveform);
 	}
 	
@@ -6061,7 +6069,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		nullChk( slowAxisCompensationSignal = malloc(nGalvoSamplesSlowAxisCompensation * sizeof(double)) );
 		errChk( Set1D(slowAxisCompensationSignal, nGalvoSamplesSlowAxisCompensation, ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked) ); 
 		nullChk( slowAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double, scanEngine->galvoSamplingRate, nGalvoSamplesSlowAxisCompensation, (void**)&slowAxisCompensationSignal) );
-		errChk( AppendWaveform(slowAxisMoveFromParkedCompensatedWaveform, slowAxisMoveFromParkedWaveform, &errMsg) );
+		errChk( AppendWaveform(slowAxisMoveFromParkedCompensatedWaveform, slowAxisMoveFromParkedWaveform, &errorInfo.errMsg) );
 		discard_Waveform_type(&slowAxisMoveFromParkedWaveform);
 	}
 	
@@ -6081,7 +6089,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// send data 
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisMoveFromParked_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );
 	
 	// fastAxisScan_Waveform has two line scans (one triangle wave period)
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
@@ -6094,7 +6102,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// send data
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisScan_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );   
-	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );    
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );    
 	
 	// go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
@@ -6104,9 +6112,9 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
-		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );    
+		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );    
 		// send NULL packet to signal termination of data stream
-		errChk( SendNullPacket(scanEngine->baseClass.VChanFastAxisCom, &errMsg) );
+		errChk( SendNullPacket(scanEngine->baseClass.VChanFastAxisCom, &errorInfo.errMsg) );
 	}
 	
 	// send number of samples in fast axis command waveform if scan is finite
@@ -6117,7 +6125,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 					   (scanEngine->scanSettings.height+nFastAxisFlybackLines) * nGalvoSamplesPerLine * nFrames + 1);
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &dataPacket, FALSE, &errMsg) );    
+		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &dataPacket, FALSE, &errorInfo.errMsg) );    
 	}
 	
 	//---------------------------------------------------------------------------------------------------------------------------
@@ -6131,7 +6139,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// send data 
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisMoveFromParked_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );
 	
 	// repeat staircase waveform
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
@@ -6144,7 +6152,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// send data
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisScan_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );   
-	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );  
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );  
 	
 	// go back to parked position if finite frame scan mode
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
@@ -6154,9 +6162,9 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
-		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );
 		// send NULL packet to signal termination of data stream
-		errChk( SendNullPacket(scanEngine->baseClass.VChanSlowAxisCom, &errMsg) );
+		errChk( SendNullPacket(scanEngine->baseClass.VChanSlowAxisCom, &errorInfo.errMsg) );
 	}
 	
 	// send number of samples in slow axis command waveform if scan is finite
@@ -6166,14 +6174,14 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		*nGalvoSamplesPtr = (uInt64) ((nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParked) + nFrames * nGalvoSamplesSlowAxisScanWaveform + 1);
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errMsg) );    
+		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errorInfo.errMsg) );    
 	}
 	
 	// Galvo sampling rate for both scan axes
 	nullChk( galvoSamplingRatePtr = malloc(sizeof(double)) );
 	*galvoSamplingRatePtr = scanEngine->galvoSamplingRate;
 	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&galvoSamplingRatePtr, NULL, NULL) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errMsg) );    
+	errChk( SendDataPacket(scanEngine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errorInfo.errMsg) );    
 	
 	
 	//---------------------------------------------------------------------------------------------------------------------------
@@ -6195,7 +6203,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 		*nPixelsPtr = nPixels;
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nPixelsPtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &dataPacket, FALSE, &errMsg) );    
+		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &dataPacket, FALSE, &errorInfo.errMsg) );    
 		
 	} else {
 		//--------------------
@@ -6208,7 +6216,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	// send pixel pulse train info
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, &dsInfo, (DiscardFptr_type)discard_PulseTrain_type) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &dataPacket, FALSE, &errMsg) ); 
+	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &dataPacket, FALSE, &errorInfo.errMsg) ); 
 	
 	// send pixel sampling rate
 	// pixel sampling rate in [Hz]
@@ -6216,7 +6224,7 @@ static int NonResRectRasterScan_GenerateScanSignals (RectRaster_type* scanEngine
 	*pixelSamplingRatePtr = 1e+6/scanEngine->scanSettings.pixelDwellTime;
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&pixelSamplingRatePtr, &dsInfo, NULL) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSamplingRate, &dataPacket, FALSE, &errMsg) ); 
+	errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSamplingRate, &dataPacket, FALSE, &errorInfo.errMsg) ); 
 	
 	return 0; // no error
 				  
@@ -6243,19 +6251,16 @@ Error:
 	ReleaseDataPacket(&dataPacket);
 	discard_DSInfo_type(&dsInfo);
 	
-	*errorMsg = FormatMsg(NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals, "NonResRectRasterScan_GenerateScanSignals", errMsg);
-	OKfree(errMsg);
-	
-	return NonResRectRasterScan_GenerateScanSignals_Err_ScanSignals;
+RETURN_ERR
 }
 
 /// HIFN Generates galvo command and ROI timing signals for jumping the laser beam from its parked position, through a series of points and returns it back to the parked position.
 static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanEngine, char** errorMsg)
 {
-	
 #define NonResRectRasterScan_GeneratePointJumpSignals_Err_NoPoints		-1
-	int						error							= 0;
-	char*					errMsg							= NULL;
+
+INIT_ERR
+
 	PointJumpSet_type*		pointJumpSet					= scanEngine->pointJumpSettings;
 	size_t					nTotalPoints					= ListNumItems(scanEngine->pointJumpSettings->pointJumps);   	// number of point ROIs available
 	Point_type*				pointJump						= NULL;
@@ -6338,11 +6343,8 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	}
 	
 	// if there are no active points, generate error
-	if (nVoltages < 3) {
-		error = NonResRectRasterScan_GeneratePointJumpSignals_Err_NoPoints;
-		errMsg = StrDup("No points to jump to");
-		goto Error;
-	}
+	if (nVoltages < 3)
+		SET_ERR(NonResRectRasterScan_GeneratePointJumpSignals_Err_NoPoints, "No points to jump to.");
 	
 	// set the first and last voltages to be the parked voltage
 	fastAxisVoltages[0] = fastAxisCal->parked;
@@ -6479,30 +6481,30 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	// fast galvo axis
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&fastAxisJumpWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errMsg) );
-	errChk( SendNullPacket(scanEngine->baseClass.VChanFastAxisCom, &errMsg) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );
+	errChk( SendNullPacket(scanEngine->baseClass.VChanFastAxisCom, &errorInfo.errMsg) );
 	
 	
 	// slow galvo axis
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&slowAxisJumpWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
-	errChk( SendNullPacket(scanEngine->baseClass.VChanSlowAxisCom, &errMsg) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );
+	errChk( SendNullPacket(scanEngine->baseClass.VChanSlowAxisCom, &errorInfo.errMsg) );
 	
 	// ROI hold
 	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIHold)) {
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, (void**)&ROIHoldWaveform, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanROIHold, &dataPacket, FALSE, &errMsg) );
-		errChk( SendNullPacket(scanEngine->baseClass.VChanROIHold, &errMsg) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanROIHold, &dataPacket, FALSE, &errorInfo.errMsg) );
+		errChk( SendNullPacket(scanEngine->baseClass.VChanROIHold, &errorInfo.errMsg) );
 	}
 	
 	// ROI stimulate
 	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate)) {
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, (void**)&ROIStimulateWaveform, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanROIStimulate, &dataPacket, FALSE, &errMsg) );
-		errChk( SendNullPacket(scanEngine->baseClass.VChanROIStimulate, &errMsg) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanROIStimulate, &dataPacket, FALSE, &errorInfo.errMsg) );
+		errChk( SendNullPacket(scanEngine->baseClass.VChanROIStimulate, &errorInfo.errMsg) );
 	}
 	
 	//------------------------------------------------------------
@@ -6514,12 +6516,12 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	*nGalvoSamplesPtr = (uInt64) nGalvoJumpSamples;
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &dataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &dataPacket, FALSE, &errorInfo.errMsg) );
 	nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
 	*nGalvoSamplesPtr = (uInt64) nGalvoJumpSamples;
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errorInfo.errMsg) );
 	
 	//------------------------------------------------------------
 	// Send galvo sampling rate
@@ -6528,7 +6530,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 	nullChk( galvoSamplingRatePtr = malloc(sizeof(double)) );
 	*galvoSamplingRatePtr = scanEngine->galvoSamplingRate;
 	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&galvoSamplingRatePtr, NULL, NULL) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errMsg) ); 
+	errChk( SendDataPacket(scanEngine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errorInfo.errMsg) ); 
 	
 	//------------------------------------------------------------
 	// Send number of pixels to acquire if recording is needed
@@ -6539,7 +6541,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		*nPixelsPtr = nPixels;
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nPixelsPtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &dataPacket, FALSE, &errMsg) );  
+		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &dataPacket, FALSE, &errorInfo.errMsg) );  
 	}
 	
 	//------------------------------------------------------------
@@ -6551,7 +6553,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32)(scanEngine->galvoSamplingRate/scanEngine->baseClass.referenceClockFreq) - 2, 2, 0) );
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, &dsInfo, (DiscardFptr_type)discard_PulseTrain_type) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &dataPacket, FALSE, &errMsg) ); 
+		errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &dataPacket, FALSE, &errorInfo.errMsg) ); 
 	}
 	
 	// send pixel sampling rate in [Hz]
@@ -6560,7 +6562,7 @@ static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanE
 		*pixelSamplingRatePtr = scanEngine->galvoSamplingRate;
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&pixelSamplingRatePtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSamplingRate, &dataPacket, FALSE, &errMsg) ); 
+		errChk( SendDataPacket(scanEngine->baseClass.VChanPixelSamplingRate, &dataPacket, FALSE, &errorInfo.errMsg) ); 
 	}
 	
 	
@@ -6591,8 +6593,7 @@ Error:
 	discard_DataPacket_type(&dataPacket);
 	discard_DSInfo_type(&dsInfo);
 	
-	ReturnErrMsg();
-	return error;
+RETURN_ERR
 }
 
 /* 
@@ -6652,8 +6653,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 #define NonResRectRasterScan_BuildImage_Err_WrongPixelDataType			-1
 #define NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage		-2
 	
-	int							error						= 0;
-	char*						errMsg						= NULL;
+INIT_ERR
+
 	DataPacket_type*			pixelPacket					= NULL;
 	ImageTypes					imageType					= 0;		// Data type of assembled image
 	Waveform_type*				pixelWaveform				= NULL;   	// Incoming pixel waveform.
@@ -6756,10 +6757,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					
 					default:
 				
-					error 	= NonResRectRasterScan_BuildImage_Err_WrongPixelDataType;
-					errMsg 	= StrDup("Wrong pixel data type");
-					goto Error;
-						
+					SET_ERR(NonResRectRasterScan_BuildImage_Err_WrongPixelDataType, "Wrong pixel data type.");
+				
 				}
 			
 				// update number of pixels in the image
@@ -6804,9 +6803,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					
 				default:
 				
-					error 	= NonResRectRasterScan_BuildImage_Err_WrongPixelDataType;
-					errMsg 	= StrDup("Wrong pixel data type");
-					goto Error;
+					SET_ERR(NonResRectRasterScan_BuildImage_Err_WrongPixelDataType, "Wrong pixel data type.");
 			}
 				
 			// update number of pixels in the buffers
@@ -6840,9 +6837,8 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 						break;
 			
 					default:
-						error 	= NonResRectRasterScan_BuildImage_Err_WrongPixelDataType;
-						errMsg 	= StrDup("Wrong pixel data type");
-						goto Error;
+						
+						SET_ERR(NonResRectRasterScan_BuildImage_Err_WrongPixelDataType, "Wrong pixel data type.");
 				}
 				
 				//--------------------------------------------
@@ -6857,14 +6853,14 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				// check if wait was aborted
 				if (GetTaskControlAbortFlag(rectRaster->baseClass.taskControl)) {
 					// send iteration done event only once for all the image building threads
-					errChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
+					CmtErrChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
 					if (*nActivePixelBuildersTSVPtr) {
-						TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
+						errChk( TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE, &errorInfo.errMsg) );
 						*nActivePixelBuildersTSVPtr = 0; // so that other threads aborting
-						CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV);
+						CmtErrChk( CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV) );
 						return 0;
 					} else {
-						CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV);
+						CmtErrChk( CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV) );
 						return 0;
 					}
 				}
@@ -6906,7 +6902,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					
 					DSInfo_type* dsInfo = GetIteratorDSData(GetTaskControlIterator(rectRaster->baseClass.taskControl), WAVERANK);	// Shouldn't this be IMAGERANK ???
 					nullChk( imagePacket = init_DataPacket_type(DL_Image, (void**)&sendImage, &dsInfo,(DiscardFptr_type)discard_Image_type));
-					errChk( SendDataPacket(imgBuffer->scanChan->outputVChan, &imagePacket, 0, &errMsg) );
+					errChk( SendDataPacket(imgBuffer->scanChan->outputVChan, &imagePacket, 0, &errorInfo.errMsg) );
 				}
 				
 				//--------------------------------------
@@ -6935,7 +6931,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 					}
 		
 					// complete iteration
-					TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
+					errChk( TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE, &errorInfo.errMsg) );
 				}
 	
 				CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV);
@@ -6961,7 +6957,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 		// Receive pixel data 
 		//---------------------------------------------------------------------------
 		
-		errChk( GetDataPacket(imgBuffer->scanChan->detVChan, &pixelPacket, &errMsg) );
+		errChk( GetDataPacket(imgBuffer->scanChan->detVChan, &pixelPacket, &errorInfo.errMsg) );
 		
 		//----------------------------------------------------------------------
 		// Process NULL packet
@@ -6969,7 +6965,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 		
 		// end task controller iteration
 		if (!pixelPacket) {
-			TaskControlIterationDone(rectRaster->baseClass.taskControl, NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage, "Not enough pixels were provided to complete an image", FALSE);
+			errChk( TaskControlIterationDone(rectRaster->baseClass.taskControl, NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage, "Not enough pixels were provided to complete an image", FALSE, &errorInfo.errMsg) );
 			break;
 		}
 			
@@ -7031,9 +7027,7 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 				
 			default:
 				
-				error = NonResRectRasterScan_BuildImage_Err_WrongPixelDataType;
-				errMsg = StrDup("Wrong pixel data type");
-				goto Error;
+				SET_ERR(NonResRectRasterScan_BuildImage_Err_WrongPixelDataType, "Wrong pixel data type.");
 		}
 		
 		ReleaseDataPacket(&pixelPacket);
@@ -7045,20 +7039,17 @@ static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t 
 			
 	return 0;
 
+CmtError:
+	
+Cmt_ERR
+	
 Error:
 	
 	// cleanup
 	ReleaseDataPacket(&pixelPacket);
 	discard_RectRasterScanSet_type(&imgSettings);
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
-	
-	if (errorMsg)
-		*errorMsg = FormatMsg(error, "NonResRectRasterScan_BuildImage", errMsg);
-	OKfree(errMsg);
-	
-	return error;
+RETURN_ERR
 }
 
 static PixelAssemblyBinding_type* init_PixelAssemblyBinding_type (RectRaster_type* rectRaster, size_t channelIdx)
@@ -7079,8 +7070,8 @@ static void discard_PixelAssemblyBinding_type (PixelAssemblyBinding_type** pixel
 
 static int CVICALLBACK NonResRectRasterScan_LaunchPixelBuilder (void* functionData)
 {
-	int								error					= 0;
-	char*							errMsg					= NULL;
+INIT_ERR
+
 	PixelAssemblyBinding_type*		binding 				= functionData;
 	
 	switch (binding->scanEngine->baseClass.scanMode) {
@@ -7088,12 +7079,12 @@ static int CVICALLBACK NonResRectRasterScan_LaunchPixelBuilder (void* functionDa
 		case ScanEngineMode_FrameScan:
 			
 			// receive pixel stream and assemble image
-			errChk( NonResRectRasterScan_BuildImage(binding->scanEngine, binding->channelIdx, &errMsg) );
+			errChk( NonResRectRasterScan_BuildImage(binding->scanEngine, binding->channelIdx, &errorInfo.errMsg) );
 			break;
 			
 		case ScanEngineMode_PointScan:
 			
-			errChk( NonResRectRasterScan_BuildPointScan(binding->scanEngine, binding->channelIdx, &errMsg) );
+			errChk( NonResRectRasterScan_BuildPointScan(binding->scanEngine, binding->channelIdx, &errorInfo.errMsg) );
 			break;
 	}
 
@@ -7103,14 +7094,15 @@ static int CVICALLBACK NonResRectRasterScan_LaunchPixelBuilder (void* functionDa
 	
 Error:
 	
-	TaskControlIterationDone(binding->scanEngine->baseClass.taskControl, error, errMsg, FALSE);
-	OKfree(errMsg);
-	return error;
+	TaskControlIterationDone(binding->scanEngine->baseClass.taskControl, errorInfo.error, errorInfo.errMsg, FALSE, NULL);
+	OKfree(errorInfo.errMsg);
+	return errorInfo.error;
 }
 
 static int NonResRectRasterScan_AssembleCompositeImage (RectRaster_type* rectRaster, char** errorMsg)
 {
-	int				error				= 0;
+INIT_ERR
+
 	RGBA_type*		compositePixArray	= NULL;
 	void*			chanPixArray		= NULL;
 	
@@ -7141,11 +7133,10 @@ static int NonResRectRasterScan_AssembleCompositeImage (RectRaster_type* rectRas
 		}
 	}
 	
-	return 0;
 	
 Error:
 	
-	return error;
+RETURN_ERR
 	
 }
 
@@ -7166,7 +7157,7 @@ static void NonResRectRasterScan_PointROIVoltage (RectRaster_type* rectRaster, P
 
 static int NonResRectRasterScan_JumpTime (RectRaster_type* rectRaster, double fastAxisAmplitude, double slowAxisAmplitude, double* jumpTimePtr, double* responseDelayPtr)
 {
-	int						error					= 0;
+INIT_ERR
 	
 	NonResGalvoCal_type*	fastAxisCal				= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal				= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
@@ -7201,7 +7192,7 @@ static int NonResRectRasterScan_JumpTime (RectRaster_type* rectRaster, double fa
 	
 Error:	
 	
-	return error;
+	return errorInfo.error;
 }
 
 static size_t NonResRectRasterScan_GetNumActivePoints (RectRaster_type* rectRaster)
@@ -7220,8 +7211,7 @@ static size_t NonResRectRasterScan_GetNumActivePoints (RectRaster_type* rectRast
 
 static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, size_t bufferIdx, char** errorMsg)
 {
-	int							error						= 0;
-	char*						errMsg						= NULL;	
+INIT_ERR
 	
 	RectRasterPointBuff_type*	pointBuffer					= rectRaster->pointBuffers[bufferIdx];
 	int* 						nActivePixelBuildersTSVPtr 	= NULL;
@@ -7234,22 +7224,22 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	// Receive pixel data
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	
-	errChk( ReceiveWaveform(pointBuffer->scanChan->detVChan, &pointBuffer->rawPixels, NULL, &errMsg) );
+	errChk( ReceiveWaveform(pointBuffer->scanChan->detVChan, &pointBuffer->rawPixels, NULL, &errorInfo.errMsg) );
 	
 	// if no waveform is received, send null packet to output channel and complete iteration if there are no other pixel builder threads for other channels
 	if (!pointBuffer->rawPixels) {
 		
 		if (IsVChanOpen((VChan_type*)pointBuffer->scanChan->outputVChan))
-			errChk( SendNullPacket(pointBuffer->scanChan->outputVChan, &errMsg) );
+			errChk( SendNullPacket(pointBuffer->scanChan->outputVChan, &errorInfo.errMsg) );
 		
-		errChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
+		CmtErrChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
 		(*nActivePixelBuildersTSVPtr)--;
 	
 		// complete iteration
 		if (!*nActivePixelBuildersTSVPtr)
-			TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
+			errChk( TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE, &errorInfo.errMsg) );
 		
-		CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV);
+		CmtErrChk( CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV) );
 		
 		return 0;
 	}
@@ -7260,7 +7250,7 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	
 	
 	size_t nHoldSamples = (size_t)RoundRealToNearestInteger(rectRaster->pointJumpSettings->globalPointScanSettings.holdTime * 1e-3 * rectRaster->galvoSamplingRate);
-	errChk( IntegrateWaveform(&pointBuffer->integratedPixels, pointBuffer->rawPixels, pointBuffer->nSkipPixels, pointBuffer->nSkipPixels + nHoldSamples, rectRaster->pointJumpSettings->nIntegration) );
+	errChk( IntegrateWaveform(&pointBuffer->integratedPixels, pointBuffer->rawPixels, pointBuffer->nSkipPixels, pointBuffer->nSkipPixels + nHoldSamples, rectRaster->pointJumpSettings->nIntegration, &errorInfo.errMsg) );
 	discard_Waveform_type(&pointBuffer->rawPixels);
 	
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -7269,10 +7259,10 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	
 	if (IsVChanOpen((VChan_type*)pointBuffer->scanChan->outputVChan)) {
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(rectRaster->baseClass.taskControl), WAVERANK) );
-		errChk( CopyWaveform(&pixelWaveformCopy, pointBuffer->integratedPixels, &errMsg) );
+		errChk( CopyWaveform(&pixelWaveformCopy, pointBuffer->integratedPixels, &errorInfo.errMsg) );
 		nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_Double, (void**)&pixelWaveformCopy, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
-		errChk( SendDataPacket(pointBuffer->scanChan->outputVChan, &dataPacket, FALSE, &errMsg) );
-		errChk( SendNullPacket(pointBuffer->scanChan->outputVChan, &errMsg) );
+		errChk( SendDataPacket(pointBuffer->scanChan->outputVChan, &dataPacket, FALSE, &errorInfo.errMsg) );
+		errChk( SendNullPacket(pointBuffer->scanChan->outputVChan, &errorInfo.errMsg) );
 	}
 	
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -7304,17 +7294,21 @@ static int NonResRectRasterScan_BuildPointScan (RectRaster_type* rectRaster, siz
 	// Finalize point scan for this channel
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	
-	errChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
+	CmtErrChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
 	
 	(*nActivePixelBuildersTSVPtr)--;
 	// complete iteration
 	if (!*nActivePixelBuildersTSVPtr)
-		TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE);
+		errChk( TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE, &errorInfo.errMsg) );
 	
-	CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV);
+	CmtErrChk( CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV) );
 	
 	return 0;
+
+CmtError:
 	
+Cmt_ERR
+
 Error:
 	
 	// cleanup
@@ -7322,13 +7316,13 @@ Error:
 	discard_DSInfo_type(&dsInfo);
 	discard_DataPacket_type(&dataPacket);
 	
-	ReturnErrMsg();
-	return error;
+RETURN_ERR
 }
 
 static void NonResRectRasterScan_SetMinimumPointJumpStartDelay (RectRaster_type* rectRaster)
 {
-	int						error				= 0;
+INIT_ERR
+
 	PointJumpSet_type*		pointJumpSet		= rectRaster->pointJumpSettings;
 	double					fastAxisCommandV	= 0;
 	double					slowAxisCommandV	= 0;
@@ -7385,6 +7379,7 @@ Error:
 	
 	// cleanup
 	OKfree(pointJumps);
+	
 }
 
 /*
@@ -7483,7 +7478,8 @@ static double NonResRectRasterScan_RoundToGalvoSampling (RectRaster_type* scanEn
 
 static PointJumpSet_type* init_PointJumpSet_type (void)
 {
-	int					error			= 0;
+INIT_ERR
+
 	PointJumpSet_type*	pointJumpSet 	= malloc(sizeof(PointJumpSet_type));
 	if (!pointJumpSet) return NULL;
 	
@@ -7605,6 +7601,8 @@ static void discard_Objective_type (Objective_type** objective)
 
 static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERR
+
 	ScanEngine_type*	engine				= callbackData;
 	char*				newObjectiveName	= NULL;
 	
@@ -7680,15 +7678,15 @@ static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void 
 			// configure/unconfigure scan engine
 			if (NonResRectRasterScan_ValidConfig((RectRaster_type*)engine)) {
 				
-				NonResRectRasterScan_ScanWidths((RectRaster_type*)engine);
-				NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine);
+				errChk( NonResRectRasterScan_ScanWidths((RectRaster_type*)engine, &errorInfo.errMsg) );
+				errChk( NonResRectRasterScan_PixelDwellTimes((RectRaster_type*)engine, &errorInfo.errMsg) );
 					
 				if (NonResRectRasterScan_ReadyToScan((RectRaster_type*)engine))
-					TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL);
+					errChk( TaskControlEvent(engine->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 				else
-					TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL); 	
+					errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) ); 	
 			} else
-				TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL);
+				errChk( TaskControlEvent(engine->taskControl, TC_Event_Unconfigure, NULL, NULL, &errorInfo.errMsg) );
 			
 			// cleanup, discard panel
 			DiscardPanel(engine->newObjectivePanHndl);
@@ -7702,6 +7700,10 @@ static int CVICALLBACK NewObjective_CB (int panel, int control, int event, void 
 			break;
 	}
 	
+Error:
+	
+PRINT_ERR
+
 	return 0;
 }
 
@@ -7754,10 +7756,9 @@ Error:
 // Fast Axis Command VChan
 static void	FastAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 { 
-	int					error				= 0;
-	char*				errMsg				= NULL;
+INIT_ERR
 	
-	ScanEngine_type*	engine				= VChanOwner;
+	ScanEngine_type*	engine		= VChanOwner;
 	
 	switch (state) {
 		
@@ -7765,7 +7766,7 @@ static void	FastAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VC
 			
 			if (!engine->fastAxisCal) return; // no parked voltage available
 			
-			errChk( SendScanAxisCommand(engine, ScanAxis_Fast, ((NonResGalvoCal_type*)engine->fastAxisCal)->parked, &errMsg) );
+			errChk( SendScanAxisCommand(engine, ScanAxis_Fast, ((NonResGalvoCal_type*)engine->fastAxisCal)->parked, &errorInfo.errMsg) );
 			break;
 			
 		case VChan_Closed:
@@ -7777,18 +7778,13 @@ static void	FastAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VC
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Unknown error or out of memory");
-	
-	DLMsg(errMsg, TRUE);
-	OKfree(errMsg);
+PRINT_ERR
 }
 
 // Slow Axis Command VChan
 static void	SlowAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
-	int					error			= 0;
-	char*				errMsg			= NULL;
+INIT_ERR
 	
 	ScanEngine_type*	engine			= VChanOwner;
 	double*				parkedVPtr 		= NULL;
@@ -7803,7 +7799,7 @@ static void	SlowAxisComVChan_StateChange (VChan_type* self, void* VChanOwner, VC
 			nullChk( parkedVPtr = malloc(sizeof(double)) );
 			*parkedVPtr = ((NonResGalvoCal_type*)engine->slowAxisCal)->parked;
 			nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&parkedVPtr, NULL, NULL) );
-			errChk( SendDataPacket(engine->VChanSlowAxisCom, &dataPacket, FALSE, &errMsg) );
+			errChk( SendDataPacket(engine->VChanSlowAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );
 			
 			break;
 			
@@ -7820,18 +7816,13 @@ Error:
 	OKfree(parkedVPtr);
 	discard_DataPacket_type(&dataPacket);
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
-	
-	DLMsg(errMsg, TRUE);
-	OKfree(errMsg);
+PRINT_ERR
 }
 
 static void	GalvoComSampleRateVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
-	int					error				= 0;
-	char*				errMsg				= NULL;
-	
+INIT_ERR
+
 	RectRaster_type*	engine				= VChanOwner;
 	double*				samplingRatePtr 	= NULL;
 	DataPacket_type*	dataPacket			= NULL;
@@ -7843,7 +7834,7 @@ static void	GalvoComSampleRateVChan_StateChange (VChan_type* self, void* VChanOw
 			nullChk( samplingRatePtr = malloc(sizeof(double)) );
 			*samplingRatePtr = engine->galvoSamplingRate;
 			nullChk( dataPacket = init_DataPacket_type(DL_Double, (void**)&samplingRatePtr, NULL, NULL) );
-			errChk( SendDataPacket(engine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errMsg) );
+			errChk( SendDataPacket(engine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errorInfo.errMsg) );
 			
 			break;
 			
@@ -7860,11 +7851,7 @@ Error:
 	OKfree(samplingRatePtr);
 	discard_DataPacket_type(&dataPacket);
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
-	
-	DLMsg(errMsg, TRUE);
-	OKfree(errMsg);
+PRINT_ERR
 }
 
 
@@ -8141,10 +8128,12 @@ static void WaveformDisplay_CB (WaveformDisplay_type* waveformDisplay, int event
 
 static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, RectRaster_type* scanEngine, RectRasterScanSet_type previousScanSettings)
 {
+INIT_ERR
+
 	Image_type**		imagePtr	= NULL;
 	
 	// obtain image lock
-	if( CmtGetTSVPtr(imgDisplay->imageTSV, &imagePtr)  < 0) goto TSVError;
+	CmtErrChk( CmtGetTSVPtr(imgDisplay->imageTSV, &imagePtr) );
 	
 	// assign this image display to the scan engine
 	scanEngine->baseClass.activeDisplay		= imgDisplay; 
@@ -8153,8 +8142,8 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 	scanEngine->scanSettings = previousScanSettings;
 	
 	// update preferred widths and pixel dwell times
-	NonResRectRasterScan_ScanWidths(scanEngine);
-	NonResRectRasterScan_PixelDwellTimes(scanEngine);
+	errChk( NonResRectRasterScan_ScanWidths(scanEngine, &errorInfo.errMsg) );
+	errChk( NonResRectRasterScan_PixelDwellTimes(scanEngine, &errorInfo.errMsg) );
 	
 	// update remaining controls on the scan panel
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize);
@@ -8220,10 +8209,13 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 	
 	return;
 	
-TSVError:
+CmtError:
 	
-	return;
-	
+Cmt_ERR
+
+Error:
+
+PRINT_ERR
 }
 
 static void	DisplayErrorHandler_CB (ImageDisplay_type* imgDisplay, int errorID, char* errorMsg)
@@ -8262,15 +8254,15 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 #define	IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples 		-1
 #define IterateTC_NonResGalvoCal_Err_SwitchTimeShorterThanGalvoLag		 		-2			
 
+INIT_ERR
+
 	ActiveNonResGalvoCal_type* 		cal 						= GetTaskControlModuleData(taskControl);
 	double*							commandSignal				= NULL;
 	double*							positionSignal				= NULL;
 	DataPacket_type*				commandPacket				= NULL;
-	char*							errMsg						= NULL;
 	uInt64*							nCommandWaveformSamplesPtr  = NULL;
 	size_t							nCommandSignalSamples		= 0;
 	size_t							nPositionSignalSamples		= 0;
-	int								error						= 0;
 	Waveform_type*					waveformCopy				= NULL;
 	WaveformTypes					waveformType				= 0;
 	DSInfo_type*					dsInfo						= NULL;
@@ -8304,11 +8296,11 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// send command waveform
 			nCommandSignalSamples = CALPOINTS * nSamplesPerCalPoint;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, (void**)&commandSignal) );
-			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
+			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errorInfo.errMsg) );
 			nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
-			errChk( SendNullPacket(cal->baseClass.VChanCom, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errorInfo.errMsg) );
+			errChk( SendNullPacket(cal->baseClass.VChanCom, &errorInfo.errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
@@ -8316,25 +8308,21 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			
 			nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 			nullChk( commandPacket = init_DataPacket_type(DL_UInt64, (void**)&nCommandWaveformSamplesPtr, &dsInfo, NULL) );
-			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errorInfo.errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			// Receive and analyze galvo response signal
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
-			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errorInfo.errMsg) );
 			
 			//get pointer to galvo position signal
 			positionSignal	 	= *(double**) GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
 			commandSignal		= *(double**) GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
 			
 			// check if number of received samples is different than the number of sent samples
-			if (nPositionSignalSamples != nCommandSignalSamples) {
-				errMsg = FormatMsg(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "IterateTC_NonResGalvoCal", "Number of command and response samples in the sent and received \
-									waveforms must be the same");
-				error = IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples;
-				goto Error;
-			}
+			if (nPositionSignalSamples != nCommandSignalSamples)
+				SET_ERR(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "Number of command and response samples in the sent and received waveforms must be the same.");
 			
 			// analyze galvo response
 			double  	Pos[CALPOINTS]				= {0};
@@ -8376,7 +8364,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// proceed to next calibration method
 			cal->currentCal++;
 			cal->currIterIdx = 0;
-			TaskControlIterationDone(taskControl, 0, "", TRUE);
+			errChk( TaskControlIterationDone(taskControl, 0, "", TRUE, &errorInfo.errMsg) );
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
 		}
@@ -8417,36 +8405,32 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// send command waveform
 			nCommandSignalSamples = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, (void**)&commandSignal) );
-			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
+			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errorInfo.errMsg) );
 			nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
-			errChk( SendNullPacket(cal->baseClass.VChanCom, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errorInfo.errMsg) );
+			errChk( SendNullPacket(cal->baseClass.VChanCom, &errorInfo.errMsg) );
 			
 			// send number of samples in waveform
 			nCommandWaveformSamplesPtr = malloc (sizeof(uInt64));
 			*nCommandWaveformSamplesPtr = (uInt64)nCommandSignalSamples;
 			nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 			nullChk( commandPacket = init_DataPacket_type(DL_UInt64, (void**)&nCommandWaveformSamplesPtr, &dsInfo, NULL) );
-			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errorInfo.errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			// Receive and analyze galvo response signal
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
-			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errorInfo.errMsg) );
 			
 			//get pointer to galvo position signal
 			positionSignal 	= *(double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
 			commandSignal	= *(double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
 			
 			// check if number of received samples is different than the number of sent samples
-			if (nPositionSignalSamples != nCommandSignalSamples) {
-				errMsg = FormatMsg(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "IterateTC_NonResGalvoCal", "Number of command and response samples in the sent and received \
-									waveforms must be the same");
-				error = IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples;
-				goto Error;
-			}
+			if (nPositionSignalSamples != nCommandSignalSamples)
+				SET_ERR(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "Number of command and response samples in the sent and received waveforms must be the same.");
 			
 			// average galvo ramp responses, use only ramp and post ramp time to analyze the data
 			double*		averageResponse = calloc (cal->nRampSamples + postRampSamples, sizeof(double));
@@ -8522,7 +8506,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			}
 				
 			OKfree(averageResponse);
-			TaskControlIterationDone(taskControl, 0, "", TRUE);
+			errChk( TaskControlIterationDone(taskControl, 0, "", TRUE, &errorInfo.errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		}
@@ -8572,36 +8556,32 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// send command waveform
 			nCommandSignalSamples = (flybackSamples + postStepSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, (void**)&commandSignal) );
-			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
+			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errorInfo.errMsg) );
 			nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
-			errChk( SendNullPacket(cal->baseClass.VChanCom, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errorInfo.errMsg) );
+			errChk( SendNullPacket(cal->baseClass.VChanCom, &errorInfo.errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = (uInt64)nCommandSignalSamples;
 			nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 			nullChk( commandPacket = init_DataPacket_type(DL_UInt64, (void**)&nCommandWaveformSamplesPtr, &dsInfo, NULL) );
-			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errorInfo.errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			// Receive and analyze galvo response signal
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
-			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errorInfo.errMsg) );
 			
 			//get pointer to galvo position signal
 			positionSignal 	= *(double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
 			commandSignal	= *(double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
 			
 			// check if number of received samples is different than the number of sent samples
-			if (nPositionSignalSamples != nCommandSignalSamples) {
-				errMsg = FormatMsg(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "IterateTC_NonResGalvoCal", "Number of command and response samples in the sent and received \
-									waveforms must be the same");
-				error = IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples;
-				goto Error;
-			}
+			if (nPositionSignalSamples != nCommandSignalSamples)
+				SET_ERR(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "Number of command and response samples in the sent and received waveforms must be the same.");
 			
 			double*		averageResponse = calloc (postStepSamples, sizeof(double));
 			// sum up step responses
@@ -8621,7 +8601,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			cal->switchTimes->delay = realloc (cal->switchTimes->delay, cal->switchTimes->n * sizeof(double));
 			
 			errChk( GetStepTime(averageResponse, postStepSamples, *cal->baseClass.comSampRate, -cal->commandVMax * amplitudeFactor, cal->commandVMax * amplitudeFactor, cal->resolution, 
-								&cal->switchTimes->switchTime[cal->switchTimes->n - 1], &cal->switchTimes->delay[cal->switchTimes->n - 1], &errMsg) );
+								&cal->switchTimes->switchTime[cal->switchTimes->n - 1], &cal->switchTimes->delay[cal->switchTimes->n - 1], &errorInfo.errMsg) );
 			
 			// plot switching time
 			double x, y;
@@ -8640,7 +8620,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			}
 				
 			OKfree(averageResponse);
-			TaskControlIterationDone(taskControl, 0, "", TRUE);  
+			errChk( TaskControlIterationDone(taskControl, 0, "", TRUE, &errorInfo.errMsg) );  
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		}
@@ -8694,36 +8674,32 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// send command waveform
 			nCommandSignalSamples = (flybackSamples + cal->nRampSamples + postRampSamples) * cal->nRepeat;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, (void**)&commandSignal) );
-			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
+			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errorInfo.errMsg) );
 			nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
-			errChk( SendNullPacket(cal->baseClass.VChanCom, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errorInfo.errMsg) );
+			errChk( SendNullPacket(cal->baseClass.VChanCom, &errorInfo.errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = (uInt64)nCommandSignalSamples;
 			nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 			nullChk( commandPacket = init_DataPacket_type(DL_UInt64, (void**)&nCommandWaveformSamplesPtr, &dsInfo, NULL) );
-			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errorInfo.errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			// Receive and analyze galvo response signal
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
-			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errorInfo.errMsg) );
 			
 			//get pointer to galvo position signal
 			positionSignal	= *(double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
 			commandSignal	= *(double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
 			
 			// check if number of received samples is different than the number of sent samples
-			if (nPositionSignalSamples != nCommandSignalSamples) {
-				errMsg = FormatMsg(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "IterateTC_NonResGalvoCal", "Number of command and response samples in the sent and received \
-									waveforms must be the same");
-				error = IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples;
-				goto Error;
-			}
+			if (nPositionSignalSamples != nCommandSignalSamples)
+				SET_ERR(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "Number of command and response samples in the sent and received waveforms must be the same.");
 			
 			double*		averageResponse = calloc (cal->nRampSamples + postRampSamples, sizeof(double));
 				
@@ -8780,7 +8756,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			}
 				
 			OKfree(averageResponse);
-			TaskControlIterationDone(taskControl, 0, "", TRUE); 
+			errChk( TaskControlIterationDone(taskControl, 0, "", TRUE, &errorInfo.errMsg) ); 
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
 		}
@@ -8832,36 +8808,32 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			// send command waveform
 			nCommandSignalSamples = nSamples;
 			nullChk( cal->commandWaveform = init_Waveform_type(Waveform_Double, *cal->baseClass.comSampRate, nCommandSignalSamples, (void**)&commandSignal) );
-			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errMsg) );
+			errChk( CopyWaveform(&waveformCopy, cal->commandWaveform, &errorInfo.errMsg) );
 			nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 			nullChk( commandPacket = init_DataPacket_type(DL_Waveform_Double, (void**)&waveformCopy, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
-			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errMsg) );
-			errChk( SendNullPacket(cal->baseClass.VChanCom, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanCom, &commandPacket, 0, &errorInfo.errMsg) );
+			errChk( SendNullPacket(cal->baseClass.VChanCom, &errorInfo.errMsg) );
 			
 			// send number of samples in waveform
 			nullChk( nCommandWaveformSamplesPtr = malloc (sizeof(uInt64)) );
 			*nCommandWaveformSamplesPtr = (uInt64)nCommandSignalSamples;
 			nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 			nullChk( commandPacket = init_DataPacket_type(DL_UInt64, (void**)&nCommandWaveformSamplesPtr, &dsInfo, NULL) );
-			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errMsg) );
+			errChk( SendDataPacket(cal->baseClass.VChanComNSamples, &commandPacket, 0, &errorInfo.errMsg) );
 			
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			// Receive and analyze galvo response signal
 			//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 			
-			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errMsg) );
+			errChk( ReceiveWaveform(cal->baseClass.VChanPos, &cal->positionWaveform, &waveformType, &errorInfo.errMsg) );
 			
 			//get pointer to galvo position signal
 			positionSignal 	= *(double**)GetWaveformPtrToData (cal->positionWaveform, &nPositionSignalSamples); 
 			commandSignal	= *(double**)GetWaveformPtrToData (cal->commandWaveform, &nCommandSignalSamples); 
 			
 			// check if number of received samples is different than the number of sent samples
-			if (nPositionSignalSamples != nCommandSignalSamples) {
-				errMsg = FormatMsg(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "IterateTC_NonResGalvoCal", "Number of command and response samples in the sent and received \
-									waveforms must be the same");
-				error = IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples;
-				goto Error;
-			}
+			if (nPositionSignalSamples != nCommandSignalSamples)
+				SET_ERR(IterateTC_NonResGalvoCal_Err_DifferentCommandAndResponseNumSamples, "Number of command and response samples in the sent and received waveforms must be the same.");
 			
 			BOOL		overloadFlag	= FALSE;
 			double* 	averageResponse = NULL;
@@ -8946,7 +8918,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 			discard_Waveform_type(&cal->commandWaveform); 
 				
 			if (cal->triangleCal->n < cal->maxSlopes->n) {
-				TaskControlIterationDone(taskControl, 0, "", TRUE); 
+				errChk( TaskControlIterationDone(taskControl, 0, "", TRUE, &errorInfo.errMsg) ); 
 			}
 			else {
 				// calculate average dead time
@@ -8957,7 +8929,7 @@ static void IterateTC_NonResGalvoCal (TaskControl_type* taskControl, Iterator_ty
 					cal->triangleCal->actualAmp[i] = cal->triangleCal->commandAmp[i] * (1 - 4 * cal->triangleCal->maxFreq[i] * cal->triangleCal->deadTime * 0.001);  
 					
 				// end task controller iterations
-				TaskControlIterationDone(taskControl, 0, "", FALSE);
+				errChk( TaskControlIterationDone(taskControl, 0, "", FALSE, &errorInfo.errMsg) );
 			}
 			
 		
@@ -8982,12 +8954,8 @@ Error:
 	OKfree(commandSignal);
 	OKfree(nCommandWaveformSamplesPtr);
 	
-	// create out of memory message
-	if (error == UIEOutOfMemory && !errMsg)
-		errMsg = StrDup("Out of memory");
-	
-	TaskControlIterationDone(cal->baseClass.taskController, error, errMsg, 0);
-	OKfree(errMsg);
+	TaskControlIterationDone(cal->baseClass.taskController, errorInfo.error, errorInfo.errMsg, FALSE, NULL);
+	OKfree(errorInfo.errMsg);
 }
 
 static int StartTC_NonResGalvoCal (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
@@ -9112,9 +9080,9 @@ static int UnconfigureTC_RectRaster (TaskControl_type* taskControl, BOOL const* 
 
 static void	IterateTC_RectRaster (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag)
 {
+INIT_ERR
+
 	RectRaster_type* 				engine 						= GetTaskControlModuleData(taskControl);
-	int								error 						= 0;
-	char*							errMsg						= NULL;
 	int*							nActivePixelBuildersTSVPtr	= NULL;
 	PixelAssemblyBinding_type*		pixelBinding				= NULL;
 	size_t							currentSequenceRepeat		= 0;
@@ -9125,20 +9093,20 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, Iterator_type* 
 			
 			// if there are no detection channels assigned, then do nothing  
 			if (!engine->imgBuffers) {
-				TaskControlIterationDone(taskControl, 0, 0, FALSE);
+				errChk( TaskControlIterationDone(taskControl, 0, 0, FALSE, &errorInfo.errMsg) );
 				break;
 			}
 			
 			// reset composite image counter to be equal to the number of image channel buffers in use
-			CmtGetTSVPtr(engine->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr);
+			CmtErrChk( CmtGetTSVPtr(engine->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
 			*nActivePixelBuildersTSVPtr = engine->nImgBuffers;
-			CmtReleaseTSVPtr(engine->baseClass.nActivePixelBuildersTSV);
+			CmtErrChk( CmtReleaseTSVPtr(engine->baseClass.nActivePixelBuildersTSV) );
 			
 			// launch image assembly threads for each channel
 			for (size_t i = 0; i < engine->nImgBuffers; i++) {
 				nullChk( pixelBinding= init_PixelAssemblyBinding_type(engine, i) );
-				CmtScheduleThreadPoolFunctionAdv(DLGetCommonThreadPoolHndl(), NonResRectRasterScan_LaunchPixelBuilder, pixelBinding, DEFAULT_THREAD_PRIORITY, NULL, 
-									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), pixelBinding, RUN_IN_SCHEDULED_THREAD, NULL);	
+				CmtErrChk( CmtScheduleThreadPoolFunctionAdv(DLGetCommonThreadPoolHndl(), NonResRectRasterScan_LaunchPixelBuilder, pixelBinding, DEFAULT_THREAD_PRIORITY, NULL, 
+									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), pixelBinding, RUN_IN_SCHEDULED_THREAD, NULL) );	
 			}
 			
 			break;
@@ -9175,24 +9143,24 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, Iterator_type* 
 			engine->pointJumpSettings->startDelay = currentSequenceRepeat * engine->pointJumpSettings->startDelayIncrement + engine->pointJumpSettings->startDelayInitVal;
 			
 			// send galvo and ROI timing waveforms
-			errChk ( NonResRectRasterScan_GeneratePointJumpSignals (engine, &errMsg) );  
+			errChk ( NonResRectRasterScan_GeneratePointJumpSignals (engine, &errorInfo.errMsg) );  
 			
 			// if there are no open detection VChans or no points to jump to
 			if (!GetNumOpenDetectionVChans(engine)) {
-				TaskControlIterationDone(taskControl, 0, 0, FALSE);
+				errChk( TaskControlIterationDone(taskControl, 0, 0, FALSE, &errorInfo.errMsg) );
 				break;
 			}
 			
 			// reset pixel builder counter
-			CmtGetTSVPtr(engine->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr);
+			CmtErrChk( CmtGetTSVPtr(engine->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
 			*nActivePixelBuildersTSVPtr = engine->nPointBuffers;
-			CmtReleaseTSVPtr(engine->baseClass.nActivePixelBuildersTSV);
+			CmtErrChk( CmtReleaseTSVPtr(engine->baseClass.nActivePixelBuildersTSV) );
 			
 			// launch point scan threads for each channel
 			for (size_t i = 0; i < engine->nPointBuffers; i++) {
 				nullChk( pixelBinding = init_PixelAssemblyBinding_type(engine, i) );
-				CmtScheduleThreadPoolFunctionAdv(DLGetCommonThreadPoolHndl(), NonResRectRasterScan_LaunchPixelBuilder, pixelBinding, DEFAULT_THREAD_PRIORITY, NULL, 
-									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), pixelBinding, RUN_IN_SCHEDULED_THREAD, NULL);	
+				CmtErrChk( CmtScheduleThreadPoolFunctionAdv(DLGetCommonThreadPoolHndl(), NonResRectRasterScan_LaunchPixelBuilder, pixelBinding, DEFAULT_THREAD_PRIORITY, NULL, 
+									 	 (EVENT_TP_THREAD_FUNCTION_BEGIN | EVENT_TP_THREAD_FUNCTION_END), pixelBinding, RUN_IN_SCHEDULED_THREAD, NULL) );	
 			}
 			
 			break;
@@ -9202,21 +9170,27 @@ static void	IterateTC_RectRaster (TaskControl_type* taskControl, Iterator_type* 
 	SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, (unsigned int) GetCurrentIterIndex(iterator) );
 	
 	return;
+
+CmtError:
 	
+Cmt_ERR
+
 Error:
 	
-	TaskControlIterationDone(taskControl, error, errMsg, FALSE);
 	SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, (unsigned int) GetCurrentIterIndex(iterator) );
-	OKfree(errMsg);
+	
+	TaskControlIterationDone(taskControl, errorInfo.error, errorInfo.errMsg, FALSE, NULL);
+	OKfree(errorInfo.errMsg);
 }
 
 static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
+INIT_ERR
+
 	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
-	int						error 				= 0;
 	
 	// open shutter
-	errChk( OpenScanEngineShutter(&engine->baseClass, 1, errorMsg) );
+	errChk( OpenScanEngineShutter(&engine->baseClass, 1, &errorInfo.errMsg) );
 	
 	// reset image scan buffers
 	for (size_t i = 0; i < engine->nImgBuffers; i++)
@@ -9227,8 +9201,7 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 		case ScanEngineMode_FrameScan:
 			
 			// send galvo waveforms
-			errChk ( NonResRectRasterScan_GenerateScanSignals (engine, errorMsg) );  
-			
+			errChk ( NonResRectRasterScan_GenerateScanSignals (engine, &errorInfo.errMsg) );
 			break;
 			
 		case ScanEngineMode_PointScan:
@@ -9239,26 +9212,20 @@ static int StartTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortF
 			
 			// reset current repeat display
 			SetCtrlVal(engine->baseClass.pointScanPanHndl, PointTab_NRepeat, 0);
-
 			break;
 	}
 	
-	return 0; // no error
-	
 Error:
 	
-	// create out of memory message
-	if (error == UIEOutOfMemory && !*errorMsg)
-		*errorMsg = StrDup("Out of memory");
-	
-	return error;
+RETURN_ERR
 }
 
 static int DoneTC_RectRaster (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
+INIT_ERR
+
 	RectRaster_type* 	engine		= GetTaskControlModuleData(taskControl);
-	int					error		= 0;
-	
+
 	
 	switch(engine->baseClass.scanMode) {
 		
@@ -9266,11 +9233,10 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, Iterator_type* iter
 			
 			// return to parked position if continuous
 			if (GetTaskControlMode(engine->baseClass.taskControl) == TASK_CONTINUOUS)
-			errChk( ReturnRectRasterToParkedPosition(engine, errorMsg) );
+			errChk( ReturnRectRasterToParkedPosition(engine, &errorInfo.errMsg) );
 			
 			// update iterations
 			SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, (unsigned int) GetCurrentIterIndex(iterator) );
-			
 			break;
 			
 		case ScanEngineMode_PointScan:
@@ -9278,71 +9244,60 @@ static int DoneTC_RectRaster (TaskControl_type* taskControl, Iterator_type* iter
 			// update sequence repeats
 			// reset current repeat display
 			SetCtrlVal(engine->baseClass.pointScanPanHndl, PointTab_NRepeat, engine->pointJumpSettings->nSequenceRepeat);
-			
 			break;
 	}
 	
 	// close shutter
-	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorMsg) );
+	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, &errorInfo.errMsg) );
 	
 	// flush leftover elements from the incoming detection pixel stream
 	for (size_t i = 0; i < engine->baseClass.nScanChans; i++)
-		ReleaseAllDataPackets(engine->baseClass.scanChans[i]->detVChan, errorMsg);
-	
-	return 0; 
+		errChk( ReleaseAllDataPackets(engine->baseClass.scanChans[i]->detVChan, &errorInfo.errMsg) );
 	
 Error:
 	
-	// create out of memory message
-	if (error == UIEOutOfMemory && !*errorMsg)
-		*errorMsg = StrDup("Out of memory");
-	
-	return error;
+RETURN_ERR
 }
 
 static int StoppedTC_RectRaster (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
+INIT_ERR
+
 	RectRaster_type* 			engine 						= GetTaskControlModuleData(taskControl);
-	int							error						= 0;
 	
 	// close shutter
-	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorMsg) );
+	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, &errorInfo.errMsg) );
 	// return to parked position
-	errChk( ReturnRectRasterToParkedPosition(engine, errorMsg) );
+	errChk( ReturnRectRasterToParkedPosition(engine, &errorInfo.errMsg) );
 	
-	return 0;
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
 static int ResetTC_RectRaster (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
+INIT_ERR
+
 	RectRaster_type* 	engine 		= GetTaskControlModuleData(taskControl);
-	int					error		= 0;
 	
 	// reset acquired frames
 	SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, 0);
 	
 	// close shutter
-	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, errorMsg) ); 
-	
-	return 0;
+	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, &errorInfo.errMsg) ); 
 	
 Error:
 	
-	// create out of memory message
-	if (error == UIEOutOfMemory && !*errorMsg)
-		*errorMsg = StrDup("Out of memory");
-	
-	return error;
+RETURN_ERR
 }
 
 static int TaskTreeStateChange_RectRaster (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
 {
+INIT_ERR
+
 	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
-	int						error				= 0;
 	size_t					nScanChans 			= engine->baseClass.nScanChans;
 	SourceVChan_type*   	detSourceVChan		= NULL;
 	DisplayEngine_type*		displayEngine		= engine->baseClass.lsModule->displayEngine;
@@ -9471,15 +9426,9 @@ static int TaskTreeStateChange_RectRaster (TaskControl_type* taskControl, TaskTr
 			break;
 	}
 	
-	return 0;
-
 Error:
 	
-	// create out of memory message
-	if (error == UIEOutOfMemory && !*errorMsg)
-		*errorMsg = StrDup("Out of memory");
-	
-	return error;
+RETURN_ERR
 }
 
 /*

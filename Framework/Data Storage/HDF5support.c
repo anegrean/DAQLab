@@ -24,17 +24,10 @@
 #include <stdlib.h>
 								   
 
-#ifndef errChk
-#define errChk(fCall) if (error = (fCall), error < 0) {goto Error;} else
-#endif
-	
 #ifndef hdf5ErrChk
-#define hdf5ErrChk(fCall) if (error = (fCall), error < 0) {goto HDF5Error;} else
+#define hdf5ErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) {goto HDF5Error;} else
 #endif
 
-#ifndef OKfree
-#define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}
-#endif
 	
 //==============================================================================
 // Constants
@@ -72,38 +65,38 @@ struct IteratorData {
 	//----------------------------------
 	// Groups
 	//----------------------------------
-static int 						CreateRootGroup 					(hid_t fileID, char *group_name);
-static int 						CreateRelativeGroup 				(hid_t parentgroupID, char *group_name);
-static int 						CreateHDF5Group 					(char* fileName, DSInfo_type* dsInfo, hid_t* fileID, hid_t* groupID);
+static int 						CreateRootGroup 					(hid_t fileID, char *group_name, char** errorMsg);
+static int 						CreateRelativeGroup 				(hid_t parentgroupID, char *group_name, char** errorMsg);
+static int 						CreateHDF5Group 					(char* fileName, DSInfo_type* dsInfo, hid_t* fileID, hid_t* groupID, char** errorMsg);
 
 	//----------------------------------
 	// Attributes
 	//----------------------------------
 
-static int 						CreateStringAttr 					(hid_t datasetID, char attr_name[], char* attr_data);
-static int 						CreateLongAttr						(hid_t datasetID, char attr_name[], long attr_data);
-static int 						CreateULongAttr 					(hid_t datasetID, char attr_name[], unsigned long attr_data);
-static int 						CreateLLongAttr 					(hid_t datasetID, char attr_name[], long long attr_data);
-static int 						CreateULLongAttr 					(hid_t datasetID, char attr_name[], unsigned long long attr_data);
-static int 						CreateULLongAttrArr 				(hid_t datasetID, char attr_name[], unsigned long long attr_data, size_t size);
-static int 						ReadNumElemAttr 					(hid_t datasetID, hsize_t index, unsigned long long* attr_data, size_t size);
-static int 						WriteNumElemAttr 					(hid_t datasetID, hsize_t index, unsigned long long attr_data, hsize_t size);
-static int 						CreateIntAttr 						(hid_t datasetID, char attr_name[], int attr_data);
-static int 						CreateUIntAttr 						(hid_t datasetID, char attr_name[], unsigned int attr_data);
-static int 						CreateShortAttr 					(hid_t datasetID, char attr_name[], long attr_data);
-static int 						CreateUShortAttr 					(hid_t datasetID, char attr_name[], unsigned long attr_data);
-static int 						CreateFloatAttr						(hid_t datasetID, char attr_name[], float attr_data);
-static int 						CreateDoubleAttr 					(hid_t datasetID, char attr_name[], double attr_data);
-static int 						CreateDoubleAttrArr					(hid_t datasetID, char attr_name[], double attr_data, hsize_t size);
+static int 						CreateStringAttr 					(hid_t datasetID, char attr_name[], char* attr_data, char** errorMsg);
+static int 						CreateLongAttr						(hid_t datasetID, char attr_name[], long attr_data, char** errorMsg);
+static int 						CreateULongAttr 					(hid_t datasetID, char attr_name[], unsigned long attr_data, char** errorMsg);
+static int 						CreateLLongAttr 					(hid_t datasetID, char attr_name[], long long attr_data, char** errorMsg);
+static int 						CreateULLongAttr 					(hid_t datasetID, char attr_name[], unsigned long long attr_data, char** errorMsg);
+static int 						CreateULLongAttrArr 				(hid_t datasetID, char attr_name[], unsigned long long attr_data, size_t size, char** errorMsg);
+static int 						ReadNumElemAttr 					(hid_t datasetID, hsize_t index, unsigned long long* attr_data, size_t size, char** errorMsg);
+static int 						WriteNumElemAttr 					(hid_t datasetID, hsize_t index, unsigned long long attr_data, hsize_t size, char** errorMsg);
+static int 						CreateIntAttr 						(hid_t datasetID, char attr_name[], int attr_data, char** errorMsg);
+static int 						CreateUIntAttr 						(hid_t datasetID, char attr_name[], unsigned int attr_data, char** errorMsg);
+static int 						CreateShortAttr 					(hid_t datasetID, char attr_name[], long attr_data, char** errorMsg);
+static int 						CreateUShortAttr 					(hid_t datasetID, char attr_name[], unsigned long attr_data, char** errorMsg);
+static int 						CreateFloatAttr						(hid_t datasetID, char attr_name[], float attr_data, char** errorMsg);
+static int 						CreateDoubleAttr 					(hid_t datasetID, char attr_name[], double attr_data, char** errorMsg);
+static int 						CreateDoubleAttrArr					(hid_t datasetID, char attr_name[], double attr_data, hsize_t size, char** errorMsg);
 
 	// Waveforms
-static int 						AddWaveformAttr 					(hid_t datasetID, Waveform_type* waveform);
-static int 						AddWaveformAttrArr 					(hid_t datasetID, unsigned long long numelements, hsize_t size);
+static int 						AddWaveformAttr 					(hid_t datasetID, Waveform_type* waveform, char** errorMsg);
+static int 						AddWaveformAttrArr 					(hid_t datasetID, unsigned long long numelements, hsize_t size, char** errorMsg);
 
 	// Images
-static int 						CreatePixelSizeAttr 				(hid_t datasetID, double* attr_data);
-static int 						AddImagePixSizeAttributes 			(hid_t datasetID, Image_type* image);
-static int 						AddImageAttributes					(hid_t datasetID, Image_type* image, hsize_t size);
+static int 						CreatePixelSizeAttr 				(hid_t datasetID, double* attr_data, char** errorMsg);
+static int 						AddImagePixSizeAttributes 			(hid_t datasetID, Image_type* image, char** errorMsg);
+static int 						AddImageAttributes					(hid_t datasetID, Image_type* image, hsize_t size, char** errorMsg);
 
 	// ROIs (regions of interest)
 //static int						
@@ -123,31 +116,33 @@ static void						WaveformDataTypeToHDF5				(WaveformTypes waveformType, hid_t* t
 //==============================================================================
 // Global functions
 
-int CreateHDF5File(char fileName[], char datasetName[]) 
+int CreateHDF5File(char fileName[], char datasetName[], char** errorMsg) 
 {
-	herr_t      error		= 0;
+INIT_ERR
+
 	hid_t       fileID		= 0;   // file identifier
 	
     // create a new file using default properties
-	errChk( fileID = H5Fcreate(fileName, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT) );
+	hdf5ErrChk( fileID = H5Fcreate(fileName, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT) );
 	
     // terminate access to the file
-    errChk( H5Fclose(fileID) ); 
+    hdf5ErrChk( H5Fclose(fileID) ); 
+
+HDF5Error:
 	
-	return 0;
 Error:
-	return error;
+	
+RETURN_ERR
 }
 
 int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo, Waveform_type* waveform, CompressionMethods compression, char** errorMsg) 
 {
+INIT_ERR
+
 	//=============================================================================================
 	// INITIALIZATION (no fail)
 	//=============================================================================================
-	
-	herr_t      			error					= 0;
-	char*					errMsg					= NULL;
-	
+
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	// data
 	
@@ -194,7 +189,7 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 	nullChk( size		= malloc(totalRank * sizeof(hsize_t)) );
 	
 	// open the file and the group or creates one if necessary
-	errChk( CreateHDF5Group(fileName, dsInfo, &fileID, &groupID) );
+	errChk( CreateHDF5Group(fileName, dsInfo, &fileID, &groupID, &errorInfo.errMsg) );
 	
 	// init dataspace dimensions
 	for(size_t i = 0; i < totalRank; i++) {
@@ -250,8 +245,8 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
    		hdf5ErrChk( H5Dwrite(datasetID, memTypeID, H5S_ALL, H5S_ALL, H5P_DEFAULT, waveformData) );
 		
    		// add attributes to dataset
-   		errChk( AddWaveformAttr(datasetID, waveform) );
-		errChk( AddWaveformAttrArr(datasetID, nElem, 1) );  
+   		errChk( AddWaveformAttr(datasetID, waveform, &errorInfo.errMsg) );
+		errChk( AddWaveformAttrArr(datasetID, nElem, 1, &errorInfo.errMsg) );  
 		
 	} else {
 		//------------------------------------------------
@@ -273,7 +268,7 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 		}
 		
 		if (are_equal){
-			errChk( ReadNumElemAttr(datasetID, size[1] - 1, &numelements, size[1]) );   
+			errChk( ReadNumElemAttr(datasetID, size[1] - 1, &numelements, size[1], &errorInfo.errMsg) );   
 			//just add to current set
 		
 			for (size_t i = 0; i < indicesRank; i++)
@@ -322,7 +317,7 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 
     	// Write the data to the extended portion of dataset
     	hdf5ErrChk( H5Dwrite(datasetID, memTypeID, memSpaceID, fileSpaceID,H5P_DEFAULT, waveformData) );
-		errChk( AddWaveformAttrArr(datasetID, numelements, size[1]) );     
+		errChk( AddWaveformAttrArr(datasetID, numelements, size[1], &errorInfo.errMsg) );     
 	}
    
 	// Close the dataset
@@ -347,12 +342,6 @@ int WriteHDF5Waveform (char fileName[], char datasetName[], DSInfo_type* dsInfo,
 
 HDF5Error:
    
-	OKfree(dims);
-	OKfree(maxDims);
-	OKfree(dimsr);
-	OKfree(offset);
-	OKfree(size);
-   			 
 	/*
 	FILE* tmpFile = tmpfile();			<--- wrong FILE type as defined by CVI's implementation of stdio compared to what H5Eprint
 	H5Eprint(H5E_DEFAULT, tmpFile);
@@ -365,9 +354,6 @@ HDF5Error:
     ReturnErrMsg("Data Storage WriteHDF5Waveform");
 	*/
 	
-	ReturnErrMsg();
-	return error;
-   
 Error:
    
 	OKfree(dims);
@@ -376,16 +362,14 @@ Error:
 	OKfree(offset);
 	OKfree(size);
    
-	ReturnErrMsg();
-	return error;
+RETURN_ERR
 }
 
 int WriteHDF5WaveformList (char fileName[], ListType waveformList, CompressionMethods compression, char** errorMsg)
 {
 #define WriteHDF5WaveformList_Err_NoFileName	-1
 	
-	herr_t      			error					= 0;
-	char*					errMsg					= NULL;
+INIT_ERR
 	
 	size_t					nWaveforms				= ListNumItems(waveformList);
 	Waveform_type*			waveform				= NULL;
@@ -411,11 +395,8 @@ int WriteHDF5WaveformList (char fileName[], ListType waveformList, CompressionMe
 	if (!nWaveforms) return 0;
 	
 	// check if a file name was given
-	if (!fileName || !fileName[0]) {
-		error 	= WriteHDF5WaveformList_Err_NoFileName;
-		errMsg 	= StrDup("No file name was provided.");
-		goto Error;
-	}
+	if (!fileName || !fileName[0])
+		SET_ERR(WriteHDF5WaveformList_Err_NoFileName, "No file name was provided.");
 	
 	// create file
    	hdf5ErrChk( fileID = H5Fcreate(fileName, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT) );
@@ -462,7 +443,7 @@ int WriteHDF5WaveformList (char fileName[], ListType waveformList, CompressionMe
 		hdf5ErrChk( datasetID = H5Dcreate(fileID, datasetName, typeID, dataSpaceID, H5P_DEFAULT, propertyListID, H5P_DEFAULT) );
 		
 		// add attributes to the dataset
-   		errChk( AddWaveformAttr(datasetID, waveform) );
+   		errChk( AddWaveformAttr(datasetID, waveform, &errorInfo.errMsg) );
 		
 		// write waveform data to the dataset
    		hdf5ErrChk( H5Dwrite(datasetID, memTypeID, H5S_ALL, H5S_ALL, H5P_DEFAULT, waveformData) );
@@ -476,9 +457,7 @@ int WriteHDF5WaveformList (char fileName[], ListType waveformList, CompressionMe
 	
 HDF5Error:
 	
-	if (error < 0)
-		errMsg 	= StrDup("HDF5 error");  
-	
+
 Error:
 	
 	// close dataset creation property list
@@ -491,13 +470,12 @@ Error:
 	// close file
 	if (fileID > 0) {H5Fclose(fileID); fileID = 0;}
 	
-	ReturnErrMsg();
-	return error;
+RETURN_ERR
 }
 
 int WriteHDF5Image(char fileName[], char datasetName[], DSInfo_type* dsInfo, Image_type* image, CompressionMethods compression, char** errorMsg) 
 { 
-	int   					error        			= 0;
+INIT_ERR
 	
 	hid_t 					fileID					= 0;
 	hid_t					groupID					= 0;
@@ -526,13 +504,13 @@ int WriteHDF5Image(char fileName[], char datasetName[], DSInfo_type* dsInfo, Ima
 
 	// opens the file and the group, 
 	// creates one if necessary
-	errChk( CreateHDF5Group(fileName, dsInfo, &fileID, &groupID) );
+	errChk( CreateHDF5Group(fileName, dsInfo, &fileID, &groupID, &errorInfo.errMsg) );
    
 	ImageTypes type = GetImageType(image);
    
     // Modify dataset creation properties, i.e. enable chunking
-	propertyListID = H5Pcreate (H5P_DATASET_CREATE);
-	errChk(H5Pset_chunk ( propertyListID, 3, imagedims));
+	hdf5ErrChk( propertyListID = H5Pcreate (H5P_DATASET_CREATE) );
+	hdf5ErrChk( H5Pset_chunk ( propertyListID, 3, imagedims) );
 	
 	// add compression if requested
 	switch (compression) {
@@ -543,7 +521,7 @@ int WriteHDF5Image(char fileName[], char datasetName[], DSInfo_type* dsInfo, Ima
 			
 		case Compression_GZIP:
 			
-			errChk( H5Pset_deflate (propertyListID, GZIP_CompressionLevel) );
+			hdf5ErrChk( H5Pset_deflate (propertyListID, GZIP_CompressionLevel) );
 			break;
 			
 		case Compression_SZIP:
@@ -551,7 +529,7 @@ int WriteHDF5Image(char fileName[], char datasetName[], DSInfo_type* dsInfo, Ima
 			unsigned int szipOptionsMask 		= H5_SZIP_NN_OPTION_MASK;
 			unsigned int szipPixelsPerBlock  	= SZIP_PixelsPerBlock;
 			
-			errChk( H5Pset_szip (propertyListID, szipOptionsMask, szipPixelsPerBlock) );
+			hdf5ErrChk( H5Pset_szip (propertyListID, szipOptionsMask, szipPixelsPerBlock) );
 			break;
 	}
   
@@ -600,94 +578,98 @@ int WriteHDF5Image(char fileName[], char datasetName[], DSInfo_type* dsInfo, Ima
 	DataPtr = GetImagePixelArray(image);
    
 	// open the dataset if it exists
-	datasetID = H5Dopen2(groupID, datasetName, H5P_DEFAULT );
+	hdf5ErrChk( datasetID = H5Dopen2(groupID, datasetName, H5P_DEFAULT ) );
 	if (datasetID < 0) {
-		datasetID = H5Dcreate2(groupID, datasetName,typeID, dataSpaceID,H5P_DEFAULT, propertyListID,H5P_DEFAULT);
-		if (datasetID < 0)
-	   		return -1;
-   	
+		hdf5ErrChk( datasetID = H5Dcreate2(groupID, datasetName,typeID, dataSpaceID,H5P_DEFAULT, propertyListID,H5P_DEFAULT) );
+		
 		// write the dataset
-		errChk(H5Dwrite(datasetID, memTypeID, H5S_ALL, H5S_ALL, H5P_DEFAULT, DataPtr));
+		hdf5ErrChk( H5Dwrite(datasetID, memTypeID, H5S_ALL, H5S_ALL, H5P_DEFAULT, DataPtr) );
    		// add attributes to dataset
-		errChk(AddImagePixSizeAttributes(datasetID,image));
-		errChk(AddImageAttributes(datasetID, image, 1)); 
+		errChk( AddImagePixSizeAttributes(datasetID,image, &errorInfo.errMsg) );
+		errChk( AddImageAttributes(datasetID, image, 1, &errorInfo.errMsg) ); 
   	} else {
 		// dataset existed, have to add the data to the current data set
 	   	// get the size of the dataset
-		fileSpaceID = H5Dget_space (datasetID);
-		errChk(H5Sget_simple_extent_dims (fileSpaceID, dimsr, NULL));
+		hdf5ErrChk( fileSpaceID = H5Dget_space (datasetID) );
+		hdf5ErrChk( H5Sget_simple_extent_dims (fileSpaceID, dimsr, NULL) );
 		size[0] = dimsr[0]+1;  
 		size[1] = dimsr[1];  
 		size[2] = dimsr[2];
-		errChk(H5Dset_extent (datasetID, size));
+		hdf5ErrChk( H5Dset_extent (datasetID, size) );
 
     	// select a hyperslab in extended portion of dataset
-    	fileSpaceID = H5Dget_space (datasetID);
+    	hdf5ErrChk( fileSpaceID = H5Dget_space (datasetID) );
     	offset[0] = dimsr[0]; 
     	offset[1] = 0;
 		offset[2] = 0;  
-    	errChk(H5Sselect_hyperslab (fileSpaceID, H5S_SELECT_SET, offset, NULL, imagedims, NULL));  
+    	hdf5ErrChk( H5Sselect_hyperslab (fileSpaceID, H5S_SELECT_SET, offset, NULL, imagedims, NULL) );
 
     	// define memory space
-   		memSpaceID = H5Screate_simple (3, imagedims, NULL); 
+   		hdf5ErrChk( memSpaceID = H5Screate_simple (3, imagedims, NULL) ); 
 
     	// Write the data to the extended portion of dataset
-    	errChk(H5Dwrite (datasetID, memTypeID, memSpaceID, fileSpaceID,H5P_DEFAULT, DataPtr));
-		errChk(AddImageAttributes(datasetID,image, size[0]));
+    	hdf5ErrChk( H5Dwrite(datasetID, memTypeID, memSpaceID, fileSpaceID,H5P_DEFAULT, DataPtr) );
+		errChk( AddImageAttributes(datasetID,image, size[0], &errorInfo.errMsg) );
    	}
 	   
     // close the dataset
-	errChk(H5Dclose(datasetID));
+	hdf5ErrChk( H5Dclose(datasetID) );
    
 	// close the group ids
-	errChk(H5Gclose (groupID));
+	hdf5ErrChk( H5Gclose (groupID) );
    
-	free(groupName);
+	OKfree(groupName);
    
 	// close the dataspace
-	errChk(H5Sclose(dataSpaceID));
+	hdf5ErrChk( H5Sclose(dataSpaceID) );
 	
 	// close the file. */
-	errChk(H5Fclose(fileID));
+	hdf5ErrChk( H5Fclose(fileID) );
    
-	return error;
-   
+HDF5Error:
+	
 Error:
 	
-   return error;
+RETURN_ERR
 }
 
-static int CreateRootGroup (hid_t fileID, char *group_name)
+static int CreateRootGroup (hid_t fileID, char *group_name, char** errorMsg)
 {
-	herr_t		error		= 0;   
+INIT_ERR
+
 	hid_t		groupID	= 0;
 	
-	errChk( groupID = H5Gcreate(fileID, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) );
-  	errChk( H5Gclose (groupID) );
+	hdf5ErrChk( groupID = H5Gcreate(fileID, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) );
+  	hdf5ErrChk( H5Gclose (groupID) );
 	
-	return 0;
+HDF5Error:
+	
 Error:
-	return error;
+
+RETURN_ERR
 }
 
-static int CreateRelativeGroup (hid_t parentgroupID, char *group_name)
+static int CreateRelativeGroup (hid_t parentgroupID, char *group_name, char** errorMsg)
 {
-	herr_t      error		= 0;   
+INIT_ERR
+
 	hid_t		groupID	= 0;
 	
-	errChk( groupID = H5Gcreate2(parentgroupID, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) );
-  	errChk(H5Gclose (groupID));
+	hdf5ErrChk( groupID = H5Gcreate2(parentgroupID, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) );
+  	hdf5ErrChk( H5Gclose (groupID) );
 	
-	return 0;
+HDF5Error:
+	
 Error:
-	return error;
+
+RETURN_ERR
 }
 
-static int CreateHDF5Group (char* fileName, DSInfo_type* dsInfo, hid_t* fileIDPtr, hid_t* groupIDPtr)
+static int CreateHDF5Group (char* fileName, DSInfo_type* dsInfo, hid_t* fileIDPtr, hid_t* groupIDPtr, char** errorMsg)
 {
 #define CreateHDF5Group_Err_NoFile		-1
 	
-   	herr_t      			error			= 0; 
+INIT_ERR
 	
 	hid_t					fileID			= 0;
 	hid_t* 					groupIDs 		= NULL;
@@ -734,7 +716,7 @@ static int CreateHDF5Group (char* fileName, DSInfo_type* dsInfo, hid_t* fileIDPt
 		if (groupIDs[i+1] < 0) {
 			
 			// create group if it didn't exist (reply is negative)
-			errChk( groupIDs[i+1] = H5Gcreate2(groupIDs[i], groupNames[i], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) );
+			hdf5ErrChk( groupIDs[i+1] = H5Gcreate2(groupIDs[i], groupNames[i], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) );
 			*groupIDPtr = groupIDs[i+1]; 
 			
 		} else 
@@ -762,6 +744,8 @@ static int CreateHDF5Group (char* fileName, DSInfo_type* dsInfo, hid_t* fileIDPt
    	OKfree(tmpGroupName);
     
 	return 0;
+	
+HDF5Error:
    
 Error:
    
@@ -782,12 +766,13 @@ Error:
 	
 	OKfree(tmpGroupName);
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateStringAttr (hid_t datasetID, char attr_name[], char* attr_data)
+static int CreateStringAttr (hid_t datasetID, char attr_name[], char* attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	hid_t		datatype		= 0;
@@ -795,107 +780,121 @@ static int CreateStringAttr (hid_t datasetID, char attr_name[], char* attr_data)
 	hsize_t  	dimsa[1]		= {1}; 
 	
 	dims 					= strlen(attr_data);
-	errChk( dataSpaceID 	= H5Screate_simple (1, dimsa, NULL) );
+	hdf5ErrChk( dataSpaceID = H5Screate_simple (1, dimsa, NULL) );
    	datatype 				= H5Tcopy(H5T_C_S1);
-   	errChk( H5Tset_size(datatype, dims) );
-   	errChk( H5Tset_strpad(datatype, H5T_STR_NULLTERM) );
-   	errChk( attributeID = H5Acreate2(datasetID, attr_name, datatype, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-   	errChk( H5Awrite(attributeID, datatype, attr_data) );
+   	hdf5ErrChk( H5Tset_size(datatype, dims) );
+   	hdf5ErrChk( H5Tset_strpad(datatype, H5T_STR_NULLTERM) );
+   	hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, datatype, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+   	hdf5ErrChk( H5Awrite(attributeID, datatype, attr_data) );
 	
 	// Close the attribute
-  	errChk( H5Aclose (attributeID) );
+  	hdf5ErrChk( H5Aclose (attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateLongAttr (hid_t datasetID, char attr_name[], long attr_data)
+static int CreateLongAttr (hid_t datasetID, char attr_name[], long attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	
-	errChk( dataSpaceID = H5Screate(H5S_SCALAR) );
-    errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_LONG, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-    errChk( H5Awrite(attributeID, H5T_NATIVE_LONG, &attr_data) ); 
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SCALAR) );
+    hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_LONG, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_LONG, &attr_data) ); 
 	
 	// Close the attribute
-  	errChk( H5Aclose (attributeID) );
+  	hdf5ErrChk( H5Aclose (attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+	
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateULongAttr (hid_t datasetID, char attr_name[], unsigned long attr_data)
+static int CreateULongAttr (hid_t datasetID, char attr_name[], unsigned long attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	
-	errChk( dataSpaceID = H5Screate(H5S_SCALAR) );
-    errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_ULONG, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-    errChk( H5Awrite(attributeID, H5T_NATIVE_ULONG, &attr_data) ); 
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SCALAR) );
+    hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_ULONG, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_ULONG, &attr_data) ); 
 	
 	// Close the attribute
-  	errChk( H5Aclose (attributeID) );
+  	hdf5ErrChk( H5Aclose (attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
 	
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateLLongAttr (hid_t datasetID, char attr_name[], long long attr_data)
+static int CreateLLongAttr (hid_t datasetID, char attr_name[], long long attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	
-	errChk( dataSpaceID = H5Screate(H5S_SCALAR) );
-    errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_LLONG, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-    errChk( H5Awrite(attributeID, H5T_NATIVE_LLONG, &attr_data) ); 
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SCALAR) );
+    hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_LLONG, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_LLONG, &attr_data) ); 
 	
 	// Close the attribute
-  	errChk( H5Aclose (attributeID) );
+  	hdf5ErrChk( H5Aclose (attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+	
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateULLongAttr (hid_t datasetID, char attr_name[], unsigned long long attr_data)
+static int CreateULLongAttr (hid_t datasetID, char attr_name[], unsigned long long attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	
-	errChk( dataSpaceID = H5Screate(H5S_SCALAR) );
-    errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_ULLONG, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-    errChk( H5Awrite(attributeID, H5T_NATIVE_ULLONG, &attr_data) ); 
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SCALAR) );
+    hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_ULLONG, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_ULLONG, &attr_data) ); 
 	
 	// Close the attribute
-  	errChk( H5Aclose (attributeID) );
+  	hdf5ErrChk( H5Aclose (attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) );
+    hdf5ErrChk( H5Sclose(dataSpaceID) );
+	
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateULLongAttrArr (hid_t datasetID, char attr_name[], unsigned long long attr_data, size_t size)
+static int CreateULLongAttrArr (hid_t datasetID, char attr_name[], unsigned long long attr_data, size_t size, char** errorMsg)
 {
-	herr_t      			error				= 0;
+INIT_ERR
+
 	hid_t     				dataSpaceID			= 0;  
 	hid_t					attributeID			= 0;
 	hsize_t     			dims[1]				= {size};
@@ -904,43 +903,44 @@ static int CreateULLongAttrArr (hid_t datasetID, char attr_name[], unsigned long
 	
 	nullChk( attr_array = malloc(size * sizeof(unsigned long long)) );
 	
-	errChk( dataSpaceID = H5Screate(H5S_SIMPLE) );
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SIMPLE) );
     ret	= H5Sset_extent_simple(dataSpaceID, 1, dims, NULL);
  
 	attributeID = H5Aopen( datasetID, attr_name, 0);
 	if (attributeID < 0) {
 		//attribute didn't extist, create one
-		errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_ULLONG, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-		errChk( H5Awrite(attributeID, H5T_NATIVE_ULLONG, &attr_data) );  
+		hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_ULLONG, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+		hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_ULLONG, &attr_data) );  
 	} else {
-		errChk( H5Aread(attributeID, H5T_NATIVE_ULLONG, attr_array) );
+		hdf5ErrChk( H5Aread(attributeID, H5T_NATIVE_ULLONG, attr_array) );
 		// delete previous attribute
 		H5Aclose(attributeID);
 		H5Adelete(datasetID, attr_name);
 		 
-		errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_ULLONG, dataSpaceID, H5P_DEFAULT,H5P_DEFAULT) );  
+		hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_ULLONG, dataSpaceID, H5P_DEFAULT,H5P_DEFAULT) );  
 		attr_array[size-1] = attr_data;
-		errChk( H5Awrite(attributeID, H5T_NATIVE_ULLONG, attr_array) );
+		hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_ULLONG, attr_array) );
 	}
    
 	// Close the attribute
-  	errChk( H5Aclose (attributeID) );
+  	hdf5ErrChk( H5Aclose (attributeID) );
 	// Close the dataspace.
-    errChk( H5Sclose(dataSpaceID) ); 
-	
-	OKfree(attr_array);
-	
-	return 0;
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+
+HDF5Error:
 	
 Error:
 	
+	// cleanup
 	OKfree(attr_array);
-	return error;
+	
+RETURN_ERR
 }
 
-static int ReadNumElemAttr (hid_t datasetID, hsize_t index, unsigned long long* attr_data, size_t size)
+static int ReadNumElemAttr (hid_t datasetID, hsize_t index, unsigned long long* attr_data, size_t size, char** errorMsg)
 {
-	herr_t      			error				= 0;
+INIT_ERR
+
 	hid_t     				dataSpaceID			= 0;  
 	hid_t					attributeID			= 0;
 	hsize_t     			dims[1]				= {size};
@@ -949,32 +949,33 @@ static int ReadNumElemAttr (hid_t datasetID, hsize_t index, unsigned long long* 
 	
 	nullChk( attr_array = malloc(size*sizeof(unsigned long long)) );
 	
-	errChk( dataSpaceID = H5Screate(H5S_SIMPLE) );
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SIMPLE) );
     ret = H5Sset_extent_simple(dataSpaceID, 1, dims, NULL);
 
 	//open attribute
-	errChk( attributeID = H5Aopen(datasetID, NUMELEMENTS_NAME, 0) ); 
-	errChk( H5Aread(attributeID, H5T_NATIVE_ULLONG, attr_array) );
+	hdf5ErrChk( attributeID = H5Aopen(datasetID, NUMELEMENTS_NAME, 0) ); 
+	hdf5ErrChk( H5Aread(attributeID, H5T_NATIVE_ULLONG, attr_array) );
 	*attr_data = attr_array[index];	 
    
 	// Close the attribute
-  	errChk( H5Aclose (attributeID) );
+  	hdf5ErrChk( H5Aclose (attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
-	
-	OKfree(attr_array);
-	
-	return 0;
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+
+HDF5Error:
 	
 Error:
 	
+	//cleanup
 	OKfree(attr_array);
-	return error;
+	
+RETURN_ERR
 }
 
-static int WriteNumElemAttr (hid_t datasetID, hsize_t index, unsigned long long attr_data, hsize_t size)
+static int WriteNumElemAttr (hid_t datasetID, hsize_t index, unsigned long long attr_data, hsize_t size, char** errorMsg)
 {
-	herr_t      			error				= 0;
+INIT_ERR
+
 	hid_t     				dataSpaceID			= 0;  
 	hid_t					attributeID			= 0;
 	hsize_t     			dims[1]				= {size};
@@ -983,165 +984,171 @@ static int WriteNumElemAttr (hid_t datasetID, hsize_t index, unsigned long long 
 	
 	nullChk( attr_array = malloc(size * sizeof(unsigned long long)) );
 	
-	errChk( dataSpaceID = H5Screate(H5S_SIMPLE) );
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SIMPLE) );
     ret  = H5Sset_extent_simple(dataSpaceID, 1, dims, NULL);
 
 	//open attribute
-	errChk( attributeID = H5Aopen(datasetID, NUMELEMENTS_NAME, NULL) );
-	errChk( H5Aread(attributeID, H5T_NATIVE_ULLONG, attr_array) ); 
+	hdf5ErrChk( attributeID = H5Aopen(datasetID, NUMELEMENTS_NAME, NULL) );
+	hdf5ErrChk( H5Aread(attributeID, H5T_NATIVE_ULLONG, attr_array) ); 
 	attr_array[index] = attr_data;
-	errChk( H5Awrite(attributeID, H5T_NATIVE_ULLONG, attr_array) );
+	hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_ULLONG, attr_array) );
 		 
 	// Close the attribute
-  	errChk( H5Aclose (attributeID) );
+  	hdf5ErrChk( H5Aclose (attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+
+HDF5Error:
 	
+Error:
+	
+	// cleanup
 	OKfree(attr_array);
 	
-	return 0;
-	
-Error:
-	
-	OKfree(attr_array);
-	return error;
+RETURN_ERR
 }
 
-static int CreateIntAttr (hid_t datasetID, char attr_name[], int attr_data)
+static int CreateIntAttr (hid_t datasetID, char attr_name[], int attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	
-	errChk( dataSpaceID = H5Screate(H5S_SCALAR) );
-    errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_INT, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-    errChk( H5Awrite(attributeID, H5T_NATIVE_INT, &attr_data) );
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SCALAR) );
+    hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_INT, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_INT, &attr_data) );
 	
 	// Close the attribute
-  	errChk( H5Aclose(attributeID) );
+  	hdf5ErrChk( H5Aclose(attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
-	
-	return 0;
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateUIntAttr (hid_t datasetID, char attr_name[], unsigned int attr_data)
+static int CreateUIntAttr (hid_t datasetID, char attr_name[], unsigned int attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	
-	errChk( dataSpaceID = H5Screate(H5S_SCALAR) );
-    errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_UINT, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-    errChk( H5Awrite(attributeID, H5T_NATIVE_UINT, &attr_data) );
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SCALAR) );
+    hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_UINT, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_UINT, &attr_data) );
 	
 	// Close the attribute
-  	errChk( H5Aclose(attributeID) );
+  	hdf5ErrChk( H5Aclose(attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
-	
-	return 0;
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateShortAttr (hid_t datasetID, char attr_name[], long attr_data)
+static int CreateShortAttr (hid_t datasetID, char attr_name[], long attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	
-	errChk( dataSpaceID = H5Screate(H5S_SCALAR) );
-    errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_SHORT, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-    errChk( H5Awrite(attributeID, H5T_NATIVE_SHORT, &attr_data) ); 
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SCALAR) );
+    hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_SHORT, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_SHORT, &attr_data) ); 
 	
 	// Close the attribute
-  	errChk( H5Aclose(attributeID) );
+  	hdf5ErrChk( H5Aclose(attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
-	
-	return 0;
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateUShortAttr (hid_t datasetID, char attr_name[], unsigned long attr_data)
+static int CreateUShortAttr (hid_t datasetID, char attr_name[], unsigned long attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	
-	errChk( dataSpaceID = H5Screate(H5S_SCALAR) );
-    errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_USHORT, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-    errChk( H5Awrite(attributeID, H5T_NATIVE_USHORT, &attr_data) ); 
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SCALAR) );
+    hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_USHORT, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_USHORT, &attr_data) ); 
 	
 	// Close the attribute
-  	errChk( H5Aclose(attributeID) );
+  	hdf5ErrChk( H5Aclose(attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
-	
-	return 0;
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateFloatAttr(hid_t datasetID, char attr_name[], float attr_data)
+static int CreateFloatAttr(hid_t datasetID, char attr_name[], float attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	
-	errChk( dataSpaceID = H5Screate(H5S_SCALAR) );
-    errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_FLOAT, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-    errChk( H5Awrite(attributeID, H5T_NATIVE_FLOAT, &attr_data) );
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SCALAR) );
+    hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_FLOAT, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_FLOAT, &attr_data) );
 	
 	// Close the attribute. */
-  	errChk( H5Aclose(attributeID) );
+  	hdf5ErrChk( H5Aclose(attributeID) );
 	// Close the dataspace. */
-    errChk( H5Sclose(dataSpaceID) ); 
-	
-	return 0;
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
+
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateDoubleAttr (hid_t datasetID, char attr_name[], double attr_data)
+static int CreateDoubleAttr (hid_t datasetID, char attr_name[], double attr_data, char** errorMsg)
 {
-	herr_t      error			= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID		= 0;  
 	hid_t       attributeID		= 0;
 	
-	errChk( dataSpaceID = H5Screate(H5S_SCALAR) );
-	errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_DOUBLE, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT));
-    errChk( H5Awrite(attributeID, H5T_NATIVE_DOUBLE, &attr_data) );
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SCALAR) );
+	hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_DOUBLE, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT));
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_DOUBLE, &attr_data) );
 	
 	// Close the attribute
-  	errChk( H5Aclose(attributeID) );
+  	hdf5ErrChk( H5Aclose(attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
 	
-	return 0;
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
-static int CreateDoubleAttrArr(hid_t datasetID, char attr_name[], double attr_data, hsize_t size)
+static int CreateDoubleAttrArr(hid_t datasetID, char attr_name[], double attr_data, hsize_t size, char** errorMsg)
 {
-	herr_t      error				= 0;
+INIT_ERR
 	
 	hid_t     	dataSpaceID			= 0;  
 	hid_t		attributeID			= 0;
@@ -1151,46 +1158,46 @@ static int CreateDoubleAttrArr(hid_t datasetID, char attr_name[], double attr_da
 	
 	nullChk( attr_array = malloc(size * sizeof(double)) );
 	
-	errChk( dataSpaceID = H5Screate(H5S_SIMPLE) );
+	hdf5ErrChk( dataSpaceID = H5Screate(H5S_SIMPLE) );
     ret = H5Sset_extent_simple(dataSpaceID, 1, dims, NULL);
 
 	if (size==1) {
 		//create attribute
-    	errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_DOUBLE, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-		errChk( H5Awrite(attributeID, H5T_NATIVE_DOUBLE, &attr_data) );  
+    	hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_DOUBLE, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+		hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_DOUBLE, &attr_data) );  
 	} else {
 		//open attribute
-		errChk( attributeID = H5Aopen( datasetID, attr_name, NULL) ); 
-		errChk( H5Aread(attributeID, H5T_NATIVE_DOUBLE, attr_array) );
+		hdf5ErrChk( attributeID = H5Aopen( datasetID, attr_name, NULL) ); 
+		hdf5ErrChk( H5Aread(attributeID, H5T_NATIVE_DOUBLE, attr_array) );
 		//test
-		errChk( H5Aclose(attributeID) );
+		hdf5ErrChk( H5Aclose(attributeID) );
 		H5Adelete(datasetID, attr_name);
 		 
-		errChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_DOUBLE, dataSpaceID, H5P_DEFAULT,H5P_DEFAULT) );  
+		hdf5ErrChk( attributeID = H5Acreate2(datasetID, attr_name, H5T_NATIVE_DOUBLE, dataSpaceID, H5P_DEFAULT,H5P_DEFAULT) );  
 		attr_array[size-1] = attr_data;
-		errChk( H5Awrite(attributeID, H5T_NATIVE_DOUBLE, attr_array) );      
+		hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_DOUBLE, attr_array) );      
 	}
    
 	// Close the attribute
-  	errChk( H5Aclose(attributeID) );
+  	hdf5ErrChk( H5Aclose(attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
 	
-	OKfree(attr_array);
-	
-	return 0;
+HDF5Error:
 	
 Error:
 	
+	//cleanup
 	OKfree(attr_array);
-	return error;
+	
+RETURN_ERR
 }
 
 // Adds waveform information as dataset attributes
-static int AddWaveformAttr (hid_t datasetID, Waveform_type* waveform)
+static int AddWaveformAttr (hid_t datasetID, Waveform_type* waveform, char** errorMsg)
 {
+INIT_ERR
 
-	int 	error				= 0;
 	char* 	waveformName		= GetWaveformName(waveform);			// Name of signal represented by the waveform.    
 	char* 	unitName			= GetWaveformPhysicalUnit(waveform);	// Physical SI unit such as V, A, Ohm, etc. 
 	double 	timestamp			= GetWaveformDateTimestamp(waveform);	// Number of seconds since midnight, January 1, 1900 in the local time zone.
@@ -1200,24 +1207,24 @@ static int AddWaveformAttr (hid_t datasetID, Waveform_type* waveform)
 	
 	// waveform name
 	if (waveformName) 
-		errChk( CreateStringAttr(datasetID, "Name", waveformName) );
+		errChk( CreateStringAttr(datasetID, "Name", waveformName, &errorInfo.errMsg) );
 	
 	// waveform unit name
 	if (unitName) 
-		errChk( CreateStringAttr(datasetID, "Units", unitName) );
+		errChk( CreateStringAttr(datasetID, "Units", unitName, &errorInfo.errMsg) );
 	
 	// waveform start timestamp
 	errChk( dateTimeBuffLen = FormatDateTimeString(timestamp, DATETIME_FORMATSTRING, NULL, 0) );
 	nullChk( dateTimeString	= malloc((dateTimeBuffLen + 1) * sizeof(char)) );
 	errChk( FormatDateTimeString(timestamp, DATETIME_FORMATSTRING, dateTimeString, dateTimeBuffLen + 1 ) );
-	errChk( CreateStringAttr(datasetID, "Timestamp", dateTimeString) );
+	errChk( CreateStringAttr(datasetID, "Timestamp", dateTimeString, &errorInfo.errMsg) );
 	
 	// sampling rate
-	errChk( CreateDoubleAttr(datasetID, "SamplingRate", samplingRate) );
+	errChk( CreateDoubleAttr(datasetID, "SamplingRate", samplingRate, &errorInfo.errMsg) );
 	
 	// sampling interval
 	if (samplingRate) {
-		errChk( CreateDoubleAttr(datasetID, "dt", 1/samplingRate) );
+		errChk( CreateDoubleAttr(datasetID, "dt", 1/samplingRate, &errorInfo.errMsg) );
 	}
 	
 Error: 
@@ -1227,7 +1234,7 @@ Error:
 	OKfree(unitName);
 	OKfree(dateTimeString);
 	 
-	return error;
+RETURN_ERR
 }
 
 static char* RemoveSlashes (char* name)
@@ -1318,78 +1325,78 @@ static void WaveformDataTypeToHDF5 (WaveformTypes waveformType, hid_t* typeIDPtr
 	}
 }
 
-static int AddWaveformAttrArr (hid_t datasetID, unsigned long long numelements, hsize_t size)
+static int AddWaveformAttrArr (hid_t datasetID, unsigned long long numelements, hsize_t size, char** errorMsg)
 {
-	 int error	= 0;
+INIT_ERR
 	 
-	 errChk( CreateULLongAttrArr(datasetID, NUMELEMENTS_NAME, numelements, size) ); 		
+	 errChk( CreateULLongAttrArr(datasetID, NUMELEMENTS_NAME, numelements, size, &errorInfo.errMsg) ); 		
 	 
-	 return 0;
 Error:
-	 return error;
+	 
+RETURN_ERR
 }
 
-static int CreatePixelSizeAttr (hid_t datasetID, double* attr_data)
+static int CreatePixelSizeAttr (hid_t datasetID, double* attr_data, char** errorMsg)
 {
-	herr_t      error				= 0;
+INIT_ERR
+
 	hid_t     	dataSpaceID			= 0;  
 	hid_t       attributeID			= 0;
 	int 		rank				= 1;
 	hsize_t 	dims[]			    = {3};
 	hsize_t 	maxDims[]			= {3}; 
 	
-	errChk(dataSpaceID = H5Screate_simple(rank, dims, maxDims) );
+	hdf5ErrChk( dataSpaceID = H5Screate_simple(rank, dims, maxDims) );
 	   
-    errChk( attributeID = H5Acreate2(datasetID, PIXELSIZE_NAME, H5T_NATIVE_DOUBLE, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
-    errChk( H5Awrite(attributeID, H5T_NATIVE_DOUBLE, attr_data) );
+    hdf5ErrChk( attributeID = H5Acreate2(datasetID, PIXELSIZE_NAME, H5T_NATIVE_DOUBLE, dataSpaceID, H5P_DEFAULT, H5P_DEFAULT) );
+    hdf5ErrChk( H5Awrite(attributeID, H5T_NATIVE_DOUBLE, attr_data) );
 	
 	// Close the attribute
-  	errChk( H5Aclose (attributeID) );
+  	hdf5ErrChk( H5Aclose (attributeID) );
 	// Close the dataspace
-    errChk( H5Sclose(dataSpaceID) ); 
+    hdf5ErrChk( H5Sclose(dataSpaceID) ); 
 	
-	return 0;
+HDF5Error:
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
 // Adds image pixel size info attribute to the image data set.
-static int AddImagePixSizeAttributes (hid_t datasetID, Image_type* image)
+static int AddImagePixSizeAttributes (hid_t datasetID, Image_type* image, char** errorMsg)
 {
-	 int 	error				= 0; 
+INIT_ERR
+
 	 double	pixSize				= GetImagePixSize(image);		// Image pixel size in [um].
-	
-
-	 double pixsize[3];
-	 pixsize[0]=pixSize;   //Z size
-	 pixsize[1]=pixSize;   //X size  
-	 pixsize[2]=pixSize;   //Y size  
-
-	 errChk(CreatePixelSizeAttr(datasetID,pixsize));          
-	 return error;
+	 double pixsize[3]			= {pixSize, pixSize, pixSize}; // Z, X, Y
+	 
+	 errChk( CreatePixelSizeAttr(datasetID,pixsize, &errorInfo.errMsg) );          
+	 
 Error:
-	 return error;
+
+RETURN_ERR
 }	
 
 // Adds all image information attributes.
-static int AddImageAttributes (hid_t datasetID, Image_type* image, hsize_t size)
+static int AddImageAttributes (hid_t datasetID, Image_type* image, hsize_t size, char** errorMsg)
 {
-	 int 	error				= 0; 
+INIT_ERR
+
 	 double	imgTopLeftXCoord	= 0;	// Image top-left corner X-Axis coordinates in [um].
 	 double	imgTopLeftYCoord	= 0;	// Image top-left corner Y-Axis coordinates in [um].
 	 double	imgZCoord			= 0;	// Image z-axis (height) location in [um].
 	 
 	 GetImageCoordinates(image, &imgTopLeftXCoord, &imgTopLeftYCoord, &imgZCoord);
 		 
-	 errChk(CreateDoubleAttrArr(datasetID,"TopLeftXCoord", imgTopLeftXCoord, size));    	
-	 errChk(CreateDoubleAttrArr(datasetID,"TopLeftYCoord", imgTopLeftYCoord, size));  
-	 errChk(CreateDoubleAttrArr(datasetID,"ZCoord", imgTopLeftXCoord, size)); 
+	 errChk(CreateDoubleAttrArr(datasetID,"TopLeftXCoord", imgTopLeftXCoord, size, &errorInfo.errMsg));    	
+	 errChk(CreateDoubleAttrArr(datasetID,"TopLeftYCoord", imgTopLeftYCoord, size, &errorInfo.errMsg));  
+	 errChk(CreateDoubleAttrArr(datasetID,"ZCoord", imgZCoord, size, &errorInfo.errMsg)); 
           
-	 return error;
+
 Error:
-	 return error;
+
+RETURN_ERR
 }
 
 

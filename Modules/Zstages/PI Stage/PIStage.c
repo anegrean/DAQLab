@@ -258,7 +258,7 @@ static void	discard_MoveCommand_type (MoveCommand_type** moveCommandPtr)
 /// HIFN Loads PIStage motorized stage specific resources. 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	errChk( InitHardware((PIStage_type*)mod, &errorInfo.errMsg) );
 	
@@ -267,12 +267,12 @@ INIT_ERROR_INFO
 	
 Error:
 	
-RETURN_ERROR_INFO
+RETURN_ERR
 }
 
 static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	PIStage_type* 	PIStage 	= (PIStage_type*) mod;  
 	
@@ -294,7 +294,7 @@ Error:
 
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
  
 	PIStage_type* 	PIStage		= (PIStage_type*) mod;
 	
@@ -454,7 +454,7 @@ static int Stop (Zstage_type* zstage)
 static int InitHardware (PIStage_type* PIstage, char** errorMsg)
 {
 #define InitHardware_Err_PICommand	-1
-INIT_ERROR_INFO
+INIT_ERR
 
 	BOOL 			ServoONFlag				= TRUE; 
 	BOOL			IsReferencedFlag		= FALSE;
@@ -532,11 +532,8 @@ INIT_ERROR_INFO
 		idx++;
 	}
 	
-	if (nOcurrences <= 1) {
-		errorInfo.error = InitHardware_Err_PICommand;
-		errorInfo.errMsg = StrDup("Error loading PI stage controller. No stage database was found");
-		goto Error;
-	}
+	if (nOcurrences <= 1)
+		SET_ERR(InitHardware_Err_PICommand, "Error loading PI stage controller. No stage database was found");
 	
 	// loading stage specific info (mechanics, limits, factory PID values, etc.)
 	DLMsg("Loading PI stage servo controller settings...", 0);
@@ -544,9 +541,7 @@ INIT_ERROR_INFO
 		PIerror = PI_GetError(ID);
 		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
 		Fmt(msg, "\n\nError loading factory stage settings. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-		errorInfo.error 	= InitHardware_Err_PICommand;
-		errorInfo.errMsg 	= StrDup(msg);
-		goto Error;
+		SET_ERR(InitHardware_Err_PICommand, msg);
 	} else
 		DLMsg("Loaded.\n\n", 0);
 		
@@ -557,9 +552,7 @@ INIT_ERROR_INFO
 				PIerror = PI_GetError(ID);
 				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
 				Fmt(msg, "Error changing PID servo parameters. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-				errorInfo.error 	= InitHardware_Err_PICommand;
-				errorInfo.errMsg 	= StrDup(msg);
-				goto Error;
+				SET_ERR(InitHardware_Err_PICommand, msg);
 			}
 	
 	// if any of the low, mid or high velocities is missing, set them to current stage velocity
@@ -586,9 +579,7 @@ INIT_ERROR_INFO
 		PIerror = PI_GetError(ID);
 		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
 		Fmt(msg, "Error turning servo ON. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-		errorInfo.error 	= InitHardware_Err_PICommand;
-		errorInfo.errMsg 	= StrDup(msg);
-		goto Error;
+		SET_ERR(InitHardware_Err_PICommand, msg);
 	}
 	
 	// set stage limits if available from loaded settings
@@ -603,9 +594,7 @@ INIT_ERROR_INFO
 		PIerror = PI_GetError(ID);
 		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
 		Fmt(msg, "Error checking if axis is referenced already. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-		errorInfo.error 	= InitHardware_Err_PICommand;
-		errorInfo.errMsg 	= StrDup(msg);
-		goto Error;
+		SET_ERR(InitHardware_Err_PICommand, msg);
 	}
 	
 	if (IsReferencedFlag) {
@@ -618,9 +607,7 @@ INIT_ERROR_INFO
 			PIerror = PI_GetError(ID);
 			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
 			Fmt(msg, "Error getting stage position. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-			errorInfo.error 	= InitHardware_Err_PICommand;
-			errorInfo.errMsg 	= StrDup(msg);
-			goto Error;
+			SET_ERR(InitHardware_Err_PICommand, msg);
 		}
 	} else {
 		// check if there are limit switches
@@ -628,9 +615,7 @@ INIT_ERROR_INFO
 			PIerror = PI_GetError(ID);
 			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
 			Fmt(msg, "Checking if stage has limit switches failed. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-			errorInfo.error 	= InitHardware_Err_PICommand;
-			errorInfo.errMsg = StrDup(msg);
-			goto Error;
+			SET_ERR(InitHardware_Err_PICommand, msg);
 		}
 		 
 		// reference axis
@@ -639,15 +624,10 @@ INIT_ERROR_INFO
 				PIerror = PI_GetError(ID);
 				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
 				Fmt(msg, "Referencing stage failed. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-				errorInfo.error 	= InitHardware_Err_PICommand;
-				errorInfo.errMsg 	= StrDup(msg);
-				goto Error;
+				SET_ERR(InitHardware_Err_PICommand, msg);
 			}
-		} else {
-			errorInfo.error 	= InitHardware_Err_PICommand;
-			errorInfo.errMsg 	= StrDup("Stage does not have limit switches and cannot be referenced");
-			goto Error;
-		} 
+		} else
+			SET_ERR(InitHardware_Err_PICommand, "Stage does not have limit switches and cannot be referenced");
 		
 		// wait until stage motion completes
 		do {
@@ -656,9 +636,7 @@ INIT_ERROR_INFO
 				PIerror = PI_GetError(ID);
 				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
 				Fmt(msg, "Could not query if target reached. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-				errorInfo.error 	= InitHardware_Err_PICommand;
-				errorInfo.errMsg 	= StrDup(msg);
-				goto Error;
+				SET_ERR(InitHardware_Err_PICommand, msg);
 			}
 		} while (!ReadyFlag);
 		
@@ -669,9 +647,7 @@ INIT_ERROR_INFO
 			PIerror = PI_GetError(ID);
 			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
 			Fmt(msg, "Error checking if stage is referenced already. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-			errorInfo.error 	= InitHardware_Err_PICommand;
-			errorInfo.errMsg 	= StrDup(msg);
-			goto Error;
+			SET_ERR(InitHardware_Err_PICommand, msg);
 		}
 	
 		if (IsReferencedFlag) {
@@ -685,9 +661,7 @@ INIT_ERROR_INFO
 				PIerror = PI_GetError(ID);
 				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
 				Fmt(msg, "Error getting stage position. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-				errorInfo.error 	= InitHardware_Err_PICommand;
-				errorInfo.errMsg 	= StrDup(msg);
-				goto Error;
+				SET_ERR(InitHardware_Err_PICommand, msg);
 			}
 			// read stage limits if they are not loaded from a file already
 			if (!PIstage->baseClass.zMinimumLimit || !PIstage->baseClass.zMaximumLimit) {
@@ -700,19 +674,17 @@ INIT_ERROR_INFO
 				(*PIstage->baseClass.GetHWStageLimits)	((Zstage_type*)PIstage, PIstage->baseClass.zMinimumLimit, PIstage->baseClass.zMaximumLimit);
 			}
 			
-		} else {
+		} else
 			// referencing failed
-			errorInfo.error 	= InitHardware_Err_PICommand;
-			errorInfo.errMsg 	= StrDup("Failed to reference stage");
-			goto Error;
-		}
+			SET_ERR(InitHardware_Err_PICommand, "Failed to reference stage");
+		
 	}
 	
 	return 0;
 	
 Error:
 	
-RETURN_ERROR_INFO
+RETURN_ERR
 }
 
 static int GetHWStageLimits (Zstage_type* zstage, double* minimumLimit, double* maximumLimit)
@@ -830,7 +802,7 @@ static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, ch
 
 static void IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	size_t 				iterindex		= GetCurrentIterIndex(iterator);
@@ -958,7 +930,7 @@ static int TaskControllerMove (PIStage_type* PIStage, Zstage_move_type moveType,
 {
 #define TaskControllerMove_Err_PIError		-1
 	
-INIT_ERROR_INFO
+INIT_ERR
 	
 	Zstage_type*			zStage			= (Zstage_type*) PIStage; 
 	BOOL					ReadyFlag;
@@ -1048,6 +1020,6 @@ INIT_ERROR_INFO
 
 Error:
 	
-RETURN_ERROR_INFO
+RETURN_ERR
 }
 

@@ -285,7 +285,7 @@ void discard_CoherentCham (DAQLabModule_type** mod)
 
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	CoherentCham_type* 				laser 						= (CoherentCham_type*) mod;     
 	ActiveXMLObj_IXMLDOMElement_	COMSettingsXMLElement		= 0;
@@ -314,7 +314,7 @@ Error:
 
 static int LoadCfg_SerialCOM (COMPortSettings_type* COMSettingsPtr, ActiveXMLObj_IXMLDOMElement_ COMSettingsXMLElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	int					baudRate			= 0;
 	DAQLabXMLNode		COMSettingsAttr[]	= { {"Port", 		BasicData_Int,	&COMSettingsPtr->portNumber},
@@ -334,7 +334,7 @@ Error:
 
 static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 	
 	CoherentCham_type* 		laser 			= (CoherentCham_type*) mod; 
 	int						panLeftPos		= 0;
@@ -359,7 +359,7 @@ Error:
 
 static int SaveCfg_SerialCOM (COMPortSettings_type* COMSettingsPtr, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	ActiveXMLObj_IXMLDOMElement_	COMSettingsXMLElement		= 0;
 	int								baudRate					= COMSettingsPtr->baudRate;
@@ -385,7 +385,7 @@ Error:
 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	CoherentCham_type* 		laser 	= (CoherentCham_type*) mod;
 	
@@ -418,12 +418,12 @@ INIT_ERROR_INFO
 	
 Error:
 	
-RETURN_ERROR_INFO
+RETURN_ERR
 }
 
 static int InitLaserCOM (CoherentCham_type* laser, char** errorMsg)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	char	command[100] 	= "";
 	char	response[100] 	= "";
@@ -479,12 +479,12 @@ Error:
 	
 	SetPanelAttribute(laser->mainPanHndl, ATTR_DIMMED, TRUE);   
 	
-RETURN_ERROR_INFO
+RETURN_ERR
 }
 
 static int CVICALLBACK UILaserControls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-INIT_ERROR_INFO
+INIT_ERR
 	
 	CoherentCham_type* 	laser	= callbackData;
 	
@@ -537,13 +537,14 @@ INIT_ERROR_INFO
 	
 Error:
 	
-PRINT_ERROR_INFO
+PRINT_ERR
+
 	return 0;
 }
 
 static int CVICALLBACK UISerialCOMSettings_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-INIT_ERROR_INFO
+INIT_ERR
 	
 	CoherentCham_type* 	laser	= callbackData;
 	
@@ -615,13 +616,14 @@ RS232Error:
 
 Error:
 	
-PRINT_ERROR_INFO	
+PRINT_ERR
+
 	return 0;
 }
 
 static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	CoherentCham_type* 		laser 		= callbackData;
 	
@@ -642,7 +644,8 @@ INIT_ERROR_INFO
 	
 Error:
 	
-PRINT_ERROR_INFO
+PRINT_ERR
+
 	return;
 }
 
@@ -694,7 +697,7 @@ static void UpdateLaserUI (CoherentCham_type* laser)
 
 int CVICALLBACK LaserStatusAsyncTimer_CB (int reserved, int timerId, int event, void *callbackData, int eventData1, int eventData2)
 {
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	CoherentCham_type* 	laser 	= callbackData;
 	
@@ -707,13 +710,14 @@ INIT_ERROR_INFO
 	
 Error:
 	
-PRINT_ERROR_INFO	
+PRINT_ERR
+
 	return 0;
 }
 
 static int GetLaserStatus (CoherentCham_type* laser, char** errorMsg)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	char	readBuffer[100]	= "";
 	
@@ -759,7 +763,7 @@ INIT_ERROR_INFO
 	
 Error:	
 	
-RETURN_ERROR_INFO	
+RETURN_ERR	
 }
 
 // pass a reply buffer sufficiently large for the laser reply to fit and make sure the buffer is initialized to 0.
@@ -768,7 +772,7 @@ static int SendLaserCommand (int COMPortNumber, char message[], char* replyBuffe
 #define	SendLaserCommand_ReplyTimeout		-1		// laser does not reply within the default timeout period COMPort_ReplyTimeout
 #define SendLaserCommand_LaserCommandError	-2		// laser does not understand the command or command has wrong parameters.
 
-INIT_ERROR_INFO
+INIT_ERR
 	
 	int		nChars		= 0;
 	double	startTime	= 0; 
@@ -806,7 +810,7 @@ RS232Error:
 
 Error:
 	
-RETURN_ERROR_INFO
+RETURN_ERR
 }
 
 static COMPortSettings_type* init_COMPortSettings_type (int portNumber, long baudRate, int parity, int dataBits, int stopBits)

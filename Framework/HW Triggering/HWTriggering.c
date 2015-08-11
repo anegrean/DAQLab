@@ -243,13 +243,12 @@ int AddHWTrigSlaveToMaster (HWTrigMaster_type* master, HWTrigSlave_type* slave, 
 {
 #define AddHWTrigSlave_Err_SlaveAlreadyHasAMaster   -1
 	
-	// check if slave already has a master
-	if (slave->master) {
-		if (errorMsg)
-			*errorMsg = FormatMsg(AddHWTrigSlave_Err_SlaveAlreadyHasAMaster, "AddHWTrigSlave", "HW triggered Slave already has a HW triggering Master assigned");
-		return AddHWTrigSlave_Err_SlaveAlreadyHasAMaster; 
-	}
+INIT_ERR
 	
+	// check if slave already has a master
+	if (slave->master)
+		SET_ERR(AddHWTrigSlave_Err_SlaveAlreadyHasAMaster, "HW triggered Slave already has a HW triggering Master assigned");
+		
 	// add slave to master
 	ListInsertItem(master->slaves, &slave, END_OF_LIST);
 	slave->master = master;
@@ -257,11 +256,13 @@ int AddHWTrigSlaveToMaster (HWTrigMaster_type* master, HWTrigSlave_type* slave, 
 	// if slave is active, then add its handle to the master
 	if (slave->active) {
 		master->nActiveSlaves++;
-		master->activeSlavesArmedHndls = realloc (master->activeSlavesArmedHndls, master->nActiveSlaves * sizeof(HANDLE));
+		nullChk( master->activeSlavesArmedHndls = realloc (master->activeSlavesArmedHndls, master->nActiveSlaves * sizeof(HANDLE)) );
 		master->activeSlavesArmedHndls[master->nActiveSlaves-1] = slave->armed;
 	}
 	
-	return 0;
+Error:
+	
+RETURN_ERR
 }
 
 void RemoveHWTrigSlaveFromMaster (HWTrigSlave_type* slave)
@@ -308,7 +309,10 @@ int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorMsg)
 #define WaitForHWTrigArmedSlaves_Err_Failed		-1
 #define WaitForHWTrigArmedSlaves_Err_Timeout	-2
 	
-	DWORD 				fCallResult 	= 0;
+INIT_ERR
+
+	DWORD 	fCallResult 	= 0;
+	char	msgBuff[500] 	= "";
 	
 	if (!master->nActiveSlaves) return 0;
 	
@@ -319,45 +323,40 @@ int WaitForHWTrigArmedSlaves (HWTrigMaster_type* master, char** errorMsg)
 			
 		case WAIT_TIMEOUT:
 			
-			if (errorMsg)
-				*errorMsg = FormatMsg(WaitForHWTrigArmedSlaves_Err_Timeout, "WaitForHWTrigArmedSlaves", "Waiting for all HW triggered slaves timed out");
-				
-			return WaitForHWTrigArmedSlaves_Err_Timeout; 
-			
+			SET_ERR(WaitForHWTrigArmedSlaves_Err_Timeout, "Waiting for all HW triggered slaves timed out.");
+		
 		case WAIT_FAILED:
 			
-			DWORD error = GetLastError();
 			// process here windows error message
-			char	errMsg[500];
-			Fmt(errMsg, "%s< WaitForMultipleObjects windows SDK function failed with error code %d", error);
-			if (errorMsg)
-				*errorMsg = FormatMsg(WaitForHWTrigArmedSlaves_Err_Failed, "WaitForHWTrigArmedSlaves", errMsg);
-			
-			return WaitForHWTrigArmedSlaves_Err_Failed;
+			Fmt(msgBuff, "%s< WaitForMultipleObjects windows SDK function failed with error code %d", GetLastError());
+			SET_ERR(WaitForHWTrigArmedSlaves_Err_Failed, msgBuff);
 	}
 	
-	return 0; // no error
+Error:
+	
+RETURN_ERR
 }
 
 int SetHWTrigSlaveArmedStatus (HWTrigSlave_type* slave, char** errorMsg)
 {
 #define SetHWTrigSlaveArmedStatus_Err_Failed		-1
 	
+INIT_ERR
+	
+	char	msgBuff[500]	= "";
+	
 	if (!slave->active) return 0; // skip if slave is not active
 	
 	if (!SetEvent(slave->armed)) {
 		
-		DWORD error = GetLastError();
 		// process here windows error message
-		char	errMsg[500];
-		Fmt(errMsg, "%s< SetEvent windows SDK function failed with error code %d", error);
-		if (errorMsg)
-			*errorMsg = FormatMsg(SetHWTrigSlaveArmedStatus_Err_Failed, "SetHWTrigSlaveArmedStatus", errMsg);
-			
-		return SetHWTrigSlaveArmedStatus_Err_Failed;
+		Fmt(msgBuff, "%s< SetEvent windows SDK function failed with error code %d", GetLastError());
+		SET_ERR(SetHWTrigSlaveArmedStatus_Err_Failed, msgBuff);
 	}
 	
-	return 0;
+Error:
+	
+RETURN_ERR
 }
 
 

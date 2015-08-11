@@ -163,7 +163,7 @@ static int 							DisplayPanels										(DAQLabModule_type* mod, BOOL visibleFl
 	// menu callback to adds a new Pockells cell
 static void CVICALLBACK 			NewPockellsCell_CB 									(int menuBar, int menuItem, void *callbackData, int panel);
 	// registers a Pockells cell with the framework
-static int							RegisterPockellsCell								(PockellsModule_type* eomModule, PockellsEOM_type* eom);
+static int							RegisterPockellsCell								(PockellsModule_type* eomModule, PockellsEOM_type* eom, char** errorMsg);
 	// unregisters a Pockells cell from the framework
 static int							UnregisterPockellsCell								(PockellsModule_type* eomModule, PockellsEOM_type* eom);
 	// initializes new pockells cell UI 
@@ -236,8 +236,9 @@ static int							ModuleEventHandler									(TaskControl_type* taskControl, TCSt
 
 DAQLabModule_type* initalloc_PockellsModule (DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl)
 {
-	int						error		= 0;
-	PockellsModule_type*	eomModule;
+INIT_ERR
+
+	PockellsModule_type*	eomModule	= NULL;
 	
 	if (!mod)
 		nullChk( eomModule = malloc (sizeof(PockellsModule_type)) );
@@ -335,7 +336,8 @@ void discard_PockellsModule (DAQLabModule_type** mod)
 
 static PockellsEOM_type* init_PockellsEOM_type (PockellsModule_type* eomModule, TaskControl_type** taskControllerPtr)
 {
-	int						error					= 0;
+INIT_ERR
+
 	PockellsEOM_type*		eom 					= malloc (sizeof(PockellsEOM_type));
 	char*					timingVChanName			= NULL;
 	char*					modulationVChanName		= NULL;
@@ -421,8 +423,7 @@ static void discard_PockellsEOM_type (PockellsEOM_type** eomPtr)
 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
-	int						error				= 0;
-	char*					errMsg				= NULL;
+INIT_ERR
 	
 	PockellsModule_type*	eomModule 			= (PockellsModule_type*) mod;
 	int						newMenuItem			= 0; 
@@ -473,8 +474,8 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 	
 	for (size_t i = 1; i <= nCells; i++) {
 		eom = *(PockellsEOM_type**) ListGetPtrToItem(eomModule->pockellsCells, i);
-		errChk( InitNewPockellsCellUI(eomModule, eom, eomPanHndl, &errMsg) );
-		errChk( RegisterPockellsCell(eomModule, eom) );
+		errChk( InitNewPockellsCellUI(eomModule, eom, eomPanHndl, &errorInfo.errMsg) );
+		errChk( RegisterPockellsCell(eomModule, eom, &errorInfo.errMsg) );
 	}
 	
 	// delete "None" tab if present and undim "Calibration" menu item
@@ -498,13 +499,13 @@ Error:
 	// cleanup
 	OKfreePanHndl(eomPanHndl);
 	
-	ReturnErrMsg();
-	return error;
+RETURN_ERR
 }
 
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-	int 							error 							= 0;
+INIT_ERR
+
 	PockellsModule_type*			eomModule						= (PockellsModule_type*)mod;    
 	eomModule->mainPanTopPos										= malloc(sizeof(int));
 	eomModule->mainPanLeftPos										= malloc(sizeof(int));
@@ -542,12 +543,13 @@ static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomModule, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int 							error 							= 0;
+INIT_ERR
+
 	PockellsEOM_type*				eom								= NULL;
 	double							maxSafeVoltage					= 0;
 	int								calibIdx						= 0;
@@ -567,7 +569,7 @@ static PockellsEOM_type* LoadPockellsCellFromXMLData (PockellsModule_type* eomMo
 	nullChk( taskController = init_TaskControl_type(taskControllerName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
 									  StartTC, ResetTC, DoneTC, StoppedTC, NULL, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC) );
 	// configure task controller
-	TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL);
+	errChk( TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 	
 	nullChk( eom = init_PockellsEOM_type(eomModule, &taskController) );
 	
@@ -605,7 +607,8 @@ Error:
 
 static int LoadPockellsCalibrationFromXMLData (PockellsEOMCal_type* eomCal, ActiveXMLObj_IXMLDOMElement_ calXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int 							error 							= 0;
+INIT_ERR
+
 	DAQLabXMLNode 					calAttr[] 						= {	{"Wavelength", BasicData_Double, &eomCal->wavelength},
 																		{"MaxPower", BasicData_Double, &eomCal->maxPower},
 											  		   		   			{"a", BasicData_Double, &eomCal->a},
@@ -615,18 +618,16 @@ static int LoadPockellsCalibrationFromXMLData (PockellsEOMCal_type* eomCal, Acti
 																		
 	errChk( DLGetXMLElementAttributes(calXMLElement, calAttr, NumElem(calAttr)) ); 
 																		
-	return 0;
-	
 Error:
 	
-	return error;
-	
+	return errorInfo.error;
 }
 
 static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
+INIT_ERR
+
 	PockellsModule_type*			eomModule				= (PockellsModule_type*)mod;
-	int								error					= 0;
 	int								lsPanTopPos				= 0;
 	int								lsPanLeftPos			= 0;
 	DAQLabXMLNode 					moduleAttr[] 			= {{"PanTopPos", BasicData_Int, &lsPanTopPos},
@@ -658,16 +659,15 @@ static int SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 		OKfreeCAHndl(pockellsXMLElement); 
 	}
 	
-	return 0;
-	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ pockellsXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error					= 0;
+INIT_ERR
+
 	char*							taskControllerName		= GetTaskControlName(eom->taskControl);
 	ActiveXMLObj_IXMLDOMElement_	calXMLElement			= 0;   // pockells cell XML calibration element
 	DAQLabXMLNode 					eomAttr[] 				= {{"MaxSafeVoltage", BasicData_Double, &eom->maxSafeVoltage},
@@ -698,16 +698,15 @@ static int SavePockellsCellXMLData (PockellsEOM_type* eom, CAObjHandle xmlDOM, A
 		OKfreeCAHndl(calXMLElement); 
 	}
 	
-	return 0;
-	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int SavePockellsCalibrationXMLData (PockellsEOMCal_type* eomCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ calXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	int								error					= 0;
+INIT_ERR
+
 	DAQLabXMLNode 					calAttr[] 				= {{"Wavelength", BasicData_Double, &eomCal->wavelength},
 															   {"MaxPower", BasicData_Double, &eomCal->maxPower},
 											  		   		   {"a", BasicData_Double, &eomCal->a},
@@ -721,11 +720,10 @@ static int SavePockellsCalibrationXMLData (PockellsEOMCal_type* eomCal, CAObjHan
 	
 	errChk( DLAddToXMLElem(xmlDOM, calXMLElement, calAttr, DL_ATTRIBUTE, NumElem(calAttr), xmlErrorInfo) );
 	
-	return 0;
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
@@ -735,6 +733,8 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 
 static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
+INIT_ERR
+
 	PockellsModule_type*	eomModule				= callbackData;
 	char*					taskControllerName  	= NULL;
 	char*					timingVChanName  		= NULL;
@@ -742,8 +742,6 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	PockellsEOM_type*		eom						= NULL;
 	int						eomPanHndl				= 0;
 	int						workspacePanHndl		= 0;
-	int						error					= 0;
-	char*					errMsg					= NULL;
 	void*					panelData				= NULL;
 	int						panelHndl				= 0;
 	TaskControl_type*		taskController			= NULL;
@@ -756,7 +754,7 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	nullChk(taskController = init_TaskControl_type(taskControllerName, eom, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
 									  StartTC, ResetTC, DoneTC, StoppedTC, NULL, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC) );
 	// configure task controller
-	TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL);
+	errChk( TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 	
 	nullChk( eom = init_PockellsEOM_type(eomModule, &taskController) );
 	
@@ -766,8 +764,8 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	
 	ListInsertItem(eomModule->pockellsCells, &eom, END_OF_LIST);
 	
-	errChk( InitNewPockellsCellUI(eomModule, eom, eomPanHndl, &errMsg) );
-	errChk( RegisterPockellsCell(eomModule, eom) );
+	errChk( InitNewPockellsCellUI(eomModule, eom, eomPanHndl, &errorInfo.errMsg) );
+	errChk( RegisterPockellsCell(eomModule, eom, &errorInfo.errMsg) );
 	
 	// delete "None" tab if present
 	GetPanelHandleFromTabPage(eomModule->mainPanHndl, MainPan_Tab, 0, &panelHndl);
@@ -787,29 +785,28 @@ static void CVICALLBACK NewPockellsCell_CB (int menuBar, int menuItem, void *cal
 	
 Error:
 	
-	if (errMsg)
-		DLMsg(errMsg, 1);
-	OKfree(errMsg);
-	
+	// cleanup
 	DiscardPanel(eomPanHndl);
 	UnregisterPockellsCell(eomModule, eom);
 	discard_PockellsEOM_type(&eom);
 	OKfree(taskControllerName);
 	OKfree(timingVChanName);
 	OKfree(modulationVChanName);
+	
+PRINT_ERR
 }
 
-static int RegisterPockellsCell (PockellsModule_type* eomModule, PockellsEOM_type* eom)
+static int RegisterPockellsCell (PockellsModule_type* eomModule, PockellsEOM_type* eom,  char** errorMsg)
 {
-	int		error	= 0;
-	
+INIT_ERR
+
 	if (eom->DLRegistered) return 0; // already registered
 	
 	// add task controller to DAQLab framework
 	nullChk( DLAddTaskController((DAQLabModule_type*)eomModule, eom->taskControl) );
 		
 	// add VChans to DAQLab framework and register with task controller
-	errChk( AddSinkVChan(eom->taskControl, eom->timingVChan, NULL, NULL) );
+	errChk( AddSinkVChan(eom->taskControl, eom->timingVChan, NULL, &errorInfo.errMsg) );
 	nullChk( DLRegisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->modulationVChan) );
 	nullChk( DLRegisterVChan((DAQLabModule_type*)eomModule, (VChan_type*)eom->timingVChan) );
 	
@@ -817,12 +814,12 @@ static int RegisterPockellsCell (PockellsModule_type* eomModule, PockellsEOM_typ
 	
 Error:
 	
-	return error;
+RETURN_ERR
 }
 
 static int UnregisterPockellsCell (PockellsModule_type* eomModule, PockellsEOM_type* eom)
 {
-	int		error 	= 0;
+INIT_ERR
 	
 	if (!eom) return 0;
 	if (!eom->DLRegistered) return 0; // not registered yet
@@ -838,18 +835,18 @@ static int UnregisterPockellsCell (PockellsModule_type* eomModule, PockellsEOM_t
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int InitNewPockellsCellUI (PockellsModule_type* eomModule, PockellsEOM_type* eom, int eomNewPanHndl, char** errorMsg)
 {
+INIT_ERR
+
 	int						nTabs			= 0;
 	char*					eomName			= NULL;
 	size_t					nCals			= ListNumItems(eom->calib); 
 	PockellsEOMCal_type*	eomCal			= NULL; 
 	char					name[50]		= ""; 
-	int						error			= 0;
-	char*					errMsg			= NULL;
 	
 	// insert new pockells cell tab
 	InsertPanelAsTabPage(eomModule->mainPanHndl, MainPan_Tab, -1, eomNewPanHndl);  
@@ -884,21 +881,12 @@ static int InitNewPockellsCellUI (PockellsModule_type* eomModule, PockellsEOM_ty
 		// apply voltage
 		SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->outputPower * eomCal->maxPower);
 		// update pockells cell voltage
-		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );
+		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errorInfo.errMsg) );
 	}
-	
-	return 0;
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
-	
-	if (errorMsg)
-		*errorMsg = FormatMsg(error, "InitNewPockellsCellUI", errMsg);
-	OKfree(errMsg);
-	
-	return error;
+RETURN_ERR
 }
 
 static void AddCalibTableEntry (PockellsEOM_type* eom, PockellsEOMCal_type* eomCal)
@@ -1112,12 +1100,12 @@ static int CVICALLBACK MainPan_CB (int panel, int control, int event, void *call
 
 static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERR
+
 	PockellsEOM_type*		eom			= callbackData;
 	PockellsEOMCal_type*	eomCal		= NULL;
 	Point					cell		= {.x = 0, .y = 0};
 	int						nRows		= 0;
-	int						error		= 0;
-	char*					errMsg		= NULL;
 	double					paramVal	= 0;
 	
 	switch (event) {
@@ -1148,7 +1136,7 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 						// apply voltage
 						SetCtrlVal(eom->eomPanHndl, Pockells_Output, eomCal->d * eomCal->maxPower);
 						// send command voltage
-						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );
+						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errorInfo.errMsg) );
 						// update calibration index assigned to the pockells cell
 						eom->calibIdx = 1;
 					}
@@ -1260,9 +1248,9 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 								if (cell.y == eom->calibIdx)
 								// apply voltage
 								if (eom->isPulsed)
-									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->pulsedOutputPower), &errMsg) );
+									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->pulsedOutputPower), &errorInfo.errMsg) );
 								else
-									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
 							}
 							else
 								SetTableCellVal(panel, control, cell, eomCal->c);
@@ -1282,7 +1270,7 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 									// apply voltage
 									SetCtrlVal(eom->eomPanHndl, Pockells_Output, eom->outputPower * eomCal->maxPower);
 									// update pockells cell voltage
-									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
 								}
 							} else 
 								SetTableCellVal(panel, control, cell, eomCal->d);
@@ -1330,7 +1318,7 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 						// apply voltage
 						SetCtrlVal(eom->eomPanHndl, Pockells_Output, eomCal->d * eomCal->maxPower);  
 								
-						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );       
+						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errorInfo.errMsg) );       
 					}
 							
 					// if there are no more calibrations available, dim the pockells cell controls
@@ -1349,13 +1337,10 @@ static int CVICALLBACK CalibPan_CB (int panel, int control, int event, void *cal
 			
 	}
 	
-	return 0;
-	
 Error:
 	
-	if (errMsg)
-		DLMsg(errMsg, 1);
-	
+PRINT_ERR
+
 	return 0;
 }
 
@@ -1365,11 +1350,11 @@ Error:
 
 static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERR	
+	
 	PockellsEOM_type*  		eom				= callbackData;
 	PockellsEOMCal_type*	eomCal			= NULL;
 	int						wavelengthIdx	= 0;
-	int						error			= 0;
-	char*					errMsg			= NULL;
 	Point					cell			= {.x = 0, .y = 0};
 	
 	
@@ -1396,7 +1381,7 @@ static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, vo
 					// update output
 					eom->outputPower 		= eomCal->d;
 					eom->pulsedOutputPower  = eomCal->d;
-					errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );
+					errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errorInfo.errMsg) );
 					break;
 					
 				case Pockells_Output:
@@ -1423,7 +1408,7 @@ static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, vo
 							SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eom->outputPower * eomCal->maxPower);
 						}
 						
-						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
 					}
 					
 					break;
@@ -1433,12 +1418,12 @@ static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, vo
 					GetCtrlVal(panel, control, &eom->isPulsed);
 					if (eom->isPulsed) {
 						// apply pockels voltage for min transmission
-						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errMsg) );
+						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errorInfo.errMsg) );
 						// update UI with current pulsed power settings
 						SetCtrlVal(panel, Pockells_Output, eom->pulsedOutputPower * eomCal->maxPower);
 					} else {
 						// apply voltage to get desired beam intensity
-						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
 						// update UI
 						SetCtrlVal(panel, Pockells_Output, eom->outputPower * eomCal->maxPower);
 					}
@@ -1450,13 +1435,10 @@ static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, vo
 			
 	}
 	
-	return 0;
-	
 Error:
-	
-	if (errMsg)
-		DLMsg(errMsg, 1);
-	
+
+PRINT_ERR
+
 	return 0;
 }
 
@@ -1464,8 +1446,7 @@ static int ApplyPockellsCellVoltage (PockellsEOM_type* eom, double voltage, char
 {
 #define ApplyPockellsCellVoltage_Waveform_NSamples		100
 	
-	int							error					= 0;
-	char*						errMsg					= NULL;
+INIT_ERR	
 	
 	double*						commandSignal			= NULL;
 	RepeatedWaveform_type*		commandWaveform			= NULL;
@@ -1478,7 +1459,7 @@ static int ApplyPockellsCellVoltage (PockellsEOM_type* eom, double voltage, char
 	nullChk( commandWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, 0, ApplyPockellsCellVoltage_Waveform_NSamples, (void**)&commandSignal, 0) );
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(eom->taskControl), WAVERANK) );
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandWaveform, &dsInfo, (DiscardFptr_type) discard_RepeatedWaveform_type) );
-	errChk( SendDataPacket(eom->modulationVChan, &dataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(eom->modulationVChan, &dataPacket, FALSE, &errorInfo.errMsg) );
 							  
 	return 0;
 	
@@ -1490,8 +1471,7 @@ Error:
 	discard_DataPacket_type(&dataPacket);
 	discard_DSInfo_type(&dsInfo);
 	
-	ReturnErrMsg();
-	return error;
+RETURN_ERR
 }
 
 static double GetPockellsCellVoltage (PockellsEOMCal_type* eomCal, double normalizedPower)
@@ -1507,16 +1487,16 @@ static double GetPockellsCellVoltage (PockellsEOMCal_type* eomCal, double normal
 // Modulation VChan
 static void	ModulationVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
 {
+INIT_ERR
+
 	PockellsEOM_type* 		eom 	= VChanOwner;
 	PockellsEOMCal_type* 	eomCal 	= ListGetPtrToItem(eom->calib, eom->calibIdx);
-	int						error	= 0;
-	char*					errMsg	= NULL;
 	
 	switch (state) {
 			
 		case VChan_Open:
 			
-			errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+			errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
 			break;
 			
 		case VChan_Closed:
@@ -1528,11 +1508,7 @@ static void	ModulationVChan_StateChange (VChan_type* self, void* VChanOwner, VCh
 	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
-	
-	DLMsg(errMsg, 1);
-	OKfree(errMsg);
+PRINT_ERR
 }
 
 //-----------------------------------------
@@ -1582,11 +1558,10 @@ static void IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, B
 			commandSignal[i] = voltageLow;																	\
 	nullChk( commandRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, samplingRate, nSamples, (void**)&commandSignal, nRepeats) );
 	
+INIT_ERR
 	
 	PockellsEOM_type* 			eom 						= GetTaskControlModuleData(taskControl);
 	PockellsEOMCal_type*		eomCal						= ListGetPtrToItem(eom->calib, eom->calibIdx);
-	int							error						= 0;
-	char*						errMsg						= NULL;
 	DataPacket_type*			dataPacketIN				= NULL;
 	DataPacket_type*			dataPacketOUT				= NULL;
 	DataPacket_type*			nullDataPacket				= NULL;
@@ -1618,14 +1593,14 @@ static void IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, B
 	
 	// if there is no Source VChan attached to the timing Sink VChan of the pockells cell or not in pulsed mode, then just send constant voltage waveform
 	if (!IsVChanOpen((VChan_type*)eom->timingVChan) || !eom->isPulsed) {
-		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errMsg) );
+		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
 		// send NULL packet as well to signal termination of transmission
-		errChk( SendDataPacket(eom->modulationVChan, &nullDataPacket, FALSE, &errMsg) ); 
-		TaskControlIterationDone(taskControl, 0, "", FALSE);
+		errChk( SendDataPacket(eom->modulationVChan, &nullDataPacket, FALSE, &errorInfo.errMsg) ); 
+		errChk( TaskControlIterationDone(taskControl, 0, "", FALSE, &errorInfo.errMsg) );
 		return;
 	}
 	
-	errChk( GetDataPacket(eom->timingVChan, &dataPacketIN, &errMsg) );
+	errChk( GetDataPacket(eom->timingVChan, &dataPacketIN, &errorInfo.errMsg) );
 	
 	while (dataPacketIN) {
 	
@@ -1722,22 +1697,22 @@ static void IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, B
 				break;	
 			
 			default:
-				TaskControlIterationDone(taskControl, IterateTC_Err_DataTypeNotSupported, "Incoming data packet type is not supported", FALSE);   
+				errChk( TaskControlIterationDone(taskControl, IterateTC_Err_DataTypeNotSupported, "Incoming data packet type is not supported", FALSE, &errorInfo.errMsg));   
 				return;
 		}
 		
 		nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 		nullChk( dataPacketOUT = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&commandRepeatedWaveform, &dsInfo, (DiscardFptr_type) discard_RepeatedWaveform_type) );
-		errChk( SendDataPacket(eom->modulationVChan, &dataPacketOUT, FALSE, &errMsg) );
+		errChk( SendDataPacket(eom->modulationVChan, &dataPacketOUT, FALSE, &errorInfo.errMsg) );
 	
 		ReleaseDataPacket(&dataPacketIN);
-		errChk( GetDataPacket(eom->timingVChan, &dataPacketIN, &errMsg) );   // get new packet
+		errChk( GetDataPacket(eom->timingVChan, &dataPacketIN, &errorInfo.errMsg) );   // get new packet
 	}
 	
 	// send NULL packet to terminate transmission
-	errChk( SendDataPacket(eom->modulationVChan, &nullDataPacket, FALSE, &errMsg) );
+	errChk( SendDataPacket(eom->modulationVChan, &nullDataPacket, FALSE, &errorInfo.errMsg) );
 	
-	TaskControlIterationDone(taskControl, 0, "", FALSE);
+	errChk( TaskControlIterationDone(taskControl, 0, "", FALSE, &errorInfo.errMsg) );
 	
 	return;
 	
@@ -1750,11 +1725,10 @@ Error:
 	OKfree(commandSignal);
 	discard_DSInfo_type(&dsInfo);
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
+	char* errorMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, errorInfo.errMsg);
 	
-	TaskControlIterationDone(taskControl, error, errMsg, FALSE);
-	OKfree(errMsg);
+	TaskControlIterationDone(taskControl, errorInfo.error, errorMsg, FALSE, NULL);
+	OKfree(errorMsg);
 }
 
 static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)

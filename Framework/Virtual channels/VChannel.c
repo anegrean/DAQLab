@@ -23,8 +23,22 @@
 
 #define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}  
 #define DEFAULT_SinkVChan_QueueSize			1000
-#define DEFAULT_SinkVChan_QueueWriteTimeout	1000.0	// number of [ms] to wait while trying
-													// to add a data packet to a Sink VChan TSQ
+#define DEFAULT_SinkVChan_QueueWriteTimeout	1000.0	// number of [ms] to wait while trying to add a data packet to a Sink VChan TSQ
+
+// Cmt library error macro
+#define CmtErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) \ 
+{goto CmtError;} else
+
+// obtain Cmt error description and jumps to Error
+#define Cmt_ERR { \
+	if (errorInfo.error < 0) { \
+		char CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE] = ""; \
+		errChk( CmtGetErrorMessage(errorInfo.error, CmtErrMsgBuffer) ); \
+		nullChk( errorInfo.errMsg = StrDup(CmtErrMsgBuffer) ); \
+	} \
+	goto Error; \
+}
+
 
 //==============================================================================
 // Types
@@ -133,7 +147,8 @@ struct SourceVChan {
 
 static BOOL 				SourceVChanIsConnected 				(SourceVChan_type* srcVChan);
 static BOOL 				SinkVChanIsConnected 				(SinkVChan_type* sinkVChan);
-static size_t				ActiveSinkVChans					(SourceVChan_type* srcVChan);
+static size_t				GetNumActiveSinkVChans				(SourceVChan_type* srcVChan);
+static size_t				GetNumOpenSinkVChans				(SourceVChan_type* srcVChan);
 
 
 static BOOL SourceVChanIsConnected (SourceVChan_type* srcVChan)
@@ -153,7 +168,7 @@ static BOOL SinkVChanIsConnected (SinkVChan_type* sinkVChan)
 }
 
 /// HIFN Returns the number of active Sink VChans connected to a Source VChan.
-static size_t ActiveSinkVChans (SourceVChan_type* srcVChan)
+static size_t GetNumActiveSinkVChans (SourceVChan_type* srcVChan)
 {
 	SinkVChan_type*		sinkVChan 				= NULL;
 	size_t				nSinkVChans				= ListNumItems(srcVChan->sinkVChans);
@@ -166,6 +181,21 @@ static size_t ActiveSinkVChans (SourceVChan_type* srcVChan)
 	}
 	
 	return nActiveSinkVChans;
+}
+
+static size_t GetNumOpenSinkVChans (SourceVChan_type* srcVChan)
+{
+	SinkVChan_type*		sinkVChan 				= NULL;
+	size_t				nSinkVChans				= ListNumItems(srcVChan->sinkVChans);
+	size_t				nOpenSinkVChans			= 0;
+	
+	for (size_t i = 1; i <= nSinkVChans; i++) {
+		sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(srcVChan->sinkVChans, i);
+		if (sinkVChan->baseClass.isOpen)
+			nOpenSinkVChans++;
+	}
+	
+	return nOpenSinkVChans;
 }
 
 
@@ -298,7 +328,7 @@ static BOOL disconnectSinkVChan (SinkVChan_type* sinkVChan)
 		if (connectedSinkVChan == sinkVChan) {
 			ListRemoveItem(srcVChan->sinkVChans, 0, i);
 			// if Source VChan is open and there are no more active Sinks, then close Source VChan
-			if (srcVChan->baseClass.isOpen && !ActiveSinkVChans(srcVChan)) {
+			if (srcVChan->baseClass.isOpen && !GetNumActiveSinkVChans(srcVChan)) {
 				srcVChan->baseClass.isOpen = VChan_Closed; 
 				if (srcVChan->baseClass.VChanStateChangeCBFptr)
 					(*srcVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)srcVChan, srcVChan->baseClass.VChanOwner, srcVChan->baseClass.isOpen);
@@ -613,7 +643,7 @@ void SetVChanActive (VChan_type* VChan, BOOL isActive)
 			
 			if (VChan->isActive) {   // Inactive -> Active
 				// Source VChan is closed. Open Source VChan if it has at least an active Sink VChan
-				if (ActiveSinkVChans((SourceVChan_type*)VChan)) {
+				if (GetNumActiveSinkVChans((SourceVChan_type*)VChan)) {
 					VChan->isOpen = VChan_Open;
 					if (VChan->VChanStateChangeCBFptr)
 						(*VChan->VChanStateChangeCBFptr) (VChan, VChan->VChanOwner, VChan->isOpen);
@@ -682,7 +712,7 @@ void SetVChanActive (VChan_type* VChan, BOOL isActive)
 				
 				// If Sink has an open Source VChan and there are no more active Sinks, then close Source VChan
 				SourceVChan_type*	srcVChan = ((SinkVChan_type*)VChan)->sourceVChan;
-				if (srcVChan && srcVChan->baseClass.isOpen && !ActiveSinkVChans(srcVChan)) {
+				if (srcVChan && srcVChan->baseClass.isOpen && !GetNumActiveSinkVChans(srcVChan)) {
 					srcVChan->baseClass.isOpen = VChan_Closed;
 					if (srcVChan->baseClass.VChanStateChangeCBFptr)
 						(*srcVChan->baseClass.VChanStateChangeCBFptr) ((VChan_type*)srcVChan, srcVChan->baseClass.VChanOwner, srcVChan->baseClass.isOpen);
@@ -762,96 +792,76 @@ double GetSinkVChanReadTimeout	(SinkVChan_type* sinkVChan)
 
 int ReleaseAllDataPackets (SinkVChan_type* sinkVChan, char** errorMsg)
 {
-#define	ReleaseAllDataPackets_Err_CouldNotGetDataPackets	-1
+INIT_ERR
 	
 	DataPacket_type**		dataPackets		= NULL;
 	size_t					nPackets		= 0;
-	char*					errMsg			= NULL;
-	
-	if (GetAllDataPackets (sinkVChan, &dataPackets, &nPackets, &errMsg) < 0) {
-		if (errorMsg)
-			*errorMsg = FormatMsg(ReleaseAllDataPackets_Err_CouldNotGetDataPackets, "ReleaseAllDataPackets", errMsg);
-		OKfree(errMsg);
-		return ReleaseAllDataPackets_Err_CouldNotGetDataPackets;
-	}
+
+	errChk( GetAllDataPackets (sinkVChan, &dataPackets, &nPackets, &errorInfo.errMsg) );
 	
 	// release data packets
 	for(size_t i = 0; i < nPackets; i++)
 		ReleaseDataPacket(&dataPackets[i]);
-		
+	
+Error:
+	
 	OKfree(dataPackets);
 	
-	return 0;
+RETURN_ERR
 }
 
 int SendDataPacket (SourceVChan_type* srcVChan, DataPacket_type** dataPacketPtr, BOOL srcVChanNeedsPacket, char** errorMsg)
 {
-#define SendDataPacket_Err_TSQWrite		-1
+INIT_ERR
 	
-	size_t		nSinks	= ListNumItems(srcVChan->sinkVChans);
-	int			error	= 0;
+	size_t				nSinks				= ListNumItems(srcVChan->sinkVChans);
+	SinkVChan_type* 	sinkVChan			= NULL;
+	size_t				nPacketsSent		= 0;		// counts to how many Sink VChans the packet has been sent successfuly
+	size_t				nPacketRecipients	= 0;		// counts the number of packet recipients
 	
-	// if Source VChan is closed, then dispose of the data packet
-	if (!srcVChan->baseClass.isOpen) {
-		if (*dataPacketPtr) ReleaseDataPacket(dataPacketPtr);
-		return 0; 
-	}
 	
 	// set packet counter
 	// Note: Since the Source VChan is open, an active Sink VChan is also an open Sink VChan
 	if (*dataPacketPtr)
-		if (srcVChanNeedsPacket)
-			SetDataPacketCounter(*dataPacketPtr, ActiveSinkVChans(srcVChan)+1);
-		else
-			SetDataPacketCounter(*dataPacketPtr, ActiveSinkVChans(srcVChan));
+		if (srcVChanNeedsPacket) {
+			nPacketRecipients = GetNumOpenSinkVChans(srcVChan)+1;
+			SetDataPacketCounter(*dataPacketPtr, nPacketRecipients);
+			nPacketsSent++;
+		} else {
+			nPacketRecipients = GetNumOpenSinkVChans(srcVChan);
+			SetDataPacketCounter(*dataPacketPtr, nPacketRecipients);
+		}
 	
-	SinkVChan_type* 	sinkVChan		= NULL;
-	int					itemsWritten	= 0;
+	// if there are no recipients then dispose of the data packet
+	if (!nPacketRecipients) {
+		ReleaseDataPacket(dataPacketPtr);
+		return 0; 
+	}
+	
+	// send data packet
 	for (size_t i = 1; i <= nSinks; i++) {
 		sinkVChan = *(SinkVChan_type**)ListGetPtrToItem(srcVChan->sinkVChans,i);
-		if (!sinkVChan->baseClass.isActive) continue; // forward packet only to active Sink VChans connected to this Source VChan
+		if (!sinkVChan->baseClass.isOpen) continue; // forward packet only to open Sink VChans connected to this Source VChan
 		// put data packet into Sink VChan TSQ
-		itemsWritten = CmtWriteTSQData(sinkVChan->tsqHndl, dataPacketPtr, 1, sinkVChan->writeTimeout, NULL);
-		
-		// check if writing the items to the sink queue succeeded
-		if (itemsWritten < 0) {
-			char* 				errMsg 										= StrDup("Writing data to ");
-			char*				sinkName									= GetVChanName((VChan_type*)sinkVChan);
-			char				cmtStatusMessage[CMT_MAX_MESSAGE_BUF_SIZE];
-			
-			AppendString(&errMsg, sinkName, -1); 
-			AppendString(&errMsg, " failed. Reason: ", -1); 
-			CmtGetErrorMessage(itemsWritten, cmtStatusMessage);
-			AppendString(&errMsg, cmtStatusMessage, -1); 
-			if (errorMsg)
-				*errorMsg = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
-			OKfree(errMsg);
-			OKfree(sinkName);
-			ReleaseDataPacket(dataPacketPtr);
-			error = SendDataPacket_Err_TSQWrite;
-			
-		} else
-		   // check if the number of written elements is the same as what was requested
-			if (!itemsWritten) {
-				char* 				errMsg 										= StrDup("Sink VChan ");
-				char*				sinkName									= GetVChanName((VChan_type*)sinkVChan);
-			
-				AppendString(&errMsg, sinkName, -1); 
-				AppendString(&errMsg, " is full or write operation timed out", -1);
-				if (errorMsg)
-					*errorMsg = FormatMsg(SendDataPacket_Err_TSQWrite, "SendDataPacket", errMsg);
-				OKfree(errMsg);
-				OKfree(sinkName);
-				ReleaseDataPacket(dataPacketPtr);
-				error = SendDataPacket_Err_TSQWrite;
-			}
-		
+		CmtErrChk( CmtWriteTSQData(sinkVChan->tsqHndl, dataPacketPtr, 1, (int)sinkVChan->writeTimeout, NULL) );
+		nPacketsSent++;
 	}
 	
 	*dataPacketPtr = NULL; 	// Data packet is considered to be consumed even if sending to some Sink VChans did not succeed
 							// Sink VChans that did receive the data packet, can further process it and release it.
+	return 0;
+
+CmtError:
 	
-	return error;
+Cmt_ERR
+	
+Error:
+
+	// cleanup
+	for (size_t i = 0; i < nPacketRecipients - nPacketsSent; i++)
+		ReleaseDataPacket(dataPacketPtr);
+	
+RETURN_ERR
 }
 
 int	SendNullPacket (SourceVChan_type* srcVChan, char** errorMsg)
@@ -868,10 +878,8 @@ int	SendNullPacket (SourceVChan_type* srcVChan, char** errorMsg)
 /// OUT dataPackets, nPackets
 int GetAllDataPackets (SinkVChan_type* sinkVChan, DataPacket_type*** dataPackets, size_t* nPackets, char** errorMsg)
 {
-#define GetAllDataPackets_Err_OutOfMem			-1
-#define GetAllDataPackets_Err_ReadDataPackets	-2  
+INIT_ERR
 	
-	int						error				= 0;
 	CmtTSQHandle			sinkVChanTSQHndl 	= sinkVChan->tsqHndl;
 	
 	// init
@@ -879,30 +887,26 @@ int GetAllDataPackets (SinkVChan_type* sinkVChan, DataPacket_type*** dataPackets
 	*nPackets		= 0;
 	
 	// get number of available packets
-	errChk(CmtGetTSQAttribute(sinkVChanTSQHndl, ATTR_TSQ_ITEMS_IN_QUEUE, nPackets));
+	CmtErrChk( CmtGetTSQAttribute(sinkVChanTSQHndl, ATTR_TSQ_ITEMS_IN_QUEUE, nPackets) );
 	if (!*nPackets) return 0;	// no data packets, return with success
 	
 	// get data packets
-	*dataPackets = malloc (*nPackets * sizeof(DataPacket_type*));
-	if (!*dataPackets) {
-		if (errorMsg)
-			*errorMsg 	= FormatMsg(GetAllDataPackets_Err_OutOfMem, "GetAllDataPackets", "Out of memory");
-		*nPackets 	= 0;
-		return GetAllDataPackets_Err_OutOfMem;
-	}
-	
-	errChk(CmtReadTSQData(sinkVChanTSQHndl, *dataPackets, *nPackets, 0, 0));
+	nullChk( *dataPackets = malloc (*nPackets * sizeof(DataPacket_type*)) );
+	CmtErrChk( CmtReadTSQData(sinkVChanTSQHndl, *dataPackets, *nPackets, 0, 0) );
 	
 	return 0;
 	
+CmtError:	
+
+Cmt_ERR
+	
 Error:
-	char	errMsg[CMT_MAX_MESSAGE_BUF_SIZE];
-	CmtGetErrorMessage (error, errMsg);
+	
+	// cleanup
 	OKfree(*dataPackets);
 	*nPackets 	= 0;
-	if (errorMsg)
-		*errorMsg 	= FormatMsg(GetAllDataPackets_Err_ReadDataPackets, "GetAllDataPackets", errMsg);
-	return GetAllDataPackets_Err_ReadDataPackets;
+
+RETURN_ERR
 }
 
 /// HIFN Attempts to get one data packet from a Sink VChan before the timeout period. 
@@ -911,36 +915,39 @@ Error:
 int GetDataPacket (SinkVChan_type* sinkVChan, DataPacket_type** dataPacketPtr, char** errorMsg)
 {
 #define GetDataPacket_Err_Timeout	-1
+
+INIT_ERR
 	
-	int					error				= 0;
 	CmtTSQHandle		sinkVChanTSQHndl 	= sinkVChan->tsqHndl;
-	char*				errMsg				= NULL;
+	int					itemsRead			= 0;
+	char*				msgBuff				= NULL;
+	
 	
 	*dataPacketPtr = NULL;
 	
 	// get data packet
-	if ( (error = CmtReadTSQData(sinkVChanTSQHndl, dataPacketPtr, 1, sinkVChan->readTimeout, 0)) < 0) goto CmtError;
+	CmtErrChk( itemsRead = CmtReadTSQData(sinkVChanTSQHndl, dataPacketPtr, 1, (int)sinkVChan->readTimeout, 0) );
 	
 	// check if timeout occured
-	if (!error) {
-		errMsg = StrDup("Waiting for ");
-		AppendString(&errMsg, sinkVChan->baseClass.name, -1);
-		AppendString(&errMsg, " Sink VChan data timed out", -1);
-		if (errorMsg)
-			*errorMsg = FormatMsg(GetDataPacket_Err_Timeout, "GetDataPacket", errMsg);
-		OKfree(errMsg);
-		return GetDataPacket_Err_Timeout;
+	if (!itemsRead) {
+		nullChk( msgBuff = StrDup("Waiting for ") );
+		nullChk( AppendString(&msgBuff, sinkVChan->baseClass.name, -1) );
+		nullChk( AppendString(&msgBuff, " Sink VChan data timed out.", -1) );
+		SET_ERR(GetDataPacket_Err_Timeout, msgBuff);
 	}
 	
 	return 0;		 
 
 CmtError:
 	
-	char	cmtErrMsg[CMT_MAX_MESSAGE_BUF_SIZE];
-	CmtGetErrorMessage (error, cmtErrMsg);
-	if (errorMsg)
-		*errorMsg = FormatMsg(error, "GetDataPacket", cmtErrMsg);
-	return error;
+Cmt_ERR
+	
+Error:
+	
+	// cleanup
+	OKfree(msgBuff);
+	
+RETURN_ERR
 }
 
 //------------------------------------------------------------------------------ 
@@ -953,28 +960,29 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 #define		ReceiveWaveform_Err_WrongDataType		-2
 #define		ReceiveWaveform_Err_NotSameDataType		-3
 	
-	int						error					= 0;
+INIT_ERR	
+	
 	DataPacket_type*		dataPacket				= NULL;
-	DLDataTypes				dataPacketType;
-	DLDataTypes				firstDataPacketType;
+	DLDataTypes				dataPacketType			= 0;
+	DLDataTypes				firstDataPacketType		= 0;
 	void*					dataPacketPtrToData		= NULL;
-	char*					errMsg					= NULL;
+	char*					msgBuff					= NULL;
+	
 	
 	// init
 	*waveform = NULL;
 	
 	// get first data packet and check if it is a NULL packet
-	errChk ( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
+	errChk ( GetDataPacket(sinkVChan, &dataPacket, &errorInfo.errMsg) );
 	
 	if (!dataPacket) {
-		errMsg = FormatMsg(ReceiveWaveform_Err_NoWaveform, "ReceiveWaveform", "Waveform received does not contain any data. This occurs if a NULL packet is encountered before any data packets");
-		error = ReceiveWaveform_Err_NoWaveform;
-		goto Error;
+		nullChk( msgBuff = StrDup("Waveform received does not contain any data. This occurs if a NULL packet is encountered before any data packets") );
+		SET_ERR(ReceiveWaveform_Err_NoWaveform, msgBuff);
 	}
 	
 	// check if data packet type is supported by this function
 	dataPacketPtrToData = GetDataPacketPtrToData(dataPacket, &firstDataPacketType);
-	dataPacketType = firstDataPacketType;
+	dataPacketType 		= firstDataPacketType;
 	
 	// check if data packet is of waveform type
 	switch (firstDataPacketType) {
@@ -995,17 +1003,15 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 		
 		default:
 			
-			errMsg = FormatMsg(ReceiveWaveform_Err_WrongDataType, "ReceiveWaveform", "Data packet received is not of a waveform type and cannot be retrieved by this function");
-			ReleaseDataPacket(&dataPacket);
-			error = ReceiveWaveform_Err_WrongDataType;
-			goto Error;
+			nullChk( msgBuff = StrDup("Data packet received is not of a waveform type and cannot be retrieved by this function") );
+			SET_ERR(ReceiveWaveform_Err_WrongDataType, msgBuff);
 	}
 	
-	errChk( CopyWaveform(waveform, *(Waveform_type**)dataPacketPtrToData, &errMsg) );
+	errChk( CopyWaveform(waveform, *(Waveform_type**)dataPacketPtrToData, &errorInfo.errMsg) );
 	ReleaseDataPacket(&dataPacket);
 	
 	// get another data packet if any
-	errChk ( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
+	errChk ( GetDataPacket(sinkVChan, &dataPacket, &errorInfo.errMsg) );
 	// assemble waveform from multiple packets until a NULL packet is encountered
 	while (dataPacket) {
 		
@@ -1014,26 +1020,22 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 		
 		// check if retrieved data packet is of the same type as the first packet
 		if (firstDataPacketType != dataPacketType) {
-			errMsg = FormatMsg(ReceiveWaveform_Err_NotSameDataType, "ReceiveWaveform", "Data packets must be all of the same type");
-			error = ReceiveWaveform_Err_NotSameDataType;
-			ReleaseDataPacket(&dataPacket);
-			goto Error;
+			nullChk( msgBuff = StrDup("Data packets must be all of the same type") );
+			SET_ERR(ReceiveWaveform_Err_NotSameDataType, msgBuff);
 		}
 	
-		errChk( AppendWaveform(*waveform, *(Waveform_type**)dataPacketPtrToData, &errMsg) );
+		errChk( AppendWaveform(*waveform, *(Waveform_type**)dataPacketPtrToData, &errorInfo.errMsg) );
 	
 		ReleaseDataPacket(&dataPacket);
 		
 		// get another packet
-		errChk ( GetDataPacket(sinkVChan, &dataPacket, &errMsg) );
+		errChk ( GetDataPacket(sinkVChan, &dataPacket, &errorInfo.errMsg) );
 	}
 	
 	// check again if waveform is NULL
 	if (!*waveform) {
-		errMsg = FormatMsg(ReceiveWaveform_Err_NoWaveform, "ReceiveWaveform", "Waveform received does not contain any data. This occurs if \
-								   a NULL packet is encountered before any data packets or the data packet doesn't have any data");
-		error = ReceiveWaveform_Err_NoWaveform;
-		goto Error;
+		nullChk( msgBuff = StrDup("Waveform received does not contain any data. This occurs if a NULL packet is encountered before any data packets or the data packet doesn't have any data") );
+		SET_ERR(ReceiveWaveform_Err_NoWaveform, msgBuff);
 	}
 	
 	// assign waveform type
@@ -1090,22 +1092,18 @@ int	ReceiveWaveform (SinkVChan_type* sinkVChan, Waveform_type** waveform, Wavefo
 			
 			default:
 			
-			errMsg = FormatMsg(ReceiveWaveform_Err_WrongDataType, "ReceiveWaveform", " Data packet received is not of a waveform type and cannot \
-							   be retrieved by this function");
-			ReleaseDataPacket(&dataPacket);
-			error = ReceiveWaveform_Err_WrongDataType;
-			goto Error;
+				nullChk( msgBuff = StrDup(" Data packet received is not of a waveform type and cannot be retrieved by this function") );
+				SET_ERR(ReceiveWaveform_Err_WrongDataType, msgBuff);
 		}
 		
 	return 0;
 	
 Error:
 	
+	// cleanup
+	OKfree(msgBuff);
 	ReleaseDataPacket(&dataPacket);
 	discard_Waveform_type(waveform);
-	if (errorMsg)
-		*errorMsg = FormatMsg(error, "ReceiveWaveform", errMsg);
-	OKfree(errMsg);
 	
-	return error;
+RETURN_ERR
 }

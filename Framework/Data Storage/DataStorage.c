@@ -401,6 +401,8 @@ char* CreateFullIterName(Iterator_type*	currentiter)
 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
+INIT_ERR
+
 	DataStorage_type* 	ds 			= (DataStorage_type*) mod;
 	
 	// load main panel
@@ -418,9 +420,11 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 	DisplayPanel(ds->mainPanHndl);
 	//default settings:
 
-	TaskControlEvent(ds->taskController, TC_Event_Configure, NULL, NULL);
+	errChk( TaskControlEvent(ds->taskController, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 	
-	return 0;
+Error:
+	
+RETURN_ERR
 }
 
 
@@ -430,8 +434,7 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 
 static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
 {
-	int 				error		= 0;
-	char*				errMsg		= NULL;
+INIT_ERR
 	
 	DataStorage_type* 	ds 			= GetTaskControlModuleData(taskControl);
 	size_t				nChans		= ListNumItems(ds->channels);
@@ -457,11 +460,7 @@ static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates st
 		OKfree(ds->hdf5DataFileName);               //free previous data file name
 		nullChk( ds->hdf5DataFileName = malloc(MAX_PATH * sizeof(char)) ); 
 		Fmt(ds->hdf5DataFileName,"%s<%s\\data.h5", ds->rawDataPath);
-		error = CreateHDF5File(ds->hdf5DataFileName,"/dset");
-		if (error < 0) {
-			errMsg = StrDup("Error creating HDF5 file");
-			goto Error;
-		}
+		errChk( CreateHDF5File(ds->hdf5DataFileName, "/dset", &errorInfo.errMsg) );
 	}
 	
 	return 0;
@@ -472,8 +471,7 @@ Error:
 	OKfree(ds->rawDataPath);
 	OKfree(ds->hdf5DataFileName);
 	
-	ReturnErrMsg();
-	return error;
+RETURN_ERR
 }
 
 static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
@@ -505,8 +503,7 @@ static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int e
 
 static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	int						error								= 0;
-	char*					errMsg								= NULL;
+INIT_ERR
 	
 	DataStorage_type* 		ds 									= callbackData;
 	DS_Channel_type*		chan								= NULL; 
@@ -548,7 +545,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					chan = init_DS_Channel_type(ds, panel, vChanName);
 		
 					// register VChan with DAQLab
-					errChk( AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC, &errMsg) );
+					errChk( AddSinkVChan(ds->taskController, chan->VChan, DataReceivedTC, &errorInfo.errMsg) );
 					DLRegisterVChan((DAQLabModule_type*)ds, (VChan_type*)chan->VChan);
 					
 					// update main panel
@@ -635,22 +632,16 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 			
 	}
 	
-	return 0;
-	
 Error:
 	
-	if (!errMsg)
-		errMsg = StrDup("Unknown error or out of memory");
-	DLMsg(errMsg, 1);
-	DLMsg("\n\n", 0);
-	OKfree(errMsg);
+PRINT_ERR
+
 	return 0;
 }
 
 static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg)  
 {
-	int						error					= 0;
-	char* 					errMsg 					= NULL;
+INIT_ERR
 	
 	DataStorage_type*		ds						= GetTaskControlModuleData(taskControl);
 	DataPacket_type**		dataPackets				= NULL;
@@ -665,7 +656,7 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 	DSInfo_type*			dsInfo					= NULL;
 	
 	// get all available data packets
-	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
+	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errorInfo.errMsg) );
 	
 	for (i = 0; i < nPackets; i++) {
 		if (!dataPackets[i] || !ds->hdf5DataFileName || !ds->hdf5DataFileName[0]) {
@@ -690,12 +681,12 @@ static int DataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BO
 					case DL_Waveform_Float:
 					case DL_Waveform_Double:
 						
-						errChk( WriteHDF5Waveform(ds->hdf5DataFileName, sourceVChanName, dsInfo, *(Waveform_type**)dataPacketDataPtr, Compression_GZIP, &errMsg) );  
+						errChk( WriteHDF5Waveform(ds->hdf5DataFileName, sourceVChanName, dsInfo, *(Waveform_type**)dataPacketDataPtr, Compression_GZIP, &errorInfo.errMsg) );  
 						break;
 					
 					case DL_Image:
 						
-						errChk( WriteHDF5Image(ds->hdf5DataFileName, sourceVChanName, dsInfo, *(Image_type**)dataPacketDataPtr, Compression_GZIP, &errMsg) );
+						errChk( WriteHDF5Image(ds->hdf5DataFileName, sourceVChanName, dsInfo, *(Image_type**)dataPacketDataPtr, Compression_GZIP, &errorInfo.errMsg) );
 						break;
 						
 					default:
@@ -714,8 +705,7 @@ Error:
 	OKfree(sinkVChanName);
 	OKfree(sourceVChanName);
 	
-	ReturnErrMsg();
-	return error;
+RETURN_ERR
 }
 
 

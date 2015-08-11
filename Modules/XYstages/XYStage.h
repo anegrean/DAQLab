@@ -187,7 +187,7 @@ int					XYStage_LoadCfg					(DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement
 	// Updates number of steps between an absolute start and relative end position given step size. If necessary it rounds up the end position 
 	// such that between the start and end positions there is an integer multiple of step sizes. These parameters are written to the structure data.
 	// It also updates these values on the display and outputs the number of steps.
-void				XYStage_UpdateSteps				(XYStage_type* stage);
+int 				XYStage_UpdateSteps 			(XYStage_type* stage, char** errorMsg);
 
 void				XYStage_SetStepCounter			(XYStage_type* stage, uInt32 xSteps, uInt32 ySteps);
 	

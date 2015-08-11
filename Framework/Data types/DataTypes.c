@@ -561,18 +561,11 @@ WaveformTypes GetWaveformDataType (Waveform_type* waveform)
 
 int CopyWaveform (Waveform_type** waveformCopy, Waveform_type* waveform, char** errorMsg)
 {
-#define CopyWaveform_Err_OutOfMemory	-1
+INIT_ERR
 
 	void*	nullData	= NULL;
-	int		error		= 0;
-	char*	errMsg		= NULL;
 	
-	*waveformCopy = init_Waveform_type(waveform->waveformType, waveform->samplingRate, 0, &nullData);
-	if (!*waveformCopy) {
-		if (errorMsg)
-			*errorMsg = FormatMsg(CopyWaveform_Err_OutOfMemory, "CopyWaveform", "Out of memory");
-		return CopyWaveform_Err_OutOfMemory;
-	}
+	nullChk( *waveformCopy = init_Waveform_type(waveform->waveformType, waveform->samplingRate, 0, &nullData) );
 	
 	// copy waveform attributes
 	(*waveformCopy)->color			= waveform->color;
@@ -580,19 +573,16 @@ int CopyWaveform (Waveform_type** waveformCopy, Waveform_type* waveform, char** 
 	(*waveformCopy)->unitName		= StrDup(waveform->unitName);
 	(*waveformCopy)->dateTimestamp	= waveform->dateTimestamp;
 	
-	
-	errChk( AppendWaveform(*waveformCopy, waveform, &errMsg) );
+	errChk( AppendWaveform(*waveformCopy, waveform, &errorInfo.errMsg) );
 	
 	return 0;
 	
 Error:
 	
+	// cleanup
 	discard_Waveform_type(waveformCopy);
 	
-	if (errorMsg)
-		*errorMsg = FormatMsg(error, "CopyWaveform", errMsg);	// chain error
-	OKfree(errMsg);
-	return error;
+RETURN_ERR
 }
 
 int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformToAppend, char** errorMsg) 
@@ -600,46 +590,31 @@ int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformTo
 #define AppendWaveformData_Err_SamplingRatesAreDifferent		-1
 #define AppendWaveformData_Err_DataTypesAreDifferent			-2
 #define AppendWaveformData_Err_UnitsAreDifferent				-3  
-#define AppendWaveformData_Err_OutOfMemory						-4
 	
+INIT_ERR
+	
+	void* 	dataBuffer		= NULL;
+
 	// do nothing if there is nothing to be copied
 	if (!waveformToAppend) return 0;
 	if (!waveformToAppend->nSamples) return 0;
 	// check if sampling rates are the same
-	if (waveformToAppendTo->samplingRate != waveformToAppend->samplingRate) {
-		if (errorMsg)
-			*errorMsg = FormatMsg(AppendWaveformData_Err_SamplingRatesAreDifferent, "AppendWaveform", "Waveform sampling rates are different");
-		return AppendWaveformData_Err_SamplingRatesAreDifferent;	
-	}
-	
+	if (waveformToAppendTo->samplingRate != waveformToAppend->samplingRate)
+		SET_ERR(AppendWaveformData_Err_SamplingRatesAreDifferent, "Waveform sampling rates are different.");
+		
 	// check if data types are the same
-	if (waveformToAppendTo->waveformType != waveformToAppend->waveformType) {
-		if (errorMsg)
-			*errorMsg = FormatMsg(AppendWaveformData_Err_DataTypesAreDifferent, "AppendWaveform", "Waveform data types are different");
-		return AppendWaveformData_Err_DataTypesAreDifferent;
-	}
+	if (waveformToAppendTo->waveformType != waveformToAppend->waveformType)
+		SET_ERR(AppendWaveformData_Err_DataTypesAreDifferent, "Waveform data types are different.");
 	
 	// check if units are the same
 	if (waveformToAppendTo->unitName && waveformToAppend->unitName)
-		if (strcmp(waveformToAppendTo->unitName, waveformToAppend->unitName)) {
-			if (errorMsg)
-				*errorMsg = FormatMsg(AppendWaveformData_Err_UnitsAreDifferent, "AppendWaveform", "Waveform units must be the same");
-			return AppendWaveformData_Err_UnitsAreDifferent;
-		}
+		if (strcmp(waveformToAppendTo->unitName, waveformToAppend->unitName))
+			SET_ERR(AppendWaveformData_Err_UnitsAreDifferent, "Waveform units must be the same.");
+		
+	if (waveformToAppendTo->unitName || waveformToAppend->unitName)
+		SET_ERR(AppendWaveformData_Err_UnitsAreDifferent, "Waveform units must be the same.");
 	
-	if (waveformToAppendTo->unitName || waveformToAppend->unitName) {
-		if (errorMsg)
-			*errorMsg = FormatMsg(AppendWaveformData_Err_UnitsAreDifferent, "AppendWaveform", "Waveform units must be the same");
-		return AppendWaveformData_Err_UnitsAreDifferent;
-	}
-	
-	
-	void* dataBuffer = realloc(waveformToAppendTo->data, (waveformToAppendTo->nSamples + waveformToAppend->nSamples) * GetWaveformSizeofData(waveformToAppendTo));
-	if (!dataBuffer) {
-		if (errorMsg)
-			*errorMsg = FormatMsg(AppendWaveformData_Err_OutOfMemory, "AppendWaveform", "Out of memory");
-		return AppendWaveformData_Err_OutOfMemory;
-	}
+	nullChk( dataBuffer = realloc(waveformToAppendTo->data, (waveformToAppendTo->nSamples + waveformToAppend->nSamples) * GetWaveformSizeofData(waveformToAppendTo)) );
 	
 	switch (waveformToAppendTo->waveformType) {
 			
@@ -680,10 +655,12 @@ int AppendWaveform (Waveform_type* waveformToAppendTo, Waveform_type* waveformTo
 	waveformToAppendTo->data = dataBuffer; 
 	waveformToAppendTo->nSamples += waveformToAppend->nSamples;
 	
-	return 0;
+Error:
+	
+RETURN_ERR
 }
 
-int IntegrateWaveform (Waveform_type** waveformOut, Waveform_type* waveformIn, size_t startIdx, size_t endIdx, size_t nInt)
+int IntegrateWaveform (Waveform_type** waveformOut, Waveform_type* waveformIn, size_t startIdx, size_t endIdx, size_t nInt, char** errorMsg)
 {
 #define IntegrateWaveform_Err_NInt			-1		// nInt is 0
 #define IntegrateWaveform_Err_Selection		-2		// (startIdx >= endIdx) and (endIdx != 0)
@@ -697,19 +674,23 @@ int IntegrateWaveform (Waveform_type** waveformOut, Waveform_type* waveformIn, s
 			for (size_t j = startIdx + i*nInt; j < startIdx + (i+1)*nInt; j++)		\
 				dataOutDouble[i] += dataIn[j];										\
 		nullChk( *waveformOut = init_Waveform_type(Waveform_Double, waveformIn->samplingRate/nInt, nDataOutSamples, (void**)&dataOutDouble) );}
+	
+INIT_ERR
 
-	int			error 				= 0;
 	size_t 		nDataOutSamples		= 0;
 	double*		dataOutDouble		= NULL;
 	
 	// check if nInt != 0
-	if (!nInt) return IntegrateWaveform_Err_NInt;
+	if (!nInt) 
+		SET_ERR(IntegrateWaveform_Err_NInt, "Number of point to integrate must be greater than 0.");
 	
 	// check if endIdx > startIdx unless endIdx = 0
-	if ((startIdx >= endIdx) && endIdx) return IntegrateWaveform_Err_Selection;
+	if ((startIdx >= endIdx) && endIdx) 
+		SET_ERR(IntegrateWaveform_Err_Selection, "Start index must be greater or equal than End index if End index is greater than 0.");
 	
 	// selection waveform bounds
-	if ( (startIdx > waveformIn->nSamples - 1) || (endIdx > waveformIn->nSamples - 1)) return IntegrateWaveform_Err_OutOfBounds;
+	if ( (startIdx > waveformIn->nSamples - 1) || (endIdx > waveformIn->nSamples - 1)) 
+		SET_ERR(IntegrateWaveform_Err_OutOfBounds, "Selection is outside of input waveform bounds.");
 	
 	if (endIdx)
 		nDataOutSamples = (endIdx - startIdx + 1) / nInt;
@@ -778,8 +759,10 @@ int IntegrateWaveform (Waveform_type** waveformOut, Waveform_type* waveformIn, s
 	
 Error:
 	
+	// cleanup
 	OKfree(dataOutDouble);
-	return error;
+	
+RETURN_ERR
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -971,7 +954,8 @@ size_t GetRepeatedWaveformSizeofData (RepeatedWaveform_type* waveform)
 
 Image_type* init_Image_type (ImageTypes imageType, int imgHeight, int imgWidth, void** imgDataPtr)
 {
-	int				error 		= 0;
+INIT_ERR
+
 	Image_type*		image 		= malloc(sizeof(Image_type));
 	
 	if (!image) return NULL;
@@ -1019,7 +1003,8 @@ void discard_Image_type (Image_type** imagePtr)
 
 Image_type* copy_Image_type(Image_type* imgSource)
 {
-	int 			error 		= 0;
+INIT_ERR
+
 	size_t			imgNBytes   = imgSource->imgHeight * imgSource->imgWidth * GetImageSizeofData(imgSource);
 	Image_type*		imgCopy		= NULL;
 	void*			imgDataCopy = NULL;
@@ -1246,7 +1231,8 @@ void discard_Point_type (Point_type** PointPtr)
 
 static Point_type* copy_Point_type (Point_type* point)
 {
-	int				error		= 0;
+INIT_ERR
+
 	Point_type*		pointCopy 	= malloc (sizeof(Point_type));
 	if (!pointCopy) return NULL;
 	
@@ -1299,7 +1285,8 @@ void discard_Rect_type (Rect_type** RectPtr)
 
 static Rect_type* copy_Rect_type (Rect_type* rect)
 {
-	int				error		= 0;
+INIT_ERR
+
 	Rect_type*		rectCopy 	= malloc (sizeof(Rect_type));
 	if (!rectCopy) return NULL;
 	
@@ -1315,7 +1302,6 @@ Error:
 	
 	free(rectCopy);
 	return NULL;
-	
 }
 
 //-------------------------     
@@ -1341,7 +1327,8 @@ void DiscardROIList (ListType* ROIListPtr)
 
 ListType CopyROIList (ListType ROIList)
 {
-	int				error		= 0;
+INIT_ERR
+
 	ListType		listCopy 	= 0;
 	size_t 			nROIs 		= ListNumItems(ROIList);
 	ROI_type* 		ROI			= NULL;
@@ -1406,22 +1393,23 @@ char* GetDefaultUniqueROIName (ListType ROIList)
 
 int SetROIName (ROI_type* ROI, char newName[])
 {
-	int		error = 0;
+INIT_ERR
 	
 	OKfree(ROI->ROIName);
 	
 	if (newName)
 		nullChk( ROI->ROIName = StrDup(newName) );
 	
-	return 0;
+
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 CallbackGroup_type* init_CallbackGroup_type	(void* objectRef, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions)
 {
-	int						error 	= 0;
+INIT_ERR
+
 	CallbackGroup_type*		cbg 	= malloc(sizeof(CallbackGroup_type));
 	if (!cbg) return NULL;
 	

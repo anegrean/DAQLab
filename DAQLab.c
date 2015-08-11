@@ -285,7 +285,7 @@ void CVICALLBACK 			LogPanTaskLogMenu_CB						(int menuBar, int menuItem, void *
 	// Closes Task log panel and stops logging of active Task Controllers.
 void CVICALLBACK 			TaskLogMenuClose_CB 						(int menuBar, int menuItem, void *callbackData, int panel); 
 
-static void					DAQLab_TaskMenu_AddTaskController 			(void);
+static int					DAQLab_TaskMenu_AddTaskController 			(char** errorMsg);
 
 static void					DAQLab_TaskMenu_DeleteTaskController 		(void);
 
@@ -351,7 +351,7 @@ static int CVICALLBACK 		DataStorage_CB			 					(int panel, int control, int eve
 /// HIRET -1 fail
 int main (int argc, char *argv[])
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	// start CVI Run-Time Engine
 	if (!InitCVIRTE (0, argv, 0)) return -1;
@@ -389,7 +389,7 @@ Error:
 /// HIRET negative value if fail
 static int DAQLab_Load (void)
 {
-INIT_ERROR_INFO
+INIT_ERR
 	
 	BOOL							FoundDAQLabSettingsFlag				= 0;		// if FALSE, no XML settings were found and default will be used
 	HRESULT							xmlerror							= 0;  
@@ -511,7 +511,7 @@ INIT_ERROR_INFO
 		// attach callback data to the Task Controller
 		SetTaskControlModuleData(newTaskController, UITaskCtrlsPtr);
 		// send a configure event to the Task Controller
-		TaskControlEvent(newTaskController, TC_Event_Configure, NULL, NULL);
+		errChk( TaskControlEvent(newTaskController, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 		
 		// cleanup
 		OKfreeCAHndl(UITaskControllerXMLNode);
@@ -656,7 +656,7 @@ XMLError:
 
 static int	DAQLab_Save	(void)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	HRESULT							xmlerror							= 0; 
 	ERRORINFO						xmlErrorInfo;
@@ -785,7 +785,7 @@ XMLError:
 
 static int DLSaveUITCTaskTree (TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	ActiveXMLObj_IXMLDOMElement_ 		taskControllerXMLElement   	= 0;
 	ListType							childTCs					= 0;
@@ -824,7 +824,7 @@ Error:
 
 static int SaveVChanConnections (ListType VChans, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	ActiveXMLObj_IXMLDOMElement_ 		switchboardXMLElement   	= 0;
 	ActiveXMLObj_IXMLDOMElement_ 		sourceVChanXMLElement  		= 0;
@@ -901,7 +901,7 @@ Error:
 
 static int SaveHWTriggerConnections (ListType hwTrigMasters, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	ActiveXMLObj_IXMLDOMElement_ 		hwTriggersXMLElement   		= 0;
 	ActiveXMLObj_IXMLDOMElement_ 		masterHWTriggerXMLElement  	= 0;
@@ -976,7 +976,7 @@ Error:
 
 static int LoadHWTriggerConnections (ListType hwTrigMasters, ListType hwTrigSlaves, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 	
 	ActiveXMLObj_IXMLDOMElement_ 		hwTrigXMLElement   			= 0;
 	ActiveXMLObj_IXMLDOMNode_			hwTrigMasterXMLNode			= 0;
@@ -1068,7 +1068,7 @@ static int LoadVChanConnections (ListType VChans, ActiveXMLObj_IXMLDOMElement_ p
 #define  LoadVChanConnections_Err_WrongVChanDataFlow				-2
 #define  LoadVChanConnections_Err_VChansCouldNotBeConnected			-3
 	
-INIT_ERROR_INFO
+INIT_ERR
 
 	ActiveXMLObj_IXMLDOMElement_ 		switchboardXMLElement   	= 0;
 	ActiveXMLObj_IXMLDOMNode_			sourceVChanXMLNode			= 0;
@@ -1105,10 +1105,9 @@ INIT_ERROR_INFO
 		}
 		
 		// check if found vChan is indeed a Source VChan as expected
-		if (GetVChanDataFlowType(vChan) != VChan_Source) {
-			errorInfo.error = LoadVChanConnections_Err_WrongVChanDataFlow;
-			goto Error;
-		} else
+		if (GetVChanDataFlowType(vChan) != VChan_Source)
+			SET_ERR(LoadVChanConnections_Err_WrongVChanDataFlow, "Wrong VChan data flow direction.")
+		else
 			sourceVChan = (SourceVChan_type*)vChan;
 			
 		
@@ -1130,10 +1129,9 @@ INIT_ERROR_INFO
 			}
 		
 			// check if found vChan is indeed a Source VChan as expected
-			if (GetVChanDataFlowType(vChan) != VChan_Sink) {
-				errorInfo.error = LoadVChanConnections_Err_WrongVChanDataFlow;
-				goto Error;
-			} else
+			if (GetVChanDataFlowType(vChan) != VChan_Sink)
+				SET_ERR(LoadVChanConnections_Err_WrongVChanDataFlow, "Wrong data flow direction.")
+			else
 				sinkVChan = (SinkVChan_type*)vChan;
 				
 			// connect Sink VChan to Source VChan
@@ -1175,7 +1173,7 @@ Error:
 
 static int ConnectTaskTrees (ActiveXMLObj_IXMLDOMElement_ UITCXMLElement, ERRORINFO* xmlErrorInfo, char** errorMsg)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	ActiveXMLObj_IXMLDOMNodeList_	tcXMLNodeList						= 0;
 	ActiveXMLObj_IXMLDOMNodeList_	childTCXMLNodeList					= 0;
@@ -1250,7 +1248,7 @@ Error:
 	OKfree(parentTCName);
 	OKfree(childTCName);
 	
-RETURN_ERROR_INFO			
+RETURN_ERR			
 }
 
 static TaskControl_type* GetTaskController (char tcName[])
@@ -1274,7 +1272,7 @@ static TaskControl_type* GetTaskController (char tcName[])
 
 static int DAQLab_Close (void)
 {  
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	// close task tree panel if open (no need to update VChans & task controllers as modules close)
 	OKfreePanHndl(TaskTreeManagerPanHndl);
@@ -1349,7 +1347,7 @@ int CVICALLBACK CB_DAQLab_MainPan (int panel, int event, void *callbackData, int
 /// HIRET 0 if successful, negative number otherwise.
 int	SetCtrlsInPanCBInfo (void* callbackData, CtrlCallbackPtr callbackFn, int panHndl)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	int		ctrlID	= 0;
 	
@@ -1523,7 +1521,7 @@ VChan_type* DLVChanNameExists (char VChanName[], size_t* idx)
 /// HIRET On success the function generates the requested name, and if there isn't sufficient memory, it returns NULL.
 char* DLVChanName (DAQLabModule_type* mod, TaskControl_type* taskController, char VChanName[], uInt32 idx)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	char*	name		 	= NULL;
 	char*	tcName			= NULL;
@@ -1917,7 +1915,7 @@ static int	DAQLab_SaveXMLDOM (const char fileName[], CAObjHandle* xmlDOM)
 /// HIPAR nodeTypeFlag/ set 1 to add elements or 0 to add attributes
 int	DLAddToXMLElem (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	ActiveXMLObj_IXMLDOMElement_	newXMLElement		= 0;
 	VARIANT							xmlVal				= CA_VariantNULL ();
@@ -2035,7 +2033,7 @@ return errorInfo.error;
 
 static int DAQLab_StringToType	(char text[], BasicDataTypes vartype, void* valuePtr)
 {
-INIT_ERROR_INFO
+INIT_ERR
 	
 	switch (vartype) {
 		
@@ -2092,7 +2090,7 @@ Error:  // conversion error
 
 int DLGetXMLElementAttributes (ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	HRESULT								xmlerror;
 	ERRORINFO							xmlErrorInfo;
@@ -2127,7 +2125,7 @@ Error:  // conversion error
 
 int DLGetXMLNodeAttributes (ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes)
 {
-INIT_ERROR_INFO
+INIT_ERR
 	
 	HRESULT								xmlerror;
 	ERRORINFO							xmlErrorInfo;
@@ -2205,7 +2203,7 @@ XMLError:
 
 int DLLoadTaskControllerSettingsFromXML	(TaskControl_type* taskController, ActiveXMLObj_IXMLDOMElement_ taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	char*								tcName				= NULL;
 	uInt32								tcNIter				= 0;
@@ -2240,7 +2238,7 @@ Error:
 
 static UITaskCtrl_type*	DAQLab_init_UITaskCtrl_type (TaskControl_type* taskControl)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	UITaskCtrl_type* 	newUItaskCtrl 	= malloc(sizeof(UITaskCtrl_type));
 	char*				name			= NULL;
@@ -2311,7 +2309,7 @@ static void	DAQLab_discard_UITaskCtrl_type	(UITaskCtrl_type** UITaskCtrlPtr)
 /// HIRET 0 for success, -1 error.
 static UITaskCtrl_type* DAQLab_AddTaskControllerToUI (TaskControl_type* taskControl)    
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	UITaskCtrl_type*	newUItaskCtrlPtr;
 	
@@ -2343,13 +2341,14 @@ static int RemoveTaskControllerFromUI (int index, char** errorMsg)
 #define		RemoveTaskControllerFromUI_Err_TaskControllerIsInUse				-1   
 #define		RemoveTaskControllerFromUI_Err_TaskControllerNotExistingAnymore		-2
 	
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	UITaskCtrl_type*	UITaskCtrl 				= *(UITaskCtrl_type**)ListGetPtrToItem (TasksUI.UItaskCtrls, index);
 	BOOL				tcIsInUse				= FALSE;
 	BOOL				tcIsInUseLockObtained 	= FALSE;
 	char*				tcName					= NULL;
-	ListType 			tcList					= 0; 
+	ListType 			tcList					= 0;
+	char*				msgBuff					= NULL;
 	
 	
 	if (!UITaskCtrl) {
@@ -2359,15 +2358,14 @@ INIT_ERROR_INFO
 	}
 	
 	// check if Task Controller is in use
-	errChk( IsTaskControllerInUse_GetLock(UITaskCtrl->taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained) );
+	errChk( IsTaskControllerInUse_GetLock(UITaskCtrl->taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) );
 	
 	if (tcIsInUse) {
-		errorInfo.error = RemoveTaskControllerFromUI_Err_TaskControllerIsInUse;
-		nullChk( errorInfo.errMsg = StrDup("Task controller ") );
+		nullChk( msgBuff = StrDup("Task controller ") );
 		nullChk( tcName = GetTaskControlName(UITaskCtrl->taskControl) );
-		nullChk( AppendString(&errorInfo.errMsg, tcName, -1) );
-		nullChk( AppendString(&errorInfo.errMsg, " cannot be removed from DAQLab while it is in use", -1) );
-		goto Error;
+		nullChk( AppendString(&msgBuff, tcName, -1) );
+		nullChk( AppendString(&msgBuff, " cannot be removed from DAQLab while it is in use", -1) );
+		SET_ERR(RemoveTaskControllerFromUI_Err_TaskControllerIsInUse, msgBuff);
 	}
 	
 	// remove from DAQLab framework
@@ -2387,12 +2385,13 @@ Error:
 	
 	// release lock
 	if (tcIsInUseLockObtained) 
-		IsTaskControllerInUse_ReleaseLock(UITaskCtrl->taskControl, &tcIsInUseLockObtained);
+		IsTaskControllerInUse_ReleaseLock(UITaskCtrl->taskControl, &tcIsInUseLockObtained, &errorInfo.errMsg);
 	
 	OKfree(tcName);
 	OKfreeList(tcList);
+	OKfree(msgBuff);
 
-RETURN_ERROR_INFO
+RETURN_ERR
 }
 
 /// HIFN Removes a list of Task Controllers provided by tcList as TaskControl_type* list elements from the DAQLab framework.
@@ -3018,14 +3017,20 @@ static int CVICALLBACK DataStorage_CB (int panel, int control, int event, void *
 
 static void CVICALLBACK DAQLab_TaskMenu_CB (int menuBarHndl, int menuItemID, void *callbackData, int panelHndl)
 {
+INIT_ERR
+
 	// menu item Add
-	if (menuItemID == TasksUI.menuManageItem_Add) DAQLab_TaskMenu_AddTaskController();
+	if (menuItemID == TasksUI.menuManageItem_Add) errChk( DAQLab_TaskMenu_AddTaskController(&errorInfo.errMsg) );
 		
 	// menu item Delete
 	if (menuItemID == TasksUI.menuManageItem_Delete ) DAQLab_TaskMenu_DeleteTaskController();
 	
 	// menu item Storage
 	if (menuItemID == TasksUI.menuDataItem_Storage ) DAQLab_TaskMenu_DisplayDataStorage();
+	
+Error:
+	
+PRINT_ERR	
 }
 
 void CVICALLBACK DAQLab_DisplayTaskManagerMenu_CB (int menuBarHndl, int menuItemID, void *callbackData, int panelHndl)
@@ -3132,7 +3137,7 @@ BOOL DLValidModuleInstanceName (char name[])
 
 int CVICALLBACK DAQLab_ManageDAQLabModules_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	switch (event)
 	{
@@ -3260,7 +3265,7 @@ INIT_ERROR_INFO
 
 int DLSaveTaskControllerSettingsToXML (TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ taskControllerXMLElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	ActiveXMLObj_IXMLDOMElement_ 		newXMLElement   = 0;
 	int									tcNIter			= GetTaskControlIterations(taskController); 
@@ -3361,25 +3366,21 @@ static BOOL	DAQLab_ValidControllerName (char name[], void* listPtr)
 	return DLValidTaskControllerName (name);
 }
 
-static void	DAQLab_TaskMenu_AddTaskController 	(void) 
+static int DAQLab_TaskMenu_AddTaskController (char** errorMsg) 
 {
-	UITaskCtrl_type*	UITaskCtrlsPtr;
-	TaskControl_type* 	newTaskControllerPtr;
-	char*				newControllerName;
+INIT_ERR
+
+	UITaskCtrl_type*	UITaskCtrlsPtr			= NULL;
+	TaskControl_type* 	newTaskControllerPtr	= NULL;
+	char*				newControllerName		= NULL;
 	
 	newControllerName = DLGetUINameInput ("New Task Controller", DAQLAB_MAX_UITASKCONTROLLER_NAME_NCHARS, DAQLab_ValidControllerName, NULL);
-	if (!newControllerName) return; // operation cancelled, do nothing
+	if (!newControllerName) return 0; // operation cancelled, do nothing
 	
 	// create new task controller
-	newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, StartUITC, 
-												  ResetUITC, DoneUITC, StoppedUITC, NULL, TaskTreeStateChangeUITC, UITCActive, NULL, ErrorUITC); // module data added to the task controller below
-	
+	nullChk(newTaskControllerPtr = init_TaskControl_type (newControllerName, NULL, DLThreadPoolHndl, ConfigureUITC, UnconfigureUITC, IterateUITC, StartUITC, 
+												  ResetUITC, DoneUITC, StoppedUITC, NULL, TaskTreeStateChangeUITC, UITCActive, NULL, ErrorUITC) ); // module data added to the task controller below
 	OKfree(newControllerName);
-	
-	if (!newTaskControllerPtr) {
-		DLMsg("Error: Task Controller could not be created.\n\n", 1);
-		return;
-	}
 	
 	// add new Task Controller to the UI environment and to the framework list
 	UITaskCtrlsPtr = DAQLab_AddTaskControllerToUI(newTaskControllerPtr);
@@ -3389,13 +3390,16 @@ static void	DAQLab_TaskMenu_AddTaskController 	(void)
 	// mark the Task Controller as an User Interface Task Controller type
 	SetTaskControlUITCFlag(newTaskControllerPtr, TRUE);
 	// send a configure event to the Task Controller
-	TaskControlEvent(newTaskControllerPtr, TC_Event_Configure, NULL, NULL);
+	errChk( TaskControlEvent(newTaskControllerPtr, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 	
+Error:
+	
+RETURN_ERR
 }
 
 static void DAQLab_TaskMenu_DisplayDataStorage (void)
 {
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	if (TasksUI.dataStoragePanHndl) {
 		DisplayPanel(TasksUI.dataStoragePanHndl);
@@ -3453,14 +3457,13 @@ int CVICALLBACK DAQLab_TCDelPan_CB (int panel, int event, void *callbackData, in
 
 int CVICALLBACK DAQLab_DelTaskControllersBTTN_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	switch (event)
 	{
 		case EVENT_COMMIT:
 			
 			int		idx;	 // 0-based list index
-			int		result;
 			int		nitems;
 			
 			// get selected Task Controller
@@ -3481,12 +3484,15 @@ INIT_ERROR_INFO
 	
 Error:
 	
-PRINT_ERROR_INFO
+PRINT_ERR
+
 	return 0;
 }
 
 static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERR
+
 	TaskControl_type* 	taskControl = callbackData;
 	BOOL             	starttask	= FALSE;					  	// 1 - task start, 0 - task stop 
 	double				waitDVal	= 0.0;
@@ -3500,13 +3506,13 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 				
 				case TCPan1_Reset:
 					
-					TaskControlEvent(taskControl, TC_Event_Reset, NULL, NULL);
+					errChk( TaskControlEvent(taskControl, TC_Event_Reset, NULL, NULL, &errorInfo.errMsg) );
 					break;
 					
 				case TCPan1_Mode:
 				case TCPan1_Repeat:  	
 					
-					TaskControlEvent(taskControl, TC_Event_Configure, NULL, NULL);
+					errChk( TaskControlEvent(taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 					break;
 					
 				case TCPan1_StartStop:
@@ -3525,12 +3531,12 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 							SetCtrlAttribute(panel, TCPan1_Abort, ATTR_DIMMED, FALSE);
 						
 						// send start task event
-						TaskControlEvent(taskControl, TC_Event_Start, NULL, NULL);
+						errChk( TaskControlEvent(taskControl, TC_Event_Start, NULL, NULL, &errorInfo.errMsg) );
 					}
 					else {
 						// dim button so the user cannot start the task again until it stops
 						SetCtrlAttribute(panel, TCPan1_StartStop, ATTR_DIMMED, TRUE);
-						TaskControlEvent(taskControl, TC_Event_Stop, NULL, NULL);
+						errChk( TaskControlEvent(taskControl, TC_Event_Stop, NULL, NULL, &errorInfo.errMsg) );
 					}
 						
 					break;
@@ -3557,6 +3563,10 @@ static int CVICALLBACK DAQLab_TaskControllers_CB (int panel, int control, int ev
 			
 	}
 	
+Error:
+	
+PRINT_ERR
+
 	return 0;
 }
 
@@ -3720,7 +3730,7 @@ static void AddRecursiveTaskTreeItems (int panHndl, int TreeCtrlID, int parentId
 
 int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-INIT_ERROR_INFO
+INIT_ERR
 	
 	static TaskTreeNode_type*	dragTreeNodePtr			= NULL;
 	static TaskTreeNode_type*   targetTreeNodePtr		= NULL;
@@ -3756,11 +3766,11 @@ INIT_ERROR_INFO
 					if (!dragTreeNodePtr->taskControl) return 1; // swallow drag event
 					
 					// Check if Task Controller is in use
-					errChk( IsTaskControllerInUse_GetLock(dragTreeNodePtr->taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained) ); 
+					errChk( IsTaskControllerInUse_GetLock(dragTreeNodePtr->taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) ); 
 					
 					if (tcIsInUse) {
 						// release lock
-						errChk( IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &tcIsInUseLockObtained) ); 
+						errChk( IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &tcIsInUseLockObtained, &errorInfo.errMsg) ); 
 						// swallow drag event
 						return 1;
 					}
@@ -3815,7 +3825,7 @@ INIT_ERROR_INFO
 					dragTreeNodePtr->acceptsUITCChild = TRUE;
 					
 					// release lock
-					errChk( IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &tcIsInUseLockObtained) ); 
+					errChk( IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &tcIsInUseLockObtained, &errorInfo.errMsg) ); 
 					
 					// refresh Task Tree
 					DisplayTaskTreeManager(workspacePanHndl, TasksUI.UItaskCtrls, DAQLabModules);
@@ -3889,9 +3899,10 @@ Error:
 	
 	// release lock
 	if (tcIsInUseLockObtained)
-		errChk( IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &tcIsInUseLockObtained) ); 
+		IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &tcIsInUseLockObtained, NULL); 
 	
-PRINT_ERROR_INFO
+PRINT_ERR
+
 	return 0;
 }
 
@@ -3957,7 +3968,7 @@ static void IterateUITC	(TaskControl_type* taskControl, Iterator_type* iterator,
 	// iteration complete, update current iteration number
 	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(iterator)+1);
 	
-	TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL);
+	TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, NULL);
 }
 
 static int StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
@@ -3973,8 +3984,7 @@ static int StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char
 static int DoneUITC  (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
 {
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
-	char				buf[100];
-
+	
 	// change Task Controller name background color from green (0x002BD22F) to gray (0x00F0F0F0)
 	SetCtrlAttribute(controllerUIDataPtr->panHndl, TCPan1_Name, ATTR_TEXT_BGCOLOR, 0x00F0F0F0);
 	// switch Stop button back to Start button
@@ -4128,7 +4138,7 @@ int CVICALLBACK CloseDAQLabModulesPan_CB (int panel, int control, int event, voi
 
 void CVICALLBACK LogPanTaskLogMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	size_t					nTCs 			= ListNumItems(DAQLabTCs);
 	size_t					nVChans			= ListNumItems(VChannels);
@@ -4156,7 +4166,7 @@ INIT_ERROR_INFO
 	
 	for (size_t i = 0; i < nTCs; i++) {
 		tc = *(TaskControl_type**)ListGetPtrToItem(DAQLabTCs, i+1);
-		errChk( GetTaskControlState_GetLock(tc, &tcStates[i], &tcStateLocks[i]) );
+		errChk( GetTaskControlState_GetLock(tc, &tcStates[i], &tcStateLocks[i], &errorInfo.errMsg) );
 	}
 	
 	// print current states of all task controllers
@@ -4203,12 +4213,12 @@ Error:
 		for (size_t i = 0; i < nTCs; i++) {
 			tc = *(TaskControl_type**)ListGetPtrToItem(DAQLabTCs, i+1);
 			if (tcStateLocks[i]) 
-				GetTaskControlState_ReleaseLock(tc, &tcStateLocks[i]);
+				GetTaskControlState_ReleaseLock(tc, &tcStateLocks[i], &errorInfo.errMsg);
 		}
 	OKfree(tcStateLocks);
 	OKfree(tcStates);
 
-PRINT_ERROR_INFO
+PRINT_ERR
 }
 
 void CVICALLBACK TaskLogMenuClose_CB (int menuBar, int menuItem, void *callbackData, int panel)

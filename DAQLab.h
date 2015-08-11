@@ -44,7 +44,7 @@
 // Macros
 	
 // print error info in the worspace log box	
-#define PRINT_ERROR_INFO \
+#define PRINT_ERR \
 	if (errorInfo.error < 0) { \
 		if (!errorInfo.errMsg) \
 			DLMsg("Unknown error or out of memory.\n\n", 1); \

@@ -270,7 +270,7 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
 #define	ZStage_Load_Err_StageNotReferenced		-1
 
-INIT_ERROR_INFO
+INIT_ERR
 	
 	Zstage_type* 	zstage 				= (Zstage_type*) mod;  
 	char			stepsizeName[50]	= "";
@@ -392,7 +392,7 @@ INIT_ERROR_INFO
 	}
 	
 	// configure Z Stage Task Controller
-	TaskControlEvent(zstage->taskController, TC_Event_Configure, NULL, NULL); 
+	errChk( TaskControlEvent(zstage->taskController, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) ); 
 	
 	// add reference positions if any
 	size_t				nRefPos										= ListNumItems(zstage->zRefPos);
@@ -417,12 +417,12 @@ INIT_ERROR_INFO
 	
 Error:
 	
-RETURN_ERROR_INFO	
+RETURN_ERR	
 }
 
 int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	Zstage_type* 		zstage			= (Zstage_type*) mod;
 	
@@ -506,7 +506,7 @@ Error:
 
 int ZStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ moduleElement, ERRORINFO* xmlErrorInfo)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	Zstage_type* 					zstage			= (Zstage_type*) mod;
 	int*							panTopPos		= NULL;
@@ -565,7 +565,7 @@ Error:
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 {
-INIT_ERROR_INFO
+INIT_ERR
 
 	Zstage_type* 	zstage		= (Zstage_type*) mod; 
 	
@@ -582,7 +582,7 @@ Error:
 
 static int ChangeLEDStatus (Zstage_type* zstage, Zstage_LED_type status)
 {
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	switch (status) {																	   
 			
@@ -613,7 +613,7 @@ Error:
 
 static int UpdatePositionDisplay (Zstage_type* zstage)
 {
-INIT_ERROR_INFO
+INIT_ERR
 	
 	// display current position
 	errChk( SetCtrlVal(zstage->controlPanHndl, ZStagePan_ZAbsPos, *zstage->zPos * 1000) );  // convert from [mm] to [um] 
@@ -627,7 +627,7 @@ Error:
 
 static int UpdateZSteps (Zstage_type* zstage)
 {
-INIT_ERROR_INFO	
+INIT_ERR	
 	
 	long		nSteps		= 0;
 	double 		stepSize	= 0;
@@ -661,7 +661,7 @@ INIT_ERROR_INFO
 	errChk( SetCtrlVal(zstage->controlPanHndl, ZStagePan_NSteps, zstage->nZSteps) );
 	
 	// configure Task Controller
-	TaskControlEvent(zstage->taskController, TC_Event_Configure, NULL, NULL);
+	errChk( TaskControlEvent(zstage->taskController, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 	
 Error:
 	

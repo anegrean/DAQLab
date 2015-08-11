@@ -467,7 +467,7 @@ int 						AppendWaveform 							(Waveform_type* waveformToAppendTo, Waveform_typ
 	// If endIdx = 0 the entire input waveform is used. nInt is the number of samples used for integration. If the number of elements in the input is less
 	// than the number of points used for integration, then an empty waveform is returned.
 	// The output waveform will be of Waveform_Double type
-int							IntegrateWaveform						(Waveform_type** waveformOut, Waveform_type* waveformIn, size_t startIdx, size_t endIdx, size_t nInt);
+int							IntegrateWaveform						(Waveform_type** waveformOut, Waveform_type* waveformIn, size_t startIdx, size_t endIdx, size_t nInt, char** errorMsg);
 
 
 //---------------------------------------------------------------------------------------------------------  

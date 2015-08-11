@@ -216,9 +216,9 @@ char*					GetTaskControlName					(TaskControl_type* taskControl);
 
 	// Obtains the current state of a Task Controller. A call to this function blocks ongoing state transitions and if TC state knowledge is not needed anymore,
 	// this call must be followed each time it is called by GetTaskControlState_ReleaseLock. On success returns 0, on failure a negative number.
-int 					GetTaskControlState_GetLock 		(TaskControl_type* taskControl, TCStates* tcStatePtr, BOOL* lockObtained);
+int 					GetTaskControlState_GetLock 		(TaskControl_type* taskControl, TCStates* tcStatePtr, BOOL* lockObtained, char** errorMsg);
 	// Releases GetTaskControlState lock so state transitions may resume. On success returns 0 and lockObtained is set back to FALSE. On failure returns a negative value and lockObtained remains TRUE. 
-int						GetTaskControlState_ReleaseLock		(TaskControl_type* taskControl, BOOL* lockObtained);
+int						GetTaskControlState_ReleaseLock		(TaskControl_type* taskControl, BOOL* lockObtained, char** errorMsg);
 
 														
 	// repeats = 1 by default
@@ -280,9 +280,9 @@ BOOL					GetTaskControlIterationStopFlag		(TaskControl_type* taskControl);
 	// Checks if a Task Controller is in use, i.e. if it is in any of the following states: Idle, Running, IterationFunctionActive, Stopping.
 	// A call to this function blocks ongoing state transitions and if TC use knowledge is not needed anymore, this call must be followed each time 
 	// it is called by GetTaskControlState_ReleaseLock. On success returns 0 and sets lockObtained to TRUE, on failure returns a negative number and sets lockObtained to FALSE.
-int 					IsTaskControllerInUse_GetLock 		(TaskControl_type* taskControl, BOOL* inUsePtr, TCStates* tcState, BOOL* lockObtained);
+int 					IsTaskControllerInUse_GetLock 		(TaskControl_type* taskControl, BOOL* inUsePtr, TCStates* tcState, BOOL* lockObtained, char** errorMsg);
 	// Releases isTaskControllerInUse lock so state transitions maye resume. On success returns 0 and lockObtained is set back to FALSE. On failure returns a negative value and lockObtained remains TRUE. 
-int 					IsTaskControllerInUse_ReleaseLock 	(TaskControl_type* taskControl, BOOL* lockObtained);
+int 					IsTaskControllerInUse_ReleaseLock 	(TaskControl_type* taskControl, BOOL* lockObtained, char** errorMsg);
 
 	// Converts a task Controller state ID into a string
 char*					TaskControlStateToString			(TCStates state);
@@ -323,16 +323,16 @@ char* 					GetUniqueTaskControllerName			(ListType TCList, char baseTCName[]);
 	// Pass NULL to eventInfo if there is no additional data carried by the event 
 	// Pass NULL to disposeEventInfoFptr if eventInfo should NOT be disposed after processing the event
 	// 
-int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr); 
+int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr, char** errorMsg); 
 
 	// Used to signal the Task Controller that an iteration is done.
-	// Pass to errorMsg an empty string as "", if there is no error and the iteration completed succesfully. Otherwise,
+	// Pass to errorInfoString an empty string as "", if there is no error and the iteration completed succesfully. Otherwise,
 	// pass an error message string. Pass 0 to errorID if there is no error, otherwise pass an error code. If another iteration is asked besides the already set number of
 	// iterations in case of a Finite Task Controller, then pass doAnotherIteration = TRUE. Like so, a finite number of iterations can be performed conditionally.
-int						TaskControlIterationDone			(TaskControl_type* taskControl, int errorID, char errorMsg[], BOOL doAnotherIteration);
+int						TaskControlIterationDone			(TaskControl_type* taskControl, int errorID, char errorInfoString[], BOOL doAnotherIteration, char** errorMsg);
 
 
-int						TaskControlEventToSubTasks  		(TaskControl_type* SenderTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr); 
+int						TaskControlEventToChildTCs 			(TaskControl_type* SenderTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr, char** errorMsg);
 
 	// Aborts iterations for the entire Nested Task Controller hierarchy
 void					AbortTaskControlExecution			(TaskControl_type* taskControl);

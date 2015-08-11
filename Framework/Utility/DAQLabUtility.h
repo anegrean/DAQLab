@@ -47,8 +47,8 @@ typedef struct {
 	char*		errMsg;
 } ErrorInfo_type;
 
-#ifndef INIT_ERROR_INFO
-#define INIT_ERROR_INFO	ErrorInfo_type errorInfo = {.result = 0, .error = 0, .line = 0, .errMsg = NULL};	
+#ifndef INIT_ERR
+#define INIT_ERR	ErrorInfo_type errorInfo = {.result = 0, .error = 0, .line = 0, .errMsg = NULL};	
 #endif
 
 #ifdef errChk
@@ -75,7 +75,7 @@ typedef struct {
 
 #define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to get the number of elements in an array passed as an argument!
 												 
-#define RETURN_ERROR_INFO \
+#define RETURN_ERR \
 	if (errorInfo.error < 0) \
 		if (errorMsg) { \
 			if (errorInfo.errMsg) \
@@ -85,6 +85,13 @@ typedef struct {
 		} else \
 			OKfree(errorInfo.errMsg); \
 	return errorInfo.error;
+
+#define SET_ERR(errorID, errorMsg) \
+{ \
+	errorInfo.error = errorID; \
+	errorInfo.errMsg = FormatMsg(errorID, __FILE__, __func__, __LINE__, errorMsg); \
+	goto Error; \
+}
 	
 					
 /* Log Messages that is only printed when _CVI_DEBUG_ is set and it is within 

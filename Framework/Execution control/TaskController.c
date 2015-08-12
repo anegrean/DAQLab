@@ -3318,8 +3318,8 @@ INIT_ERR
 			AppendString(&taskControl->errorMsg, "\" error: ", -1);
 			msgBuff = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, errorInfo.errMsg);
 			AppendString(&taskControl->errorMsg, msgBuff, -1);
-			OKfree(msgBuff);	;
-			taskControl->errorID	= errorInfo.error;
+			OKfree(msgBuff);
+			taskControl->errorID = errorInfo.error;
 			
 			// abort execution in the entire Task Tree
 			if (GetTaskControlParent(taskControl))

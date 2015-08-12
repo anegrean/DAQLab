@@ -10927,6 +10927,7 @@ INIT_ERR
 	double*					samplingRatePtr		= NULL;
 	DSInfo_type*			dsInfo				= NULL;
 	Iterator_type*			iterator			= GetTaskControlIterator(dev->taskController);
+	int*					nActiveTasksPtr		= NULL; // keeps track of the number of active tasks on the daqmx device
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data
@@ -11044,6 +11045,12 @@ INIT_ERR
 	
 	DAQmxErrChk(DAQmxTaskControl(dev->AITaskSet->taskHndl, DAQmx_Val_Task_Start));
 	
+	// increment number of active tasks
+	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	(*nActiveTasksPtr)++;
+	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksPtr = NULL;
+	
 	errChk(SetHWTrigSlaveArmedStatus(dev->AITaskSet->HWTrigSlave, &errorInfo.errMsg));
 	
 	
@@ -11052,6 +11059,10 @@ INIT_ERR
 DAQmxError:
 	
 DAQmx_ERROR_INFO
+
+CmtError:
+	
+Cmt_ERR
 
 Error:
 	
@@ -11080,6 +11091,7 @@ INIT_ERR
 	float64*			AOData 					= NULL;
 	Iterator_type*		iterator				= GetTaskControlIterator(dev->taskController);
 	DSInfo_type*		dsInfo					= NULL;
+	int*				nActiveTasksPtr			= NULL; // keeps track of the total number of active tasks on the daqmx device
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data
@@ -11191,6 +11203,12 @@ INIT_ERR
 	// launch task (and arm if this task is a slave triggered task)
 	DAQmxErrChk(DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Start));
 	
+	// increment number of active tasks
+	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	(*nActiveTasksPtr)++;
+	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksPtr = NULL;
+	
 	// if this task has a master HW-trigger, then signal it that task is armed
 	errChk(SetHWTrigSlaveArmedStatus(dev->AOTaskSet->HWTrigSlave, &errorInfo.errMsg));
 	
@@ -11200,6 +11218,10 @@ INIT_ERR
 DAQmxError:
 	
 DAQmx_ERROR_INFO
+
+CmtError:
+	
+Cmt_ERR
 
 Error:
 	
@@ -11239,6 +11261,7 @@ INIT_ERR
 	void*				dataPacketData		= NULL;
 	DLDataTypes			dataPacketDataType	= 0;
 	PulseTrain_type*	pulseTrain			= NULL;
+	int*				nActiveTasksPtr		= NULL; // keeps track of the number of active tasks on the daqmx device
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data and update UI settings
@@ -11406,6 +11429,12 @@ INIT_ERR
 	
 	DAQmxErrChk(DAQmxTaskControl(chanSetCO->taskHndl, DAQmx_Val_Task_Start));
 	
+	// increment number of active tasks
+	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	(*nActiveTasksPtr)++;
+	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksPtr = NULL;
+	
 	errChk(SetHWTrigSlaveArmedStatus(chanSetCO->HWTrigSlave, &errorInfo.errMsg));
 	
 	
@@ -11414,6 +11443,10 @@ INIT_ERR
 DAQmxError:
 	
 DAQmx_ERROR_INFO
+
+CmtError:
+	
+Cmt_ERR
 
 Error:
 	
@@ -11935,7 +11968,7 @@ INIT_ERR
 	int*					nActiveTasksPtr 							= NULL; 
 	BOOL					writeLastBlock								= FALSE;
 	int 					LastBlockSize								= data->writeblock;  
-	div_t					numblocks									;
+	div_t					numblocks;
 
 	// cycle over channels
 	for (int i = 0; i < data->numchan; i++) {
@@ -11946,7 +11979,11 @@ INIT_ERR
 			if (!data->datain_size[i]) {
 				
 				if (!data->nullPacketReceived[i])
-					CmtErrChk( itemsRead = CmtReadTSQData (tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
+					CmtErrChk( itemsRead = CmtReadTSQData(tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
+				
+				// if timeout occured and no data packet was read, generate error
+				if (!itemsRead)
+					SET_ERR(WriteAODAQmx_Err_WaitingForDataTimeout, "Waiting for AO data timed out.");
 				
 				// process NULL packet
 				if (!dataPacket) {
@@ -11954,8 +11991,7 @@ INIT_ERR
 																			
 					if (!data->databuff_size[i]) {
 						// if NULL received and there is no data in the AO buffer, stop AO task if running
-						//int*		nActiveTasksPtr	= NULL;
-					
+						
 						DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
 						// Task Controller iteration is complete if all DAQmx Tasks are complete
 						CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
@@ -11984,10 +12020,6 @@ INIT_ERR
 					}
 				}
 					
-				// if timeout occured and no data packet was read, generate error
-				if (!itemsRead)
-					SET_ERR(WriteAODAQmx_Err_WaitingForDataTimeout, "Waiting for AO data timed out.");
-				
 				// copy data packet to datain
 				dataPacketData = GetDataPacketPtrToData (dataPacket, &dataPacketType);
 				switch (dataPacketType) {
@@ -12153,7 +12185,6 @@ SkipPacket:
 	}
 	
 	if ((stopAOTaskFlag && writeLastBlock) || GetTaskControlAbortFlag(dev->taskController)) {
-		int*	nActiveTasksPtr = NULL;
 		
 		// write last block with adjusted size
 		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, LastBlockSize, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL)); 
@@ -14167,24 +14198,23 @@ INIT_ERR
 	Dev_type*		dev											= GetTaskControlModuleData(taskControl);
 	char			CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
 	int  			nActiveTasks								= 0;
-	int*			nActiveTasksPtr								= &nActiveTasks;	// Keeps track of the number of DAQmx tasks that must still complete before the iteration is considered to be complete
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(iterator));
 	
 	//----------------------------------------
-	// Launch and count active tasks 
+	// Reset Active Tasks counter
 	//----------------------------------------
 	
-	// get active tasks counter handle
-	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
-	nActiveTasks = *nActiveTasksPtr;
+	CmtErrChk( CmtSetTSV(dev->nActiveTasks, &nActiveTasks) );
+	
+	//----------------------------------------
+	// Launch tasks 
+	//----------------------------------------
 	
 	// AI
-	if (dev->AITaskSet && dev->AITaskSet->taskHndl && dev->AITaskSet->nOpenChannels) {
+	if (dev->AITaskSet && dev->AITaskSet->taskHndl && dev->AITaskSet->nOpenChannels)
 		CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAIDAQmxTask_CB, dev, NULL) );
-		nActiveTasks++;
-	}
 	
 	// AO
 	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl && dev->AOTaskSet->nOpenChannels) {
@@ -14196,16 +14226,17 @@ INIT_ERR
 		DAQmxErrChk( DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev) );  
 		
 		CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAODAQmxTask_CB, dev, NULL) );
-		nActiveTasks++;
 	}
 	
 	// DI
-	if (dev->DITaskSet && dev->DITaskSet->taskHndl)
-		nActiveTasks++;
+	//if (dev->DITaskSet && dev->DITaskSet->taskHndl)
+	// not implemented
+	
 	
 	// DO
-	if (dev->DOTaskSet && dev->DOTaskSet->taskHndl)
-		nActiveTasks++;
+	//if (dev->DOTaskSet && dev->DOTaskSet->taskHndl)
+	// not implemented
+	
 	
 	// CI
 	if (dev->CITaskSet) {
@@ -14213,10 +14244,8 @@ INIT_ERR
 		size_t 				nCI 		= ListNumItems(dev->CITaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nCI; i++) {
 			chanSet = *(ChanSet_CI_type**)ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-			if (chanSet->taskHndl) {
+			if (chanSet->taskHndl)
 				CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCIDAQmxTasks_CB, chanSet, NULL) );
-				nActiveTasks++;
-			}
 		}
 	}
 	
@@ -14226,16 +14255,10 @@ INIT_ERR
 		size_t 				nCO 		= ListNumItems(dev->COTaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nCO; i++) {
 			chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-			if (chanSet->taskHndl) {
+			if (chanSet->taskHndl)
 				CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCODAQmxTasks_CB, chanSet, NULL) );
-				nActiveTasks++;
-			}
 		}
 	}
-	
-	CmtErrChk( CmtSetTSV(dev->nActiveTasks, &nActiveTasks) );
-	// release active tasks counter handle
-	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	
 	return; // no error
 	
@@ -14249,9 +14272,9 @@ Cmt_ERR
 
 Error:
 	
-	errChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	AbortTaskControlExecution(taskControl);
-	OKfree(errorInfo.errMsg);
+	
+PRINT_ERR
 }
 
 static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)

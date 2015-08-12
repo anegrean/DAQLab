@@ -822,16 +822,16 @@ INIT_ERR
 	
 	// set packet counter
 	// Note: Since the Source VChan is open, an active Sink VChan is also an open Sink VChan
-	if (*dataPacketPtr)
-		if (srcVChanNeedsPacket) {
-			nPacketRecipients = GetNumOpenSinkVChans(srcVChan)+1;
-			SetDataPacketCounter(*dataPacketPtr, nPacketRecipients);
-			nPacketsSent++;
-		} else {
-			nPacketRecipients = GetNumOpenSinkVChans(srcVChan);
-			SetDataPacketCounter(*dataPacketPtr, nPacketRecipients);
-		}
 	
+	if (srcVChanNeedsPacket) {
+		nPacketRecipients = GetNumOpenSinkVChans(srcVChan)+1;
+		nPacketsSent++;
+	} else
+		nPacketRecipients = GetNumOpenSinkVChans(srcVChan);
+		
+	if (*dataPacketPtr)
+		SetDataPacketCounter(*dataPacketPtr, nPacketRecipients);
+		
 	// if there are no recipients then dispose of the data packet
 	if (!nPacketRecipients) {
 		ReleaseDataPacket(dataPacketPtr);

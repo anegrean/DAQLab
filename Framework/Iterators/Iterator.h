@@ -113,7 +113,7 @@ void 					SetCurrentIterName			(Iterator_type* iterator,char name[]);
 int						IteratorAddWaveform			(Iterator_type* iterator, Waveform_type* waveform);
 
 	// Adds an iterator to another iterator
-int						IteratorAddIterator			(Iterator_type* iterator, Iterator_type* iteratorToAdd);
+int						IteratorAddIterator			(Iterator_type* iterator, Iterator_type* iteratorToAdd, char** errorMsg);
 
 void					SetIteratorStackData 		(Iterator_type* iterator, BOOL stackdata);
 

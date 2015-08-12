@@ -14,6 +14,7 @@
 #include <formatio.h>
 #include "Iterator.h"
 #include "toolbox.h"
+#include "DAQLabUtility.h"
 
 //==============================================================================
 // Constants
@@ -118,7 +119,7 @@ void discard_Iterator_type (Iterator_type** iteratorPtr)
 void RemoveFromParentIterator(Iterator_type* iterator)
 {
 	size_t 				nObjects 		= ListNumItems(iterator->iterObjects);   
-	Iterator_type**		iterObjectPtr; 
+	Iterator_type**		iterObjectPtr	= NULL; 
 	
 	// remove from parent iterator if any
 	if (iterator->parent) {
@@ -127,6 +128,7 @@ void RemoveFromParentIterator(Iterator_type* iterator)
 			iterObjectPtr = ListGetPtrToItem(iterator->parent->iterObjects, i);
 			if (*iterObjectPtr == iterator) {
 				ListRemoveItem(iterator->parent->iterObjects, 0, i);
+				iterator->parent = NULL;
 				break;
 			}
 			
@@ -249,20 +251,23 @@ int	IteratorAddWaveform (Iterator_type* iterator, Waveform_type* waveform)
 }
 
 
-int	IteratorAddIterator	(Iterator_type* iterator, Iterator_type* iteratorToAdd)
+int	IteratorAddIterator	(Iterator_type* iterator, Iterator_type* iteratorToAdd, char** errorMsg)
 {
 #define IteratorAddIterator_Err_WrongIteratorType					-1
-	// iterator to be added as a child has been already added to another iterator
-#define IteratorAddIterator_Err_ChildIteratorAlreadyAssigned		-2
+#define IteratorAddIterator_Err_ChildIteratorAlreadyAssigned		-2 	// iterator to be added as a child has been already added to another iterator
+	
+INIT_ERR
 	
 	// check parent iterator type
 	if (iterator->iterType == Iterator_None)  
-		iterator->iterType 			= Iterator_Iterator;
+		iterator->iterType = Iterator_Iterator;
 	else
-		if (iterator->iterType != Iterator_Iterator) return IteratorAddIterator_Err_WrongIteratorType;
+		if (iterator->iterType != Iterator_Iterator)
+			SET_ERR(IteratorAddIterator_Err_WrongIteratorType, "Wrong iterator type.");
 	
 	// check if iteratorToAdd has already a parent iterator
-	if (iteratorToAdd->parent) return IteratorAddIterator_Err_ChildIteratorAlreadyAssigned;
+	if (iteratorToAdd->parent)
+		SET_ERR(IteratorAddIterator_Err_ChildIteratorAlreadyAssigned, "Child iterator is already assigned.");
 	
 	// add child iterator to parent iterator
 	ListInsertItem(iterator->iterObjects, &iteratorToAdd, END_OF_LIST);
@@ -270,7 +275,9 @@ int	IteratorAddIterator	(Iterator_type* iterator, Iterator_type* iteratorToAdd)
 	// add parent iterator to child iterator
 	iteratorToAdd->parent = iterator;
 	
-	return 0;
+Error:
+	
+RETURN_ERR	
 }
 
 void ResetIterators (Iterator_type* iterator)
@@ -321,7 +328,8 @@ ListType IterateOverIterators (Iterator_type* iterator)
 // get DataStorage data from the iterator
 DSInfo_type* GetIteratorDSData (Iterator_type* iterator, unsigned int datarank)
 {
-	int					error						= 0;
+INIT_ERR
+
 	int 				rank						= 0;
 	DSInfo_type* 		ds_data						= NULL;  
 	Iterator_type* 		parentIterator				= NULL;
@@ -335,8 +343,7 @@ DSInfo_type* GetIteratorDSData (Iterator_type* iterator, unsigned int datarank)
 	size_t				totalIter					= 0;
 	BOOL				stackData					= FALSE;
 	
-	if (!iterator)
-		return NULL;
+	if (!iterator) return NULL;
 	
 	nullChk( ds_data = init_DSInfo_type() );
 

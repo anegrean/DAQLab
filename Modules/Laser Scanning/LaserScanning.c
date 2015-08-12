@@ -48,7 +48,7 @@
 
 #define MOD_LaserScanning_UI 								"./Modules/Laser Scanning/UI_LaserScanning.uir"
 #define VChanDataTimeout									1e4					// Timeout in [ms] for Sink VChans to receive data
-#define TaskControllerIterationTimeout						10					// Timeout in [s] to complete the task controller iteration function
+#define TaskControllerIterationTimeout						0					// Timeout in [s] to complete the task controller iteration function
 
 //--------------------------------------------------------------------------------
 // Default VChan names

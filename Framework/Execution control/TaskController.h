@@ -228,8 +228,8 @@ size_t					GetTaskControlIterations			(TaskControl_type* taskControl);
 
 	// Task Controller Iteration Function completion timeout. Default timeout = 10 sec. If timeout < 0, the Task Controller will wait indefinitely to
 	// receive TC_Event_IterationDone. If timeout > 0, a timeout error is generated if after timeout seconds TC_Event_IterationDone is not received.
-void					SetTaskControlIterationTimeout		(TaskControl_type* taskControl, int timeout);
-int						GetTaskControlIterationTimeout		(TaskControl_type* taskControl);
+void					SetTaskControlIterationTimeout		(TaskControl_type* taskControl, unsigned int timeout);
+unsigned int			GetTaskControlIterationTimeout		(TaskControl_type* taskControl);
 
 	// Task Controller Iteration Mode
 	// default, iterationMode = TC_Execute_BeforeChildTCs

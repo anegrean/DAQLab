@@ -487,13 +487,12 @@ size_t GetTaskControlIterations	(TaskControl_type* taskControl)
 	return taskControl->repeat;
 }
 
-
-void SetTaskControlIterationTimeout	(TaskControl_type* taskControl, int timeout)
+void SetTaskControlIterationTimeout	(TaskControl_type* taskControl, unsigned int timeout)
 {
 	taskControl->iterTimeout = timeout;
 }
 
-int	GetTaskControlIterationTimeout (TaskControl_type* taskControl)
+unsigned int GetTaskControlIterationTimeout (TaskControl_type* taskControl)
 {
 	return taskControl->iterTimeout;
 }
@@ -1615,27 +1614,6 @@ static void ChangeState (TaskControl_type* taskControl, EventPacket_type* eventP
 	taskControl->oldState   	= taskControl->currentState;
 	taskControl->currentState 	= newState;
 	
-	// add here actions on new state entry
-	switch (newState) {
-			
-		case TC_State_Error:
-			
-			parentTC = GetTaskControlParent(taskControl);
-			// abort execution in the entire Task Tree
-			if (parentTC)
-				AbortTaskControlExecution(parentTC);
-			else
-				AbortTaskControlExecution(taskControl);
-			
-			// call error function to handle error
-			FunctionCall(taskControl, eventPacket, TC_Callback_Error, NULL, NULL); 
-			break;
-			
-		default:
-			
-			break;
-	}
-	
 	// add log entry if enabled
 	ExecutionLogEntry(taskControl, eventPacket, STATE_CHANGE, NULL);
 }
@@ -1731,7 +1709,6 @@ INIT_ERR
 				// if timeout elapses without receiving a TC_Event_IterationDone, a TC_Event_IterationTimeout is generated 
 				if ( (taskControl->iterationTimerID = NewAsyncTimer(taskControl->iterTimeout, 1, 1, TaskControlIterTimeout, taskControl)) < 0)
 					SET_ERR(taskControl->iterationTimerID, "Async timer error.");	
-				
 			}
 			
 			// launch provided iteration function pointer in a separate thread
@@ -1917,7 +1894,7 @@ INIT_ERR
 	childTC->childTCIdx = ListNumItems(parentTC->childTCs); 
 	
 	// link iteration info
-	errChk( IteratorAddIterator(GetTaskControlIterator(parentTC), GetTaskControlIterator(childTC)) ); 
+	errChk( IteratorAddIterator(GetTaskControlIterator(parentTC), GetTaskControlIterator(childTC), &errorInfo.errMsg) ); 
 	
 Error:
 	
@@ -3297,7 +3274,8 @@ INIT_ERR
 
 			// assign new state and release state lock
 			*tcStateTSVPtr = taskControl->currentState;
-			CmtErrChk( CmtReleaseTSVPtr(taskControl->stateTSV) );    
+			CmtErrChk( CmtReleaseTSVPtr(taskControl->stateTSV) );
+			tcStateTSVPtr = NULL;
 			stateLockObtained = FALSE;
 			
 			// free memory for extra eventData if any
@@ -3316,26 +3294,49 @@ INIT_ERR
 			// cleanup
 			//-------------------------------------------
 	
-			OKfree(msgBuff);
-	
 			// remove iteration timeout timer
 			if (taskControl->iterationTimerID > 0) {
 				DiscardAsyncTimer(taskControl->iterationTimerID);
 				taskControl->iterationTimerID = 0;
 			}
-	
-			// try to release lock if obtained
-			if (stateLockObtained) {
-				CmtReleaseTSVPtr(taskControl->stateTSV);
-				stateLockObtained = FALSE;
-			}
-		
-			// store error
-			taskControl->errorMsg 	= FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, errorInfo.errMsg);
-			taskControl->errorID	= errorInfo.error;
 		
 			// change state
 			ChangeState(taskControl, &eventpacket[i], TC_State_Error);
+			
+			// assign new state and try to release lock if obtained
+			if (stateLockObtained) {
+				*tcStateTSVPtr = taskControl->currentState;
+				CmtReleaseTSVPtr(taskControl->stateTSV);
+				tcStateTSVPtr = NULL;
+				stateLockObtained = FALSE;
+			}
+			
+			// store error
+			OKfree(msgBuff);
+			taskControl->errorMsg = StrDup("Task Controller \"");
+			AppendString(&taskControl->errorMsg, taskControl->taskName, -1);
+			AppendString(&taskControl->errorMsg, "\" error: ", -1);
+			msgBuff = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, errorInfo.errMsg);
+			AppendString(&taskControl->errorMsg, msgBuff, -1);
+			OKfree(msgBuff);	;
+			taskControl->errorID	= errorInfo.error;
+			
+			// abort execution in the entire Task Tree
+			if (GetTaskControlParent(taskControl))
+				AbortTaskControlExecution(GetTaskControlParent(taskControl));
+			else
+				AbortTaskControlExecution(taskControl);
+			
+			// call error function to handle error
+			FunctionCall(taskControl, &eventpacket[i], TC_Callback_Error, NULL, NULL);
+		
+			// if there is a parent task controller, update it on the state of this child task controller
+			if (taskControl->parentTC)
+				errChk( TaskControlEvent(taskControl->parentTC, TC_Event_UpdateChildTCState, init_ChildTCEventInfo_type(taskControl->childTCIdx, taskControl->currentState), (DiscardFptr_type)discard_ChildTCEventInfo_type, &errorInfo.errMsg) );
+
+			// free memory for extra eventData if any
+			if (eventpacket[i].eventData && eventpacket[i].discardEventDataFptr)
+				(*eventpacket[i].discardEventDataFptr)(&eventpacket[i].eventData);
 		
 		} 
 		

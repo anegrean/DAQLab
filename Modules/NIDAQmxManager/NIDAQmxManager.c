@@ -3068,7 +3068,7 @@ static Dev_type* init_Dev_type (NIDAQmxManager_type* niDAQModule, DevAttr_type**
 	dev -> taskController = init_TaskControl_type (taskControllerName, dev, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, StartTC, 
 						  ResetTC, DoneTC, StoppedTC, IterationStopTC, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC);
 	// set no iteration function timeout
-	SetTaskControlIterationTimeout(dev->taskController, -1);
+	SetTaskControlIterationTimeout(dev->taskController, 0);
 	
 	if (!dev->taskController) goto Error;
 	
@@ -10793,8 +10793,8 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorMsg)
 	
 INIT_ERR	
 	
-	int*		nActiveTasksPtr								= NULL;
-	bool32		taskDoneFlag								= FALSE;
+	int*		nActiveTasksPtr		= NULL;
+	bool32		taskDoneFlag		= FALSE;
 	
 	
 	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
@@ -14163,7 +14163,6 @@ INIT_ERR
 	char			CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
 	int  			nActiveTasks								= 0;
 	int*			nActiveTasksPtr								= &nActiveTasks;	// Keeps track of the number of DAQmx tasks that must still complete before the iteration is considered to be complete
-	int**			nActiveTasksPtrPtr						    = &nActiveTasksPtr;
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(iterator));
@@ -14173,10 +14172,8 @@ INIT_ERR
 	//----------------------------------------
 	
 	// get active tasks counter handle
-	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, nActiveTasksPtrPtr) );
-	
-	nActiveTasksPtr =*nActiveTasksPtrPtr; 
-	nActiveTasks=*nActiveTasksPtr;
+	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	nActiveTasks = *nActiveTasksPtr;
 	
 	// AI
 	if (dev->AITaskSet && dev->AITaskSet->taskHndl && dev->AITaskSet->nOpenChannels) {

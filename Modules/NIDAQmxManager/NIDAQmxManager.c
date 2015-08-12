@@ -13800,6 +13800,7 @@ INIT_ERR
 		DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Abort) );
 	
 	
+	
 	// get all available data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errorInfo.errMsg) );
 				
@@ -13889,13 +13890,15 @@ INIT_ERR
 			break;
 	}
 	
+	DAQmxErrChk(DAQmxClearTask(taskHndl));
+	
 	// set AO task to Commited state if it exists and is not on demand
 	if (dev->AOTaskSet->taskHndl && !chan->onDemand) {
 		DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Reserve) );
 		DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Commit) );  
 	}
 	
-	goto Error;
+	return 0;
 	
 DAQmxError:
 	

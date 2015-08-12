@@ -37,7 +37,7 @@ struct PIStage {
 	
 	// SUPER, must be the first member to inherit from
 	
-	Zstage_type 	baseClass;
+	ZStage_type 	baseClass;
 
 	// DATA
 		

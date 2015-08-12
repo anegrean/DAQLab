@@ -181,26 +181,30 @@ int WritePMTReg(unsigned long regaddress,unsigned long regvalue)
 ///  HIRET returns error, no error when 0
 int GetPMTControllerVersion(void)
 {
-	int 			error 		= 0;
-	unsigned long 	version;
-	int 			major;
-	int				minor;
+#define GetPMTControllerVersion_Err_WrongVersion	-1
+INIT_ERR
+
+	unsigned long 	version		= 0;
+	int 			major		= 0;
+	int				minor		= 0;
 	
-	errChk(ReadPMTReg(VERS_REG,&version));
+	errChk(ReadPMTReg(VERS_REG, &version));
 	
 	minor = version&0x0000000F;
 	major = (version>>4)&0x0000000F;
-	if(!((major == MAJOR_VERSION) && (minor == MINOR_VERSION))) error = -1;
+	if(!((major == MAJOR_VERSION) && (minor == MINOR_VERSION)))
+		SET_ERR(GetPMTControllerVersion_Err_WrongVersion, "Wrong PMT Controller version.");
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 
 int PMTController_Init(void)
 {
-	int 			error	= 0;
+INIT_ERR
+
 	unsigned long 	timeout	= 5000;  //in ms
 	
 	InitializeAcqBusy();
@@ -225,12 +229,12 @@ int PMTController_Init(void)
 	
 Error:
 	
-	return error;  
+	return errorInfo.error;  
 }
 
 int PMTController_Finalize(void)	    
 {    
-	 int error=0;
+INIT_ERR
 	 
 	 SetAcqBusy(0); 
 	 UninitializeAcqBusy();  
@@ -246,13 +250,14 @@ int PMTController_Finalize(void)
 	 
 Error:
 	 
-	 return error;
+	 return errorInfo.error;
 }
 
 //called in pmt thread
 int ReadBuffer(int bufsize)
 {
-	int 					error			= 0;
+INIT_ERR
+
 	int 					result			= 0;
 	DataPacket_type*  		dataPacket		= NULL;
 	char*					errMsg			= NULL;  
@@ -354,7 +359,7 @@ int ReadBuffer(int bufsize)
 				//iteration is done
 				nrsamples = 0;
 				PMTStopAcq(); 
-				TaskControlIterationDone(gtaskControl, 0, "", FALSE);   
+				errChk( TaskControlIterationDone(gtaskControl, 0, "", FALSE, &errorInfo.errMsg) );   
 			}
 			else {
 				if (((nrsamples_in_iteration-nrsamples)*8)<MAXBUFSIZE) {
@@ -376,20 +381,19 @@ Error:
 	discard_DataPacket_type(&dataPacket);
 	discard_DSInfo_type(&dsInfo);
 	
-	if (!errMsg)
-		errMsg = StrDup("Out of memory");
+	char* msgBuff = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, errorInfo.errMsg);
+	TaskControlIterationDone(gtaskControl, errorInfo.error, msgBuff, FALSE, NULL); 
+	OKfree(msgBuff);
 	
-	TaskControlIterationDone(gtaskControl, error, errMsg, FALSE); 
-	OKfree(errMsg);
-	
-	return error;
+	return errorInfo.error;
 }
 
 
 
 int PMT_SetMode (int PMTnr, PMT_Mode_type mode)  
 {
-	int 			error 		= 0;  
+INIT_ERR
+
 	unsigned long 	controlreg;
 	
 	errChk(ReadPMTReg(CTRL_REG,&controlreg));
@@ -431,13 +435,14 @@ int PMT_SetMode (int PMTnr, PMT_Mode_type mode)
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 
 int PMT_SetFan (int PMTnr, BOOL value)  
 {
-	int 			error = 0; 
+INIT_ERR
+
 	unsigned long 	controlreg;
 	
 	
@@ -480,13 +485,14 @@ int PMT_SetFan (int PMTnr, BOOL value)
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 
 int PMT_SetCooling (int PMTnr, BOOL value)  
 {
-	int 			error = 0; 
+INIT_ERR
+
 	unsigned long 	controlreg;
 	
 	errChk(ReadPMTReg(CTRL_REG,&controlreg));    
@@ -527,7 +533,7 @@ int PMT_SetCooling (int PMTnr, BOOL value)
 	errChk(WritePMTReg(CTRL_REG,controlreg));
 	
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 
@@ -536,7 +542,8 @@ Error:
 ///  HIRET returns error, no error when 0
 int PMT_SetGainTresh(int PMTnr,unsigned int PMTGain,unsigned int PMTThreshold)
 {
-	int 			error		= 0;
+INIT_ERR
+
 	unsigned long 	combinedval;
 	unsigned long 	THMASK		= 0x0000FFFF;
 	unsigned long 	GAINMASK	= 0xFFFF0000; 
@@ -574,7 +581,7 @@ int PMT_SetGainTresh(int PMTnr,unsigned int PMTGain,unsigned int PMTThreshold)
 	}
 	
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 
@@ -597,7 +604,8 @@ int ConvertVoltsToBits(float value_in_volts)
 ///  HIRET returns error, no error when 0
 int SetPMTGainTresh(int PMTnr,double gain,double threshold)
 {
-	int error=0;
+INIT_ERR
+
 	unsigned int 	gain_in_bits;
 	unsigned int 	threshold_in_bits;
 
@@ -607,13 +615,14 @@ int SetPMTGainTresh(int PMTnr,double gain,double threshold)
 	errChk(PMT_SetGainTresh(PMTnr,gain_in_bits,threshold_in_bits));
 
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 
 int PMT_SetTestMode(BOOL testmode)
 {
-	int 			error=0;
+INIT_ERR
+
 	unsigned long 	controlreg;
 	
 	errChk(ReadPMTReg(CTRL_REG,&controlreg));    
@@ -623,14 +632,15 @@ int PMT_SetTestMode(BOOL testmode)
 	errChk(WritePMTReg(CTRL_REG,controlreg)); 
 		   
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 /// HIFN  starts the PMT Controller Acquisition
 /// HIRET returns error, no error when 0
 int PMTStartAcq(TaskMode_type mode,TaskControl_type* taskControl,Channel_type** channels)
 {
-	int 			error=0;
+INIT_ERR
+
 	unsigned long 	controlreg;
 	int 			i;
 	
@@ -661,14 +671,15 @@ int PMTStartAcq(TaskMode_type mode,TaskControl_type* taskControl,Channel_type** 
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }																																				   
 
 ///  HIFN  stops the PMT Controller Acquisition
 ///  HIRET returns error, no error when 0
 int PMTStopAcq(void)
 {
-	int 					error			= 0;
+INIT_ERR
+
 	unsigned long 			controlreg;
 	int 					i;
 	char*					errMsg			= NULL;
@@ -694,34 +705,26 @@ int PMTStopAcq(void)
 	
 Error:
 
-	return error;
+	return errorInfo.error;
 }
 
-
-
-
-
-
-
-
-
-///  HIFN  resets the PMT Controller 
- /// HIRET returns error, no error when 0
+/// HIFN  resets the PMT Controller 
+/// HIRET returns error, no error when 0
 int PMTReset(void)
 {
-	int 			error		=0;
-	unsigned long 	controlreg;
+INIT_ERR
+
+	unsigned long 	controlreg	= 0;
 	double 			zero		= 0.0;
 	double 			twenty_mV	= 0.020;
 
-
-	controlreg=0;   //clear control reg 
+	controlreg = 0;   //clear control reg 
 	//set reset bit   
-	controlreg=controlreg|RESET_BIT; 
-	errChk(WritePMTReg(CTRL_REG,controlreg));
+	controlreg = controlreg|RESET_BIT; 
+	errChk(WritePMTReg(CTRL_REG, controlreg));
 	//clear reset bit
-	controlreg=controlreg&~RESET_BIT;
-	errChk(WritePMTReg(CTRL_REG,controlreg));
+	controlreg = controlreg&~RESET_BIT;
+	errChk(WritePMTReg(CTRL_REG, controlreg));
 	
 	//set gain to zero, threshold level to 20mV
 	SetPMTGainTresh(PMT1,zero,twenty_mV);
@@ -729,71 +732,70 @@ int PMTReset(void)
 	SetPMTGainTresh(PMT3,zero,twenty_mV);   
 	SetPMTGainTresh(PMT4,zero,twenty_mV);   
 	
-	
-	
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 //can only be called when acq is finished
 int PMTClearFifo(void)
 {
-	int 			error=0;
-	unsigned long 	statreg;
+INIT_ERR
+
+	unsigned long 	statreg	= 0;
 	
 	//reset DMAChannel
 	errChk(WritePMTReg(USCTRL,0x0200000A));       
 	//  reset fifo's
 	errChk(WritePMTReg(EBCR_REG,0x0A));    
 	
-
 	errChk(ReadPMTReg(STAT_REG,&statreg));
 		//clear fifo status bits if set
 	if ((statreg&FFALMFULL_BIT)||(statreg&FFOVERFLOW_BIT)){ 
-			if (statreg&FFALMFULL_BIT) statreg=statreg&~FFALMFULL_BIT;  //clear bit
-			if (statreg&FFOVERFLOW_BIT) statreg=statreg&~FFOVERFLOW_BIT;  //clear bit    
-			error=WritePMTReg(STAT_REG,statreg);    
+			if (statreg&FFALMFULL_BIT) statreg = statreg&~FFALMFULL_BIT;  //clear bit
+			if (statreg&FFOVERFLOW_BIT) statreg = statreg&~FFOVERFLOW_BIT;  //clear bit    
+			errChk( WritePMTReg(STAT_REG,statreg) );    
 	}
 	
 	//here?
-	nrsamples=0;
+	nrsamples = 0;
 	
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 int PMT_ClearControl(int PMTnr)
 {
-	int 			error=0;
-	unsigned long 	controlreg;
+INIT_ERR
+
+	unsigned long 	controlreg	= 0;
 	
 	errChk(ReadPMTReg(CTRL_REG,&controlreg));    
 	
 	switch(PMTnr){
 		case PMT1:
-			controlreg=controlreg&~0x70000;    //clear control FAN,TEC and HV bitsfor PMT1
+			controlreg = controlreg&~0x70000;    //clear control FAN,TEC and HV bitsfor PMT1
 			break;
 		case PMT2:
-			controlreg=controlreg&~0x700000;   //clear control FAN,TEC and HV bitsfor PMT2        
+			controlreg = controlreg&~0x700000;   //clear control FAN,TEC and HV bitsfor PMT2        
 			break;
 		case PMT3:
-			controlreg=controlreg&~0x7000000;  //clear control FAN,TEC and HV bitsfor PMT3       
+			controlreg = controlreg&~0x7000000;  //clear control FAN,TEC and HV bitsfor PMT3       
 			break;
 		case PMT4:
-			controlreg=controlreg&~0x70000000; //clear control FAN,TEC and HV bitsfor PMT4       
+			controlreg = controlreg&~0x70000000; //clear control FAN,TEC and HV bitsfor PMT4       
 			break;
 	}
+	
 	errChk(WritePMTReg(CTRL_REG,controlreg));
 	
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 
 int StartDAQThread(int mode, CmtThreadPoolHandle poolHandle)
 {
-	int error=0;
-	
+INIT_ERR
 	
 	SetAcqBusy(1);   
 	
@@ -805,20 +807,20 @@ int StartDAQThread(int mode, CmtThreadPoolHandle poolHandle)
 	
 	ProcessSystemEvents();  //to start the tread functions      
 	
-	//InitializePMTstate();  
+	//InitializePMTstate();
+	
 Error:
-	return error;
+	
+	return errorInfo.error;
 }
-
-
 
 int StopDAQThread(CmtThreadPoolHandle poolHandle)
 {
-	int 	error							= 0;	
+INIT_ERR
 
 	SetAcqBusy(0);  //should stop the acq thread 
 	
-	return error;
+	return errorInfo.error;
 }
 
 
@@ -826,6 +828,8 @@ int StopDAQThread(CmtThreadPoolHandle poolHandle)
 //run pmt read actions in this separate thread to prevent other daq tasks from underrunning
 int CVICALLBACK PMTThreadFunction(void *(functionData))
 {
+INIT_ERR
+
 	int result; 
 	int abort	=0;
 	
@@ -841,16 +845,19 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
 		if (gtaskControl!=NULL) {
 			abort=GetTaskControlAbortFlag(gtaskControl);  
 			if (abort) {
-				TaskControlIterationDone (gtaskControl, 0,NULL,FALSE);
+				errChk( TaskControlIterationDone (gtaskControl, 0, NULL, FALSE, &errorInfo.errMsg) );
 				SetAcqBusy(0);
 			}
 		}
     }
+	
 	SetReadyForReading(0);
     //quit
 	SetPMTCommandFlag(0);
 	
-	return 0;
+Error:
+	
+	return errorInfo.error;
 }
 
 //thread function,

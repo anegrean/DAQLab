@@ -28,7 +28,7 @@
 //==============================================================================
 // Types
 		
-typedef struct Zstage 	Zstage_type;
+typedef struct Zstage 	ZStage_type;
 
 typedef enum {
 	
@@ -124,36 +124,36 @@ struct Zstage {
 		// Override: Required, provides hardware specific movement of Zstage.
 		
 		// moveVal in [mm] same units as zPos
-	int					(* MoveZ) 					(Zstage_type* self, Zstage_move_type moveType, double moveVal);
+	int					(*MoveZ) 					(ZStage_type* self, Zstage_move_type moveType, double moveVal, char** errorMsg);
 		// Activates Z stage joystick control
-	int					(* UseJoystick)				(Zstage_type* self, BOOL useJoystick);	
+	int					(*UseJoystick)				(ZStage_type* self, BOOL useJoystick, char** errorMsg);	
 		// Stops Z stage motion
-	int					(* StopZ)					(Zstage_type* self);
+	int					(*StopZ)					(ZStage_type* self, char** errorMsg);
 		// Changes the status of the LED on the Zstage control panel
-	int					(* StatusLED)   			(Zstage_type* self, Zstage_LED_type status);
+	int					(*StatusLED)   				(ZStage_type* self, Zstage_LED_type status);
 		// Updates position display of stage from structure data
-	int					(* UpdatePositionDisplay)	(Zstage_type* self);
+	int					(*UpdatePositionDisplay)	(ZStage_type* self);
 		// Gets stage negative and positive limits in [mm] if this functionality is implemented for the specific hardware. 
 		// If not, then by default both negative and positive limits are set to the current position of the stage and the stage will not
 		// move until zMinimumLimit < zMaximumLimit.
-	int					(* GetHWStageLimits)		(Zstage_type* self, double* negativeLimit, double* positiveLimit);
+	int					(*GetHWStageLimits)			(ZStage_type* self, double* negativeLimit, double* positiveLimit, char** errorMsg);
 		// Sets stage negative and positive limits in [mm] if this functionality is implemented for the specific hardware. This is an extra
 		// safety measure if software set limits zMaximumLimit and zMinimumLimit fail to stop the stage.
-	int					(* SetHWStageLimits)		(Zstage_type* self, double negativeLimit, double positiveLimit);
+	int					(*SetHWStageLimits)			(ZStage_type* self, double negativeLimit, double positiveLimit, char** errorMsg);
 	
 		// Gets stage velocity
-	int					(* GetStageVelocity)		(Zstage_type* self, double* velocity);
+	int					(*GetStageVelocity)			(ZStage_type* self, double* velocity, char** errorMsg);
 		// Sets stage velocity
-	int					(* SetStageVelocity)		(Zstage_type* self, double velocity);
+	int					(*SetStageVelocity)			(ZStage_type* self, double velocity, char** errorMsg);
 		// Updates number of steps between an absolute start and relative end position to start position given step size 
 		// and rounds up if necessary the end position such that between the start and end positions there is an integer 
 		// multiple of step sizes. These parameters are written to the structure data.
 		// It also updates these values on the display and outputs the number of steps
-	int					(* UpdateZSteps)			(Zstage_type* self);
+	int					(*UpdateZSteps)				(ZStage_type* self);
 	
-	void				(* SetStepCounter)			(Zstage_type* self, size_t val);
+	void				(*SetStepCounter)			(ZStage_type* self, size_t val);
 	
-	void				(* DimWhenRunning)			(Zstage_type* self, BOOL dimmed);
+	void				(*DimWhenRunning)			(ZStage_type* self, BOOL dimmed);
 		
 
 };

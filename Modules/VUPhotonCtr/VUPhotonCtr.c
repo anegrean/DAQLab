@@ -406,31 +406,29 @@ static void	discard_Channel_type (Channel_type** chan)
 	OKfree(*chan);  // this also removes the channel from the device structure
 }
 
-void ErrortoTaskController(VUPhotonCtr_type* vupc,int error,char errstring[])
+void ErrortoTaskController(VUPhotonCtr_type* vupc, int error, char errstring[])
 {
 	if (vupc->taskControl!=NULL) AbortTaskControlExecution(vupc->taskControl); 
 }
 
 static int InitHardware (VUPhotonCtr_type* vupc)
 {
-	int error = 0;
-	
-	
+INIT_ERR
 	
 	errChk(PMTController_Init());
 	  
-	
 //	SetMeasurementMode(vupc->contmode);
 Error:
-	if (error!=0) ErrortoTaskController(vupc,error,__func__);   
 	
-	return error;
+	if (errorInfo.error) 
+		ErrortoTaskController(vupc, errorInfo.error, __func__);   
+	
+	return errorInfo.error;
 }
 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 {
-	int					error 					= 0;
-	char*				errMsg					= NULL;
+INIT_ERR
 	
 	VUPhotonCtr_type* 	vupc 					= (VUPhotonCtr_type*) mod;
 	int					menuItemSettingsHndl	= 0;
@@ -530,26 +528,27 @@ static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 	// register HW Triggers with framework
 	DLRegisterHWTrigSlave(vupc->HWTrigSlave);
 	
-	TaskControlEvent(vupc->taskControl, TC_Event_Configure, NULL, NULL);
+	errChk( TaskControlEvent(vupc->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 
 Error:
-	return error;
 
+RETURN_ERR
 }
 
 static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 {
-	VUPhotonCtr_type* 	vupc 	= (VUPhotonCtr_type*) mod;
-	int 				error 	= 0;
+INIT_ERR
 
+	VUPhotonCtr_type* 	vupc 	= (VUPhotonCtr_type*) mod;
+	
 	if (visibleFlag)
 		errChk(	DisplayPanel(vupc->mainPanHndl) );
 	else
 		errChk( HidePanel(vupc->mainPanHndl) );
 
-
 Error:
-	return error;
+	
+	return errorInfo.error;
 }
 
 static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
@@ -685,63 +684,52 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 
 static int PMT_Set_Mode (VUPhotonCtr_type* self, int PMTnr, PMT_Mode_type mode)
 {
-	int error = 0;
+INIT_ERR
 
 	errChk(PMT_SetMode (PMTnr,mode));
 
 Error:
-	return error;
+	
+	return errorInfo.error;
 }
 
 
 static int PMT_Set_Fan (VUPhotonCtr_type* self, int PMTnr, BOOL value)
 {
-	int error = 0;
+INIT_ERR
 
 	errChk(PMT_SetFan (PMTnr,value));
 
 Error:
-	return error;
+	
+	return errorInfo.error;
 }
 
 static int PMT_Set_Cooling (VUPhotonCtr_type* self, int PMTnr, BOOL value)
 {
-	int error = 0;
+INIT_ERR
 
 	errChk(PMT_SetCooling (PMTnr,value));
 
 Error:
-	return error;
+	
+	return errorInfo.error;
 }
-
-
-
-
-
-
-
-
-
 
 static int PMT_Set_GainThresh (VUPhotonCtr_type* vupc,int PMTnr, double gain, double threshold)
 {
-	int 			error = 0;
+INIT_ERR
 
 	errChk(SetPMTGainTresh(PMTnr,gain,threshold));
 
 Error:
-	return error;
+	
+	return errorInfo.error;
 }
-
-
-
-
-
 
 int ResetActions(VUPhotonCtr_type* 	vupc)
 {
-	int error = 0;
-	
+INIT_ERR
 	
 	errChk(PMTReset());
 	SetCtrlVal (vupc->counterPanHndl,CounterPan_BTTN_TestMode, FALSE);
@@ -751,50 +739,52 @@ int ResetActions(VUPhotonCtr_type* 	vupc)
 	PMTController_UpdateDisplay(vupc);
 	
 Error:
-	return error;
+	
+	return errorInfo.error;
 }
 
 
 static int PMTController_SetTestMode (VUPhotonCtr_type* vupc, BOOL testmode)
 {
-	int error = 0;
+INIT_ERR
 
 	errChk(PMT_SetTestMode(testmode));
 	
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 static int PMTController_Reset (VUPhotonCtr_type* vupc)
 {
-	int error = 0;
+INIT_ERR
 
 	errChk(ResetActions(vupc));
 
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 
 static int PMTController_ResetFifo (VUPhotonCtr_type* vupc)
 {
-	int error = 0;
+INIT_ERR
 
 	errChk(PMTClearFifo());
 
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 
 static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 {
-	int 			error 		= 0;
-	int 			i;
-	BOOL 			HV;
-	BOOL 			CurrentErr;
-	unsigned long 	statreg;
-	unsigned long 	controlreg; 
+INIT_ERR
+
+	int 			i			= 0;
+	BOOL 			HV			= FALSE;
+	BOOL 			CurrentErr	= FALSE;
+	unsigned long 	statreg		= 0;
+	unsigned long 	controlreg	= 0; 
 
 	//Get status from Hardware
 	errChk(ReadPMTReg(CTRL_REG,&controlreg));
@@ -867,7 +857,8 @@ static int PMTController_UpdateDisplay (VUPhotonCtr_type* vupc)
 	}
 
 Error:
-	return error;
+	
+	return errorInfo.error;
 }
 
 
@@ -875,13 +866,14 @@ Error:
 
 static int CVICALLBACK VUPCChannel_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	Channel_type*	chan 	= callbackData;
-	int 			intval;
-	float 			gain;
-	float 			thresh_mV;
-	float 			thresh;
-	int 			error	= 0;
+INIT_ERR
 
+	Channel_type*	chan 		= callbackData;
+	int 			intval		= 0;
+	float 			gain		= 0;
+	float 			thresh_mV	= 0;
+	float 			thresh		= 0;
+	
 	switch (event) {
 
 		case EVENT_COMMIT:
@@ -927,7 +919,10 @@ static int CVICALLBACK VUPCChannel_CB (int panel, int control, int event, void *
 	}
 
 Error:
-	return error;
+
+PRINT_ERR
+
+	return 0;
 }
 
 static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -1062,11 +1057,12 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 
 static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	VUPhotonCtr_type* 	vupc 	=   callbackData;
+INIT_ERR
 
-	int 				mode;
-	int 				repeat;
-	double 				waitBetweenIterations;
+	VUPhotonCtr_type* 	vupc 					= callbackData;
+	int 				mode					= 0;
+	int 				repeat					= 0;
+	double 				waitBetweenIterations	= 0;
 
 	switch (event) {
 		case EVENT_COMMIT:
@@ -1088,9 +1084,14 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 					break;
 			}
 			// (re) configure Photoncounter Task Controller
-			TaskControlEvent(vupc->taskControl, TC_Event_Configure, NULL, NULL);
+			errChk( TaskControlEvent(vupc->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 			break;
 	}
+	
+Error:
+	
+PRINT_ERR
+
 	return 0;
 }
 
@@ -1099,10 +1100,11 @@ static int CVICALLBACK VUPCTask_CB (int panel, int control, int event, void *cal
 
 static int CVICALLBACK VUPCPhotonCounter_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	VUPhotonCtr_type* 	vupc 	= callbackData;
-	BOOL 				testmode;
-	int 				error   = 0;
-	int 				start;
+INIT_ERR
+
+	VUPhotonCtr_type* 	vupc 		= callbackData;
+	BOOL 				testmode	= FALSE;
+	int 				start		= 0;
 
 	switch (event) {
 		case EVENT_COMMIT:
@@ -1126,6 +1128,9 @@ static int CVICALLBACK VUPCPhotonCounter_CB (int panel, int control, int event, 
 	}
 	
 Error:
+	
+PRINT_ERR
+
 	return 0;
 }
 
@@ -1137,7 +1142,7 @@ static BOOL ValidTaskControllerName	(char name[], void* dataPtr)
 void HWIterationDone(TaskControl_type* taskControl,int errorID, char errorMsg[])
 {
 	//hardware informs that the current iteration is done	
-	TaskControlIterationDone (taskControl, errorID, errorMsg,TRUE);	//?
+	TaskControlIterationDone (taskControl, errorID, errorMsg, TRUE,  NULL);	//?
 }
 
 void HWError(void)
@@ -1182,26 +1187,25 @@ static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, 
 
 static void	IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag)
 {
+INIT_ERR
+
 	VUPhotonCtr_type* 		vupc 				= GetTaskControlModuleData(taskControl);
 	double 					timeout				= 3.0;
 	double 					delaystep			= 0.1;
-	int mode;
+	int 					mode				= 0;
 	DataPacket_type*		dataPacket			= NULL;
-	char*					errMsg				= NULL;
-	int						error				= 0;
-	void*					dataPacketDataPtr;
-	DLDataTypes				dataPacketDataType;
-	PulseTrain_type*    	pulsetrain;
+	void*					dataPacketDataPtr	= NULL;
+	DLDataTypes				dataPacketDataType	= 0;
+	PulseTrain_type*    	pulsetrain			= NULL;
 
 	//display current iteration index
 	VUPC_SetStepCounter(vupc,GetCurrentIterIndex(iterator));
-	
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive pulse train settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
 	if (IsVChanOpen((VChan_type*)vupc->pulseTrainVChan)) {
-		errChk( GetDataPacket(vupc->pulseTrainVChan, &dataPacket, &errMsg) );
+		errChk( GetDataPacket(vupc->pulseTrainVChan, &dataPacket, &errorInfo.errMsg) );
 		dataPacketDataPtr 	= GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
 		pulsetrain			= *(PulseTrain_type**)dataPacketDataPtr;
 		vupc->nSamples		= GetPulseTrainNPulses(pulsetrain);
@@ -1213,14 +1217,16 @@ static void	IterateTC (TaskControl_type* taskControl, Iterator_type* iterator, B
 	
 	Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),vupc->samplingRate,vupc->nSamples); 
 	
-	error=PMTStartAcq(GetTaskControlMode(vupc->taskControl),vupc->taskControl,vupc->channels);
+	errChk( PMTStartAcq(GetTaskControlMode(vupc->taskControl),vupc->taskControl,vupc->channels) );
 	
 	//inform that slave is armed
-	errChk(SetHWTrigSlaveArmedStatus(vupc->HWTrigSlave,&errMsg));
+	errChk(SetHWTrigSlaveArmedStatus(vupc->HWTrigSlave, &errorInfo.errMsg));
+
+	return;
 	
 Error:
+	
 	return;
-
 }
 
 
@@ -1309,28 +1315,27 @@ static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState
 
 static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg)
 {
-	
+INIT_ERR
+
 	VUPhotonCtr_type* 	vupc				= GetTaskControlModuleData(taskControl);
-	unsigned int		nSamples;
-	int					error				= 0;
+	unsigned int		nSamples			= 0;
 	DataPacket_type**	dataPackets			= NULL;
-	size_t				nPackets;
-	size_t				nElem;
-	void*				dataPacketDataPtr;
-	DLDataTypes			dataPacketType;  
-	PulseTrain_type*    pulsetrain;
-	size_t 				i;
-	PulseTrainModes		pulsetrainmode;
-	double 				hightime,lowtime;
-	char*				errMsg				= NULL;
-	
+	size_t				nPackets			= 0;
+	size_t				nElem				= 0;
+	void*				dataPacketDataPtr	= NULL;
+	DLDataTypes			dataPacketType		= 0;  
+	PulseTrain_type*    pulsetrain			= NULL;
+	size_t 				i					= 0;
+	PulseTrainModes		pulsetrainmode		= 0;
+	double 				hightime			= 0;
+	double				lowtime				= 0;
 	
 	// process data only if task controller is not active
 	if (taskActive) return 0;
 
 	// get all available data packets 
-    //get LAST!!
-	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errMsg) );
+    // get LAST!!
+	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errorInfo.errMsg) );
 			
 	for (i = 0; i < nPackets; i++) {
 				
@@ -1374,7 +1379,7 @@ static int PulseTrainDataReceivedTC (TaskControl_type* taskControl, TCStates tas
 	
 Error:	   
 				
-	return error;
+RETURN_ERR
 }
  
 

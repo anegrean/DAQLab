@@ -59,15 +59,15 @@ typedef struct {
 
 static int							DisplayPanels					(DAQLabModule_type* mod, BOOL visibleFlag); 
 
-static int							ChangeLEDStatus					(Zstage_type* zstage, Zstage_LED_type status);
+static int							ChangeLEDStatus					(ZStage_type* zstage, Zstage_LED_type status);
 
-static int							UpdatePositionDisplay			(Zstage_type* zstage);
+static int							UpdatePositionDisplay			(ZStage_type* zstage);
 
-static int							UpdateZSteps					(Zstage_type* zstage);
+static int							UpdateZSteps					(ZStage_type* zstage);
 
-static void 						SetStepCounter					(Zstage_type* zstage, size_t val);
+static void 						SetStepCounter					(ZStage_type* zstage, size_t val);
 
-static void							DimWhenRunning					(Zstage_type* zstage, BOOL dimmed);
+static void							DimWhenRunning					(ZStage_type* zstage, BOOL dimmed);
 
 static RefPosition_type*			init_RefPosition_type			(char refName[], double refVal);
 
@@ -117,13 +117,13 @@ static int							EventHandler					(TaskControl_type* taskControl, TCStates taskS
 /// HIRET NULL if only initialization was performed. 
 DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], char instanceName[], int workspacePanHndl)
 {
-	Zstage_type* zstage;
+	ZStage_type* zstage;
 	
 	if (!mod) {
-		zstage = malloc (sizeof(Zstage_type));
+		zstage = malloc (sizeof(ZStage_type));
 		if (!zstage) return NULL;
 	} else
-		zstage = (Zstage_type*) mod;
+		zstage = (ZStage_type*) mod;
 		
 	// initialize base class
 	initalloc_DAQLabModule(&zstage->baseClass, className, instanceName, workspacePanHndl);
@@ -147,7 +147,7 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 	zstage->baseClass.DisplayPanels	= DisplayPanels;
 	
 	//---------------------------
-	// Child Level 1: Zstage_type 
+	// Child Level 1: ZStage_type 
 	
 		// DATA
 		
@@ -203,16 +203,16 @@ DAQLabModule_type*	initalloc_Zstage (DAQLabModule_type* mod, char className[], c
 }
 
 
-/// HIFN Discards a generic Zstage_type data but does not free the structure memory.
+/// HIFN Discards a generic ZStage_type data but does not free the structure memory.
 void discard_Zstage (DAQLabModule_type** mod)
 {
-	Zstage_type* 		zstage 		= (Zstage_type*) (*mod);
+	ZStage_type* 		zstage 		= (ZStage_type*) (*mod);
 	RefPosition_type**	refPosPtr	= NULL;
 	size_t				nZRefpos	= ListNumItems(zstage->zRefPos);
 	
 	if (!zstage) return;
 	
-	// discard Zstage_type specific data
+	// discard ZStage_type specific data
 	discard_TaskControl_type(&zstage->taskController);
 	
 	// discard UI resources
@@ -272,7 +272,7 @@ int ZStage_Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
 
 INIT_ERR
 	
-	Zstage_type* 	zstage 				= (Zstage_type*) mod;  
+	ZStage_type* 	zstage 				= (ZStage_type*) mod;  
 	char			stepsizeName[50]	= "";
 	
 	// load panel resources
@@ -284,7 +284,7 @@ INIT_ERR
 		SetPanelAttribute(zstage->controlPanHndl, ATTR_TOP, *zstage->controlPanTopPos);
 	
 	// connect module data and user interface callbackFn to all direct controls in the panel
-	SetCtrlsInPanCBInfo(mod, ((Zstage_type*)mod)->uiCtrlsCB, zstage->controlPanHndl);
+	SetCtrlsInPanCBInfo(mod, ((ZStage_type*)mod)->uiCtrlsCB, zstage->controlPanHndl);
 	
 	// add panel callback function pointer and callback data
 	SetPanelAttribute(zstage->controlPanHndl, ATTR_CALLBACK_FUNCTION_POINTER, UIPan_CB);
@@ -424,7 +424,7 @@ int	ZStage_LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_ moduleE
 {
 INIT_ERR
 
-	Zstage_type* 		zstage			= (Zstage_type*) mod;
+	ZStage_type* 		zstage			= (ZStage_type*) mod;
 	
 	// allocate memory to store values
 	// Note: This must be done before initializing the attributes array!
@@ -508,7 +508,7 @@ int ZStage_SaveCfg (DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXM
 {
 INIT_ERR
 
-	Zstage_type* 					zstage			= (Zstage_type*) mod;
+	ZStage_type* 					zstage			= (ZStage_type*) mod;
 	int*							panTopPos		= NULL;
 	int*							panLeftPos		= NULL;
 	
@@ -567,7 +567,7 @@ static int DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 {
 INIT_ERR
 
-	Zstage_type* 	zstage		= (Zstage_type*) mod; 
+	ZStage_type* 	zstage		= (ZStage_type*) mod; 
 	
 	
 	if (visibleFlag)
@@ -580,7 +580,7 @@ Error:
 	return errorInfo.error;
 }
 
-static int ChangeLEDStatus (Zstage_type* zstage, Zstage_LED_type status)
+static int ChangeLEDStatus (ZStage_type* zstage, Zstage_LED_type status)
 {
 INIT_ERR	
 	
@@ -611,7 +611,7 @@ Error:
 	return errorInfo.error;
 }
 
-static int UpdatePositionDisplay (Zstage_type* zstage)
+static int UpdatePositionDisplay (ZStage_type* zstage)
 {
 INIT_ERR
 	
@@ -625,7 +625,7 @@ Error:
 	return errorInfo.error;
 }
 
-static int UpdateZSteps (Zstage_type* zstage)
+static int UpdateZSteps (ZStage_type* zstage)
 {
 INIT_ERR	
 	
@@ -668,12 +668,12 @@ Error:
 	return errorInfo.error;
 }
 
-static void SetStepCounter	(Zstage_type* zstage, size_t val)
+static void SetStepCounter	(ZStage_type* zstage, size_t val)
 {
 	SetCtrlVal(zstage->controlPanHndl, ZStagePan_Step, val);
 }
 
-static void	DimWhenRunning (Zstage_type* zstage, BOOL dimmed)
+static void	DimWhenRunning (ZStage_type* zstage, BOOL dimmed)
 {
 	int menubarHndl = GetPanelMenuBar (zstage->controlPanHndl);
 	
@@ -690,14 +690,16 @@ static void	DimWhenRunning (Zstage_type* zstage, BOOL dimmed)
 
 static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	Zstage_type* 				zstage 			= callbackData;
-	int							refPosIdx;						// 0-based index of ref pos selected in the list
-	RefPosition_type**			refPosPtrPtr;
-	double						stepsize;	  					
-	double 						direction;
-	double 						moveAbsPos;   					
-	double						moveRelPos; 
-	char						refPosDisplayItem[MAX_REF_POS_LENGTH + 50];
+INIT_ERR
+
+	ZStage_type* 				zstage 											= callbackData;
+	int							refPosIdx										= 0;			// 0-based index of ref pos selected in the list
+	RefPosition_type**			refPosPtrPtr									= NULL;
+	double						stepsize										= 0;	  					
+	double 						direction										= 0;
+	double 						moveAbsPos										= 0;   					
+	double						moveRelPos										= 0; 
+	char						refPosDisplayItem[MAX_REF_POS_LENGTH + 50]		= "";
 	
 	switch (event) {
 			
@@ -722,28 +724,28 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					
 					// move up relative to current position with selected step size
 					if (zstage->MoveZ)
-						(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, direction*stepsize);
+						errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, direction * stepsize, &errorInfo.errMsg) );
 					break;
 					
 				case ZStagePan_MoveZDown:
 					
 					// move down relative to current position with selected step size
 					if (zstage->MoveZ)
-						(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, -direction*stepsize);
+						errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, -direction*stepsize, &errorInfo.errMsg) );
 					break;
 					
 				case ZStagePan_Stop:
 					
 					// stop stage motion
 					if (zstage->StopZ)
-						(*zstage->StopZ)	(zstage);
+						errChk( (*zstage->StopZ)(zstage, &errorInfo.errMsg) );
 					break;
 				
 				case ZStagePan_ZAbsPos:
 					
 					// move to absolute position with selected step size
 					if (zstage->MoveZ)
-						(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_ABS, moveAbsPos);
+						errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_ABS, moveAbsPos, &errorInfo.errMsg) );
 					
 					break;
 					
@@ -751,7 +753,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					
 					// move relative to current position
 					if (zstage->MoveZ)
-						(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, moveRelPos);
+						errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, moveRelPos, &errorInfo.errMsg) );
 					
 					break;
 					
@@ -772,26 +774,19 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					if (!newRefPosName) return 0;	// operation cancelled or an error occured.
 					
 					// add new reference position to structure data
-					newRefPos = init_RefPosition_type(newRefPosName, moveAbsPos);
-					if (!newRefPos) goto AddRefPosError;
+					nullChk( newRefPos = init_RefPosition_type(newRefPosName, moveAbsPos) );
 					
-					if (!ListInsertItem(zstage->zRefPos, &newRefPos, END_OF_LIST)) goto AddRefPosError;
+					nullChk( ListInsertItem(zstage->zRefPos, &newRefPos, END_OF_LIST) );
 					
 					// undim ref pos listbox
 					SetCtrlAttribute(panel, ZStagePan_RefPosList, ATTR_DIMMED, 0);
 					
 					// add reference position to listbox
-					Fmt(refPosDisplayItem, "%s @ %f[p*]", newRefPosName, POS_DISPLAY_PRECISION, moveAbsPos*1000);  		// display in [um]
+					Fmt(refPosDisplayItem, "%s @ %f[p*]", newRefPosName, POS_DISPLAY_PRECISION, moveAbsPos * 1000);  		// display in [um]
 					OKfree(newRefPosName);
-					InsertListItem(panel, ZStagePan_RefPosList, -1, refPosDisplayItem, moveAbsPos); // store listbox position value in [mm] 
-					
+					nullChk( InsertListItem(panel, ZStagePan_RefPosList, -1, refPosDisplayItem, moveAbsPos) ); // store listbox position value in [mm] 
 					break;
-					AddRefPosError:
-					OKfree(newRefPosName);
-					discard_RefPosition_type(&newRefPos);
-					DLMsg("Error. Could not add new reference position. Out of memory?\n\n", 1);
-					return 0;
-					
+				
 				case ZStagePan_Joystick:
 					
 					BOOL	useJoystick;
@@ -800,7 +795,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					
 					GetCtrlVal(panel, control, &useJoystick);
 					
-					(*zstage->UseJoystick)	(zstage, useJoystick);
+					errChk( (*zstage->UseJoystick)(zstage, useJoystick, &errorInfo.errMsg) );
 					
 					break;
 					
@@ -813,13 +808,13 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					if (!zstage->SetStageVelocity) break; // do nothing if there is no such functionality implemented by the child class
 					
 					if (velIdx == 0 && zstage->lowVelocity)
-						(*zstage->SetStageVelocity)		(zstage, *zstage->lowVelocity);
+						errChk( (*zstage->SetStageVelocity)(zstage, *zstage->lowVelocity, &errorInfo.errMsg) );
 					else
 						if (velIdx == 1 && zstage->midVelocity)
-						(*zstage->SetStageVelocity)		(zstage, *zstage->midVelocity);
+							errChk( (*zstage->SetStageVelocity)(zstage, *zstage->midVelocity, &errorInfo.errMsg) );
 						else
 							if (velIdx == 2 && zstage->highVelocity)
-								(*zstage->SetStageVelocity)		(zstage, *zstage->highVelocity);
+								errChk( (*zstage->SetStageVelocity)(zstage, *zstage->highVelocity, &errorInfo.errMsg) );
 					
 					break;
 					
@@ -864,7 +859,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 					GetValueFromIndex(panel, control, refPosIdx, &moveAbsPos);
 					// move to reference position
 					if (zstage->MoveZ)
-						(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_ABS, moveAbsPos);
+						errChk( (*zstage->MoveZ) (zstage, ZSTAGE_MOVE_ABS, moveAbsPos, &errorInfo.errMsg) );
 					
 					break;
 			}
@@ -891,13 +886,13 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 				case ZStagePan_StartAbsPos:	// set start position to match current position
 					
 					SetCtrlVal(panel, control, *zstage->zPos * 1000); 							// convert to [um]
-					UpdateZSteps	(zstage);  
+					UpdateZSteps(zstage);  
 					break;
 					
 				case ZStagePan_EndRelPos: 	// set relative end position (to absolute start position) to match current stage position
 					
 					SetCtrlVal(panel, control, (*zstage->zPos - *zstage->startAbsPos) * 1000);   	// convert to [um] 
-					UpdateZSteps	(zstage); 
+					UpdateZSteps(zstage); 
 					break;
 					
 			}
@@ -925,7 +920,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							SetCtrlVal(panel, control, (*zstage->zPos + direction * stepsize) * 1000);	// convert back to [um]
 							// move relative to current position
 							if (zstage->MoveZ)
-								(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, direction * stepsize);
+								errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, direction * stepsize, &errorInfo.errMsg) );
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
@@ -933,7 +928,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							SetCtrlVal(panel, control, (*zstage->zPos - direction * stepsize) * 1000);	// convert back to [um] 
 							// move relative to current position
 							if (zstage->MoveZ)
-								(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, -direction * stepsize);
+								errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, -direction * stepsize, &errorInfo.errMsg) );
 							return 1;
 					
 					}
@@ -948,7 +943,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							SetCtrlVal(panel, control, direction * stepsize * 1000);					// convert back to [um]
 							// move relative to current position
 							if (zstage->MoveZ)
-								(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, direction * stepsize);
+								errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, direction * stepsize, &errorInfo.errMsg) );
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
@@ -956,7 +951,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 							SetCtrlVal(panel, control, -direction * stepsize * 1000);					// convert back to [um]
 							// move relative to current position
 							if (zstage->MoveZ)
-								(*zstage->MoveZ)	(zstage, ZSTAGE_MOVE_REL, -direction * stepsize);
+								errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, -direction * stepsize, &errorInfo.errMsg) );
 							return 1;
 					
 					}
@@ -998,12 +993,18 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 			}
 	}
 	
+Error:
+	
+PRINT_ERR
+
 	return 0;
 }
 
 static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	Zstage_type* 		zstage 	= callbackData;
+INIT_ERR
+
+	ZStage_type* 		zstage 	= callbackData;
 	
 	switch (event) {
 		
@@ -1030,7 +1031,7 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 					
 					// if given, call hardware specific function to set these limits
 					if (zstage->SetHWStageLimits)
-						if ( (*zstage->SetHWStageLimits)	(zstage, newMinLimit, newMaxLimit) < 0) {
+						if ( (*zstage->SetHWStageLimits)(zstage, newMinLimit, newMaxLimit, NULL) < 0) {
 							// error setting new limits, return to old values
 							SetCtrlVal(panel, ZSetPan_MinimumLimit, *zstage->zMinimumLimit * 1000);		// convert from [mm] to [um]
 							SetCtrlVal(panel, ZSetPan_MaximumLimit, *zstage->zMaximumLimit * 1000);		// convert from [mm] to [um]
@@ -1052,7 +1053,7 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 									// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(zstage->controlPanHndl, ZStagePan_StageVel, &velIdx);
 						if (velIdx == 0 && zstage->SetStageVelocity)
-							(*zstage->SetStageVelocity)	(zstage, *zstage->lowVelocity);
+							errChk( (*zstage->SetStageVelocity)(zstage, *zstage->lowVelocity, &errorInfo.errMsg) );
 					}
 					
 					break;
@@ -1067,7 +1068,7 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 									// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(zstage->controlPanHndl, ZStagePan_StageVel, &velIdx);
 						if (velIdx == 1 && zstage->SetStageVelocity)
-							(*zstage->SetStageVelocity)	(zstage, *zstage->midVelocity);
+							errChk( (*zstage->SetStageVelocity)(zstage, *zstage->midVelocity, &errorInfo.errMsg) );
 					}
 					
 					break;
@@ -1082,7 +1083,7 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 									// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(zstage->controlPanHndl, ZStagePan_StageVel, &velIdx);
 						if (velIdx == 0 && zstage->SetStageVelocity)
-							(*zstage->SetStageVelocity)	(zstage, *zstage->highVelocity);
+							errChk( (*zstage->SetStageVelocity)(zstage, *zstage->highVelocity, &errorInfo.errMsg) );
 					}
 					
 					break;
@@ -1092,19 +1093,23 @@ static int CVICALLBACK SettingsCtrls_CB (int panel, int control, int event, void
 			break;
 	}
 	
+Error:
+	
+PRINT_ERR
+
 	return 0;
 }
 
 static int CVICALLBACK UIPan_CB (int panel, int event, void *callbackData, int eventData1, int eventData2)
 {
-	Zstage_type* 		zstage 	= callbackData;
+	ZStage_type* 		zstage 	= callbackData;
 	
 	return 0;
 }
 
 static void CVICALLBACK SettingsMenu_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
-	Zstage_type* 	zstage 			= callbackData;
+	ZStage_type* 	zstage 			= callbackData;
 	int				parentPanHndl;
 	
 	GetPanelAttribute(panel, ATTR_PANEL_PARENT, &parentPanHndl);
@@ -1165,21 +1170,21 @@ static BOOL ValidateRefPosName (char inputStr[], void* dataPtr)
 /*
 static int ConfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	ZStage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static int UnconfigureTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	ZStage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIterationFlag)
 {
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	ZStage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	
 	TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL);
@@ -1187,47 +1192,47 @@ static void IterateTC (TaskControl_type* taskControl, BOOL const* abortIteration
 
 static void	AbortIterationTC (TaskControl_type* taskControl, BOOL const* abortFlag)
 {
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	ZStage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 }
 
 static int StartTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	ZStage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	ZStage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static int DoneTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	ZStage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static int StoppedTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	ZStage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }
 
 static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[])
 {
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	ZStage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 }
 
 static int EventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorMsg)
 {
-	Zstage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
+	ZStage_type* 		zstage 			= GetTaskControlModuleData(taskControl);
 	
 	return 0;
 }

@@ -6694,7 +6694,7 @@ INIT_ERR
 					// insert trigger type options
 					InsertListItem(trigPanHndl, TrigPan_TrigType, -1, "None", Trig_None); 
 					InsertListItem(trigPanHndl, TrigPan_TrigType, -1, "Digital Edge", Trig_DigitalEdge); 
-					newChan->startTrig->trigType=Trig_None;
+					newChan->startTrig->trigType = Trig_None;
 					SetCtrlAttribute(trigPanHndl,TrigPan_Slope,ATTR_DIMMED,TRUE);
 					SetCtrlAttribute(trigPanHndl,TrigPan_Source,ATTR_DIMMED,TRUE); 									   ;  
 						
@@ -7640,7 +7640,7 @@ static void PopulateIOType (Dev_type* dev, int panHndl, int controlID, int ioVal
 								
 							// Generate digital pulses defined by frequency and duty cycle.
 							case DAQmx_Val_Pulse_Freq:
-								InsertListItem(panHndl, controlID, -1, "Pulse by frequency", DAQmx_Val_Pulse_Freq); 
+								InsertListItem(panHndl, controlID, -1, "Pulse by freq.", DAQmx_Val_Pulse_Freq); 
 								break;
 								
 							// Generate digital pulses defined by the number of timebase ticks that the pulse is at a low state and the number of timebase ticks that the pulse is at a high state. 
@@ -9299,34 +9299,53 @@ INIT_ERR
 
 	ChanSet_CO_type* 			selectedChan 		= callbackData; 
 	int 						buffsize 			= 0; 
-	int 						intval;
 	
 	
 	if (event != EVENT_COMMIT) return 0;
-	
 	
 	switch (control) { 							  
 			
 		case TrigPan_Slope:
 			
-		  	GetCtrlVal(panel, control, &intval);
-			if (intval == TrigSlope_Rising) selectedChan->startTrig->slope = TrigSlope_Rising;
-			if (intval == TrigSlope_Falling) selectedChan->startTrig->slope = TrigSlope_Falling; 
+			uInt32	slope = 0;
+			
+		  	GetCtrlVal(panel, control, &slope);
+			
+			switch (slope) {
+					
+				case TrigSlope_Rising:
+					
+					selectedChan->startTrig->slope = TrigSlope_Rising;
+					break;
+					
+				case TrigSlope_Falling:
+					
+					selectedChan->startTrig->slope = TrigSlope_Falling;
+					break;
+			}
 			break;
 			
  		case TrigPan_TrigType:
 			
-			GetCtrlVal(panel, control,&intval); 
-			if (intval == Trig_None) {
-				selectedChan->startTrig->trigType = DAQmx_Val_None;
-				SetCtrlAttribute(panel,TrigPan_Slope,ATTR_DIMMED,TRUE);
-				SetCtrlAttribute(panel,TrigPan_Source,ATTR_DIMMED,TRUE); 
-			}
+			uInt32	trigType = 0;
 			
-			if (intval == Trig_DigitalEdge) {
-				selectedChan->startTrig->trigType = DAQmx_Val_DigEdge;
-				SetCtrlAttribute(panel,TrigPan_Slope,ATTR_DIMMED,FALSE);
-				SetCtrlAttribute(panel,TrigPan_Source,ATTR_DIMMED,FALSE); 
+			GetCtrlVal(panel, control, &trigType); 
+			
+			switch (trigType) {
+					
+				case Trig_None:
+					
+					selectedChan->startTrig->trigType = Trig_None;
+					SetCtrlAttribute(panel, TrigPan_Slope, ATTR_DIMMED, TRUE);
+					SetCtrlAttribute(panel, TrigPan_Source, ATTR_DIMMED, TRUE); 
+					break;
+					
+				case Trig_DigitalEdge:
+					
+					selectedChan->startTrig->trigType = Trig_DigitalEdge;
+					SetCtrlAttribute(panel, TrigPan_Slope, ATTR_DIMMED, FALSE);
+					SetCtrlAttribute(panel, TrigPan_Source, ATTR_DIMMED, FALSE); 
+					break;
 			}
 			break;
 			
@@ -10544,21 +10563,21 @@ INIT_ERR
 		taskName = GetTaskControlName(dev->taskController);
 		AppendString(&taskName, " CO Task on ", -1);
 		AppendString(&taskName, strstr(chanSet->baseClass.name, "/")+1, -1);
-		DAQmxErrChk (DAQmxCreateTask(taskName, &chanSet->taskHndl));
+		DAQmxErrChk( DAQmxCreateTask(taskName, &chanSet->taskHndl) );
 		OKfree(taskName);
 		
 		switch (chanSet->baseClass.chanType) {
 				
 			case Chan_CO_Pulse_Frequency:
 				
-				DAQmxErrChk ( DAQmxCreateCOPulseChanFreq(chanSet->taskHndl, chanSet->baseClass.name, "", DAQmx_Val_Hz, PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), 
+				DAQmxErrChk( DAQmxCreateCOPulseChanFreq(chanSet->taskHndl, chanSet->baseClass.name, "", DAQmx_Val_Hz, PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), 
 														 GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)chanSet->pulseTrain), GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)chanSet->pulseTrain), 
 														 (GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)chanSet->pulseTrain)/100)) );
 				break;
 				
 			case Chan_CO_Pulse_Time:
 				     
-				DAQmxErrChk ( DAQmxCreateCOPulseChanTime(chanSet->taskHndl, chanSet->baseClass.name, "", DAQmx_Val_Seconds, PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), 
+				DAQmxErrChk( DAQmxCreateCOPulseChanTime(chanSet->taskHndl, chanSet->baseClass.name, "", DAQmx_Val_Seconds, PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), 
 													GetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)chanSet->pulseTrain), GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)chanSet->pulseTrain), 
 													GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)chanSet->pulseTrain)) );
 				break;
@@ -10566,11 +10585,11 @@ INIT_ERR
 			case Chan_CO_Pulse_Ticks:
 				
 				if (chanSet->clockSource && chanSet->clockSource[0])
-					DAQmxErrChk ( DAQmxCreateCOPulseChanTicks(chanSet->taskHndl, chanSet->baseClass.name, "", chanSet->clockSource,
+					DAQmxErrChk( DAQmxCreateCOPulseChanTicks(chanSet->taskHndl, chanSet->baseClass.name, "", chanSet->clockSource,
 								 PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain), GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain),
 								 GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain)) );
 				else
-					DAQmxErrChk ( DAQmxCreateCOPulseChanTicks(chanSet->taskHndl, chanSet->baseClass.name, "", "OnboardClock",
+					DAQmxErrChk( DAQmxCreateCOPulseChanTicks(chanSet->taskHndl, chanSet->baseClass.name, "", "OnboardClock",
 							 PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain), GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain),
 							 GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain)) );
 	
@@ -10579,9 +10598,7 @@ INIT_ERR
 				
 			default:
 				
-				errorInfo.error 	= ConfigDAQmxCOTask_Err_ChanNotImplemented;
-				errorInfo.errMsg	= StrDup("Channel type not implemented");
-				goto Error;
+				SET_ERR(ConfigDAQmxCOTask_Err_ChanNotImplemented, "Channel type not implemented");
 		}
 		
 		//----------------------
@@ -10592,23 +10609,23 @@ INIT_ERR
 			switch (chanSet->startTrig->trigType) {
 				
 				case Trig_None:
-					DAQmxErrChk (DAQmxDisableStartTrig(chanSet->taskHndl));
+					DAQmxErrChk( DAQmxDisableStartTrig(chanSet->taskHndl) );
 					break;
 			
 				case Trig_AnalogEdge:
 					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0])
-						DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->slope, chanSet->startTrig->level));  
+						DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->slope, chanSet->startTrig->level) );  
 					break;
 			
 				case Trig_AnalogWindow:
 					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0])
-						DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->wndTrigCond, 
-									 chanSet->startTrig->wndTop, chanSet->startTrig->wndBttm));  
+						DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->wndTrigCond, 
+									 chanSet->startTrig->wndTop, chanSet->startTrig->wndBttm) );  
 					break;
 			
 				case Trig_DigitalEdge:
 					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0])
-						DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->slope));  
+						DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->slope) );  
 					break;
 			
 				case Trig_DigitalPattern:
@@ -10620,23 +10637,23 @@ INIT_ERR
 			switch (chanSet->referenceTrig->trigType) {
 			
 				case Trig_None:
-					DAQmxErrChk (DAQmxDisableRefTrig(chanSet->taskHndl));
+					DAQmxErrChk( DAQmxDisableRefTrig(chanSet->taskHndl) );
 					break;
 			
 				case Trig_AnalogEdge:
 					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0])
-						DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->slope, chanSet->referenceTrig->level, chanSet->referenceTrig->nPreTrigSamples));  
+						DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->slope, chanSet->referenceTrig->level, chanSet->referenceTrig->nPreTrigSamples) );  
 					break;
 			
 				case Trig_AnalogWindow:
 					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0])
-						DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->wndTrigCond, 
-							 		chanSet->referenceTrig->wndTop, chanSet->referenceTrig->wndBttm, chanSet->referenceTrig->nPreTrigSamples));  
+						DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->wndTrigCond, 
+							 		chanSet->referenceTrig->wndTop, chanSet->referenceTrig->wndBttm, chanSet->referenceTrig->nPreTrigSamples) );  
 					break;
 			
 				case Trig_DigitalEdge:
 					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0])
-						DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->slope, chanSet->referenceTrig->nPreTrigSamples));  
+						DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->slope, chanSet->referenceTrig->nPreTrigSamples) );
 					break;
 			
 				case Trig_DigitalPattern:
@@ -10645,7 +10662,7 @@ INIT_ERR
 		
 		
 		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSet->taskHndl, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(chanSet->pulseTrain)), GetPulseTrainNPulses(chanSet->pulseTrain)) );
-		DAQmxErrChk ( DAQmxSetTrigAttribute(chanSet->taskHndl, DAQmx_StartTrig_Retriggerable, TRUE) );    
+		DAQmxErrChk ( DAQmxSetTrigAttribute(chanSet->taskHndl, DAQmx_StartTrig_Retriggerable, FALSE) );    
 		
 		// register CO task done event callback
 		// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.

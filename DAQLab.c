@@ -1673,6 +1673,8 @@ BOOL DLUnregisterHWTrigSlave (HWTrigSlave_type* slave)
 
 void DLMsg(const char* text, BOOL beep)
 {
+	if (!text) return;
+	
 	SetCtrlVal(logPanHndl, LogPan_LogBox, text);
 	if (beep) {
 		DisplayPanel(logPanHndl); // bring to focus

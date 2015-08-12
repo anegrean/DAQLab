@@ -46,12 +46,17 @@
 // print error info in the worspace log box	
 #define PRINT_ERR \
 	if (errorInfo.error < 0) { \
-		if (!errorInfo.errMsg) \
-			DLMsg("Unknown error or out of memory.\n\n", 1); \
-		else { \
-			AppendString(&errorInfo.errMsg, "\n\n", -1); \
-			DLMsg(errorInfo.errMsg, 1); \
+		char* msgBuff = NULL; \
+		if (!errorInfo.errMsg) { \
+			msgBuff = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown error or out of memory."); \
+			DLMsg(msgBuff, 1); \
+			DLMsg("\n\n", 0); \
+		} else { \
+			msgBuff = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, errorInfo.errMsg); \
+			DLMsg(msgBuff, 1); \
+			DLMsg("\n\n", 0); \
 		} \
+		OKfree(msgBuff);\
 		OKfree(errorInfo.errMsg); \
 	} \
 		

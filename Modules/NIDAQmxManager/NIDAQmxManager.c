@@ -11041,11 +11041,9 @@ Error:
 	// cleanup
 	discard_DSInfo_type(&dsInfo);
 	
-	if (!errorInfo.errMsg)
-		errorInfo.errMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or out of memory.");
-	
-	TaskControlIterationDone(dev->taskController, errorInfo.error, errorInfo.errMsg, FALSE, NULL);
-	OKfree(errorInfo.errMsg);
+	StopDAQmxTasks(dev, NULL);
+
+PRINT_ERR
 	return 0;
 }
 
@@ -11192,11 +11190,10 @@ Error:
 	OKfree(AOData);
 	discard_Waveform_type(&AOWaveform);
 	
-	if (!errorInfo.errMsg)
-		errorInfo.errMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or out of memory");
+	StopDAQmxTasks(dev, NULL);
 	
-	TaskControlIterationDone(dev->taskController, errorInfo.error, errorInfo.errMsg, FALSE, NULL);
-	OKfree(errorInfo.errMsg);
+PRINT_ERR
+
 	return 0;
 }
 
@@ -11406,11 +11403,10 @@ Error:
 	// cleanup
 	discard_PulseTrain_type(&pulseTrain);
 	
-	if (!errorInfo.errMsg)
-		errorInfo.errMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or out of memory");
+	StopDAQmxTasks(dev, NULL);
 	
-	TaskControlIterationDone(dev->taskController, errorInfo.error, errorInfo.errMsg, FALSE, NULL);
-	OKfree(errorInfo.errMsg);
+PRINT_ERR
+
 	return 0;
 }
 
@@ -11643,19 +11639,13 @@ DAQmxError:
 DAQmx_ERROR_INFO
 
 Error:
+
+// cleanup
+	OKfree(readBuffer);  
 	
-	if (!errorInfo.errMsg)
-		errorInfo.errMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or o	ut of memory");
-	
-	//-------------------------
-	// cleanup
-	//-------------------------
-	// stop all device tasks
 	StopDAQmxTasks(dev, NULL); 
 	
-	OKfree(readBuffer); 
-
-	OKfree(errorInfo.errMsg);
+PRINT_ERR
 	
 	return 0;
 }
@@ -11749,18 +11739,12 @@ DAQmx_ERROR_INFO
 
 Error:
 	
-	if (!errorInfo.errMsg)
-		errorInfo.errMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or out of memory");
-	
-	//-------------------------
 	// cleanup
-	//-------------------------
-	// clear all device tasks
+	OKfree(readBuffer);
+	
 	StopDAQmxTasks(dev, NULL); 
 	
-	OKfree(readBuffer); 
-
-	OKfree(errorInfo.errMsg);
+PRINT_ERR
 	
 	return 0;
 }
@@ -11823,8 +11807,10 @@ DAQmx_ERROR_INFO
 
 Error:
 	
-	TaskControlIterationDone(dev->taskController, errorInfo.error, errorInfo.errMsg, FALSE, NULL);
-	OKfree(errorInfo.errMsg);
+	StopDAQmxTasks(dev, NULL);
+	
+PRINT_ERR
+
 	return 0;
 }
 
@@ -11893,8 +11879,10 @@ DAQmx_ERROR_INFO
 
 Error:
 	
-	TaskControlIterationDone(dev->taskController, errorInfo.error, errorInfo.errMsg, FALSE, NULL);
-	OKfree(errorInfo.errMsg);
+	StopDAQmxTasks(dev, NULL);
+	
+PRINT_ERR
+
 	return 0;
 }
 
@@ -14456,6 +14444,8 @@ static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char**
 static void	ErrorTC (TaskControl_type* taskControl, int errorID, char errorMsg[])
 {
 	Dev_type*	dev	= GetTaskControlModuleData(taskControl);
+	
+	StopDAQmxTasks(dev, NULL);
 }
 
 static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorMsg)

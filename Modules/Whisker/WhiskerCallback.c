@@ -18,6 +18,7 @@
 
 //==============================================================================
 // Constants
+
 //==============================================================================
 // Types
 
@@ -40,13 +41,30 @@ QuitButton_CB(int panel, int control, int event, void *callbackData, int eventDa
 	
 	switch (event) {
 		case EVENT_COMMIT:	/* Text Box have commit only when enter key is pressed */
-			/* This stops only existing module. But fail to remove it from global list.
-			 * Thus, we need a way to remove this module from module list.
+			/* Hiding panel seems better way to handle quit panel.
+			 * Module discard function will be called when the entire application is closed.
+		     * When entire application is restarted, whisker module will be restarted if it
+			 * remains in the open module list. Otherwise have to start manually.
 			 */
-			discard_WhiskerModule((DAQLabModule_type **)&whisker_m);
+			HidePanel(whisker_m->whisker_ui.main_panel_handle);
 			break;
 	}
 	return 0;
+}
+
+inline void
+update_xy_positions(zaber_device_t *z_dev, int panel)
+{
+	size_t	abs_pos, x_pos, y_pos;
+	
+	abs_pos = get_device_data(z_dev->port, ZABER_DEV, "pos");
+	x_pos = get_device_data(z_dev->port, ZABER_X_DEV, "pos");
+	y_pos = get_device_data(z_dev->port, ZABER_Y_DEV, "pos");
+					
+	SetCtrlVal(panel, MainPanel_XYAbs, abs_pos);
+	SetCtrlVal(panel, MainPanel_XYLeft, y_pos);
+	SetCtrlVal(panel, MainPanel_XYRight, x_pos);
+	return;
 }
 
 int CVICALLBACK 
@@ -56,7 +74,10 @@ XYMovement_CB(int panel, int control, int event, void *callbackData, int eventDa
 	zaber_device_t	*z_dev = NULL;
 	char			com_port[6] = { 0 };
 	int				position = 0;
-	uint32_t		abs_pos, x_pos, y_pos;
+	int				value;
+	int				num_rows;
+	int				isSelected = 0;
+	Position_t		*saved_position = NULL;
 	
 	z_dev = &(whisker_m->z_dev);
 	
@@ -67,61 +88,105 @@ XYMovement_CB(int panel, int control, int event, void *callbackData, int eventDa
 	
 	switch (event) {
 		case EVENT_COMMIT:
-			
+			GetCtrlVal(panel, control, &position);
 			switch(control) {
 				case MainPanel_XYAbs:
-					/* Get Abs position */
-					GetCtrlVal(panel, MainPanel_XYAbs, &(z_dev->absolute_position));
-					if (z_dev->absolute_position == 0) {	/* TODO: Value should be minimum and maximum allowed */
-						LOG_MSG(9, "Value should be greate than zero"); /* TODO: Alert dialog box */
-					}
-			
-					/* Send Command */ /* TODO: This should be in seperate thread */
-					send_MoveABS_cmd(z_dev->port, z_dev->absolute_position);
+					/* Send ABS Command */
+					send_MoveABS_cmd(z_dev->port, ZABER_DEV, position);
+					update_xy_positions(z_dev, panel);
 					break;
 					
 				case MainPanel_XYLeft:
-					GetCtrlVal(panel, control, &position);
-					/* TODO: Position has to within limit */
-					send_MoveRel_cmd(z_dev->port, ZABER_X_DEV, position); 
+					send_MoveABS_cmd(z_dev->port, ZABER_Y_DEV, position);
+					update_xy_positions(z_dev, panel);
 					break;
 					
 				case MainPanel_XYRight:
-					GetCtrlVal(panel, control, &position);
-					/* TODO: Position has be within limit */
-					send_MoveRel_cmd(z_dev->port, ZABER_Y_DEV, position); 
+					send_MoveABS_cmd(z_dev->port, ZABER_X_DEV, position); 
+					update_xy_positions(z_dev, panel);
 					break;
 				
 				case MainPanel_XYArrowLeft:
 				case MainPanel_XYArrowRight:
 				case MainPanel_XYArrowUp:
 				case MainPanel_XYArrowDown:
-					GetCtrlVal(panel, MainPanel_XYStepNum, &position);
-					
-					if (control == MainPanel_XYArrowLeft || 
-							control == MainPanel_XYArrowDown) {
-								position = -position;
+					value = position;
+					if (value == 1) {			/* Button pressed */
+						if (control == MainPanel_XYArrowRight) {
+							send_MoveMaxMin_cmd(z_dev->port, ZABER_X_DEV, "max");
+						} else if (control == MainPanel_XYArrowLeft) {
+							send_MoveMaxMin_cmd(z_dev->port, ZABER_X_DEV, "min");
+						} else if (control == MainPanel_XYArrowUp) {
+							send_MoveMaxMin_cmd(z_dev->port, ZABER_Y_DEV, "max");
+						} else if (control == MainPanel_XYArrowDown) {
+							send_MoveMaxMin_cmd(z_dev->port, ZABER_Y_DEV, "min");
+						}
+						
+						isSelected = 1;
+					} else if (value == 0) {	/* Button unpressed */
+						send_stop_cmd(z_dev->port, ZABER_DEV);
+						update_xy_positions(z_dev, panel);
 					}
 					
-					if (control == MainPanel_XYArrowLeft || 
-							control == MainPanel_XYArrowRight) {
-						send_MoveRel_cmd(z_dev->port, ZABER_X_DEV, position);
-					} else {
-						send_MoveRel_cmd(z_dev->port, ZABER_Y_DEV, position);
+					/* Dim Undim other controls */
+					if (control == MainPanel_XYArrowRight) {
+						SetCtrlAttribute(panel, MainPanel_XYArrowLeft, ATTR_DIMMED, isSelected);
+						SetCtrlAttribute(panel, MainPanel_XYArrowUp, ATTR_DIMMED, isSelected);
+						SetCtrlAttribute(panel, MainPanel_XYArrowDown, ATTR_DIMMED, isSelected);
+					} else if (control == MainPanel_XYArrowLeft) {
+						SetCtrlAttribute(panel, MainPanel_XYArrowRight, ATTR_DIMMED, isSelected);
+						SetCtrlAttribute(panel, MainPanel_XYArrowUp, ATTR_DIMMED, isSelected);
+						SetCtrlAttribute(panel, MainPanel_XYArrowDown, ATTR_DIMMED, isSelected);
+					} else if (control == MainPanel_XYArrowUp) {
+						SetCtrlAttribute(panel, MainPanel_XYArrowRight, ATTR_DIMMED, isSelected);
+						SetCtrlAttribute(panel, MainPanel_XYArrowLeft, ATTR_DIMMED, isSelected);
+						SetCtrlAttribute(panel, MainPanel_XYArrowDown, ATTR_DIMMED, isSelected);
+					} else if (control == MainPanel_XYArrowDown) {
+						SetCtrlAttribute(panel, MainPanel_XYArrowRight, ATTR_DIMMED, isSelected);
+						SetCtrlAttribute(panel, MainPanel_XYArrowUp, ATTR_DIMMED, isSelected);
+						SetCtrlAttribute(panel, MainPanel_XYArrowLeft, ATTR_DIMMED, isSelected);
 					}
 					
-					/* Once operation is done, it is good to update UI.
-					 * Doing callback won't cause delay and we other operation
-					 * on the same device will be prevented
-					 */
-					abs_pos = get_device_data(z_dev->port, ZABER_DEV, "pos");
-					x_pos = get_device_data(z_dev->port, ZABER_X_DEV, "pos");
-					y_pos = get_device_data(z_dev->port, ZABER_Y_DEV, "pos");
+					break;
 					
-					SetCtrlVal(panel, MainPanel_XYAbs, abs_pos);
-					SetCtrlVal(panel, MainPanel_XYLeft, x_pos);
-					SetCtrlVal(panel, MainPanel_XYRight, y_pos);
+				case MainPanel_XYAddRow: /* Add current values of X and Y to saved positions list */
+					if (z_dev->VALID_DEVICE == FALSE) {
+						MessagePopup("Zaber Device", "Device is not open!");
+						return -1;
+					}
 					
+					saved_position = (Position_t *)malloc(sizeof(Position_t));
+					if (saved_position == NULL) {
+						MessagePopup("Zaber Position", "Failed to allocation memory!");
+						return -1;
+					}
+					
+					/* Get current X and Y values */
+					GetCtrlVal(panel, MainPanel_XYRight, &(saved_position->X));
+					GetCtrlVal(panel, MainPanel_XYLeft, &(saved_position->Y));
+					
+					/* Insert into the list */
+					if (NULL == ListInsertItem(z_dev->saved_positions, &saved_position, 
+											   	END_OF_LIST)) {
+						MessagePopup("Zaber Position", "Failed to insert position into the list");
+						OKfree(saved_position);
+						return -1;
+					}
+					
+					/* Create a new row and update table values */
+					GetNumTableRows (panel, MainPanel_XYPositionsTable, &num_rows);
+					num_rows++;
+					InsertTableRows(panel, MainPanel_XYPositionsTable, num_rows, 1, 
+																VAL_USE_MASTER_CELL_TYPE);
+					SetTableCellVal (panel, MainPanel_XYPositionsTable, 
+									 			MakePoint(XYTABLE_X_COL, num_rows), saved_position->X);
+					SetTableCellVal (panel, MainPanel_XYPositionsTable,
+									 			MakePoint(XYTABLE_Y_COL, num_rows), saved_position->Y);
+					SetTableCellVal (panel, MainPanel_XYPositionsTable,
+									 			MakePoint(XYTABLE_GO_COL, num_rows), GO_LABEL);
+					SetTableCellVal (panel, MainPanel_XYPositionsTable,
+									 			MakePoint(XYTABLE_DEL_COL, num_rows), DEL_LABEL);
+					/* unToggle this */
 					SetCtrlVal(panel, control, 0);
 					break;
 			}
@@ -132,67 +197,78 @@ XYMovement_CB(int panel, int control, int event, void *callbackData, int eventDa
 	
 }
 
-int CVICALLBACK 
-ZUpDown_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+/* Position Table callbacks. Handles Go and Delete operations */
+int  CVICALLBACK 
+PositionTable_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	Whisker_t		*whisker_m = (Whisker_t *)callbackData;
 	zaber_device_t	*z_dev = NULL;
-	int				position = 0;
+	Point			focus;
+	Position_t		*saved_position = NULL;
+	
 	z_dev = &(whisker_m->z_dev);
 	
 	switch (event) {
-			 case EVENT_COMMIT:
-				 GetCtrlVal(panel, control, &position);
-				 if (position == 0) {		/* TODO: Check has to be between valid expected values */
-					 MessagePopup("Error Msg", "Cannot have relative position zero");  /* TODO: Alert dialog box */
-					 return -1;
-				 }
-				 
-				 send_MoveRel_cmd(z_dev->port, 1 /* Device number */, position);
-				 break;
+		case EVENT_COMMIT:
+			GetActiveTableCell(panel, control, &focus);
+			
+			if (focus.x == XYTABLE_GO_COL) {			/* Move zaber using desired position */
+				ListGetItem(z_dev->saved_positions, &saved_position, focus.y);
+				/* Move Zaber device in X direction */
+				send_MoveABS_cmd(z_dev->port, ZABER_X_DEV, saved_position->X);
+				send_MoveABS_cmd(z_dev->port, ZABER_Y_DEV, saved_position->Y);
+			} else if (focus.x == XYTABLE_DEL_COL) { 	/* Delete row from the table and list */
+				/* Remove saved position from list */
+				ListRemoveItem(z_dev->saved_positions, &saved_position, focus.y);
+				OKfree(saved_position);
+				/* Remove row from table */
+				DeleteTableRows(panel, control, focus.y, 1);
+			}
+			break;
 	}
-	
 	return 0;
 }
 
-/*
-int  CVICALLBACK 
-Deditec_Group_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+/* Z Axis movement Handler */
+int CVICALLBACK 
+ZMovement_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	Whisker_t		*whisker_m = (Whisker_t *)callbackData;
 	delib_device_t	*de_dev = NULL;
-	int				button;
-	static int		selected_button = -1; 
-	de_dev = &whisker_m->de_dev;
 	
-	switch(event) {
-		case EVENT_MARK_STATE_CHANGE:
-			Radio_GetMarkedOption(panel, MainPanel_Deditec_Group, &button);
-			
-			if (selected_button != button) {
-				if (button == 3) {
-					set_with_timer(de_dev, AIR_PUFF_CH + button, ON, 15000);
-				} else {
-					 set_with_timer(de_dev, AIR_PUFF_CH + button, ON, 500);
-				}
-				selected_button = button;
+	de_dev = &(whisker_m->de_dev);
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			switch (control) {
+				/* Z Axis IO channel handle seperately in the function IO_Channel_CB */
+				case MainPanel_ZArrowUp:	/* Move up */
+					set_without_timer(de_dev, de_dev->IO_Channel[ZAXIS_MOVE_CH], 1); 
+					break;
+				case MainPanel_ZArrowDown:	/* Move Down */
+					set_without_timer(de_dev, de_dev->IO_Channel[ZAXIS_MOVE_CH], 0);
+					break;
 			}
+			
+			/* UN Toggle the button */
+			SetCtrlVal(panel, control, 0);
 			break;
 	}
 	
 	return 0;
 }
-*/
 
 int  CVICALLBACK
 WhiskerButton_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	Whisker_t		*whisker_m = (Whisker_t *)callbackData;
+	WhiskerUI_t		*whisker_ui = NULL;
 	zaber_device_t	*z_dev = NULL;
 	delib_device_t	*de_dev = NULL;
 	int				index;
 	int				ret = 0;
 	
+	whisker_ui = &(whisker_m->whisker_ui);
 	z_dev = &(whisker_m->z_dev);
 	de_dev = &(whisker_m->de_dev);
 	
@@ -244,6 +320,8 @@ WhiskerButton_CB(int panel, int control, int event, void *callbackData, int even
 						 SetCtrlAttribute (panel, MainPanel_LED_Port, ATTR_ON_COLOR, VAL_GREEN);
 						 SetCtrlVal(panel, MainPanel_LED_Port, 1);
 						 SetCtrlAttribute(panel, MainPanel_XYSetting, ATTR_DIMMED, 0); /* XY setting */
+						 SetCtrlAttribute(panel, MainPanel_XYHome, ATTR_DIMMED, 0);	 /* Home Position */
+						 SetCtrlAttribute(panel, MainPanel_XYUpdatePos, ATTR_DIMMED, 0); /* Update Current Position */
 						 break;
 						 
 					case MainPanel_PortClose:
@@ -254,6 +332,9 @@ WhiskerButton_CB(int panel, int control, int event, void *callbackData, int even
 						SetCtrlAttribute(panel, MainPanel_PortClose, ATTR_DIMMED, 1);
 						SetCtrlVal(panel, MainPanel_LED_Port, 0);
 						SetCtrlAttribute(panel, MainPanel_XYSetting, ATTR_DIMMED, 1); /* XY setting */
+						SetCtrlAttribute(panel, MainPanel_XYHome, ATTR_DIMMED, 1);	 /* Home Position */
+						SetCtrlAttribute(panel, MainPanel_XYUpdatePos, ATTR_DIMMED, 1); /* Update Current Position */
+						
 						break;
 						 
 					case MainPanel_SoundPlay:	/* Play Sound */
@@ -268,6 +349,23 @@ WhiskerButton_CB(int panel, int control, int event, void *callbackData, int even
 						
 					case MainPanel_BuildScript: /* Launch Build Script Panel */
 						init_display_script((void *)whisker_m);
+						break;
+						
+					case MainPanel_ExperimentInfo:	/* Launch Experiment Info Panel */
+						whisker_ui->experiment_panel_handle =  LoadPanel(panel, MOD_Whisker_UI, 
+															   					ExpPanel);
+						if (whisker_ui->experiment_panel_handle < 0) {
+							MessagePopup("Experiment Info Error", "Failed to load panel!");
+							return -1;
+						}
+						
+						SetCtrlAttribute(whisker_ui->experiment_panel_handle, ExpPanel_ExpOk,
+										 	ATTR_CALLBACK_DATA, (void *)whisker_m);
+						SetCtrlAttribute(whisker_ui->experiment_panel_handle, ExpPanel_ExpCancel,
+										 	ATTR_CALLBACK_DATA, (void *)whisker_m);
+						
+						/* Display Panel */
+						DisplayPanel(whisker_ui->experiment_panel_handle);
 						break;
 				 }
 				 
@@ -331,6 +429,9 @@ IO_Channel_CB(int panel, int control, int event, void *callbackData, int eventDa
 						SetCtrlAttribute(panel, MainPanel_Num_DropOut, ATTR_DIMMED, 0);
 						SetCtrlAttribute(panel, MainPanel_Toggle_DropOut, ATTR_DIMMED, 0);
 						*/
+				} else if (panel == whisker_m->whisker_ui.main_panel_handle &&
+						 	control == MainPanel_IO_LickDetection) {
+						de_dev->IO_Channel[LICK_DET_CH] = index;
 				}
 				
 				break;
@@ -444,12 +545,12 @@ WhiskerCheck_CB(int panel, int control, int event, void *callbackData, int event
 		
 }
 
-int  CVICALLBACK WhiskerToggle_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+int  CVICALLBACK 
+WhiskerToggle_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	Whisker_t		*whisker_m = (Whisker_t *)callbackData;
 	delib_device_t	*de_dev = NULL;
-	int				isSelected = 0;
-	unsigned int	time_msec = 0, interval = 0;
+	size_t			time_msec = 0, interval = 0;
 	int				ch = 0;
 	
 	de_dev = &(whisker_m->de_dev);
@@ -515,43 +616,58 @@ int  CVICALLBACK WhiskerToggle_CB(int panel, int control, int event, void *callb
 }
 
 int  CVICALLBACK
-XYSettingButton_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+XYButton_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	Whisker_t		*whisker_m = (Whisker_t *)callbackData;
 	WhiskerUI_t		*whisker_ui = NULL;
+	zaber_device_t	*z_dev = NULL;
 	int				error	= 0;
 	int				X_min, X_max;
 	int				Y_min, Y_max;
 	int				max_speed;
 	
 	whisker_ui = &(whisker_m->whisker_ui);
+	z_dev = &(whisker_m->z_dev);
 	
 	switch (event) {
 		case EVENT_COMMIT:
-			/* Load Setting Panel */
-			errChk(whisker_ui->XYSetting_panel_handle = LoadPanel(panel, MOD_Whisker_UI, XYSetPanel));
 			
-			/* Add call back to each UI componant */
-			SetCtrlAttribute (whisker_ui->XYSetting_panel_handle, XYSetPanel_XYApply, 
+			switch (control) {
+				case MainPanel_XYHome:
+					send_cmd(whisker_m->z_dev.port, "/home", NULL, SYNC);
+				
+				case MainPanel_XYUpdatePos:
+					/* Get absulute postion and update UI */
+					update_xy_positions(z_dev, panel);
+					break;
+					
+				case MainPanel_XYSetting:
+					/* Load Setting Panel */
+					errChk(whisker_ui->XYSetting_panel_handle = LoadPanel(panel, MOD_Whisker_UI, XYSetPanel));
+			
+					/* Add call back to each UI componant */
+					SetCtrlAttribute (whisker_ui->XYSetting_panel_handle, XYSetPanel_XYApply, 
 							  		ATTR_CALLBACK_DATA, (void *)whisker_m);
-			SetCtrlAttribute (whisker_ui->XYSetting_panel_handle, XYSetPanel_XYCancel, 
+					SetCtrlAttribute (whisker_ui->XYSetting_panel_handle, XYSetPanel_XYCancel, 
 							  		ATTR_CALLBACK_DATA, (void *)whisker_m);
 			
-			/* Query zaber device and populate values */
-			X_min = get_device_data(whisker_m->z_dev.port, ZABER_X_DEV, "limit.min");
-			X_max = get_device_data(whisker_m->z_dev.port, ZABER_X_DEV, "limit.max");
-			Y_min = get_device_data(whisker_m->z_dev.port, ZABER_Y_DEV, "limit.min");
-			Y_max = get_device_data(whisker_m->z_dev.port, ZABER_Y_DEV, "limit.max");
-			max_speed = get_device_data(whisker_m->z_dev.port, ZABER_DEV, "maxspeed");
+					/* Query zaber device and populate values */
+					X_min = get_device_data(whisker_m->z_dev.port, ZABER_X_DEV, "limit.min");
+					X_max = get_device_data(whisker_m->z_dev.port, ZABER_X_DEV, "limit.max");
+					Y_min = get_device_data(whisker_m->z_dev.port, ZABER_Y_DEV, "limit.min");
+					Y_max = get_device_data(whisker_m->z_dev.port, ZABER_Y_DEV, "limit.max");
+					max_speed = get_device_data(whisker_m->z_dev.port, ZABER_DEV, "maxspeed");
 			
-			SetCtrlVal(whisker_ui->XYSetting_panel_handle, XYSetPanel_XMin, X_min);
-			SetCtrlVal(whisker_ui->XYSetting_panel_handle, XYSetPanel_XMax, X_max);
-			SetCtrlVal(whisker_ui->XYSetting_panel_handle, XYSetPanel_YMin, Y_min);
-			SetCtrlVal(whisker_ui->XYSetting_panel_handle, XYSetPanel_YMax, Y_max);
-			SetCtrlVal(whisker_ui->XYSetting_panel_handle, XYSetPanel_XYSpeed, max_speed);
+					SetCtrlVal(whisker_ui->XYSetting_panel_handle, XYSetPanel_XMin, X_min);
+					SetCtrlVal(whisker_ui->XYSetting_panel_handle, XYSetPanel_XMax, X_max);
+					SetCtrlVal(whisker_ui->XYSetting_panel_handle, XYSetPanel_YMin, Y_min);
+					SetCtrlVal(whisker_ui->XYSetting_panel_handle, XYSetPanel_YMax, Y_max);
+					SetCtrlVal(whisker_ui->XYSetting_panel_handle, XYSetPanel_XYSpeed, max_speed);
 			
-			/* Display Panel */
-			DisplayPanel(whisker_ui->XYSetting_panel_handle);
+					/* Display Panel */
+					DisplayPanel(whisker_ui->XYSetting_panel_handle);
+					break;
+			}
 			break;
 	}
 
@@ -560,6 +676,39 @@ XYSettingButton_CB(int panel, int control, int event, void *callbackData, int ev
 Error:
 	LOG_MSG(1, "Error Occurred while loading XY setting Panel");
 	return error;
+}
+
+int  CVICALLBACK 
+WhiskerLickToggle_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	Whisker_t	*whisker_m = (Whisker_t *)callbackData;
+	size_t		interval = 1;
+	int			ch;
+	int			input_value;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			GetCtrlVal(panel, MainPanel_LickDetDuration, &interval);
+			while (interval) {
+				input_value = get_input_value(&whisker_m->de_dev, 
+											  whisker_m->de_dev.IO_Channel[LICK_DET_CH]);
+	 			if (input_value == 0) {	/* Lick Detected */
+					SetCtrlAttribute (panel, MainPanel_LickDetection, ATTR_ON_COLOR, VAL_GREEN);
+					SetCtrlVal(panel, MainPanel_LickDetection, 1);
+					break;
+	 			}
+	 			Sleep(INPUT_CHECK_DELAY);	/* 1 ms delay */
+	 			interval -= INPUT_CHECK_DELAY;
+			}
+			
+			if (interval == 0) {	/* Lick not detected */
+				SetCtrlVal(panel, MainPanel_LickDetection, 0);	
+			}
+			
+			SetCtrlVal(panel, control, 0);
+			break;
+	}
+	return 0;
 }
 
 
@@ -610,5 +759,33 @@ XYSettings_CB(int panel, int control, int event, void *callbackData, int eventDa
 			break;
 	}
 	
+	return 0;
+}
+
+/****************************************************************
+ * Experiment Info Panel Callback.								*
+ ****************************************************************/
+int  CVICALLBACK 
+ExperimentInfo_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	Whisker_t	*whisker_m = (Whisker_t *)callbackData;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			switch (control) {
+				case ExpPanel_ExpOk:
+					/* Get Information from Panel and save it to stucture */
+					GetCtrlVal(panel, ExpPanel_ExpName, whisker_m->exp_info.user_name);
+					GetCtrlVal(panel, ExpPanel_ExpNum, &(whisker_m->exp_info.exp_num));
+					GetCtrlVal(panel, ExpPanel_ExpMsg, 	whisker_m->exp_info.extra_msg);
+					whisker_m->exp_info.VALID_INFO = TRUE;
+					
+				case ExpPanel_ExpCancel:
+					DiscardPanel(whisker_m->whisker_ui.experiment_panel_handle);
+					whisker_m->whisker_ui.experiment_panel_handle = 0;
+					break;
+			}
+			break;
+	}
 	return 0;
 }

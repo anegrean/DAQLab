@@ -70,11 +70,6 @@ set_without_timer(delib_device_t *de_dev, ULONG ch, unsigned int flag)
 		return -1;
 	}
 	
-	/* TODO : Remove this. Check output of this channel 
-	ULONG	input;
-	input = DapiDIGet1(de_dev->handle, ch);
-	LOG_MSG1(9, "DEditec input value check %ul ", input);
-	*/
 	return 0;
 }
 
@@ -90,7 +85,7 @@ set_with_timer(delib_device_t *de_dev, ULONG ch, unsigned int flag, long time)
 		return -1;
 	}
 
-	Sleep(time);				/* TODO: It should be nearly accurate time. */
+	Sleep(time);		/* TODO: It should be nearly accurate time. */
 	
 	flag ^= 1 << 0;
 	DapiDOSet1(de_dev->handle, ch, flag);
@@ -101,13 +96,12 @@ set_with_timer(delib_device_t *de_dev, ULONG ch, unsigned int flag, long time)
 	return 0;
 }
 
-int 
+static int 
 is_deditec_error()
 {
 	unsigned char msg[500];
 
-	if (DapiGetLastError() != DAPI_ERR_NONE)
-	{
+	if (DapiGetLastError() != DAPI_ERR_NONE) {
 
 		DapiGetLastErrorText((unsigned char*) msg, sizeof(msg));
 		LOG_MSG2(5, "Error Code = %x * Message = %s\n", 0, msg);
@@ -134,24 +128,18 @@ init_deditec_device(delib_device_t *de_dev)
 	LOG_MSG1(9, "Deditec module handle %ul", handle);
 	de_dev->handle = handle;
 	
-	/* Set I/O to output */
-	DapiSpecialCommand(handle, DAPI_SPECIAL_CMD_SET_DIR_DX_8, 0, 0xf, 0);
+	/* Set Direction.
+	 * CH 1-8 to output : i.e. first bit 1 (lowermost)
+	 * CH 9-16 to input : i.e. second bit 0
+	 * CH 17-24 to output : i.e. third bit 1
+	 * Therefore, Direction = 101
+	 */
+	DapiSpecialCommand(handle, DAPI_SPECIAL_CMD_SET_DIR_DX_8, 0 /* Start channel */, 
+					   					0x5 /* Direction */, 0);
 	if (is_deditec_error()) {
 		close_deditec_device(de_dev);
 		return -1;
 	}
-	
-	/* Set channel 6 to 1 */
-	//DapiDOSet1(handle, 4, 1);
-	//is_deditec_error();
-	
-	//DapiSpecialCommand(handle, DAPI_SPECIAL_CMD_SET_DIR_DX_8, 0, 0, 0);
-	//is_deditec_error();
-	
-	//DapiDOSet1(handle, 4, 0);
-	//is_deditec_error();
-	
-	//set_ch_OnOff(de_dev, AIR_PUFF_CH);
 	return 0;
 }
 

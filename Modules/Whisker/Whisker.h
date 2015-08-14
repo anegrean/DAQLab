@@ -29,14 +29,36 @@
 #define MOD_Whisker_UI		"./Modules/Whisker/UI_Whisker.uir"
 #define MOD_Whisker_Name 	"Rat Whisker"
 #define FILE_PATH_LEN		256
+#define NAME_LEN			64
+#define MSG_LEN				128
+#define INPUT_CHECK_DELAY	1		/* 1 ms between each input check detection */ 
 
 		/* Tab Index */
 #define TAB_DROP_IN			0
 #define TAB_DROP_OUT		1
 #define TAB_AIR_PUFF		2
+		
+/* XY Position TABLE */
+#define	XYTABLE_X_COL	1		/* X column */ 
+#define XYTABLE_Y_COL	2		/* Y column */
+#define XYTABLE_PER_COL	3		/* Percentage Column */
+#define XYTABLE_GO_COL	3		/* Go to position column */
+#define XYTABLE_DEL_COL	4		/* Delete position column */
+#define GO_LABEL		"-->"   /* Go button label */
+#define DEL_LABEL		"X"		/* Delete button label */
 
 //==============================================================================
 // Types
+
+/**
+ * Experiment Information
+ */
+typedef struct {
+	char	user_name[NAME_LEN];	/* User Name */
+	int		exp_num;				/* Experiment Number */
+	char	extra_msg[MSG_LEN];		/* Message to store */
+	int		VALID_INFO;				/* Validity of this informantion */
+} ExperimentInfo_t;
 
 /**
  * Sound structure
@@ -56,6 +78,7 @@ typedef struct {
 	int	tab_drop_in;			/* Drop IN Tab page */
 	int	tab_drop_out;			/* Drop Out Tab Page */
 	int	XYSetting_panel_handle; /* XY setting Panel handle */
+	int experiment_panel_handle	/* Experiment Info Panel */
 } WhiskerUI_t;
 
 /**
@@ -67,7 +90,8 @@ typedef struct {
 	delib_device_t		de_dev;					/* Deditec Device */
 	WhiskerSound_t		sound;					/* Sound structure */
 	WhiskerUI_t			whisker_ui;				/* UI related componants */
-	//WhiskerScript_t		*whisker_script;		/* WhiskerScript builder structure */
+	ExperimentInfo_t	exp_info;				/* Experiment Information */
+	//WhiskerScript_t		*whisker_script;	/* WhiskerScript builder structure */
 } Whisker_t;
 
 //==============================================================================

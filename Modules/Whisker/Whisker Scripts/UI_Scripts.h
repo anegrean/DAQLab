@@ -36,6 +36,7 @@
 #define  CondEle_EleNum                   9       /* control type: textMsg, callback function: (none) */
 #define  CondEle_EleIO_CH                 10      /* control type: ring, callback function: (none) */
 #define  CondEle_EleValue                 11      /* control type: ring, callback function: (none) */
+#define  CondEle_EleDuration              12      /* control type: numeric, callback function: (none) */
 
 #define  ContainPan                       3
 
@@ -118,6 +119,32 @@
 #define  WaitEle_EleApply                 7       /* control type: pictButton, callback function: WaitElementButtons_CB */
 #define  WaitEle_LED                      8       /* control type: LED, callback function: (none) */
 
+#define  XYMoveEle                        11
+#define  XYMoveEle_SPLITTER               2       /* control type: splitter, callback function: (none) */
+#define  XYMoveEle_EleName                3       /* control type: textMsg, callback function: (none) */
+#define  XYMoveEle_EleNum                 4       /* control type: textMsg, callback function: (none) */
+#define  XYMoveEle_EleDelete              5       /* control type: pictButton, callback function: XYMoveElementButtons_CB */
+#define  XYMoveEle_EleApply               6       /* control type: pictButton, callback function: XYMoveElementButtons_CB */
+#define  XYMoveEle_LED                    7       /* control type: LED, callback function: (none) */
+#define  XYMoveEle_ElePercentage          8       /* control type: numeric, callback function: (none) */
+#define  XYMoveEle_ElePos                 9       /* control type: numeric, callback function: (none) */
+#define  XYMoveEle_EleShow                10      /* control type: command, callback function: XYMoveElementButtons_CB */
+#define  XYMoveEle_EleAdd                 11      /* control type: command, callback function: XYMoveElementButtons_CB */
+
+#define  XYPosPan                         12
+#define  XYPosPan_XYPositionsTable        2       /* control type: table, callback function: XYPosTable_CB */
+#define  XYPosPan_XYPositionOk            3       /* control type: command, callback function: XYPosTable_CB */
+
+#define  ZMoveEle                         13
+#define  ZMoveEle_SPLITTER                2       /* control type: splitter, callback function: (none) */
+#define  ZMoveEle_EleName                 3       /* control type: textMsg, callback function: (none) */
+#define  ZMoveEle_EleNum                  4       /* control type: textMsg, callback function: (none) */
+#define  ZMoveEle_EleDelete               5       /* control type: pictButton, callback function: ZMoveElementButtons_CB */
+#define  ZMoveEle_EleApply                6       /* control type: pictButton, callback function: ZMoveElementButtons_CB */
+#define  ZMoveEle_LED                     7       /* control type: LED, callback function: (none) */
+#define  ZMoveEle_EleIO_CH                8       /* control type: ring, callback function: (none) */
+#define  ZMoveEle_EleCommand              9       /* control type: ring, callback function: (none) */
+
 
      /* Control Arrays: */
 
@@ -141,6 +168,9 @@ int  CVICALLBACK StartElementButtons_CB(int panel, int control, int event, void 
 int  CVICALLBACK StopElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK WaitElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK XYMoveElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK XYPosTable_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK ZMoveElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 
 #ifdef __cplusplus

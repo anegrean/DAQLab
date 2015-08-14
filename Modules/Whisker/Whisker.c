@@ -70,7 +70,7 @@ initalloc_WhiskerModule(DAQLabModule_type* mod, char className[], char instanceN
 	// overriding methods
 	whisker_m->baseClass.Discard 		= discard_WhiskerModule;
 	whisker_m->baseClass.Load			= Load;
-	whisker_m->baseClass.LoadCfg		= NULL;		/* TODO: We can have NULL here */
+	whisker_m->baseClass.LoadCfg		= NULL;		/* TODO : We can have NULL here */
 	whisker_m->baseClass.SaveCfg		= NULL;		/* TODO : We can have NULL here */
 	whisker_m->baseClass.DisplayPanels	= DisplayPanels;
 	
@@ -82,6 +82,7 @@ initalloc_WhiskerModule(DAQLabModule_type* mod, char className[], char instanceN
 	//----------------------
 	whisker_m->whisker_ui.main_panel_handle = 0;
 	whisker_m->whisker_ui.XYSetting_panel_handle = 0;
+	whisker_m->whisker_ui.experiment_panel_handle = 0;
 	//whisker_m->whisker_script = NULL;
 	
 	if (mod == NULL) {
@@ -102,6 +103,10 @@ discard_WhiskerModule(DAQLabModule_type** mod)
 	
 	/* Disconnect zaber device */
 	close_zaber_device(&whisker_m->z_dev);
+	/* Free comport list */
+	for (int i = 0; whisker_m->z_dev.comport_list[i] != NULL; i++) {
+		OKfree(whisker_m->z_dev.comport_list[i]);	
+	}
 	
 	/* Close deditec device */
 	close_deditec_device(&whisker_m->de_dev);
@@ -151,7 +156,6 @@ Load(DAQLabModule_type* mod, int workspacePanHndl)
 		InsertListItem(whisker_m->whisker_ui.main_panel_handle, MainPanel_ZaberComPort, i, 
 					   whisker_m->z_dev.comport_list[i], i);
 	}
-	
 	whisker_m->z_dev.VALID_DEVICE = FALSE;
 	
 	/* Init Sound structure */
@@ -160,6 +164,9 @@ Load(DAQLabModule_type* mod, int workspacePanHndl)
 	/* Invalid deditec handle */
 	whisker_m->de_dev.handle = 0; /* TODO: Fail to understand why global varibale is not initialized to zero
  								   * Compiler dependent operation. Thus, do not rely on it */
+	
+	/* Init Expo info */
+	whisker_m->exp_info.VALID_INFO = FALSE;
 	
 	/* Insert IO channels list into AIR_PUFF, DROP_IN, DROP_OUT UI.
 	 * One can do it from UI, but 32 * 3 entries have to entered manually.
@@ -175,7 +182,26 @@ Load(DAQLabModule_type* mod, int workspacePanHndl)
 					   IO_channel, i);
 		InsertListItem(whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_ZAxis, i,
 					   IO_channel, i);
+		InsertListItem(whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_LickDetection, i,
+					   IO_channel, i);
 	}
+	/* Set default value of IO Channels */
+	whisker_m->de_dev.IO_Channel[AIR_PUFF_CH] = AIRPUFF_DEFAULT_CH;
+	whisker_m->de_dev.IO_Channel[DROP_OUT_CH] = DROPOUT_DEFAULT_CH;
+	whisker_m->de_dev.IO_Channel[DROP_IN_CH] = DROPIN_DEFAULT_CH;
+	whisker_m->de_dev.IO_Channel[ZAXIS_MOVE_CH] = ZAXIS_DEFAULT_CH;
+	whisker_m->de_dev.IO_Channel[LICK_DET_CH] = LICKDET_DEFAULT_CH;
+	
+	SetCtrlVal(whisker_m->whisker_ui.tab_air_puff, TabAirPuff_IO_AirPuff, 
+									AIRPUFF_DEFAULT_CH);
+	SetCtrlVal(whisker_m->whisker_ui.tab_drop_out, TabDropOut_IO_DropOut, 
+									DROPOUT_DEFAULT_CH);
+	SetCtrlVal(whisker_m->whisker_ui.tab_drop_in, TabDropIn_IO_DropIN,
+									DROPIN_DEFAULT_CH); 
+	SetCtrlVal(whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_ZAxis,
+									ZAXIS_DEFAULT_CH);
+	SetCtrlVal(whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_LickDetection,
+			   						LICKDET_DEFAULT_CH);
 	
 	return 0;
 	
@@ -218,6 +244,10 @@ set_ctrl_attribute(Whisker_t *whisker_m)
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYArrowRight, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYArrowUp, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYArrowDown, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYAddRow, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYPositionsTable, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYHome, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYUpdatePos, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_ZArrowUp, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_ZArrowDown, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	
@@ -230,12 +260,13 @@ set_ctrl_attribute(Whisker_t *whisker_m)
 	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_out, TabDropOut_IO_DropOut, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.tab_air_puff, TabAirPuff_IO_AirPuff, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_ZAxis, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_LickDetection, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	
 	/* Buttons */
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_LoadSound, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_SoundPlay, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_BuildScript, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_ExperimentInfo, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	
 	/* Check boxes */
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_CheckSync, ATTR_CALLBACK_DATA, (void *)whisker_m);
@@ -251,7 +282,7 @@ set_ctrl_attribute(Whisker_t *whisker_m)
 	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_in, TabDropIn_Toggle_Inter_DropIN, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_out, TabDropOut_Toggle_Inter_DropOut, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.tab_air_puff, TabAirPuff_Toggle_Inter_AirPuff, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_Toggle_Inter_LickDet, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	
 	/* XY setting button that launches Setting Panel */
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYSetting, ATTR_CALLBACK_DATA, (void *)whisker_m);

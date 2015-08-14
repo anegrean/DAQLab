@@ -23,12 +23,21 @@
 //==============================================================================
 // Constants
 #define TOT_IO_CH			32		/* Total number of I/O channels */
-#define TOT_VALID_IO_CH		4		/* Total number of Useful channel for our module */
+#define TOT_VALID_IO_CH		5		/* Total number of Useful channel for our module */
 		
-#define AIR_PUFF_CH			0
+/* IO channel indexes */
+#define AIR_PUFF_CH			0		
 #define DROP_IN_CH			1
 #define DROP_OUT_CH			2
 #define ZAXIS_MOVE_CH		3
+#define LICK_DET_CH			4
+
+/* Default IO channels */
+#define AIRPUFF_DEFAULT_CH	4
+#define	DROPIN_DEFAULT_CH   5
+#define DROPOUT_DEFAULT_CH	6
+#define ZAXIS_DEFAULT_CH	7
+#define LICKDET_DEFAULT_CH	8
 		
 #define ON					1
 #define OFF					0

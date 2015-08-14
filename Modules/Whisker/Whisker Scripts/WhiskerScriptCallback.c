@@ -216,13 +216,21 @@ ScriptAddElement_CB(int panel, int control, int event, void *callbackData, int e
 					nullChk(element = init_SoundElement(whisker_script, NULL));
 					break;
 					
+				case XYMOVE: /* XY Move Element */
+					nullChk(element = init_XYMoveElement(whisker_script, NULL));
+					break;
+					
+				case ZMOVE:	/* Z Move Element */
+					nullChk(element = init_ZMoveElement(whisker_script, NULL));
+					break;
 			}
 			
 			/* Set Panel Attributes */
 			SetPanelAttribute(element->panel_handle, ATTR_TITLEBAR_VISIBLE, 0);
 				
 			/* Add this element into script_elements list */
-			if (NULL == ListInsertItem(cur_script->script_elements, &element, (cur_script->num_elements + 1))) {
+			if (NULL == ListInsertItem(cur_script->script_elements, &element, 
+									   	(cur_script->num_elements + 1))) {
 				DiscardPanel(element->panel_handle);
 				LOG_MSG(0, "Error when inserting element into list\n");
 				goto Error;
@@ -242,6 +250,34 @@ Error:
 	return error;
 }
 
+inline void
+delete_element(WScript_t *cur_script, int index)
+{
+	ScriptElement_t	*element = NULL;
+	
+	ListRemoveItem(cur_script->script_elements, &element, index);
+	cur_script->num_elements -= 1;
+					
+	/* Discard Panel */
+	DiscardPanel(element->panel_handle);
+	
+	if (element->MAGIC_NUM == XYMOVE) {	/* Free saved Positions */
+			Position_t	*saved_position = NULL;
+			while (ListNumItems(((XYMoveElement_t *)element)->saved_positions)) {
+				ListRemoveItem(((XYMoveElement_t *)element)->saved_positions, 
+							   		&saved_position, FRONT_OF_LIST);
+				OKfree(saved_position);
+			}
+			OKfreeList(((XYMoveElement_t *)element)->saved_positions);
+	}
+	
+	OKfree(element);
+					
+	/* Redraw UI */
+	redraw_script_elements(cur_script);
+	return;
+}
+
 /* Action Element Control related callback */
 int  CVICALLBACK 
 ActionElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -255,24 +291,15 @@ ActionElementButtons_CB(int panel, int control, int event, void *callbackData, i
 		case EVENT_COMMIT:
 			GetCtrlVal(panel, ActionEle_EleNum, seq_num);
 			index = atoi(seq_num);
+			ListGetItem(whisker_script->cur_script.script_elements, &element, index);
+			ActionElement_t *action_element = (ActionElement_t *)element;
 			
 			switch (control) {
-				case ActionEle_EleDelete:
-					ListRemoveItem(whisker_script->cur_script.script_elements, &element, index);
-					whisker_script->cur_script.num_elements -= 1;
-					
-					/* Discard Panel */
-					DiscardPanel(element->panel_handle);
-					OKfree(element);
-					
-					/* Redraw UI */
-					redraw_script_elements(&(whisker_script->cur_script));
+				case ActionEle_EleDelete:	/* Delete Element */
+					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case ActionEle_EleApply:
-					ListGetItem(whisker_script->cur_script.script_elements, &element, index);
-					ActionElement_t *action_element = (ActionElement_t *)element;
-					
+				case ActionEle_EleApply:	/* Apply all Elements value */
 					/* Update Structure */
 					GetCtrlVal(panel, ActionEle_EleDuration, &(action_element->duration));
 					GetCtrlVal(panel, ActionEle_EleCommand, (int *)&(action_element->action));
@@ -301,15 +328,7 @@ StartElementButtons_CB(int panel, int control, int event, void *callbackData, in
 			
 			switch (control) {
 				case StartEle_EleDelete:
-					ListRemoveItem(whisker_script->cur_script.script_elements, &element, index);
-					whisker_script->cur_script.num_elements -= 1;
-					
-					/* Discard Panel */
-					DiscardPanel(element->panel_handle);
-					OKfree(element);
-					
-					/* Redraw UI */
-					redraw_script_elements(&(whisker_script->cur_script));
+					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
 				case StartEle_EleApply:
@@ -342,15 +361,7 @@ CondElementButtons_CB(int panel, int control, int event, void *callbackData, int
 			
 			switch (control) {
 				case CondEle_EleDelete:
-					ListRemoveItem(whisker_script->cur_script.script_elements, &element, index);
-					whisker_script->cur_script.num_elements -= 1;
-					
-					/* Discard Panel */
-					DiscardPanel(element->panel_handle);
-					OKfree(element);
-					
-					/* Redraw UI */
-					redraw_script_elements(&(whisker_script->cur_script));
+					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
 				case CondEle_EleApply:
@@ -362,6 +373,7 @@ CondElementButtons_CB(int panel, int control, int event, void *callbackData, int
 					GetCtrlVal(panel, CondEle_EleValue, &(cond_element->value));
 					GetCtrlVal(panel, CondEle_EleTrue, &(cond_element->true_step));
 					GetCtrlVal(panel, CondEle_EleFalse, &(cond_element->false_step));
+					GetCtrlVal(panel, CondEle_EleDuration, &(cond_element->duration));
 					break;
 			}
 			break;
@@ -386,15 +398,7 @@ RepeatElementButtons_CB(int panel, int control, int event, void *callbackData, i
 			
 			switch (control) {
 				case RepEle_EleDelete:
-					ListRemoveItem(whisker_script->cur_script.script_elements, &element, index);
-					whisker_script->cur_script.num_elements -= 1;
-					
-					/* Discard Panel */
-					DiscardPanel(element->panel_handle);
-					OKfree(element);
-					
-					/* Redraw UI */
-					redraw_script_elements(&(whisker_script->cur_script));
+					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
 				case RepEle_EleApply:
@@ -429,15 +433,7 @@ StopElementButtons_CB(int panel, int control, int event, void *callbackData, int
 			
 			switch (control) {
 				case StopEle_EleDelete:
-					ListRemoveItem(whisker_script->cur_script.script_elements, &element, index);
-					whisker_script->cur_script.num_elements -= 1;
-					
-					/* Discard Panel */
-					DiscardPanel(element->panel_handle);
-					OKfree(element);
-					
-					/* Redraw UI */
-					redraw_script_elements(&(whisker_script->cur_script));
+					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
 				case StopEle_EleApply:
@@ -470,15 +466,7 @@ WaitElementButtons_CB(int panel, int control, int event, void *callbackData, int
 			
 			switch (control) {
 				case WaitEle_EleDelete:
-					ListRemoveItem(whisker_script->cur_script.script_elements, &element, index);
-					whisker_script->cur_script.num_elements -= 1;
-					
-					/* Discard Panel */
-					DiscardPanel(element->panel_handle);
-					OKfree(element);
-					
-					/* Redraw UI */
-					redraw_script_elements(&(whisker_script->cur_script));
+					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
 				case WaitEle_EleApply:
@@ -511,15 +499,7 @@ MsgElementButtons_CB(int panel, int control, int event, void *callbackData, int 
 			
 			switch (control) {
 				case MsgEle_EleDelete:
-					ListRemoveItem(whisker_script->cur_script.script_elements, &element, index);
-					whisker_script->cur_script.num_elements -= 1;
-					
-					/* Discard Panel */
-					DiscardPanel(element->panel_handle);
-					OKfree(element);
-					
-					/* Redraw UI */
-					redraw_script_elements(&(whisker_script->cur_script));
+					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
 				case MsgEle_EleApply:
@@ -555,15 +535,7 @@ SoundElementButtons_CB(int panel, int control, int event, void *callbackData, in
 			
 			switch (control) {
 				case SoundEle_EleDelete:   /* TODO: Create MACRO or inline function for following statements */
-					ListRemoveItem(whisker_script->cur_script.script_elements, &element, index);
-					whisker_script->cur_script.num_elements -= 1;
-					
-					/* Discard Panel */
-					DiscardPanel(element->panel_handle);
-					OKfree(element);
-					
-					/* Redraw UI */
-					redraw_script_elements(&(whisker_script->cur_script));
+					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
 				case SoundEle_EleApply:
@@ -596,4 +568,170 @@ SoundElementButtons_CB(int panel, int control, int event, void *callbackData, in
 	return 0;
 }
 
+/* XY Movement Button Control Callback */
+int  CVICALLBACK 
+XYMoveElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)callbackData;
+	ScriptElement_t	*element = NULL;
+	Whisker_t		*whisker_m = (Whisker_t *)whisker_script->whisker_m;
+	char			seq_num[3];
+	int				index = 0;
+	int				xyposition_panel_handle = 0;
+	int				table_index;
+	Position_t		*table_saved_position = NULL;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			GetCtrlVal(panel, XYMoveEle_EleNum, seq_num);
+			index = atoi(seq_num);
+			ListGetItem(whisker_script->cur_script.script_elements, &element, index);
+			XYMoveElement_t *xymove_element = (XYMoveElement_t *)element;
+			
+			switch (control) {
+				case XYMoveEle_EleDelete:
+					delete_element(&(whisker_script->cur_script), index);
+					break;
+				
+				case XYMoveEle_EleApply:
+					/* Get Values */
+					/*
+					GetCtrlVal(panel, XYMoveEle_EleX, &(xymove_element->X));
+					GetCtrlVal(panel, XYMoveEle_EleY, &(xymove_element->Y));
+					GetCtrlVal(panel, XYMoveEle_ElePos, &(xymove_element->pos));
+					*/
+					break;
+					
+				case XYMoveEle_EleShow:	/* Table to launch */
+					xyposition_panel_handle = LoadPanel(0, MOD_WhiskerScript_UI, XYPosPan);
+					if (xyposition_panel_handle < 0) {
+						MessagePopup("XY Position Table Error", "Failed to load panel!");
+							return -1;
+					}
+				
+					/* Set Control Callback */
+					SetCtrlAttribute(xyposition_panel_handle, XYPosPan_XYPositionOk,
+										 	ATTR_CALLBACK_DATA, (void *)xymove_element);
+					SetCtrlAttribute(xyposition_panel_handle, XYPosPan_XYPositionsTable,
+										 	ATTR_CALLBACK_DATA, (void *)xymove_element);
+					
+					/* Add table rows from element->saved_positions */
+					for (int i = 1; i <= ListNumItems(xymove_element->saved_positions); 
+													i++) {
+						ListGetItem(xymove_element->saved_positions, &table_saved_position, i);
+						InsertTableRows(xyposition_panel_handle, XYPosPan_XYPositionsTable, i, 
+										1, VAL_USE_MASTER_CELL_TYPE);
+						SetTableCellVal (xyposition_panel_handle, XYPosPan_XYPositionsTable, 
+								MakePoint(XYTABLE_X_COL, i), table_saved_position->X);
+						SetTableCellVal (xyposition_panel_handle, XYPosPan_XYPositionsTable,
+								MakePoint(XYTABLE_Y_COL, i), table_saved_position->Y);
+						SetTableCellVal (xyposition_panel_handle, XYPosPan_XYPositionsTable,
+								MakePoint(XYTABLE_PER_COL, i), table_saved_position->percent);
+						SetTableCellVal (xyposition_panel_handle, XYPosPan_XYPositionsTable,
+								MakePoint(XYTABLE_DEL_COL, i), DEL_LABEL);
+					}
+					
+					DisplayPanel(xyposition_panel_handle);
+					break;
+					
+				case XYMoveEle_EleAdd:	/* Add position from test panel saved positions */
+					GetCtrlVal(panel, XYMoveEle_ElePos, &table_index);
+					if (table_index > ListNumItems(whisker_m->z_dev.saved_positions)) {
+						MessagePopup("Add XY Position Error", "No Such position in the table!");
+						return -1;
+					}
+					ListGetItem(whisker_m->z_dev.saved_positions, &table_saved_position, 
+								 							table_index);
+					 
+					Position_t	*saved_position = (Position_t *)malloc(sizeof(Position_t));
+					if (saved_position == NULL) {
+						MessagePopup("Positions Add Error", "Failed to allocation memory!");
+						return -1;
+					}
+					*saved_position = *table_saved_position;	/* Copy Saved positions */
+					/* Get the Percentage from UI */
+					GetCtrlVal(panel, XYMoveEle_ElePercentage, &(saved_position->percent));
+					
+					/* Add into Element saved positions list */
+					if (NULL == ListInsertItem(xymove_element->saved_positions, &saved_position, 
+											   	END_OF_LIST)) {
+						MessagePopup("Position Intert List Error", "Failed to insert position into the list");
+						OKfree(saved_position);
+						return -1;
+					}
+					break;
+			}
+			break;
+	}
+	
+	return 0;
+}
 
+/* Z Movement Button Control Callback */
+int  CVICALLBACK 
+ZMoveElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)callbackData;
+	ScriptElement_t	*element = NULL;
+	char			seq_num[3];
+	int				index = 0;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			GetCtrlVal(panel, ZMoveEle_EleNum, seq_num);
+			index = atoi(seq_num);
+			
+			switch (control) {
+				case ZMoveEle_EleDelete:	/* Generic Delete */
+					delete_element(&(whisker_script->cur_script), index);
+					break;
+				
+				case ZMoveEle_EleApply:
+					ListGetItem(whisker_script->cur_script.script_elements, &element, index);
+					ZMoveElement_t *zmove_element = (ZMoveElement_t *)element;
+					
+					/* Get Values */
+					GetCtrlVal(panel, ZMoveEle_EleIO_CH, &(zmove_element->IO_channel));
+					GetCtrlVal(panel, ZMoveEle_EleCommand, (int *)&(zmove_element->dir));
+					break;
+			}
+			break;
+	}
+	
+	return 0;
+}
+
+
+/* XY Position Callbacks */
+int  CVICALLBACK 
+XYPosTable_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	XYMoveElement_t *xymove_element = (XYMoveElement_t *)callbackData;
+	Point			focus;
+	Position_t		*saved_position = NULL;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			switch (control) {
+				case XYPosPan_XYPositionOk:	
+					/* Discard table and the panel */
+					/* TODO: We do not need to explicitely remove table rows */
+					DiscardPanel(panel);
+					break;
+					
+				case XYPosPan_XYPositionsTable:	/* Controls embedded in Tables */
+					GetActiveTableCell(panel, control, &focus);
+					if (focus.x == XYTABLE_DEL_COL) {
+						/* Remove saved position from list */
+						ListRemoveItem(xymove_element->saved_positions, &saved_position, 
+									   				focus.y);
+						OKfree(saved_position);
+						/* Remove row from table */
+						DeleteTableRows(panel, control, focus.y, 1);
+					}
+					break;
+			}
+			break;
+	}
+	return 0;
+}

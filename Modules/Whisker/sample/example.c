@@ -51,7 +51,6 @@ main(int argc, char *argv[])
 	/* Check input signal */
 	ret = get_input_value(&de_dev, 5 /* IO Channel 5 */);
 	if (ret == 0) {
-		
 		MessagePopup ("Deditec Input", "I/O channel 5 has input OFF");
 	} else {
 		MessagePopup ("Deditec Input", "I/O channel 5 has input ON");

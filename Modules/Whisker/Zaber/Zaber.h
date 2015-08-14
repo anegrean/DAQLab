@@ -1,7 +1,7 @@
 //==============================================================================
 //
 // Title:		Zaber.h
-// Purpose:		A short description of the interface.
+// Purpose:		Zaber device specific functionality.
 //
 // Created on:	22-7-2015 at 16:01:44 by Vinod Nigade.
 // Copyright:	VU University Amsterdam. All Rights Reserved.
@@ -32,9 +32,18 @@
 #define CMD_LEN				32					/* Command length */
 #define RESPONSE_LEN		256					/* Device Response length */
 #define RESPONSE_DATA_LEN	128					/* Response data length */
+#define	ASYNC				1					/* Perform movement Asynchronously */
+#define SYNC				0					/* Perform movement Synchronously */
 //==============================================================================
 // Types
-		
+
+/* Position */
+typedef struct {
+	size_t	X;			/* X Axis position */
+	size_t	Y;			/* Y Axis position */
+	size_t	percent;	/* Percent associated with this position */
+} Position_t;
+
 /**
  * Zaber device XY stage.
  */
@@ -43,7 +52,7 @@ typedef struct {
 	z_port		port;							/* Port to connect to zaber device */
 	char		*comport_list[20];				/* Stores list of available comport */
 	int			VALID_DEVICE;					/* Flag to indicate device is opened and initialized */
-	uint32_t 	absolute_position;				/* Absolute position */
+	ListType	saved_positions;				/* Stores saved positions */
 } zaber_device_t;
 
 //==============================================================================
@@ -55,8 +64,11 @@ typedef struct {
 int  init_zaber_device(zaber_device_t *z_dev);
 int  close_zaber_device(zaber_device_t *z_dev);
 
-int			send_MoveABS_cmd(z_port port, uint32_t abs_position);
+void        send_cmd(z_port port, char *cmd, char *data_buf, int async);
+int			send_MoveABS_cmd(z_port port, int device, uint32_t abs_position);
 int			send_MoveRel_cmd(z_port port, int device, int position);
+int			send_stop_cmd(z_port port, int device);
+int			send_MoveMaxMin_cmd(z_port port, int device, char *sub_cmd);
 void 		get_available_COMport(char *comport[]);
 int			get_device_data(z_port port, int device, char	*sub_cmd);
 void		set_device_data(z_port port, int device, char *sub_cmd, uint32_t value);

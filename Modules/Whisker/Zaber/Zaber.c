@@ -1,7 +1,7 @@
 //==============================================================================
 //
 // Title:		Zaber.c
-// Purpose:		A short description of the implementation.
+// Purpose:		It contains function specific to Zaber device. 
 //
 // Created on:	22-7-2015 at 16:01:44 by Vinod Nigade.
 // Copyright:	VU University Amsterdam. All Rights Reserved.
@@ -34,59 +34,49 @@ inline void print_decoded_reply(struct za_reply decoded_reply);
 /************************************************************
  * Zaber Device functions will follow after this section  	*
  ************************************************************/
-
 void
 poll_until_idle(z_port port)
 {
-    char reply[RESPONSE_LEN] = { 0 };
-	struct za_reply decoded_reply;
+    char	reply[RESPONSE_LEN] = { 0 };
+	struct	za_reply decoded_reply;
+	char	cmd[CMD_LEN];
+	int		i = 2;
     
 	/* We use za_decode() to decode this string into more manageable parts,
 	 * sorting them into the fields of a za_reply struct, then we test
 	 * the device_status field. Possible values for device_status are "IDLE"
-	 * and "BUSY". */
-    for(;;)
-    {
-        za_send(port, "/\n");
+	 * and "BUSY". 
+	 */
+	while (i > 0) {
+		sprintf(cmd, "/%d\n", i);
+        za_send(port, cmd);
         za_receive(port, reply, sizeof(reply));
 		za_decode(&decoded_reply, reply);
 		
-        if(strncmp(decoded_reply.device_status, "BUSY", 4) == 0)
-		{
+        if(strncmp(decoded_reply.device_status, "BUSY", 4) == 0) {
 			Sleep(100);	/* TODO: Check non-sleep way */
-		}
-        else 
-		{
-			break;
+		} else {
+			i--;
 		}
     }
 }
 
 inline void
-print_zaber_data(uint8_t *reply, int length)
-{
-	printf("Received Data from Zaber:\t"); 
-	for (int i = 0; i < length; i++) {
-		printf("%2x", reply[i]);			
-	}
-	
-	printf("\n");
-	return;
-}
-
-inline void
 print_decoded_reply(struct za_reply decoded_reply)
 {
-	/* TODO: Log this without printf */
 	if (_CVI_DEBUG_) {
-		printf("%c %d %d %s %s %s %s\n", decoded_reply.message_type, decoded_reply.device_address,
-		   			decoded_reply.axis_number, decoded_reply.reply_flags, decoded_reply.device_status,
-					decoded_reply.warning_flags, decoded_reply.response_data);
+		printf("%c %d %d %s %s %s %s\n", decoded_reply.message_type, 
+			   			decoded_reply.device_address,
+		   				decoded_reply.axis_number, 
+						decoded_reply.reply_flags, 
+						decoded_reply.device_status,
+						decoded_reply.warning_flags, 
+						decoded_reply.response_data);
 	}
 }
 
-inline void
-send_cmd(z_port port, char *cmd, char *data_buf)
+void
+send_cmd(z_port port, char *cmd, char *data_buf, int mode)
 {   
 	struct za_reply decoded_reply;
 	char reply[256] = { 0 };
@@ -97,12 +87,34 @@ send_cmd(z_port port, char *cmd, char *data_buf)
 	za_decode(&decoded_reply, reply);
 	
 	print_decoded_reply(decoded_reply);
-	poll_until_idle(port);
+	if (mode == SYNC) {
+		poll_until_idle(port);
+	}
 	
 	if (data_buf != NULL) {
 		strncpy(data_buf, decoded_reply.response_data, 128);
 	}
 	return;
+}
+
+int
+send_MoveMaxMin_cmd(z_port port, int device, char *sub_cmd)
+{
+	char	cmd[CMD_LEN];
+	sprintf(cmd, "/%d move %s\n", device, sub_cmd);
+	
+	send_cmd(port, cmd, NULL, ASYNC);
+	return 0;
+}
+
+int
+send_stop_cmd(z_port port, int device) 
+{
+	char	cmd[CMD_LEN];
+	sprintf(cmd, "/%d stop\n", device);
+	
+	send_cmd(port, cmd, NULL, ASYNC);
+	return 0;
 }
 
 int
@@ -112,20 +124,20 @@ send_MoveRel_cmd(z_port port, int device, int position)
 	
 	sprintf(cmd, "/%d move rel %d\n", device, position);
 	LOG_MSG1(9, "Following move relative command is requested-> %s\n", cmd); 
-	send_cmd(port, cmd, NULL);	/* TODO : Error check */
+	send_cmd(port, cmd, NULL, ASYNC);	/* TODO : Error check */
 	
 	return 0;
 }
 
 int
-send_MoveABS_cmd(z_port port, uint32_t abs_position)
+send_MoveABS_cmd(z_port port, int device, uint32_t abs_position)
 {
 	char	cmd[CMD_LEN];
 	
-	sprintf(cmd, "/move abs %u\n", abs_position);
+	sprintf(cmd, "/%d move abs %u\n", device, abs_position);
 	
 	LOG_MSG1(9, "Following absolute move command is requested--> %s", cmd);
-	send_cmd(port, cmd, NULL);	/* TODO : Error check */
+	send_cmd(port, cmd, NULL, SYNC);	/* TODO : Error check */
 	
 	return 0;
 }
@@ -141,15 +153,13 @@ get_device_data(z_port port, int device, char	*sub_cmd)
 	char	response_data[RESPONSE_DATA_LEN];
 	
 	sprintf(cmd, "/%d get %s\n", device, sub_cmd);
-	//sprintf(cmd, "/get maxspeed\n"); 
-	
 	LOG_MSG1(9, "Get device data command %s", cmd);
 	
 	/* Draining previos responses from zaber device is neccessary
 	 * Otherwise, you wont get the desired response immediately.
 	 */
 	za_drain(port);
-	send_cmd(port, cmd, response_data);
+	send_cmd(port, cmd, response_data, ASYNC);
 	
 	/* Return converted value */
 	return (uint32_t)atoi(response_data);
@@ -163,7 +173,7 @@ set_device_data(z_port port, int device, char *sub_cmd, uint32_t value)
 	sprintf(cmd, "%d set %s %d\n", device, sub_cmd, value);
 	LOG_MSG1(9, "Set device data command %s", cmd);
 	
-	send_cmd(port, cmd, NULL);
+	send_cmd(port, cmd, NULL, SYNC);
 	
 	return;
 }
@@ -180,19 +190,6 @@ init_zaber_device(zaber_device_t *z_dev)
 		return -1;
 	}
 	
-	
-	/* Biinary Protocol
-	//uint8_t	cmd[6] = { 0, 1, 0, 0, 0, 0 };
-	//uint8_t	cmd[6];
-	//zb_encode(cmd, 0, 1, 0);
-
-	ret = zb_receive(z_dev->port, reply);
-	if (ret == Z_ERROR_SYSTEM_ERROR) {
-		printf("Read no reply from device %s. ", z_dev->device_name);
-		return -1;
-	}
-	*/
-	
 	za_send(z_dev->port, "/home\n");
 	za_receive(z_dev->port, reply, sizeof(reply));
 	if (reply[0] == '\0') {
@@ -202,13 +199,12 @@ init_zaber_device(zaber_device_t *z_dev)
 		return -1;
 	}
 	
-    poll_until_idle(z_dev->port);   /* TODO: No need to have this when we are going to other thing */
-	
-	/* Get all device properties
-	 */
-	//LOG_MSG1(9, "Get data return value %u", get_device_data(z_dev->port, 2, "limit.max"));
-	
+    poll_until_idle(z_dev->port);
+
 	z_dev->VALID_DEVICE = TRUE;
+	/* Create Saved Positions list */
+	z_dev->saved_positions = ListCreate(sizeof(Position_t *));
+	
 	LOG_MSG(9, "Zaber device connected successfuly\n");
 	return 0;
 }
@@ -217,12 +213,21 @@ init_zaber_device(zaber_device_t *z_dev)
 int
 close_zaber_device(zaber_device_t *z_dev)
 {
+	Position_t	*saved_position =  NULL;
+	
 	if (!z_dev->VALID_DEVICE) {
 		return -1;
 	}
 	
 	za_disconnect(z_dev->port);
 	z_dev->VALID_DEVICE = FALSE;
+	
+	/* Free saved positions list */
+	while (ListNumItems(z_dev->saved_positions)) {
+		ListRemoveItem(z_dev->saved_positions, &saved_position, FRONT_OF_LIST);
+		OKfree(saved_position);
+	}
+	OKfreeList(z_dev->saved_positions);
 	
 	return 0;
 }

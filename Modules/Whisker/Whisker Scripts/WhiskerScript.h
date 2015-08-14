@@ -40,14 +40,17 @@ typedef enum {
 	STOP,
 	WAIT,
 	MESSAGE,
-	SOUND
+	SOUND,
+	XYMOVE,
+	ZMOVE
 } ElementType_t;
 
 /* Type of action to take */
 typedef enum {
 	AIRPUFF,
 	DROPOUT,
-	DROPIN
+	DROPIN,
+	TTLOUT
 } Action_t;
 
 /* Script Run Status */
@@ -56,6 +59,12 @@ typedef enum {
 	PAUSED,
 	STOPPED
 } RunStatus_t;
+
+/* ZMove Direction */
+typedef enum {
+	DOWN,
+	UP
+} ZDirection_t;
 
 //==============================================================================
 // Types
@@ -78,12 +87,12 @@ typedef struct {
 
 typedef struct {
 	ScriptElement_t	base_class;	/* Base Class */
-	int				delay;		/* Delay for start operation */
+	size_t			delay;		/* Delay for start operation */
 } StartElement_t;				/* Start Element */
 
 typedef struct {
 	ScriptElement_t base_class;	/* Base Class */
-	int				duration;	/* Duration of operation */
+	size_t			duration;	/* Duration of operation */
 	Action_t		action;		/* Sub Action */
 	int				IO_Channel;	/* IO channel */
 } ActionElement_t; 				/* Action Element */
@@ -92,25 +101,26 @@ typedef struct {
 	ScriptElement_t	base_class;	/* Base Class */
 	int				IO_channel;	/* I/O channel to check input on */
 	int				value;		/* ON/OFF, bool type */
-	int				true_step;	/* step when condition is true */
-	int				false_step; /* step when condition is false */
+	size_t			true_step;	/* step when condition is true */
+	size_t			false_step; /* step when condition is false */
+	size_t			duration;	/* Interval to detect condition */
 } ConditionElement_t; 			/* Condition Element */
 
 typedef struct {
 	ScriptElement_t base_class; 	/* Base Class */
-	int				ntimes;			/* Repeat number of times */
-	int				repeat_step; 	/* Repeat from step */
+	size_t			ntimes;			/* Repeat number of times */
+	size_t			repeat_step; 	/* Repeat from step */
 	int				counter;		/* Counter that starts from 1 to ntimes */
 } RepeatElement_t; 					/* Repeat Element */
 
 typedef struct {
 	ScriptElement_t	base_class;	/* Base Class */
-	int				delay;		/* Delay for stop operation */
+	size_t			delay;		/* Delay for stop operation */
 } StopElement_t; 				/* Stop Element */
 
 typedef struct {
 	ScriptElement_t	base_class;	/* Base Class */
-	int				delay;		/* Delay for wait operation */
+	size_t			delay;		/* Delay for wait operation */
 } WaitElement_t; 				/* Wait Element */
 
 typedef struct {
@@ -123,7 +133,17 @@ typedef struct {
 	FilePath_t		file_path;		/* File path */
 } SoundElement_t;					/* Sound Element */
 
+typedef struct {
+	ScriptElement_t	base_class;		 /* Base Class */
+	ListType		saved_positions; /* Saved Positions */
+} XYMoveElement_t;					 /* XY Move Element */
 
+typedef struct {
+	ScriptElement_t	base_class;		/* Base Class */
+	int				IO_channel;		/* IO channel */
+	ZDirection_t	dir;			/* Direction of movement */
+} ZMoveElement_t;					/* Z move Element */
+					
 /* Actual script which stores elements list */
 typedef struct {
 	ListType			script_elements;	/* Stores script elements */
@@ -140,7 +160,8 @@ typedef struct {
 	
 	/* UI */
 	int		main_panel_handle;			/* Main Script Panel */
-	int		container_panel_handle; 	/* Container Script Panel */ 
+	int		container_panel_handle; 	/* Container Script Panel */
+	/* Element Panel */
 	int		startElement_panel_handle;  /* Start Element Panel Handle */
 	int		actionElement_panel_handle; /* Action Element Panel Handle */
 	int		condElement_panel_handle;	/* Conditional Element Panel Handle */
@@ -149,6 +170,10 @@ typedef struct {
 	int 	waitElement_panel_handle;	/* Wait Element Panel Handle */
 	int		msgElement_panel_handle;	/* Message Element Panel Handle */
 	int		soundElement_panel_handle;	/* Sound Element Panel Handle */
+	int		xymoveElement_panel_handle;	/* XY Move Panel Handle */
+	int		zmoveElement_panel_handle;	/* Z Move Panel Handle */
+	/* Other Panels */
+	
 	size_t	element_panel_height;		/* Height of script element panel */
 } WhiskerScript_t;
 //==============================================================================
@@ -174,7 +199,8 @@ ScriptElement_t* init_ConditionElement(WhiskerScript_t *whisker_script, char val
 ScriptElement_t* init_WaitElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
 ScriptElement_t* init_MessageElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
 ScriptElement_t* init_SoundElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
-
+ScriptElement_t* init_XYMoveElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_ZMoveElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
 
 #ifdef __cplusplus
     }

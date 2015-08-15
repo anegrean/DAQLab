@@ -196,6 +196,7 @@
      /* tab page panel controls */
 #define  TimingPan_Plate                  2       /* control type: deco, callback function: (none) */
 #define  TimingPan_ClockSource            3       /* control type: string, callback function: (none) */
+#define  TimingPan_ClkFreq                4       /* control type: numeric, callback function: (none) */
 
      /* tab page panel controls */
 #define  Trig_TrigSet                     2       /* control type: tab, callback function: (none) */

@@ -2379,6 +2379,10 @@ INIT_ERR
 	if (!DLRemoveTaskControllers (NULL, tcList))
 		return -1;
 	
+	// release lock
+	if (tcIsInUseLockObtained) 
+		errChk( IsTaskControllerInUse_ReleaseLock(UITaskCtrl->taskControl, &tcIsInUseLockObtained, &errorInfo.errMsg) );
+	
 	DAQLab_discard_UITaskCtrl_type(&removedUITC);
 	
 	DAQLab_RedrawTaskControllerUI();
@@ -3965,12 +3969,14 @@ static int UnconfigureUITC (TaskControl_type* taskControl, BOOL const* abortFlag
 
 static void IterateUITC	(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortIterationFlag)
 {
+INIT_ERR
+
 	UITaskCtrl_type*	controllerUIDataPtr		= GetTaskControlModuleData(taskControl);
 	
 	// iteration complete, update current iteration number
-	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(iterator)+1);
+	SetCtrlVal(controllerUIDataPtr->panHndl, TCPan1_TotalIterations, GetCurrentIterIndex(iterator) + 1);
 	
-	TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, NULL);
+	TaskControlIterationDone(taskControl, 0, NULL, FALSE, NULL);
 }
 
 static int StartUITC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)

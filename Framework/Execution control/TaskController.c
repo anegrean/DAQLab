@@ -328,16 +328,8 @@ Error:
 	
 	// release state TSV lock if obtained
 	if (tcStateTSVPtr) {CmtReleaseTSVPtr(tc->stateTSV); tcStateTSVPtr = NULL;}
-	// discard state TSV
-	if (tc->stateTSV)				{CmtDiscardTSV(tc->stateTSV); tc->stateTSV = 0;}
 	
-	if (tc->eventQ) 				{CmtDiscardTSQ(tc->eventQ); tc->eventQ = 0;}
-	if (tc->eventQThreadLock)		{CmtDiscardLock(tc->eventQThreadLock); tc->eventQThreadLock = 0;}
-	if (tc->dataQs)	 				{ListDispose(tc->dataQs); tc->dataQs = 0;}
-	if (tc->sourceVChans)			{ListDispose(tc->sourceVChans); tc->sourceVChans = 0;}
-	if (tc->childTCs)    			{ListDispose(tc->childTCs); tc->childTCs = 0;}
-	
-	OKfree(tc);
+	discard_TaskControl_type(&tc);
 	
 	return NULL;
 }
@@ -345,50 +337,63 @@ Error:
 /// HIFN Discards recursively a Task controller.
 void discard_TaskControl_type(TaskControl_type** taskControllerPtr)
 {
-	TaskControl_type*	taskController = *taskControllerPtr;	
+	TaskControl_type*	tc = *taskControllerPtr;	
 	
-	if (!taskController) return;
+	if (!tc) return;
 	
 	//----------------------------------------------------------------------------
 	// Disassemble task tree branch recusively starting with the given parent node
 	//----------------------------------------------------------------------------
-	DisassembleTaskTreeBranch(taskController, NULL);
+	DisassembleTaskTreeBranch(tc, NULL);
 	
 	//----------------------------------------------------------------------------
 	// Discard this Task Controller
 	//----------------------------------------------------------------------------
 	
-	// name
-	OKfree(taskController->taskName);
+	// incoming data queues (does not free the queue itself!)
+	if (tc->dataQs) {
+		RemoveAllSinkVChans(tc, NULL);
+		OKfreeList(tc->dataQs);
+	}
+	
+	// discard state TSV
+	if (tc->stateTSV) {
+		CmtDiscardTSV(tc->stateTSV); 
+		tc->stateTSV = 0;
+	}
 	
 	// event queue
-	CmtDiscardTSQ(taskController->eventQ);
+	if (tc->eventQ) {
+		CmtDiscardTSQ(tc->eventQ);
+		tc->eventQ = 0;
+	}
 	
-	// source VChan list
-	ListDispose(taskController->sourceVChans);
-	
-	// release thread
-	if (taskController->threadFunctionID) CmtReleaseThreadPoolFunctionID(taskController->threadPoolHndl, taskController->threadFunctionID);   
+	// name
+	OKfree(tc->taskName);
 	
 	// event queue thread lock
-	CmtDiscardLock(taskController->eventQThreadLock); 
+	if (tc->eventQThreadLock) {
+		CmtDiscardLock(tc->eventQThreadLock); 
+		tc->eventQThreadLock = 0;
+	}
 	
-	// incoming data queues (does not free the queue itself!)
-	RemoveAllSinkVChans(taskController, NULL);
-	ListDispose(taskController->dataQs);
+	// source VChan list
+	OKfreeList(tc->sourceVChans);
+	
+	// child Task Controllers list
+	OKfreeList(tc->childTCs);
+	
+	// release thread
+	if (tc->threadFunctionID) CmtReleaseThreadPoolFunctionID(tc->threadPoolHndl, tc->threadFunctionID);   
 	
 	// error message storage 
-	OKfree(taskController->errorMsg);
+	OKfree(tc->errorMsg);
 	
 	//iteration info
-	discard_Iterator_type (&taskController->currentIter); 
+	discard_Iterator_type (&tc->currentIter); 
 
-	// child Task Controllers list
-	ListDispose(taskController->childTCs);
-	
 	// free Task Controller memory
 	OKfree(*taskControllerPtr);
-	
 }
 
 void discard_TaskTreeBranch (TaskControl_type** taskControllerPtr)
@@ -603,6 +608,12 @@ INIT_ERR
 	
 	TCStates*	tcStateTSVPtr 	= NULL;
 	
+	if (!taskControl->stateTSV) {
+		*lockObtained 	= FALSE;
+		*inUsePtr		= FALSE;
+		return 0;
+	}
+	
 	*lockObtained = FALSE;
 	CmtErrChk( CmtGetTSVPtr(taskControl->stateTSV, &tcStateTSVPtr) );
 	*lockObtained = TRUE;
@@ -622,6 +633,8 @@ RETURN_ERR
 int IsTaskControllerInUse_ReleaseLock (TaskControl_type* taskControl, BOOL* lockObtained, char** errorMsg)
 {
 INIT_ERR	
+	
+	if (!taskControl->stateTSV) return 0;
 	
 	*lockObtained = TRUE;
 	CmtErrChk( CmtReleaseTSVPtr(taskControl->stateTSV) );
@@ -1577,15 +1590,16 @@ INIT_ERR
 	
 	CmtErrChk( CmtWriteTSQData(RecipientTaskControl->eventQ, &eventpacket, 1, 0, NULL) );
 	
-	// release event TSQ thread lock
-	CmtErrChk( CmtReleaseLock(RecipientTaskControl->eventQThreadLock) );
-	
-	
+
 CmtError:
 	
 Cmt_ERR
 
 Error:
+
+	// release event TSQ thread lock
+	if (lockObtainedFlag)
+		CmtReleaseLock(RecipientTaskControl->eventQThreadLock);
 	
 RETURN_ERR
 }
@@ -1703,6 +1717,8 @@ INIT_ERR
 			
 			taskControl->stopIterationsFlag = FALSE;
 			
+			/* Taken out because DiscardAsyncTimer does not discard the timer and after creating 8 timers the function fails and the iteration function is not launched
+			
 			// call iteration function and set timeout if required to complete the iteration
 			if (taskControl->iterTimeout) {  
 				// set an iteration timeout async timer until which a TC_Event_IterationDone must be received 
@@ -1710,6 +1726,7 @@ INIT_ERR
 				if ( (taskControl->iterationTimerID = NewAsyncTimer(taskControl->iterTimeout, 1, 1, TaskControlIterTimeout, taskControl)) < 0)
 					SET_ERR(taskControl->iterationTimerID, "Async timer error.");	
 			}
+			*/
 			
 			// launch provided iteration function pointer in a separate thread
 			CmtErrChk( CmtScheduleThreadPoolFunctionAdv(taskControl->threadPoolHndl, ScheduleIterateFunction, taskControl, DEFAULT_THREAD_PRIORITY,
@@ -1883,7 +1900,7 @@ INIT_ERR
 	// call UITC Active function to dim/undim UITC Task Control execution
 	if (childTC->UITCFlag) {
 		EventPacket_type eventPacket = {TASK_EVENT_SUBTASK_ADDED_TO_PARENT, NULL, NULL};
-		FunctionCall(childTC, &eventPacket, TASK_FCALL_SET_UITC_MODE, &UITCFlag, NULL);
+		errChk( FunctionCall(childTC, &eventPacket, TASK_FCALL_SET_UITC_MODE, &UITCFlag, &errorInfo.errMsg) );
 	}
 	// insert childTC
 	nullChk( ListInsertItem(parentTC->childTCs, &childTCItem, END_OF_LIST) );
@@ -2615,7 +2632,7 @@ INIT_ERR
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, NULL);
+										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
 									else 
 										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
 										
@@ -2641,7 +2658,7 @@ INIT_ERR
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, NULL);
+										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
 									else 
 										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
 										
@@ -2663,7 +2680,7 @@ INIT_ERR
 									//---------------------------------------------------------------------------------------------------------------
 							
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, NULL);
+										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
 									else 
 										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
 										
@@ -2770,7 +2787,7 @@ INIT_ERR
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, NULL);
+										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
 									else 
 										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
 										
@@ -3087,7 +3104,7 @@ INIT_ERR
 							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
 							
 						    // reset iterations
-							SetCurrentIterIndex(taskControl->currentIter,0);
+							SetCurrentIterIndex(taskControl->currentIter, 0);
 					
 							// switch to INITIAL state
 							ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
@@ -3328,7 +3345,7 @@ INIT_ERR
 				AbortTaskControlExecution(taskControl);
 			
 			// call error function to handle error
-			FunctionCall(taskControl, &eventpacket[i], TC_Callback_Error, NULL, NULL);
+			errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Error, NULL, &errorInfo.errMsg) );
 		
 			// if there is a parent task controller, update it on the state of this child task controller
 			if (taskControl->parentTC)

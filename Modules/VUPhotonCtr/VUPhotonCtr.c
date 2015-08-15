@@ -81,18 +81,14 @@ struct VUPhotonCtr {
 		//-------------------------
 
 	int					mainPanHndl;
-
 	int					chanPanHndl;
-
 	int					statusPanHndl;
-
-	int					settingsPanHndl;
-
+	int					acqSettingsPanHndl;
 	int 				counterPanHndl;
-
 	int					taskPanHndl;
-	
-	int					menubarHndl; 
+	int					menubarHndl;
+	int					acquisitionMenuItemID;
+	int					deviceMenuItemID;
 
 
 		//-------------------------
@@ -113,19 +109,10 @@ struct VUPhotonCtr {
 		// Device IO settings
 		//-------------------------
 
-		// Number of samples to acquire if in finite mode. This value is set by the device.
-	size_t				nSamples;
-		// Acquisition rate set by the device in [Hz]. This value is set by the device.
-	double				samplingRate;
-		// Points to either device set number of samples or virtual channel set number of samples.
-		// By default it points to the device number of samples nSamples. In [Hz]
-	size_t*				refNSamples;
-		// Points to either device set sampling rate or virtual channel set sampling rate.
-		// By default it points to the device sampling rate samplingRate. In [Hz]
-	double*				PixClkFreq;
-
-
-
+	size_t				nSamples;					// Number of samples to acquire if in finite mode.
+	double				samplingRate;				// Acquisition rate in [Hz].
+	
+	
 	// METHODS
 
 		// Callback to install on controls from selected panel in UI_VUPhotonCtr.uir
@@ -185,13 +172,15 @@ static int CVICALLBACK 			VUPCSettings_CB					(int panel, int control, int event
 	// UI controls callback for changing the Task Controller settings
 static int CVICALLBACK 			VUPCTask_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-void CVICALLBACK 				MenuSettings_CB 				(int menuBar, int menuItem, void *callbackData, int panel);
+void CVICALLBACK 				AcquisitionSettings_CB 			(int menuBar, int menuItem, void *callbackData, int panel);
+
+void CVICALLBACK 				DeviceSettings_CB 				(int menuBar, int menuItem, void *callbackData, int panel);
 
 static int CVICALLBACK 			VUPCPhotonCounter_CB 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static BOOL 					ValidTaskControllerName			(char name[], void* dataPtr);
 
-static int 						PulseTrainDataReceivedTC 		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
+static void						SetVUPCSamplingInfo				(VUPhotonCtr_type* vupc, PulseTrain_type* pulseTrain);
 
 static int 						PMT_Set_Mode 					(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
 static int 						PMT_Set_Fan 					(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
@@ -230,6 +219,8 @@ static int				 		ResetTC 						(TaskControl_type* taskControl, BOOL const* abort
 static void				 		ErrorTC 						(TaskControl_type* taskControl, int errorID, char* errorMsg);
 
 static int						ModuleEventHandler				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, void* eventData, BOOL const* abortFlag, char** errorMsg); 
+
+static int 						PulseTrainDataReceivedTC 		(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 
 
 //==============================================================================
@@ -289,19 +280,18 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	vupc->mainPanHndl				= 0;
 	vupc->chanPanHndl				= 0;
 	vupc->statusPanHndl				= 0;
-	vupc->settingsPanHndl			= 0;
+	vupc->acqSettingsPanHndl		= 0;
 	vupc->counterPanHndl			= 0;
 	vupc->taskPanHndl				= 0;
 	vupc->menubarHndl				= 0;
+	vupc->acquisitionMenuItemID		= 0;
+	vupc->deviceMenuItemID			= 0;
 
 	for (int i = 0; i < MAX_CHANNELS; i++)
 		vupc->channels[i] = NULL;
 
 	vupc->nSamples					= DEFAULT_NSAMPLES;
-	vupc->refNSamples				= &vupc->nSamples;	  		// by default point to device set number of samples
 	vupc->samplingRate				= DEFAULT_SAMPLING_RATE;
-	vupc->PixClkFreq				= &vupc->samplingRate; 		// by default point to device set sampling rate
-
 	vupc->pulseTrainVChan			= NULL;
 	vupc->HWTrigSlave				= NULL;
 	
@@ -338,9 +328,10 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 	for (int i = 0; i < MAX_CHANNELS; i++)
 		discard_Channel_type(&vupc->channels[i]);
 
-	//UI
+	// UI
 	// main panel and panels loaded into it (channels and task control)
 	if (vupc->menubarHndl)  { DiscardMenuBar (vupc->menubarHndl); vupc->menubarHndl = 0; }     
+	
 	if (vupc->mainPanHndl) {
 		DiscardPanel(vupc->mainPanHndl);
 		vupc->mainPanHndl = 0;
@@ -348,9 +339,9 @@ void discard_VUPhotonCtr (DAQLabModule_type** mod)
 		vupc->chanPanHndl = 0;
 	}
 
-	if (vupc->statusPanHndl) 	{DiscardPanel(vupc->statusPanHndl); vupc->statusPanHndl = 0;}
-	if (vupc->settingsPanHndl) 	{DiscardPanel(vupc->settingsPanHndl); vupc->settingsPanHndl = 0;}
-	if (vupc->counterPanHndl)	{DiscardPanel(vupc->counterPanHndl); vupc->counterPanHndl = 0;}
+	OKfreePanHndl(vupc->statusPanHndl);
+	OKfreePanHndl(vupc->acqSettingsPanHndl);
+	OKfreePanHndl(vupc->counterPanHndl);
 	
 	// discard pulsetrain SinkVChan   
 	if (vupc->pulseTrainVChan) {
@@ -443,31 +434,33 @@ INIT_ERR
 	DLAddTaskController(mod, vupc->taskControl);
 
 	// load main panel
-	vupc->mainPanHndl 		= LoadPanel(workspacePanHndl, UI_VUPhotonCtr, VUPCMain);
+	errChk( vupc->mainPanHndl 			= LoadPanel(workspacePanHndl, UI_VUPhotonCtr, VUPCMain) );
 	// load settings panel
-	vupc->settingsPanHndl   = LoadPanel(workspacePanHndl, UI_VUPhotonCtr, VUPCSet);
-		// load Photoncounter status and control panel
-	vupc->counterPanHndl	= LoadPanel(workspacePanHndl, UI_VUPhotonCtr, CounterPan);
+	errChk( vupc->acqSettingsPanHndl 	= LoadPanel(workspacePanHndl, UI_VUPhotonCtr, VUPCSet) );
+	// load Photoncounter status and control panel
+	errChk( vupc->counterPanHndl		= LoadPanel(workspacePanHndl, UI_VUPhotonCtr, CounterPan) );
 
 	// load Task Controller panel
-	vupc->taskPanHndl		= LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCTask);
+	errChk( vupc->taskPanHndl			= LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCTask) );
 	// load channel panel, the dimensions of which will be used to adjust the size of the main panel
-	vupc->chanPanHndl		= LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCChan);
-
+	errChk( vupc->chanPanHndl			= LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCChan) );
 
 	// connect module data and user interface callbackFn to all direct controls in the settings and task panels
-	SetCtrlsInPanCBInfo(mod, VUPCSettings_CB, vupc->settingsPanHndl);
+	SetCtrlsInPanCBInfo(mod, VUPCSettings_CB, vupc->acqSettingsPanHndl);
 	SetCtrlsInPanCBInfo(mod, VUPCTask_CB, vupc->taskPanHndl);
 	SetCtrlsInPanCBInfo(mod, VUPCPhotonCounter_CB, vupc->counterPanHndl);
-
-
 
 	// connect module data to Settings menubar item
 	errChk( vupc->menubarHndl = NewMenuBar(vupc->mainPanHndl) );
 	errChk( menuItemSettingsHndl = NewMenu(vupc->menubarHndl, "Settings", -1) );
+	
+	/*
 	SetMenuBarAttribute(vupc->menubarHndl, menuItemSettingsHndl, ATTR_CALLBACK_DATA, mod);
-	SetMenuBarAttribute(vupc->menubarHndl, menuItemSettingsHndl, ATTR_CALLBACK_FUNCTION_POINTER, MenuSettings_CB);
+	SetMenuBarAttribute(vupc->menubarHndl, menuItemSettingsHndl, ATTR_CALLBACK_FUNCTION_POINTER, AcquisitionSettings_CB);
 	SetMenuBarAttribute(vupc->menubarHndl, 0, ATTR_SHOW_IMMEDIATE_ACTION_SYMBOL, 0);
+	*/
+	errChk( vupc->acquisitionMenuItemID = NewMenuItem(vupc->menubarHndl, menuItemSettingsHndl, "Acquisition", -1, (VAL_MENUKEY_MODIFIER | 'A'), AcquisitionSettings_CB, mod) );
+	errChk( vupc->deviceMenuItemID = NewMenuItem(vupc->menubarHndl, menuItemSettingsHndl, "Device", -1, (VAL_MENUKEY_MODIFIER | 'D'), DeviceSettings_CB, mod) );
 
 	// change main panel title to module instance name
 	SetPanelAttribute(vupc->mainPanHndl, ATTR_TITLE, mod->instanceName);
@@ -475,25 +468,25 @@ INIT_ERR
 	name = StrDup(" settings");
 	if (!name) return -1;
 	AddStringPrefix(&name, mod->instanceName, -1);
-	SetPanelAttribute(vupc->settingsPanHndl, ATTR_TITLE, name);
+	SetPanelAttribute(vupc->acqSettingsPanHndl, ATTR_TITLE, name);
 	OKfree(name);
 
 	// populate settings panel with available channels
 	for (int i = 1; i <= MAX_CHANNELS; i++) {
 		sprintf(buff,"Ch. %d", i);
-		InsertListItem(vupc->settingsPanHndl, VUPCSet_Channels, -1, buff, i);
+		InsertListItem(vupc->acqSettingsPanHndl, VUPCSet_Channels, -1, buff, i);
 	}
 
 	// populate measurement mode ring and select Finite measurement mode
-	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Continuous",TASK_CONTINUOUS );  
-	InsertListItem(vupc->settingsPanHndl, VUPCSet_MeasMode, -1, "Finite", TASK_FINITE);
+	InsertListItem(vupc->acqSettingsPanHndl, VUPCSet_MeasMode, -1, "Continuous",TASK_CONTINUOUS );  
+	InsertListItem(vupc->acqSettingsPanHndl, VUPCSet_MeasMode, -1, "Finite", TASK_FINITE);
 	
-	SetCtrlIndex(vupc->settingsPanHndl, VUPCSet_MeasMode, TASK_FINITE);
+	SetCtrlIndex(vupc->acqSettingsPanHndl, VUPCSet_MeasMode, TASK_FINITE);
 
 	// update acquisition settings display from structure data
-	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_NSamples, *vupc->refNSamples);
-	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_PixClkFreq, *vupc->PixClkFreq/1000);					// display in [kHz]
-	SetCtrlVal(vupc->settingsPanHndl, VUPCSet_Duration, *vupc->refNSamples/(*vupc->PixClkFreq*1000));	// display in [s]
+	SetCtrlVal(vupc->acqSettingsPanHndl, VUPCSet_NSamples, vupc->nSamples);
+	SetCtrlVal(vupc->acqSettingsPanHndl, VUPCSet_SamplingRate, vupc->samplingRate/1000);				// display in [kHz]
+	SetCtrlVal(vupc->acqSettingsPanHndl, VUPCSet_Duration, vupc->nSamples/vupc->samplingRate);		// display in [s]
 
 
 	// add functionality to set PMT mode
@@ -593,9 +586,6 @@ static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
 
 		}
 
-
-
-
 	// reposition Task Controller panel to be the end of all channel panels
 	SetPanelAttribute(vupc->taskPanHndl, ATTR_LEFT, (chanPanWidth + MAIN_PAN_SPACING) * nChannels + MAIN_PAN_MARGIN);
 	SetPanelAttribute(vupc->taskPanHndl, ATTR_TOP, MAIN_PAN_MARGIN + menubarHeight);
@@ -619,24 +609,18 @@ static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
 
 	//?
 	PMTController_UpdateDisplay(vupc);
-	DisplayPanel(vupc->counterPanHndl);
-
 }
 
-
-
-
-//resets the VUPC user interface corresponding to the resetted hardware
+// resets the VUPC user interface corresponding to the resetted hardware
 void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 {
-	int 	i;
-	double 	zero	= 0.0;
+	double 	zero		= 0.0;
 	double 	twenty_mV	= 20.0;  
 
-	for(i=0;i<MAX_CHANNELS;i++)  {
-		if(vupc->channels[i]!=NULL) {
+	for (int i = 0; i < MAX_CHANNELS; i++) {
+		if(vupc->channels[i]) {
 			if(i==0){
-			//PMT1 is selected
+			// PMT1 is selected
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Fan,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Cooling,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Mode,0);
@@ -647,7 +631,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 			 
 			}
 			if(i==1){
-			//PMT2 is selected
+			// PMT2 is selected
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Fan,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Cooling,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Mode,0);
@@ -657,7 +641,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Gain, zero);
 			}
 			if(i==2){
-			//PMT3 is selected
+			// PMT3 is selected
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Fan,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Cooling,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Mode,0);
@@ -667,7 +651,7 @@ void ResetVUPC_UI(VUPhotonCtr_type* vupc)
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Gain, zero);
 			}
 			if(i==3){
-			//PMT4 is selected
+			// PMT4 is selected
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Fan,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Cooling,0);
 				SetCtrlVal (vupc->channels[i]->panHndl,VUPCChan_Mode,0);
@@ -731,11 +715,11 @@ int ResetActions(VUPhotonCtr_type* 	vupc)
 {
 INIT_ERR
 	
+	// set all gains to zero, all thresholds to 20 mV    
 	errChk(PMTReset());
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_BTTN_TestMode, FALSE);
-	//set all gains to zero, all thresholds to 20 mV
-	
 	ResetVUPC_UI(vupc);
+	
+	SetCtrlVal(vupc->counterPanHndl, CounterPan_TestMode, FALSE);
 	PMTController_UpdateDisplay(vupc);
 	
 Error:
@@ -792,15 +776,15 @@ INIT_ERR
 
 	//Update UI
 	// photon counter
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_STATUS, statreg);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_NUM_COMMAND, controlreg);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_RUNNING, statreg&RUNNING_BIT);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_ALMFULL, statreg&FFALMFULL_BIT);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_FIFO_FULL, statreg&FFOVERFLOW_BIT);
+	SetCtrlVal (vupc->counterPanHndl, CounterPan_Status, statreg);
+	SetCtrlVal (vupc->counterPanHndl, CounterPan_Command, controlreg);
+	SetCtrlVal (vupc->counterPanHndl, CounterPan_LEDRunning, statreg&RUNNING_BIT);
+	SetCtrlVal (vupc->counterPanHndl, CounterPan_LEDFIFOAlmostFull, statreg&FFALMFULL_BIT);
+	SetCtrlVal (vupc->counterPanHndl, CounterPan_LEDFIFOFull, statreg&FFOVERFLOW_BIT);
 	
 	
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_DOOR_OPEN, statreg&DOOROPEN_BIT);
-	SetCtrlVal (vupc->counterPanHndl,CounterPan_LED_COUNTEROVERFLOW, statreg&COVERFLOW_BIT);
+	SetCtrlVal (vupc->counterPanHndl, CounterPan_LEDDoorOpen, statreg&DOOROPEN_BIT);
+	SetCtrlVal (vupc->counterPanHndl, CounterPan_LEDCounterOverflow, statreg&COVERFLOW_BIT);
 
 	for(i=0;i<MAX_CHANNELS;i++)  {
 		if(vupc->channels[i]) {
@@ -927,13 +911,11 @@ PRINT_ERR
 
 static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	VUPhotonCtr_type* 	vupc 								= callbackData;
-	char*				vChanName							= NULL;
-	char				buff[DAQLAB_MAX_VCHAN_NAME + 50]	= "";
-	double 				duration							= 0;
-	int 				nsamples							= 0;
-	int 				mode								= 0;
-
+	VUPhotonCtr_type* 	vupc 			= callbackData;
+	char*				VChanName		= NULL;
+	char				chanName[50] 	= "";
+	int 				nsamples		= 0;
+	
 	switch (event) {
 
 		case EVENT_COMMIT:
@@ -941,39 +923,17 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 			switch (control) {
 
 				case VUPCSet_MeasMode:
-					GetCtrlIndex(panel,VUPCSet_MeasMode,&mode);
-					SetTaskControlMode(vupc->taskControl,mode);
-					GetCtrlVal(panel,VUPCSet_PixClkFreq,vupc->PixClkFreq );  
-					GetCtrlVal(panel,VUPCSet_NSamples,&nsamples);   
-					*vupc->refNSamples=nsamples;
-					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->PixClkFreq,*vupc->refNSamples);
-					break;
-
-				case VUPCSet_PixClkFreq:
-					GetCtrlIndex(panel,VUPCSet_MeasMode,&mode);
-					SetTaskControlMode(vupc->taskControl,mode);    
-					GetCtrlVal(panel,VUPCSet_PixClkFreq,vupc->PixClkFreq);  
-					GetCtrlVal(panel,VUPCSet_NSamples,&nsamples);   
-					*vupc->refNSamples=nsamples;
-					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->PixClkFreq,*vupc->refNSamples);
-					break;
-
-				case VUPCSet_Duration:
-					GetCtrlVal(panel,control,&duration);
-					break;
-
-				case VUPCSet_NSamples:
-					GetCtrlIndex(panel,VUPCSet_MeasMode,&mode);
-					SetTaskControlMode(vupc->taskControl,mode);    
-					GetCtrlVal(panel,VUPCSet_PixClkFreq,vupc->PixClkFreq);  
-					GetCtrlVal(panel,VUPCSet_NSamples,vupc->refNSamples);   
-					Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),*vupc->PixClkFreq,*vupc->refNSamples);
+					
+					int		measMode	= 0;
+					GetCtrlIndex(panel, VUPCSet_MeasMode, &measMode);
+					SetTaskControlMode(vupc->taskControl, measMode);
+					
+					PMTSetBufferSize(GetTaskControlMode(vupc->taskControl), vupc->samplingRate, vupc->nSamples);
 					break;
 
 				case VUPCSet_Close:
 
-					HidePanel(vupc->settingsPanHndl);
-
+					HidePanel(vupc->acqSettingsPanHndl);
 					break;
 			}
 
@@ -988,37 +948,30 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 					// eventData1 =  The new mark state of the list item
 					// eventData2 =  0-based itemIndex of the item whose mark state is being changed
 
-					SourceVChan_type* 	srcVChan;
-					Channel_type*		chan;
+					SourceVChan_type* 	srcVChan	= NULL;
+					Channel_type*		chan		= NULL;
 
 					if (eventData1) {
 						// channel checked, give new VChan name and add channel
-						vChanName = DLGetUINameInput("New Virtual Channel", DAQLAB_MAX_VCHAN_NAME, DLValidateVChanName, NULL);
-						if (!vChanName) {
-							// uncheck channel
-							CheckListItem(panel, control, eventData2, 0);
-							return 0;	// action cancelled
-						}
-						// rename label in settings panel
-						sprintf(buff, "Ch. %d: %s", eventData2+1, vChanName);
-						ReplaceListItem(panel, control, eventData2, buff, eventData2+1);
+						Fmt(chanName, "Ch. %d", eventData2+1);
+						VChanName = DLVChanName((DAQLabModule_type*)vupc, vupc->taskControl, chanName, 0);
+						
 						// create channel
-						chan = init_Channel_type(vupc, LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCChan), eventData2+1, vChanName);
+						chan = init_Channel_type(vupc, LoadPanel(vupc->mainPanHndl, UI_VUPhotonCtr, VUPCChan), eventData2 + 1, VChanName);
 						// rename channel mode label
-						sprintf(buff, "Ch. %d", eventData2+1);
-						SetCtrlAttribute(chan->panHndl, VUPCChan_Mode, ATTR_LABEL_TEXT, buff);
+						sprintf(chanName, "Ch. %d", eventData2 + 1);
+						SetCtrlAttribute(chan->panHndl, VUPCChan_Mode, ATTR_LABEL_TEXT, chanName);
 						// register VChan with DAQLab
 						DLRegisterVChan((DAQLabModule_type*)chan->vupcInstance, (VChan_type*)chan->VChan);
-						
 						
 						// connect module data and user interface callbackFn to all direct controls in the panel
 						SetCtrlsInPanCBInfo(chan, ((VUPhotonCtr_type*)vupc)->uiCtrlsCB, chan->panHndl);
 						
-						//add sink to receive pulsetrain settings
+						// add sink to receive pulsetrain settings
 						if (vupc->pulseTrainVChan==NULL){
 							char*	pulsetrainVChanName		= DLVChanName((DAQLabModule_type*)vupc, vupc->taskControl, VChan_Default_PulseTrainSinkChan, 0);
 							DLDataTypes allowedPacketTypes[] = {DL_PulseTrain_Freq, DL_PulseTrain_Ticks, DL_PulseTrain_Time};
-							vupc->pulseTrainVChan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance,VChanDataTimeout, NULL); 
+							vupc->pulseTrainVChan= init_SinkVChan_type(pulsetrainVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), chan->vupcInstance, VChanDataTimeout, NULL); 
 							// register VChan with DAQLab
 							DLRegisterVChan((DAQLabModule_type*)vupc, (VChan_type*)vupc->pulseTrainVChan);	
 							AddSinkVChan(vupc->taskControl, vupc->pulseTrainVChan, PulseTrainDataReceivedTC, NULL); 
@@ -1026,24 +979,21 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 						}
 						// update main panel
 						RedrawMainPanel(vupc);
-						free(vChanName);  
+						OKfree(VChanName);  
 
 
 					} else {
 						// channel unchecked, remove channel
 
-							//clear corresponding control bits in control register
+						//clear corresponding control bits in control register
 						PMT_ClearControl(vupc->channels[eventData2]->chanIdx);
 
 						// get channel pointer
 						srcVChan = vupc->channels[eventData2]->VChan;
 						// unregister VChan from DAQLab framework
-						DLUnregisterVChan((DAQLabModule_type*)chan->vupcInstance, (VChan_type*)srcVChan);
+						DLUnregisterVChan((DAQLabModule_type*)vupc, (VChan_type*)srcVChan);
 						// discard channel data
 						discard_Channel_type(&vupc->channels[eventData2]);
-						// update channel list in the settings panel
-						sprintf(buff, "Ch. %d", eventData2+1);
-						ReplaceListItem(panel, control, eventData2, buff, eventData2+1);
 						// update main panel
 						RedrawMainPanel(vupc);
 
@@ -1065,22 +1015,26 @@ INIT_ERR
 	double 				waitBetweenIterations	= 0;
 
 	switch (event) {
+			
 		case EVENT_COMMIT:
 			switch (control) {
-				case VUPCTask_Mode:		  //repeat mode
+					
+				case VUPCTask_Mode:
+					
 					GetCtrlVal(panel,control,&mode);
 					SetTaskControlMode	(vupc->taskControl,mode);
-					//set Rio module in right mode
 					break;
+					
 				case VUPCTask_Repeat:
+					
 					GetCtrlVal(panel,control,&repeat);
 					SetTaskControlIterations (vupc->taskControl, repeat+1);
 					break;
 
 				case VUPCTask_Wait:
+					
 					GetCtrlVal(panel,control,&waitBetweenIterations);
 					SetTaskControlIterationsWait (vupc->taskControl,waitBetweenIterations);
-					//prog RIO module
 					break;
 			}
 			// (re) configure Photoncounter Task Controller
@@ -1095,9 +1049,6 @@ PRINT_ERR
 	return 0;
 }
 
-
-
-
 static int CVICALLBACK VUPCPhotonCounter_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 INIT_ERR
@@ -1108,21 +1059,31 @@ INIT_ERR
 
 	switch (event) {
 		case EVENT_COMMIT:
+			
 			switch (control) {
-				case CounterPan_BTTN_FFRESET:
+					
+				case CounterPan_FIFOReset:
+					
 					errChk(PMTClearFifo());
 					PMTController_UpdateDisplay(vupc);
 					break;
-				case CounterPan_BTTN_RESET :
+					
+				case CounterPan_Reset :
+					
 					errChk(ResetActions(vupc));
 					break;
 
-				case CounterPan_BTTN_TestMode:
+				case CounterPan_TestMode:
+					
 					GetCtrlVal(panel,control,&testmode);
 					errChk(PMT_SetTestMode(testmode));
 					PMTController_UpdateDisplay(vupc);
 					break;
-
+					
+				case CounterPan_Close:
+					
+					HidePanel(vupc->counterPanHndl);
+					break;
 			}
 			break;
 	}
@@ -1137,6 +1098,65 @@ PRINT_ERR
 static BOOL ValidTaskControllerName	(char name[], void* dataPtr)
 {
 	return DLValidTaskControllerName(name);
+}
+
+static void SetVUPCSamplingInfo (VUPhotonCtr_type* vupc, PulseTrain_type* pulseTrain)
+{
+	vupc->nSamples 	= GetPulseTrainNPulses(pulseTrain);
+	
+	switch (GetPulseTrainMode(pulseTrain)) {
+				
+		case PulseTrain_Finite:
+				
+			SetTaskControlMode(vupc->taskControl, TASK_FINITE);
+			break;
+				
+		case PulseTrain_Continuous:
+			SetTaskControlMode(vupc->taskControl, TASK_CONTINUOUS);
+			break;
+	}								   
+		
+	// assign sampling rate from pulse train info
+	switch (GetPulseTrainType(pulseTrain)) {
+				
+		case PulseTrain_Freq:
+				
+			PulseTrainFreqTiming_type*	freqPulse 		= (PulseTrainFreqTiming_type*)pulseTrain;
+				
+			vupc->samplingRate = GetPulseTrainFreqTimingFreq(freqPulse);
+			break;
+				
+		case PulseTrain_Time:
+			
+			PulseTrainTimeTiming_type*	timePulse 		= (PulseTrainTimeTiming_type*)pulseTrain;
+			double 						highTime		= 0;
+			double						lowTime			= 0;
+	
+			highTime 			= GetPulseTrainTimeTimingHighTime(timePulse);
+			lowTime 			= GetPulseTrainTimeTimingLowTime(timePulse); 
+			vupc->samplingRate	= 1/(highTime + lowTime);
+			break;
+				
+		case PulseTrain_Ticks:
+				
+			PulseTrainTickTiming_type*	tickPulse		= (PulseTrainTickTiming_type*)pulseTrain;
+			uInt32						highTicks		= 0;
+			uInt32						lowTicks		= 0;
+			double						tickClockFreq 	= 0;
+				
+			highTicks			= GetPulseTrainTickTimingHighTicks(tickPulse);
+			lowTicks			= GetPulseTrainTickTimingLowTicks(tickPulse);
+			tickClockFreq		= GetPulseTrainTickTimingClockFrequency(tickPulse);
+			
+			vupc->samplingRate	= tickClockFreq/(highTicks + lowTicks);
+			break;
+	} 	
+						
+	//update UI
+	SetCtrlVal(vupc->acqSettingsPanHndl, VUPCSet_NSamples, vupc->nSamples);
+	SetCtrlVal(vupc->acqSettingsPanHndl, VUPCSet_SamplingRate, vupc->samplingRate/1000);  					// display in [KHz]
+	SetCtrlVal(vupc->acqSettingsPanHndl, VUPCSet_Duration, vupc->nSamples/(vupc->samplingRate * 1000));	// display in [s]
+	SetCtrlIndex(vupc->acqSettingsPanHndl, VUPCSet_MeasMode, GetTaskControlMode(vupc->taskControl));     
 }
 
 void HWIterationDone(TaskControl_type* taskControl,int errorID, char errorMsg[])
@@ -1156,13 +1176,18 @@ static void VUPC_SetStepCounter	(VUPhotonCtr_type* 	vupc, size_t val)
 	SetCtrlVal(vupc->taskPanHndl, VUPCTask_TotalIterations, val);
 }
 
-
-
-void CVICALLBACK MenuSettings_CB (int menuBar, int menuItem, void *callbackData, int panel)
+void CVICALLBACK AcquisitionSettings_CB (int menuBar, int menuItem, void *callbackData, int panel)
 {
 	VUPhotonCtr_type* 	vupc 	=   callbackData;
 
-	DisplayPanel(vupc->settingsPanHndl);
+	DisplayPanel(vupc->acqSettingsPanHndl);
+}
+
+void CVICALLBACK DeviceSettings_CB (int menuBar, int menuItem, void *callbackData, int panel)
+{
+	VUPhotonCtr_type* 	vupc 	=   callbackData;
+
+	DisplayPanel(vupc->counterPanHndl);
 }
 
 //-----------------------------------------
@@ -1194,38 +1219,41 @@ INIT_ERR
 	double 					delaystep			= 0.1;
 	int 					mode				= 0;
 	DataPacket_type*		dataPacket			= NULL;
-	void*					dataPacketDataPtr	= NULL;
 	DLDataTypes				dataPacketDataType	= 0;
-	PulseTrain_type*    	pulsetrain			= NULL;
+	PulseTrain_type*    	pulseTrain			= NULL;
 
-	//display current iteration index
-	VUPC_SetStepCounter(vupc,GetCurrentIterIndex(iterator));
+	// display current iteration index
+	VUPC_SetStepCounter(vupc, GetCurrentIterIndex(iterator));
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive pulse train settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
-	if (IsVChanOpen((VChan_type*)vupc->pulseTrainVChan)) {
-		errChk( GetDataPacket(vupc->pulseTrainVChan, &dataPacket, &errorInfo.errMsg) );
-		dataPacketDataPtr 	= GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
-		pulsetrain			= *(PulseTrain_type**)dataPacketDataPtr;
-		vupc->nSamples		= GetPulseTrainNPulses(pulsetrain);
+	if (!IsVChanOpen((VChan_type*)vupc->pulseTrainVChan)) goto SkipPulseTrainInfo;
+	
+	errChk( GetDataPacket(vupc->pulseTrainVChan, &dataPacket, &errorInfo.errMsg) );
+	pulseTrain = *(PulseTrain_type**)GetDataPacketPtrToData(dataPacket, &dataPacketDataType);
+	
+	SetVUPCSamplingInfo(vupc, pulseTrain);
 		
-		*vupc->refNSamples 	= vupc->nSamples;
-		ReleaseDataPacket(&dataPacket);
-		dataPacket = NULL;
-	}
+	ReleaseDataPacket(&dataPacket);
 	
-	Setnrsamples_in_iteration(GetTaskControlMode(vupc->taskControl),vupc->samplingRate,vupc->nSamples); 
+	//-------------------------------------------------------------------------------------------------------------------------------
+SkipPulseTrainInfo:
 	
-	errChk( PMTStartAcq(GetTaskControlMode(vupc->taskControl),vupc->taskControl,vupc->channels) );
+	PMTSetBufferSize(GetTaskControlMode(vupc->taskControl), vupc->samplingRate, vupc->nSamples); 
 	
-	//inform that slave is armed
+	errChk( PMTStartAcq(GetTaskControlMode(vupc->taskControl), vupc->taskControl, vupc->samplingRate, vupc->channels) );
+	
+	// inform that slave is armed
 	errChk(SetHWTrigSlaveArmedStatus(vupc->HWTrigSlave, &errorInfo.errMsg));
 
 	return;
 	
 Error:
 	
+	char* msgBuff = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, errorInfo.errMsg);
+	TaskControlIterationDone(vupc->taskControl, errorInfo.error, msgBuff, FALSE, NULL);
+	OKfree(msgBuff);
 	return;
 }
 
@@ -1278,13 +1306,13 @@ static int	TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates st
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
 	
-/*	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_NUM_COMMAND, ATTR_DIMMED, dimmed); 
-	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_NUM_STATUS, ATTR_DIMMED, dimmed);
-	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_FFRESET, ATTR_DIMMED, dimmed);    
-	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_RESET, ATTR_DIMMED, dimmed);    
-	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_LED_DOOR_OPEN, ATTR_DIMMED, dimmed); 
-	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_LED_RUNNING, ATTR_DIMMED, dimmed); 
-	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_BTTN_TestMode, ATTR_DIMMED, dimmed);    */
+/*	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_Command, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_Status, ATTR_DIMMED, dimmed);
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_FIFOReset, ATTR_DIMMED, dimmed);    
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_Reset, ATTR_DIMMED, dimmed);    
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_LEDDoorOpen, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_LEDRunning, ATTR_DIMMED, dimmed); 
+	SetCtrlAttribute(vupc->counterPanHndl, CounterPan_TestMode, ATTR_DIMMED, dimmed);    */
 
 	return 0;
 }
@@ -1294,16 +1322,13 @@ static void	ErrorTC (TaskControl_type* taskControl, int errorID, char* errorMsg)
 	VUPhotonCtr_type* 	vupc 	= GetTaskControlModuleData(taskControl);
 	int 				error	= 0;
 
-	error=ResetActions(vupc);
-
+	error = ResetActions(vupc);
 
 	PMTStopAcq();    
-	// print error message
-	DLMsg(errorMsg, 1);
-
 	PMTController_UpdateDisplay(vupc);
 
-
+	// print error message
+	DLMsg(errorMsg, 1);
 }
 
 static int ModuleEventHandler (TaskControl_type* taskControl, TCStates taskState, BOOL taskActive,  void* eventData, BOOL const* abortFlag, char** errorMsg)
@@ -1322,59 +1347,25 @@ INIT_ERR
 	DataPacket_type**	dataPackets			= NULL;
 	size_t				nPackets			= 0;
 	size_t				nElem				= 0;
-	void*				dataPacketDataPtr	= NULL;
 	DLDataTypes			dataPacketType		= 0;  
-	PulseTrain_type*    pulsetrain			= NULL;
-	size_t 				i					= 0;
-	PulseTrainModes		pulsetrainmode		= 0;
-	double 				hightime			= 0;
-	double				lowtime				= 0;
+	PulseTrain_type*    pulseTrain			= NULL;
+	PulseTrainModes		pulseTrainMode		= 0;
 	
 	// process data only if task controller is not active
 	if (taskActive) return 0;
 
-	// get all available data packets 
-    // get LAST!!
+    // get all data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errorInfo.errMsg) );
-			
-	for (i = 0; i < nPackets; i++) {
-				
-		dataPacketDataPtr = GetDataPacketPtrToData(dataPackets[i], &dataPacketType);
-		pulsetrain=*(PulseTrain_type**)dataPacketDataPtr;
-		vupc->nSamples=GetPulseTrainNPulses(pulsetrain);
-		*vupc->refNSamples = vupc->nSamples;  // changed by adrian, originally it was vupc->refNSamples = vupc->nSamples
-		pulsetrainmode=GetPulseTrainMode(pulsetrain); 
-		switch (pulsetrainmode){						 
-			case PulseTrain_Finite:
-				SetTaskControlMode(vupc->taskControl,TASK_FINITE);
-				break;
-			case PulseTrain_Continuous:
-				SetTaskControlMode(vupc->taskControl,TASK_CONTINUOUS);
-				break;
-		}								   
-		//only pass frew info  in DL_PulseTrain_Freq  and DL_PulseTrain_Time mode
-		switch (dataPacketType) {
-			case DL_PulseTrain_Freq:
-				vupc->samplingRate=GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)pulsetrain);
-				SetCtrlVal(vupc->settingsPanHndl,VUPCSet_PixClkFreq,vupc->samplingRate/1000);  //in khz
-				break;
-			case DL_PulseTrain_Time:
-				hightime=GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)pulsetrain);
-				lowtime=GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)pulsetrain); 
-				vupc->samplingRate=1/(hightime+lowtime);
-				SetCtrlVal(vupc->settingsPanHndl,VUPCSet_PixClkFreq,vupc->samplingRate/1000);     //in khz  
-				break;
-			case DL_PulseTrain_Ticks:
-				break;
-		} 	
-						
-					//update UI
-		SetCtrlVal(vupc->settingsPanHndl,VUPCSet_NSamples,vupc->nSamples);
-		SetCtrlIndex(vupc->settingsPanHndl,VUPCSet_MeasMode,GetTaskControlMode(vupc->taskControl));     
-					
+	
+	// use last data packet to set sampling info
+	pulseTrain 	= *(PulseTrain_type**)GetDataPacketPtrToData(dataPackets[nPackets-1], &dataPacketType);
+	
+	SetVUPCSamplingInfo(vupc, pulseTrain);
+	
+	// release all data packets
+	for (size_t i = 0; i < nPackets; i++)
 		ReleaseDataPacket(&dataPackets[i]);
-	}
-		
+	
 	OKfree(dataPackets);				
 	
 Error:	   

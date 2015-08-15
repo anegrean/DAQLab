@@ -310,7 +310,6 @@ TSVError:
 
 static int DisplayNIVisionRGBImage (NIImageDisplay_type* imgDisplay, Image_type** imageR, Image_type** imageG, Image_type** imageB)
 {
-	
 	return 0;
 }
 
@@ -975,8 +974,6 @@ static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, ch
 	int 				error							= 0;
 	char*				errMsg							= NULL;
 	int 				fileSelection					= 0;
-	char 				fullPathName[MAX_PATHNAME_LEN]	= "";
-	char*				strippedPathName				= NULL;
 	char 				fileName[MAX_PATHNAME_LEN]		= ""; 
 	Image*				imageCopy						= NULL;
 	ImageType			imgType							= 0;
@@ -988,11 +985,11 @@ static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, ch
 	switch (fileFormat) {
 			
 		case NIDisplay_Save_TIFF:
-			fileSelection = FileSelectPopupEx ("","*.tiff", "*.tiff", "Save Image as tiff", VAL_SAVE_BUTTON, 0, 1, fullPathName);
+			fileSelection = FileSelectPopupEx ("","*.tiff", "*.tiff", "Save Image as tiff", VAL_SAVE_BUTTON, 0, 1, fileName);
 			break;
 			
 		case NIDisplay_Save_PNG:
-			fileSelection = FileSelectPopupEx ("","*.png", "*.png", "Save Image as png", VAL_SAVE_BUTTON, 0, 1, fullPathName);
+			fileSelection = FileSelectPopupEx ("","*.png", "*.png", "Save Image as png", VAL_SAVE_BUTTON, 0, 1, fileName);
 			break;
 	}
 	
@@ -1009,16 +1006,12 @@ static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, ch
 			switch (fileFormat) {
 					
 				case NIDisplay_Save_TIFF:
-					// strip extension and add .tiff extension back
-					strippedPathName = strtok(fullPathName,".");
-					Fmt(fileName, "%s<%s.tiff", strippedPathName);
+					
 					nullChk( imaqWriteTIFFFile(image, fileName, &tiffOptions, NULL) ); 
 					break;
 				
 				case NIDisplay_Save_PNG:
-					// strip extension and add .png extension back
-					strippedPathName = strtok(fullPathName,".");
-					Fmt(fileName, "%s<%s.png", strippedPathName);
+					
 					nullChk( imaqWritePNGFile2(image, fileName, 0, NULL, TRUE) );
 					break;
 			}
@@ -1035,12 +1028,14 @@ static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, ch
 			switch (fileFormat) {
 					
 				case NIDisplay_Save_TIFF:
-					Fmt(fileName, "%s<%s_ROI.tiff", strippedPathName);
+					
+					strcpy(strrchr(fileName, 46), "_ROI.tiff");
 					nullChk( imaqWriteTIFFFile(imageCopy, fileName, &tiffOptions, NULL) ); 
 					break;
 				
 				case NIDisplay_Save_PNG:
-					Fmt(fileName, "%s<%s_ROI.png", strippedPathName);
+					
+					strcpy(strrchr(fileName, 46), "_ROI.png");
 					nullChk( imaqWritePNGFile2(imageCopy, fileName, 0, NULL, TRUE) );
 					break;
 			}

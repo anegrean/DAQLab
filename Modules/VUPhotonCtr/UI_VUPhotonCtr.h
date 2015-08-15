@@ -14,16 +14,18 @@
      /* Panels and Controls: */
 
 #define  CounterPan                       1
-#define  CounterPan_NUM_COMMAND           2       /* control type: numeric, callback function: (none) */
-#define  CounterPan_NUM_STATUS            3       /* control type: numeric, callback function: (none) */
-#define  CounterPan_BTTN_FFRESET          4       /* control type: command, callback function: (none) */
-#define  CounterPan_BTTN_RESET            5       /* control type: command, callback function: (none) */
-#define  CounterPan_LED_COUNTEROVERFLOW   6       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_DOOR_OPEN         7       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_FULL         8       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_FIFO_ALMFULL      9       /* control type: LED, callback function: (none) */
-#define  CounterPan_LED_RUNNING           10      /* control type: LED, callback function: (none) */
-#define  CounterPan_BTTN_TestMode         11      /* control type: textButton, callback function: (none) */
+#define  CounterPan_Command               2       /* control type: numeric, callback function: (none) */
+#define  CounterPan_Background            3       /* control type: deco, callback function: (none) */
+#define  CounterPan_Status                4       /* control type: numeric, callback function: (none) */
+#define  CounterPan_FIFOReset             5       /* control type: command, callback function: (none) */
+#define  CounterPan_Reset                 6       /* control type: command, callback function: (none) */
+#define  CounterPan_LEDCounterOverflow    7       /* control type: LED, callback function: (none) */
+#define  CounterPan_LEDDoorOpen           8       /* control type: LED, callback function: (none) */
+#define  CounterPan_Close                 9       /* control type: command, callback function: (none) */
+#define  CounterPan_LEDFIFOFull           10      /* control type: LED, callback function: (none) */
+#define  CounterPan_LEDFIFOAlmostFull     11      /* control type: LED, callback function: (none) */
+#define  CounterPan_LEDRunning            12      /* control type: LED, callback function: (none) */
+#define  CounterPan_TestMode              13      /* control type: textButton, callback function: (none) */
 
 #define  VUPCChan                         2
 #define  VUPCChan_Fan                     2       /* control type: radioButton, callback function: (none) */
@@ -40,7 +42,7 @@
 #define  VUPCSet                          4
 #define  VUPCSet_Channels                 2       /* control type: listBox, callback function: (none) */
 #define  VUPCSet_Background               3       /* control type: deco, callback function: (none) */
-#define  VUPCSet_PixClkFreq               4       /* control type: numeric, callback function: (none) */
+#define  VUPCSet_SamplingRate             4       /* control type: numeric, callback function: (none) */
 #define  VUPCSet_Duration                 5       /* control type: numeric, callback function: (none) */
 #define  VUPCSet_NSamples                 6       /* control type: numeric, callback function: (none) */
 #define  VUPCSet_MeasMode                 7       /* control type: ring, callback function: (none) */

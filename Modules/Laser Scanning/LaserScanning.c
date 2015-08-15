@@ -3147,6 +3147,8 @@ static void	discard_ScanChan_type (ScanChan_type** scanChanPtr)
 	
 	// discard image display
 	discard_ImageDisplay_type(&scanChan->imgDisplay);
+	//if (scanChan->imgDisplay)
+	//(*scanChan->imgDisplay->discardFptr)(&scanChan->imgDisplay); // causes sometimes a general protection fault
 	
 	// discard waveform display
 	discard_WaveformDisplay_type(&scanChan->waveDisplay);
@@ -3161,7 +3163,6 @@ static int RegisterDLScanChan (ScanChan_type* scanChan)
 	DLRegisterVChan((DAQLabModule_type*)scanChan->scanEngine->lsModule, (VChan_type*)scanChan->outputVChan);
 	
 	return 0;
-	
 }
 
 static int UnregisterDLScanChan (ScanChan_type* scanChan)
@@ -6196,7 +6197,7 @@ INIT_ERR
 		// total number of pixels
 		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)(scanEngine->scanSettings.height + nFastAxisFlybackLines) * (uInt64)nFrames; 
 		// pixel pulse train
-		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32) RoundRealToNearestInteger(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0) );
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32) RoundRealToNearestInteger(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0, scanEngine->baseClass.referenceClockFreq) );
 		
 		// send n pixels
 		nullChk( nPixelsPtr = malloc(sizeof(uInt64)) );
@@ -6210,7 +6211,7 @@ INIT_ERR
 		// continuous mode
 		//--------------------
 		// pixel pulse train
-		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32) RoundRealToNearestInteger(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0) );
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32) RoundRealToNearestInteger(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0, scanEngine->baseClass.referenceClockFreq) );
 	}
 	
 	// send pixel pulse train info
@@ -6550,7 +6551,7 @@ INIT_ERR
 	
 	// send pixel pulse train info
 	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanPixelPulseTrain)) {
-		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32) RoundRealToNearestInteger(1/scanEngine->galvoSamplingRate * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0) );
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32) RoundRealToNearestInteger(1/scanEngine->galvoSamplingRate * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0, scanEngine->baseClass.referenceClockFreq) );
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_PulseTrain_Ticks, (void**)&pixelPulseTrain, &dsInfo, (DiscardFptr_type)discard_PulseTrain_type) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanPixelPulseTrain, &dataPacket, FALSE, &errorInfo.errMsg) ); 

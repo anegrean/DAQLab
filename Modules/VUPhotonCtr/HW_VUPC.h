@@ -127,16 +127,14 @@ int 		PMTClearFifo				(void);
 int 		PMT_SetMode 				(int PMTnr, PMT_Mode_type mode);
 int 		PMT_SetFan 					(int PMTnr, BOOL value);
 int 		PMT_SetCooling 				(int PMTnr, BOOL value);
-int 		SetPMTGainTresh				(int PMTnr,double gain,double threshold);
+int 		SetPMTGainTresh				(int PMTnr, double gain, double threshold);
 int 		PMT_SetTestMode				(BOOL testmode);
 int 		PMT_ClearControl			(int PMTnr);
-void 		Setnrsamples_in_iteration	(int mode,int samplerate_in_khz,int itsamples);
+void 		PMTSetBufferSize			(int mode, double sampleRate, int itsamples);
 void 		ResetDataCounter			(void);
 int 		GetDataCounter				(void);
-int 		PMTStartAcq					(TaskMode_type mode,TaskControl_type* taskControl,Channel_type** channels);
+int 		PMTStartAcq					(TaskMode_type mode, TaskControl_type* taskControl, double samplingRate, Channel_type** channels);
 int 		PMTStopAcq					(void);
-
-
 
 #ifdef __cplusplus
     }

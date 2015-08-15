@@ -1476,7 +1476,11 @@ RETURN_ERR
 
 static double GetPockellsCellVoltage (PockellsEOMCal_type* eomCal, double normalizedPower)
 {
-	return (asin(sqrt((normalizedPower - eomCal->d)/eomCal->a)) - eomCal->c)/eomCal->b;
+	double	val = (normalizedPower - eomCal->d)/eomCal->a;
+	if (val < 0.0) val = 0.0; 	// Must do it like this cause even a simple exact difference of 2.755e-3 - 2.755e-3 can 
+								// generate a negative number (although very small) which will make the sqrt fail on its domain check.
+	
+	return (asin(sqrt(val)) - eomCal->c)/eomCal->b;
 }
 
 

@@ -520,9 +520,9 @@ PulseTrainFreqTiming_type* 	init_PulseTrainFreqTiming_type 			(PulseTrainModes m
 	// Time defined pulse train
 PulseTrainTimeTiming_type* 	init_PulseTrainTimeTiming_type 			(PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, double highTime, 
 																	 double lowTime, double initialDelay);
-	// Ticks defined pulse train
+	// Ticks defined pulse train. Set clockFrequency to 0 Hz if unknown.
 PulseTrainTickTiming_type* 	init_PulseTrainTickTiming_type 			(PulseTrainModes mode, PulseTrainIdleStates idleState, uInt64 nPulses, uInt32 highTicks, 
-																	 uInt32 lowTicks, uInt32 delayTicks);
+																	 uInt32 lowTicks, uInt32 delayTicks, double clockFrequency);
 	// Discards all pulse train types       
 void 						discard_PulseTrain_type 				(PulseTrain_type** pulseTrainPtr);
 
@@ -531,28 +531,22 @@ void 						discard_PulseTrain_type 				(PulseTrain_type** pulseTrainPtr);
 	//-------------------------------------
 	
 		//returns a copy of the pulsetrain 
-PulseTrain_type* 			CopyPulseTrain							(PulseTrain_type* pulsetrain);
+PulseTrain_type* 			CopyPulseTrain							(PulseTrain_type* pulseTrain);
 
 	//-------------------------------------
 	// Set/Get All pulse train types
 	//-------------------------------------
 
-	// sets the pulse train idle state
+	// idle state
 void   						SetPulseTrainIdleState					(PulseTrain_type* pulseTrain, PulseTrainIdleStates idleState);
-
-	// gets the pulsetrain idle state   
 PulseTrainIdleStates	 	GetPulseTrainIdleState					(PulseTrain_type* pulseTrain);
 
-	// sets the pulsetrain number of pulses
+	// number of pulses
 void   						SetPulseTrainNPulses					(PulseTrain_type* pulseTrain, uInt64 nPulses);
-
-	// gets the number of pulses in a pulsetrain
 uInt64   					GetPulseTrainNPulses					(PulseTrain_type* pulseTrain);
 
-	// sets the pulsetrain mode
+	// pulsetrain mode
 void   						SetPulseTrainMode						(PulseTrain_type* pulseTrain, PulseTrainModes mode);
-
-	// gets the pulsetrain mode
 PulseTrainModes   			GetPulseTrainMode						(PulseTrain_type* pulseTrain);
 
 	// gets the pulsetrain type
@@ -562,66 +556,52 @@ PulseTrainTimingTypes   	GetPulseTrainType						(PulseTrain_type* pulseTrain);
 	// Set/Get Frequency pulse train type
 	//-------------------------------------
 
-	// sets the pulsetrain frequency
+	// frequency
 void   						SetPulseTrainFreqTimingFreq				(PulseTrainFreqTiming_type* pulseTrain, double frequency);
-
-	// gets the pulsetrain frequency
 double 						GetPulseTrainFreqTimingFreq				(PulseTrainFreqTiming_type* pulseTrain);
 
-	// sets the pulsetrain duty cycle
+	// duty cycle
 void   						SetPulseTrainFreqTimingDutyCycle		(PulseTrainFreqTiming_type* pulseTrain, double dutyCycle);
-
-	// gets the pulsetrain duty cycle  
 double 						GetPulseTrainFreqTimingDutyCycle		(PulseTrainFreqTiming_type* pulseTrain);
 
-	// sets the pulsetrain initial delay 
+	// initial delay 
 void   						SetPulseTrainFreqTimingInitialDelay		(PulseTrainFreqTiming_type* pulseTrain, double initialDelay);
-
-	// gets the pulsetrain initial delay 
 double 						GetPulseTrainFreqTimingInitialDelay		(PulseTrainFreqTiming_type* pulseTrain);
 
 	//-------------------------------------
 	// Set/Get Ticks pulse train type
 	//-------------------------------------
 
-	// sets the pulsetrain highticks
+	// highticks
 void   						SetPulseTrainTickTimingHighTicks		(PulseTrainTickTiming_type* pulseTrain, uInt32 highTicks);
-
-	// gets the pulsetrain highticks
 uInt32   					GetPulseTrainTickTimingHighTicks		(PulseTrainTickTiming_type* pulseTrain);
 
-	// sets the pulsetrain lowticks
+	// lowticks
 void   						SetPulseTrainTickTimingLowTicks			(PulseTrainTickTiming_type* pulseTrain, uInt32 lowTicks);
-
-	// gets the pulsetrain lowticks
 uInt32   					GetPulseTrainTickTimingLowTicks			(PulseTrainTickTiming_type* pulseTrain);
 
-	// sets the pulsetrain delayticks
+	// delayticks
 void   						SetPulseTrainTickTimingDelayTicks		(PulseTrainTickTiming_type* pulseTrain, uInt32 delayTicks);
-
-	// gets the pulsetrain delayticks
 uInt32   					GetPulseTrainTickTimingDelayTicks		(PulseTrainTickTiming_type* pulseTrain);
+
+	// clock frequency in [Hz]
+void						SetPulseTrainTickTimingClockFrequency	(PulseTrainTickTiming_type* pulseTrain, double clockFrequency);
+double						GetPulseTrainTickTimingClockFrequency	(PulseTrainTickTiming_type* pulseTrain);
 
 	//-------------------------------------
 	// Set/Get Time pulse train type
 	//-------------------------------------
 
-	// sets the pulsetrain hightime
+	// hightime
 void   						SetPulseTrainTimeTimingHighTime			(PulseTrainTimeTiming_type* pulseTrain, double highTime);
-
-	// gets the pulsetrain hightime
 double   					GetPulseTrainTimeTimingHighTime			(PulseTrainTimeTiming_type* pulseTrain);
 
-	// sets the pulsetrain lowtime
+	// lowtime
 void   						SetPulseTrainTimeTimingLowTime			(PulseTrainTimeTiming_type* pulseTrain, double lowTime);
-
-	// gets the pulsetrain lowtime
 double   					GetPulseTrainTimeTimingLowTime			(PulseTrainTimeTiming_type* pulseTrain);
 
-	// sets the pulsetrain initial delay time
+	// delay time
 void   						SetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* pulseTrain, double delayTime);
-
-	// gets the pulsetrain iniial delay time
 double   					GetPulseTrainTimeTimingInitialDelay		(PulseTrainTimeTiming_type* pulseTrain);
 
 //---------------------------------------------------------------------------------------------------------  

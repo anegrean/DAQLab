@@ -27,29 +27,17 @@
 #define WDTE_ERR_BIT	0x01000000
 #define RDTE_ERR_BIT	0x02000000
 #define DTE_DONE_BIT	0x80000000
-		
 #define MAJOR_VERSION	2
 #define MINOR_VERSION	0 
-
-		//driver status bits
+// driver status bits
 #define READYFORDATA	0x00000001
 #define WORKERACTIVE	0x00000002
-		
 #define BYTESPERPIXEL	8  
-	
-
 #define QUEUE_LENGTH	100   
-	
 #define NUMTHREADS		10																			  
-		
 #define MAXBUFSIZE		0x40000    
-		
-#define MAXCHAR 255  //testval for filename
-
 #define MAXPACKETSIZE   0x8000      //bytes
 	
-
-
 //==============================================================================
 // Types
 
@@ -59,26 +47,27 @@ typedef enum {
 	PMT_IDLE,
 	PMT_WAITFORARMED,
 	PMT_READREQ
-} PMTcontroller_state;
-
+} PMTControllerStates;
 
 typedef struct _PMTregcommand {
-	unsigned long regaddress;
-	unsigned long regvalue;
-	int RW;
+	
+	unsigned long 		regaddress;
+	unsigned long 		regvalue;
+	int 				RW;
+	
 } PMTregcommand;
 
 
 //==============================================================================
 // Static global variables
 
-//==============================================================================
-// Static functions
+static TaskControl_type*		gtaskControl				= NULL;
+static Channel_type*			gchannels[MAX_CHANNELS]		= {NULL};
+static double					gSamplingRate				= 0;
 
 //==============================================================================
 // Global variables
-TaskControl_type*		gtaskControl;
-Channel_type*			gchannels[MAX_CHANNELS];
+
 int         			measurementmode =TASK_FINITE;  //default
 //int 		 			bufsize; 
 unsigned int 			PMTThreadID; 
@@ -98,6 +87,14 @@ DefineThreadSafeScalarVar(unsigned int,AcqBusy,0); 	            // acquisition i
 DefineThreadSafeScalarVar(unsigned int,ReadyForReading,0); 	    // acquisition thread is ready for reading
 
 //==============================================================================
+// Static functions
+
+static unsigned int 	GetAcquisitionBusy 				(void);
+static void 			SetMeasurementMode 				(int mode);
+static int 				GetPMTControllerVersion 		(void);
+static int 				ReadBuffer 						(int bufsize);
+
+//==============================================================================
 // Global functions
 
 int CVICALLBACK 		PMTThreadFunction				(void *(functionData));
@@ -109,67 +106,68 @@ unsigned long 			ImReadReg						(unsigned long regaddress);
 int 					ImWriteReg						(unsigned long regaddress,unsigned long regvalue);
 
 
-unsigned int GetAcquisitionBusy(void)
+static unsigned int GetAcquisitionBusy (void)
 {
 	return GetAcqBusy();
 }
 
-void SetMeasurementMode(int mode)
+static void SetMeasurementMode (int mode)
 {
-	 measurementmode=mode;
+	 measurementmode = mode;
 }
 
-void Setnrsamples_in_iteration(int mode,int samplerate_in_khz,int itsamples)
+void PMTSetBufferSize (int mode, double sampleRate, int itsamples)
 {
-	int bufsize;
+	int bufsize	= 0;
 	 
-	if (mode==TASK_CONTINUOUS) {   
+	if (mode == TASK_CONTINUOUS) {   
 		// continuous mode, bufsize based on sample freq
-		if (samplerate_in_khz>500) {
-			bufsize=MAXBUFSIZE;  
+		if (sampleRate > 500 * 1e3) {
+			bufsize = MAXBUFSIZE;  
 		}
-		else if (samplerate_in_khz>250) {
-			bufsize=0x20000;  
+		else if (sampleRate > 250 * 1e3) {
+			bufsize = 0x20000;  
 		}
-		else if (samplerate_in_khz>125) {
-			bufsize=0x10000;  
+		else if (sampleRate > 125 * 1e3) {
+			bufsize = 0x10000;  
 		}
-		else if (samplerate_in_khz>64) {
-			bufsize=0x8000;  
+		else if (sampleRate > 64 * 1e3) {
+			bufsize = 0x8000;  
 		}
-		else if (samplerate_in_khz>32) {
-			bufsize=0x4000;  
+		else if (sampleRate > 32 * 1e3) {
+			bufsize = 0x4000;  
 		}
-		else bufsize=0x2000;   
-	
+		else 
+			bufsize = 0x2000;   
 	
 	 } else {  
 		// finite mode, bufsize based on sample requested samples
-	 	nrsamples_in_iteration=itsamples;
+	 	nrsamples_in_iteration = itsamples;
 		// 8 bytes per sample (pixel)
-	 	bufsize=8*itsamples;
-		if (bufsize>MAXBUFSIZE) bufsize=MAXBUFSIZE;   //use max bufsize
+	 	bufsize = 8 * itsamples;
+		if (bufsize > MAXBUFSIZE) bufsize = MAXBUFSIZE;   //use max bufsize
 	 }
+	 
 	 SetPMTBufsize(bufsize);  
 	 //SetPMTnewbufsizeflag(1);
 }
 
-int ReadPMTReg(unsigned long regaddress,unsigned long *regval)
+int ReadPMTReg (unsigned long regaddress, unsigned long *regval)
 {
 	int 			error = 0;
 	unsigned long 	reply = 0;
 	 
-	if(!VUPCI_Get_Reg(regaddress,&reply)){ 
-		error=-1;
-	 };
-	*regval=reply;
+	if(!VUPCI_Get_Reg(regaddress, &reply))
+		error = -1;
+	
+	*regval = reply;
 	
 	return error;
 }
 
-int WritePMTReg(unsigned long regaddress,unsigned long regvalue)
+int WritePMTReg (unsigned long regaddress, unsigned long regvalue)
 {
-	 int 	error = 0;
+	 int 			error = 0;
 	 
 	 if(!VUPCI_Set_Reg(regaddress, regvalue))
 		error = -1;
@@ -179,7 +177,7 @@ int WritePMTReg(unsigned long regaddress,unsigned long regvalue)
 
 ///  HIFN  Gets the PMT Controller Hardware Version
 ///  HIRET returns error, no error when 0
-int GetPMTControllerVersion(void)
+static int GetPMTControllerVersion (void)
 {
 #define GetPMTControllerVersion_Err_WrongVersion	-1
 INIT_ERR
@@ -201,7 +199,7 @@ Error:
 }
 
 
-int PMTController_Init(void)
+int PMTController_Init (void)
 {
 INIT_ERR
 
@@ -232,7 +230,7 @@ Error:
 	return errorInfo.error;  
 }
 
-int PMTController_Finalize(void)	    
+int PMTController_Finalize (void)	    
 {    
 INIT_ERR
 	 
@@ -253,20 +251,19 @@ Error:
 	 return errorInfo.error;
 }
 
-//called in pmt thread
-int ReadBuffer(int bufsize)
+// called in pmt thread
+static int ReadBuffer (int bufsize)
 {
 INIT_ERR
 
 	int 					result			= 0;
 	DataPacket_type*  		dataPacket		= NULL;
 	char*					errMsg			= NULL;  
-	unsigned short int* 	Samplebuffer	= NULL;   
+	unsigned short int* 	sampleBuffer	= NULL;   
 	void*     				pmtdataptr		= NULL;
 	size_t 					numpixels		= 0;
 	size_t 					numshorts		= 0;
 	size_t 					ndatapoints		= 0;
-	double 					refSamplingRate	= 1000;
 	long 					errcode			= 0;
 	Waveform_type* 			waveform		= NULL;
 	int						swappedi		= 0;
@@ -274,16 +271,16 @@ INIT_ERR
 	DSInfo_type* 			dsInfo			= NULL;
 	
 	
-	Samplebuffer 	= malloc(bufsize); 
+	nullChk( sampleBuffer 	= malloc(bufsize) ); 
 	
-	result 			= VUPCI_Read_Buffer(Samplebuffer, bufsize);
+	result 			= VUPCI_Read_Buffer(sampleBuffer, bufsize);
 	
-	if((result < 0) && (GetAcqBusy() == 0)){ //only pass errors when acq is busy  
-		OKfree(Samplebuffer);  
+	if((result < 0) && (GetAcqBusy() == 0)) { //only pass errors when acq is busy  
+		OKfree(sampleBuffer);  
 		return 0;
 	}
 	
-	if (result < 0){  
+	if (result < 0) {  
 		//error
 		readerror	= 1;
 		errcode		= ~result;
@@ -291,13 +288,13 @@ INIT_ERR
 		//timeout occured, skip this read
 	}
 	
-	if (result > 0){
+	if (result > 0) {
 		// deinterlace data here
 		numpixels 	= result/8;  //8 bytes per pixel, result gives number of bytes
 		numshorts 	= result/2;
 		ndatapoints = numshorts/4;
 		//transpose data array
-		TransposeData(Samplebuffer, VAL_SHORT_INTEGER, numshorts, 4);
+		TransposeData(sampleBuffer, VAL_SHORT_INTEGER, numshorts, 4);
 		totalbytes=ndatapoints * sizeof(unsigned short);
 		//send datapackets
 		//index i is index of active channels; chanIdx contains the PMT channel index
@@ -308,15 +305,27 @@ INIT_ERR
 					//swap index; 
 					//to be repaired in hardware!
 					switch (i) {
-						case 0: swappedi=2;
-						break;
-						case 1: swappedi=3;
-						break;
-						case 2: swappedi=0;
-						break;
-						case 3: swappedi=1;
-						break;
-						}
+							
+						case 0: 
+							
+							swappedi = 2;
+							break;
+							
+						case 1:
+							
+							swappedi = 3;
+							break;
+							
+						case 2:
+							
+							swappedi = 0;
+							break;
+							
+						case 3:
+							
+							swappedi = 1;
+							break;
+					}
 				/*	//chop data in MAXPACKETSIZE blocks
 					bytes_send=0;
 					while (bytes_send<totalbytes){
@@ -333,14 +342,14 @@ INIT_ERR
 							bytes_send=ndatapoints;
 						}
 						nullChk(pmtdataptr = malloc(blksize)); 
-						memcpy(pmtdataptr, &Samplebuffer[dataindex], blksize);
+						memcpy(pmtdataptr, &sampleBuffer[dataindex], blksize);
 					//end chop data in MAXPACKETSIZE blocks */  
 					//full block code
 						nullChk(pmtdataptr = malloc(totalbytes)); 
-						memcpy(pmtdataptr, &Samplebuffer[swappedi*ndatapoints], totalbytes);
+						memcpy(pmtdataptr, &sampleBuffer[swappedi*ndatapoints], totalbytes);
 					//end full block code	
 						// prepare waveform
-						nullChk( waveform = init_Waveform_type(Waveform_UShort, refSamplingRate, ndatapoints, &pmtdataptr) );
+						nullChk( waveform = init_Waveform_type(Waveform_UShort, gSamplingRate, ndatapoints, &pmtdataptr) );
 						Iterator_type* currentiter = GetTaskControlIterator(gtaskControl);
 						nullChk( dsInfo = GetIteratorDSData(currentiter, WAVERANK) );
 				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, (void**)&waveform, &dsInfo, (DiscardFptr_type) discard_Waveform_type));       
@@ -370,7 +379,7 @@ INIT_ERR
 		}
 	}
 	
-	OKfree(Samplebuffer);
+	OKfree(sampleBuffer);
 	
 	return result;
 	
@@ -394,44 +403,58 @@ int PMT_SetMode (int PMTnr, PMT_Mode_type mode)
 {
 INIT_ERR
 
-	unsigned long 	controlreg;
+	unsigned long 	controlreg	 = 0;
 	
-	errChk(ReadPMTReg(CTRL_REG,&controlreg));
+	errChk( ReadPMTReg(CTRL_REG, &controlreg) );
 	
-	if(mode==PMT_MODE_ON){
+	if(mode == PMT_MODE_ON){
 		switch(PMTnr){
+				
 			case PMT1:
-				controlreg=controlreg|PMT1HV_BIT;  //set bit
+				
+				controlreg = controlreg|PMT1HV_BIT;  //set bit
 				break;
+				
 			case PMT2:
-				controlreg=controlreg|PMT2HV_BIT;
+				
+				controlreg = controlreg|PMT2HV_BIT;
 				break;
+				
 			case PMT3:
-				controlreg=controlreg|PMT3HV_BIT;
+				
+				controlreg = controlreg|PMT3HV_BIT;
 				break;
+				
 			case PMT4:
-				controlreg=controlreg|PMT4HV_BIT;
+				
+				controlreg = controlreg|PMT4HV_BIT;
 				break;
 		}
-	}
-	else {
+	} else {
 		switch(PMTnr){
+				
 			case PMT1:
-				controlreg=controlreg&(~PMT1HV_BIT);   //clear bit
+				
+				controlreg = controlreg&(~PMT1HV_BIT);   //clear bit
 				break;
+				
 			case PMT2:
-				controlreg=controlreg&(~PMT2HV_BIT);
+				
+				controlreg = controlreg&(~PMT2HV_BIT);
 				break;
+				
 			case PMT3:
-				controlreg=controlreg&(~PMT3HV_BIT);
+				
+				controlreg = controlreg&(~PMT3HV_BIT);
 				break;
+				
 			case PMT4:
-				controlreg=controlreg&(~PMT4HV_BIT);
+				controlreg = controlreg&(~PMT4HV_BIT);
 				break;
 		}
 	}
 		//write control register
-	errChk(WritePMTReg(CTRL_REG,controlreg));  
+	errChk( WritePMTReg(CTRL_REG, controlreg) );  
 	
 Error:
 	
@@ -443,40 +466,53 @@ int PMT_SetFan (int PMTnr, BOOL value)
 {
 INIT_ERR
 
-	unsigned long 	controlreg;
+	unsigned long 	controlreg	= 0;
 	
-	
-	errChk(ReadPMTReg(CTRL_REG,&controlreg));    
+	errChk( ReadPMTReg(CTRL_REG, &controlreg) );    
 	
 	if(value){				//Fan On
 		switch(PMTnr){
+				
 			case PMT1:
-				controlreg=controlreg|PMT1FAN_BIT;  //set bit
+				controlreg = controlreg|PMT1FAN_BIT;  //set bit
 				break;
+				
 			case PMT2:
-				controlreg=controlreg|PMT2FAN_BIT;
+				
+				controlreg = controlreg|PMT2FAN_BIT;
 				break;
+				
 			case PMT3:
-				controlreg=controlreg|PMT3FAN_BIT;
+				
+				controlreg = controlreg|PMT3FAN_BIT;
 				break;
+				
 			case PMT4:
-				controlreg=controlreg|PMT4FAN_BIT;
+				
+				controlreg = controlreg|PMT4FAN_BIT;
 				break;
 		}
 	}
 	else {
 		switch(PMTnr){
 			case PMT1:
-				controlreg=controlreg&(~PMT1FAN_BIT);   //clear bit
+				
+				controlreg = controlreg&(~PMT1FAN_BIT);   //clear bit
 				break;
+				
 			case PMT2:
-				controlreg=controlreg&(~PMT2FAN_BIT);
+				
+				controlreg = controlreg&(~PMT2FAN_BIT);
 				break;
+				
 			case PMT3:
-				controlreg=controlreg&(~PMT3FAN_BIT);
+				
+				controlreg = controlreg&(~PMT3FAN_BIT);
 				break;
+				
 			case PMT4:
-				controlreg=controlreg&(~PMT4FAN_BIT);
+				
+				controlreg = controlreg&(~PMT4FAN_BIT);
 				break;
 		}
 	}
@@ -493,39 +529,54 @@ int PMT_SetCooling (int PMTnr, BOOL value)
 {
 INIT_ERR
 
-	unsigned long 	controlreg;
+	unsigned long 	controlreg	= 0;
 	
 	errChk(ReadPMTReg(CTRL_REG,&controlreg));    
 	
 	if(value){			//Peltier ON
 		switch(PMTnr){
+				
 			case PMT1:
-				controlreg=controlreg|PMT1PELT_BIT;  //set bit
+				
+				controlreg = controlreg|PMT1PELT_BIT;  //set bit
 				break;
+				
 			case PMT2:
-				controlreg=controlreg|PMT2PELT_BIT;
+				
+				controlreg = controlreg|PMT2PELT_BIT;
 				break;
+				
 			case PMT3:
-				controlreg=controlreg|PMT3PELT_BIT;
+				
+				controlreg = controlreg|PMT3PELT_BIT;
 				break;
+				
 			case PMT4:
-				controlreg=controlreg|PMT4PELT_BIT;
+				controlreg = controlreg|PMT4PELT_BIT;
 				break;
 		}
 	}
 	else {
 		switch(PMTnr){
+				
 			case PMT1:
-				controlreg=controlreg&(~PMT1PELT_BIT);   //clear bit
+				
+				controlreg = controlreg&(~PMT1PELT_BIT);   //clear bit
 				break;
+				
 			case PMT2:
-				controlreg=controlreg&(~PMT2PELT_BIT);
+				
+				controlreg = controlreg&(~PMT2PELT_BIT);
 				break;
+				
 			case PMT3:
-				controlreg=controlreg&(~PMT3PELT_BIT);
+				
+				controlreg = controlreg&(~PMT3PELT_BIT);
 				break;
+				
 			case PMT4:
-				controlreg=controlreg&(~PMT4PELT_BIT);
+				
+				controlreg = controlreg&(~PMT4PELT_BIT);
 				break;
 		}
 	}
@@ -540,43 +591,51 @@ Error:
 ///  HIFN  Sets the PMT gain
 ///  HIPAR PMTnr/PMT number,PMTGain /Gain, range ......
 ///  HIRET returns error, no error when 0
-int PMT_SetGainTresh(int PMTnr,unsigned int PMTGain,unsigned int PMTThreshold)
+int PMT_SetGainTresh (int PMTnr, unsigned int PMTGain, unsigned int PMTThreshold)
 {
 INIT_ERR
 
-	unsigned long 	combinedval;
+	unsigned long 	combinedval	= 0;
 	unsigned long 	THMASK		= 0x0000FFFF;
 	unsigned long 	GAINMASK	= 0xFFFF0000; 
-	unsigned long 	controlreg;
+	unsigned long 	controlreg	= 0;
 	
-	errChk(ReadPMTReg(CTRL_REG,&controlreg));    
+	errChk( ReadPMTReg(CTRL_REG, &controlreg) );    
  
-	combinedval=((PMTGain<<16)&GAINMASK)+(PMTThreshold&THMASK);   
+	combinedval = ((PMTGain<<16)&GAINMASK) + (PMTThreshold&THMASK);   
 	
 	switch(PMTnr){
+			
 		case PMT1:
-			errChk(WritePMTReg(PMT1_CTRL_REG,combinedval));  
-			controlreg=controlreg|UPDPMT12_BIT; //set bit  
-			errChk(WritePMTReg(CTRL_REG,controlreg));   
-			controlreg=controlreg&~UPDPMT12_BIT;  //clear bit 
+			
+			errChk( WritePMTReg(PMT1_CTRL_REG, combinedval) );  
+			controlreg = controlreg|UPDPMT12_BIT; //set bit  
+			errChk( WritePMTReg(CTRL_REG,controlreg) );   
+			controlreg = controlreg&~UPDPMT12_BIT;  //clear bit 
 			break;
+			
 		case PMT2:
-			errChk(WritePMTReg(PMT2_CTRL_REG,combinedval));  
-			controlreg=controlreg|UPDPMT12_BIT;  //set bit 
-			errChk(WritePMTReg(CTRL_REG,controlreg));   
-			controlreg=controlreg&~UPDPMT12_BIT;  //clear bit 
+			
+			errChk( WritePMTReg(PMT2_CTRL_REG, combinedval) );  
+			controlreg = controlreg|UPDPMT12_BIT;  //set bit 
+			errChk( WritePMTReg(CTRL_REG, controlreg) );   
+			controlreg = controlreg&~UPDPMT12_BIT;  //clear bit 
 			break;
+			
 		case PMT3:
-			errChk(WritePMTReg(PMT3_CTRL_REG,combinedval));
-			controlreg=controlreg|UPDPMT34_BIT;  //set bit   
-			errChk(WritePMTReg(CTRL_REG,controlreg));   
-			controlreg=controlreg&~UPDPMT34_BIT;  //clear bit 
+			
+			errChk( WritePMTReg(PMT3_CTRL_REG, combinedval) );
+			controlreg = controlreg|UPDPMT34_BIT;  //set bit   
+			errChk( WritePMTReg(CTRL_REG,controlreg) );   
+			controlreg = controlreg&~UPDPMT34_BIT;  //clear bit 
 			break;
+			
 		case PMT4:
-			errChk(WritePMTReg(PMT4_CTRL_REG,combinedval)); 
-			controlreg=controlreg|UPDPMT34_BIT;  //set bit   
-			errChk(WritePMTReg(CTRL_REG,controlreg));   
-			controlreg=controlreg&~UPDPMT34_BIT;  //clear bit 
+			
+			errChk( WritePMTReg(PMT4_CTRL_REG, combinedval)); 
+			controlreg = controlreg|UPDPMT34_BIT;  //set bit   
+			errChk( WritePMTReg(CTRL_REG, controlreg));   
+			controlreg = controlreg&~UPDPMT34_BIT;  //clear bit 
 			break;
 	}
 	
@@ -588,33 +647,32 @@ Error:
 
 int ConvertVoltsToBits(float value_in_volts)
 {
-	  int 		value_in_bits;
-	  double 	voltsperbit	=1/65535.0;
+	  int 		value_in_bits	= 0;
+	  double 	voltsperbit		= 1/65535.0;
 	  
 	  //1V corresponds with a bitvalue of 65535
-	  value_in_bits=value_in_volts/voltsperbit;
+	  value_in_bits = value_in_volts/voltsperbit;
 	  
 	  return value_in_bits;
 }
 
-
-
 ///  HIFN  Sets the PMT gain
 ///  HIPAR PMTnr/PMT number,PMTGain /Gain, range ......
 ///  HIRET returns error, no error when 0
-int SetPMTGainTresh(int PMTnr,double gain,double threshold)
+int SetPMTGainTresh (int PMTnr, double gain, double threshold)
 {
 INIT_ERR
 
-	unsigned int 	gain_in_bits;
-	unsigned int 	threshold_in_bits;
+	unsigned int 	gain_in_bits		= 0;
+	unsigned int 	threshold_in_bits	= 0;
 
-	gain_in_bits=ConvertVoltsToBits(gain);
-	threshold_in_bits=ConvertVoltsToBits(threshold);
+	gain_in_bits = ConvertVoltsToBits(gain);
+	threshold_in_bits = ConvertVoltsToBits(threshold);
 	
-	errChk(PMT_SetGainTresh(PMTnr,gain_in_bits,threshold_in_bits));
+	errChk( PMT_SetGainTresh(PMTnr, gain_in_bits, threshold_in_bits) );
 
 Error:
+	
 	return errorInfo.error;
 }
 
@@ -623,13 +681,16 @@ int PMT_SetTestMode(BOOL testmode)
 {
 INIT_ERR
 
-	unsigned long 	controlreg;
+	unsigned long 	controlreg	= 0;
 	
-	errChk(ReadPMTReg(CTRL_REG,&controlreg));    
+	errChk( ReadPMTReg(CTRL_REG, &controlreg) );    
 	
-	if (testmode) controlreg=controlreg|TESTMODE0_BIT;  //set bit
-	else controlreg=controlreg&(~TESTMODE0_BIT);  //clear bit 
-	errChk(WritePMTReg(CTRL_REG,controlreg)); 
+	if (testmode) 
+		controlreg = controlreg|TESTMODE0_BIT;  //set bit
+	else 
+		controlreg = controlreg&(~TESTMODE0_BIT);  //clear bit 
+	
+	errChk( WritePMTReg(CTRL_REG, controlreg) ); 
 		   
 Error:
 	return errorInfo.error;
@@ -637,37 +698,39 @@ Error:
 
 /// HIFN  starts the PMT Controller Acquisition
 /// HIRET returns error, no error when 0
-int PMTStartAcq(TaskMode_type mode,TaskControl_type* taskControl,Channel_type** channels)
+int PMTStartAcq(TaskMode_type mode, TaskControl_type* taskControl, double samplingRate, Channel_type** channels)
 {
 INIT_ERR
 
-	unsigned long 	controlreg;
-	int 			i;
+	unsigned long 	controlreg	= 0;
 	
-	gtaskControl=taskControl;		  
-	for (i=0;i<MAX_CHANNELS;i++){
-		if (channels[i]!=NULL) {
-			gchannels[i]=malloc(sizeof(Channel_type));
-		 	*gchannels[i]=*channels[i];
-		}
-		else gchannels[i]=NULL;
-	}
+	// assign task controller to global (should be avoided in the future!)
+	gtaskControl = taskControl;
+	
+	// assign sampling rate to global (should be avoided in the future!)
+	gSamplingRate = samplingRate;
+	
+	for (int i = 0; i < MAX_CHANNELS; i++)
+		if (channels[i]) {
+			nullChk( gchannels[i] = malloc(sizeof(Channel_type)) );
+		 	*gchannels[i] = *channels[i];
+		} else 
+			gchannels[i] = NULL;
 	
 	SetMeasurementMode(mode);
-	errChk(PMTClearFifo()); 
+	errChk( PMTClearFifo() ); 
 	
-	errChk(StartDAQThread(mode,DEFAULT_THREAD_POOL_HANDLE));
+	errChk( StartDAQThread(mode, DEFAULT_THREAD_POOL_HANDLE) );
 	
-	readdata=1;   //start reading       
-	errChk(ReadPMTReg(CTRL_REG,&controlreg));     
+	readdata = 1;   //start reading       
+	errChk( ReadPMTReg(CTRL_REG, &controlreg) );     
 	//set app start bit  
-	controlreg=controlreg|APPSTART_BIT;
-	errChk(WritePMTReg(CTRL_REG,controlreg));
+	controlreg = controlreg|APPSTART_BIT;
+	errChk( WritePMTReg(CTRL_REG, controlreg) );
 	
-	while (GetReadyForReading()==0) {
-		  //wait until thread has started
-		  ProcessSystemEvents();
-	}
+	while (!GetReadyForReading())
+		//wait until thread has started
+		ProcessSystemEvents();
 	
 Error:
 	
@@ -681,27 +744,24 @@ int PMTStopAcq(void)
 INIT_ERR
 
 	unsigned long 			controlreg;
-	int 					i;
-	char*					errMsg			= NULL;
 	
 	//send null packet(s)
-	for (i = 0; i < MAX_CHANNELS; i++)
+	for (int i = 0; i < MAX_CHANNELS; i++)
 		if (gchannels[i] && gchannels[i]->VChan)
-			errChk( SendNullPacket(gchannels[i]->VChan, &errMsg) );
+			errChk( SendNullPacket(gchannels[i]->VChan, &errorInfo.errMsg) );
 	
 	
 	readdata = 0;  //stop reading  
-	errChk(StopDAQThread(DLGetCommonThreadPoolHndl()));
+	errChk( StopDAQThread(DLGetCommonThreadPoolHndl()) );
 
-	for (i=0;i<MAX_CHANNELS;i++){
+	for (int i = 0; i < MAX_CHANNELS; i++)
 		OKfree(gchannels[i]);
-	}
 	
 	//tell hardware to stop
-	errChk(ReadPMTReg(CTRL_REG,&controlreg));    
+	errChk( ReadPMTReg(CTRL_REG, &controlreg) );    
 	//set app start bit  
-	controlreg=controlreg&~APPSTART_BIT; //clear appstart bit
-	errChk(WritePMTReg(CTRL_REG,controlreg));
+	controlreg = controlreg&~APPSTART_BIT; //clear appstart bit
+	errChk( WritePMTReg(CTRL_REG,controlreg) );
 	
 Error:
 
@@ -714,23 +774,23 @@ int PMTReset(void)
 {
 INIT_ERR
 
-	unsigned long 	controlreg	= 0;
+	unsigned long 	controlreg	= 0;		// clear control reg 
 	double 			zero		= 0.0;
 	double 			twenty_mV	= 0.020;
 
-	controlreg = 0;   //clear control reg 
-	//set reset bit   
+	// set reset bit   
 	controlreg = controlreg|RESET_BIT; 
 	errChk(WritePMTReg(CTRL_REG, controlreg));
-	//clear reset bit
+	
+	// clear reset bit
 	controlreg = controlreg&~RESET_BIT;
 	errChk(WritePMTReg(CTRL_REG, controlreg));
 	
 	//set gain to zero, threshold level to 20mV
-	SetPMTGainTresh(PMT1,zero,twenty_mV);
-	SetPMTGainTresh(PMT2,zero,twenty_mV);   
-	SetPMTGainTresh(PMT3,zero,twenty_mV);   
-	SetPMTGainTresh(PMT4,zero,twenty_mV);   
+	SetPMTGainTresh(PMT1, zero, twenty_mV);
+	SetPMTGainTresh(PMT2, zero, twenty_mV);   
+	SetPMTGainTresh(PMT3, zero, twenty_mV);   
+	SetPMTGainTresh(PMT4, zero, twenty_mV);   
 	
 Error:
 	return errorInfo.error;
@@ -830,20 +890,20 @@ int CVICALLBACK PMTThreadFunction(void *(functionData))
 {
 INIT_ERR
 
-	int result; 
-	int abort	=0;
+	int result	= 0; 
+	int abort	= 0;
 	
-	PMTThreadID=CmtGetCurrentThreadID ();  
-	readerror=0;    
+	PMTThreadID = CmtGetCurrentThreadID ();  
+	readerror = 0;    
 
 	SetReadyForReading(1);
-	while (GetAcqBusy()==1)
+	while (GetAcqBusy() == 1)
 	{
-		if ((readdata)&&(!readerror)) {
-			result=ReadBuffer(GetPMTBufsize());
+		if ((readdata) && (!readerror)) {
+			result = ReadBuffer(GetPMTBufsize());
 		}
-		if (gtaskControl!=NULL) {
-			abort=GetTaskControlAbortFlag(gtaskControl);  
+		if (gtaskControl) {
+			abort = GetTaskControlAbortFlag(gtaskControl);  
 			if (abort) {
 				errChk( TaskControlIterationDone (gtaskControl, 0, NULL, FALSE, &errorInfo.errMsg) );
 				SetAcqBusy(0);
@@ -862,18 +922,18 @@ Error:
 
 //thread function,
 //run pmt read actions in this separate thread to prevent other daq tasks from underrunning
-int CVICALLBACK PMTThreadFunction2(void *(functionData))
+int CVICALLBACK PMTThreadFunction2 (void *(functionData))
 {
-	int result;
+	int result	= 0;
 	
-	PMTThread2ID=CmtGetCurrentThreadID ();  
+	PMTThread2ID = CmtGetCurrentThreadID ();  
 	
-//parallel thread requesting data when in movie mode
-	while (GetAcqBusy()==1)     
+	//parallel thread requesting data when in movie mode
+	while (GetAcqBusy() == 1)     
 	{
-		if (measurementmode !=TASK_FINITE) {
-			result=ReadBuffer(GetPMTBufsize());     
-		}
+		if (measurementmode != TASK_FINITE)
+			result = ReadBuffer(GetPMTBufsize());     
+		
 		ProcessSystemEvents();
     }
     //quit

@@ -758,7 +758,8 @@ typedef struct {
 	HWTrigMaster_type*			HWTrigMaster;				// If this task is a master HW trigger, otherwise NULL.
 	HWTrigSlave_type*			HWTrigSlave;				// If this task is a slave HW trigger, otherwise NULL.
 	PulseTrain_type*			pulseTrain;					// Pulse train info.
-	char*         				clockSource;  				// Clock source used for CO ticks output. If NULL, internal clock has no reference clock. note: Clock source for CO Frequency and Co Time is Implicit.
+	char*         				clockSource;  				// Clock source used for CO ticks output. If NULL, OnboardClock is used. Note: Clock source for CO Frequency and CO Time is Implicit.
+	double						clockFrequency;				// Clock frequency in [Hz] for ticks output. Default 0 if not known.
 } ChanSet_CO_type;
 
 //--------------------
@@ -2360,7 +2361,7 @@ INIT_ERR
 																			{"DelayTicks",				BasicData_UInt,			&delayTicks} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
-				nullChk( pulseTrain = init_PulseTrainTickTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTicks, lowTicks, delayTicks) );
+				nullChk( pulseTrain = init_PulseTrainTickTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTicks, lowTicks, delayTicks, 0) ); // tick clock unknown at this point
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, (PulseTrain_type*)pulseTrain) );
 				OKfree(clockSource);
 				// reserve channel
@@ -5745,6 +5746,7 @@ static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[]
 	chanSet->HWTrigSlave	= NULL;
 	chanSet->pulseTrain 	= pulseTrain;
 	chanSet->clockSource	= StrDup(clockSource);
+	chanSet->clockFrequency	= 0;
 	
 	return chanSet;
 }
@@ -6464,7 +6466,7 @@ INIT_ERR
 						case DAQmx_Val_Pulse_Ticks:
 							chanType		= Chan_CO_Pulse_Ticks;
 							pulseTrain		= (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, DAQmxDefault_CO_Task_idlestate, DAQmxDefault_CO_Task_nPulses,
-									  							 DAQmxDefault_CO_Ticks_Task_highticks, DAQmxDefault_CO_Ticks_Task_lowticks, DAQmxDefault_CO_Ticks_Task_initdelayticks);  
+									  							 DAQmxDefault_CO_Ticks_Task_highticks, DAQmxDefault_CO_Ticks_Task_lowticks, DAQmxDefault_CO_Ticks_Task_initdelayticks, 0);  // tick clock unknown at this point
 							break;
 					}
 					
@@ -6490,7 +6492,7 @@ INIT_ERR
 					//SetCtrlsInPanCBInfo(newChan, ChanSetCO_CB, newChan->baseClass.chanPanHndl);
 						
 					//--------------------------
-					// adjust "Settings" tab
+					// adjust "VChans" tab
 					//--------------------------
 					
 					int settingsPanHndl;
@@ -6669,6 +6671,9 @@ INIT_ERR
 						SetCtrlAttribute(timingPanHndl, TimingPan_ClockSource, ATTR_DIMMED, FALSE);
 					else
 						SetCtrlAttribute(timingPanHndl, TimingPan_ClockSource, ATTR_DIMMED, TRUE);
+					
+					if (newChan->clockSource && newChan->clockSource[0])
+						SetCtrlVal(timingPanHndl, TimingPan_ClockSource, newChan->clockSource);
 						
 					//--------------------------
 					// adjust "Trigger" tab
@@ -9271,7 +9276,7 @@ INIT_ERR
 			
 			OKfree(selectedChan->clockSource);
 			GetCtrlValStringLength(panel, control, &buffSize);
-			selectedChan->clockSource = malloc((buffSize+1) * sizeof(char)); // including ASCII null
+			nullChk( selectedChan->clockSource = malloc((buffSize + 1) * sizeof(char)) ); // including ASCII null
 			GetCtrlVal(panel, control, selectedChan->clockSource);
 			break;
 			
@@ -10588,12 +10593,16 @@ INIT_ERR
 					DAQmxErrChk( DAQmxCreateCOPulseChanTicks(chanSet->taskHndl, chanSet->baseClass.name, "", chanSet->clockSource,
 								 PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain), GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain),
 								 GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain)) );
-				else
+				else {
 					DAQmxErrChk( DAQmxCreateCOPulseChanTicks(chanSet->taskHndl, chanSet->baseClass.name, "", "OnboardClock",
 							 PulseTrainIdleStates_To_DAQmxVal(GetPulseTrainIdleState(chanSet->pulseTrain)), GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain), GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain),
 							 GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain)) );
-	
-	
+					DAQmxGetChanAttribute(chanSet->taskHndl, "", DAQmx_CO_CtrTimebaseRate, &chanSet->clockFrequency);
+					
+				}
+				
+				// set pulse train clock frequency
+				SetPulseTrainTickTimingClockFrequency((PulseTrainTickTiming_type*)chanSet->pulseTrain, chanSet->clockFrequency);
 				break;
 				
 			default:

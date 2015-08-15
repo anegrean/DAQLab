@@ -108,8 +108,8 @@ void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 	if( CmtGetTSVPtr(imageDisplay->imageTSV, &imagePtr)  < 0) goto SkipDiscardImage;
 	discard_Image_type(imagePtr);
 	CmtReleaseTSVPtr(imageDisplay->imageTSV);
-	SkipDiscardImage:
 	
+	SkipDiscardImage:
 	// discard image TSV
 	if (imageDisplay->imageTSV) {
 		CmtDiscardTSV(imageDisplay->imageTSV);

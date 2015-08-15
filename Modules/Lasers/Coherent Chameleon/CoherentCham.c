@@ -69,7 +69,7 @@
 // COM settings
 //--------------------------------
 
-#define COMPort_ReplyTimeout				10.0				// Timeout to wait for a reply from the laser in [s]
+#define COMPort_ReplyTimeout				2.0					// Timeout to wait for a reply from the laser in [s]
 #define COMPort_Timeout						0.02				// Timeout in [s] for read and write operations
 #define COMPort_NBytes						50					// Number of bytes to read at once
 	

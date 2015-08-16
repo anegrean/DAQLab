@@ -216,7 +216,7 @@ char*					GetTaskControlName					(TaskControl_type* taskControl);
 
 	// Obtains the current state of a Task Controller. A call to this function blocks ongoing state transitions and if TC state knowledge is not needed anymore,
 	// this call must be followed each time it is called by GetTaskControlState_ReleaseLock. On success returns 0, on failure a negative number.
-int 					GetTaskControlState_GetLock 		(TaskControl_type* taskControl, TCStates* tcStatePtr, BOOL* lockObtained, char** errorMsg);
+int 					GetTaskControlState_GetLock 		(TaskControl_type* taskControl, TCStates* tcStatePtr, BOOL* lockObtained, int lineNumDebug, char fileNameDebug[], char** errorMsg);
 	// Releases GetTaskControlState lock so state transitions may resume. On success returns 0 and lockObtained is set back to FALSE. On failure returns a negative value and lockObtained remains TRUE. 
 int						GetTaskControlState_ReleaseLock		(TaskControl_type* taskControl, BOOL* lockObtained, char** errorMsg);
 
@@ -280,7 +280,7 @@ BOOL					GetTaskControlIterationStopFlag		(TaskControl_type* taskControl);
 	// Checks if a Task Controller is in use, i.e. if it is in any of the following states: Idle, Running, IterationFunctionActive, Stopping.
 	// A call to this function blocks ongoing state transitions and if TC use knowledge is not needed anymore, this call must be followed each time 
 	// it is called by GetTaskControlState_ReleaseLock. On success returns 0 and sets lockObtained to TRUE, on failure returns a negative number and sets lockObtained to FALSE.
-int 					IsTaskControllerInUse_GetLock 		(TaskControl_type* taskControl, BOOL* inUsePtr, TCStates* tcState, BOOL* lockObtained, char** errorMsg);
+int 					IsTaskControllerInUse_GetLock 		(TaskControl_type* taskControl, BOOL* inUsePtr, TCStates* tcState, BOOL* lockObtained, int lineNumDebug, char fileNameDebug[], char** errorMsg);
 	// Releases isTaskControllerInUse lock so state transitions maye resume. On success returns 0 and lockObtained is set back to FALSE. On failure returns a negative value and lockObtained remains TRUE. 
 int 					IsTaskControllerInUse_ReleaseLock 	(TaskControl_type* taskControl, BOOL* lockObtained, char** errorMsg);
 

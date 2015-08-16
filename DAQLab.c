@@ -2360,7 +2360,7 @@ INIT_ERR
 	}
 	
 	// check if Task Controller is in use
-	errChk( IsTaskControllerInUse_GetLock(UITaskCtrl->taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(UITaskCtrl->taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
 	
 	if (tcIsInUse) {
 		nullChk( msgBuff = StrDup("Task controller ") );
@@ -3772,7 +3772,7 @@ INIT_ERR
 					if (!dragTreeNodePtr->taskControl) return 1; // swallow drag event
 					
 					// Check if Task Controller is in use
-					errChk( IsTaskControllerInUse_GetLock(dragTreeNodePtr->taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) ); 
+					errChk( IsTaskControllerInUse_GetLock(dragTreeNodePtr->taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) ); 
 					
 					if (tcIsInUse) {
 						// release lock
@@ -4174,7 +4174,7 @@ INIT_ERR
 	
 	for (size_t i = 0; i < nTCs; i++) {
 		tc = *(TaskControl_type**)ListGetPtrToItem(DAQLabTCs, i+1);
-		errChk( GetTaskControlState_GetLock(tc, &tcStates[i], &tcStateLocks[i], &errorInfo.errMsg) );
+		errChk( GetTaskControlState_GetLock(tc, &tcStates[i], &tcStateLocks[i], __LINE__, __FILE__, &errorInfo.errMsg) );
 	}
 	
 	// print current states of all task controllers

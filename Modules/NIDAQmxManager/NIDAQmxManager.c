@@ -46,7 +46,7 @@
 {goto CmtError;} else
 
 // obtains Cmt error description and jumps to Error
-#define Cmt_ERR { \
+#define Cmt_ERROR_INFO { \
 	if (errorInfo.error < 0) { \
 		char CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE] = ""; \
 		errChk( CmtGetErrorMessage(errorInfo.error, CmtErrMsgBuffer) ); \
@@ -10819,11 +10819,14 @@ static int StopDAQmxTasks (Dev_type* dev, char** errorMsg)
 	
 INIT_ERR	
 	
-	int*		nActiveTasksPtr		= NULL;
-	bool32		taskDoneFlag		= FALSE;
+	int*		nActiveTasksPtr					= NULL;
+	bool32		taskDoneFlag					= FALSE;
+	BOOL		nActiveTasksTSVLockObtained		= FALSE;
 	
 	
 	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	nActiveTasksTSVLockObtained = TRUE;
+	
 	// AI task
 	if (dev->AITaskSet && dev->AITaskSet->taskHndl) {
 		DAQmxErrChk( DAQmxIsTaskDone(dev->AITaskSet->taskHndl, &taskDoneFlag) );
@@ -10908,6 +10911,7 @@ INIT_ERR
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksTSVLockObtained = FALSE;
 	
 	return 0;
 	
@@ -10917,9 +10921,14 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERR
+Cmt_ERROR_INFO
 
 Error:
+
+	// try to release nActiveTasks lock if obtained before stopping all tasks
+	if (nActiveTasksTSVLockObtained)
+		CmtReleaseTSVPtr(dev->nActiveTasks);
+	
 	
 RETURN_ERR	
 }
@@ -10928,15 +10937,16 @@ int CVICALLBACK StartAIDAQmxTask_CB (void *functionData)
 {
 INIT_ERR	
 	
-	Dev_type*				dev					= functionData;
-	DataPacket_type*		dataPacket			= NULL;
-	void*					dataPacketData		= NULL;
-	DLDataTypes				dataPacketType		= 0;
-	uInt64*					nSamplesPtr			= NULL;
-	double*					samplingRatePtr		= NULL;
-	DSInfo_type*			dsInfo				= NULL;
-	Iterator_type*			iterator			= GetTaskControlIterator(dev->taskController);
-	int*					nActiveTasksPtr		= NULL; // keeps track of the number of active tasks on the daqmx device
+	Dev_type*				dev								= functionData;
+	DataPacket_type*		dataPacket						= NULL;
+	void*					dataPacketData					= NULL;
+	DLDataTypes				dataPacketType					= 0;
+	uInt64*					nSamplesPtr						= NULL;
+	double*					samplingRatePtr					= NULL;
+	DSInfo_type*			dsInfo							= NULL;
+	Iterator_type*			iterator						= GetTaskControlIterator(dev->taskController);
+	int*					nActiveTasksPtr					= NULL; // keeps track of the number of active tasks on the daqmx device
+	BOOL					nActiveTasksTSVLockObtained		= FALSE;
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data
@@ -11056,8 +11066,12 @@ INIT_ERR
 	
 	// increment number of active tasks
 	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	nActiveTasksTSVLockObtained = TRUE;
+	
 	(*nActiveTasksPtr)++;
+	
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksTSVLockObtained = FALSE;
 	nActiveTasksPtr = NULL;
 	
 	errChk(SetHWTrigSlaveArmedStatus(dev->AITaskSet->HWTrigSlave, &errorInfo.errMsg));
@@ -11071,12 +11085,16 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERR
+Cmt_ERROR_INFO
 
 Error:
 	
 	// cleanup
 	discard_DSInfo_type(&dsInfo);
+	
+	// try to release nActiveTasks lock if obtained before stopping all tasks
+	if (nActiveTasksTSVLockObtained)
+		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 
@@ -11090,17 +11108,18 @@ int CVICALLBACK StartAODAQmxTask_CB (void *functionData)
 
 INIT_ERR
 	
-	Dev_type*			dev						= functionData;
-	DataPacket_type*	dataPacket				= NULL;
-	void*				dataPacketData			= NULL;
-	DLDataTypes			dataPacketType			= 0;
-	uInt64*				nSamplesPtr				= NULL;
-	double*				samplingRatePtr			= NULL;
-	Waveform_type*		AOWaveform				= NULL;
-	float64*			AOData 					= NULL;
-	Iterator_type*		iterator				= GetTaskControlIterator(dev->taskController);
-	DSInfo_type*		dsInfo					= NULL;
-	int*				nActiveTasksPtr			= NULL; // keeps track of the total number of active tasks on the daqmx device
+	Dev_type*			dev							= functionData;
+	DataPacket_type*	dataPacket					= NULL;
+	void*				dataPacketData				= NULL;
+	DLDataTypes			dataPacketType				= 0;
+	uInt64*				nSamplesPtr					= NULL;
+	double*				samplingRatePtr				= NULL;
+	Waveform_type*		AOWaveform					= NULL;
+	float64*			AOData 						= NULL;
+	Iterator_type*		iterator					= GetTaskControlIterator(dev->taskController);
+	DSInfo_type*		dsInfo						= NULL;
+	int*				nActiveTasksPtr				= NULL; // keeps track of the total number of active tasks on the daqmx device
+	BOOL				nActiveTasksTSVLockObtained = FALSE;  
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data
@@ -11214,8 +11233,13 @@ INIT_ERR
 	
 	// increment number of active tasks
 	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	nActiveTasksTSVLockObtained = TRUE;
+	
 	(*nActiveTasksPtr)++;
+	
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksTSVLockObtained = FALSE;
+	
 	nActiveTasksPtr = NULL;
 	
 	// if this task has a master HW-trigger, then signal it that task is armed
@@ -11230,13 +11254,17 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERR
+Cmt_ERROR_INFO
 
 Error:
 	
 	// cleanup
 	OKfree(AOData);
 	discard_Waveform_type(&AOWaveform);
+	
+	// try to release nActiveTasks lock if obtained before stopping all tasks
+	if (nActiveTasksTSVLockObtained)
+		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 	
@@ -11264,13 +11292,14 @@ int CVICALLBACK StartCODAQmxTasks_CB (void *functionData)
 {
 INIT_ERR
 	
-	ChanSet_CO_type*	chanSetCO			= functionData;
-	Dev_type*			dev 				= chanSetCO->baseClass.device;
-	DataPacket_type*	dataPacket			= NULL;
-	void*				dataPacketData		= NULL;
-	DLDataTypes			dataPacketDataType	= 0;
-	PulseTrain_type*	pulseTrain			= NULL;
-	int*				nActiveTasksPtr		= NULL; // keeps track of the number of active tasks on the daqmx device
+	ChanSet_CO_type*	chanSetCO					= functionData;
+	Dev_type*			dev 						= chanSetCO->baseClass.device;
+	DataPacket_type*	dataPacket					= NULL;
+	void*				dataPacketData				= NULL;
+	DLDataTypes			dataPacketDataType			= 0;
+	PulseTrain_type*	pulseTrain					= NULL;
+	int*				nActiveTasksPtr				= NULL; // keeps track of the number of active tasks on the daqmx device
+	BOOL				nActiveTasksTSVLockObtained	= FALSE;
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Receive task settings data and update UI settings
@@ -11440,8 +11469,12 @@ INIT_ERR
 	
 	// increment number of active tasks
 	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	nActiveTasksTSVLockObtained	= TRUE;
+	
 	(*nActiveTasksPtr)++;
+	
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksTSVLockObtained	= FALSE;
 	nActiveTasksPtr = NULL;
 	
 	errChk(SetHWTrigSlaveArmedStatus(chanSetCO->HWTrigSlave, &errorInfo.errMsg));
@@ -11455,12 +11488,16 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERR
+Cmt_ERROR_INFO
 
 Error:
 	
 	// cleanup
 	discard_PulseTrain_type(&pulseTrain);
+	
+	// try to release nActiveTasks lock if obtained before stopping all tasks
+	if (nActiveTasksTSVLockObtained)
+		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 	
@@ -11637,13 +11674,14 @@ int32 CVICALLBACK AIDAQmxTaskDataAvailable_CB (TaskHandle taskHandle, int32 ever
 {
 INIT_ERR
 	
-	Dev_type*			dev 					= callbackData;
-	float64*    		readBuffer				= NULL;				// temporary buffer to place data into
-	uInt32				nAI						= 0;
-	int					nRead					= 0;
-	ChanSet_type*		chanSet					= NULL;
-	size_t				nChans					= ListNumItems(dev->AITaskSet->chanSet);
-	size_t				chIdx					= 0;
+	Dev_type*			dev 							= callbackData;
+	float64*    		readBuffer						= NULL;				// temporary buffer to place data into
+	uInt32				nAI								= 0;
+	int					nRead							= 0;
+	ChanSet_type*		chanSet							= NULL;
+	size_t				nChans							= ListNumItems(dev->AITaskSet->chanSet);
+	size_t				chIdx							= 0;
+	BOOL				nActiveTasksTSVLockObtained 	= FALSE;
 	
 	// allocate memory to read samples
 	DAQmxErrChk( DAQmxGetTaskAttribute(taskHandle, DAQmx_Task_NumChans, &nAI) );
@@ -11671,14 +11709,16 @@ INIT_ERR
 		
 		DAQmxErrChk( DAQmxStopTask(dev->AITaskSet->taskHndl) );
 		
-		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+		CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+		nActiveTasksTSVLockObtained = TRUE;
 		
 			(*nActiveTasksPtr)--;
 		
 			if (!*nActiveTasksPtr)
 				errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
 		
-		CmtReleaseTSVPtr(dev->nActiveTasks);
+		CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+		nActiveTasksTSVLockObtained = FALSE;
 			
 		// send NULL data packets to AI channels used in the DAQmx task
 		for (size_t i = 1; i <= nChans; i++) { 
@@ -11692,6 +11732,10 @@ INIT_ERR
 	}
 	
 	return 0;
+
+CmtError:
+	
+Cmt_ERROR_INFO
 	
 DAQmxError:
 	
@@ -11699,8 +11743,13 @@ DAQmx_ERROR_INFO
 
 Error:
 
-// cleanup
-	OKfree(readBuffer);  
+	// cleanup
+	OKfree(readBuffer); 
+	
+	// try to release nActiveTasks lock if obtained before stopping all tasks
+	if (nActiveTasksTSVLockObtained)
+		CmtReleaseTSVPtr(dev->nActiveTasks);
+		
 	
 	StopDAQmxTasks(dev, NULL); 
 	
@@ -11715,15 +11764,16 @@ int32 CVICALLBACK AIDAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 {
 INIT_ERR
 
-	Dev_type*			dev 					= callbackData;
-	uInt32				nSamples				= 0;						// number of samples per channel in the AI buffer
-	float64*    		readBuffer				= NULL;						// temporary buffer to place data into       
-	uInt32				nAI						= 0;
-	int					nRead					= 0;
-	ChanSet_type*		chanSet					= NULL;
-	size_t				nChans					= ListNumItems(dev->AITaskSet->chanSet);
-	int*				nActiveTasksPtr			= NULL;
-	size_t				chIdx					= 0;
+	Dev_type*			dev 							= callbackData;
+	uInt32				nSamples						= 0;						// number of samples per channel in the AI buffer
+	float64*    		readBuffer						= NULL;						// temporary buffer to place data into       
+	uInt32				nAI								= 0;
+	int					nRead							= 0;
+	ChanSet_type*		chanSet							= NULL;
+	size_t				nChans							= ListNumItems(dev->AITaskSet->chanSet);
+	int*				nActiveTasksPtr					= NULL;
+	size_t				chIdx							= 0;
+	BOOL				nActiveTasksTSVLockObtained 	= FALSE; 
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
 	if (status < 0) goto DAQmxError;
@@ -11745,14 +11795,16 @@ INIT_ERR
 		DAQmxErrChk( DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop) );
 		
 		// Task Controller iteration is complete if all DAQmx Tasks are complete
-		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+		CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+		nActiveTasksTSVLockObtained = TRUE; 
 		
 			(*nActiveTasksPtr)--;
 		
 			if (!*nActiveTasksPtr)
 				errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
 		
-		CmtReleaseTSVPtr(dev->nActiveTasks);
+		CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+		nActiveTasksTSVLockObtained = FALSE; 
 	
 		return 0;
 	}
@@ -11780,17 +11832,24 @@ INIT_ERR
 	DAQmxErrChk( DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop) );
 		
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
-	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	nActiveTasksTSVLockObtained = TRUE; 
 	
 		(*nActiveTasksPtr)--;
 		
 		if (!*nActiveTasksPtr)
 			errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
 		
-	CmtReleaseTSVPtr(dev->nActiveTasks);
+	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksTSVLockObtained = FALSE; 
 	
 	OKfree(readBuffer);
+	
 	return 0;
+
+CmtError:
+	
+Cmt_ERROR_INFO
 	
 DAQmxError:
 	
@@ -11800,6 +11859,10 @@ Error:
 	
 	// cleanup
 	OKfree(readBuffer);
+	
+	// try to release nActiveTasks lock if obtained before stopping all tasks
+	if (nActiveTasksTSVLockObtained)
+		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL); 
 	
@@ -11834,9 +11897,10 @@ int32 CVICALLBACK AODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 {
 INIT_ERR
 
-	Dev_type*	dev 			= callbackData;
-	int			nActiveTasks    = 0;
-	int*		nActiveTasksPtr = &nActiveTasks;
+	Dev_type*		dev 							= callbackData;
+	int				nActiveTasks    				= 0;
+	int*			nActiveTasksPtr 				= &nActiveTasks;
+	BOOL			nActiveTasksTSVLockObtained		= FALSE;
 	
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
@@ -11850,21 +11914,31 @@ INIT_ERR
 	nullChk( dev->AOTaskSet->writeAOData = init_WriteAOData_type(dev) );
 	
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
-	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	nActiveTasksTSVLockObtained = TRUE;
 	(*nActiveTasksPtr)--;
 		
 	if (!*nActiveTasksPtr)
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
 		
-	CmtReleaseTSVPtr(dev->nActiveTasks);
+	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksTSVLockObtained = FALSE;
 		
 	return 0;
+
+CmtError:
+	
+Cmt_ERROR_INFO
 	
 DAQmxError:
 	
 DAQmx_ERROR_INFO
 
 Error:
+
+	// try to release nActiveTasks lock if obtained before stopping all tasks
+	if (nActiveTasksTSVLockObtained)
+		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 	
@@ -11912,8 +11986,9 @@ int32 CVICALLBACK CODAQmxTaskDone_CB (TaskHandle taskHandle, int32 status, void 
 {
 INIT_ERR
 
-	Dev_type*			dev 			= callbackData;
-	int*				nActiveTasksPtr	= NULL;
+	Dev_type*		dev 							= callbackData;
+	int*			nActiveTasksPtr					= NULL;
+	BOOL			nActiveTasksTSVLockObtained		= FALSE;
 	
 	// in case of error abort all tasks and finish Task Controller iteration with an error
 	if (status < 0) goto DAQmxError;
@@ -11922,21 +11997,32 @@ INIT_ERR
 	DAQmxErrChk( DAQmxTaskControl(taskHandle, DAQmx_Val_Task_Stop) );
 		
 	// Task Controller iteration is complete if all DAQmx Tasks are complete
-	CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	nActiveTasksTSVLockObtained = TRUE;
+	
 	(*nActiveTasksPtr)--;
 		
 	if (!*nActiveTasksPtr)
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
 		
-	CmtReleaseTSVPtr(dev->nActiveTasks);
+	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksTSVLockObtained = FALSE;
 	
 	return 0;
+
+CmtError:
+	
+Cmt_ERROR_INFO
 	
 DAQmxError:
 	
 DAQmx_ERROR_INFO
 
 Error:
+
+	// try to release nActiveTasks lock if obtained before stopping all tasks
+	if (nActiveTasksTSVLockObtained)
+		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 	
@@ -11976,6 +12062,7 @@ INIT_ERR
 	BOOL					stopAOTaskFlag								= TRUE;
 	int*					nActiveTasksPtr 							= NULL; 
 	BOOL					writeLastBlock								= FALSE;
+	BOOL					nActiveTasksTSVLockObtained					= FALSE;
 	int 					LastBlockSize								= data->writeblock;  
 	div_t					numblocks;
 
@@ -12003,13 +12090,17 @@ INIT_ERR
 						
 						DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
 						// Task Controller iteration is complete if all DAQmx Tasks are complete
+						nActiveTasksTSVLockObtained = FALSE;
 						CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+						nActiveTasksTSVLockObtained = TRUE;
+						
 						(*nActiveTasksPtr)--;
 		
 						if (!*nActiveTasksPtr)
 							errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
 		
 						CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+						nActiveTasksTSVLockObtained = FALSE;
 						
 						return 0;
 						
@@ -12185,10 +12276,7 @@ SkipPacket:
 			numblocks=div(data->databuff_size[j],data->writeblock);
 			if (numblocks.quot==0) {
 				writeLastBlock=TRUE;
-				if (numblocks.rem<LastBlockSize) LastBlockSize=numblocks.rem;   //size of block is smallest data size of a channel
-			}
-			else {
-				 //nothing; this channel has enough data for a next writeblock
+				if (numblocks.rem<LastBlockSize) LastBlockSize=numblocks.rem;   // size of block is smallest data size of a channel
 			}
 		}
 	}
@@ -12200,17 +12288,19 @@ SkipPacket:
 		
 		DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
 		// Task Controller iteration is complete if all DAQmx Tasks are complete
-		CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr);
+		nActiveTasksTSVLockObtained = FALSE;
+		CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+		nActiveTasksTSVLockObtained = TRUE;
 		
 			(*nActiveTasksPtr)--;
 		
 			if (!*nActiveTasksPtr)
 				errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
 		
-		CmtReleaseTSVPtr(dev->nActiveTasks);
+		CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+		nActiveTasksTSVLockObtained = FALSE;
 		
-	} 
-	else
+	} else
 		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, data->writeblock, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL));
 				 
 	
@@ -12222,9 +12312,13 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERR
+Cmt_ERROR_INFO
 
 Error:
+
+	// try to release nActiveTasks lock if obtained before stopping all tasks
+	if (nActiveTasksTSVLockObtained)
+		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
@@ -12419,7 +12513,7 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERR
+Cmt_ERROR_INFO
 
 Error:
 
@@ -14277,7 +14371,7 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERR
+Cmt_ERROR_INFO
 
 Error:
 	
@@ -14317,12 +14411,14 @@ static int IterationStopTC (TaskControl_type* taskControl, Iterator_type* iterat
 {
 INIT_ERR
 	
-	Dev_type*	dev					= GetTaskControlModuleData(taskControl);
-	int*		nActiveTasksPtr		= NULL;
-	bool32		taskDoneFlag		= FALSE;
+	Dev_type*	dev								= GetTaskControlModuleData(taskControl);
+	int*		nActiveTasksPtr					= NULL;
+	bool32		taskDoneFlag					= FALSE;
+	BOOL		nActiveTasksTSVLockObtained		= FALSE;
 	
 	
 	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+	nActiveTasksTSVLockObtained = TRUE;
 	
 	// stop CO tasks explicitely
 	if (dev->COTaskSet) {
@@ -14345,6 +14441,7 @@ INIT_ERR
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksTSVLockObtained = FALSE;
 	
 	return 0;
 
@@ -14354,9 +14451,13 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERR
+Cmt_ERROR_INFO
 
 Error:
+
+	// try to release nActiveTasks lock if obtained before stopping all tasks
+	if (nActiveTasksTSVLockObtained)
+		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 RETURN_ERR
 }

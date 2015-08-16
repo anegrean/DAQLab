@@ -112,6 +112,8 @@ struct TaskControl {
 	CmtThreadFunctionID				threadFunctionID;					// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
 	CmtThreadPoolHandle				threadPoolHndl;						// Thread pool handle used to launch task controller threads.
 	CmtTSVHandle					stateTSV;							// Task Controller state, thread safe variable of TCStates.
+	int								stateTSVLineNumDebug;					// used to find out where in the code the state TSV is obtained and is not released.
+	char							stateTSVFileName[200];					// used to find out where in the code the state TSV is obtained and is not released. 
 	BOOL							stateTSVLockObtained;				// Status of stateTSV lock.
 	TCStates						currentState;						// Current Task Controller state for internal use. Its value is updated from stateTSV before processing an event.
 	TCStates 						oldState;							// Previous Task Controller state used for logging.
@@ -438,7 +440,7 @@ void SetTaskControlName (TaskControl_type* taskControl, char newName[])
 	SetCurrentIterName(taskControl->currentIter, newName); 
 }
 
-int GetTaskControlState_GetLock (TaskControl_type* taskControl, TCStates* tcStatePtr, BOOL* lockObtained, char** errorMsg)
+int GetTaskControlState_GetLock (TaskControl_type* taskControl, TCStates* tcStatePtr, BOOL* lockObtained, int lineNumDebug, char fileNameDebug[], char** errorMsg)
 {
 INIT_ERR
 
@@ -447,6 +449,12 @@ INIT_ERR
 	*lockObtained = FALSE;
 	CmtErrChk( CmtGetTSVPtr(taskControl->stateTSV, &tcStateTSVPtr) );
 	*lockObtained = TRUE;
+	
+	//-------------------------------------------------------- 
+	// debug
+	taskControl->stateTSVLineNumDebug = lineNumDebug;
+	strcpy(taskControl->stateTSVFileName, fileNameDebug);
+	//--------------------------------------------------------
 	
 	*tcStatePtr = *tcStateTSVPtr;
 	
@@ -602,7 +610,7 @@ BOOL GetTaskControlIterationStopFlag (TaskControl_type* taskControl)
 	return taskControl->stopIterationsFlag;
 }
 
-int IsTaskControllerInUse_GetLock (TaskControl_type* taskControl, BOOL* inUsePtr, TCStates* tcState, BOOL* lockObtained, char** errorMsg)
+int IsTaskControllerInUse_GetLock (TaskControl_type* taskControl, BOOL* inUsePtr, TCStates* tcState, BOOL* lockObtained, int lineNumDebug, char fileNameDebug[], char** errorMsg)
 {
 INIT_ERR
 	
@@ -617,6 +625,12 @@ INIT_ERR
 	*lockObtained = FALSE;
 	CmtErrChk( CmtGetTSVPtr(taskControl->stateTSV, &tcStateTSVPtr) );
 	*lockObtained = TRUE;
+	
+	//-------------------------------------------------------- 
+	// debug
+	taskControl->stateTSVLineNumDebug = lineNumDebug;
+	strcpy(taskControl->stateTSVFileName, fileNameDebug);
+	//--------------------------------------------------------
 	
 	*inUsePtr = (*tcStateTSVPtr == TC_State_Idle || *tcStateTSVPtr == TC_State_Running || *tcStateTSVPtr == TC_State_IterationFunctionActive || *tcStateTSVPtr == TC_State_Stopping);
 	if (tcState) *tcState = *tcStateTSVPtr;
@@ -685,7 +699,7 @@ INIT_ERR
 	}
 	
 	// Check if Task Controller is in use
-	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) ); 
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) ); 
 	
 	if (tcIsInUse) {
 		
@@ -761,7 +775,7 @@ INIT_ERR
 	}
 	
 	// check if Task Controller is in use
-	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
 	
 	if (tcIsInUse) {
 		nullChk( msgBuff = StrDup("Source VChan ") );
@@ -809,7 +823,7 @@ INIT_ERR
 	
 	
 	// Check if Task Controller is currently executing
-	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
 	
 	if (tcIsInUse) {
 		nullChk( msgBuff = StrDup("Source VChan ") );
@@ -869,7 +883,7 @@ INIT_ERR
 	char*		msgBuff					= NULL;
 	
 	// Check if Task Controller is in use
-	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
 	
 	if (tcIsInUse) {
 		nullChk( msgBuff = StrDup("Source VChannels cannot be removed from ") );
@@ -914,7 +928,7 @@ INIT_ERR
 	
 	
 	// Check if Task Controller is in use
-	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
 	
 	if (tcIsInUse) {
 		nullChk( msgBuff = StrDup("Sink VChan ") );
@@ -984,7 +998,7 @@ INIT_ERR
 	char*						msgBuff					= NULL;
 	
 	// Check if Task Controller is in use
-	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
 	
 	if (tcIsInUse) {
 		nullChk( msgBuff = StrDup("Sink VChannels cannot be removed from ") );
@@ -1037,7 +1051,7 @@ INIT_ERR
 	
 	
 	// Check if Task Controller is in use
-	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
 	
 	if (tcIsInUse) {
 		nullChk( msgBuff = StrDup("Sink VChannels assigned to ") );
@@ -1081,7 +1095,7 @@ INIT_ERR
 	char*					msgBuff					= NULL;
 	
 	// Check if Task Controller is in use
-	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
 	
 	if (tcIsInUse) {
 		nullChk( msgBuff = StrDup("Source VChannels assigned to ") );
@@ -1689,7 +1703,7 @@ INIT_ERR
 	
 	// determine if task tree is active.
 	// Note: this should be better done through message passing if task controllers are not local
-	errChk( IsTaskControllerInUse_GetLock(GetTaskControlRootParent(taskControl), &taskActive, NULL, &taskActiveLockObtained, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(GetTaskControlRootParent(taskControl), &taskActive, NULL, &taskActiveLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
 	
 	// add log entry if enabled
 	ExecutionLogEntry(taskControl, eventPacket, FUNCTION_CALL, &fID);
@@ -1881,8 +1895,8 @@ INIT_ERR
 	
 	
 	// Check if parent or child Task Controllers are in use
-	errChk( IsTaskControllerInUse_GetLock(parentTC, &parentTCIsInUse, NULL, &parentTCIsInUseLockObtained, &errorInfo.errMsg) );
-	errChk( IsTaskControllerInUse_GetLock(childTC, &childTCIsInUse, &childTCState, &childTCIsInUseLockObtained, &errorInfo.errMsg) ); 
+	errChk( IsTaskControllerInUse_GetLock(parentTC, &parentTCIsInUse, NULL, &parentTCIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(childTC, &childTCIsInUse, &childTCState, &childTCIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) ); 
 	
 	if (parentTCIsInUse || childTCIsInUse) {
 		nullChk( msgBuff = StrDup("Cannot add child task controller ") );
@@ -1949,8 +1963,8 @@ INIT_ERR
 	if (!parentTC) return 0;
 	
 	// check if parent or child Task Controllers are in use
-	errChk( IsTaskControllerInUse_GetLock(parentTC, &parentTCIsInUse, NULL, &parentTCIsInUseLockObtained, &errorInfo.errMsg) );
-	errChk( IsTaskControllerInUse_GetLock(childTC, &childTCIsInUse, &childTCState, &childTCIsInUseLockObtained, &errorInfo.errMsg) ); 
+	errChk( IsTaskControllerInUse_GetLock(parentTC, &parentTCIsInUse, NULL, &parentTCIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
+	errChk( IsTaskControllerInUse_GetLock(childTC, &childTCIsInUse, &childTCState, &childTCIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) ); 
 	
 	if (parentTCIsInUse || childTCIsInUse) {
 		nullChk( msgBuff = StrDup("Cannot add child task controller ") );

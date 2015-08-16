@@ -6049,7 +6049,7 @@ INIT_ERR
 	
 	// calculate number of pixels to skip when assembling the images and set this for all image buffers
 	for (size_t i = 0; i < scanEngine->nImgBuffers; i++) 
-		scanEngine->imgBuffers[i]->nSkipPixels = (size_t)((scanEngine->flyInDelay - scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime);
+		scanEngine->imgBuffers[i]->nSkipPixels = (size_t)RoundRealToNearestInteger((scanEngine->flyInDelay - scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime);
 	
 	// determine number of additional galvo samples needed to compensate fast and slow axis fly-in and lag delays
 	size_t				nGalvoSamplesFastAxisCompensation	=  nGalvoSamplesFlyIn - nGalvoSamplesFastAxisLag - nGalvoSamplesFastAxisMoveFromParked;
@@ -6195,7 +6195,7 @@ INIT_ERR
 		// finite mode
 		//--------------------
 		// total number of pixels
-		uInt64	nPixels = (uInt64)((scanEngine->flyInDelay + scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)(scanEngine->scanSettings.height + nFastAxisFlybackLines) * (uInt64)nFrames; 
+		uInt64	nPixels = (uInt64)RoundRealToNearestInteger((scanEngine->flyInDelay - scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)(scanEngine->scanSettings.height + nFastAxisFlybackLines) * (uInt64)nFrames; 
 		// pixel pulse train
 		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32) RoundRealToNearestInteger(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0, scanEngine->baseClass.referenceClockFreq) );
 		

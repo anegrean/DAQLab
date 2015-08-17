@@ -13,7 +13,7 @@
 #include "DAQLab.h" 		// include this first 
 #include "DAQLabUtility.h"
 #include "LangLStep.h"
-#include "LStep4.h"
+#include "LStep4X.h"
 
 //==============================================================================
 // Constants
@@ -68,7 +68,7 @@
 //----------------------------------------------------------------------
 
 #define Stage_Config_File					"Modules\\XYstages\\Lang L-Step\\L-Step configuration.ls"
-#define LStep4_DLL							"Modules\\XYstages\\Lang L-Step\\LStep4.dll"
+#define LStep4X_DLL							"Modules\\XYstages\\Lang L-Step\\lstep4x.dll"
 #define Stage_Units							2			// position in [mm]
 #define Stage_WaitUntilMovementComplete		TRUE		// thread that issues movement command is blocked until movement completes
 
@@ -173,6 +173,7 @@ DAQLabModule_type* initalloc_LangLStep (DAQLabModule_type* mod, char className[]
 	
 		// DATA
 	langStage->lstepLibHndl		= NULL;
+	langStage->LSID				= 0;
 		
 	
 		// METHODS
@@ -188,12 +189,21 @@ DAQLabModule_type* initalloc_LangLStep (DAQLabModule_type* mod, char className[]
 
 void discard_LangLStep (DAQLabModule_type** mod)
 {
-	LangLStep_type* stage = *(LangLStep_type**) mod;
+	int					lstepError				= 0;
+	DWORD				winError				= 0;
+	
+	FARPROC				procAddr				= NULL;
+	
+	LangLStep_type* 	stage 					= *(LangLStep_type**) mod;
 	
 	if (!stage) return;
 	
 	// if connection was established and if still connected, close connection
 	CloseStageConnection(stage, NULL);
+	
+	// free LSID
+	if ( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_FreeLSID") )
+		(*(PCreateLSID)procAddr) (&stage->LSID);
 	
 	// discard DLL handle
 	if (stage->lstepLibHndl) {
@@ -203,6 +213,7 @@ void discard_LangLStep (DAQLabModule_type** mod)
 			
 	// discard XYStage_type specific data
 	discard_XYStage (mod);
+	
 }
 
 static int Load (DAQLabModule_type* mod, int workspacePanHndl, char** errorMsg)
@@ -217,7 +228,7 @@ INIT_ERR
 	
 	
 	// load DLL
-	nullWinChk( (stage->lstepLibHndl = LoadLibrary(LStep4_DLL)) );
+	nullWinChk( (stage->lstepLibHndl = LoadLibrary(LStep4X_DLL)) );
 	
 	errChk( InitStageConnection(stage, &errorInfo.errMsg) );
 	
@@ -246,21 +257,25 @@ INIT_ERR
 	
 	FARPROC		procAddr				= NULL;
 	
+	// create LSID to identify stage with subsequent commands
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_CreateLSID") );
+	LStepErrChk( (*(PCreateLSID)procAddr) (&stage->LSID) );
+	
 	// connect to stage
-	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_ConnectSimple") );
-	LStepErrChk( (*(PConnectSimple)procAddr) (Stage_IO_InterfaceType, Stage_IO_COMPort, Stage_IO_BaudRate, FALSE) );
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_ConnectSimple") );
+	LStepErrChk( (*(PConnectSimple)procAddr) (stage->LSID, Stage_IO_InterfaceType, Stage_IO_COMPort, Stage_IO_BaudRate, FALSE) );
 	
 	// load stage configuration file
-	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_LoadConfig") );
-	LStepErrChk( (*(PLoadConfig)procAddr) (Stage_Config_File) );
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_LoadConfig") );
+	LStepErrChk( (*(PLoadConfig)procAddr) (stage->LSID, Stage_Config_File) );
 	
 	// send configuration parameters to the stage
-	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_SetControlPars") );
-	LStepErrChk( (*(PSetControlPars)procAddr) () );
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_SetControlPars") );
+	LStepErrChk( (*(PSetControlPars)procAddr) (stage->LSID) );
 	
 	// set units to [mm]
-	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_SetDimensions") );
-	LStepErrChk( (*(PSetDimensions)procAddr) (Stage_Units, Stage_Units, Stage_Units, Stage_Units) );
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_SetDimensions") );
+	LStepErrChk( (*(PSetDimensions)procAddr) (stage->LSID, Stage_Units, Stage_Units, Stage_Units, Stage_Units) );
 
 LSTEP_RETURN_ERR
 }
@@ -277,8 +292,8 @@ INIT_ERR
 	FARPROC		procAddr				= NULL;
 	
 	// disconnect from stage
-	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_Disconnect") );
-	LStepErrChk( (*(PDisconnect)procAddr) () );
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_Disconnect") );
+	LStepErrChk( (*(PDisconnect)procAddr) (stage->LSID) );
 	
 LSTEP_RETURN_ERR 
 }
@@ -301,14 +316,14 @@ INIT_ERR
 			
 				case XYSTAGE_X_AXIS:
 			 
-					nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_MoveRelSingleAxis") );
-					LStepErrChk( (*(PMoveRelSingleAxis)procAddr) (XYSTAGE_X_AXIS + 1, moveVal, Stage_WaitUntilMovementComplete) );
+					nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_MoveRelSingleAxis") );
+					LStepErrChk( (*(PMoveRelSingleAxis)procAddr) (stage->LSID, XYSTAGE_X_AXIS + 1, moveVal, Stage_WaitUntilMovementComplete) );
 					break;
 			
 				case XYSTAGE_Y_AXIS:
 			
-					nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_MoveRelSingleAxis") );
-					LStepErrChk( (*(PMoveRelSingleAxis)procAddr) (XYSTAGE_Y_AXIS + 1, moveVal, Stage_WaitUntilMovementComplete) );
+					nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_MoveRelSingleAxis") );
+					LStepErrChk( (*(PMoveRelSingleAxis)procAddr) (stage->LSID, XYSTAGE_Y_AXIS + 1, moveVal, Stage_WaitUntilMovementComplete) );
 					break;	
 			}
 			break;
@@ -319,14 +334,14 @@ INIT_ERR
 			
 				case XYSTAGE_X_AXIS:
 			 
-					nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_MoveAbsSingleAxis") );
-					LStepErrChk( (*(PMoveAbsSingleAxis)procAddr) (XYSTAGE_X_AXIS + 1, moveVal, Stage_WaitUntilMovementComplete) );
+					nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_MoveAbsSingleAxis") );
+					LStepErrChk( (*(PMoveAbsSingleAxis)procAddr) (stage->LSID, XYSTAGE_X_AXIS + 1, moveVal, Stage_WaitUntilMovementComplete) );
 					break;
 			
 				case XYSTAGE_Y_AXIS:
 			
-					nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_MoveAbsSingleAxis") );
-					LStepErrChk( (*(PMoveAbsSingleAxis)procAddr) (XYSTAGE_Y_AXIS + 1, moveVal, Stage_WaitUntilMovementComplete) );
+					nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_MoveAbsSingleAxis") );
+					LStepErrChk( (*(PMoveAbsSingleAxis)procAddr) (stage->LSID, XYSTAGE_Y_AXIS + 1, moveVal, Stage_WaitUntilMovementComplete) );
 					break;	
 			}
 			break;
@@ -345,8 +360,8 @@ INIT_ERR
 	
 	FARPROC		procAddr				= NULL;
 	
-	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_StopAxes") );
-	LStepErrChk( (*(PStopAxes)procAddr) () );
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_StopAxes") );
+	LStepErrChk( (*(PStopAxes)procAddr) (stage->LSID) );
 	
 LSTEP_RETURN_ERR	
 }
@@ -362,12 +377,12 @@ INIT_ERR
 	FARPROC		procAddr				= NULL;
 	
 	// set X axis limit
-	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_SetLimit") );
-	LStepErrChk( (*(PSetLimit)procAddr) (XYSTAGE_X_AXIS + 1, xNegativeLimit, xPositiveLimit) );
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_SetLimit") );
+	LStepErrChk( (*(PSetLimit)procAddr) (stage->LSID, XYSTAGE_X_AXIS + 1, xNegativeLimit, xPositiveLimit) );
 	
 	// set Y axis limit
-	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_SetLimit") );
-	LStepErrChk( (*(PSetLimit)procAddr) (XYSTAGE_Y_AXIS + 1, yNegativeLimit, yPositiveLimit) );
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_SetLimit") );
+	LStepErrChk( (*(PSetLimit)procAddr) (stage->LSID, XYSTAGE_Y_AXIS + 1, yNegativeLimit, yPositiveLimit) );
 	
 LSTEP_RETURN_ERR	
 }
@@ -400,8 +415,8 @@ INIT_ERR
 	
 	FARPROC		procAddr				= NULL;
 	
-	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_SetVel") );
-	LStepErrChk( (*(PSetVel)procAddr) (velocity, velocity, velocity, velocity) );
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_SetVel") );
+	LStepErrChk( (*(PSetVel)procAddr) (stage->LSID, velocity, velocity, velocity, velocity) );
 	
 LSTEP_RETURN_ERR
 }
@@ -436,8 +451,8 @@ INIT_ERR
 	double		zPos					= 0;
 	double		aPos					= 0;
 	
-	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LS_GetPos") );
-	LStepErrChk( (*(PGetPos)procAddr) (&xPos, &yPos, &zPos, &aPos) );
+	nullWinChk( procAddr = GetProcAddress(stage->lstepLibHndl, "LSX_GetPos") );
+	LStepErrChk( (*(PGetPos)procAddr) (stage->LSID, &xPos, &yPos, &zPos, &aPos) );
 	
 	*xAbsPos = xPos;
 	*yAbsPos = yPos;

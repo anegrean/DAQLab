@@ -51,6 +51,8 @@
 #define  StagePan_Joystick                23      /* control type: radioButton, callback function: (none) */
 #define  StagePan_YSteps                  24      /* control type: string, callback function: (none) */
 #define  StagePan_XSteps                  25      /* control type: string, callback function: (none) */
+#define  StagePan_TEXTMSG1                26      /* control type: textMsg, callback function: (none) */
+#define  StagePan_TEXTMSG2                27      /* control type: textMsg, callback function: (none) */
 
 
      /* Control Arrays: */

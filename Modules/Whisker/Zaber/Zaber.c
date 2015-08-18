@@ -130,14 +130,14 @@ send_MoveRel_cmd(z_port port, int device, int position)
 }
 
 int
-send_MoveABS_cmd(z_port port, int device, uint32_t abs_position)
+send_MoveABS_cmd(z_port port, int device, uint32_t abs_position, int mode)
 {
 	char	cmd[CMD_LEN];
 	
 	sprintf(cmd, "/%d move abs %u\n", device, abs_position);
 	
 	LOG_MSG1(9, "Following absolute move command is requested--> %s", cmd);
-	send_cmd(port, cmd, NULL, SYNC);	/* TODO : Error check */
+	send_cmd(port, cmd, NULL, mode);	/* TODO : Error check */
 	
 	return 0;
 }

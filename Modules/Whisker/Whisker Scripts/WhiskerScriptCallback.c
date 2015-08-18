@@ -1,7 +1,7 @@
 //==============================================================================
 //
 // Title:		WhiskerScriptCallback.c
-// Purpose:		A short description of the implementation.
+// Purpose:		Whisker Script callback functions defined here.
 //
 // Created on:	25-7-2015 at 22:57:55 by Vinod Nigade.
 // Copyright:	VU University Amsterdam. All Rights Reserved.
@@ -44,6 +44,7 @@ WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, in
 	WScript_t		*cur_script = NULL;
 	int				error = 0;
 	int				ret = 0;
+	char			file_path[FILE_PATH_LEN];
 	
 	cur_script = &(whisker_script->cur_script);
 	
@@ -156,9 +157,33 @@ WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, in
 					discard_script_elements(cur_script);
 					break;
 					
+				case ScriptPan_ScriptApply:		/* Apply UI changes to Local Structure */
+					apply_changes(cur_script);
+					break;
+					
 				case ScriptPan_ScriptImportSetting:	/* Import settings from whisker UI */
 					import_settings(whisker_script);
 					break;
+					
+				case ScriptPan_ScriptSaveLog:	/* Save log file if it is valid */
+					if (cur_script->log_file.VALID_FILE == FALSE) {
+						MessagePopup("Save Log", "No log available!");
+						return -1;
+					}
+					/* Ask user file path to save file */
+					ret = FileSelectPopup("", "*.txt", "", "Log File",
+                        		VAL_SAVE_BUTTON, 0, 1, 1, 0, UNCHECKED(file_path));
+					
+        			if (!ret) {	/* Cancelled operation */
+						return -1;
+					}
+					
+					/* Copy or Move temp file */
+					CopyFile(LOG_TEMP_FILE, file_path);
+					
+					/* Set file path in text box */
+					SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_LogFile,
+							   										file_path);
 			}
 			
 			break;
@@ -175,6 +200,7 @@ ScriptAddElement_CB(int panel, int control, int event, void *callbackData, int e
 	WScript_t		*cur_script = NULL;
 	ElementType_t	index;
 	ScriptElement_t	*element = NULL;
+	size_t			insert_pos = 0;
 	int				error = 0;
 	
 	cur_script = &(whisker_script->cur_script);
@@ -182,6 +208,8 @@ ScriptAddElement_CB(int panel, int control, int event, void *callbackData, int e
 	switch (event) {
 		case EVENT_COMMIT:
 			GetCtrlVal(panel, ScriptPan_ScriptElement, (int *)&index);
+			GetCtrlVal(panel, ScriptPan_ScriptPos, &insert_pos);
+			SetCtrlVal(panel, ScriptPan_ScriptPos, 0);	/* Reset back to zero */
 			
 			switch (index) {
 				case START: /* Start Element */
@@ -223,14 +251,27 @@ ScriptAddElement_CB(int panel, int control, int event, void *callbackData, int e
 				case ZMOVE:	/* Z Move Element */
 					nullChk(element = init_ZMoveElement(whisker_script, NULL));
 					break;
+					
+				case JUMP:	/* Jump Element */
+					nullChk(element = init_JumpElement(whisker_script, NULL));
+					break;
+					
+				case THWAIT: /* Thread Element */
+					nullChk(element = init_THWaitElement(whisker_script, NULL));
+					break;
 			}
 			
 			/* Set Panel Attributes */
 			SetPanelAttribute(element->panel_handle, ATTR_TITLEBAR_VISIBLE, 0);
-				
+			
+			/* Adjust position */
+			if (insert_pos == 0 || insert_pos > cur_script->num_elements) {
+				insert_pos = END_OF_LIST;
+			}
+			
 			/* Add this element into script_elements list */
 			if (NULL == ListInsertItem(cur_script->script_elements, &element, 
-									   	(cur_script->num_elements + 1))) {
+									   	insert_pos)) {
 				DiscardPanel(element->panel_handle);
 				LOG_MSG(0, "Error when inserting element into list\n");
 				goto Error;
@@ -299,12 +340,10 @@ ActionElementButtons_CB(int panel, int control, int event, void *callbackData, i
 					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case ActionEle_EleApply:	/* Apply all Elements value */
+				//case ActionEle_EleApply:	/* Apply all Elements value */
 					/* Update Structure */
-					GetCtrlVal(panel, ActionEle_EleDuration, &(action_element->duration));
-					GetCtrlVal(panel, ActionEle_EleCommand, (int *)&(action_element->action));
-					GetCtrlVal(panel, ActionEle_EleIO_CH, &(action_element->IO_Channel)); /* 0 : Default */
-					break;
+				//	apply_action_changes(action_element);
+				//	break;
 			}
 			break;
 	}
@@ -331,13 +370,13 @@ StartElementButtons_CB(int panel, int control, int event, void *callbackData, in
 					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case StartEle_EleApply:
+				/*case StartEle_EleApply:
 					ListGetItem(whisker_script->cur_script.script_elements, &element, index);
 					StartElement_t *start_element = (StartElement_t *)element;
 					
 					/* Update duration */
-					GetCtrlVal(panel, StartEle_EleDelay, &(start_element->delay));
-					break;
+					/*apply_start_changes(start_element);
+					break;*/
 			}
 			break;
 	}
@@ -364,17 +403,13 @@ CondElementButtons_CB(int panel, int control, int event, void *callbackData, int
 					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case CondEle_EleApply:
+				/*case CondEle_EleApply:
 					ListGetItem(whisker_script->cur_script.script_elements, &element, index);
 					ConditionElement_t *cond_element = (ConditionElement_t *)element;
 					
 					/* Update condition structure */
-					GetCtrlVal(panel, CondEle_EleIO_CH, &(cond_element->IO_channel));
-					GetCtrlVal(panel, CondEle_EleValue, &(cond_element->value));
-					GetCtrlVal(panel, CondEle_EleTrue, &(cond_element->true_step));
-					GetCtrlVal(panel, CondEle_EleFalse, &(cond_element->false_step));
-					GetCtrlVal(panel, CondEle_EleDuration, &(cond_element->duration));
-					break;
+					/*apply_condition_changes(cond_element);
+					break;*/
 			}
 			break;
 	}
@@ -401,15 +436,13 @@ RepeatElementButtons_CB(int panel, int control, int event, void *callbackData, i
 					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case RepEle_EleApply:
+				/*case RepEle_EleApply:
 					ListGetItem(whisker_script->cur_script.script_elements, &element, index);
 					RepeatElement_t *repeat_element = (RepeatElement_t *)element;
 					
 					/* Update condition structure */
-					GetCtrlVal(panel, RepEle_EleNTimes, &(repeat_element->ntimes));
-					GetCtrlVal(panel, RepEle_EleStep, &(repeat_element->repeat_step));
-				
-					break;
+					/*apply_repeat_changes(repeat_element);
+					break;*/
 			}
 			break;
 	}
@@ -436,13 +469,13 @@ StopElementButtons_CB(int panel, int control, int event, void *callbackData, int
 					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case StopEle_EleApply:
+				/*case StopEle_EleApply:
 					ListGetItem(whisker_script->cur_script.script_elements, &element, index);
 					StopElement_t *stop_element = (StopElement_t *)element;
 					
 					/* Update duration */
-					GetCtrlVal(panel, StopEle_EleDelay, &(stop_element->delay));
-					break;
+					/*apply_stop_changes(stop_element);
+					break; */
 			}
 			break;
 	}
@@ -469,13 +502,13 @@ WaitElementButtons_CB(int panel, int control, int event, void *callbackData, int
 					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case WaitEle_EleApply:
+				/*case WaitEle_EleApply:
 					ListGetItem(whisker_script->cur_script.script_elements, &element, index);
 					WaitElement_t *wait_element = (WaitElement_t *)element;
 					
 					/* Update duration */
-					GetCtrlVal(panel, WaitEle_EleDelay, &(wait_element->delay));
-					break;
+					/*apply_wait_changes(wait_element);
+					break;*/
 			}
 			break;
 	}
@@ -502,13 +535,13 @@ MsgElementButtons_CB(int panel, int control, int event, void *callbackData, int 
 					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case MsgEle_EleApply:
+				/*case MsgEle_EleApply:
 					ListGetItem(whisker_script->cur_script.script_elements, &element, index);
 					MessageElement_t *message_element = (MessageElement_t *)element;
 					
 					/* Get Text Message */
-					GetCtrlVal(panel, MsgEle_EleText, message_element->text);
-					break;
+					/*apply_message_changes(message_element);
+					break;*/
 			}
 			break;
 	}
@@ -538,11 +571,10 @@ SoundElementButtons_CB(int panel, int control, int event, void *callbackData, in
 					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case SoundEle_EleApply:
+				/*case SoundEle_EleApply:
 					/* Get Text Message */
-					GetCtrlVal(panel, SoundEle_ElePath, sound_element->file_path.file_path);
-					sound_element->file_path.VALID_FILE = TRUE;
-					break;
+					//apply_sound_changes(sound_element);
+					//break;
 					
 				case SoundEle_EleLoad:	/* Load Sound file */
 					ret = FileSelectPopup("", "*.wav", "", "Select a File",
@@ -593,14 +625,14 @@ XYMoveElementButtons_CB(int panel, int control, int event, void *callbackData, i
 					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case XYMoveEle_EleApply:
+				//case XYMoveEle_EleApply:
 					/* Get Values */
 					/*
 					GetCtrlVal(panel, XYMoveEle_EleX, &(xymove_element->X));
 					GetCtrlVal(panel, XYMoveEle_EleY, &(xymove_element->Y));
 					GetCtrlVal(panel, XYMoveEle_ElePos, &(xymove_element->pos));
 					*/
-					break;
+					//break;
 					
 				case XYMoveEle_EleShow:	/* Table to launch */
 					xyposition_panel_handle = LoadPanel(0, MOD_WhiskerScript_UI, XYPosPan);
@@ -686,14 +718,13 @@ ZMoveElementButtons_CB(int panel, int control, int event, void *callbackData, in
 					delete_element(&(whisker_script->cur_script), index);
 					break;
 				
-				case ZMoveEle_EleApply:
+				/*case ZMoveEle_EleApply:
 					ListGetItem(whisker_script->cur_script.script_elements, &element, index);
 					ZMoveElement_t *zmove_element = (ZMoveElement_t *)element;
 					
 					/* Get Values */
-					GetCtrlVal(panel, ZMoveEle_EleIO_CH, &(zmove_element->IO_channel));
-					GetCtrlVal(panel, ZMoveEle_EleCommand, (int *)&(zmove_element->dir));
-					break;
+					/*apply_zmove_changes(zmove_element);
+					break;*/
 			}
 			break;
 	}
@@ -701,6 +732,53 @@ ZMoveElementButtons_CB(int panel, int control, int event, void *callbackData, in
 	return 0;
 }
 
+/* Jump Element Callback Handler */
+int  CVICALLBACK 
+JumpElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)callbackData;
+	ScriptElement_t	*element = NULL;
+	char			seq_num[3];
+	int				index = 0;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			GetCtrlVal(panel, JumpEle_EleNum, seq_num);
+			index = atoi(seq_num);
+			
+			switch (control) {
+				case JumpEle_EleDelete:	/* Generic Delete */
+					delete_element(&(whisker_script->cur_script), index);
+					break;
+			}
+			break;
+	}
+	return 0;
+}
+
+/* Thread WAit element callback */
+int  CVICALLBACK 
+THWaitElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)callbackData;
+	ScriptElement_t	*element = NULL;
+	char			seq_num[3];
+	int				index = 0;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			GetCtrlVal(panel, THWaitEle_EleNum, seq_num);
+			index = atoi(seq_num);
+			
+			switch (control) {
+				case THWaitEle_EleDelete:	/* Generic Delete */
+					delete_element(&(whisker_script->cur_script), index);
+					break;
+			}
+			break;
+	}
+	return 0;	
+}
 
 /* XY Position Callbacks */
 int  CVICALLBACK 

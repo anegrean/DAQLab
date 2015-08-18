@@ -1,7 +1,8 @@
 //==============================================================================
 //
 // Title:		Whisker.c
-// Purpose:		A short description of the implementation.
+// Purpose:		Whisker Module main file. It implements init, load, discard etc.
+//				functions.
 //
 // Created on:	17-7-2015 at 14:52:54 by Vinod Nigade.
 // Copyright:	VU University Amsterdam. All Rights Reserved.

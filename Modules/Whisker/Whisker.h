@@ -1,7 +1,7 @@
 //==============================================================================
 //
 // Title:		Whisker.h
-// Purpose:		A short description of the interface.
+// Purpose:		Whisker Module specific header file.
 //
 // Created on:	17-7-2015 at 14:17:06 by Vinod Nigade.
 // Copyright:	VU University Amsterdam. All Rights Reserved.
@@ -55,7 +55,7 @@
  */
 typedef struct {
 	char	user_name[NAME_LEN];	/* User Name */
-	int		exp_num;				/* Experiment Number */
+	char	exp_num[NAME_LEN];				/* Experiment Number */
 	char	extra_msg[MSG_LEN];		/* Message to store */
 	int		VALID_INFO;				/* Validity of this informantion */
 } ExperimentInfo_t;

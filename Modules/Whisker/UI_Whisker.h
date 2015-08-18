@@ -14,12 +14,12 @@
      /* Panels and Controls: */
 
 #define  ExpPanel                         1
-#define  ExpPanel_ExpMsg                  2       /* control type: string, callback function: (none) */
+#define  ExpPanel_ExpMsg                  2       /* control type: textBox, callback function: (none) */
 #define  ExpPanel_ExpName                 3       /* control type: string, callback function: (none) */
-#define  ExpPanel_ExpNum                  4       /* control type: numeric, callback function: (none) */
-#define  ExpPanel_DECORATION              5       /* control type: deco, callback function: (none) */
-#define  ExpPanel_ExpOk                   6       /* control type: command, callback function: ExperimentInfo_CB */
-#define  ExpPanel_ExpCancel               7       /* control type: command, callback function: ExperimentInfo_CB */
+#define  ExpPanel_DECORATION              4       /* control type: deco, callback function: (none) */
+#define  ExpPanel_ExpOk                   5       /* control type: command, callback function: ExperimentInfo_CB */
+#define  ExpPanel_ExpCancel               6       /* control type: command, callback function: ExperimentInfo_CB */
+#define  ExpPanel_ExpNum                  7       /* control type: string, callback function: (none) */
 
 #define  MainPanel                        2
 #define  MainPanel_ZaberComPort           2       /* control type: ring, callback function: (none) */

@@ -1,7 +1,7 @@
 //==============================================================================
 //
 // Title:		Deditec.c
-// Purpose:		A short description of the implementation.
+// Purpose:		Deditec hardware interfaces are defined.
 //
 // Created on:	22-7-2015 at 16:49:54 by Vinod Nigade.
 // Copyright:	VU University Amsterdam. All Rights Reserved.

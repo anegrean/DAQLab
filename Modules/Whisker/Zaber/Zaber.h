@@ -64,8 +64,8 @@ typedef struct {
 int  init_zaber_device(zaber_device_t *z_dev);
 int  close_zaber_device(zaber_device_t *z_dev);
 
-void        send_cmd(z_port port, char *cmd, char *data_buf, int async);
-int			send_MoveABS_cmd(z_port port, int device, uint32_t abs_position);
+void        send_cmd(z_port port, char *cmd, char *data_buf, int mode);
+int			send_MoveABS_cmd(z_port port, int device, uint32_t abs_position, int mode);
 int			send_MoveRel_cmd(z_port port, int device, int position);
 int			send_stop_cmd(z_port port, int device);
 int			send_MoveMaxMin_cmd(z_port port, int device, char *sub_cmd);

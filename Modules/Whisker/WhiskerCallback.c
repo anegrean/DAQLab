@@ -92,17 +92,17 @@ XYMovement_CB(int panel, int control, int event, void *callbackData, int eventDa
 			switch(control) {
 				case MainPanel_XYAbs:
 					/* Send ABS Command */
-					send_MoveABS_cmd(z_dev->port, ZABER_DEV, position);
+					send_MoveABS_cmd(z_dev->port, ZABER_DEV, position, SYNC);
 					update_xy_positions(z_dev, panel);
 					break;
 					
 				case MainPanel_XYLeft:
-					send_MoveABS_cmd(z_dev->port, ZABER_Y_DEV, position);
+					send_MoveABS_cmd(z_dev->port, ZABER_Y_DEV, position, SYNC);
 					update_xy_positions(z_dev, panel);
 					break;
 					
 				case MainPanel_XYRight:
-					send_MoveABS_cmd(z_dev->port, ZABER_X_DEV, position); 
+					send_MoveABS_cmd(z_dev->port, ZABER_X_DEV, position, SYNC); 
 					update_xy_positions(z_dev, panel);
 					break;
 				
@@ -215,8 +215,8 @@ PositionTable_CB(int panel, int control, int event, void *callbackData, int even
 			if (focus.x == XYTABLE_GO_COL) {			/* Move zaber using desired position */
 				ListGetItem(z_dev->saved_positions, &saved_position, focus.y);
 				/* Move Zaber device in X direction */
-				send_MoveABS_cmd(z_dev->port, ZABER_X_DEV, saved_position->X);
-				send_MoveABS_cmd(z_dev->port, ZABER_Y_DEV, saved_position->Y);
+				send_MoveABS_cmd(z_dev->port, ZABER_X_DEV, saved_position->X, SYNC);
+				send_MoveABS_cmd(z_dev->port, ZABER_Y_DEV, saved_position->Y, SYNC);
 			} else if (focus.x == XYTABLE_DEL_COL) { 	/* Delete row from the table and list */
 				/* Remove saved position from list */
 				ListRemoveItem(z_dev->saved_positions, &saved_position, focus.y);
@@ -359,10 +359,22 @@ WhiskerButton_CB(int panel, int control, int event, void *callbackData, int even
 							return -1;
 						}
 						
+						//SetCtrlAttribute(whisker_ui->experiment_panel_handle, ExpPanel_ExpMsg,
+						//				 	ATTR_NO_EDIT_TEXT, 0);
 						SetCtrlAttribute(whisker_ui->experiment_panel_handle, ExpPanel_ExpOk,
 										 	ATTR_CALLBACK_DATA, (void *)whisker_m);
 						SetCtrlAttribute(whisker_ui->experiment_panel_handle, ExpPanel_ExpCancel,
 										 	ATTR_CALLBACK_DATA, (void *)whisker_m);
+						
+						/* If experiment info is valid, then show it in UI */
+						if (whisker_m->exp_info.VALID_INFO == TRUE) {
+							SetCtrlVal(whisker_ui->experiment_panel_handle, ExpPanel_ExpName, 
+								   								whisker_m->exp_info.user_name);
+							SetCtrlVal(whisker_ui->experiment_panel_handle, ExpPanel_ExpNum, 
+								   								whisker_m->exp_info.exp_num);
+							SetCtrlVal(whisker_ui->experiment_panel_handle, ExpPanel_ExpMsg, 	
+								   								whisker_m->exp_info.extra_msg);
+						}
 						
 						/* Display Panel */
 						DisplayPanel(whisker_ui->experiment_panel_handle);
@@ -637,7 +649,7 @@ XYButton_CB(int panel, int control, int event, void *callbackData, int eventData
 					send_cmd(whisker_m->z_dev.port, "/home", NULL, SYNC);
 				
 				case MainPanel_XYUpdatePos:
-					/* Get absulute postion and update UI */
+					/* Get abolute postion and update UI */
 					update_xy_positions(z_dev, panel);
 					break;
 					
@@ -776,7 +788,7 @@ ExperimentInfo_CB(int panel, int control, int event, void *callbackData, int eve
 				case ExpPanel_ExpOk:
 					/* Get Information from Panel and save it to stucture */
 					GetCtrlVal(panel, ExpPanel_ExpName, whisker_m->exp_info.user_name);
-					GetCtrlVal(panel, ExpPanel_ExpNum, &(whisker_m->exp_info.exp_num));
+					GetCtrlVal(panel, ExpPanel_ExpNum, whisker_m->exp_info.exp_num);
 					GetCtrlVal(panel, ExpPanel_ExpMsg, 	whisker_m->exp_info.extra_msg);
 					whisker_m->exp_info.VALID_INFO = TRUE;
 					

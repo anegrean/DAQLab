@@ -1,7 +1,7 @@
 //==============================================================================
 //
 // Title:		WhiskerScript.h
-// Purpose:		A short description of the interface.
+// Purpose:		Whisker Script Header file.
 //
 // Created on:	25-7-2015 at 20:33:50 by Vinod Nigade.
 // Copyright:	VU University Amsterdam. All Rights Reserved.
@@ -21,7 +21,8 @@
 //==============================================================================
 // Constants
 #define MOD_WhiskerScript_UI 	"./Modules/Whisker/Whisker Scripts/UI_Scripts.uir"
-
+#define LOG_TEMP_FILE			"log_temp.txt"
+		
 #define	XML_ELEMENT_VALUE		128		/* Message text OR 8 Number of digits in the value + '\0'*/
 #define	ELEMENT_NAME_LEN	 	32
 #define INTER_ELEMENT_SPACING 	10
@@ -30,6 +31,7 @@
 #define MSG_LEN					128
 #define	NEW_SCRIPT_NAME			"<New Script>"
 #define NO_SCRIPT_NAME			"<No Script>"
+#define NO_LOG_NAME				"<No Log File>"
 
 /* Element type of script */		
 typedef enum {
@@ -42,7 +44,9 @@ typedef enum {
 	MESSAGE,
 	SOUND,
 	XYMOVE,
-	ZMOVE
+	ZMOVE,
+	JUMP,
+	THWAIT
 } ElementType_t;
 
 /* Type of action to take */
@@ -78,8 +82,9 @@ typedef struct {
 
 /* Element Structure */
 typedef struct {
-	ElementType_t	MAGIC_NUM;										/* Identifies Element type */
-	int				panel_handle;									/* UI its panel ID */
+	ElementType_t	MAGIC_NUM;								/* Identifies Element type */
+	int				panel_handle;							/* UI its panel ID */
+	int				mode;									/* Synchronous or asynchronous */
 	void		(*runner_function)(void *element, 
 								  void *whisker_script, 
 								   int *index);
@@ -143,6 +148,15 @@ typedef struct {
 	int				IO_channel;		/* IO channel */
 	ZDirection_t	dir;			/* Direction of movement */
 } ZMoveElement_t;					/* Z move Element */
+
+typedef struct {
+	ScriptElement_t	base_class;		/* Base Class */
+	size_t			step;			/* Step to jump */
+} JumpElement_t;					/* Jump Element */
+
+typedef struct {
+	ScriptElement_t base_class;		/* Base Class */
+} THWaitElement_t;				/* Thread Wait element */
 					
 /* Actual script which stores elements list */
 typedef struct {
@@ -152,6 +166,7 @@ typedef struct {
 	FilePath_t  		log_file;			/* Stores log file path */
 	RunStatus_t			run_status;			/* Script run status */
 	CmtThreadLockHandle	lock;				/* Lock to protect status variable */
+	ListType			thread_functionIDs;	/* Stores thread ids of asynchronous element */
 } WScript_t;
 
 typedef struct {
@@ -172,6 +187,8 @@ typedef struct {
 	int		soundElement_panel_handle;	/* Sound Element Panel Handle */
 	int		xymoveElement_panel_handle;	/* XY Move Panel Handle */
 	int		zmoveElement_panel_handle;	/* Z Move Panel Handle */
+	int		jumpElement_panel_handle;	/* Jump Element Panel Handle */
+	int		thwaitElement_panel_handle;  /* Thread Wait Panel Handle */
 	/* Other Panels */
 	
 	size_t	element_panel_height;		/* Height of script element panel */
@@ -201,7 +218,22 @@ ScriptElement_t* init_MessageElement(WhiskerScript_t *whisker_script, char value
 ScriptElement_t* init_SoundElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
 ScriptElement_t* init_XYMoveElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
 ScriptElement_t* init_ZMoveElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_JumpElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_THWaitElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
 
+void apply_changes(WScript_t *cur_script);
+extern inline void apply_start_changes(StartElement_t *start_element);
+extern inline void apply_action_changes(ActionElement_t *action_element);
+extern inline void apply_condition_changes(ConditionElement_t *condition_element);
+extern inline void apply_repeat_changes(RepeatElement_t *repeat_element);
+extern inline void apply_stop_changes(StopElement_t *stop_element);
+extern inline void apply_wait_changes(WaitElement_t *wait_element);
+extern inline void apply_message_changes(MessageElement_t *message_element);
+extern inline void apply_sound_changes(SoundElement_t *sound_element);
+extern inline void apply_xymove_changes(XYMoveElement_t *xymove_element);
+extern inline void apply_zmove_changes(ZMoveElement_t *zmove_element);
+extern inline void apply_jump_changes(JumpElement_t *zmove_element);
+							 
 #ifdef __cplusplus
     }
 #endif

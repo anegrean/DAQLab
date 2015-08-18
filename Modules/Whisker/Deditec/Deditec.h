@@ -1,7 +1,7 @@
 //==============================================================================
 //
 // Title:		Deditec.h
-// Purpose:		A short description of the interface.
+// Purpose:		Deditec hardware specific header file.
 //
 // Created on:	22-7-2015 at 16:49:01 by Vinod Nigade.
 // Copyright:	VU University Amsterdam. All Rights Reserved.

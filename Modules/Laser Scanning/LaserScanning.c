@@ -4778,7 +4778,7 @@ INIT_ERR
 	
 	double*						parkedFastAxis				= NULL;
 	double*						parkedSlowAxis				= NULL;
-	size_t						nParkedSamples				= (size_t) (engine->galvoSamplingRate * 1); // generate 1s long parked signal
+	size_t						nParkedSamples				= (size_t) (engine->galvoSamplingRate * 0.2); // generate 0.2s long parked signal
 	RepeatedWaveform_type*		parkedFastAxisWaveform		= NULL;
 	RepeatedWaveform_type*		parkedSlowAxisWaveform		= NULL;
 	DataPacket_type*			fastAxisDataPacket			= NULL;
@@ -6652,7 +6652,7 @@ The function is not multi-threaded.
 static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t bufferIdx, char** errorMsg)
 {
 #define NonResRectRasterScan_BuildImage_Err_WrongPixelDataType			-1
-#define NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage		-2
+//#define NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage		-2
 	
 INIT_ERR
 
@@ -6966,7 +6966,7 @@ INIT_ERR
 		
 		// end task controller iteration
 		if (!pixelPacket) {
-			errChk( TaskControlIterationDone(rectRaster->baseClass.taskControl, NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage, "Not enough pixels were provided to complete an image", FALSE, &errorInfo.errMsg) );
+			errChk( TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE, &errorInfo.errMsg) );
 			break;
 		}
 			
@@ -9234,7 +9234,7 @@ INIT_ERR
 			
 			// return to parked position if continuous
 			if (GetTaskControlMode(engine->baseClass.taskControl) == TASK_CONTINUOUS)
-			errChk( ReturnRectRasterToParkedPosition(engine, &errorInfo.errMsg) );
+				errChk( ReturnRectRasterToParkedPosition(engine, &errorInfo.errMsg) );
 			
 			// update iterations
 			SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, (unsigned int) GetCurrentIterIndex(iterator) );

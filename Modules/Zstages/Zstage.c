@@ -784,7 +784,7 @@ INIT_ERR
 					// add reference position to listbox
 					Fmt(refPosDisplayItem, "%s @ %f[p*]", newRefPosName, POS_DISPLAY_PRECISION, moveAbsPos * 1000);  		// display in [um]
 					OKfree(newRefPosName);
-					nullChk( InsertListItem(panel, ZStagePan_RefPosList, -1, refPosDisplayItem, moveAbsPos) ); // store listbox position value in [mm] 
+					errChk( InsertListItem(panel, ZStagePan_RefPosList, -1, refPosDisplayItem, moveAbsPos) ); // store listbox position value in [mm] 
 					break;
 				
 				case ZStagePan_Joystick:

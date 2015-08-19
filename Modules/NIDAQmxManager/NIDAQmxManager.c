@@ -11682,6 +11682,7 @@ INIT_ERR
 	size_t				nChans							= ListNumItems(dev->AITaskSet->chanSet);
 	size_t				chIdx							= 0;
 	BOOL				nActiveTasksTSVLockObtained 	= FALSE;
+	int*				nActiveTasksPtr					= NULL;   
 	
 	// allocate memory to read samples
 	DAQmxErrChk( DAQmxGetTaskAttribute(taskHandle, DAQmx_Task_NumChans, &nAI) );
@@ -11703,9 +11704,8 @@ INIT_ERR
 	// cleanup
 	OKfree(readBuffer);
 	
-	// stop AI task if TC iteration was aborted
-	if (GetTaskControlAbortFlag(dev->taskController)) {
-		int*				nActiveTasksPtr		= NULL;
+	// stop AI task if TC iteration was aborted or stopped
+	if (GetTaskControlAbortFlag(dev->taskController) || GetTaskControlIterationStopFlag(dev->taskController)) {
 		
 		DAQmxErrChk( DAQmxStopTask(dev->AITaskSet->taskHndl) );
 		
@@ -12265,23 +12265,23 @@ SkipPacket:
 			}
 		}
 	}
-	else {
-		//in finite mode; stopping on correct number of samples written
+	else
+		// in finite mode; stopping on correct number of samples written
 		stopAOTaskFlag = FALSE; 
-	}
+	
 
-	if (stopAOTaskFlag){
-		//determine num blocks to write
+	if (stopAOTaskFlag) {
+		// determine num blocks to write
 		for (int j = 0; j < data->numchan; j++) {  
-			numblocks=div(data->databuff_size[j],data->writeblock);
+			numblocks = div(data->databuff_size[j], data->writeblock);
 			if (numblocks.quot==0) {
-				writeLastBlock=TRUE;
-				if (numblocks.rem<LastBlockSize) LastBlockSize=numblocks.rem;   // size of block is smallest data size of a channel
+				writeLastBlock = TRUE;
+				if (numblocks.rem < LastBlockSize) LastBlockSize = numblocks.rem;   // size of block is smallest data size of a channel
 			}
 		}
 	}
 	
-	if ((stopAOTaskFlag && writeLastBlock) || GetTaskControlAbortFlag(dev->taskController)) {
+	if ( (stopAOTaskFlag && writeLastBlock) || GetTaskControlAbortFlag(dev->taskController) ) {
 		
 		// write last block with adjusted size
 		DAQmxErrChk(DAQmxWriteAnalogF64(dev->AOTaskSet->taskHndl, LastBlockSize, 0, dev->AOTaskSet->timeout, DAQmx_Val_GroupByChannel, data->dataout, &nSamplesWritten, NULL)); 
@@ -14420,7 +14420,7 @@ INIT_ERR
 	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
 	nActiveTasksTSVLockObtained = TRUE;
 	
-	// stop CO tasks explicitely
+	// stop CO tasks explicitly
 	if (dev->COTaskSet) {
 		ChanSet_CO_type* 	chanSet	= NULL;
 		size_t				nChans	= ListNumItems(dev->COTaskSet->chanTaskSet);

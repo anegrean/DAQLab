@@ -12074,12 +12074,12 @@ INIT_ERR
 			// if datain[i] is empty, get data packet from queue if NULL packet was not yet received
 			if (!data->datain_size[i]) {
 				
-				if (!data->nullPacketReceived[i])
+				if (!data->nullPacketReceived[i]) {
 					CmtErrChk( itemsRead = CmtReadTSQData(tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
-				
-				// if timeout occured and no data packet was read, generate error
-				if (!itemsRead)
-					SET_ERR(WriteAODAQmx_Err_WaitingForDataTimeout, "Waiting for AO data timed out.");
+					// if timeout occured and no data packet was read, generate error
+					if (!itemsRead)
+						SET_ERR(WriteAODAQmx_Err_WaitingForDataTimeout, "Waiting for AO data timed out.");
+				}
 				
 				// process NULL packet
 				if (!dataPacket) {

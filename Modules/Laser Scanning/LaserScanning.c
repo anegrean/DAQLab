@@ -6119,15 +6119,16 @@ INIT_ERR
 	}
 	
 	// send number of samples in fast axis command waveform if scan is finite
-	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
-		nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
+	nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
+	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
 		// move from parked waveform + scan waveform + one sample to return to parked position
-		*nGalvoSamplesPtr = (uInt64)((nGalvoSamplesFastAxisCompensation + nGalvoSamplesFastAxisMoveFromParkedWaveform) + 
-					   (scanEngine->scanSettings.height+nFastAxisFlybackLines) * nGalvoSamplesPerLine * nFrames + 1);
-		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &dataPacket, FALSE, &errorInfo.errMsg) );    
-	}
+		*nGalvoSamplesPtr = (uInt64)((nGalvoSamplesFastAxisCompensation + nGalvoSamplesFastAxisMoveFromParkedWaveform) + (scanEngine->scanSettings.height+nFastAxisFlybackLines) * nGalvoSamplesPerLine * nFrames + 1);
+	else
+		*nGalvoSamplesPtr = 0;
+		
+	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
+	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanFastAxisComNSamples, &dataPacket, FALSE, &errorInfo.errMsg) );    
 	
 	//---------------------------------------------------------------------------------------------------------------------------
 	// 													Y-galvo slow scan axis
@@ -6169,14 +6170,16 @@ INIT_ERR
 	}
 	
 	// send number of samples in slow axis command waveform if scan is finite
-	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
-		nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
+	nullChk( nGalvoSamplesPtr = malloc(sizeof(uInt64)) );
+	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
 		// move from parked waveform + scan waveform + one sample to return to parked position
 		*nGalvoSamplesPtr = (uInt64) ((nGalvoSamplesSlowAxisCompensation + nGalvoSamplesSlowAxisMoveFromParked) + nFrames * nGalvoSamplesSlowAxisScanWaveform + 1);
-		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errorInfo.errMsg) );    
-	}
+	else
+		*nGalvoSamplesPtr = 0;
+	
+	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
+	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nGalvoSamplesPtr, &dsInfo, NULL) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanSlowAxisComNSamples, &dataPacket, FALSE, &errorInfo.errMsg) );    
 	
 	// Galvo sampling rate for both scan axes
 	nullChk( galvoSamplingRatePtr = malloc(sizeof(double)) );
@@ -6190,29 +6193,24 @@ INIT_ERR
 	//---------------------------------------------------------------------------------------------------------------------------
 	
 	
+	nullChk( nPixelsPtr = malloc(sizeof(uInt64)) );
+		
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
-		//--------------------
-		// finite mode
-		//--------------------
 		// total number of pixels
-		uInt64	nPixels = (uInt64)RoundRealToNearestInteger((scanEngine->flyInDelay - scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)(scanEngine->scanSettings.height + nFastAxisFlybackLines) * (uInt64)nFrames; 
+		*nPixelsPtr = (uInt64)RoundRealToNearestInteger((scanEngine->flyInDelay - scanEngine->baseClass.pixDelay)/scanEngine->scanSettings.pixelDwellTime) + (uInt64)nPixelsPerLine * (uInt64)(scanEngine->scanSettings.height + nFastAxisFlybackLines) * (uInt64)nFrames; 
 		// pixel pulse train
-		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, nPixels, (uInt32) RoundRealToNearestInteger(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0, scanEngine->baseClass.referenceClockFreq) );
-		
-		// send n pixels
-		nullChk( nPixelsPtr = malloc(sizeof(uInt64)) );
-		*nPixelsPtr = nPixels;
-		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nPixelsPtr, &dsInfo, NULL) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &dataPacket, FALSE, &errorInfo.errMsg) );    
-		
+		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Finite, PulseTrainIdle_Low, *nPixelsPtr, (uInt32) RoundRealToNearestInteger(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0, scanEngine->baseClass.referenceClockFreq) );
 	} else {
-		//--------------------
-		// continuous mode
-		//--------------------
+		// total number of pixels
+		*nPixelsPtr = 0;
 		// pixel pulse train
 		nullChk( pixelPulseTrain = (PulseTrain_type*) init_PulseTrainTickTiming_type(PulseTrain_Continuous, PulseTrainIdle_Low, 0, (uInt32) RoundRealToNearestInteger(scanEngine->scanSettings.pixelDwellTime * 1e-6 * scanEngine->baseClass.referenceClockFreq) - 2, 2, 0, scanEngine->baseClass.referenceClockFreq) );
 	}
+	
+	// send n pixels
+	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
+	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&nPixelsPtr, &dsInfo, NULL) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanNPixels, &dataPacket, FALSE, &errorInfo.errMsg) );    
 	
 	// send pixel pulse train info
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );

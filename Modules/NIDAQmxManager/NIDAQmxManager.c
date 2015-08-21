@@ -1184,6 +1184,9 @@ static void							discard_TaskTrig_type					(TaskTrig_type** taskTrigPtr);
 static ADTaskTiming_type*			init_ADTaskTiming_type					(void);
 static void							discard_ADTaskTiming_type				(ADTaskTiming_type** taskTimingPtr);
 
+	// updates ADC/DAC N Samples, and measurement mode
+static int							UpdateADTaskTimingNSamplesMeasMode		(ADTaskSet_type* tskSet, uInt64 nSamples, uInt32 oversampling, char** errorMsg);
+
 //--------------------
 // DAQmx task settings
 //--------------------
@@ -7845,6 +7848,58 @@ static void discard_ADTaskTiming_type (ADTaskTiming_type** taskTimingPtr)
 	OKfree(*taskTimingPtr);
 }
 
+static int UpdateADTaskTimingNSamplesMeasMode (ADTaskSet_type* tskSet, uInt64 nSamples, uInt32 oversampling, char** errorMsg)
+{
+INIT_ERR
+
+	int					ctrlIdx			= 0;  
+	uInt64*				nSamplesPtr		= NULL; 
+	DataPacket_type*	dataPacket		= NULL;
+	
+	if (nSamples) {
+		// finite measurement mode
+		tskSet->timing->measMode = Operation_Finite;
+		// update number of samples in dev structure
+		tskSet->timing->nSamples = nSamples;
+		DAQmxErrChk (DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampPerChan, tskSet->timing->nSamples * oversampling));
+		DAQmxErrChk (DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampMode,  DAQmx_Val_FiniteSamps));
+	} else {
+		// continuous measurement mode
+		tskSet->timing->measMode = Operation_Continuous;
+		DAQmxErrChk (DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampMode,  DAQmx_Val_ContSamps));
+	}
+	
+	// update meas mode in UI
+	GetIndexFromValue(tskSet->timing->settingsPanHndl, Set_MeasMode, &ctrlIdx, tskSet->timing->measMode);
+	SetCtrlIndex(tskSet->timing->settingsPanHndl, Set_MeasMode, ctrlIdx);
+	
+	// update number of samples in UI
+	SetCtrlVal(tskSet->timing->settingsPanHndl, Set_NSamples, tskSet->timing->nSamples);
+	// update duration in UI
+	SetCtrlVal(tskSet->timing->settingsPanHndl, Set_Duration, tskSet->timing->nSamples / tskSet->timing->sampleRate);
+	
+	// send data
+	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
+	*nSamplesPtr = nSamples;
+	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, NULL, NULL) );
+	errChk(SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg));
+	
+	return 0;
+
+DAQmxError:
+	
+DAQmx_ERROR_INFO
+
+Error:
+
+	// cleanup
+	OKfree(nSamplesPtr);
+	discard_DataPacket_type(&dataPacket);
+
+RETURN_ERR
+	
+}
+
 //------------------------------------------------------------------------------
 // ADTaskSet_type
 //------------------------------------------------------------------------------
@@ -10995,52 +11050,35 @@ INIT_ERR
 	//----------
 	// N samples
 	//----------
-	if (dev->AITaskSet->timing->measMode == Operation_Finite) {
-		if (IsVChanOpen((VChan_type*)dev->AITaskSet->timing->nSamplesSinkVChan)) {
-			errChk( GetDataPacket(dev->AITaskSet->timing->nSamplesSinkVChan, &dataPacket, &errorInfo.errMsg) );
-			dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
-			switch (dataPacketType) {
-				case DL_UChar:
-					dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned char**)dataPacketData;
-					break;
-				case DL_UShort:
-					dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned short**)dataPacketData;
-					break;
-				case DL_UInt:
-					dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned int**)dataPacketData;
-					break;
-				case DL_UInt64:
-					dev->AITaskSet->timing->nSamples = (uInt64)**(unsigned long long**)dataPacketData;
-					break;
-			}
-			
-			// update number of samples in dev structure
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples * dev->AITaskSet->timing->oversampling));
-			// update number of samples in UI
-			SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_NSamples, dev->AITaskSet->timing->nSamples);
-			// update duration in UI
-			SetCtrlVal(dev->AITaskSet->timing->settingsPanHndl, Set_Duration, dev->AITaskSet->timing->nSamples / dev->AITaskSet->timing->sampleRate);
-	
-			// cleanup
-			ReleaseDataPacket(&dataPacket);
+	if (IsVChanOpen((VChan_type*)dev->AITaskSet->timing->nSamplesSinkVChan)) {
+		errChk( GetDataPacket(dev->AITaskSet->timing->nSamplesSinkVChan, &dataPacket, &errorInfo.errMsg) );
+		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
+		
+		uInt64	nSamples = 0;
+		
+		switch (dataPacketType) {
+			case DL_UChar:
+				nSamples = (uInt64)**(unsigned char**)dataPacketData;
+				break;
+			case DL_UShort:
+				nSamples = (uInt64)**(unsigned short**)dataPacketData;
+				break;
+			case DL_UInt:
+				nSamples = (uInt64)**(unsigned int**)dataPacketData;
+				break;
+			case DL_UInt64:
+				nSamples = (uInt64)**(unsigned long long**)dataPacketData;
+				break;
 		}
-	} else
-		// n samples cannot be used for continuous tasks, empty Sink VChan if there are any elements
-		ReleaseAllDataPackets(dev->AITaskSet->timing->nSamplesSinkVChan, NULL);
-	
+		
+		ReleaseDataPacket(&dataPacket);
+		
+		errChk( UpdateADTaskTimingNSamplesMeasMode(dev->AITaskSet, nSamples, dev->AITaskSet->timing->oversampling, &errorInfo.errMsg) );
+	}
 	
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Send task settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
-	
-	//----------
-	// N samples
-	//----------
-	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
-	*nSamplesPtr = dev->AITaskSet->timing->nSamples;
-	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
-	dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, &dsInfo, NULL);
-	errChk(SendDataPacket(dev->AITaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg));
 	
 	//--------------
 	// Sampling rate
@@ -11050,7 +11088,6 @@ INIT_ERR
 	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
 	dataPacket = init_DataPacket_type(DL_Double, (void**) &samplingRatePtr, &dsInfo, NULL);
 	errChk(SendDataPacket(dev->AITaskSet->timing->samplingRateSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg));
-	
 	
 	// reset AI data processing structure
 	discard_ReadAIData_type(&dev->AITaskSet->readAIData);
@@ -11128,38 +11165,32 @@ INIT_ERR
 	//----------
 	// N samples
 	//----------
-	if (dev->AOTaskSet->timing->measMode == Operation_Finite) {
-		if (IsVChanOpen((VChan_type*)dev->AOTaskSet->timing->nSamplesSinkVChan)) {
-			errChk( GetDataPacket(dev->AOTaskSet->timing->nSamplesSinkVChan, &dataPacket, &errorInfo.errMsg) );
-			dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
-			switch (dataPacketType) {
-				case DL_UChar:
-					dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned char**)dataPacketData;
-					break;
-				case DL_UShort:
-					dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned short**)dataPacketData;
-					break;
-				case DL_UInt:
-					dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned int**)dataPacketData;
-					break;
-				case DL_UInt64:
-					dev->AOTaskSet->timing->nSamples = (uInt64)**(unsigned long long**)dataPacketData;
-					break;
-			}
-			
-			// update number of samples in dev structure
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AOTaskSet->timing->nSamples));
-			// update number of samples in UI
-			SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_NSamples, dev->AOTaskSet->timing->nSamples);
-			// update duration in UI
-			SetCtrlVal(dev->AOTaskSet->timing->settingsPanHndl, Set_Duration, dev->AOTaskSet->timing->nSamples / dev->AOTaskSet->timing->sampleRate);
 	
-			// cleanup
-			ReleaseDataPacket(&dataPacket);
+	if (IsVChanOpen((VChan_type*)dev->AOTaskSet->timing->nSamplesSinkVChan)) {
+		errChk( GetDataPacket(dev->AOTaskSet->timing->nSamplesSinkVChan, &dataPacket, &errorInfo.errMsg) );
+		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
+		
+		uInt64	nSamples = 0;
+		
+		switch (dataPacketType) {
+			case DL_UChar:
+				nSamples = (uInt64)**(unsigned char**)dataPacketData;
+				break;
+			case DL_UShort:
+				nSamples = (uInt64)**(unsigned short**)dataPacketData;
+				break;
+			case DL_UInt:
+				nSamples = (uInt64)**(unsigned int**)dataPacketData;
+				break;
+			case DL_UInt64:
+				nSamples = (uInt64)**(unsigned long long**)dataPacketData;
+				break;
 		}
-	} else
-		// n samples cannot be used for continuous tasks, empty Sink VChan if there are any elements
-		ReleaseAllDataPackets(dev->AOTaskSet->timing->nSamplesSinkVChan, NULL);
+		
+		ReleaseDataPacket(&dataPacket);
+		
+		errChk( UpdateADTaskTimingNSamplesMeasMode(dev->AOTaskSet, nSamples, dev->AOTaskSet->timing->oversampling, &errorInfo.errMsg) );
+	}
 	
 	//--------------
 	// Sampling rate
@@ -11191,15 +11222,6 @@ INIT_ERR
 	//-------------------------------------------------------------------------------------------------------------------------------
 	// Send task settings data
 	//-------------------------------------------------------------------------------------------------------------------------------
-	
-	//----------
-	// N samples
-	//----------
-	nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
-	*nSamplesPtr = dev->AOTaskSet->timing->nSamples;
-	nullChk( dsInfo = GetIteratorDSData(iterator, WAVERANK) );
-	dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, &dsInfo, NULL);
-	errChk(SendDataPacket(dev->AOTaskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg));
 	
 	//--------------
 	// Sampling rate
@@ -13579,16 +13601,18 @@ static void ADNSamplesSinkVChan_StateChange (VChan_type* self, void* VChanOwner,
 			
 		case VChan_Open:
 			
-			// dim number of samples controls and duration
+			// dim number of samples, duration and measurement mode controls
 			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 1);
 			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 1);
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_MeasMode, ATTR_DIMMED, 1);
 			break;
 			
 		case VChan_Closed:
 			
-			// undim number of samples controls and duration
+			// undim number of samples, duration and measurement mode controls
 			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_NSamples, ATTR_DIMMED, 0);
 			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_Duration, ATTR_DIMMED, 0);
+			SetCtrlAttribute(tskSet->timing->settingsPanHndl, Set_MeasMode, ATTR_DIMMED, 0);
 			break;
 	}
 }
@@ -13767,65 +13791,40 @@ INIT_ERR
 	// update only if task controller is not active
 	if (taskActive) return 0;
 	
-	ADTaskSet_type*			tskSet			= GetVChanOwner((VChan_type*) sinkVChan);
+	ADTaskSet_type*			tskSet			= GetVChanOwner((VChan_type*) sinkVChan);					 
 	DataPacket_type*		dataPacket		= NULL;
 	void*					dataPacketData	= NULL;
-	DLDataTypes				dataPacketType;
-	uInt64*					nSamplesPtr		= NULL;   
+	DLDataTypes				dataPacketType	= 0;
+	uInt64					nSamples		= 0;
 	
-	if (tskSet->timing->measMode == Operation_Finite) {
-		errChk( GetDataPacket(tskSet->timing->nSamplesSinkVChan, &dataPacket, &errorInfo.errMsg) );
-		dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
-		switch (dataPacketType) {
-			case DL_UChar:
-				tskSet->timing->nSamples = (uInt64)**(unsigned char**)dataPacketData;
-				break;
+	
+	// get number of samples
+	errChk( GetDataPacket(tskSet->timing->nSamplesSinkVChan, &dataPacket, &errorInfo.errMsg) );
+	dataPacketData = GetDataPacketPtrToData(dataPacket, &dataPacketType );
+	switch (dataPacketType) {
+		case DL_UChar:
+			nSamples = (uInt64)**(unsigned char**)dataPacketData;
+			break;
 				
-			case DL_UShort:
-				tskSet->timing->nSamples = (uInt64)**(unsigned short**)dataPacketData;
-				break;
+		case DL_UShort:
+			nSamples = (uInt64)**(unsigned short**)dataPacketData;
+			break;
 				
-			case DL_UInt:
-				tskSet->timing->nSamples = (uInt64)**(unsigned int**)dataPacketData;
-				break;
+		case DL_UInt:
+			nSamples = (uInt64)**(unsigned int**)dataPacketData;
+			break;
 				
-			case DL_UInt64:
-				tskSet->timing->nSamples = (uInt64)**(unsigned long long**)dataPacketData;
-				break;
-		}
-			
-		// update number of samples in dev structure
-		DAQmxErrChk (DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampPerChan, tskSet->timing->nSamples));
-		// update number of samples in UI
-		SetCtrlVal(tskSet->timing->settingsPanHndl, Set_NSamples, tskSet->timing->nSamples);
-		// update duration in UI
-		SetCtrlVal(tskSet->timing->settingsPanHndl, Set_Duration, tskSet->timing->nSamples / tskSet->timing->sampleRate);
+		case DL_UInt64:
+			nSamples = (uInt64)**(unsigned long long**)dataPacketData;
+			break;
+	}
 	
-		// cleanup
-		ReleaseDataPacket(&dataPacket);
-		
-		// send data
-		nullChk( nSamplesPtr = malloc(sizeof(uInt64)) );
-		*nSamplesPtr = tskSet->timing->nSamples;
-		dataPacket = init_DataPacket_type(DL_UInt64, (void**) &nSamplesPtr, NULL, NULL);
-		errChk(SendDataPacket(tskSet->timing->nSamplesSourceVChan, &dataPacket, FALSE, &errorInfo.errMsg));
+	errChk( UpdateADTaskTimingNSamplesMeasMode(tskSet, nSamples, tskSet->timing->oversampling, &errorInfo.errMsg) );
 	
-	} else
-		// n Samples cannot be used for continuous tasks, empty Sink VChan if there are any elements
-		ReleaseAllDataPackets(tskSet->timing->nSamplesSinkVChan, NULL);
-	
-	
-	return 0;
-
-DAQmxError:
-	
-DAQmx_ERROR_INFO
-
 Error:
 	
 	// cleanup
 	ReleaseDataPacket(&dataPacket);
-	OKfree(nSamplesPtr);
 
 RETURN_ERR
 }

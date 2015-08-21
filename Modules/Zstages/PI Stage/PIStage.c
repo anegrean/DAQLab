@@ -901,7 +901,7 @@ static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BO
 	return 0;
 }
 
-static int	TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
+static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
 {
 	//PIStage_type* 		zstage = GetTaskControlModuleData(taskControl);
 	

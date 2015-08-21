@@ -50,7 +50,7 @@
 #ifndef TC_WRONG_EVENT_STATE_ERROR
 #define TC_WRONG_EVENT_STATE_ERROR \
 { \
-	eventStr 	= EventToString(eventpacket[i].event); \
+	eventStr 	= EventToString(eventPackets[i].event); \
 	stateStr 	= TaskControlStateToString(taskControl->currentState); \
 	nChars 		= snprintf(msgBuff, 0, "%s event is invalid for %s state", eventStr, stateStr); \
 	nullChk( msgBuff = malloc ((nChars + 1) * sizeof(char)) ); \
@@ -161,6 +161,7 @@ struct TaskControl {
 // Static functions
 
 static void 								TaskEventHandler 						(TaskControl_type* taskControl); 
+static void 								AddIterationEventWithPriority 			(EventPacket_type* eventPackets, int* nEventPackets, int currentEventIdx);
 
 // Use this function to change the state of a Task Controller
 static void 								ChangeState 							(TaskControl_type* taskControl, EventPacket_type* eventPacket, TCStates newState);
@@ -190,6 +191,10 @@ static int									TaskTreeStateChange		 				(TaskControl_type* taskControl, Eve
 static int									ClearTaskTreeBranchVChans				(TaskControl_type* taskControl, char** errorMsg);
 
 static void									SetChildTCsOutOfDate					(TaskControl_type* taskControl);
+
+// macro for debugging where certain events are generated
+#define PlaceLineTag						NumTag(__LINE__)
+static int*									NumTag									(int num);
 
 //==============================================================================
 // Global variables
@@ -1213,6 +1218,17 @@ static void SetChildTCsOutOfDate (TaskControl_type* taskControl)
 	}
 }
 
+static int*	NumTag (int num)
+{
+	int* numTagPtr = malloc(sizeof(int));
+	
+	if (!numTagPtr) return NULL;
+	
+	*numTagPtr = num;
+	
+	return numTagPtr;
+}
+
 static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr)
 {
 	VChanCallbackData_type* VChanCB = malloc(sizeof(VChanCallbackData_type));
@@ -1589,7 +1605,7 @@ int TaskControlEvent (TaskControl_type* RecipientTaskControl, TCEvents event, vo
 {
 INIT_ERR	
 	
-	EventPacket_type 	eventpacket 		= {event, eventData, discardEventDataFptr};
+	EventPacket_type 	eventPackets 		= {event, eventData, discardEventDataFptr};
 	ChildTCInfo_type*	subTask				= NULL;
 	int 				lockObtainedFlag 	= FALSE;
 
@@ -1602,7 +1618,7 @@ INIT_ERR
 		subTask->isOutOfDate = TRUE;
 	}
 	
-	CmtErrChk( CmtWriteTSQData(RecipientTaskControl->eventQ, &eventpacket, 1, 0, NULL) );
+	CmtErrChk( CmtWriteTSQData(RecipientTaskControl->eventQ, &eventPackets, 1, 0, NULL) );
 	
 
 CmtError:
@@ -1626,7 +1642,7 @@ INIT_ERR
 		errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, init_FCallReturn_type(errorID, "External Task Control Iteration", errorInfoString), (DiscardFptr_type)discard_FCallReturn_type, &errorInfo.errMsg) );
 	else {
 		if (doAnotherIteration) taskControl->repeat++;
-		errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
+		errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, PlaceLineTag, NULL, &errorInfo.errMsg) );
 	}
 	
 Error:
@@ -1725,7 +1741,7 @@ INIT_ERR
 		case TC_Callback_Iterate:
 			
 			if (!taskControl->IterateFptr) { 
-				errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
+				errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, PlaceLineTag, NULL, &errorInfo.errMsg) );
 				break; 									// function not provided 
 			}
 			
@@ -2138,9 +2154,24 @@ int CVICALLBACK TaskControlIterTimeout (int reserved, int timerId, int event, vo
 	TaskControl_type* taskControl = callbackData; 
 	
 	if (event == EVENT_TIMER_TICK)
-		TaskControlEvent(taskControl, TC_Event_IterationTimeout, NULL, NULL, NULL);
+		TaskControlEvent(taskControl, TC_Event_IterationTimeout, PlaceLineTag, NULL, NULL);
 	
 	return 0;
+}
+
+static void AddIterationEventWithPriority (EventPacket_type* eventPackets, int* nEventPackets, int currentEventIdx) 
+{
+	EventPacket_type	iterEvent = {.event = TC_Event_Iterate, .eventData = NULL, .discardEventDataFptr = NULL};
+	
+	// shift events in the array with one element beyond the current EventIdx
+	for (size_t i = *nEventPackets; i > currentEventIdx + 1; i--)
+		eventPackets[i] = eventPackets[i-1];
+	
+	// insert iteration event
+	eventPackets[currentEventIdx+1] = iterEvent;
+	
+	// increment number of event packets
+	(*nEventPackets)++;
 }
 
 static void TaskEventHandler (TaskControl_type* taskControl)
@@ -2153,7 +2184,7 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 
 INIT_ERR
 	
-	EventPacket_type 		eventpacket[EVENT_BUFFER_SIZE];
+	EventPacket_type 		eventPackets[EVENT_BUFFER_SIZE];
 	ChildTCInfo_type* 		childTCPtr			= NULL; 
 	char*					eventStr			= NULL;
 	char*					stateStr			= NULL;
@@ -2165,7 +2196,7 @@ INIT_ERR
 	TCStates*				tcStateTSVPtr 		= NULL; 
 	
 	// get all Task Controller events in the queue
-	while ((nEventItems = CmtReadTSQData(taskControl->eventQ, eventpacket, EVENT_BUFFER_SIZE, 0, 0)) > 0) {
+	while ((nEventItems = CmtReadTSQData(taskControl->eventQ, eventPackets, EVENT_BUFFER_SIZE - 1, 0, 0)) > 0) {
 		
 		for (int i = 0; i < nEventItems; i++) {
 		
@@ -2182,12 +2213,12 @@ INIT_ERR
 		
 				case TC_State_Unconfigured:
 		
-					switch (eventpacket[i].event) {
+					switch (eventPackets[i].event) {
 				
 						case TC_Event_Configure:
 					
 							// configure this task
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
 							
 							// send TC_Event_Configure to all childTCs if there are any
 							errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
@@ -2195,15 +2226,15 @@ INIT_ERR
 							// If there are no childTCs, then reset device/module and make transition here to Initial state and inform parent TC
 							if (!ListNumItems(taskControl->childTCs)) {
 								// reset device/module
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
 								
 								// reset iterations
 								SetCurrentIterIndex(taskControl->currentIter, 0);
 						
-								ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Initial);
 						
 							} else
-								ChangeState(taskControl, &eventpacket[i], TC_State_Configured);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Configured);
 						
 							break;
 					
@@ -2222,11 +2253,11 @@ INIT_ERR
 						case TC_Event_UpdateChildTCState:
 					
 							// update childTC state
-							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventpacket[i].eventData)->childTCIdx);
+							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventPackets[i].eventData)->childTCIdx);
 							childTCPtr->previousChildTCState 	= childTCPtr->childTCState; // save old state for debuging purposes
-							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState;
+							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventPackets[i].eventData)->newChildTCState;
 							childTCPtr->isOutOfDate 			= FALSE; 
-							ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
+							ExecutionLogEntry(taskControl, &eventPackets[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 							// if childTC is in an error state, then switch to error state
 							if (childTCPtr->childTCState == TC_State_Error)
@@ -2237,13 +2268,13 @@ INIT_ERR
 						case TC_Event_DataReceived:
 					
 							// call data received event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_DataReceived, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_DataReceived, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Custom:
 					
 							// call custom module event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_CustomEvent, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_CustomEvent, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						default:
@@ -2255,12 +2286,12 @@ INIT_ERR
 			
 				case TC_State_Configured:
 		
-					switch (eventpacket[i].event) { 
+					switch (eventPackets[i].event) { 
 				
 						case TC_Event_Configure: 
 					
 							// configure this TC again
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
 							
 							// send TC_Event_Configure to all childTCs if there are any
 							errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
@@ -2275,20 +2306,20 @@ INIT_ERR
 						case TC_Event_Unconfigure:
 					
 							// unconfigure
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Unconfigure, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Unconfigure, NULL, &errorInfo.errMsg) );
 							
-							ChangeState(taskControl, &eventpacket[i], TC_State_Unconfigured);
+							ChangeState(taskControl, &eventPackets[i], TC_State_Unconfigured);
 					
 							break;
 					
 						case TC_Event_UpdateChildTCState:
 					
 							// update childTC state
-							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventpacket[i].eventData)->childTCIdx);
+							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventPackets[i].eventData)->childTCIdx);
 							childTCPtr->previousChildTCState 	= childTCPtr->childTCState; // save old state for debuging purposes 
-							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState;
+							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventPackets[i].eventData)->newChildTCState;
 							childTCPtr->isOutOfDate 			= FALSE;
-							ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
+							ExecutionLogEntry(taskControl, &eventPackets[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 							// if childTC is in an error state, then switch to error state
 							if (childTCPtr->childTCState == TC_State_Error)
@@ -2301,12 +2332,12 @@ INIT_ERR
 							// reset task controller and set it to initial state if all child TCs are in their initial state
 							if (AllChildTCsInState(taskControl, TC_State_Initial)) {
 								// reset device/module
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
 								
 								// reset iterations
 								SetCurrentIterIndex(taskControl->currentIter,0);
 						
-								ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Initial);
 							}
 					
 							break;
@@ -2314,13 +2345,13 @@ INIT_ERR
 						case TC_Event_DataReceived:
 					
 							// call data received event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_DataReceived, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_DataReceived, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Custom:
 					
 							// call custom event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_CustomEvent, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_CustomEvent, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						default:
@@ -2332,20 +2363,20 @@ INIT_ERR
 			
 				case TC_State_Initial:
 		
-					switch (eventpacket[i].event) {
+					switch (eventPackets[i].event) {
 				
 						case TC_Event_Configure:
 					
 							// configure again this TC
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Unconfigure:
 					
 							// unconfigure
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Unconfigure, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Unconfigure, NULL, &errorInfo.errMsg) );
 							
-							ChangeState(taskControl, &eventpacket[i], TC_State_Unconfigured);
+							ChangeState(taskControl, &eventPackets[i], TC_State_Unconfigured);
 					
 							break;
 				
@@ -2364,34 +2395,29 @@ INIT_ERR
 								errChk( ClearTaskTreeBranchVChans(taskControl, &errorInfo.errMsg) );
 								
 								// if this is the root task controller (i.e. it doesn't have a parent) then change Task Tree status
-								errChk( TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Started, &errorInfo.errMsg) );
+								errChk( TaskTreeStateChange(taskControl, &eventPackets[i], TaskTree_Started, &errorInfo.errMsg) );
 							}
 					
 							//--------------------------------------------------------------------------------------------------------------- 
 							// Call Start Task Controller function pointer to inform that task will start
 							//--------------------------------------------------------------------------------------------------------------- 
 					
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Start, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Start, NULL, &errorInfo.errMsg) );
 							
 							//---------------------------------------------------------------------------------------------------------------   
 							// Set flag to iterate once or continue until done or stopped
 							//---------------------------------------------------------------------------------------------------------------   
-							if (eventpacket[i].event == TC_Event_IterateOnce) 
+							if (eventPackets[i].event == TC_Event_IterateOnce) 
 								taskControl->nIterationsFlag = 1;
 							else
 								taskControl->nIterationsFlag = -1;
 					
 							//---------------------------------------------------------------------------------------------------------------
-							// Iterate Task Controller
+							// Iterate Task Controller and switch to RUNNING state
 							//---------------------------------------------------------------------------------------------------------------
 					
-							errChk( TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL, &errorInfo.errMsg) );
-							
-							//---------------------------------------------------------------------------------------------------------------
-							// Switch to RUNNING state
-							//---------------------------------------------------------------------------------------------------------------
-					
-							ChangeState(taskControl, &eventpacket[i], TC_State_Running);  
+							AddIterationEventWithPriority(eventPackets, &nEventItems, i);
+							ChangeState(taskControl, &eventPackets[i], TC_State_Running);  
 					
 							break;
 					
@@ -2404,11 +2430,11 @@ INIT_ERR
 						case TC_Event_UpdateChildTCState:
 					
 							// update childTC state
-							childTCPtr = ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventpacket[i].eventData)->childTCIdx);
+							childTCPtr = ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventPackets[i].eventData)->childTCIdx);
 							childTCPtr->previousChildTCState = childTCPtr->childTCState; // save old state for debuging purposes 
-							childTCPtr->childTCState = ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState;
+							childTCPtr->childTCState = ((ChildTCEventInfo_type*)eventPackets[i].eventData)->newChildTCState;
 							childTCPtr->isOutOfDate = FALSE;
-							ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
+							ExecutionLogEntry(taskControl, &eventPackets[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 							// if childTC is in an error state, then switch to error state
 							if (childTCPtr->childTCState == TC_State_Error)
@@ -2416,7 +2442,7 @@ INIT_ERR
 							
 							// if childTC is unconfigured then switch to configured state
 							if (childTCPtr->childTCState == TC_State_Unconfigured)
-								ChangeState(taskControl, &eventpacket[i], TC_State_Configured);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Configured);
 					
 							break;
 					
@@ -2424,13 +2450,13 @@ INIT_ERR
 						case TC_Event_DataReceived:
 					
 							// call data received event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_DataReceived, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_DataReceived, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Custom:
 					
 							// call custom module event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_CustomEvent, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_CustomEvent, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						default:
@@ -2442,22 +2468,8 @@ INIT_ERR
 			
 				case TC_State_Idle:
 	
-					switch (eventpacket[i].event) {
+					switch (eventPackets[i].event) {
 				
-						case TC_Event_Configure:
-				
-							// ignore this command
-							break;
-					
-						case TC_Event_Unconfigure:
-					
-							// call unconfigure function and switch to unconfigured state
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Unconfigure, NULL, &errorInfo.errMsg) );
-							
-							ChangeState(taskControl, &eventpacket[i], TC_State_Unconfigured);
-					
-							break;
-					
 						case TC_Event_Start:
 						case TC_Event_IterateOnce: 
 					
@@ -2467,20 +2479,20 @@ INIT_ERR
 								errChk( ClearTaskTreeBranchVChans(taskControl, &errorInfo.errMsg) );
 								
 								// if this is the root task controller (i.e. it doesn't have a parent) then change Task Tree status
-								errChk( TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Started, &errorInfo.errMsg) );
+								errChk( TaskTreeStateChange(taskControl, &eventPackets[i], TaskTree_Started, &errorInfo.errMsg) );
 							}
 					
 							//--------------------------------------------------------------------------------------------------------------- 
 							// Call Start Task Controller function pointer to inform that task will start
 							//--------------------------------------------------------------------------------------------------------------- 
 					
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Start, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Start, NULL, &errorInfo.errMsg) );
 							
 							//---------------------------------------------------------------------------------------------------------------   
 							// Set flag to iterate once or continue until done or stopped
 							//---------------------------------------------------------------------------------------------------------------
 					
-							if (eventpacket[i].event == TC_Event_IterateOnce)
+							if (eventPackets[i].event == TC_Event_IterateOnce)
 								taskControl->nIterationsFlag = 1;
 							else
 								taskControl->nIterationsFlag = -1;
@@ -2489,10 +2501,9 @@ INIT_ERR
 							// Switch to RUNNING state and iterate Task Controller
 							//---------------------------------------------------------------------------------------------------------------
 					
-							errChk( TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL, &errorInfo.errMsg) );
+							AddIterationEventWithPriority(eventPackets, &nEventItems, i);
+							ChangeState(taskControl, &eventPackets[i], TC_State_Running);
 							
-							ChangeState(taskControl, &eventpacket[i], TC_State_Running);
-					
 							break;
 					
 						case TC_Event_Iterate:
@@ -2509,12 +2520,12 @@ INIT_ERR
 							if (!ListNumItems(taskControl->childTCs)) {
 						
 								// reset device/module
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
 								
 								// reset iterations
 								SetCurrentIterIndex(taskControl->currentIter,0);
 						
-								ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Initial);
 						
 							}
 					
@@ -2529,11 +2540,11 @@ INIT_ERR
 						case TC_Event_UpdateChildTCState:
 					
 							// update childTC state
-							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventpacket[i].eventData)->childTCIdx);
+							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventPackets[i].eventData)->childTCIdx);
 							childTCPtr->previousChildTCState 	= childTCPtr->childTCState; // save old state for debuging purposes 
-							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState;
+							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventPackets[i].eventData)->newChildTCState;
 							childTCPtr->isOutOfDate 			= FALSE;
-							ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
+							ExecutionLogEntry(taskControl, &eventPackets[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 							// if childTC is in an error state, then switch to error state
 							if (childTCPtr->childTCState == TC_State_Error)
@@ -2541,7 +2552,7 @@ INIT_ERR
 							
 							// if childTC is unconfigured then switch to configured state
 							if (childTCPtr->childTCState == TC_State_Unconfigured) {
-								ChangeState(taskControl, &eventpacket[i], TC_State_Configured);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Configured);
 								break;
 							}
 					
@@ -2551,12 +2562,12 @@ INIT_ERR
 					
 							if (AllChildTCsInState(taskControl, TC_State_Initial)) {
 								// reset device/module
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
 								
 								// reset iterations
 								SetCurrentIterIndex(taskControl->currentIter,0);
 						
-								ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Initial);
 							}
 					
 							break;
@@ -2564,13 +2575,13 @@ INIT_ERR
 						case TC_Event_DataReceived:
 					
 							// call data received event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_DataReceived, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_DataReceived, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Custom:
 					
 							// call custom module event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_CustomEvent, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_CustomEvent, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						default:
@@ -2583,14 +2594,14 @@ INIT_ERR
 			
 				case TC_State_Running:
 		 
-					switch (eventpacket[i].event) {
+					switch (eventPackets[i].event) {
 				
 					
 						case TC_Event_Configure:
 					
 							if (!taskControl->repeat)
 								// configure again this TC
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
 							 else
 								TC_WRONG_EVENT_STATE_ERROR
 							
@@ -2615,13 +2626,13 @@ INIT_ERR
 								//---------------------------------------------------------------------------------------------------------------- 	
 										
 								// call done function
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Done, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Done, NULL, &errorInfo.errMsg) );
 								
-								ChangeState(taskControl, &eventpacket[i], TC_State_Done);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Done);
 						
 								// change Task Tree status
 								if(!taskControl->parentTC) 
-									errChk( TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Finished, &errorInfo.errMsg) );
+									errChk( TaskTreeStateChange(taskControl, &eventPackets[i], TaskTree_Finished, &errorInfo.errMsg) );
 									
 								break; // stop here
 							}
@@ -2646,12 +2657,12 @@ INIT_ERR
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
+										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
 									else 
-										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
+										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, PlaceLineTag, NULL, &errorInfo.errMsg) );
 										
 									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TC_State_IterationFunctionActive);
+									ChangeState(taskControl, &eventPackets[i], TC_State_IterationFunctionActive);
 									
 									break;
 							
@@ -2663,7 +2674,7 @@ INIT_ERR
 									nItems = ListNumItems(taskControl->childTCs); 		
 									if (nItems) {    
 										// send START event to all childTCs
-										errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, NULL, NULL, &errorInfo.errMsg) );
+										errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, PlaceLineTag, NULL, &errorInfo.errMsg) );
 										break; // stop here
 									}	
 							
@@ -2672,12 +2683,12 @@ INIT_ERR
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
+										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
 									else 
-										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
+										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, PlaceLineTag, NULL, &errorInfo.errMsg) );
 										
 									// switch state and wait for iteration to complete
-									ChangeState(taskControl, &eventpacket[i], TC_State_IterationFunctionActive);  
+									ChangeState(taskControl, &eventPackets[i], TC_State_IterationFunctionActive);  
 									
 									break;
 									
@@ -2687,19 +2698,19 @@ INIT_ERR
 									// Start ChildTCs if there are any
 									//---------------------------------------------------------------------------------------------------------------
 							
-									errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, NULL, NULL, &errorInfo.errMsg) );
+									errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, PlaceLineTag, NULL, &errorInfo.errMsg) );
 									
 									//---------------------------------------------------------------------------------------------------------------
 									// Call iteration function if needed
 									//---------------------------------------------------------------------------------------------------------------
 							
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
+										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
 									else 
-										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
+										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, PlaceLineTag, NULL, &errorInfo.errMsg) );
 										
 									// switch state and wait for iteration and ChildTCs if there are any to complete
-									ChangeState(taskControl, &eventpacket[i], TC_State_IterationFunctionActive);  
+									ChangeState(taskControl, &eventPackets[i], TC_State_IterationFunctionActive);  
 									break;
 							}
 					
@@ -2713,29 +2724,29 @@ INIT_ERR
 								// if there are no ChildTC Controllers
 								if (taskControl->mode == TASK_CONTINUOUS) {
 									// switch to DONE state if continuous task controller
-									errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Done, NULL, &errorInfo.errMsg) );
+									errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Done, NULL, &errorInfo.errMsg) );
 									
-									ChangeState(taskControl, &eventpacket[i], TC_State_Done);
+									ChangeState(taskControl, &eventPackets[i], TC_State_Done);
 							
 								} else 
 									// switch to IDLE or DONE state if finite task controller
 									if (GetCurrentIterIndex(taskControl->currentIter) < taskControl->repeat) {
-										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Stopped, NULL, &errorInfo.errMsg) );
-										ChangeState(taskControl, &eventpacket[i], TC_State_Idle);
+										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Stopped, NULL, &errorInfo.errMsg) );
+										ChangeState(taskControl, &eventPackets[i], TC_State_Idle);
 									} else {
-										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Done, NULL, &errorInfo.errMsg) );
-										ChangeState(taskControl, &eventpacket[i], TC_State_Done);
+										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Done, NULL, &errorInfo.errMsg) );
+										ChangeState(taskControl, &eventPackets[i], TC_State_Done);
 									}
 						
 								// change Task Tree status
 								if(!taskControl->parentTC)
-									errChk( TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Finished, &errorInfo.errMsg) );
+									errChk( TaskTreeStateChange(taskControl, &eventPackets[i], TaskTree_Finished, &errorInfo.errMsg) );
 							
 							} else {
 								// send TC_Event_Stop event to all childTCs
-								errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Stop, NULL, NULL, &errorInfo.errMsg) );
+								errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Stop, PlaceLineTag, NULL, &errorInfo.errMsg) );
 								
-								ChangeState(taskControl, &eventpacket[i], TC_State_Stopping);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Stopping);
 							}
 					
 							break;
@@ -2743,12 +2754,12 @@ INIT_ERR
 						case TC_Event_UpdateChildTCState:
 					
 							// update childTC state
-							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventpacket[i].eventData)->childTCIdx);
+							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventPackets[i].eventData)->childTCIdx);
 							childTCPtr->previousChildTCState 	= childTCPtr->childTCState; // save old state for debuging purposes 
-							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState;
+							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventPackets[i].eventData)->newChildTCState;
 							childTCPtr->isOutOfDate 			= FALSE; 
 					
-							ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
+							ExecutionLogEntry(taskControl, &eventPackets[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 					
 							// if childTC is in an error state then switch to error state
@@ -2789,7 +2800,7 @@ INIT_ERR
 									// Ask for another iteration and check later if iteration is needed or possible
 									//---------------------------------------------------------------------------------------------------------------- 
 							
-									errChk( TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL, &errorInfo.errMsg) );
+									AddIterationEventWithPriority(eventPackets, &nEventItems, i);
 									
 									// stay in TC_State_Running
 									break;
@@ -2801,11 +2812,11 @@ INIT_ERR
 									//---------------------------------------------------------------------------------------------------------------
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
-										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
+										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
 									else 
-										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
+										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, PlaceLineTag, NULL, &errorInfo.errMsg) );
 										
-									ChangeState(taskControl, &eventpacket[i], TC_State_IterationFunctionActive); 	
+									ChangeState(taskControl, &eventPackets[i], TC_State_IterationFunctionActive); 	
 									break;
 							
 							}
@@ -2815,13 +2826,13 @@ INIT_ERR
 						case TC_Event_DataReceived:
 					
 							// call data received event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_DataReceived, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_DataReceived, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Custom:
 					
 							// call custom module event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_CustomEvent, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_CustomEvent, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						default:
@@ -2834,7 +2845,7 @@ INIT_ERR
 			
 				case TC_State_IterationFunctionActive:
 			
-					switch (eventpacket[i].event) {
+					switch (eventPackets[i].event) {
 				
 						case TC_Event_IterationDone:
 					
@@ -2850,8 +2861,8 @@ INIT_ERR
 							// Check if error occured during iteration 
 							// (which may be also because it was aborted and this caused an error for the TC)
 							//---------------------------------------------------------------------------------------------------------------   
-							if (eventpacket[i].eventData) {
-								FCallReturn_type* fCallReturn = eventpacket[i].eventData;
+							if (eventPackets[i].eventData) {
+								FCallReturn_type* fCallReturn = eventPackets[i].eventData;
 						
 								if (fCallReturn->retVal < 0)
 									SET_ERR(TaskEventHandler_Error_IterateExternThread, fCallReturn->errorMsg); 
@@ -2862,42 +2873,42 @@ INIT_ERR
 							// otherwise switch to STOPPING state and wait for ChildTCs to complete their iterations
 							//---------------------------------------------------------------------------------------------------------------
 					
-							if (taskControl->abortFlag) {
+							if (taskControl->abortFlag || taskControl->stopIterationsFlag) {  // added || taskControl->stopIterationsFlag
 						
 								if (!ListNumItems(taskControl->childTCs)) {
 							
 									// if there are no ChildTC Controllers
 									if (taskControl->mode == TASK_CONTINUOUS) {
 										// switch to DONE state if continuous task controller
-										errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Done, NULL, &errorInfo.errMsg) );
+										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Done, NULL, &errorInfo.errMsg) );
 										
-										ChangeState(taskControl, &eventpacket[i], TC_State_Done);
+										ChangeState(taskControl, &eventPackets[i], TC_State_Done);
 								
 									} else 
 										// switch to IDLE or DONE state if finite task controller
 							
 										if ( GetCurrentIterIndex(taskControl->currentIter) < taskControl->repeat) {
-											errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Stopped, NULL, &errorInfo.errMsg) );
+											errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Stopped, NULL, &errorInfo.errMsg) );
 											
-											ChangeState(taskControl, &eventpacket[i], TC_State_Idle);
+											ChangeState(taskControl, &eventPackets[i], TC_State_Idle);
 									
 										} else { 
 									
-											errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Done, NULL, &errorInfo.errMsg) )
+											errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Done, NULL, &errorInfo.errMsg) )
 											
-											ChangeState(taskControl, &eventpacket[i], TC_State_Done);
+											ChangeState(taskControl, &eventPackets[i], TC_State_Done);
 										}
 							
 									// change Task Tree status
 									if(!taskControl->parentTC)
-										errChk( TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Finished, &errorInfo.errMsg) );
+										errChk( TaskTreeStateChange(taskControl, &eventPackets[i], TaskTree_Finished, &errorInfo.errMsg) );
 										
 								} else {
 							
 									// send TC_Event_Stop event to all childTCs
-									errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Stop, NULL, NULL, &errorInfo.errMsg) );
+									errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Stop, PlaceLineTag, NULL, &errorInfo.errMsg) );
 									
-									ChangeState(taskControl, &eventpacket[i], TC_State_Stopping);
+									ChangeState(taskControl, &eventPackets[i], TC_State_Stopping);
 								}
 						
 								break; // stop here
@@ -2917,10 +2928,10 @@ INIT_ERR
 							
 									if (ListNumItems(taskControl->childTCs)) {
 										// send START event to all childTCs
-										errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, NULL, NULL, &errorInfo.errMsg) );
+										errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, PlaceLineTag, NULL, &errorInfo.errMsg) );
 										
 										// switch to RUNNING state and wait for ChildTCs to complete
-										ChangeState(taskControl, &eventpacket[i], TC_State_Running);
+										ChangeState(taskControl, &eventPackets[i], TC_State_Running);
 										break; // stop here
 									} 
 							
@@ -2939,13 +2950,9 @@ INIT_ERR
 									// If not stopped, ask for another iteration and check later if iteration is needed or possible
 									//---------------------------------------------------------------------------------------------------------------- 
 							
-									if (!taskControl->stopIterationsFlag)
-								
-										errChk( TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL, &errorInfo.errMsg) );
-									else
-										errChk( TaskControlEvent(taskControl, TC_Event_Stop, NULL, NULL, &errorInfo.errMsg) );
-										
-									ChangeState(taskControl, &eventpacket[i], TC_State_Running); 
+									// ask for another iteration
+									AddIterationEventWithPriority(eventPackets, &nEventItems, i);
+									ChangeState(taskControl, &eventPackets[i], TC_State_Running); 
 									break;
 									
 								case TC_Execute_InParallelWithChildTCs:
@@ -2955,7 +2962,7 @@ INIT_ERR
 									//---------------------------------------------------------------------------------------------------------------- 
 							
 									if (!AllChildTCsInState(taskControl, TC_State_Done)) {
-										ChangeState(taskControl, &eventpacket[i], TC_State_Running);
+										ChangeState(taskControl, &eventPackets[i], TC_State_Running);
 										break;  // stop here
 									}
 							
@@ -2971,12 +2978,9 @@ INIT_ERR
 									// Ask for another iteration and check later if iteration is needed or possible
 									//---------------------------------------------------------------------------------------------------------------- 
 							
-									if (!taskControl->stopIterationsFlag)
-										errChk( TaskControlEvent(taskControl, TC_Event_Iterate, NULL, NULL, &errorInfo.errMsg) );
-									else
-										errChk( TaskControlEvent(taskControl, TC_Event_Stop, NULL, NULL, &errorInfo.errMsg) );
-										
-									ChangeState(taskControl, &eventpacket[i], TC_State_Running);
+									// ask for another iteration
+									AddIterationEventWithPriority(eventPackets, &nEventItems, i);
+									ChangeState(taskControl, &eventPackets[i], TC_State_Running); 
 									break;
 							}
 							break;
@@ -2990,17 +2994,17 @@ INIT_ERR
 				
 							taskControl->stopIterationsFlag = TRUE; // interation function in progress completes normally and no further iterations are requested.
 					
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_IterationStop, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_IterationStop, NULL, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_UpdateChildTCState:
 					
 							// update childTC state
-							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventpacket[i].eventData)->childTCIdx);
+							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventPackets[i].eventData)->childTCIdx);
 							childTCPtr->previousChildTCState 	= childTCPtr->childTCState; // save old state for debuging purposes 
-							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState;
+							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventPackets[i].eventData)->newChildTCState;
 							childTCPtr->isOutOfDate 			= FALSE;  
-							ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
+							ExecutionLogEntry(taskControl, &eventPackets[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 							// if childTC is in an error state then switch to error state
 							if (childTCPtr->childTCState == TC_State_Error)
@@ -3011,13 +3015,13 @@ INIT_ERR
 						case TC_Event_DataReceived:
 							
 							// call data received event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_DataReceived, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_DataReceived, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Custom:
 					
 							// call custom module event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_CustomEvent, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_CustomEvent, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						default:
@@ -3028,7 +3032,7 @@ INIT_ERR
 			
 				case TC_State_Stopping:
 			
-					switch (eventpacket[i].event) {
+					switch (eventPackets[i].event) {
 				
 						case TC_Event_Stop:
 				
@@ -3039,11 +3043,11 @@ INIT_ERR
 						case TC_Event_UpdateChildTCState:
 					
 							// update childTC state
-							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventpacket[i].eventData)->childTCIdx);
+							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventPackets[i].eventData)->childTCIdx);
 							childTCPtr->previousChildTCState 	= childTCPtr->childTCState; // save old state for debuging purposes 
-							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState;
+							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventPackets[i].eventData)->newChildTCState;
 							childTCPtr->isOutOfDate 			= FALSE;  
-							ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
+							ExecutionLogEntry(taskControl, &eventPackets[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 							// if childTC is in an error state, then switch to error state
 							if (childTCPtr->childTCState == TC_State_Error)
@@ -3063,27 +3067,39 @@ INIT_ERR
 							// if all ChildTCs are IDLE or DONE, switch to IDLE state
 							if (IdleOrDoneFlag) {
 						
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Stopped, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Stopped, NULL, &errorInfo.errMsg) );
 								
-								ChangeState(taskControl, &eventpacket[i], TC_State_Idle);
-						
 								// change Task Tree status
 								if(!taskControl->parentTC)
-									errChk( TaskTreeStateChange(taskControl, &eventpacket[i], TaskTree_Finished, &errorInfo.errMsg) );
-									
+									errChk( TaskTreeStateChange(taskControl, &eventPackets[i], TaskTree_Finished, &errorInfo.errMsg) );
+								
+								ChangeState(taskControl, &eventPackets[i], TC_State_Idle);
+								break;
+							}
+							
+							// reset task controller and set it to initial state if all child TCs are in their initial state
+							if (AllChildTCsInState(taskControl, TC_State_Initial)) {
+								// reset device/module
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
+								
+								// reset iterations
+								SetCurrentIterIndex(taskControl->currentIter,0);
+						
+								ChangeState(taskControl, &eventPackets[i], TC_State_Initial); 
+								break;
 							}
 							break;
 					
 						case TC_Event_DataReceived:
 					
 							// call data received event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_DataReceived, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_DataReceived, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Custom:
 					
 							// call custom module event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_CustomEvent, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_CustomEvent, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						default:
@@ -3096,52 +3112,52 @@ INIT_ERR
 				case TC_State_Done:
 				// This state can be reached only if all ChildTC Controllers are in a DONE state
 			
-					switch (eventpacket[i].event) {
+					switch (eventPackets[i].event) {
 				
 						case TC_Event_Configure:
 					
 							// configure again this TC
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Unconfigure:
 					
 							// call unconfigure function and switch to unconfigured state
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Unconfigure, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Unconfigure, NULL, &errorInfo.errMsg) );
 							
-							ChangeState(taskControl, &eventpacket[i], TC_State_Unconfigured);
+							ChangeState(taskControl, &eventPackets[i], TC_State_Unconfigured);
 							break;
 					
 						case TC_Event_Start:
 					
 							// reset device/module
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
 							
 						    // reset iterations
 							SetCurrentIterIndex(taskControl->currentIter, 0);
 					
 							// switch to INITIAL state
-							ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
+							ChangeState(taskControl, &eventPackets[i], TC_State_Initial);
 					
 							// send START event to self
-							errChk( TaskControlEvent(taskControl, TC_Event_Start, NULL, NULL, &errorInfo.errMsg) );
+							errChk( TaskControlEvent(taskControl, TC_Event_Start, PlaceLineTag, NULL, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Reset:
 					
 							// send RESET event to all childTCs
-							errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Reset, NULL, NULL, &errorInfo.errMsg) );
+							errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Reset, PlaceLineTag, NULL, &errorInfo.errMsg) );
 							
 							// change state to INITIAL if there are no childTCs and call reset function
 							if (!ListNumItems(taskControl->childTCs)) {
 						
 								// reset device/module
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
 								
 								// reset iterations
 								SetCurrentIterIndex(taskControl->currentIter,0);
 						
-								ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Initial);
 						
 							}
 					
@@ -3156,11 +3172,11 @@ INIT_ERR
 						case TC_Event_UpdateChildTCState:
 					
 							// update childTC state
-							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventpacket[i].eventData)->childTCIdx);
+							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventPackets[i].eventData)->childTCIdx);
 							childTCPtr->previousChildTCState 	= childTCPtr->childTCState; // save old state for debuging purposes 
-							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState; 
+							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventPackets[i].eventData)->newChildTCState; 
 							childTCPtr->isOutOfDate 			= FALSE;  
-							ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
+							ExecutionLogEntry(taskControl, &eventPackets[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 							// if childTC is in an error state, then switch to error state
 							if (childTCPtr->childTCState == TC_State_Error)
@@ -3168,7 +3184,7 @@ INIT_ERR
 								
 							// if childTC is unconfigured then switch to configured state
 							if (childTCPtr->childTCState == TC_State_Unconfigured) {
-								ChangeState(taskControl, &eventpacket[i], TC_State_Configured);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Configured);
 								break;
 							}
 					
@@ -3180,12 +3196,12 @@ INIT_ERR
 							// check states of all childTCs and transition to INITIAL state if all childTCs are in INITIAL state
 							if (AllChildTCsInState(taskControl, TC_State_Initial)) {
 								// reset device/module
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
 								
 								// reset iterations
 								SetCurrentIterIndex(taskControl->currentIter,0);
 						
-								ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Initial);
 							}
 					
 							break;
@@ -3193,13 +3209,13 @@ INIT_ERR
 						case TC_Event_DataReceived:
 					
 							// call data received event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_DataReceived, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_DataReceived, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Custom:
 					
 							// call custom module event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_CustomEvent, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_CustomEvent, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						default:
@@ -3209,14 +3225,14 @@ INIT_ERR
 					break;
 			
 				case TC_State_Error:
-					switch (eventpacket[i].event) {
+					switch (eventPackets[i].event) {
 				
 						case TC_Event_Configure:
 							// Reconfigures Task Controller
 					
-							ChangeState(taskControl, &eventpacket[i], TC_State_Unconfigured);
+							ChangeState(taskControl, &eventPackets[i], TC_State_Unconfigured);
 					
-							errChk( TaskControlEvent(taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
+							errChk( TaskControlEvent(taskControl, TC_Event_Configure, PlaceLineTag, NULL, &errorInfo.errMsg) );
 							
 							// clear error
 							OKfree(taskControl->errorMsg);
@@ -3226,18 +3242,21 @@ INIT_ERR
 						case TC_Event_Reset:
 					
 							// send RESET event to all childTCs
-							errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Reset, NULL, NULL, &errorInfo.errMsg) );
+							errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Reset, PlaceLineTag, NULL, &errorInfo.errMsg) );
 							
 							// reset and change state to Initial if there are no childTCs
 							if (!ListNumItems(taskControl->childTCs)) {
 						
+								// configure this task controller again
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
+								
 								// reset device/module
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
 								
 								// reset iterations
 								SetCurrentIterIndex(taskControl->currentIter,0);
 						
-								ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Initial);
 						
 							}
 					
@@ -3249,29 +3268,33 @@ INIT_ERR
 						case TC_Event_Unconfigure:
 					
 							// unconfigure
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Unconfigure, NULL, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Unconfigure, NULL, &errorInfo.errMsg) );
 							
-							ChangeState(taskControl, &eventpacket[i], TC_State_Unconfigured);
+							ChangeState(taskControl, &eventPackets[i], TC_State_Unconfigured);
 							break;
 					
 						case TC_Event_UpdateChildTCState: 
 					
 							// update childTC state
-							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventpacket[i].eventData)->childTCIdx);
+							childTCPtr 							= ListGetPtrToItem(taskControl->childTCs, ((ChildTCEventInfo_type*)eventPackets[i].eventData)->childTCIdx);
 							childTCPtr->previousChildTCState 	= childTCPtr->childTCState; // save old state for debuging purposes 
-							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventpacket[i].eventData)->newChildTCState;
+							childTCPtr->childTCState 			= ((ChildTCEventInfo_type*)eventPackets[i].eventData)->newChildTCState;
 							childTCPtr->isOutOfDate 			= FALSE;  
-							ExecutionLogEntry(taskControl, &eventpacket[i], CHILD_TASK_STATE_UPDATE, NULL);
+							ExecutionLogEntry(taskControl, &eventPackets[i], CHILD_TASK_STATE_UPDATE, NULL);
 					
 							// if the error has been cleared and all child TCs are in an initial state, then switch to initial state as well
 							if (!taskControl->errorID && AllChildTCsInState(taskControl, TC_State_Initial)) {
+								
+								// configure this task controller again
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Configure, NULL, &errorInfo.errMsg) );
+								
 								// reset device/module
-								errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
+								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Reset, NULL, &errorInfo.errMsg) );
 								
 								// reset iterations
 								SetCurrentIterIndex(taskControl->currentIter,0);
 						
-								ChangeState(taskControl, &eventpacket[i], TC_State_Initial);
+								ChangeState(taskControl, &eventPackets[i], TC_State_Initial);
 							}
 					
 							break;
@@ -3280,13 +3303,13 @@ INIT_ERR
 						case TC_Event_DataReceived:
 					
 							// call data received event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_DataReceived, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_DataReceived, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Custom:
 					
 							// call custom module event function
-							errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_CustomEvent, eventpacket[i].eventData, &errorInfo.errMsg) );
+							errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_CustomEvent, eventPackets[i].eventData, &errorInfo.errMsg) );
 							break;
 					
 						default:
@@ -3310,8 +3333,8 @@ INIT_ERR
 			stateLockObtained = FALSE;
 			
 			// free memory for extra eventData if any
-			if (eventpacket[i].eventData && eventpacket[i].discardEventDataFptr)
-				(*eventpacket[i].discardEventDataFptr)(&eventpacket[i].eventData);
+			if (eventPackets[i].eventData && eventPackets[i].discardEventDataFptr)
+				(*eventPackets[i].discardEventDataFptr)(&eventPackets[i].eventData);
 			
 			// process another event if there is any
 			continue;
@@ -3332,7 +3355,7 @@ INIT_ERR
 			}
 		
 			// change state
-			ChangeState(taskControl, &eventpacket[i], TC_State_Error);
+			ChangeState(taskControl, &eventPackets[i], TC_State_Error);
 			
 			// assign new state and try to release lock if obtained
 			if (stateLockObtained) {
@@ -3359,15 +3382,15 @@ INIT_ERR
 				AbortTaskControlExecution(taskControl);
 			
 			// call error function to handle error
-			errChk( FunctionCall(taskControl, &eventpacket[i], TC_Callback_Error, NULL, &errorInfo.errMsg) );
+			errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Error, NULL, &errorInfo.errMsg) );
 		
 			// if there is a parent task controller, update it on the state of this child task controller
 			if (taskControl->parentTC)
 				errChk( TaskControlEvent(taskControl->parentTC, TC_Event_UpdateChildTCState, init_ChildTCEventInfo_type(taskControl->childTCIdx, taskControl->currentState), (DiscardFptr_type)discard_ChildTCEventInfo_type, &errorInfo.errMsg) );
 
 			// free memory for extra eventData if any
-			if (eventpacket[i].eventData && eventpacket[i].discardEventDataFptr)
-				(*eventpacket[i].discardEventDataFptr)(&eventpacket[i].eventData);
+			if (eventPackets[i].eventData && eventPackets[i].discardEventDataFptr)
+				(*eventPackets[i].discardEventDataFptr)(&eventPackets[i].eventData);
 		
 		} 
 		

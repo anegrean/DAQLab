@@ -20,7 +20,7 @@
 #endif
 		
 #ifndef	_DEBUG_LEVEL_
-#define	_DEBUG_LEVEL_ 	-1
+#define	_DEBUG_LEVEL_ -1
 #endif
 		
 //==============================================================================
@@ -30,16 +30,10 @@
 
 //==============================================================================
 // Constants
-
-//=====================================================		
-// USAGE
-//=====================================================
-		
 		
 //-------------------------------------------------------------------------------
 // Error checking macros
 //-------------------------------------------------------------------------------
-
 typedef struct {
 	int			result;
 	int			error;
@@ -92,7 +86,6 @@ typedef struct {
 	errorInfo.errMsg = FormatMsg(errorID, __FILE__, __func__, __LINE__, errorMsg); \
 	goto Error; \
 }
-	
 					
 /* Log Messages that is only printed when _CVI_DEBUG_ is set and it is within 
  * _DEBUG_LEVEL_
@@ -125,7 +118,7 @@ typedef struct {
 // Used to return meaningful error information
 typedef struct FCallReturn {
 	int						retVal;			// Value returned by function call.
-	char*					errorMsg;		// In case of error, additional info.
+	char*					errorInfo;		// In case of error, additional info.
 } FCallReturn_type;
 
 //==============================================================================
@@ -140,7 +133,7 @@ FCallReturn_type*	init_FCallReturn_type			(int valFCall, const char errorOrigin[
 void				discard_FCallReturn_type		(FCallReturn_type** fCallReturnPtr);
 
 // Formats error and warning messages ( errors: msgID < 0, message: msgID = 0, warning: msgID > 0 )
-char* 				FormatMsg 						(int messageID, char fileName[], char functionName[], int lineNumber, char message[]);
+char* 				FormatMsg 						(int messageID, char messageOrigin[], char message[]);
 
 #ifdef __cplusplus
     }

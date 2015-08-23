@@ -83,15 +83,22 @@
 	#define	initalloc_LaserScanning NULL
 #endif
 
+#ifdef DAQLabModule_Whisker
+#include "Whisker.h"
+#else		/* Whisker not defined */
+#define	MOD_Whisker_Name NULL
+#define initalloc_WhiskerModule NULL
+#endif		/* Whisker */
+
 //------------------------------------------------------
 // Data storage (will be part of framework)
 //------------------------------------------------------
 #ifdef DAQLabModule_DataStorage
-	#include "DataStorage.h"
-#else		// not defined
-	#define	MOD_DataStorage_NAME NULL
-	#define	initalloc_DataStorage NULL
-#endif
+#include "DataStorage.h"
+#else		/* DataStorage not defined */ 
+#define	MOD_DataStorage_NAME NULL
+#define	initalloc_DataStorage NULL
+#endif		/* DataStorage */
 
 //------------------------------------------------------
 // Coherent Chameleon Laser

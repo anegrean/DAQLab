@@ -37,7 +37,7 @@
 #define REF_POS_LABEL_FORMAT		"%s @ x = %f[p*], y = %f[p*]"
 
 	// Predefined step sizes in [um] displayed in the StagePan_XStepSize and StagePan_YStepSize controls
-const double 	XYStepSizes[] 		= { 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000 };
+const double 	XYStepSizes[] 		= { 0.1, 0.2, 0.5, 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000 };
 
 	// Controls from UI_XYstage.uir that will be dimmed or undimmed when the stage is stepping (RUNNING state)
 const int 		UIXYStageCtrls[] = {StagePan_MoveXForward, StagePan_MoveXBackward, StagePan_MoveYLeft, StagePan_MoveYRight, StagePan_XAbsPos, StagePan_XRelPos,

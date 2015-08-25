@@ -544,7 +544,10 @@ typedef enum {
 															
 	PointJump_PointGroup,									// The beam jumps between the selected point ROIs starting from parked position, then to the first point, next point, until last point and finally returns 
 															// to parked position. If Repeat > 1 then the point group is visited several times, and if "start delay increment" is != 0 then with each repetition, 
-															// the start delay is incremented. Note that in this case the number of task controller iterations is the same as the number of repetitions.
+															// the start delay is increased. Note that in this case the number of task controller iterations is the same as the number of repetitions.
+															
+	PointJump_IncrementalPointGroup							// The beam jumps between an increasing number of selected point ROIs starting from the parked position. The total number of iterations is equal to the number
+															// of selected point ROIs times the number of repetitions. If "startdelay increment" is !=0 then with each repetition the start delay is increased.
 } PointJumpMethods;
 
 typedef struct {
@@ -566,6 +569,7 @@ typedef struct {
 	uInt32						nIntegration;				// Number of samples to use for integration.
 	ListType					pointJumps;					// List of points to jump to of PointJump_type*. The order of point jumps is determined by the order of the elements in the list.
 	size_t						currentActivePoint;			// 1-based index of current active point to visit when using the PointJump_SinglePoints mode.
+	size_t						nPointsInGroup;				// Number of points in a group when using PointJump_IncrementalPointGroup mode.
 	PointScan_type				globalPointScanSettings;	// Global settings for stimulation and recording from point ROIs.
 	double*						jumpTimes;					// Array of galvo jump times between ROIs in [ms]. The first entry is the galvo jump time from the parked position to the first point ROI which does not include any additional start delay.
 															// Note: a jump time is the sum of a galvo response delay and a switching time between two ROIs.
@@ -1237,6 +1241,7 @@ static void SetRectRasterScanEnginePointScanJumpModeUI (int panel, PointJumpMeth
 			break;
 			
 		case PointJump_PointGroup:
+		case PointJump_IncrementalPointGroup:
 			
 			SetCtrlAttribute(panel, PointTab_Record, ATTR_DIMMED, TRUE);
 			
@@ -1313,6 +1318,7 @@ INIT_ERR
 	// populate point jump modes
 	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_SinglePoints, "Single points", PointJump_SinglePoints);
 	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_PointGroup, "Point group", PointJump_PointGroup);
+	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_IncrementalPointGroup, "Incremental point group", PointJump_IncrementalPointGroup);
 	SetCtrlIndex(pointScanPanHndl, PointTab_Mode, (int) rectRaster->pointJumpSettings->jumpMethod);
 	SetRectRasterScanEnginePointScanJumpModeUI(pointScanPanHndl, rectRaster->pointJumpSettings->jumpMethod);
 				
@@ -5379,6 +5385,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 							break;
 							
 						case PointJump_PointGroup:
+						case PointJump_IncrementalPointGroup:
+							
 							scanEngine->pointJumpSettings->record = FALSE;
 							SetCtrlVal(panel, PointTab_Record, FALSE);
 							SetRectRasterScanEnginePointScanRecordUI(panel, scanEngine->pointJumpSettings->record);
@@ -6312,6 +6320,7 @@ INIT_ERR
 			for (size_t i = 1; i <= nTotalPoints; i++) {
 				pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
 				if (!pointJump->baseClass.active) continue; // select only active point jumps
+				
 				nPointJumps++;
 				if (nPointJumps < pointJumpSet->currentActivePoint) continue; // select point to visit
 				
@@ -6332,6 +6341,24 @@ INIT_ERR
 				if (!pointJump->baseClass.active) continue; // select only active point jumps
 				
 				nPointJumps++;
+				nullChk(fastAxisVoltages = realloc(fastAxisVoltages, (nPointJumps+2) * sizeof(double)) );
+				nullChk(slowAxisVoltages = realloc(slowAxisVoltages, (nPointJumps+2) * sizeof(double)) ); 
+				NonResRectRasterScan_PointROIVoltage(scanEngine, pointJump, &fastAxisVoltages[nPointJumps], &slowAxisVoltages[nPointJumps]);
+			}
+			nVoltages = nPointJumps + 2;
+			
+			break;
+			
+		case PointJump_IncrementalPointGroup:
+			
+			// set ROI jumping voltages
+			for (size_t i = 1; i <= nTotalPoints; i++) {
+				pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
+				if (!pointJump->baseClass.active) continue; // select only active point jumps
+				
+				if (nPointJumps >= pointJumpSet->nPointsInGroup) break; // add only up to nPointsinGroup per group.
+				nPointJumps++;
+					
 				nullChk(fastAxisVoltages = realloc(fastAxisVoltages, (nPointJumps+2) * sizeof(double)) );
 				nullChk(slowAxisVoltages = realloc(slowAxisVoltages, (nPointJumps+2) * sizeof(double)) ); 
 				NonResRectRasterScan_PointROIVoltage(scanEngine, pointJump, &fastAxisVoltages[nPointJumps], &slowAxisVoltages[nPointJumps]);
@@ -7357,6 +7384,7 @@ INIT_ERR
 			break;
 			
 		case PointJump_PointGroup:
+		case PointJump_IncrementalPointGroup:
 			
 			if (nPointJumps) {
 				NonResRectRasterScan_PointROIVoltage(rectRaster, pointJumps[0], &fastAxisCommandV, &slowAxisCommandV);
@@ -7497,6 +7525,7 @@ INIT_ERR
 	pointJumpSet->nIntegration							= 1;
 	pointJumpSet->pointJumps							= 0;
 	pointJumpSet->currentActivePoint					= 0;
+	pointJumpSet->nPointsInGroup						= 0;
 	pointJumpSet->jumpTimes								= NULL;
 	pointJumpSet->responseDelays						= NULL;
 	
@@ -9133,6 +9162,15 @@ INIT_ERR
 					currentSequenceRepeat = GetCurrentIterIndex(iterator);
 					
 					break;
+				
+				case PointJump_IncrementalPointGroup:
+					
+					// update number of points in group
+					engine->pointJumpSettings->nPointsInGroup = GetCurrentIterIndex(iterator)/engine->pointJumpSettings->nSequenceRepeat + 1;
+					
+					currentSequenceRepeat = GetCurrentIterIndex(iterator)%engine->pointJumpSettings->nSequenceRepeat; 
+					
+					break;
 			}
 			
 			// display current repeat
@@ -9207,8 +9245,7 @@ INIT_ERR
 			
 			// reset current active point in case single point jump mode is used
 			engine->pointJumpSettings->currentActivePoint = 0;
-			// initialize start delay
-			
+		
 			// reset current repeat display
 			SetCtrlVal(engine->baseClass.pointScanPanHndl, PointTab_NRepeat, 0);
 			break;
@@ -9488,6 +9525,11 @@ static void SetRectRasterTaskControllerSettings (RectRaster_type* scanEngine)
 				case PointJump_PointGroup:
 							
 					SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointJumpSettings->nSequenceRepeat);
+					break;
+					
+				case PointJump_IncrementalPointGroup:
+					
+					SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointJumpSettings->nSequenceRepeat * NonResRectRasterScan_GetNumActivePoints(scanEngine));
 					break;
 			}
 			break;

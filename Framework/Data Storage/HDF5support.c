@@ -578,7 +578,7 @@ INIT_ERR
 	DataPtr = GetImagePixelArray(image);
    
 	// open the dataset if it exists
-	hdf5ErrChk( datasetID = H5Dopen2(groupID, datasetName, H5P_DEFAULT ) );
+ 	datasetID = H5Dopen2(groupID, datasetName, H5P_DEFAULT );
 	if (datasetID < 0) {
 		hdf5ErrChk( datasetID = H5Dcreate2(groupID, datasetName,typeID, dataSpaceID,H5P_DEFAULT, propertyListID,H5P_DEFAULT) );
 		

@@ -1417,11 +1417,16 @@ INIT_ERR
 					
 					GetCtrlVal(panel, control, &eom->isPulsed);
 					if (eom->isPulsed) {
+						// enable task controller to iterate once
+						SetTaskControlIterations(eom->taskControl, 1);
 						// apply pockels voltage for min transmission
 						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errorInfo.errMsg) );
 						// update UI with current pulsed power settings
 						SetCtrlVal(panel, Pockells_Output, eom->pulsedOutputPower * eomCal->maxPower);
 					} else {
+						// disable task controller iterations
+						// enable task controller to iterate once
+						SetTaskControlIterations(eom->taskControl, 0);
 						// apply voltage to get desired beam intensity
 						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
 						// update UI
@@ -1765,7 +1770,26 @@ static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BO
 
 static int TaskTreeStateChange (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
 {
-	//PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	PockellsEOM_type* eom = GetTaskControlModuleData(taskControl);
+	
+	
+	switch (state) {
+			
+		case TaskTree_Finished:
+			
+			// undim pulsed mode control
+			SetCtrlAttribute(eom->eomPanHndl, Pockells_Pulsed, ATTR_DIMMED, FALSE);
+			
+			break;
+			
+		case TaskTree_Started:
+			
+			// dim pulsed mode control
+			SetCtrlAttribute(eom->eomPanHndl, Pockells_Pulsed, ATTR_DIMMED, TRUE);
+			
+			break;
+	}
+	
 	
 	return 0;
 }

@@ -8806,7 +8806,10 @@ static void	discard_WriteAOData_type (WriteAOData_type** writeDataPtr)
 	if (!writeData) return;
 	
 	for (size_t i = 0; i < writeData->numchan; i++) {
-		OKfree(writeData->datain[i]);	    
+		if (writeData->datain)
+			OKfree(writeData->datain[i]);
+		
+		if (writeData->databuff)
 		OKfree(writeData->databuff[i]);   
 	}
 	OKfree(writeData->databuff);
@@ -12103,44 +12106,44 @@ INIT_ERR
 						SET_ERR(WriteAODAQmx_Err_WaitingForDataTimeout, "Waiting for AO data timed out.");
 				}
 				
-				// process NULL packet
-				if (!dataPacket) {
-					data->nullPacketReceived[i] = TRUE;
+					// process NULL packet
+					if (!dataPacket) {
+						data->nullPacketReceived[i] = TRUE;
 																			
-					if (!data->databuff_size[i]) {
-						// if NULL received and there is no data in the AO buffer, stop AO task if running
+						if (!data->databuff_size[i]) {
+							// if NULL received and there is no data in the AO buffer, stop AO task if running
 						
-						DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
-						// Task Controller iteration is complete if all DAQmx Tasks are complete
-						nActiveTasksTSVLockObtained = FALSE;
-						CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
-						nActiveTasksTSVLockObtained = TRUE;
+							DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
+							// Task Controller iteration is complete if all DAQmx Tasks are complete
+							nActiveTasksTSVLockObtained = FALSE;
+							CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+							nActiveTasksTSVLockObtained = TRUE;
 						
-						(*nActiveTasksPtr)--;
+							(*nActiveTasksPtr)--;
 		
-						if (!*nActiveTasksPtr)
-							errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+							if (!*nActiveTasksPtr)
+								errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
 		
-						CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
-						nActiveTasksTSVLockObtained = FALSE;
+							CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+							nActiveTasksTSVLockObtained = FALSE;
 						
-						return 0;
+							return 0;
 						
-					} else {
+						} else {
 						
-						// repeat last value from the buffer until all AO channels have received a NULL packet
-						data->datain[i] = malloc (data->writeblock * sizeof(float64));
-						for (int j = 0; j < data->writeblock ; j++)
-							data->datain[i][j] = data->databuff[i][data->databuff_size[i] - 1];
+							// repeat last value from the buffer until all AO channels have received a NULL packet
+							data->datain[i] = malloc (data->writeblock * sizeof(float64));
+							for (int j = 0; j < data->writeblock ; j++)
+								data->datain[i][j] = data->databuff[i][data->databuff_size[i] - 1];
 						
-						data->datain_size[i]		= data->writeblock;
-						data->datain_repeat[i] 		= 0;
-						data->datain_remainder[i] 	= 0;
-						data->datain_loop[i] 		= TRUE;
+							data->datain_size[i]		= data->writeblock;
+							data->datain_repeat[i] 		= 0;
+							data->datain_remainder[i] 	= 0;
+							data->datain_loop[i] 		= TRUE;
 						
-						goto SkipPacket;
+							goto SkipPacket;
+						}
 					}
-				}
 					
 				// copy data packet to datain
 				dataPacketData = GetDataPacketPtrToData (dataPacket, &dataPacketType);

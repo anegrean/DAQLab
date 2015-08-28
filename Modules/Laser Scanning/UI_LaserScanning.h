@@ -89,24 +89,29 @@
      /* tab page panel controls */
 #define  PointTab_ROIs                    2       /* control type: listBox, callback function: (none) */
 #define  PointTab_NRepeat                 3       /* control type: numeric, callback function: (none) */
-#define  PointTab_Repeat                  4       /* control type: numeric, callback function: (none) */
-#define  PointTab_Plate                   5       /* control type: deco, callback function: (none) */
-#define  PointTab_Mode                    6       /* control type: ring, callback function: (none) */
-#define  PointTab_NIntegration            7       /* control type: numeric, callback function: (none) */
-#define  PointTab_NPulses                 8       /* control type: numeric, callback function: (none) */
-#define  PointTab_PulseOFF                9       /* control type: numeric, callback function: (none) */
-#define  PointTab_PulseON                 10      /* control type: numeric, callback function: (none) */
-#define  PointTab_RepeatWait              11      /* control type: numeric, callback function: (none) */
-#define  PointTab_StartDelayIncrement     12      /* control type: numeric, callback function: (none) */
-#define  PointTab_StartDelay              13      /* control type: numeric, callback function: (none) */
-#define  PointTab_StimDelay               14      /* control type: numeric, callback function: (none) */
-#define  PointTab_Hold                    15      /* control type: numeric, callback function: (none) */
-#define  PointTab_DECORATION_2            16      /* control type: deco, callback function: (none) */
-#define  PointTab_DECORATION              17      /* control type: deco, callback function: (none) */
-#define  PointTab_TEXTMSG_2               18      /* control type: textMsg, callback function: (none) */
-#define  PointTab_TEXTMSG                 19      /* control type: textMsg, callback function: (none) */
-#define  PointTab_Stimulate               20      /* control type: radioButton, callback function: (none) */
-#define  PointTab_Record                  21      /* control type: radioButton, callback function: (none) */
+#define  PointTab_NHoldBurst              4       /* control type: numeric, callback function: (none) */
+#define  PointTab_Repeat                  5       /* control type: numeric, callback function: (none) */
+#define  PointTab_Plate                   6       /* control type: deco, callback function: (none) */
+#define  PointTab_Mode                    7       /* control type: ring, callback function: (none) */
+#define  PointTab_NIntegration            8       /* control type: numeric, callback function: (none) */
+#define  PointTab_NPulses                 9       /* control type: numeric, callback function: (none) */
+#define  PointTab_PulseOFF                10      /* control type: numeric, callback function: (none) */
+#define  PointTab_PulseON                 11      /* control type: numeric, callback function: (none) */
+#define  PointTab_HoldBurstPeriodIncr     12      /* control type: numeric, callback function: (none) */
+#define  PointTab_HoldBurstPeriod         13      /* control type: numeric, callback function: (none) */
+#define  PointTab_RepeatWait              14      /* control type: numeric, callback function: (none) */
+#define  PointTab_StartDelayIncrement     15      /* control type: numeric, callback function: (none) */
+#define  PointTab_StartDelay              16      /* control type: numeric, callback function: (none) */
+#define  PointTab_StimDelay               17      /* control type: numeric, callback function: (none) */
+#define  PointTab_Hold                    18      /* control type: numeric, callback function: (none) */
+#define  PointTab_DECORATION_2            19      /* control type: deco, callback function: (none) */
+#define  PointTab_DECORATION_3            20      /* control type: deco, callback function: (none) */
+#define  PointTab_DECORATION              21      /* control type: deco, callback function: (none) */
+#define  PointTab_TEXTMSG_2               22      /* control type: textMsg, callback function: (none) */
+#define  PointTab_TEXTMSG_3               23      /* control type: textMsg, callback function: (none) */
+#define  PointTab_TEXTMSG                 24      /* control type: textMsg, callback function: (none) */
+#define  PointTab_Stimulate               25      /* control type: radioButton, callback function: (none) */
+#define  PointTab_Record                  26      /* control type: radioButton, callback function: (none) */
 
      /* tab page panel controls */
 #define  ScanTab_PixelSize                2       /* control type: numeric, callback function: (none) */

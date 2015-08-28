@@ -50,9 +50,9 @@ FCallReturn_type* init_FCallReturn_type (int valFCall, const char errorOrigin[],
 		Msg		= malloc((nchars+1)*sizeof(char));
 		if (!Msg) {free(result); return NULL;}
 		snprintf(Msg, nchars+1, "<%s Error. Reason: %s>", errorOrigin, errorDescription);
-		result -> errorMsg	= Msg;
+		result -> errorInfo	= Msg;
 	} else
-		result -> errorMsg = NULL;
+		result -> errorInfo = NULL;
 	
 	return result;
 }
@@ -62,7 +62,7 @@ void discard_FCallReturn_type (FCallReturn_type** fCallReturnPtr)
 {
 	if (!*fCallReturnPtr) return;
 	
-	OKfree((*fCallReturnPtr)->errorMsg);
+	OKfree((*fCallReturnPtr)->errorInfo);
 	OKfree(*fCallReturnPtr);
 }
 

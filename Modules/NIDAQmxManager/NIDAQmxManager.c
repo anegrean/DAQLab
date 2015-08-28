@@ -12099,6 +12099,8 @@ INIT_ERR
 			// if datain[i] is empty, get data packet from queue if NULL packet was not yet received
 			if (!data->datain_size[i]) {
 				
+				/* Seems to cause troubles when updating on the fly
+				
 				if (!data->nullPacketReceived[i]) {
 					CmtErrChk( itemsRead = CmtReadTSQData(tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
 					// if timeout occured and no data packet was read, generate error
@@ -12144,7 +12146,55 @@ INIT_ERR
 							goto SkipPacket;
 						}
 					}
+				*/
 					
+				if (!data->nullPacketReceived[i]) {
+					CmtErrChk( itemsRead = CmtReadTSQData(tsqID, &dataPacket, 1, GetSinkVChanReadTimeout(data->sinkVChans[i]), 0) );
+					// if timeout occured and no data packet was read, generate error
+					if (!itemsRead)
+						SET_ERR(WriteAODAQmx_Err_WaitingForDataTimeout, "Waiting for AO data timed out.");
+				
+					if (!dataPacket)
+						data->nullPacketReceived[i] = TRUE;
+				}
+				
+				// process received NULL packet
+				if (data->nullPacketReceived[i])	
+					if (!data->databuff_size[i]) {
+						// if NULL received and there is no data in the AO buffer, stop AO task if running
+					
+						DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
+						// Task Controller iteration is complete if all DAQmx Tasks are complete
+						nActiveTasksTSVLockObtained = FALSE;
+						CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
+						nActiveTasksTSVLockObtained = TRUE;
+						
+						(*nActiveTasksPtr)--;
+		
+						if (!*nActiveTasksPtr)
+							errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+		
+						CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+						nActiveTasksTSVLockObtained = FALSE;
+						
+						return 0;
+						
+					} else {
+						
+						// repeat last value from the buffer until all AO channels have received a NULL packet
+						data->datain[i] = malloc (data->writeblock * sizeof(float64));
+						for (int j = 0; j < data->writeblock ; j++)
+							data->datain[i][j] = data->databuff[i][data->databuff_size[i] - 1];
+						
+						data->datain_size[i]		= data->writeblock;
+						data->datain_repeat[i] 		= 0;
+						data->datain_remainder[i] 	= 0;
+						data->datain_loop[i] 		= TRUE;
+						
+						goto SkipPacket;
+					}
+			
+				
 				// copy data packet to datain
 				dataPacketData = GetDataPacketPtrToData (dataPacket, &dataPacketType);
 				switch (dataPacketType) {

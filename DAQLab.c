@@ -3738,14 +3738,15 @@ int CVICALLBACK TaskTree_CB (int panel, int control, int event, void *callbackDa
 {
 INIT_ERR
 	
-	static TaskTreeNode_type*	dragTreeNodePtr			= NULL;
-	static TaskTreeNode_type*   targetTreeNodePtr		= NULL;
-	static int					relation				= 0;
-	int 						nodeListIdx				= 0; 
-	int							selectedNodeIdx			= 0;
-	TaskTreeNode_type*			selectedTreeNodePtr		= NULL; 
-	static BOOL					tcIsInUse				= FALSE;
-	static BOOL					tcIsInUseLockObtained 	= FALSE;
+	static TaskTreeNode_type*	dragTreeNodePtr					= NULL;
+	static TaskTreeNode_type*   targetTreeNodePtr				= NULL;
+	static int					relation						= 0;
+	int 						nodeListIdx						= 0; 
+	int							selectedNodeIdx					= 0;
+	TaskTreeNode_type*			selectedTreeNodePtr				= NULL; 
+	static BOOL					tcIsInUse						= FALSE;
+	static BOOL					childTCIsInUseLockObtained 		= FALSE;
+	static BOOL					parentTCIsInUseLockObtained 	= FALSE;
 	
 	
 	switch (control) {
@@ -3772,11 +3773,11 @@ INIT_ERR
 					if (!dragTreeNodePtr->taskControl) return 1; // swallow drag event
 					
 					// Check if Task Controller is in use
-					errChk( IsTaskControllerInUse_GetLock(dragTreeNodePtr->taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) ); 
+					errChk( IsTaskControllerInUse_GetLock(dragTreeNodePtr->taskControl, &tcIsInUse, NULL, &childTCIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) ); 
 					
 					if (tcIsInUse) {
 						// release lock
-						errChk( IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &tcIsInUseLockObtained, &errorInfo.errMsg) ); 
+						errChk( IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &childTCIsInUseLockObtained, &errorInfo.errMsg) ); 
 						// swallow drag event
 						return 1;
 					}
@@ -3797,11 +3798,23 @@ INIT_ERR
 					
 					if (!((targetTreeNodePtr->acceptsTCChild && !GetTaskControlUITCFlag(dragTreeNodePtr->taskControl)) ||
 						(targetTreeNodePtr->acceptsUITCChild && GetTaskControlUITCFlag(dragTreeNodePtr->taskControl)))) return 1; // swallow drop event
-						
+					
 					// do not allow drop to root element
 					int				treeLevel;
 					GetTreeItemLevel(panel, control, eventData2, &treeLevel);
 					if (!treeLevel && relation == VAL_SIBLING) return 1;  
+					
+					
+					// do not add child if target parent TC is in use
+					if (targetTreeNodePtr->taskControl) {
+						errChk( IsTaskControllerInUse_GetLock(targetTreeNodePtr->taskControl, &tcIsInUse, NULL, &parentTCIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
+						if (tcIsInUse) {
+							// release lock
+							errChk( IsTaskControllerInUse_ReleaseLock(targetTreeNodePtr->taskControl, &parentTCIsInUseLockObtained, &errorInfo.errMsg) ); 
+							// swallow drag event
+							return 1;
+						}
+					}
 					
 					break;
 					
@@ -3831,7 +3844,7 @@ INIT_ERR
 					dragTreeNodePtr->acceptsUITCChild = TRUE;
 					
 					// release lock
-					errChk( IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &tcIsInUseLockObtained, &errorInfo.errMsg) ); 
+					errChk( IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &childTCIsInUseLockObtained, &errorInfo.errMsg) ); 
 					
 					// refresh Task Tree
 					DisplayTaskTreeManager(workspacePanHndl, TasksUI.UItaskCtrls, DAQLabModules);
@@ -3903,9 +3916,14 @@ INIT_ERR
 	
 Error:
 	
-	// release lock
-	if (tcIsInUseLockObtained)
-		IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &tcIsInUseLockObtained, NULL); 
+	// release locks
+	if (childTCIsInUseLockObtained)
+		IsTaskControllerInUse_ReleaseLock(dragTreeNodePtr->taskControl, &childTCIsInUseLockObtained, NULL);
+	
+	if (parentTCIsInUseLockObtained)
+		IsTaskControllerInUse_ReleaseLock(targetTreeNodePtr->taskControl, &parentTCIsInUseLockObtained, NULL); 
+	
+	
 	
 PRINT_ERR
 

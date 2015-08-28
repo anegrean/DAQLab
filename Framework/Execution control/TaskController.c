@@ -2865,7 +2865,7 @@ INIT_ERR
 								FCallReturn_type* fCallReturn = eventPackets[i].eventData;
 						
 								if (fCallReturn->retVal < 0)
-									SET_ERR(TaskEventHandler_Error_IterateExternThread, fCallReturn->errorMsg); 
+									SET_ERR(TaskEventHandler_Error_IterateExternThread, fCallReturn->errorInfo); 
 							}
 					
 							//---------------------------------------------------------------------------------------------------------------

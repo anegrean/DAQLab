@@ -47,6 +47,8 @@
 #define GO_LABEL		"-->"   /* Go button label */
 #define DEL_LABEL		"X"		/* Delete button label */
 
+#define WHISKER_DELAY(x)	Sleep(x)	/* Wait time */
+
 //==============================================================================
 // Types
 
@@ -55,7 +57,11 @@
  */
 typedef struct {
 	char	user_name[NAME_LEN];	/* User Name */
-	char	exp_num[NAME_LEN];				/* Experiment Number */
+	char	exp_num[NAME_LEN];		/* Experiment Number */
+	char	animal_num[NAME_LEN];	/* Animal Number */
+	char	animal_age[NAME_LEN];	/* Animal Age */
+	double	animal_weight;			/* Animal Weight */
+	char	training_num[NAME_LEN];	/* Training Number */
 	char	extra_msg[MSG_LEN];		/* Message to store */
 	int		VALID_INFO;				/* Validity of this informantion */
 } ExperimentInfo_t;

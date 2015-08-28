@@ -34,6 +34,7 @@
 #define RESPONSE_DATA_LEN	128					/* Response data length */
 #define	ASYNC				1					/* Perform movement Asynchronously */
 #define SYNC				0					/* Perform movement Synchronously */
+#define ZABER_DELAY(x)		Sleep(x)			/* Delay time */
 //==============================================================================
 // Types
 

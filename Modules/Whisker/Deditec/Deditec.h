@@ -41,6 +41,7 @@
 		
 #define ON					1
 #define OFF					0
+#define DEDITEC_DELAY(x)	Sleep(x)	/* Delay time */
 //==============================================================================
 // Types
 
@@ -48,9 +49,10 @@
  * Deditec USB-TTL device. 
  */
 typedef struct {
-	int			module_number;				/* Specifies which module to open e.g. USB_TTL_32 */
-	ULONG		handle;						/* Handle to the corresponding module */
-	int			IO_Channel[TOT_VALID_IO_CH];/* Stores I/O channel number required */ 		
+	int					module_number;				/* Specifies which module to open e.g. USB_TTL_32 */
+	ULONG				handle;						/* Handle to the corresponding module */
+	int					IO_Channel[TOT_VALID_IO_CH];/* Stores I/O channel number required */
+	CmtThreadLockHandle	lock;						/* Lock for multi-thread protection */
 } delib_device_t;
 
 //==============================================================================

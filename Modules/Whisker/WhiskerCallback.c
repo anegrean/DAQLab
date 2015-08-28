@@ -41,6 +41,9 @@ QuitButton_CB(int panel, int control, int event, void *callbackData, int eventDa
 	
 	switch (event) {
 		case EVENT_COMMIT:	/* Text Box have commit only when enter key is pressed */
+			/* If script module is running, discard it */
+			discard_script_module();
+			
 			/* Hiding panel seems better way to handle quit panel.
 			 * Module discard function will be called when the entire application is closed.
 		     * When entire application is restarted, whisker module will be restarted if it
@@ -352,6 +355,10 @@ WhiskerButton_CB(int panel, int control, int event, void *callbackData, int even
 						break;
 						
 					case MainPanel_ExperimentInfo:	/* Launch Experiment Info Panel */
+						if (whisker_ui->experiment_panel_handle != 0) {	/* Poor User asking for another panel */
+							LOG_MSG(1, "Experiment info is already running ");
+							return -1;
+						}
 						whisker_ui->experiment_panel_handle =  LoadPanel(panel, MOD_Whisker_UI, 
 															   					ExpPanel);
 						if (whisker_ui->experiment_panel_handle < 0) {
@@ -374,6 +381,14 @@ WhiskerButton_CB(int panel, int control, int event, void *callbackData, int even
 								   								whisker_m->exp_info.exp_num);
 							SetCtrlVal(whisker_ui->experiment_panel_handle, ExpPanel_ExpMsg, 	
 								   								whisker_m->exp_info.extra_msg);
+							SetCtrlVal(whisker_ui->experiment_panel_handle, ExpPanel_ExpAniNum, 	
+								   								whisker_m->exp_info.animal_num);
+							SetCtrlVal(whisker_ui->experiment_panel_handle, ExpPanel_ExpAniAge, 	
+								   								whisker_m->exp_info.animal_age);
+							SetCtrlVal(whisker_ui->experiment_panel_handle, ExpPanel_ExpAniWeight, 	
+								   								whisker_m->exp_info.animal_weight);
+							SetCtrlVal(whisker_ui->experiment_panel_handle, ExpPanel_ExpTrainNum, 	
+								   								whisker_m->exp_info.training_num);
 						}
 						
 						/* Display Panel */
@@ -630,6 +645,8 @@ WhiskerToggle_CB(int panel, int control, int event, void *callbackData, int even
 int  CVICALLBACK
 XYButton_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERR
+
 	Whisker_t		*whisker_m = (Whisker_t *)callbackData;
 	WhiskerUI_t		*whisker_ui = NULL;
 	zaber_device_t	*z_dev = NULL;
@@ -687,7 +704,7 @@ XYButton_CB(int panel, int control, int event, void *callbackData, int eventData
 	
 Error:
 	LOG_MSG(1, "Error Occurred while loading XY setting Panel");
-	return error;
+	return errorInfo.error;
 }
 
 int  CVICALLBACK 
@@ -709,7 +726,7 @@ WhiskerLickToggle_CB(int panel, int control, int event, void *callbackData, int 
 					SetCtrlVal(panel, MainPanel_LickDetection, 1);
 					break;
 	 			}
-	 			Sleep(INPUT_CHECK_DELAY);	/* 1 ms delay */
+	 			WHISKER_DELAY(INPUT_CHECK_DELAY);	/* 1 ms delay */
 	 			interval -= INPUT_CHECK_DELAY;
 			}
 			
@@ -790,6 +807,11 @@ ExperimentInfo_CB(int panel, int control, int event, void *callbackData, int eve
 					GetCtrlVal(panel, ExpPanel_ExpName, whisker_m->exp_info.user_name);
 					GetCtrlVal(panel, ExpPanel_ExpNum, whisker_m->exp_info.exp_num);
 					GetCtrlVal(panel, ExpPanel_ExpMsg, 	whisker_m->exp_info.extra_msg);
+					GetCtrlVal(panel, ExpPanel_ExpTrainNum, whisker_m->exp_info.training_num);
+					GetCtrlVal(panel, ExpPanel_ExpAniNum, whisker_m->exp_info.animal_num);
+					GetCtrlVal(panel, ExpPanel_ExpAniAge, whisker_m->exp_info.animal_age);
+					GetCtrlVal(panel, ExpPanel_ExpAniWeight, &(whisker_m->exp_info.animal_weight));
+					
 					whisker_m->exp_info.VALID_INFO = TRUE;
 					
 				case ExpPanel_ExpCancel:

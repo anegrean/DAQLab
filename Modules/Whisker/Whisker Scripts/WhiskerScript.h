@@ -22,6 +22,7 @@
 // Constants
 #define MOD_WhiskerScript_UI 	"./Modules/Whisker/Whisker Scripts/UI_Scripts.uir"
 #define LOG_TEMP_FILE			"log_temp.txt"
+#define	LICK_DET_TEMP_FILE		"lick_temp.txt"
 		
 #define	XML_ELEMENT_VALUE		128		/* Message text OR 8 Number of digits in the value + '\0'*/
 #define	ELEMENT_NAME_LEN	 	32
@@ -29,6 +30,7 @@
 #define FILE_PATH_LEN			128
 #define FILE_NAME_LEN			64
 #define MSG_LEN					128
+#define LOG_MSG_LEN				256
 #define	NEW_SCRIPT_NAME			"<New Script>"
 #define NO_SCRIPT_NAME			"<No Script>"
 #define NO_LOG_NAME				"<No Log File>"
@@ -46,7 +48,10 @@ typedef enum {
 	XYMOVE,
 	ZMOVE,
 	JUMP,
-	THWAIT
+	THWAIT,
+	PROCEDURE,		/* This is just to view the element to load the sub script into script */
+	XYCONDITION,
+	RESETREPEAT
 } ElementType_t;
 
 /* Type of action to take */
@@ -70,6 +75,11 @@ typedef enum {
 	UP
 } ZDirection_t;
 
+/* XY Position State */
+typedef enum {
+	NO_GO,
+	GO
+} XYPosState_t;
 //==============================================================================
 // Types
 
@@ -157,7 +167,30 @@ typedef struct {
 typedef struct {
 	ScriptElement_t base_class;		/* Base Class */
 } THWaitElement_t;				/* Thread Wait element */
-					
+
+typedef struct {
+	ScriptElement_t base_class;		/* Base Class */
+	size_t	X;						/* Zaber X absolute position */
+	size_t	Y;						/* Zaber Y absolute position */
+	int		value;					/* Go or No-Go position */
+} XYConditionElement_t;				/* XYcondition element */
+
+typedef struct {
+	ScriptElement_t	base_class;		/* Base Class */
+	size_t			step;			/* Repeat step to reset */
+} ResetRepeatElement_t;				/* Reset Repeat Element */
+
+/* Script Run statistics */
+typedef struct {
+	size_t	air_puff;			/* Total number of Air Puff */
+	size_t	drop_in;			/* Total number of drop ins */
+	size_t	drop_out;			/* Total number of drop outs */
+	size_t	correct_lick;		/* GO state and lick */
+	size_t	incorrect_rejection;/* GO State and No lick */
+	size_t	false_alarm;		/* NO_GO state and lick */
+	size_t	correct_rejection;	/* NO_GO state and no lick */
+} WStats_t;
+
 /* Actual script which stores elements list */
 typedef struct {
 	ListType			script_elements;	/* Stores script elements */
@@ -167,6 +200,8 @@ typedef struct {
 	RunStatus_t			run_status;			/* Script run status */
 	CmtThreadLockHandle	lock;				/* Lock to protect status variable */
 	ListType			thread_functionIDs;	/* Stores thread ids of asynchronous element */
+	WStats_t			stats;				/* Stores statistics for each run */
+	XYPosState_t		xy_state;			/* XY Position State */
 } WScript_t;
 
 typedef struct {
@@ -188,24 +223,28 @@ typedef struct {
 	int		xymoveElement_panel_handle;	/* XY Move Panel Handle */
 	int		zmoveElement_panel_handle;	/* Z Move Panel Handle */
 	int		jumpElement_panel_handle;	/* Jump Element Panel Handle */
-	int		thwaitElement_panel_handle;  /* Thread Wait Panel Handle */
+	int		thwaitElement_panel_handle; /* Thread Wait Panel Handle */
+	int		xycondElement_panel_handle;	/* XY Condition Panel Hanlde */
+	int		resrepElement_panel_handle;	/* Reset Repeat Panel Handle */
+	int		dummyElement_panel_handle;	/* XXX: Dummy element panel handle */
 	/* Other Panels */
 	
 	size_t	element_panel_height;		/* Height of script element panel */
 } WhiskerScript_t;
 //==============================================================================
 // External variables
-
+extern const char	*Action_String[];
 //==============================================================================
 // Global functions
 int	init_display_script(void *function_data);
-void discard_script_elements(WScript_t *cur_script);
+void discard_script_elements(ListType script_element);
 int discard_cur_script(WScript_t *cur_script);
-int discard_script_module(WhiskerScript_t *whisker_script);
+int discard_script_module();
 void redraw_script_elements(WScript_t *cur_script);
 void save_script(WhiskerScript_t *whisker_script);
 void load_script(WhiskerScript_t	*whisker_script);
 void import_settings(WhiskerScript_t	*whisker_script);
+ListType convert_xml_to_list(WhiskerScript_t *whisker_script, char file_path[FILE_PATH_LEN]);
 int CVICALLBACK script_runner(void *thread_data);
 
 ScriptElement_t* init_StartElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
@@ -220,6 +259,8 @@ ScriptElement_t* init_XYMoveElement(WhiskerScript_t *whisker_script, char value[
 ScriptElement_t* init_ZMoveElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
 ScriptElement_t* init_JumpElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
 ScriptElement_t* init_THWaitElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_XYConditionElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
+ScriptElement_t* init_ResetRepeatElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE]);
 
 void apply_changes(WScript_t *cur_script);
 extern inline void apply_start_changes(StartElement_t *start_element);
@@ -233,6 +274,8 @@ extern inline void apply_sound_changes(SoundElement_t *sound_element);
 extern inline void apply_xymove_changes(XYMoveElement_t *xymove_element);
 extern inline void apply_zmove_changes(ZMoveElement_t *zmove_element);
 extern inline void apply_jump_changes(JumpElement_t *zmove_element);
+extern inline void apply_xycondition_changes(XYConditionElement_t *xycond_element);
+extern inline void apply_resetrepeat_changes(ResetRepeatElement_t *resrep_element);
 							 
 #ifdef __cplusplus
     }

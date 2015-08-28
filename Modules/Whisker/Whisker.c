@@ -133,6 +133,8 @@ SaveCfg(DAQLabModule_type* mod, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_
 static int 
 Load(DAQLabModule_type* mod, int workspacePanHndl)
 {
+INIT_ERR
+
 	int				error	= 0;
 	Whisker_t		*whisker_m 	= (Whisker_t*)mod;
 	char			IO_channel[7] = { 0 };
@@ -208,12 +210,14 @@ Load(DAQLabModule_type* mod, int workspacePanHndl)
 	
 Error:
 	LOG_MSG(1, "Error occured in the load function");
-	return error;
+	return errorInfo.error;
 }
 
 static int 
 DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 {
+INIT_ERR
+
 	Whisker_t	*whisker_t 	= (Whisker_t*) mod;
 	int 		error 	= 0;
 
@@ -231,7 +235,7 @@ DisplayPanels (DAQLabModule_type* mod, BOOL visibleFlag)
 	}
 
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 inline void

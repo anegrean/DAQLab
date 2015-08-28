@@ -54,7 +54,7 @@ poll_until_idle(z_port port)
 		za_decode(&decoded_reply, reply);
 		
         if(strncmp(decoded_reply.device_status, "BUSY", 4) == 0) {
-			Sleep(100);	/* TODO: Check non-sleep way */
+			ZABER_DELAY(100);	/* TODO: Check non-sleep way */
 		} else {
 			i--;
 		}

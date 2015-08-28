@@ -17,7 +17,11 @@
 
 //==============================================================================
 // Constants
-
+#define NUM_ELEMENTS_VISIBLE	7	/* Total number of elements visible at a time.
+									 * i.e. = (height of container panel) /
+		 							 * (height of element panel) provided that
+		 							 * height of every element is same.
+		 							 */
 //==============================================================================
 // Types
 
@@ -37,9 +41,255 @@
 /// HIPAR x/What inputs does your function expect?
 /// HIRET What does your function return?
 
+/* Function to print script dump */
+static int
+print_script_dump(WhiskerScript_t *whisker_script)
+{
+	WScript_t	*cur_script = &(whisker_script->cur_script);
+	int			i = 1, j = 0;
+	int			dummy_panel_handle[NUM_ELEMENTS_VISIBLE];
+	
+	/* XXX: Hack to show only NUM_ELEMENTS_VISIBLE elements 
+	 * at a time on the screen 
+	 */
+	while (i <= cur_script->num_elements) {
+		if (i > NUM_ELEMENTS_VISIBLE) {				/* Need Scrolling */
+			j = cur_script->num_elements - i;
+							
+			if (j < NUM_ELEMENTS_VISIBLE) {			/* Few elements to fit */
+				j = NUM_ELEMENTS_VISIBLE - (j+1);	/* Need so many elements */
+				for (int k = 0; k < j; k++) {		/* Duplicate panel */
+					dummy_panel_handle[k] = DuplicatePanel(whisker_script->container_panel_handle,
+					whisker_script->dummyElement_panel_handle, "", 0, 0);
+									
+					/* Set position of element */
+					SetPanelAttribute(dummy_panel_handle[k], ATTR_TOP, ((cur_script->num_elements + k) * 
+							(whisker_script->element_panel_height + INTER_ELEMENT_SPACING)) + 
+							INTER_ELEMENT_SPACING);
+									
+					/* Set Panel Attributes */
+					SetPanelAttribute(dummy_panel_handle[k], ATTR_TITLEBAR_VISIBLE, 0);
+									
+					if (dummy_panel_handle[k] <= 0) {	/* Failed */
+						for (--k ; k >= 0; k--) {
+							DiscardPanel(dummy_panel_handle[k]);
+						}
+						return -1;
+					}
+					DisplayPanel(dummy_panel_handle[k]);
+				}
+			}
+							
+			/* Move scroll down. But if next elements are less than 
+			 * NUM_ELEMENTS_VISIBLE then we have to add other dummy
+			 * elements to fill the space and scroll it. 
+			 * XXX: Could not find better way in CVI except including
+			 * some libraries and trying out.
+			 */
+			SetPanelAttribute(whisker_script->container_panel_handle, ATTR_VSCROLL_OFFSET, 
+							(whisker_script->element_panel_height + INTER_ELEMENT_SPACING) * i);
+		}
+						
+		/* Print the visible area */
+		SetPrintAttribute (ATTR_EJECT_AFTER, 1);
+		PrintPanel(whisker_script->container_panel_handle, "", 1, VAL_VISIBLE_AREA, 1);
+		i += NUM_ELEMENTS_VISIBLE;
+						
+		for (int k = j - 1; k >= 0; k--) {
+			DiscardPanel(dummy_panel_handle[k]);
+		}
+	}
+					 
+	redraw_script_elements(cur_script);
+	return 0;
+}
+
+static int
+print_script_to_text(WhiskerScript_t *whisker_script)
+{
+	WScript_t		*cur_script = &(whisker_script->cur_script);
+	size_t			num_elements = cur_script->num_elements;
+	ScriptElement_t	*element = NULL;
+	int				ret = 0;
+	char			file_path[FILE_PATH_LEN];
+	FILE			*file_handle = NULL;
+	char			msg[MSG_LEN];
+	Position_t		*saved_position = NULL;
+	
+	/* Ask user about text path */
+	ret = FileSelectPopup ("", "*.txt", "", "Save Script to Text",
+                                VAL_SAVE_BUTTON, 0, 1, 1, 0, UNCHECKED(file_path));
+	if (!ret) {
+		return -1;	
+	}
+	
+	/* Open file to write into it */
+	file_handle = fopen(file_path, "w+");
+	if (file_handle == NULL) {
+		MessagePopup("Save Script to text", "Failed to open file!"); 
+		return -1;
+	}
+	
+	for (int i = 1; i <= num_elements; i++) {
+		/* Get Element one by one */
+		ListGetItem(cur_script->script_elements, &element, i);
+		
+		switch (element->MAGIC_NUM) {
+			case START:			/* Start Element */
+				/* Create Message */
+				sprintf(msg, "%d)\tStart\n"
+							"\t\tDelay = %u", i, ((StartElement_t *)element)->delay);
+				break;
+				
+			case ACTION:		/* Action Element */
+				sprintf(msg, "%d)\tAction\n"
+							"\t\taction = %s\tduration = %u\n"
+							"\t\tIO Channel = %d\tmode = %s",
+							i, Action_String[(int)((ActionElement_t *)element)->action], 
+							((ActionElement_t *)element)->duration,
+							((ActionElement_t *)element)->IO_Channel + 1,
+							(element->mode ? "Parallel" : "Non-Parallel"));
+				break;
+				
+			case CONDITION:		/* Condition Element */
+				sprintf(msg, "%d)\tCondition\n"
+							"\t\tIO Channel = %d\tvalue = %s\n"
+							"\t\ttrue = %u\tfalse = %u\tduration = %u",
+							i, ((ConditionElement_t *)element)->IO_channel + 1,
+							(((ConditionElement_t *)element)->value ? "OFF" : "ON"),
+							((ConditionElement_t *)element)->true_step,
+							((ConditionElement_t *)element)->false_step,
+							((ConditionElement_t *)element)->duration);
+				break;
+				
+			case REPEAT:		/* Repeat element */
+				sprintf(msg, "%d)\tRepeat\n"
+						"\t\tntimes = %u\telement = %u",
+						i, ((RepeatElement_t *)element)->ntimes,
+						((RepeatElement_t *)element)->repeat_step);
+				break;
+			
+			case STOP:			/*  Stop Element */
+				sprintf(msg, "%d)\tStop\n"
+							"\t\tdelay = %u",
+							i, ((StopElement_t *)element)->delay);
+				break;
+				
+			case WAIT:			/* Wait element */
+				sprintf(msg, "%d)\tWait\n"
+							"\t\tdelay = %u",
+							i, ((WaitElement_t *)element)->delay);
+				break;
+				
+			case MESSAGE:		/* Message Element */
+				sprintf(msg, "%d)\tMessage\n"
+							"\t\tmessage = %s", 
+							i, ((MessageElement_t *)element)->text);
+				break;
+				
+			case SOUND:			/* Sound Element */
+				sprintf(msg, "%d)\tSound\n"
+							"\t\tpath = %s\tmode = %s",
+							i, ((SoundElement_t *)element)->file_path.file_path,
+							(element->mode ? "Parallel" : "Non-Parallel"));
+				break;
+			
+			case XYMOVE:		/* XYMove Element */
+				sprintf(msg, "%d)\tXY Move", i);
+				char	temp_msg[XML_ELEMENT_VALUE];
+				for (int j = 1; 
+						j <= ListNumItems(((XYMoveElement_t *)element)->saved_positions); 
+									j++) {
+					ListGetItem(((XYMoveElement_t *)element)->saved_positions, 
+															&saved_position, j);
+					sprintf(temp_msg, "\n\t\tX = %u\tY = %u\tPercent = %u",
+								saved_position->X, saved_position->Y, saved_position->percent);
+					strcat(msg, temp_msg);
+				}
+				break;
+				
+			case ZMOVE:			/* Z move element */
+				sprintf(msg, "%d)\tZ Move\n"
+							"\t\tIO Channel = %d\tDirection = %s",
+							i, ((ZMoveElement_t *)element)->IO_channel + 1,
+							(((ZMoveElement_t *)element)->dir? "UP" : "DOWN"));
+				break;
+				
+			case JUMP:			/* Jump Element */
+				sprintf(msg, "%d)\tJump\n"
+						"\t\telement = %u",
+						i, ((JumpElement_t *)element)->step);
+				break;
+				
+			case THWAIT:		/* Thread wait element */
+				sprintf(msg, "%d)\tThread Wait\n"
+						"\t\tWait for parallel elements to finish.", i);
+				break;
+				
+			case XYCONDITION:	/* XY condition element */
+				sprintf(msg, "%d)\tXY Condition\n"
+							"\t\tX = %u\tY = %u\tValue = %s", i,
+							((XYConditionElement_t *)element)->X,
+							((XYConditionElement_t *)element)->Y,
+							(((XYConditionElement_t *)element)->value ? "GO" : "NO-GO"));
+				break;
+			
+			case RESETREPEAT:	/* Reset Repeat Element */
+				sprintf(msg, "%d)\tReset Repeat\n"
+							"\t\tRepeat Element = %u", i,
+							((ResetRepeatElement_t *)element)->step);
+				break;
+		}
+		fprintf(file_handle, "%s\n\n", msg);
+	}
+	fclose(file_handle);
+	return 0;
+}
+
+/*
+ * Append file1 content to file2 content.
+ */
+static void
+AppendFile(char	file_path1[FILE_PATH_LEN], char file_path2[FILE_PATH_LEN])
+{
+	FILE	*file_handle1 = NULL, *file_handle2 = NULL;
+	char	line[LOG_MSG_LEN];
+	
+	/* Open first file in read mode */
+	file_handle1 = fopen(file_path1, "r");
+	if (file_handle1 == NULL) {
+		LOG_MSG(5, "Error opening file 1");
+		goto Error;	
+	}
+	
+	/* Open second file in append mode */
+	file_handle2 = fopen(file_path2, "a");
+	if (file_handle2 == NULL) {
+		LOG_MSG(5, "Error opening file 2");
+		goto Error;	
+	}
+	
+	/* Get each line of file1 and append it to file2 */
+	while (fgets(line, LOG_MSG_LEN, file_handle1)) {
+		fprintf(file_handle2, "%s", line);	
+	}
+	
+Error:
+	if (file_handle1) {
+		fclose(file_handle1);
+	}
+	
+	if (file_handle2) {
+		fclose(file_handle2);
+	}
+	return;
+}
+
 int  CVICALLBACK 
 WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2) 
 {
+INIT_ERR
+
 	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)callbackData;
 	WScript_t		*cur_script = NULL;
 	int				error = 0;
@@ -76,7 +326,7 @@ WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, in
 					break;
 					
 				case ScriptPan_ScriptQuit:	/* Quit Button pressed */
-					discard_script_module(whisker_script);
+					discard_script_module();
 					break;
 					
 				case ScriptPan_ScriptSave:	/* Save Button pressed */
@@ -154,7 +404,8 @@ WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, in
 						return 0;	
 					}
 					
-					discard_script_elements(cur_script);
+					discard_script_elements(cur_script->script_elements);
+					cur_script->num_elements = 0;
 					break;
 					
 				case ScriptPan_ScriptApply:		/* Apply UI changes to Local Structure */
@@ -180,22 +431,119 @@ WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, in
 					
 					/* Copy or Move temp file */
 					CopyFile(LOG_TEMP_FILE, file_path);
+					AppendFile(LICK_DET_TEMP_FILE, file_path);
 					
 					/* Set file path in text box */
 					SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_LogFile,
 							   										file_path);
+					break;
+					
+				case ScriptPan_ScriptPrint:		/* Print Script */
+					if (cur_script->script_elements == NULL ||
+					   		cur_script->num_elements <= 0) {
+						MessagePopup("Print Script", "Script should have atleast one element");
+						return -1;
+					}
+					
+					print_script_to_text(whisker_script);
+					break;
+				
+				case ScriptPan_ScriptPrinter:	/* Printer Script */
+					if (cur_script->script_elements == NULL ||
+					   		cur_script->num_elements <= 0) {
+						MessagePopup("Printer Script", "Script should have atleast one element");
+						return -1;
+					}
+					
+					print_script_dump(whisker_script);
+					break;
 			}
 			
 			break;
 	}
 	
 Error:
-	return error;
+	return errorInfo.error;
+}
+
+static void
+insert_procedure(WhiskerScript_t *whisker_script, size_t insert_pos)
+{
+	WScript_t		*cur_script = &(whisker_script->cur_script);
+	char			file_path[FILE_PATH_LEN];
+	int		 		ret = 0;
+	int				base_position = insert_pos;
+	ListType		script_elements = NULL;
+	ScriptElement_t	*element = NULL;
+	
+	ret = FileSelectPopup("", "*.xml", "", "Select a SubScript File",
+                                   VAL_LOAD_BUTTON, 0, 1, 1, 0, UNCHECKED(file_path));
+	if (!ret) {
+		return;	
+	}
+	
+	script_elements = convert_xml_to_list(whisker_script, file_path);
+	if (script_elements == NULL) {
+		MessagePopup("Insert Procedure Error", "Failed to load subscript!");
+		return;
+	}	
+	
+	while (ListNumItems(script_elements)) {
+		ListRemoveItem(script_elements, &element, FRONT_OF_LIST);
+		
+		/* Now, jumping from element has to be relative */
+		switch (element->MAGIC_NUM) {
+			case REPEAT:
+				((RepeatElement_t *)element)->repeat_step += (base_position - 1);
+				
+				/* Update UI */
+				SetCtrlVal(((RepeatElement_t *)element)->base_class.panel_handle, 
+						   RepEle_EleStep, ((RepeatElement_t *)element)->repeat_step);
+				break;
+				
+			case CONDITION:
+				((ConditionElement_t *)element)->true_step += (base_position - 1);
+				((ConditionElement_t *)element)->false_step += (base_position - 1);
+				
+				/* Update UI */
+				SetCtrlVal(((ConditionElement_t *)element)->base_class.panel_handle, 
+						   CondEle_EleTrue, ((ConditionElement_t *)element)->true_step);
+				SetCtrlVal(((ConditionElement_t *)element)->base_class.panel_handle, 
+						   CondEle_EleFalse, ((ConditionElement_t *)element)->false_step);
+				break;
+				
+			case JUMP:
+				((JumpElement_t *)element)->step += (base_position - 1);
+				
+				/* Update UI */
+				SetCtrlVal(((JumpElement_t *)element)->base_class.panel_handle, 
+						   JumpEle_EleStep, ((JumpElement_t *)element)->step);
+				break;
+		}
+		
+		/* Add element to cur_script */
+		if (NULL == ListInsertItem(cur_script->script_elements, 
+								   	&element, insert_pos++)) {
+			ListInsertItem(script_elements, &element, END_OF_LIST);	/* This frees element properly */
+			discard_script_elements(script_elements);
+			OKfreeList(script_elements);
+			MessagePopup("Insert Procedure Error", "Failed to load complete sub script");
+			return;
+		}
+	}
+	OKfreeList(script_elements);
+	
+	cur_script->num_elements = ListNumItems(cur_script->script_elements);
+	/* Redraw cur script elements */
+	redraw_script_elements(cur_script);
+	return;
 }
 
 int  CVICALLBACK 
 ScriptAddElement_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERR
+
 	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)callbackData;
 	WScript_t		*cur_script = NULL;
 	ElementType_t	index;
@@ -259,6 +607,21 @@ ScriptAddElement_CB(int panel, int control, int event, void *callbackData, int e
 				case THWAIT: /* Thread Element */
 					nullChk(element = init_THWaitElement(whisker_script, NULL));
 					break;
+					
+				case PROCEDURE:	/* Procedure element */
+					if (insert_pos == 0 || insert_pos > cur_script->num_elements) {
+						insert_pos = cur_script->num_elements + 1;
+					}
+					insert_procedure(whisker_script, insert_pos); 
+					return 0;
+					
+				case XYCONDITION:	/* XY condition element */
+					nullChk(element = init_XYConditionElement(whisker_script, NULL));
+					break;
+					
+				case RESETREPEAT:	/* Reset Repeat Element */
+					nullChk(element = init_ResetRepeatElement(whisker_script, NULL));
+					break;
 			}
 			
 			/* Set Panel Attributes */
@@ -288,7 +651,7 @@ ScriptAddElement_CB(int panel, int control, int event, void *callbackData, int e
 	return 0;
 Error:
 	OKfree(element);
-	return error;
+	return errorInfo.error;
 }
 
 inline void
@@ -778,6 +1141,77 @@ THWaitElementButtons_CB(int panel, int control, int event, void *callbackData, i
 			break;
 	}
 	return 0;	
+}
+
+/* XY Condition Callback Handler */
+int  CVICALLBACK 
+XYCondElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)callbackData;
+	ScriptElement_t	*element = NULL;
+	Whisker_t		*whisker_m = (Whisker_t *)whisker_script->whisker_m;
+	char			seq_num[3];
+	int				index = 0;
+	int				table_index;
+	Position_t		*table_saved_position = NULL;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			GetCtrlVal(panel, XYCondEle_EleNum, seq_num);
+			index = atoi(seq_num);
+			ListGetItem(whisker_script->cur_script.script_elements, &element, index);
+			XYConditionElement_t *xycond_element = (XYConditionElement_t *)element;
+			
+			switch (control) {
+				case XYCondEle_EleDelete:	/* Generic Delete */
+					delete_element(&(whisker_script->cur_script), index);
+					break;
+					
+				case XYCondEle_EleAdd:		/* Add position */
+					GetCtrlVal(panel, XYCondEle_ElePos, &table_index);
+					if (table_index > ListNumItems(whisker_m->z_dev.saved_positions)) {
+						MessagePopup("Add XY Position Error", "No Such position in the table!");
+						return -1;
+					}
+					
+					ListGetItem(whisker_m->z_dev.saved_positions, &table_saved_position, 
+								 							table_index);
+					
+					xycond_element->X = table_saved_position->X;
+					xycond_element->Y = table_saved_position->Y;
+					
+					/* Update UI */
+					SetCtrlVal(panel, XYCondEle_EleX, xycond_element->X);
+					SetCtrlVal(panel, XYCondEle_EleY, xycond_element->Y);
+					break;
+			}
+			break;
+	}
+	return 0;
+}
+
+/* Reset Repeat Element Callback Handler */
+int  CVICALLBACK 
+ResRepElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+{
+	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)callbackData;
+	ScriptElement_t	*element = NULL;
+	char			seq_num[3];
+	int				index = 0;
+	
+	switch (event) {
+		case EVENT_COMMIT:
+			GetCtrlVal(panel, ResRepEle_EleNum, seq_num);
+			index = atoi(seq_num);
+			
+			switch (control) {
+				case ResRepEle_EleDelete:	/* Generic Delete */
+					delete_element(&(whisker_script->cur_script), index);
+					break;
+			}
+			break;
+	}
+	return 0;
 }
 
 /* XY Position Callbacks */

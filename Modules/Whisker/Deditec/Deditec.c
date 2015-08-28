@@ -49,7 +49,9 @@ get_input_value(delib_device_t *de_dev, ULONG ch)
 		return -1;
 	}
 	
+	CmtGetLock(de_dev->lock);
 	input = DapiDIGet1(de_dev->handle, ch);
+	CmtReleaseLock(de_dev->lock);
 	
 	if (is_deditec_error()) {
 		return -1;
@@ -65,7 +67,9 @@ set_without_timer(delib_device_t *de_dev, ULONG ch, unsigned int flag)
 		return 0;	
 	}
 	
+	CmtGetLock(de_dev->lock);
 	DapiDOSet1(de_dev->handle, ch, flag);
+	CmtReleaseLock(de_dev->lock);
 	if (is_deditec_error()) {
 		return -1;
 	}
@@ -80,15 +84,21 @@ set_with_timer(delib_device_t *de_dev, ULONG ch, unsigned int flag, long time)
 		return 0;	
 	}
 	
+	CmtGetLock(de_dev->lock);
 	DapiDOSet1(de_dev->handle, ch, flag);
+	CmtReleaseLock(de_dev->lock);
+	
 	if (is_deditec_error()) {
 		return -1;
 	}
 
-	Sleep(time);		/* TODO: It should be nearly accurate time. */
+	DEDITEC_DELAY(time);		/* TODO: It should be nearly accurate time. */
 	
 	flag ^= 1 << 0;
+	CmtGetLock(de_dev->lock);
 	DapiDOSet1(de_dev->handle, ch, flag);
+	CmtReleaseLock(de_dev->lock);
+	
 	if (is_deditec_error()) {
 		return -1;
 	}
@@ -140,6 +150,11 @@ init_deditec_device(delib_device_t *de_dev)
 		close_deditec_device(de_dev);
 		return -1;
 	}
+	
+	/* Get a lock for multi-thread protection 
+	 * TODO: It has to be a spin lock not the sleep lock
+	 */ 
+	CmtNewLock (NULL, 0, &(de_dev->lock));
 	return 0;
 }
 
@@ -152,5 +167,8 @@ close_deditec_device(delib_device_t *de_dev)
 	
 	DapiCloseModule(de_dev->handle);
 	de_dev->handle = 0;
+	
+	/* Discard lock */
+	CmtDiscardLock(de_dev->lock);
 	return;
 }

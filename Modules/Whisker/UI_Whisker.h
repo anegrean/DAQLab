@@ -19,7 +19,12 @@
 #define  ExpPanel_DECORATION              4       /* control type: deco, callback function: (none) */
 #define  ExpPanel_ExpOk                   5       /* control type: command, callback function: ExperimentInfo_CB */
 #define  ExpPanel_ExpCancel               6       /* control type: command, callback function: ExperimentInfo_CB */
-#define  ExpPanel_ExpNum                  7       /* control type: string, callback function: (none) */
+#define  ExpPanel_ExpAniAge               7       /* control type: string, callback function: (none) */
+#define  ExpPanel_ExpAniNum               8       /* control type: string, callback function: (none) */
+#define  ExpPanel_ExpTrainNum             9       /* control type: string, callback function: (none) */
+#define  ExpPanel_ExpNum                  10      /* control type: string, callback function: (none) */
+#define  ExpPanel_ExpAniWeight            11      /* control type: numeric, callback function: (none) */
+#define  ExpPanel_SPLITTER                12      /* control type: splitter, callback function: (none) */
 
 #define  MainPanel                        2
 #define  MainPanel_ZaberComPort           2       /* control type: ring, callback function: (none) */

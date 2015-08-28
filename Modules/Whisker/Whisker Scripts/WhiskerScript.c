@@ -38,6 +38,8 @@
 #define ZMOVE_ELEMENT_CHILDS	3
 #define JUMP_ELEMENT_CHILDS		2
 #define THWAIT_ELEMENT_CHILDS	1
+#define XYCOND_ELEMENT_CHILDS	4
+#define RESREP_ELEMENT_CHILDS	2
 
 #define ATTR_ID				"ID"
 #define XML_ROOT_ELEMENT	"Script"
@@ -52,7 +54,9 @@
 #define XYMOVE_ELEMENT_TAG	"XYMove"
 #define ZMOVE_ELEMENT_TAG	"ZMove"
 #define JUMP_ELEMENT_TAG	"Jump"
-#define THWAIT_ELEMENT_TAG	"threadwait"
+#define THWAIT_ELEMENT_TAG	"Threadwait"
+#define XYCOND_ELEMENT_TAG	"XYCondition"
+#define RESREP_ELEMENT_TAG	"ResetRepeat"
 
 #define SEQ_NO_TAG			"Seq_No"
 #define DELAY_TAG			"Delay"
@@ -69,16 +73,20 @@
 #define POS_TAG				"Position"
 #define Z_DIR_TAG			"Direction"
 #define MODE_TAG			"mode"
+#define X_TAG				"X"
+#define Y_TAG				"Y"
 
 #define X_ATTR				"X"
 #define Y_ATTR				"Y"
 #define PERCENT_ATTR		"Percent"
 
-#define LOG_MSG_LEN				256
 #define LOG_TITLE				"ID\t\tType\t\tParams\n"
 #define LOG_HYPHEN				"-------\t\t-----------------\t\t------------------"
 #define LOG_NUM_LINES			100
 #define LOG_NUM_DELETE_LINES    10		/* 10% of LOG_NUM_LINES */
+
+#define BAR_GRAPH_COUNTERS	4
+#define GRAPH_PLOT_DELAY	100			/* 100 ms delay to update the graph */
 
 const char	*Action_String[] = {
 			"AIR PUFF",
@@ -125,8 +133,12 @@ void xymove_runner(void *element, void *whisker_script, int *index);
 void zmove_runner(void *element, void *whisker_script, int *index);
 void jump_runner(void *element, void *whisker_script, int *index);
 void thwait_runner(void *element, void *whisker_script, int *index);
+void xycondition_runner(void *element, void *whisker_script, int *index);
+void resetrepeat_runner(void *element, void *whisker_script, int *index);
 
 inline void save_and_print_LogMsg(WhiskerScript_t *whisker_script, char	*msg);
+inline void save_stats(WhiskerScript_t *whisker_script);
+inline void reset_stats_UIcounters(WhiskerScript_t	*whisker_script);
 
 static void DisplayActiveXErrorMessageOnFailure(HRESULT error);
 
@@ -138,6 +150,8 @@ static void DisplayActiveXErrorMessageOnFailure(HRESULT error);
 int
 init_display_script(void *function_data)
 {
+INIT_ERR
+
 	//Whisker_t	*whisker_m = (Whisker_t *)function_data;
 	int			error = 0;
 	char		IO_channel[7] = { 0 };
@@ -193,8 +207,15 @@ init_display_script(void *function_data)
 														MOD_WhiskerScript_UI, JumpEle));
 	errChk(whisker_script->thwaitElement_panel_handle = LoadPanel(whisker_script->container_panel_handle,
 														MOD_WhiskerScript_UI, THWaitEle));
+	errChk(whisker_script->xycondElement_panel_handle = LoadPanel(whisker_script->container_panel_handle,
+														MOD_WhiskerScript_UI, XYCondEle));
+	errChk(whisker_script->resrepElement_panel_handle = LoadPanel(whisker_script->container_panel_handle,
+														MOD_WhiskerScript_UI, ResRepEle));
 	
-																				   
+	/* XXX: Dummy element is used in print panel case. Not found better and easy way */
+	errChk(whisker_script->dummyElement_panel_handle = LoadPanel(whisker_script->container_panel_handle,
+														MOD_WhiskerScript_UI, DummyEle));
+	
 	/* Set Ctrl attibute */
 	setscript_ctrl_attribute(whisker_script);
 	
@@ -226,16 +247,16 @@ init_display_script(void *function_data)
 	DisplayPanel(whisker_script->container_panel_handle);
 	
 Error:
-	return error;
+	return errorInfo.error;
 }
 
 void
-discard_script_elements(WScript_t *cur_script)
+discard_script_elements(ListType script_elements)
 {
 	ScriptElement_t	*element = NULL;
 	
-	while (ListNumItems(cur_script->script_elements)) {
-		ListRemoveItem(cur_script->script_elements, &element, FRONT_OF_LIST);
+	while (ListNumItems(script_elements)) {
+		ListRemoveItem(script_elements, &element, FRONT_OF_LIST);
 		
 		/* Discard Panel */
 		DiscardPanel(element->panel_handle);
@@ -253,7 +274,7 @@ discard_script_elements(WScript_t *cur_script)
 		OKfree(element);
 	}
 	
-	cur_script->num_elements = 0;
+	//cur_script->num_elements = 0; /* Caller has to set it to NULL */
 	return;
 }
 
@@ -267,7 +288,7 @@ discard_cur_script(WScript_t *cur_script)
 	}
 	
 	/* Discard elements from the list */
-	discard_script_elements(cur_script);
+	discard_script_elements(cur_script->script_elements);
 	
 	/* Free list */
 	OKfreeList(cur_script->script_elements);
@@ -281,10 +302,14 @@ discard_cur_script(WScript_t *cur_script)
 	}
 	cur_script->log_file.VALID_FILE = FALSE;
 	
+	/* Delete lick detection file */
+	DeleteFile(LICK_DET_TEMP_FILE);
+	
 	/* Reset Log UI text box */
 	log_lines_counter = 0;
 	ResetTextBox (whisker_script->main_panel_handle, ScriptPan_ScriptLog, "");
 	SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_LogFile, NO_LOG_NAME);
+	reset_stats_UIcounters(whisker_script);
 							   										
 	return 0;
 }
@@ -293,6 +318,10 @@ discard_cur_script(WScript_t *cur_script)
 int
 discard_script_module()
 {
+	if (whisker_script == NULL) {
+		LOG_MSG(9, "Attempt to discard non-existent script module");
+		return -1;
+	}
 	/* Discard Panels.
 	 * When discard parent panel, all its childrens are discarded.
 	 */
@@ -318,6 +347,8 @@ setscript_ctrl_attribute(WhiskerScript_t *whisker_script)
 	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptApply, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptSaveLog, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptPrint, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptPrinter, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	
 	SetCtrlAttribute (whisker_script->main_panel_handle, ScriptPan_ScriptImportSetting, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	
@@ -359,6 +390,11 @@ setscript_ctrl_attribute(WhiskerScript_t *whisker_script)
 	SetCtrlAttribute (whisker_script->jumpElement_panel_handle, JumpEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	
 	SetCtrlAttribute (whisker_script->thwaitElement_panel_handle, THWaitEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	
+	SetCtrlAttribute (whisker_script->xycondElement_panel_handle, XYCondEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	SetCtrlAttribute (whisker_script->xycondElement_panel_handle, XYCondEle_EleAdd, ATTR_CALLBACK_DATA, (void *)whisker_script);
+	
+	SetCtrlAttribute (whisker_script->resrepElement_panel_handle, ResRepEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	return;
 }
 
@@ -407,6 +443,10 @@ redraw_script_elements(WScript_t *cur_script)
 			SetCtrlVal(element->panel_handle, JumpEle_EleNum, seq_num);
 		} else if (element->MAGIC_NUM == THWAIT) {
 			SetCtrlVal(element->panel_handle, THWaitEle_EleNum, seq_num);	
+		} else if (element->MAGIC_NUM == XYCONDITION) {
+			SetCtrlVal(element->panel_handle, XYCondEle_EleNum, seq_num);	
+		} else if (element->MAGIC_NUM == RESETREPEAT) {
+			SetCtrlVal(element->panel_handle, ResRepEle_EleNum, seq_num);
 		}
 			
 		GetPanelAttribute(element->panel_handle, ATTR_HEIGHT, &height_element_panel);
@@ -603,6 +643,30 @@ save_script(WhiskerScript_t	*whisker_script)
 				sprintf(value[1], "%d", i);
 				break;
 				
+			case XYCONDITION:	/* XY condition element */
+				/* Set Tag */
+				tag[0] = XYCOND_ELEMENT_TAG;	tag[1] = SEQ_NO_TAG;
+				tag[2] = X_TAG;					tag[3] = Y_TAG;
+				tag[4] = VALUE_TAG;				tag[5] = NULL;
+				
+				/* Set value. Tag index and value index should match */
+				sprintf(value[0], "%d", element->MAGIC_NUM);
+				sprintf(value[1], "%d", i);
+				sprintf(value[2], "%u", ((XYConditionElement_t *)element)->X);
+				sprintf(value[3], "%u", ((XYConditionElement_t *)element)->Y);
+				sprintf(value[4], "%u", ((XYConditionElement_t *)element)->value);
+				break;
+				
+			case RESETREPEAT:	/* Reset Repeat Element */
+				/* Set Tag */
+				tag[0] = RESREP_ELEMENT_TAG;	tag[1] = SEQ_NO_TAG;
+				tag[2] = STEP_TAG;				tag[3] = NULL;
+				
+				/* Set value. Tag index and value index should match */
+				sprintf(value[0], "%d", element->MAGIC_NUM);
+				sprintf(value[1], "%d", i);
+				sprintf(value[2], "%u", ((ResetRepeatElement_t *)element)->step);
+				break;
 		}
 		
 		/* Add tag and value to script element */
@@ -660,13 +724,14 @@ Error:
 	return;
 }
 
-/* Load Existing Scripts */
-void
-load_script(WhiskerScript_t	*whisker_script)
+/* Generic function to convert XML to list */
+ListType
+convert_xml_to_list(WhiskerScript_t *whisker_script, char file_path[FILE_PATH_LEN]) 
 {
-	WScript_t		*cur_script = &(whisker_script->cur_script);
+INIT_ERR
+
+	ListType		script_elements = NULL;
 	ScriptElement_t	*element = NULL;
-	int				ret = 0;
 	CVIXMLDocument	script_doc;
 	CVIXMLElement	root_element = NULL;
 	CVIXMLElement	xml_element = NULL;
@@ -675,44 +740,20 @@ load_script(WhiskerScript_t	*whisker_script)
 	ElementType_t	MAGIC_NUM;
 	HRESULT         error = S_OK;
 	int				num_XMLelements = 0;
-	char			value[MAX_CHILD_ELEMENTS][XML_ELEMENT_VALUE];	/* TODO: Need dynamic allocation */
-	
-	if (cur_script->script_elements != NULL) {
-		ret = ConfirmPopup ("Load Script", "Discard existing script?");
-		if (ret == 0) {		/* Cancelled Operation */
-			return;	
-		} 
-		discard_cur_script(cur_script);	
-	}
-	
-	/* Get the file path */
-	ret = FileSelectPopup("", "*.xml", "", "Select a Script File",
-                                   VAL_LOAD_BUTTON, 0, 1, 1, 0, cur_script->xml_script.file_path);
-    if (!ret) {
-		/* As we have already discarded a script we should change UI */
-		SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_ScriptName, NO_SCRIPT_NAME);
-		SetCtrlAttribute(whisker_script->main_panel_handle, ScriptPan_ScriptAdd, ATTR_DIMMED, 1);
-		return;
-	}
-    /* Set file path to UI display */
-	cur_script->xml_script.VALID_FILE = TRUE;
-	SplitPath(cur_script->xml_script.file_path, NULL, NULL, cur_script->xml_script.file_name);
-	SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_ScriptName, 
-			   									cur_script->xml_script.file_name);
+	char			value[MAX_CHILD_ELEMENTS][XML_ELEMENT_VALUE];
 	
 	/* Load XML Document and root element */
-	XMLErrChk(CVIXMLLoadDocument (cur_script->xml_script.file_path, &script_doc));
+	XMLErrChk(CVIXMLLoadDocument (file_path, &script_doc));
     XMLErrChk(CVIXMLGetRootElement(script_doc, &root_element));
 	XMLErrChk(CVIXMLGetNumChildElements(root_element, &num_XMLelements));
 	
 	if (num_XMLelements < 1) {
-		MessagePopup("Load XML", "Script Should have atleast one element!");
+		MessagePopup("Convert XML", "Script Should have atleast one element!");
 		goto Error;	
 	}
 	
 	/* Create ScriptElement list */
-	nullChk(cur_script->script_elements = ListCreate(sizeof(ScriptElement_t*)));
-	cur_script->num_elements = 0;
+	nullChk(script_elements = ListCreate(sizeof(ScriptElement_t*)));
 	
 	for (int i = 0; i < num_XMLelements; i++) {
 		XMLErrChk(CVIXMLGetChildElementByIndex(root_element, i, &xml_element));
@@ -784,33 +825,93 @@ load_script(WhiskerScript_t	*whisker_script)
 				XMLErrChk(get_XMLElement_childvalues(&xml_element, value, THWAIT_ELEMENT_CHILDS));
 				nullChk(element = init_THWaitElement(whisker_script, value));
 				break;
+				
+			case XYCONDITION:
+				XMLErrChk(get_XMLElement_childvalues(&xml_element, value, XYCOND_ELEMENT_CHILDS));
+				nullChk(element = init_XYConditionElement(whisker_script, value));
+				break;
+				
+			case RESETREPEAT:
+				XMLErrChk(get_XMLElement_childvalues(&xml_element, value, RESREP_ELEMENT_CHILDS));
+				nullChk(element = init_ResetRepeatElement(whisker_script, value));
+				break;
 		}
 		/* Set Panel Attributes */
 		SetPanelAttribute(element->panel_handle, ATTR_TITLEBAR_VISIBLE, 0);
 				
 		/* Add this element into script_elements list */
-		if (NULL == ListInsertItem(cur_script->script_elements, &element, (cur_script->num_elements + 1))) {
+		if (NULL == ListInsertItem(script_elements, &element, END_OF_LIST)) {
 			DiscardPanel(element->panel_handle);
 			LOG_MSG(0, "Error when inserting element into list\n");
+			/* TODO: Free list */
+			discard_script_elements(script_elements);
+			OKfreeList(script_elements);
 			goto Error;
 		}
-		cur_script->num_elements += 1;
 		
 		CVIXMLDiscardElement(xml_element);
 		xml_element = NULL;
+	}		
+
+Error:
+	CVIXMLDiscardElement(xml_element);
+	CVIXMLDiscardElement(root_element);
+	CVIXMLDiscardDocument(script_doc);
+	DisplayActiveXErrorMessageOnFailure(errorInfo.error);
+	return script_elements;
+}
+/* Load Existing Scripts */
+void
+load_script(WhiskerScript_t	*whisker_script)
+{
+	WScript_t		*cur_script = &(whisker_script->cur_script);
+	ScriptElement_t	*element = NULL;
+	int				ret = 0;
+	CVIXMLDocument	script_doc;
+	CVIXMLElement	root_element = NULL;
+	CVIXMLElement	xml_element = NULL;
+	CVIXMLAttribute xmlelement_type = NULL;
+	char			attr_value[XML_ELEMENT_VALUE];
+	ElementType_t	MAGIC_NUM;
+	HRESULT         error = S_OK;
+	int				num_XMLelements = 0;
+	char			value[MAX_CHILD_ELEMENTS][XML_ELEMENT_VALUE];	/* TODO: Need dynamic allocation */
+	
+	if (cur_script->script_elements != NULL) {
+		ret = ConfirmPopup ("Load Script", "Discard existing script?");
+		if (ret == 0) {		/* Cancelled Operation */
+			return;	
+		} 
+		discard_cur_script(cur_script);	
 	}
 	
+	/* Get the file path */
+	ret = FileSelectPopup("", "*.xml", "", "Select a Script File",
+                                   VAL_LOAD_BUTTON, 0, 1, 1, 0, cur_script->xml_script.file_path);
+    if (!ret) {
+		/* As we have already discarded a script we should change UI */
+		SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_ScriptName, NO_SCRIPT_NAME);
+		SetCtrlAttribute(whisker_script->main_panel_handle, ScriptPan_ScriptAdd, ATTR_DIMMED, 1);
+		return;
+	}
+    /* Set file path to UI display */
+	cur_script->xml_script.VALID_FILE = TRUE;
+	SplitPath(cur_script->xml_script.file_path, NULL, NULL, cur_script->xml_script.file_name);
+	SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_ScriptName, 
+			   									cur_script->xml_script.file_name);
+	
+	/* Load XML Document and root element */
+	cur_script->script_elements = convert_xml_to_list(whisker_script, 
+								  				cur_script->xml_script.file_path);
+	if (cur_script->script_elements == NULL) {
+		return;	
+	}
+	cur_script->num_elements = ListNumItems(cur_script->script_elements);
 	redraw_script_elements(cur_script);
 	
 	/* Undim element add functionality */
 	SetCtrlAttribute(whisker_script->main_panel_handle, ScriptPan_ScriptElement, ATTR_DIMMED, 0);
 	SetCtrlAttribute(whisker_script->main_panel_handle, ScriptPan_ScriptAdd, ATTR_DIMMED, 0);
-	
-Error:
-	CVIXMLDiscardElement(xml_element);
-	CVIXMLDiscardElement(root_element);
-	CVIXMLDiscardDocument(script_doc);
-	DisplayActiveXErrorMessageOnFailure(error);
 	return;	
 }
 
@@ -903,6 +1004,8 @@ async_script_runner(void *thread_data)
 void
 start_async_runner_function(ScriptElement_t *element, WhiskerScript_t *whisker_script, int *index)
 {
+INIT_ERR
+
 	CmtThreadFunctionID	*thread_functionid = NULL;
 	AsyncThreadData_t	*thread_data = NULL;
 	WScript_t			*cur_script = &(whisker_script->cur_script);
@@ -930,6 +1033,192 @@ Error:
 	MessagePopup("Script Run Error", "Failed to start asynchronous thread.");
 	*index = cur_script->num_elements;
 	return;
+}
+
+/* Plot Graphs */
+inline void
+plot_counter_graph(WhiskerScript_t *whisker_script)
+{
+	double	data[BAR_GRAPH_COUNTERS];
+	double	total;
+	WScript_t	*cur_script = &(whisker_script->cur_script);
+	
+	/* Calculate total counter values */
+	total =  cur_script->stats.correct_lick + cur_script->stats.incorrect_rejection +
+			 cur_script->stats.false_alarm + cur_script->stats.correct_rejection;
+	LOG_MSG1(9, "Total counter value : %lf", total);
+	
+	data[0] = (cur_script->stats.correct_lick / total) * 100.00;
+	data[1] = (cur_script->stats.correct_rejection / total) * 100.00;
+	data[2] = (cur_script->stats.incorrect_rejection / total) * 100.00;
+	data[3] = (cur_script->stats.false_alarm / total) * 100.00;
+	LOG_MSG2(9, "Percentage : Correct Lick = %lf\tCorrect Rejection = %lf", data[0], data[1]);
+	LOG_MSG2(9, "Percentage : Incorrect Rejection = %lf\tFalse Alarm = %lf", 
+			 											data[2], data[3]);
+	DeleteGraphPlot (whisker_script->main_panel_handle, ScriptPan_ScriptGraphCtr, 
+					 								-1, VAL_DELAYED_DRAW);
+	PlotY(whisker_script->main_panel_handle, ScriptPan_ScriptGraphCtr, data, 4, 
+		  VAL_DOUBLE, VAL_VERTICAL_BAR, VAL_EMPTY_SQUARE, VAL_SOLID, 1, VAL_GREEN); 
+	
+	return;
+}
+
+/* Graph plotting thread that runs simultaneosly with the script
+ */
+void CVICALLBACK
+plot_graphs(void *thread_data)
+{
+	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)thread_data;
+	WScript_t		*cur_script = &(whisker_script->cur_script);
+	
+	while (cur_script->run_status != STOPPED) { 
+		plot_counter_graph(whisker_script);
+		WHISKER_DELAY(GRAPH_PLOT_DELAY);
+	}
+	
+	plot_counter_graph(whisker_script);
+	return;
+}
+
+/* Continous lick detector thread. That runs simultaneosly with the script 
+ */
+void CVICALLBACK
+continous_lick_detector(void *thread_data)
+{
+	WhiskerScript_t	*whisker_script = (WhiskerScript_t *)thread_data;
+	Whisker_t		*whisker_m = (Whisker_t *)whisker_script->whisker_m;
+	WScript_t		*cur_script = &(whisker_script->cur_script);
+	int				input_value;
+	FILE			*file_handle = NULL;
+	SYSTEMTIME		dh;
+	char			msg[LOG_MSG_LEN];
+	
+	/* Open temp file for writing stats */
+	file_handle = fopen(LICK_DET_TEMP_FILE, "w+");
+	if (file_handle == NULL) {
+		MessagePopup("Lick Detector", "Continous lick detector failed to start!");
+		return;
+	}
+	
+	/* Write initial line */
+	fprintf(file_handle, "\n\n=========Lick Detection=========\n");
+	
+	/* Delete old plot from the graph */
+	ClearStripChart(whisker_script->main_panel_handle, ScriptPan_ScriptLickDetGraph);
+	
+	/* Detect lick upto current script does not stop.
+	 * No Lock needed.
+	 */
+	while (cur_script->run_status != STOPPED) {
+		input_value = get_input_value(&whisker_m->de_dev, 
+								whisker_m->de_dev.IO_Channel[LICK_DET_CH]);
+		if (input_value == 0) {	/* Lick Detected */
+			/* Get current local date and time */
+			GetLocalTime(&dh);
+			sprintf(msg, "%d:%02d:%02d:%02d \tLick Detected\n", 
+							 dh.wHour, dh.wMinute, dh.wSecond, dh.wMilliseconds);
+			fprintf(file_handle, "%s", msg);
+		}
+		/* Plot a graph.
+		 * Toggle input value because on graph, lick is 1 but actual returned value is
+		 * 0
+		 */
+		input_value ^= (1 << 0);
+		PlotStripChart(whisker_script->main_panel_handle, ScriptPan_ScriptLickDetGraph, 
+									&input_value, 1, 0, 0, VAL_INTEGER);
+		WHISKER_DELAY(INPUT_CHECK_DELAY);
+	}
+	
+	fclose(file_handle);
+	LOG_MSG(9, "Continous lick detector finished");
+	return;
+}	
+
+inline void
+reset_stats_UIcounters(WhiskerScript_t *whisker_script)
+{
+	SetCtrlVal(whisker_script->main_panel_handle,
+					   		ScriptPan_ScriptAirPuffCtr, 0);
+	SetCtrlVal(whisker_script->main_panel_handle,
+					   		ScriptPan_ScriptDropInCtr, 0);
+	SetCtrlVal(whisker_script->main_panel_handle,
+					   		ScriptPan_ScriptDropOutCtr, 0);
+	SetCtrlVal(whisker_script->main_panel_handle,
+					   		ScriptPan_ScriptCorrectLickCtr, 0);
+	SetCtrlVal(whisker_script->main_panel_handle,
+					   		ScriptPan_ScriptIncorrectRejCtr, 0);
+	SetCtrlVal(whisker_script->main_panel_handle,
+					   		ScriptPan_ScriptFalseAlarmCtr, 0);
+	SetCtrlVal(whisker_script->main_panel_handle,
+					   		ScriptPan_ScriptCorrectRejCtr, 0);
+	return;
+}
+
+inline void
+init_stats(WStats_t *stats)
+{
+	stats->air_puff = 0;
+	stats->drop_in = 0;
+	stats->drop_out = 0;
+	stats->correct_lick = 0;
+	stats->incorrect_rejection = 0;
+	stats->correct_rejection = 0;
+	stats->false_alarm = 0;
+	return;
+}
+
+inline void
+save_experiment_info(WhiskerScript_t *whisker_script)
+{
+	Whisker_t	*whisker_m	= (Whisker_t *)whisker_script->whisker_m;
+	WScript_t	*cur_script =  &(whisker_script->cur_script);
+	char		msg[LOG_MSG_LEN + LOG_MSG_LEN] = { '\0' };
+	SYSTEMTIME	dh;
+	char		temp[LOG_MSG_LEN] = { '\0' };
+	size_t		zaber_speed = 0;
+	
+	GetLocalTime(&dh);
+	/* If experiment info is valid then print in the log file */
+	if (whisker_m->exp_info.VALID_INFO == TRUE) {
+		sprintf(msg, "\nName:\t\t\t%s\n"
+					"Experiment Number:\t%s\n"
+					"Training Number:\t%s\n"
+					"Animal Number:\t\t%s\n"
+					"Animal Age:\t\t%s\n"
+					"Animal Weight:\t\t%lf\n"
+					"Message:\t\t%s\n"
+					"Date:\t\t\t%d/%d/%04d\n", whisker_m->exp_info.user_name,
+					whisker_m->exp_info.exp_num, whisker_m->exp_info.training_num,
+					whisker_m->exp_info.animal_num, whisker_m->exp_info.animal_age,
+					whisker_m->exp_info.animal_weight, whisker_m->exp_info.extra_msg,
+			   		dh.wDay, dh.wMonth, dh.wYear);
+	} else {
+		sprintf(msg, "\nName:\n"
+					"Experiment Number:\n"
+					"Message:\n"
+					"Training Number:\n"
+					"Animal Number:\n"
+					"Animal Age:\n"
+					"Animal Weight:\n"
+			   		"Date:\t\t%d/%d/%04d\n",
+					dh.wDay, dh.wMonth, dh.wYear);
+	}
+	
+	/* Get the Zaber Speed */
+	if (whisker_m->z_dev.VALID_DEVICE == TRUE) {
+		zaber_speed = get_device_data(whisker_m->z_dev.port, ZABER_DEV, "maxspeed");	
+	}
+	
+	/* Add zaber Speed and Script Name */
+	sprintf(temp, "Script Name: \t\t%s\n"
+					"Zaber Device: \t\t%u\n",
+					(cur_script->xml_script.VALID_FILE ? 
+					 			cur_script->xml_script.file_name : ""),
+					zaber_speed);
+	strcat(msg, temp);
+	
+	save_and_print_LogMsg(whisker_script, msg);
+	return 0;	
 }
 
 /* Script Runner that runs current script */
@@ -1005,24 +1294,39 @@ script_runner(void *thread_data)
 	/* Reset Log Box */
 	log_lines_counter = 0;
 	ResetTextBox (whisker_script->main_panel_handle, ScriptPan_ScriptLog, "");
+	save_experiment_info(whisker_script);
 	save_and_print_LogMsg(whisker_script, LOG_TITLE);
-	save_and_print_LogMsg(whisker_script, LOG_HYPHEN); 
+	save_and_print_LogMsg(whisker_script, LOG_HYPHEN);
+	
+	/* Init Stats */
+	init_stats(&(cur_script->stats));
+	reset_stats_UIcounters(whisker_script);
+	CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE, continous_lick_detector, 
+													 whisker_script, NULL);
+	
+	/* Start Graph plotting thread */
+	CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE, plot_graphs, 
+													 whisker_script, NULL);
 	
 	/* Seed random number generator */
 	srand(time(NULL));
+	
+	/* XY State position has to be GO position initially */
+	cur_script->xy_state = GO;
 	
 	CmtGetLock(cur_script->lock);
 	cur_script->run_status = STARTED;
 	while (i <= cur_script->num_elements && cur_script->run_status != STOPPED) {
 		if (cur_script->run_status == PAUSED) {
 			CmtReleaseLock(cur_script->lock);
-			Sleep(100);
+			WHISKER_DELAY(100);
 			CmtGetLock(cur_script->lock);
 			continue;
 		}
 		CmtReleaseLock(cur_script->lock);
 		
-		/* Before calling runner function, just scroll element appropriately.
+		/* Before calling runner function, just 
+		element appropriately.
 		 * Element Panel height is retrieved in init function and maintained
 		 * in whisker_script. We could get the height in local variable
 		 * but there is no issue in maintaining in global structure.
@@ -1048,6 +1352,9 @@ script_runner(void *thread_data)
 	 */
 	free_thread_functionIDs(cur_script);
 	OKfreeList(cur_script->thread_functionIDs);
+	
+	/* Save stats */
+	save_stats(whisker_script);
 	
 	/* Flush temp log file.
 	 */
@@ -1095,6 +1402,30 @@ script_runner(void *thread_data)
 
 }
 
+/* Save Stats */
+inline void
+save_stats(WhiskerScript_t *whisker_script)
+{
+	WScript_t	*cur_script = &(whisker_script->cur_script);
+	WStats_t	*stats = &(cur_script->stats);
+	char		msg[LOG_MSG_LEN];
+	
+	sprintf(msg, "\nStatistics:\n"
+				"\t\tAir Puff\t\t\t%u\n"
+				"\t\tDrop IN\t\t\t%u\n"
+				"\t\tDrop OUT\t\t%u\n"
+				"\t\tCorrect Lick\t\t%u\n"
+				"\t\tIncorrect Rejection\t\t\t%u\n"
+				"\t\tCorrect Rejection\t\t\t%u\n"
+				"\t\tFalse Alarm\t\t\t%u\n",
+				stats->air_puff, stats->drop_in, stats->drop_out, 
+				stats->correct_lick, stats->incorrect_rejection, stats->correct_rejection,
+		   		stats->false_alarm);
+				
+	save_and_print_LogMsg(whisker_script, msg);
+	return;
+}
+
 /* Save and Print log message. This operation should be async */
 inline void
 save_and_print_LogMsg(WhiskerScript_t *whisker_script, char	*str)
@@ -1105,9 +1436,8 @@ save_and_print_LogMsg(WhiskerScript_t *whisker_script, char	*str)
 	
 	/* Get current local date and time */
 	GetLocalTime(&dh);
-	sprintf(msg, "%d/%d/%04d \t%d:%02d:%02d \t%s\n", dh.wDay, dh.wMonth,
-											dh.wYear, dh.wHour, 
-											dh.wMinute, dh.wSecond, str);
+	sprintf(msg, "%d:%02d:%02d:%02d \t%s\n", dh.wHour, dh.wMinute, dh.wSecond, 
+													dh.wMilliseconds, str);
 	
 	/* Write it to UI */
 	SetCtrlVal(whisker_script->main_panel_handle, ScriptPan_ScriptLog, msg);
@@ -1213,10 +1543,6 @@ import_settings(WhiskerScript_t	*whisker_script)
 	
 }
 
-/* Add on feature that to convert script in printable
- * format.
- */
-
 /* Get current values from UI and update Internal Structure.
  */
 void
@@ -1272,6 +1598,14 @@ apply_changes(WScript_t	*cur_script)
 				
 			case JUMP:
 				apply_jump_changes((JumpElement_t *)element);
+				break;
+				
+			case XYCONDITION:
+				apply_xycondition_changes((XYConditionElement_t *)element);
+				break;
+				
+			case RESETREPEAT:
+				apply_resetrepeat_changes((ResetRepeatElement_t *)element);
 				break;
 		}
 		
@@ -1385,6 +1719,26 @@ apply_jump_changes(JumpElement_t *jump_element)
 {
 	GetCtrlVal(jump_element->base_class.panel_handle, JumpEle_EleStep,
 			   							(size_t *)&(jump_element->step));
+	return;
+}
+
+inline void
+apply_xycondition_changes(XYConditionElement_t *xycond_element)
+{
+	GetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleX,
+			   							(size_t *)&(xycond_element->X));
+	GetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleY,
+			   							(size_t *)&(xycond_element->Y));
+	GetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleValue,
+			   							&(xycond_element->value));
+	return;	
+}
+
+inline void
+apply_resetrepeat_changes(ResetRepeatElement_t *resrep_element)
+{
+	GetCtrlVal(resrep_element->base_class.panel_handle, ResRepEle_EleStep,
+			   							(size_t *)&(resrep_element->step));
 	return;
 }
 
@@ -1749,6 +2103,62 @@ init_THWaitElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VAL
 	return (ScriptElement_t *)thwait_element;
 }
 
+ScriptElement_t *
+init_XYConditionElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE])
+{
+	XYConditionElement_t *xycond_element = (XYConditionElement_t *)init_Element(whisker_script, 
+												sizeof(XYConditionElement_t),
+									 			whisker_script->xycondElement_panel_handle);
+	
+	if (xycond_element == NULL) {
+		return NULL;
+	}
+	
+	xycond_element->base_class.MAGIC_NUM = XYCONDITION;
+	xycond_element->base_class.runner_function = xycondition_runner;
+	
+	if (value != NULL) {
+		 xycond_element->X = (size_t)atoi(value[1]);
+		 xycond_element->Y = (size_t)atoi(value[2]);
+		 xycond_element->value = (size_t)atoi(value[3]);
+		 
+		 /* Update UI */
+		 SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleX,
+														xycond_element->X);
+		 SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleY,
+														xycond_element->Y);
+		 SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleValue,
+														xycond_element->value);
+	}
+	
+	return (ScriptElement_t *)xycond_element;
+}
+
+ScriptElement_t *
+init_ResetRepeatElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_VALUE])
+{
+	ResetRepeatElement_t *resrep_element = (ResetRepeatElement_t *)init_Element(whisker_script, 
+												sizeof(ResetRepeatElement_t),
+									 			whisker_script->resrepElement_panel_handle);
+	
+	if (resrep_element == NULL) {
+		return NULL;
+	}
+	
+	resrep_element->base_class.MAGIC_NUM = RESETREPEAT;
+	resrep_element->base_class.runner_function = resetrepeat_runner;
+	
+	if (value != NULL) {
+		 resrep_element->step = (size_t)atoi(value[1]);
+		 
+		 /* Update UI */
+		 SetCtrlVal(resrep_element->base_class.panel_handle, ResRepEle_EleStep,
+														resrep_element->step);
+	}
+	
+	return (ScriptElement_t *)resrep_element;
+}
+
 /*********************************************************************
  * XML specific functions											 *
  *********************************************************************/
@@ -1932,7 +2342,7 @@ start_runner(void *element, void *whisker_script, int *index)
 	
 	SetCtrlVal(start_element->base_class.panel_handle, StartEle_LED, 1);
 	
-	Sleep(start_element->delay);
+	WHISKER_DELAY(start_element->delay);
 
 	SetCtrlVal(start_element->base_class.panel_handle, StartEle_LED, 0);
 	return;
@@ -1943,6 +2353,7 @@ action_runner(void *element, void *whisker_script, int *index)
 {
 	Whisker_t		*whisker_m = (Whisker_t *)
 							((WhiskerScript_t *)whisker_script)->whisker_m;
+	WScript_t		*cur_script = &(((WhiskerScript_t *)whisker_script)->cur_script);
 	ActionElement_t	*action_element = (ActionElement_t *)element;
 	char			log_msg[LOG_MSG_LEN];
 	
@@ -1952,6 +2363,29 @@ action_runner(void *element, void *whisker_script, int *index)
 						action_element->duration);
 	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, log_msg);
 	
+	/* Stat collection */
+	switch (action_element->action) {
+		case AIRPUFF:
+			cur_script->stats.air_puff++;
+			/* UPdate UI counters */
+			SetCtrlVal(((WhiskerScript_t *)whisker_script)->main_panel_handle,
+					   		ScriptPan_ScriptAirPuffCtr, cur_script->stats.air_puff);
+			break;
+			
+		case DROPOUT:
+			cur_script->stats.drop_out++;
+			/* Update UI counter */
+			SetCtrlVal(((WhiskerScript_t *)whisker_script)->main_panel_handle,
+					   		ScriptPan_ScriptDropOutCtr, cur_script->stats.drop_out);
+			break;
+					
+		case DROPIN:
+			cur_script->stats.drop_in++;
+			/* Update UI counter */
+			SetCtrlVal(((WhiskerScript_t *)whisker_script)->main_panel_handle,
+					   		ScriptPan_ScriptDropInCtr, cur_script->stats.drop_in);
+			break;
+	}
 	
 	SetCtrlVal(action_element->base_class.panel_handle, ActionEle_LED, 1);
 	set_with_timer(&(whisker_m->de_dev), action_element->IO_Channel, ON,
@@ -1973,7 +2407,7 @@ stop_runner(void *element, void *whisker_script, int *index)
 	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, log_msg);
 	
 	SetCtrlVal(stop_element->base_class.panel_handle, StopEle_LED, 1);
-	Sleep(stop_element->delay);
+	WHISKER_DELAY(stop_element->delay);
 	SetCtrlVal(stop_element->base_class.panel_handle, StopEle_LED, 0);
 	return;		
 }
@@ -1991,9 +2425,8 @@ wait_runner(void *element, void *whisker_script, int *index)
 	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, log_msg);
 	
 	SetCtrlVal(wait_element->base_class.panel_handle, WaitEle_LED, 1);
-	Sleep(wait_element->delay);
+	WHISKER_DELAY(wait_element->delay);
 	SetCtrlVal(wait_element->base_class.panel_handle, WaitEle_LED, 0);
-
 	return;		
 }
 
@@ -2002,27 +2435,63 @@ condition_runner(void *element, void *whisker_script, int *index)
 {
 	Whisker_t			*whisker_m = (Whisker_t *)
 									((WhiskerScript_t *)whisker_script)->whisker_m;
+	WScript_t			*cur_script = &(((WhiskerScript_t *)whisker_script)->cur_script);
 	ConditionElement_t	*cond_element = (ConditionElement_t *)element;
 	char				log_msg[LOG_MSG_LEN];
 	int					input_value;
-	size_t				interval = 0;
+	double				start_time = 0, elapsed_time = 0;
+	int					condition_true = 0;
 	
 	SetCtrlVal(cond_element->base_class.panel_handle, CondEle_LED, 1);
 	
 	/* Test input on cond_element->IO_channel */
-	interval = cond_element->duration;
-	while (interval) {
+	start_time = Timer();
+	while (elapsed_time < (double)cond_element->duration) {
 	 	input_value = get_input_value(&whisker_m->de_dev, cond_element->IO_channel);
 	 	if (cond_element->value == input_value) {
 			*index = cond_element->true_step;
+			/* Lick detection channel */
+			if (whisker_m->de_dev.IO_Channel[LICK_DET_CH] == 
+										cond_element->IO_channel &&
+			   					cond_element->value == 0) {
+				if (cur_script->xy_state == GO) {	/* Correct Lick */
+					cur_script->stats.correct_lick++;
+					/* Update UI counter */
+					SetCtrlVal(((WhiskerScript_t *)whisker_script)->main_panel_handle,
+					   		ScriptPan_ScriptCorrectLickCtr, cur_script->stats.correct_lick);
+				} else {							/* False Alarm */
+					cur_script->stats.false_alarm++;
+					/* Update UI counter */
+					SetCtrlVal(((WhiskerScript_t *)whisker_script)->main_panel_handle,
+					   	ScriptPan_ScriptFalseAlarmCtr, cur_script->stats.false_alarm);
+				}
+			}
+			condition_true = 1;
 			break;
 	 	}
-	 	Sleep(INPUT_CHECK_DELAY);	/* 1 ms delay */
-	 	interval -= INPUT_CHECK_DELAY;
+	 	WHISKER_DELAY(INPUT_CHECK_DELAY);	/* 1 ms delay */
+	 	elapsed_time = (Timer() - start_time) * 1000.00;
 	}
+	LOG_MSG1(9, "Elapsed time in condition runner %lf", elapsed_time);
 	 
-	if (interval == 0) {
+	if (condition_true == 0) {
 		*index = cond_element->false_step;
+		/* Lick detection channel */
+		if (whisker_m->de_dev.IO_Channel[LICK_DET_CH] == 
+										cond_element->IO_channel &&
+		   			cond_element->value == 0) {
+			if (cur_script->xy_state == GO) {	/* No Lick */
+				cur_script->stats.incorrect_rejection++;
+				/* Update UI counter */
+				SetCtrlVal(((WhiskerScript_t *)whisker_script)->main_panel_handle,
+					ScriptPan_ScriptIncorrectRejCtr, cur_script->stats.incorrect_rejection);
+			} else {							/* Correct Rejection */
+				cur_script->stats.correct_rejection++;
+				/* Update UI */
+				SetCtrlVal(((WhiskerScript_t *)whisker_script)->main_panel_handle,
+					ScriptPan_ScriptCorrectRejCtr, cur_script->stats.correct_rejection);
+			}
+		}
 	}
 	 *index = *index - 1;	/* Decrement by one because, script runner increments it */
 	
@@ -2193,6 +2662,56 @@ thwait_runner(void *element, void *whisker_script, int *index)
 	SetCtrlVal(thwait_element->base_class.panel_handle, THWaitEle_LED, 1);
 	free_thread_functionIDs(&(((WhiskerScript_t *)whisker_script)->cur_script));
 	SetCtrlVal(thwait_element->base_class.panel_handle, THWaitEle_LED, 0);
+	return;
+}
+
+void
+xycondition_runner(void *element, void *whisker_script, int *index)
+{
+	Whisker_t				*whisker_m = (Whisker_t *)
+							((WhiskerScript_t *)whisker_script)->whisker_m;
+	WScript_t				*cur_script = &(((WhiskerScript_t *)whisker_script)->cur_script);
+	size_t					X, Y;
+	XYConditionElement_t	*xycond_element = (XYConditionElement_t *)element;
+	char					log_msg[LOG_MSG_LEN];
+	
+	SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_LED, 1);
+	X = get_device_data(whisker_m->z_dev.port, ZABER_X_DEV, "pos");	/* Get current X position */
+	Y = get_device_data(whisker_m->z_dev.port, ZABER_Y_DEV, "pos");	/* Get current Y position */
+	
+	LOG_MSG2(9, "XY Condition, X = %u and Y = %u\n", X, Y);
+	if (X == xycond_element->X && Y == xycond_element->Y) {
+		cur_script->xy_state = xycond_element->value;	
+	} else {
+		cur_script->xy_state = xycond_element->value ^ (1 << 0);
+	}
+	sprintf(log_msg, "XYCondition Position:\t %s", 
+											(cur_script->xy_state ? "NO_GO" : "GO"));
+	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, log_msg);
+	SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_LED, 0);
+	return;
+}
+
+void
+resetrepeat_runner(void *element, void *whisker_script, int *index) 
+{
+	Whisker_t				*whisker_m = (Whisker_t *)
+							((WhiskerScript_t *)whisker_script)->whisker_m;
+	WScript_t				*cur_script = &(((WhiskerScript_t *)whisker_script)->cur_script);
+	ScriptElement_t			*repeat_element = NULL;
+	ResetRepeatElement_t	*resrep_element = (ResetRepeatElement_t *)element;
+	char					log_msg[LOG_MSG_LEN];
+	
+	SetCtrlVal(resrep_element->base_class.panel_handle, ResRepEle_LED, 1); 
+	sprintf(log_msg, "Reset Repeat Element : %u", resrep_element->step);
+	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, log_msg);
+	
+	/* Get the repeat element from the list and reset its counter */
+	ListGetItem(cur_script->script_elements, &repeat_element, resrep_element->step);
+	if (repeat_element && repeat_element->MAGIC_NUM == REPEAT) {
+		((RepeatElement_t *)repeat_element)->counter = 0; 
+	}
+	SetCtrlVal(resrep_element->base_class.panel_handle, ResRepEle_LED, 0);
 	return;
 }
 	

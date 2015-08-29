@@ -6312,7 +6312,8 @@ RETURN_ERR
 /// HIFN Generates galvo command and ROI timing signals for jumping the laser beam from its parked position, through a series of points and returns it back to the parked position.
 static int NonResRectRasterScan_GeneratePointJumpSignals (RectRaster_type* scanEngine, char** errorMsg)
 {
-#define NonResRectRasterScan_GeneratePointJumpSignals_Err_NoPoints		-1
+#define NonResRectRasterScan_GeneratePointJumpSignals_Err_NoPoints				-1
+#define NonResRectRasterScan_GeneratePointJumpSignals_Err_HoldBurstTooShort		-2
 
 INIT_ERR
 
@@ -6324,6 +6325,8 @@ INIT_ERR
 	size_t					nSamples						= 0;
 	size_t					nJumpSamples					= 0;
 	size_t					nGalvoJumpSamples				= 0;		// number of galvo samples during a galvo jump cycle.
+	size_t					nNewGalvoJumpSamples			= 0;
+	size_t					nPreviousGalvoJumpSamples		= 0;
 	size_t					nExtraStartDelaySamples			= 0;		// number of galvo samples to keep the galvos at their parked position after the golbal start time point.
 	size_t					nHoldSamples					= 0;		// number of galvo samples during a point ROI hold period.
 	size_t					nExtraHoldSamples				= 0;
@@ -6345,13 +6348,15 @@ INIT_ERR
 	DataPacket_type*		dataPacket						= NULL; 
 	NonResGalvoCal_type*	fastAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal						= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
-	double					totalJumpTime					= 0;	  	// time in [ms] from the global start trigger until the point jump cycle completes.
-	double					extraStartDelay					= 0;		// time in [ms] from the global start trigger before the galvos initiate their jumps.
+	double					totalJumpTime					= 0;	  	// time in [ms] from the global start trigger or the end of a previous hold burst cycle until the point jump cycle completes.
+	double					totalPointJumpTime				= 0;		// sum of jump times in [ms] from the parked position to the first point, continuing with the next and finally back to the parked position.
+	double					totalExtraHoldTime				= 0;		// together with the total galvo delays it makes up the total hold time in [ms].
+	double					extraStartDelay					= 0;		// time in [ms] from the global start trigger or the end of a previous hold burst cycle  before the galvos initiate their jumps.
 	double					extraHoldTime					= 0;		// time in [ms] that combined with the galvo response delay makes up the desired ROI hold time during which the galvo is not moving.
 	Iterator_type*			iterator						= GetTaskControlIterator(scanEngine->baseClass.taskControl);
 	DSInfo_type*			dsInfo							= NULL;
 	
-	// timing and galvo command signals
+	// 1 hold cycle timing and galvo command signals
 	RepeatedWaveform_type*	fastAxisJumpWaveform			= NULL;
 	RepeatedWaveform_type*	slowAxisJumpWaveform			= NULL;
 	Waveform_type*			ROIHoldWaveform					= NULL;
@@ -6442,8 +6447,8 @@ INIT_ERR
 	
 	for (size_t i = 0; i < pointJumpSet->nJumpTimes; i++) {
 		errChk( NonResRectRasterScan_JumpTime(scanEngine, fastAxisVoltages[i] - fastAxisVoltages[i+1], slowAxisVoltages[i] - slowAxisVoltages[i+1], &pointJumpSet->jumpTimes[i], &pointJumpSet->responseDelays[i]) );
-		// add jump times between ROIs to total jump time
-		totalJumpTime += pointJumpSet->jumpTimes[i];
+		// add up jump times between ROIs
+		totalPointJumpTime += pointJumpSet->jumpTimes[i];
 	}
 	
 	// add extra hold time such that this time plus the response delays make up the target hold time
@@ -6451,104 +6456,138 @@ INIT_ERR
 		extraHoldTime = pointJumpSet->globalPointScanSettings.holdTime - pointJumpSet->responseDelays[i];
 		if (extraHoldTime < 0.0)
 			extraHoldTime = 0.0;  // in this case the entire galvo hold period will fall within the galvo response time (the galvos received a command signal but did not leave yet the ROI within the calibrated resolution)
-		
-		totalJumpTime += extraHoldTime;	
+	
+		totalExtraHoldTime += extraHoldTime;	
 	}
+		
+	for (size_t holdBurstIdx = 0; holdBurstIdx < pointJumpSet->globalPointScanSettings.nHoldBurst; holdBurstIdx++) {
 	
-	extraStartDelay = pointJumpSet->startDelay - pointJumpSet->minStartDelay;   // cannot be < 0 since the smallest value pointJumpSet->startDelay can take is pointJumpSet->minStartDelay
+		// initialize total jump time
+		totalJumpTime = totalPointJumpTime + totalExtraHoldTime;
+		
+		extraStartDelay = pointJumpSet->startDelay - pointJumpSet->minStartDelay;   // cannot be < 0 since the smallest value pointJumpSet->startDelay can take is pointJumpSet->minStartDelay
 	
-	// add extra start delay to the total jump time
-	totalJumpTime +=  extraStartDelay;
+		// add extra start delay to the total jump time
+		totalJumpTime +=  extraStartDelay;
 	
-	//-----------------------------------------------
-	// Calculate number of pixels to skip
-	//-----------------------------------------------
-	for (size_t i = 0; i < scanEngine->nPointBuffers; i++) 
-		scanEngine->pointBuffers[i]->nSkipPixels = (size_t)RoundRealToNearestInteger(((pointJumpSet->startDelay * 1e3 + scanEngine->baseClass.pixDelay) * 1e-6 * scanEngine->galvoSamplingRate));
+		if (!holdBurstIdx) {
+			// calculate number of pixels to skip
+			for (size_t i = 0; i < scanEngine->nPointBuffers; i++) 
+				scanEngine->pointBuffers[i]->nSkipPixels = (size_t)RoundRealToNearestInteger(((pointJumpSet->startDelay * 1e3 + scanEngine->baseClass.pixDelay) * 1e-6 * scanEngine->galvoSamplingRate));
 	
-	//-------------------------------------------------
-	// Calculate number of pixels to record if required
-	//-------------------------------------------------
+			// calculate number of pixels to record if required
+			nPixels = (uInt64)RoundRealToNearestInteger(((totalJumpTime * 1e3 + scanEngine->baseClass.pixDelay) * 1e-6 * scanEngine->galvoSamplingRate));
+		}
 	
-	nPixels = (uInt64)RoundRealToNearestInteger(((totalJumpTime * 1e3 + scanEngine->baseClass.pixDelay) * 1e-6 * scanEngine->galvoSamplingRate));
+		//-----------------------------------------------
+		// Generate galvo jump waveforms
+		//-----------------------------------------------
 	
-	//-----------------------------------------------
-	// Generate galvo jump waveforms
-	//-----------------------------------------------
+		//------------------------------
+		// allocate memory for waveforms
+		//------------------------------
+		
+		nNewGalvoJumpSamples = (size_t)RoundRealToNearestInteger(totalJumpTime * 1e-3 * scanEngine->galvoSamplingRate);
+		nPreviousGalvoJumpSamples = nGalvoJumpSamples; 
+		nGalvoJumpSamples += nNewGalvoJumpSamples; 
+		
+		// fast axis signal
+		nullChk( fastAxisJumpSignal = realloc(fastAxisJumpSignal, nGalvoJumpSamples * sizeof(double)) );
+		Set1D(fastAxisJumpSignal + nPreviousGalvoJumpSamples, nNewGalvoJumpSamples, 0);
+		
+		// slow axis signal
+		nullChk( slowAxisJumpSignal = realloc(slowAxisJumpSignal, nGalvoJumpSamples * sizeof(double)) );
+		Set1D(slowAxisJumpSignal + nPreviousGalvoJumpSamples, nNewGalvoJumpSamples, 0);
 	
-	// allocate memory for waveforms
-	nGalvoJumpSamples = (size_t)RoundRealToNearestInteger(totalJumpTime * 1e-3 * scanEngine->galvoSamplingRate);
-	nullChk( fastAxisJumpSignal = calloc(nGalvoJumpSamples, sizeof(double)) );
-	nullChk( slowAxisJumpSignal = calloc(nGalvoJumpSamples, sizeof(double)) );
+		// hold timing signal
+		if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIHold)) {
+			nullChk( ROIHoldSignal = realloc(ROIHoldSignal, nGalvoJumpSamples * sizeof(unsigned short)) );
+			for (size_t i = nPreviousGalvoJumpSamples; i < nPreviousGalvoJumpSamples + nNewGalvoJumpSamples; i++)
+				ROIHoldSignal[i] = 0;
+		}
 	
-	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIHold))
-		nullChk( ROIHoldSignal 		= calloc(nGalvoJumpSamples, sizeof(unsigned short)) );
+		// stimulation timing signal
+		if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate)) {
+			nullChk( ROIStimulateSignal = realloc(ROIStimulateSignal, nGalvoJumpSamples * sizeof(unsigned short)) );
+			for (size_t i = nPreviousGalvoJumpSamples; i < nPreviousGalvoJumpSamples + nNewGalvoJumpSamples; i++)
+				ROIStimulateSignal[i] = 0;
+		}
 	
-	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate))
-		nullChk( ROIStimulateSignal = calloc(nGalvoJumpSamples, sizeof(unsigned short)) );
-	
-	//-----------------
-	// create waveforms
-	//-----------------
+		//-----------------
+		// create waveforms
+		//-----------------
 							   
-	// calculate number of samples during galvo position holding time at a point ROI
-	nExtraStartDelaySamples	= (size_t)RoundRealToNearestInteger(extraStartDelay * 1e-3 * scanEngine->galvoSamplingRate);
-	nHoldSamples 			= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.holdTime * 1e-3 * scanEngine->galvoSamplingRate);
-	nStimPulseONSamples 	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimPulseONDuration * 1e-3 * scanEngine->galvoSamplingRate);
-	nStimPulseOFFSamples 	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimPulseOFFDuration * 1e-3 * scanEngine->galvoSamplingRate);
-	nStimPulseDelaySamples	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimDelay * 1e-3 * scanEngine->galvoSamplingRate);
+		// calculate number of samples during galvo position holding time at a point ROI
+		nExtraStartDelaySamples	= (size_t)RoundRealToNearestInteger(extraStartDelay * 1e-3 * scanEngine->galvoSamplingRate);
+		nHoldSamples 			= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.holdTime * 1e-3 * scanEngine->galvoSamplingRate);
+		nStimPulseONSamples 	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimPulseONDuration * 1e-3 * scanEngine->galvoSamplingRate);
+		nStimPulseOFFSamples 	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimPulseOFFDuration * 1e-3 * scanEngine->galvoSamplingRate);
+		nStimPulseDelaySamples	= (size_t)RoundRealToNearestInteger(pointJumpSet->globalPointScanSettings.stimDelay * 1e-3 * scanEngine->galvoSamplingRate);
 	
-	// keep galvos parked during the extra start delay (the extra start delay + jump time from parked position to 1st point ROI is the start delay)
-	if (nExtraStartDelaySamples) {
-		Set1D(fastAxisJumpSignal, nExtraStartDelaySamples, fastAxisCal->parked);
-		Set1D(slowAxisJumpSignal, nExtraStartDelaySamples, slowAxisCal->parked);
-	}
+		// keep galvos parked during the extra start delay (the extra start delay + jump time from parked position to 1st point ROI is the start delay)
+		if (nExtraStartDelaySamples) {
+			Set1D(fastAxisJumpSignal + nPreviousGalvoJumpSamples, nExtraStartDelaySamples, fastAxisCal->parked);
+			Set1D(slowAxisJumpSignal + nPreviousGalvoJumpSamples, nExtraStartDelaySamples, slowAxisCal->parked);
+		}
 	
-	nSamples = nExtraStartDelaySamples;
-	for (size_t i = 0; i < pointJumpSet->nJumpTimes - 1; i++) {
+		nSamples = nPreviousGalvoJumpSamples + nExtraStartDelaySamples;
+		for (size_t i = 0; i < pointJumpSet->nJumpTimes - 1; i++) {
 		
-		extraHoldTime = pointJumpSet->globalPointScanSettings.holdTime - pointJumpSet->responseDelays[i+1];
-		if (extraHoldTime < 0.0)
-			extraHoldTime = 0.0;  // in this case the entire galvo hold period will fall within the galvo response time (the galvos received a command signal but did not leave yet the ROI within the calibrated resolution)
+			extraHoldTime = pointJumpSet->globalPointScanSettings.holdTime - pointJumpSet->responseDelays[i+1];
+			if (extraHoldTime < 0.0)
+				extraHoldTime = 0.0;  // in this case the entire galvo hold period will fall within the galvo response time (the galvos received a command signal but did not leave yet the ROI within the calibrated resolution)
 		
-		nJumpSamples = (size_t)RoundRealToNearestInteger(pointJumpSet->jumpTimes[i] * 1e-3 * scanEngine->galvoSamplingRate);   
-		nExtraHoldSamples = (size_t)RoundRealToNearestInteger(extraHoldTime * 1e-3 * scanEngine->galvoSamplingRate);
+			nJumpSamples = (size_t)RoundRealToNearestInteger(pointJumpSet->jumpTimes[i] * 1e-3 * scanEngine->galvoSamplingRate);   
+			nExtraHoldSamples = (size_t)RoundRealToNearestInteger(extraHoldTime * 1e-3 * scanEngine->galvoSamplingRate);
 		
-		// set galvo signals
-		Set1D(fastAxisJumpSignal + nSamples, nJumpSamples + nExtraHoldSamples, fastAxisVoltages[i+1]);
-		Set1D(slowAxisJumpSignal + nSamples, nJumpSamples + nExtraHoldSamples, slowAxisVoltages[i+1]);
+			// set galvo signals
+			Set1D(fastAxisJumpSignal + nSamples, nJumpSamples + nExtraHoldSamples, fastAxisVoltages[i+1]);
+			Set1D(slowAxisJumpSignal + nSamples, nJumpSamples + nExtraHoldSamples, slowAxisVoltages[i+1]);
 		
-		// set ROI hold signal
-		if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIHold))
-			for (size_t j = nSamples + nJumpSamples; j < nSamples + nJumpSamples + nHoldSamples; j++)
-				ROIHoldSignal[j] = TRUE;
+			// set ROI hold signal
+			if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIHold))
+				for (size_t j = nSamples + nJumpSamples; j < nSamples + nJumpSamples + nHoldSamples; j++)
+					ROIHoldSignal[j] = TRUE;
 		
-		// set ROI stimulate signal
-		if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate))
-			for (uInt32 pulse = 0; pulse < pointJumpSet->globalPointScanSettings.nStimPulses; pulse++)
-				for (size_t j = nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples + nStimPulseOFFSamples); 
-					j < nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples+nStimPulseOFFSamples) + nStimPulseONSamples; j++)
-					ROIStimulateSignal[j] = TRUE;
+			// set ROI stimulate signal
+			if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate))
+				for (uInt32 pulse = 0; pulse < pointJumpSet->globalPointScanSettings.nStimPulses; pulse++)
+					for (size_t j = nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples + nStimPulseOFFSamples); 
+						j < nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples+nStimPulseOFFSamples) + nStimPulseONSamples; j++)
+						ROIStimulateSignal[j] = TRUE;
 		
-		nSamples += nJumpSamples + nExtraHoldSamples;
-	}
+			nSamples += nJumpSamples + nExtraHoldSamples;
+		}
 	
-	// jump back to parked position
-	nJumpSamples = (size_t)(pointJumpSet->jumpTimes[pointJumpSet->nJumpTimes-1] * 1e-3 * scanEngine->galvoSamplingRate); 
-	Set1D(fastAxisJumpSignal + nSamples, nGalvoJumpSamples - nSamples, fastAxisVoltages[nVoltages - 1]);
-	Set1D(slowAxisJumpSignal + nSamples, nGalvoJumpSamples - nSamples, slowAxisVoltages[nVoltages - 1]);
+		// jump back to parked position
+		Set1D(fastAxisJumpSignal + nSamples, nGalvoJumpSamples - nSamples, fastAxisVoltages[nVoltages - 1]);
+		Set1D(slowAxisJumpSignal + nSamples, nGalvoJumpSamples - nSamples, slowAxisVoltages[nVoltages - 1]);
+	
+		// update start delay
+		if (pointJumpSet->globalPointScanSettings.nHoldBurst > 1) {
+			pointJumpSet->startDelay = pointJumpSet->globalPointScanSettings.holdBurstPeriod + pointJumpSet->globalPointScanSettings.holdBurstPeriodIncr - (totalJumpTime - extraStartDelay - pointJumpSet->jumpTimes[0]);
+			if (pointJumpSet->startDelay < 0.0)
+				SET_ERR(NonResRectRasterScan_GeneratePointJumpSignals_Err_HoldBurstTooShort, "Hold burst period is too short.");
+		}
+	
+	} // cycling over Hold Burst Index
+	
+	//-------------------------------
+	// Transform signals to waveforms
+	//-------------------------------
 	
 	// generate galvo command jump waveforms
 	nullChk( fastAxisJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&fastAxisJumpSignal, 1.0) );
 	nullChk( slowAxisJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&slowAxisJumpSignal, 1.0) );
 	
 	// generate ROI hold waveform
-	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIHold))
+	if (ROIHoldSignal)
 		nullChk( ROIHoldWaveform = init_Waveform_type(Waveform_UShort, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIHoldSignal) );
 	
 	// generate ROI stimulate waveform
-	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate))
+	if (ROIStimulateSignal)
 		nullChk( ROIStimulateWaveform = init_Waveform_type(Waveform_UShort, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIStimulateSignal) );
+	
 	
 	//------------------------------------------------------------
 	// Send galvo, ROI timing and stimulation waveforms
@@ -7457,6 +7496,55 @@ Error:
 	OKfree(pointJumps);
 	
 }
+
+/*
+static void NonResRectRasterScan_SetMinimumHoldBurstPeriod (RectRaster_type* rectRaster)
+{
+INIT_ERR
+
+	PointJumpSet_type*		pointJumpSet		= rectRaster->pointJumpSettings;
+	Point_type**			pointJumps			= NULL;	// Array of point jumps from the parked position to each point ROI in case of Single Point mode or to the first point ROI in case of Point Group mode.
+	size_t					nPointJumps			= 0;	// Number of active points to jump to from pointJumps array.
+	size_t					nTotalPoints		= ListNumItems(pointJumpSet->pointJumps);
+	Point_type*				pointJump			= NULL;
+	double					minBurstPeriod		= 0;
+	
+	
+	// get points to jump to from the parked position
+	for (size_t i = 1; i <= nTotalPoints; i++) {
+		pointJump = *(Point_type**)ListGetPtrToItem(pointJumpSet->pointJumps, i);
+		if (!pointJump->baseClass.active) continue; // select only active points
+		nPointJumps++;
+		pointJumps = realloc(pointJumps, nPointJumps * sizeof(Point_type*));
+		pointJumps[nPointJumps - 1] = pointJump;
+	}
+
+	switch (rectRaster->pointJumpSettings->jumpMethod) {
+		
+		case PointJump_SinglePoints:
+			
+			for (size_t i = 0; i < nPointJumps; i++) {
+				
+				
+				
+			}
+			
+			break;
+			
+		case PointJump_PointGroup:
+		case PointJump_IncrementalPointGroup:
+			
+		
+			break;
+	}
+	
+
+Error:
+	
+	// cleanup
+	OKfree(pointJumps);	
+}
+*/
 
 /*
 // Calculates the minimum time it takes to visit all the point ROIs starting from the parked position and ending up again in the parked position

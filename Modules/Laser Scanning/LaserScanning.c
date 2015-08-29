@@ -572,6 +572,7 @@ typedef struct {
 	double						repeatWait;					// Additional time in [s] to wait between sequence repetitions.
 	uInt32						nIntegration;				// Number of samples to use for integration.
 	ListType					pointJumps;					// List of points to jump to of PointJump_type*. The order of point jumps is determined by the order of the elements in the list.
+	RectRasterScanSet_type		scanSettings;				// Scan settings used when the list of point jumps was selected.
 	size_t						currentActivePoint;			// 1-based index of current active point to visit when using the PointJump_SinglePoints mode.
 	size_t						nPointsInGroup;				// Number of points in a group when using PointJump_IncrementalPointGroup mode.
 	PointScan_type				globalPointScanSettings;	// Global settings for stimulation and recording from point ROIs.
@@ -7666,6 +7667,14 @@ INIT_ERR
 	pointJumpSet->jumpTimes										= NULL;
 	pointJumpSet->responseDelays								= NULL;
 	
+	// scan parameters
+	pointJumpSet->scanSettings.width							= 0;
+	pointJumpSet->scanSettings.widthOffset						= 0;
+	pointJumpSet->scanSettings.height							= 0;
+	pointJumpSet->scanSettings.heightOffset						= 0;
+	pointJumpSet->scanSettings.pixelDwellTime					= 0;
+	pointJumpSet->scanSettings.pixSize							= 0;
+	
 	// hold settings
 	pointJumpSet->globalPointScanSettings.nHoldBurst			= 1;
 	pointJumpSet->globalPointScanSettings.holdTime				= NonResGalvoRasterScan_Default_HoldTime;
@@ -8311,6 +8320,7 @@ INIT_ERR
 	
 	// assign previous scan settings
 	scanEngine->scanSettings = previousScanSettings;
+	scanEngine->pointJumpSettings->scanSettings = previousScanSettings;
 	
 	// update preferred widths and pixel dwell times
 	errChk( NonResRectRasterScan_ScanWidths(scanEngine, &errorInfo.errMsg) );

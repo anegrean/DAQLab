@@ -51,9 +51,11 @@
 #define PIStage_POSITION_UPDATE_INTERVAL	0.2			// Time intervals in [s] between position updates when using a joystick
 
 //------------------------------------------------------------------------------
-// USB connection ID
+// Connection ID
 //------------------------------------------------------------------------------
-#define PIStage_ID 							"0115500620"
+#define PIStage_USB_ID 						"PI C-863 Mercury"  //"0115500620"
+#define PIStage_COM_Port					3
+#define PIStage_COM_BaudRate				9600
 
 //------------------------------------------------------------------------------
 // PI Stage type
@@ -507,11 +509,24 @@ INIT_ERR
 	
 	// establish connection
 	DLMsg("Connecting to PI stage controller...\n\n", 0); 
-	if ((ID = PI_ConnectUSB(PIStage_ID)) < 0) {
-		Fmt(msg,"Could not connect to PI stage controller with USB ID %s.\n\n", PIStage_ID);
+	
+	// use this to list all USB items
+	//char	tmpBuff[1000] = "";
+	//ID = PI_EnumerateUSB(tmpBuff, 1000, NULL);
+	
+	if ((ID = PI_ConnectUSB(PIStage_USB_ID)) < 0) {
+		Fmt(msg,"Could not connect to PI stage controller with USB ID %s.\n\n", PIStage_USB_ID);
 		SET_ERR(InitHardware_Err_PICommand, msg);
 	} else
 		PIstage->PIStageID = ID;
+	
+	/*
+	if ((ID = PI_ConnectRS232(PIStage_COM_Port, PIStage_COM_BaudRate)) < 0) {
+		Fmt(msg,"Could not connect to PI stage controller on COM %d with Baud Rate %d.\n\n", PIStage_COM_Port, PIStage_COM_BaudRate);
+		SET_ERR(InitHardware_Err_PICommand, msg);
+	} else
+		PIstage->PIStageID = ID;
+	*/
 	
 	// print servo controller info
 	if (!PI_qIDN(ID, buff, 10000)) {

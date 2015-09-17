@@ -627,7 +627,7 @@ struct ChanSet {
 	char*						name;						// Full physical channel name used by DAQmx, e.g. Dev1/ai1 
 	Channel_type				chanType;					// Channel type.
 	int							chanPanHndl;				// Panel handle where channel properties are adjusted
-	Dev_type*					device;						// reference to device owing the channel
+	Dev_type*					device;						// reference to device owing the channel.
 	SourceVChan_type*			srcVChan;					// Source VChan assigned to input type physical channels.
 	SinkVChan_type*				sinkVChan;					// Sink VChan assigned to output type physical channels.
 	BOOL						onDemand;					// If TRUE, the channel is updated/read out using software-timing.
@@ -1126,6 +1126,10 @@ static int 							ReadDirectDigitalOut					(char* chan, uInt32* data, char** err
 static int 							DirectDigitalOut 						(char* chan, uInt32 data, BOOL invert, double timeout, char** errorMsg);
 void 								SetPortControls							(int panel, uInt32 data);																	// <---------- check & cleanup!!!
 
+	//-----------------------------
+	// CI
+	//-----------------------------
+
 	// CI base class
 static void							init_ChanSet_CI_type					(Dev_type* dev, ChanSet_CI_type* chanSet, char physChanName[], Channel_type chanType, EdgeTypes activeEdge, DiscardFptr_type discardFptr);
 static void							discard_ChanSet_CI_type					(ChanSet_CI_type** chanSetPtr);
@@ -1139,10 +1143,15 @@ static ChanSet_CI_Frequency_type* 	init_ChanSet_CI_Frequency_type 			(Dev_type* 
 																  			 double measTime, uInt32 divisor, char freqInputTerminal[], CounterTaskTiming_type taskTiming);
 static void 						discard_ChanSet_CI_Frequency_type 		(ChanSet_CI_Frequency_type** chanSetPtr);
 
+	//-----------------------------
 	// CO
-static ChanSet_CO_type* 			init_ChanSet_CO_type 					(Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain);
+	//-----------------------------
+
+	// CO
+static ChanSet_CO_type* 			init_ChanSet_CO_type 					(Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], TaskTrig_type* startTrig, PulseTrain_type* pulseTrain);
 static void 						discard_ChanSet_CO_type 				(ChanSet_CO_type** chanSetPtr);
 static int 							ChanSetCO_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);	// <---------- check & cleanup!!!
+static int 							AddToUI_Chan_CO			 				(ChanSet_CO_type* chanSet, char** errorMsg); 
 
 	// channels & property lists
 static ListType						GetPhysChanPropertyList					(char chanName[], int chanProperty);
@@ -1194,11 +1203,11 @@ static int							UpdateADTaskTimingNSamplesMeasMode		(ADTaskSet_type* tskSet, uI
 static ADTaskSet_type*				init_ADTaskSet_type						(Dev_type* dev);
 static void							discard_ADTaskSet_type					(ADTaskSet_type** taskSetPtr);
 
-	// creates a new AD task settings structure UI
+	// creates a new AD task UI
 static void							newUI_ADTaskSet 						(ADTaskSet_type* tskSet, char taskSettingsTabName[], CVICtrlCBFptr_type removeDAQmxChanCBFptr, int taskTriggerUsage, 
 																			 char sinkVChanNSamplesBaseName[], char sourceVChanNSamplesBaseName[], char sinkVChanSamplingRateBaseName[], 
 																			 char sourceVChanSamplingRateBaseName[], char HWTrigBaseName[]);
-	// discards an AD task settings structire from the UI and framework
+	// discards an AD task UI
 static void							discardUI_ADTaskSet 					(ADTaskSet_type** taskSetPtr); 
 
 static int 							ADTaskSettings_CB			 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
@@ -1226,6 +1235,10 @@ static void							discard_CITaskSet_type					(CITaskSet_type** taskSetPtr);
 	// CO task settings
 static COTaskSet_type*				init_COTaskSet_type						(Dev_type* dev);
 static void							discard_COTaskSet_type					(COTaskSet_type** taskSetPtr);
+
+	// creates a new CO task UI
+static int							newUI_COTaskSet							(COTaskSet_type* taskSet, char** errorMsg);
+
 static int CVICALLBACK 				Chan_CO_Pulse_Frequency_CB				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				Chan_CO_Pulse_Time_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK 				Chan_CO_Pulse_Ticks_CB					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
@@ -1380,7 +1393,7 @@ static void							COPulseTrainSourceVChan_StateChange		(VChan_type* self, void* 
 	//-------------------------------------------------------------------
 
 
-	// AI, AO, Di & DO 
+	// AI, AO, DI & DO 
 static int							ADNSamples_DataReceivedTC				(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 static int							ADSamplingRate_DataReceivedTC			(TaskControl_type* taskControl, TCStates taskState, BOOL taskActive, SinkVChan_type* sinkVChan, BOOL const* abortFlag, char** errorMsg);
 	// AO
@@ -2309,7 +2322,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTimeTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTime, lowTime, initialDelay) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, , (PulseTrain_type*)pulseTrain) );
 				
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2336,7 +2349,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainFreqTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, dutyCycle, frequency, initialDelay) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, ,(PulseTrain_type*)pulseTrain) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 				
@@ -2365,7 +2378,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTickTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTicks, lowTicks, delayTicks, 0) ); // tick clock unknown at this point
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, , (PulseTrain_type*)pulseTrain) );
 				OKfree(clockSource);
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -5733,7 +5746,7 @@ static void discard_ChanSet_CI_Frequency_type (ChanSet_CI_Frequency_type** chanS
 //------------------------------------------------------------------------------
 // ChanSet_CO_type
 //------------------------------------------------------------------------------
-static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain)
+static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], TaskTrig_type* startTrig, PulseTrain_type* pulseTrain)
 {
 	ChanSet_CO_type*	chanSet = malloc (sizeof(ChanSet_CO_type));
 	if (!chanSet) return NULL;
@@ -5743,7 +5756,7 @@ static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[]
 	
 	// init child class
 	chanSet->taskHndl		= NULL;
-	chanSet->startTrig		= NULL;
+	chanSet->startTrig		= startTrig;
 	chanSet->referenceTrig	= NULL;
 	chanSet->HWTrigMaster	= NULL;
 	chanSet->HWTrigSlave	= NULL;
@@ -5811,6 +5824,281 @@ static int ChanSetCO_CB (int panel, int control, int event, void *callbackData, 
 	}
 	
 	return 0;
+}
+
+static int AddToUI_Chan_CO (ChanSet_CO_type* chanSet, char** errorMsg)
+{
+INIT_ERR
+
+	int						panHndl				= 0;
+	int 					chanSetPanHndl		= 0;
+	int						settingsPanHndl		= 0;
+	int						newTabIdx			= 0;
+	int 					pulsePanHndl		= 0;	
+	int						COPulsePanHndl		= 0;
+	int 					timingPanHndl 		= 0;
+	int						int trigPanHndl		= 0;
+	int 					ctrlIdx				= 0;
+	PulseTrainIdleStates	idleState			= 0;
+	Dev_type*   			dev					= chanSet->baseClass.device;
+	char*					shortChanName		= NULL;
+	void*					callbackData		= NULL;
+	
+	//--------------------------
+	// prepare UI
+	//--------------------------
+	
+	// remove "None" labelled channel tab if its panel doesn't have callback data attached to it  
+	GetPanelHandleFromTabPage(dev->COTaskSet->panHndl, CICOTskSet_ChanSet, 0, &panHndl);
+	GetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, &callbackData); 
+	if (!callbackData) DeleteTabPage(dev->COTaskSet->panHndl, CICOTskSet_ChanSet, 0, 1);
+	
+	// insert new channel tab
+	errChk( chanSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOChSet) );
+	newTabIdx = InsertPanelAsTabPage(dev->COTaskSet->panHndl, Chan_ChanSet, -1, chanSetPanHndl);
+	OKfreePanHndl(chanSetPanHndl);
+	GetPanelHandleFromTabPage(dev->COTaskSet->panHndl, Chan_ChanSet, newTabIdx, &chanSet->baseClass.chanPanHndl);
+	// add callbackdata to the channel panel
+	SetPanelAttribute(chanSet->baseClass.chanPanHndl, ATTR_CALLBACK_DATA, chanSet);
+	
+	// change tab title
+	shortChanName = strstr(chanSet->baseClass.name, "/") + 1;
+	SetTabPageAttribute(dev->COTaskSet->panHndl, Chan_ChanSet, newTabIdx, ATTR_LABEL_TEXT, shortChanName);
+	
+	
+	//--------------------------
+	// adjust "VChans" tab
+	//--------------------------
+					
+	GetPanelHandleFromTabPage(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_SettingsTabIdx, &settingsPanHndl);
+	SetCtrlsInPanCBInfo(chanSet, ChanSetCO_CB, settingsPanHndl);  
+	
+	//--------------------------
+	// adjust "Pulse" tab
+	//--------------------------
+					
+	// delete empty Pulse tab
+	DeleteTabPage(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, 1); 
+					
+	switch (chanSet->baseClass.chanType){
+						
+		case Chan_CO_Pulse_Frequency:
+			
+			// load panel
+			errChk( COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COFreqPan) );
+			InsertPanelAsTabPage(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
+			OKfreePanHndl(COPulsePanHndl);
+			SetTabPageAttribute(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Pulse");
+			GetPanelHandleFromTabPage(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &pulsePanHndl);
+		
+			// add control callbacks
+			SetCtrlsInPanCBInfo(chanSet, Chan_CO_Pulse_Frequency_CB, pulsePanHndl);
+		
+			// init idle state
+			idleState = GetPulseTrainIdleState(chanSet->pulseTrain);
+			switch (idleState) {
+			
+				case PulseTrainIdle_Low:
+					
+					SetCtrlIndex(pulsePanHndl, COFreqPan_IdleState, 0);
+					break;
+					
+				case PulseTrainIdle_High:
+					
+					SetCtrlIndex(pulsePanHndl, COFreqPan_IdleState, 1);
+					break;
+			}
+		
+			// init frequency
+			SetCtrlVal(pulsePanHndl, COFreqPan_Frequency, GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)chanSet->pulseTrain)); 					// display in [Hz]
+			
+			// init duty cycle
+			SetCtrlVal(pulsePanHndl, COFreqPan_DutyCycle, GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)chanSet->pulseTrain)); 				// display in [%]
+			
+			// init initial delay
+			SetCtrlVal(pulsePanHndl, COFreqPan_InitialDelay, GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)chanSet->pulseTrain)*1e3); 	// display in [ms]
+			
+			// init CO generation mode
+			InsertListItem(pulsePanHndl, COFreqPan_Mode, -1, "Finite", Operation_Finite);
+			InsertListItem(pulsePanHndl, COFreqPan_Mode, -1, "Continuous", Operation_Continuous);
+			GetIndexFromValue(pulsePanHndl, COFreqPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(chanSet->pulseTrain))); 
+			SetCtrlIndex(pulsePanHndl, COFreqPan_Mode, ctrlIdx);
+			
+			// init CO N Pulses
+			SetCtrlVal(pulsePanHndl, COFreqPan_NPulses, GetPulseTrainNPulses(chanSet->pulseTrain)); 
+			
+			break;
+					
+		case Chan_CO_Pulse_Time:
+			
+			errChk( COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COTimePan) );
+			InsertPanelAsTabPage(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
+			OKfreePanHndl(COPulsePanHndl);
+			SetTabPageAttribute(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Pulse");
+			GetPanelHandleFromTabPage(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &pulsePanHndl);
+			
+			// add control callbacks
+			SetCtrlsInPanCBInfo(chanSet, Chan_CO_Pulse_Time_CB, pulsePanHndl);
+			
+			// init idle state
+			idleState = GetPulseTrainIdleState(chanSet->pulseTrain);
+			switch (idleState) {
+				
+				case PulseTrainIdle_Low:
+					
+					SetCtrlIndex(pulsePanHndl, COTimePan_IdleState, 0);
+					break;
+					
+				case PulseTrainIdle_High:
+					
+					SetCtrlIndex(pulsePanHndl, COTimePan_IdleState, 1);
+					break;
+			}
+			
+			// init high time
+			SetCtrlVal(pulsePanHndl, COTimePan_HighTime, GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)chanSet->pulseTrain)*1e3); 			// display in [ms]
+			
+			// init low time
+			SetCtrlVal(pulsePanHndl, COTimePan_LowTime, GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)chanSet->pulseTrain)*1e3); 				// display in [ms]
+			
+			// init initial delay
+			SetCtrlVal(pulsePanHndl, COTimePan_InitialDelay, GetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)chanSet->pulseTrain)*1e3); 	// display in [ms]
+			
+			// init CO generation mode
+			InsertListItem(pulsePanHndl, COTimePan_Mode, -1, "Finite", Operation_Finite);
+			InsertListItem(pulsePanHndl, COTimePan_Mode, -1, "Continuous", Operation_Continuous);
+			GetIndexFromValue(pulsePanHndl, COTimePan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(chanSet->pulseTrain))); 
+			SetCtrlIndex(pulsePanHndl, COTimePan_Mode, ctrlIdx);
+			
+			// init CO N Pulses
+			SetCtrlVal(pulsePanHndl, COTimePan_NPulses, GetPulseTrainNPulses(chanSet->pulseTrain)); 
+					
+			break;
+					
+		case Chan_CO_Pulse_Ticks:
+			
+			COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COTicksPan);
+			InsertPanelAsTabPage(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
+			OKfreePanHndl(COPulsePanHndl);
+			SetTabPageAttribute(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Pulse");
+			GetPanelHandleFromTabPage(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &pulsePanHndl);
+			
+			// add control callbacks
+			SetCtrlsInPanCBInfo(chanSet, Chan_CO_Pulse_Ticks_CB, pulsePanHndl);
+			
+			// init idle state
+			idleState = GetPulseTrainIdleState(chanSet->pulseTrain);
+			switch (idleState) {
+				
+				case PulseTrainIdle_Low:
+					
+					SetCtrlIndex(pulsePanHndl, COTicksPan_IdleState, 0);
+					break;
+					
+				case PulseTrainIdle_High:
+					
+					SetCtrlIndex(pulsePanHndl, COTicksPan_IdleState, 1);
+					break;
+			}
+			
+			// init high ticks
+			SetCtrlVal(pulsePanHndl, COTicksPan_HighTicks, GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain));
+			
+			// init low ticks
+			SetCtrlVal(pulsePanHndl, COTicksPan_LowTicks, GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain));
+			
+			// init initial delay ticks
+			SetCtrlVal(pulsePanHndl, COTicksPan_InitialDelay, GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)chanSet->pulseTrain));   
+			
+			// init CO generation mode
+			InsertListItem(pulsePanHndl, COTicksPan_Mode, -1, "Finite", Operation_Finite);
+			InsertListItem(pulsePanHndl, COTicksPan_Mode, -1, "Continuous", Operation_Continuous);
+			GetIndexFromValue(pulsePanHndl, COTicksPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(chanSet->pulseTrain))); 
+			SetCtrlIndex(pulsePanHndl, COTicksPan_Mode, ctrlIdx);
+			
+			// init CO N Pulses
+			SetCtrlVal(pulsePanHndl, COTicksPan_NPulses, GetPulseTrainNPulses(chanSet->pulseTrain)); 
+			
+			break;
+	}
+	
+	//--------------------------
+	// adjust "Timing" tab
+	//--------------------------
+	
+	// get timing tab panel handle
+	GetPanelHandleFromTabPage(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_ClkTabIdx, &timingPanHndl);
+
+	// add callback to controls in the panel
+	// note: this must be done before changing the string control to a terminal control!
+	SetCtrlsInPanCBInfo(chanSet, Chan_CO_Clk_CB, timingPanHndl);
+
+	// make sure that the host controls are not dimmed before inserting terminal controls!
+	NIDAQmx_NewTerminalCtrl(timingPanHndl, TimingPan_ClockSource, 0); // single terminal selection
+
+	// adjust sample clock terminal control properties
+	NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, TimingPan_ClockSource, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
+	NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, TimingPan_ClockSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+
+	// if CO channel type is ticks then undim clock source control, and dim it otherwise (do this after inserting the custom control)
+	if (chanSet->baseClass.chanType == Chan_CO_Pulse_Ticks)
+		SetCtrlAttribute(timingPanHndl, TimingPan_ClockSource, ATTR_DIMMED, FALSE);
+	else
+		SetCtrlAttribute(timingPanHndl, TimingPan_ClockSource, ATTR_DIMMED, TRUE);
+
+	if (chanSet->clockSource && chanSet->clockSource[0])
+		SetCtrlVal(timingPanHndl, TimingPan_ClockSource, chanSet->clockSource);
+	
+	//--------------------------
+	// adjust "Trigger" tab
+	//--------------------------
+	
+	// get trigger tab panel handle
+	GetPanelHandleFromTabPage(chanSet->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TriggerTabIdx, &trigPanHndl);
+	
+	// add callback to controls in the panel
+	// note: this must be done before changing the string control to a terminal control!
+	SetCtrlsInPanCBInfo(chanSet, Chan_CO_Trig_CB, trigPanHndl);
+	
+	// make sure that the host controls are not dimmed before inserting terminal controls!
+	NIDAQmx_NewTerminalCtrl(trigPanHndl, TrigPan_Source, 0); // single terminal selection
+	
+	// adjust sample clock terminal control properties
+	NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TrigPan_Source, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
+	NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TrigPan_Source, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
+		
+	// insert trigger type options
+	InsertListItem(trigPanHndl, TrigPan_TrigType, -1, "None", Trig_None); 
+	InsertListItem(trigPanHndl, TrigPan_TrigType, -1, "Digital Edge", Trig_DigitalEdge);
+	// set trigger type
+	GetIndexFromValue(trigPanHndl, TrigPan_TrigType, &ctrlIdx, chanSet->startTrig->trigType);
+	SetCtrlIndex(trigPanHndl, TrigPan_TrigType, ctrlIdx);
+	
+	// insert trigger slope options
+	InsertListItem(trigPanHndl, TrigPan_Slope, 0, "Rising", TrigSlope_Rising); 
+	InsertListItem(trigPanHndl, TrigPan_Slope, 1, "Falling", TrigSlope_Falling);
+	// set trigger slope
+	GetIndexFromValue(trigPanHndl, TrigPan_Slope, &ctrlIdx, chanSet->startTrig->slope);
+	SetCtrlIndex(trigPanHndl, TrigPan_Slope, ctrlIdx);
+	
+	if (chanSet->startTrig->trigType == Trig_None) {
+		SetCtrlAttribute(trigPanHndl, TrigPan_Slope, ATTR_DIMMED, TRUE);
+		SetCtrlAttribute(trigPanHndl, TrigPan_Source, ATTR_DIMMED, TRUE);
+	} else {
+		SetCtrlAttribute(trigPanHndl, TrigPan_Slope, ATTR_DIMMED, FALSE);
+		SetCtrlAttribute(trigPanHndl, TrigPan_Source, ATTR_DIMMED, FALSE);
+	}
+	
+	
+	
+	
+	return 0;
+Error:
+	
+	if (chanSetPanHndl > 0) OKfreePanHndl(chanSetPanHndl);
+	if (COPulsePanHndl > 0)
+					
+RETURN_ERR
 }
 
 /// HIFN Obtains a list of physical channel properties for a given DAQmx channel attribute that returns an array of properties.
@@ -6232,6 +6520,8 @@ INIT_ERR
 					if(!dev->AOTaskSet) {
 						// init AO task structure data
 						dev->AOTaskSet = init_ADTaskSet_type(dev);
+						
+						// add task UI
 						newUI_ADTaskSet(dev->AOTaskSet, DAQmxAOTaskSetTabName, RemoveDAQmxAOChannel_CB, dev->attr->AOTriggerUsage, SinkVChan_AONSamples_BaseName, 
 										SourceVChan_AONSamples_BaseName, SinkVChan_AOSamplingRate_BaseName, SourceVChan_AOSamplingRate_BaseName, HWTrig_AO_BaseName); 
 					}
@@ -6287,6 +6577,8 @@ INIT_ERR
 					if(!dev->DOTaskSet) {
 						// init DO task structure data
 						dev->DOTaskSet = init_ADTaskSet_type(dev);
+						
+						// add task UI
 						newUI_ADTaskSet(dev->DOTaskSet, DAQmxDOTaskSetTabName, RemoveDAQmxDOChannel_CB, dev->attr->DOTriggerUsage, SinkVChan_DONSamples_BaseName, 
 										SourceVChan_DONSamples_BaseName, SinkVChan_DOSamplingRate_BaseName, SourceVChan_DOSamplingRate_BaseName, HWTrig_DO_BaseName); 
 					}
@@ -6408,36 +6700,12 @@ INIT_ERR
 							
 					if(!dev->COTaskSet) {
 						// init CO task structure data
-						dev->COTaskSet = init_COTaskSet_type(dev);    
+						dev->COTaskSet = init_COTaskSet_type(dev);
 						
-						// load UI resources
-						int CICOTaskSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOTskSet);  
-						// insert panel to UI and keep track of the AI task settings panel handle
-						newTabIdx = InsertPanelAsTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, -1, CICOTaskSetPanHndl); 
-						GetPanelHandleFromTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, newTabIdx, &dev->COTaskSet->panHndl);
-						// change tab title to new Task Controller name
-						SetTabPageAttribute(dev->devPanHndl, TaskSetPan_DAQTasks, newTabIdx, ATTR_LABEL_TEXT, DAQmxCOTaskSetTabName);
-				
-						// remove "None" labelled task settings tab (always first tab) if its panel doesn't have callback data attached to it  
-							
-						GetPanelHandleFromTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, 0, &panHndl);
-						GetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, &callbackData); 
-						if (!callbackData) DeleteTabPage(dev->devPanHndl, TaskSetPan_DAQTasks, 0, 1);
-						// connect CO task settings data to the panel
-						SetPanelAttribute(dev->COTaskSet->panHndl, ATTR_CALLBACK_DATA, dev->COTaskSet);
-							
-						// add callback data and callback function to remove channels
-						SetCtrlAttribute(dev->COTaskSet->panHndl, Chan_ChanSet,ATTR_CALLBACK_FUNCTION_POINTER, RemoveDAQmxCOChannel_CB);
-						SetCtrlAttribute(dev->COTaskSet->panHndl, Chan_ChanSet,ATTR_CALLBACK_DATA, dev);
-						
+						// add task UI
+						errChk( newUI_COTaskSet(dev->COTaskSet, &errorInfo.errMsg) );
 					}
 						
-							
-					// remove "None" labelled task settings tab (always first tab) if its panel doesn't have callback data attached to it  
-					GetPanelHandleFromTabPage(dev->COTaskSet->panHndl, Chan_ChanSet, 0, &panHndl);
-					GetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, &callbackData); 
-					if (!callbackData) DeleteTabPage(dev->COTaskSet->panHndl, Chan_ChanSet, 0, 1);
-			
 					//------------------------------------------------
 					// add new channel
 					//------------------------------------------------
@@ -6446,12 +6714,11 @@ INIT_ERR
 				
 					// mark channel as in use
 					COchanAttr->inUse = TRUE;
-							
-					Channel_type 				chanType		= 0;
-					PulseTrain_type*			pulseTrain		= NULL;
 					
-					GetCtrlVal(dev->devPanHndl, TaskSetPan_IOType, &ioType);  
-					//set channel type 
+					// add new CO channel to UI
+					Channel_type 		chanType		= 0;
+					PulseTrain_type*	pulseTrain		= NULL;
+					
 					switch (ioType){
 						
 						case DAQmx_Val_Pulse_Freq:
@@ -6473,243 +6740,12 @@ INIT_ERR
 							break;
 					}
 					
+					TaskTrig_type* 		startTrig	=  init_TaskTrig_type(dev, 0);
+					ChanSet_CO_type* 	newChan 	=  init_ChanSet_CO_type(dev, chName, chanType, NULL, startTrig, pulseTrain);
+					errChk( AddToUI_Chan_CO(newChan, &errorInfo.errMsg) );
 					
-					ChanSet_CO_type* newChan 	=  init_ChanSet_CO_type(dev, chName, chanType, NULL, pulseTrain);
-						
-					// insert new channel tab
-					int chanSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOChSet);  
-					newTabIdx = InsertPanelAsTabPage(dev->COTaskSet->panHndl, Chan_ChanSet, -1, chanSetPanHndl); 
-					// change tab title
-					shortChanName = strstr(chName, "/") + 1;  
+					/*
 					
-					SetTabPageAttribute(dev->COTaskSet->panHndl, Chan_ChanSet, newTabIdx, ATTR_LABEL_TEXT, shortChanName); 
-					DiscardPanel(chanSetPanHndl); 
-					chanSetPanHndl = 0;
-					GetPanelHandleFromTabPage(dev->COTaskSet->panHndl, Chan_ChanSet, newTabIdx, &newChan->baseClass.chanPanHndl);
-						
-					// add callbackdata to the channel panel
-					SetPanelAttribute(newChan->baseClass.chanPanHndl, ATTR_CALLBACK_DATA, newChan);
-							
-					
-					// add callback data to the controls in the panel
-					//SetCtrlsInPanCBInfo(newChan, ChanSetCO_CB, newChan->baseClass.chanPanHndl);
-						
-					//--------------------------
-					// adjust "VChans" tab
-					//--------------------------
-					
-					int settingsPanHndl;
-					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_SettingsTabIdx, &settingsPanHndl);
-					//GetCtrlVal(settingsPanHndl, TimingPan_Timeout, &dev->COTaskSet->timeout);
-						
-					// add callback to controls in the panel
-					SetCtrlsInPanCBInfo(newChan, ChanSetCO_CB, settingsPanHndl);   
-								
-					//--------------------------
-					// adjust "Pulse" tab
-					//--------------------------
-					
-					// delete empty Pulse tab
-					DeleteTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, 1); 
-					
-					int 					pulsePanHndl	= 0;	
-					int 					COPulsePanHndl	= 0;
-					PulseTrainIdleStates	idleState		= 0;
-					int 					ctrlIdx			= 0;
-					
-					switch (chanType){
-						
-						case Chan_CO_Pulse_Frequency:
-							// load panel
-							COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COFreqPan);
-							InsertPanelAsTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
-							DiscardPanel(COPulsePanHndl);
-							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Pulse");
-							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &pulsePanHndl);
-							
-							// add control callbacks
-							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Frequency_CB, pulsePanHndl);
-							
-							// init idle state
-							idleState = GetPulseTrainIdleState(newChan->pulseTrain);
-							switch (idleState) {
-								
-								case PulseTrainIdle_Low:
-									SetCtrlIndex(pulsePanHndl, COFreqPan_IdleState, 0);
-									break;
-								case PulseTrainIdle_High:
-									SetCtrlIndex(pulsePanHndl, COFreqPan_IdleState, 1);
-									break;
-							}
-							
-							// init frequency
-							SetCtrlVal(pulsePanHndl, COFreqPan_Frequency, GetPulseTrainFreqTimingFreq((PulseTrainFreqTiming_type*)newChan->pulseTrain)); 					// display in [Hz]
-							
-							// init duty cycle
-							SetCtrlVal(pulsePanHndl, COFreqPan_DutyCycle, GetPulseTrainFreqTimingDutyCycle((PulseTrainFreqTiming_type*)newChan->pulseTrain)); 				// display in [%]
-							
-							// init initial delay
-							SetCtrlVal(pulsePanHndl, COFreqPan_InitialDelay, GetPulseTrainFreqTimingInitialDelay((PulseTrainFreqTiming_type*)newChan->pulseTrain)*1e3); 	// display in [ms]
-							
-							// init CO generation mode
-							InsertListItem(pulsePanHndl, COFreqPan_Mode, -1, "Finite", Operation_Finite);
-							InsertListItem(pulsePanHndl, COFreqPan_Mode, -1, "Continuous", Operation_Continuous);
-							GetIndexFromValue(pulsePanHndl, COFreqPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
-							SetCtrlIndex(pulsePanHndl, COFreqPan_Mode, ctrlIdx);
-							
-							// init CO N Pulses
-							SetCtrlVal(pulsePanHndl, COFreqPan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
-							
-							break;
-									
-						case Chan_CO_Pulse_Time:
-							
-							COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COTimePan);
-							InsertPanelAsTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
-							DiscardPanel(COPulsePanHndl);
-							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Pulse");
-							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &pulsePanHndl);
-							
-							// add control callbacks
-							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Time_CB, pulsePanHndl);
-							
-							// init idle state
-							idleState = GetPulseTrainIdleState(newChan->pulseTrain);
-							switch (idleState) {
-								
-								case PulseTrainIdle_Low:
-									SetCtrlIndex(pulsePanHndl, COTimePan_IdleState, 0);
-									break;
-								case PulseTrainIdle_High:
-									SetCtrlIndex(pulsePanHndl, COTimePan_IdleState, 1);
-									break;
-							}
-							
-							// init high time
-							SetCtrlVal(pulsePanHndl, COTimePan_HighTime, GetPulseTrainTimeTimingHighTime((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 			// display in [ms]
-							
-							// init low time
-							SetCtrlVal(pulsePanHndl, COTimePan_LowTime, GetPulseTrainTimeTimingLowTime((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 				// display in [ms]
-							
-							// init initial delay
-							SetCtrlVal(pulsePanHndl, COTimePan_InitialDelay, GetPulseTrainTimeTimingInitialDelay((PulseTrainTimeTiming_type*)newChan->pulseTrain)*1e3); 	// display in [ms]
-							
-							// init CO generation mode
-							InsertListItem(pulsePanHndl, COTimePan_Mode, -1, "Finite", Operation_Finite);
-							InsertListItem(pulsePanHndl, COTimePan_Mode, -1, "Continuous", Operation_Continuous);
-							GetIndexFromValue(pulsePanHndl, COTimePan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
-							SetCtrlIndex(pulsePanHndl, COTimePan_Mode, ctrlIdx);
-							
-							// init CO N Pulses
-							SetCtrlVal(pulsePanHndl, COTimePan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
-									
-							break;
-									
-						case Chan_CO_Pulse_Ticks:
-							
-							COPulsePanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, COTicksPan);
-							InsertPanelAsTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, COPulsePanHndl);
-							DiscardPanel(COPulsePanHndl);
-							SetTabPageAttribute(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, ATTR_LABEL_TEXT, "Pulse");
-							GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TimingTabIdx, &pulsePanHndl);
-							
-							// add control callbacks
-							SetCtrlsInPanCBInfo(newChan, Chan_CO_Pulse_Ticks_CB, pulsePanHndl);
-							
-							// init idle state
-							idleState = GetPulseTrainIdleState(newChan->pulseTrain);
-							switch (idleState) {
-								
-								case PulseTrainIdle_Low:
-									SetCtrlIndex(pulsePanHndl, COTicksPan_IdleState, 0);
-									break;
-								case PulseTrainIdle_High:
-									SetCtrlIndex(pulsePanHndl, COTicksPan_IdleState, 1);
-									break;
-							}
-							
-							// init high ticks
-							SetCtrlVal(pulsePanHndl, COTicksPan_HighTicks, GetPulseTrainTickTimingHighTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));
-							
-							// init low ticks
-							SetCtrlVal(pulsePanHndl, COTicksPan_LowTicks, GetPulseTrainTickTimingLowTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));
-							
-							// init initial delay ticks
-							SetCtrlVal(pulsePanHndl, COTicksPan_InitialDelay, GetPulseTrainTickTimingDelayTicks((PulseTrainTickTiming_type*)newChan->pulseTrain));   
-							
-							// init CO generation mode
-							InsertListItem(pulsePanHndl, COTicksPan_Mode, -1, "Finite", Operation_Finite);
-							InsertListItem(pulsePanHndl, COTicksPan_Mode, -1, "Continuous", Operation_Continuous);
-							GetIndexFromValue(pulsePanHndl, COTicksPan_Mode, &ctrlIdx, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(newChan->pulseTrain))); 
-							SetCtrlIndex(pulsePanHndl, COTicksPan_Mode, ctrlIdx);
-							
-							// init CO N Pulses
-							SetCtrlVal(pulsePanHndl, COTicksPan_NPulses, GetPulseTrainNPulses(newChan->pulseTrain)); 
-							
-							break;
-					}
-
-					//--------------------------
-					// adjust "Timing" tab
-					//--------------------------
-					// get timing tab panel handle
-						
-					int 	timingPanHndl = 0;
-					
-					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_ClkTabIdx, &timingPanHndl);
-					
-					// add callback to controls in the panel
-					// note: this must be done before changing the string control to a terminal control!
-					SetCtrlsInPanCBInfo(newChan, Chan_CO_Clk_CB, timingPanHndl);
-					
-					// make sure that the host controls are not dimmed before inserting terminal controls!
-					NIDAQmx_NewTerminalCtrl(timingPanHndl, TimingPan_ClockSource, 0); // single terminal selection
-					
-					// adjust sample clock terminal control properties
-					NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, TimingPan_ClockSource, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
-					NIDAQmx_SetTerminalCtrlAttribute(timingPanHndl, TimingPan_ClockSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
-					
-					// if CO channel type is ticks then undim clock source control, and dim it otherwise (do this after inserting the custom control)
-					if (chanType == Chan_CO_Pulse_Ticks)
-						SetCtrlAttribute(timingPanHndl, TimingPan_ClockSource, ATTR_DIMMED, FALSE);
-					else
-						SetCtrlAttribute(timingPanHndl, TimingPan_ClockSource, ATTR_DIMMED, TRUE);
-					
-					if (newChan->clockSource && newChan->clockSource[0])
-						SetCtrlVal(timingPanHndl, TimingPan_ClockSource, newChan->clockSource);
-						
-					//--------------------------
-					// adjust "Trigger" tab
-					//--------------------------
-					
-					// get trigger tab panel handle
-					newChan->startTrig = init_TaskTrig_type(dev, 0);  //? lex  
-						
-					int trigPanHndl;
-					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB, DAQmxCICOTskSet_TriggerTabIdx, &trigPanHndl);
-					
-					// add callback to controls in the panel
-					// note: this must be done before changing the string control to a terminal control!
-					SetCtrlsInPanCBInfo(newChan, Chan_CO_Trig_CB, trigPanHndl);
-					
-					// make sure that the host controls are not dimmed before inserting terminal controls!
-					NIDAQmx_NewTerminalCtrl(trigPanHndl, TrigPan_Source, 0); // single terminal selection
-					
-					// adjust sample clock terminal control properties
-					NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TrigPan_Source, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
-					NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TrigPan_Source, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
-						
-					// insert trigger type options
-					InsertListItem(trigPanHndl, TrigPan_TrigType, -1, "None", Trig_None); 
-					InsertListItem(trigPanHndl, TrigPan_TrigType, -1, "Digital Edge", Trig_DigitalEdge); 
-					newChan->startTrig->trigType = Trig_None;
-					SetCtrlAttribute(trigPanHndl,TrigPan_Slope,ATTR_DIMMED,TRUE);
-					SetCtrlAttribute(trigPanHndl,TrigPan_Source,ATTR_DIMMED,TRUE); 									   ;  
-						
-					InsertListItem(trigPanHndl,TrigPan_Slope , 0, "Rising", TrigSlope_Rising); 
-					InsertListItem(trigPanHndl,TrigPan_Slope , 1, "Falling", TrigSlope_Falling);
-					newChan->startTrig->slope = TrigSlope_Rising;
-						
 					
 					//------------------------------------
 					// Create and register CO Source VChan
@@ -6808,10 +6844,7 @@ INIT_ERR
 					DLRegisterHWTrigMaster(newChan->HWTrigMaster);
 					DLRegisterHWTrigSlave(newChan->HWTrigSlave);
 					
-					//---------------------------------------
-					// Add new CO channel to list of channels
-					//---------------------------------------
-					ListInsertItem(dev->COTaskSet->chanTaskSet, &newChan, END_OF_LIST);
+					*/
 					
 					//--------------------------------------  
 					// Configure CO task on device
@@ -9072,6 +9105,45 @@ static void discard_COTaskSet_type (COTaskSet_type** taskSetPtr)
 	}
 	
 	OKfree(*taskSetPtr);
+}
+
+static int	newUI_COTaskSet (COTaskSet_type* taskSet, char** errorMsg)
+{
+INIT_ERR
+
+	int 	CICOTaskSetPanHndl	= 0;
+	int		newTabIdx			= 0;
+	int		panHndl				= 0;
+	void*	callbackData		= NULL;
+	
+	// load UI resources
+	errChk( CICOTaskSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOTskSet) );
+	
+	// insert panel to UI and keep track of the task settings panel handle
+	newTabIdx = InsertPanelAsTabPage(taskSet->dev->devPanHndl, TaskSetPan_DAQTasks, -1, CICOTaskSetPanHndl); 
+	GetPanelHandleFromTabPage(taskSet->dev->devPanHndl, TaskSetPan_DAQTasks, newTabIdx, &taskSet->dev->COTaskSet->panHndl);
+	// change tab title to new Task Controller name
+	SetTabPageAttribute(taskSet->dev->devPanHndl, TaskSetPan_DAQTasks, newTabIdx, ATTR_LABEL_TEXT, DAQmxCOTaskSetTabName);
+				
+	// remove "None" labelled task settings tab (always first tab) if its panel doesn't have callback data attached to it  
+	GetPanelHandleFromTabPage(taskSet->dev->devPanHndl, TaskSetPan_DAQTasks, 0, &panHndl);
+	GetPanelAttribute(panHndl, ATTR_CALLBACK_DATA, &callbackData); 
+	if (!callbackData) DeleteTabPage(taskSet->dev->devPanHndl, TaskSetPan_DAQTasks, 0, 1);
+	// connect CO task settings data to the panel
+	SetPanelAttribute(taskSet->dev->COTaskSet->panHndl, ATTR_CALLBACK_DATA, taskSet->dev->COTaskSet);
+							
+	// add callback data and callback function to remove channels
+	SetCtrlAttribute(taskSet->dev->COTaskSet->panHndl, CICOTskSet_ChanSet, ATTR_CALLBACK_FUNCTION_POINTER, RemoveDAQmxCOChannel_CB);
+	SetCtrlAttribute(taskSet->dev->COTaskSet->panHndl, CICOTskSet_ChanSet, ATTR_CALLBACK_DATA, taskSet->dev);
+
+	return 0;
+	
+Error:
+	
+	// cleanup
+	if (CICOTaskSetPanHndl > 0) OKfreePanHndl(CICOTaskSetPanHndl);
+	
+RETURN_ERR
 }
 
 static int CVICALLBACK Chan_CO_Pulse_Frequency_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)

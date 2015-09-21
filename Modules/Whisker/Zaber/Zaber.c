@@ -94,7 +94,7 @@ send_cmd(z_port port, char *cmd, char *data_buf, int mode)
 	if (data_buf != NULL) {
 		strncpy(data_buf, decoded_reply.response_data, 128);
 	}
-	return;
+	return;																	
 }
 
 int

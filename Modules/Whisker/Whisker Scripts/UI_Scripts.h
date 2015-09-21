@@ -35,7 +35,8 @@
 #define  CondEle_EleNum                   8       /* control type: textMsg, callback function: (none) */
 #define  CondEle_EleIO_CH                 9       /* control type: ring, callback function: (none) */
 #define  CondEle_EleValue                 10      /* control type: ring, callback function: (none) */
-#define  CondEle_EleDuration              11      /* control type: numeric, callback function: (none) */
+#define  CondEle_EleFullDuration          11      /* control type: radioButton, callback function: (none) */
+#define  CondEle_EleDuration              12      /* control type: numeric, callback function: (none) */
 
 #define  ContainPan                       3
 
@@ -159,11 +160,9 @@
 #define  XYCondEle_EleNum                 4       /* control type: textMsg, callback function: (none) */
 #define  XYCondEle_EleDelete              5       /* control type: pictButton, callback function: XYMoveElementButtons_CB */
 #define  XYCondEle_LED                    6       /* control type: LED, callback function: (none) */
-#define  XYCondEle_ElePos                 7       /* control type: numeric, callback function: (none) */
-#define  XYCondEle_EleAdd                 8       /* control type: command, callback function: XYCondElementButtons_CB */
-#define  XYCondEle_EleY                   9       /* control type: numeric, callback function: (none) */
-#define  XYCondEle_EleValue               10      /* control type: ring, callback function: (none) */
-#define  XYCondEle_EleX                   11      /* control type: numeric, callback function: (none) */
+#define  XYCondEle_EleFalse               7       /* control type: numeric, callback function: (none) */
+#define  XYCondEle_EleValue               8       /* control type: ring, callback function: (none) */
+#define  XYCondEle_EleTrue                9       /* control type: numeric, callback function: (none) */
 
 #define  XYMoveEle                        16
 #define  XYMoveEle_SPLITTER               2       /* control type: splitter, callback function: (none) */
@@ -174,8 +173,9 @@
 #define  XYMoveEle_ElePercentage          7       /* control type: numeric, callback function: (none) */
 #define  XYMoveEle_ElePos                 8       /* control type: numeric, callback function: (none) */
 #define  XYMoveEle_EleShow                9       /* control type: command, callback function: XYMoveElementButtons_CB */
-#define  XYMoveEle_EleAsync               10      /* control type: radioButton, callback function: (none) */
-#define  XYMoveEle_EleAdd                 11      /* control type: command, callback function: XYMoveElementButtons_CB */
+#define  XYMoveEle_EleGoState             10      /* control type: ring, callback function: (none) */
+#define  XYMoveEle_EleAsync               11      /* control type: radioButton, callback function: (none) */
+#define  XYMoveEle_EleAdd                 12      /* control type: command, callback function: XYMoveElementButtons_CB */
 
 #define  XYPosPan                         17
 #define  XYPosPan_XYPositionsTable        2       /* control type: table, callback function: XYPosTable_CB */
@@ -216,7 +216,6 @@ int  CVICALLBACK StopElementButtons_CB(int panel, int control, int event, void *
 int  CVICALLBACK THWaitElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK WaitElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK WhiskerScriptButton_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
-int  CVICALLBACK XYCondElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK XYMoveElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK XYPosTable_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK ZMoveElementButtons_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);

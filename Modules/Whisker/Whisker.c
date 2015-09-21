@@ -102,6 +102,10 @@ discard_WhiskerModule(DAQLabModule_type** mod)
 		return;
 	}
 	
+	/* Stop Lick Detector timer */
+	SetCtrlAttribute(whisker_m->whisker_ui.main_panel_handle, MainPanel_LickTimer, 
+					 						ATTR_ENABLED, 0);
+	
 	/* Disconnect zaber device */
 	close_zaber_device(&whisker_m->z_dev);
 	/* Free comport list */
@@ -206,6 +210,18 @@ INIT_ERR
 	SetCtrlVal(whisker_m->whisker_ui.main_panel_handle, MainPanel_IO_LickDetection,
 			   						LICKDET_DEFAULT_CH);
 	
+	/* Load Initial screen to ask user about experiment info */
+	whisker_m->whisker_ui.experiment_panel_handle =  
+			LoadPanel(whisker_m->whisker_ui.main_panel_handle, MOD_Whisker_UI, ExpPanel);
+	if (whisker_m->whisker_ui.experiment_panel_handle < 0) {
+		MessagePopup("Experiment Info Error", "Failed to load panel!");
+	} else {
+		SetCtrlAttribute(whisker_m->whisker_ui.experiment_panel_handle, ExpPanel_ExpOk,
+								ATTR_CALLBACK_DATA, (void *)whisker_m);
+		SetCtrlAttribute(whisker_m->whisker_ui.experiment_panel_handle, ExpPanel_ExpCancel,
+								ATTR_CALLBACK_DATA, (void *)whisker_m);
+	}
+	
 	return 0;
 	
 Error:
@@ -229,6 +245,9 @@ INIT_ERR
 		
 	if (visibleFlag) {
 		errChk(DisplayPanel(whisker_t->whisker_ui.main_panel_handle));
+		if (whisker_t->whisker_ui.experiment_panel_handle >= 0) {
+			errChk(DisplayPanel(whisker_t->whisker_ui.experiment_panel_handle));
+		}
 	} else {
 		errChk(DiscardPanel(whisker_t->whisker_ui.main_panel_handle));
 		whisker_t->whisker_ui.main_panel_handle = -1;
@@ -287,7 +306,8 @@ set_ctrl_attribute(Whisker_t *whisker_m)
 	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_in, TabDropIn_Toggle_Inter_DropIN, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.tab_drop_out, TabDropOut_Toggle_Inter_DropOut, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	SetCtrlAttribute (whisker_m->whisker_ui.tab_air_puff, TabAirPuff_Toggle_Inter_AirPuff, ATTR_CALLBACK_DATA, (void *)whisker_m);
-	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_Toggle_Inter_LickDet, ATTR_CALLBACK_DATA, (void *)whisker_m);
+	
+	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_LickTimer, ATTR_CALLBACK_DATA, (void *)whisker_m);
 	
 	/* XY setting button that launches Setting Panel */
 	SetCtrlAttribute (whisker_m->whisker_ui.main_panel_handle, MainPanel_XYSetting, ATTR_CALLBACK_DATA, (void *)whisker_m);

@@ -43,6 +43,7 @@ typedef struct {
 	size_t	X;			/* X Axis position */
 	size_t	Y;			/* Y Axis position */
 	size_t	percent;	/* Percent associated with this position */
+	int		go_state;	/* Whether this position is GO or NO-GO */
 } Position_t;
 
 /**

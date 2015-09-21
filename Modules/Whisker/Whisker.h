@@ -39,13 +39,19 @@
 #define TAB_AIR_PUFF		2
 		
 /* XY Position TABLE */
-#define	XYTABLE_X_COL	1		/* X column */ 
-#define XYTABLE_Y_COL	2		/* Y column */
-#define XYTABLE_PER_COL	3		/* Percentage Column */
-#define XYTABLE_GO_COL	3		/* Go to position column */
-#define XYTABLE_DEL_COL	4		/* Delete position column */
-#define GO_LABEL		"-->"   /* Go button label */
-#define DEL_LABEL		"X"		/* Delete button label */
+#define	XYTABLE_X_COL			1		/* X column */ 
+#define XYTABLE_Y_COL			2		/* Y column */
+#define XYTABLE_PER_COL			3		/* Percentage Column */
+#define XYTABLE_GO_COL			3		/* Go to position column */
+#define XYTABLE_DEL_COL			4		/* Delete position column */
+#define XYTABLE_GOSTATE_COL 	4		/* Go State column */
+#define XYTABLE_SCRIPTDEL_COL 	5		/* Delete column in script element */
+#define GO_LABEL				"-->"   /* Go button label */
+#define DEL_LABEL				"X"		/* Delete button label */
+
+/* Experiment Info Table */
+#define EXPTABLE_NAME_COL		1		/* First column has info name */
+#define EXPTABLE_VALUE_COL		2		/* Second column has info value */
 
 #define WHISKER_DELAY(x)	Sleep(x)	/* Wait time */
 

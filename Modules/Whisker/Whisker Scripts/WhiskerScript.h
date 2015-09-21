@@ -113,13 +113,14 @@ typedef struct {
 } ActionElement_t; 				/* Action Element */
 
 typedef struct {
-	ScriptElement_t	base_class;	/* Base Class */
-	int				IO_channel;	/* I/O channel to check input on */
-	int				value;		/* ON/OFF, bool type */
-	size_t			true_step;	/* step when condition is true */
-	size_t			false_step; /* step when condition is false */
-	size_t			duration;	/* Interval to detect condition */
-} ConditionElement_t; 			/* Condition Element */
+	ScriptElement_t	base_class;		/* Base Class */
+	int				IO_channel;		/* I/O channel to check input on */
+	int				value;			/* ON/OFF, bool type */
+	size_t			true_step;		/* step when condition is true */
+	size_t			false_step; 	/* step when condition is false */
+	size_t			duration;		/* Interval to detect condition */
+	int				full_duration;	/* Wait until complete duration finishes */
+} ConditionElement_t; 				/* Condition Element */
 
 typedef struct {
 	ScriptElement_t base_class; 	/* Base Class */
@@ -170,8 +171,8 @@ typedef struct {
 
 typedef struct {
 	ScriptElement_t base_class;		/* Base Class */
-	size_t	X;						/* Zaber X absolute position */
-	size_t	Y;						/* Zaber Y absolute position */
+	size_t	true_step;				/* True when pole condition is matched */
+	size_t	false_step;				/* False when pole condition is not matched */
 	int		value;					/* Go or No-Go position */
 } XYConditionElement_t;				/* XYcondition element */
 

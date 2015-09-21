@@ -27,27 +27,27 @@
 #define  ExpPanel_SPLITTER                12      /* control type: splitter, callback function: (none) */
 
 #define  MainPanel                        2
-#define  MainPanel_ZaberComPort           2       /* control type: ring, callback function: (none) */
-#define  MainPanel_DeditecModule          3       /* control type: ring, callback function: (none) */
-#define  MainPanel_CheckSync              4       /* control type: radioButton, callback function: WhiskerCheck_CB */
-#define  MainPanel_Toggle_Inter_LickDet   5       /* control type: toggle, callback function: WhiskerLickToggle_CB */
+#define  MainPanel_ExperimentInfoTable    2       /* control type: table, callback function: (none) */
+#define  MainPanel_ZaberComPort           3       /* control type: ring, callback function: (none) */
+#define  MainPanel_DeditecModule          4       /* control type: ring, callback function: (none) */
+#define  MainPanel_CheckSync              5       /* control type: radioButton, callback function: WhiskerCheck_CB */
 #define  MainPanel_PortSetting            6       /* control type: textMsg, callback function: (none) */
 #define  MainPanel_Text_DropIN_6          7       /* control type: textMsg, callback function: (none) */
-#define  MainPanel_IO_LickDetection       8       /* control type: ring, callback function: IO_Channel_CB */
-#define  MainPanel_IO_ZAxis               9       /* control type: ring, callback function: IO_Channel_CB */
-#define  MainPanel_Text_DropIN_5          10      /* control type: textMsg, callback function: (none) */
-#define  MainPanel_QUITBUTTON             11      /* control type: command, callback function: QuitButton_CB */
-#define  MainPanel_LoadSound              12      /* control type: command, callback function: FileSelect_CB */
-#define  MainPanel_SoundFilePath          13      /* control type: string, callback function: (none) */
-#define  MainPanel_SoundPlay              14      /* control type: command, callback function: WhiskerButton_CB */
-#define  MainPanel_ExperimentInfo         15      /* control type: command, callback function: WhiskerButton_CB */
-#define  MainPanel_BuildScript            16      /* control type: command, callback function: WhiskerButton_CB */
-#define  MainPanel_LickDetection          17      /* control type: LED, callback function: (none) */
-#define  MainPanel_Sound                  18      /* control type: textMsg, callback function: (none) */
-#define  MainPanel_XYLeft                 19      /* control type: numeric, callback function: XYMovement_CB */
-#define  MainPanel_XYRight                20      /* control type: numeric, callback function: XYMovement_CB */
-#define  MainPanel_DECORATION_10          21      /* control type: deco, callback function: (none) */
-#define  MainPanel_DECORATION_3           22      /* control type: deco, callback function: (none) */
+#define  MainPanel_LickTimer              8       /* control type: timer, callback function: WhiskerLickToggle_CB */
+#define  MainPanel_IO_LickDetection       9       /* control type: ring, callback function: IO_Channel_CB */
+#define  MainPanel_IO_ZAxis               10      /* control type: ring, callback function: IO_Channel_CB */
+#define  MainPanel_Text_DropIN_5          11      /* control type: textMsg, callback function: (none) */
+#define  MainPanel_QUITBUTTON             12      /* control type: command, callback function: QuitButton_CB */
+#define  MainPanel_LoadSound              13      /* control type: command, callback function: FileSelect_CB */
+#define  MainPanel_SoundFilePath          14      /* control type: string, callback function: (none) */
+#define  MainPanel_SoundPlay              15      /* control type: command, callback function: WhiskerButton_CB */
+#define  MainPanel_ExperimentInfo         16      /* control type: command, callback function: WhiskerButton_CB */
+#define  MainPanel_BuildScript            17      /* control type: command, callback function: WhiskerButton_CB */
+#define  MainPanel_LickDetection          18      /* control type: LED, callback function: (none) */
+#define  MainPanel_Sound                  19      /* control type: textMsg, callback function: (none) */
+#define  MainPanel_XYLeft                 20      /* control type: numeric, callback function: XYMovement_CB */
+#define  MainPanel_XYRight                21      /* control type: numeric, callback function: XYMovement_CB */
+#define  MainPanel_DECORATION_10          22      /* control type: deco, callback function: (none) */
 #define  MainPanel_DECORATION             23      /* control type: deco, callback function: (none) */
 #define  MainPanel_XYAbs                  24      /* control type: numeric, callback function: XYMovement_CB */
 #define  MainPanel_DECORATION_8           25      /* control type: deco, callback function: (none) */
@@ -65,9 +65,10 @@
 #define  MainPanel_XYAddRow               37      /* control type: pictButton, callback function: XYMovement_CB */
 #define  MainPanel_XYArrowDown            38      /* control type: pictButton, callback function: XYMovement_CB */
 #define  MainPanel_IOChannelTab           39      /* control type: tab, callback function: (none) */
-#define  MainPanel_XYPositionsTable       40      /* control type: table, callback function: PositionTable_CB */
-#define  MainPanel_VULogo                 41      /* control type: picture, callback function: (none) */
-#define  MainPanel_LickDetDuration        42      /* control type: numeric, callback function: (none) */
+#define  MainPanel_DECORATION_3           40      /* control type: deco, callback function: (none) */
+#define  MainPanel_XYPositionsTable       41      /* control type: table, callback function: PositionTable_CB */
+#define  MainPanel_TEXTMSG                42      /* control type: textMsg, callback function: (none) */
+#define  MainPanel_TEXTMSG_2              43      /* control type: textMsg, callback function: (none) */
 
 #define  XYSetPanel                       3
 #define  XYSetPanel_YMax                  2       /* control type: numeric, callback function: (none) */

@@ -25,10 +25,10 @@
 #define ERR_MSG_SIZE		128
 
 /* Static elements in the XML file */
-#define MAX_CHILD_ELEMENTS		6		/* Condition Element has maximum childrens */
+#define MAX_CHILD_ELEMENTS		7		/* Condition Element has maximum childrens */
 #define START_ELEMENT_CHILDS	2			
 #define ACTION_ELEMENT_CHILDS	5
-#define COND_ELEMENT_CHILDS		6
+#define COND_ELEMENT_CHILDS		7
 #define REPEAT_ELEMENT_CHILDS	3
 #define STOP_ELEMENT_CHILDS		2
 #define WAIT_ELEMENT_CHILDS		2
@@ -62,6 +62,7 @@
 #define DELAY_TAG			"Delay"
 #define SUB_ACTION_TAG		"Sub_Action"
 #define DURATION_TAG		"Duration"
+#define FULL_DURATION_TAG	"Full_Duration"
 #define IO_CH_TAG			"IO_Channel"
 #define VALUE_TAG			"Value"
 #define TRUE_TAG			"True"
@@ -79,6 +80,7 @@
 #define X_ATTR				"X"
 #define Y_ATTR				"Y"
 #define PERCENT_ATTR		"Percent"
+#define GOSTATE_ATTR		"GO_State"
 
 #define LOG_TITLE				"ID\t\tType\t\tParams\n"
 #define LOG_HYPHEN				"-------\t\t-----------------\t\t------------------"
@@ -392,7 +394,6 @@ setscript_ctrl_attribute(WhiskerScript_t *whisker_script)
 	SetCtrlAttribute (whisker_script->thwaitElement_panel_handle, THWaitEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	
 	SetCtrlAttribute (whisker_script->xycondElement_panel_handle, XYCondEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
-	SetCtrlAttribute (whisker_script->xycondElement_panel_handle, XYCondEle_EleAdd, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	
 	SetCtrlAttribute (whisker_script->resrepElement_panel_handle, ResRepEle_EleDelete, ATTR_CALLBACK_DATA, (void *)whisker_script);
 	return;
@@ -519,7 +520,8 @@ save_script(WhiskerScript_t	*whisker_script)
 				tag[0] = COND_ELEMENT_TAG;	tag[1] = SEQ_NO_TAG;
 				tag[2] = IO_CH_TAG;			tag[3] = VALUE_TAG;
 				tag[4] = TRUE_TAG;			tag[5] = FALSE_TAG;
-				tag[6] = DURATION_TAG;		tag[7] = NULL;
+				tag[6] = DURATION_TAG;		tag[7] = FULL_DURATION_TAG;
+				tag[8] = NULL;
 				
 				/* Set value . Tag and index and value index should match */
 				sprintf(value[0], "%d", element->MAGIC_NUM);
@@ -529,7 +531,8 @@ save_script(WhiskerScript_t	*whisker_script)
 				sprintf(value[4], "%u", ((ConditionElement_t *)element)->true_step);
 				sprintf(value[5], "%u", ((ConditionElement_t *)element)->false_step);
 				sprintf(value[6], "%u", ((ConditionElement_t *)element)->duration);
-		
+				sprintf(value[7], "%u", ((ConditionElement_t *)element)->full_duration);
+										
 				break;
 				
 			case REPEAT:	/* Add repeat element */
@@ -646,14 +649,14 @@ save_script(WhiskerScript_t	*whisker_script)
 			case XYCONDITION:	/* XY condition element */
 				/* Set Tag */
 				tag[0] = XYCOND_ELEMENT_TAG;	tag[1] = SEQ_NO_TAG;
-				tag[2] = X_TAG;					tag[3] = Y_TAG;
+				tag[2] = TRUE_TAG;				tag[3] = FALSE_TAG;
 				tag[4] = VALUE_TAG;				tag[5] = NULL;
 				
 				/* Set value. Tag index and value index should match */
 				sprintf(value[0], "%d", element->MAGIC_NUM);
 				sprintf(value[1], "%d", i);
-				sprintf(value[2], "%u", ((XYConditionElement_t *)element)->X);
-				sprintf(value[3], "%u", ((XYConditionElement_t *)element)->Y);
+				sprintf(value[2], "%u", ((XYConditionElement_t *)element)->true_step);
+				sprintf(value[3], "%u", ((XYConditionElement_t *)element)->false_step);
 				sprintf(value[4], "%u", ((XYConditionElement_t *)element)->value);
 				break;
 				
@@ -677,9 +680,10 @@ save_script(WhiskerScript_t	*whisker_script)
 			Position_t	*saved_position = NULL;
 			XMLErrChk(CVIXMLGetChildElementByIndex(root_element, i-1, &child_element));
 			/* First tag name and others are attribute name */
-			tag[0] = POS_TAG;	tag[1] = X_ATTR;
-			tag[2] = Y_ATTR;	tag[3] = PERCENT_ATTR;
-			tag[4] = NULL;
+			tag[0] = POS_TAG;		tag[1] = X_ATTR;
+			tag[2] = Y_ATTR;		tag[3] = PERCENT_ATTR;
+			tag[4] = GOSTATE_ATTR;	tag[5] = NULL;
+			
 			for (int j = 1; j <= ListNumItems(((XYMoveElement_t *)element)->saved_positions); 
 											j++) {
 				ListGetItem(((XYMoveElement_t *)element)->saved_positions, 
@@ -687,6 +691,7 @@ save_script(WhiskerScript_t	*whisker_script)
 				sprintf(value[1], "%u", saved_position->X);
 				sprintf(value[2], "%u", saved_position->Y);
 				sprintf(value[3], "%u", saved_position->percent);
+				sprintf(value[4], "%d", saved_position->go_state);
 				
 				append_child_with_attributes(&child_element, tag, value, 
 											 				XYMOVE_ELEMENT_CHILDS + (j-1)); 	
@@ -1284,6 +1289,9 @@ script_runner(void *thread_data)
 	SetPanelAttribute(whisker_m->whisker_ui.tab_air_puff, ATTR_DIMMED, 1);
 	SetPanelAttribute(whisker_m->whisker_ui.tab_drop_in, ATTR_DIMMED, 1);
 	SetPanelAttribute(whisker_m->whisker_ui.tab_drop_out, ATTR_DIMMED, 1);
+	/* Stop Lick Detector test panel timer */
+	SetCtrlAttribute(whisker_m->whisker_ui.main_panel_handle, MainPanel_LickTimer, 
+					 						ATTR_ENABLED, 0);
 	
 	/* UnDim Other Pause and Stop */
 	SetCtrlAttribute(whisker_script->main_panel_handle, ScriptPan_ScriptPause,
@@ -1391,6 +1399,11 @@ script_runner(void *thread_data)
 	SetPanelAttribute(whisker_m->whisker_ui.tab_air_puff, ATTR_DIMMED, 0);
 	SetPanelAttribute(whisker_m->whisker_ui.tab_drop_in, ATTR_DIMMED, 0);
 	SetPanelAttribute(whisker_m->whisker_ui.tab_drop_out, ATTR_DIMMED, 0);
+	/* Start Lick Detector timer */
+	if (whisker_m->de_dev.handle != 0) {
+		SetCtrlAttribute(whisker_m->whisker_ui.main_panel_handle, MainPanel_LickTimer, 
+					 						ATTR_ENABLED, 1);
+	}
 							 
 	/* Dim Other Pause and Stop */
 	SetCtrlAttribute(whisker_script->main_panel_handle, ScriptPan_ScriptPause,
@@ -1532,7 +1545,7 @@ import_settings(WhiskerScript_t	*whisker_script)
 			
 		} else if (element->MAGIC_NUM == ZMOVE) {	/* Z Movement Element */
 			((ZMoveElement_t *)element)->IO_channel = 
-										whisker_m->de_dev.IO_Channel[AIR_PUFF_CH];
+										whisker_m->de_dev.IO_Channel[ZAXIS_MOVE_CH];
 			/* Update UI */
 			SetCtrlVal(element->panel_handle, ZMoveEle_EleIO_CH, 
 					   	((ZMoveElement_t *)element)->IO_channel);
@@ -1648,6 +1661,8 @@ apply_condition_changes(ConditionElement_t *cond_element)
 			   							&(cond_element->false_step));
 	GetCtrlVal(cond_element->base_class.panel_handle, CondEle_EleDuration, 
 			   							&(cond_element->duration));
+	GetCtrlVal(cond_element->base_class.panel_handle, CondEle_EleFullDuration, 
+			   							&(cond_element->full_duration));
 	return;
 }
 
@@ -1725,10 +1740,10 @@ apply_jump_changes(JumpElement_t *jump_element)
 inline void
 apply_xycondition_changes(XYConditionElement_t *xycond_element)
 {
-	GetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleX,
-			   							(size_t *)&(xycond_element->X));
-	GetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleY,
-			   							(size_t *)&(xycond_element->Y));
+	GetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleTrue,
+			   							(size_t *)&(xycond_element->true_step));
+	GetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleFalse,
+			   							(size_t *)&(xycond_element->false_step));
 	GetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleValue,
 			   							&(xycond_element->value));
 	return;	
@@ -1844,6 +1859,7 @@ init_ConditionElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_
 		condition_element->true_step = (size_t)atoi(value[3]);
 		condition_element->false_step = (size_t)atoi(value[4]);
 		condition_element->duration = (size_t)atoi(value[5]);
+		condition_element->full_duration = atoi(value[6]);
 		
 		/* Update UI */
 		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleIO_CH, 
@@ -1856,6 +1872,8 @@ init_ConditionElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMENT_
 				  								condition_element->false_step);
 		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleDuration,
 				   								condition_element->duration);
+		SetCtrlVal(condition_element->base_class.panel_handle, CondEle_EleFullDuration,
+				   								condition_element->full_duration);
 	}
 		
 	return (ScriptElement_t *)condition_element;
@@ -2118,15 +2136,15 @@ init_XYConditionElement(WhiskerScript_t *whisker_script, char value[][XML_ELEMEN
 	xycond_element->base_class.runner_function = xycondition_runner;
 	
 	if (value != NULL) {
-		 xycond_element->X = (size_t)atoi(value[1]);
-		 xycond_element->Y = (size_t)atoi(value[2]);
+		 xycond_element->true_step = (size_t)atoi(value[1]);
+		 xycond_element->false_step = (size_t)atoi(value[2]);
 		 xycond_element->value = (size_t)atoi(value[3]);
 		 
 		 /* Update UI */
-		 SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleX,
-														xycond_element->X);
-		 SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleY,
-														xycond_element->Y);
+		 SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleTrue,
+														xycond_element->true_step);
+		 SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleFalse,
+														xycond_element->false_step);
 		 SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_EleValue,
 														xycond_element->value);
 	}
@@ -2184,7 +2202,8 @@ load_xymove_positions(CVIXMLElement *par_element, XYMoveElement_t *xymove_elemen
 	HRESULT			error = S_OK;
 	int				num_XMLelements = 0;
 	CVIXMLElement	position_element = NULL;	
-	CVIXMLAttribute	x_attribute = NULL, y_attribute = NULL, percent_attribute = NULL;
+	CVIXMLAttribute	x_attribute = NULL, y_attribute = NULL, 
+					percent_attribute = NULL, gostate_attribute = NULL;
 	char			attr_value[XML_ELEMENT_VALUE];
 	Position_t		*saved_position = NULL;
 	
@@ -2195,6 +2214,7 @@ load_xymove_positions(CVIXMLElement *par_element, XYMoveElement_t *xymove_elemen
 			XMLErrChk(CVIXMLGetAttributeByName(position_element, X_ATTR, &x_attribute));
 			XMLErrChk(CVIXMLGetAttributeByName(position_element, Y_ATTR, &y_attribute));
 			XMLErrChk(CVIXMLGetAttributeByName(position_element, PERCENT_ATTR, &percent_attribute));
+			XMLErrChk(CVIXMLGetAttributeByName(position_element, GOSTATE_ATTR, &gostate_attribute));
 		
 			/* Allocate memory */
 			saved_position = (Position_t *)malloc(sizeof(Position_t));
@@ -2203,6 +2223,7 @@ load_xymove_positions(CVIXMLElement *par_element, XYMoveElement_t *xymove_elemen
 				CVIXMLDiscardAttribute(x_attribute);
 				CVIXMLDiscardAttribute(y_attribute);
 				CVIXMLDiscardAttribute(percent_attribute);
+				CVIXMLDiscardAttribute(gostate_attribute);
 				/* TODO: Check whether to discard attributes or not */
 				goto Error;	
 			}
@@ -2219,10 +2240,16 @@ load_xymove_positions(CVIXMLElement *par_element, XYMoveElement_t *xymove_elemen
 			XMLErrChk(CVIXMLGetAttributeValue(percent_attribute, attr_value));
 			RemoveSurroundingWhiteSpace(attr_value);
 			saved_position->percent = (size_t)atoi(attr_value);
+			/* Get Go_State Value */
+			XMLErrChk(CVIXMLGetAttributeValue(gostate_attribute, attr_value));
+			RemoveSurroundingWhiteSpace(attr_value);
+			saved_position->go_state = atoi(attr_value);
+			
 			CVIXMLDiscardElement(position_element);
 			CVIXMLDiscardAttribute(x_attribute);
 			CVIXMLDiscardAttribute(y_attribute);
 			CVIXMLDiscardAttribute(percent_attribute);
+			CVIXMLDiscardAttribute(gostate_attribute);
 			
 			/* Add saved position into list */
 			if (NULL == ListInsertItem(xymove_element->saved_positions, &saved_position, 
@@ -2451,7 +2478,7 @@ condition_runner(void *element, void *whisker_script, int *index)
 	 	if (cond_element->value == input_value) {
 			*index = cond_element->true_step;
 			/* Lick detection channel */
-			if (whisker_m->de_dev.IO_Channel[LICK_DET_CH] == 
+			if (!condition_true && whisker_m->de_dev.IO_Channel[LICK_DET_CH] == 
 										cond_element->IO_channel &&
 			   					cond_element->value == 0) {
 				if (cur_script->xy_state == GO) {	/* Correct Lick */
@@ -2467,7 +2494,9 @@ condition_runner(void *element, void *whisker_script, int *index)
 				}
 			}
 			condition_true = 1;
-			break;
+			if (!cond_element->full_duration) {	/* User has asked to run the condition for full duration */
+				break;
+			}
 	 	}
 	 	WHISKER_DELAY(INPUT_CHECK_DELAY);	/* 1 ms delay */
 	 	elapsed_time = (Timer() - start_time) * 1000.00;
@@ -2512,14 +2541,16 @@ repeat_runner(void *element, void *whisker_script, int *index)
 	RepeatElement_t		*repeat_element = (RepeatElement_t *)element;
 	char				log_msg[LOG_MSG_LEN];
 	
-	/* Log message to file and text box */
-	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, "Repeat :\t");
-	
 	SetCtrlVal(repeat_element->base_class.panel_handle, RepEle_LED, 1);
 	if (repeat_element->counter < repeat_element->ntimes) {
 		*index = repeat_element->repeat_step - 1; 	/* Decrement by one because script runner
 													 * increments it by one */
 		repeat_element->counter++;
+		
+		/* Log message to file and text box */
+		sprintf(log_msg, "Repeat (%u/%u) : \tStep %u\t", repeat_element->counter, 
+									repeat_element->ntimes, repeat_element->repeat_step); 
+		save_and_print_LogMsg((WhiskerScript_t *)whisker_script, log_msg);
 	}
 	SetCtrlVal(repeat_element->base_class.panel_handle, RepEle_LED, 0);
 	return;
@@ -2672,7 +2703,11 @@ xycondition_runner(void *element, void *whisker_script, int *index)
 							((WhiskerScript_t *)whisker_script)->whisker_m;
 	WScript_t				*cur_script = &(((WhiskerScript_t *)whisker_script)->cur_script);
 	size_t					X, Y;
+	ScriptElement_t			*temp_element = NULL;
 	XYConditionElement_t	*xycond_element = (XYConditionElement_t *)element;
+	XYMoveElement_t			*xymove_element = NULL;
+	Position_t				*saved_position = NULL;
+	int						is_true = FALSE;
 	char					log_msg[LOG_MSG_LEN];
 	
 	SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_LED, 1);
@@ -2680,13 +2715,45 @@ xycondition_runner(void *element, void *whisker_script, int *index)
 	Y = get_device_data(whisker_m->z_dev.port, ZABER_Y_DEV, "pos");	/* Get current Y position */
 	
 	LOG_MSG2(9, "XY Condition, X = %u and Y = %u\n", X, Y);
-	if (X == xycond_element->X && Y == xycond_element->Y) {
-		cur_script->xy_state = xycond_element->value;	
+	
+	/* 
+	 * Iterate over all the script elements and if XY Move element is present then
+	 * Iterate over all the saved_positions.
+	 * TODO: It can be optimized
+	 */
+	for (int i = 1; i <= cur_script->num_elements; i++) {
+		/* Get Element one by one */
+		ListGetItem(cur_script->script_elements, &temp_element, i);
+		
+		if (temp_element->MAGIC_NUM == XYMOVE) {
+			/* Iterate over all saved positions */
+			xymove_element = (XYMoveElement_t *)temp_element;
+			for (int j = 1; j <= ListNumItems(xymove_element->saved_positions); 
+									j++) {
+				ListGetItem(xymove_element->saved_positions, &saved_position, j);
+				if (saved_position->go_state == xycond_element->value &&
+						saved_position->X == X && saved_position->Y == Y) { /* True condition */
+					is_true = TRUE;
+					break;			
+				}
+			}
+			if (is_true) {	/* True Condition */
+				break;
+			}
+		}
+	}
+	
+	if (is_true) {
+		cur_script->xy_state = xycond_element->value;
+		*index = xycond_element->true_step;	
 	} else {
 		cur_script->xy_state = xycond_element->value ^ (1 << 0);
+		*index = xycond_element->false_step;
 	}
-	sprintf(log_msg, "XYCondition Position:\t %s", 
-											(cur_script->xy_state ? "NO_GO" : "GO"));
+	*index = *index - 1;	/* Decrement by one because, script runner increments it */
+	
+	sprintf(log_msg, "XYCondition Position:\t %s goto step %u\t", 
+								(cur_script->xy_state ? "GO" : "NO_GO"), *index + 1);
 	save_and_print_LogMsg((WhiskerScript_t *)whisker_script, log_msg);
 	SetCtrlVal(xycond_element->base_class.panel_handle, XYCondEle_LED, 0);
 	return;

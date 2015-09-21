@@ -154,12 +154,13 @@ print_script_to_text(WhiskerScript_t *whisker_script)
 			case CONDITION:		/* Condition Element */
 				sprintf(msg, "%d)\tCondition\n"
 							"\t\tIO Channel = %d\tvalue = %s\n"
-							"\t\ttrue = %u\tfalse = %u\tduration = %u",
+							"\t\ttrue = %u\tfalse = %u\tduration = %u\tfull duration = %s",
 							i, ((ConditionElement_t *)element)->IO_channel + 1,
 							(((ConditionElement_t *)element)->value ? "OFF" : "ON"),
 							((ConditionElement_t *)element)->true_step,
 							((ConditionElement_t *)element)->false_step,
-							((ConditionElement_t *)element)->duration);
+							((ConditionElement_t *)element)->duration,
+					   		(((ConditionElement_t *)element)->full_duration ? "YES" : "NO"));
 				break;
 				
 			case REPEAT:		/* Repeat element */
@@ -202,8 +203,9 @@ print_script_to_text(WhiskerScript_t *whisker_script)
 									j++) {
 					ListGetItem(((XYMoveElement_t *)element)->saved_positions, 
 															&saved_position, j);
-					sprintf(temp_msg, "\n\t\tX = %u\tY = %u\tPercent = %u",
-								saved_position->X, saved_position->Y, saved_position->percent);
+					sprintf(temp_msg, "\n\t\tX = %u\tY = %u\tPercent = %u\tGo State = %s",
+								saved_position->X, saved_position->Y, saved_position->percent,
+						   		(saved_position->go_state ? "GO" : "NO_GO"));
 					strcat(msg, temp_msg);
 				}
 				break;
@@ -228,10 +230,10 @@ print_script_to_text(WhiskerScript_t *whisker_script)
 				
 			case XYCONDITION:	/* XY condition element */
 				sprintf(msg, "%d)\tXY Condition\n"
-							"\t\tX = %u\tY = %u\tValue = %s", i,
-							((XYConditionElement_t *)element)->X,
-							((XYConditionElement_t *)element)->Y,
-							(((XYConditionElement_t *)element)->value ? "GO" : "NO-GO"));
+							"\t\tTrue = %u\tFalse = %u\tValue = %s", i,
+							((XYConditionElement_t *)element)->true_step,
+							((XYConditionElement_t *)element)->false_step,
+							(((XYConditionElement_t *)element)->value ? "GO" : "NO_GO"));
 				break;
 			
 			case RESETREPEAT:	/* Reset Repeat Element */
@@ -1023,7 +1025,10 @@ XYMoveElementButtons_CB(int panel, int control, int event, void *callbackData, i
 						SetTableCellVal (xyposition_panel_handle, XYPosPan_XYPositionsTable,
 								MakePoint(XYTABLE_PER_COL, i), table_saved_position->percent);
 						SetTableCellVal (xyposition_panel_handle, XYPosPan_XYPositionsTable,
-								MakePoint(XYTABLE_DEL_COL, i), DEL_LABEL);
+								MakePoint(XYTABLE_GOSTATE_COL, i), 
+								(table_saved_position->go_state ? "GO" : "NO_GO"));
+						SetTableCellVal (xyposition_panel_handle, XYPosPan_XYPositionsTable,
+								MakePoint(XYTABLE_SCRIPTDEL_COL, i), DEL_LABEL);
 					}
 					
 					DisplayPanel(xyposition_panel_handle);
@@ -1046,6 +1051,8 @@ XYMoveElementButtons_CB(int panel, int control, int event, void *callbackData, i
 					*saved_position = *table_saved_position;	/* Copy Saved positions */
 					/* Get the Percentage from UI */
 					GetCtrlVal(panel, XYMoveEle_ElePercentage, &(saved_position->percent));
+					/* Get the Go State from UI */
+					GetCtrlVal(panel, XYMoveEle_EleGoState, &(saved_position->go_state));
 					
 					/* Add into Element saved positions list */
 					if (NULL == ListInsertItem(xymove_element->saved_positions, &saved_position, 
@@ -1166,8 +1173,9 @@ XYCondElementButtons_CB(int panel, int control, int event, void *callbackData, i
 				case XYCondEle_EleDelete:	/* Generic Delete */
 					delete_element(&(whisker_script->cur_script), index);
 					break;
-					
-				case XYCondEle_EleAdd:		/* Add position */
+				
+					/*
+				case XYCondEle_EleAdd:		/* Add position 
 					GetCtrlVal(panel, XYCondEle_ElePos, &table_index);
 					if (table_index > ListNumItems(whisker_m->z_dev.saved_positions)) {
 						MessagePopup("Add XY Position Error", "No Such position in the table!");
@@ -1180,10 +1188,11 @@ XYCondElementButtons_CB(int panel, int control, int event, void *callbackData, i
 					xycond_element->X = table_saved_position->X;
 					xycond_element->Y = table_saved_position->Y;
 					
-					/* Update UI */
+					/* Update UI 
 					SetCtrlVal(panel, XYCondEle_EleX, xycond_element->X);
 					SetCtrlVal(panel, XYCondEle_EleY, xycond_element->Y);
 					break;
+					*/
 			}
 			break;
 	}
@@ -1233,7 +1242,7 @@ XYPosTable_CB(int panel, int control, int event, void *callbackData, int eventDa
 					
 				case XYPosPan_XYPositionsTable:	/* Controls embedded in Tables */
 					GetActiveTableCell(panel, control, &focus);
-					if (focus.x == XYTABLE_DEL_COL) {
+					if (focus.x == XYTABLE_SCRIPTDEL_COL) {
 						/* Remove saved position from list */
 						ListRemoveItem(xymove_element->saved_positions, &saved_position, 
 									   				focus.y);

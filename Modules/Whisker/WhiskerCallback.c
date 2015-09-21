@@ -325,17 +325,23 @@ WhiskerButton_CB(int panel, int control, int event, void *callbackData, int even
 						 SetCtrlAttribute(panel, MainPanel_XYSetting, ATTR_DIMMED, 0); /* XY setting */
 						 SetCtrlAttribute(panel, MainPanel_XYHome, ATTR_DIMMED, 0);	 /* Home Position */
 						 SetCtrlAttribute(panel, MainPanel_XYUpdatePos, ATTR_DIMMED, 0); /* Update Current Position */
+						 
+						 /* Start Lick Detector timer */
+						 SetCtrlAttribute (panel, MainPanel_LickTimer, ATTR_ENABLED, 1);
 						 break;
 						 
 					case MainPanel_PortClose:
+						/* Stop Lick Detector Timer */
+						SetCtrlAttribute (panel, MainPanel_LickTimer, ATTR_ENABLED, 0);
+						
 						close_zaber_device(z_dev);
 						close_deditec_device(de_dev);
 						
 						SetCtrlAttribute(panel, MainPanel_PortOpen, ATTR_DIMMED, 0);
 						SetCtrlAttribute(panel, MainPanel_PortClose, ATTR_DIMMED, 1);
 						SetCtrlVal(panel, MainPanel_LED_Port, 0);
-						SetCtrlAttribute(panel, MainPanel_XYSetting, ATTR_DIMMED, 1); /* XY setting */
-						SetCtrlAttribute(panel, MainPanel_XYHome, ATTR_DIMMED, 1);	 /* Home Position */
+						SetCtrlAttribute(panel, MainPanel_XYSetting, ATTR_DIMMED, 1); 	/* XY setting */
+						SetCtrlAttribute(panel, MainPanel_XYHome, ATTR_DIMMED, 1);	 	/* Home Position */
 						SetCtrlAttribute(panel, MainPanel_XYUpdatePos, ATTR_DIMMED, 1); /* Update Current Position */
 						
 						break;
@@ -711,30 +717,20 @@ int  CVICALLBACK
 WhiskerLickToggle_CB(int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	Whisker_t	*whisker_m = (Whisker_t *)callbackData;
-	size_t		interval = 1;
-	int			ch;
 	int			input_value;
 	
 	switch (event) {
-		case EVENT_COMMIT:
-			GetCtrlVal(panel, MainPanel_LickDetDuration, &interval);
-			while (interval) {
-				input_value = get_input_value(&whisker_m->de_dev, 
-											  whisker_m->de_dev.IO_Channel[LICK_DET_CH]);
-	 			if (input_value == 0) {	/* Lick Detected */
-					SetCtrlAttribute (panel, MainPanel_LickDetection, ATTR_ON_COLOR, VAL_GREEN);
-					SetCtrlVal(panel, MainPanel_LickDetection, 1);
-					break;
-	 			}
-	 			WHISKER_DELAY(INPUT_CHECK_DELAY);	/* 1 ms delay */
-	 			interval -= INPUT_CHECK_DELAY;
+		case EVENT_TIMER_TICK:
+			input_value = get_input_value(&whisker_m->de_dev, 
+											whisker_m->de_dev.IO_Channel[LICK_DET_CH]);
+			LOG_MSG1(9, "Lick Detection : %d", input_value);
+	 		if (input_value == 0) {	/* Lick Detected */
+				SetCtrlAttribute (panel, MainPanel_LickDetection, ATTR_ON_COLOR, VAL_GREEN);
+				SetCtrlVal(panel, MainPanel_LickDetection, 1);
+				break;
+	 		} else {
+				SetCtrlVal(panel, MainPanel_LickDetection, 0);
 			}
-			
-			if (interval == 0) {	/* Lick not detected */
-				SetCtrlVal(panel, MainPanel_LickDetection, 0);	
-			}
-			
-			SetCtrlVal(panel, control, 0);
 			break;
 	}
 	return 0;
@@ -813,6 +809,22 @@ ExperimentInfo_CB(int panel, int control, int event, void *callbackData, int eve
 					GetCtrlVal(panel, ExpPanel_ExpAniWeight, &(whisker_m->exp_info.animal_weight));
 					
 					whisker_m->exp_info.VALID_INFO = TRUE;
+					
+					/* Update Experiment Table view */
+					SetTableCellVal (whisker_m->whisker_ui.main_panel_handle, MainPanel_ExperimentInfoTable, 
+							MakePoint(EXPTABLE_VALUE_COL, 1), whisker_m->exp_info.user_name);
+					SetTableCellVal (whisker_m->whisker_ui.main_panel_handle, MainPanel_ExperimentInfoTable, 
+							MakePoint(EXPTABLE_VALUE_COL, 2), whisker_m->exp_info.exp_num);
+					SetTableCellVal (whisker_m->whisker_ui.main_panel_handle, MainPanel_ExperimentInfoTable, 
+							MakePoint(EXPTABLE_VALUE_COL, 3), whisker_m->exp_info.training_num);
+					SetTableCellVal (whisker_m->whisker_ui.main_panel_handle, MainPanel_ExperimentInfoTable, 
+							MakePoint(EXPTABLE_VALUE_COL, 4), whisker_m->exp_info.animal_num);
+					SetTableCellVal (whisker_m->whisker_ui.main_panel_handle, MainPanel_ExperimentInfoTable, 
+							MakePoint(EXPTABLE_VALUE_COL, 5), whisker_m->exp_info.animal_age);
+					SetTableCellVal (whisker_m->whisker_ui.main_panel_handle, MainPanel_ExperimentInfoTable, 
+							MakePoint(EXPTABLE_VALUE_COL, 6), whisker_m->exp_info.animal_weight);
+					SetTableCellVal (whisker_m->whisker_ui.main_panel_handle, MainPanel_ExperimentInfoTable, 
+							MakePoint(EXPTABLE_VALUE_COL, 7), whisker_m->exp_info.extra_msg);
 					
 				case ExpPanel_ExpCancel:
 					DiscardPanel(whisker_m->whisker_ui.experiment_panel_handle);

@@ -1,9 +1,0 @@
-camerafollow=0
-expansionlevel=
-mastervolume=0.008000
-musicvolume=0.014000
-OptionRevisionAccount=5
-profanityfilter=0
-simplecommandcard=0
-sound=1
-toastFade=7.152000

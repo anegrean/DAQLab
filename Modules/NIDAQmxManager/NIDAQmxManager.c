@@ -872,7 +872,7 @@ typedef struct {
 	int							panHndl;					// Panel handle to task settings.
 	TaskHandle					taskHndl;					// DAQmx task handle for hw-timed CO.
 	ListType 					chanTaskSet;     			// Channel and task settings. Of ChanSet_CO_type*
-	//double        				timeout;       				// Task timeout [s]
+	//double        			timeout;	       			// Task timeout [s]
 } COTaskSet_type;
 
 // DAQ Task definition
@@ -963,9 +963,9 @@ static int 							SaveDeviceCfg 							(Dev_type* dev, CAObjHandle xmlDOM, Activ
 
 static int 							SaveADTaskCfg 							(ADTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement, ERRORINFO* xmlErrorInfo); 
 
-static int 							SaveCITaskCfg 							(CITaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement, ERRORINFO* xmlErrorInfo); 
+static int 							SaveCITaskCfg 							(CITaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ CITaskXMLElement, ERRORINFO* xmlErrorInfo); 
 
-static int 							SaveCOTaskCfg 							(COTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement, ERRORINFO* xmlErrorInfo); 
+static int 							SaveCOTaskCfg 							(COTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ COTaskXMLElement, ERRORINFO* xmlErrorInfo); 
 
 static int 							SaveTaskTrigCfg 						(TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ TriggerXMLElement, ERRORINFO* xmlErrorInfo);
 
@@ -1148,7 +1148,7 @@ static void 						discard_ChanSet_CI_Frequency_type 		(ChanSet_CI_Frequency_type
 	//-----------------------------
 
 	// CO
-static ChanSet_CO_type* 			init_ChanSet_CO_type 					(Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], TaskTrig_type* startTrig, PulseTrain_type* pulseTrain);
+static ChanSet_CO_type* 			init_ChanSet_CO_type 					(Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain);
 static void 						discard_ChanSet_CO_type 				(ChanSet_CO_type** chanSetPtr);
 static int 							ChanSetCO_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);	// <---------- check & cleanup!!!
 static int 							AddToUI_Chan_CO			 				(ChanSet_CO_type* chanSet, char** errorMsg); 
@@ -1673,6 +1673,20 @@ INIT_ERR
 		// CO task
 		//-------------------------------
 		
+		if(DAQmxDev->COTaskSet) {
+			
+			errChk( newUI_COTaskSet(DAQmxDev->COTaskSet, &errorInfo.errMsg) );
+			
+			// CO tasks
+			nChans = ListNumItems(DAQmxDev->COTaskSet->chanTaskSet);
+			for (size_t j = 1; j <= nChans; j++) {
+				chanSet = *(ChanSet_type**) ListGetPtrToItem(DAQmxDev->COTaskSet->chanTaskSet, j);
+				// add to UI
+				errChk( AddToUI_Chan_CO((ChanSet_CO_type*)chanSet, &errorInfo.errMsg) );
+			}
+			
+		}
+		
 		// configure Task Controller
 		errChk( TaskControlEvent(DAQmxDev->taskController, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 	
@@ -1706,6 +1720,7 @@ INIT_ERR
 	DiscardDeviceList(&allInstalledDevices);
 	nullChk( allInstalledDevices = ListAllDAQmxDevices() );
 	nInstalledDevs = ListNumItems(allInstalledDevices);
+	
 	//--------------------------------------------------------------------------
 	// Load main panel position
 	//--------------------------------------------------------------------------
@@ -1990,7 +2005,39 @@ static int LoadCITaskCfg (CITaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ 
 
 static int LoadCOTaskCfg (COTaskSet_type* taskSet, ActiveXMLObj_IXMLDOMElement_ taskSetXMLElement, ERRORINFO* xmlErrorInfo)
 {
-	return 0;
+INIT_ERR
+
+	Dev_type*						dev						= taskSet->dev;     
+	ChanSet_type*					chanSet					= NULL;
+	ActiveXMLObj_IXMLDOMElement_	channelsXMLElement		= 0;
+	ActiveXMLObj_IXMLDOMNodeList_	channelNodeList			= 0;
+	ActiveXMLObj_IXMLDOMNode_		channelNode				= 0; 
+	long							nChans					= 0;
+
+	//--------------------------------------------------------------------------------
+	// Load task channels
+	//--------------------------------------------------------------------------------
+	
+	errChk( DLGetSingleXMLElementFromElement(taskSetXMLElement, "Channels", &channelsXMLElement) );
+	
+	errChk ( ActiveXML_IXMLDOMElement_getElementsByTagName(channelsXMLElement, xmlErrorInfo, "Channel", &channelNodeList) );
+	errChk ( ActiveXML_IXMLDOMNodeList_Getlength(channelNodeList, xmlErrorInfo, &nChans) );
+	
+	for (long i = 0; i < nChans; i++) {
+		errChk( ActiveXML_IXMLDOMNodeList_Getitem(channelNodeList, xmlErrorInfo, i, &channelNode) );
+		errChk( LoadChannelCfg(dev, &chanSet, (ActiveXMLObj_IXMLDOMElement_) channelNode, xmlErrorInfo) );
+		OKfreeCAHndl(channelNode);
+		ListInsertItem(taskSet->chanTaskSet, &chanSet, END_OF_LIST);
+	}
+
+Error:
+	
+	// cleanup
+	OKfreeCAHndl(channelsXMLElement);
+	OKfreeCAHndl(channelNodeList);
+	OKfreeCAHndl(channelNode);
+	
+	return errorInfo.error;
 	
 }
 
@@ -1999,8 +2046,6 @@ static int LoadTaskTrigCfg (TaskTrig_type* taskTrig, ActiveXMLObj_IXMLDOMElement
 #define LoadTaskTrigCfg_Err_NotImplemented		-1
 
 INIT_ERR
-	
-	//ERRORINFO						xmlErrorInfo;
 	
 	uInt32							trigType				= 0;
 	uInt32							slopeType				= 0;
@@ -2306,7 +2351,8 @@ INIT_ERR
 		case Chan_CO_Pulse_Time:
 			{
 				COChannel_type*					chanAttr				= GetCOChannel(dev, physChanName);
-				PulseTrainTimeTiming_type*		pulseTrain				= NULL;				
+				PulseTrainTimeTiming_type*		pulseTrain				= NULL;	
+				TaskTrig_type*					startTrig				= NULL;
 				uInt32							pulseMode				= 0;
 				uInt32							idlePulseState			= 0;
 				uInt64							nPulses					= 0;
@@ -2322,7 +2368,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTimeTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTime, lowTime, initialDelay) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, , (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain) );
 				
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2334,6 +2380,7 @@ INIT_ERR
 			{
 				COChannel_type*					chanAttr				= GetCOChannel(dev, physChanName);
 				PulseTrainFreqTiming_type*		pulseTrain				= NULL;				
+				TaskTrig_type*					startTrig				= NULL;
 				uInt32							pulseMode				= 0;
 				uInt32							idlePulseState			= 0;
 				uInt64							nPulses					= 0;
@@ -2349,7 +2396,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainFreqTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, dutyCycle, frequency, initialDelay) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, ,(PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 				
@@ -2359,7 +2406,8 @@ INIT_ERR
 		case Chan_CO_Pulse_Ticks:
 			{
 				COChannel_type*					chanAttr				= GetCOChannel(dev, physChanName);
-				PulseTrainTickTiming_type*		pulseTrain				= NULL;				
+				PulseTrainTickTiming_type*		pulseTrain				= NULL;
+				TaskTrig_type*					startTrig				= NULL;    
 				uInt32							pulseMode				= 0;
 				uInt32							idlePulseState			= 0;
 				uInt64							nPulses					= 0;
@@ -2378,7 +2426,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTickTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTicks, lowTicks, delayTicks, 0) ); // tick clock unknown at this point
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, , (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, (PulseTrain_type*)pulseTrain) );
 				OKfree(clockSource);
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2536,7 +2584,7 @@ INIT_ERR
 	//ActiveXMLObj_IXMLDOMElement_	DITaskXMLElement	= 0;	 // holds an "DITask" element
 	//ActiveXMLObj_IXMLDOMElement_	DOTaskXMLElement	= 0;	 // holds an "DOTask" element
 	//ActiveXMLObj_IXMLDOMElement_	CITaskXMLElement	= 0;	 // holds an "CITask" element
-	//ActiveXMLObj_IXMLDOMElement_	COTaskXMLElement	= 0;	 // holds an "COTask" element
+	ActiveXMLObj_IXMLDOMElement_	COTaskXMLElement	= 0;	 // holds an "COTask" element
 	
 	// AI task
 	if (dev->AITaskSet) {
@@ -2556,10 +2604,22 @@ INIT_ERR
 		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "AOTask", &AOTaskXMLElement) );
 		// save task config
 		errChk( SaveADTaskCfg (dev->AOTaskSet, xmlDOM, AOTaskXMLElement, xmlErrorInfo) );
-		// add device XML element to device element
+		// add task XML element to device element
 		errChk ( ActiveXML_IXMLDOMElement_appendChild (NIDAQDeviceXMLElement, xmlErrorInfo, AOTaskXMLElement, NULL) );
 		// discard task XML element handle
 		OKfreeCAHndl(AOTaskXMLElement);
+	}
+	
+	// CO task
+	if (dev->COTaskSet) {
+		// create new task XML element
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "COTask", &COTaskXMLElement) );
+		// save task config
+		errChk( SaveCOTaskCfg (dev->COTaskSet, xmlDOM, COTaskXMLElement, xmlErrorInfo) );
+		// add task XML element to device element
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (NIDAQDeviceXMLElement, xmlErrorInfo, COTaskXMLElement, NULL) );
+		// discard task XML element handle	
+		OKfreeCAHndl(COTaskXMLElement);
 	}
 	
 	return 0;
@@ -2681,7 +2741,7 @@ Error:
 	return errorInfo.error;	
 }
 
-static int SaveCITaskCfg (CITaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AITaskXMLElement, ERRORINFO* xmlErrorInfo) 
+static int SaveCITaskCfg (CITaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ CITaskXMLElement, ERRORINFO* xmlErrorInfo) 
 {
 //INIT_ERR
 	
@@ -2689,12 +2749,44 @@ static int SaveCITaskCfg (CITaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXML
 	return 0;
 }
 
-static int SaveCOTaskCfg (COTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ AOTaskXMLElement, ERRORINFO* xmlErrorInfo) 
+static int SaveCOTaskCfg (COTaskSet_type* taskSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ COTaskXMLElement, ERRORINFO* xmlErrorInfo) 
 {
-//INIT_ERR
+INIT_ERR
+
+	//--------------------------------------------------------------------------------
+	// Save taskSet channels
+	//--------------------------------------------------------------------------------
 	
+	ActiveXMLObj_IXMLDOMElement_	ChannelsXMLElement			= 0;	 // holds the "Channels" element
+	ActiveXMLObj_IXMLDOMElement_	ChannelXMLElement			= 0;	 // holds the "Channel" element for each channel in the taskSet
+	size_t							nChannels					= ListNumItems(taskSet->chanTaskSet);
+	ChanSet_CO_type*				chanSet						= NULL;
+	
+	//create new "Channels" XML element
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Channels", &ChannelsXMLElement) );
+	// save channels info
+	for (size_t i = 1; i <= nChannels; i++) {
+		chanSet = *(ChanSet_type**) ListGetPtrToItem(taskSet->chanTaskSet, i);
+		// create new "Channel" element
+		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Channel", &ChannelXMLElement) );
+		// save channel info
+		errChk( SaveChannelCfg(chanSet, xmlDOM, ChannelXMLElement, xmlErrorInfo) );
+		// add "Channel" element to "Channels" element
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (ChannelsXMLElement, xmlErrorInfo, ChannelXMLElement, NULL) );
+		// discard "Channel" XML element handle
+		OKfreeCAHndl(ChannelXMLElement);
+	}
+	
+	// add "Channels" XML element to taskSet element
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (COTaskXMLElement, xmlErrorInfo, ChannelsXMLElement, NULL) );
+	// discard "Channels" XML element handle
+	OKfreeCAHndl(ChannelsXMLElement);
 	
 	return 0;
+	
+Error:
+	
+	return errorInfo.error;	
 }
 
 static int SaveTaskTrigCfg (TaskTrig_type* taskTrig, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ TriggerXMLElement, ERRORINFO* xmlErrorInfo)
@@ -2962,7 +3054,7 @@ INIT_ERR
 				DAQLabXMLNode 					COChanAttr[]			= { {"PulseMode",				BasicData_UInt, 		&pulseMode},
 																			{"IdlePulseState",			BasicData_UInt,			&idlePulseState},
 																			{"NPulses",					BasicData_UInt64,		&nPulses},
-																			{"ClockSource", 			BasicData_CString,		&COChanSet->clockSource},
+																			{"ClockSource", 			BasicData_CString,		COChanSet->clockSource},
 																			{"HighTicks",				BasicData_UInt,			&highTicks},
 																			{"LowTicks",				BasicData_UInt,			&lowTicks},
 																			{"DelayTicks",				BasicData_UInt,			&delayTicks} };
@@ -5746,7 +5838,7 @@ static void discard_ChanSet_CI_Frequency_type (ChanSet_CI_Frequency_type** chanS
 //------------------------------------------------------------------------------
 // ChanSet_CO_type
 //------------------------------------------------------------------------------
-static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], TaskTrig_type* startTrig, PulseTrain_type* pulseTrain)
+static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain)
 {
 	ChanSet_CO_type*	chanSet = malloc (sizeof(ChanSet_CO_type));
 	if (!chanSet) return NULL;
@@ -5756,7 +5848,7 @@ static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[]
 	
 	// init child class
 	chanSet->taskHndl		= NULL;
-	chanSet->startTrig		= startTrig;
+	chanSet->startTrig		= NULL;
 	chanSet->referenceTrig	= NULL;
 	chanSet->HWTrigMaster	= NULL;
 	chanSet->HWTrigSlave	= NULL;
@@ -5837,7 +5929,7 @@ INIT_ERR
 	int 					pulsePanHndl		= 0;	
 	int						COPulsePanHndl		= 0;
 	int 					timingPanHndl 		= 0;
-	int						int trigPanHndl		= 0;
+	int						trigPanHndl			= 0;
 	int 					ctrlIdx				= 0;
 	PulseTrainIdleStates	idleState			= 0;
 	Dev_type*   			dev					= chanSet->baseClass.device;
@@ -6063,7 +6155,7 @@ INIT_ERR
 	// make sure that the host controls are not dimmed before inserting terminal controls!
 	NIDAQmx_NewTerminalCtrl(trigPanHndl, TrigPan_Source, 0); // single terminal selection
 	
-	// adjust sample clock terminal control properties
+	// adjust trigger source terminal control
 	NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TrigPan_Source, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
 	NIDAQmx_SetTerminalCtrlAttribute(trigPanHndl, TrigPan_Source, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 		
@@ -6077,10 +6169,16 @@ INIT_ERR
 	// insert trigger slope options
 	InsertListItem(trigPanHndl, TrigPan_Slope, 0, "Rising", TrigSlope_Rising); 
 	InsertListItem(trigPanHndl, TrigPan_Slope, 1, "Falling", TrigSlope_Falling);
+	
 	// set trigger slope
 	GetIndexFromValue(trigPanHndl, TrigPan_Slope, &ctrlIdx, chanSet->startTrig->slope);
 	SetCtrlIndex(trigPanHndl, TrigPan_Slope, ctrlIdx);
 	
+	// display trigger source
+	if (chanSet->startTrig->trigSource)
+		SetCtrlVal(trigPanHndl, TrigPan_Source, chanSet->startTrig->trigSource);
+	
+	// dim/undim controls
 	if (chanSet->startTrig->trigType == Trig_None) {
 		SetCtrlAttribute(trigPanHndl, TrigPan_Slope, ATTR_DIMMED, TRUE);
 		SetCtrlAttribute(trigPanHndl, TrigPan_Source, ATTR_DIMMED, TRUE);
@@ -6089,9 +6187,98 @@ INIT_ERR
 		SetCtrlAttribute(trigPanHndl, TrigPan_Source, ATTR_DIMMED, FALSE);
 	}
 	
+	//------------------------------------
+	// Create and register CO Source VChan
+	//------------------------------------
+						
+	// add a sourceVChan to send pulsetrain settings
+	// name of VChan is unique because because task controller names are unique and physical channel names are unique
+					
+	char* pulseTrainSourceVChanName	= GetTaskControlName(dev->taskController);
+	AppendString(&pulseTrainSourceVChanName, ": ", -1);
+	AppendString(&pulseTrainSourceVChanName, chanSet->baseClass.name, -1);
+	AppendString(&pulseTrainSourceVChanName, SourceVChan_COPulseTrain_BaseName, -1);
+					
+	switch (GetPulseTrainType(chanSet->pulseTrain)) {
+		
+		case PulseTrain_Freq:
+			chanSet->baseClass.srcVChan 	= init_SourceVChan_type(pulseTrainSourceVChanName, DL_PulseTrain_Freq, chanSet, COPulseTrainSourceVChan_StateChange); 
+			break;
+				
+		case PulseTrain_Time:
+			chanSet->baseClass.srcVChan		= init_SourceVChan_type(pulseTrainSourceVChanName, DL_PulseTrain_Time, chanSet, COPulseTrainSourceVChan_StateChange); 
+			break;
+				
+		case PulseTrain_Ticks:
+			chanSet->baseClass.srcVChan 	= init_SourceVChan_type(pulseTrainSourceVChanName, DL_PulseTrain_Ticks, chanSet, COPulseTrainSourceVChan_StateChange); 
+			break;
+			
+	}
 	
+	SetCtrlVal(settingsPanHndl, VChanPan_SrcVChanName, pulseTrainSourceVChanName);  	
+	// register Source VChan with DAQLab
+	DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) chanSet->baseClass.srcVChan);
 	
+	// cleanup
+	OKfree(pulseTrainSourceVChanName);  
 	
+	//------------------------------------
+	// Create and register CO Sink VChan
+	//------------------------------------
+	
+	char* pulseTrainSinkVChanName	= GetTaskControlName(dev->taskController);
+	AppendString(&pulseTrainSinkVChanName, ": ", -1);
+	AppendString(&pulseTrainSinkVChanName, chanSet->baseClass.name, -1);
+	AppendString(&pulseTrainSinkVChanName, " ", -1);
+	AppendString(&pulseTrainSinkVChanName, SinkVChan_COPulseTrain_BaseName, -1);
+	
+	DLDataTypes allowedPulseTrainPacket;
+	
+	switch (GetPulseTrainType(chanSet->pulseTrain)) {
+		
+		case PulseTrain_Freq:
+			allowedPulseTrainPacket = DL_PulseTrain_Freq;
+			break;
+				
+		case PulseTrain_Time:
+			allowedPulseTrainPacket = DL_PulseTrain_Time; 
+			break;
+				
+		case PulseTrain_Ticks:
+			allowedPulseTrainPacket = DL_PulseTrain_Ticks; 
+			break;
+	}
+	
+	chanSet->baseClass.sinkVChan	= init_SinkVChan_type(pulseTrainSinkVChanName, &allowedPulseTrainPacket, 1, 
+																	 chanSet, VChan_Data_Receive_Timeout, COPulseTrainSinkVChan_StateChange); 
+	
+	SetCtrlVal(settingsPanHndl, VChanPan_SinkVChanName, pulseTrainSinkVChanName);  
+	// register VChan with DAQLab
+	DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) chanSet->baseClass.sinkVChan);	
+	errChk( AddSinkVChan(dev->taskController, chanSet->baseClass.sinkVChan, CO_DataReceivedTC, &errorInfo.errMsg) ); 
+	
+	// cleanup
+	OKfree(pulseTrainSinkVChanName);
+	
+	//-------------------------------------------------------------------------
+	// add HW Triggers
+	//-------------------------------------------------------------------------
+		
+	// Master & Slave HW Triggers
+	char*	HWTrigName = GetTaskControlName(dev->taskController);
+	AppendString(&HWTrigName, ": ", -1);
+	AppendString(&HWTrigName, chanSet->baseClass.name, -1); 
+	AppendString(&HWTrigName, " ", -1);
+	AppendString(&HWTrigName, HWTrig_CO_BaseName, -1);
+	chanSet->HWTrigMaster	= init_HWTrigMaster_type(HWTrigName);
+	chanSet->HWTrigSlave	= init_HWTrigSlave_type(HWTrigName);
+	OKfree(HWTrigName);
+		
+	// register HW Triggers with framework
+	DLRegisterHWTrigMaster(chanSet->HWTrigMaster);
+	DLRegisterHWTrigSlave(chanSet->HWTrigSlave);
+	
+				
 	return 0;
 Error:
 	
@@ -6694,6 +6881,11 @@ INIT_ERR
 					
 				case DAQmxCounter:
 					
+					Channel_type 			chanType		= 0;
+					PulseTrain_type*		pulseTrain		= NULL;
+					TaskTrig_type* 			startTrig		= NULL;
+					ChanSet_CO_type* 		newChan			= NULL; 
+					
 					//-------------------------------------------------
 					// if there is no CO task then create it and add UI
 					//-------------------------------------------------
@@ -6716,9 +6908,6 @@ INIT_ERR
 					COchanAttr->inUse = TRUE;
 					
 					// add new CO channel to UI
-					Channel_type 		chanType		= 0;
-					PulseTrain_type*	pulseTrain		= NULL;
-					
 					switch (ioType){
 						
 						case DAQmx_Val_Pulse_Freq:
@@ -6740,112 +6929,16 @@ INIT_ERR
 							break;
 					}
 					
-					TaskTrig_type* 		startTrig	=  init_TaskTrig_type(dev, 0);
-					ChanSet_CO_type* 	newChan 	=  init_ChanSet_CO_type(dev, chName, chanType, NULL, startTrig, pulseTrain);
+					nullChk( newChan = init_ChanSet_CO_type(dev, chName, chanType, NULL, pulseTrain) );
+					// add start trigger
+					nullChk( newChan->startTrig = init_TaskTrig_type(dev, NULL) );
+					// add to UI
 					errChk( AddToUI_Chan_CO(newChan, &errorInfo.errMsg) );
 					
-					/*
 					
-					
-					//------------------------------------
-					// Create and register CO Source VChan
-					//------------------------------------
-						
-					int settingspanel;
-					GetPanelHandleFromTabPage(newChan->baseClass.chanPanHndl, CICOChSet_TAB,DAQmxCICOTskSet_SettingsTabIdx , &settingspanel);    
-					
-					// add a sourceVChan to send pulsetrain settings
-					// name of VChan is unique because because task controller names are unique and physical channel names are unique
-					
-					char* pulseTrainSourceVChanName	= GetTaskControlName(dev->taskController);
-					AppendString(&pulseTrainSourceVChanName, ": ", -1);
-					AppendString(&pulseTrainSourceVChanName	, chName, -1);
-					AppendString(&pulseTrainSourceVChanName, SourceVChan_COPulseTrain_BaseName, -1);
-					
-					switch (GetPulseTrainType(newChan->pulseTrain)) {
-						
-						case PulseTrain_Freq:
-							newChan->baseClass.srcVChan 	= init_SourceVChan_type(pulseTrainSourceVChanName, DL_PulseTrain_Freq, newChan, 
-															  						COPulseTrainSourceVChan_StateChange); 
-							break;
-								
-						case PulseTrain_Time:
-							newChan->baseClass.srcVChan		= init_SourceVChan_type(pulseTrainSourceVChanName, DL_PulseTrain_Time, newChan, 
-														  						COPulseTrainSourceVChan_StateChange); 
-							break;
-								
-						case PulseTrain_Ticks:
-							newChan->baseClass.srcVChan 	= init_SourceVChan_type(pulseTrainSourceVChanName, DL_PulseTrain_Ticks, newChan, 
-																  						COPulseTrainSourceVChan_StateChange); 
-							break;
+					// add new CO channel to list of channels
+					ListInsertItem(dev->COTaskSet->chanTaskSet, &newChan, END_OF_LIST);
 							
-					}
-					
-					SetCtrlVal(settingspanel, VChanPan_SrcVChanName, pulseTrainSourceVChanName);  	
-					// register Source VChan with DAQLab
-					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) newChan->baseClass.srcVChan);
-					
-					// cleanup
-					OKfree(pulseTrainSourceVChanName);  
-					
-					//------------------------------------
-					// Create and register CO Sink VChan
-					//------------------------------------
-					
-					char* pulseTrainSinkVChanName	= GetTaskControlName(dev->taskController);
-					AppendString(&pulseTrainSinkVChanName, ": ", -1);
-					AppendString(&pulseTrainSinkVChanName, chName, -1);
-					AppendString(&pulseTrainSinkVChanName, " ", -1);
-					AppendString(&pulseTrainSinkVChanName, SinkVChan_COPulseTrain_BaseName, -1);
-					
-					DLDataTypes allowedPulseTrainPacket;
-					
-					switch (GetPulseTrainType(newChan->pulseTrain)) {
-						
-						case PulseTrain_Freq:
-							allowedPulseTrainPacket = DL_PulseTrain_Freq;
-							break;
-								
-						case PulseTrain_Time:
-							allowedPulseTrainPacket = DL_PulseTrain_Time; 
-							break;
-								
-						case PulseTrain_Ticks:
-							allowedPulseTrainPacket = DL_PulseTrain_Ticks; 
-							break;
-					}
-					
-					newChan->baseClass.sinkVChan	= init_SinkVChan_type(pulseTrainSinkVChanName, &allowedPulseTrainPacket, 1, 
-																					 newChan, VChan_Data_Receive_Timeout, COPulseTrainSinkVChan_StateChange); 
-					
-					SetCtrlVal(settingspanel, VChanPan_SinkVChanName, pulseTrainSinkVChanName);  
-					// register VChan with DAQLab
-					DLRegisterVChan((DAQLabModule_type*)dev->niDAQModule, (VChan_type*) newChan->baseClass.sinkVChan);	
-					errChk( AddSinkVChan(dev->taskController, newChan->baseClass.sinkVChan, CO_DataReceivedTC, &errorInfo.errMsg) ); 
-					
-					// cleanup
-					OKfree(pulseTrainSinkVChanName);
-					
-					//-------------------------------------------------------------------------
-					// add HW Triggers
-					//-------------------------------------------------------------------------
-						
-					// Master & Slave HW Triggers
-					char*	HWTrigName = GetTaskControlName(dev->taskController);
-					AppendString(&HWTrigName, ": ", -1);
-					AppendString(&HWTrigName, chName, -1); 
-					AppendString(&HWTrigName, " ", -1);
-					AppendString(&HWTrigName, HWTrig_CO_BaseName, -1);
-					newChan->HWTrigMaster 	= init_HWTrigMaster_type(HWTrigName);
-					newChan->HWTrigSlave	= init_HWTrigSlave_type(HWTrigName);
-					OKfree(HWTrigName);
-						
-					// register HW Triggers with framework
-					DLRegisterHWTrigMaster(newChan->HWTrigMaster);
-					DLRegisterHWTrigSlave(newChan->HWTrigSlave);
-					
-					*/
-					
 					//--------------------------------------  
 					// Configure CO task on device
 					//-------------------------------------- 

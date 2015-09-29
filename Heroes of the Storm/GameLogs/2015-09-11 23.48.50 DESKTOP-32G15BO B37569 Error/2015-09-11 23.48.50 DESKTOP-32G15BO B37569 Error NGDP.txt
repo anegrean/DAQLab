@@ -1,0 +1,19 @@
+﻿DIAG_BUFFER_ERROR
+[20150911T23:48:49] {12f0} ERR: long block at input offset 53487
+
+DIAG_BUFFER_INFO
+[20150911T23:48:47] {8ac} INF: Add new Host addr=88.221.254.179, port=80, name=dist.blizzard.com.edgesuite.net, proxy=false
+[20150911T23:48:47] {8ac} INF: Add new Host addr=88.221.254.200, port=80, name=dist.blizzard.com.edgesuite.net, proxy=false
+[20150911T23:48:47] {8ac} INF: Add new Host addr=88.221.254.200, port=80, name=dist.blizzard.com, proxy=false
+[20150911T23:48:47] {8ac} INF: Add new Host addr=88.221.254.179, port=80, name=dist.blizzard.com, proxy=false
+[20150911T23:48:49] {12f0} ERR: long block at input offset 53487
+[20150911T23:48:49] {12f0} INF: scanning E-key dcf058956c79ad446bfe2b9e61524f3e (C-key f97bf04e2dd8966366597ccc9da92920, {offset=18568,size=519}) for bad data
+
+DIAG_BUFFER_ALL
+[20150911T23:48:47] {8ac} INF: Add new Host addr=88.221.254.179, port=80, name=dist.blizzard.com.edgesuite.net, proxy=false
+[20150911T23:48:47] {8ac} INF: Add new Host addr=88.221.254.200, port=80, name=dist.blizzard.com.edgesuite.net, proxy=false
+[20150911T23:48:47] {8ac} INF: Add new Host addr=88.221.254.200, port=80, name=dist.blizzard.com, proxy=false
+[20150911T23:48:47] {8ac} INF: Add new Host addr=88.221.254.179, port=80, name=dist.blizzard.com, proxy=false
+[20150911T23:48:47] {8ac} debug: Clearing content fault counter for all hosts
+[20150911T23:48:49] {12f0} ERR: long block at input offset 53487
+[20150911T23:48:49] {12f0} INF: scanning E-key dcf058956c79ad446bfe2b9e61524f3e (C-key f97bf04e2dd8966366597ccc9da92920, {offset=18568,size=519}) for bad data

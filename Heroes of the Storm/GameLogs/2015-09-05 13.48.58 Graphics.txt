@@ -1,0 +1,37 @@
+﻿GFX  13:48:58.622 ====================================================================================================
+GFX  13:48:58.622 Heroes of the Storm (B37351)
+GFX  13:48:58.622 
+GFX  13:48:58.622 Executable              C:\Program Files (x86)\Heroes of the Storm\Versions\Base37351\HeroesOfTheStorm_x64.exe
+GFX  13:48:58.622 <Parameters>            -sso=1 -launch -uid heroes
+GFX  13:48:58.622 Parent Executable       C:\Program Files (x86)\Heroes of the Storm\Support64\HeroesSwitcher_x64.exe
+GFX  13:48:58.622 Grandparent Executable  C:\Program Files (x86)\Battle.net\Battle.net.6119\Battle.net.exe
+GFX  13:48:58.622 LocalTime               2015-09-05 13:48:58.622
+GFX  13:48:58.622 <ComputerUser>          popes
+GFX  13:48:58.622 <ComputerName>          DESKTOP-32G15BO
+GFX  13:48:58.622 <Exe.Architecture>      x86_64
+GFX  13:48:58.622 <Version>               13.2.0.37351
+GFX  13:48:58.622 <DataBuild>             B37463
+GFX  13:48:58.622 <CodeBranch>            branches/Heroes.13
+GFX  13:48:58.622 <CodeRevision>          218842
+GFX  13:48:58.622 <Locale.Assets>         enUS
+GFX  13:48:58.622 <Locale.Data>           enUS
+GFX  13:48:58.622 <Locale.Install>        enUS
+GFX  13:48:58.622 <AccountCountry>        GBR
+GFX  13:48:58.622 ====================================================================================================
+GFX  13:48:58.622 DXGI: Available
+GFX  13:48:59.111 Resource Cache Override Variable: 0MB
+GFX  13:48:59.111 Resource Cache: 2048MB Win64 (24459MB Physical, 21339MB Process Virtual)
+GFX  13:48:59.112 Adapter [0]: NVIDIA GeForce GTX 980M (VendorID 0x10de DeviceID 0x13d7)
+GFX  13:48:59.113 Attempting CreateDevice on adapter [0] (VendorID 0x10de DeviceID 0x13d7)
+GFX  13:48:59.173 CreateDevice succeeded
+GFX  13:48:59.174 Using adapter [0]
+GFX  13:48:59.174 Floating point render targets supported.
+GFX  13:48:59.175 DXGI Adapter Name: NVIDIA GeForce GTX 980M
+GFX  13:48:59.176 VRAM Detected: Dedicated [8095MB] Shared [12229MB] (DXGI)
+GFX  13:48:59.176 VRAM Override Variables: Dedicated [0MB] Shared [0MB]
+GFX  13:48:59.176 Initialized D3D9 GraphicsDevice: NVIDIA GeForce GTX 980M (Driver Version: 10.18.13.5582, VRAM: 8095MB, SVMEM: 12229MB).
+GFX  13:48:59.176 VRAM texture space: 2048MB
+GFX  13:49:00.291 PerfNotifiers initialized
+GFX  13:49:00.305 Lost D3D9 device
+GFX  13:49:00.307 
+GFX  13:49:00.307 D3D9 Device Reset from unknown returned e_errorKindGfx(0)

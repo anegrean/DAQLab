@@ -27,7 +27,7 @@
 #define WDTE_ERR_BIT	0x01000000
 #define RDTE_ERR_BIT	0x02000000
 #define DTE_DONE_BIT	0x80000000
-#define MAJOR_VERSION	2
+#define MAJOR_VERSION	3
 #define MINOR_VERSION	0 
 // driver status bits
 #define READYFORDATA	0x00000001

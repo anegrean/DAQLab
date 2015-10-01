@@ -10772,7 +10772,7 @@ INIT_ERR
 	BOOL 	hwTimingFlag 	= FALSE;
 	for (size_t i = 1; i <= nCOChan; i++) {	
 		chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-		if (!chanSet->baseClass.onDemand && IsVChanOpen((VChan_type*)chanSet->baseClass.sinkVChan)) {
+		if (!chanSet->baseClass.onDemand) {
 			hwTimingFlag = TRUE;
 			break;
 		}
@@ -10785,7 +10785,7 @@ INIT_ERR
 	for (size_t i = 1; i <= nCOChan; i++) {	
 		chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
 		// include in the task only channel for which HW-timing is required
-		if (chanSet->baseClass.onDemand && !IsVChanOpen((VChan_type*)chanSet->baseClass.sinkVChan)) continue;
+		if (chanSet->baseClass.onDemand) continue;
 		
 		// create DAQmx CO task for each counter 
 		taskName = GetTaskControlName(dev->taskController);

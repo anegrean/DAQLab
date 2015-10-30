@@ -74,6 +74,7 @@ struct Waveform {
 	void*						data;					// Array of waveformType elements.
 };
 
+
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Repeated Waveforms
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1483,3 +1484,4 @@ void FireCallbackGroup (CallbackGroup_type* callbackGroup, int event)
 			(*callbackGroup->CBs[i]) (callbackGroup->objectRef, event, callbackGroup->CBsData[i]);
 	
 }
+

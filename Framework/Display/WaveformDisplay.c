@@ -13,7 +13,7 @@
 //==============================================================================
 // Include files
 
-#include "DAQLab.h"
+#include "DAQLab.h"				// include this first
 #include "WaveformDisplay.h"
 #include "UI_WaveformDisplay.h"
 #include "HDF5support.h"
@@ -182,7 +182,7 @@ Error:
 
 void discard_WaveformDisplay_type (WaveformDisplay_type** waveDispPtr)
 {
-	WaveformDisplay_type*	waveDisp = * waveDispPtr;
+	WaveformDisplay_type*	waveDisp = *waveDispPtr;
 	if (!waveDisp) return;
 	
 	//--------------

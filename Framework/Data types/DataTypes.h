@@ -190,7 +190,8 @@ typedef enum {
 	//----------------------------------------------------------------------------------------------
 	// Image types
 	//----------------------------------------------------------------------------------------------   
-typedef struct Image				Image_type; 
+	
+typedef struct Image		Image_type; 
 
 	// transform method to use for displaying image
 typedef enum {

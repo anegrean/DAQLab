@@ -163,9 +163,8 @@ void DiscardImageList (ListType* imageListPtr)
 
 static int Image_typeToBitmap(Image_type** image)
 {
-INIT_ERRaluca, [30.10.15 13:50]
-hehehe pai in mod normal nu te intelegi cu propozitiileR 
-	
+INIT_ERR 
+
 	int BitmapID = 0;
 	Image_type* ImageCVI = *image;
 	

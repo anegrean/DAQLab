@@ -34,13 +34,6 @@ typedef struct ChannelGroupDisplay				ChannelGroupDisplay_type;			// Used to gro
 typedef struct ChannelGroupDisplayContainer		ChannelGroupDisplayContainer_type;	// Container for multiple channel display groups. Image dimensions between different channel groups need not be the same.
 																	
 
-//--------------------------------------------------------------
-// Functions
-//--------------------------------------------------------------
-
-// Displays or updates an image in a display window
-typedef int				(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type** image);
-
 //--------------------------------------------------------------		
 // Enums
 //--------------------------------------------------------------		
@@ -60,10 +53,21 @@ typedef enum {
 
 // Allowed operations on ROIs
 typedef enum {
-	ROI_Visible,													// ROI is visible on the image.
+	ROI_Show,														// ROI is visible on the image.
 	ROI_Hide,														// ROI is hidden.
 	ROI_Delete														// ROI is deleted from the image.
 } ROIActions;
+
+//--------------------------------------------------------------
+// Functions
+//--------------------------------------------------------------
+
+// Displays or updates an image in a display window
+typedef int				(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type** image);
+
+// Performs a ROI operation on the image display. ROIIdx is the 1-based ROI index from the image ROI list. If ROIIdx is 0, the operation applies to all ROIs.
+typedef void			(*ROIActionsFptr_type)						(ImageDisplay_type* imgDisplay, int ROIIdx, ROIActions action);
+
 
 //--------------------------------------------------------------		
 // Generic image display class
@@ -75,6 +79,7 @@ struct ImageDisplay {
 	//----------------------------------------------------
 	
 	CmtTSVHandle						imageTSV;					// Thread safe variable of Image_type* storing the displayed image which can be accessed safely from multiple threads.
+	BOOL								visible;					// If True, the image window is visible, False otherwise. This flag should be by the displayImageFptr method to either display a new window or just update the current image.
 	
 	
 	//----------------------------------------------------
@@ -82,9 +87,10 @@ struct ImageDisplay {
 	//----------------------------------------------------
 	
 	DiscardFptr_type					imageDisplayDiscardFptr;	// Method to discard the image display.
-	DisplayImageFptr_type				displayImageFptr;			// Method to display an image.
+	DisplayImageFptr_type				displayImageFptr;			// Method to display or update an image depending on the visible flag.
+	ROIActionsFptr_type					ROIActionsFptr;				// Method to apply ROI actions to the image.
 	
-
+	
 	//----------------------------------------------------
 	// CALLBACKS
 	//----------------------------------------------------
@@ -101,10 +107,12 @@ struct ImageDisplay {
 // Generic image display class management
 //--------------------------------------------------------------------------------------------------------------------------
 
-// Initializes the generic image display class.
+// Initializes the generic image display class. Provide a pointer to an image if already available, otherwise set imagePtr to NULL.
 int										init_ImageDisplay_type						(ImageDisplay_type* 		imageDisplay,
+																					 Image_type**				imagePtr,
 																			 	 	 DiscardFptr_type			imageDisplayDiscardFptr,
 																				  	 DisplayImageFptr_type		displayImageFptr,
+																					 ROIActionsFptr_type		ROIActionsFptr,
 																			 	 	 CallbackGroup_type**		callbackGroupPtr);
 
 void									discard_ImageDisplay_type					(ImageDisplay_type** imageDisplayPtr);
@@ -122,9 +130,9 @@ void									discard_ChannelGroupDisplay_type			(ChannelGroupDisplay_type** chan
 // If ROIIdx is 0 then the action applies to all ROIs.
 int										ChannelGroupDisplayROIAction				(ChannelGroupDisplay_type* chanGroupDisplay, size_t channelIdx, size_t ROIIdx, ROIActions action, char** errorMsg);
 
-// Adds an image to the channel group display with a given channel index. Any existing ROIs from the provided image are discarded and they must be added back afterwards. The image width and height in pixels
+// Adds an image to the channel group display with a given 0-based channel index. Any existing ROIs from the provided image are discarded and they must be added back afterwards. The image width and height in pixels
 // must be the same for all images added to the channel group display.
-int										ChannelGroupDisplayAddImageChannel			(ChannelGroupDisplay_type* chanGroupDisplay, size_t chanIdx, Image_type** imagePtr);
+int										ChannelGroupDisplayAddImageDisplay			(ChannelGroupDisplay_type* chanGroupDisplay, size_t chanIdx, ImageDisplay_type** imageDisplayPtr, char** errorMsg);
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Channel Group Display Container

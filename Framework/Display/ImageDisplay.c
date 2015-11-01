@@ -45,6 +45,7 @@ struct ChannelGroupDisplayContainer {
 // Global functions
 
 int init_ImageDisplay_type (ImageDisplay_type* 				imageDisplay,
+							void*							imageDisplayOwner,
 							Image_type**					imagePtr,
 							DiscardFptr_type				imageDisplayDiscardFptr,
 							DisplayImageFptr_type			displayImageFptr,
@@ -60,6 +61,7 @@ INIT_ERR
 	//----------------------------------------------------------
 	
 	// data
+	imageDisplay->imageDisplayOwner			= imageDisplayOwner;
 	imageDisplay->imageTSV					= 0;
 	imageDisplay->visible					= FALSE;
 	

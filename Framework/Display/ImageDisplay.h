@@ -44,7 +44,8 @@ typedef enum {
 	ImageDisplay_Discard,											// Image display window was discarded.
 	ImageDisplay_RestoreSettings,									// The image display window wishes to restore a list of settings that were used to acquire the image.
 	
-	// Region of interest (ROI) management
+	// Region of interest (ROI) events
+	// callbackData is of ROI_type*
 	ImageDisplay_ROI_Placed,										// A ROI (region of interest) was placed on the image, but not added to it.
 	ImageDisplay_ROI_Added,											// A ROI was added to the image.
 	ImageDisplay_ROI_Removed,										// A ROI was removed from the image.
@@ -78,6 +79,7 @@ struct ImageDisplay {
 	// DATA
 	//----------------------------------------------------
 	
+	void*								imageDisplayOwner;			// Reference to object that owns this image display.
 	CmtTSVHandle						imageTSV;					// Thread safe variable of Image_type* storing the displayed image which can be accessed safely from multiple threads.
 	BOOL								visible;					// If True, the image window is visible, False otherwise. This flag should be by the displayImageFptr method to either display a new window or just update the current image.
 	
@@ -95,7 +97,9 @@ struct ImageDisplay {
 	// CALLBACKS
 	//----------------------------------------------------
 	
-	CallbackGroup_type*					callbackGroup;				// Callback function of the form CallbackFptr_type within the callback group receive events of ImageDisplayEvents type.  			   
+	CallbackGroup_type*					callbackGroup;				// Callback function of the form CallbackFptr_type within the callback group receive events of ImageDisplayEvents type.
+																	// Since the CallbackFptr_type has the form typedef void (*CallbackFptr_type) (void* objectRef, int event, void* callbackData)
+																	// objectRef will be the reference to the image display of ImageDisplay_type* while callbackData will depend on the event type among ImageDisplayEvents.
 };
 	
 	
@@ -109,6 +113,7 @@ struct ImageDisplay {
 
 // Initializes the generic image display class. Provide a pointer to an image if already available, otherwise set imagePtr to NULL.
 int										init_ImageDisplay_type						(ImageDisplay_type* 		imageDisplay,
+																					 void*						imageDisplayOwner,
 																					 Image_type**				imagePtr,
 																			 	 	 DiscardFptr_type			imageDisplayDiscardFptr,
 																				  	 DisplayImageFptr_type		displayImageFptr,

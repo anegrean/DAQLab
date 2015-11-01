@@ -19,7 +19,7 @@
 #include <userint.h>
 #include "combobox.h" 
 #include <analysis.h>
-#include <NIDisplayEngine.h>
+#include <ImageDisplayNIVision.h>
 #include "WaveformDisplay.h"
 #include "UI_LaserScanning.h"
 

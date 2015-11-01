@@ -1,13 +1,13 @@
 [Workspace Header]
 Version = 1302
-Pathname = "/d/ELE_DAQLAB/DAQLab.cws"
-CVI Dir = "/c/program files (x86)/national instruments/cvi2013"
-CVI Shared Dir = "/C/Program Files (x86)/National Instruments/Shared/CVI"
+Pathname = "/d/GitHub/DAQLab_private/DAQLab.cws"
+CVI Dir = "/c/program files/national instruments/cvi2013"
+CVI Shared Dir = "/C/Program Files/National Instruments/Shared/CVI"
 CVI Pub Local Dir = "/C/ProgramData/National Instruments/CVI2013"
 CVI Pub Global Dir = "/C/ProgramData/National Instruments/CVI"
-IVI Standard Root Dir = "/C/Program Files (x86)/IVI Foundation/IVI"
+IVI Standard Root Dir = "/C/Program Files/IVI Foundation/IVI"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
-VXIplug&play Framework Dir = "/C/Program Files (x86)/IVI Foundation/VISA/winnt"
+VXIplug&play Framework Dir = "/C/Program Files/IVI Foundation/VISA/winnt"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
 Number of Projects = 1
 Active Project = 1
@@ -32,6 +32,8 @@ Project 0001 Folder Instrument Files Collapsed = True
 Project 0001 FolderId 12 Collapsed = True
 Project 0001 Folder Framework/Data Storage Collapsed = True
 Project 0001 FolderId 14 Collapsed = True
+Project 0001 Folder Framework/Task Control Collapsed = True
+Project 0001 FolderId 15 Collapsed = True
 Project 0001 Folder Framework/Virtual Channels Collapsed = True
 Project 0001 FolderId 16 Collapsed = True
 Project 0001 Folder Framework/Iterators Collapsed = True
@@ -40,11 +42,13 @@ Project 0001 Folder Framework/Data Packets Collapsed = True
 Project 0001 FolderId 18 Collapsed = True
 Project 0001 Folder Framework/HW Triggering Collapsed = True
 Project 0001 FolderId 20 Collapsed = True
-Drag Bar Left = 357
-Window Top = 438
-Window Left = 973
-Window Bottom = 1049
-Window Right = 1960
+Project 0001 Folder Framework/Utility Collapsed = True
+Project 0001 FolderId 21 Collapsed = True
+Drag Bar Left = 271
+Window Top = 120
+Window Left = 393
+Window Bottom = 726
+Window Right = 1401
 Maximized = True
 Maximized Children = True
 Max32 Number Of Errors = 20
@@ -58,9 +62,9 @@ Save Changes Before Compiling = "Always"
 Hide Windows = False
 Break At First Statement = False
 Sort Type = "File Name"
-Number of Opened Files = 7
+Number of Opened Files = 10
 Window Confinement Region Enabled = True
-MainColumnWidth = 340
+MainColumnWidth = 254
 FileDateColumnWidth = 70
 FileSizeColumnWidth = 70
 
@@ -74,827 +78,833 @@ Batch Build Release = False
 Batch Build Debug = False
 
 [File 0001]
-Path = "/d/ELE_DAQLAB/MSXML/ActiveXML.fp"
+Path = "/d/GitHub/DAQLab_private/MSXML/ActiveXML.fp"
 File Type = "Function Panel"
-Disk Date = 3526348336
+Disk Date = 3529060573
 In Projects = "1,"
 
 [File 0002]
-Path Line0001 = "/c/program files (x86)/national instruments/cvi2013/toolslib/custctrl/combobox.f"
-Path Line0002 = "p"
+Path = "/c/Program Files/National Instruments/CVI2013/toolslib/custctrl/combobox.fp"
 File Type = "Function Panel"
 Disk Date = 3486492000
 In Projects = "1,"
 
 [File 0003]
-Path Line0001 = "/C/Program Files (x86)/National Instruments/Shared/CVI/toolslib/custctrl/daqmxio"
-Path Line0002 = "ctrl.fp"
+Path Line0001 = "/c/Program Files/National Instruments/Shared/CVI/toolslib/custctrl/daqmxioctrl.f"
+Path Line0002 = "p"
 File Type = "Function Panel"
-Disk Date = 3521269526
+Disk Date = 3485520506
 In Projects = "1,"
 
 [File 0004]
-Path = "/d/ELE_DAQLAB/Framework/Display/ImageDisplayCVI.h"
+Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayCVI.h"
 File Type = "Include"
-Disk Date = 3529046063
+Disk Date = 3529064485
 In Projects = "1,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 3
-Source Window State = "1,0,0,0,0,0,0,0,0,60,0,0,0,0,0,25,17,0,35,22,349,523,1,0,"
+Window Z-Order = 6
+Source Window State = "1,0,0,0,0,0,0,0,0,60,0,0,0,0,0,25,11,0,35,22,349,523,1,0,"
 
 [File 0005]
-Path = "/d/ELE_DAQLAB/Framework/Display/ImageDisplay.c"
+Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplay.c"
 File Type = "CSource"
-Disk Date = 3529046063
+Disk Date = 3529253425
 In Projects = "1,"
 Window Top = 64
 Window Left = 26
-Window Z-Order = 2
-Source Window State = "1,29,29,29,5,34,34,0,3,60,0,0,0,0,0,25,8,0,29,5,349,523,1,0,"
+Window Z-Order = 5
+Source Window State = "1,46,46,46,4,26,26,0,0,60,0,0,0,0,0,25,41,0,48,24,349,523,1,11,"
 
 [File 0006]
-Path = "/d/ELE_DAQLAB/Framework/Display/ImageDisplayCVI.c"
+Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayCVI.c"
 File Type = "CSource"
-Disk Date = 3529060910
+Disk Date = 3529070629
 In Projects = "1,"
 Window Top = 106
 Window Left = 952
-Window Z-Order = 1
-Source Window State = "1,53,53,53,0,15,15,0,0,190,0,137,0,0,0,46,36,0,60,29,369,843,0,16,"
+Window Z-Order = 7
+Source Window State = "1,53,53,53,0,15,15,0,0,100,0,137,0,0,0,26,113,0,60,29,369,843,1,16,"
 
 [File 0007]
-Path = "/d/ELE_DAQLAB/Framework/Display/ImageDisplay.h"
+Path = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/LaserScanning.h"
 File Type = "Include"
-Disk Date = 3529047921
-In Projects = "1,"
-Window Top = 126
-Window Left = 58
-Window Z-Order = 4
-Source Window State = "1,76,76,76,40,57,40,0,0,60,0,0,0,0,0,25,77,0,103,12,349,523,1,0,"
-
-[File 0008]
-Path = "/d/ELE_DAQLAB/Modules/Laser Scanning/LaserScanning.h"
-File Type = "Include"
-Disk Date = 3526348337
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 212
 Window Left = 106
-Window Z-Order = 7
+Window Z-Order = 10
 Source Window State = "1,37,37,37,0,95,95,0,3,80,0,0,0,0,0,25,0,0,37,0,349,683,1,0,"
 
-[File 0009]
-Path = "/d/ELE_DAQLAB/Framework/Display/UI_ImageDisplay.uir"
+[File 0008]
+Path = "/d/GitHub/DAQLab_private/Framework/Display/UI_ImageDisplay.uir"
 File Type = "User Interface Resource"
-Disk Date = 3527236089
+Disk Date = 3529064485
 In Projects = "1,"
 Window Top = 157
 Window Left = 74
 Window Height = 349
 Window Width = 683
-Window Z-Order = 5
+Window Z-Order = 8
 
-[File 0010]
-Path = "/d/ELE_DAQLAB/Framework/Display/WaveformDisplay.h"
+[File 0009]
+Path = "/d/GitHub/DAQLab_private/Framework/Display/WaveformDisplay.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 362
 Window Left = 134
-Window Z-Order = 6
+Window Z-Order = 9
 Source Window State = "1,51,51,51,28,48,28,0,0,80,0,0,0,0,0,25,10,0,36,27,349,683,1,0,"
 
-[File 0011]
-Path = "/d/ELE_DAQLAB/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.h"
+[File 0010]
+Path Line0001 = "/d/GitHub/DAQLab_private/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS"
+Path Line0002 = "2_DLL.h"
 File Type = "Include"
-Disk Date = 3526348336
+Disk Date = 3529060577
 In Projects = "1,"
 Window Top = 302
 Window Left = 154
 Source Window State = "1,122,122,122,24,39,24,0,3,0,0,0,0,0,0,0,99,0,122,39,349,683,1,0,"
 
-[File 0012]
-Path = "/d/ELE_DAQLAB/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.lib"
+[File 0011]
+Path Line0001 = "/d/GitHub/DAQLab_private/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS"
+Path Line0002 = "2_DLL.lib"
 File Type = "Library"
-Disk Date = 3526348336
+Disk Date = 3529060577
 In Projects = "1,"
 
-[File 0013]
-Path = "/d/ELE_DAQLAB/Modules/Zstages/PI Stage/PIStage.c"
+[File 0012]
+Path = "/d/GitHub/DAQLab_private/Modules/Zstages/PI Stage/PIStage.c"
 File Type = "CSource"
-Disk Date = 3526348337
+Disk Date = 3529060577
 In Projects = "1,"
 Window Top = 218
 Window Left = 428
 Window Released = True
 Source Window State = "1,55,55,55,8,22,22,0,0,0,0,902,0,965,53,0,20,0,34,59,397,913,0,0,"
 
-[File 0014]
-Path = "/d/ELE_DAQLAB/Modules/Zstages/PI Stage/PIStage.h"
+[File 0013]
+Path = "/d/GitHub/DAQLab_private/Modules/Zstages/PI Stage/PIStage.h"
 File Type = "Include"
-Disk Date = 3526348336
+Disk Date = 3529060577
 In Projects = "1,"
 Window Top = 97
 Window Left = 330
 Window Released = True
 Source Window State = "1,59,61,59,0,0,0,0,0,0,0,0,0,0,0,0,10,0,39,14,830,1222,0,0,"
 
-[File 0015]
-Path = "/d/ELE_DAQLAB/Modules/Zstages/UI_Zstage.h"
+[File 0014]
+Path = "/d/GitHub/DAQLab_private/Modules/Zstages/UI_Zstage.h"
 File Type = "Include"
-Disk Date = 3526348336
+Disk Date = 3529060578
 In Projects = "1,"
 Window Top = 62
 Window Left = 26
 Source Window State = "1,27,27,27,9,26,26,0,3,0,0,0,0,0,0,0,0,0,27,9,349,683,1,0,"
 
-[File 0016]
-Path = "/d/ELE_DAQLAB/Modules/Zstages/UI_Zstage.uir"
+[File 0015]
+Path = "/d/GitHub/DAQLab_private/Modules/Zstages/UI_Zstage.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526348336
+Disk Date = 3529060578
 In Projects = "1,"
 Window Top = 187
 Window Left = -593
 Window Height = 349
 Window Width = 683
 
-[File 0017]
-Path = "/d/ELE_DAQLAB/Modules/Zstages/Zstage.c"
+[File 0016]
+Path = "/d/GitHub/DAQLab_private/Modules/Zstages/Zstage.c"
 File Type = "CSource"
-Disk Date = 3526348337
+Disk Date = 3529060578
 In Projects = "1,"
 Window Top = 218
 Window Left = 204
 Window Released = True
 Source Window State = "1,627,627,627,11,23,23,0,0,0,0,93,0,102,0,0,52,0,71,64,582,1105,0,0,"
 
-[File 0018]
-Path = "/d/ELE_DAQLAB/Modules/Zstages/Zstage.h"
+[File 0017]
+Path = "/d/GitHub/DAQLab_private/Modules/Zstages/Zstage.h"
 File Type = "Include"
-Disk Date = 3526348336
+Disk Date = 3529060578
 In Projects = "1,"
 Window Top = 131
 Window Left = -1614
 Window Released = True
 Source Window State = "1,141,141,141,114,115,115,0,0,0,0,0,0,0,0,0,23,0,141,131,804,1503,0,0,"
 
-[File 0019]
-Path = "/d/ELE_DAQLAB/Modules/XYstages/Lang L-Step/LangLStep.c"
+[File 0018]
+Path = "/d/GitHub/DAQLab_private/Modules/XYstages/Lang L-Step/LangLStep.c"
 File Type = "CSource"
-Disk Date = 3526348338
+Disk Date = 3529060576
 In Projects = "1,"
 Window Top = 200
 Window Left = -1296
 Window Released = True
 Source Window State = "1,300,300,300,11,20,20,0,0,0,0,0,0,0,0,0,291,0,303,74,633,1188,0,0,"
 
-[File 0020]
-Path = "/d/ELE_DAQLAB/Modules/XYstages/Lang L-Step/LangLStep.h"
+[File 0019]
+Path = "/d/GitHub/DAQLab_private/Modules/XYstages/Lang L-Step/LangLStep.h"
 File Type = "Include"
-Disk Date = 3526348338
+Disk Date = 3529060576
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Source Window State = "1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,349,683,1,0,"
 
-[File 0021]
-Path = "/d/ELE_DAQLAB/Modules/XYstages/Lang L-Step/LStep4X.h"
+[File 0020]
+Path = "/d/GitHub/DAQLab_private/Modules/XYstages/Lang L-Step/LStep4X.h"
 File Type = "Include"
-Disk Date = 3526348338
+Disk Date = 3529060576
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 
-[File 0022]
-Path = "/d/ELE_DAQLAB/Modules/XYstages/UI_XYStage.h"
+[File 0021]
+Path = "/d/GitHub/DAQLab_private/Modules/XYstages/UI_XYStage.h"
 File Type = "Include"
-Disk Date = 3526348338
+Disk Date = 3529060577
 In Projects = "1,"
 Window Top = 302
 Window Left = 154
 Source Window State = "1,28,28,28,9,17,17,0,3,0,0,0,0,0,0,0,0,0,28,9,349,683,1,0,"
 
-[File 0023]
-Path = "/d/ELE_DAQLAB/Modules/XYstages/UI_XYStage.uir"
+[File 0022]
+Path = "/d/GitHub/DAQLab_private/Modules/XYstages/UI_XYStage.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526348338
+Disk Date = 3529060577
 In Projects = "1,"
 Window Top = 122
 Window Left = 58
 Window Height = 349
 Window Width = 683
 
-[File 0024]
-Path = "/d/ELE_DAQLAB/Modules/XYstages/XYStage.c"
+[File 0023]
+Path = "/d/GitHub/DAQLab_private/Modules/XYstages/XYStage.c"
 File Type = "CSource"
-Disk Date = 3526348338
+Disk Date = 3529060577
 In Projects = "1,"
 Window Top = 86
 Window Left = -1570
 Window Released = True
 Source Window State = "1,1419,1419,1419,11,28,28,0,0,0,0,751,0,762,31,0,0,0,39,45,886,1556,0,0,"
 
-[File 0025]
-Path = "/d/ELE_DAQLAB/Modules/XYstages/XYStage.h"
+[File 0024]
+Path = "/d/GitHub/DAQLab_private/Modules/XYstages/XYStage.h"
 File Type = "Include"
-Disk Date = 3526348338
+Disk Date = 3529060577
 In Projects = "1,"
 Window Top = 92
 Window Left = 42
 Source Window State = "1,41,41,41,4,18,18,0,3,0,0,0,0,0,0,0,18,0,41,4,349,683,1,0,"
 
-[File 0026]
-Path = "/d/ELE_DAQLAB/Modules/VUPhotonCtr/HW_VUPC.c"
+[File 0025]
+Path = "/d/GitHub/DAQLab_private/Modules/VUPhotonCtr/HW_VUPC.c"
 File Type = "CSource"
-Disk Date = 3527572822
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 141
 Window Left = 118
 Window Released = True
 Source Window State = "1,741,741,741,4,14,4,0,0,0,0,336,0,351,82,0,713,0,741,4,811,1545,0,0,"
 
-[File 0027]
-Path = "/d/ELE_DAQLAB/Modules/VUPhotonCtr/HW_VUPC.h"
+[File 0026]
+Path = "/d/GitHub/DAQLab_private/Modules/VUPhotonCtr/HW_VUPC.h"
 File Type = "Include"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 152
 Window Left = 74
 Source Window State = "1,132,132,132,68,75,68,0,0,0,0,0,0,0,0,0,114,0,136,12,349,683,1,0,"
 
-[File 0028]
-Path = "/d/ELE_DAQLAB/Modules/VUPhotonCtr/PCIkernel_dma.lib"
+[File 0027]
+Path = "/d/GitHub/DAQLab_private/Modules/VUPhotonCtr/PCIkernel_dma.lib"
 File Type = "Library"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 
-[File 0029]
-Path = "/d/ELE_DAQLAB/Modules/VUPhotonCtr/UI_VUPhotonCtr.h"
+[File 0028]
+Path = "/d/GitHub/DAQLab_private/Modules/VUPhotonCtr/UI_VUPhotonCtr.h"
 File Type = "Include"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 152
 Window Left = 74
 Source Window State = "1,42,42,42,9,27,27,0,3,0,0,0,0,0,0,0,0,0,42,9,349,683,1,0,"
 
-[File 0030]
-Path = "/d/ELE_DAQLAB/Modules/VUPhotonCtr/UI_VUPhotonCtr.uir"
+[File 0029]
+Path = "/d/GitHub/DAQLab_private/Modules/VUPhotonCtr/UI_VUPhotonCtr.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 62
 Window Left = 18
 Window Height = 297
 Window Width = 643
 
-[File 0031]
-Path = "/d/ELE_DAQLAB/Modules/VUPhotonCtr/VUPhotonCtr.c"
+[File 0030]
+Path = "/d/GitHub/DAQLab_private/Modules/VUPhotonCtr/VUPhotonCtr.c"
 File Type = "CSource"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 156
 Window Left = 56
 Window Released = True
 Source Window State = "1,776,776,776,122,123,123,0,3,0,0,950,0,973,16,0,750,0,776,122,750,1475,0,0,"
 
-[File 0032]
-Path = "/d/ELE_DAQLAB/Modules/VUPhotonCtr/VUPhotonCtr.h"
+[File 0031]
+Path = "/d/GitHub/DAQLab_private/Modules/VUPhotonCtr/VUPhotonCtr.h"
 File Type = "Include"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 192
 Window Left = 628
 Window Released = True
 Source Window State = "1,34,34,34,24,36,36,0,3,0,0,0,0,0,0,0,9,0,34,24,747,1004,0,0,"
 
-[File 0033]
-Path = "/d/ELE_DAQLAB/Modules/NIDAQmxManager/NIDAQmxManager.c"
+[File 0032]
+Path = "/d/GitHub/DAQLab_private/Modules/NIDAQmxManager/NIDAQmxManager.c"
 File Type = "CSource"
-Disk Date = 3527572822
+Disk Date = 3529060573
 In Projects = "1,"
-Window Top = 107
-Window Left = 206
+Window Top = 68
+Window Left = -4
 Window Released = True
-Source Window State Line0001 = "0,10873,10873,10873,11,25,25,0,0,0,0,2303,0,2324,17,0,10953,0,10971,4,883,1716,0"
-Source Window State Line0002 = ",6789,"
+Source Window State Line0001 = "1,11046,11046,11046,28,31,31,0,3,205,0,2303,0,2324,17,70,11028,0,11046,28,883,17"
+Source Window State Line0002 = "16,0,0,"
 
-[File 0034]
-Path = "/d/ELE_DAQLAB/Modules/NIDAQmxManager/NIDAQmxManager.h"
+[File 0033]
+Path = "/d/GitHub/DAQLab_private/Modules/NIDAQmxManager/NIDAQmxManager.h"
 File Type = "Include"
-Disk Date = 3526348339
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Source Window State = "1,38,38,38,20,44,20,0,0,0,0,0,0,0,0,0,11,0,39,24,349,683,1,0,"
 
-[File 0035]
-Path = "/d/ELE_DAQLAB/Modules/NIDAQmxManager/UI_NIDAQmxManager.h"
+[File 0034]
+Path = "/d/GitHub/DAQLab_private/Modules/NIDAQmxManager/UI_NIDAQmxManager.h"
 File Type = "Include"
-Disk Date = 3526348339
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 362
 Window Left = 186
 Source Window State = "1,196,196,196,9,28,28,0,3,0,0,0,0,0,0,0,174,0,196,9,349,683,1,0,"
 
-[File 0036]
-Path = "/d/ELE_DAQLAB/Modules/NIDAQmxManager/UI_NIDAQmxManager.uir"
+[File 0035]
+Path = "/d/GitHub/DAQLab_private/Modules/NIDAQmxManager/UI_NIDAQmxManager.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526372685
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 212
 Window Left = 106
 Window Height = 349
 Window Width = 683
 
-[File 0037]
-Path = "/c/program files (x86)/national instruments/cvi2013/sdk/lib/msvc/ComCtl32.Lib"
+[File 0036]
+Path = "/c/Program Files/National Instruments/CVI2013/sdk/lib/msvc/ComCtl32.Lib"
 File Type = "Library"
 Disk Date = 3486492000
 In Projects = "1,"
 
+[File 0037]
+Path = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/LaserScanning.c"
+File Type = "CSource"
+Disk Date = 3529252431
+In Projects = "1,"
+Window Top = 88
+Window Left = 3
+Window Released = True
+Source Window State Line0001 = "1,8169,8169,8169,12,25,25,0,3,197,0,7246,0,7257,21,63,8154,0,8169,12,899,1612,0,"
+Source Window State Line0002 = "0,"
+
 [File 0038]
-Path = "/d/ELE_DAQLAB/Modules/Laser Scanning/DisplayEngine.c"
-File Type = "CSource"
-Disk Date = 3526348337
-In Projects = "1,"
-Window Top = 198
-Window Left = 173
-Window Released = True
-Source Window State = "1,118,118,118,32,44,44,0,0,184,5,14,0,20,34,51,86,0,119,26,804,1512,0,797,"
-
-[File 0039]
-Path = "/d/ELE_DAQLAB/Modules/Laser Scanning/DisplayEngine.h"
+Path = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/UI_LaserScanning.h"
 File Type = "Include"
-Disk Date = 3526348337
-In Projects = "1,"
-Window Top = 578
-Window Left = 123
-Window Released = True
-Source Window State = "1,142,142,142,7,19,19,0,3,192,0,0,0,0,0,72,106,0,142,7,1008,1576,0,0,"
-
-[File 0040]
-Path = "/d/ELE_DAQLAB/Modules/Laser Scanning/LaserScanning.c"
-File Type = "CSource"
-Disk Date = 3526348337
-In Projects = "1,"
-Window Top = 61
-Window Left = 173
-Window Released = True
-Source Window State = "1,7027,7027,7027,41,57,41,0,0,0,0,7246,0,7257,21,0,6996,0,7027,31,899,1612,0,0,"
-
-[File 0041]
-Path = "/d/ELE_DAQLAB/Modules/Laser Scanning/NIDisplayEngine.c"
-File Type = "CSource"
-Disk Date = 3526348337
-In Projects = "1,"
-Window Top = 345
-Window Left = 35
-Window Released = True
-Source Window State = "1,166,166,166,55,78,55,0,3,0,0,0,0,0,0,0,130,0,166,78,843,843,0,0,"
-
-[File 0042]
-Path = "/d/ELE_DAQLAB/Modules/Laser Scanning/NIDisplayEngine.h"
-File Type = "Include"
-Disk Date = 3526348337
-In Projects = "1,"
-Window Top = 62
-Window Left = 26
-Source Window State = "1,43,43,43,36,61,36,0,0,0,0,0,0,0,0,0,1,0,42,51,349,683,1,0,"
-
-[File 0043]
-Path = "/d/ELE_DAQLAB/Modules/Laser Scanning/UI_LaserScanning.h"
-File Type = "Include"
-Disk Date = 3526348337
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 122
 Window Left = 58
 Source Window State = "1,87,88,87,8,22,8,0,0,0,0,0,0,0,0,0,57,0,91,19,349,683,1,0,"
 
-[File 0044]
-Path = "/d/ELE_DAQLAB/Modules/Laser Scanning/UI_LaserScanning.uir"
+[File 0039]
+Path = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/UI_LaserScanning.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526348337
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 92
 Window Left = 42
 Window Height = 349
 Window Width = 683
 
-[File 0045]
-Path = "/d/ELE_DAQLAB/Modules/Pockells Cell/Pockells.c"
+[File 0040]
+Path = "/d/GitHub/DAQLab_private/Modules/Pockells Cell/Pockells.c"
 File Type = "CSource"
-Disk Date = 3526348339
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 69
 Window Left = 110
 Window Released = True
 Source Window State = "1,1415,1415,1415,29,36,36,0,0,0,0,858,0,868,61,0,1405,0,1411,73,903,1549,0,0,"
 
-[File 0046]
-Path = "/d/ELE_DAQLAB/Modules/Pockells Cell/Pockells.h"
+[File 0041]
+Path = "/d/GitHub/DAQLab_private/Modules/Pockells Cell/Pockells.h"
 File Type = "Include"
-Disk Date = 3526348339
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 242
 Window Left = 122
 Source Window State = "1,5,6,6,0,39,39,0,0,0,0,0,0,0,0,0,0,0,12,41,349,683,1,0,"
 
-[File 0047]
-Path = "/d/ELE_DAQLAB/Modules/Pockells Cell/UI_Pockells.h"
+[File 0042]
+Path = "/d/GitHub/DAQLab_private/Modules/Pockells Cell/UI_Pockells.h"
 File Type = "Include"
-Disk Date = 3526348339
+Disk Date = 3529060573
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 
-[File 0048]
-Path = "/d/ELE_DAQLAB/Modules/Pockells Cell/UI_Pockells.uir"
+[File 0043]
+Path = "/d/GitHub/DAQLab_private/Modules/Pockells Cell/UI_Pockells.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526348339
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 302
 Window Left = 154
 Window Height = 349
 Window Width = 683
 
-[File 0049]
-Path = "/d/ELE_DAQLAB/Modules/Lasers/Coherent Chameleon/CoherentCham.c"
+[File 0044]
+Path = "/d/GitHub/DAQLab_private/Modules/Lasers/Coherent Chameleon/CoherentCham.c"
 File Type = "CSource"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 207
 Window Left = -1461
 Window Released = True
 Source Window State = "1,65,65,65,8,29,29,0,0,0,0,239,0,251,77,0,671,0,686,119,771,1360,0,0,"
 
-[File 0050]
-Path = "/d/ELE_DAQLAB/Modules/Lasers/Coherent Chameleon/CoherentCham.h"
+[File 0045]
+Path = "/d/GitHub/DAQLab_private/Modules/Lasers/Coherent Chameleon/CoherentCham.h"
 File Type = "Include"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 122
 Window Left = 58
 Source Window State = "1,36,36,36,24,46,24,0,3,0,0,0,0,0,0,0,0,0,36,46,349,683,1,0,"
 
-[File 0051]
-Path = "/d/ELE_DAQLAB/Modules/Lasers/Coherent Chameleon/UI_CoherentCham.h"
+[File 0046]
+Path = "/d/GitHub/DAQLab_private/Modules/Lasers/Coherent Chameleon/UI_CoherentCham.h"
 File Type = "Include"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 
-[File 0052]
-Path = "/d/ELE_DAQLAB/Modules/Lasers/Coherent Chameleon/UI_CoherentCham.uir"
+[File 0047]
+Path = "/d/GitHub/DAQLab_private/Modules/Lasers/Coherent Chameleon/UI_CoherentCham.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 92
 Window Left = 42
 Window Height = 349
 Window Width = 683
 
-[File 0053]
-Path = "/d/ELE_DAQLAB/Modules/DAQLabModule.c"
+[File 0048]
+Path = "/d/GitHub/DAQLab_private/Modules/DAQLabModule.c"
 File Type = "CSource"
-Disk Date = 3526348338
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 152
 Window Left = 74
 Source Window State = "1,56,56,56,56,73,56,0,0,0,0,0,0,0,0,0,47,0,61,4,349,683,1,0,"
 
-[File 0054]
-Path = "/d/ELE_DAQLAB/Modules/DAQLabModule.h"
+[File 0049]
+Path = "/d/GitHub/DAQLab_private/Modules/DAQLabModule.h"
 File Type = "Include"
-Disk Date = 3526348336
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 137
 Window Left = 245
 Window Released = True
 Source Window State = "1,48,48,48,32,48,32,0,0,0,0,0,0,0,0,0,22,0,48,48,743,1092,0,0,"
 
-[File 0055]
-Path = "/d/ELE_DAQLAB/MSXML/ActiveXML.h"
+[File 0050]
+Path = "/d/GitHub/DAQLab_private/MSXML/ActiveXML.h"
 File Type = "Include"
-Disk Date = 3526348336
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 122
 Window Left = 58
 Source Window State = "1,188,188,188,20,48,48,0,0,0,0,0,0,0,0,0,164,0,188,17,323,683,1,0,"
 
-[File 0056]
-Path = "/d/ELE_DAQLAB/Framework/Data Storage/DataStorage.c"
+[File 0051]
+Path = "/d/GitHub/DAQLab_private/Framework/Data Storage/DataStorage.c"
 File Type = "CSource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 254
 Window Left = -739
 Window Released = True
 Source Window State = "1,649,649,649,152,161,161,0,0,0,0,113,0,149,34,0,623,38,649,152,771,1082,0,0,"
 
-[File 0057]
-Path = "/d/ELE_DAQLAB/Framework/Data Storage/DataStorage.h"
+[File 0052]
+Path = "/d/GitHub/DAQLab_private/Framework/Data Storage/DataStorage.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 62
 Window Left = 26
 Source Window State = "1,43,44,44,33,25,25,0,0,0,0,0,0,0,0,0,42,0,61,28,349,683,1,0,"
 
-[File 0058]
-Path = "/d/ELE_DAQLAB/HDF5/lib/hdf5.lib"
+[File 0053]
+Path = "/d/GitHub/DAQLab_private/HDF5/lib/hdf5.lib"
 File Type = "Library"
-Disk Date = 3516020688
+Disk Date = 0
 In Projects = "1,"
 
-[File 0059]
-Path = "/d/ELE_DAQLAB/Framework/Data Storage/HDF5support.c"
+[File 0054]
+Path = "/d/GitHub/DAQLab_private/Framework/Data Storage/HDF5support.c"
 File Type = "CSource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 78
 Window Left = 77
 Window Released = True
 Source Window State = "1,580,580,580,60,62,60,0,0,0,0,320,0,326,31,0,0,0,42,66,883,1432,0,0,"
 
-[File 0060]
-Path = "/d/ELE_DAQLAB/Framework/Data Storage/HDF5support.h"
+[File 0055]
+Path = "/d/GitHub/DAQLab_private/Framework/Data Storage/HDF5support.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 272
 Window Left = 138
 Source Window State = "1,50,50,50,169,178,178,0,0,0,0,0,0,0,0,0,33,116,50,169,349,683,1,0,"
 
-[File 0061]
-Path = "/d/ELE_DAQLAB/Framework/Data Storage/types.h"
+[File 0056]
+Path = "/d/GitHub/DAQLab_private/Framework/Data Storage/types.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 
-[File 0062]
-Path = "/d/ELE_DAQLAB/Framework/Data Storage/UI_DataStorage.h"
+[File 0057]
+Path = "/d/GitHub/DAQLab_private/Framework/Data Storage/UI_DataStorage.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
 
-[File 0063]
-Path = "/d/ELE_DAQLAB/Framework/Data Storage/UI_DataStorage.uir"
+[File 0058]
+Path = "/d/GitHub/DAQLab_private/Framework/Data Storage/UI_DataStorage.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 122
 Window Left = 58
 Window Height = 349
 Window Width = 683
 
-[File 0064]
-Path = "/d/ELE_DAQLAB/Framework/Execution control/TaskController.h"
+[File 0059]
+Path = "/d/GitHub/DAQLab_private/Framework/Execution control/TaskController.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 237
 Window Left = -1385
 Window Released = True
 Source Window State = "1,93,93,93,4,21,4,0,3,0,0,0,0,0,0,0,67,0,93,21,816,1597,0,0,"
 
-[File 0065]
-Path = "/d/ELE_DAQLAB/Framework/Execution control/UI_TaskController.h"
+[File 0060]
+Path = "/d/GitHub/DAQLab_private/Framework/Execution control/UI_TaskController.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 182
 Window Left = 90
 Source Window State = "1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,349,683,1,0,"
 
-[File 0066]
-Path = "/d/ELE_DAQLAB/Framework/Execution control/UI_TaskController.uir"
+[File 0061]
+Path = "/d/GitHub/DAQLab_private/Framework/Execution control/UI_TaskController.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Window Height = 310
 Window Width = 523
 
-[File 0067]
-Path = "/d/ELE_DAQLAB/Framework/Virtual channels/VChannel.c"
+[File 0062]
+Path = "/d/GitHub/DAQLab_private/Framework/Virtual channels/VChannel.c"
 File Type = "CSource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 182
 Window Left = -420
 Window Released = True
 Source Window State = "1,896,896,896,0,15,0,0,0,0,0,0,0,0,0,0,774,0,776,41,850,1373,0,0,"
 
-[File 0068]
-Path = "/d/ELE_DAQLAB/Framework/Virtual channels/VChannel.h"
+[File 0063]
+Path = "/d/GitHub/DAQLab_private/Framework/Virtual channels/VChannel.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 73
 Window Left = -1623
 Window Released = True
 Source Window State = "1,48,48,48,0,121,121,0,0,0,0,0,0,0,0,0,16,0,20,173,906,1518,0,0,"
 
-[File 0069]
-Path = "/d/ELE_DAQLAB/Framework/Iterators/Iterator.c"
+[File 0064]
+Path = "/d/GitHub/DAQLab_private/Framework/Iterators/Iterator.c"
 File Type = "CSource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 195
 Window Left = -1204
 Window Released = True
 Source Window State = "1,158,158,158,5,23,23,0,0,0,0,22,0,25,116,0,132,0,159,5,771,1449,0,0,"
 
-[File 0070]
-Path = "/d/ELE_DAQLAB/Framework/Iterators/Iterator.h"
+[File 0065]
+Path = "/d/GitHub/DAQLab_private/Framework/Iterators/Iterator.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 247
 Window Left = -1389
 Window Released = True
 Source Window State = "1,149,149,149,92,93,92,0,0,0,0,0,0,0,0,0,93,0,115,123,659,1350,0,0,"
 
-[File 0071]
-Path = "/d/ELE_DAQLAB/Framework/Data packets/DataPacket.c"
+[File 0066]
+Path = "/d/GitHub/DAQLab_private/Framework/Data packets/DataPacket.c"
 File Type = "CSource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Source Window State = "1,112,112,112,37,38,37,0,0,0,0,0,0,0,0,0,100,0,122,25,349,683,1,0,"
 
-[File 0072]
-Path = "/d/ELE_DAQLAB/Framework/Data packets/DataPacket.h"
+[File 0067]
+Path = "/d/GitHub/DAQLab_private/Framework/Data packets/DataPacket.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 62
 Window Left = 26
 Source Window State = "1,52,52,52,0,16,16,0,0,0,0,0,0,0,0,0,29,0,52,0,349,683,1,0,"
 
-[File 0073]
-Path = "/d/ELE_DAQLAB/Framework/Data types/DataTypes.c"
+[File 0068]
+Path = "/d/GitHub/DAQLab_private/Framework/Data types/DataTypes.c"
 File Type = "CSource"
-Disk Date = 3527579634
+Disk Date = 3529064485
 In Projects = "1,"
-Window Top = 118
-Window Left = 205
+Window Top = 31
+Window Left = 10
 Window Released = True
-Source Window State = "1,47,47,47,7,12,12,0,3,177,0,106,0,125,40,57,19,0,47,7,816,1457,0,0,"
+Source Window State = "1,1131,1131,1131,5,29,29,0,3,121,0,106,0,125,40,47,1103,0,1131,5,688,1006,0,0,"
 
-[File 0074]
-Path = "/d/ELE_DAQLAB/Framework/Data types/DataTypes.h"
+[File 0069]
+Path = "/d/GitHub/DAQLab_private/Framework/Data types/DataTypes.h"
 File Type = "Include"
-Disk Date = 3527580172
+Disk Date = 3529064485
 In Projects = "1,"
-Window Top = 107
-Window Left = 131
+Window Top = 97
+Window Left = 404
 Window Released = True
-Source Window State = "1,193,193,193,28,38,38,0,0,216,0,443,0,459,131,51,168,0,193,18,740,1771,0,0,"
+Source Window State = "1,94,94,94,0,82,0,0,3,205,0,443,0,459,131,70,71,0,94,82,688,1006,0,0,"
 
-[File 0075]
-Path = "/d/ELE_DAQLAB/Framework/HW Triggering/HWTriggering.c"
+[File 0070]
+Path = "/d/GitHub/DAQLab_private/Framework/HW Triggering/HWTriggering.c"
 File Type = "CSource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Source Window State = "1,241,241,241,87,96,96,0,0,0,0,0,0,0,0,0,229,28,241,87,349,683,1,0,"
 
-[File 0076]
-Path = "/d/ELE_DAQLAB/Framework/HW Triggering/HWTriggering.h"
+[File 0071]
+Path = "/d/GitHub/DAQLab_private/Framework/HW Triggering/HWTriggering.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 62
 Window Left = 26
 Source Window State = "1,92,92,92,120,129,129,0,0,0,0,0,0,0,0,0,80,61,92,120,349,683,1,0,"
 
-[File 0077]
-Path = "/d/ELE_DAQLAB/Framework/Utility/DAQLabUtility.c"
+[File 0072]
+Path = "/d/GitHub/DAQLab_private/Framework/Utility/DAQLabUtility.c"
 File Type = "CSource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 152
 Window Left = 74
 Source Window State = "1,64,64,64,30,38,30,0,0,0,0,0,0,0,0,0,24,0,64,4,297,643,1,0,"
 
-[File 0078]
-Path = "/d/ELE_DAQLAB/Framework/Utility/DAQLabUtility.h"
+[File 0073]
+Path = "/d/GitHub/DAQLab_private/Framework/Utility/DAQLabUtility.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 128
 Window Left = 187
 Window Released = True
-Source Window State = "1,51,51,51,8,14,14,0,3,163,0,0,0,0,0,45,36,0,51,8,666,1345,0,0,"
+Source Window State = "1,51,51,51,8,14,14,0,3,0,0,0,0,0,0,0,36,0,51,8,666,1345,0,0,"
 
-[File 0079]
-Path = "/d/ELE_DAQLAB/Framework/Display/UI_ImageDisplay.h"
+[File 0074]
+Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplay.h"
 File Type = "Include"
-Disk Date = 3527236089
+Disk Date = 3529253425
+In Projects = "1,"
+Window Top = 31
+Window Left = 10
+Window Released = True
+Source Window State = "1,57,57,57,4,12,12,0,3,121,0,0,0,0,0,47,34,0,57,4,688,1006,0,0,"
+
+[File 0075]
+Path = "/d/GitHub/DAQLab_private/Framework/Display/UI_ImageDisplay.h"
+File Type = "Include"
+Disk Date = 3529064485
 In Projects = "1,"
 Window Top = 126
 Window Left = 58
 Source Window State = "1,42,43,43,0,119,119,0,3,0,0,0,0,0,0,0,4,0,42,0,349,683,1,0,"
 
-[File 0080]
-Path = "/d/ELE_DAQLAB/Framework/Display/UI_WaveformDisplay.h"
+[File 0076]
+Path = "/d/GitHub/DAQLab_private/Framework/Display/UI_WaveformDisplay.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 31
 Source Window State = "1,15,15,15,9,14,14,0,3,0,0,0,0,0,0,0,0,0,15,9,400,600,1,0,"
 
-[File 0081]
-Path = "/d/ELE_DAQLAB/Framework/Display/UI_WaveformDisplay.uir"
+[File 0077]
+Path = "/d/GitHub/DAQLab_private/Framework/Display/UI_WaveformDisplay.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 332
 Window Left = 170
 Window Height = 349
 Window Width = 683
 
-[File 0082]
-Path = "/d/ELE_DAQLAB/Framework/Display/WaveformDisplay.c"
+[File 0078]
+Path = "/d/GitHub/DAQLab_private/Framework/Display/WaveformDisplay.c"
 File Type = "CSource"
-Disk Date = 3527578824
+Disk Date = 3529064485
 In Projects = "1,"
 Window Top = 324
 Window Left = 424
 Window Released = True
 Source Window State = "1,229,252,229,0,15,0,0,0,0,0,30,0,43,4,0,202,0,252,20,972,1472,0,0,"
 
-[File 0083]
-Path = "/d/ELE_DAQLAB/Framework/Execution control/TaskController.c"
+[File 0079]
+Path = "/d/GitHub/DAQLab_private/Framework/Execution control/TaskController.c"
 File Type = "CSource"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 99
 Window Left = -1419
 Window Released = True
 Source Window State = "1,2622,2622,2622,89,107,89,0,0,0,0,2139,0,2338,50,0,3344,0,3399,0,802,1509,0,0,"
 
-[File 0084]
-Path = "/d/ELE_DAQLAB/DAQLab.c"
+[File 0080]
+Path = "/d/GitHub/DAQLab_private/DAQLab.c"
 File Type = "CSource"
-Disk Date = 3526372835
+Disk Date = 3529064485
 In Projects = "1,"
 Window Top = 129
 Window Left = 280
 Window Released = True
 Source Window State = "1,370,370,370,4,19,4,0,0,0,0,342,0,271,72,0,342,0,370,19,972,1458,0,0,"
 
-[File 0085]
-Path = "/d/ELE_DAQLAB/DAQLab.h"
+[File 0081]
+Path = "/d/GitHub/DAQLab_private/DAQLab.h"
 File Type = "Include"
-Disk Date = 3526348347
+Disk Date = 3529060557
 In Projects = "1,"
 Window Top = 249
 Window Left = 113
 Window Released = True
 Source Window State = "1,152,152,152,107,116,107,0,3,0,0,0,0,0,0,0,63,0,152,116,635,1905,0,0,"
 
-[File 0086]
-Path = "/d/ELE_DAQLAB/Module_Header.h"
+[File 0082]
+Path = "/d/GitHub/DAQLab_private/Module_Header.h"
 File Type = "Include"
-Disk Date = 3526348331
+Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 212
 Window Left = 106
 Source Window State = "1,98,99,98,3,3,3,0,0,0,0,0,0,0,0,0,69,0,93,8,349,683,1,0,"
 
-[File 0087]
-Path = "/d/ELE_DAQLAB/UI_DAQLab.h"
+[File 0083]
+Path = "/d/GitHub/DAQLab_private/UI_DAQLab.h"
 File Type = "Include"
-Disk Date = 3526348336
+Disk Date = 3529060578
 In Projects = "1,"
 Window Top = 106
 Window Left = 190
 Window Released = True
 Source Window State = "1,30,30,30,9,28,28,0,3,0,0,0,0,0,0,0,18,0,30,9,397,1055,0,0,"
 
-[File 0088]
-Path = "/d/ELE_DAQLAB/UI_DAQLab.uir"
+[File 0084]
+Path = "/d/GitHub/DAQLab_private/UI_DAQLab.uir"
 File Type = "User Interface Resource"
-Disk Date = 3526348331
+Disk Date = 3529060578
 In Projects = "1,"
 Window Top = 182
 Window Left = 90
 Window Height = 349
 Window Width = 683
 
+[File 0085]
+Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayNIVision.c"
+File Type = "CSource"
+Disk Date = 3529265069
+In Projects = "1,"
+Window Top = 62
+Window Left = 26
+Window Z-Order = 1
+Source Window State = "0,748,748,748,25,32,25,0,0,171,35,786,0,803,50,32,438,0,444,48,349,683,1,5245,"
+
+[File 0086]
+Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayNIVision.h"
+File Type = "Include"
+Disk Date = 3529264803
+In Projects = "1,"
+Window Top = 32
+Window Left = 10
+Window Z-Order = 2
+Source Window State = "1,29,29,29,40,65,65,0,0,80,0,0,0,0,0,25,17,0,29,34,349,683,1,0,"
+
+[File 0087]
+Path = "/c/Program Files/National Instruments/CVI2013/sdk/include/WinDef.h"
+File Type = "Include"
+Disk Date = 3486492000
+In Projects = ""
+Window Top = 212
+Window Left = 106
+Window Z-Order = 3
+Source Window State = "1,207,207,207,27,31,31,0,0,80,0,0,0,0,0,25,195,0,207,1,349,683,1,0,"
+
+[File 0088]
+Path = "/c/Program Files/National Instruments/CVI2013/sdk/include/WinNT.h"
+File Type = "Include"
+Disk Date = 3486492000
+In Projects = ""
+Window Top = 242
+Window Left = 122
+Window Z-Order = 4
+Source Window State = "1,518,518,518,8,22,22,0,3,80,0,0,0,0,0,25,506,0,518,8,349,683,1,0,"
+
 [Tab Order]
-Tab 0001 = "/d/ELE_DAQLAB/Framework/Display/ImageDisplayCVI.h"
-Tab 0002 = "/d/ELE_DAQLAB/Modules/Laser Scanning/LaserScanning.h"
-Tab 0003 = "/d/ELE_DAQLAB/Framework/Display/WaveformDisplay.h"
-Tab 0004 = "/d/ELE_DAQLAB/Framework/Display/UI_ImageDisplay.uir"
-Tab 0005 = "/d/ELE_DAQLAB/Framework/Display/ImageDisplay.c"
-Tab 0006 = "/d/ELE_DAQLAB/Framework/Display/ImageDisplay.h"
-Tab 0007 = "/d/ELE_DAQLAB/Framework/Display/ImageDisplayCVI.c"
+Tab 0001 = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/LaserScanning.h"
+Tab 0002 = "/d/GitHub/DAQLab_private/Framework/Display/WaveformDisplay.h"
+Tab 0003 = "/d/GitHub/DAQLab_private/Framework/Display/UI_ImageDisplay.uir"
+Tab 0004 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayCVI.h"
+Tab 0005 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplay.c"
+Tab 0006 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayCVI.c"
+Tab 0007 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayNIVision.h"
+Tab 0008 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayNIVision.c"
+Tab 0009 = "/c/Program Files/National Instruments/CVI2013/sdk/include/WinDef.h"
+Tab 0010 = "/c/Program Files/National Instruments/CVI2013/sdk/include/WinNT.h"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

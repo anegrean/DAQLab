@@ -405,13 +405,13 @@ In Projects = "1,"
 [File 0037]
 Path = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/LaserScanning.c"
 File Type = "CSource"
-Disk Date = 3529491569
+Disk Date = 3529499853
 In Projects = "1,"
-Window Top = 177
-Window Left = 742
+Window Top = 89
+Window Left = 205
 Window Released = True
-Source Window State Line0001 = "1,8267,8267,8267,12,27,27,0,0,205,0,7246,0,7257,21,70,8241,0,8269,78,899,1612,0,"
-Source Window State Line0002 = "0,"
+Source Window State Line0001 = "1,1186,1187,1186,4,51,4,0,0,205,29,8221,0,8238,48,41,5602,0,5622,63,899,1612,0,4"
+Source Window State Line0002 = "230,"
 
 [File 0038]
 Path = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/UI_LaserScanning.h"
@@ -705,7 +705,7 @@ In Projects = "1,"
 Window Top = 257
 Window Left = 590
 Window Released = True
-Source Window State = "1,642,642,642,28,39,28,0,3,205,0,443,0,459,131,70,625,0,642,39,688,1006,0,0,"
+Source Window State = "1,261,261,261,24,32,32,0,0,205,0,443,0,459,131,70,226,0,251,48,688,1006,0,0,"
 
 [File 0070]
 Path = "/d/GitHub/DAQLab_private/Framework/HW Triggering/HWTriggering.c"
@@ -752,7 +752,7 @@ In Projects = "1,"
 Window Top = 143
 Window Left = 139
 Window Released = True
-Source Window State = "1,126,126,126,0,153,0,0,0,205,0,0,0,0,0,70,70,0,126,0,688,1353,0,0,"
+Source Window State = "1,48,50,48,4,104,4,0,0,205,0,0,0,0,0,70,28,0,35,87,688,1353,0,0,"
 
 [File 0075]
 Path = "/d/GitHub/DAQLab_private/Framework/Display/UI_ImageDisplay.h"
@@ -858,7 +858,7 @@ In Projects = "1,"
 Window Top = 216
 Window Left = 187
 Window Released = True
-Source Window State = "1,842,844,842,0,54,0,0,0,205,0,374,0,81,96,70,807,0,842,0,831,1412,0,0,"
+Source Window State = "1,842,844,842,0,54,0,0,0,205,0,374,0,81,96,70,670,0,693,66,831,1412,0,0,"
 
 [File 0086]
 Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayNIVision.h"

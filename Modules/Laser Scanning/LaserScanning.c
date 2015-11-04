@@ -645,8 +645,6 @@ struct LaserScanning {
 	ListType					activeCal;
 		// Scan engines of ScanEngine_type* base class which can be casted to specific scan engines. 
 	ListType					scanEngines;
-		// Display engine
-	DisplayEngine_type*			displayEngine;
 	
 		//-------------------------
 		// UI
@@ -1000,8 +998,6 @@ static uInt32							GetNumOpenDetectionVChans							(RectRaster_type* scanEngine
 // Display interface
 //-----------------------------------------
 
-static void								ROIDisplay_CB										(ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI);
-
 static void 							ImageDisplay_CB 									(ImageDisplay_type* imgDisplay, int event, void* eventData, void* callbackFunctionData);
 
 static void 							WaveformDisplay_CB 									(WaveformDisplay_type* waveformDisplay, int event, void* callbackData);
@@ -1110,8 +1106,7 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 	ls->availableCals				= 0;
 	ls->activeCal					= 0;
 	ls->scanEngines					= 0;
-	ls->displayEngine				= NULL; // added when the module is loading
-		
+	
 	if (!(ls->availableCals			= ListCreate(sizeof(ScanAxisCal_type*))))	goto Error;
 	if (!(ls->activeCal				= ListCreate(sizeof(ActiveScanAxisCal_type*))))	goto Error;
 	if (!(ls->scanEngines			= ListCreate(sizeof(ScanEngine_type*))))	goto Error;
@@ -1188,9 +1183,6 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		
 		ListDispose(ls->scanEngines);
 	}
-	
-	// display engine
-	discard_DisplayEngine_type(&ls->displayEngine);
 	
 	// UI
 	OKfree(ls->mainPanLeftPos);
@@ -1541,9 +1533,7 @@ INIT_ERR
 	// initialize display engine
 	intptr_t workspaceWndHndl = 0;	
 	GetPanelAttribute(ls->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHndl);
-	nullChk( ls->displayEngine = (DisplayEngine_type*)init_NIDisplayEngine_type(	workspaceWndHndl,
-																			   		ROIDisplay_CB,
-																					DisplayErrorHandler_CB		) );
+	
 	return 0;
 	
 Error:
@@ -8167,126 +8157,101 @@ static uInt32 GetNumOpenDetectionVChans	(RectRaster_type* scanEngine)
 // Display interface
 //-----------------------------------------
 
-static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI)
-{
-	ScanChan_type*			scanChan 		= callbackData;
-	ROI_type*				addedROI		= NULL;						  // reference to the ROI added to the image display
-	DisplayEngine_type*		displayEngine   = imgDisplay->displayEngine; 
-	RectRaster_type*		scanEngine		= (RectRaster_type*) scanChan->scanEngine;
-	int						nListItems		= 0;
-	ListType				ROIlist			= 0;
-	Image_type**			imagePtr		= NULL;
-	
-	// obtain lock to image
-	if( CmtGetTSVPtr(imgDisplay->imageTSV, &imagePtr)  < 0) goto TSVError;
-	
-	switch (event) {
-			
-		case ROI_Placed:
-			
-			switch (ROI->ROIType) {
-				
-				case ROI_Point:
-					
-					break;
-				
-				case ROI_Rectangle:
-					
-					break;
-			}
-			
-			break;
-			
-		case ROI_Added:
-			
-			// obtain default unique ROI name and apply it
-			OKfree(ROI->ROIName);
-			ROIlist = GetImageROIs(*imagePtr); 
-			ROI->ROIName = GetDefaultUniqueROIName(ROIlist);
-			// apply ROI color
-			ROI->rgba.R 		= Default_ROI_R_Color; 
-			ROI->rgba.G 		= Default_ROI_G_Color;
-			ROI->rgba.B 		= Default_ROI_B_Color;
-			ROI->rgba.alpha 	= Default_ROI_A_Color;
-			
-			// add point ROI to the image
-			PointJump_type*	pointJump = init_PointJump_type((Point_type*)ROI); 
-			
-			// add ROI to the image
-			addedROI = (*displayEngine->overlayROIFptr) (imgDisplay, (ROI_type*)pointJump);
-	
-			switch (addedROI->ROIType) {
-						
-				case ROI_Point:
-						
-					// update scan engine if this display is assigned to it
-					if (scanEngine->baseClass.activeDisplay == imgDisplay) {
-						// insert point ROI item in the UI
-						InsertListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, -1, ROI->ROIName, ListNumItems(ROIlist));
-						
-						// mark point as checked (in use)  
-						GetNumListItems(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, &nListItems);
-						CheckListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, nListItems - 1, 1); 
-						// insert ROI item in the scan engine as well
-						ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &pointJump, END_OF_LIST);
-						
-						// calculate the minimum initial delay, display it and set this as a lower bound in the UI
-						NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
-						
-						// update minimum point jump period
-						//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
-						
-						// undim panel
-						SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, 0);
-					} else 
-						discard_PointJump_type(&pointJump);
-					
-					break;
-					
-				default:
-						
-					break;
-			}
-				
-			break;
-			
-		case ROI_Removed:
-			
-			break;
-		
-	}
-
-	// release lock to image
-	CmtReleaseTSVPtr(imgDisplay->imageTSV);
-	
-	return;
-	
-TSVError:
-	return;
-}
-
 static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, int event, void* eventData, void* callbackFunctionData)
 {
 	RectRasterDisplayCBData_type*	displayCBData			= callbackFunctionData;
 	RectRaster_type*				scanEngine 				= displayCBData->scanEngine;
 	RectRasterScanSet_type			previousScanSettings	= displayCBData->scanSettings;
-	
+	ScanChan_type*					scanChan				= scanEngine->baseClass.scanChans[displayCBData->scanChanIdx];
+				
 	switch (event) {
 			
 		case ImageDisplay_Close:
-			
+				
 			// detach image display from scan engine if it was previously assigned to it and clear ROI list
 			if (scanEngine->baseClass.activeDisplay == imgDisplay)
 				scanEngine->baseClass.activeDisplay = NULL;
 			
-			//discard_ImageDisplay_type(&scanEngine->baseClass.scanChans[displayCBData->scanChanIdx]->imgDisplay);
-			scanEngine->baseClass.scanChans[displayCBData->scanChanIdx]->imgDisplay = NULL; // display is discarded by Display module
-			
+			scanChan->imgDisplay = NULL; // display is discarded by Display module
 			break;
 			
 		case ImageDisplay_RestoreSettings:
 			
 			RestoreScanSettingsFromImageDisplay(imgDisplay, scanEngine, previousScanSettings);
+			break;
+			
+		case ImageDisplay_ROI_Placed:
+			{
+				ROI_type*			ROI = eventData;
+				
+				switch (ROI->ROIType) {
+				
+					case ROI_Point:
+					
+						break;
+				
+					case ROI_Rectangle:
+						
+						break;
+				}
+				
+			}
+			break;
+			
+		case ImageDisplay_ROI_Added:
+			{
+				ROI_type*		ROI				= eventData;
+				ListType		ROIlist			= 0;
+				
+				// set default unique ROI name
+				OKfree(ROI->ROIName);
+				ROIlist = GetImageROIs(imgDisplay->image);
+				ROI->ROIName = GetDefaultUniqueROIName(ROIlist);
+				
+				// change ROI color
+				ROI->rgba.R 		= Default_ROI_R_Color; 
+				ROI->rgba.G 		= Default_ROI_G_Color;
+				ROI->rgba.B 		= Default_ROI_B_Color;
+				ROI->rgba.alpha 	= Default_ROI_A_Color;
+				
+				switch (ROI->ROIType) {
+						
+					case ROI_Point:
+						
+						// update scan engine if this display is assigned to it
+						if (scanEngine->baseClass.activeDisplay == imgDisplay) {
+							// insert point ROI item in the UI
+							InsertListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, -1, ROI->ROIName, ListNumItems(ROIlist));
+						
+							// mark point as checked (in use)  
+							GetNumListItems(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, &nListItems);
+							CheckListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, nListItems - 1, 1); 
+							// insert ROI item in the scan engine as well
+							ROI_type*	ROICopy = (*ROI->copyFptr) (ROI);
+							ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &ROICopy, END_OF_LIST);
+						
+							// calculate the minimum initial delay, display it and set this as a lower bound in the UI
+							NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
+						
+							// update minimum point jump period
+							//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
+						
+							// undim panel
+							SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, 0);
+						}
+					
+						break;
+					
+					default:
+						
+					break;
+			}
+				
+				
+			}
+			break;
+			
+		case ImageDisplay_ROI_Removed:
 			
 			break;
 	}

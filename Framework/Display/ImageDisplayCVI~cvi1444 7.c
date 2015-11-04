@@ -160,7 +160,7 @@ void DiscardImageList (ListType* imageListPtr)
 	OKfreeList(*imageListPtr);
 }
 
-/*
+/*  to see the types
 size_t GetImageSizeofData (Image_type* image)
 {
 	size_t dataTypeSize = 0;

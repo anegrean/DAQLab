@@ -54,16 +54,17 @@ int init_ImageDisplay_type (ImageDisplay_type* 				imageDisplay,
 {
 INIT_ERR
 	
-	Image_type**	TSVImagePtr	= NULL;
-	
 	//----------------------------------------------------------
 	// Init
 	//----------------------------------------------------------
 	
 	// data
 	imageDisplay->imageDisplayOwner			= imageDisplayOwner;
-	imageDisplay->imageTSV					= 0;
+	imageDisplay->image						= *imagePtr;
+	*imagePtr								= NULL;
 	imageDisplay->visible					= FALSE;
+	imageDisplay->selectionROI				= NULL;
+	imageDisplay->addROIToImage				= FALSE;
 	
 	// methods
 	imageDisplay->imageDisplayDiscardFptr 	= imageDisplayDiscardFptr;
@@ -74,21 +75,7 @@ INIT_ERR
 	imageDisplay->callbackGroup				= *callbackGroupPtr;
 	*callbackGroupPtr						= NULL;
 	
-	//----------------------------------------------------------
-	// Alloc
-	//----------------------------------------------------------
-	
-	errChk( CmtNewTSV(sizeof(Image_type*), &imageDisplay->imageTSV) );
-	// init image TSV
-	errChk( CmtGetTSVPtr(imageDisplay->imageTSV, &TSVImagePtr) );
-	if (imagePtr) {
-		*TSVImagePtr 	= *imagePtr;
-		*imagePtr 		= NULL;
-	} else
-		*TSVImagePtr = NULL;
-	
-	CmtReleaseTSVPtr(imageDisplay->imageTSV);
-	
+ 
 Error:
 	
 	return errorInfo.error;
@@ -97,22 +84,16 @@ Error:
 void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 {
 	ImageDisplay_type* 		imageDisplay 	= *imageDisplayPtr;
-	Image_type**			imagePtr		= NULL;
 	
 	if (!imageDisplay) return;
 	
+	// discard ROI selection
+	(*imageDisplay->selectionROI->discardFptr) ((void**)&imageDisplay->selectionROI);
+	
 	// dispose image
-	if ( CmtGetTSVPtr(imageDisplay->imageTSV, &imagePtr)  < 0) goto SkipDiscardImage;
-	discard_Image_type(imagePtr);
-	CmtReleaseTSVPtr(imageDisplay->imageTSV);
+	discard_Image_type(&imageDisplay->image);
 	
-SkipDiscardImage:
-	// discard image TSV
-	if (imageDisplay->imageTSV) {
-		CmtDiscardTSV(imageDisplay->imageTSV);
-		imageDisplay->imageTSV = 0;
-	}
-	
+	// discard callback group
 	discard_CallbackGroup_type(&imageDisplay->callbackGroup);
 	
 	OKfree(*imageDisplayPtr);
@@ -207,30 +188,21 @@ INIT_ERR
 
 	// incoming image display
 	ImageDisplay_type*		imageDisplay					= *imageDisplayPtr;
-	Image_type**			imagePtr						= NULL;
-	CmtTSVHandle			imageTSVLockHndl				= 0;
 	int						imageWidth						= 0;
 	int						imageHeight						= 0;
 	
 	// image display from channel group
-	Image_type**			chanGroupImagePtr				= NULL;
-	CmtTSVHandle			chanGroupImageTSVLockHndl		= 0;
 	int						chanGroupImageWidth				= 0;
 	int						chanGroupImageHeight			= 0;
 	
 	// get incoming image dimensions
-	errChk( CmtGetTSVPtr(imageDisplay->imageTSV, &imagePtr) );
-	imageTSVLockHndl = imageDisplay->imageTSV;
-	GetImageSize(*imagePtr, &imageWidth, &imageHeight);
+	GetImageSize(imageDisplay->image, &imageWidth, &imageHeight);
 	
 	// check first if image size is the same compared to the first non-empty channel
 	for (size_t i = 0; i < chanGroupDisplay->nDisplays; i++)
 		if (chanGroupDisplay->imgDisplays[i]) {
-			// get channel group image TSV lock
-			errChk( CmtGetTSVPtr(chanGroupDisplay->imgDisplays[i]->imageTSV, &chanGroupImagePtr) );
-			chanGroupImageTSVLockHndl = chanGroupDisplay->imgDisplays[i]->imageTSV;
 			// get channel group image dimensions
-			GetImageSize(*chanGroupImagePtr, &chanGroupImageWidth, &chanGroupImageHeight);
+			GetImageSize(chanGroupDisplay->imgDisplays[i]->image, &chanGroupImageWidth, &chanGroupImageHeight);
 			// compare dimensions
 			if (chanGroupImageWidth != imageWidth || chanGroupImageHeight != imageHeight)
 				SET_ERR(ChannelGroupDisplayAddImageChannel_Err_ImageSizeMismatch, "Dimensions of image to be added must be the same with the dimension of all images in the channel group.");
@@ -252,14 +224,6 @@ INIT_ERR
 	*imageDisplayPtr = NULL;
 
 Error:
-	
-	// release incoming image TSV lock
-	if (imageTSVLockHndl)
-		CmtReleaseTSVPtr(imageTSVLockHndl);
-	
-	// release channel group image TSV lock
-	if (chanGroupImageTSVLockHndl)
-		CmtReleaseTSVPtr(chanGroupImageTSVLockHndl);
 	
 RETURN_ERR	
 }

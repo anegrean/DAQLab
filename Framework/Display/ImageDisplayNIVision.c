@@ -27,6 +27,8 @@
 
 #define OKfreeIMAQ(ptr) if (ptr) {imaqDispose(ptr); ptr = NULL;}
 
+#define	MAX_NI_VISION_DISPLAYS				16
+
 #define ROILabel_XOffset					3		// ROI text label offset in the X direction in pixels.
 #define ROILabel_YOffset					3		// ROI text label offset in the Y direction in pixels.
 
@@ -72,6 +74,9 @@ struct ImageDisplayNIVision {
 
 	// NI Vision Engine
 BOOL							NIVisionEngineInitialized				= FALSE;
+
+	// Binding between NI window IDs and display structure data
+ImageDisplayNIVision_type*		NIDisplays[MAX_NI_VISION_DISPLAYS]		= {NULL};
 
 	// IMAQ tools setup
 static ToolWindowOptions 		imaqTools 								= {	.showSelectionTool 			= TRUE,
@@ -382,6 +387,10 @@ static void discard_ImageDisplayNIVision_type (ImageDisplayNIVision_type** displ
 	//---------------------------------------------------
 	// discard child class data
 	
+	// close window
+	imaqCloseWindow(display->imaqWndID);
+	NIDisplays[display->imaqWndID] = NULL;
+	
 	// discard NI image
 	DiscardImaqImg((Image**)&display->NIImage);
 
@@ -394,23 +403,20 @@ static int DisplayNIVisionImage (ImageDisplayNIVision_type* imgDisplay, Image_ty
 {								
 INIT_ERR
 
-	Image_type**		currentImagePtr		= NULL;
-	Image_type*			testImg				= NULL;
-	
-	if( CmtGetTSVPtr(imgDisplay->baseClass.imageTSV, &currentImagePtr)  < 0) goto TSVError;
-	
-	testImg = *currentImagePtr;
+
+	// bind image display data to window ID
+	NIDisplays[imgDisplay->imaqWndID] = imgDisplay;
 	
 	// apply current image transform if there was any to the new image
-	if (*currentImagePtr)
-		SetImageDisplayTransform(*newImagePtr, GetImageDisplayTransform(*currentImagePtr));
+	if (imgDisplay->baseClass.image)
+		SetImageDisplayTransform(*newImagePtr, GetImageDisplayTransform(imgDisplay->baseClass.image));
 	
 	// discard current image and assign new image
-	discard_Image_type(currentImagePtr);
-	*currentImagePtr = *newImagePtr;
+	discard_Image_type(&imgDisplay->baseClass.image);
+	imgDisplay->baseClass.image = *newImagePtr;
 	*newImagePtr = NULL;
 	
-	errChk( ConvertImageTypeToNIImage(imgDisplay->NIImage, *currentImagePtr) );
+	errChk( ConvertImageTypeToNIImage(imgDisplay->NIImage, imgDisplay->baseClass.image) );
 	
 	// display NI image
 	nullChk( imaqDisplayImage(imgDisplay->NIImage, imgDisplay->imaqWndID, FALSE) );
@@ -421,13 +427,7 @@ INIT_ERR
 	if (!isToolWindowVisible)
 		nullChk( imaqShowToolWindow(TRUE) );
 		    
-
 Error:
-	
-	CmtReleaseTSVPtr(imgDisplay->baseClass.imageTSV);
-	return errorInfo.error;
-	
-TSVError:
 	
 	return errorInfo.error;
 }
@@ -436,162 +436,6 @@ static int DisplayNIVisionRGBImage (ImageDisplayNIVision_type* imgDisplay, Image
 {
 	return 0;
 }
-
-/*
-static ImageDisplayNIVision_type* GetImageDisplayNIVision (NIDisplayEngine_type* NIDisplay, void* callbackData, int imgHeight, int imgWidth, ImageTypes imageType)
-{
-	int				imaqHndl				= 0;	// imaq window ID
-	int				error					= 0;
-	ImageType		imaqImgType				= 0;
-	HWND			imaqWndHndl				= 0;	// windows handle of the imaq window
-	HMENU			imaqWndMenuHndl			= 0;	// menu bar for the imaq window
-	HMENU			imageMenuHndl			= 0;	// submenu handle for "Image" menu item in the imaq window
-	HMENU			equalizeMenuHndl		= 0;	// submenu handle for "Image->Equalize" menu item in the imaq window
-	HMONITOR		hMonitor				= NULL;
-	MONITORINFO		monitorInfo				= {.cbSize = sizeof(MONITORINFO)};
-	LONG			maxWindowHeight			= 0;
-	LONG			maxWindowWidth			= 0;
-	float			imgZoom					= 0;	// final zoom factor that will be applied, not exceeding Default_Max_Zoom
-	float			heightZoom				= 0; 	// zoom factor needed to match imgHeight to maxWindowHeight*Default_WorkspaceScaling
-	float			widthZoom				= 0;	// zoom factor needed to match imgWidth to maxWindowWidth*Default_WorkspaceScaling
-	
-	// get IMAQ window handle
-	if (!imaqGetWindowHandle(&imaqHndl)) return NULL;
-	// check if an available imaq window handle was obtained
-	if (imaqHndl < 0) return NULL;
-	// get windows window handle
-	nullChk( imaqWndHndl	= (HWND) imaqGetSystemWindowHandle(imaqHndl) ); 
-	
-	//-----------------------------------------------------------
-	// adjust window size and zoom based on the screen dimensions
-	//-----------------------------------------------------------
-	hMonitor = MonitorFromWindow(imaqWndHndl, MONITOR_DEFAULTTONEAREST);
-	if (hMonitor) {
-		nullChk( GetMonitorInfo(hMonitor, &monitorInfo) );
-		maxWindowHeight = labs(monitorInfo.rcWork.top - monitorInfo.rcWork.bottom);
-		heightZoom = (float)maxWindowHeight*(float)Default_WorkspaceScaling/(float)imgHeight;
-		maxWindowWidth = labs(monitorInfo.rcWork.left - monitorInfo.rcWork.right);
-		widthZoom = (float)maxWindowWidth*(float)Default_WorkspaceScaling/(float)imgWidth;
-		
-		// pick smallest zoom factor so that the zoomed in image does not exceed the boundaries set by Default_WorkspaceScaling
-		imgZoom = min(min(heightZoom, widthZoom), Default_Max_Zoom);
-		
-		// adjust image zoom
-		nullChk( imaqZoomWindow2(imaqHndl, imgZoom, imgZoom, IMAQ_NO_POINT) );
-		
-		// adjust window size to match displayed image size
-		RECT	targetWindowSize	 	= {.left = 0, .top = 0, .right = (LONG)((float)imgWidth*imgZoom), .bottom = (LONG)((float)imgHeight*imgZoom)};
-		DWORD	imaqWindowStyle			= (DWORD)GetWindowLong(imaqWndHndl, GWL_STYLE);
-		
-		nullChk( AdjustWindowRect(&targetWindowSize, imaqWindowStyle, TRUE) );
-		nullChk( imaqSetWindowSize(imaqHndl, abs(targetWindowSize.left - targetWindowSize.right), abs(targetWindowSize.top - targetWindowSize.bottom)) );
-		
-	}
-	
-	// assign data structure
-	nullChk(displays[imaqHndl] = init_ImageDisplayNIVision_type(NIDisplay, imaqHndl, callbackData) );
-	
-	// set window on top
-	nullChk( SetWindowPos(imaqWndHndl, HWND_TOPMOST, 0, 0, 0, 0, (SWP_ASYNCWINDOWPOS | SWP_DRAWFRAME | SWP_NOMOVE | SWP_NOSIZE)) );
-	
-	// init IMAQ image buffer 
-	switch (imageType) {
-		case Image_UChar:
-			imaqImgType 		= IMAQ_IMAGE_U8;
-			break;
-		
-		case Image_UShort:
-			imaqImgType 		= IMAQ_IMAGE_U16;
-			break;
-			
-		case Image_Short:
-			imaqImgType 		= IMAQ_IMAGE_I16; 
-			break;
-			
-		case Image_UInt:
-			imaqImgType 		= IMAQ_IMAGE_SGL;	 // no U32 support in IMAQ, image needs to be displayed as a float
-			break;
-			
-		case Image_Int:
-			imaqImgType 		= IMAQ_IMAGE_SGL;	 // no I32 support in IMAQ  image needs to be displayed as a float 
-			break;
-			
-		case Image_Float:
-			imaqImgType 		= IMAQ_IMAGE_SGL; 
-			break;
-			
-		case Image_RGBA:
-			imaqImgType 		= IMAQ_IMAGE_RGB; 
-			break;
-			
-		case Image_RGBAU64:
-			imaqImgType 		= IMAQ_IMAGE_RGB_U64; 
-			break;
-			
-		default:
-			
-			goto Error;
-	}
-	
-	nullChk( displays[imaqHndl]->NIImage = imaqCreateImage(imaqImgType, 0) );
-	// pre allocate image memory
-	nullChk( imaqSetImageSize(displays[imaqHndl]->NIImage, imgWidth, imgHeight) );
-	// confine image window to parent window if provided  ( sometimes this freezes the UI!! )
-	//if (NIDisplay->parentWindowHndl)
-	//	SetParent( imaqWndHndl, (HWND)NIDisplay->parentWindowHndl);
-	
-	//--------------------------------------------------------------------------------------------------------
-	// Create menu bar and add menu items
-	//--------------------------------------------------------------------------------------------------------
-	
-	imaqWndMenuHndl = CreateMenu();
-	// add menu item "Save"
-	AppendMenu(imaqWndMenuHndl, MF_STRING, NIDisplayMenu_Save, "&Save");
-	// add menu item "Restore"
-	AppendMenu(imaqWndMenuHndl, MF_STRING, NIDisplayMenu_Restore, "&Restore");
-	
-	// add menu bar to the imaq window
-	SetMenu(imaqWndHndl, imaqWndMenuHndl);
-	
-	//-------------------------------------------------------------------------
-	// Add Menu->Image menu and add menu items
-	//-------------------------------------------------------------------------
-	
-	// "Image" menu
-	imageMenuHndl = CreateMenu();
-	
-	// add menu item "Image" to imaq Menu
-	AppendMenu(imaqWndMenuHndl, MF_STRING | MF_POPUP, (UINT_PTR)imageMenuHndl, "&Image");
-	
-	//-------------------------------------------------------------------------
-	// Add Menu->Image->Equalize popup menu and add menu items
-	//-------------------------------------------------------------------------
-	
-	equalizeMenuHndl = CreatePopupMenu();
-	// add menu item "Linear"
-	AppendMenu(equalizeMenuHndl, MF_STRING, NIDisplayMenu_Image_Equalize_Linear, "&Linear");
-	// add menu item "Logarithmic"
-	AppendMenu(equalizeMenuHndl, MF_STRING, NIDisplayMenu_Image_Equalize_Logarithmic, "&Logarithmic");
-	
-	// add menu item "Equalize" to Menu->Image
-	AppendMenu(imageMenuHndl, MF_STRING | MF_POPUP, (UINT_PTR)equalizeMenuHndl, "&Equalize");
-	
-	
-	// add custom window callback function
-	SetWindowSubclass(imaqWndHndl, CustomImageDisplayNIVision_CB, 0, (DWORD_PTR)displays[imaqHndl]);
-	
-	
-	return displays[imaqHndl];
-	
-Error:
-	
-	// cleanup
-	discard_ImageDisplayNIVision_type(&displays[imaqHndl]);
-	
-	return NULL;
-}
-
-*/
 
 static int DrawROI (Image* image, ROI_type* ROI)
 {
@@ -664,10 +508,6 @@ static ROI_type* OverlayNIVisionROI (ImageDisplayNIVision_type* imgDisplay, ROI_
 INIT_ERR
 
 	ROI_type*			ROICopy			= NULL;
-	Image_type**		imagePtr		= NULL;
-	
-	// get image lock
-	if( CmtGetTSVPtr(imgDisplay->baseClass.imageTSV, &imagePtr)  < 0) goto TSVError;
 	
 	errChk( DrawROI(imgDisplay->NIImage, ROI) );
 	
@@ -675,10 +515,7 @@ INIT_ERR
 	nullChk( ROICopy = (*ROI->copyFptr) ((void*)ROI) );
 	
 	// add ROI overlay to list
-	ListInsertItem(GetImageROIs(*imagePtr), &ROICopy, END_OF_LIST);
-	
-	// release image lock
-	CmtReleaseTSVPtr(imgDisplay->baseClass.imageTSV);
+	ListInsertItem(GetImageROIs(imgDisplay->baseClass.image), &ROICopy, END_OF_LIST);
 	
 	// update image
 	imaqDisplayImage(imgDisplay->NIImage, imgDisplay->imaqWndID, FALSE);
@@ -692,19 +529,12 @@ Error:
 	
 	return NULL;
 	
-TSVError:
-	
-	return NULL;
 }
 
 static void NIVisionROIActions (ImageDisplayNIVision_type* imgDisplay, int ROIIdx, ROIActions action)
 {
 	ROI_type**		ROIPtr 		= NULL;
-	Image_type**	imagePtr	= NULL;
-	
-	if( CmtGetTSVPtr(imgDisplay->baseClass.imageTSV, &imagePtr)  < 0) goto TSVError;
-	
-	ListType		ROIlist 	= GetImageROIs(*imagePtr);
+	ListType		ROIlist 	= GetImageROIs(imgDisplay->baseClass.image);
 	size_t			nROIs		= ListNumItems(ROIlist);
 	
 	if (ROIIdx) {
@@ -779,17 +609,12 @@ static void NIVisionROIActions (ImageDisplayNIVision_type* imgDisplay, int ROIId
 		
 	}
 	
-	// release lock
-	CmtReleaseTSVPtr(imgDisplay->baseClass.imageTSV);
-	
+
 	// update imaq display
 	imaqDisplayImage(imgDisplay->NIImage, imgDisplay->imaqWndID, FALSE);
 	
 	return;
 	
-TSVError:
-
-	return;
 }
 
 static void	DiscardImaqImg (Image** image)
@@ -801,9 +626,9 @@ static void	DiscardImaqImg (Image** image)
 
 static void IMAQ_CALLBACK ImageDisplayNIVision_CB (WindowEventType event, int windowNumber, Tool tool, Rect rect)
 {
-	ImageDisplayNIVision_type*	display 		= displays[windowNumber];
-	Point_type*				PointROI		= NULL;
-	Rect_type*				RectROI			= NULL;
+	ImageDisplayNIVision_type*		imgDisplay 		= NIDisplays[windowNumber];
+	Point_type*						PointROI		= NULL;
+	Rect_type*						RectROI			= NULL;
 	
 	switch (event) {
 			
@@ -815,14 +640,28 @@ static void IMAQ_CALLBACK ImageDisplayNIVision_CB (WindowEventType event, int wi
 					
 					RGBA_type	color = {.R = 0, .G = 0, .B = 0, .alpha = 255};
 					
-					PointROI =  initalloc_Point_type(NULL, "", color, TRUE, rect.left, rect.top);
+					// discard previous ROI selection
+					(*imgDisplay->baseClass.selectionROI->discardFptr) ((void**)&imgDisplay->baseClass.selectionROI);
 					
-					// execute callback
-					if (display->baseClass.displayEngine->ROIEventsCBFptr)
-						(*display->baseClass.displayEngine->ROIEventsCBFptr) ((ImageDisplay_type*)display, display->baseClass.imageDisplayCBData, display->baseClass.ROIEvent, (ROI_type*) PointROI);
+					// update current selection
+					imgDisplay->baseClass.selectionROI = (ROI_type*)initalloc_Point_type(NULL, "", color, TRUE, rect.left, rect.top);
 					
-					(*PointROI->baseClass.discardFptr) ((void**)&PointROI);
+					// inform that ROI was placed
+					FireCallbackGroup(imgDisplay->baseClass.callbackGroup, ImageDisplay_ROI_Placed, imgDisplay->baseClass.selectionROI);
 					
+					// inform if ROI must be added to the image
+					if (imgDisplay->baseClass.addROIToImage) {
+						
+						ROI_type*	ROICopy 		= (*imgDisplay->baseClass.selectionROI->copyFptr) (imgDisplay->baseClass.selectionROI);
+						ROI_type*	ROIReference	= ROICopy;
+						
+						// add ROI to image
+						AddImageROI(imgDisplay->baseClass.image, &ROICopy, NULL);
+
+						// inform that ROI was added
+						FireCallbackGroup(imgDisplay->baseClass.callbackGroup, ImageDisplay_ROI_Added, ROIReference);
+					}
+
 					break;
 					
 				default:
@@ -859,14 +698,28 @@ static void IMAQ_CALLBACK ImageDisplayNIVision_CB (WindowEventType event, int wi
 					
 					RGBA_type	color = {.R = 0, .G = 0, .B = 0, .alpha = 255};
 					
-					RectROI =  initalloc_Rect_type(NULL, "", color, TRUE, rect.top, rect.left, rect.height, rect.width);
+					// discard previous ROI selection
+					(*imgDisplay->baseClass.selectionROI->discardFptr) ((void**)&imgDisplay->baseClass.selectionROI);
 					
-					// execute callback
-					if (display->baseClass.displayEngine->ROIEventsCBFptr)
-						(*display->baseClass.displayEngine->ROIEventsCBFptr) ((ImageDisplay_type*)display, display->baseClass.imageDisplayCBData, display->baseClass.ROIEvent,(ROI_type*) RectROI);
+					// update current selection
+					imgDisplay->baseClass.selectionROI = (ROI_type*)initalloc_Rect_type(NULL, "", color, TRUE, rect.top, rect.left, rect.height, rect.width);
 					
-					(*RectROI->baseClass.discardFptr) ((void**)&RectROI);
+					// inform that ROI was placed
+					FireCallbackGroup(imgDisplay->baseClass.callbackGroup, ImageDisplay_ROI_Placed, imgDisplay->baseClass.selectionROI);
 					
+					// inform if ROI must be added to the image
+					if (imgDisplay->baseClass.addROIToImage) {
+						
+						ROI_type*	ROICopy 		= (*imgDisplay->baseClass.selectionROI->copyFptr) (imgDisplay->baseClass.selectionROI);
+						ROI_type*	ROIReference	= ROICopy;
+						
+						// add ROI to image
+						AddImageROI(imgDisplay->baseClass.image, &ROICopy, NULL);
+
+						// inform that ROI was added
+						FireCallbackGroup(imgDisplay->baseClass.callbackGroup, ImageDisplay_ROI_Added, ROIReference);
+					}
+
 					break;
 					
 				default:
@@ -883,12 +736,10 @@ static void IMAQ_CALLBACK ImageDisplayNIVision_CB (WindowEventType event, int wi
 		case IMAQ_CLOSE_EVENT:
 			
 			// broadcast close event to callbacks
-			FireCallbackGroup(display->baseClass.callbacks, ImageDisplay_Close); 
+			FireCallbackGroup(imgDisplay->baseClass.callbackGroup, ImageDisplay_Close, NULL);   // Note: listeners should only set their reference to the display to NULL and not discard the display directly.
 			
 			// close window and discard image display data
-			imaqCloseWindow(windowNumber);
-			displays[display->imaqWndID] = NULL;
-			(*display->baseClass.discardFptr) ((void**)&display);
+			(*imgDisplay->baseClass.imageDisplayDiscardFptr) ((void**)&imgDisplay);
 			
 			break;
 			
@@ -902,14 +753,12 @@ static void IMAQ_CALLBACK ImageDisplayNIVision_CB (WindowEventType event, int wi
 }
 
 LRESULT CALLBACK CustomImageDisplayNIVision_CB (HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
-{   
-	ImageDisplayNIVision_type*	disp 			= (ImageDisplayNIVision_type*) dwRefData;
-	WORD					wParamHighWord	= HIWORD(wParam);
-	WORD					wParamLowWord	= LOWORD(wParam);
-	int						error			= 0;
-	char*					errMsg			= NULL;
-	Image_type**			imagePtr		= NULL;
-	BOOL					imageLocked		= FALSE;
+{
+INIT_ERR
+
+	ImageDisplayNIVision_type*	disp 				= (ImageDisplayNIVision_type*) dwRefData;
+	WORD						wParamHighWord		= HIWORD(wParam);
+	WORD						wParamLowWord		= LOWORD(wParam);
 	
 	switch (msg) {
 			
@@ -923,28 +772,20 @@ LRESULT CALLBACK CustomImageDisplayNIVision_CB (HWND hWnd, UINT msg, WPARAM wPar
 				case NIDisplayMenu_Save:
 					//save as tiff with and without overlays
 					//popup and remember dir
-					errChk(ImageSavePopup(disp->NIImage, NIDisplayFileSaveDefaultFormat, &errMsg));
+					errChk(ImageSavePopup(disp->NIImage, NIDisplayFileSaveDefaultFormat, &errorInfo.errMsg));
 					break;
 					
 				case NIDisplayMenu_Restore:
 					
 					// broadcast RestoreSettings event to callbacks
-					FireCallbackGroup(disp->baseClass.callbacks, ImageDisplay_RestoreSettings);
+					FireCallbackGroup(disp->baseClass.callbackGroup, ImageDisplay_RestoreSettings, NULL);
 					break;
 					
 				case NIDisplayMenu_Image_Equalize_Linear:
 					
-					// obtain image lock
-					if( CmtGetTSVPtr(disp->baseClass.imageTSV, &imagePtr)  < 0) goto TSVError;
-					imageLocked = TRUE;
-					
 					// convert image
-					SetImageDisplayTransform(*imagePtr, ImageDisplayTransform_Linear);
-					errChk( ConvertImageTypeToNIImage(disp->NIImage, *imagePtr) );
-					
-					// release image lock
-					CmtReleaseTSVPtr(disp->baseClass.imageTSV);
-					imageLocked = FALSE;
+					SetImageDisplayTransform(disp->baseClass.image, ImageDisplayTransform_Linear);
+					errChk( ConvertImageTypeToNIImage(disp->NIImage, disp->baseClass.image) );
 					
 					// display image
 					nullChk( imaqDisplayImage(disp->NIImage, disp->imaqWndID, FALSE) );
@@ -952,17 +793,9 @@ LRESULT CALLBACK CustomImageDisplayNIVision_CB (HWND hWnd, UINT msg, WPARAM wPar
 					
 				case NIDisplayMenu_Image_Equalize_Logarithmic:
 					
-					// obtain image lock
-					if( CmtGetTSVPtr(disp->baseClass.imageTSV, &imagePtr)  < 0) goto TSVError;
-					imageLocked = TRUE; 
-					
 					// convert image
-					SetImageDisplayTransform(*imagePtr, ImageDisplayTransform_Logarithmic);
-					errChk( ConvertImageTypeToNIImage(disp->NIImage, *imagePtr) );
-					
-					// release image lock 
-					CmtReleaseTSVPtr(disp->baseClass.imageTSV);
-					imageLocked = FALSE;
+					SetImageDisplayTransform(disp->baseClass.image, ImageDisplayTransform_Logarithmic);
+					errChk( ConvertImageTypeToNIImage(disp->NIImage, disp->baseClass.image) );
 					
 					// display image
 					nullChk( imaqDisplayImage(disp->NIImage, disp->imaqWndID, FALSE) );
@@ -976,7 +809,7 @@ LRESULT CALLBACK CustomImageDisplayNIVision_CB (HWND hWnd, UINT msg, WPARAM wPar
 			switch (wParam) {
 				case VK_CONTROL:
 					
-					disp->baseClass.ROIEvent	= ROI_Added;
+					disp->baseClass.addROIToImage	= TRUE;
 					
 					break;
 					
@@ -992,7 +825,7 @@ LRESULT CALLBACK CustomImageDisplayNIVision_CB (HWND hWnd, UINT msg, WPARAM wPar
 			switch (wParam) {
 				case VK_CONTROL:
 					
-					disp->baseClass.ROIEvent	= ROI_Placed;
+					disp->baseClass.addROIToImage	= FALSE;
 					
 					break;
 					
@@ -1007,32 +840,16 @@ LRESULT CALLBACK CustomImageDisplayNIVision_CB (HWND hWnd, UINT msg, WPARAM wPar
 			break;
 	}
 	
-TSVError:
-	
-	return DefSubclassProc(hWnd, msg, wParam, lParam);
-	
 Error:
 	
-	// release image lock if locked
-	if (imageLocked) {
-		CmtReleaseTSVPtr(disp->baseClass.imageTSV);
-		imageLocked = FALSE;
-	}
-		
-	// call display error handler
-	if (!errMsg)
-		errMsg = StrDup("Unknown error.\n\n");
-	
-	
-	(*disp->baseClass.displayEngine->errorHandlerCBFptr) ((ImageDisplay_type*)disp, error, errMsg);
-	OKfree(errMsg);
+	OKfree(errorInfo.errMsg);
 	
 	return DefSubclassProc(hWnd, msg, wParam, lParam);
 }
 
 static int ApplyDisplayTransform (Image* image, ImageDisplayTransforms dispTransformFunc)
 {
-	int					error		= 0;
+INIT_ERR
 	
 	QuantifyReport*		imageReport	= NULL;
 	
@@ -1058,12 +875,12 @@ Error:
 	// cleanup
 	OKfreeIMAQ(imageReport);
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int ConvertImageTypeToNIImage (Image* NIImage, Image_type* image)
 {
-	int			error		= 0;   
+INIT_ERR
 	
 	int			imgWidth	= 0;
 	int			imgHeight	= 0;
@@ -1089,13 +906,13 @@ static int ConvertImageTypeToNIImage (Image* NIImage, Image_type* image)
 	
 Error:
 	
-	return error;
+	return errorInfo.error;
 }
 
 static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, char** errorMsg)
 {
-	int 				error							= 0;
-	char*				errMsg							= NULL;
+INIT_ERR
+
 	int 				fileSelection					= 0;
 	char 				fileName[MAX_PATHNAME_LEN]		= ""; 
 	Image*				imageCopy						= NULL;
@@ -1178,12 +995,11 @@ Error:
 	// cleanup
 	OKfreeIMAQ(imageCopy);
 	
-	errMsg = imaqGetErrorText(error);
-	if (errorMsg)
-		*errorMsg = StrDup(errMsg);
-	OKfreeIMAQ(errMsg);
+	char* IMAQErrMsg = imaqGetErrorText(errorInfo.error);
+	errorInfo.errMsg = StrDup(IMAQErrMsg);
+	OKfreeIMAQ(IMAQErrMsg);
 	
-	return error;
+RETURN_ERR
 }	
 
 

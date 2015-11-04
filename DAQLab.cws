@@ -45,10 +45,10 @@ Project 0001 FolderId 20 Collapsed = True
 Project 0001 Folder Framework/Utility Collapsed = True
 Project 0001 FolderId 21 Collapsed = True
 Drag Bar Left = 271
-Window Top = 120
-Window Left = 393
-Window Bottom = 726
-Window Right = 1401
+Window Top = 131
+Window Left = 287
+Window Bottom = 852
+Window Right = 1457
 Maximized = True
 Maximized Children = True
 Max32 Number Of Errors = 20
@@ -62,7 +62,7 @@ Save Changes Before Compiling = "Always"
 Hide Windows = False
 Break At First Statement = False
 Sort Type = "File Name"
-Number of Opened Files = 10
+Number of Opened Files = 3
 Window Confinement Region Enabled = True
 MainColumnWidth = 254
 FileDateColumnWidth = 70
@@ -103,28 +103,26 @@ Disk Date = 3529064485
 In Projects = "1,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 6
 Source Window State = "1,0,0,0,0,0,0,0,0,60,0,0,0,0,0,25,11,0,35,22,349,523,1,0,"
 
 [File 0005]
 Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplay.c"
 File Type = "CSource"
-Disk Date = 3529253425
+Disk Date = 3529494374
 In Projects = "1,"
 Window Top = 64
 Window Left = 26
-Window Z-Order = 5
-Source Window State = "1,46,46,46,4,26,26,0,0,60,0,0,0,0,0,25,41,0,48,24,349,523,1,11,"
+Window Z-Order = 1
+Source Window State = "1,198,198,204,31,34,59,0,0,171,0,0,0,0,0,67,169,0,192,108,349,523,1,11,"
 
 [File 0006]
 Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayCVI.c"
 File Type = "CSource"
-Disk Date = 3529070629
+Disk Date = 3529490684
 In Projects = "1,"
 Window Top = 106
 Window Left = 952
-Window Z-Order = 7
-Source Window State = "1,53,53,53,0,15,15,0,0,100,0,137,0,0,0,26,113,0,60,29,369,843,1,16,"
+Source Window State = "1,53,53,53,0,15,15,0,0,100,0,137,0,0,0,26,0,0,24,70,369,843,1,16,"
 
 [File 0007]
 Path = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/LaserScanning.h"
@@ -133,7 +131,6 @@ Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 212
 Window Left = 106
-Window Z-Order = 10
 Source Window State = "1,37,37,37,0,95,95,0,3,80,0,0,0,0,0,25,0,0,37,0,349,683,1,0,"
 
 [File 0008]
@@ -145,7 +142,6 @@ Window Top = 157
 Window Left = 74
 Window Height = 349
 Window Width = 683
-Window Z-Order = 8
 
 [File 0009]
 Path = "/d/GitHub/DAQLab_private/Framework/Display/WaveformDisplay.h"
@@ -154,8 +150,8 @@ Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 362
 Window Left = 134
-Window Z-Order = 9
-Source Window State = "1,51,51,51,28,48,28,0,0,80,0,0,0,0,0,25,10,0,36,27,349,683,1,0,"
+Window Z-Order = 2
+Source Window State = "1,29,29,29,33,53,53,0,0,80,0,0,0,0,0,25,17,0,19,99,349,683,1,0,"
 
 [File 0010]
 Path Line0001 = "/d/GitHub/DAQLab_private/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS"
@@ -409,12 +405,12 @@ In Projects = "1,"
 [File 0037]
 Path = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/LaserScanning.c"
 File Type = "CSource"
-Disk Date = 3529252431
+Disk Date = 3529491569
 In Projects = "1,"
-Window Top = 88
-Window Left = 3
+Window Top = 177
+Window Left = 742
 Window Released = True
-Source Window State Line0001 = "1,8169,8169,8169,12,25,25,0,3,197,0,7246,0,7257,21,63,8154,0,8169,12,899,1612,0,"
+Source Window State Line0001 = "1,8267,8267,8267,12,27,27,0,0,205,0,7246,0,7257,21,70,8241,0,8269,78,899,1612,0,"
 Source Window State Line0002 = "0,"
 
 [File 0038]
@@ -694,22 +690,22 @@ Source Window State = "1,52,52,52,0,16,16,0,0,0,0,0,0,0,0,0,29,0,52,0,349,683,1,
 [File 0068]
 Path = "/d/GitHub/DAQLab_private/Framework/Data types/DataTypes.c"
 File Type = "CSource"
-Disk Date = 3529064485
+Disk Date = 3529404909
 In Projects = "1,"
-Window Top = 31
-Window Left = 10
+Window Top = 112
+Window Left = 222
 Window Released = True
-Source Window State = "1,1131,1131,1131,5,29,29,0,3,121,0,106,0,125,40,47,1103,0,1131,5,688,1006,0,0,"
+Source Window State = "1,1126,1126,1126,4,15,15,0,3,166,0,106,0,125,40,47,1103,0,1126,4,688,1371,0,0,"
 
 [File 0069]
 Path = "/d/GitHub/DAQLab_private/Framework/Data types/DataTypes.h"
 File Type = "Include"
-Disk Date = 3529064485
+Disk Date = 3529334980
 In Projects = "1,"
-Window Top = 97
-Window Left = 404
+Window Top = 257
+Window Left = 590
 Window Released = True
-Source Window State = "1,94,94,94,0,82,0,0,3,205,0,443,0,459,131,70,71,0,94,82,688,1006,0,0,"
+Source Window State = "1,642,642,642,28,39,28,0,3,205,0,443,0,459,131,70,625,0,642,39,688,1006,0,0,"
 
 [File 0070]
 Path = "/d/GitHub/DAQLab_private/Framework/HW Triggering/HWTriggering.c"
@@ -751,12 +747,12 @@ Source Window State = "1,51,51,51,8,14,14,0,3,0,0,0,0,0,0,0,36,0,51,8,666,1345,0
 [File 0074]
 Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplay.h"
 File Type = "Include"
-Disk Date = 3529253425
+Disk Date = 3529494227
 In Projects = "1,"
-Window Top = 31
-Window Left = 10
+Window Top = 143
+Window Left = 139
 Window Released = True
-Source Window State = "1,57,57,57,4,12,12,0,3,121,0,0,0,0,0,47,34,0,57,4,688,1006,0,0,"
+Source Window State = "1,126,126,126,0,153,0,0,0,205,0,0,0,0,0,70,70,0,126,0,688,1353,0,0,"
 
 [File 0075]
 Path = "/d/GitHub/DAQLab_private/Framework/Display/UI_ImageDisplay.h"
@@ -790,10 +786,10 @@ Path = "/d/GitHub/DAQLab_private/Framework/Display/WaveformDisplay.c"
 File Type = "CSource"
 Disk Date = 3529064485
 In Projects = "1,"
-Window Top = 324
-Window Left = 424
+Window Top = 169
+Window Left = 81
 Window Released = True
-Source Window State = "1,229,252,229,0,15,0,0,0,0,0,30,0,43,4,0,202,0,252,20,972,1472,0,0,"
+Source Window State = "1,31,31,31,7,22,22,0,3,179,0,30,0,43,4,69,0,0,31,7,972,1472,0,0,"
 
 [File 0079]
 Path = "/d/GitHub/DAQLab_private/Framework/Execution control/TaskController.c"
@@ -857,12 +853,12 @@ Window Width = 683
 [File 0085]
 Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayNIVision.c"
 File Type = "CSource"
-Disk Date = 3529265069
+Disk Date = 3529495797
 In Projects = "1,"
-Window Top = 62
-Window Left = 26
-Window Z-Order = 1
-Source Window State = "0,748,748,748,25,32,25,0,0,171,35,786,0,803,50,32,438,0,444,48,349,683,1,5245,"
+Window Top = 216
+Window Left = 187
+Window Released = True
+Source Window State = "1,842,844,842,0,54,0,0,0,205,0,374,0,81,96,70,807,0,842,0,831,1412,0,0,"
 
 [File 0086]
 Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayNIVision.h"
@@ -871,40 +867,13 @@ Disk Date = 3529264803
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
-Window Z-Order = 2
-Source Window State = "1,29,29,29,40,65,65,0,0,80,0,0,0,0,0,25,17,0,29,34,349,683,1,0,"
-
-[File 0087]
-Path = "/c/Program Files/National Instruments/CVI2013/sdk/include/WinDef.h"
-File Type = "Include"
-Disk Date = 3486492000
-In Projects = ""
-Window Top = 212
-Window Left = 106
 Window Z-Order = 3
-Source Window State = "1,207,207,207,27,31,31,0,0,80,0,0,0,0,0,25,195,0,207,1,349,683,1,0,"
-
-[File 0088]
-Path = "/c/Program Files/National Instruments/CVI2013/sdk/include/WinNT.h"
-File Type = "Include"
-Disk Date = 3486492000
-In Projects = ""
-Window Top = 242
-Window Left = 122
-Window Z-Order = 4
-Source Window State = "1,518,518,518,8,22,22,0,3,80,0,0,0,0,0,25,506,0,518,8,349,683,1,0,"
+Source Window State = "1,29,29,29,40,65,65,0,0,80,0,0,0,0,0,25,17,0,40,55,349,683,1,0,"
 
 [Tab Order]
-Tab 0001 = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/LaserScanning.h"
-Tab 0002 = "/d/GitHub/DAQLab_private/Framework/Display/WaveformDisplay.h"
-Tab 0003 = "/d/GitHub/DAQLab_private/Framework/Display/UI_ImageDisplay.uir"
-Tab 0004 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayCVI.h"
-Tab 0005 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplay.c"
-Tab 0006 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayCVI.c"
-Tab 0007 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayNIVision.h"
-Tab 0008 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayNIVision.c"
-Tab 0009 = "/c/Program Files/National Instruments/CVI2013/sdk/include/WinDef.h"
-Tab 0010 = "/c/Program Files/National Instruments/CVI2013/sdk/include/WinNT.h"
+Tab 0001 = "/d/GitHub/DAQLab_private/Framework/Display/WaveformDisplay.h"
+Tab 0002 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplay.c"
+Tab 0003 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayNIVision.h"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

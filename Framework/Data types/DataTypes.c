@@ -1117,11 +1117,29 @@ ImageTypes GetImageType (Image_type* image)
 	 return image->imageType; 
 }
 
-void SetImageROIs (Image_type* image, ListType	ROIs)
+void SetImageROIs (Image_type* image, ListType ROIs)
 {
 	// free previous ROIs
 	DiscardROIList(&image->ROIs);
 	image->ROIs = ROIs; 
+}
+
+int AddImageROI (Image_type* image, ROI_type** ROIPtr, size_t* ROIIdxPtr)
+{
+INIT_ERR
+
+	if (ROIIdxPtr)
+		*ROIIdxPtr = 0;
+	
+	nullChk( ListInsertItem(image->ROIs, ROIPtr, END_OF_LIST) );
+	*ROIPtr = NULL;
+	
+	if (ROIIdxPtr)
+		*ROIIdxPtr = ListNumItems(image->ROIs);
+	
+Error:
+	
+	return errorInfo.error;
 }
 
 ListType GetImageROIs (Image_type* image)
@@ -1421,7 +1439,7 @@ Error:
 	return errorInfo.error;
 }
 
-CallbackGroup_type* init_CallbackGroup_type	(void* objectRef, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions)
+CallbackGroup_type* init_CallbackGroup_type	(void* objectRef, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackFunctionsData, DiscardFptr_type* discardCallbackDataFunctions)
 {
 INIT_ERR
 
@@ -1442,7 +1460,7 @@ INIT_ERR
 	
 	for (size_t i = 0; i < nCallbackFunctions; i++) {
 		cbg->CBs[i] 				= callbackFunctions[i];
-		cbg->CBsData[i]				= callbackData[i];
+		cbg->CBsData[i]				= callbackFunctionsData[i];
 		cbg->discardCBsData[i] 		= discardCallbackDataFunctions[i];
 	}
 	
@@ -1475,13 +1493,13 @@ void discard_CallbackGroup_type (CallbackGroup_type** callbackGroupPtr)
 	OKfree(*callbackGroupPtr);
 }
 
-void FireCallbackGroup (CallbackGroup_type* callbackGroup, int event)
+void FireCallbackGroup (CallbackGroup_type* callbackGroup, int event, void* eventData)
 {
 	if (!callbackGroup) return;
 	
 	for (size_t i = 0; i < callbackGroup->nCBs; i++)
 		if (callbackGroup->CBs[i]) 
-			(*callbackGroup->CBs[i]) (callbackGroup->objectRef, event, callbackGroup->CBsData[i]);
+			(*callbackGroup->CBs[i]) (callbackGroup->objectRef, event, eventData, callbackGroup->CBsData[i]);
 	
 }
 

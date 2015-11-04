@@ -1002,7 +1002,7 @@ static uInt32							GetNumOpenDetectionVChans							(RectRaster_type* scanEngine
 
 static void								ROIDisplay_CB										(ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI);
 
-static void								ImageDisplay_CB										(ImageDisplay_type* imgDisplay, int event, void* callbackData);
+static void 							ImageDisplay_CB 									(ImageDisplay_type* imgDisplay, int event, void* eventData, void* callbackFunctionData);
 
 static void 							WaveformDisplay_CB 									(WaveformDisplay_type* waveformDisplay, int event, void* callbackData);
 
@@ -8265,9 +8265,9 @@ TSVError:
 	return;
 }
 
-static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, int event, void* callbackData)
+static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, int event, void* eventData, void* callbackFunctionData)
 {
-	RectRasterDisplayCBData_type*	displayCBData			= callbackData;
+	RectRasterDisplayCBData_type*	displayCBData			= callbackFunctionData;
 	RectRaster_type*				scanEngine 				= displayCBData->scanEngine;
 	RectRasterScanSet_type			previousScanSettings	= displayCBData->scanSettings;
 	

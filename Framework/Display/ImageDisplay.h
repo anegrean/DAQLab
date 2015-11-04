@@ -38,16 +38,16 @@ typedef struct ChannelGroupDisplayContainer		ChannelGroupDisplayContainer_type;	
 // Enums
 //--------------------------------------------------------------		
 
-// Image display events
+// Image display events passed to the callbackGroup
 typedef enum {
 	// General
-	ImageDisplay_Discard,											// Image display window was discarded.
+	ImageDisplay_Close,												// Image display will be discarded. Listeners should not discard the image display directly, instead just set the display references to NULL.
 	ImageDisplay_RestoreSettings,									// The image display window wishes to restore a list of settings that were used to acquire the image.
 	
 	// Region of interest (ROI) events
 	// callbackData is of ROI_type*
-	ImageDisplay_ROI_Placed,										// A ROI (region of interest) was placed on the image, but not added to it.
-	ImageDisplay_ROI_Added,											// A ROI was added to the image.
+	ImageDisplay_ROI_Placed,										// A ROI (region of interest) was placed on the image, but not added to it. Event data in CallbackFptr_type will be a ROI_type* of ROI selection on the image.
+	ImageDisplay_ROI_Added,											// A ROI was added to the image. Event data in CallbackFptr_type will be a ROI_type* of the added ROI to the image.
 	ImageDisplay_ROI_Removed,										// A ROI was removed from the image.
 	
 } ImageDisplayEvents;
@@ -80,8 +80,10 @@ struct ImageDisplay {
 	//----------------------------------------------------
 	
 	void*								imageDisplayOwner;			// Reference to object that owns this image display.
-	CmtTSVHandle						imageTSV;					// Thread safe variable of Image_type* storing the displayed image which can be accessed safely from multiple threads.
+	Image_type*							image;						// Image object used for display.
 	BOOL								visible;					// If True, the image window is visible, False otherwise. This flag should be by the displayImageFptr method to either display a new window or just update the current image.
+	ROI_type*							selectionROI;				// Keeps track of the last placed ROI on the image.
+	BOOL								addROIToImage;				// If True, the selected ROI will be added to the image.
 	
 	
 	//----------------------------------------------------
@@ -98,7 +100,7 @@ struct ImageDisplay {
 	//----------------------------------------------------
 	
 	CallbackGroup_type*					callbackGroup;				// Callback function of the form CallbackFptr_type within the callback group receive events of ImageDisplayEvents type.
-																	// Since the CallbackFptr_type has the form typedef void (*CallbackFptr_type) (void* objectRef, int event, void* callbackData)
+																	// Since the CallbackFptr_type has the form typedef void (*CallbackFptr_type) (void* objectRef, int event, void* eventData, void* callbackFunctionData)
 																	// objectRef will be the reference to the image display of ImageDisplay_type* while callbackData will depend on the event type among ImageDisplayEvents.
 };
 	
@@ -121,6 +123,7 @@ int										init_ImageDisplay_type						(ImageDisplay_type* 		imageDisplay,
 																			 	 	 CallbackGroup_type**		callbackGroupPtr);
 
 void									discard_ImageDisplay_type					(ImageDisplay_type** imageDisplayPtr);
+
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Channel Group Display

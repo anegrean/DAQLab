@@ -324,6 +324,8 @@ Error:
 
 static int DisplayImageFunction (ImageDisplayCVI_type* imgDisplay, Image_type** image)
 {
+
+	int ImageID = Image_typeToBitmap(image);
 	return 0;
 }
 

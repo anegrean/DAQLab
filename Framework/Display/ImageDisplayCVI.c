@@ -160,7 +160,7 @@ void DiscardImageList (ListType* imageListPtr)
 	OKfreeList(*imageListPtr);
 }
 
-/*
+/*  to see the types
 size_t GetImageSizeofData (Image_type* image)
 {
 	size_t dataTypeSize = 0;
@@ -199,8 +199,6 @@ size_t GetImageSizeofData (Image_type* image)
 }
 */
 
-//TODO use memcpy to convert void* to specific array
-//
 static unsigned char* convertToBitArray(Image_type* image) 
 {
 	nullChk(image);
@@ -212,8 +210,12 @@ static unsigned char* convertToBitArray(Image_type* image)
 	switch(image->imageType) {
 		
 		case Image_UChar:					// 8 bit unsigned 
+			
+			unsigned char* iterr;
+			iterr = (unsigned char*) image->pixData[i];
+			
 			for(i = 0; i < size; i++) {
-				bits[i] = (unsigned char) image->pixData[i];
+				bits[i] = iterr[i];
 			}
 		break;
 		
@@ -224,12 +226,82 @@ static unsigned char* convertToBitArray(Image_type* image)
 			max = (unsigned short int) image->pixData[0];
 			min = (unsigned short int) image->pixData[0];
 			
-			for (i = 0; i < size; i++) {
-				if max > (unsigned short int) image-> pixData[0];
+			unsigned short int* iterr;
+			iterr = (unsigned short int*) image->pixData;
+			for(i = 0; i < size; i++) {
+			
+			if(max > iterr[i])
+				max = iterr[i];
+			
+			if(min < iterr[i])
+				min = iterr[i];
+			
 			}
+			int intervalLength = (max - min) / sizeof(unsigned char);
+			
+			for(i = 0; i < size; i++) {
+				bits[i] = iterr[i] / intervalLength;
+			}
+			
+		break;
+		
+		case Image_UInt:					// 32 bit unsigned
+		case Image_Int:						// 32 bit signed
+			
+			unsigned  int max, min;
+			
+			max = (unsigned  int) image->pixData[0];
+			min = (unsigned  int) image->pixData[0];
+			
+			unsigned int* iterr;
+			iterr = (unsigned  int*) image->pixData;
+			
+			for(i = 0; i < size; i++) {
+			
+				if(max > iterr[i])
+					max = iterr[i];
+			
+				if(min < iterr[i])
+					min = iterr[i];
+			
+			}
+			
+			int intervalLength = (max - min) / sizeof(unsigned char);
+			
+			for(i = 0; i < size; i++) {
+				bits[i] = iterr[i] / intervalLength;
+			}
+		break;
+		
+		case Image_Float:					// 32 bit float   :
+			 float max, min;
+			 
+			max = (float) image->pixData[0];
+			min = (float) image->pixData[0];
+			
+			float* iterr;
+			iterr = (float*) image->pixData;
+			
+			for(i = 0; i < size; i++) {
+			
+				if(max > iterr[i])
+					max = iterr[i];
+			
+				if(min < iterr[i])
+					min = iterr[i];
+			
+			}
+			
+			int intervalLength = (max - min) / sizeof(unsigned char);
+			
+			for(i = 0; i < size; i++) {
+				bits[i] = iterr[i] / intervalLength;
+			}
+			
 		break;
 	
 	}
+		return bits;
 }
 
 static int Image_typeToBitmap(Image_type** image)

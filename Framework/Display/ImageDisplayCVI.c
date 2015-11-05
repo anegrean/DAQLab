@@ -65,7 +65,7 @@ INIT_ERR
 	// call parent init fn
 
 	
-	  init_GenericImageDisplay_type(&imgDisplay->baseClass,(DiscardFptr_type)discard_ImageDisplayCVI_type, (DisplayImageFptr_type)DisplayImageFunction, NULL);							
+	   init_ImageDisplay_type(&imgDisplay->baseClass,(DiscardFptr_type)discard_ImageDisplayCVI_type, (DisplayImageFptr_type)DisplayImageFunction, NULL);							
 	
 	//-------------------------------------
 	// Init child class
@@ -201,9 +201,11 @@ size_t GetImageSizeofData (Image_type* image)
 
 static unsigned char* convertToBitArray(Image_type* image) 
 {
+INIT_ERR
+	
 	nullChk(image);
 
-	int size = image->width * image-> height;
+	int size = image->width * image->height;
 	int i 	 = 0;
 	unsigned char bits[size];
 	
@@ -302,6 +304,8 @@ static unsigned char* convertToBitArray(Image_type* image)
 	
 	}
 		return bits;
+Error:
+		return NULL;
 }
 
 static int Image_typeToBitmap(Image_type** image)
@@ -313,7 +317,7 @@ INIT_ERR
 	unsigned char bits[] = convertToBitArray(ImageCVI);;
 	errChk(NewBitmap (-1, 24, ImageCVI->width, ImageCVI->height, NULL, bits, NULL, &BitmapID));
 	
-	return 0;
+	return BitmapID;
 Error:
 	return -1;
 }

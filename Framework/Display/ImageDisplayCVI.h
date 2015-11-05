@@ -30,7 +30,6 @@
 		
 typedef struct ImageDisplayCVI	ImageDisplayCVI_type; 
 
-GenericImageDisplay_type somethingsomething;
 //=============================================================================
 // External variables
 
@@ -48,7 +47,7 @@ int							DisplayImage					(ImageDisplayCVI_type* imageDisp, Image_type* images[
 
 
 struct ImageDisplayCVI {
-GenericImageDisplay_type baseClass; 
+ImageDisplay_type baseClass; 
 	//---------------------------------------------------------------------------------------------------------------
 	// DATA
 	//---------------------------------------------------------------------------------------------------------------

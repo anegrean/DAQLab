@@ -91,8 +91,8 @@ struct TaskControl {
 	CmtThreadFunctionID				threadFunctionID;					// ID of ScheduleTaskEventHandler that is executed in a separate thread from the main thread.
 	CmtThreadPoolHandle				threadPoolHndl;						// Thread pool handle used to launch task controller threads.
 	CmtTSVHandle					stateTSV;							// Task Controller state, thread safe variable of TCStates.
-	int								stateTSVLineNumDebug;					// used to find out where in the code the state TSV is obtained and is not released.
-	char							stateTSVFileName[200];					// used to find out where in the code the state TSV is obtained and is not released. 
+	int								stateTSVLineNumDebug;				// Used to find out where in the code the state TSV is obtained and is not released.
+	char							stateTSVFileName[200];				// Used to find out where in the code the state TSV is obtained and is not released. 
 	BOOL							stateTSVLockObtained;				// Status of stateTSV lock.
 	TCStates						currentState;						// Current Task Controller state for internal use. Its value is updated from stateTSV before processing an event.
 	TCStates 						oldState;							// Previous Task Controller state used for logging.
@@ -243,6 +243,8 @@ INIT_ERR
 	tc->threadPoolHndl						= tcThreadPoolHndl;
 	tc->childTCIdx							= 0;
 	tc->stateTSV							= 0;
+	tc->stateTSVLineNumDebug				= 0;
+	tc->stateTSVFileName[0]					= 0;
 	tc->stateTSVLockObtained				= FALSE;
 	tc->currentState						= TC_State_Unconfigured;
 	tc->oldState							= TC_State_Unconfigured;
@@ -458,6 +460,12 @@ INIT_ERR
 	*lockObtained = TRUE;
 	CmtErrChk( CmtReleaseTSVPtr(taskControl->stateTSV) );
 	*lockObtained = FALSE;
+	
+	//-------------------------------------------------------- 
+	// debug
+	taskControl->stateTSVLineNumDebug = 0;
+	strcpy(taskControl->stateTSVFileName, "");
+	//--------------------------------------------------------
 
 CmtError:
 	
@@ -637,6 +645,12 @@ INIT_ERR
 	*lockObtained = TRUE;
 	CmtErrChk( CmtReleaseTSVPtr(taskControl->stateTSV) );
 	*lockObtained = FALSE;
+	
+	//-------------------------------------------------------- 
+	// debug
+	taskControl->stateTSVLineNumDebug = 0;
+	strcpy(taskControl->stateTSVFileName, "");
+	//--------------------------------------------------------
 
 CmtError:
 	

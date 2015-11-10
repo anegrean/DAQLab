@@ -3813,7 +3813,10 @@ INIT_ERR
 							errChk( IsTaskControllerInUse_ReleaseLock(targetTreeNodePtr->taskControl, &parentTCIsInUseLockObtained, &errorInfo.errMsg) ); 
 							// swallow drag event
 							return 1;
-						}
+							
+						} else
+							// release lock
+							errChk( IsTaskControllerInUse_ReleaseLock(targetTreeNodePtr->taskControl, &parentTCIsInUseLockObtained, &errorInfo.errMsg) ); 
 					}
 					
 					break;

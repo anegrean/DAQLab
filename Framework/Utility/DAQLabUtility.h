@@ -68,7 +68,11 @@ typedef struct {
 #define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}  
 
 #define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to get the number of elements in an array passed as an argument!
-												 
+
+#ifdef RETURN_ERR
+#undef RETURN_ERR
+#endif
+
 #define RETURN_ERR \
 	if (errorInfo.error < 0) \
 		if (errorMsg) { \
@@ -80,13 +84,44 @@ typedef struct {
 			OKfree(errorInfo.errMsg); \
 	return errorInfo.error;
 
+#ifdef SET_ERR
+#undef SET_ERR
+#endif
+
 #define SET_ERR(errorID, errorMsg) \
 { \
 	errorInfo.error = errorID; \
 	errorInfo.errMsg = FormatMsg(errorID, __FILE__, __func__, __LINE__, errorMsg); \
 	goto Error; \
 }
-					
+
+//-----------------------------------------------------------------------------------------------------
+// CVI Cmt multithreading library error handling
+//-----------------------------------------------------------------------------------------------------
+
+// Cmt library error macro
+#ifdef CmtErrChk
+#undef CmtErrChk
+#endif
+
+#define CmtErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) \ 
+{goto CmtError;} else
+
+// obtain Cmt error description and jumps to Error
+#ifdef Cmt_ERR
+#undef Cmt_ERR
+#endif
+
+#define Cmt_ERR { \
+	if (errorInfo.error < 0) { \
+		char CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE] = ""; \
+		errChk( CmtGetErrorMessage(errorInfo.error, CmtErrMsgBuffer) ); \
+		nullChk( errorInfo.errMsg = StrDup(CmtErrMsgBuffer) ); \
+	} \
+	goto Error; \
+}
+
+
 /* Log Messages that is only printed when _CVI_DEBUG_ is set and it is within 
  * _DEBUG_LEVEL_
  */

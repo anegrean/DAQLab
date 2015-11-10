@@ -60,8 +60,13 @@ INIT_ERR
 	
 	// data
 	imageDisplay->imageDisplayOwner			= imageDisplayOwner;
-	imageDisplay->image						= *imagePtr;
-	*imagePtr								= NULL;
+	
+	if (imagePtr) {
+		imageDisplay->image					= *imagePtr;
+		*imagePtr							= NULL;
+	} else
+		imageDisplay->image					= NULL;
+		
 	imageDisplay->visible					= FALSE;
 	imageDisplay->selectionROI				= NULL;
 	imageDisplay->addROIToImage				= FALSE;
@@ -72,8 +77,13 @@ INIT_ERR
 	imageDisplay->ROIActionsFptr			= ROIActionsFptr;
 	
 	// callbacks
-	imageDisplay->callbackGroup				= *callbackGroupPtr;
-	*callbackGroupPtr						= NULL;
+	if (callbackGroupPtr) {
+		imageDisplay->callbackGroup			= *callbackGroupPtr;
+		*callbackGroupPtr					= NULL;
+		SetCallbackGroupOwner(imageDisplay->callbackGroup, imageDisplay);
+	} else
+		imageDisplay->callbackGroup			= NULL;
+		
 	
  
 Error:
@@ -87,8 +97,9 @@ void discard_ImageDisplay_type (ImageDisplay_type** imageDisplayPtr)
 	
 	if (!imageDisplay) return;
 	
-	// discard ROI selection
-	(*imageDisplay->selectionROI->discardFptr) ((void**)&imageDisplay->selectionROI);
+	// discard ROI selection if any
+	if (imageDisplay->selectionROI)
+		(*imageDisplay->selectionROI->discardFptr) ((void**)&imageDisplay->selectionROI);
 	
 	// dispose image
 	discard_Image_type(&imageDisplay->image);

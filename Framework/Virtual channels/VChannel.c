@@ -21,23 +21,8 @@
 //==============================================================================
 // Constants
 
-#define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}  
 #define DEFAULT_SinkVChan_QueueSize			1000
 #define DEFAULT_SinkVChan_QueueWriteTimeout	1000.0	// number of [ms] to wait while trying to add a data packet to a Sink VChan TSQ
-
-// Cmt library error macro
-#define CmtErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) \ 
-{goto CmtError;} else
-
-// obtain Cmt error description and jumps to Error
-#define Cmt_ERR { \
-	if (errorInfo.error < 0) { \
-		char CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE] = ""; \
-		errChk( CmtGetErrorMessage(errorInfo.error, CmtErrMsgBuffer) ); \
-		nullChk( errorInfo.errMsg = StrDup(CmtErrMsgBuffer) ); \
-	} \
-	goto Error; \
-}
 
 
 //==============================================================================

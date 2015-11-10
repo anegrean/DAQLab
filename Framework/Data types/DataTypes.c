@@ -34,7 +34,7 @@
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 struct CallbackGroup {
-	void*						objectRef;				// Reference to object owing the callback group.
+	void*						callbackGroupOwner;		// Reference to object owing the callback group.
 	size_t 						nCBs;					// Number of callbacks to be called.
 	CallbackFptr_type* 			CBs;					// Callback array called sequencially.
 	void** 						CBsData;				// Array of callback data assigned to each callback function.
@@ -1438,7 +1438,7 @@ Error:
 	return errorInfo.error;
 }
 
-CallbackGroup_type* init_CallbackGroup_type	(void* objectRef, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackFunctionsData, DiscardFptr_type* discardCallbackDataFunctions)
+CallbackGroup_type* init_CallbackGroup_type	(void* callbackGroupOwner, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackFunctionsData, DiscardFptr_type* discardCallbackDataFunctions)
 {
 INIT_ERR
 
@@ -1446,11 +1446,11 @@ INIT_ERR
 	if (!cbg) return NULL;
 	
 	// init
-	cbg->objectRef		= objectRef;
-	cbg->nCBs 			= nCallbackFunctions;
-	cbg->CBs			= NULL;
-	cbg->CBsData		= NULL;
-	cbg->discardCBsData = NULL;
+	cbg->callbackGroupOwner			= callbackGroupOwner;
+	cbg->nCBs 						= nCallbackFunctions;
+	cbg->CBs						= NULL;
+	cbg->CBsData					= NULL;
+	cbg->discardCBsData 			= NULL;
 	
 	// alloc
 	nullChk( cbg->CBs 				= malloc (nCallbackFunctions * sizeof(CallbackFptr_type)) );
@@ -1498,7 +1498,17 @@ void FireCallbackGroup (CallbackGroup_type* callbackGroup, int event, void* even
 	
 	for (size_t i = 0; i < callbackGroup->nCBs; i++)
 		if (callbackGroup->CBs[i]) 
-			(*callbackGroup->CBs[i]) (callbackGroup->objectRef, event, eventData, callbackGroup->CBsData[i]);
+			(*callbackGroup->CBs[i]) (callbackGroup->callbackGroupOwner, event, eventData, callbackGroup->CBsData[i]);
 	
+}
+
+void SetCallbackGroupOwner (CallbackGroup_type* callbackGroup, void* callbackGroupOwner)
+{
+	callbackGroup->callbackGroupOwner = callbackGroupOwner;
+}
+
+void* GetCallbackGroupOwner (CallbackGroup_type* callbackGroup)
+{
+	return callbackGroup->callbackGroupOwner;
 }
 

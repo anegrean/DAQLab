@@ -29,7 +29,6 @@
 //========================================================================================================================================================================================================
 // Macros
 
-// DAQmxErrChk
 #define DAQmxErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) \
 {goto DAQmxError;} else
 	
@@ -38,20 +37,6 @@
 	int buffsize = DAQmxGetExtendedErrorInfo(NULL, 0); \
 	nullChk( errorInfo.errMsg = malloc((buffsize + 1) * sizeof(char)) ); \
 	errChk( DAQmxGetExtendedErrorInfo(errorInfo.errMsg, buffsize + 1) ); \
-	goto Error; \
-}
-
-// Cmt library error macro
-#define CmtErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) \ 
-{goto CmtError;} else
-
-// obtains Cmt error description and jumps to Error
-#define Cmt_ERROR_INFO { \
-	if (errorInfo.error < 0) { \
-		char CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE] = ""; \
-		errChk( CmtGetErrorMessage(errorInfo.error, CmtErrMsgBuffer) ); \
-		nullChk( errorInfo.errMsg = StrDup(CmtErrMsgBuffer) ); \
-	} \
 	goto Error; \
 }
 
@@ -11144,7 +11129,7 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 
 Error:
 
@@ -11290,7 +11275,7 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 
 Error:
 	
@@ -11444,7 +11429,7 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 
 Error:
 	
@@ -11678,7 +11663,7 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 
 Error:
 	
@@ -11925,7 +11910,7 @@ INIT_ERR
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 	
 DAQmxError:
 	
@@ -12039,7 +12024,7 @@ INIT_ERR
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 	
 DAQmxError:
 	
@@ -12118,7 +12103,7 @@ INIT_ERR
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 	
 DAQmxError:
 	
@@ -12202,7 +12187,7 @@ INIT_ERR
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 	
 DAQmxError:
 	
@@ -12552,7 +12537,7 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 
 Error:
 
@@ -12753,7 +12738,7 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 
 Error:
 
@@ -14588,7 +14573,7 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 
 Error:
 	
@@ -14668,7 +14653,7 @@ DAQmx_ERROR_INFO
 
 CmtError:
 	
-Cmt_ERROR_INFO
+Cmt_ERR
 
 Error:
 

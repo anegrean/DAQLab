@@ -25,27 +25,6 @@
 // Constants
 
 #define EVENT_BUFFER_SIZE 10											// Number of maximum events read at once from the Task Controller TSQs
-#ifndef OKfree
-#define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}
-#endif
-
-// Cmt library error macro
-#ifndef CmtErrChk
-#define CmtErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) \ 
-{goto CmtError;} else
-#endif
-
-// obtain Cmt error description and jumps to Error
-#ifndef Cmt_ERR
-#define Cmt_ERR { \
-	if (errorInfo.error < 0) { \
-		char CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE] = ""; \
-		errChk( CmtGetErrorMessage(errorInfo.error, CmtErrMsgBuffer) ); \
-		nullChk( errorInfo.errMsg = StrDup(CmtErrMsgBuffer) ); \
-	} \
-	goto Error; \
-}
-#endif
 
 #ifndef TC_WRONG_EVENT_STATE_ERROR
 #define TC_WRONG_EVENT_STATE_ERROR \
@@ -3335,6 +3314,8 @@ INIT_ERR
 			// free memory for extra eventData if any
 			if (eventPackets[i].eventData && eventPackets[i].discardEventDataFptr)
 				(*eventPackets[i].discardEventDataFptr)(&eventPackets[i].eventData);
+			else
+				OKfree(eventPackets[i].eventData);
 			
 			// process another event if there is any
 			continue;

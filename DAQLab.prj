@@ -413,7 +413,7 @@ Path Is Rel = True
 Path Rel To = "CVI"
 Path Rel To Override = "CVI"
 Path Rel Path = "sdk/lib/msvc/ComCtl32.Lib"
-Path = "/c/Program Files/National Instruments/CVI2013/sdk/lib/msvc/ComCtl32.Lib"
+Path = "/c/program files/national instruments/cvi2013/sdk/lib/msvc/ComCtl32.Lib"
 Exclude = False
 Project Flags = 0
 Folder = "Modules/Laser Scanning"
@@ -622,7 +622,7 @@ Path Is Rel = True
 Path Rel To = "CVI"
 Path Rel To Override = "CVI"
 Path Rel Path = "toolslib/custctrl/combobox.fp"
-Path = "/c/Program Files/National Instruments/CVI2013/toolslib/custctrl/combobox.fp"
+Path = "/c/program files/national instruments/cvi2013/toolslib/custctrl/combobox.fp"
 Exclude = False
 Project Flags = 0
 Folder = "Instrument Files"
@@ -635,7 +635,7 @@ Path Is Rel = True
 Path Rel To = "CVI"
 Path Rel To Override = "CVI Shared"
 Path Rel Path = "toolslib/custctrl/daqmxioctrl.fp"
-Path Line0001 = "/c/Program Files/National Instruments/Shared/CVI/toolslib/custctrl/daqmxioctrl.f"
+Path Line0001 = "/C/Program Files/National Instruments/Shared/CVI/toolslib/custctrl/daqmxioctrl.f"
 Path Line0002 = "p"
 Exclude = False
 Project Flags = 0
@@ -741,13 +741,14 @@ Folder = "Framework/Data Storage"
 Folder Id = 14
 
 [File 0054]
-File Type = "Include"
+File Type = "CSource"
 Res Id = 54
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Framework/Execution control/TaskController.h"
-Path = "/d/GitHub/DAQLab_private/Framework/Execution control/TaskController.h"
+Path Rel Path = "Framework/Execution control/TaskController.c"
+Path = "/d/GitHub/DAQLab_private/Framework/Execution control/TaskController.c"
 Exclude = False
+Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Task Control"
 Folder Id = 15
@@ -757,6 +758,18 @@ File Type = "Include"
 Res Id = 55
 Path Is Rel = True
 Path Rel To = "Project"
+Path Rel Path = "Framework/Execution control/TaskController.h"
+Path = "/d/GitHub/DAQLab_private/Framework/Execution control/TaskController.h"
+Exclude = False
+Project Flags = 0
+Folder = "Framework/Task Control"
+Folder Id = 15
+
+[File 0056]
+File Type = "Include"
+Res Id = 56
+Path Is Rel = True
+Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/UI_TaskController.h"
 Path = "/d/GitHub/DAQLab_private/Framework/Execution control/UI_TaskController.h"
 Exclude = False
@@ -764,9 +777,9 @@ Project Flags = 0
 Folder = "Framework/Task Control"
 Folder Id = 15
 
-[File 0056]
+[File 0057]
 File Type = "User Interface Resource"
-Res Id = 56
+Res Id = 57
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Execution control/UI_TaskController.uir"
@@ -776,9 +789,9 @@ Project Flags = 0
 Folder = "Framework/Task Control"
 Folder Id = 15
 
-[File 0057]
+[File 0058]
 File Type = "CSource"
-Res Id = 57
+Res Id = 58
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Virtual channels/VChannel.c"
@@ -789,9 +802,9 @@ Project Flags = 0
 Folder = "Framework/Virtual Channels"
 Folder Id = 16
 
-[File 0058]
+[File 0059]
 File Type = "Include"
-Res Id = 58
+Res Id = 59
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Virtual channels/VChannel.h"
@@ -801,9 +814,9 @@ Project Flags = 0
 Folder = "Framework/Virtual Channels"
 Folder Id = 16
 
-[File 0059]
+[File 0060]
 File Type = "CSource"
-Res Id = 59
+Res Id = 60
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Iterators/Iterator.c"
@@ -814,9 +827,9 @@ Project Flags = 0
 Folder = "Framework/Iterators"
 Folder Id = 17
 
-[File 0060]
+[File 0061]
 File Type = "Include"
-Res Id = 60
+Res Id = 61
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Iterators/Iterator.h"
@@ -826,9 +839,9 @@ Project Flags = 0
 Folder = "Framework/Iterators"
 Folder Id = 17
 
-[File 0061]
+[File 0062]
 File Type = "CSource"
-Res Id = 61
+Res Id = 62
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data packets/DataPacket.c"
@@ -839,9 +852,9 @@ Project Flags = 0
 Folder = "Framework/Data Packets"
 Folder Id = 18
 
-[File 0062]
+[File 0063]
 File Type = "Include"
-Res Id = 62
+Res Id = 63
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data packets/DataPacket.h"
@@ -851,9 +864,9 @@ Project Flags = 0
 Folder = "Framework/Data Packets"
 Folder Id = 18
 
-[File 0063]
+[File 0064]
 File Type = "CSource"
-Res Id = 63
+Res Id = 64
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data types/DataTypes.c"
@@ -864,9 +877,9 @@ Project Flags = 0
 Folder = "Framework/Data Types"
 Folder Id = 19
 
-[File 0064]
+[File 0065]
 File Type = "Include"
-Res Id = 64
+Res Id = 65
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Data types/DataTypes.h"
@@ -876,9 +889,9 @@ Project Flags = 0
 Folder = "Framework/Data Types"
 Folder Id = 19
 
-[File 0065]
+[File 0066]
 File Type = "CSource"
-Res Id = 65
+Res Id = 66
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/HW Triggering/HWTriggering.c"
@@ -889,9 +902,9 @@ Project Flags = 0
 Folder = "Framework/HW Triggering"
 Folder Id = 20
 
-[File 0066]
+[File 0067]
 File Type = "Include"
-Res Id = 66
+Res Id = 67
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/HW Triggering/HWTriggering.h"
@@ -901,9 +914,9 @@ Project Flags = 0
 Folder = "Framework/HW Triggering"
 Folder Id = 20
 
-[File 0067]
+[File 0068]
 File Type = "CSource"
-Res Id = 67
+Res Id = 68
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Utility/DAQLabUtility.c"
@@ -914,9 +927,9 @@ Project Flags = 0
 Folder = "Framework/Utility"
 Folder Id = 21
 
-[File 0068]
+[File 0069]
 File Type = "Include"
-Res Id = 68
+Res Id = 69
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Utility/DAQLabUtility.h"
@@ -926,9 +939,9 @@ Project Flags = 0
 Folder = "Framework/Utility"
 Folder Id = 21
 
-[File 0069]
+[File 0070]
 File Type = "CSource"
-Res Id = 69
+Res Id = 70
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/ImageDisplay.c"
@@ -939,9 +952,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0070]
+[File 0071]
 File Type = "Include"
-Res Id = 70
+Res Id = 71
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/ImageDisplay.h"
@@ -951,9 +964,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0071]
+[File 0072]
 File Type = "CSource"
-Res Id = 71
+Res Id = 72
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/ImageDisplayCVI.c"
@@ -964,9 +977,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0072]
+[File 0073]
 File Type = "Include"
-Res Id = 72
+Res Id = 73
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/ImageDisplayCVI.h"
@@ -976,9 +989,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0073]
+[File 0074]
 File Type = "CSource"
-Res Id = 73
+Res Id = 74
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/ImageDisplayNIVision.c"
@@ -989,9 +1002,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0074]
+[File 0075]
 File Type = "Include"
-Res Id = 74
+Res Id = 75
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/ImageDisplayNIVision.h"
@@ -1001,9 +1014,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0075]
+[File 0076]
 File Type = "Include"
-Res Id = 75
+Res Id = 76
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/UI_ImageDisplay.h"
@@ -1013,9 +1026,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0076]
+[File 0077]
 File Type = "User Interface Resource"
-Res Id = 76
+Res Id = 77
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/UI_ImageDisplay.uir"
@@ -1025,9 +1038,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0077]
+[File 0078]
 File Type = "Include"
-Res Id = 77
+Res Id = 78
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/UI_WaveformDisplay.h"
@@ -1037,9 +1050,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0078]
+[File 0079]
 File Type = "User Interface Resource"
-Res Id = 78
+Res Id = 79
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/UI_WaveformDisplay.uir"
@@ -1049,9 +1062,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0079]
+[File 0080]
 File Type = "CSource"
-Res Id = 79
+Res Id = 80
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/WaveformDisplay.c"
@@ -1062,9 +1075,9 @@ Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
 
-[File 0080]
+[File 0081]
 File Type = "Include"
-Res Id = 80
+Res Id = 81
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/WaveformDisplay.h"
@@ -1073,19 +1086,6 @@ Exclude = False
 Project Flags = 0
 Folder = "Framework/Display"
 Folder Id = 22
-
-[File 0081]
-File Type = "CSource"
-Res Id = 81
-Path Is Rel = True
-Path Rel To = "Project"
-Path Rel Path = "Framework/Execution control/TaskController.c"
-Path = "/d/GitHub/DAQLab_private/Framework/Execution control/TaskController.c"
-Exclude = False
-Compile Into Object File = False
-Project Flags = 0
-Folder = "Framework"
-Folder Id = 13
 
 [File 0082]
 File Type = "CSource"

@@ -34,7 +34,7 @@
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 struct CallbackGroup {
-	void*						objectRef;				// Reference to object owing the callback group.
+	void*						callbackGroupOwner;		// Reference to object owing the callback group.
 	size_t 						nCBs;					// Number of callbacks to be called.
 	CallbackFptr_type* 			CBs;					// Callback array called sequencially.
 	void** 						CBsData;				// Array of callback data assigned to each callback function.
@@ -58,7 +58,6 @@ struct Image {
 	ImageDisplayTransforms		dispTransformFunc;		// function to use for mapping pixel values to display.
 };
 
-
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Waveforms
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -73,6 +72,7 @@ struct Waveform {
 	size_t						nSamples;				// Number of samples in the waveform.
 	void*						data;					// Array of waveformType elements.
 };
+
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Repeated Waveforms
@@ -1116,11 +1116,29 @@ ImageTypes GetImageType (Image_type* image)
 	 return image->imageType; 
 }
 
-void SetImageROIs (Image_type* image, ListType	ROIs)
+void SetImageROIs (Image_type* image, ListType ROIs)
 {
 	// free previous ROIs
 	DiscardROIList(&image->ROIs);
 	image->ROIs = ROIs; 
+}
+
+int AddImageROI (Image_type* image, ROI_type** ROIPtr, size_t* ROIIdxPtr)
+{
+INIT_ERR
+
+	if (ROIIdxPtr)
+		*ROIIdxPtr = 0;
+	
+	nullChk( ListInsertItem(image->ROIs, ROIPtr, END_OF_LIST) );
+	*ROIPtr = NULL;
+	
+	if (ROIIdxPtr)
+		*ROIIdxPtr = ListNumItems(image->ROIs);
+	
+Error:
+	
+	return errorInfo.error;
 }
 
 ListType GetImageROIs (Image_type* image)
@@ -1420,7 +1438,7 @@ Error:
 	return errorInfo.error;
 }
 
-CallbackGroup_type* init_CallbackGroup_type	(void* objectRef, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions)
+CallbackGroup_type* init_CallbackGroup_type	(void* callbackGroupOwner, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackFunctionsData, DiscardFptr_type* discardCallbackDataFunctions)
 {
 INIT_ERR
 
@@ -1428,11 +1446,11 @@ INIT_ERR
 	if (!cbg) return NULL;
 	
 	// init
-	cbg->objectRef		= objectRef;
-	cbg->nCBs 			= nCallbackFunctions;
-	cbg->CBs			= NULL;
-	cbg->CBsData		= NULL;
-	cbg->discardCBsData = NULL;
+	cbg->callbackGroupOwner			= callbackGroupOwner;
+	cbg->nCBs 						= nCallbackFunctions;
+	cbg->CBs						= NULL;
+	cbg->CBsData					= NULL;
+	cbg->discardCBsData 			= NULL;
 	
 	// alloc
 	nullChk( cbg->CBs 				= malloc (nCallbackFunctions * sizeof(CallbackFptr_type)) );
@@ -1441,7 +1459,7 @@ INIT_ERR
 	
 	for (size_t i = 0; i < nCallbackFunctions; i++) {
 		cbg->CBs[i] 				= callbackFunctions[i];
-		cbg->CBsData[i]				= callbackData[i];
+		cbg->CBsData[i]				= callbackFunctionsData[i];
 		cbg->discardCBsData[i] 		= discardCallbackDataFunctions[i];
 	}
 	
@@ -1474,12 +1492,23 @@ void discard_CallbackGroup_type (CallbackGroup_type** callbackGroupPtr)
 	OKfree(*callbackGroupPtr);
 }
 
-void FireCallbackGroup (CallbackGroup_type* callbackGroup, int event)
+void FireCallbackGroup (CallbackGroup_type* callbackGroup, int event, void* eventData)
 {
 	if (!callbackGroup) return;
 	
 	for (size_t i = 0; i < callbackGroup->nCBs; i++)
 		if (callbackGroup->CBs[i]) 
-			(*callbackGroup->CBs[i]) (callbackGroup->objectRef, event, callbackGroup->CBsData[i]);
+			(*callbackGroup->CBs[i]) (callbackGroup->callbackGroupOwner, event, eventData, callbackGroup->CBsData[i]);
 	
 }
+
+void SetCallbackGroupOwner (CallbackGroup_type* callbackGroup, void* callbackGroupOwner)
+{
+	callbackGroup->callbackGroupOwner = callbackGroupOwner;
+}
+
+void* GetCallbackGroupOwner (CallbackGroup_type* callbackGroup)
+{
+	return callbackGroup->callbackGroupOwner;
+}
+

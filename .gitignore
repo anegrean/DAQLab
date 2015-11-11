@@ -1,10 +1,5 @@
-
-#############
-## CVI
-#############
-
 cvibuild.DAQLab/
-DAQLabCfg.xml
 *.exe
-*.prj
 *.cws
+*.prj
+DAQLab.cws

@@ -17,7 +17,6 @@
 #include <formatio.h>
 #include <userint.h>
 #include "DataStorage.h"
-#include "DisplayEngine.h"
 #include "HDF5support.h"
 
 

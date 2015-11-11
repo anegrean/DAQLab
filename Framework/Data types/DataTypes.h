@@ -92,7 +92,7 @@ typedef void (*DiscardFptr_type) (void** objectPtr);
 typedef void* (*CopyFptr_type) (void* object);
 
 	// Generic callback
-typedef void (*CallbackFptr_type) (void* objectRef, int event, void* callbackData);
+typedef void (*CallbackFptr_type) (void* objectRef, int event, void* eventData, void* callbackFunctionData);
 		
 	//----------------------------------------------------------------------------------------------
 	// Callback group
@@ -190,7 +190,8 @@ typedef enum {
 	//----------------------------------------------------------------------------------------------
 	// Image types
 	//----------------------------------------------------------------------------------------------   
-typedef struct Image				Image_type; 
+	
+typedef struct Image		Image_type; 
 
 	// transform method to use for displaying image
 typedef enum {
@@ -639,6 +640,8 @@ size_t 						GetImageSizeofData 						(Image_type* image);
 
 void 						SetImageROIs 							(Image_type* image, ListType ROIs);
 
+int							AddImageROI								(Image_type* image, ROI_type** ROIPtr, size_t* ROIIdxPtr);
+
 ListType 					GetImageROIs 							(Image_type* image);
 
 void						SetImageDisplayTransform				(Image_type* image, ImageDisplayTransforms dispTransformFunc);
@@ -690,11 +693,20 @@ int							SetROIName								(ROI_type* ROI, char newName[]);
 
 	// Creates a callback group. Each callback function has its own dinamically allocated callback data. By providing discardCallbackDataFunctions, the callback data
 	// will be disposed of automatically when discarding the callback group. If this is not needed, then pass NULL instead of a discard function pointer.
-CallbackGroup_type*			init_CallbackGroup_type					(void* objectRef, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackData, DiscardFptr_type* discardCallbackDataFunctions);
+CallbackGroup_type*			init_CallbackGroup_type					(void* callbackGroupOwner, size_t nCallbackFunctions, CallbackFptr_type* callbackFunctions, void** callbackFunctionsData, DiscardFptr_type* discardCallbackDataFunctions);
 
 void						discard_CallbackGroup_type				(CallbackGroup_type** callbackGroupPtr);
 
-void						FireCallbackGroup						(CallbackGroup_type* callbackGroup, int event);
+	// Dispatches event to all callback function in the callback group 
+void						FireCallbackGroup						(CallbackGroup_type* callbackGroup, int event, void* eventData);
+
+	// Set/Get
+	
+void						SetCallbackGroupOwner					(CallbackGroup_type* callbackGroup, void* callbackGroupOwner);
+
+void*						GetCallbackGroupOwner					(CallbackGroup_type* callbackGroup);
+
+
 
 
 

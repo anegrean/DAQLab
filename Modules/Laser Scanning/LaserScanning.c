@@ -19,7 +19,7 @@
 #include <userint.h>
 #include "combobox.h" 
 #include <analysis.h>
-#include <NIDisplayEngine.h>
+#include <ImageDisplayNIVision.h>
 #include "WaveformDisplay.h"
 #include "UI_LaserScanning.h"
 
@@ -27,21 +27,6 @@
 
 //==============================================================================
 // Constants
-#define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) {goto Error;} else 
-
-// Cmt library error macro
-#define CmtErrChk(fCall) if (errorInfo.error = (fCall), errorInfo.line = __LINE__, errorInfo.error < 0) \ 
-{goto CmtError;} else
-
-// obtains Cmt error description and jumps to Error
-#define Cmt_ERR { \
-	if (errorInfo.error < 0) { \
-		char CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE] = ""; \
-		errChk( CmtGetErrorMessage(errorInfo.error, CmtErrMsgBuffer) ); \
-		nullChk( errorInfo.errMsg = StrDup(CmtErrMsgBuffer) ); \
-	} \
-	goto Error; \
-}
 
 	// maximum number of characters to represent a double precision number
 #define MAX_DOUBLE_NCHARS									30
@@ -133,15 +118,6 @@
 #define NonResGalvoRasterScan_Default_HoldTime				5.0			// Time in [ms] during which the galvos are stationary at this point ROI.
 #define NonResGalvoRasterScan_Default_StimPulseONDuration   1.0			// Time in [ms] during which a stimulation pulse is delivered at the given ROI.
 #define NonResGalvoRasterScan_Default_StimPulseOFFDuration	1.0			// If multiple stimulation pulses are delivered to the given ROI (burst), this is the idle time between stimulation pulses the burst.
-
-
-//-----------------------------------------------------------------------
-// Display settings
-//-----------------------------------------------------------------------
-#define Default_ROI_R_Color									0	   		// red
-#define Default_ROI_G_Color									255	   		// green
-#define Default_ROI_B_Color									0			// blue
-#define Default_ROI_A_Color									0			// alpha
 
 
 //==============================================================================
@@ -330,7 +306,7 @@ typedef struct {
 	SourceVChan_type*			outputVChan;				// Assembled image or waveform for this channel. VChan of DL_Image type for frame scan and Allowed_Detector_Data_Types for point scan.
 	ScanChanColorScales			color;						// Color channel assigned to this channel.
 	ScanEngine_type*			scanEngine;					// Reference to scan engine to which this scan channel belongs.
-	ImageDisplay_type*			imgDisplay;					// Handle to display images for this channel.
+	CmtTSVHandle				imgDisplayTSV;				// Thread safe variable of ImageDisplay_type*
 	WaveformDisplay_type*		waveDisplay;				// Handle to display waveforms for this channel.
 } ScanChan_type;
 
@@ -645,8 +621,6 @@ struct LaserScanning {
 	ListType					activeCal;
 		// Scan engines of ScanEngine_type* base class which can be casted to specific scan engines. 
 	ListType					scanEngines;
-		// Display engine
-	DisplayEngine_type*			displayEngine;
 	
 		//-------------------------
 		// UI
@@ -1000,15 +974,11 @@ static uInt32							GetNumOpenDetectionVChans							(RectRaster_type* scanEngine
 // Display interface
 //-----------------------------------------
 
-static void								ROIDisplay_CB										(ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI);
-
-static void								ImageDisplay_CB										(ImageDisplay_type* imgDisplay, int event, void* callbackData);
+static void 							ImageDisplay_CB 									(ImageDisplay_type* imgDisplay, int event, void* eventData, void* callbackFunctionData);
 
 static void 							WaveformDisplay_CB 									(WaveformDisplay_type* waveformDisplay, int event, void* callbackData);
 
 static void								RestoreScanSettingsFromImageDisplay					(ImageDisplay_type* imgDisplay, RectRaster_type* scanEngine, RectRasterScanSet_type previousScanSettings); 
-
-static void								DisplayErrorHandler_CB								(ImageDisplay_type* imgDisplay, int errorID, char* errorMsg);
 
 //-----------------------------------------
 // Task Controller Callbacks
@@ -1110,8 +1080,7 @@ DAQLabModule_type*	initalloc_LaserScanning (DAQLabModule_type* mod, char classNa
 	ls->availableCals				= 0;
 	ls->activeCal					= 0;
 	ls->scanEngines					= 0;
-	ls->displayEngine				= NULL; // added when the module is loading
-		
+	
 	if (!(ls->availableCals			= ListCreate(sizeof(ScanAxisCal_type*))))	goto Error;
 	if (!(ls->activeCal				= ListCreate(sizeof(ActiveScanAxisCal_type*))))	goto Error;
 	if (!(ls->scanEngines			= ListCreate(sizeof(ScanEngine_type*))))	goto Error;
@@ -1188,9 +1157,6 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		
 		ListDispose(ls->scanEngines);
 	}
-	
-	// display engine
-	discard_DisplayEngine_type(&ls->displayEngine);
 	
 	// UI
 	OKfree(ls->mainPanLeftPos);
@@ -1541,9 +1507,7 @@ INIT_ERR
 	// initialize display engine
 	intptr_t workspaceWndHndl = 0;	
 	GetPanelAttribute(ls->baseClass.workspacePanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &workspaceWndHndl);
-	nullChk( ls->displayEngine = (DisplayEngine_type*)init_NIDisplayEngine_type(	workspaceWndHndl,
-																			   		ROIDisplay_CB,
-																					DisplayErrorHandler_CB		) );
+	
 	return 0;
 	
 Error:
@@ -3104,9 +3068,10 @@ static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanId
 {
 INIT_ERR
 	
-	ScanChan_type* 	scanChan		= malloc(sizeof(ScanChan_type));
-	char*			detVChanName	= NULL;
-	char*			outputVChanName	= NULL;
+	ScanChan_type* 			scanChan		= malloc(sizeof(ScanChan_type));
+	char*					detVChanName	= NULL;
+	char*					outputVChanName	= NULL;
+	ImageDisplay_type**		imgDisplayPtr	= NULL;
 	
 	if (!scanChan) return NULL;
 	
@@ -3115,7 +3080,7 @@ INIT_ERR
 	//--------------------
 	
 	DLDataTypes allowedPacketTypes[] 	= Allowed_Detector_Data_Types;
-	scanChan->imgDisplay				= NULL;
+	scanChan->imgDisplayTSV				= 0;
 	scanChan->waveDisplay				= NULL;
 	scanChan->detVChan					= NULL;
 	scanChan->outputVChan				= NULL;
@@ -3126,6 +3091,13 @@ INIT_ERR
 	// Alloc resources
 	//--------------------
 	
+	// image display TSV
+	errChk( CmtNewTSV(sizeof(ImageDisplay_type*), &scanChan->imgDisplayTSV) );
+	errChk( CmtGetTSVPtr(scanChan->imgDisplayTSV, &imgDisplayPtr) );
+	*imgDisplayPtr = NULL;
+	errChk( CmtReleaseTSVPtr(scanChan->imgDisplayTSV) );
+	imgDisplayPtr = NULL;
+
 	// incoming pixel data from detection channel
 	nullChk( detVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SinkVChan_DetectionChan, chanIdx) );
 	nullChk( scanChan->detVChan = init_SinkVChan_type(detVChanName, allowedPacketTypes, NumElem(allowedPacketTypes), scanChan, VChanDataTimeout, DetectionVChan_StateChange) );
@@ -3160,7 +3132,9 @@ Error:
 
 static void	discard_ScanChan_type (ScanChan_type** scanChanPtr)
 {
-	ScanChan_type*	scanChan = *scanChanPtr;
+	ScanChan_type*			scanChan 		= *scanChanPtr;
+	ImageDisplay_type**		imgDisplayPtr   = NULL;
+	
 	if (!scanChan) return;
 	
 	// unregister sink VChan from task controller
@@ -3169,9 +3143,15 @@ static void	discard_ScanChan_type (ScanChan_type** scanChanPtr)
 	discard_VChan_type((VChan_type**)&scanChan->outputVChan);
 	
 	// discard image display
-	discard_ImageDisplay_type(&scanChan->imgDisplay);
-	//if (scanChan->imgDisplay)
-	//(*scanChan->imgDisplay->discardFptr)(&scanChan->imgDisplay); // causes sometimes a general protection fault
+	if (!CmtGetTSVPtr(scanChan->imgDisplayTSV, &imgDisplayPtr)) {
+		// discard image display child class
+		if (*imgDisplayPtr)
+			(*(*imgDisplayPtr)->imageDisplayDiscardFptr)  ((void**)imgDisplayPtr);
+		
+		CmtReleaseTSVPtr(scanChan->imgDisplayTSV);
+	}
+	CmtDiscardTSV(scanChan->imgDisplayTSV);
+	scanChan->imgDisplayTSV = 0;
 	
 	// discard waveform display
 	discard_WaveformDisplay_type(&scanChan->waveDisplay);
@@ -5630,7 +5610,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					// if there is an active display, remove ROI item from display and from scan engine list
 					if (scanEngine->baseClass.activeDisplay)
-						(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, itemIdx + 1, ROI_Delete);
+						(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, itemIdx + 1, ROI_Delete);
 					
 					DeleteListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, itemIdx, 1);
 					ListRemoveItem(scanEngine->pointJumpSettings->pointJumps, 0, itemIdx + 1);
@@ -5662,13 +5642,13 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						ROI->active = TRUE;
 						// if there is an active display, mark point ROI as active and make it visible
 						if (scanEngine->baseClass.activeDisplay)
-							(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Visible);
+							(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Show);
 					} else {
 						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumpSettings->pointJumps, eventData2 + 1);
 						ROI->active = FALSE;
 						// if there is an active display mark point ROI as inactive and hide it
 						if (scanEngine->baseClass.activeDisplay)
-							(*scanEngine->baseClass.activeDisplay->displayEngine->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Hide);
+							(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Hide);
 					}
 					
 					// calculate minimum point jump start delay
@@ -6354,7 +6334,6 @@ INIT_ERR
 	double					totalExtraHoldTime				= 0;		// together with the total galvo delays it makes up the total hold time in [ms].
 	double					extraStartDelay					= 0;		// time in [ms] from the global start trigger or the end of a previous hold burst cycle  before the galvos initiate their jumps.
 	double					extraHoldTime					= 0;		// time in [ms] that combined with the galvo response delay makes up the desired ROI hold time during which the galvo is not moving.
-	Iterator_type*			iterator						= GetTaskControlIterator(scanEngine->baseClass.taskControl);
 	DSInfo_type*			dsInfo							= NULL;
 	
 	// 1 hold cycle timing and galvo command signals
@@ -6779,8 +6758,7 @@ INIT_ERR
 	size_t             			pixelDataIdx   				= 0;      	// The index of the processed pixel from the received pixel waveform.
 	RectRasterImgBuff_type*   	imgBuffer					= rectRaster->imgBuffers[bufferIdx];
 	size_t						nDeadTimePixels				= (size_t) ceil(((NonResGalvoCal_type*)rectRaster->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3 / rectRaster->scanSettings.pixelDwellTime);
-	
-	DisplayEngine_type* 		displayEngine 				= imgBuffer->scanChan->scanEngine->lsModule->displayEngine;
+	ImageDisplay_type**			imgDisplayPtr				= NULL;
 	RectRasterScanSet_type*		imgSettings					= NULL;
 	DataPacket_type* 			imagePacket         		= NULL;
 	Image_type*					sendImage					= NULL;
@@ -6990,23 +6968,42 @@ INIT_ERR
 				// TEMPORARY: X, Y & Z coordinates set to 0 for now
 				SetImageCoord(imgBuffer->image, 0, 0, 0);
 				
+				// add stored point ROIs if any
+				SetImageROIs(imgBuffer->image, CopyROIList(rectRaster->pointJumpSettings->pointJumps));
 				
-				//------------------------------------------------
-				// Add restore settings callbacks and ROIs
-				//------------------------------------------------
+				//-------------------------------------
+				// Update image display callback group
+				//-------------------------------------
 				
-				// add restore image settings callback info
+				imgDisplayPtr = NULL;
+				errChk( CmtGetTSVPtr(imgBuffer->scanChan->imgDisplayTSV, &imgDisplayPtr) );
 				
+				CallbackGroup_type*				imgDisplayCBGroup				= NULL;
 				CallbackFptr_type				CBFns[] 						= {(CallbackFptr_type)ImageDisplay_CB};
 				void* 							callbackData[]					= {init_RectRasterDisplayCBData_type(rectRaster, bufferIdx)};
 				DiscardFptr_type 				discardCallbackDataFunctions[] 	= {(DiscardFptr_type)discard_RectRasterDisplayCBData_type};
 				
-				discard_CallbackGroup_type(&imgBuffer->scanChan->imgDisplay->callbacks);
-				nullChk( imgBuffer->scanChan->imgDisplay->callbacks = init_CallbackGroup_type(imgBuffer->scanChan->imgDisplay, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
+				// create new callback group
+				nullChk( imgDisplayCBGroup = init_CallbackGroup_type(NULL, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
 				
-				// add stored point ROIs if any
-				SetImageROIs(imgBuffer->image, CopyROIList(rectRaster->pointJumpSettings->pointJumps));
+				// if display was discarded, create a new display
+				if (!*imgDisplayPtr)
+					nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
+				else {
+					discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
+					(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
+				}
 				
+				//--------------------------------------
+				// Display image for this channel
+				//--------------------------------------
+				
+				// temporarily must be commented out for debug
+				errChk( (*(*imgDisplayPtr)->displayImageFptr) (*imgDisplayPtr, &imgBuffer->image) ); 
+				//discard_Image_type(&imgBuffer->image);
+				
+				errChk( CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV) );
+				imgDisplayPtr = NULL;
 				
 				//--------------------------------------
 				// Send image for this channel if needed
@@ -7020,13 +7017,6 @@ INIT_ERR
 					nullChk( imagePacket = init_DataPacket_type(DL_Image, (void**)&sendImage, &dsInfo,(DiscardFptr_type)discard_Image_type));
 					errChk( SendDataPacket(imgBuffer->scanChan->outputVChan, &imagePacket, 0, &errorInfo.errMsg) );
 				}
-				
-				//--------------------------------------
-				// Display image
-				//--------------------------------------
-				// temporarily must be commented out for debug
-				errChk( (*displayEngine->displayImageFptr) (imgBuffer->scanChan->imgDisplay, &imgBuffer->image) ); 
-				//discard_Image_type(&imgBuffer->image);
 				
 				//---------------------------------------------------
 				// Assemble composite image if all channels are ready
@@ -7165,6 +7155,11 @@ Error:
 	ReleaseDataPacket(&pixelPacket);
 	discard_RectRasterScanSet_type(&imgSettings);
 	
+	if (imgDisplayPtr) {
+		CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV);
+		imgDisplayPtr = NULL;
+	}
+	
 RETURN_ERR
 }
 
@@ -7277,7 +7272,6 @@ INIT_ERR
 	
 	NonResGalvoCal_type*	fastAxisCal				= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;
 	NonResGalvoCal_type*	slowAxisCal				= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
-	double					jumpTime				= 0;
 	double					fastAxisSwitchTime		= 0;
 	double					fastAxisSwitchDelay		= 0;
 	double					slowAxisSwitchTime		= 0;
@@ -8167,129 +8161,110 @@ static uInt32 GetNumOpenDetectionVChans	(RectRaster_type* scanEngine)
 // Display interface
 //-----------------------------------------
 
-static void	ROIDisplay_CB (ImageDisplay_type* imgDisplay, void* callbackData, ROIEvents event, ROI_type* ROI)
+static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, int event, void* eventData, void* callbackFunctionData)
 {
-	ScanChan_type*			scanChan 		= callbackData;
-	ROI_type*				addedROI		= NULL;						  // reference to the ROI added to the image display
-	DisplayEngine_type*		displayEngine   = imgDisplay->displayEngine; 
-	RectRaster_type*		scanEngine		= (RectRaster_type*) scanChan->scanEngine;
-	int						nListItems		= 0;
-	ListType				ROIlist			= 0;
-	Image_type**			imagePtr		= NULL;
-	
-	// obtain lock to image
-	if( CmtGetTSVPtr(imgDisplay->imageTSV, &imagePtr)  < 0) goto TSVError;
-	
-	switch (event) {
-			
-		case ROI_Placed:
-			
-			switch (ROI->ROIType) {
-				
-				case ROI_Point:
-					
-					break;
-				
-				case ROI_Rectangle:
-					
-					break;
-			}
-			
-			break;
-			
-		case ROI_Added:
-			
-			// obtain default unique ROI name and apply it
-			OKfree(ROI->ROIName);
-			ROIlist = GetImageROIs(*imagePtr); 
-			ROI->ROIName = GetDefaultUniqueROIName(ROIlist);
-			// apply ROI color
-			ROI->rgba.R 		= Default_ROI_R_Color; 
-			ROI->rgba.G 		= Default_ROI_G_Color;
-			ROI->rgba.B 		= Default_ROI_B_Color;
-			ROI->rgba.alpha 	= Default_ROI_A_Color;
-			
-			// add point ROI to the image
-			PointJump_type*	pointJump = init_PointJump_type((Point_type*)ROI); 
-			
-			// add ROI to the image
-			addedROI = (*displayEngine->overlayROIFptr) (imgDisplay, (ROI_type*)pointJump);
-	
-			switch (addedROI->ROIType) {
-						
-				case ROI_Point:
-						
-					// update scan engine if this display is assigned to it
-					if (scanEngine->baseClass.activeDisplay == imgDisplay) {
-						// insert point ROI item in the UI
-						InsertListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, -1, ROI->ROIName, ListNumItems(ROIlist));
-						
-						// mark point as checked (in use)  
-						GetNumListItems(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, &nListItems);
-						CheckListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, nListItems - 1, 1); 
-						// insert ROI item in the scan engine as well
-						ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &pointJump, END_OF_LIST);
-						
-						// calculate the minimum initial delay, display it and set this as a lower bound in the UI
-						NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
-						
-						// update minimum point jump period
-						//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
-						
-						// undim panel
-						SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, 0);
-					} else 
-						discard_PointJump_type(&pointJump);
-					
-					break;
-					
-				default:
-						
-					break;
-			}
-				
-			break;
-			
-		case ROI_Removed:
-			
-			break;
-		
-	}
+INIT_ERR
 
-	// release lock to image
-	CmtReleaseTSVPtr(imgDisplay->imageTSV);
-	
-	return;
-	
-TSVError:
-	return;
-}
-
-static void ImageDisplay_CB (ImageDisplay_type* imgDisplay, int event, void* callbackData)
-{
-	RectRasterDisplayCBData_type*	displayCBData			= callbackData;
+	RectRasterDisplayCBData_type*	displayCBData			= callbackFunctionData;
 	RectRaster_type*				scanEngine 				= displayCBData->scanEngine;
 	RectRasterScanSet_type			previousScanSettings	= displayCBData->scanSettings;
-	
+	ScanChan_type*					scanChan				= scanEngine->baseClass.scanChans[displayCBData->scanChanIdx];
+	ImageDisplay_type**				imgDisplayPtr			= NULL;
+				
 	switch (event) {
 			
 		case ImageDisplay_Close:
-			
-			// detach image display from scan engine if it was previously assigned to it and clear ROI list
+				
+			// detach image display from scan engine if it was previously assigned to it
 			if (scanEngine->baseClass.activeDisplay == imgDisplay)
 				scanEngine->baseClass.activeDisplay = NULL;
 			
-			//discard_ImageDisplay_type(&scanEngine->baseClass.scanChans[displayCBData->scanChanIdx]->imgDisplay);
-			scanEngine->baseClass.scanChans[displayCBData->scanChanIdx]->imgDisplay = NULL; // display is discarded by Display module
+			CmtErrChk( CmtGetTSVPtr(scanChan->imgDisplayTSV, &imgDisplayPtr) );
+			*imgDisplayPtr = NULL; // display is discarded by Display module
+			CmtErrChk( CmtReleaseTSVPtr(scanChan->imgDisplayTSV) );
+			imgDisplayPtr = NULL;
 			
 			break;
 			
 		case ImageDisplay_RestoreSettings:
 			
 			RestoreScanSettingsFromImageDisplay(imgDisplay, scanEngine, previousScanSettings);
+			break;
+			
+		case ImageDisplay_ROI_Placed:
+			{
+				ROI_type*			ROI = eventData;
+				
+				switch (ROI->ROIType) {
+				
+					case ROI_Point:
+					
+						break;
+				
+					case ROI_Rectangle:
+						
+						break;
+				}
+				
+			}
+			break;
+			
+		case ImageDisplay_ROI_Added:
+			{
+				ROI_type*		ROI				= eventData;
+				
+				switch (ROI->ROIType) {
+						
+					case ROI_Point:
+						
+						// update scan engine if this display is assigned to it
+						if (scanEngine->baseClass.activeDisplay == imgDisplay) {
+							// insert point ROI item in the UI
+							int	nListItems = 0;
+							GetNumListItems(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, &nListItems);
+							InsertListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, -1, ROI->ROIName, nListItems+1);
+						
+							// mark point as checked (in use)
+							CheckListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, nListItems, 1); 
+							// insert ROI item in the scan engine as well
+							ROI_type*	ROICopy = (*ROI->copyFptr) (ROI);
+							ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &ROICopy, END_OF_LIST);
+						
+							// calculate the minimum initial delay, display it and set this as a lower bound in the UI
+							NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
+						
+							// update minimum point jump period
+							//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
+						
+							// undim panel
+							SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, 0);
+						}
+					
+						break;
+					
+					default:
+						
+					break;
+			}
+				
+				
+			}
+			break;
+			
+		case ImageDisplay_ROI_Removed:
 			
 			break;
 	}
+	
+	
+	
+CmtError:
+	
+Cmt_ERR
+
+Error:
+
+PRINT_ERR
 }
 
 static void WaveformDisplay_CB (WaveformDisplay_type* waveformDisplay, int event, void* callbackData)
@@ -8310,13 +8285,8 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 {
 INIT_ERR
 
-	Image_type**		imagePtr	= NULL;
-	
-	// obtain image lock
-	CmtErrChk( CmtGetTSVPtr(imgDisplay->imageTSV, &imagePtr) );
-	
 	// assign this image display to the scan engine
-	scanEngine->baseClass.activeDisplay		= imgDisplay; 
+	scanEngine->baseClass.activeDisplay	= imgDisplay; 
 	
 	// assign previous scan settings
 	scanEngine->scanSettings = previousScanSettings;
@@ -8345,7 +8315,7 @@ INIT_ERR
 	}
 	ListClear(scanEngine->pointJumpSettings->pointJumps);
 	
-	ListType	ROIlist				= GetImageROIs(*imagePtr);
+	ListType	ROIlist				= GetImageROIs(imgDisplay->image);
 	size_t 		nROIs 				= ListNumItems(ROIlist);
 	ROI_type*   ROI					= NULL;
 	ROI_type*   ROICopy				= NULL;
@@ -8386,23 +8356,9 @@ INIT_ERR
 		SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, TRUE);
 	
 	
-	CmtReleaseTSVPtr(imgDisplay->imageTSV);
-	
-	return;
-	
-CmtError:
-	
-Cmt_ERR
-
 Error:
 
 PRINT_ERR
-}
-
-static void	DisplayErrorHandler_CB (ImageDisplay_type* imgDisplay, int errorID, char* errorMsg)
-{
-	DLMsg(errorMsg, 1);
-	DLMsg("\n\n", 0);
 }
 
 //---------------------------------------------------------------------
@@ -9489,9 +9445,7 @@ INIT_ERR
 	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
 	size_t					nScanChans 			= engine->baseClass.nScanChans;
 	SourceVChan_type*   	detSourceVChan		= NULL;
-	DisplayEngine_type*		displayEngine		= engine->baseClass.lsModule->displayEngine;
 	DLDataTypes				pixelDataType		= 0;
-	ImageTypes				imageType			= 0;
 	int 					activeTabIdx 		= 0;
 	
 	GetActiveTabPage(engine->baseClass.scanPanHndl, RectRaster_Tab, &activeTabIdx);
@@ -9530,44 +9484,11 @@ INIT_ERR
 		
 						detSourceVChan = GetSourceVChan(engine->baseClass.scanChans[i]->detVChan);
 						pixelDataType = GetSourceVChanDataType(detSourceVChan);
-						switch (pixelDataType) {
-				
-							case DL_Waveform_UChar:
-								imageType = Image_UChar;  
-								break;
-		
-							case DL_Waveform_UShort:
-								imageType = Image_UShort;    
-								break;
-			
-							case DL_Waveform_Short:
-								imageType = Image_Short;    
-								break;
 						
-							case DL_Waveform_UInt:
-								imageType = Image_UInt;    
-								break;
-						
-							case DL_Waveform_Int:
-								imageType = Image_Int;    
-								break;
-			
-							case DL_Waveform_Float:
-								imageType = Image_Float;     
-								break;
-			
-							default:
-					
-							goto Error;
-						}
-		
-						// get display handles for connected channels
-						nullChk(engine->baseClass.scanChans[i]->imgDisplay 	= (*displayEngine->getImageDisplayFptr) (displayEngine, engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, imageType) ); 
-		
 						engine->nImgBuffers++;
 						// allocate memory for image assembly
-						engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuff_type*));
-						engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuff_type(engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, pixelDataType, FALSE); 
+						nullChk( engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuff_type*)) );
+						nullChk( engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuff_type(engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, pixelDataType, FALSE) ); 
 					}
 			
 					// Taken out for now, but must be put back if composite image display is implemented
@@ -9600,8 +9521,8 @@ INIT_ERR
 						if (!IsVChanOpen((VChan_type*)engine->baseClass.scanChans[i]->detVChan)) continue;	// select only open detection channels
 						
 						engine->nPointBuffers++;
-						engine->pointBuffers = realloc(engine->pointBuffers, engine->nPointBuffers * sizeof(RectRasterPointBuff_type*));
-						engine->pointBuffers[engine->nPointBuffers - 1] = init_RectRasterPointBuff_type(engine->baseClass.scanChans[i]);
+						nullChk( engine->pointBuffers = realloc(engine->pointBuffers, engine->nPointBuffers * sizeof(RectRasterPointBuff_type*)) );
+						nullChk( engine->pointBuffers[engine->nPointBuffers - 1] = init_RectRasterPointBuff_type(engine->baseClass.scanChans[i]) );
 						
 					}
 					

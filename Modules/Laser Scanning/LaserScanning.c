@@ -13,7 +13,7 @@
 // Include files
 
 #include "DAQLab.h" 		// include this first  
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 #include <formatio.h>  
 #include "LaserScanning.h"
 #include <userint.h>

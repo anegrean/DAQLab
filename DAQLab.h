@@ -19,7 +19,7 @@
 // Include files
 		
 #include "ActiveXML.h"        // must be first to be included 
-#include "DAQLabUtility.h" 
+#include "DAQLabErrHandling.h" 
 #include "cvidef.h"
 #include <toolbox.h>
 #include <userint.h>

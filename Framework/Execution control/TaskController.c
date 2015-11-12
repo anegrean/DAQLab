@@ -10,7 +10,7 @@
 
 //==============================================================================										    
 // Include files
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 #include <windows.h>
 #include "asynctmr.h"
 #include <formatio.h>

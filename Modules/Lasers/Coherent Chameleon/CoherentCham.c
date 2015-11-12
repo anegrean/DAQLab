@@ -15,7 +15,7 @@
 #include <formatio.h> 
 #include "asynctmr.h"
 #include <rs232.h>
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 #include "CoherentCham.h"
 #include "UI_CoherentCham.h"
 

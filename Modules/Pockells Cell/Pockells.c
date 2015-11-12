@@ -12,7 +12,7 @@
 // Include files
 
 #include "DAQLab.h" 		// include this first
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 #include <analysis.h> 
 #include <formatio.h>
 #include "UI_Pockells.h"

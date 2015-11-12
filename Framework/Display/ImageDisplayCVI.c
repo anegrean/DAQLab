@@ -168,52 +168,51 @@ INIT_ERR
 	
 	nullChk(image);
 
-	int width 	 = 	0;
-	int height	 =  0;
-	int size 	 =  0;	  
-	int i 		 =  0;
-	
-	unsigned char *bits;
+	int 			width 	 	= 0;
+	int 			height	 	= 0;
+	int 			nBits 	 	= 0;	  
+	int 			i 		 	= 0;
+	unsigned char*	bits		= NULL;
 
-	bits = (unsigned char*) malloc(size * sizeof(unsigned char));
-	
 	GetImageSize(image, &width, &height);
 	
-	size = width * height;
+	nBits = width * height;
+
+	nullChk( bits = (unsigned char*) malloc(nBits * sizeof(unsigned char)) );                              
 	
 	switch(GetImageType(image)) {
 		
 		case Image_UChar:					// 8 bit unsigned 
 			
-			unsigned char* iterr_char;
-			iterr_char = (unsigned char*) GetImagePixelArray(image);
-			
-			for(i = 0; i < size; i++) {
+			unsigned char* iterr_char = GetImagePixelArray(image);
+		
+			for(i = 0; i < nBits; i++)
 				bits[i] = iterr_char[i];
-			}
-		break;
+			
+			break;
 		
 		case Image_UShort:					// 16 bit unsigned   
 		case Image_Short:					// 16 bit signed
 			unsigned short int max_short, min_short;
 			
 
-			unsigned short int* iterr_short;
-			iterr_short = (unsigned short int*) GetImagePixelArray(image);
+			unsigned short int* iterr_short = GetImagePixelArray(image);
+		
 			max_short = iterr_short[0];
 			min_short = iterr_short[0];
-			for(i = 0; i < size; i++) {
 			
-			if(max_short > iterr_short[i])
-				max_short = iterr_short[i];
+			for(i = 0; i < nBits; i++) {
 			
-			if(min_short < iterr_short[i])
-				min_short = iterr_short[i];
+				if(max_short > iterr_short[i])
+					max_short = iterr_short[i];
+			
+				if(min_short < iterr_short[i])
+					min_short = iterr_short[i];
 			
 			}
 			int intervalLength_short = (max_short - min_short) / sizeof(unsigned char);
 			
-			for(i = 0; i < size; i++) {
+			for(i = 0; i < nBits; i++) {
 				bits[i] = iterr_short[i] / intervalLength_short;
 			}
 		break;
@@ -223,12 +222,12 @@ INIT_ERR
 			
 			unsigned  int max_int, min_int;
 			
-			unsigned int* iterr_int;
-			iterr_int = (unsigned  int*) GetImagePixelArray(image);
+			unsigned int* iterr_int = (unsigned  int*) GetImagePixelArray(image);
+						;
 			max_int = iterr_int[0];
 			min_int = iterr_int[0];
 			
-			for(i = 0; i < size; i++) {
+			for(i = 0; i < nBits; i++) {
 			
 				if(max_int > iterr_int[i])
 					max_int = iterr_int[i];
@@ -240,7 +239,7 @@ INIT_ERR
 			
 			int intervalLength_int = (max_int - min_int) / sizeof(unsigned char);
 			
-			for(i = 0; i < size; i++) {
+			for(i = 0; i < nBits; i++) {
 				bits[i] = iterr_int[i] / intervalLength_int;
 			}
 		break;
@@ -248,13 +247,12 @@ INIT_ERR
 		case Image_Float:					// 32 bit float   :
 			
 			float max_float, min_float;
-			float* iterr_float;
-			iterr_float = (float*) GetImagePixelArray(image);
+			float* iterr_float = (float*) GetImagePixelArray(image);
 			
 			max_float = iterr_float[0];
 			min_float = iterr_float[0];
 			
-			for(i = 0; i < size; i++) {
+			for(i = 0; i < nBits; i++) {
 			
 				if(max_float > iterr_float[i])
 					max_float = iterr_float[i];
@@ -266,7 +264,7 @@ INIT_ERR
 			
 			int intervalLength_float = (max_float - min_float) / sizeof(unsigned char);
 			
-			for(i = 0; i < size; i++) {
+			for(i = 0; i < nBits; i++) {
 				bits[i] = iterr_float[i] / intervalLength_float;
 			}
 		break;

@@ -65,8 +65,7 @@ INIT_ERR
 	// call parent init fn
 
 	
-	   //init_ImageDisplay_type(&imgDisplay->baseClass,NULL, &imgDisplay, (DiscardFptr_type)discard_ImageDisplayCVI_type, (DisplayImageFptr_type)DisplayImageFunction,NULL , NULL);
-	   init_ImageDisplay_type(&imgDisplay->baseClass, &imgDisplay, NULL, (DiscardFptr_type) discard_ImageDisplayCVI_type, (DisplayImageFptr_type) DisplayImageFunction, NULL, NULL);
+	init_ImageDisplay_type(&imgDisplay->baseClass, &imgDisplay, NULL, (DiscardFptr_type) discard_ImageDisplayCVI_type, (DisplayImageFptr_type) DisplayImageFunction, NULL, NULL);
 
 	//-------------------------------------
 	// Init child class
@@ -300,6 +299,7 @@ static int DisplayImageFunction (ImageDisplayCVI_type* imgDisplay, Image_type** 
 {
 
 	int ImageID = Image_typeToBitmap(image);
+	CanvasDrawBitmap (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ImageID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
 	return 0;
 }
 

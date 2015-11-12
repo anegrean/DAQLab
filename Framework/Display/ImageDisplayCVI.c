@@ -192,9 +192,10 @@ INIT_ERR
 		
 		case Image_UShort:					// 16 bit unsigned   
 		case Image_Short:					// 16 bit signed
-			unsigned short int max_short, min_short;
 			
-
+			unsigned short int 	max_short	= 0;
+			unsigned short int 	min_short	= 0;
+			
 			unsigned short int* iterr_short = GetImagePixelArray(image);
 		
 			max_short = iterr_short[0];
@@ -202,10 +203,10 @@ INIT_ERR
 			
 			for(i = 0; i < nBits; i++) {
 			
-				if(max_short > iterr_short[i])
+				if(max_short < iterr_short[i])
 					max_short = iterr_short[i];
 			
-				if(min_short < iterr_short[i])
+				if(min_short > iterr_short[i])
 					min_short = iterr_short[i];
 			
 			}
@@ -219,7 +220,8 @@ INIT_ERR
 		case Image_UInt:					// 32 bit unsigned
 		case Image_Int:						// 32 bit signed
 			
-			unsigned  int max_int, min_int;
+			unsigned int max_int	= 0;
+			unsigned int min_int	= 0;
 			
 			unsigned int* iterr_int = (unsigned  int*) GetImagePixelArray(image);
 						;
@@ -228,10 +230,10 @@ INIT_ERR
 			
 			for(i = 0; i < nBits; i++) {
 			
-				if(max_int > iterr_int[i])
+				if(max_int < iterr_int[i])
 					max_int = iterr_int[i];
 			
-				if(min_int < iterr_int[i])
+				if(min_int > iterr_int[i])
 					min_int = iterr_int[i];
 			
 			}
@@ -245,18 +247,19 @@ INIT_ERR
 		
 		case Image_Float:					// 32 bit float   :
 			
-			float max_float, min_float;
-			float* iterr_float = (float*) GetImagePixelArray(image);
+			float max_float	 	 = 0;
+			float min_float		 = 0;
+			float* iterr_float	 = (float*) GetImagePixelArray(image);
 			
 			max_float = iterr_float[0];
 			min_float = iterr_float[0];
 			
 			for(i = 0; i < nBits; i++) {
 			
-				if(max_float > iterr_float[i])
+				if(max_float < iterr_float[i])
 					max_float = iterr_float[i];
 			
-				if(min_float < iterr_float[i])
+				if(min_float > iterr_float[i])
 					min_float = iterr_float[i];
 			
 			}
@@ -279,13 +282,12 @@ static int Image_typeToBitmap(Image_type** image)
 {
 INIT_ERR 
 
-	int BitmapID	 = 0;
-	int width 		 = 0;
-	int height 		 = 0;
+	int BitmapID	 		= 0;
+	int width 		 		= 0;
+	int height 		 		= 0;
 	
-	Image_type* ImageCVI = *image;
-	unsigned char *bits;
-	bits = convertToBitArray(ImageCVI);
+	Image_type* ImageCVI 	= *image;
+	unsigned char *bits		= convertToBitArray(ImageCVI);
 	
 	GetImageSize(ImageCVI, &width, &height); 
 	errChk(NewBitmap (-1, 24, width, height, NULL, bits, NULL, &BitmapID));
@@ -299,6 +301,7 @@ static int DisplayImageFunction (ImageDisplayCVI_type* imgDisplay, Image_type** 
 {
 
 	int ImageID = Image_typeToBitmap(image);
+	
 	CanvasDrawBitmap (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ImageID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
 	return 0;
 }

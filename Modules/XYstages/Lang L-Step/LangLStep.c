@@ -11,7 +11,7 @@
 //==============================================================================
 // Include files
 #include "DAQLab.h" 		// include this first 
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 #include "LangLStep.h"
 #include "LStep4X.h"
 

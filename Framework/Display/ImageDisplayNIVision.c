@@ -15,7 +15,7 @@
 #include <formatio.h>
 #include "Commctrl.h"
 #include "ImageDisplayNIVision.h"
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 #include "ImageDisplay.h"
 #include "toolbox.h"
 #include "DataStorage.h"

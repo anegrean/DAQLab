@@ -65,8 +65,9 @@ INIT_ERR
 	// call parent init fn
 
 	
-	   init_ImageDisplay_type(&imgDisplay->baseClass,(DiscardFptr_type)discard_ImageDisplayCVI_type, (DisplayImageFptr_type)DisplayImageFunction, NULL);							
-	
+	   //init_ImageDisplay_type(&imgDisplay->baseClass,NULL, &imgDisplay, (DiscardFptr_type)discard_ImageDisplayCVI_type, (DisplayImageFptr_type)DisplayImageFunction,NULL , NULL);
+	   init_ImageDisplay_type(&imgDisplay->baseClass, &imgDisplay, NULL, (DiscardFptr_type) discard_ImageDisplayCVI_type, (DisplayImageFptr_type) DisplayImageFunction, NULL, NULL);
+
 	//-------------------------------------
 	// Init child class
 	//-------------------------------------
@@ -160,44 +161,6 @@ void DiscardImageList (ListType* imageListPtr)
 	OKfreeList(*imageListPtr);
 }
 
-/*  to see the types
-size_t GetImageSizeofData (Image_type* image)
-{
-	size_t dataTypeSize = 0;
-	
-	switch (image->imageType) {
-			
-		case Image_UChar:					// 8 bit unsigned
-		  	dataTypeSize = sizeof(char);
-			break;
-	
-		case Image_UShort:					// 16 bit unsigned   
-		case Image_Short:					// 16 bit signed   
-		   dataTypeSize = sizeof(short int);
-			break;
-			
-		case Image_UInt:					// 32 bit unsigned
-		case Image_Int:						// 32 bit signed
-			dataTypeSize = sizeof(int);
-			break;
-			
-		case Image_Float:					// 32 bit float   :
-			dataTypeSize = sizeof(float);
-			break;
-			
-		case Image_RGBA:
-			dataTypeSize = sizeof (RGBA_type);
-			break;
-			
-		case Image_RGBAU64:
-			dataTypeSize = sizeof (RGBAU64_type);
-			break;
-			
-	}
-	
-	return dataTypeSize;
-}
-*/
 
 static unsigned char* convertToBitArray(Image_type* image) 
 {
@@ -205,102 +168,109 @@ INIT_ERR
 	
 	nullChk(image);
 
-	int size = image->width * image->height;
-	int i 	 = 0;
-	unsigned char bits[size];
+	int width 	 = 	0;
+	int height	 =  0;
+	int size 	 =  0;	  
+	int i 		 =  0;
 	
-	switch(image->imageType) {
+	unsigned char *bits;
+
+	bits = (unsigned char*) malloc(size * sizeof(unsigned char));
+	
+	GetImageSize(image, &width, &height);
+	
+	size = width * height;
+	
+	switch(GetImageType(image)) {
 		
 		case Image_UChar:					// 8 bit unsigned 
 			
-			unsigned char* iterr;
-			iterr = (unsigned char*) image->pixData[i];
+			unsigned char* iterr_char;
+			iterr_char = (unsigned char*) GetImagePixelArray(image);
 			
 			for(i = 0; i < size; i++) {
-				bits[i] = iterr[i];
+				bits[i] = iterr_char[i];
 			}
 		break;
 		
 		case Image_UShort:					// 16 bit unsigned   
 		case Image_Short:					// 16 bit signed
-			unsigned short int max, min;
+			unsigned short int max_short, min_short;
 			
-			max = (unsigned short int) image->pixData[0];
-			min = (unsigned short int) image->pixData[0];
-			
-			unsigned short int* iterr;
-			iterr = (unsigned short int*) image->pixData;
+
+			unsigned short int* iterr_short;
+			iterr_short = (unsigned short int*) GetImagePixelArray(image);
+			max_short = iterr_short[0];
+			min_short = iterr_short[0];
 			for(i = 0; i < size; i++) {
 			
-			if(max > iterr[i])
-				max = iterr[i];
+			if(max_short > iterr_short[i])
+				max_short = iterr_short[i];
 			
-			if(min < iterr[i])
-				min = iterr[i];
+			if(min_short < iterr_short[i])
+				min_short = iterr_short[i];
 			
 			}
-			int intervalLength = (max - min) / sizeof(unsigned char);
+			int intervalLength_short = (max_short - min_short) / sizeof(unsigned char);
 			
 			for(i = 0; i < size; i++) {
-				bits[i] = iterr[i] / intervalLength;
+				bits[i] = iterr_short[i] / intervalLength_short;
 			}
-			
 		break;
 		
 		case Image_UInt:					// 32 bit unsigned
 		case Image_Int:						// 32 bit signed
 			
-			unsigned  int max, min;
+			unsigned  int max_int, min_int;
 			
-			max = (unsigned  int) image->pixData[0];
-			min = (unsigned  int) image->pixData[0];
-			
-			unsigned int* iterr;
-			iterr = (unsigned  int*) image->pixData;
+			unsigned int* iterr_int;
+			iterr_int = (unsigned  int*) GetImagePixelArray(image);
+			max_int = iterr_int[0];
+			min_int = iterr_int[0];
 			
 			for(i = 0; i < size; i++) {
 			
-				if(max > iterr[i])
-					max = iterr[i];
+				if(max_int > iterr_int[i])
+					max_int = iterr_int[i];
 			
-				if(min < iterr[i])
-					min = iterr[i];
+				if(min_int < iterr_int[i])
+					min_int = iterr_int[i];
 			
 			}
 			
-			int intervalLength = (max - min) / sizeof(unsigned char);
+			int intervalLength_int = (max_int - min_int) / sizeof(unsigned char);
 			
 			for(i = 0; i < size; i++) {
-				bits[i] = iterr[i] / intervalLength;
+				bits[i] = iterr_int[i] / intervalLength_int;
 			}
 		break;
 		
 		case Image_Float:					// 32 bit float   :
-			 float max, min;
-			 
-			max = (float) image->pixData[0];
-			min = (float) image->pixData[0];
 			
-			float* iterr;
-			iterr = (float*) image->pixData;
+			float max_float, min_float;
+			float* iterr_float;
+			iterr_float = (float*) GetImagePixelArray(image);
+			
+			max_float = iterr_float[0];
+			min_float = iterr_float[0];
 			
 			for(i = 0; i < size; i++) {
 			
-				if(max > iterr[i])
-					max = iterr[i];
+				if(max_float > iterr_float[i])
+					max_float = iterr_float[i];
 			
-				if(min < iterr[i])
-					min = iterr[i];
+				if(min_float < iterr_float[i])
+					min_float = iterr_float[i];
 			
 			}
 			
-			int intervalLength = (max - min) / sizeof(unsigned char);
+			int intervalLength_float = (max_float - min_float) / sizeof(unsigned char);
 			
 			for(i = 0; i < size; i++) {
-				bits[i] = iterr[i] / intervalLength;
+				bits[i] = iterr_float[i] / intervalLength_float;
 			}
-			
 		break;
+
 	
 	}
 		return bits;
@@ -312,10 +282,16 @@ static int Image_typeToBitmap(Image_type** image)
 {
 INIT_ERR 
 
-	int BitmapID = 0;
+	int BitmapID	 = 0;
+	int width 		 = 0;
+	int height 		 = 0;
+	
 	Image_type* ImageCVI = *image;
-	unsigned char bits[] = convertToBitArray(ImageCVI);;
-	errChk(NewBitmap (-1, 24, ImageCVI->width, ImageCVI->height, NULL, bits, NULL, &BitmapID));
+	unsigned char *bits;
+	bits = convertToBitArray(ImageCVI);
+	
+	GetImageSize(ImageCVI, &width, &height); 
+	errChk(NewBitmap (-1, 24, width, height, NULL, bits, NULL, &BitmapID));
 	
 	return BitmapID;
 Error:

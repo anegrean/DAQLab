@@ -48,7 +48,7 @@ Project 0001 Folder Framework/HW Triggering Collapsed = True
 Project 0001 FolderId 20 Collapsed = True
 Project 0001 Folder Framework/Display Collapsed = True
 Project 0001 FolderId 22 Collapsed = True
-Drag Bar Left = 357
+Drag Bar Left = 366
 Window Top = 320
 Window Left = 205
 Window Bottom = 1081
@@ -66,9 +66,9 @@ Save Changes Before Compiling = "Always"
 Hide Windows = False
 Break At First Statement = False
 Sort Type = "File Name"
-Number of Opened Files = 5
+Number of Opened Files = 8
 Window Confinement Region Enabled = True
-MainColumnWidth = 340
+MainColumnWidth = 349
 FileDateColumnWidth = 70
 FileSizeColumnWidth = 70
 
@@ -104,22 +104,22 @@ In Projects = "1,"
 [File 0004]
 Path = "/d/DAQLab_private/Framework/Display/ImageDisplayCVI.c"
 File Type = "CSource"
-Disk Date = 3530173415
+Disk Date = 3530183925
 In Projects = "1,"
 Window Top = 106
 Window Left = 875
-Window Z-Order = 5
-Source Window State = "1,314,316,316,0,57,57,0,0,100,0,137,0,0,0,26,0,4,256,122,369,843,1,16,"
+Window Z-Order = 1
+Source Window State = "1,266,267,267,34,34,34,0,0,189,0,193,0,0,0,46,262,0,267,91,369,843,1,16,"
 
 [File 0005]
 Path = "/d/DAQLab_private/Framework/Utility/DAQLabUtility.c"
 File Type = "CSource"
-Disk Date = 3530179183
+Disk Date = 3530180960
 In Projects = "1,"
 Window Top = 95
 Window Left = 42
 Window Z-Order = 3
-Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,25,0,0,35,35,349,683,1,0,"
+Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,25,0,0,35,35,349,683,1,16,"
 
 [File 0006]
 Path = "/d/DAQLab_private/Framework/Utility/DAQLabErrHandling.c"
@@ -128,8 +128,8 @@ Disk Date = 3530179183
 In Projects = "1,"
 Window Top = 64
 Window Left = 26
-Window Z-Order = 1
-Source Window State = "1,13,13,13,10,25,25,0,0,190,0,0,0,0,0,46,0,0,29,74,349,683,1,0,"
+Window Z-Order = 7
+Source Window State = "1,13,13,13,10,25,25,0,0,80,0,0,0,0,0,25,66,0,24,36,349,683,1,0,"
 
 [File 0007]
 Path = "/d/DAQLab_private/Framework/Utility/DAQLabErrHandling.h"
@@ -138,18 +138,18 @@ Disk Date = 3530179183
 In Projects = "1,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 2
+Window Z-Order = 8
 Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,25,0,0,0,0,349,683,1,0,"
 
 [File 0008]
 Path = "/d/DAQLab_private/Framework/Utility/DAQLabUtility.h"
 File Type = "Include"
-Disk Date = 3530179183
+Disk Date = 3530181174
 In Projects = "1,"
 Window Top = 126
 Window Left = 58
-Window Z-Order = 4
-Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,25,0,0,18,26,349,683,1,0,"
+Window Z-Order = 6
+Source Window State = "1,33,34,34,82,82,82,0,0,80,0,0,0,0,0,25,0,0,34,102,349,683,1,0,"
 
 [File 0009]
 Path = "/d/DAQLab_private/Modules/Zstages/PI Stage/drivers and docs/PI_GCS/PI_GCS2_DLL.h"
@@ -564,12 +564,12 @@ In Projects = "1,"
 [File 0054]
 Path = "/d/DAQLab_private/Framework/Data Storage/HDF5support.c"
 File Type = "CSource"
-Disk Date = 3530173415
+Disk Date = 3530181311
 In Projects = "1,"
 Window Top = 78
 Window Left = 77
 Window Released = True
-Source Window State = "1,580,580,580,60,62,60,0,0,0,0,320,0,326,31,0,0,0,42,66,883,1432,0,0,"
+Source Window State = "1,580,580,580,60,62,60,0,0,174,0,320,0,326,31,62,94,0,109,126,883,1432,0,0,"
 
 [File 0055]
 Path = "/d/DAQLab_private/Framework/Data Storage/HDF5support.h"
@@ -646,12 +646,12 @@ Window Width = 523
 [File 0063]
 Path = "/d/DAQLab_private/Framework/Virtual channels/VChannel.c"
 File Type = "CSource"
-Disk Date = 3530173415
+Disk Date = 3530181248
 In Projects = "1,"
 Window Top = 98
 Window Left = 164
 Window Released = True
-Source Window State = "1,26,38,26,0,1,0,0,0,0,0,0,0,0,0,0,0,0,26,0,850,1373,0,0,"
+Source Window State = "1,26,38,26,0,1,0,0,0,167,0,0,0,0,0,59,750,0,779,0,850,1373,0,0,"
 
 [File 0064]
 Path = "/d/DAQLab_private/Framework/Virtual channels/VChannel.h"
@@ -666,12 +666,12 @@ Source Window State = "1,48,48,48,0,121,121,0,0,0,0,0,0,0,0,0,16,0,20,173,906,15
 [File 0065]
 Path = "/d/DAQLab_private/Framework/Iterators/Iterator.c"
 File Type = "CSource"
-Disk Date = 3530173415
+Disk Date = 3530181265
 In Projects = "1,"
-Window Top = 195
-Window Left = -1204
+Window Top = 387
+Window Left = 207
 Window Released = True
-Source Window State = "1,158,158,158,5,23,23,0,0,0,0,22,0,25,116,0,132,0,159,5,771,1449,0,0,"
+Source Window State = "1,158,158,158,5,23,23,0,0,176,0,22,0,25,116,53,232,0,258,0,771,1449,0,0,"
 
 [File 0066]
 Path = "/d/DAQLab_private/Framework/Iterators/Iterator.h"
@@ -704,31 +704,32 @@ Source Window State = "1,52,52,52,0,16,16,0,0,0,0,0,0,0,0,0,29,0,52,0,349,683,1,
 [File 0069]
 Path = "/d/DAQLab_private/Framework/Data types/DataTypes.c"
 File Type = "CSource"
-Disk Date = 3530173415
+Disk Date = 3530181226
 In Projects = "1,"
-Window Top = 31
-Window Left = 9
+Window Top = 261
+Window Left = 514
 Window Released = True
-Source Window State = "1,47,47,47,7,12,12,0,3,0,0,106,0,125,40,0,26,0,47,7,640,1262,0,0,"
+Source Window State = "1,47,47,47,7,12,12,0,3,153,0,106,0,125,40,43,26,0,47,7,640,1262,0,0,"
 
 [File 0070]
 Path = "/d/DAQLab_private/Framework/Data types/DataTypes.h"
 File Type = "Include"
 Disk Date = 3530173415
 In Projects = "1,"
-Window Top = 257
-Window Left = 590
+Window Top = 72
+Window Left = 772
 Window Released = True
-Source Window State = "1,193,193,193,28,38,38,0,0,0,0,443,0,459,131,0,611,0,193,19,688,1006,0,0,"
+Source Window State = "1,634,634,634,28,47,47,0,3,121,0,443,0,459,131,47,598,0,634,28,688,1006,0,0,"
 
 [File 0071]
 Path = "/d/DAQLab_private/Framework/HW Triggering/HWTriggering.c"
 File Type = "CSource"
-Disk Date = 3530173415
+Disk Date = 3530181303
 In Projects = "1,"
 Window Top = 32
 Window Left = 10
-Source Window State = "1,241,241,241,87,96,96,0,0,0,0,0,0,0,0,0,229,28,241,87,349,683,1,0,"
+Window Z-Order = 5
+Source Window State = "1,241,241,241,87,96,96,0,0,80,0,0,0,0,0,25,338,0,351,122,349,683,1,0,"
 
 [File 0072]
 Path = "/d/DAQLab_private/Framework/HW Triggering/HWTriggering.h"
@@ -742,11 +743,12 @@ Source Window State = "1,92,92,92,120,129,129,0,0,0,0,0,0,0,0,0,80,61,92,120,349
 [File 0073]
 Path = "/d/DAQLab_private/Framework/Display/ImageDisplay.c"
 File Type = "CSource"
-Disk Date = 3530173415
+Disk Date = 3530181286
 In Projects = "1,"
 Window Top = 64
 Window Left = 26
-Source Window State = "1,93,93,93,5,30,30,0,0,0,0,0,0,0,0,0,90,0,91,35,349,523,1,11,"
+Window Z-Order = 4
+Source Window State = "1,61,61,61,18,35,35,0,0,60,0,40,0,0,0,25,40,0,65,9,349,523,1,0,"
 
 [File 0074]
 Path = "/d/DAQLab_private/Framework/Display/ImageDisplay.h"
@@ -756,7 +758,7 @@ In Projects = "1,"
 Window Top = 143
 Window Left = 139
 Window Released = True
-Source Window State = "1,76,76,76,7,19,19,0,0,0,0,0,0,0,0,0,0,0,82,12,688,1353,0,0,"
+Source Window State = "1,81,81,81,40,57,57,0,0,164,0,0,0,0,0,47,58,0,84,85,688,1353,0,0,"
 
 [File 0075]
 Path = "/d/DAQLab_private/Framework/Display/ImageDisplayCVI.h"
@@ -765,17 +767,18 @@ Disk Date = 3530173415
 In Projects = "1,"
 Window Top = 33
 Window Left = 10
-Source Window State = "1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,11,0,35,22,349,523,1,0,"
+Window Z-Order = 2
+Source Window State = "1,0,0,0,0,0,0,0,0,60,0,0,0,0,0,25,13,0,40,28,349,523,1,0,"
 
 [File 0076]
 Path = "/d/DAQLab_private/Framework/Display/ImageDisplayNIVision.c"
 File Type = "CSource"
-Disk Date = 3530173415
+Disk Date = 3530181275
 In Projects = "1,"
 Window Top = 125
 Window Left = 350
 Window Released = True
-Source Window State = "1,240,240,240,27,57,27,0,0,0,0,562,0,532,84,0,234,0,238,66,640,1262,0,0,"
+Source Window State = "1,240,240,240,27,57,27,0,0,153,0,562,0,532,84,43,129,0,150,0,640,1262,0,0,"
 
 [File 0077]
 Path = "/d/DAQLab_private/Framework/Display/ImageDisplayNIVision.h"
@@ -897,6 +900,9 @@ Tab 0002 = "/d/DAQLab_private/Framework/Utility/DAQLabErrHandling.h"
 Tab 0003 = "/d/DAQLab_private/Framework/Utility/DAQLabErrHandling.c"
 Tab 0004 = "/d/DAQLab_private/Framework/Utility/DAQLabUtility.h"
 Tab 0005 = "/d/DAQLab_private/Framework/Utility/DAQLabUtility.c"
+Tab 0006 = "/d/DAQLab_private/Framework/Display/ImageDisplay.c"
+Tab 0007 = "/d/DAQLab_private/Framework/HW Triggering/HWTriggering.c"
+Tab 0008 = "/d/DAQLab_private/Framework/Display/ImageDisplayCVI.h"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

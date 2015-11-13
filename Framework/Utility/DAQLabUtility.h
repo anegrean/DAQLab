@@ -32,7 +32,7 @@
 //==============================================================================
 // Global functions
 
-int Declare_Your_Functions_Here (int x);
+int minmax_array(void *arr, int *(compareFn)(void*, void*), size_t numElements, size_t sizeOfElement);
 
 #ifdef __cplusplus
     }

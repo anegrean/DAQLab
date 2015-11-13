@@ -10,7 +10,7 @@
 
 //==============================================================================
 // Include files
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 #include <ansi_c.h>
 #include <formatio.h> 
 #include "toolbox.h"

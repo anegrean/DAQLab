@@ -12,7 +12,7 @@
 // Include files
 
 #include "DataTypes.h" 
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 #include <ansi_c.h>
 #include "toolbox.h"
 

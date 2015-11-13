@@ -19,7 +19,7 @@
 #include "hdf5_hl.h"
 #include "Iterator.h"
 #include "HDF5support.h"
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 #include <stdio.h>
 #include <stdlib.h>
 								   

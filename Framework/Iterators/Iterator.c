@@ -14,7 +14,7 @@
 #include <formatio.h>
 #include "Iterator.h"
 #include "toolbox.h"
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 
 //==============================================================================
 // Constants

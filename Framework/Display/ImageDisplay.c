@@ -8,7 +8,7 @@
 //
 
 #include "ImageDisplay.h"
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 
 //==============================================================================
 // Constants

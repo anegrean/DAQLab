@@ -418,18 +418,21 @@ struct ScanEngine {
 	//-----------------------------------
 	// Pixel assembly thread coordination
 	//-----------------------------------
+	
 	CmtTSVHandle				nActivePixelBuildersTSV;	// Variable of int type. Thread safe variable indicating whether all channels have completed assembling their pixels in separate threads. 
 															// Initially, this variable is equal to the number of used channels and its value decreses to 0 with each channel completing pixel assembly.
 	
 	//-----------------------------------
 	// Scan Settings										// For performing frame scans.
 	//-----------------------------------
+	
 	double						referenceClockFreq;			// Reference clock frequency in [Hz] that determines the smallest time unit in which the galvo and pixel sampling times can be divided.
 	double						pixDelay;					// Pixel signal delay in [us] due to processing electronics measured from the moment the signal (fluorescence) is generated at the sample.
 	
 	//-----------------------------------
 	// Optics
 	//-----------------------------------
+	
 	double						scanLensFL;					// Scan lens focal length in [mm]
 	double						tubeLensFL;					// Tube lens focal length in [mm]
 	Objective_type*				objectiveLens;				// Chosen objective lens
@@ -438,6 +441,7 @@ struct ScanEngine {
 	//-----------------------------------
 	// UI
 	//-----------------------------------
+	
 	int							newObjectivePanHndl;
 	int							scanPanHndl;				// Panel handle for the scan engine.
 	int							frameScanPanHndl;			// Panel handle for adjusting scan settings such as pixel size, etc...
@@ -449,9 +453,9 @@ struct ScanEngine {
 	//-----------------------------------
 	// Methods
 	//-----------------------------------
-		// discard method to be overridden by child class
-	void	(*Discard) (ScanEngine_type** scanEngine);
-		
+	
+	DiscardFptr_type			discardFptr;				// Discard method to be overridden by child class.
+
 };
 
 //------------------------
@@ -562,23 +566,24 @@ typedef struct {
 typedef struct {
 	ScanEngine_type				baseClass;					// Base class, must be first structure member.
 	
-	//----------------
-	// Scan parameters
-	//----------------
+	//----------------------------------------------------
+	// Frame scan settings
+	//----------------------------------------------------
 	
 	RectRasterScanSet_type		scanSettings;
 	double						galvoSamplingRate;			// Default galvo sampling rate set by the scan engine in [Hz].
-	double						flyInDelay;					// Galvo fly-in time from parked position to start of the imaging area in [us]. This value is also an integer multiple of the pixelDwellTime. 
+	double						flyInDelay;					// Galvo fly-in time from parked position to start of the imaging area in [us]. This value is also an integer multiple of the pixelDwellTime.
+	ListType					scanROIs;					// List of Rect_type* scan ROIs marking subregions to scan within the parent scan area described by the ScanSettings.
 	
-	//-----------------------------------
+	//----------------------------------------------------
 	// Point Jump Settings									// For jumping as fast as possible between a series of points and staying at each point a given amount of time. 
-	//-----------------------------------
+	//----------------------------------------------------
 	
 	PointJumpSet_type*			pointJumpSettings;
 	
-	//-----------------------------------
+	//----------------------------------------------------
 	// Image and point scan buffers
-	//-----------------------------------
+	//----------------------------------------------------
 	
 	RectRasterImgBuff_type**	imgBuffers;					// Array of image buffers. Number of buffers and the buffer index is taken from the list of available (open) detection channels (baseClass.scanChans)
 	size_t						nImgBuffers;				// Number of image buffers available.
@@ -805,7 +810,7 @@ static RectRaster_type*					init_RectRaster_type								(LaserScanning_type*	lsM
 																				 	 		double					scanLensFL,
 																				 	 		double					tubeLensFL);
 
-static void								discard_RectRaster_type								(ScanEngine_type** engine);
+static void								discard_RectRaster_type								(RectRaster_type** rectRasterPtr);
 
 static void 							SetRectRasterScanEnginePointScanStimulateUI			(int panel, BOOL stimulate);
 
@@ -1152,7 +1157,7 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 		for (size_t i = 1; i <= nItems; i++) {
 			enginePtr = ListGetPtrToItem(ls->scanEngines, i);
 			DLUnregisterScanEngine(*enginePtr);
-			(*(*enginePtr)->Discard)	(enginePtr);
+			(*(*enginePtr)->discardFptr) ((void**)enginePtr);
 		}
 		
 		ListDispose(ls->scanEngines);
@@ -3549,7 +3554,7 @@ static int CVICALLBACK ScanEnginesTab_CB (int panel, int control, int event, voi
 	// delete scan engine and tab page
 	ScanEngine_type**	enginePtr = ListGetPtrToItem(ls->scanEngines, activeTabIdx + 1);
 	DLUnregisterScanEngine(*enginePtr);
-	(*(*enginePtr)->Discard) (enginePtr);
+	(*(*enginePtr)->discardFptr) ((void**)enginePtr);
 	ListRemoveItem(ls->scanEngines, 0, activeTabIdx + 1);
 	DeleteTabPage(panel, control, activeTabIdx, 1);
 	
@@ -4471,7 +4476,7 @@ INIT_ERR
 	engine->tubeLensFL					= tubeLensFL;
 	engine->objectiveLens				= NULL;
 	
-	engine->Discard						= NULL;	   // overriden by derived scan engine classes
+	engine->discardFptr					= NULL;	   // overriden by derived scan engine classes
 	
 	//------------------------
 	// allocate
@@ -4894,12 +4899,17 @@ INIT_ERR
 	
 	// init scan engine base class
 	errChk( init_ScanEngine_type((ScanEngine_type**)&engine, lsModule, &taskController, continuousFrameScan, nFrames, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, referenceClockFreq, pixelDelay, scanLensFL, tubeLensFL) );
+	
 	// override discard method
-	engine->baseClass.Discard = discard_RectRaster_type;
+	engine->baseClass.discardFptr = (DiscardFptr_type)discard_RectRaster_type;
 	
 	//--------------------------------------------------------
-	// init RectRaster_type
+	// RectRaster_type
 	//--------------------------------------------------------
+	
+	//----------------------------------------
+	// Init
+	//----------------------------------------
 	
 	//--------------------
 	// scan parameters
@@ -4913,6 +4923,7 @@ INIT_ERR
 	
 	engine->galvoSamplingRate			= galvoSamplingRate;
 	engine->flyInDelay					= 0;
+	engine->scanROIs					= 0;
 	
 	//--------------------
 	// point jump settings
@@ -4927,6 +4938,12 @@ INIT_ERR
 	engine->nImgBuffers					= 0;
 	engine->pointBuffers				= NULL;
 	engine->nPointBuffers				= 0;
+	
+	//----------------------------------------
+	// Alloc
+	//----------------------------------------
+	
+	nullChk( engine->scanROIs			= ListCreate(sizeof(Rect_type*)) );
 
 	return engine;
 	
@@ -4935,14 +4952,14 @@ Error:
 	// cleanup
 	discard_TaskControl_type(&taskController);
 	
-	discard_RectRaster_type((ScanEngine_type**)&engine);
+	discard_RectRaster_type(&engine);
 	
 	return NULL;
 }
 
-static void	discard_RectRaster_type (ScanEngine_type** engine)
+static void	discard_RectRaster_type (RectRaster_type** rectRasterPtr)
 {
-	RectRaster_type*	rectRaster = (RectRaster_type*) *engine;
+	RectRaster_type*	rectRaster = *rectRasterPtr;
 	
 	//--------------------------------------------------------------------
 	// discard RectRaster_type data
@@ -4971,7 +4988,7 @@ static void	discard_RectRaster_type (ScanEngine_type** engine)
 	//--------------------------------------------------------------------
 	// discard Scan Engine data
 	//--------------------------------------------------------------------
-	discard_ScanEngine_type(engine);
+	discard_ScanEngine_type((ScanEngine_type**)rectRasterPtr);
 }
 
 static RectRasterImgBuff_type* init_RectRasterImgBuff_type (ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows)
@@ -7697,7 +7714,15 @@ static void discard_PointJumpSet_type (PointJumpSet_type** pointJumpSetPtr)
 	PointJumpSet_type*	pointJumpSet = *pointJumpSetPtr;
 	if (!pointJumpSet) return;
 	
+	// discard point jumps
+	PointJump_type**	pointJumpPtr	= NULL;
+	size_t				nPointJumps		= ListNumItems(pointJumpSet->pointJumps);
+	for (size_t i = 1; i <= nPointJumps; i++) {
+		pointJumpPtr = ListGetPtrToItem(pointJumpSet->pointJumps, i);
+		discard_PointJump_type(pointJumpPtr);
+	}
 	OKfreeList(pointJumpSet->pointJumps);
+	
 	OKfree(pointJumpSet->jumpTimes);
 	OKfree(pointJumpSet->responseDelays);
 	
@@ -8241,6 +8266,27 @@ INIT_ERR
 						}
 					
 						break;
+						
+					case ROI_Rectangle:
+						
+						// update scan engine if this display is assigned to it
+						if (scanEngine->baseClass.activeDisplay == imgDisplay) {
+							
+							// insert rectangle ROI item in the UI
+							int	nListItems = 0;
+							GetNumListItems(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, &nListItems);
+							InsertListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, -1, ROI->ROIName, nListItems+1);
+							
+							// mark rectangle as checked (visible)
+							CheckListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, nListItems, 1); 
+							
+							// insert ROI item in the scan engine as well
+							ROI_type*	ROICopy = (*ROI->copyFptr) (ROI);
+							ListInsertItem(scanEngine->scanROIs, &ROICopy, END_OF_LIST);
+						
+						}
+						
+						break;
 					
 					default:
 						
@@ -8288,6 +8334,10 @@ INIT_ERR
 	// assign this image display to the scan engine
 	scanEngine->baseClass.activeDisplay	= imgDisplay; 
 	
+	//----------------------------------------------------------------------------------------------------------------------------------------------------
+	// Restore scan settings
+	//----------------------------------------------------------------------------------------------------------------------------------------------------
+
 	// assign previous scan settings
 	scanEngine->scanSettings = previousScanSettings;
 	scanEngine->pointJumpSettings->scanSettings = previousScanSettings;
@@ -8302,6 +8352,10 @@ INIT_ERR
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_WidthOffset, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, scanEngine->scanSettings.pixSize);
 	
+	//----------------------------------------------------------------------------------------------------------------------------------------------------
+	// Clear point jump and frame scan ROIs
+	//----------------------------------------------------------------------------------------------------------------------------------------------------
+	
 	// clear ROIs in the scan engine UI
 	ClearListCtrl(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs);
 	
@@ -8315,26 +8369,30 @@ INIT_ERR
 	}
 	ListClear(scanEngine->pointJumpSettings->pointJumps);
 	
+	
+	//----------------------------------------------------------------------------------------------------------------------------------------------------
+	// Restore point jump and frame scan ROIs
+	//----------------------------------------------------------------------------------------------------------------------------------------------------
+	
 	ListType	ROIlist				= GetImageROIs(imgDisplay->image);
 	size_t 		nROIs 				= ListNumItems(ROIlist);
 	ROI_type*   ROI					= NULL;
 	ROI_type*   ROICopy				= NULL;
-	BOOL		activeROIAvailable 	= FALSE;
 	
 	for (size_t i = 1; i <= nROIs; i++) {
 		ROI = *(ROI_type**)ListGetPtrToItem(ROIlist, i);
 		ROICopy = (*ROI->copyFptr) ((void*)ROI);
-		InsertListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, -1, ROI->ROIName, i);
-		
-		if (ROI->active)
-			activeROIAvailable = TRUE;
 		
 		switch (ROI->ROIType) {
 						
 			case ROI_Point:
-						
+				
+				// insert ROI in point jump UI list
+				InsertListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, -1, ROI->ROIName, i);
+				
 				// mark point as checked/unchecked
 				CheckListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, i - 1, ROI->active); 
+				
 				// insert ROI item in the scan engine as well
 				ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &ROICopy, END_OF_LIST);
 						

@@ -29,8 +29,8 @@
 
 #define	MAX_NI_VISION_DISPLAYS				16
 
-#define ROILabel_XOffset					3		// ROI text label offset in the X direction in pixels.
-#define ROILabel_YOffset					3		// ROI text label offset in the Y direction in pixels.
+#define ROILabel_XOffset					2		// ROI text label offset in the X direction in pixels.
+#define ROILabel_YOffset					2		// ROI text label offset in the Y direction in pixels.
 
 // Default image display settings
 #define Default_Max_Zoom					3.0		// Maximum zoom factor applied to the image to try to fill the target display area
@@ -87,7 +87,7 @@ ImageDisplayNIVision_type*		NIDisplays[MAX_NI_VISION_DISPLAYS]		= {NULL};
 	// IMAQ tools setup
 static ToolWindowOptions 		imaqTools 								= {	.showSelectionTool 			= TRUE,
 																			.showZoomTool				= TRUE,
-																			.showPointTool				= FALSE,
+																			.showPointTool				= TRUE,
 																			.showLineTool				= FALSE,
 																			.showRectangleTool			= TRUE,
 																			.showOvalTool				= FALSE,
@@ -613,12 +613,13 @@ static void IMAQ_CALLBACK ImageDisplayNIVision_CB (WindowEventType event, int wi
 	ImageDisplayNIVision_type*		imgDisplay 		= NIDisplays[windowNumber];
 	
 	switch (event) {
+		
 			
 		case IMAQ_CLICK_EVENT:
 			
 			switch (tool) {
 					
-				case IMAQ_SELECTION_TOOL:
+				case IMAQ_POINT_TOOL:
 					
 					RGBA_type	color 		= {.R = Default_ROI_R_Color, .G = Default_ROI_G_Color, .B = Default_ROI_B_Color, .alpha = Default_ROI_A_Color};
 					ListType	ROIlist		= 0;
@@ -679,63 +680,60 @@ static void IMAQ_CALLBACK ImageDisplayNIVision_CB (WindowEventType event, int wi
 			}
 			
 			break;
-			
+		
 		case IMAQ_DRAW_EVENT:
+			
+			RGBA_type	color 		= {.R = Default_ROI_R_Color, .G = Default_ROI_G_Color, .B = Default_ROI_B_Color, .alpha = Default_ROI_A_Color};
+			ListType	ROIlist		= 0;
+					
+			// discard previous ROI selection if any
+			if (imgDisplay->baseClass.selectionROI)
+				(*imgDisplay->baseClass.selectionROI->discardFptr) ((void**)&imgDisplay->baseClass.selectionROI);
 			
 			switch (tool) {
 					
-				case IMAQ_LINE_TOOL:
-					
-					break;
-					
 				case IMAQ_RECTANGLE_TOOL:
-					
-					RGBA_type	color 		= {.R = Default_ROI_R_Color, .G = Default_ROI_G_Color, .B = Default_ROI_B_Color, .alpha = Default_ROI_A_Color};
-					ListType	ROIlist		= 0;
-					
-					// discard previous ROI selection if any
-					if (imgDisplay->baseClass.selectionROI)
-						(*imgDisplay->baseClass.selectionROI->discardFptr) ((void**)&imgDisplay->baseClass.selectionROI);
 					
 					// update current selection
 					imgDisplay->baseClass.selectionROI = (ROI_type*)initalloc_Rect_type(NULL, "", color, TRUE, rect.top, rect.left, rect.height, rect.width);
-					
-					// inform that ROI was placed
-					FireCallbackGroup(imgDisplay->baseClass.callbackGroup, ImageDisplay_ROI_Placed, imgDisplay->baseClass.selectionROI);
-					
-					// inform if ROI must be added to the image
-					if (imgDisplay->baseClass.addROIToImage) {
-						
-						// add a unique name to the ROI selection
-						OKfree(imgDisplay->baseClass.selectionROI->ROIName);
-						ROIlist = GetImageROIs(imgDisplay->baseClass.image);
-						imgDisplay->baseClass.selectionROI->ROIName = GetDefaultUniqueROIName(ROIlist);
-						
-						
-						ROI_type*	ROICopy 		= (*imgDisplay->baseClass.selectionROI->copyFptr) (imgDisplay->baseClass.selectionROI);
-						ROI_type*	ROIReference	= ROICopy;
-						
-						
-						// add ROI to image
-						AddImageROI(imgDisplay->baseClass.image, &ROICopy, NULL);
-						
-						// update image
-						DrawROI(imgDisplay->NIImage, ROIReference);
-						imaqDisplayImage(imgDisplay->NIImage, imgDisplay->imaqWndID, FALSE);
-
-						// inform that ROI was added
-						FireCallbackGroup(imgDisplay->baseClass.callbackGroup, ImageDisplay_ROI_Added, ROIReference);
-					}
-
 					break;
 					
 				default:
 					
-					break;
+					return;
+					
 			}
+					
+			// inform that ROI was placed
+			FireCallbackGroup(imgDisplay->baseClass.callbackGroup, ImageDisplay_ROI_Placed, imgDisplay->baseClass.selectionROI);
+		
+			// inform if ROI must be added to the image
+			if (imgDisplay->baseClass.addROIToImage) {
 			
+				// add a unique name to the ROI selection
+				OKfree(imgDisplay->baseClass.selectionROI->ROIName);
+				ROIlist = GetImageROIs(imgDisplay->baseClass.image);
+				imgDisplay->baseClass.selectionROI->ROIName = GetDefaultUniqueROIName(ROIlist);
+			
+			
+				ROI_type*	ROICopy 		= (*imgDisplay->baseClass.selectionROI->copyFptr) (imgDisplay->baseClass.selectionROI);
+				ROI_type*	ROIReference	= ROICopy;
+			
+			
+				// add ROI to image
+				AddImageROI(imgDisplay->baseClass.image, &ROICopy, NULL);
+			
+				// update image
+				DrawROI(imgDisplay->NIImage, ROIReference);
+				imaqDisplayImage(imgDisplay->NIImage, imgDisplay->imaqWndID, FALSE);
+
+				// inform that ROI was added
+				FireCallbackGroup(imgDisplay->baseClass.callbackGroup, ImageDisplay_ROI_Added, ROIReference);
+			}
+
 			break;
-			
+				
+					
 		case IMAQ_ACTIVATE_EVENT:
 			
 			break;
@@ -750,8 +748,6 @@ static void IMAQ_CALLBACK ImageDisplayNIVision_CB (WindowEventType event, int wi
 			(*imgDisplay->baseClass.imageDisplayDiscardFptr) ((void**)&imgDisplay);
 			
 			break;
-			
-	
 			
 		default:
 			
@@ -815,7 +811,8 @@ INIT_ERR
 		case WM_KEYDOWN:
 			
 			switch (wParam) {
-				case VK_CONTROL:
+					
+				case VK_SPACE:
 					
 					disp->baseClass.addROIToImage	= TRUE;
 					
@@ -831,7 +828,8 @@ INIT_ERR
 		case WM_KEYUP:
 			
 			switch (wParam) {
-				case VK_CONTROL:
+					
+				case VK_SPACE:
 					
 					disp->baseClass.addROIToImage	= FALSE;
 					

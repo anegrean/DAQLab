@@ -114,21 +114,22 @@
 #define  PointTab_Record                  26      /* control type: radioButton, callback function: (none) */
 
      /* tab page panel controls */
-#define  ScanTab_PixelSize                2       /* control type: numeric, callback function: (none) */
-#define  ScanTab_FramesAcquired           3       /* control type: numeric, callback function: (none) */
-#define  ScanTab_NFrames                  4       /* control type: numeric, callback function: (none) */
-#define  ScanTab_ExecutionMode            5       /* control type: radioButton, callback function: (none) */
-#define  ScanTab_Objective                6       /* control type: ring, callback function: (none) */
-#define  ScanTab_Plate                    7       /* control type: deco, callback function: (none) */
-#define  ScanTab_FPS                      8       /* control type: numeric, callback function: (none) */
-#define  ScanTab_WidthOffset              9       /* control type: numeric, callback function: (none) */
-#define  ScanTab_HeightOffset             10      /* control type: numeric, callback function: (none) */
-#define  ScanTab_Width                    11      /* control type: string, callback function: (none) */
-#define  ScanTab_Height                   12      /* control type: numeric, callback function: (none) */
-#define  ScanTab_Ready                    13      /* control type: LED, callback function: (none) */
-#define  ScanTab_PixelDwell               14      /* control type: string, callback function: (none) */
-#define  ScanTab_DECORATION_4             15      /* control type: deco, callback function: (none) */
-#define  ScanTab_DECORATION_3             16      /* control type: deco, callback function: (none) */
+#define  ScanTab_ROIs                     2       /* control type: listBox, callback function: (none) */
+#define  ScanTab_PixelSize                3       /* control type: numeric, callback function: (none) */
+#define  ScanTab_FramesAcquired           4       /* control type: numeric, callback function: (none) */
+#define  ScanTab_NFrames                  5       /* control type: numeric, callback function: (none) */
+#define  ScanTab_ExecutionMode            6       /* control type: radioButton, callback function: (none) */
+#define  ScanTab_Objective                7       /* control type: ring, callback function: (none) */
+#define  ScanTab_Plate                    8       /* control type: deco, callback function: (none) */
+#define  ScanTab_FPS                      9       /* control type: numeric, callback function: (none) */
+#define  ScanTab_WidthOffset              10      /* control type: numeric, callback function: (none) */
+#define  ScanTab_HeightOffset             11      /* control type: numeric, callback function: (none) */
+#define  ScanTab_Width                    12      /* control type: string, callback function: (none) */
+#define  ScanTab_Height                   13      /* control type: numeric, callback function: (none) */
+#define  ScanTab_Ready                    14      /* control type: LED, callback function: (none) */
+#define  ScanTab_PixelDwell               15      /* control type: string, callback function: (none) */
+#define  ScanTab_DECORATION_4             16      /* control type: deco, callback function: (none) */
+#define  ScanTab_DECORATION_3             17      /* control type: deco, callback function: (none) */
 
 
      /* Control Arrays: */

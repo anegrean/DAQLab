@@ -648,10 +648,6 @@ void						SetImageDisplayTransform				(Image_type* image, ImageDisplayTransforms
 
 ImageDisplayTransforms		GetImageDisplayTransform				(Image_type* image);
 
-void						GetImageBitmapID						(Image_type* image, int* bitmapID);
-
-void						SetImageBitmapID						(Image_type* image, int bitmapID);
-
 	// Image operations
 Image_type* 				copy_Image_type							(Image_type* imgSource);
 

@@ -56,7 +56,6 @@ struct Image {
 	double						imgZCoord;				// image z-axis (height) location in [um].
 	ListType					ROIs;					// list of ROIs added to the image of ROI_type*.
 	ImageDisplayTransforms		dispTransformFunc;		// function to use for mapping pixel values to display.
-	int							imgBitmapID;		    // handle to a bitmap image created from image pixData
 };
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -987,7 +986,6 @@ INIT_ERR
 	image->imgZCoord					= 0.0;								// image z-axis (height) location in [um].    
 	image->ROIs							= 0;								// ROI list
 	image->dispTransformFunc			= ImageDisplayTransform_Linear;		// used to map pixels to the display.
-	image->imgBitmapID					= -1;								// handle for associated Bitmap image, -1 indicates no initial image
 	
 	//-----------------------------------------------------------
 	// alloc
@@ -1013,10 +1011,6 @@ void discard_Image_type (Image_type** imagePtr)
 	
 	// free ROIs
 	DiscardROIList(&image->ROIs);
-	
-	// free associated bitmap image
-	if(image->imgBitmapID >= 0)
-		DiscardBitmap (image->imgBitmapID);
 
 	OKfree(*imagePtr);
 }
@@ -1160,17 +1154,6 @@ void SetImageDisplayTransform (Image_type* image, ImageDisplayTransforms dispTra
 ImageDisplayTransforms GetImageDisplayTransform (Image_type* image)
 {
 	return image->dispTransformFunc;
-}
-
-void GetImageBitmapID (Image_type* image, int* bitmapID)
-{
-	if (bitmapID)
-		*bitmapID = image->imgBitmapID;
-}
-
-void SetImageBitmapID (Image_type* image, int bitmapID)
-{
-	image->imgBitmapID = bitmapID;
 }
 
 size_t GetImageSizeofData (Image_type* image)

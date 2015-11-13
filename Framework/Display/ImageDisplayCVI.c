@@ -132,7 +132,7 @@ static void discard_ImageDisplayCVI_type	(ImageDisplayCVI_type** imageDisplayPtr
 void discard_ImageCVI_type (ImageDisplayCVI_type** ImageCVIPtr)
 {
 	ImageDisplayCVI_type* ImageCVI = *ImageCVIPtr;
-	if (!ImageCVI) return;
+	if (!ImageCVI) return;				   //TODO: CHANGE TO PTRS
 	
 
 	
@@ -300,12 +300,9 @@ Error:
 static int DisplayImageFunction (ImageDisplayCVI_type* imgDisplay, Image_type** image)
 {
 
-	Image_type* ImageCVI	= *image;
-	int 		ImageID 	= Image_typeToBitmap(image);
+	int ImageID = Image_typeToBitmap(image);
 	
-	SetImageBitmapID(ImageCVI, ImageID);
 	CanvasDrawBitmap (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ImageID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
-	
 	return 0;
 }
 

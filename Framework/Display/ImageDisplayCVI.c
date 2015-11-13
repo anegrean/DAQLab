@@ -31,6 +31,8 @@ static void 			DiscardImageList 			(ListType* imageListPtr);
 
 static int				DisplayImageFunction		(ImageDisplayCVI_type* imgDisplay, Image_type** image);
 
+static unsigned char* 	ConvertToBitArray(ImageDisplayCVI_type* display, Image_type* image);
+
 //==============================================================================
 // Global variables
 
@@ -50,13 +52,29 @@ static int				DisplayImageFunction		(ImageDisplayCVI_type* imgDisplay, Image_typ
 #define ImageDisplay_UI 	"./Framework/Display/UI_ImageDisplay.uir"   
 
 
-
-ImageDisplayCVI_type* init_ImageDisplayCVI_type (int parentPanHandl, char displayTitle[],  void *callbackData)		  //namechng
+// Initializes a display handle using DisplayCVI module. If known, the parameters imageType, imgWidth and imgHeight should be supplied
+// as memory allocation can be done only once at this point and reused when updating the display with a similar image.
+ImageDisplayCVI_type* init_ImageDisplayCVI_type (int    		parentPanHandl, 
+												 char   		displayTitle[],
+												 ImageTypes 	imageType,
+												 int			imgWidth,
+												 int			imgHeight,
+												 void*			callbackData
+)		 
 {
 INIT_ERR
 
+	//-------------------------------------
+	// Sanity checks
+	//-------------------------------------
+	
+	// height and width only valid if strict positive
+	if(imgHeight <= 0 || imgWidth <= 0) 
+	return NULL;
+
 	ImageDisplayCVI_type*	imgDisplay = malloc(sizeof(ImageDisplayCVI_type));
 	if (!imgDisplay) return NULL;
+	
 	
 	//-------------------------------------
 	// Init parent class
@@ -67,6 +85,7 @@ INIT_ERR
 	
 	init_ImageDisplay_type(&imgDisplay->baseClass, &imgDisplay, NULL, (DiscardFptr_type) discard_ImageDisplayCVI_type, (DisplayImageFptr_type) DisplayImageFunction, NULL, NULL);
 
+	
 	//-------------------------------------
 	// Init child class
 	//-------------------------------------
@@ -78,21 +97,40 @@ INIT_ERR
 	imgDisplay->displayPanHndl		= 0;
 	imgDisplay->canvasPanHndl		= 0;
 	imgDisplay->images				= 0;
+	imgDisplay->imgBitmapID			= -1;
+	imgDisplay->nBytes				= imgHeight * imgWidth * BytesPerPixelDepth;
+	imgDisplay->imgHeight			= imgHeight;
+	imgDisplay->imgWidth			= imgWidth;
+	imgDisplay->bitmapBitArray		= NULL;
 
 	
 	// ALLOC Resources
 	//---------------------------------
 	
+	if(imgHeight > 0 && imgWidth > 0)
+		nullChk(imgDisplay->bitmapBitArray = malloc(BytesPerPixelDepth * imgWidth * imgHeight));
+	else
+		goto Error;
+		
 	// loading display panel into workspace panel
 	errChk( imgDisplay->displayPanHndl = LoadPanel (parentPanHandl, ImageDisplay_UI, DisplayPan) );
-	
+
 	// loading canvas panel into display panel
 	errChk( imgDisplay->canvasPanHndl = LoadPanel (imgDisplay->displayPanHndl, ImageDisplay_UI, CanvasPan) ); 
 	
 	// create image list
-	nullChk( imgDisplay->images = ListCreate(sizeof(Image_type*)) );    
+	nullChk( imgDisplay->images = ListCreate(sizeof(Image_type*)) );
+
+	// create bitmap bit array
+	nullChk( imgDisplay->bitmapBitArray = initBitArray(imgDisplay->nBytes));
+	
+	// create bitmap image handler
+	errChk(NewBitmap (-1, 24, imgWidth, imgHeight, NULL, imgDisplay->bitmapBitArray, NULL, &imgDisplay->imgBitmapID));
+	
+	
 
 	DisplayPanel (imgDisplay->canvasPanHndl);
+	DisplayPanel(imgDisplay->displayPanHndl);
 	
 	return imgDisplay;
 	
@@ -101,6 +139,16 @@ Error:
 	// cleanup
 	discard_ImageDisplayCVI_type(&imgDisplay);
 	return NULL;
+}
+
+unsigned char* initBitArray(int nBytes)
+{
+	unsigned char* bytes = NULL;
+	
+	bytes = (unsigned char*) malloc(nBytes * sizeof(unsigned char));
+	
+	if (!bytes) return NULL;
+	return bytes;
 }
 
 static void discard_ImageDisplayCVI_type	(ImageDisplayCVI_type** imageDisplayPtr)
@@ -113,6 +161,11 @@ static void discard_ImageDisplayCVI_type	(ImageDisplayCVI_type** imageDisplayPtr
 	//--------------
 	
 	DiscardImageList(&imgDisp->images);
+	
+	if(imgDisp->imgBitmapID >= 0)
+		DiscardBitmap(imgDisp->imgBitmapID);
+	
+	OKfree(imgDisp->bitmapBitArray);
 	
 	//--------------
 	// UI
@@ -160,149 +213,66 @@ void DiscardImageList (ListType* imageListPtr)
 	OKfreeList(*imageListPtr);
 }
 
-
-static unsigned char* convertToBitArray(Image_type* image) 
+//TODO: split function in grayscale and color, to avoid unnecessary pixArray iterration
+static unsigned char* ConvertToBitArray(ImageDisplayCVI_type* display, Image_type* image) 
 {
 INIT_ERR
-	
-	nullChk(image);
+		int i 			= 0;
+		int j 			= 0;
+		int iterrations = display->nBytes;		
+		nullChk(image);
 
-	int 			width 	 	= 0;
-	int 			height	 	= 0;
-	int 			nBits 	 	= 0;	  
-	int 			i 		 	= 0;
-	unsigned char*	bits		= NULL;
-
-	GetImageSize(image, &width, &height);
-	
-	nBits = width * height;
-
-	nullChk( bits = (unsigned char*) malloc(nBits * sizeof(unsigned char)) );                              
-	
-	switch(GetImageType(image)) {
-		
-		case Image_UChar:					// 8 bit unsigned 
+		unsigned char* pixArray = (unsigned char*) GetImagePixelArray(image);
 			
-			unsigned char* iterr_char = GetImagePixelArray(image);
 		
-			for(i = 0; i < nBits; i++)
-				bits[i] = iterr_char[i];
-			
+		
+		switch(GetImageType(image)) {
+				
+									
+			case Image_UChar:					//8bit - nothing to do 
 			break;
-		
-		case Image_UShort:					// 16 bit unsigned   
-		case Image_Short:					// 16 bit signed
 			
-			unsigned short int 	max_short	= 0;
-			unsigned short int 	min_short	= 0;
+			case Image_UShort:					// 16 bit unsigned
+			case Image_Short:					// 16 bit signed
+			break;
 			
-			unsigned short int* iterr_short = GetImagePixelArray(image);
-		
-			max_short = iterr_short[0];
-			min_short = iterr_short[0];
-			
-			for(i = 0; i < nBits; i++) {
-			
-				if(max_short < iterr_short[i])
-					max_short = iterr_short[i];
-			
-				if(min_short > iterr_short[i])
-					min_short = iterr_short[i];
-			
-			}
-			int intervalLength_short = (max_short - min_short) / sizeof(unsigned char);
-			
-			for(i = 0; i < nBits; i++) {
-				bits[i] = iterr_short[i] / intervalLength_short;
-			}
-		break;
-		
-		case Image_UInt:					// 32 bit unsigned
-		case Image_Int:						// 32 bit signed
-			
-			unsigned int max_int	= 0;
-			unsigned int min_int	= 0;
-			
-			unsigned int* iterr_int = (unsigned  int*) GetImagePixelArray(image);
-						;
-			max_int = iterr_int[0];
-			min_int = iterr_int[0];
-			
-			for(i = 0; i < nBits; i++) {
-			
-				if(max_int < iterr_int[i])
-					max_int = iterr_int[i];
-			
-				if(min_int > iterr_int[i])
-					min_int = iterr_int[i];
-			
-			}
-			
-			int intervalLength_int = (max_int - min_int) / sizeof(unsigned char);
-			
-			for(i = 0; i < nBits; i++) {
-				bits[i] = iterr_int[i] / intervalLength_int;
-			}
-		break;
-		
-		case Image_Float:					// 32 bit float   :
-			
-			float max_float	 	 = 0;
-			float min_float		 = 0;
-			float* iterr_float	 = (float*) GetImagePixelArray(image);
-			
-			max_float = iterr_float[0];
-			min_float = iterr_float[0];
-			
-			for(i = 0; i < nBits; i++) {
-			
-				if(max_float < iterr_float[i])
-					max_float = iterr_float[i];
-			
-				if(min_float > iterr_float[i])
-					min_float = iterr_float[i];
-			
-			}
-			
-			int intervalLength_float = (max_float - min_float) / sizeof(unsigned char);
-			
-			for(i = 0; i < nBits; i++) {
-				bits[i] = iterr_float[i] / intervalLength_float;
-			}
-		break;
+			case Image_UInt:					// 32 bit unsigned
+			case Image_Int:						// 32 bit signed
+			break;
 
-	
-	}
-		return bits;
+			case Image_Float:					// 32 bit float 
+			break;
+			
+		}
+		
+		//for all greyscale images
+			//for each 32 bit value
+			for(i = 0; i < iterrations; i = i + BytesPerPixelDepth) {
+				
+				//for each of the 4 bytes of the 32 bit value
+				for(j = 0; j < BytesPerPixelDepth; j++) {			  
+					if(j == 0) 
+						display->bitmapBitArray[i] = 0;
+					else
+						display->bitmapBitArray[i+j] = pixArray[i];
+				}
+			}
+			
+			// yield access to pixel array generic data
+			pixArray = NULL;
 Error:
 		return NULL;
 }
 
-static int Image_typeToBitmap(Image_type** image)
-{
-INIT_ERR 
-
-	int BitmapID	 		= 0;
-	int width 		 		= 0;
-	int height 		 		= 0;
-	
-	Image_type* ImageCVI 	= *image;
-	unsigned char *bits		= convertToBitArray(ImageCVI);
-	
-	GetImageSize(ImageCVI, &width, &height); 
-	errChk(NewBitmap (-1, 24, width, height, NULL, bits, NULL, &BitmapID));
-	
-	return BitmapID;
-Error:
-	return -1;
-}
 
 static int DisplayImageFunction (ImageDisplayCVI_type* imgDisplay, Image_type** image)
 {
 
-	int ImageID = Image_typeToBitmap(image);
+//	unsigned char* bits = ConvertToBitArray(imgDisplay, *image);
+//	SetBitmapData(imgDisplay->imgBitmapID, -1, 24, NULL, bits, NULL);
 	
-	CanvasDrawBitmap (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ImageID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
+	CanvasDrawBitmap (imgDisplay->canvasPanHndl, CanvasPan_Canvas, imgDisplay->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
+	
 	return 0;
 }
 

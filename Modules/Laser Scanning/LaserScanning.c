@@ -6989,8 +6989,8 @@ INIT_ERR
 				
 				// if display was discarded, create a new display
 				if (!*imgDisplayPtr)
-					nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
-				//	nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayCVI_type(imgBuffer->scanChan, "Test Windows", NULL));
+				//	nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
+					nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayCVI_type(0, "Test Windows",imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, NULL));
 				else {
 					discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
 					(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;

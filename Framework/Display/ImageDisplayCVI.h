@@ -44,7 +44,6 @@ typedef struct ImageDisplayCVI	ImageDisplayCVI_type;
 
 ImageDisplayCVI_type* init_ImageDisplayCVI_type (int    		parentPanHandl, 
 												 char   		displayTitle[],
-												 ImageTypes 	imageType,
 												 int			imgWidth,
 												 int			imgHeight,
 												 void*			callbackData
@@ -56,34 +55,6 @@ void						discard_ImageDisplayCVI_type	(ImageDisplayCVI_type** imageDisplayPtr);
 int							DisplayImage					(ImageDisplayCVI_type* imageDisp, Image_type* images[]);
 unsigned char* 				initBitArray					(int nBits);
 
-
-
-struct ImageDisplayCVI {
-ImageDisplay_type baseClass; 
-	//---------------------------------------------------------------------------------------------------------------
-	// DATA
-	//---------------------------------------------------------------------------------------------------------------
-	
-	ListType				images;				// List of Image_type* elements. Data in this image is used to update the display whenever needed. Note: do not modify this data directly!
-	BOOL					update;				// If True, the plot will display each time the latest waveform added to it. If False, the user can use the scrollbar to return to a previous plot. Default: True.
-	int						imgBitmapID;		// this is the handle to the image provided to the display canvas, it is updated from the "images" array, when needed.
-	unsigned char* 			bitmapBitArray;		// Array of bits used to create the bitmap image
-	int						nBytes;				// number of bits in the bitmapBitArray;
-	int						imgHeight;			// image height
-	int 					imgWidth;			// image width
-	
-	// UI
-	int						displayPanHndl;
-	int						canvasPanHndl;
-	int						menuBarHndl;
-	int						menuID_Close;
-	int						menuID_Save;
-	//int						scrollbarCtrl;
-	
-	// CALLBACK
-	//WaveformDisplayCB_type	callbackFptr;
-	void*					callbackData;
-};
 
 
 #ifdef __cplusplus

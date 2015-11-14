@@ -50,12 +50,11 @@
 #define ScanEngine_SourceVChan_CompositeImage				"composite image"			// Combined image channels.
 #define ScanEngine_SourceVChan_ImageChannel					"image channel"				// Assembled image from a single detection channel. VChan of DL_Image type for frame scan and Allowed_Detector_Data_Types for point scan.
 #define ScanEngine_SinkVChan_DetectionChan					"detection channel"			// Incoming fluorescence signal to assemble an image from.
-#define ScanEngine_SourceVChan_Shutter_Command				"shutter command"
 #define ScanEngine_SourceVChan_PixelPulseTrain				"pixel pulse train"			// Source VChan of DL_PulseTrain_Ticks type
 #define ScanEngine_SourceVChan_PixelSamplingRate			"pixel sampling rate"		// 1/pixel_dwell_time = pixel sampling rate in [Hz]
 #define ScanEngine_SourceVChan_NPixels						"detection channel n pixels"
 #define ScanEngine_SourceVChan_ROIHold						"ROI hold"
-#define ScanEngine_SourceVChan_ROIStimulate					"ROI stimulate"
+#define ScanEngine_SourceVChan_ROIShutter					"ROI shutter"
 
 // Default Scan Axis Calibration VChan base names. Default base names must be unique among each other!
 #define ScanAxisCal_SourceVChan_Command						"scan axis cal command"
@@ -389,8 +388,6 @@ struct ScanEngine {
 	SinkVChan_type*				VChanFastAxisPos;			// Position feedback signals (optional for some scan axis types)
 	SinkVChan_type*				VChanSlowAxisPos;
 	
-	SourceVChan_type*			VChanShutter;				// Mechanical shutter command.
-	
 	SourceVChan_type*			VChanPixelPulseTrain;		// Pixel pulse train.
 	SourceVChan_type*			VChanPixelSamplingRate;		// Pixel sampling rate (same as pixel pulse train except this is just the sampling rate in [Hz])
 	SourceVChan_type*			VChanNPixels;				// N pixels.
@@ -403,9 +400,9 @@ struct ScanEngine {
 															// a point ROI the signal has a value of 1 (TRUE) which remains TRUE until the galvos leave the point ROI to another point
 															// ROI or back to their parked position, during which the signal is again FALSE.
 															
-	SourceVChan_type*			VChanROIStimulate;			// ROI timing signal of DL_RepeatedWaveform_UChar type generated when a point ROI must be photostimulated. The signal starts 
-															// with the galvos in their parked position with a value of 0 (FALSE) and takes a value of 1 (TRUE) when photostimulation must
-															// take place. This signal can be sent for example to a Pockells module which will apply a certain stimulation intensity to it.
+	SourceVChan_type*			VChanROIShutter;			// ROI timing signal of DL_RepeatedWaveform_UChar type generated when a point ROI must be photostimulated or an area must be scanned. 
+															// The signal starts with the galvos in their parked position with a value of 0 (FALSE) and takes a value of 1 (TRUE) when the laser must be on.
+															// This signal can be sent for example to a Pockells module which will apply a certain stimulation intensity to it.
 	
 	SourceVChan_type*			VChanCompositeImage;		// Scan Engine composite RGB image output.
 	
@@ -775,9 +772,6 @@ static void								DLUnregisterScanEngine								(ScanEngine_type* engine);
 	//------------------------
 	// Common functionality
 	//------------------------
-
-	// opens/closes scan engine laser shutter
-static int								OpenScanEngineShutter								(ScanEngine_type* engine, BOOL openStatus, char** errorMsg);
 
 	// sends a voltage command to one of the scan axes
 static int 								SendScanAxisCommand									(ScanEngine_type* engine, RasterScanAxes scanAxis, double voltage, char** errorMsg);
@@ -1309,11 +1303,11 @@ INIT_ERR
 	SetCtrlVal(pointScanPanHndl, PointTab_Stimulate, rectRaster->pointJumpSettings->stimulate);
 	SetRectRasterScanEnginePointScanStimulateUI(pointScanPanHndl, rectRaster->pointJumpSettings->stimulate);
 		// VChan
-		// activate ROI stimulate VChan
+		// activate ROI shutter VChan
 	if (rectRaster->pointJumpSettings->stimulate)
-		SetVChanActive((VChan_type*)rectRaster->baseClass.VChanROIStimulate, TRUE);
+		SetVChanActive((VChan_type*)rectRaster->baseClass.VChanROIShutter, TRUE);
 	else
-		SetVChanActive((VChan_type*)rectRaster->baseClass.VChanROIStimulate, FALSE);
+		SetVChanActive((VChan_type*)rectRaster->baseClass.VChanROIShutter, FALSE);
 	//------------------------
 	
 	// set integration
@@ -4399,12 +4393,11 @@ INIT_ERR
 	char*				fastAxisPosVChanName					= NULL;
 	char*				slowAxisPosVChanName					= NULL;
 	char*				compositeImageVChanName					= NULL;
-	char*				shutterCommandVChanName					= NULL;
 	char*				pixelPulseTrainVChanName				= NULL;
 	char*				pixelSamplingRateVChanName				= NULL;
 	char*				nPixelsVChanName						= NULL;
 	char*				ROIHoldVChanName						= NULL;
-	char*				ROIStimulateVChanName					= NULL;
+	char*				ROIShutterVChanName						= NULL;
 	
 	// assemble default VChan names
 	nullChk( fastAxisComVChanName 				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr, ScanEngine_SourceVChan_FastAxis_Command, 0) );
@@ -4415,12 +4408,11 @@ INIT_ERR
 	nullChk( fastAxisPosVChanName	 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_FastAxis_Position, 0) );
 	nullChk( slowAxisPosVChanName	 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SinkVChan_SlowAxis_Position, 0) );
 	nullChk( compositeImageVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_CompositeImage, 0) );
-	nullChk( shutterCommandVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_Shutter_Command, 0) );
 	nullChk( pixelPulseTrainVChanName 			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelPulseTrain, 0) );
 	nullChk( pixelSamplingRateVChanName			= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_PixelSamplingRate, 0) );
 	nullChk( nPixelsVChanName 					= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_NPixels, 0) );
 	nullChk( ROIHoldVChanName					= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROIHold, 0) );
-	nullChk( ROIStimulateVChanName				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROIStimulate, 0) );
+	nullChk( ROIShutterVChanName				= DLVChanName((DAQLabModule_type*)lsModule, *taskControllerPtr,	ScanEngine_SourceVChan_ROIShutter, 0) );
 	
 	//------------------------
 	// init
@@ -4447,12 +4439,11 @@ INIT_ERR
 	engine->VChanGalvoComSamplingRate	= NULL;
 	engine->VChanFastAxisPos			= NULL;
 	engine->VChanCompositeImage			= NULL;
-	engine->VChanShutter				= NULL;
 	engine->VChanPixelPulseTrain		= NULL;
 	engine->VChanPixelSamplingRate		= NULL;
 	engine->VChanNPixels				= NULL;
 	engine->VChanROIHold				= NULL;
-	engine->VChanROIStimulate			= NULL;
+	engine->VChanROIShutter				= NULL;
 	engine->scanChans 					= NULL;
 	engine->nScanChans					= 0;
 	// composite image display
@@ -4491,13 +4482,12 @@ INIT_ERR
 	nullChk( engine->VChanFastAxisPos			= init_SinkVChan_type(fastAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, NULL) ); 
 	nullChk( engine->VChanSlowAxisPos			= init_SinkVChan_type(slowAxisPosVChanName, allowedScanAxisPacketTypes, NumElem(allowedScanAxisPacketTypes), engine, VChanDataTimeout, NULL) ); 
 	nullChk( engine->VChanCompositeImage		= init_SourceVChan_type(compositeImageVChanName, DL_Image, engine, NULL) );
-	nullChk( engine->VChanShutter				= init_SourceVChan_type(shutterCommandVChanName, DL_Waveform_UChar, engine, NULL) ); 
 	nullChk( engine->VChanPixelPulseTrain		= init_SourceVChan_type(pixelPulseTrainVChanName, DL_PulseTrain_Ticks, engine, NULL) ); 	
 	nullChk( engine->VChanPixelSamplingRate		= init_SourceVChan_type(pixelSamplingRateVChanName, DL_Double, engine, NULL) ); 	
 	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_UInt64, engine, NULL) ); 	
 	nullChk( engine->objectives					= ListCreate(sizeof(Objective_type*)) ); 
 	nullChk( engine->VChanROIHold				= init_SourceVChan_type(ROIHoldVChanName, DL_Waveform_UShort, engine, NULL) );
-	nullChk( engine->VChanROIStimulate			= init_SourceVChan_type(ROIStimulateVChanName, DL_Waveform_UShort, engine, NULL) );
+	nullChk( engine->VChanROIShutter			= init_SourceVChan_type(ROIShutterVChanName, DL_Waveform_UShort, engine, NULL) );
 	
 	// register Sink VChans with the task controller
 	errChk( AddSinkVChan(engine->taskControl, engine->VChanFastAxisPos, NULL, NULL) );
@@ -4515,12 +4505,11 @@ INIT_ERR
 	OKfree(fastAxisPosVChanName);
 	OKfree(slowAxisPosVChanName);
 	OKfree(compositeImageVChanName);
-	OKfree(shutterCommandVChanName);
 	OKfree(pixelPulseTrainVChanName);
 	OKfree(pixelSamplingRateVChanName);
 	OKfree(nPixelsVChanName);
 	OKfree(ROIHoldVChanName);
-	OKfree(ROIStimulateVChanName);
+	OKfree(ROIShutterVChanName);
 	
 	return 0;
 	
@@ -4535,12 +4524,11 @@ Error:
 	OKfree(fastAxisPosVChanName);
 	OKfree(slowAxisPosVChanName);
 	OKfree(compositeImageVChanName);
-	OKfree(shutterCommandVChanName);
 	OKfree(pixelPulseTrainVChanName);
 	OKfree(pixelSamplingRateVChanName);
 	OKfree(nPixelsVChanName);
 	OKfree(ROIHoldVChanName);
-	OKfree(ROIStimulateVChanName);
+	OKfree(ROIShutterVChanName);
 	
 	discard_ScanEngine_type(enginePtr);
 	return errorInfo.error;
@@ -4562,12 +4550,11 @@ static void	discard_ScanEngine_type (ScanEngine_type** enginePtr)
 	discard_VChan_type((VChan_type**)&engine->VChanFastAxisPos);
 	discard_VChan_type((VChan_type**)&engine->VChanSlowAxisPos);
 	discard_VChan_type((VChan_type**)&engine->VChanCompositeImage);
-	discard_VChan_type((VChan_type**)&engine->VChanShutter);
 	discard_VChan_type((VChan_type**)&engine->VChanPixelPulseTrain);
 	discard_VChan_type((VChan_type**)&engine->VChanPixelSamplingRate);
 	discard_VChan_type((VChan_type**)&engine->VChanNPixels);
 	discard_VChan_type((VChan_type**)&engine->VChanROIHold);
-	discard_VChan_type((VChan_type**)&engine->VChanROIStimulate); 
+	discard_VChan_type((VChan_type**)&engine->VChanROIShutter); 
 	
 	// discard composite image display
 	discard_ImageDisplay_type(&engine->compositeImgDisplay);
@@ -4620,12 +4607,11 @@ static int DLRegisterScanEngine (ScanEngine_type* engine)
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanFastAxisPos);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanSlowAxisPos);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanCompositeImage);
-	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanShutter);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelPulseTrain);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelSamplingRate);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanNPixels);
 	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROIHold);
-	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROIStimulate); 
+	DLRegisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROIShutter); 
 		
 	for (size_t i = 0; i < engine->nScanChans; i++)
 		RegisterDLScanChan(engine->scanChans[i]);
@@ -4675,10 +4661,6 @@ static void DLUnregisterScanEngine (ScanEngine_type* engine)
 	if (engine->VChanCompositeImage)
 		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanCompositeImage);
 	
-	// shutter command
-	if (engine->VChanShutter)
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanShutter);
-	
 	// pixel pulse train
 	if (engine->VChanPixelPulseTrain)
 		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanPixelPulseTrain);
@@ -4695,9 +4677,9 @@ static void DLUnregisterScanEngine (ScanEngine_type* engine)
 	if (engine->VChanROIHold)
 		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROIHold);
 	
-	// ROI stimulate
-	if (engine->VChanROIStimulate)
-		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROIStimulate);
+	// ROI shutter
+	if (engine->VChanROIShutter)
+		DLUnregisterVChan((DAQLabModule_type*)engine->lsModule, (VChan_type*)engine->VChanROIShutter);
 	
 	// scan channels
 	for (size_t i = 0; i < engine->nScanChans; i++)
@@ -4709,35 +4691,6 @@ static void DLUnregisterScanEngine (ScanEngine_type* engine)
 	if (engine->taskControl)
 		DLRemoveTaskController((DAQLabModule_type*)engine->lsModule, engine->taskControl); 
 		
-}
-
-static int OpenScanEngineShutter (ScanEngine_type* engine, BOOL openStatus, char** errorMsg)
-{
-INIT_ERR
-	
-	unsigned char*			shutterCommand				= NULL;
-	DataPacket_type*		shutterDataPacket			= NULL;
-	DSInfo_type*			dsInfo						= NULL;
-	
-	// get ietartor info
-	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(engine->taskControl), WAVERANK) );
-	
-	nullChk( shutterCommand			= malloc (sizeof(unsigned char)) );
-	*shutterCommand					= (unsigned char) openStatus;
-	nullChk( shutterDataPacket		= init_DataPacket_type(DL_UChar, (void**)&shutterCommand, &dsInfo, NULL) );
-	
-	errChk( SendDataPacket(engine->VChanShutter, &shutterDataPacket, FALSE, &errorInfo.errMsg) );
-	
-	return 0;
-	
-Error:
-	
-	// cleanup
-	OKfree(shutterCommand);
-	discard_DataPacket_type(&shutterDataPacket);
-	discard_DSInfo_type(&dsInfo);
-	
-RETURN_ERR
 }
 
 static int SendScanAxisCommand (ScanEngine_type* engine, RasterScanAxes scanAxis, double voltage, char** errorMsg)
@@ -4985,6 +4938,18 @@ static void	discard_RectRaster_type (RectRaster_type** rectRasterPtr)
 	
 	discard_PointJumpSet_type(&rectRaster->pointJumpSettings);
 	
+	//----------------------------------
+	// Scan ROIs
+	
+	Rect_type**		rectPtr		= NULL;
+	size_t			nROIs		= ListNumItems(rectRaster->scanROIs);
+	
+	for (size_t i = 1; i <= nROIs; i++) {
+		rectPtr = ListGetPtrToItem(rectRaster->scanROIs, i);
+		discard_Rect_type(rectPtr);
+	}
+	OKfreeList(rectRaster->scanROIs);
+	
 	//--------------------------------------------------------------------
 	// discard Scan Engine data
 	//--------------------------------------------------------------------
@@ -5146,6 +5111,10 @@ INIT_ERR
 						SetCtrlAttribute(panel, ScanTab_NFrames, ATTR_DIMMED, TRUE);
 					else
 						SetCtrlAttribute(panel, ScanTab_NFrames, ATTR_DIMMED, FALSE);
+					
+					break;
+					
+				case ScanTab_ROIs:
 					
 					break;
 					
@@ -5364,6 +5333,36 @@ INIT_ERR
 					break;
 			}
 			break;
+			
+		case EVENT_KEYPRESS:
+			
+			switch (control) {
+					
+				case ScanTab_ROIs:
+					
+					// continue only if Del key is pressed
+					if (eventData1 != VAL_FWD_DELETE_VKEY) break;
+					
+					int itemIdx = 0;
+					
+					GetCtrlIndex(panel, control, &itemIdx);
+					if (itemIdx < 0) break; // stop here if list is empty
+					
+					// get ROI name from UI list
+					ROI_type*	ROIItem = *(ROI_type**) ListGetPtrToItem(scanEngine->scanROIs, itemIdx+1);
+					
+					// if there is an active display, remove ROI item from display and from scan engine list
+					if (scanEngine->baseClass.activeDisplay)
+						(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, ROIItem->ROIName, ROI_Delete);
+					
+					DeleteListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, itemIdx, 1);
+					ListRemoveItem(scanEngine->scanROIs, 0, itemIdx + 1);
+					
+					break;
+					
+			}
+			
+			break;
 	}
 	
 Error:
@@ -5434,9 +5433,9 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					// VChan
 					if (scanEngine->pointJumpSettings->stimulate)
-						SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIStimulate, TRUE);
+						SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, TRUE);
 					else
-						SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIStimulate, FALSE);
+						SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, FALSE);
 					
 					break;
 			
@@ -5614,7 +5613,6 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 			
 		case EVENT_KEYPRESS:
 			
-			
 			switch (control) {
 					
 				case PointTab_ROIs:
@@ -5625,9 +5623,12 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlIndex(panel, control, &itemIdx);
 					if (itemIdx < 0) break; // stop here if list is empty
 					
+					// get ROI name from UI list
+					ROI_type*	ROIItem = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumpSettings->pointJumps, itemIdx+1);
+					
 					// if there is an active display, remove ROI item from display and from scan engine list
 					if (scanEngine->baseClass.activeDisplay)
-						(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, itemIdx + 1, ROI_Delete);
+						(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, ROIItem->ROIName, ROI_Delete);
 					
 					DeleteListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, itemIdx, 1);
 					ListRemoveItem(scanEngine->pointJumpSettings->pointJumps, 0, itemIdx + 1);
@@ -5659,13 +5660,13 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						ROI->active = TRUE;
 						// if there is an active display, mark point ROI as active and make it visible
 						if (scanEngine->baseClass.activeDisplay)
-							(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Show);
+							(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, ROI->ROIName, ROI_Show);
 					} else {
 						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumpSettings->pointJumps, eventData2 + 1);
 						ROI->active = FALSE;
 						// if there is an active display mark point ROI as inactive and hide it
 						if (scanEngine->baseClass.activeDisplay)
-							(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, eventData2 + 1, ROI_Hide);
+							(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, ROI->ROIName, ROI_Hide);
 					}
 					
 					// calculate minimum point jump start delay
@@ -6337,7 +6338,7 @@ INIT_ERR
 	double*					slowAxisJumpSignal				= NULL;
 	double*					pixelSamplingRatePtr			= NULL;
 	unsigned short*			ROIHoldSignal					= NULL;
-	unsigned short*			ROIStimulateSignal				= NULL;
+	unsigned short*			ROIShutterSignal				= NULL;
 	uInt64*					nGalvoSamplesPtr				= NULL;
 	double*					galvoSamplingRatePtr			= NULL;
 	uInt64					nPixels							= 0;
@@ -6357,7 +6358,7 @@ INIT_ERR
 	RepeatedWaveform_type*	fastAxisJumpWaveform			= NULL;
 	RepeatedWaveform_type*	slowAxisJumpWaveform			= NULL;
 	Waveform_type*			ROIHoldWaveform					= NULL;
-	Waveform_type*			ROIStimulateWaveform			= NULL;
+	Waveform_type*			ROIShutterWaveform			= NULL;
 	
 	
 	//-----------------------------------------------
@@ -6504,10 +6505,10 @@ INIT_ERR
 		}
 	
 		// stimulation timing signal
-		if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate)) {
-			nullChk( ROIStimulateSignal = realloc(ROIStimulateSignal, nGalvoJumpSamples * sizeof(unsigned short)) );
+		if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIShutter)) {
+			nullChk( ROIShutterSignal = realloc(ROIShutterSignal, nGalvoJumpSamples * sizeof(unsigned short)) );
 			for (size_t i = nPreviousGalvoJumpSamples; i < nPreviousGalvoJumpSamples + nNewGalvoJumpSamples; i++)
-				ROIStimulateSignal[i] = 0;
+				ROIShutterSignal[i] = 0;
 		}
 	
 		//-----------------
@@ -6547,11 +6548,11 @@ INIT_ERR
 					ROIHoldSignal[j] = TRUE;
 		
 			// set ROI stimulate signal
-			if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate))
+			if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIShutter))
 				for (uInt32 pulse = 0; pulse < pointJumpSet->globalPointScanSettings.nStimPulses; pulse++)
 					for (size_t j = nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples + nStimPulseOFFSamples); 
 						j < nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples+nStimPulseOFFSamples) + nStimPulseONSamples; j++)
-						ROIStimulateSignal[j] = TRUE;
+						ROIShutterSignal[j] = TRUE;
 		
 			nSamples += nJumpSamples + nExtraHoldSamples;
 		}
@@ -6582,8 +6583,8 @@ INIT_ERR
 		nullChk( ROIHoldWaveform = init_Waveform_type(Waveform_UShort, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIHoldSignal) );
 	
 	// generate ROI stimulate waveform
-	if (ROIStimulateSignal)
-		nullChk( ROIStimulateWaveform = init_Waveform_type(Waveform_UShort, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIStimulateSignal) );
+	if (ROIShutterSignal)
+		nullChk( ROIShutterWaveform = init_Waveform_type(Waveform_UShort, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIShutterSignal) );
 	
 	
 	//------------------------------------------------------------
@@ -6612,11 +6613,11 @@ INIT_ERR
 	}
 	
 	// ROI stimulate
-	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIStimulate)) {
+	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIShutter)) {
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, (void**)&ROIStimulateWaveform, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
-		errChk( SendDataPacket(scanEngine->baseClass.VChanROIStimulate, &dataPacket, FALSE, &errorInfo.errMsg) );
-		errChk( SendNullPacket(scanEngine->baseClass.VChanROIStimulate, &errorInfo.errMsg) );
+		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, (void**)&ROIShutterWaveform, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
+		errChk( SendDataPacket(scanEngine->baseClass.VChanROIShutter, &dataPacket, FALSE, &errorInfo.errMsg) );
+		errChk( SendNullPacket(scanEngine->baseClass.VChanROIShutter, &errorInfo.errMsg) );
 	}
 	
 	//------------------------------------------------------------
@@ -6692,7 +6693,7 @@ Error:
 	OKfree(fastAxisJumpSignal);
 	OKfree(slowAxisJumpSignal);
 	OKfree(ROIHoldSignal);
-	OKfree(ROIStimulateSignal);
+	OKfree(ROIShutterSignal);
 	OKfree(nGalvoSamplesPtr);
 	OKfree(galvoSamplingRatePtr);
 	OKfree(nPixelsPtr);
@@ -6700,7 +6701,7 @@ Error:
 	discard_RepeatedWaveform_type(&fastAxisJumpWaveform);
 	discard_RepeatedWaveform_type(&slowAxisJumpWaveform);
 	discard_Waveform_type(&ROIHoldWaveform);
-	discard_Waveform_type(&ROIStimulateWaveform);
+	discard_Waveform_type(&ROIShutterWaveform);
 	discard_PulseTrain_type(&pixelPulseTrain);
 	discard_DataPacket_type(&dataPacket);
 	discard_DSInfo_type(&dsInfo);
@@ -8114,8 +8115,8 @@ static void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			// inactivate ROI hold VChan
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIHold, FALSE);
 			
-			// inactivate ROI stimulate VChan
-			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIStimulate, FALSE);
+			// activate ROI shutter VChan
+			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, TRUE);
 			
 			break;
 							
@@ -8161,11 +8162,11 @@ static void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			// activate ROI hold VChan
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIHold, TRUE);
 			
-			// activate ROI stimulate VChan
+			// activate ROI shutter VChan
 			if (scanEngine->pointJumpSettings->stimulate)
-				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIStimulate, TRUE);
+				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, TRUE);
 			else
-				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIStimulate, FALSE);
+				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, FALSE);
 			
 			break;
 	}
@@ -8331,6 +8332,23 @@ static void RestoreScanSettingsFromImageDisplay (ImageDisplay_type* imgDisplay, 
 {
 INIT_ERR
 
+	// scan engine point ROI list 
+	ListType			pointROIList	= scanEngine->pointJumpSettings->pointJumps;
+	size_t				nPointROIs 		= ListNumItems(pointROIList);
+	PointJump_type**	pointJumpPtr	= NULL;
+	
+	// scan engine rectangle ROI list
+	ListType			rectROIList		= scanEngine->scanROIs;
+	size_t				nRectROIs 		= ListNumItems(rectROIList);
+	Rect_type**			rectPtr			= NULL;
+	
+	// image ROI list
+	ListType			imageROIList	= GetImageROIs(imgDisplay->image);
+	size_t 				nImageROIs		= ListNumItems(imageROIList);
+	ROI_type*   		ROI				= NULL;
+	ROI_type*   		ROICopy			= NULL;
+	
+	
 	// assign this image display to the scan engine
 	scanEngine->baseClass.activeDisplay	= imgDisplay; 
 	
@@ -8353,49 +8371,81 @@ INIT_ERR
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, scanEngine->scanSettings.pixSize);
 	
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
-	// Clear point jump and frame scan ROIs
+	// Clear point jump ROIs
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
 	
 	// clear ROIs in the scan engine UI
 	ClearListCtrl(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs);
 	
 	// clear ROIs from the scan engine
-	size_t					nPoints 		= ListNumItems(scanEngine->pointJumpSettings->pointJumps);
-	PointJump_type**		pointJumpPtr	= NULL;
-	
-	for (size_t i = 1; i <= nPoints; i++) {
-		pointJumpPtr = ListGetPtrToItem(scanEngine->pointJumpSettings->pointJumps, i);
+	for (size_t i = 1; i <= nPointROIs; i++) {
+		pointJumpPtr = ListGetPtrToItem(pointROIList, i);
 		discard_PointJump_type(pointJumpPtr);
 	}
-	ListClear(scanEngine->pointJumpSettings->pointJumps);
+	ListClear(pointROIList);
 	
+	//----------------------------------------------------------------------------------------------------------------------------------------------------
+	// Clear frame scan ROIs and add parent image ROI
+	//----------------------------------------------------------------------------------------------------------------------------------------------------
+	
+	// clear ROIs in the scan engine UI
+	ClearListCtrl(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs);
+	
+	// clear ROIs from the scan engine list
+	for (size_t i = 1; i <= nRectROIs; i++) {
+		rectPtr = ListGetPtrToItem(rectROIList, i);
+		discard_Rect_type(rectPtr);
+	}
+	ListClear(rectROIList);
+	
+	// add parent image ROI
+	Rect_type*	parentRectROI		= NULL;
+	RGBA_type	parentRectROIColor	= {.R = 0, .G = 0, .B = 0, .alpha = 255}; // transparent
+	
+	nullChk( parentRectROI = initalloc_Rect_type(NULL, "", parentRectROIColor, TRUE, 0, 0, scanEngine->scanSettings.height, scanEngine->scanSettings.width) );
+	
+	// insert parent ROI in UI list
+	InsertListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, 0, "parent", 0);
+	
+	// check parent image ROI list item, which means that if this item is selected, scanning will open a new window, otherwise the scanned image will be displayed in the same window
+	CheckListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, 0, TRUE);
+	
+	// insert parent ROI in scan engine list
+	ListInsertItem(scanEngine->scanROIs, &parentRectROI, END_OF_LIST);
 	
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
 	// Restore point jump and frame scan ROIs
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
 	
-	ListType	ROIlist				= GetImageROIs(imgDisplay->image);
-	size_t 		nROIs 				= ListNumItems(ROIlist);
-	ROI_type*   ROI					= NULL;
-	ROI_type*   ROICopy				= NULL;
+	nPointROIs			= 0;
+	nRectROIs			= 1;	// there is already the parent ROI in the UI and scan engine lists
 	
-	for (size_t i = 1; i <= nROIs; i++) {
-		ROI = *(ROI_type**)ListGetPtrToItem(ROIlist, i);
+	for (size_t i = 1; i <= nImageROIs; i++) {
+		ROI = *(ROI_type**)ListGetPtrToItem(imageROIList, i);
 		ROICopy = (*ROI->copyFptr) ((void*)ROI);
 		
 		switch (ROI->ROIType) {
 						
 			case ROI_Point:
 				
+				nPointROIs++;
 				// insert ROI in point jump UI list
-				InsertListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, -1, ROI->ROIName, i);
-				
+				InsertListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, -1, ROI->ROIName, nPointROIs); // UI list item index matches always scanEngine->pointJumpSettings->pointJumps list index.
 				// mark point as checked/unchecked
-				CheckListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, i - 1, ROI->active); 
-				
+				CheckListItem(scanEngine->baseClass.pointScanPanHndl, PointTab_ROIs, nPointROIs - 1, ROI->active); 
 				// insert ROI item in the scan engine as well
 				ListInsertItem(scanEngine->pointJumpSettings->pointJumps, &ROICopy, END_OF_LIST);
-						
+				break;
+				
+			case ROI_Rectangle:
+				
+				nRectROIs++;
+				// insert ROI in frame scan UI list
+				InsertListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, -1, ROI->ROIName, nRectROIs); // UI list item index matches always scanEngine->pointJumpSettings->pointJumps list index.
+				// mark point as checked/unchecked (ROI visible or not)
+				CheckListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, nRectROIs - 1, ROI->active); 
+				// insert ROI item in the scan engine as well
+				ListInsertItem(scanEngine->scanROIs, &ROICopy, END_OF_LIST);
 				break;
 					
 			default:
@@ -8404,11 +8454,12 @@ INIT_ERR
 		}
 	}
 	
+	
 	// update jump start delay and minimum jump period
 	NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 	//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine); 
 	
-	if (nROIs)
+	if (nPointROIs)
 		SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, FALSE);
 	else
 		SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, TRUE);
@@ -9393,9 +9444,6 @@ INIT_ERR
 
 	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
 	
-	// open shutter
-	errChk( OpenScanEngineShutter(&engine->baseClass, 1, &errorInfo.errMsg) );
-	
 	// reset image scan buffers
 	for (size_t i = 0; i < engine->nImgBuffers; i++)
 		ResetRectRasterImgBuffer(engine->imgBuffers[i], FALSE);
@@ -9450,9 +9498,6 @@ INIT_ERR
 			break;
 	}
 	
-	// close shutter
-	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, &errorInfo.errMsg) );
-	
 	// flush leftover elements from the incoming detection pixel stream
 	for (size_t i = 0; i < engine->baseClass.nScanChans; i++)
 		errChk( ReleaseAllDataPackets(engine->baseClass.scanChans[i]->detVChan, &errorInfo.errMsg) );
@@ -9468,8 +9513,6 @@ INIT_ERR
 
 	RectRaster_type* 			engine 						= GetTaskControlModuleData(taskControl);
 	
-	// close shutter
-	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, &errorInfo.errMsg) );
 	// return to parked position
 	errChk( ReturnRectRasterToParkedPosition(engine, &errorInfo.errMsg) );
 	
@@ -9487,9 +9530,6 @@ INIT_ERR
 	
 	// reset acquired frames
 	SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, 0);
-	
-	// close shutter
-	errChk( OpenScanEngineShutter(&engine->baseClass, FALSE, &errorInfo.errMsg) ); 
 	
 Error:
 	

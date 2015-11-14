@@ -20,6 +20,14 @@
 
 #include "cvidef.h"
 #include "DataTypes.h"
+		
+//==============================================================================
+// Constants
+		
+#define Default_ROI_R_Color					0	   	// red
+#define Default_ROI_G_Color					255	   	// green
+#define Default_ROI_B_Color					0		// blue
+#define Default_ROI_A_Color					0		// alpha
 
 
 //==============================================================================
@@ -66,8 +74,8 @@ typedef enum {
 // Displays or updates an image in a display window
 typedef int				(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type** image);
 
-// Performs a ROI operation on the image display. ROIIdx is the 1-based ROI index from the image ROI list. If ROIIdx is 0, the operation applies to all ROIs.
-typedef void			(*ROIActionsFptr_type)						(ImageDisplay_type* imgDisplay, int ROIIdx, ROIActions action);
+// Performs a ROI operation on the image display. ROIName is the name of the ROI or ROIs from the image ROI list to which the operation applies. If ROIName is NULL, the operation applies to all ROIs.
+typedef void			(*ROIActionsFptr_type)						(ImageDisplay_type* imgDisplay, char ROIName[], ROIActions action);
 
 
 //--------------------------------------------------------------		

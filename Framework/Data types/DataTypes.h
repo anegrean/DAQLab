@@ -240,7 +240,7 @@ struct RGBAU64 {
 	// Region Of Interest (ROI) types for images
 	//----------------------------------------------------------------------------------------------
 
-typedef struct ROI 			ROI_type;			 // Base class
+typedef struct ROI 			ROI_type;			// Base class
 typedef struct Point		Point_type;		 	// Child class of ROI_type
 typedef struct Rect			Rect_type;		 	// Child class of ROI_type
 
@@ -665,7 +665,7 @@ Point_type*					initalloc_Point_type					(Point_type* point, char ROIName[], RGB
 
 void 						discard_Point_type 						(Point_type** PointPtr);
 
-	// Creates a Rectangle with default Black Opaque color.
+	// Creates a Rectangle.
 Rect_type*					initalloc_Rect_type						(Rect_type* rect, char ROIName[], RGBA_type color, BOOL active, int top, int left, int height, int width);
 void 						discard_Rect_type 						(Rect_type** RectPtr);
 

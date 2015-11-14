@@ -38,11 +38,6 @@
 
 #define NIDisplayFileSaveDefaultFormat		NIDisplay_Save_TIFF
 
-#define Default_ROI_R_Color					0	   	// red
-#define Default_ROI_G_Color					255	   	// green
-#define Default_ROI_B_Color					0		// blue
-#define Default_ROI_A_Color					0		// alpha
-
 
 //==============================================================================
 // Types
@@ -123,7 +118,7 @@ static int 								ImageSavePopup 									(Image* image, NIDisplayFileSaveForma
 
 static int 								DrawROI 										(Image* image, ROI_type* ROI);
 
-static void								NIVisionROIActions								(ImageDisplayNIVision_type* imgDisplay, int ROIIdx, ROIActions action);
+static void								NIVisionROIActions								(ImageDisplayNIVision_type* imgDisplay, char ROIName[], ROIActions action);
 
 static void								DiscardImaqImg									(Image** image);
 
@@ -509,16 +504,25 @@ Error:
 	
 }
 
-static void NIVisionROIActions (ImageDisplayNIVision_type* imgDisplay, int ROIIdx, ROIActions action)
+static void NIVisionROIActions (ImageDisplayNIVision_type* imgDisplay, char ROIName[], ROIActions action)
 {
 	ROI_type**		ROIPtr 		= NULL;
 	ROI_type*		ROI			= NULL;
 	ListType		ROIlist 	= GetImageROIs(imgDisplay->baseClass.image);
 	size_t			nROIs		= ListNumItems(ROIlist);
+	size_t			i			= 1;
 	
-	if (ROIIdx) {
-		ROIPtr = ListGetPtrToItem(ROIlist, ROIIdx);
+	while (i <= nROIs) {
+		
+		ROIPtr = ListGetPtrToItem(ROIlist, i);
 		ROI = *ROIPtr;
+		
+		// check if ROIName is given if it matches with any ROI names in the image list
+		if (ROIName && strcmp(ROIName, ROI->ROIName)) {
+			i++;
+			continue;
+		}
+		
 		switch (action) {
 				
 			case ROI_Show:
@@ -527,7 +531,7 @@ static void NIVisionROIActions (ImageDisplayNIVision_type* imgDisplay, int ROIId
 					DrawROI(imgDisplay->NIImage, ROI);
 					ROI->active = TRUE;
 				}
-				
+				i++;
 				break;
 				
 			case ROI_Hide:
@@ -537,7 +541,7 @@ static void NIVisionROIActions (ImageDisplayNIVision_type* imgDisplay, int ROIId
 					imaqClearOverlay(imgDisplay->NIImage, ROI->ROIName);
 					ROI->active = FALSE;
 				}
-				
+				i++;
 				break;
 				
 			case ROI_Delete:
@@ -549,51 +553,13 @@ static void NIVisionROIActions (ImageDisplayNIVision_type* imgDisplay, int ROIId
 				// discard ROI data
 				(*ROI->discardFptr)((void**)ROIPtr);
 				// remove ROI from image display list
-				ListRemoveItem(ROIlist, 0, ROIIdx);
+				ListRemoveItem(ROIlist, 0, i);
+				nROIs--;
 				break;
-		}
-	} else {
-		for (size_t i = 1; i <= nROIs; i++) {
-			ROIPtr = ListGetPtrToItem(ROIlist, i);
-			ROI = *ROIPtr;
-			switch (action) {
-				
-				case ROI_Show:
-				
-					if (!ROI->active) {
-						DrawROI(imgDisplay->NIImage, ROI);
-						ROI->active = TRUE;
-					}
-				
-					break;
-				
-				case ROI_Hide:
-				
-					// clear imaq ROI group (shape and label)
-					if (ROI->active) {
-						imaqClearOverlay(imgDisplay->NIImage, ROI->ROIName);
-						ROI->active = FALSE;
-					}
-				
-					break;
-				
-				case ROI_Delete:
-					
-					// clear imaq ROI group (shape and label)
-					if (ROI->active)
-						imaqClearOverlay(imgDisplay->NIImage, ROI->ROIName);
-					
-					// discard ROI data
-					(*ROI->discardFptr)((void**)ROIPtr);
-					// remove ROI from image display list
-					ListRemoveItem(ROIlist, 0, ROIIdx);
-					break;
-			}
 		}
 		
 	}
 	
-
 	// update imaq display
 	imaqDisplayImage(imgDisplay->NIImage, imgDisplay->imaqWndID, FALSE);
 	

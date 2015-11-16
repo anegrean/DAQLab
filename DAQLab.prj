@@ -670,10 +670,8 @@ Folder Id = 14
 [File 0048]
 File Type = "Library"
 Res Id = 48
-Path Is Rel = True
-Path Rel To = "Project"
-Path Rel Path = "HDF5/lib/hdf5.lib"
-Path = "/d/GitHub/DAQLab_private/HDF5/lib/hdf5.lib"
+Path Is Rel = False
+Path = "/c/Program Files/HDF_Group/HDF5/1.8.15/lib/hdf5.lib"
 Exclude = False
 Project Flags = 0
 Folder = "Framework/Data Storage"
@@ -971,7 +969,7 @@ Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "Framework/Display/ImageDisplayCVI.c"
 Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplayCVI.c"
-Exclude = False
+Exclude = True
 Compile Into Object File = False
 Project Flags = 0
 Folder = "Framework/Display"
@@ -1459,12 +1457,8 @@ Image Base Address x64 = 4194304
 Compiler Defines = "/DWIN32_LEAN_AND_MEAN"
 
 [Include Paths]
-Include Path 1 Is Rel = True
-Include Path 1 Rel To = "Project"
-Include Path 1 Rel Path = "HDF5/include"
-Include Path 1 = "/d/GitHub/DAQLab_private/HDF5/include"
-Include Path 2 Is Rel = False
-Include Path 2 = "/c/Program Files (x86)/National Instruments/LabVIEW 2013/cintools"
+Include Path 1 Is Rel = False
+Include Path 1 = "/c/Program Files/HDF_Group/HDF5/1.8.15/include"
 
 [Create Executable]
 Executable File_Debug Is Rel = True

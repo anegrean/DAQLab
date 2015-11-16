@@ -425,6 +425,7 @@ struct ScanEngine {
 	
 	double						referenceClockFreq;			// Reference clock frequency in [Hz] that determines the smallest time unit in which the galvo and pixel sampling times can be divided.
 	double						pixDelay;					// Pixel signal delay in [us] due to processing electronics measured from the moment the signal (fluorescence) is generated at the sample.
+	double						shutterSwitchTime;			// Switch time in [us] for laser beam modulation shutter (pockells cell or similar) to blank the beam during scan area fly-in time and line scan turnaround.
 	
 	//-----------------------------------
 	// Optics
@@ -759,6 +760,7 @@ static int 								init_ScanEngine_type 								(ScanEngine_type** 			engine,
 																						 	ScanEngineEnum_type 		engineType,
 																						 	double						referenceClockFreq,
 																						 	double						pixelDelay,
+																							double						shutterSwitchTime,
 																						 	double						scanLensFL,
 																						 	double						tubeLensFL);	
 
@@ -795,6 +797,7 @@ static RectRaster_type*					init_RectRaster_type								(LaserScanning_type*	lsM
 																				 	 		double					galvoSamplingRate,
 																				 	 		double					referenceClockFreq,
 																					 		double					pixelDelay,
+																							double					shutterSwitchTime,
 																				 	 		uInt32					scanHeight,
 																				 	 		int						scanHeightOffset,
 																				 	 		uInt32					scanWidth,
@@ -1650,7 +1653,8 @@ INIT_ERR
 												{"TubeLensFL", 					BasicData_Double, 		&scanEngine->tubeLensFL},
 												{"Objective", 					BasicData_CString, 		objectiveName},
 												{"PixelClockRate", 				BasicData_Double, 		&scanEngine->referenceClockFreq},
-												{"PixelSignalDelay", 			BasicData_Double, 		&scanEngine->pixDelay} 			};
+												{"PixelSignalDelay", 			BasicData_Double, 		&scanEngine->pixDelay},
+												{"ShutterSwitchTime",			BasicData_Double,		&scanEngine->shutterSwitchTime} };
 												
 		// save attributes
 		errChk( DLAddToXMLElem(xmlDOM, scanEngineXMLElement, scanEngineAttr, DL_ATTRIBUTE, NumElem(scanEngineAttr), xmlErrorInfo) );
@@ -1891,6 +1895,7 @@ INIT_ERR
 	double							objectiveFL						= 0;
 	double							referenceClockFreq				= 0;
 	double							pixelDelay						= 0;
+	double							shutterSwitchTime				= 0;
 	unsigned int					nFrames							= 0;
 	BOOL							continuousFrameScan				= FALSE;
 	char*							assignedObjectiveName			= NULL;
@@ -1907,7 +1912,8 @@ INIT_ERR
 																		{"TubeLensFL", 					BasicData_Double, 		&tubeLensFL},
 																		{"Objective", 					BasicData_CString, 		&assignedObjectiveName},
 																		{"PixelClockRate", 				BasicData_Double, 		&referenceClockFreq},
-																		{"PixelSignalDelay", 			BasicData_Double, 		&pixelDelay} };
+																		{"PixelSignalDelay", 			BasicData_Double, 		&pixelDelay},
+																		{"ShutterSwitchTime",			BasicData_Double,		&shutterSwitchTime}};
 																	
 	DAQLabXMLNode					objectiveAttr[]					= { {"Name", 						BasicData_CString, 		&objectiveName},
 																		{"FL", 							BasicData_Double, 		&objectiveFL} };
@@ -1974,7 +1980,7 @@ INIT_ERR
 					
 				
 				scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, continuousFrameScan, nFrames, galvoSamplingRate, referenceClockFreq, 
-							 pixelDelay, height, heightOffset, width, widthOffset, pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
+							 pixelDelay, shutterSwitchTime, height, heightOffset, width, widthOffset, pixelSize, pixelDwellTime, scanLensFL, tubeLensFL); 
 				
 				// load point scan settings
 				errChk( LoadCfg_PointScan((RectRaster_type*)scanEngine, (ActiveXMLObj_IXMLDOMElement_)scanEngineNode, xmlErrorInfo) );
@@ -2463,10 +2469,10 @@ Error:
 void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle)
 {
 	LaserScanning_type*		ls					= callbackData;
-	ScanEngine_type**		enginePtr;
-	ScanEngine_type*		engine;
-	int						workspacePanHndl;
-	int						tabIdx;
+	ScanEngine_type**		enginePtr			= NULL;
+	ScanEngine_type*		engine				= NULL;
+	int						workspacePanHndl	= 0;
+	int						tabIdx				= 0;
 	
 	// get pointer to selected scan engine
 	GetActiveTabPage(panelHandle, ScanPan_ScanEngines, &tabIdx);
@@ -2528,8 +2534,12 @@ void CVICALLBACK ScanEngineSettingsMenu_CB (int menuBarHandle, int menuItemID, v
 	// update galvo and pixel sampling rates
 	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_GalvoSamplingRate, ((RectRaster_type*)engine)->galvoSamplingRate/1e3); 		// convert from [Hz] to [kHz]
 	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_RefClkFreq, engine->referenceClockFreq/1e6);								// convert from [Hz] to [MHz] 
+	
 	// update pixel delay
-	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelDelay, engine->pixDelay);													// convert from [Hz] to [MHz] 
+	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_PixelDelay, engine->pixDelay);												// convert from [Hz] to [MHz] 
+	
+	// update shutter switch time
+	SetCtrlVal(engine->engineSetPanHndl, ScanSetPan_ShutterSwitchTime, engine->shutterSwitchTime);										
 	
 	DisplayPanel(engine->engineSetPanHndl);
 }
@@ -2603,7 +2613,7 @@ INIT_ERR
 						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 					
 							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, FALSE, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 
-											0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
+											0, 0, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelSize, NonResGalvoRasterScan_Default_PixelDwellTime, 1, 1);
 							
 							errChk( InsertRectRasterScanEngineToUI(ls, (RectRaster_type*)newScanEngine, &errorInfo.errMsg) );
 							
@@ -3408,6 +3418,10 @@ INIT_ERR
 				case ScanSetPan_PixelDelay:
 					
 					GetCtrlVal(panel, control, &engine->pixDelay);
+					break;
+					
+				case ScanSetPan_ShutterSwitchTime:
+					GetCtrlVal(panel, control, &engine->shutterSwitchTime);
 					break;
 					
 				case ScanSetPan_GalvoSamplingRate:
@@ -4378,6 +4392,7 @@ static int init_ScanEngine_type (ScanEngine_type** 			enginePtr,
 								 ScanEngineEnum_type 		engineType,
 								 double						referenceClockFreq,
 								 double						pixelDelay,
+								 double						shutterSwitchTime,
 								 double						scanLensFL,
 								 double						tubeLensFL)					
 {
@@ -4462,6 +4477,7 @@ INIT_ERR
 	engine->engineSetPanHndl			= 0;
 	engine->referenceClockFreq			= referenceClockFreq;
 	engine->pixDelay					= pixelDelay;
+	engine->shutterSwitchTime			= shutterSwitchTime;
 	// optics
 	engine->scanLensFL					= scanLensFL;
 	engine->tubeLensFL					= tubeLensFL;
@@ -4825,6 +4841,7 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*		lsModule,
 												double					galvoSamplingRate,
 												double					referenceClockFreq,
 												double					pixelDelay,
+												double					shutterSwitchTime,
 												uInt32					scanHeight,
 												int						scanHeightOffset,
 												uInt32					scanWidth,
@@ -4851,7 +4868,7 @@ INIT_ERR
 	SetTaskControlIterationTimeout(taskController, TaskControllerIterationTimeout);
 	
 	// init scan engine base class
-	errChk( init_ScanEngine_type((ScanEngine_type**)&engine, lsModule, &taskController, continuousFrameScan, nFrames, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, referenceClockFreq, pixelDelay, scanLensFL, tubeLensFL) );
+	errChk( init_ScanEngine_type((ScanEngine_type**)&engine, lsModule, &taskController, continuousFrameScan, nFrames, ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis, referenceClockFreq, pixelDelay, shutterSwitchTime, scanLensFL, tubeLensFL) );
 	
 	// override discard method
 	engine->baseClass.discardFptr = (DiscardFptr_type)discard_RectRaster_type;
@@ -5973,7 +5990,9 @@ INIT_ERR
 	// init dynamically allocated signals
 	double*						fastAxisCommandSignal						= NULL;
 	double*						fastAxisCompensationSignal					= NULL;
-	double*						slowAxisCompensationSignal					= NULL; 
+	double*						slowAxisCompensationSignal					= NULL;
+	unsigned char*				shutterScanSignal							= NULL;	// Laser beam modulation signal to blank fast axis line scan galvo turnaround and laser beam fly-in to the scan area.
+	unsigned char*				shutterFlyInSignal							= NULL;	// Shutter closed waveform while the beam moves from the parked position to the scan area.
 	double*						parkedVoltageSignal							= NULL;
 	double*						galvoSamplingRatePtr						= NULL;
 	uInt64*						nGalvoSamplesPtr							= NULL;
@@ -5987,7 +6006,9 @@ INIT_ERR
 	RepeatedWaveform_type*		fastAxisMoveFromParked_RepWaveform			= NULL;
 	RepeatedWaveform_type*		slowAxisMoveFromParked_RepWaveform			= NULL;
 	RepeatedWaveform_type*		fastAxisScan_RepWaveform					= NULL;
-	RepeatedWaveform_type*		slowAxisScan_RepWaveform					= NULL; 
+	RepeatedWaveform_type*		slowAxisScan_RepWaveform					= NULL;
+	RepeatedWaveform_type*		shutterScan_RepWaveform						= NULL;
+	RepeatedWaveform_type*		shutterFlyIn_RepWaveform					= NULL;
 	DataPacket_type*			dataPacket									= NULL; 
 	PulseTrain_type*			pixelPulseTrain								= NULL;
 	double*						pixelSamplingRatePtr						= NULL;
@@ -6007,6 +6028,8 @@ INIT_ERR
 	double						flybackSwitchDelay							= 0;	
 	uInt32						nFastAxisFlybackLines						= 0;
 	DSInfo_type*				dsInfo										= NULL;
+	NonResGalvoCal_type*		fastAxisCal									= (NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal;
+	NonResGalvoCal_type*		slowAxisCal									= (NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal;
 
 	
 //============================================================================================================================================================================================
@@ -6015,7 +6038,7 @@ INIT_ERR
 	
 	// number of line scan dead time pixels
 	// note: deadTime in [ms] and pixelDwellTime in [us]
-	nDeadTimePixels = (uInt32) ceil(((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->triangleCal->deadTime * 1e3/scanEngine->scanSettings.pixelDwellTime);
+	nDeadTimePixels = (uInt32) ceil(fastAxisCal->triangleCal->deadTime * 1e3/scanEngine->scanSettings.pixelDwellTime);
 	
 	// number of pixels per line
 	nPixelsPerLine = scanEngine->scanSettings.width + 2 * nDeadTimePixels;
@@ -6024,9 +6047,9 @@ INIT_ERR
 	lineDuration = nPixelsPerLine * scanEngine->scanSettings.pixelDwellTime;
 	
 	// calculate number of fast axis lines to skip at the end of each image until the slow axis flies back to the start of the image
-	slowAxisStepVoltage 	= scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement; 
+	slowAxisStepVoltage 	= scanEngine->scanSettings.pixSize / slowAxisCal->sampleDisplacement; 
 	slowAxisAmplitude 		= (scanEngine->scanSettings.height - 1) * slowAxisStepVoltage;
-	slowAxisStartVoltage 	= scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->sampleDisplacement - slowAxisAmplitude/2;
+	slowAxisStartVoltage 	= scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize / slowAxisCal->sampleDisplacement - slowAxisAmplitude/2;
 	
 	NonResGalvoPointJumpTime((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal, slowAxisAmplitude, &flybackSwitchTime, &flybackSwitchDelay);  
 	flybackTime = flybackSwitchTime + flybackSwitchDelay;
@@ -6040,12 +6063,12 @@ INIT_ERR
 	nGalvoSamplesPerLine = RoundRealToNearestInteger(lineDuration * 1e-6 * scanEngine->galvoSamplingRate);
 	
 	// generate bidirectional raster scan signal (2 line scans, 1 triangle waveform period)
-	fastAxisCommandAmplitude = nPixelsPerLine * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->sampleDisplacement;
+	fastAxisCommandAmplitude = nPixelsPerLine * scanEngine->scanSettings.pixSize / fastAxisCal->sampleDisplacement;
 	
 	nullChk( fastAxisCommandSignal = malloc(2 * nGalvoSamplesPerLine * sizeof(double)) );
 	double 		phase = -90;   
 	errChk( TriangleWave(2 * nGalvoSamplesPerLine , fastAxisCommandAmplitude/2, 0.5/nGalvoSamplesPerLine , &phase, fastAxisCommandSignal) );
-	double		fastAxisCommandOffset = scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize / ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->sampleDisplacement; 
+	double		fastAxisCommandOffset = scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize / fastAxisCal->sampleDisplacement; 
 	for (size_t i = 0; i < 2 * nGalvoSamplesPerLine; i++)
 		fastAxisCommandSignal[i] += fastAxisCommandOffset;
 	
@@ -6054,7 +6077,7 @@ INIT_ERR
 	
 	// generate fast axis fly-in waveform from parked position
 	nullChk( fastAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal, scanEngine->galvoSamplingRate, 
-	((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked, - fastAxisCommandAmplitude/2 + fastAxisCommandOffset, 0, 0) );
+	fastAxisCal->parked, - fastAxisCommandAmplitude/2 + fastAxisCommandOffset, 0, 0) );
 	
 	size_t		nGalvoSamplesFastAxisMoveFromParkedWaveform = GetWaveformNumSamples(fastAxisMoveFromParkedWaveform);
 	
@@ -6066,20 +6089,19 @@ INIT_ERR
 	nullChk( slowAxisScan_Waveform = StaircaseWaveform(scanEngine->galvoSamplingRate, nGalvoSamplesPerLine, scanEngine->scanSettings.height, nGalvoSamplesPerLine * nFastAxisFlybackLines, slowAxisStartVoltage, slowAxisStepVoltage) );  
 	
 	// generate slow axis fly-in waveform from parked position
-	nullChk( slowAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal, scanEngine->galvoSamplingRate, 
-	((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked, slowAxisStartVoltage, 0, 0) ); 
+	nullChk( slowAxisMoveFromParkedWaveform = NonResGalvoMoveBetweenPoints(slowAxisCal, scanEngine->galvoSamplingRate, slowAxisCal->parked, slowAxisStartVoltage, 0, 0) ); 
 	
-	size_t		nGalvoSamplesSlowAxisScanWaveform 			= GetWaveformNumSamples(slowAxisScan_Waveform);    
+	size_t		nGalvoSamplesSlowAxisScanWaveform 			= GetWaveformNumSamples(slowAxisScan_Waveform);
 	
 //============================================================================================================================================================================================
 //                             						Compensate delay between X and Y galvo response and fly-in from parked position
 //============================================================================================================================================================================================
 	
 	// fast scan axis response lag in terms of number of galvo samples 
-	size_t				nGalvoSamplesFastAxisLag			= (size_t) floor(((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->lag * 1e-3 * scanEngine->galvoSamplingRate);
+	size_t				nGalvoSamplesFastAxisLag			= (size_t) floor(fastAxisCal->lag * 1e-3 * scanEngine->galvoSamplingRate);
 	
 	// slow scan axis response lag in terms of number of galvo samples  
-	size_t				nGalvoSamplesSlowAxisLag			= (size_t) floor(((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->lag * 1e-3 * scanEngine->galvoSamplingRate);
+	size_t				nGalvoSamplesSlowAxisLag			= (size_t) floor(slowAxisCal->lag * 1e-3 * scanEngine->galvoSamplingRate);
 	
 	// fast axis number of samples needed to move the galvo from the parked position to the start of the scan region
 	size_t				nGalvoSamplesFastAxisMoveFromParked = GetWaveformNumSamples(fastAxisMoveFromParkedWaveform);
@@ -6114,7 +6136,7 @@ INIT_ERR
 	// generate compensated fast axis fly-in waveform from parked position
 	if (nGalvoSamplesFastAxisCompensation) {
 		nullChk( fastAxisCompensationSignal = malloc(nGalvoSamplesFastAxisCompensation * sizeof(double)) );
-		errChk( Set1D(fastAxisCompensationSignal, nGalvoSamplesFastAxisCompensation, ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked) ); 
+		errChk( Set1D(fastAxisCompensationSignal, nGalvoSamplesFastAxisCompensation, fastAxisCal->parked) ); 
 		nullChk( fastAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double, scanEngine->galvoSamplingRate, nGalvoSamplesFastAxisCompensation, (void**)&fastAxisCompensationSignal) );
 		errChk( AppendWaveform(fastAxisMoveFromParkedCompensatedWaveform, fastAxisMoveFromParkedWaveform, &errorInfo.errMsg) );
 		discard_Waveform_type(&fastAxisMoveFromParkedWaveform);
@@ -6123,12 +6145,46 @@ INIT_ERR
 	// generate compensated slow axis fly-in waveform from parked position
 	if (nGalvoSamplesSlowAxisCompensation) {
 		nullChk( slowAxisCompensationSignal = malloc(nGalvoSamplesSlowAxisCompensation * sizeof(double)) );
-		errChk( Set1D(slowAxisCompensationSignal, nGalvoSamplesSlowAxisCompensation, ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked) ); 
+		errChk( Set1D(slowAxisCompensationSignal, nGalvoSamplesSlowAxisCompensation, slowAxisCal->parked) ); 
 		nullChk( slowAxisMoveFromParkedCompensatedWaveform = init_Waveform_type(Waveform_Double, scanEngine->galvoSamplingRate, nGalvoSamplesSlowAxisCompensation, (void**)&slowAxisCompensationSignal) );
 		errChk( AppendWaveform(slowAxisMoveFromParkedCompensatedWaveform, slowAxisMoveFromParkedWaveform, &errorInfo.errMsg) );
 		discard_Waveform_type(&slowAxisMoveFromParkedWaveform);
 	}
 	
+//============================================================================================================================================================================================
+//		                             						Preparation of Shutter Waveforms for laser beam modulation
+//============================================================================================================================================================================================
+	
+	// generate one cycle of open shutter signal, i.e two line scans since the scanning is bidirectional
+	size_t	nShutterCycleSamples = 2*nGalvoSamplesPerLine;
+	nullChk( shutterScanSignal = malloc(nShutterCycleSamples * sizeof(unsigned char)) );
+	for (size_t i = 0; i < nShutterCycleSamples; i++)
+		shutterScanSignal[i] = TRUE;
+	
+	// calculate number of pixels needed to switch the shutter
+	uInt32	nShutterPix = (uInt32) ceil(scanEngine->baseClass.shutterSwitchTime/scanEngine->scanSettings.pixelDwellTime);
+	
+	// mark closed shutter times if the shutter switch time pixels are fewer than the line dead time pixels
+	if (nShutterPix < nDeadTimePixels) {
+		for (size_t i = 0; i < nDeadTimePixels - nShutterPix; i++)
+			shutterScanSignal[i] = FALSE;
+		for (size_t i = nGalvoSamplesPerLine - nDeadTimePixels; i < nGalvoSamplesPerLine + nDeadTimePixels - nShutterPix - 1; i++)
+			shutterScanSignal[i] = FALSE;
+		for (size_t i = nShutterCycleSamples - nDeadTimePixels; i < nShutterCycleSamples; i++)
+			shutterScanSignal[i] = FALSE;
+	}
+	
+	// generate shutter raster scan waveform 
+	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE)
+		// finite mode
+		nullChk( shutterScan_RepWaveform = init_RepeatedWaveform_type(Waveform_UChar, scanEngine->galvoSamplingRate, nShutterCycleSamples, (void**)&shutterScanSignal, (scanEngine->scanSettings.height + nFastAxisFlybackLines)/2.0 * nFrames) );
+	else
+		// continuous mode
+		nullChk( shutterScan_RepWaveform = init_RepeatedWaveform_type(Waveform_UChar, scanEngine->galvoSamplingRate, nShutterCycleSamples, (void**)&shutterScanSignal, 0) );
+	
+	// generate shutter closed fly-in signal
+	nullChk( shutterFlyInSignal = calloc(nGalvoSamplesFlyIn, sizeof(unsigned char)) );
+	nullChk( shutterFlyIn_RepWaveform = init_RepeatedWaveform_type(Waveform_UChar, scanEngine->galvoSamplingRate, nGalvoSamplesFlyIn, (void**)&shutterFlyInSignal, 1) ); 
 	
 //============================================================================================================================================================================================
 //                             											Send command waveforms to the scan axes VChans
@@ -6164,7 +6220,7 @@ INIT_ERR
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
 		// generate one sample
 		nullChk( parkedVoltageSignal = malloc(sizeof(double)) );
-		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.fastAxisCal)->parked;
+		*parkedVoltageSignal = fastAxisCal->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
@@ -6215,7 +6271,7 @@ INIT_ERR
 	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
 		// generate one sample
 		nullChk( parkedVoltageSignal = malloc(sizeof(double)) );
-		*parkedVoltageSignal = ((NonResGalvoCal_type*)scanEngine->baseClass.slowAxisCal)->parked;
+		*parkedVoltageSignal = slowAxisCal->parked;
 		RepeatedWaveform_type*	parkedRepeatedWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&parkedVoltageSignal, 0);
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
 		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedRepeatedWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
@@ -6240,8 +6296,21 @@ INIT_ERR
 	nullChk( galvoSamplingRatePtr = malloc(sizeof(double)) );
 	*galvoSamplingRatePtr = scanEngine->galvoSamplingRate;
 	nullChk( dataPacket = init_DataPacket_type(DL_UInt64, (void**)&galvoSamplingRatePtr, NULL, NULL) );
-	errChk( SendDataPacket(scanEngine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errorInfo.errMsg) );    
+	errChk( SendDataPacket(scanEngine->baseClass.VChanGalvoComSamplingRate, &dataPacket, FALSE, &errorInfo.errMsg) ); 
 	
+	//---------------------------------------------------------------------------------------------------------------------------
+	// 													Shutter signal
+	//---------------------------------------------------------------------------------------------------------------------------
+	
+	// close shutter while moving from parked position to the scan region
+	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&shutterFlyIn_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanROIShutter, &dataPacket, FALSE, &errorInfo.errMsg) );
+	
+	// modulate shutter to blank fast axis line scan turn-around
+	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&shutterScan_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(scanEngine->baseClass.VChanROIShutter, &dataPacket, FALSE, &errorInfo.errMsg) );
 	
 	//---------------------------------------------------------------------------------------------------------------------------
 	// 													Pixel timing info
@@ -6287,6 +6356,8 @@ Error:
 	OKfree(fastAxisCommandSignal);
 	OKfree(fastAxisCompensationSignal);
 	OKfree(slowAxisCompensationSignal);
+	OKfree(shutterScanSignal);
+	OKfree(shutterFlyInSignal);
 	OKfree(parkedVoltageSignal);
 	OKfree(galvoSamplingRatePtr);
 	OKfree(nGalvoSamplesPtr);
@@ -6301,6 +6372,8 @@ Error:
 	discard_RepeatedWaveform_type(&slowAxisMoveFromParked_RepWaveform); 
 	discard_RepeatedWaveform_type(&fastAxisScan_RepWaveform);
 	discard_RepeatedWaveform_type(&slowAxisScan_RepWaveform);
+	discard_RepeatedWaveform_type(&shutterScan_RepWaveform);
+	discard_RepeatedWaveform_type(&shutterFlyIn_RepWaveform);
 	discard_PulseTrain_type(&pixelPulseTrain);
 	ReleaseDataPacket(&dataPacket);
 	discard_DSInfo_type(&dsInfo);

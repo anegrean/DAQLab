@@ -160,7 +160,7 @@ static ChildTCEventInfo_type* 				init_ChildTCEventInfo_type 				(size_t childTC
 static void									discard_ChildTCEventInfo_type 			(ChildTCEventInfo_type** eventDataPtr);
 
 // VChan and Task Control binding
-static VChanCallbackData_type*				init_VChanCallbackData_type				(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr);
+static VChanCallbackData_type*				init_VChanCallbackData_type				(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, CmtTSQCallbackID itemsInQueueCBID);
 static void									discard_VChanCallbackData_type			(VChanCallbackData_type** VChanCBDataPtr);
 
 // Informs recursively Task Controllers about the Task Tree status when it changes (active/inactive).
@@ -172,7 +172,7 @@ static int									ClearTaskTreeBranchVChans				(TaskControl_type* taskControl, 
 static void									SetChildTCsOutOfDate					(TaskControl_type* taskControl);
 
 // macro for debugging where certain events are generated
-#define PlaceLineTag						NumTag(__LINE__)
+#define PlaceLineTag						NULL // formerly NumTag(__LINE__), but if NumTag must be used then this has to be done in two steps because TaskControlEvent takes in a void** eventDataPtr which is set to NULL once the event data is taken in.
 static int*									NumTag									(int num);
 
 //==============================================================================
@@ -640,7 +640,10 @@ int IsTaskControllerInUse_ReleaseLock (TaskControl_type* taskControl, BOOL* lock
 {
 INIT_ERR	
 	
-	if (!taskControl->stateTSV) return 0;
+	if (!taskControl->stateTSV) {
+		*lockObtained = TRUE;
+		return 0;
+	}
 	
 	*lockObtained = TRUE;
 	CmtErrChk( CmtReleaseTSVPtr(taskControl->stateTSV) );
@@ -711,7 +714,7 @@ INIT_ERR
 		SET_ERR(AddSinkVChan_Err_TaskControllerIsInUse, msgBuff);
 	}
 	
-	nullChk( newVChanTSQData = init_VChanCallbackData_type(taskControl, sinkVChan, DataReceivedFptr) );
+	nullChk( newVChanTSQData = init_VChanCallbackData_type(taskControl, sinkVChan, DataReceivedFptr, 0) );
 	// Add Task Controller TSQ callback. Process queue events in the same thread that is used to initialize the task control (generally main thread)
 	CmtErrChk( CmtInstallTSQCallback(tsqID, EVENT_TSQ_ITEMS_IN_QUEUE, 1, TaskDataItemsInQueue, newVChanTSQData, taskControl->eventQThreadID, &newVChanTSQData->itemsInQueueCBID) );
 	
@@ -1222,7 +1225,7 @@ static int*	NumTag (int num)
 	return numTagPtr;
 }
 
-static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr)
+static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* taskControl, SinkVChan_type* sinkVChan, DataReceivedFptr_type DataReceivedFptr, CmtTSQCallbackID itemsInQueueCBID)
 {
 	VChanCallbackData_type* VChanCB = malloc(sizeof(VChanCallbackData_type));
 	if (!VChanCB) return NULL;
@@ -1230,7 +1233,7 @@ static VChanCallbackData_type*	init_VChanCallbackData_type	(TaskControl_type* ta
 	VChanCB->sinkVChan 				= sinkVChan;
 	VChanCB->taskControl  			= taskControl;
 	VChanCB->DataReceivedFptr		= DataReceivedFptr;
-	VChanCB->itemsInQueueCBID		= 0;
+	VChanCB->itemsInQueueCBID		= itemsInQueueCBID;
 	
 	return VChanCB;
 }
@@ -1556,23 +1559,23 @@ void CVICALLBACK TaskDataItemsInQueue (CmtTSQHandle queueHandle, unsigned int ev
 INIT_ERR
 
 	VChanCallbackData_type*		VChanTSQData		= callbackData;
-	VChanCallbackData_type**	VChanTSQDataPtr		= NULL;
-	EventPacket_type			eventPacket			= {TC_Event_DataReceived, NULL, NULL};
+	VChanCallbackData_type*		VChanTSQDataCopy	= NULL;
 	
-	nullChk( VChanTSQDataPtr = malloc(sizeof(SinkVChan_type*)) );
+	nullChk( VChanTSQDataCopy = init_VChanCallbackData_type(VChanTSQData->taskControl, VChanTSQData->sinkVChan, VChanTSQData->DataReceivedFptr, VChanTSQData->itemsInQueueCBID) );
 	
-	*VChanTSQDataPtr = VChanTSQData;
 	// inform Task Controller that data was placed in an otherwise empty data queue
-	errChk( TaskControlEvent(VChanTSQData->taskControl, TC_Event_DataReceived, VChanTSQDataPtr, (DiscardFptr_type)discard_VChanCallbackData_type, &errorInfo.errMsg) );
+	errChk( TaskControlEvent(VChanTSQData->taskControl, TC_Event_DataReceived, (void**)&VChanTSQDataCopy, (DiscardFptr_type)discard_VChanCallbackData_type, &errorInfo.errMsg) );
 	
 	return;
 	
 Error:
 
 	// flush queue
+	discard_VChanCallbackData_type(&VChanTSQDataCopy);
 	CmtFlushTSQ(GetSinkVChanTSQHndl(VChanTSQData->sinkVChan), TSQ_FLUSH_ALL, NULL);
 	VChanTSQData->taskControl->errorMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Out of memory.");
 	VChanTSQData->taskControl->errorID	= errorInfo.error;
+	EventPacket_type	eventPacket = {.event = TC_Event_DataReceived, .eventData = NULL, .discardEventDataFptr = NULL};
 	ChangeState(VChanTSQData->taskControl, &eventPacket, TC_State_Error); 
 }
 
@@ -1594,13 +1597,23 @@ void CVICALLBACK IterationFunctionThreadCallback (CmtThreadPoolHandle poolHandle
 	SetSleepPolicy(VAL_SLEEP_SOME);
 }
 
-int TaskControlEvent (TaskControl_type* RecipientTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr, char** errorMsg)
+int TaskControlEvent (TaskControl_type* RecipientTaskControl, TCEvents event, void** eventDataPtr, DiscardFptr_type discardEventDataFptr, char** errorMsg)
 {
 INIT_ERR	
 	
-	EventPacket_type 	eventPackets 		= {event, eventData, discardEventDataFptr};
+	EventPacket_type 	eventPackets;
 	ChildTCInfo_type*	subTask				= NULL;
 	int 				lockObtainedFlag 	= FALSE;
+	
+	// init event packet
+	eventPackets.event 					= event;
+	if (eventDataPtr) {
+		eventPackets.eventData			= *eventDataPtr;
+		*eventDataPtr					= NULL;
+	} else
+		eventPackets.eventData			= NULL;
+	
+	eventPackets.discardEventDataFptr	= discardEventDataFptr;	
 
 	// get event TSQ thread lock
 	CmtErrChk( CmtGetLockEx(RecipientTaskControl->eventQThreadLock, 0, CMT_WAIT_FOREVER, &lockObtainedFlag) );
@@ -1613,13 +1626,24 @@ INIT_ERR
 	
 	CmtErrChk( CmtWriteTSQData(RecipientTaskControl->eventQ, &eventPackets, 1, 0, NULL) );
 	
-
+	// release event TSQ thread lock
+	if (lockObtainedFlag)
+		CmtReleaseLock(RecipientTaskControl->eventQThreadLock);
+	
+	return 0;
+	
 CmtError:
 	
 Cmt_ERR
 
 Error:
 
+	// cleanup event data
+	if (eventPackets.eventData && eventPackets.discardEventDataFptr)
+		(*eventPackets.discardEventDataFptr) (&eventPackets.eventData);
+	else
+		OKfree(eventPackets.eventData);
+	
 	// release event TSQ thread lock
 	if (lockObtainedFlag)
 		CmtReleaseLock(RecipientTaskControl->eventQThreadLock);
@@ -1631,14 +1655,26 @@ int	TaskControlIterationDone (TaskControl_type* taskControl, int errorID, char e
 {
 INIT_ERR
 
-	if (errorID)
-		errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, init_FCallReturn_type(errorID, "External Task Control Iteration", errorInfoString), (DiscardFptr_type)discard_FCallReturn_type, &errorInfo.errMsg) );
-	else {
-		if (doAnotherIteration) taskControl->repeat++;
+	FCallReturn_type*	fCallReturn = NULL;
+	
+	if (errorID) {
+		
+		nullChk( fCallReturn = init_FCallReturn_type(errorID, "External Task Control Iteration", errorInfoString) );
+		errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, (void**)&fCallReturn, (DiscardFptr_type)discard_FCallReturn_type, &errorInfo.errMsg) );
+		
+	} else {
+		
+		if (doAnotherIteration) 
+			taskControl->repeat++;
 		errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, PlaceLineTag, NULL, &errorInfo.errMsg) );
+		
 	}
 	
+	return 0;
+	
 Error:
+	
+	discard_FCallReturn_type(&fCallReturn);
 	
 RETURN_ERR
 }
@@ -1801,9 +1837,10 @@ INIT_ERR
 		case TC_Callback_DataReceived:
 			
 			// call data received callback if one was provided
-			if (!(*(VChanCallbackData_type**)fCallData)->DataReceivedFptr) break;	// function not provided 
-			errChk( (*(*(VChanCallbackData_type**)fCallData)->DataReceivedFptr)(taskControl, taskControl->currentState, taskActive,
-							   (*(VChanCallbackData_type**)fCallData)->sinkVChan, &taskControl->abortFlag, &errorInfo.errMsg) );
+			VChanCallbackData_type*	VChanCBData = fCallData;
+			
+			if (!VChanCBData->DataReceivedFptr) break;	// function not provided 
+			errChk( (*VChanCBData->DataReceivedFptr)(taskControl, taskControl->currentState, taskActive, VChanCBData->sinkVChan, &taskControl->abortFlag, &errorInfo.errMsg) );
 			break;
 			
 		case TC_Callback_CustomEvent:
@@ -2178,7 +2215,8 @@ static void TaskEventHandler (TaskControl_type* taskControl)
 INIT_ERR
 	
 	EventPacket_type 		eventPackets[EVENT_BUFFER_SIZE];
-	ChildTCInfo_type* 		childTCPtr			= NULL; 
+	ChildTCInfo_type* 		childTCPtr			= NULL;
+	ChildTCEventInfo_type*	childTCEventInfo 	= NULL;
 	char*					eventStr			= NULL;
 	char*					stateStr			= NULL;
 	char* 					msgBuff 			= NULL;
@@ -2200,6 +2238,8 @@ INIT_ERR
 			stateLockObtained = FALSE;
 			CmtErrChk( CmtGetTSVPtr(taskControl->stateTSV, &tcStateTSVPtr) );
 			stateLockObtained = TRUE;
+			taskControl->stateTSVLineNumDebug = __LINE__;
+			strcpy(taskControl->stateTSVFileName, __FILE__);
 			taskControl->currentState = *tcStateTSVPtr;
 			
 			switch (taskControl->currentState) {
@@ -3316,14 +3356,23 @@ INIT_ERR
 			}
 	
 			// if there is a parent task controller, update it on the state of this child task controller
-			if (taskControl->parentTC)
-				errChk( TaskControlEvent(taskControl->parentTC, TC_Event_UpdateChildTCState, init_ChildTCEventInfo_type(taskControl->childTCIdx, taskControl->currentState), (DiscardFptr_type)discard_ChildTCEventInfo_type, &errorInfo.errMsg) );
+			if (taskControl->parentTC) {
+				
+				childTCEventInfo = NULL;
+				nullChk( childTCEventInfo = init_ChildTCEventInfo_type(taskControl->childTCIdx, taskControl->currentState) );
+				
+				errChk( TaskControlEvent(taskControl->parentTC, TC_Event_UpdateChildTCState, (void**)&childTCEventInfo, (DiscardFptr_type)discard_ChildTCEventInfo_type, &errorInfo.errMsg) );
+				
+			}
 
 			// assign new state and release state lock
 			*tcStateTSVPtr = taskControl->currentState;
+			stateLockObtained = TRUE;
 			CmtErrChk( CmtReleaseTSVPtr(taskControl->stateTSV) );
 			tcStateTSVPtr = NULL;
 			stateLockObtained = FALSE;
+			taskControl->stateTSVLineNumDebug = 0;
+			strcpy(taskControl->stateTSVFileName, "");
 			
 			// free memory for extra eventData if any
 			if (eventPackets[i].eventData && eventPackets[i].discardEventDataFptr)
@@ -3343,6 +3392,8 @@ INIT_ERR
 			// cleanup
 			//-------------------------------------------
 	
+			discard_ChildTCEventInfo_type(&childTCEventInfo);
+		
 			// remove iteration timeout timer
 			if (taskControl->iterationTimerID > 0) {
 				DiscardAsyncTimer(taskControl->iterationTimerID);
@@ -3358,6 +3409,8 @@ INIT_ERR
 				CmtReleaseTSVPtr(taskControl->stateTSV);
 				tcStateTSVPtr = NULL;
 				stateLockObtained = FALSE;
+				taskControl->stateTSVLineNumDebug = 0;
+				strcpy(taskControl->stateTSVFileName, "");
 			}
 			
 			// store error
@@ -3380,12 +3433,16 @@ INIT_ERR
 			errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Error, NULL, &errorInfo.errMsg) );
 		
 			// if there is a parent task controller, update it on the state of this child task controller
-			if (taskControl->parentTC)
-				errChk( TaskControlEvent(taskControl->parentTC, TC_Event_UpdateChildTCState, init_ChildTCEventInfo_type(taskControl->childTCIdx, taskControl->currentState), (DiscardFptr_type)discard_ChildTCEventInfo_type, &errorInfo.errMsg) );
+			if (taskControl->parentTC) {
+				childTCEventInfo = init_ChildTCEventInfo_type(taskControl->childTCIdx, taskControl->currentState);
+				TaskControlEvent(taskControl->parentTC, TC_Event_UpdateChildTCState, (void**)&childTCEventInfo, (DiscardFptr_type)discard_ChildTCEventInfo_type, &errorInfo.errMsg);
+			}
 
 			// free memory for extra eventData if any
 			if (eventPackets[i].eventData && eventPackets[i].discardEventDataFptr)
 				(*eventPackets[i].discardEventDataFptr)(&eventPackets[i].eventData);
+			else
+				OKfree(eventPackets[i].eventData);
 		
 		} 
 		

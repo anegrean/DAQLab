@@ -320,10 +320,9 @@ char* 					GetUniqueTaskControllerName			(ListType TCList, char baseTCName[]);
 // Task Controller event posting and execution control functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 														
-	// Pass NULL to eventInfo if there is no additional data carried by the event 
-	// Pass NULL to disposeEventInfoFptr if eventInfo should NOT be disposed after processing the event
-	// 
-int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr, char** errorMsg); 
+	// Pass NULL to eventData if there is no additional data carried by the event 
+	// Pass NULL to discardEventDataFptr if eventData should be discarded using free().
+int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TCEvents event, void** eventDataPtr, DiscardFptr_type discardEventDataFptr, char** errorMsg); 
 
 	// Used to signal the Task Controller that an iteration is done.
 	// Pass to errorInfoString an empty string as "", if there is no error and the iteration completed succesfully. Otherwise,

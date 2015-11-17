@@ -724,6 +724,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 INIT_ERR	
 	
 	XYStage_type* 				stage 				= callbackData;
+	MoveCommand_type*			moveCommand			= NULL;
 	int							refPosIdx			= 0;									// 0-based index of ref pos selected in the list
 	RefPosition_type**			refPosPtr			= NULL;
 	double						xStepSize			= 0;
@@ -770,25 +771,29 @@ INIT_ERR
 				case StagePan_MoveXForward:
 					
 					// move X axis in the positive direction if direction is positive, relative to current position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_MoveXBackward:
 					
 					// move X axis in the negative direction if direction is positive, relative to current position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_MoveYRight:
 					
 					// move Y axis in the positive direction if direction is positive, relative to current position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_MoveYLeft:
 					
 					// move Y axis in the negative direction if direction is positive, relative to current position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_Stop:
@@ -801,25 +806,29 @@ INIT_ERR
 				case StagePan_XAbsPos:
 					
 					// move to X absolute position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, moveXAbsPos), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, moveXAbsPos) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_YAbsPos:
 					
 					// move to Y absolute position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, moveYAbsPos), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, moveYAbsPos) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_XRelPos:
 					
 					// move X axis relative to current position
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, moveXRelPos), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, moveXRelPos) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_YRelPos:
 					
 					// move Y axis relative to current position
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, moveYRelPos), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, moveYRelPos) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_StartXAbsPos:
@@ -947,10 +956,12 @@ INIT_ERR
 					refPosPtr = ListGetPtrToItem(stage->xyRefPos, refPosIdx + 1);
 					
 					// move X axis to reference position
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, (*refPosPtr)->x), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, (*refPosPtr)->x) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					
 					// move Y axis to reference position
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, (*refPosPtr)->y), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, (*refPosPtr)->y) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					
 					break;
 			}
@@ -1030,14 +1041,16 @@ INIT_ERR
 							
 							SetCtrlVal(panel, control, (stage->xPos + xDirection * xStepSize) * 1000);	// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, (stage->xPos - xDirection * xStepSize) * 1000);	// convert back to [um] 
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 					}
@@ -1051,14 +1064,16 @@ INIT_ERR
 							
 							SetCtrlVal(panel, control, (stage->yPos + yDirection * yStepSize) * 1000);	// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, (stage->yPos - yDirection * yStepSize) * 1000);	// convert back to [um] 
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 					}
@@ -1072,14 +1087,16 @@ INIT_ERR
 							
 							SetCtrlVal(panel, control, xDirection * xStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize) ); 
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, -xDirection * xStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					}
 					break;
@@ -1092,14 +1109,16 @@ INIT_ERR
 							
 							SetCtrlVal(panel, control, yDirection * yStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, -yDirection * yStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					}
 					break;
@@ -1174,7 +1193,10 @@ INIT_ERR
 			}
 	}
 	
+	return 0;
 Error:
+	
+	discard_MoveCommand_type(&moveCommand);
 	
 PRINT_ERR
 

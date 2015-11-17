@@ -327,9 +327,16 @@ static int Move (ZStage_type* zstage, Zstage_move_type moveType, double moveVal,
 {
 INIT_ERR
 
-	errChk( TaskControlEvent(zstage->taskController, TC_Event_Custom, init_MoveCommand_type(moveType, moveVal), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) );
+	MoveCommand_type*	moveCommand = NULL;
+	
+	nullChk( moveCommand = init_MoveCommand_type(moveType, moveVal) );
+	errChk( TaskControlEvent(zstage->taskController, TC_Event_Custom, &moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) );
+	
+	return 0;
 	
 Error:
+	
+	discard_MoveCommand_type(&moveCommand);
 	
 RETURN_ERR
 }

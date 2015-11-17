@@ -550,6 +550,9 @@ typedef struct {
 	//------------------------------------
 	int							timingPanHndl;				// Panel handle containing timing controls.
 	int							settingsPanHndl;
+	int							sampleClkSrcCtrlID;
+	int							refClkSrcCtrlID;
+	int							startRoutingCtrlID;
 } ADTaskTiming_type;
 
 // timing structure for counter tasks
@@ -575,6 +578,7 @@ typedef struct {
 	TrigWndCond_type			wndTrigCond;  				// For analog window trigger.
 	uInt32						nPreTrigSamples;			// For reference type trigger. Number of pre-trigger samples to acquire.
 	Dev_type*					device;						// Reference to the device that owns this task trigger.
+	
 	//------------------------------------
 	// UI
 	//------------------------------------
@@ -7906,6 +7910,10 @@ static void	discard_TaskTrig_type (TaskTrig_type** taskTrigPtr)
 	
 	OKfree(taskTrig->trigSource);
 	
+	// UI terminal
+	if (taskTrig->trigSourceCtrlID > 0) NIDAQmx_DiscardIOCtrl(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID);
+	
+	
 	OKfree(*taskTrigPtr);
 }
 
@@ -7937,6 +7945,9 @@ static ADTaskTiming_type* init_ADTaskTiming_type (void)
 	// UI
 	taskTiming->timingPanHndl				= 0;
 	taskTiming->settingsPanHndl				= 0;
+	taskTiming->sampleClkSrcCtrlID			= -1;
+	taskTiming->refClkSrcCtrlID				= -1;
+	taskTiming->startRoutingCtrlID			= -1;
 	
 	return taskTiming;
 }
@@ -7955,6 +7966,11 @@ static void discard_ADTaskTiming_type (ADTaskTiming_type** taskTimingPtr)
 	discard_VChan_type((VChan_type**)&taskTiming->samplingRateSinkVChan);
 	discard_VChan_type((VChan_type**)&taskTiming->nSamplesSourceVChan);
 	discard_VChan_type((VChan_type**)&taskTiming->samplingRateSourceVChan);
+	
+	// UI
+	if (taskTiming->sampleClkSrcCtrlID > 0) NIDAQmx_RevertIOCtrl(taskTiming->timingPanHndl, taskTiming->sampleClkSrcCtrlID);
+	if (taskTiming->refClkSrcCtrlID > 0) NIDAQmx_RevertIOCtrl(taskTiming->timingPanHndl, taskTiming->refClkSrcCtrlID);
+	if (taskTiming->startRoutingCtrlID > 0) NIDAQmx_RevertIOCtrl(taskTiming->timingPanHndl, taskTiming->startRoutingCtrlID);
 	
 	OKfree(*taskTimingPtr);
 }
@@ -8221,9 +8237,11 @@ INIT_ERR
 	// note: do this before changing the string controls to terminal controls!
 	SetCtrlsInPanCBInfo(tskSet, ADTimingSettings_CB, tskSet->timing->timingPanHndl);
 	// make sure that the host controls are not dimmed before inserting terminal controls!
-	NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_SampleClkSource, 0); // single terminal selection
-	NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_RefClkSource, 0);    // single terminal selection
-								
+	errChk( NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_SampleClkSource, 0) ); // single terminal selection
+	tskSet->timing->sampleClkSrcCtrlID = Timing_SampleClkSource;
+	errChk( NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_RefClkSource, 0) );    // single terminal selection
+	tskSet->timing->refClkSrcCtrlID = Timing_RefClkSource;
+	
 	// adjust sample clock terminal control properties
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_SampleClkSource, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_SampleClkSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
@@ -8249,7 +8267,8 @@ INIT_ERR
 	SetCtrlVal(tskSet->timing->timingPanHndl, Timing_Timeout, tskSet->timeout);							// display in [s]
 	
 	// adjust signal routing control properties
-	NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_StartRouting, 0); 					// single terminal selection
+	errChk( NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_StartRouting, 0) ); 					// single terminal selection
+	tskSet->timing->startRoutingCtrlID = Timing_StartRouting;
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_StartRouting, NIDAQmx_IOCtrl_Limit_To_Device, 0);
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_StartRouting, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 	
@@ -8468,6 +8487,7 @@ Error:
 static void	discardUI_ADTaskSet (ADTaskSet_type** taskSetPtr)
 {
 	ADTaskSet_type* taskSet = *taskSetPtr;
+	
 	//------------------------------------------
 	// remove nSamples Sink & Source VChans
 	//------------------------------------------
@@ -14231,7 +14251,8 @@ INIT_ERR
 			break;
 	}
 	
-	DAQmxErrChk(DAQmxClearTask(taskHndl));
+	DAQmxClearTask(taskHndl);
+	taskHndl = 0;
 	
 	// set AO task to Commited state if it exists and is not on demand
 	if (dev->AOTaskSet->taskHndl && !chan->onDemand) {
@@ -14239,8 +14260,13 @@ INIT_ERR
 		DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Commit) );  
 	}
 	
-	return 0;
+	// cleanup
+	for (size_t i = 0; i < nPackets; i++)
+		ReleaseDataPacket(&dataPackets[i]); 
+	OKfree(dataPackets);
 	
+	return 0;
+
 DAQmxError:
 	
 DAQmx_ERROR_INFO
@@ -14252,7 +14278,7 @@ Error:
 		ReleaseDataPacket(&dataPackets[i]); 
 	OKfree(dataPackets);
 	
-	DAQmxClearTask(taskHndl);
+	if (taskHndl) DAQmxClearTask(taskHndl);
 	
 RETURN_ERR
 }

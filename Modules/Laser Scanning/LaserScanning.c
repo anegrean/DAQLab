@@ -550,7 +550,6 @@ typedef struct {
 	double						repeatWait;					// Additional time in [s] to wait between sequence repetitions.
 	uInt32						nIntegration;				// Number of samples to use for integration.
 	ListType					pointJumps;					// List of points to jump to of PointJump_type*. The order of point jumps is determined by the order of the elements in the list.
-	RectRasterScanSet_type		scanSettings;				// Scan settings used when the list of point jumps was selected.
 	size_t						currentActivePoint;			// 1-based index of current active point to visit when using the PointJump_SinglePoints mode.
 	size_t						nPointsInGroup;				// Number of points in a group when using PointJump_IncrementalPointGroup mode.
 	PointScan_type				globalPointScanSettings;	// Global settings for stimulation and recording from point ROIs.
@@ -568,7 +567,8 @@ typedef struct {
 	// Frame scan settings
 	//----------------------------------------------------
 	
-	RectRasterScanSet_type		scanSettings;
+	RectRasterScanSet_type		scanSettings;				// Scan settings used to perform a frame scan.
+	RectRasterScanSet_type		parentFrameScanSettings;	// Parent ROI frame scan settings restored from previous scans used to reference subregion scans defined in scanROIs or point scans.
 	double						galvoSamplingRate;			// Default galvo sampling rate set by the scan engine in [Hz].
 	double						flyInDelay;					// Galvo fly-in time from parked position to start of the imaging area in [us]. This value is also an integer multiple of the pixelDwellTime.
 	ListType					scanROIs;					// List of Rect_type* scan ROIs marking subregions to scan within the parent scan area described by the ScanSettings.
@@ -844,7 +844,7 @@ static int CVICALLBACK 					NonResRectRasterScan_FrameScanPan_CB 				(int panel,
 
 static int CVICALLBACK 					NonResRectRasterScan_PointScanPan_CB		 		(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
-static int 								NonResRectRasterScan_ScanWidths						(RectRaster_type* scanEngine,  char** errorMsg);
+static int 								NonResRectRasterScan_ScanWidths						(RectRaster_type* scanEngine, char** errorMsg);
 
 static int								NonResRectRasterScan_PixelDwellTimes				(RectRaster_type* scanEngine, char** errorMsg);
 
@@ -1265,6 +1265,9 @@ INIT_ERR
 		if (!strcmp(objective->objectiveName, rectRaster->baseClass.objectiveLens->objectiveName))
 		SetCtrlIndex(frameScanPanHndl, ScanTab_Objective, j-1);
 	}
+	
+	// add default parent frame scan ROI
+	InsertListItem(frameScanPanHndl, ScanTab_ROIs, 0, "parent", 0);
 				
 	// update height
 	SetCtrlVal(frameScanPanHndl, ScanTab_Height, rectRaster->scanSettings.height * rectRaster->scanSettings.pixSize);
@@ -4855,6 +4858,7 @@ INIT_ERR
 
 	RectRaster_type*	engine 			= malloc (sizeof(RectRaster_type));
 	TaskControl_type*	taskController  = NULL;
+	Rect_type*			parentROIRect	= NULL;
 	
 	if (!engine) return NULL;
 	
@@ -4891,9 +4895,13 @@ INIT_ERR
 	engine->scanSettings.pixelDwellTime	= pixelDwellTime;
 	engine->scanSettings.pixSize		= pixelSize;
 	
+	// parent frame scan settings 
+	engine->parentFrameScanSettings		= engine->scanSettings;
+	
 	engine->galvoSamplingRate			= galvoSamplingRate;
 	engine->flyInDelay					= 0;
 	engine->scanROIs					= 0;
+	
 	
 	//--------------------
 	// point jump settings
@@ -4913,13 +4921,21 @@ INIT_ERR
 	// Alloc
 	//----------------------------------------
 	
-	nullChk( engine->scanROIs			= ListCreate(sizeof(Rect_type*)) );
+	nullChk( engine->scanROIs = ListCreate(sizeof(Rect_type*)) );
+	
+	// Add parent frame scan ROI to frame scan ROI list
+	RGBA_type	parentRectROIColor	= {.R = 0, .G = 0, .B = 0, .alpha = 255}; // transparent
+	nullChk( parentROIRect = initalloc_Rect_type(NULL, "parent", parentRectROIColor, TRUE, 0, 0, engine->scanSettings.height, engine->scanSettings.width) );
+	nullChk( ListInsertItem(engine->scanROIs, &parentROIRect, END_OF_LIST) );
+	parentROIRect = NULL;
+	
 
 	return engine;
 	
 Error:
 	
 	// cleanup
+	discard_Rect_type(&parentROIRect);
 	discard_TaskControl_type(&taskController);
 	
 	discard_RectRaster_type(&engine);
@@ -5147,9 +5163,9 @@ INIT_ERR
 				
 				case ScanTab_Width:
 					
-					char   		widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-					double		width;
-					uInt32		widthPix;
+					char   		widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1] 	= "";
+					double		width															= 0;
+					uInt32		widthPix														= 0;
 					
 					// get image width
 					GetCtrlVal(panel, control, widthString);
@@ -5363,7 +5379,7 @@ INIT_ERR
 					int itemIdx = 0;
 					
 					GetCtrlIndex(panel, control, &itemIdx);
-					if (itemIdx < 0) break; // stop here if list is empty
+					if (itemIdx < 1) break; // stop here if list has only the parent frame scan ROI
 					
 					// get ROI name from UI list
 					ROI_type*	ROIItem = *(ROI_type**) ListGetPtrToItem(scanEngine->scanROIs, itemIdx+1);
@@ -5377,6 +5393,76 @@ INIT_ERR
 					
 					break;
 					
+			}
+			break;
+			
+		case EVENT_VAL_CHANGED:
+			
+			switch (control) {
+					
+				case ScanTab_ROIs:
+					
+					int	itemIdx	= 0;
+					GetCtrlIndex(panel, control, &itemIdx);
+					
+					//----------------------------------------------------
+					// Convert chosen subregion ROI to scan settings
+					//----------------------------------------------------
+					
+					Rect_type*	rectROI		= *(Rect_type**)ListGetPtrToItem(scanEngine->scanROIs, itemIdx+1);
+					
+					// adjust scan engine scan settings
+					scanEngine->scanSettings.height			= rectROI->height;
+					scanEngine->scanSettings.heightOffset 	= scanEngine->parentFrameScanSettings.heightOffset + rectROI->top;
+					scanEngine->scanSettings.width			= rectROI->width;
+					scanEngine->scanSettings.widthOffset	= scanEngine->parentFrameScanSettings.widthOffset + rectROI->left;
+					scanEngine->scanSettings.pixSize		= scanEngine->parentFrameScanSettings.pixSize;
+					scanEngine->scanSettings.pixelDwellTime	= scanEngine->parentFrameScanSettings.pixelDwellTime;
+					
+					//----------------------------------------------------
+					// Update UI scan settings
+					//----------------------------------------------------
+					
+					// height
+					SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize);
+					// width
+					char widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+					Fmt(widthString, "%s<%f[p1]", scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize);
+					SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Width, widthString); 
+					// update height and width offsets
+					SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_HeightOffset, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize); 
+					SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_WidthOffset, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
+					// update pixel size
+					SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, scanEngine->scanSettings.pixSize);
+					// update pixel dwell times
+					errChk( NonResRectRasterScan_PixelDwellTimes(scanEngine, &errorInfo.errMsg) ); 
+					
+					break;
+			}
+			
+		case EVENT_MARK_STATE_CHANGE:
+			
+			switch (control) {
+					
+				case ScanTab_ROIs:
+					
+					if (eventData1) {
+						// ROI marked as active
+						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->scanROIs, eventData2 + 1);
+						ROI->active = TRUE;
+						// if there is an active display, mark point ROI as active and make it visible
+						if (scanEngine->baseClass.activeDisplay)
+							(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, ROI->ROIName, ROI_Show);
+					} else {
+						// ROI marked as inactive
+						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->scanROIs, eventData2 + 1);
+						ROI->active = FALSE;
+						// if there is an active display mark point ROI as inactive and hide it
+						if (scanEngine->baseClass.activeDisplay)
+							(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, ROI->ROIName, ROI_Hide);
+					}
+					
+					break;
 			}
 			
 			break;
@@ -5673,12 +5759,14 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 				case PointTab_ROIs:
 					
 					if (eventData1) {
+						// ROI marked as active
 						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumpSettings->pointJumps, eventData2 + 1);
 						ROI->active = TRUE;
 						// if there is an active display, mark point ROI as active and make it visible
 						if (scanEngine->baseClass.activeDisplay)
 							(*scanEngine->baseClass.activeDisplay->ROIActionsFptr) (scanEngine->baseClass.activeDisplay, ROI->ROIName, ROI_Show);
 					} else {
+						// ROI marked as inactive
 						ROI_type*	ROI = *(ROI_type**) ListGetPtrToItem(scanEngine->pointJumpSettings->pointJumps, eventData2 + 1);
 						ROI->active = FALSE;
 						// if there is an active display mark point ROI as inactive and hide it
@@ -5887,7 +5975,7 @@ Error:
 	
 RETURN_ERR
 }
-																	
+
 // Determines whether a given rectangular ROI with given width and height as well as offsets is falling within a circular region with given radius.
 // 0 - Rect ROI is outside the circular perimeter, 1 - otherwise.
 static BOOL RectROIInsideCircle (double ROIHeight, double ROIWidth, double ROIHeightOffset, double ROIWidthOffset, double circleRadius)
@@ -7077,13 +7165,19 @@ INIT_ERR
 				// create new callback group
 				nullChk( imgDisplayCBGroup = init_CallbackGroup_type(NULL, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
 				
+				/*
 				// if display was discarded, create a new display
 				if (!*imgDisplayPtr)
 					nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
 				else {
+					// reuse same display
 					discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
 					(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
 				}
+				*/
+				
+				// display image in new window
+				nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
 				
 				//--------------------------------------
 				// Display image for this channel
@@ -7752,14 +7846,6 @@ INIT_ERR
 	pointJumpSet->jumpTimes										= NULL;
 	pointJumpSet->responseDelays								= NULL;
 	
-	// scan parameters
-	pointJumpSet->scanSettings.width							= 0;
-	pointJumpSet->scanSettings.widthOffset						= 0;
-	pointJumpSet->scanSettings.height							= 0;
-	pointJumpSet->scanSettings.heightOffset						= 0;
-	pointJumpSet->scanSettings.pixelDwellTime					= 0;
-	pointJumpSet->scanSettings.pixSize							= 0;
-	
 	// hold settings
 	pointJumpSet->globalPointScanSettings.nHoldBurst			= 1;
 	pointJumpSet->globalPointScanSettings.holdTime				= NonResGalvoRasterScan_Default_HoldTime;
@@ -8426,25 +8512,7 @@ INIT_ERR
 	scanEngine->baseClass.activeDisplay	= imgDisplay; 
 	
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
-	// Restore scan settings
-	//----------------------------------------------------------------------------------------------------------------------------------------------------
-
-	// assign previous scan settings
-	scanEngine->scanSettings = previousScanSettings;
-	scanEngine->pointJumpSettings->scanSettings = previousScanSettings;
-	
-	// update preferred widths and pixel dwell times
-	errChk( NonResRectRasterScan_ScanWidths(scanEngine, &errorInfo.errMsg) );
-	errChk( NonResRectRasterScan_PixelDwellTimes(scanEngine, &errorInfo.errMsg) );
-	
-	// update remaining controls on the scan panel
-	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize);
-	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_HeightOffset, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize);
-	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_WidthOffset, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
-	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, scanEngine->scanSettings.pixSize);
-	
-	//----------------------------------------------------------------------------------------------------------------------------------------------------
-	// Clear point jump ROIs
+	// Set UI: Clear point jump ROIs
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
 	
 	// clear ROIs in the scan engine UI
@@ -8458,7 +8526,7 @@ INIT_ERR
 	ListClear(pointROIList);
 	
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
-	// Clear frame scan ROIs and add parent image ROI
+	// Set UI: Clear frame scan ROIs and add parent image ROI
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
 	
 	// clear ROIs in the scan engine UI
@@ -8484,10 +8552,10 @@ INIT_ERR
 	CheckListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, 0, TRUE);
 	
 	// insert parent ROI in scan engine list
-	ListInsertItem(scanEngine->scanROIs, &parentRectROI, END_OF_LIST);
+	nullChk( ListInsertItem(scanEngine->scanROIs, &parentRectROI, END_OF_LIST) );
 	
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
-	// Restore point jump and frame scan ROIs
+	// Set UI: Restore point jump and frame scan ROIs
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
 	
 	nPointROIs			= 0;
@@ -8527,6 +8595,26 @@ INIT_ERR
 		}
 	}
 	
+	// select parent ROI in frame scan list
+	SetCtrlIndex(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, 0);
+	
+	//----------------------------------------------------------------------------------------------------------------------------------------------------
+	// Restore scan settings
+	//----------------------------------------------------------------------------------------------------------------------------------------------------
+
+	// assign previous scan settings
+	scanEngine->scanSettings 				= previousScanSettings;
+	scanEngine->parentFrameScanSettings 	= previousScanSettings;
+	
+	// update preferred widths and pixel dwell times
+	errChk( NonResRectRasterScan_ScanWidths(scanEngine, &errorInfo.errMsg) );
+	errChk( NonResRectRasterScan_PixelDwellTimes(scanEngine, &errorInfo.errMsg) );
+	
+	// update remaining controls on the scan panel
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_HeightOffset, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_WidthOffset, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
+	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, scanEngine->scanSettings.pixSize);
 	
 	// update jump start delay and minimum jump period
 	NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);

@@ -331,7 +331,7 @@ int 					TaskControlEvent					(TaskControl_type* RecipientTaskControl, TCEvents 
 int						TaskControlIterationDone			(TaskControl_type* taskControl, int errorID, char errorInfoString[], BOOL doAnotherIteration, char** errorMsg);
 
 
-int						TaskControlEventToChildTCs 			(TaskControl_type* SenderTaskControl, TCEvents event, void* eventData, DiscardFptr_type discardEventDataFptr, char** errorMsg);
+int						TaskControlEventToChildTCs 			(TaskControl_type* SenderTaskControl, TCEvents event, void** eventDataPtr, DiscardFptr_type discardEventDataFptr, char** errorMsg);
 
 	// Aborts iterations for the entire Nested Task Controller hierarchy
 void					AbortTaskControlExecution			(TaskControl_type* taskControl);

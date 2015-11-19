@@ -7165,19 +7165,15 @@ INIT_ERR
 				// create new callback group
 				nullChk( imgDisplayCBGroup = init_CallbackGroup_type(NULL, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
 				
-				/*
 				// if display was discarded, create a new display
 				if (!*imgDisplayPtr)
 					nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
 				else {
-					// reuse same display
+					// just replace old callback group
 					discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
 					(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
 				}
-				*/
 				
-				// display image in new window
-				nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
 				
 				//--------------------------------------
 				// Display image for this channel
@@ -9699,13 +9695,17 @@ RETURN_ERR
 
 static int TaskTreeStateChange_RectRaster (TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg)
 {
+#define TaskTreeStateChange_RectRaster_Err_WrongPixelDataType		-1
 INIT_ERR
 
 	RectRaster_type* 		engine 				= GetTaskControlModuleData(taskControl);
 	size_t					nScanChans 			= engine->baseClass.nScanChans;
 	SourceVChan_type*   	detSourceVChan		= NULL;
+	ImageTypes				imageType			= 0;
 	DLDataTypes				pixelDataType		= 0;
 	int 					activeTabIdx 		= 0;
+	ImageDisplay_type**		imgDisplayPtr		= NULL;
+	CmtTSVHandle			displayTSVHndl		= 0;
 	
 	GetActiveTabPage(engine->baseClass.scanPanHndl, RectRaster_Tab, &activeTabIdx);
 	engine->baseClass.scanMode = (ScanEngineModes) activeTabIdx;
@@ -9744,10 +9744,46 @@ INIT_ERR
 						detSourceVChan = GetSourceVChan(engine->baseClass.scanChans[i]->detVChan);
 						pixelDataType = GetSourceVChanDataType(detSourceVChan);
 						
+						switch (pixelDataType) {
+				
+							case DL_Waveform_UChar:
+								imageType = Image_UChar;
+								break;
+		
+							case DL_Waveform_UShort:
+								imageType = Image_UShort;    
+								break;
+			
+							case DL_Waveform_Short:
+								imageType = Image_Short;    
+								break;
+						
+							case DL_Waveform_UInt:
+								imageType = Image_UInt;    
+								break;
+						
+							case DL_Waveform_Float:
+								imageType = Image_Float;     
+								break;
+			
+							default:
+						
+								SET_ERR(TaskTreeStateChange_RectRaster_Err_WrongPixelDataType, "Wrong pixel data type.");
+						}
+						
+						// display image in new window
+						imgDisplayPtr = NULL;
+						displayTSVHndl = engine->baseClass.scanChans[i]->imgDisplayTSV;
+						errChk( CmtGetTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV, &imgDisplayPtr) );
+						nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (engine->baseClass.scanChans[i], imageType, engine->scanSettings.width, engine->scanSettings.height, NULL) );
+						errChk( CmtReleaseTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV) );
+						imgDisplayPtr = NULL;
+						
 						engine->nImgBuffers++;
 						// allocate memory for image assembly
 						nullChk( engine->imgBuffers = realloc(engine->imgBuffers, engine->nImgBuffers * sizeof(RectRasterImgBuff_type*)) );
 						nullChk( engine->imgBuffers[engine->nImgBuffers - 1] = init_RectRasterImgBuff_type(engine->baseClass.scanChans[i], engine->scanSettings.height, engine->scanSettings.width, pixelDataType, FALSE) ); 
+						
 					}
 			
 					// Taken out for now, but must be put back if composite image display is implemented
@@ -9796,6 +9832,10 @@ INIT_ERR
 	}
 	
 Error:
+	
+	// release display TSV
+	if (imgDisplayPtr)
+		CmtReleaseTSVPtr(displayTSVHndl);
 	
 RETURN_ERR
 }

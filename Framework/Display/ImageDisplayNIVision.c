@@ -246,6 +246,7 @@ INIT_ERR
 	HMENU			imaqWndMenuHndl			= 0;	// menu bar for the imaq window
 	HMENU			imageMenuHndl			= 0;	// submenu handle for "Image" menu item in the imaq window
 	HMENU			equalizeMenuHndl		= 0;	// submenu handle for "Image->Equalize" menu item in the imaq window
+	int				newIMAQWindowID			= 0;
 										
 	ImageDisplayNIVision_type*	niImgDisp 	= malloc(sizeof(ImageDisplayNIVision_type));
 	if (!niImgDisp) return NULL;
@@ -282,7 +283,9 @@ INIT_ERR
 	errChk( InitializeNIVisionEngine() );
 	
 	// get an available IMAQ window handle
-	nullChk ( imaqGetWindowHandle(&niImgDisp->imaqWndID) );
+	nullChk ( imaqGetWindowHandle(&newIMAQWindowID) );
+	errChk(newIMAQWindowID);
+	niImgDisp->imaqWndID = newIMAQWindowID;
 	
 	// get windows window handle
 	nullChk( niImgDisp->imaqWndWindowsHndl = (HWND) imaqGetSystemWindowHandle(niImgDisp->imaqWndID) ); 

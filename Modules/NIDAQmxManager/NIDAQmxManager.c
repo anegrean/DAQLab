@@ -11079,16 +11079,16 @@ INIT_ERR
 	// AO task (stop if finite; continuous task stopping happens on receiving a NULL packet and is handled by WriteAODAQmx)
 	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl && dev->AOTaskSet->timing->measMode == Operation_Finite) {
 		DAQmxErrChk( DAQmxIsTaskDone(dev->AOTaskSet->taskHndl, &taskDoneFlag) ); 
-		if (!taskDoneFlag ) {
+		if (!taskDoneFlag) {
 			DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
-			(*nActiveTasksPtr)--; 
+			(*nActiveTasksPtr)--;
 		}
 	}
 	
 	// DI task
 	if (dev->DITaskSet && dev->DITaskSet->taskHndl) {
 		DAQmxErrChk( DAQmxIsTaskDone(dev->DITaskSet->taskHndl, &taskDoneFlag) ); 
-		if (!taskDoneFlag ) {
+		if (!taskDoneFlag) {
 			DAQmxErrChk( DAQmxStopTask(dev->DITaskSet->taskHndl) );
 			(*nActiveTasksPtr)--;
 		}
@@ -11097,7 +11097,7 @@ INIT_ERR
 	// DO task
 	if (dev->DOTaskSet && dev->DOTaskSet->taskHndl) {
 		DAQmxErrChk( DAQmxIsTaskDone(dev->DOTaskSet->taskHndl, &taskDoneFlag) );
-		if (!taskDoneFlag ) {
+		if (!taskDoneFlag) {
 			DAQmxErrChk( DAQmxStopTask(dev->DOTaskSet->taskHndl) );
 			(*nActiveTasksPtr)--;
 		}
@@ -11111,7 +11111,7 @@ INIT_ERR
 			chanSet = *(ChanSet_CI_type**)ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 			if (chanSet->taskHndl) {
 				DAQmxErrChk( DAQmxIsTaskDone(chanSet->taskHndl, &taskDoneFlag) ); 
-				if (!taskDoneFlag ) {
+				if (!taskDoneFlag) {
 					DAQmxErrChk( DAQmxStopTask(chanSet->taskHndl) );
 					(*nActiveTasksPtr)--;
 				}
@@ -11127,7 +11127,7 @@ INIT_ERR
 			chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);	
 			if (chanSet->taskHndl) {
 				DAQmxErrChk( DAQmxIsTaskDone(chanSet->taskHndl, &taskDoneFlag) ); 
-				if (!taskDoneFlag ) {
+				if (!taskDoneFlag) {
 					DAQmxErrChk( DAQmxStopTask(chanSet->taskHndl) );
 					(*nActiveTasksPtr)--;
 				}
@@ -11274,18 +11274,7 @@ INIT_ERR
 	
 	DAQmxErrChk(DAQmxTaskControl(dev->AITaskSet->taskHndl, DAQmx_Val_Task_Start));
 	
-	// increment number of active tasks
-	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
-	nActiveTasksTSVLockObtained = TRUE;
-	
-	(*nActiveTasksPtr)++;
-	
-	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
-	nActiveTasksTSVLockObtained = FALSE;
-	nActiveTasksPtr = NULL;
-	
 	errChk(SetHWTrigSlaveArmedStatus(dev->AITaskSet->HWTrigSlave, &errorInfo.errMsg));
-	
 	
 	return 0;
 	
@@ -11301,10 +11290,6 @@ Error:
 	
 	// cleanup
 	discard_DSInfo_type(&dsInfo);
-	
-	// try to release nActiveTasks lock if obtained before stopping all tasks
-	if (nActiveTasksTSVLockObtained)
-		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 
@@ -11426,17 +11411,6 @@ INIT_ERR
 	// launch task (and arm if this task is a slave triggered task)
 	DAQmxErrChk(DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Start));
 	
-	// increment number of active tasks
-	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
-	nActiveTasksTSVLockObtained = TRUE;
-	
-	(*nActiveTasksPtr)++;
-	
-	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
-	nActiveTasksTSVLockObtained = FALSE;
-	
-	nActiveTasksPtr = NULL;
-	
 	// if this task has a master HW-trigger, then signal it that task is armed
 	errChk(SetHWTrigSlaveArmedStatus(dev->AOTaskSet->HWTrigSlave, &errorInfo.errMsg));
 	
@@ -11456,10 +11430,6 @@ Error:
 	// cleanup
 	OKfree(AOData);
 	discard_Waveform_type(&AOWaveform);
-	
-	// try to release nActiveTasks lock if obtained before stopping all tasks
-	if (nActiveTasksTSVLockObtained)
-		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 	
@@ -11662,16 +11632,6 @@ INIT_ERR
 	
 	DAQmxErrChk(DAQmxTaskControl(chanSetCO->taskHndl, DAQmx_Val_Task_Start));
 	
-	// increment number of active tasks
-	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
-	nActiveTasksTSVLockObtained	= TRUE;
-	
-	(*nActiveTasksPtr)++;
-	
-	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
-	nActiveTasksTSVLockObtained	= FALSE;
-	nActiveTasksPtr = NULL;
-	
 	errChk(SetHWTrigSlaveArmedStatus(chanSetCO->HWTrigSlave, &errorInfo.errMsg));
 	
 	
@@ -11689,10 +11649,6 @@ Error:
 	
 	// cleanup
 	discard_PulseTrain_type(&pulseTrain);
-	
-	// try to release nActiveTasks lock if obtained before stopping all tasks
-	if (nActiveTasksTSVLockObtained)
-		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 	
@@ -14528,24 +14484,26 @@ INIT_ERR
 
 	Dev_type*		dev											= GetTaskControlModuleData(taskControl);
 	char			CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
-	int  			nActiveTasks								= 0;
+	int*  			nActiveTasksPtr								= NULL;
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(iterator));
 	
-	//----------------------------------------
-	// Reset Active Tasks counter
-	//----------------------------------------
+	// obtain active tasks TSV lock
+	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
 	
-	CmtErrChk( CmtSetTSV(dev->nActiveTasks, &nActiveTasks) );
+	// reset Active Tasks counter
+	*nActiveTasksPtr = 0;
 	
 	//----------------------------------------
 	// Launch tasks 
 	//----------------------------------------
 	
 	// AI
-	if (dev->AITaskSet && dev->AITaskSet->taskHndl && dev->AITaskSet->nOpenChannels)
+	if (dev->AITaskSet && dev->AITaskSet->taskHndl && dev->AITaskSet->nOpenChannels) {
 		CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAIDAQmxTask_CB, dev, NULL) );
+		(*nActiveTasksPtr)++;
+	}
 	
 	// AO
 	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl && dev->AOTaskSet->nOpenChannels) {
@@ -14557,6 +14515,7 @@ INIT_ERR
 		DAQmxErrChk( DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev) );  
 		
 		CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAODAQmxTask_CB, dev, NULL) );
+		(*nActiveTasksPtr)++;
 	}
 	
 	// DI
@@ -14575,8 +14534,10 @@ INIT_ERR
 		size_t 				nCI 		= ListNumItems(dev->CITaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nCI; i++) {
 			chanSet = *(ChanSet_CI_type**)ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-			if (chanSet->taskHndl)
+			if (chanSet->taskHndl) {
 				CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCIDAQmxTasks_CB, chanSet, NULL) );
+				(*nActiveTasksPtr)++;
+			}
 		}
 	}
 	
@@ -14586,10 +14547,15 @@ INIT_ERR
 		size_t 				nCO 		= ListNumItems(dev->COTaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nCO; i++) {
 			chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-			if (chanSet->taskHndl)
+			if (chanSet->taskHndl) {
 				CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCODAQmxTasks_CB, chanSet, NULL) );
+				(*nActiveTasksPtr)++;
+			}
 		}
 	}
+	
+	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksPtr = NULL;
 	
 	return; // no error
 	
@@ -14603,6 +14569,11 @@ Cmt_ERR
 
 Error:
 	
+	if (nActiveTasksPtr) {
+		CmtReleaseTSVPtr(dev->nActiveTasks);
+		nActiveTasksPtr = NULL;
+	}
+		
 	AbortTaskControlExecution(taskControl);
 	
 PRINT_ERR

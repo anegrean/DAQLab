@@ -1,3 +1,5 @@
+#include <userint.h>
+
 //==============================================================================
 //
 // Title:		ImageDisplayCVI.c
@@ -54,11 +56,12 @@ ImageDisplay_type baseClass;
 //==============================================================================
 // Static functions
 
-static void 			DiscardImageList 			(ListType* imageListPtr);
+static void 					DiscardImageList 			(ListType* imageListPtr);
 
-static int				DisplayImageFunction		(ImageDisplayCVI_type* imgDisplay, Image_type** image);
+static int						DisplayImageFunction		(ImageDisplayCVI_type* imgDisplay, Image_type** image);
 
-static void			 	ConvertToBitArray(ImageDisplayCVI_type* display, Image_type* image);
+static void			 			ConvertToBitArray			(ImageDisplayCVI_type* display, Image_type* image);
+
 
 //==============================================================================
 // Global variables
@@ -81,12 +84,11 @@ static void			 	ConvertToBitArray(ImageDisplayCVI_type* display, Image_type* ima
 
 // Initializes a display handle using DisplayCVI module. If known, the parameters imageType, imgWidth and imgHeight should be supplied
 // as memory allocation can be done only once at this point and reused when updating the display with a similar image.
-ImageDisplayCVI_type* init_ImageDisplayCVI_type (int    		parentPanHandl, 
-												 char   		displayTitle[],
-												 int			imgWidth,
-												 int			imgHeight,
-												 void*			callbackData
-)		 
+ImageDisplayCVI_type* init_ImageDisplayCVI_type (int    				parentPanHandl, 
+												 char   				displayTitle[],
+												 int					imgWidth,
+												 int					imgHeight,
+												 CallbackGroup_type**	callbackGroupPtr)		 
 {
 INIT_ERR
 
@@ -109,7 +111,7 @@ INIT_ERR
 	// call parent init fn
 
 	
-	init_ImageDisplay_type(&imgDisplay->baseClass, &imgDisplay, NULL, (DiscardFptr_type) discard_ImageDisplayCVI_type, (DisplayImageFptr_type) DisplayImageFunction, NULL, NULL);
+	init_ImageDisplay_type(&imgDisplay->baseClass, &imgDisplay, NULL, (DiscardFptr_type) discard_ImageDisplayCVI_type, (DisplayImageFptr_type) DisplayImageFunction, NULL, callbackGroupPtr);
 
 	
 	//-------------------------------------
@@ -132,31 +134,29 @@ INIT_ERR
 	
 	// ALLOC Resources
 	//---------------------------------
-	
-	if(imgHeight > 0 && imgWidth > 0)
-		nullChk(imgDisplay->bitmapBitArray = malloc(BytesPerPixelDepth * imgWidth * imgHeight));
-	else
-		goto Error;
 		
 	// loading display panel into workspace panel
 	errChk( imgDisplay->displayPanHndl = LoadPanel (parentPanHandl, ImageDisplay_UI, DisplayPan) );
 
 	// loading canvas panel into display panel
 	errChk( imgDisplay->canvasPanHndl = LoadPanel (imgDisplay->displayPanHndl, ImageDisplay_UI, CanvasPan) ); 
+
+	//allow access to ImgDisplay
+	SetCtrlAttribute(imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_CALLBACK_DATA, imgDisplay);
 	
 	// create image list
 	nullChk( imgDisplay->images = ListCreate(sizeof(Image_type*)) );
 
 	// create bitmap bit array
-	nullChk( imgDisplay->bitmapBitArray = initBitArray(imgDisplay->nBytes));
+	if(imgHeight > 0 && imgWidth > 0)
+		nullChk( imgDisplay->bitmapBitArray = malloc(BytesPerPixelDepth * imgWidth * imgHeight) );
+	else
+		goto Error;
+				 
+	// create bitmap image handle
+	errChk( NewBitmap (-1, pixelDepth, imgWidth, imgHeight, NULL, imgDisplay->bitmapBitArray, NULL, &imgDisplay->imgBitmapID) );
 	
-	// create bitmap image handler
-	errChk(NewBitmap (-1, pixelDepth, imgWidth, imgHeight, NULL, imgDisplay->bitmapBitArray, NULL, &imgDisplay->imgBitmapID));
-	
-	
-
 	DisplayPanel (imgDisplay->canvasPanHndl);
-	DisplayPanel(imgDisplay->displayPanHndl);
 	
 	return imgDisplay;
 	
@@ -165,16 +165,6 @@ Error:
 	// cleanup
 	discard_ImageDisplayCVI_type(&imgDisplay);
 	return NULL;
-}
-
-unsigned char* initBitArray(int nBytes)
-{
-	unsigned char* bytes = NULL;
-	
-	bytes = (unsigned char*) malloc(nBytes * sizeof(unsigned char));
-	
-	if (!bytes) return NULL;
-	return bytes;
 }
 
 static void discard_ImageDisplayCVI_type	(ImageDisplayCVI_type** imageDisplayPtr)
@@ -197,8 +187,9 @@ static void discard_ImageDisplayCVI_type	(ImageDisplayCVI_type** imageDisplayPtr
 	// UI
 	//--------------
 	
+	OKfreePanHndl(imgDisp->canvasPanHndl); 	
 	OKfreePanHndl(imgDisp->displayPanHndl);
-	OKfreePanHndl(imgDisp->canvasPanHndl);
+
 	
 	OKfree(* imageDisplayPtr);
 	
@@ -211,7 +202,7 @@ static void discard_ImageDisplayCVI_type	(ImageDisplayCVI_type** imageDisplayPtr
 void discard_ImageCVI_type (ImageDisplayCVI_type** ImageCVIPtr)
 {
 	ImageDisplayCVI_type* ImageCVI = *ImageCVIPtr;
-	if (!ImageCVI) return;				   //TODO: CHANGE TO PTRS
+	if (!ImageCVI) return;				   
 	
 
 	
@@ -374,7 +365,7 @@ INIT_ERR
 	}
 	
 	//Image mapping B->G->R->ignored byte
-	switch(imgType) { 
+	switch (imgType) { 
 		
 		case Image_RGBA:
 	
@@ -464,15 +455,73 @@ Error:
 }
 
 
-static int DisplayImageFunction (ImageDisplayCVI_type* imgDisplay, Image_type** image)
+static int DisplayImageFunction (ImageDisplayCVI_type* imgDisplay, Image_type** imagePtr)
 {
+INIT_ERR 
+	
+	Image_type* 	image     	= *imagePtr;
+	int 			imgHeight 	= 0;
+	int 			imgWidth 	= 0;
+	
+	GetImageSize(image, &imgWidth, &imgHeight);  
+	
+	if(imgWidth != imgDisplay->imgWidth || imgHeight != imgDisplay->imgHeight) {
+	
+		//clear old display internal bitmap image data
+		OKfree(imgDisplay->bitmapBitArray);
+		DiscardBitmap(imgDisplay->imgBitmapID);
+		
 
-	ConvertToBitArray(imgDisplay, *image);
+		//allocate and update display internal data with new image content 
+		nullChk( imgDisplay->bitmapBitArray = (unsigned char*) malloc(imgHeight * imgWidth * BytesPerPixelDepth) );
+		imgDisplay->nBytes	  = imgHeight * imgWidth * BytesPerPixelDepth; 
+		imgDisplay->imgHeight = imgHeight;
+		imgDisplay->imgWidth  = imgWidth;
 	
-	SetBitmapData(imgDisplay->imgBitmapID, -1, pixelDepth, NULL, imgDisplay->bitmapBitArray, NULL);
 	
+		//convert new image data to bit array and create bitmap image
+		ConvertToBitArray(imgDisplay, image);
+		errChk( NewBitmap (-1, pixelDepth, imgDisplay->imgWidth, imgDisplay->imgHeight, NULL, imgDisplay->bitmapBitArray, NULL, &imgDisplay->imgBitmapID) );
+	
+	} else {
+		
+		//only update bitmap data 
+		ConvertToBitArray(imgDisplay, image);
+		SetBitmapData(imgDisplay->imgBitmapID, -1, pixelDepth, NULL, imgDisplay->bitmapBitArray, NULL);
+	
+	}
+	
+	//draw bitmap on canvas
+
 	CanvasDrawBitmap (imgDisplay->canvasPanHndl, CanvasPan_Canvas, imgDisplay->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
+	DisplayPanel(imgDisplay->displayPanHndl); 
 	
 	return 0;
+	
+Error: 
+	
+	return errorInfo.error;
+	
 }
 
+int CVICALLBACK DisplayPanCallback (int panel, int event, void *callbackData,
+									int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_CLOSE:
+			
+			HidePanel(panel);
+			
+		break;
+		
+		case EVENT_RIGHT_CLICK:
+			/*
+			ImageDisplayCVI_type* display = (ImageDisplayCVI_type*) callbackData;
+			GetScaledCtrlDisplayBitmap (display->canvasPanHndl, CanvasPan_Canvas, 0, 1.5 * display->imgHeight, 1.5 * display->imgWidth, &display->imgBitmapID);
+			CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);  
+			 */
+		break;
+	}
+	return 0;
+}

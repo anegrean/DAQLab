@@ -42,18 +42,14 @@ typedef struct ImageDisplayCVI	ImageDisplayCVI_type;
 //==============================================================================
 // Global functions
 
-ImageDisplayCVI_type* init_ImageDisplayCVI_type (int    		parentPanHandl, 
-												 char   		displayTitle[],
-												 int			imgWidth,
-												 int			imgHeight,
-												 void*			callbackData
-);
-						
-void						discard_ImageDisplayCVI_type	(ImageDisplayCVI_type** imageDisplayPtr);
+ImageDisplayCVI_type* 		init_ImageDisplayCVI_type 		(	int    					parentPanHandl, 
+												 				char   					displayTitle[],
+												 				int						imgWidth,
+												 				int						imgHeight,
+												 				CallbackGroup_type**	callbackGroupPtr);
 
-// Adds an image to display. Multiple images can be added to the same display and the user can make use of a scrollbar to view each image.
-int							DisplayImage					(ImageDisplayCVI_type* imageDisp, Image_type* images[]);
-unsigned char* 				initBitArray					(int nBits);
+
+void						discard_ImageDisplayCVI_type	(ImageDisplayCVI_type** imageDisplayPtr);
 
 
 

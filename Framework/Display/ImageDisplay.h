@@ -72,7 +72,7 @@ typedef enum {
 //--------------------------------------------------------------
 
 // Displays or updates an image in a display window
-typedef int				(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type** image);
+typedef int				(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type** image, char** errorMsg);
 
 // Performs a ROI operation on the image display. ROIName is the name of the ROI or ROIs from the image ROI list to which the operation applies. If ROIName is NULL, the operation applies to all ROIs.
 typedef void			(*ROIActionsFptr_type)						(ImageDisplay_type* imgDisplay, char ROIName[], ROIActions action);
@@ -142,9 +142,9 @@ ChannelGroupDisplay_type*				init_ChannelGroupDisplay_type				(char name[]);
 
 void									discard_ChannelGroupDisplay_type			(ChannelGroupDisplay_type** chanGroupDisplayPtr);
 
-// Given a 1-based ROI index, the function performs an action on the ROI from a given channel display within the group. If channelIdx is 0 then the action applies to all channels.
-// If ROIIdx is 0 then the action applies to all ROIs.
-int										ChannelGroupDisplayROIAction				(ChannelGroupDisplay_type* chanGroupDisplay, size_t channelIdx, size_t ROIIdx, ROIActions action, char** errorMsg);
+// Given a ROI name, the function performs an action on the ROI from a given channel display within the group. If channelIdx is 0 then the action applies to all channels.
+// If ROIIdx is "" then the action applies to all ROIs.
+int										ChannelGroupDisplayROIAction				(ChannelGroupDisplay_type* chanGroupDisplay, size_t channelIdx, char ROIName[], ROIActions action, char** errorMsg);
 
 // Adds an image to the channel group display with a given 0-based channel index. Any existing ROIs from the provided image are discarded and they must be added back afterwards. The image width and height in pixels
 // must be the same for all images added to the channel group display.
@@ -163,7 +163,8 @@ size_t									AddChannelGroupDisplayToContainer			(ChannelGroupDisplayContainer
 
 // Gets the 1-based active channel group index within the container. If 0, there is no active channel group display.
 size_t									GetActiveChannelGroupDisplayIndex			(ChannelGroupDisplayContainer_type* container);
- 
+
+
 
 #ifdef __cplusplus
     }

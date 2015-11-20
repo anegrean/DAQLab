@@ -156,7 +156,7 @@ void discard_ChannelGroupDisplay_type (ChannelGroupDisplay_type** chanGroupDispl
 	OKfree(*chanGroupDisplayPtr);
 }
 
-int ChannelGroupDisplayROIAction (ChannelGroupDisplay_type* chanGroupDisplay, size_t channelIdx, size_t ROIIdx, ROIActions action, char** errorMsg)
+int ChannelGroupDisplayROIAction (ChannelGroupDisplay_type* chanGroupDisplay, size_t channelIdx, char ROIName[], ROIActions action, char** errorMsg)
 {
 INIT_ERR
 
@@ -181,10 +181,10 @@ INIT_ERR
 	if (!channelIdx) {
 		for (size_t i = 0; i < chanGroupDisplay->nDisplays; i++)
 			if (chanGroupDisplay->imgDisplays[i])
-				(*chanGroupDisplay->imgDisplays[i]->ROIActionsFptr) (chanGroupDisplay->imgDisplays[i], ROIIdx, action);
+				(*chanGroupDisplay->imgDisplays[i]->ROIActionsFptr) (chanGroupDisplay->imgDisplays[i], ROIName, action);
 	} else
 		if (chanGroupDisplay->imgDisplays[channelIdx-1])
-				(*chanGroupDisplay->imgDisplays[channelIdx-1]->ROIActionsFptr) (chanGroupDisplay->imgDisplays[channelIdx-1], ROIIdx, action);
+				(*chanGroupDisplay->imgDisplays[channelIdx-1]->ROIActionsFptr) (chanGroupDisplay->imgDisplays[channelIdx-1], ROIName, action);
 	
 Error:
 	

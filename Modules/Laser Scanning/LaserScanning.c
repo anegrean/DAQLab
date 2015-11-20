@@ -7179,7 +7179,7 @@ INIT_ERR
 				//--------------------------------------
 				
 				// temporarily must be commented out for debug
-				errChk( (*(*imgDisplayPtr)->displayImageFptr) (*imgDisplayPtr, &imgBuffer->image) ); 
+				errChk( (*(*imgDisplayPtr)->displayImageFptr) (*imgDisplayPtr, &imgBuffer->image, &errorInfo.errMsg) ); 
 				//discard_Image_type(&imgBuffer->image);
 				
 				errChk( CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV) );

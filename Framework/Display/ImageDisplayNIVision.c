@@ -107,7 +107,7 @@ static int								InitializeNIVisionEngine						(void);
 
 static int								AdjustNIVisionImageDisplay						(ImageDisplayNIVision_type* imgDisplay);
 
-static int								DisplayNIVisionImage							(ImageDisplayNIVision_type* imgDisplay, Image_type** newImagePtr);
+static int								DisplayNIVisionImage							(ImageDisplayNIVision_type* imgDisplay, Image_type** newImagePtr, char** errorMsg);
 
 static int								DisplayNIVisionRGBImage							(ImageDisplayNIVision_type* imgDisplay, Image_type** imageR, Image_type** imageG, Image_type** imageB);	
 
@@ -133,7 +133,7 @@ LRESULT CALLBACK 						CustomImageDisplayNIVision_CB					(HWND hWnd, UINT msg, W
 static int								ApplyDisplayTransform							(Image* image, ImageDisplayTransforms dispTransformFunc);
 
 	// Converts Image_type to NI image. Pass an existing (allocated) NI image of the same size as the image to be converted. On success return nonzero, on failure returns 0.
-static int								ConvertImageTypeToNIImage						(Image* NIImage, Image_type* image);
+static int								ConvertImageTypeToNIImage						(Image* NIImage, Image_type* image, char** errorMsg);
 
 //==============================================================================
 // Global variables
@@ -259,7 +259,7 @@ INIT_ERR
 	//----------------------------
 	
 	niImgDisp->NIImage					= NULL;
-	niImgDisp->imaqWndID				= 0;
+	niImgDisp->imaqWndID				= -1;
 	niImgDisp->imaqWndWindowsHndl		= 0;	
 	niImgDisp->imaqWndProc				= 0;
 	
@@ -393,7 +393,8 @@ static void discard_ImageDisplayNIVision_type (ImageDisplayNIVision_type** displ
 	//---------------------------------------------------
 	// discard child class data
 	
-	NIDisplays[display->imaqWndID] = NULL;
+	if (display->imaqWndID >= 0)
+		NIDisplays[display->imaqWndID] = NULL;
 	
 	// discard NI image
 	DiscardImaqImg((Image**)&display->NIImage);
@@ -403,10 +404,9 @@ static void discard_ImageDisplayNIVision_type (ImageDisplayNIVision_type** displ
 	discard_ImageDisplay_type((ImageDisplay_type**) displayPtr);
 }
 
-static int DisplayNIVisionImage (ImageDisplayNIVision_type* imgDisplay, Image_type** newImagePtr)
+static int DisplayNIVisionImage (ImageDisplayNIVision_type* imgDisplay, Image_type** newImagePtr, char** errorMsg)
 {								
 INIT_ERR
-
 
 	// bind image display data to window ID
 	NIDisplays[imgDisplay->imaqWndID] = imgDisplay;
@@ -420,7 +420,7 @@ INIT_ERR
 	imgDisplay->baseClass.image = *newImagePtr;
 	*newImagePtr = NULL;
 	
-	errChk( ConvertImageTypeToNIImage(imgDisplay->NIImage, imgDisplay->baseClass.image) );
+	errChk( ConvertImageTypeToNIImage(imgDisplay->NIImage, imgDisplay->baseClass.image, &errorInfo.errMsg) );
 	
 	// display NI image
 	nullChk( imaqDisplayImage(imgDisplay->NIImage, imgDisplay->imaqWndID, FALSE) );
@@ -433,7 +433,7 @@ INIT_ERR
 		    
 Error:
 	
-	return errorInfo.error;
+RETURN_ERR
 }
 
 static int DisplayNIVisionRGBImage (ImageDisplayNIVision_type* imgDisplay, Image_type** imageR, Image_type** imageG, Image_type** imageB)
@@ -758,7 +758,7 @@ INIT_ERR
 					
 					// convert image
 					SetImageDisplayTransform(disp->baseClass.image, ImageDisplayTransform_Linear);
-					errChk( ConvertImageTypeToNIImage(disp->NIImage, disp->baseClass.image) );
+					errChk( ConvertImageTypeToNIImage(disp->NIImage, disp->baseClass.image, &errorInfo.errMsg) );
 					
 					// display image
 					nullChk( imaqDisplayImage(disp->NIImage, disp->imaqWndID, FALSE) );
@@ -768,7 +768,7 @@ INIT_ERR
 					
 					// convert image
 					SetImageDisplayTransform(disp->baseClass.image, ImageDisplayTransform_Logarithmic);
-					errChk( ConvertImageTypeToNIImage(disp->NIImage, disp->baseClass.image) );
+					errChk( ConvertImageTypeToNIImage(disp->NIImage, disp->baseClass.image, &errorInfo.errMsg) );
 					
 					// display image
 					nullChk( imaqDisplayImage(disp->NIImage, disp->imaqWndID, FALSE) );
@@ -853,8 +853,10 @@ Error:
 	return errorInfo.error;
 }
 
-static int ConvertImageTypeToNIImage (Image* NIImage, Image_type* image)
+static int ConvertImageTypeToNIImage (Image* NIImage, Image_type* image, char** errorMsg)
 {
+#define ConvertImageTypeToNIImage_Err_ZeroSizeImage	-1
+#define ConvertImageTypeToNIImage_Err_NoImagePixels	-2
 INIT_ERR
 	
 	int			imgWidth	= 0;
@@ -866,6 +868,13 @@ INIT_ERR
 	
 	GetImageSize(image, &imgWidth, &imgHeight);
 	
+	// check image
+	if (!imgWidth || !imgHeight)
+		SET_ERR(ConvertImageTypeToNIImage_Err_ZeroSizeImage, "Image must have non-zero pixel width and height.");
+	
+	if (!pixelArray)
+		SET_ERR(ConvertImageTypeToNIImage_Err_NoImagePixels, "Image has no pixel data.");
+		
 	// convert pixel array to image
 	nullChk( imaqArrayToImage(NIImage, pixelArray, imgWidth, imgHeight) );
 	
@@ -881,7 +890,7 @@ INIT_ERR
 	
 Error:
 	
-	return errorInfo.error;
+RETURN_ERR
 }
 
 static int ImageSavePopup (Image* image, NIDisplayFileSaveFormats fileFormat, char** errorMsg)

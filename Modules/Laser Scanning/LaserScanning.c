@@ -6925,7 +6925,7 @@ The function is not multi-threaded.
 static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t bufferIdx, char** errorMsg)
 {
 #define NonResRectRasterScan_BuildImage_Err_WrongPixelDataType			-1
-//#define NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage		-2
+//#define NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage	-2
 	
 INIT_ERR
 
@@ -7162,15 +7162,14 @@ INIT_ERR
 				void* 							callbackData[]					= {init_RectRasterDisplayCBData_type(rectRaster, bufferIdx)};
 				DiscardFptr_type 				discardCallbackDataFunctions[] 	= {(DiscardFptr_type)discard_RectRasterDisplayCBData_type};
 				
-				// create new callback group
-				nullChk( imgDisplayCBGroup = init_CallbackGroup_type(NULL, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
-				
 				// if display was discarded, create a new display
-				if (!*imgDisplayPtr)
+				if (!*imgDisplayPtr) {
+					nullChk( imgDisplayCBGroup = init_CallbackGroup_type(NULL, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
 					nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
-				else {
+				} else {
 					// just replace old callback group
 					discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
+					nullChk( imgDisplayCBGroup = init_CallbackGroup_type(*imgDisplayPtr, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
 					(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
 				}
 				
@@ -8394,7 +8393,7 @@ INIT_ERR
 			{
 				ROI_type*		ROI				= eventData;
 				
-				switch (ROI->ROIType) {
+				switch ( ROI->ROIType) {
 						
 					case ROI_Point:
 						

@@ -574,7 +574,7 @@ typedef struct {
 	ListType					scanROIs;					// List of Rect_type* scan ROIs marking subregions to scan within the parent scan area described by the ScanSettings.
 	
 	//----------------------------------------------------
-	// Point Jump Settings									// For jumping as fast as possible between a series of points and staying at each point a given amount of time. 
+	// Point Jump Settings									// For jumping as fast as possible between a series of points and staying at or stimulating each point a given amount of time. 
 	//----------------------------------------------------
 	
 	PointJumpSet_type*			pointJumpSettings;

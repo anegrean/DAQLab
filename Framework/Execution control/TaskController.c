@@ -1600,19 +1600,19 @@ int TaskControlEvent (TaskControl_type* RecipientTaskControl, TCEvents event, vo
 {
 INIT_ERR	
 	
-	EventPacket_type 	eventPackets;
+	EventPacket_type 	eventPacket;
 	ChildTCInfo_type*	subTask				= NULL;
 	int 				lockObtainedFlag 	= FALSE;
 	
 	// init event packet
-	eventPackets.event 					= event;
+	eventPacket.event 					= event;
 	if (eventDataPtr) {
-		eventPackets.eventData			= *eventDataPtr;
+		eventPacket.eventData			= *eventDataPtr;
 		*eventDataPtr					= NULL;
 	} else
-		eventPackets.eventData			= NULL;
+		eventPacket.eventData			= NULL;
 	
-	eventPackets.discardEventDataFptr	= discardEventDataFptr;	
+	eventPacket.discardEventDataFptr	= discardEventDataFptr;	
 
 	// get event TSQ thread lock
 	CmtErrChk( CmtGetLockEx(RecipientTaskControl->eventQThreadLock, 0, CMT_WAIT_FOREVER, &lockObtainedFlag) );
@@ -1623,7 +1623,7 @@ INIT_ERR
 		subTask->isOutOfDate = TRUE;
 	}
 	
-	CmtErrChk( CmtWriteTSQData(RecipientTaskControl->eventQ, &eventPackets, 1, 0, NULL) );
+	CmtErrChk( CmtWriteTSQData(RecipientTaskControl->eventQ, &eventPacket, 1, 0, NULL) );
 	
 	// release event TSQ thread lock
 	if (lockObtainedFlag)
@@ -1638,10 +1638,10 @@ Cmt_ERR
 Error:
 
 	// cleanup event data
-	if (eventPackets.eventData && eventPackets.discardEventDataFptr)
-		(*eventPackets.discardEventDataFptr) (&eventPackets.eventData);
+	if (eventPacket.eventData && eventPacket.discardEventDataFptr)
+		(*eventPacket.discardEventDataFptr) (&eventPacket.eventData);
 	else
-		OKfree(eventPackets.eventData);
+		OKfree(eventPacket.eventData);
 	
 	// release event TSQ thread lock
 	if (lockObtainedFlag)
@@ -1655,7 +1655,6 @@ int	TaskControlIterationDone (TaskControl_type* taskControl, int errorID, char e
 INIT_ERR
 
 	FCallReturn_type*	fCallReturn = NULL;
-	int*				lineNumPtr	= NULL;
 	
 	if (errorID) {
 		
@@ -1666,7 +1665,8 @@ INIT_ERR
 		
 		if (doAnotherIteration) 
 			taskControl->repeat++;
-		nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+		
+		errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
 		
 	}
 	
@@ -1674,7 +1674,6 @@ INIT_ERR
 	
 Error:
 	
-	OKfree(lineNumPtr);
 	discard_FCallReturn_type(&fCallReturn);
 	
 RETURN_ERR
@@ -1746,7 +1745,6 @@ INIT_ERR
 	
 	BOOL	taskActive					= FALSE;
 	BOOL	taskActiveLockObtained		= FALSE;
-	int*	lineNumPtr					= NULL;
 	
 	// determine if task tree is active.
 	// Note: this should be better done through message passing if task controllers are not local
@@ -1772,7 +1770,7 @@ INIT_ERR
 		case TC_Callback_Iterate:
 			
 			if (!taskControl->IterateFptr) { 
-				nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+				errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
 				break; 									// function not provided 
 			}
 			
@@ -1871,7 +1869,6 @@ Cmt_ERR
 
 Error:
 	
-	OKfree(lineNumPtr);
 	// release lock
 	if (taskActiveLockObtained)
 		IsTaskControllerInUse_ReleaseLock(GetTaskControlRootParent(taskControl), &taskActiveLockObtained, NULL);
@@ -2197,17 +2194,13 @@ int CVICALLBACK TaskControlIterTimeout (int reserved, int timerId, int event, vo
 INIT_ERR
 
 	TaskControl_type* 	taskControl = callbackData;
-	int*				lineNumPtr	= NULL;
 	
-	if (event == EVENT_TIMER_TICK) {
-		nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEvent(taskControl, TC_Event_IterationTimeout, (void**)&lineNumPtr, NULL, NULL) );
-	}
-	
-	return 0;
+	if (event == EVENT_TIMER_TICK)
+		errChk( TaskControlEvent(taskControl, TC_Event_IterationTimeout, NULL, NULL, NULL) );
 	
 Error:
 	
-	OKfree(lineNumPtr);
+	return 0;
 }
 
 static void AddIterationEventWithPriority (EventPacket_type* eventPackets, int* nEventPackets, int currentEventIdx) 
@@ -2246,7 +2239,6 @@ INIT_ERR
 	int						nEventItems			= 0;
 	BOOL					stateLockObtained   = FALSE;
 	TCStates*				tcStateTSVPtr 		= NULL; 
-	int*					lineNumPtr			= NULL;
 	
 	// get all Task Controller events in the queue
 	while ((nEventItems = CmtReadTSQData(taskControl->eventQ, eventPackets, EVENT_BUFFER_SIZE - 1, 0, 0)) > 0) {
@@ -2713,10 +2705,9 @@ INIT_ERR
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
 										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
-									else { 
-										nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
-									}
-										
+									else 
+										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
+									
 									// switch state and wait for iteration to complete
 									ChangeState(taskControl, &eventPackets[i], TC_State_IterationFunctionActive);
 									
@@ -2730,7 +2721,7 @@ INIT_ERR
 									nItems = ListNumItems(taskControl->childTCs); 		
 									if (nItems) {    
 										// send START event to all childTCs
-										nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+										errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, NULL, NULL, &errorInfo.errMsg) );
 										break; // stop here
 									}	
 							
@@ -2740,10 +2731,9 @@ INIT_ERR
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
 										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
-									else { 
-										nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
-									}
-										
+									else
+										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
+									
 									// switch state and wait for iteration to complete
 									ChangeState(taskControl, &eventPackets[i], TC_State_IterationFunctionActive);  
 									
@@ -2755,7 +2745,7 @@ INIT_ERR
 									// Start ChildTCs if there are any
 									//---------------------------------------------------------------------------------------------------------------
 							
-									nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+									errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, NULL, NULL, &errorInfo.errMsg) );
 									
 									//---------------------------------------------------------------------------------------------------------------
 									// Call iteration function if needed
@@ -2763,10 +2753,9 @@ INIT_ERR
 							
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
 										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
-									else { 
-										nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
-									}
-										
+									else 
+										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
+									
 									// switch state and wait for iteration and ChildTCs if there are any to complete
 									ChangeState(taskControl, &eventPackets[i], TC_State_IterationFunctionActive);  
 									break;
@@ -2802,7 +2791,7 @@ INIT_ERR
 							
 							} else {
 								// send TC_Event_Stop event to all childTCs
-								nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Stop, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+								errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Stop, NULL, NULL, &errorInfo.errMsg) );
 								
 								ChangeState(taskControl, &eventPackets[i], TC_State_Stopping);
 							}
@@ -2871,9 +2860,9 @@ INIT_ERR
 									
 									if (taskControl->repeat || taskControl->mode == TASK_CONTINUOUS)
 										errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Iterate, NULL, &errorInfo.errMsg) );
-									else { 
-										nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
-									}
+									else 
+										errChk( TaskControlEvent(taskControl, TC_Event_IterationDone, NULL, NULL, &errorInfo.errMsg) );
+									
 										
 									ChangeState(taskControl, &eventPackets[i], TC_State_IterationFunctionActive); 	
 									break;
@@ -2965,7 +2954,7 @@ INIT_ERR
 								} else {
 							
 									// send TC_Event_Stop event to all childTCs
-									nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Stop, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+									errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Stop, NULL, NULL, &errorInfo.errMsg) );
 									
 									ChangeState(taskControl, &eventPackets[i], TC_State_Stopping);
 								}
@@ -2987,7 +2976,7 @@ INIT_ERR
 							
 									if (ListNumItems(taskControl->childTCs)) {
 										// send START event to all childTCs
-										nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+										errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Start, NULL, NULL, &errorInfo.errMsg) );
 										
 										// switch to RUNNING state and wait for ChildTCs to complete
 										ChangeState(taskControl, &eventPackets[i], TC_State_Running);
@@ -3199,13 +3188,13 @@ INIT_ERR
 							ChangeState(taskControl, &eventPackets[i], TC_State_Initial);
 					
 							// send START event to self
-							nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEvent(taskControl, TC_Event_Start, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+							errChk( TaskControlEvent(taskControl, TC_Event_Start, NULL, NULL, &errorInfo.errMsg) );
 							break;
 					
 						case TC_Event_Reset:
 					
 							// send RESET event to all childTCs
-							nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Reset, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+							errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Reset, NULL, NULL, &errorInfo.errMsg) );
 							
 							// change state to INITIAL if there are no childTCs and call reset function
 							if (!ListNumItems(taskControl->childTCs)) {
@@ -3291,7 +3280,7 @@ INIT_ERR
 					
 							ChangeState(taskControl, &eventPackets[i], TC_State_Unconfigured);
 					
-							nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEvent(taskControl, TC_Event_Configure, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+							errChk( TaskControlEvent(taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 							
 							// clear error
 							OKfree(taskControl->errorMsg);
@@ -3301,7 +3290,7 @@ INIT_ERR
 						case TC_Event_Reset:
 					
 							// send RESET event to all childTCs
-							nullChk( lineNumPtr = NumTag(__LINE__) ); errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Reset, (void**)&lineNumPtr, NULL, &errorInfo.errMsg) );
+							errChk( TaskControlEventToChildTCs(taskControl, TC_Event_Reset, NULL, NULL, &errorInfo.errMsg) );
 							
 							// reset and change state to Initial if there are no childTCs
 							if (!ListNumItems(taskControl->childTCs)) {
@@ -3418,7 +3407,6 @@ INIT_ERR
 			// cleanup
 			//-------------------------------------------
 	
-			OKfree(lineNumPtr);
 			discard_ChildTCEventInfo_type(&childTCEventInfo);
 		
 			// remove iteration timeout timer

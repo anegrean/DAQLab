@@ -90,11 +90,11 @@ typedef struct {
 
 AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last parameter, i.e. the instance
 																  // counter always to 0
-	//{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
-	//{ MOD_LangLStep_NAME, initalloc_LangLStep, FALSE, 0},
+	{ MOD_PIStage_NAME, initalloc_PIStage, FALSE, 0 },
+	{ MOD_LangLStep_NAME, initalloc_LangLStep, FALSE, 0},
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
-	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
 	{ MOD_DataStorage_NAME, initalloc_DataStorage, FALSE, 0 },
 	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 },
 	{ MOD_CoherentCham_NAME, initalloc_CoherentCham, FALSE, 0}
@@ -408,7 +408,7 @@ INIT_ERR
 	DAQLabXMLNode 					attr1[] = { {"TaskPanTopPos", 		BasicData_Int, 		&taskPanTopPos},
 							 					{"TaskPanLeftPos", 		BasicData_Int, 		&taskPanLeftPos},
 												{"LogPanTopPos", 		BasicData_Int, 		&logPanTopPos},
-												{"LogPanLeftPos",		 BasicData_Int, 	&logPanLeftPos} };
+												{"LogPanLeftPos",		BasicData_Int, 		&logPanLeftPos} };
 									
 	//---------------------------------------------------------------------------------
 	// Load resources

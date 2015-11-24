@@ -2023,10 +2023,10 @@ INIT_ERR
 	errChk( IsTaskControllerInUse_GetLock(childTC, &childTCIsInUse, &childTCState, &childTCIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) ); 
 	
 	if (parentTCIsInUse || childTCIsInUse) {
-		nullChk( msgBuff = StrDup("Cannot add child task controller ") );
+		nullChk( msgBuff = StrDup("Cannot remove child task controller ") );
 		nullChk( childTCName = GetTaskControlName(childTC) );
 		nullChk( AppendString(&msgBuff, childTCName, -1) );
-		nullChk( AppendString(&msgBuff, " to parent task controller ", -1) );    
+		nullChk( AppendString(&msgBuff, " from parent task controller ", -1) );    
 		nullChk( parentTCName = GetTaskControlName(childTC->parentTC) );
 		nullChk( AppendString(&msgBuff, parentTCName, -1) );
 		nullChk( AppendString(&msgBuff, " while either the parent or child task controllers are in use", -1) );

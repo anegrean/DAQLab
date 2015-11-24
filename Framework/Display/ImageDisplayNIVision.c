@@ -430,6 +430,8 @@ INIT_ERR
 	nullChk( imaqIsToolWindowVisible(&isToolWindowVisible) );
 	if (!isToolWindowVisible)
 		nullChk( imaqShowToolWindow(TRUE) );
+	
+	return 0;
 		    
 Error:
 	
@@ -583,7 +585,6 @@ static void IMAQ_CALLBACK ImageDisplayNIVision_CB (WindowEventType event, int wi
 	
 	switch (event) {
 		
-			
 		case IMAQ_CLICK_EVENT:
 			
 			switch (tool) {
@@ -734,7 +735,7 @@ INIT_ERR
 	WORD						wParamLowWord		= LOWORD(wParam);
 	
 	switch (msg) {
-			
+		
 		case WM_COMMAND:
 			
 			// filter menu events (wParamHighWord = 0)
@@ -818,8 +819,7 @@ INIT_ERR
 Error:
 	
 	OKfree(errorInfo.errMsg);
-	
-	return DefSubclassProc(hWnd, msg, wParam, lParam);
+	return DefSubclassProc(hWnd, msg, wParam, lParam);;
 }
 
 static int ApplyDisplayTransform (Image* image, ImageDisplayTransforms dispTransformFunc)

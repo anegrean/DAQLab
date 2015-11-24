@@ -306,6 +306,7 @@ typedef struct {
 	ScanChanColorScales			color;						// Color channel assigned to this channel.
 	ScanEngine_type*			scanEngine;					// Reference to scan engine to which this scan channel belongs.
 	CmtTSVHandle				imgDisplayTSV;				// Thread safe variable of ImageDisplay_type*
+	int							imgDisplayTSVLineNumDebug;	// Used for debug purposes to find out where the display lock is acquired and not released
 	WaveformDisplay_type*		waveDisplay;				// Handle to display waveforms for this channel.
 } ScanChan_type;
 
@@ -3091,13 +3092,14 @@ INIT_ERR
 	// Init
 	//--------------------
 	
-	DLDataTypes allowedPacketTypes[] 	= Allowed_Detector_Data_Types;
-	scanChan->imgDisplayTSV				= 0;
-	scanChan->waveDisplay				= NULL;
-	scanChan->detVChan					= NULL;
-	scanChan->outputVChan				= NULL;
-	scanChan->color						= ScanChanColor_Grey;
-	scanChan->scanEngine 				= engine;
+	DLDataTypes allowedPacketTypes[] 		= Allowed_Detector_Data_Types;
+	scanChan->imgDisplayTSV					= 0;
+	scanChan->imgDisplayTSVLineNumDebug		= 0;
+	scanChan->waveDisplay					= NULL;
+	scanChan->detVChan						= NULL;
+	scanChan->outputVChan					= NULL;
+	scanChan->color							= ScanChanColor_Grey;
+	scanChan->scanEngine 					= engine;
 	
 	//--------------------
 	// Alloc resources
@@ -3105,10 +3107,11 @@ INIT_ERR
 	
 	// image display TSV
 	errChk( CmtNewTSV(sizeof(ImageDisplay_type*), &scanChan->imgDisplayTSV) );
-	errChk( CmtGetTSVPtr(scanChan->imgDisplayTSV, &imgDisplayPtr) );
+	errChk( CmtGetTSVPtr(scanChan->imgDisplayTSV, &imgDisplayPtr) ); scanChan->imgDisplayTSVLineNumDebug = __LINE__;
 	*imgDisplayPtr = NULL;
 	errChk( CmtReleaseTSVPtr(scanChan->imgDisplayTSV) );
 	imgDisplayPtr = NULL;
+	scanChan->imgDisplayTSVLineNumDebug = 0;
 
 	// incoming pixel data from detection channel
 	nullChk( detVChanName = DLVChanName((DAQLabModule_type*)engine->lsModule, engine->taskControl, ScanEngine_SinkVChan_DetectionChan, chanIdx) );
@@ -3156,11 +3159,13 @@ static void	discard_ScanChan_type (ScanChan_type** scanChanPtr)
 	
 	// discard image display
 	if (!CmtGetTSVPtr(scanChan->imgDisplayTSV, &imgDisplayPtr)) {
+		scanChan->imgDisplayTSVLineNumDebug = __LINE__;
 		// discard image display child class
 		if (*imgDisplayPtr)
 			(*(*imgDisplayPtr)->imageDisplayDiscardFptr)  ((void**)imgDisplayPtr);
 		
 		CmtReleaseTSVPtr(scanChan->imgDisplayTSV);
+		scanChan->imgDisplayTSVLineNumDebug = 0;
 	}
 	CmtDiscardTSV(scanChan->imgDisplayTSV);
 	scanChan->imgDisplayTSV = 0;
@@ -7155,7 +7160,7 @@ INIT_ERR
 				//-------------------------------------
 				
 				imgDisplayPtr = NULL;
-				errChk( CmtGetTSVPtr(imgBuffer->scanChan->imgDisplayTSV, &imgDisplayPtr) );
+				errChk( CmtGetTSVPtr(imgBuffer->scanChan->imgDisplayTSV, &imgDisplayPtr) ); imgBuffer->scanChan->imgDisplayTSVLineNumDebug = __LINE__;
 				
 				CallbackGroup_type*				imgDisplayCBGroup				= NULL;
 				CallbackFptr_type				CBFns[] 						= {(CallbackFptr_type)ImageDisplay_CB};
@@ -7178,12 +7183,12 @@ INIT_ERR
 				// Display image for this channel
 				//--------------------------------------
 				
-				// temporarily must be commented out for debug
-				errChk( (*(*imgDisplayPtr)->displayImageFptr) (*imgDisplayPtr, &imgBuffer->image, &errorInfo.errMsg) ); 
-				//discard_Image_type(&imgBuffer->image);
+				errChk( (*(*imgDisplayPtr)->displayImageFptr) (*imgDisplayPtr, &imgBuffer->image, &errorInfo.errMsg) );
 				
 				errChk( CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV) );
+				imgBuffer->scanChan->imgDisplayTSVLineNumDebug = 0;
 				imgDisplayPtr = NULL;
+				
 				
 				//--------------------------------------
 				// Send image for this channel if needed
@@ -7337,6 +7342,7 @@ Error:
 	
 	if (imgDisplayPtr) {
 		CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV);
+		imgBuffer->scanChan->imgDisplayTSVLineNumDebug = 0;
 		imgDisplayPtr = NULL;
 	}
 	
@@ -7364,6 +7370,8 @@ static int CVICALLBACK NonResRectRasterScan_LaunchPixelBuilder (void* functionDa
 INIT_ERR
 
 	PixelAssemblyBinding_type*		binding 				= functionData;
+	
+	SetSleepPolicy(VAL_SLEEP_SOME);
 	
 	switch (binding->scanEngine->baseClass.scanMode) {
 			
@@ -8359,9 +8367,11 @@ INIT_ERR
 			if (scanEngine->baseClass.activeDisplay == imgDisplay)
 				scanEngine->baseClass.activeDisplay = NULL;
 			
-			CmtErrChk( CmtGetTSVPtr(scanChan->imgDisplayTSV, &imgDisplayPtr) );
+			CmtErrChk( CmtGetTSVPtr(scanChan->imgDisplayTSV, &imgDisplayPtr) ); scanChan->imgDisplayTSVLineNumDebug = __LINE__;
+			
 			*imgDisplayPtr = NULL; // display is discarded by Display module
 			CmtErrChk( CmtReleaseTSVPtr(scanChan->imgDisplayTSV) );
+			scanChan->imgDisplayTSVLineNumDebug = 0;
 			imgDisplayPtr = NULL;
 			
 			break;
@@ -9773,9 +9783,10 @@ INIT_ERR
 						// display image in new window
 						imgDisplayPtr = NULL;
 						displayTSVHndl = engine->baseClass.scanChans[i]->imgDisplayTSV;
-						errChk( CmtGetTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV, &imgDisplayPtr) );
+						errChk( CmtGetTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV, &imgDisplayPtr) ); engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = __LINE__;
 						nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (engine->baseClass.scanChans[i], imageType, engine->scanSettings.width, engine->scanSettings.height, NULL) );
 						errChk( CmtReleaseTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV) );
+						engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = 0;
 						imgDisplayPtr = NULL;
 						
 						engine->nImgBuffers++;

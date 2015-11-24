@@ -28,8 +28,10 @@
 // pixel depth represents how many bits from the bitmapBitArray each pixel has. If pixelDepth is 24, each pixel is represented by a 24-bit RGB value of the form RRGGBB,
 // where RR, GG, and BB represent the red, green, and blue components of the color value. The RR byte is at the lowest memory address of the three bytes.
 // When pixelDepth is 24 or 32, valid RR, GG, and BB values range from 0 to 255.		
-#define pixelDepth 32
-#define BytesPerPixelDepth 4
+#define pixelDepth 			32
+#define BytesPerPixelDepth 	4
+#define zoomFactor 			0.25
+#define maxZoomLevel 		4
 
 //==============================================================================
 // Types

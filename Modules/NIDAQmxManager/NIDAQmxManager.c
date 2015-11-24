@@ -2433,12 +2433,14 @@ INIT_ERR
 	errChk ( DLGetSingleXMLElementFromElement(channelXMLElement, "Triggers", &triggersXMLElement) );
 	
 	// get start trigger XML element
-	if (triggersXMLElement)
+	if (triggersXMLElement) {
 		errChk ( DLGetSingleXMLElementFromElement(triggersXMLElement, "StartTrigger", &startTriggerXMLElement) );
+	}
 	
 	// get reference trigger XML element
-	if (triggersXMLElement)
+	if (triggersXMLElement) {
 		errChk ( DLGetSingleXMLElementFromElement(triggersXMLElement, "ReferenceTrigger", &referenceTriggerXMLElement) );
+	}
 	
 	// load trigger attributes only for counter channels
 	switch ((*chanSetPtr)->chanType) {
@@ -2654,8 +2656,9 @@ INIT_ERR
 	ActiveXMLObj_IXMLDOMElement_	ReferenceTriggerXMLElement	= 0;	 // holds the "ReferenceTrigger" element
 	
 	// create new triggers XML element
-	if (taskSet->startTrig || taskSet->referenceTrig)
+	if (taskSet->startTrig || taskSet->referenceTrig) {
 		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Triggers", &TriggersXMLElement) );
+	}
 	
 	//----------------------
 	// Start Trigger
@@ -3085,8 +3088,9 @@ INIT_ERR
 	}
 	
 	// create new triggers XML element
-	if (startTrig || referenceTrig)
+	if (startTrig || referenceTrig) {
 		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Triggers", &TriggersXMLElement) );
+	}
 	
 	// start Trigger
 	if (startTrig) {
@@ -4783,18 +4787,19 @@ static int AddToUI_Chan_AI_Voltage (ChanSet_AI_Voltage_type* chanSet)
 	//--------------
 	
 	// select default terminal configuration from available choices in the following order
-	if (chanSet->terminal == Terminal_None)
-	if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) 
-		chanSet->terminal = Terminal_RSE;
-	else
-		if (chanSet->chanAttr->terminalCfg | Terminal_Bit_NRSE) 
-			chanSet->terminal = Terminal_NRSE;
+	if (chanSet->terminal == Terminal_None) {
+		if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) 
+			chanSet->terminal = Terminal_RSE;
 		else
-			if (chanSet->chanAttr->terminalCfg | Terminal_Bit_Diff) 
-				chanSet->terminal = Terminal_Diff;
+			if (chanSet->chanAttr->terminalCfg | Terminal_Bit_NRSE) 
+				chanSet->terminal = Terminal_NRSE;
 			else
-				if (chanSet->chanAttr->terminalCfg | Terminal_Bit_PseudoDiff) 
-					chanSet->terminal = Terminal_PseudoDiff; // if none of the above then Terminal_None is used which should not happen
+				if (chanSet->chanAttr->terminalCfg | Terminal_Bit_Diff) 
+					chanSet->terminal = Terminal_Diff;
+				else
+					if (chanSet->chanAttr->terminalCfg | Terminal_Bit_PseudoDiff) 
+						chanSet->terminal = Terminal_PseudoDiff; // if none of the above then Terminal_None is used which should not happen
+	}
 									
 	// populate terminal ring control with available terminal configurations
 	if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) InsertListItem(chanSet->baseClass.chanPanHndl, AIVoltage_Terminal, -1, "RSE", Terminal_RSE);  
@@ -5155,18 +5160,19 @@ INIT_ERR
 	//--------------
 	
 	// select default terminal configuration from available choices in the following order
-	if (chanSet->terminal == Terminal_None)
-	if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) 
-		chanSet->terminal = Terminal_RSE;
-	else
-		if (chanSet->chanAttr->terminalCfg | Terminal_Bit_NRSE)
-			chanSet->terminal = Terminal_NRSE;
+	if (chanSet->terminal == Terminal_None) {
+		if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) 
+			chanSet->terminal = Terminal_RSE;
 		else
-			if (chanSet->chanAttr->terminalCfg | Terminal_Bit_Diff) 
-				chanSet->terminal = Terminal_Diff;
+			if (chanSet->chanAttr->terminalCfg | Terminal_Bit_NRSE)
+				chanSet->terminal = Terminal_NRSE;
 			else
-				if (chanSet->chanAttr->terminalCfg | Terminal_Bit_PseudoDiff) 
-					chanSet->terminal = Terminal_PseudoDiff; // if none of the above then Terminal_None is used which should not happen
+				if (chanSet->chanAttr->terminalCfg | Terminal_Bit_Diff) 
+					chanSet->terminal = Terminal_Diff;
+				else
+					if (chanSet->chanAttr->terminalCfg | Terminal_Bit_PseudoDiff) 
+						chanSet->terminal = Terminal_PseudoDiff; // if none of the above then Terminal_None is used which should not happen
+	}
 											
 	// populate terminal ring control with available terminal configurations
 	if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) InsertListItem(chanSet->baseClass.chanPanHndl, AOVoltage_Terminal, -1, "RSE", Terminal_RSE);  
@@ -6269,10 +6275,16 @@ INIT_ERR
 	
 				
 	return 0;
+	
 Error:
 	
-	if (chanSetPanHndl > 0) OKfreePanHndl(chanSetPanHndl);
-	if (COPulsePanHndl > 0)
+	if (chanSetPanHndl > 0) {
+		OKfreePanHndl(chanSetPanHndl);
+	}
+	
+	if (COPulsePanHndl > 0) {
+		OKfreePanHndl(COPulsePanHndl);
+	}
 					
 RETURN_ERR
 }
@@ -7988,12 +8000,12 @@ INIT_ERR
 		tskSet->timing->measMode = Operation_Finite;
 		// update number of samples in dev structure
 		tskSet->timing->nSamples = nSamples;
-		DAQmxErrChk (DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampPerChan, tskSet->timing->nSamples * oversampling));
-		DAQmxErrChk (DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampMode,  DAQmx_Val_FiniteSamps));
+		DAQmxErrChk( DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampPerChan, tskSet->timing->nSamples * oversampling) );
+		DAQmxErrChk( DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampMode,  DAQmx_Val_FiniteSamps) );
 	} else {
 		// continuous measurement mode
 		tskSet->timing->measMode = Operation_Continuous;
-		DAQmxErrChk (DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampMode,  DAQmx_Val_ContSamps));
+		DAQmxErrChk( DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampMode,  DAQmx_Val_ContSamps) );
 	}
 	
 	// update meas mode in UI
@@ -8670,17 +8682,21 @@ INIT_ERR
 	}
 	
 	// update device settings
-	if (tskSet->dev->AITaskSet == tskSet)
+	if (tskSet->dev->AITaskSet == tskSet) {
 		errChk ( ConfigDAQmxAITask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->AOTaskSet == tskSet)
+	if (tskSet->dev->AOTaskSet == tskSet) {
 		errChk ( ConfigDAQmxAOTask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->DITaskSet == tskSet)
+	if (tskSet->dev->DITaskSet == tskSet) {
 		errChk ( ConfigDAQmxDITask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->DOTaskSet == tskSet)
+	if (tskSet->dev->DOTaskSet == tskSet) {
 		errChk ( ConfigDAQmxDOTask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
 	return 0;
 	
@@ -8750,17 +8766,21 @@ INIT_ERR
 	}
 	
 	// update device settings
-	if (tskSet->dev->AITaskSet == tskSet)
+	if (tskSet->dev->AITaskSet == tskSet) {
 		errChk ( ConfigDAQmxAITask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->AOTaskSet == tskSet)
+	if (tskSet->dev->AOTaskSet == tskSet) {
 		errChk ( ConfigDAQmxAOTask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->DITaskSet == tskSet)
+	if (tskSet->dev->DITaskSet == tskSet) {
 		errChk ( ConfigDAQmxDITask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->DOTaskSet == tskSet)
+	if (tskSet->dev->DOTaskSet == tskSet) {
 		errChk ( ConfigDAQmxDOTask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
 Error:
 	
@@ -8937,12 +8957,15 @@ static void	discard_WriteAOData_type (WriteAOData_type** writeDataPtr)
 	if (!writeData) return;
 	
 	for (size_t i = 0; i < writeData->numchan; i++) {
-		if (writeData->datain)
+		if (writeData->datain) {
 			OKfree(writeData->datain[i]);
+		}
 		
-		if (writeData->databuff)
-		OKfree(writeData->databuff[i]);   
+		if (writeData->databuff) {
+			OKfree(writeData->databuff[i]);
+		}
 	}
+	
 	OKfree(writeData->databuff);
 	OKfree(writeData->datain); 
 	
@@ -9777,7 +9800,7 @@ INIT_ERR
 	// create DAQmx AI task 
 	char* taskName = GetTaskControlName(dev->taskController);
 	AppendString(&taskName, " AI Task", -1);
-	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->AITaskSet->taskHndl));
+	DAQmxErrChk( DAQmxCreateTask(taskName, &dev->AITaskSet->taskHndl) );
 	OKfree(taskName);
 	
 	// create AI channels and adjust data type conversion
@@ -9799,14 +9822,14 @@ INIT_ERR
 			case Chan_AI_Voltage:
 				
 				ChanSet_AI_Voltage_type*	AIVoltageChanSet	= (ChanSet_AI_Voltage_type*)chanSet;
-				DAQmxErrChk ( DAQmxCreateAIVoltageChan(dev->AITaskSet->taskHndl, chanSet->name, "", AIVoltageChanSet->terminal, AIVoltageChanSet->VMin, AIVoltageChanSet->VMax, DAQmx_Val_Volts, NULL) ); 
+				DAQmxErrChk( DAQmxCreateAIVoltageChan(dev->AITaskSet->taskHndl, chanSet->name, "", AIVoltageChanSet->terminal, AIVoltageChanSet->VMin, AIVoltageChanSet->VMax, DAQmx_Val_Volts, NULL) ); 
 				
 				break;
 				
 			case Chan_AI_Current:
 				
 				ChanSet_AI_Current_type*	AICurrentChanSet	= (ChanSet_AI_Current_type*)chanSet;
-				DAQmxErrChk ( DAQmxCreateAICurrentChan(dev->AITaskSet->taskHndl, chanSet->name, "", AICurrentChanSet->terminal, AICurrentChanSet->IMin, AICurrentChanSet->IMax, DAQmx_Val_Amps,
+				DAQmxErrChk( DAQmxCreateAICurrentChan(dev->AITaskSet->taskHndl, chanSet->name, "", AICurrentChanSet->terminal, AICurrentChanSet->IMin, AICurrentChanSet->IMax, DAQmx_Val_Amps,
 													  AICurrentChanSet->shuntResistorType, AICurrentChanSet->shuntResistorValue, NULL) );
 							  
 				break;
@@ -9823,26 +9846,26 @@ INIT_ERR
 	// sample clock source
 	// if no sample clock is given, then use OnboardClock by default
 	if (!dev->AITaskSet->timing->sampClkSource) 
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 	else
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, dev->AITaskSet->timing->sampClkSource));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, dev->AITaskSet->timing->sampClkSource) );
 	
 	// sample clock edge
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AITaskSet->timing->sampClkEdge));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AITaskSet->timing->sampClkEdge) );
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate * dev->AITaskSet->timing->oversampling));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate * dev->AITaskSet->timing->oversampling) );
 	
 	// set operation mode: finite, continuous
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AITaskSet->timing->measMode));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AITaskSet->timing->measMode) );
 	
 	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) ); 
 	
 	// if a reference clock is given, use it to synchronize the internal clock
 	if (dev->AITaskSet->timing->refClkSource && dev->AITaskSet->timing->refClkSource[0]) {
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Src, dev->AITaskSet->timing->refClkSource));
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AITaskSet->timing->refClkFreq));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Src, dev->AITaskSet->timing->refClkSource) );
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AITaskSet->timing->refClkFreq) );
 	}
 	
 	// adjust manually the number of samples to acquire and  input buffer size to be even multiple of blocksizes and make sure that the input buffer is
@@ -9856,7 +9879,7 @@ INIT_ERR
 		case Operation_Finite:
 			
 			// set number of samples per channel
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples * dev->AITaskSet->timing->oversampling));
+			DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples * dev->AITaskSet->timing->oversampling) );
 			quot = (dev->AITaskSet->timing->nSamples * dev->AITaskSet->timing->oversampling) / dev->AITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
 			if (!quot) quot = 1;
@@ -9881,23 +9904,30 @@ INIT_ERR
 		switch (dev->AITaskSet->startTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableStartTrig(dev->AITaskSet->taskHndl));
+				
+				DAQmxErrChk( DAQmxDisableStartTrig(dev->AITaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope, dev->AITaskSet->startTrig->level));  
+				
+				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope, dev->AITaskSet->startTrig->level) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->wndTrigCond, 
-							 dev->AITaskSet->startTrig->wndTop, dev->AITaskSet->startTrig->wndBttm));  
+				
+				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->wndTrigCond, 
+							 dev->AITaskSet->startTrig->wndTop, dev->AITaskSet->startTrig->wndBttm) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope));  
+				
+				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -9909,23 +9939,29 @@ INIT_ERR
 		switch (dev->AITaskSet->referenceTrig->trigType) {
 			
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableRefTrig(dev->AITaskSet->taskHndl));
+				
+				DAQmxErrChk( DAQmxDisableRefTrig(dev->AITaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->level, dev->AITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->level, dev->AITaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0])
-				DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->wndTrigCond, 
-							 dev->AITaskSet->referenceTrig->wndTop, dev->AITaskSet->referenceTrig->wndBttm, dev->AITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->wndTrigCond, 
+							 dev->AITaskSet->referenceTrig->wndTop, dev->AITaskSet->referenceTrig->wndBttm, dev->AITaskSet->referenceTrig->nPreTrigSamples) );}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0])
-				DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10007,7 +10043,7 @@ INIT_ERR
 	// create DAQmx AO task with hardware timing
 	char* taskName = GetTaskControlName(dev->taskController);
 	AppendString(&taskName, " AO Task", -1);
-	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->AOTaskSet->taskHndl));
+	DAQmxErrChk( DAQmxCreateTask(taskName, &dev->AOTaskSet->taskHndl) );
 	OKfree(taskName);
 	
 	// create AO channels
@@ -10024,14 +10060,14 @@ INIT_ERR
 			case Chan_AO_Voltage:
 				
 				ChanSet_AO_Voltage_type*	AOVoltageChanSet = (ChanSet_AO_Voltage_type*)chanSet;
-				DAQmxErrChk (DAQmxCreateAOVoltageChan(dev->AOTaskSet->taskHndl, chanSet->name, "", AOVoltageChanSet->VMin, AOVoltageChanSet->VMax, DAQmx_Val_Volts, NULL)); 
+				DAQmxErrChk( DAQmxCreateAOVoltageChan(dev->AOTaskSet->taskHndl, chanSet->name, "", AOVoltageChanSet->VMin, AOVoltageChanSet->VMax, DAQmx_Val_Volts, NULL) ); 
 				
 				break;
 				
 			case Chan_AO_Current:
 				
 				ChanSet_AO_Current_type*	AOCurrentChanSet = (ChanSet_AO_Current_type*)chanSet;
-				DAQmxErrChk (DAQmxCreateAOCurrentChan(dev->AOTaskSet->taskHndl, chanSet->name, "", AOCurrentChanSet->IMin, AOCurrentChanSet->IMax, DAQmx_Val_Amps, NULL));
+				DAQmxErrChk( DAQmxCreateAOCurrentChan(dev->AOTaskSet->taskHndl, chanSet->name, "", AOCurrentChanSet->IMin, AOCurrentChanSet->IMax, DAQmx_Val_Amps, NULL) );
 							  
 				break;
 			/*	
@@ -10053,30 +10089,31 @@ INIT_ERR
 	// sample clock source
 	// if no sample clock is given, then OnboardClock is used by default
 	if (!dev->AOTaskSet->timing->sampClkSource) 
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 	else
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->AOTaskSet->timing->sampClkSource));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->AOTaskSet->timing->sampClkSource) );
 	
 	// sample clock edge
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AOTaskSet->timing->sampClkEdge));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AOTaskSet->timing->sampClkEdge) );
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AOTaskSet->timing->sampleRate));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AOTaskSet->timing->sampleRate) );
 	
 	// set operation mode: finite, continuous
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AOTaskSet->timing->measMode));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AOTaskSet->timing->measMode) );
 	
 	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
 	
 	// set number of samples per channel for finite generation
-	if (dev->AOTaskSet->timing->measMode == Operation_Finite)
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AOTaskSet->timing->nSamples));
+	if (dev->AOTaskSet->timing->measMode == Operation_Finite) {
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AOTaskSet->timing->nSamples) );
+	}
 	
 	// if a reference clock is given, use it to synchronize the internal clock
 	if (dev->AOTaskSet->timing->refClkSource && dev->AOTaskSet->timing->refClkSource[0]) {
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->AOTaskSet->timing->refClkSource));
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AOTaskSet->timing->refClkFreq));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->AOTaskSet->timing->refClkSource) );
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AOTaskSet->timing->refClkFreq) );
 	}
 	
 	// disable AO regeneration
@@ -10091,7 +10128,7 @@ INIT_ERR
 			
 		case Operation_Continuous:
 			// adjust output buffer size to be twice (even multiple) the blocksize
-			DAQmxErrChk ( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, 2 * dev->AOTaskSet->timing->blockSize));
+			DAQmxErrChk( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, 2 * dev->AOTaskSet->timing->blockSize) );
 			break;
 	}
 	
@@ -10101,24 +10138,32 @@ INIT_ERR
 	// configure start trigger
 	if (dev->AOTaskSet->startTrig)
 		switch (dev->AOTaskSet->startTrig->trigType) {
+				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableStartTrig(dev->AOTaskSet->taskHndl));   
+				
+				DAQmxErrChk( DAQmxDisableStartTrig(dev->AOTaskSet->taskHndl) );   
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope, dev->AOTaskSet->startTrig->level));  
+				
+				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope, dev->AOTaskSet->startTrig->level) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0]) 
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->wndTrigCond, 
-							 dev->AOTaskSet->startTrig->wndTop, dev->AOTaskSet->startTrig->wndBttm));  
+				
+				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->wndTrigCond, 
+							 dev->AOTaskSet->startTrig->wndTop, dev->AOTaskSet->startTrig->wndBttm) );  
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0]) 
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope));  
+				
+				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10130,24 +10175,31 @@ INIT_ERR
 		switch (dev->AOTaskSet->referenceTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableRefTrig(dev->AOTaskSet->taskHndl));   
+				
+				DAQmxErrChk( DAQmxDisableRefTrig(dev->AOTaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, 
-														 dev->AOTaskSet->referenceTrig->level, dev->AOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, 
+														 dev->AOTaskSet->referenceTrig->level, dev->AOTaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->wndTrigCond, 
-							 dev->AOTaskSet->referenceTrig->wndTop, dev->AOTaskSet->referenceTrig->wndBttm, dev->AOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->wndTrigCond, 
+							 dev->AOTaskSet->referenceTrig->wndTop, dev->AOTaskSet->referenceTrig->wndBttm, dev->AOTaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, dev->AOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, dev->AOTaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10159,11 +10211,11 @@ INIT_ERR
 	//----------------------
 	// register AO data request callback if task is continuous
 	//if (dev->AOTaskSet->timing->measMode == Operation_Continuous)
-	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev)); 
+	DAQmxErrChk( DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev) ); 
 	// register AO task done event callback
 	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
-	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev));
+	DAQmxErrChk( DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev) );
 	
 	
 	//----------------------
@@ -10224,7 +10276,7 @@ INIT_ERR
 	// create DAQmx DI task 
 	char* taskName = GetTaskControlName(dev->taskController);
 	AppendString(&taskName, " DI Task", -1);
-	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->DITaskSet->taskHndl));
+	DAQmxErrChk( DAQmxCreateTask(taskName, &dev->DITaskSet->taskHndl) );
 	OKfree(taskName);
 	
 	// create DI channels
@@ -10235,32 +10287,32 @@ INIT_ERR
 		// include in the task only channel for which HW-timing is required
 		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 		
-		DAQmxErrChk (DAQmxCreateDIChan(dev->DITaskSet->taskHndl, chanSet->name, "", DAQmx_Val_ChanForAllLines)); 
+		DAQmxErrChk( DAQmxCreateDIChan(dev->DITaskSet->taskHndl, chanSet->name, "", DAQmx_Val_ChanForAllLines) ); 
 	}
 				 
 	// sample clock source
 	// if no sample clock is given, then use OnboardClock by default
 	if (!dev->DITaskSet->timing->sampClkSource) 
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 	else
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Src, dev->DITaskSet->timing->sampClkSource));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Src, dev->DITaskSet->timing->sampClkSource) );
 	
 	// sample clock edge
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DITaskSet->timing->sampClkEdge));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DITaskSet->timing->sampClkEdge) );
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->DITaskSet->timing->sampleRate));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->DITaskSet->timing->sampleRate) );
 	
 	// set operation mode: finite, continuous
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DITaskSet->timing->measMode));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DITaskSet->timing->measMode) );
 	
 	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) ); 
 	
 	// if a reference clock is given, use it to synchronize the internal clock
 	if (dev->DITaskSet->timing->refClkSource && dev->DITaskSet->timing->refClkSource[0]) {
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_RefClk_Src, dev->DITaskSet->timing->refClkSource));
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->DITaskSet->timing->refClkFreq));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_RefClk_Src, dev->DITaskSet->timing->refClkSource) );
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->DITaskSet->timing->refClkFreq) );
 	}
 	
 	// adjust manually number of samples and input buffer size to be even multiple of blocksizes and make sure that the input buffer is
@@ -10274,7 +10326,7 @@ INIT_ERR
 		case Operation_Finite:
 			
 			// set number of samples per channel read within one call of the read function, i.e. blocksize
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->DITaskSet->timing->nSamples));
+			DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->DITaskSet->timing->nSamples) );
 			quot = dev->DITaskSet->timing->nSamples  / dev->DITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
 			DAQmxErrChk(DAQmxCfgInputBuffer (dev->DITaskSet->taskHndl, dev->DITaskSet->timing->blockSize * quot));
@@ -10297,23 +10349,30 @@ INIT_ERR
 		switch (dev->DITaskSet->startTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableStartTrig(dev->DITaskSet->taskHndl));
+				
+				DAQmxErrChk( DAQmxDisableStartTrig(dev->DITaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope, dev->DITaskSet->startTrig->level));  
+				
+				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope, dev->DITaskSet->startTrig->level) );  
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->wndTrigCond, 
-						 		dev->DITaskSet->startTrig->wndTop, dev->DITaskSet->startTrig->wndBttm));  
+				
+				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->wndTrigCond, 
+						 		dev->DITaskSet->startTrig->wndTop, dev->DITaskSet->startTrig->wndBttm) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope));  
+				
+				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope) ); 
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10325,24 +10384,31 @@ INIT_ERR
 		switch (dev->DITaskSet->referenceTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableRefTrig(dev->DITaskSet->taskHndl)); 
+				
+				DAQmxErrChk( DAQmxDisableRefTrig(dev->DITaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, 
-														 dev->DITaskSet->referenceTrig->level, dev->DITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, 
+														 dev->DITaskSet->referenceTrig->level, dev->DITaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->wndTrigCond, 
-								 dev->DITaskSet->referenceTrig->wndTop, dev->DITaskSet->referenceTrig->wndBttm, dev->DITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->wndTrigCond, 
+								 dev->DITaskSet->referenceTrig->wndTop, dev->DITaskSet->referenceTrig->wndBttm, dev->DITaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, dev->DITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, dev->DITaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10353,12 +10419,11 @@ INIT_ERR
 	// Add DI Task callbacks
 	//----------------------
 	// register DI data available callback 
-	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->DITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DITaskSet->timing->blockSize, 0, DIDAQmxTaskDataAvailable_CB, dev)); 
+	DAQmxErrChk( DAQmxRegisterEveryNSamplesEvent(dev->DITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DITaskSet->timing->blockSize, 0, DIDAQmxTaskDataAvailable_CB, dev) );
 	// register DI task done event callback (which is called also if the task encounters an error)
 	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
-	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DITaskSet->taskHndl, 0, DIDAQmxTaskDone_CB, dev));
-	
+	DAQmxErrChk( DAQmxRegisterDoneEvent(dev->DITaskSet->taskHndl, 0, DIDAQmxTaskDone_CB, dev) );
 	
 	//----------------------
 	// Signal routing
@@ -10423,7 +10488,7 @@ INIT_ERR
 	// create DAQmx DO task 
 	char* taskName = GetTaskControlName(dev->taskController);
 	AppendString(&taskName, " DO Task", -1);
-	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->DOTaskSet->taskHndl));
+	DAQmxErrChk( DAQmxCreateTask(taskName, &dev->DOTaskSet->taskHndl) );
 	OKfree(taskName);
 	
 	// create DO channels
@@ -10434,43 +10499,44 @@ INIT_ERR
 		// include in the task only channel for which HW-timing is required
 		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->sinkVChan)) continue;
 		
-		DAQmxErrChk (DAQmxCreateDOChan(dev->DOTaskSet->taskHndl, chanSet->name, "", DAQmx_Val_ChanForAllLines)); 
+		DAQmxErrChk( DAQmxCreateDOChan(dev->DOTaskSet->taskHndl, chanSet->name, "", DAQmx_Val_ChanForAllLines) );
 	}
 				 
 	// sample clock source
 	// if no sample clock is given, then use OnboardClock by default
 	if (!dev->DOTaskSet->timing->sampClkSource) 
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 	else
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->DOTaskSet->timing->sampClkSource));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->DOTaskSet->timing->sampClkSource) );
 	
 	// sample clock edge
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DOTaskSet->timing->sampClkEdge));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DOTaskSet->timing->sampClkEdge) );
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->DOTaskSet->timing->sampleRate));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->DOTaskSet->timing->sampleRate) );
 	
 	// set operation mode: finite, continuous
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DOTaskSet->timing->measMode));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DOTaskSet->timing->measMode) );
 	
 	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) ); 
 	
 	// if a reference clock is given, use it to synchronize the internal clock
 	if (dev->DOTaskSet->timing->refClkSource && dev->DOTaskSet->timing->refClkSource[0]) {
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->DOTaskSet->timing->refClkSource));
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->DOTaskSet->timing->refClkFreq));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->DOTaskSet->timing->refClkSource) );
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->DOTaskSet->timing->refClkFreq) );
 	}
 	
 	// set number of samples per channel for finite acquisition
-	if (dev->DOTaskSet->timing->measMode == Operation_Finite)
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->DOTaskSet->timing->nSamples));
+	if (dev->DOTaskSet->timing->measMode == Operation_Finite) {
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->DOTaskSet->timing->nSamples) );
+	}
 	
 	// disable DO regeneration
 	DAQmxSetWriteAttribute (dev->DOTaskSet->taskHndl, DAQmx_Write_RegenMode, DAQmx_Val_DoNotAllowRegen);
 	
 	// adjust output buffer size to be even multiple of blocksize
-	DAQmxErrChk (DAQmxCfgOutputBuffer(dev->DOTaskSet->taskHndl, 2 * dev->DOTaskSet->timing->blockSize));
+	DAQmxErrChk(DAQmxCfgOutputBuffer(dev->DOTaskSet->taskHndl, 2 * dev->DOTaskSet->timing->blockSize) );
 	
 	//----------------------
 	// Configure DO triggers
@@ -10480,23 +10546,30 @@ INIT_ERR
 		switch (dev->DOTaskSet->startTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableStartTrig(dev->DOTaskSet->taskHndl));  
+				
+				DAQmxErrChk( DAQmxDisableStartTrig(dev->DOTaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope, dev->DOTaskSet->startTrig->level));  
+				
+				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope, dev->DOTaskSet->startTrig->level) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->wndTrigCond, 
-						 		dev->DOTaskSet->startTrig->wndTop, dev->DOTaskSet->startTrig->wndBttm));  
+				
+				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->wndTrigCond, 
+						 		dev->DOTaskSet->startTrig->wndTop, dev->DOTaskSet->startTrig->wndBttm) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope));  
+				
+				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10508,24 +10581,31 @@ INIT_ERR
 		switch (dev->DOTaskSet->referenceTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableRefTrig(dev->DOTaskSet->taskHndl));     
+				
+				DAQmxErrChk( DAQmxDisableRefTrig(dev->DOTaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, 
-														 dev->DOTaskSet->referenceTrig->level, dev->DOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, 
+														 dev->DOTaskSet->referenceTrig->level, dev->DOTaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->wndTrigCond, 
-						 		dev->DOTaskSet->referenceTrig->wndTop, dev->DOTaskSet->referenceTrig->wndBttm, dev->DOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->wndTrigCond, 
+						 		dev->DOTaskSet->referenceTrig->wndTop, dev->DOTaskSet->referenceTrig->wndBttm, dev->DOTaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, dev->DOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, dev->DOTaskSet->referenceTrig->nPreTrigSamples));
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10536,11 +10616,11 @@ INIT_ERR
 	// Add DO Task callbacks
 	//----------------------
 	// register DO data available callback 
-	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->DOTaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DOTaskSet->timing->blockSize, 0, DODAQmxTaskDataRequest_CB, dev)); 
+	DAQmxErrChk( DAQmxRegisterEveryNSamplesEvent(dev->DOTaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DOTaskSet->timing->blockSize, 0, DODAQmxTaskDataRequest_CB, dev) ); 
 	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
 	// register DO task done event callback (which is called also if the task encounters an error)
-	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DOTaskSet->taskHndl, 0, DODAQmxTaskDone_CB, dev));
+	DAQmxErrChk( DAQmxRegisterDoneEvent(dev->DOTaskSet->taskHndl, 0, DODAQmxTaskDone_CB, dev) );
 	
 	
 	//----------------------
@@ -10624,40 +10704,42 @@ INIT_ERR
 				DAQmxErrChk(DAQmxCreateTask(taskName, &chCIFreq->baseClass.taskHndl) );
 				OKfree(taskName);
 				
-				DAQmxErrChk ( DAQmxCreateCIFreqChan(chCIFreq->baseClass.taskHndl, chanSet->name, "", chCIFreq->freqMin, chCIFreq->freqMax, DAQmx_Val_Hz, 
+				DAQmxErrChk( DAQmxCreateCIFreqChan(chCIFreq->baseClass.taskHndl, chanSet->name, "", chCIFreq->freqMin, chCIFreq->freqMax, DAQmx_Val_Hz, 
 												   chCIFreq->baseClass.activeEdge, chCIFreq->measMethod, chCIFreq->measTime, chCIFreq->divisor, NULL) );
 				
 				// use another terminal for the counter if other than default
-				if (chCIFreq->freqInputTerminal)
-				DAQmxErrChk ( DAQmxSetChanAttribute(chCIFreq->baseClass.taskHndl, chanSet->name, DAQmx_CI_Freq_Term, chCIFreq->freqInputTerminal) );
+				if (chCIFreq->freqInputTerminal) {
+					DAQmxErrChk( DAQmxSetChanAttribute(chCIFreq->baseClass.taskHndl, chanSet->name, DAQmx_CI_Freq_Term, chCIFreq->freqInputTerminal) );
+				}
 				
 				// sample clock source
 				// if no sample clock is given, then use OnboardClock by default
 				if (chCIFreq->taskTiming.sampClkSource || chCIFreq->taskTiming.sampClkSource[0])
-					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, chCIFreq->taskTiming.sampClkSource) );
+					DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, chCIFreq->taskTiming.sampClkSource) );
 				else
-					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
+					DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 					
 				// sample clock edge
-				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreq->taskTiming.sampClkEdge) );
+				DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreq->taskTiming.sampClkEdge) );
 	
 				// sampling rate
-				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Rate, chCIFreq->taskTiming.sampleRate) );
+				DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Rate, chCIFreq->taskTiming.sampleRate) );
 	
 				// set operation mode: finite, continuous
-				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampMode, chCIFreq->taskTiming.measMode) );
+				DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampMode, chCIFreq->taskTiming.measMode) );
 	
 				// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) );
+				DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) );
 				
 				// set number of samples per channel for finite acquisition
-				if (chCIFreq->taskTiming.measMode == Operation_Finite)
-					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampPerChan, chCIFreq->taskTiming.nSamples) );
+				if (chCIFreq->taskTiming.measMode == Operation_Finite) {
+					DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampPerChan, chCIFreq->taskTiming.nSamples) );
+				}
 	
 				// if a reference clock is given, use it to synchronize the internal clock
 				if (chCIFreq->taskTiming.refClkSource && chCIFreq->taskTiming.refClkSource[0]) {  
-					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Src, chCIFreq->taskTiming.refClkSource) );
-					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Rate, chCIFreq->taskTiming.refClkFreq) );
+					DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Src, chCIFreq->taskTiming.refClkSource) );
+					DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Rate, chCIFreq->taskTiming.refClkFreq) );
 				}
 	
 				//----------------------
@@ -10668,24 +10750,31 @@ INIT_ERR
 					switch (chCIFreq->baseClass.startTrig->trigType) {
 				
 						case Trig_None:
-							DAQmxErrChk (DAQmxDisableStartTrig(chCIFreq->baseClass.taskHndl));
+							
+							DAQmxErrChk( DAQmxDisableStartTrig(chCIFreq->baseClass.taskHndl) );
 							break;
 			
 						case Trig_AnalogEdge:
-							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0])
-								DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->slope, 
-																	   chCIFreq->baseClass.startTrig->level));  
+							
+							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->slope, 
+																	   chCIFreq->baseClass.startTrig->level) );  
+							}
 							break;
 			
 						case Trig_AnalogWindow:
-							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0])
-								DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->wndTrigCond, 
-							 			     chCIFreq->baseClass.startTrig->wndTop, chCIFreq->baseClass.startTrig->wndBttm));  
+							
+							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->wndTrigCond, 
+							 			     chCIFreq->baseClass.startTrig->wndTop, chCIFreq->baseClass.startTrig->wndBttm) );
+							}
 							break;
 			
 						case Trig_DigitalEdge:
-							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0])
-								DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->slope));  
+							
+							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->slope) );
+							}
 							break;
 			
 						case Trig_DigitalPattern:
@@ -10697,24 +10786,31 @@ INIT_ERR
 					switch (chCIFreq->baseClass.referenceTrig->trigType) {
 			
 						case Trig_None:
-							DAQmxErrChk (DAQmxDisableRefTrig(chCIFreq->baseClass.taskHndl));
+							
+							DAQmxErrChk( DAQmxDisableRefTrig(chCIFreq->baseClass.taskHndl) );
 							break;
 			
 						case Trig_AnalogEdge:
-							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0])
-								DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->slope, 
-																	 chCIFreq->baseClass.referenceTrig->level, chCIFreq->baseClass.referenceTrig->nPreTrigSamples));  
+							
+							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->slope, 
+																	 chCIFreq->baseClass.referenceTrig->level, chCIFreq->baseClass.referenceTrig->nPreTrigSamples) );  
+							}
 							break;
 			
 						case Trig_AnalogWindow:
-							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0])
-								DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(chCIFreq->baseClass.taskHndl,chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->wndTrigCond, 
-							 				chCIFreq->baseClass.referenceTrig->wndTop, chCIFreq->baseClass.referenceTrig->wndBttm, chCIFreq->baseClass.referenceTrig->nPreTrigSamples));  
+							
+							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(chCIFreq->baseClass.taskHndl,chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->wndTrigCond, 
+							 				chCIFreq->baseClass.referenceTrig->wndTop, chCIFreq->baseClass.referenceTrig->wndBttm, chCIFreq->baseClass.referenceTrig->nPreTrigSamples) );  
+							}
 							break;
 			
 						case Trig_DigitalEdge:
-							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0])
-							DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->slope, chCIFreq->baseClass.referenceTrig->nPreTrigSamples));  
+							
+							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->slope, chCIFreq->baseClass.referenceTrig->nPreTrigSamples) );  
+							}
 							break;
 			
 						case Trig_DigitalPattern:
@@ -10846,23 +10942,30 @@ INIT_ERR
 			switch (chanSet->startTrig->trigType) {
 				
 				case Trig_None:
+					
 					DAQmxErrChk( DAQmxDisableStartTrig(chanSet->taskHndl) );
 					break;
 			
 				case Trig_AnalogEdge:
-					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0])
+					
+					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->slope, chanSet->startTrig->level) );  
+					}
 					break;
 			
 				case Trig_AnalogWindow:
-					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0])
+					
+					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->wndTrigCond, 
 									 chanSet->startTrig->wndTop, chanSet->startTrig->wndBttm) );  
+					}
 					break;
 			
 				case Trig_DigitalEdge:
-					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0])
+					
+					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->slope) );  
+					}
 					break;
 			
 				case Trig_DigitalPattern:
@@ -10874,23 +10977,30 @@ INIT_ERR
 			switch (chanSet->referenceTrig->trigType) {
 			
 				case Trig_None:
+					
 					DAQmxErrChk( DAQmxDisableRefTrig(chanSet->taskHndl) );
 					break;
 			
 				case Trig_AnalogEdge:
-					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0])
+					
+					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->slope, chanSet->referenceTrig->level, chanSet->referenceTrig->nPreTrigSamples) );  
+					}
 					break;
 			
 				case Trig_AnalogWindow:
-					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0])
+					
+					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->wndTrigCond, 
 							 		chanSet->referenceTrig->wndTop, chanSet->referenceTrig->wndBttm, chanSet->referenceTrig->nPreTrigSamples) );  
+					}
 					break;
 			
 				case Trig_DigitalEdge:
-					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0])
+					
+					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->slope, chanSet->referenceTrig->nPreTrigSamples) );
+					}
 					break;
 			
 				case Trig_DigitalPattern:
@@ -10898,8 +11008,8 @@ INIT_ERR
 			}
 		
 		
-		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSet->taskHndl, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(chanSet->pulseTrain)), GetPulseTrainNPulses(chanSet->pulseTrain)) );
-		DAQmxErrChk ( DAQmxSetTrigAttribute(chanSet->taskHndl, DAQmx_StartTrig_Retriggerable, FALSE) );    
+		DAQmxErrChk( DAQmxCfgImplicitTiming(chanSet->taskHndl, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(chanSet->pulseTrain)), GetPulseTrainNPulses(chanSet->pulseTrain)) );
+		DAQmxErrChk( DAQmxSetTrigAttribute(chanSet->taskHndl, DAQmx_StartTrig_Retriggerable, FALSE) );    
 		
 		// register CO task done event callback
 		// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
@@ -11135,8 +11245,9 @@ INIT_ERR
 		}
 	}
 	
-	if (!*nActiveTasksPtr)
+	if (!*nActiveTasksPtr) {
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+	}
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	nActiveTasksTSVLockObtained = FALSE;
@@ -11500,7 +11611,7 @@ INIT_ERR
 		pulseMode = GetPulseTrainMode(chanSetCO->pulseTrain);
 		// timing
 		nPulses = GetPulseTrainNPulses(chanSetCO->pulseTrain);
-		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, PulseTrainModes_To_DAQmxVal(pulseMode), nPulses) );
+		DAQmxErrChk( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, PulseTrainModes_To_DAQmxVal(pulseMode), nPulses) );
 		
 		switch (dataPacketDataType) {
 			case DL_PulseTrain_Freq:
@@ -11865,8 +11976,9 @@ INIT_ERR
 		
 			(*nActiveTasksPtr)--;
 		
-			if (!*nActiveTasksPtr)
+			if (!*nActiveTasksPtr) {
 				errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+			}
 		
 		CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 		nActiveTasksTSVLockObtained = FALSE;
@@ -11951,8 +12063,9 @@ INIT_ERR
 		
 			(*nActiveTasksPtr)--;
 		
-			if (!*nActiveTasksPtr)
+			if (!*nActiveTasksPtr) {
 				errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+			}
 		
 		CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 		nActiveTasksTSVLockObtained = FALSE; 
@@ -11988,8 +12101,9 @@ INIT_ERR
 	
 		(*nActiveTasksPtr)--;
 		
-		if (!*nActiveTasksPtr)
+		if (!*nActiveTasksPtr) {
 			errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+		}
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	nActiveTasksTSVLockObtained = FALSE; 
@@ -12069,8 +12183,9 @@ INIT_ERR
 	nActiveTasksTSVLockObtained = TRUE;
 	(*nActiveTasksPtr)--;
 		
-	if (!*nActiveTasksPtr)
+	if (!*nActiveTasksPtr) {
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+	}
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	nActiveTasksTSVLockObtained = FALSE;
@@ -12153,8 +12268,9 @@ INIT_ERR
 	
 	(*nActiveTasksPtr)--;
 		
-	if (!*nActiveTasksPtr)
+	if (!*nActiveTasksPtr) {
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+	}
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	nActiveTasksTSVLockObtained = FALSE;
@@ -12285,7 +12401,7 @@ INIT_ERR
 				}
 				
 				// process received NULL packet
-				if (data->nullPacketReceived[i])	
+				if (data->nullPacketReceived[i]) {	
 					if (!data->databuff_size[i]) {
 						// if NULL received and there is no data in the AO buffer, stop AO task if running
 					
@@ -12297,8 +12413,9 @@ INIT_ERR
 						
 						(*nActiveTasksPtr)--;
 		
-						if (!*nActiveTasksPtr)
+						if (!*nActiveTasksPtr) {
 							errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+						}
 		
 						CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 						nActiveTasksTSVLockObtained = FALSE;
@@ -12319,6 +12436,7 @@ INIT_ERR
 						
 						goto SkipPacket;
 					}
+				}
 			
 				
 				// copy data packet to datain
@@ -12495,8 +12613,9 @@ SkipPacket:
 		
 			(*nActiveTasksPtr)--;
 		
-			if (!*nActiveTasksPtr)
+			if (!*nActiveTasksPtr) {
 				errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+			}
 		
 		CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 		nActiveTasksTSVLockObtained = FALSE;
@@ -14113,10 +14232,9 @@ INIT_ERR
 	
 	
 	// set AO task to Verified state if it exists and is not on demand
-	if (dev->AOTaskSet->taskHndl && !chan->onDemand)
+	if (dev->AOTaskSet->taskHndl && !chan->onDemand) {
 		DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Abort) );
-	
-	
+	}
 	
 	// get all available data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errorInfo.errMsg) );
@@ -14294,7 +14412,7 @@ INIT_ERR
 	pulseMode = GetPulseTrainMode(chanSetCO->pulseTrain);
 	// timing
 	nPulses = GetPulseTrainNPulses(chanSetCO->pulseTrain);
-	DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, PulseTrainModes_To_DAQmxVal(pulseMode), nPulses) );
+	DAQmxErrChk( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, PulseTrainModes_To_DAQmxVal(pulseMode), nPulses) );
 		
 	switch (dataPacketType) {
 		case DL_PulseTrain_Freq:
@@ -14464,7 +14582,7 @@ INIT_ERR
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, 0);
 	
 	// configure device again
-	errChk( ConfigDAQmxDevice(dev, errorInfo.errMsg) );
+	errChk( ConfigDAQmxDevice(dev, &errorInfo.errMsg) );
 	
 Error:
 	
@@ -14636,8 +14754,9 @@ INIT_ERR
 	}
 	
 	// check if iteration can be set to done
-	if (!*nActiveTasksPtr)
+	if (!*nActiveTasksPtr) {
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+	}
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	nActiveTasksTSVLockObtained = FALSE;
@@ -14773,8 +14892,9 @@ INIT_ERR
 	}
 	
 	// just make sure the device is configured again before start
-	if (state == TaskTree_Started)
+	if (state == TaskTree_Started)  {
 		errChk( ConfigDAQmxDevice(dev, &errorInfo.errMsg) );
+	}
 	
 Error:
 	

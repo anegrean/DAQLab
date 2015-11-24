@@ -62,10 +62,10 @@ typedef struct {
 //==============================================================================
 // Macros
 
-#define OKfree(ptr) 					if (ptr) {free(ptr); ptr = NULL;}
-#define OKfreeCAHndl(objHandle)			if (objHandle) {CA_DiscardObjHandle(objHandle); objHandle = 0;}
-#define OKfreePanHndl(panelHandle)  	if (panelHandle) {DiscardPanel(panelHandle); panelHandle = 0;}
-#define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}  
+#define OKfree(ptr) 					if (ptr) {free(ptr); ptr = NULL;} else
+#define OKfreeCAHndl(objHandle)			if (objHandle) {CA_DiscardObjHandle(objHandle); objHandle = 0;} else
+#define OKfreePanHndl(panelHandle)  	if (panelHandle) {DiscardPanel(panelHandle); panelHandle = 0;} else
+#define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;} else  
 
 #define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to get the number of elements in an array passed as an argument!
 
@@ -74,14 +74,14 @@ typedef struct {
 #endif
 
 #define RETURN_ERR \
-	if (errorInfo.error < 0) \
+	if (errorInfo.error < 0) { \
 		if (errorMsg) { \
 			if (errorInfo.errMsg) \
 				*errorMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, errorInfo.errMsg); \
 			else \
 				*errorMsg = FormatMsg(errorInfo.error, __FILE__, __func__, errorInfo.line, "Unknown or out of memory"); \
 		} else \
-			OKfree(errorInfo.errMsg); \
+			OKfree(errorInfo.errMsg);} \
 	return errorInfo.error;
 
 #ifdef SET_ERR

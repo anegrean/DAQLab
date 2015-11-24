@@ -428,8 +428,10 @@ INIT_ERR
 	// display IMAQ tool window
 	int		isToolWindowVisible = 0;
 	nullChk( imaqIsToolWindowVisible(&isToolWindowVisible) );
-	if (!isToolWindowVisible)
+	
+	if (!isToolWindowVisible) {
 		nullChk( imaqShowToolWindow(TRUE) );
+	}
 	
 	return 0;
 		    
@@ -881,8 +883,9 @@ INIT_ERR
 	// draw ROIs
 	for (size_t i = 1; i <= nROIs; i++) {
 		ROI = *(ROI_type**) ListGetPtrToItem(ROIList, i);
-		if (ROI->active)
+		if (ROI->active) {
 			errChk( DrawROI(NIImage, ROI) );
+		}
 	}
 	
 	// apply display transform 

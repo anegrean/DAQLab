@@ -990,6 +990,7 @@ INIT_ERR
 			
 			nullChk( msgBuff = StrDup("Data packet received is not of a waveform type and cannot be retrieved by this function") );
 			SET_ERR(ReceiveWaveform_Err_WrongDataType, msgBuff);
+			break;
 	}
 	
 	errChk( CopyWaveform(waveform, *(Waveform_type**)dataPacketPtrToData, &errorInfo.errMsg) );

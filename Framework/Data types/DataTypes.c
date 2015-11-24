@@ -1429,8 +1429,9 @@ INIT_ERR
 	
 	OKfree(ROI->ROIName);
 	
-	if (newName)
+	if (newName) {
 		nullChk( ROI->ROIName = StrDup(newName) );
+	}
 	
 
 Error:

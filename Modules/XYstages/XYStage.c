@@ -357,8 +357,9 @@ INIT_ERR
 	// Update stage position
 	//------------------------------------------
 	
-	if (stage->GetAbsPosition)
+	if (stage->GetAbsPosition) {
 		errChk( (*stage->GetAbsPosition) (stage, &stage->xPos, &stage->yPos, &errorInfo.errMsg) );
+	}
 		
 	// update stage X absolute position if position has been determined
 	// make visible stepper controls and update them if position has been determined
@@ -528,9 +529,9 @@ INIT_ERR
 NoReferencePositions:
 	
 	// cleanup
-	if (xmlRefPositionsNodeList) OKfreeCAHndl(xmlRefPositionsNodeList); 
-	if (xmlRefPositionsNode) OKfreeCAHndl(xmlRefPositionsNode);
-	if (xmlRefPosNodeList) OKfreeCAHndl(xmlRefPosNodeList); 
+	OKfreeCAHndl(xmlRefPositionsNodeList); 
+	OKfreeCAHndl(xmlRefPositionsNode);
+	OKfreeCAHndl(xmlRefPosNodeList); 
 	
 	return 0;
 	
@@ -799,8 +800,9 @@ INIT_ERR
 				case StagePan_Stop:
 					
 					// stop stage motion
-					if (stage->Stop)
+					if (stage->Stop) {
 						errChk( (*stage->Stop)	(stage, &errorInfo.errMsg) );
+					}
 					break;
 				
 				case StagePan_XAbsPos:
@@ -876,8 +878,9 @@ INIT_ERR
 					
 					GetCtrlVal(panel, control, &useJoystick);
 					
-					if (stage->UseJoystick)
+					if (stage->UseJoystick) {
 						errChk( (*stage->UseJoystick)	(stage, useJoystick, &errorInfo.errMsg) );
+					}
 					break;
 					
 				case StagePan_LockYStepSize:
@@ -905,14 +908,15 @@ INIT_ERR
 					
 					if (!stage->SetVelocity) break; // do nothing if there is no such functionality implemented by the child class
 					
-					if (velIdx == 0 && stage->lowVelocity)
+					if (velIdx == 0 && stage->lowVelocity) {
 						errChk( (*stage->SetVelocity) (stage, *stage->lowVelocity, &errorInfo.errMsg) );
-					else
-						if (velIdx == 1 && stage->midVelocity)
-						errChk( (*stage->SetVelocity) (stage, *stage->midVelocity, &errorInfo.errMsg) );
-						else
-							if (velIdx == 2 && stage->highVelocity)
+					} else
+						if (velIdx == 1 && stage->midVelocity) {
+							errChk( (*stage->SetVelocity) (stage, *stage->midVelocity, &errorInfo.errMsg) );
+						} else
+							if (velIdx == 2 && stage->highVelocity) {
 								errChk( (*stage->SetVelocity)	(stage, *stage->highVelocity, &errorInfo.errMsg) );
+							}
 					
 					break;
 					
@@ -1297,7 +1301,7 @@ INIT_ERR
 					newYMaxLimit *= 0.001; 	// convert from [um] to [mm]
 					
 					// if given, call hardware specific function to set these limits
-					if (stage->SetLimits)
+					if (stage->SetLimits) {
 						if ( (errorInfo.error = (*stage->SetLimits) (stage, newXMinLimit, newXMaxLimit, newYMinLimit, newYMaxLimit, &errorInfo.errMsg)) < 0) {
 							// error setting new limits, return to old values
 							SetCtrlVal(panel, SetPan_XMinLimit, *stage->xMinimumLimit * 1000);		// convert from [mm] to [um]
@@ -1312,6 +1316,7 @@ INIT_ERR
 							*stage->yMinimumLimit = newYMinLimit;
 							*stage->yMaximumLimit = newYMaxLimit;
 						}
+					}
 					
 					break;
 					
@@ -1325,8 +1330,9 @@ INIT_ERR
 						int		velIdx;	// velocity settings index to be applied to the stage:
 										// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(stage->controlPanHndl, StagePan_StageVel, &velIdx);
-						if (velIdx == 0 && stage->SetVelocity)
+						if (velIdx == 0 && stage->SetVelocity) {
 							errChk( (*stage->SetVelocity) (stage, *stage->lowVelocity, &errorInfo.errMsg) );
+						}
 					}
 					break;
 					
@@ -1340,8 +1346,9 @@ INIT_ERR
 						int		velIdx;	// velocity settings index to be applied to the stage:
 										// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(stage->controlPanHndl, StagePan_StageVel, &velIdx);
-						if (velIdx == 1 && stage->SetVelocity)
+						if (velIdx == 1 && stage->SetVelocity) {
 							errChk( (*stage->SetVelocity) (stage, *stage->midVelocity, &errorInfo.errMsg) );
+						}
 					}
 					break;
 					
@@ -1354,8 +1361,9 @@ INIT_ERR
 					{	int		velIdx;	// velocity settings index to be applied to the stage:
 										// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(stage->controlPanHndl, StagePan_StageVel, &velIdx);
-						if (velIdx == 0 && stage->SetVelocity)
+						if (velIdx == 0 && stage->SetVelocity) {
 							errChk( (*stage->SetVelocity) (stage, *stage->highVelocity, &errorInfo.errMsg) );
+						}
 					}
 					break;
 					
@@ -1449,8 +1457,9 @@ INIT_ERR
 	ChangeLEDStatus(stage, XYSTAGE_LED_MOVING);
 	
 	// move stage
-	if (stage->Move)
+	if (stage->Move) {
 		errChk( (*stage->Move)	(stage, moveCommand->moveType, moveCommand->axis, moveCommand->moveVal, &errorInfo.errMsg) );
+	}
 	
 	// movement assumed to be complete, check position if method given
 	if (stage->GetAbsPosition)

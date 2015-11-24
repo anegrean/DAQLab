@@ -1857,7 +1857,7 @@ INIT_ERR
 	for (long i = 0; i < nAxisCalibrations; i++) {
 		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(axisCalibrationNodeList, xmlErrorInfo, i, &axisCalibrationNode) );
 		
-		errChk( DLGetXMLNodeAttributes(axisCalibrationNode, axisCalibrationGenericAttr, NumElem(axisCalibrationGenericAttr)) ); 
+		errChk ( DLGetXMLNodeAttributes(axisCalibrationNode, axisCalibrationGenericAttr, NumElem(axisCalibrationGenericAttr)) ); 
 		   
 		switch (axisCalibrationType) {
 				
@@ -2437,33 +2437,39 @@ INIT_ERR
 	
 	
 	// laser scanning module panels
-	if (ls->mainPanHndl)
+	if (ls->mainPanHndl) {
 		errChk(SetPanelAttribute(ls->mainPanHndl, ATTR_VISIBLE, visibleFlag));
+	}
 	
-	if (ls->enginesPanHndl)
+	if (ls->enginesPanHndl) {
 		errChk(SetPanelAttribute(ls->enginesPanHndl, ATTR_VISIBLE, visibleFlag));
+	}
 	
-	if (ls->manageAxisCalPanHndl)
+	if (ls->manageAxisCalPanHndl) {
 		errChk(SetPanelAttribute(ls->manageAxisCalPanHndl, ATTR_VISIBLE, visibleFlag));
+	}
 	
-	if (ls->newAxisCalTypePanHndl)
-		errChk(SetPanelAttribute(ls->newAxisCalTypePanHndl, ATTR_VISIBLE, visibleFlag));  
+	if (ls->newAxisCalTypePanHndl) {
+		errChk(SetPanelAttribute(ls->newAxisCalTypePanHndl, ATTR_VISIBLE, visibleFlag));
+	}
 		
 	
 	// scan engine settings panels
 	for (size_t i = 1; i <= nEngines; i++) {
 		enginePtr = ListGetPtrToItem(ls->scanEngines, i);
 		
-		if ((*enginePtr)->engineSetPanHndl)
+		if ((*enginePtr)->engineSetPanHndl) {
 			errChk(SetPanelAttribute((*enginePtr)->engineSetPanHndl, ATTR_VISIBLE, visibleFlag));
+		}
 	}
 	
 	// active scan axis calibration panels
 	for(size_t i = 1; i <= nActiveCals; i++) {
 		activeCalPtr = ListGetPtrToItem(ls->activeCal, i);
 		
-		if ((*activeCalPtr)->calPanHndl)
+		if ((*activeCalPtr)->calPanHndl) {
 			errChk(SetPanelAttribute((*activeCalPtr)->calPanHndl, ATTR_VISIBLE, visibleFlag));
+		}
 	}
 	
 Error:
@@ -3458,11 +3464,13 @@ INIT_ERR
 				case ScanSetPan_ParkGalvos:
 					
 					// send fast axis to parked position
-					if (engine->fastAxisCal)
+					if (engine->fastAxisCal) {
 						errChk( SendScanAxisCommand(engine, ScanAxis_Fast, ((NonResGalvoCal_type*)engine->fastAxisCal)->parked, &errorInfo.errMsg) );
+					}
 					// send slow axis to parked position
-					if (engine->slowAxisCal)
+					if (engine->slowAxisCal) {
 						errChk( SendScanAxisCommand(engine, ScanAxis_Slow, ((NonResGalvoCal_type*)engine->slowAxisCal)->parked, &errorInfo.errMsg) );
+					}
 					break;
 					
 				case ScanSetPan_CenterGalvos:
@@ -6745,12 +6753,14 @@ INIT_ERR
 	nullChk( slowAxisJumpWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&slowAxisJumpSignal, 1.0) );
 	
 	// generate ROI hold waveform
-	if (ROIHoldSignal)
+	if (ROIHoldSignal) {
 		nullChk( ROIHoldWaveform = init_Waveform_type(Waveform_UShort, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIHoldSignal) );
+	}
 	
 	// generate ROI stimulate waveform
-	if (ROIShutterSignal)
+	if (ROIShutterSignal) {
 		nullChk( ROIShutterWaveform = init_Waveform_type(Waveform_UShort, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIShutterSignal) );
+	}
 	
 	
 	//------------------------------------------------------------
@@ -7475,18 +7485,20 @@ INIT_ERR
 	slowAxisJumpTime = slowAxisSwitchTime + slowAxisSwitchDelay;
 	
 	// set jump time to be the largest jump time of the two scan axes (i.e. the jump time includes the switch delay and switch time)
-	if (jumpTimePtr)
+	if (jumpTimePtr) {
 		if (fastAxisJumpTime > slowAxisJumpTime)
 			*jumpTimePtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, fastAxisJumpTime);  
 		else
 			*jumpTimePtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, slowAxisJumpTime);
+	}
 	
 	// set switch delay to be the smallest of the two scan axes (i.e. during this time both galvos are within their initial position given a calibration resolution)
-	if (responseDelayPtr)
+	if (responseDelayPtr) {
 		if (fastAxisSwitchDelay < slowAxisSwitchDelay)
 			*responseDelayPtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, fastAxisSwitchDelay);
 		else
 			*responseDelayPtr = NonResRectRasterScan_RoundToGalvoSampling(rectRaster, slowAxisSwitchDelay);
+	}
 	
 Error:	
 	
@@ -7527,15 +7539,17 @@ INIT_ERR
 	// if no waveform is received, send null packet to output channel and complete iteration if there are no other pixel builder threads for other channels
 	if (!pointBuffer->rawPixels) {
 		
-		if (IsVChanOpen((VChan_type*)pointBuffer->scanChan->outputVChan))
+		if (IsVChanOpen((VChan_type*)pointBuffer->scanChan->outputVChan)) {
 			errChk( SendNullPacket(pointBuffer->scanChan->outputVChan, &errorInfo.errMsg) );
+		}
 		
 		CmtErrChk( CmtGetTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV, &nActivePixelBuildersTSVPtr) );
 		(*nActivePixelBuildersTSVPtr)--;
 	
 		// complete iteration
-		if (!*nActivePixelBuildersTSVPtr)
+		if (!*nActivePixelBuildersTSVPtr) {
 			errChk( TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE, &errorInfo.errMsg) );
+		}
 		
 		CmtErrChk( CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV) );
 		
@@ -7595,8 +7609,9 @@ INIT_ERR
 	
 	(*nActivePixelBuildersTSVPtr)--;
 	// complete iteration
-	if (!*nActivePixelBuildersTSVPtr)
+	if (!*nActivePixelBuildersTSVPtr) {
 		errChk( TaskControlIterationDone(rectRaster->baseClass.taskControl, 0, "", FALSE, &errorInfo.errMsg) );
+	}
 	
 	CmtErrChk( CmtReleaseTSVPtr(rectRaster->baseClass.nActivePixelBuildersTSV) );
 	
@@ -9649,8 +9664,9 @@ INIT_ERR
 		case ScanEngineMode_FrameScan:
 			
 			// return to parked position if continuous
-			if (GetTaskControlMode(engine->baseClass.taskControl) == TASK_CONTINUOUS)
+			if (GetTaskControlMode(engine->baseClass.taskControl) == TASK_CONTINUOUS) {
 				errChk( ReturnRectRasterToParkedPosition(engine, &errorInfo.errMsg) );
+			}
 			
 			// update iterations
 			SetCtrlVal(engine->baseClass.frameScanPanHndl, ScanTab_FramesAcquired, (unsigned int) GetCurrentIterIndex(iterator) );

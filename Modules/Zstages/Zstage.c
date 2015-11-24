@@ -493,9 +493,9 @@ INIT_ERR
 NoReferencePositions:
 	
 	// cleanup
-	if (xmlRefPositionsNodeList) OKfreeCAHndl(xmlRefPositionsNodeList); 
-	if (xmlRefPositionsNode) OKfreeCAHndl(xmlRefPositionsNode);
-	if (xmlRefPosNodeList) OKfreeCAHndl(xmlRefPosNodeList); 
+	OKfreeCAHndl(xmlRefPositionsNodeList); 
+	OKfreeCAHndl(xmlRefPositionsNode);
+	OKfreeCAHndl(xmlRefPosNodeList); 
 	
 	return 0;
 	
@@ -723,38 +723,41 @@ INIT_ERR
 				case ZStagePan_MoveZUp:
 					
 					// move up relative to current position with selected step size
-					if (zstage->MoveZ)
+					if (zstage->MoveZ) {
 						errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, direction * stepsize, &errorInfo.errMsg) );
+					}
 					break;
 					
 				case ZStagePan_MoveZDown:
 					
 					// move down relative to current position with selected step size
-					if (zstage->MoveZ)
+					if (zstage->MoveZ) {
 						errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, -direction*stepsize, &errorInfo.errMsg) );
+					}
 					break;
 					
 				case ZStagePan_Stop:
 					
 					// stop stage motion
-					if (zstage->StopZ)
+					if (zstage->StopZ) {
 						errChk( (*zstage->StopZ)(zstage, &errorInfo.errMsg) );
+					}
 					break;
 				
 				case ZStagePan_ZAbsPos:
 					
 					// move to absolute position with selected step size
-					if (zstage->MoveZ)
+					if (zstage->MoveZ) {
 						errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_ABS, moveAbsPos, &errorInfo.errMsg) );
-					
+					}
 					break;
 					
 				case ZStagePan_ZRelPos:
 					
 					// move relative to current position
-					if (zstage->MoveZ)
+					if (zstage->MoveZ) {
 						errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, moveRelPos, &errorInfo.errMsg) );
-					
+					}
 					break;
 					
 				case ZStagePan_StartAbsPos:
@@ -807,14 +810,15 @@ INIT_ERR
 					
 					if (!zstage->SetStageVelocity) break; // do nothing if there is no such functionality implemented by the child class
 					
-					if (velIdx == 0 && zstage->lowVelocity)
+					if (velIdx == 0 && zstage->lowVelocity) {
 						errChk( (*zstage->SetStageVelocity)(zstage, *zstage->lowVelocity, &errorInfo.errMsg) );
-					else
-						if (velIdx == 1 && zstage->midVelocity)
+					} else
+						if (velIdx == 1 && zstage->midVelocity) {
 							errChk( (*zstage->SetStageVelocity)(zstage, *zstage->midVelocity, &errorInfo.errMsg) );
-						else
-							if (velIdx == 2 && zstage->highVelocity)
+						} else
+							if (velIdx == 2 && zstage->highVelocity) {
 								errChk( (*zstage->SetStageVelocity)(zstage, *zstage->highVelocity, &errorInfo.errMsg) );
+							}
 					
 					break;
 					
@@ -858,9 +862,9 @@ INIT_ERR
 					GetCtrlIndex(panel, control, &refPosIdx);
 					GetValueFromIndex(panel, control, refPosIdx, &moveAbsPos);
 					// move to reference position
-					if (zstage->MoveZ)
+					if (zstage->MoveZ) {
 						errChk( (*zstage->MoveZ) (zstage, ZSTAGE_MOVE_ABS, moveAbsPos, &errorInfo.errMsg) );
-					
+					}
 					break;
 			}
 			break;
@@ -919,16 +923,18 @@ INIT_ERR
 							
 							SetCtrlVal(panel, control, (*zstage->zPos + direction * stepsize) * 1000);	// convert back to [um]
 							// move relative to current position
-							if (zstage->MoveZ)
+							if (zstage->MoveZ) {
 								errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, direction * stepsize, &errorInfo.errMsg) );
+							}
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, (*zstage->zPos - direction * stepsize) * 1000);	// convert back to [um] 
 							// move relative to current position
-							if (zstage->MoveZ)
+							if (zstage->MoveZ) {
 								errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, -direction * stepsize, &errorInfo.errMsg) );
+							}
 							return 1;
 					
 					}
@@ -942,16 +948,18 @@ INIT_ERR
 							
 							SetCtrlVal(panel, control, direction * stepsize * 1000);					// convert back to [um]
 							// move relative to current position
-							if (zstage->MoveZ)
+							if (zstage->MoveZ) {
 								errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, direction * stepsize, &errorInfo.errMsg) );
+							}
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, -direction * stepsize * 1000);					// convert back to [um]
 							// move relative to current position
-							if (zstage->MoveZ)
+							if (zstage->MoveZ) {
 								errChk( (*zstage->MoveZ)(zstage, ZSTAGE_MOVE_REL, -direction * stepsize, &errorInfo.errMsg) );
+							}
 							return 1;
 					
 					}
@@ -1030,7 +1038,7 @@ INIT_ERR
 					newMaxLimit *= 0.001; // convert from [um] to [mm]
 					
 					// if given, call hardware specific function to set these limits
-					if (zstage->SetHWStageLimits)
+					if (zstage->SetHWStageLimits) {
 						if ( (*zstage->SetHWStageLimits)(zstage, newMinLimit, newMaxLimit, NULL) < 0) {
 							// error setting new limits, return to old values
 							SetCtrlVal(panel, ZSetPan_MinimumLimit, *zstage->zMinimumLimit * 1000);		// convert from [mm] to [um]
@@ -1040,7 +1048,7 @@ INIT_ERR
 							*zstage->zMinimumLimit = newMinLimit;
 							*zstage->zMaximumLimit = newMaxLimit;
 						}
-					
+					}
 					break;
 					
 				case ZSetPan_LowVelocity:
@@ -1052,10 +1060,10 @@ INIT_ERR
 					{	int		velIdx;	// velocity settings index to be applied to the stage:
 									// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(zstage->controlPanHndl, ZStagePan_StageVel, &velIdx);
-						if (velIdx == 0 && zstage->SetStageVelocity)
+						if (velIdx == 0 && zstage->SetStageVelocity) {
 							errChk( (*zstage->SetStageVelocity)(zstage, *zstage->lowVelocity, &errorInfo.errMsg) );
+						}
 					}
-					
 					break;
 					
 				case ZSetPan_MidVelocity:
@@ -1067,10 +1075,10 @@ INIT_ERR
 					{	int		velIdx;	// velocity settings index to be applied to the stage:
 									// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(zstage->controlPanHndl, ZStagePan_StageVel, &velIdx);
-						if (velIdx == 1 && zstage->SetStageVelocity)
+						if (velIdx == 1 && zstage->SetStageVelocity) {
 							errChk( (*zstage->SetStageVelocity)(zstage, *zstage->midVelocity, &errorInfo.errMsg) );
+						}
 					}
-					
 					break;
 					
 				case ZSetPan_HighVelocity:
@@ -1082,10 +1090,10 @@ INIT_ERR
 					{	int		velIdx;	// velocity settings index to be applied to the stage:
 									// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(zstage->controlPanHndl, ZStagePan_StageVel, &velIdx);
-						if (velIdx == 0 && zstage->SetStageVelocity)
+						if (velIdx == 0 && zstage->SetStageVelocity) {
 							errChk( (*zstage->SetStageVelocity)(zstage, *zstage->highVelocity, &errorInfo.errMsg) );
+						}
 					}
-					
 					break;
 					
 			}

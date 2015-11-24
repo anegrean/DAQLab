@@ -697,8 +697,9 @@ INIT_ERR
 		// add task controller settings
 		errChk( DLSaveTaskControllerSettingsToXML(UITaskCtrl->taskControl, DAQLabCfg_DOMHndl, newXMLElement, &xmlErrorInfo) );
 		// add child TCs recursively if root TC
-		if (!GetTaskControlParent(UITaskCtrl->taskControl))
+		if (!GetTaskControlParent(UITaskCtrl->taskControl)) {
 			errChk( DLSaveUITCTaskTree(UITaskCtrl->taskControl, DAQLabCfg_DOMHndl, newXMLElement, &xmlErrorInfo) );
+		}
 		// add task controller element to DAQLab root element
 		XMLErrChk ( ActiveXML_IXMLDOMElement_appendChild (DAQLabCfg_RootElement, &xmlErrorInfo, newXMLElement, NULL) );
 		// free attributes memory
@@ -758,8 +759,9 @@ INIT_ERR
 		// add attributes to the module element
 		errChk( DLAddToXMLElem(DAQLabCfg_DOMHndl, moduleXMLElement, attr3, DL_ATTRIBUTE, NumElem(attr3), &xmlErrorInfo) );
 		// call module saving method if defined
-		if (DLModule->SaveCfg)
+		if (DLModule->SaveCfg) {
 			XMLErrChk( (*DLModule->SaveCfg) (DLModule, DAQLabCfg_DOMHndl, moduleXMLElement, &xmlErrorInfo) );
+		}
 		
 		OKfreeCAHndl(moduleXMLElement); 
 		
@@ -877,7 +879,7 @@ INIT_ERR
 		
 		// cleanup
 		OKfree(sourceVChanName);
-		OKfreeCAHndl(sourceVChanXMLElement)
+		OKfreeCAHndl(sourceVChanXMLElement);
 	}
 	
 	// add Switchboard xml element to parent xml element
@@ -952,7 +954,7 @@ INIT_ERR
 		
 		// cleanup
 		OKfree(masterHWTriggerName);
-		OKfreeCAHndl(masterHWTriggerXMLElement)
+		OKfreeCAHndl(masterHWTriggerXMLElement);
 	}
 	
 	// add HWTriggers xml element to parent xml element
@@ -1928,9 +1930,10 @@ INIT_ERR
 		// ignore elements or attributes that have NULL data
 		if (!childXMLNodes[i].pData) continue;
 			
-		if (nodeType == DL_ELEMENT)
+		if (nodeType == DL_ELEMENT) {
 			// create new element
 			errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, childXMLNodes[i].tag, &newXMLElement) );
+		}
 	
 		// convert to variant
 		switch (childXMLNodes[i].type) {
@@ -2181,14 +2184,18 @@ int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 	if (!nXMLElements) {
 		*childXMLElement = 0;
 		// cleanup
-		if (xmlNodeList) OKfreeCAHndl(xmlNodeList);
+		if (xmlNodeList) {
+			OKfreeCAHndl(xmlNodeList);
+		}
 		return 0;
 	}
 	
 	XMLErrChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlNodeList, &xmlErrorInfo, 0, &xmlNode) );
 	
 	// cleanup
-	if (xmlNodeList) OKfreeCAHndl(xmlNodeList);
+	if (xmlNodeList) {
+		OKfreeCAHndl(xmlNodeList);
+	}
 	
 	*childXMLElement = (ActiveXMLObj_IXMLDOMElement_) xmlNode;
 	
@@ -2197,8 +2204,9 @@ int DLGetSingleXMLElementFromElement (ActiveXMLObj_IXMLDOMElement_ parentXMLElem
 XMLError: 
 	
 	// cleanup
-	if (xmlNodeList) OKfreeCAHndl(xmlNodeList);
-	if (xmlNode) OKfreeCAHndl(xmlNode); 
+	OKfreeCAHndl(xmlNodeList);
+	
+	OKfreeCAHndl(xmlNode); 
 	
 	return xmlerror;
 }
@@ -2380,8 +2388,9 @@ INIT_ERR
 		return -1;
 	
 	// release lock
-	if (tcIsInUseLockObtained) 
+	if (tcIsInUseLockObtained) { 
 		errChk( IsTaskControllerInUse_ReleaseLock(UITaskCtrl->taskControl, &tcIsInUseLockObtained, &errorInfo.errMsg) );
+	}
 	
 	DAQLab_discard_UITaskCtrl_type(&removedUITC);
 	
@@ -3026,7 +3035,9 @@ static void CVICALLBACK DAQLab_TaskMenu_CB (int menuBarHndl, int menuItemID, voi
 INIT_ERR
 
 	// menu item Add
-	if (menuItemID == TasksUI.menuManageItem_Add) errChk( DAQLab_TaskMenu_AddTaskController(&errorInfo.errMsg) );
+	if (menuItemID == TasksUI.menuManageItem_Add) {
+		errChk( DAQLab_TaskMenu_AddTaskController(&errorInfo.errMsg) );
+	}
 		
 	// menu item Delete
 	if (menuItemID == TasksUI.menuManageItem_Delete ) DAQLab_TaskMenu_DeleteTaskController();
@@ -3837,8 +3848,9 @@ INIT_ERR
 					if (relation == VAL_CHILD && targetTreeNodePtr->taskControl)
 						errChk( AddChildTCToParent(targetTreeNodePtr->taskControl, dragTreeNodePtr->taskControl, &errorInfo.errMsg) ); 
 					else
-						if (relation == VAL_SIBLING && parentTaskController)
-							errChk( AddChildTCToParent(parentTaskController, dragTreeNodePtr->taskControl, &errorInfo.errMsg) ); 
+						if (relation == VAL_SIBLING && parentTaskController) {
+							errChk( AddChildTCToParent(parentTaskController, dragTreeNodePtr->taskControl, &errorInfo.errMsg) );
+						}
 					
 					// allow dropped task controller to be deleted
 					dragTreeNodePtr->canBeDeleted = TRUE;

@@ -1852,8 +1852,9 @@ INIT_ERR
 		case TC_Callback_Error:
 			
 			// change Task Tree status if this is a Root Task Controller
-			if (!taskControl->parentTC)
+			if (!taskControl->parentTC) {
 				errChk( TaskTreeStateChange (taskControl, eventPacket, TaskTree_Finished, &errorInfo.errMsg) );
+			}
 			
 			// call ErrorFptr
 			if (taskControl->ErrorFptr)
@@ -2195,8 +2196,9 @@ INIT_ERR
 
 	TaskControl_type* 	taskControl = callbackData;
 	
-	if (event == EVENT_TIMER_TICK)
+	if (event == EVENT_TIMER_TICK) {
 		errChk( TaskControlEvent(taskControl, TC_Event_IterationTimeout, NULL, NULL, NULL) );
+	}
 	
 Error:
 	
@@ -2678,8 +2680,9 @@ INIT_ERR
 								ChangeState(taskControl, &eventPackets[i], TC_State_Done);
 						
 								// change Task Tree status
-								if(!taskControl->parentTC) 
+								if(!taskControl->parentTC) { 
 									errChk( TaskTreeStateChange(taskControl, &eventPackets[i], TaskTree_Finished, &errorInfo.errMsg) );
+								}
 									
 								break; // stop here
 							}
@@ -2786,8 +2789,9 @@ INIT_ERR
 									}
 						
 								// change Task Tree status
-								if(!taskControl->parentTC)
+								if(!taskControl->parentTC) {
 									errChk( TaskTreeStateChange(taskControl, &eventPackets[i], TaskTree_Finished, &errorInfo.errMsg) );
+								}
 							
 							} else {
 								// send TC_Event_Stop event to all childTCs
@@ -2948,8 +2952,9 @@ INIT_ERR
 										}
 							
 									// change Task Tree status
-									if(!taskControl->parentTC)
+									if(!taskControl->parentTC) {
 										errChk( TaskTreeStateChange(taskControl, &eventPackets[i], TaskTree_Finished, &errorInfo.errMsg) );
+									}
 										
 								} else {
 							
@@ -3118,8 +3123,9 @@ INIT_ERR
 								errChk( FunctionCall(taskControl, &eventPackets[i], TC_Callback_Stopped, NULL, &errorInfo.errMsg) );
 								
 								// change Task Tree status
-								if(!taskControl->parentTC)
+								if(!taskControl->parentTC) {
 									errChk( TaskTreeStateChange(taskControl, &eventPackets[i], TaskTree_Finished, &errorInfo.errMsg) );
+								}
 								
 								ChangeState(taskControl, &eventPackets[i], TC_State_Idle);
 								break;

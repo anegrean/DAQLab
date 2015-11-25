@@ -68,7 +68,7 @@ static void 					DiscardImageList 			(ListType* imageListPtr);
 
 static int						DisplayImageFunction		(ImageDisplayCVI_type* imgDisplay, Image_type** image);
 
-static void 					ConvertToBitArray			(ImageDisplayCVI_type* display, Image_type* image, int* alternativeInput, unsigned char type);
+static void 					ConvertToBitArray			(ImageDisplayCVI_type* display, Image_type* image);
 
 static void 					BilinearResize				(int* input, int** outputPtr, int sourceWidth, int sourceHeight, int targetWidth, int targetHeight);
 
@@ -78,7 +78,7 @@ static int CVICALLBACK 			CanvasPanCallback 			(int panel, int control, int even
 
 static int CVICALLBACK 			DisplayPanCallback			(int panel, int event, void *callbackData, int eventData1, int eventData2);
 
-static int* 					NormalizePixelArray			(ImageDisplayCVI_type* display);
+void 							NormalizePixelArray			(ImageDisplayCVI_type* display, int **arrayPtr);
 
 static void 					Deserialize					(ImageDisplayCVI_type* display, int* array, int length);
 
@@ -257,7 +257,9 @@ void DiscardImageList (ListType* imageListPtr)
 }
 
 
-static void ConvertToBitArray(ImageDisplayCVI_type* display, Image_type* image, int* alternativeInput, unsigned char type) 
+// static int ConvertToBitArray (int BitArray[], int nPixels, void* pixelArray, ImageTypes imageType)
+
+static void ConvertToBitArray(ImageDisplayCVI_type* display, Image_type* image) 
 {
 INIT_ERR
 	
@@ -271,13 +273,10 @@ INIT_ERR
 	GetImageSize(image, &imgWidth, &imgHeight);
 	
 	int 				nPixels				= imgHeight * imgWidth;
-	
-	
-	
-	if(type == 0) {
-		
-		nullChk(pixArray = (unsigned char*) malloc(nPixels * sizeof(unsigned char)));
-		iterrations = nPixels * BytesPerPixelDepth;
+			
+	nullChk(pixArray = (unsigned char*) malloc(nPixels * sizeof(unsigned char)));
+
+	iterrations = nPixels * BytesPerPixelDepth;
 		
 		switch (imgType) {
 			
@@ -476,48 +475,12 @@ INIT_ERR
 							display->bitmapBitArray[i+j] = 0;
 						else
 							display->bitmapBitArray[i+j] = pixArray[i / BytesPerPixelDepth];
-	
+
 					}
 				}
+				
 				break;
-	
-	
 		}
-	} else {
-		
-			nullChk(pixArray = (unsigned char*) malloc(display->nBytes * sizeof(unsigned char)));
-			
-			int* int_iterr 	 = (int*) GetImagePixelArray(image);
-			int	 int_min	 = int_iterr[0];
-			int	 int_max	 = int_iterr[0];
-
-			for (int i = 0; i < nPixels; i++) {
-				if (int_iterr[i] > int_max)
-					int_max = int_iterr[i];
-	
-				if (int_iterr[i] < int_min)
-					int_min = int_iterr[i];
-			}
-
-			int int_interval = int_max - int_min;
-
-			for (int i = 0; i < nPixels; i++)
-				pixArray[i] = (unsigned char)((int_iterr[i] - int_min) * 255.0 / int_interval);
-			
-							//for each 32 bit value
-			for (int i = 0; i < iterrations; i = i + BytesPerPixelDepth) {
-
-				//for each of the 4 bytes of the 32 bit value
-				for (int j = 0; j < BytesPerPixelDepth; j++) {			  
-					if (j == 3) 
-						display->bitmapBitArray[i+j] = 0;
-					else
-						display->bitmapBitArray[i+j] = pixArray[i / BytesPerPixelDepth];
-
-				}
-			}
-}
-
 
 Error:
 	
@@ -525,7 +488,7 @@ Error:
 	OKfree(pixArray);
 }
 
-
+//TODO : CHECK TIME FOR DISPLAY AFTER ZOOM CODE CLEANUP
 static int DisplayImageFunction (ImageDisplayCVI_type* imgDisplay, Image_type** imagePtr)
 {
 INIT_ERR 
@@ -553,20 +516,29 @@ INIT_ERR
 	
 	
 		//convert new image data to bit array and create bitmap image
-		ConvertToBitArray(imgDisplay, image, NULL, 0);
+		ConvertToBitArray(imgDisplay, image);
 		errChk( NewBitmap (-1, pixelDepth, imgDisplay->imgWidth, imgDisplay->imgHeight, NULL, imgDisplay->bitmapBitArray, NULL, &imgDisplay->imgBitmapID) );
 	
 	} else {
 		
 		//only update bitmap data 
-		ConvertToBitArray(imgDisplay, image, NULL, 0);
+		ConvertToBitArray(imgDisplay, image);
 		SetBitmapData(imgDisplay->imgBitmapID, -1, pixelDepth, NULL, imgDisplay->bitmapBitArray, NULL);
 	
 	}
+
+	SetCtrlAttribute(imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , imgWidth);
+	SetCtrlAttribute(imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_HEIGHT, imgHeight);
+	imgDisplay->ZoomLevel = 0;
 	
 	//draw bitmap on canvas
 	CanvasDrawBitmap (imgDisplay->canvasPanHndl, CanvasPan_Canvas, imgDisplay->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
-	DisplayPanel(imgDisplay->displayPanHndl); 
+	
+	int panVisible	= FALSE;
+	GetPanelAttribute(imgDisplay->displayPanHndl, ATTR_VISIBLE, &panVisible);
+	
+	if (!panVisible)
+		DisplayPanel(imgDisplay->displayPanHndl); 
 	
 	return 0;
 	
@@ -593,11 +565,7 @@ static int CVICALLBACK CanvasPanCallback (int panel, int control, int event, voi
 			
 			
 			Zoom(display, 1);
-			/*
-			
-			GetScaledCtrlDisplayBitmap (display->canvasPanHndl, CanvasPan_Canvas, 0, 1.5 * display->imgHeight, 1.5 * display->imgWidth, &display->imgBitmapID);
-			CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);  
-			 */
+
 		break;
 		
 		case EVENT_LEFT_CLICK:
@@ -642,74 +610,83 @@ INIT_ERR
 	if (display->ZoomLevel < maxZoomLevel && direction > 0)
 		display->ZoomLevel++;
 
-		GetImageSize(display->baseClass.image, &imageWidth, &imageHeight); 
-	//  GetImageSize(display->crtImage, &imageWidth, &imageHeight);
-	newWidth = imageWidth * (1 + display->ZoomLevel * zoomFactor);
-	newHeight = imageHeight * (1 + display->ZoomLevel * zoomFactor);
+	GetImageSize(display->baseClass.image, &imageWidth, &imageHeight); 
+
+	newWidth = (int) (imageWidth * (1 + display->ZoomLevel * zoomFactor));
+	newHeight = (int) (imageHeight * (1 + display->ZoomLevel * zoomFactor));
 	
 	DiscardBitmap(display->imgBitmapID);
 	
-	nullChk ( interpolationArray = (int*) malloc (imageWidth * imageHeight * sizeof(int)));
+	//replace with reallocs and move to display struct
 	nullChk ( resizedArray 		=  (int*) malloc (newWidth * newHeight * sizeof(int)));
-
+	nullChk ( interpolationArray		=  (int*) malloc (imageWidth * imageHeight * sizeof(int)));   
+	display->imgHeight = imageHeight;
+	display->imgWidth = imageWidth;
+	display->nBytes = imageHeight * imageWidth * BytesPerPixelDepth;
 	
-	ConvertToBitArray(display, display->baseClass.image, NULL, 0);
-	interpolationArray = NormalizePixelArray(display);
 	
-	OKfree(display->bitmapBitArray);
-	//update display info
-	display->imgWidth = newWidth;
-	display->imgHeight = newHeight;
+	ConvertToBitArray(display, display->baseClass.image);
+	NormalizePixelArray(display, &interpolationArray);
+	
+	OKfree(display->bitmapBitArray); 
+	BilinearResize(interpolationArray, &resizedArray, imageWidth, imageHeight, newWidth, newHeight);
 	
 	//update image array size and allocate memory
 	display->nBytes = newWidth * newHeight * BytesPerPixelDepth;
-	nullChk( display->bitmapBitArray = (unsigned char*) malloc(display->nBytes * sizeof(unsigned char)) );
 	
-	BilinearResize(interpolationArray, &resizedArray, imageWidth, imageHeight, newWidth, newHeight);
+	//update display info																												
+	display->imgWidth = newWidth;
+	display->imgHeight = newHeight;
+
+	nullChk( display->bitmapBitArray = (unsigned char*) malloc(display->nBytes * sizeof(unsigned char)) );  
 	
-	//ConvertToBitArray(display, display->baseClass.image, resizedArray, 1);
-	Deserialize(display, resizedArray, newWidth * newHeight);								   
+	Deserialize(display, resizedArray, newWidth * newHeight);
+
 	
 	SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , newWidth);
 	SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_HEIGHT, newHeight);
 	
-	errChk( NewBitmap (-1, pixelDepth, display->imgWidth, display->imgHeight, NULL, display->bitmapBitArray, NULL, &display->imgBitmapID) );   
+	errChk( NewBitmap (-1, pixelDepth, display->imgWidth, display->imgHeight, NULL, display->bitmapBitArray, NULL, &display->imgBitmapID) );
+	CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
+	
+	OKfree(interpolationArray);
+	OKfree(resizedArray);
+
 
 Error:
+	OKfree(interpolationArray);
+	OKfree(resizedArray);
 	
 	return errorInfo.error; 
 	
 	
 }
 
-static int* NormalizePixelArray(ImageDisplayCVI_type* display) {
-INIT_ERR
+void NormalizePixelArray(ImageDisplayCVI_type* display, int **arrayPtr) {
+	
 	int 	imgHeight   = 0;
 	int 	imgWidth	= 0;
-	int* 	result  	= NULL;
 	int 	nPixels		= 0;
+	int* 	array		= *arrayPtr;
 	
 	
 	GetImageSize(display->baseClass.image, &imgHeight, &imgWidth);
 	nPixels = imgHeight * imgWidth;
-	nullChk(result = (int*) malloc (nPixels * sizeof(int)));
+
+	for(int i = 0; i < nPixels; i++) {
+		array[i] = ( display->bitmapBitArray[4 * i] << 24) | ( display->bitmapBitArray[4 * i + 1] << 16) |
+				 	( display->bitmapBitArray[4 * i + 2] << 8) | display->bitmapBitArray[4 * i + 3] ;
 	
-	for(int i = 0; i < nPixels; i++)
-		result[i] = ( display->bitmapBitArray[4 * i] << 24) | ( display->bitmapBitArray[4 * i + 1] << 16) |
-				 	( display->bitmapBitArray[4 * i + 2] << 8) | display->bitmapBitArray[4 * i + 3];
-	return result;
-Error:
-	OKfree(result);
-	return NULL;
+	}
 }
 
 static void Deserialize(ImageDisplayCVI_type* display, int* array, int length) {
 
 	for(int i = 0; i < length; i++) {
-		display->bitmapBitArray[4 * i] = ((array[i] >> 24)  &0x000000ff);
-		display->bitmapBitArray[4 * i + 1] = ((array[i] >> 16) & 0x000000ff);
-		display->bitmapBitArray[4 * i + 2] = ((array[i] >> 8) &0x000000ff);
-		display->bitmapBitArray[4 * i + 3] = ((array[i])  &0x000000ff);
+		display->bitmapBitArray[4 * i] = ((array[i] >> 24) &0xff);
+		display->bitmapBitArray[4 * i + 1] = ((array[i] >> 16) & 0xff);
+		display->bitmapBitArray[4 * i + 2] = ((array[i] >> 8) & 0xff);
+		display->bitmapBitArray[4 * i + 3] = ((array[i])  &0x000000ff);	   
 	}
 };
 
@@ -736,8 +713,8 @@ static void BilinearResize(int* input, int** outputPtr, int sourceWidth, int sou
             b = input[index + 1] ;
             c = input[index + sourceWidth] ;
             d = input[index + sourceWidth + 1] ;
- 			
-            // blue element
+
+			// blue element
             blue = ((a>>24)&0xff)*(1-x_diff)*(1-y_diff) + ((b>>24)&0xff)*(x_diff)*(1-y_diff) +
                    ((c>>24)&0xff)*(y_diff)*(1-x_diff)   + ((d>>24)&0xff)*(x_diff*y_diff);
  		
@@ -749,19 +726,11 @@ static void BilinearResize(int* input, int** outputPtr, int sourceWidth, int sou
             red = ((a>>16)&0xff)*(1-x_diff)*(1-y_diff) + ((b>>16)&0xff)*(x_diff)*(1-y_diff) +
                   ((c>>16)&0xff)*(y_diff)*(1-x_diff)   + ((d>>16)&0xff)*(x_diff*y_diff);
 		
- 		     /* 
             output [offset++] =
-                    0x000000ff | // alpha
-                    ((((int))   << 24)&0xff0000) |
-                    ((((int)green) << 16)&0xff00) |
-                    ((((int))  << 8)&0xff00);
-			*/ 
-			output [offset++] =
-                    (int)blue &0x000000ff| 
-                    ((((int)blue)   << 24)&0x000000ff) |
-                    ((((int)green) << 16)&0x000000ff) |
-                    ((((int)red)  << 8)&0x000000ff);
-				
+                    0x0 | // alpha
+                    ((((int)blue) & 0xff)   << 24) |
+                    ((((int)green) & 0xff) << 16) |
+                    ((((int)red) & 0xff)  << 8);
 			
         }
     }

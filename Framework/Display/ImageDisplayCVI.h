@@ -32,11 +32,14 @@
 #define BytesPerPixelDepth 	4
 #define zoomFactor 			0.25
 #define maxZoomLevel 		4
+		
+#define getByte(value, byteNum) ((value >> (8*byteNum)) & 0xff)
 
 //==============================================================================
 // Types
 		
 typedef struct ImageDisplayCVI	ImageDisplayCVI_type; 
+
 
 //=============================================================================
 // External variables

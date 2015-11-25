@@ -44,6 +44,8 @@ struct ImageDisplayCVI {
 	int 					imgWidth;			// image width
 	unsigned char			ZoomLevel;			// current Zoom level (can be 0,1,2,3,4)
 	Image_type* 			crtImage; 			// TODO replace with baseclass img
+	int*					interpolationArray; // array used to perform normalization ( squashing 4 bytes into an int) for the Bilinear interpolation
+	int*					resizedArray;		// array used to deserialize bytes from the integer into bitmapBitArray
 	
 	// UI
 	int						displayPanHndl;
@@ -51,7 +53,6 @@ struct ImageDisplayCVI {
 	int						menuBarHndl;
 	int						menuID_Close;
 	int						menuID_Save;
-	//int						scrollbarCtrl;
 	
 	// CALLBACK
 	//WaveformDisplayCB_type	callbackFptr;
@@ -174,9 +175,11 @@ INIT_ERR
 	nullChk( imgDisplay->images = ListCreate(sizeof(Image_type*)) );
 
 	// create bitmap bit array
-	if(imgHeight > 0 && imgWidth > 0)
-		nullChk( imgDisplay->bitmapBitArray = malloc(BytesPerPixelDepth * imgWidth * imgHeight) );
-	else
+	if(imgHeight > 0 && imgWidth > 0) {
+		nullChk( imgDisplay->bitmapBitArray 		= malloc(BytesPerPixelDepth * imgWidth * imgHeight) );
+		nullChk( imgDisplay->resizedArray   		= malloc(imgWidth * imgHeight * sizeof(int)) );
+		nullChk( imgDisplay->interpolationArray   	= malloc(imgWidth * imgHeight * sizeof(int)) ); 
+	} else
 		goto Error;
 				 
 	// create bitmap image handle
@@ -492,6 +495,7 @@ Error:
 static int DisplayImageFunction (ImageDisplayCVI_type* imgDisplay, Image_type** imagePtr)
 {
 INIT_ERR 
+	float  start =  Timer();
 	
 	Image_type* 	image     		= *imagePtr;
 	int 			imgHeight 		= 0;
@@ -509,7 +513,9 @@ INIT_ERR
 		
 
 		//allocate and update display internal data with new image content 
-		nullChk( imgDisplay->bitmapBitArray = (unsigned char*) malloc(imgHeight * imgWidth * BytesPerPixelDepth) );
+		nullChk( imgDisplay->bitmapBitArray 		= (unsigned char*) malloc(imgHeight * imgWidth * BytesPerPixelDepth) );
+		nullChk( imgDisplay->interpolationArray 	= (int*) realloc(imgDisplay->interpolationArray, imgHeight * imgWidth * sizeof(int)));
+		
 		imgDisplay->nBytes	  = imgHeight * imgWidth * BytesPerPixelDepth; 
 		imgDisplay->imgHeight = imgHeight;
 		imgDisplay->imgWidth  = imgWidth;
@@ -540,6 +546,8 @@ INIT_ERR
 	if (!panVisible)
 		DisplayPanel(imgDisplay->displayPanHndl); 
 	
+	float end =  Timer();
+	DebugPrintf(" Display took %f\n", end - start);
 	return 0;
 	
 Error: 
@@ -595,14 +603,11 @@ static int CVICALLBACK DisplayPanCallback (int panel, int event, void *callbackD
 static int Zoom (ImageDisplayCVI_type* display, char direction)
 {
 INIT_ERR 
-	
+	float   start 				= Timer();
 	int 	newWidth 			= 0;
 	int 	newHeight 			= 0;
 	int 	imageWidth			= 0;
 	int 	imageHeight			= 0;
-	int*	interpolationArray 	= NULL;
-	int*	resizedArray		= NULL;
-
 	
 	if (display->ZoomLevel > 0 && direction < 0)
 		display->ZoomLevel--;
@@ -617,19 +622,18 @@ INIT_ERR
 	
 	DiscardBitmap(display->imgBitmapID);
 	
-	//replace with reallocs and move to display struct
-	nullChk ( resizedArray 		=  (int*) malloc (newWidth * newHeight * sizeof(int)));
-	nullChk ( interpolationArray		=  (int*) malloc (imageWidth * imageHeight * sizeof(int)));   
+	nullChk ( display->resizedArray  =  (int*) realloc(display->resizedArray, newWidth * newHeight * sizeof(int)));
+ 
 	display->imgHeight = imageHeight;
 	display->imgWidth = imageWidth;
 	display->nBytes = imageHeight * imageWidth * BytesPerPixelDepth;
 	
 	
 	ConvertToBitArray(display, display->baseClass.image);
-	NormalizePixelArray(display, &interpolationArray);
+	NormalizePixelArray(display, &display->interpolationArray);
 	
 	OKfree(display->bitmapBitArray); 
-	BilinearResize(interpolationArray, &resizedArray, imageWidth, imageHeight, newWidth, newHeight);
+	BilinearResize(display->interpolationArray, &display->resizedArray, imageWidth, imageHeight, newWidth, newHeight);
 	
 	//update image array size and allocate memory
 	display->nBytes = newWidth * newHeight * BytesPerPixelDepth;
@@ -640,7 +644,7 @@ INIT_ERR
 
 	nullChk( display->bitmapBitArray = (unsigned char*) malloc(display->nBytes * sizeof(unsigned char)) );  
 	
-	Deserialize(display, resizedArray, newWidth * newHeight);
+	Deserialize(display, display->resizedArray, newWidth * newHeight);
 
 	
 	SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , newWidth);
@@ -648,14 +652,11 @@ INIT_ERR
 	
 	errChk( NewBitmap (-1, pixelDepth, display->imgWidth, display->imgHeight, NULL, display->bitmapBitArray, NULL, &display->imgBitmapID) );
 	CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
+
+	float end =  Timer();
 	
-	OKfree(interpolationArray);
-	OKfree(resizedArray);
-
-
+	DebugPrintf("Zoom took %f\n", end - start);
 Error:
-	OKfree(interpolationArray);
-	OKfree(resizedArray);
 	
 	return errorInfo.error; 
 	
@@ -666,12 +667,11 @@ void NormalizePixelArray(ImageDisplayCVI_type* display, int **arrayPtr) {
 	
 	int 	imgHeight   = 0;
 	int 	imgWidth	= 0;
-	int 	nPixels		= 0;
 	int* 	array		= *arrayPtr;
 	
-	
 	GetImageSize(display->baseClass.image, &imgHeight, &imgWidth);
-	nPixels = imgHeight * imgWidth;
+	
+	int 	nPixels 	= imgHeight * imgWidth; 
 
 	for(int i = 0; i < nPixels; i++) {
 		array[i] = ( display->bitmapBitArray[4 * i] << 24) | ( display->bitmapBitArray[4 * i + 1] << 16) |
@@ -683,10 +683,10 @@ void NormalizePixelArray(ImageDisplayCVI_type* display, int **arrayPtr) {
 static void Deserialize(ImageDisplayCVI_type* display, int* array, int length) {
 
 	for(int i = 0; i < length; i++) {
-		display->bitmapBitArray[4 * i] = ((array[i] >> 24) &0xff);
-		display->bitmapBitArray[4 * i + 1] = ((array[i] >> 16) & 0xff);
-		display->bitmapBitArray[4 * i + 2] = ((array[i] >> 8) & 0xff);
-		display->bitmapBitArray[4 * i + 3] = ((array[i])  &0x000000ff);	   
+		display->bitmapBitArray[4 * i] 	   = getByte(array[i], 3);
+		display->bitmapBitArray[4 * i + 1] = getByte(array[i], 2);
+		display->bitmapBitArray[4 * i + 2] = getByte(array[i], 1);
+		display->bitmapBitArray[4 * i + 3] = getByte(array[i], 0);	     
 	}
 };
 
@@ -715,17 +715,18 @@ static void BilinearResize(int* input, int** outputPtr, int sourceWidth, int sou
             d = input[index + sourceWidth + 1] ;
 
 			// blue element
-            blue = ((a>>24)&0xff)*(1-x_diff)*(1-y_diff) + ((b>>24)&0xff)*(x_diff)*(1-y_diff) +
-                   ((c>>24)&0xff)*(y_diff)*(1-x_diff)   + ((d>>24)&0xff)*(x_diff*y_diff);
- 		
-            // green element
-            green = ((a>>8)&0xff)*(1-x_diff)*(1-y_diff) + ((b>>8)&0xff)*(x_diff)*(1-y_diff) +
-                    ((c>>8)&0xff)*(y_diff)*(1-x_diff)   + ((d>>8)&0xff)*(x_diff*y_diff);
+            blue = getByte(a, 3) * (1-x_diff)*(1-y_diff) + getByte(b, 3) * (x_diff)*(1-y_diff) +
+                   getByte(c, 3) * (y_diff)*(1-x_diff)   + getByte(d, 3) * (x_diff*y_diff);
+
+			// green element
+            green = getByte(a, 2) * (1-x_diff)*(1-y_diff) + getByte(b, 2) * (x_diff)*(1-y_diff) +
+                  	getByte(c, 2) * (y_diff)*(1-x_diff)   + getByte(d, 2) * (x_diff*y_diff);
+			
  			
-            // red element
-            red = ((a>>16)&0xff)*(1-x_diff)*(1-y_diff) + ((b>>16)&0xff)*(x_diff)*(1-y_diff) +
-                  ((c>>16)&0xff)*(y_diff)*(1-x_diff)   + ((d>>16)&0xff)*(x_diff*y_diff);
-		
+			// red element
+			red = 	getByte(a, 1) * (1-x_diff)*(1-y_diff) + getByte(b, 1) * (x_diff)*(1-y_diff) +
+                    getByte(c, 1) * (y_diff)*(1-x_diff)   + getByte(d, 1) * (x_diff*y_diff);
+			
             output [offset++] =
                     0x0 | // alpha
                     ((((int)blue) & 0xff)   << 24) |

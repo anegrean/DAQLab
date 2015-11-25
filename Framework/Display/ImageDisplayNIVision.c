@@ -153,7 +153,7 @@ INIT_ERR
 	nullChk( imaqSetCurrentTool(IMAQ_PAN_TOOL) );
 	
 	// set up display callback
-	errChk( imaqSetEventCallback(ImageDisplayNIVision_CB, FALSE) );
+	errChk( imaqSetEventCallback(ImageDisplayNIVision_CB, TRUE) );
 	
 	NIVisionEngineInitialized = TRUE;
 	
@@ -234,6 +234,7 @@ static void discard_NIDisplayEngine_type (NIDisplayEngine_type** niVisionDisplay
 */
 
 ImageDisplayNIVision_type* init_ImageDisplayNIVision_type	(void*						imageDisplayOwner,
+															 int						parentPanHndl,
 															 ImageTypes 				imageType,
 															 int						imgWidth,
 															 int						imgHeight,
@@ -247,6 +248,7 @@ INIT_ERR
 	HMENU			imageMenuHndl			= 0;	// submenu handle for "Image" menu item in the imaq window
 	HMENU			equalizeMenuHndl		= 0;	// submenu handle for "Image->Equalize" menu item in the imaq window
 	int				newIMAQWindowID			= 0;
+	intptr_t		parentPanWindowsHndl	= 0;
 										
 	ImageDisplayNIVision_type*	niImgDisp 	= malloc(sizeof(ImageDisplayNIVision_type));
 	if (!niImgDisp) return NULL;
@@ -287,8 +289,19 @@ INIT_ERR
 	errChk(newIMAQWindowID);
 	niImgDisp->imaqWndID = newIMAQWindowID;
 	
-	// get windows window handle
+	// get windows IMAQ window handle
 	nullChk( niImgDisp->imaqWndWindowsHndl = (HWND) imaqGetSystemWindowHandle(niImgDisp->imaqWndID) ); 
+	
+	// get windows parent panel handle
+	if (parentPanHndl)
+		GetPanelAttribute(parentPanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &parentPanWindowsHndl);
+	
+	// embed display and toolbox in parent window
+	if (parentPanWindowsHndl) {
+		SetParent(niImgDisp->imaqWndWindowsHndl, (HWND) parentPanWindowsHndl);
+		HWND imaqToolWindowsHndl = imaqGetToolWindowHandle();
+		SetParent(imaqToolWindowsHndl, (HWND) parentPanWindowsHndl);
+	}
 	
 	// init IMAQ image buffer 
 	switch (imageType) {

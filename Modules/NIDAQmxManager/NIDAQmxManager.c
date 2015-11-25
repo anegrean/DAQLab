@@ -1056,7 +1056,7 @@ static COChannel_type*				GetCOChannel							(Dev_type* dev, char physChanName[]
 // Channel settings
 //------------------------------------------------------------------------------
 	// channel settings base class
-static void							init_ChanSet_type						(Dev_type* dev, ChanSet_type* chanSet, char physChanName[], Channel_type chanType, DiscardFptr_type discardFptr);
+static void							init_ChanSet_type						(Dev_type* dev, ChanSet_type* chanSet, char physChanName[], Channel_type chanType, BOOL onDemand, DiscardFptr_type discardFptr);
 static void							discard_ChanSet_type					(ChanSet_type** chanSetPtr);
 
 	//-----------------------------
@@ -1065,7 +1065,7 @@ static void							discard_ChanSet_type					(ChanSet_type** chanSetPtr);
 
 	// AI Voltage
 static ChanSet_AI_Voltage_type*		init_ChanSet_AI_Voltage_type 			(Dev_type* dev, char physChanName[], AIChannel_type* chanAttr, BOOL integrateFlag, 
-													 						 DataTypeConversion_type dataTypeConversion, uInt32 VRangeIdx, Terminal_type terminalType);
+													 						 DataTypeConversion_type dataTypeConversion, uInt32 VRangeIdx, Terminal_type terminalType, BOOL onDemand);
 
 static void							discard_ChanSet_AI_Voltage_type			(ChanSet_AI_Voltage_type** chanSetPtr);
 
@@ -1076,7 +1076,7 @@ static int CVICALLBACK				ChanSetAIVoltageUI_CB					(int panel, int control, int
 	// AI Current
 static ChanSet_AI_Current_type*		init_ChanSet_AI_Current_type 			(Dev_type* dev, char physChanName[], AIChannel_type* chanAttr, BOOL integrateFlag, 
 													 						 DataTypeConversion_type dataTypeConversion, uInt32 IRangeIdx, ShuntResistor_type shuntResistorType, 
-																			 double shuntResistorValue, Terminal_type terminalType);
+																			 double shuntResistorValue, Terminal_type terminalType, BOOL onDemand);
 
 static void							discard_ChanSet_AI_Current_type			(ChanSet_AI_Current_type** chanSetPtr);                          
 
@@ -1090,7 +1090,7 @@ void 								ResetAIDataTypeGainOffset				(ChanSet_AI_Voltage_type* chSet);
 	//-----------------------------
 
 	// AO Voltage
-static ChanSet_AO_Voltage_type*		init_ChanSet_AO_Voltage_type 			(Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 VRangeIdx, Terminal_type terminalType);
+static ChanSet_AO_Voltage_type*		init_ChanSet_AO_Voltage_type 			(Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 VRangeIdx, Terminal_type terminalType, BOOL onDemand);
 
 static void							discard_ChanSet_AO_Voltage_type			(ChanSet_AO_Voltage_type** chanSetPtr);
 
@@ -1101,13 +1101,13 @@ static int CVICALLBACK				ChanSetAOVoltageUI_CB					(int panel, int control, int
 
 	// AO Current
 static ChanSet_AO_Current_type*		init_ChanSet_AO_Current_type 			(Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 IRangeIdx, ShuntResistor_type shuntResistorType, 
-																			 double shuntResistorValue, Terminal_type terminalType);
+																			 double shuntResistorValue, Terminal_type terminalType, BOOL onDemand);
 static void							discard_ChanSet_AO_Current_type			(ChanSet_AO_Current_type** chanSetPtr);                          
 
 	//-----------------------------
 	// DI and DO 
 	//-----------------------------
-static ChanSet_DIDO_type*			init_ChanSet_DIDO_type					(Dev_type* dev, char physChanName[], Channel_type chanType, BOOL invert);
+static ChanSet_DIDO_type*			init_ChanSet_DIDO_type					(Dev_type* dev, char physChanName[], Channel_type chanType, BOOL invert, BOOL onDemand);
 static void							discard_ChanSet_DIDO_type				(ChanSet_type** chanSetPtr);
 static int 							ChanSetLineDO_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
 static int 							ChanSetPortDO_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
@@ -1120,16 +1120,16 @@ void 								SetPortControls							(int panel, uInt32 data);																	// 
 	//-----------------------------
 
 	// CI base class
-static void							init_ChanSet_CI_type					(Dev_type* dev, ChanSet_CI_type* chanSet, char physChanName[], Channel_type chanType, EdgeTypes activeEdge, DiscardFptr_type discardFptr);
+static void							init_ChanSet_CI_type					(Dev_type* dev, ChanSet_CI_type* chanSet, char physChanName[], Channel_type chanType, EdgeTypes activeEdge, BOOL onDemand, DiscardFptr_type discardFptr);
 static void							discard_ChanSet_CI_type					(ChanSet_CI_type** chanSetPtr);
 	// CI Edge Count
-static ChanSet_CI_EdgeCount_type* 	init_ChanSet_CI_EdgeCount_type 			(Dev_type* dev, char physChanName[], EdgeTypes activeEdge, uInt32 initialCount, CountDirections countDirection);
+static ChanSet_CI_EdgeCount_type* 	init_ChanSet_CI_EdgeCount_type 			(Dev_type* dev, char physChanName[], EdgeTypes activeEdge, uInt32 initialCount, CountDirections countDirection, BOOL onDemand);
 static void							discard_ChanSet_CI_EdgeCount_type		(ChanSet_CI_EdgeCount_type** chanSetPtr);
 static int 							ChanSetCIEdge_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);   	// <---------- check & cleanup!!!
 
 	// CI Frequency
 static ChanSet_CI_Frequency_type* 	init_ChanSet_CI_Frequency_type 			(Dev_type* dev, char physChanName[], double freqMax, double freqMin, EdgeTypes activeEdge, CIFrequencyMeasMethods measMethod, 
-																  			 double measTime, uInt32 divisor, char freqInputTerminal[], CounterTaskTiming_type taskTiming);
+																  			 double measTime, uInt32 divisor, char freqInputTerminal[], CounterTaskTiming_type taskTiming, BOOL onDemand);
 static void 						discard_ChanSet_CI_Frequency_type 		(ChanSet_CI_Frequency_type** chanSetPtr);
 
 	//-----------------------------
@@ -1137,7 +1137,7 @@ static void 						discard_ChanSet_CI_Frequency_type 		(ChanSet_CI_Frequency_type
 	//-----------------------------
 
 	// CO
-static ChanSet_CO_type* 			init_ChanSet_CO_type 					(Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain);
+static ChanSet_CO_type* 			init_ChanSet_CO_type 					(Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain, BOOL onDemand);
 static void 						discard_ChanSet_CO_type 				(ChanSet_CO_type** chanSetPtr);
 static int 							ChanSetCO_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);	// <---------- check & cleanup!!!
 static int 							AddToUI_Chan_CO			 				(ChanSet_CO_type* chanSet, char** errorMsg); 
@@ -2151,7 +2151,7 @@ INIT_ERR
 				
 				DataTypeConversion_type			dataTypeConversion		= {.dataType = (DataTypeConversions)AIDataTypeConversion, .min = dataTypeMin, .max = dataTypeMax, .offset = dataTypeOffset, .gain = dataTypeGain};
 				
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AI_Voltage_type(dev, physChanName, AIChanAttr, integrateFlag, dataTypeConversion, VRangeIdx, (Terminal_type) terminalType) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AI_Voltage_type(dev, physChanName, AIChanAttr, integrateFlag, dataTypeConversion, VRangeIdx, (Terminal_type) terminalType, onDemand) );
 				// reserve channel
 				AIChanAttr->inUse = TRUE;
 			}
@@ -2189,7 +2189,7 @@ INIT_ERR
 				
 				DataTypeConversion_type			dataTypeConversion		= {.dataType = (DataTypeConversions)AIDataTypeConversion, .min = dataTypeMin, .max = dataTypeMax, .offset = dataTypeOffset, .gain = dataTypeGain};
 				
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AI_Current_type(dev, physChanName, chanAttr, integrateFlag, dataTypeConversion, IRangeIdx, (ShuntResistor_type) AIShuntResistorType, shuntResistor, (Terminal_type) terminalType) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AI_Current_type(dev, physChanName, chanAttr, integrateFlag, dataTypeConversion, IRangeIdx, (ShuntResistor_type) AIShuntResistorType, shuntResistor, (Terminal_type) terminalType, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2210,7 +2210,7 @@ INIT_ERR
 				
 																			
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanAOVoltageAttr, NumElem(ChanAOVoltageAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AO_Voltage_type(dev, physChanName, chanAttr, VRangeIdx, (Terminal_type) terminalType) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AO_Voltage_type(dev, physChanName, chanAttr, VRangeIdx, (Terminal_type) terminalType, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2230,7 +2230,7 @@ INIT_ERR
 																			{"Terminal",			BasicData_UInt,		&terminalType} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanAOCurrentAttr, NumElem(ChanAOCurrentAttr)) );															
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AO_Current_type(dev, physChanName, chanAttr, IRangeIdx, 0, 0, (Terminal_type) terminalType) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AO_Current_type(dev, physChanName, chanAttr, IRangeIdx, 0, 0, (Terminal_type) terminalType, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 				
@@ -2244,7 +2244,7 @@ INIT_ERR
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2257,7 +2257,7 @@ INIT_ERR
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2270,7 +2270,7 @@ INIT_ERR
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2283,7 +2283,7 @@ INIT_ERR
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2300,7 +2300,7 @@ INIT_ERR
 																			{"CountDirection",		BasicData_UInt,		&countDirection} };
 																			
 				errChk( DLGetXMLElementAttributes(channelXMLElement, CIEdgeCountAttr, NumElem(CIEdgeCountAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CI_EdgeCount_type(dev, physChanName, edgeType, initialCount, countDirection) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CI_EdgeCount_type(dev, physChanName, edgeType, initialCount, countDirection, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2330,7 +2330,7 @@ INIT_ERR
 																			{"FrequencyInputTerminal",		BasicData_CString,		freqInputTerminal}};
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, CIFreqChanAttr, NumElem(CIFreqChanAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CI_Frequency_type(dev, physChanName, freqMax, freqMin, edgeType, freqMeasMethod, measTime, divisor, freqInputTerminal, CIFreqTaskTiming) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CI_Frequency_type(dev, physChanName, freqMax, freqMin, edgeType, freqMeasMethod, measTime, divisor, freqInputTerminal, CIFreqTaskTiming, onDemand) );
 				OKfree(freqInputTerminal);
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2357,7 +2357,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTimeTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTime, lowTime, initialDelay) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain, onDemand) );
 				
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2385,7 +2385,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainFreqTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, dutyCycle, frequency, initialDelay) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 				
@@ -2415,7 +2415,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTickTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTicks, lowTicks, delayTicks, 0) ); // tick clock unknown at this point
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, (PulseTrain_type*)pulseTrain, onDemand) );
 				OKfree(clockSource);
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -4686,7 +4686,7 @@ static COChannel_type* GetCOChannel (Dev_type* dev, char physChanName[])
 // ChanSet_type base class
 //------------------------------------------------------------------------------
 
-static void  init_ChanSet_type (Dev_type* dev, ChanSet_type* chanSet, char physChanName[], Channel_type chanType, DiscardFptr_type discardFptr)
+static void  init_ChanSet_type (Dev_type* dev, ChanSet_type* chanSet, char physChanName[], Channel_type chanType, BOOL onDemand, DiscardFptr_type discardFptr)
 {
 	chanSet->name							= StrDup(physChanName);
 	chanSet->chanType						= chanType;
@@ -4694,7 +4694,7 @@ static void  init_ChanSet_type (Dev_type* dev, ChanSet_type* chanSet, char physC
 	chanSet->sinkVChan						= NULL;
 	chanSet->device							= dev;
 	chanSet->srcVChan						= NULL;
-	chanSet->onDemand						= FALSE;				// hw-timing by default
+	chanSet->onDemand						= onDemand;
 	chanSet->integrateFlag					= FALSE;
 	chanSet->dataTypeConversion.dataType	= Convert_To_Double;   // no conversion needed, gai, offset, min and max are ignored.
 	chanSet->dataTypeConversion.gain		= 1;
@@ -4724,13 +4724,13 @@ static void	discard_ChanSet_type (ChanSet_type** chanSetPtr)
 //------------------------------------------------------------------------------
 
 static ChanSet_AI_Voltage_type* init_ChanSet_AI_Voltage_type (Dev_type* dev, char physChanName[], AIChannel_type* chanAttr, BOOL integrateFlag, 
-															  DataTypeConversion_type dataTypeConversion, uInt32 VRangeIdx, Terminal_type terminalType)
+															  DataTypeConversion_type dataTypeConversion, uInt32 VRangeIdx, Terminal_type terminalType, BOOL onDemand)
 {
 	ChanSet_AI_Voltage_type* chan = malloc (sizeof(ChanSet_AI_Voltage_type));
 	if (!chan) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AI_Voltage, (DiscardFptr_type)discard_ChanSet_AI_Voltage_type);
+	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AI_Voltage, onDemand, (DiscardFptr_type)discard_ChanSet_AI_Voltage_type);
 	chan->baseClass.dataTypeConversion	= dataTypeConversion;
 	chan->baseClass.integrateFlag		= integrateFlag;
 	
@@ -4781,7 +4781,13 @@ static int AddToUI_Chan_AI_Voltage (ChanSet_AI_Voltage_type* chanSet)
 	SetPanelAttribute(chanSet->baseClass.chanPanHndl, ATTR_CALLBACK_DATA, chanSet);
 	// add callback data to the controls in the panel
 	SetCtrlsInPanCBInfo(chanSet, ChanSetAIVoltageUI_CB, chanSet->baseClass.chanPanHndl);
-							
+	
+	//--------------
+	// On demand
+	//--------------
+	
+	SetCtrlVal(chanSet->baseClass.chanPanHndl, AIVoltage_OnDemand, chanSet->baseClass.onDemand); 
+	
 	//--------------
 	// Terminal
 	//--------------
@@ -5100,13 +5106,13 @@ PRINT_ERR
 // ChanSet_AO_Voltage_type
 //------------------------------------------------------------------------------
 
-static ChanSet_AO_Voltage_type* init_ChanSet_AO_Voltage_type (Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 VRangeIdx, Terminal_type terminalType)
+static ChanSet_AO_Voltage_type* init_ChanSet_AO_Voltage_type (Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 VRangeIdx, Terminal_type terminalType, BOOL onDemand)
 {
 	ChanSet_AO_Voltage_type* chan = malloc (sizeof(ChanSet_AO_Voltage_type));
 	if (!chan) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AO_Voltage, (DiscardFptr_type)discard_ChanSet_AO_Voltage_type);
+	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AO_Voltage, onDemand, (DiscardFptr_type)discard_ChanSet_AO_Voltage_type);
 	
 	// init child
 	chan->chanAttr							= chanAttr;
@@ -5154,7 +5160,13 @@ INIT_ERR
 	SetPanelAttribute(chanSet->baseClass.chanPanHndl, ATTR_CALLBACK_DATA, chanSet);
 	// add callback data to the controls in the panel
 	SetCtrlsInPanCBInfo(chanSet, ChanSetAOVoltageUI_CB, chanSet->baseClass.chanPanHndl);
-							
+	
+	//--------------
+	// On demand
+	//--------------
+	
+	SetCtrlVal(chanSet->baseClass.chanPanHndl, AOVoltage_OnDemand, chanSet->baseClass.onDemand); 
+	
 	//--------------
 	// Terminal
 	//--------------
@@ -5301,13 +5313,13 @@ PRINT_ERR
 //------------------------------------------------------------------------------
 
 static ChanSet_AI_Current_type* init_ChanSet_AI_Current_type (Dev_type* dev, char physChanName[], AIChannel_type* chanAttr, BOOL integrateFlag, DataTypeConversion_type dataTypeConversion, 
-																uInt32 IRangeIdx, ShuntResistor_type shuntResistorType, double shuntResistorValue, Terminal_type terminalType)
+																uInt32 IRangeIdx, ShuntResistor_type shuntResistorType, double shuntResistorValue, Terminal_type terminalType, BOOL onDemand)
 {
 	ChanSet_AI_Current_type* chan = malloc (sizeof(ChanSet_AI_Current_type));
 	if (!chan) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AI_Current, (DiscardFptr_type)discard_ChanSet_AI_Current_type);
+	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AI_Current, onDemand, (DiscardFptr_type)discard_ChanSet_AI_Current_type);
 	chan->baseClass.dataTypeConversion	= dataTypeConversion;
 	chan->baseClass.integrateFlag		= integrateFlag;
 	
@@ -5336,13 +5348,13 @@ static void discard_ChanSet_AI_Current_type (ChanSet_AI_Current_type** chanSetPt
 //------------------------------------------------------------------------------
 
 static ChanSet_AO_Current_type* init_ChanSet_AO_Current_type (Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 IRangeIdx, ShuntResistor_type shuntResistorType, 
-															  double shuntResistorValue, Terminal_type terminalType)
+															  double shuntResistorValue, Terminal_type terminalType, BOOL onDemand)
 {
 	ChanSet_AO_Current_type* chan = malloc (sizeof(ChanSet_AO_Current_type));
 	if (!chan) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AO_Current, (DiscardFptr_type)discard_ChanSet_AO_Current_type);
+	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AO_Current, onDemand, (DiscardFptr_type)discard_ChanSet_AO_Current_type);
 	
 	// init child
 	chan->chanAttr						= chanAttr;
@@ -5436,13 +5448,13 @@ void ResetAIDataTypeGainOffset (ChanSet_AI_Voltage_type* chSet)
 //------------------------------------------------------------------------------
 // ChanSet_DIDO_type
 //------------------------------------------------------------------------------
-static ChanSet_DIDO_type* init_ChanSet_DIDO_type (Dev_type* dev, char physChanName[], Channel_type chanType, BOOL invert) 
+static ChanSet_DIDO_type* init_ChanSet_DIDO_type (Dev_type* dev, char physChanName[], Channel_type chanType, BOOL invert, BOOL onDemand) 
 {
 	ChanSet_DIDO_type* chanSet = malloc (sizeof(ChanSet_DIDO_type));
 	if (!chanSet) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, (DiscardFptr_type)discard_ChanSet_DIDO_type);
+	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, onDemand, (DiscardFptr_type)discard_ChanSet_DIDO_type);
 	
 	// init child
 	chanSet->invert		= invert;
@@ -5697,10 +5709,10 @@ void SetPortControls(int panel,uInt32 data)
 // ChanSet_CI
 //------------------------------------------------------------------------------
 
-static void	init_ChanSet_CI_type (Dev_type* dev, ChanSet_CI_type* chanSet, char physChanName[], Channel_type chanType, EdgeTypes activeEdge, DiscardFptr_type discardFptr)
+static void	init_ChanSet_CI_type (Dev_type* dev, ChanSet_CI_type* chanSet, char physChanName[], Channel_type chanType, EdgeTypes activeEdge, BOOL onDemand, DiscardFptr_type discardFptr)
 {
 	// init base class
-	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, discardFptr);
+	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, onDemand, discardFptr);
 	
 	// init
 	chanSet->taskHndl			= NULL;
@@ -5739,13 +5751,13 @@ static void discard_ChanSet_CI_type (ChanSet_CI_type** chanSetPtr)
 // ChanSet_CI_EdgeCount_type
 //------------------------------------------------------------------------------
 
-static ChanSet_CI_EdgeCount_type* init_ChanSet_CI_EdgeCount_type (Dev_type* dev, char physChanName[], EdgeTypes activeEdge, uInt32 initialCount, CountDirections countDirection)
+static ChanSet_CI_EdgeCount_type* init_ChanSet_CI_EdgeCount_type (Dev_type* dev, char physChanName[], EdgeTypes activeEdge, uInt32 initialCount, CountDirections countDirection, BOOL onDemand)
 {
 	ChanSet_CI_EdgeCount_type* chanSet = malloc (sizeof(ChanSet_CI_EdgeCount_type));
 	if (!chanSet) return NULL;
 	
 	// initialize base class
-	init_ChanSet_CI_type(dev, &chanSet->baseClass, physChanName, Chan_CI_EdgeCount, activeEdge, (DiscardFptr_type)discard_ChanSet_CI_EdgeCount_type);   
+	init_ChanSet_CI_type(dev, &chanSet->baseClass, physChanName, Chan_CI_EdgeCount, activeEdge, onDemand, (DiscardFptr_type)discard_ChanSet_CI_EdgeCount_type);   
 	
 	chanSet->initialCount		= initialCount;
 	chanSet->countDirection		= countDirection;
@@ -5798,13 +5810,13 @@ static int ChanSetCIEdge_CB (int panel, int control, int event, void *callbackDa
 //------------------------------------------------------------------------------
 
 static ChanSet_CI_Frequency_type* init_ChanSet_CI_Frequency_type (Dev_type* dev, char physChanName[], double freqMax, double freqMin, EdgeTypes activeEdge, CIFrequencyMeasMethods measMethod, 
-																  double measTime, uInt32 divisor, char freqInputTerminal[], CounterTaskTiming_type taskTiming)
+																  double measTime, uInt32 divisor, char freqInputTerminal[], CounterTaskTiming_type taskTiming, BOOL onDemand)
 {
 	ChanSet_CI_Frequency_type* chanSet = malloc (sizeof(ChanSet_CI_Frequency_type));
 	if (!chanSet) return NULL;
 	
 	// initialize base class
-	init_ChanSet_CI_type(dev, &chanSet->baseClass, physChanName, Chan_CI_Frequency, activeEdge, (DiscardFptr_type)discard_ChanSet_CI_Frequency_type);   
+	init_ChanSet_CI_type(dev, &chanSet->baseClass, physChanName, Chan_CI_Frequency, activeEdge, onDemand, (DiscardFptr_type)discard_ChanSet_CI_Frequency_type);   
 	
 	// init child class
 	chanSet->freqMax			= freqMax;
@@ -5833,13 +5845,13 @@ static void discard_ChanSet_CI_Frequency_type (ChanSet_CI_Frequency_type** chanS
 //------------------------------------------------------------------------------
 // ChanSet_CO_type
 //------------------------------------------------------------------------------
-static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain)
+static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain, BOOL onDemand)
 {
 	ChanSet_CO_type*	chanSet = malloc (sizeof(ChanSet_CO_type));
 	if (!chanSet) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, (DiscardFptr_type)discard_ChanSet_CO_type);
+	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, onDemand, (DiscardFptr_type)discard_ChanSet_CO_type);
 	
 	// init child class
 	chanSet->taskHndl		= NULL;
@@ -6547,7 +6559,7 @@ INIT_ERR
 							// init new channel data
 							DataTypeConversion_type	AIDataTypeConversion = {.dataType = Convert_To_Double, .min = AIChanAttr->Vrngs->low[AIChanAttr->Vrngs->Nrngs - 1], 
 																			.max = AIChanAttr->Vrngs->high[AIChanAttr->Vrngs->Nrngs - 1], .offset = 0, .gain = 1};
-							ChanSet_AI_Voltage_type* newChan = init_ChanSet_AI_Voltage_type(dev, chName, AIChanAttr, FALSE, AIDataTypeConversion, AIChanAttr->Vrngs->Nrngs - 1, Terminal_None);
+							ChanSet_AI_Voltage_type* newChan = init_ChanSet_AI_Voltage_type(dev, chName, AIChanAttr, FALSE, AIDataTypeConversion, AIChanAttr->Vrngs->Nrngs - 1, Terminal_None, FALSE);
 							// add new AI channel to UI
 							AddToUI_Chan_AI_Voltage(newChan);
 							// add new AI channel to list of channels
@@ -6643,7 +6655,7 @@ INIT_ERR
 						CounterTaskTiming_type			counterTaskTiming = {.measMode = Operation_Finite, .nSamples = DAQmxDefault_CO_Task_nPulses, .sampleRate = DAQmxDefault_Task_SampleRate, .refClkFreq = DAQmxDefault_Task_RefClkFreq};	
 						ChanSet_CI_EdgeCount_type*	 	newChan 	=  (ChanSet_CI_EdgeCount_type*) init_ChanSet_CI_Frequency_type(dev, chName, DAQmxDefault_CI_Frequency_Task_MaxFreq, DAQmxDefault_CI_Frequency_Task_MinFreq,
 																														  DAQmxDefault_CI_Frequency_Task_Edge, DAQmxDefault_CI_Frequency_Task_MeasMethod, DAQmxDefault_CI_Frequency_Task_MeasTime, 
-																														  DAQmxDefault_CI_Frequency_Task_Divisor, NULL, counterTaskTiming);
+																														  DAQmxDefault_CI_Frequency_Task_Divisor, NULL, counterTaskTiming, FALSE);
 							
 						// insert new channel settings tab
 						int chanSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOChSet);  
@@ -6732,7 +6744,7 @@ INIT_ERR
 							// init new channel data
 							DataTypeConversion_type	AIDataTypeConversion = {.dataType = Convert_To_Double, .min = AOChanAttr->Vrngs->low[AOChanAttr->Vrngs->Nrngs - 1], 
 																			.max = AOChanAttr->Vrngs->high[AOChanAttr->Vrngs->Nrngs - 1], .offset = 0, .gain = 1}; 
-							ChanSet_AO_Voltage_type* newChan = init_ChanSet_AO_Voltage_type(dev, chName, AOChanAttr, AOChanAttr->Vrngs->Nrngs - 1, Terminal_None);
+							ChanSet_AO_Voltage_type* newChan = init_ChanSet_AO_Voltage_type(dev, chName, AOChanAttr, AOChanAttr->Vrngs->Nrngs - 1, Terminal_None, FALSE);
 							// add new AO channel to UI
 							AddToUI_Chan_AO_Voltage(newChan);
 							// add new AO channel to list of channels
@@ -6782,12 +6794,12 @@ INIT_ERR
 					
 					GetCtrlVal(dev->devPanHndl, TaskSetPan_IOType, &ioType); 
 					
-					//set channel type 
+					// set channel type 
 					switch (ioType){
 						
 						case Chan_DO_Line:
 						
-							newDOChan = init_ChanSet_DIDO_type (dev, chName, ioType, FALSE);  
+							newDOChan = init_ChanSet_DIDO_type (dev, chName, ioType, FALSE, FALSE);  
 							newDOChan->baseClass.chanType = Chan_DO_Line;
 							DOLineChannel_type* DOlineChanAttr = GetDOLineChannel (dev, chName);
 							// mark channel as in use 
@@ -6812,7 +6824,7 @@ INIT_ERR
 								
 						case Chan_DO_Port:
 							
-							newDOChan =init_ChanSet_DIDO_type (dev, chName, ioType, FALSE);  
+							newDOChan =init_ChanSet_DIDO_type (dev, chName, ioType, FALSE, FALSE);  
 							newDOChan->baseClass.chanType=Chan_DO_Port;  
 							DOPortChannel_type* DOportChanAttr=GetDOPortChannel (dev, chName);
 							// mark channel as in use 
@@ -6930,7 +6942,7 @@ INIT_ERR
 							break;
 					}
 					
-					nullChk( newChan = init_ChanSet_CO_type(dev, chName, chanType, NULL, pulseTrain) );
+					nullChk( newChan = init_ChanSet_CO_type(dev, chName, chanType, NULL, pulseTrain, FALSE) );
 					// add start trigger
 					nullChk( newChan->startTrig = init_TaskTrig_type(dev, NULL) );
 					// add to UI

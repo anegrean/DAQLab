@@ -1269,6 +1269,8 @@ INIT_ERR
 	
 	// add default parent frame scan ROI
 	InsertListItem(frameScanPanHndl, ScanTab_ROIs, 0, "parent", 0);
+	// check default parent frame scan ROI
+	CheckListItem(frameScanPanHndl, ScanTab_ROIs, 0, 1);
 				
 	// update height
 	SetCtrlVal(frameScanPanHndl, ScanTab_Height, rectRaster->scanSettings.height * rectRaster->scanSettings.pixSize);
@@ -2184,15 +2186,24 @@ INIT_ERR
 	ActiveXMLObj_IXMLDOMElement_	switchTimesXMLElement; 			  
 	ActiveXMLObj_IXMLDOMElement_	maxSlopesXMLElement;   		
 	ActiveXMLObj_IXMLDOMElement_	triangleCalXMLElement;
-	DAQLabXMLNode 					nrgCalAttr[] 			= {	{"CommandVMax", BasicData_Double, &nrgCal->commandVMax},
-																{"CommandAsFunctionOfPositionLinFitSlope", BasicData_Double, &nrgCal->slope},
-																{"CommandAsFunctionOfPositionLinFitOffset", BasicData_Double, &nrgCal->offset},
-																{"PositionStdDev", BasicData_Double, &nrgCal->posStdDev},
-																{"ResponseLag", BasicData_Double, &nrgCal->lag},
-																{"Resolution", BasicData_Double, &nrgCal->resolution},
-																{"MinStepSize", BasicData_Double, &nrgCal->minStepSize},
-																{"ParkedCommandV", BasicData_Double, &nrgCal->parked},
-																{"MechanicalResponse", BasicData_Double, &nrgCal->mechanicalResponse}};
+	char*							switchTimesStepSizeStr 				= NULL;
+	char*							switchTimesSwitchTimeStr			= NULL;
+	char*							switchTimesDelayStr					= NULL;
+	char*							maxSlopesSlopeStr					= NULL;
+	char*							maxSlopesAmplitudeStr				= NULL;
+	char*							triangleCalCommandAmplitudeStr		= NULL;
+	char*							triangleCalActualAmplitudeStr		= NULL;
+	char*							triangleCalMaxFreqStr				= NULL;
+	char*							triangleCalResiduaLagStr			= NULL;
+	DAQLabXMLNode 					nrgCalAttr[] 						= {	{"CommandVMax", BasicData_Double, &nrgCal->commandVMax},
+																			{"CommandAsFunctionOfPositionLinFitSlope", BasicData_Double, &nrgCal->slope},
+																			{"CommandAsFunctionOfPositionLinFitOffset", BasicData_Double, &nrgCal->offset},
+																			{"PositionStdDev", BasicData_Double, &nrgCal->posStdDev},
+																			{"ResponseLag", BasicData_Double, &nrgCal->lag},
+																			{"Resolution", BasicData_Double, &nrgCal->resolution},
+																			{"MinStepSize", BasicData_Double, &nrgCal->minStepSize},
+																			{"ParkedCommandV", BasicData_Double, &nrgCal->parked},
+																			{"MechanicalResponse", BasicData_Double, &nrgCal->mechanicalResponse} };
 	
 	// Save calibration attributes
 	errChk( DLAddToXMLElem(xmlDOM, axisCalibrationsElement, nrgCalAttr, DL_ATTRIBUTE, NumElem(nrgCalAttr), xmlErrorInfo) ); 
@@ -2201,16 +2212,6 @@ INIT_ERR
 	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "SwitchTimes", &switchTimesXMLElement) );
 	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "MaxSlopes", &maxSlopesXMLElement) );
 	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "TriangleWaveform", &triangleCalXMLElement) );
-	
-	char*	switchTimesStepSizeStr 				= NULL;
-	char*	switchTimesSwitchTimeStr			= NULL;
-	char*	switchTimesDelayStr					= NULL;
-	char*	maxSlopesSlopeStr					= NULL;
-	char*	maxSlopesAmplitudeStr				= NULL;
-	char*	triangleCalCommandAmplitudeStr		= NULL;
-	char*	triangleCalActualAmplitudeStr		= NULL;
-	char*	triangleCalMaxFreqStr				= NULL;
-	char*	triangleCalResiduaLagStr			= NULL;
 	
 	// convert switch times calibration data to string
 	nullChk( switchTimesStepSizeStr = malloc (nrgCal->switchTimes->n * MAX_DOUBLE_NCHARS * sizeof(char)+1) );
@@ -2302,6 +2303,7 @@ INIT_ERR
 	ActiveXMLObj_IXMLDOMElement_	switchTimesXMLElement			= 0; 			  
 	ActiveXMLObj_IXMLDOMElement_	maxSlopesXMLElement				= 0;   		
 	ActiveXMLObj_IXMLDOMElement_	triangleCalXMLElement			= 0;
+	
 	DAQLabXMLNode					axisCalibrationAttr[] 			= { {"Name", BasicData_CString, &axisCalibrationName},
 											  		   					{"CommandVMax", BasicData_Double, &commandVMax},
 																		{"CommandAsFunctionOfPositionLinFitSlope", BasicData_Double, &slope},
@@ -2312,13 +2314,7 @@ INIT_ERR
 																		{"MinStepSize", BasicData_Double, &minStepSize},
 																		{"ParkedCommandV", BasicData_Double, &parked},
 																		{"MechanicalResponse", BasicData_Double, &mechanicalResponse}};
-	
-	errChk( DLGetXMLElementAttributes(axisCalibrationElement, axisCalibrationAttr, NumElem(axisCalibrationAttr)) ); 
-	
-	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "SwitchTimes", &switchTimesXMLElement) ); 
-	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "MaxSlopes", &maxSlopesXMLElement) );
-	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "TriangleWaveform", &triangleCalXMLElement) );
-	
+																		
 	char*							switchTimesStepSizeStr 			= NULL;
 	char*							switchTimesSwitchTimeStr		= NULL;
 	char*							switchTimesDelayStr				= NULL;
@@ -2332,6 +2328,12 @@ INIT_ERR
 	char*							triangleCalResiduaLagStr		= NULL;
 	unsigned int					nTriangleCal					= 0;
 	double							deadTime						= 0;
+	
+	errChk( DLGetXMLElementAttributes(axisCalibrationElement, axisCalibrationAttr, NumElem(axisCalibrationAttr)) ); 
+	
+	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "SwitchTimes", &switchTimesXMLElement) ); 
+	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "MaxSlopes", &maxSlopesXMLElement) );
+	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "TriangleWaveform", &triangleCalXMLElement) );
 	
 	// get calibration data from XML elements
 	DAQLabXMLNode 					switchTimesAttr[] 				= {	{"NElements", 			BasicData_UInt, 	&nSwitchTimes},
@@ -5425,10 +5427,19 @@ INIT_ERR
 					Rect_type*	rectROI		= *(Rect_type**)ListGetPtrToItem(scanEngine->scanROIs, itemIdx+1);
 					
 					// adjust scan engine scan settings
+					/*
 					scanEngine->scanSettings.height			= rectROI->height;
 					scanEngine->scanSettings.heightOffset 	= scanEngine->parentFrameScanSettings.heightOffset + rectROI->top;
 					scanEngine->scanSettings.width			= rectROI->width;
 					scanEngine->scanSettings.widthOffset	= scanEngine->parentFrameScanSettings.widthOffset + rectROI->left;
+					scanEngine->scanSettings.pixSize		= scanEngine->parentFrameScanSettings.pixSize;
+					scanEngine->scanSettings.pixelDwellTime	= scanEngine->parentFrameScanSettings.pixelDwellTime;
+					*/
+					
+					scanEngine->scanSettings.height			= rectROI->height;
+					scanEngine->scanSettings.heightOffset 	= (rectROI->height + 2 * rectROI->top - (int)scanEngine->parentFrameScanSettings.height)/2;
+					scanEngine->scanSettings.width			= rectROI->width;
+					scanEngine->scanSettings.widthOffset	= (rectROI->width + 2 * rectROI->left - (int)scanEngine->parentFrameScanSettings.width)/2;
 					scanEngine->scanSettings.pixSize		= scanEngine->parentFrameScanSettings.pixSize;
 					scanEngine->scanSettings.pixelDwellTime	= scanEngine->parentFrameScanSettings.pixelDwellTime;
 					
@@ -6958,6 +6969,10 @@ INIT_ERR
 	Image_type*					sendImage					= NULL;
 	int* 						nActivePixelBuildersTSVPtr 	= NULL;
 	
+	ListType					pointJumpROIList 			= 0;
+	ListType					frameScanROIList			= 0;
+	ListType					ROIList						= 0;
+	
 	
 	do {
 		
@@ -7162,8 +7177,16 @@ INIT_ERR
 				// TEMPORARY: X, Y & Z coordinates set to 0 for now
 				SetImageCoord(imgBuffer->image, 0, 0, 0);
 				
-				// add stored point ROIs if any
-				SetImageROIs(imgBuffer->image, CopyROIList(rectRaster->pointJumpSettings->pointJumps));
+				// add stored point and frame scan ROIs if any
+				nullChk( pointJumpROIList = CopyROIList(rectRaster->pointJumpSettings->pointJumps) );
+				nullChk( frameScanROIList = CopyROIList(rectRaster->scanROIs) );
+				nullChk( ROIList = ListCreate(sizeof(ROI_type*)) );
+				nullChk( ListAppend(ROIList, pointJumpROIList) );
+				OKfreeList(pointJumpROIList);
+				nullChk( ListAppend(ROIList, frameScanROIList) );
+				OKfreeList(frameScanROIList);
+				SetImageROIs(imgBuffer->image, ROIList);
+				ROIList = 0;
 				
 				//-------------------------------------
 				// Update image display callback group
@@ -7180,7 +7203,7 @@ INIT_ERR
 				// if display was discarded, create a new display
 				if (!*imgDisplayPtr) {
 					nullChk( imgDisplayCBGroup = init_CallbackGroup_type(NULL, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
-					nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
+					nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, 0, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
 				} else {
 					// just replace old callback group
 					discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
@@ -7349,6 +7372,9 @@ Error:
 	// cleanup
 	ReleaseDataPacket(&pixelPacket);
 	discard_RectRasterScanSet_type(&imgSettings);
+	DiscardROIList(&pointJumpROIList);
+	DiscardROIList(&frameScanROIList);
+	DiscardROIList(&ROIList);
 	
 	if (imgDisplayPtr) {
 		CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV);
@@ -9800,7 +9826,7 @@ INIT_ERR
 						imgDisplayPtr = NULL;
 						displayTSVHndl = engine->baseClass.scanChans[i]->imgDisplayTSV;
 						errChk( CmtGetTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV, &imgDisplayPtr) ); engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = __LINE__;
-						nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (engine->baseClass.scanChans[i], imageType, engine->scanSettings.width, engine->scanSettings.height, NULL) );
+						nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (engine->baseClass.scanChans[i], 0, imageType, engine->scanSettings.width, engine->scanSettings.height, NULL) );
 						errChk( CmtReleaseTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV) );
 						engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = 0;
 						imgDisplayPtr = NULL;

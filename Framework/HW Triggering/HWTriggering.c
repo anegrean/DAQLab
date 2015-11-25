@@ -12,7 +12,7 @@
 // Include files
 #include <windows.h> 
 #include "HWTriggering.h"
-#include "DAQLabUtility.h"
+#include "DAQLabErrHandling.h"
 #include <formatio.h>
 #include <ansi_c.h>
 #include "toolbox.h"

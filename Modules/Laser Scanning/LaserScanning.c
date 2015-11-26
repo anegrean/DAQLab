@@ -495,8 +495,32 @@ typedef struct {
 	double						pixelDwellTime;				// Pixel dwell time in [us].
 } RectRasterScanSet_type;
 
+typedef enum {
+	
+	PointJump_SinglePoints,									// Point ROIs are visited one at a time, with the beam jumping from and returning to the parked position.
+															// If Repeat is > 1 then each point is visited several times in the same manner before moving on to the next point and if the "start delay increment"
+															// is != 0 then with each repetition, the start delay is incremented. Note that the total number of iterations of the task controller is the number of 
+															// points times the number of repetitions for each point.
+															
+	PointJump_PointGroup,									// The beam jumps between the selected point ROIs starting from parked position, then to the first point, next point, until last point and finally returns 
+															// to parked position. If Repeat > 1 then the point group is visited several times, and if "start delay increment" is != 0 then with each repetition, 
+															// the start delay is increased. Note that in this case the number of task controller iterations is the same as the number of repetitions.
+															
+	PointJump_IncrementalPointGroup							// The beam jumps between an increasing number of selected point ROIs starting from the parked position. The total number of iterations is equal to the number
+															// of selected point ROIs times the number of repetitions. If "startdelay increment" is !=0 then with each repetition the start delay is increased.
+} PointJumpMethods;
+
 // Settings for stimulation and recording from point ROIs
 typedef struct {
+	PointJumpMethods			jumpMethod;					// Determines point jump method.
+	BOOL						record;						// If True, fluorescence signals from point ROIs are recorded while holding position.
+	BOOL						stimulate;					// If True, then optical stimulation is applied to the point ROI.
+	uInt32						nIntegration;				// Number of samples to use for integration of recorded fluorescence signal.
+	uInt32						nSequenceRepeat;			// Number of times to repeat a sequence of ROI point jumps.
+	double						startDelayInitVal;			// Scan start delay value for the first iteration.
+	double						startDelayIncrement;		// Scan start delay increment in [ms] with each iteration.
+	double						repeatWait;					// Additional time in [s] to wait between sequence repetitions.
+	
 	double						holdTime;					// Time in [ms] during which the galvos are stationary at this point ROI.
 	uInt32						nHoldBurst;					// Number of hold events within a single sweep that share a common start timepoint, i.e. the control waveform is continuous. Default is 1.
 	double						holdBurstPeriod;			// Elapsed time between hold events when holdBurstPeriodIncr is set to 0, otherwise it is the elapsed time between the first and second hold event.
@@ -518,28 +542,7 @@ typedef struct {
 	
 } PointJump_type;
 
-typedef enum {
-	
-	PointJump_SinglePoints,									// Point ROIs are visited one at a time, with the beam jumping from and returning to the parked position.
-															// If Repeat is > 1 then each point is visited several times in the same manner before moving on to the next point and if the "start delay increment"
-															// is != 0 then with each repetition, the start delay is incremented. Note that the total number of iterations of the task controller is the number of 
-															// points times the number of repetitions for each point.
-															
-	PointJump_PointGroup,									// The beam jumps between the selected point ROIs starting from parked position, then to the first point, next point, until last point and finally returns 
-															// to parked position. If Repeat > 1 then the point group is visited several times, and if "start delay increment" is != 0 then with each repetition, 
-															// the start delay is increased. Note that in this case the number of task controller iterations is the same as the number of repetitions.
-															
-	PointJump_IncrementalPointGroup							// The beam jumps between an increasing number of selected point ROIs starting from the parked position. The total number of iterations is equal to the number
-															// of selected point ROIs times the number of repetitions. If "startdelay increment" is !=0 then with each repetition the start delay is increased.
-} PointJumpMethods;
-
 typedef struct {
-	
-	PointJumpMethods			jumpMethod;					// Determines point jump method.
-	BOOL						record;						// If True, fluorescence signals from point ROIs are recorded while holding position.
-	BOOL						stimulate;					// If True, then optical stimulation is applied to the point ROI.
-	double						startDelayInitVal;			// startDelay value for the first iteration
-	double						startDelayIncrement;		// startDelay increment in [ms] with each iteration.
 	double						startDelay;					// Initial delay in [ms] from the global start trigger to the start of the first point jump sequence defined to be the beginning 
 															// of the galvo hold time at the first point ROI in the first sequence. This initial delay is composed of a delay during which 
 															// the galvos are kept at their parked position and a jump time needed to position the galvos to the first point ROI.
@@ -547,18 +550,14 @@ typedef struct {
 	double						sequenceDuration;			// Time in [ms] during which the beam jumps between all the point ROIs in a sequence. This time is measured from the start of the first point
 															// ROI holding time to the end holding time of the last point ROI in the sequence.
 	double						minSequencePeriod;			// Minimum value of sequence period due to galvo jump speed in [ms].
-	uInt32						nSequenceRepeat;			// Number of times to repeat a sequence of ROI point jumps.
-	double						repeatWait;					// Additional time in [s] to wait between sequence repetitions.
-	uInt32						nIntegration;				// Number of samples to use for integration.
 	ListType					pointJumps;					// List of points to jump to of PointJump_type*. The order of point jumps is determined by the order of the elements in the list.
 	size_t						currentActivePoint;			// 1-based index of current active point to visit when using the PointJump_SinglePoints mode.
 	size_t						nPointsInGroup;				// Number of points in a group when using PointJump_IncrementalPointGroup mode.
-	PointScanSettings_type*		globalPointScanSettings;	// Global settings for stimulation and recording from point ROIs.
 	double*						jumpTimes;					// Array of galvo jump times between ROIs in [ms]. The first entry is the galvo jump time from the parked position to the first point ROI which does not include any additional start delay.
 															// Note: a jump time is the sum of a galvo response delay and a switching time between two ROIs.
 	double*						responseDelays;				// Array of galvo response delays in [ms] to a jump command. This value together with the switching time makes up a jump time.
 	size_t						nJumpTimes;					// Number of jumpTimes array elements.
-	
+	PointScanSettings_type*		globalPointScanSettings;	// Global settings for stimulation and recording from point ROIs.
 } PointScan_type;
 
 typedef struct {
@@ -871,11 +870,13 @@ static double 							NonResRectRasterScan_RoundToGalvoSampling 			(RectRaster_ty
 	// Point jump mode
 	//--------------------------------------
 
-static PointScan_type*					init_PointScan_type									(void);
+static PointScan_type*					init_PointScan_type									(PointScanSettings_type** pointScanSettingsPtr);
 static void								discard_PointScan_type								(PointScan_type** pointScanPtr);
 
-static PointScanSettings_type*			init_PointScanSettings_type							(double holdTime, uInt32 nHoldBurst, double holdBurstPeriod, double holdBurstPeriodIncr, double stimDelay,
-																   							 double stimPulseONDuration, double stimPulseOFFDuration, uInt32 nStimPulses);
+static PointScanSettings_type* 			init_PointScanSettings_type 						(double holdTime, uInt32 nHoldBurst, double holdBurstPeriod, double holdBurstPeriodIncr, double stimDelay,
+														    								 double stimPulseONDuration, double stimPulseOFFDuration, uInt32 nStimPulses, PointJumpMethods jumpMethod, 
+																							 BOOL record, BOOL stimulate, uInt32 nIntegration, uInt32 nSequenceRepeat, double startDelayInitVal,
+																							 double startDelayIncrement, double repeatWait);
 static void 							discard_PointScanSettings_type						(PointScanSettings_type** pointScanSetPtr);
 
 static PointJump_type* 					init_PointJump_type 								(Point_type* point);
@@ -1232,11 +1233,12 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 {
 INIT_ERR
 
-	int		scanPanHndl			= 0;	
-	int		frameScanPanHndl	= 0;	// contains frame scan controls
-	int		pointScanPanHndl	= 0;	// contains point scan controls
-	int		newTabIdx			= 0;
-	char*	scanEngineName		= NULL; 
+	int							scanPanHndl			= 0;	
+	int							frameScanPanHndl	= 0;	// contains frame scan controls
+	int							pointScanPanHndl	= 0;	// contains point scan controls
+	int							newTabIdx			= 0;
+	char*						scanEngineName		= NULL; 
+	PointScanSettings_type*		pointScanSettings	= NULL;
 	
 	scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
 				
@@ -1293,37 +1295,40 @@ INIT_ERR
 	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
 	
 	// create default point jump settings if none loaded
-	if (!rectRaster->pointScan)
-		rectRaster->pointScan = init_PointScan_type();
+	if (!rectRaster->pointScan) {
+		nullChk( pointScanSettings = init_PointScanSettings_type(NonResGalvoRasterScan_Default_HoldTime, 1, 0, 0, 0, NonResGalvoRasterScan_Default_StimPulseONDuration, 
+									 NonResGalvoRasterScan_Default_StimPulseOFFDuration, 1, PointJump_SinglePoints, FALSE, FALSE, 1, 1, 0, 0, 0) );  
+		rectRaster->pointScan = init_PointScan_type(&pointScanSettings);
+	}
 	
 	GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &pointScanPanHndl); 
 	// populate point jump modes
 	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_SinglePoints, "Single points", PointJump_SinglePoints);
 	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_PointGroup, "Point group", PointJump_PointGroup);
 	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_IncrementalPointGroup, "Incremental point group", PointJump_IncrementalPointGroup);
-	SetCtrlIndex(pointScanPanHndl, PointTab_Mode, (int) rectRaster->pointScan->jumpMethod);
-	SetRectRasterScanEnginePointScanJumpModeUI(pointScanPanHndl, rectRaster->pointScan->jumpMethod);
+	SetCtrlIndex(pointScanPanHndl, PointTab_Mode, (int)rectRaster->pointScan->globalPointScanSettings->jumpMethod);
+	SetRectRasterScanEnginePointScanJumpModeUI(pointScanPanHndl, rectRaster->pointScan->globalPointScanSettings->jumpMethod);
 				
 	// recording UI settings
-	SetCtrlVal(pointScanPanHndl, PointTab_Record, rectRaster->pointScan->record);
-	SetRectRasterScanEnginePointScanRecordUI(pointScanPanHndl, rectRaster->pointScan->record);    
+	SetCtrlVal(pointScanPanHndl, PointTab_Record, rectRaster->pointScan->globalPointScanSettings->record);
+	SetRectRasterScanEnginePointScanRecordUI(pointScanPanHndl, rectRaster->pointScan->globalPointScanSettings->record);    
 	
 	//------------------------
 	// stimulate UI settings
 	
 		// UI
-	SetCtrlVal(pointScanPanHndl, PointTab_Stimulate, rectRaster->pointScan->stimulate);
-	SetRectRasterScanEnginePointScanStimulateUI(pointScanPanHndl, rectRaster->pointScan->stimulate);
+	SetCtrlVal(pointScanPanHndl, PointTab_Stimulate, rectRaster->pointScan->globalPointScanSettings->stimulate);
+	SetRectRasterScanEnginePointScanStimulateUI(pointScanPanHndl, rectRaster->pointScan->globalPointScanSettings->stimulate);
 		// VChan
 		// activate ROI shutter VChan
-	if (rectRaster->pointScan->stimulate)
+	if (rectRaster->pointScan->globalPointScanSettings->stimulate)
 		SetVChanActive((VChan_type*)rectRaster->baseClass.VChanROIShutter, TRUE);
 	else
 		SetVChanActive((VChan_type*)rectRaster->baseClass.VChanROIShutter, FALSE);
 	//------------------------
 	
 	// set integration
-	SetCtrlVal(pointScanPanHndl, PointTab_NIntegration, rectRaster->pointScan->nIntegration);
+	SetCtrlVal(pointScanPanHndl, PointTab_NIntegration, rectRaster->pointScan->globalPointScanSettings->nIntegration);
 
 	// round settings to galvo sampling time
 	rectRaster->pointScan->globalPointScanSettings->holdTime 				= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan->globalPointScanSettings->holdTime);
@@ -1332,14 +1337,14 @@ INIT_ERR
 	rectRaster->pointScan->globalPointScanSettings->stimDelay 				= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan->globalPointScanSettings->stimDelay);
 	rectRaster->pointScan->globalPointScanSettings->stimPulseONDuration 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan->globalPointScanSettings->stimPulseONDuration);
 	rectRaster->pointScan->globalPointScanSettings->stimPulseOFFDuration 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan->globalPointScanSettings->stimPulseOFFDuration); 
-	rectRaster->pointScan->startDelayInitVal 								= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan->startDelayInitVal);
-	rectRaster->pointScan->startDelayIncrement								= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan->startDelayIncrement);
+	rectRaster->pointScan->globalPointScanSettings->startDelayInitVal 		= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan->globalPointScanSettings->startDelayInitVal);
+	rectRaster->pointScan->globalPointScanSettings->startDelayIncrement		= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan->globalPointScanSettings->startDelayIncrement);
 	
 	// populate jump settings
-	SetCtrlVal(pointScanPanHndl, PointTab_Repeat, rectRaster->pointScan->nSequenceRepeat);
-	SetCtrlVal(pointScanPanHndl, PointTab_RepeatWait, rectRaster->pointScan->repeatWait);
-	SetCtrlVal(pointScanPanHndl, PointTab_StartDelay, rectRaster->pointScan->startDelayInitVal);
-	SetCtrlVal(pointScanPanHndl, PointTab_StartDelayIncrement, rectRaster->pointScan->startDelayIncrement);
+	SetCtrlVal(pointScanPanHndl, PointTab_Repeat, rectRaster->pointScan->globalPointScanSettings->nSequenceRepeat);
+	SetCtrlVal(pointScanPanHndl, PointTab_RepeatWait, rectRaster->pointScan->globalPointScanSettings->repeatWait);
+	SetCtrlVal(pointScanPanHndl, PointTab_StartDelay, rectRaster->pointScan->globalPointScanSettings->startDelayInitVal);
+	SetCtrlVal(pointScanPanHndl, PointTab_StartDelayIncrement, rectRaster->pointScan->globalPointScanSettings->startDelayIncrement);
 	
 	// populate hold settings
 	SetCtrlVal(pointScanPanHndl, PointTab_NHoldBurst, rectRaster->pointScan->globalPointScanSettings->nHoldBurst);
@@ -1425,6 +1430,9 @@ INIT_ERR
 	
 	
 Error:
+	
+	// cleanup
+	discard_PointScanSettings_type(&pointScanSettings);
 	
 RETURN_ERR
 }
@@ -1784,16 +1792,16 @@ INIT_ERR
 	ActiveXMLObj_IXMLDOMElement_	jumpSettingsXMLElement		= 0;
 	ActiveXMLObj_IXMLDOMElement_	pointSettingsXMLElement		= 0;
 	
-	uInt32							jumpMethod					= pointScan->jumpMethod;
+	uInt32							jumpMethod					= pointScan->globalPointScanSettings->jumpMethod;
 	
-	DAQLabXMLNode					jumpSettingsAttr[] 			= { {"Repeat",						BasicData_UInt,		&pointScan->nSequenceRepeat},
-																	{"StartDelay",					BasicData_Double,	&pointScan->startDelayInitVal},
-																	{"StartDelayIncrement",			BasicData_Double,	&pointScan->startDelayIncrement},
-																	{"RepeatWait",					BasicData_Double,	&pointScan->repeatWait},
+	DAQLabXMLNode					jumpSettingsAttr[] 			= { {"Repeat",						BasicData_UInt,		&pointScan->globalPointScanSettings->nSequenceRepeat},
+																	{"StartDelay",					BasicData_Double,	&pointScan->globalPointScanSettings->startDelayInitVal},
+																	{"StartDelayIncrement",			BasicData_Double,	&pointScan->globalPointScanSettings->startDelayIncrement},
+																	{"RepeatWait",					BasicData_Double,	&pointScan->globalPointScanSettings->repeatWait},
 																	{"PointJumpMode", 				BasicData_UInt, 	&jumpMethod},
-																	{"Record",						BasicData_Bool,		&pointScan->record},
-																	{"NIntegrate",					BasicData_UInt,		&pointScan->nIntegration},
-																	{"Stimulate",					BasicData_Bool,		&pointScan->stimulate} };
+																	{"Record",						BasicData_Bool,		&pointScan->globalPointScanSettings->record},
+																	{"NIntegrate",					BasicData_UInt,		&pointScan->globalPointScanSettings->nIntegration},
+																	{"Stimulate",					BasicData_Bool,		&pointScan->globalPointScanSettings->stimulate} };
 	
 	DAQLabXMLNode					pointSettingsAttr[] 		= { {"NHoldBurst",					BasicData_UInt,		&pointScan->globalPointScanSettings->nHoldBurst},
 																	{"Hold", 						BasicData_Double, 	&pointScan->globalPointScanSettings->holdTime},
@@ -2131,6 +2139,23 @@ INIT_ERR
 	ActiveXMLObj_IXMLDOMElement_	pointSettingsXMLElement		= 0;
 	
 	PointScan_type*					pointScan					= NULL;
+	PointScanSettings_type*			pointScanSettings			= NULL;
+	double							holdTime					= 0;				
+	uInt32							nHoldBurst					= 0;				
+	double							holdBurstPeriod				= 0;		
+	double							holdBurstPeriodIncr			= 0;
+	double							stimDelay					= 0;
+	double							stimPulseONDuration			= 0;
+	double							stimPulseOFFDuration		= 0;
+	uInt32							nStimPulses					= 0;
+	uInt32							nSequenceRepeat				= 0;
+	double							startDelayInitVal			= 0;
+	double							startDelayIncrement			= 0;
+	double							repeatWait					= 0;
+	BOOL							record						= 0;
+	uInt32							nIntegration				= 0;
+	BOOL							stimulate					= 0;
+	
 	
 	// get jump settings XML element
 	errChk( DLGetSingleXMLElementFromElement(parentXMLElement, "JumpSettings", &jumpSettingsXMLElement) );
@@ -2141,32 +2166,33 @@ INIT_ERR
 	// skip loading point jump settings if either element is missing
 	if (!jumpSettingsXMLElement || !pointSettingsXMLElement) goto SkipLoad;
 	
-	// allocate memory for new point jump settings
-	nullChk( pointScan = init_PointScan_type() );
-	
 	uInt32							jumpMethod					= 0;
-	DAQLabXMLNode					jumpSettingsAttr[] 			= { {"Repeat",						BasicData_UInt,		&pointScan->nSequenceRepeat},
-																	{"StartDelay",					BasicData_Double,	&pointScan->startDelayInitVal},
-																	{"StartDelayIncrement",			BasicData_Double,	&pointScan->startDelayIncrement},
-																	{"RepeatWait",					BasicData_Double,	&pointScan->repeatWait},
+	DAQLabXMLNode					jumpSettingsAttr[] 			= { {"Repeat",						BasicData_UInt,		&nSequenceRepeat},
+																	{"StartDelay",					BasicData_Double,	&startDelayInitVal},
+																	{"StartDelayIncrement",			BasicData_Double,	&startDelayIncrement},
+																	{"RepeatWait",					BasicData_Double,	&repeatWait},
 																	{"PointJumpMode", 				BasicData_UInt, 	&jumpMethod},
-																	{"Record",						BasicData_Bool,		&pointScan->record},
-																	{"NIntegrate",					BasicData_UInt,		&pointScan->nIntegration},
-																	{"Stimulate",					BasicData_Bool,		&pointScan->stimulate} };
+																	{"Record",						BasicData_Bool,		&record},
+																	{"NIntegrate",					BasicData_UInt,		&nIntegration},
+																	{"Stimulate",					BasicData_Bool,		&stimulate} };
 	
-	DAQLabXMLNode					pointSettingsAttr[] 		= { {"NHoldBurst",					BasicData_UInt,		&pointScan->globalPointScanSettings.nHoldBurst},
-																	{"Hold", 						BasicData_Double, 	&pointScan->globalPointScanSettings.holdTime},
-																	{"HoldBurstPeriod",				BasicData_Double,	&pointScan->globalPointScanSettings.holdBurstPeriod},
-																	{"HoldBurstPeriodIncrement",	BasicData_Double,	&pointScan->globalPointScanSettings.holdBurstPeriodIncr},
-																	{"StimulationDelay",			BasicData_Double,	&pointScan->globalPointScanSettings.stimDelay},
-																	{"NPulses",						BasicData_UInt,		&pointScan->globalPointScanSettings.nStimPulses},
-																	{"PulseONDuration",				BasicData_Double,	&pointScan->globalPointScanSettings.stimPulseONDuration},
-																	{"PulseOFFDuration",			BasicData_Double,	&pointScan->globalPointScanSettings.stimPulseOFFDuration} };
+	DAQLabXMLNode					pointSettingsAttr[] 		= { {"NHoldBurst",					BasicData_UInt,		&nHoldBurst},
+																	{"Hold", 						BasicData_Double, 	&holdTime},
+																	{"HoldBurstPeriod",				BasicData_Double,	&holdBurstPeriod},
+																	{"HoldBurstPeriodIncrement",	BasicData_Double,	&holdBurstPeriodIncr},
+																	{"StimulationDelay",			BasicData_Double,	&stimDelay},
+																	{"NPulses",						BasicData_UInt,		&nStimPulses},
+																	{"PulseONDuration",				BasicData_Double,	&stimPulseONDuration},
+																	{"PulseOFFDuration",			BasicData_Double,	&stimPulseOFFDuration} };
+	
+	nullChk( pointScanSettings = init_PointScanSettings_type(holdTime, nHoldBurst, holdBurstPeriod, holdBurstPeriodIncr, stimDelay, stimPulseONDuration, 
+								 stimPulseOFFDuration, nStimPulses, (PointJumpMethods)jumpMethod, record, stimulate, nIntegration, nSequenceRepeat, 
+								 startDelayInitVal, startDelayIncrement, repeatWait) );
+	nullChk( pointScan = init_PointScan_type(&pointScanSettings) );
 	
 	// get settings
 	errChk( DLGetXMLElementAttributes(jumpSettingsXMLElement, jumpSettingsAttr, NumElem(jumpSettingsAttr)) ); 
 	errChk( DLGetXMLElementAttributes(pointSettingsXMLElement, pointSettingsAttr, NumElem(pointSettingsAttr)) );
-	pointScan->jumpMethod = jumpMethod;
 	
 	// replace existing settings if there are any
 	discard_PointScan_type(&scanEngine->pointScan);
@@ -2176,6 +2202,8 @@ SkipLoad:
 Error:
 		
 	// cleanup
+	discard_PointScanSettings_type(&pointScanSettings);
+	
 	OKfreeCAHndl(jumpSettingsXMLElement);
 	OKfreeCAHndl(pointSettingsXMLElement);
 	
@@ -5518,10 +5546,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 				case PointTab_Mode:
 					
 					GetCtrlIndex(panel, control, &itemIdx);
-					scanEngine->pointScan->jumpMethod = (PointJumpMethods) itemIdx;
+					scanEngine->pointScan->globalPointScanSettings->jumpMethod = (PointJumpMethods) itemIdx;
 					
 					// do not allow recording for point group
-					switch (scanEngine->pointScan->jumpMethod) {
+					switch (scanEngine->pointScan->globalPointScanSettings->jumpMethod) {
 							
 						case PointJump_SinglePoints:
 							
@@ -5530,13 +5558,13 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						case PointJump_PointGroup:
 						case PointJump_IncrementalPointGroup:
 							
-							scanEngine->pointScan->record = FALSE;
+							scanEngine->pointScan->globalPointScanSettings->record = FALSE;
 							SetCtrlVal(panel, PointTab_Record, FALSE);
-							SetRectRasterScanEnginePointScanRecordUI(panel, scanEngine->pointScan->record);
+							SetRectRasterScanEnginePointScanRecordUI(panel, scanEngine->pointScan->globalPointScanSettings->record);
 							break;
 					}
 					
-					SetRectRasterScanEnginePointScanJumpModeUI(panel, scanEngine->pointScan->jumpMethod);
+					SetRectRasterScanEnginePointScanJumpModeUI(panel, scanEngine->pointScan->globalPointScanSettings->jumpMethod);
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 					break;
 				
@@ -5546,23 +5574,23 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 				case PointTab_Record:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan->record);
-					SetRectRasterScanEnginePointScanRecordUI(panel, scanEngine->pointScan->record); 
+					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings->record);
+					SetRectRasterScanEnginePointScanRecordUI(panel, scanEngine->pointScan->globalPointScanSettings->record); 
 					break;
 					
 				case PointTab_NIntegration:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan->nIntegration);
+					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings->nIntegration);
 					break;
 					
 				case PointTab_Stimulate:
 					
 					// UI
-					GetCtrlVal(panel, control, &scanEngine->pointScan->stimulate);
-					SetRectRasterScanEnginePointScanStimulateUI(panel, scanEngine->pointScan->stimulate);
+					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings->stimulate);
+					SetRectRasterScanEnginePointScanStimulateUI(panel, scanEngine->pointScan->globalPointScanSettings->stimulate);
 					
 					// VChan
-					if (scanEngine->pointScan->stimulate)
+					if (scanEngine->pointScan->globalPointScanSettings->stimulate)
 						SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, TRUE);
 					else
 						SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, FALSE);
@@ -5571,7 +5599,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 			
 				case PointTab_NHoldBurst:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings.nHoldBurst); 
+					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings->nHoldBurst); 
 					break;
 					
 				case PointTab_Hold:
@@ -5584,24 +5612,24 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					holdTime = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, holdTime);
 						
 					// if hold time is shorter than stimulation delay plus stimulation, then make delay 0 and use only one pulse
-					stimTime = scanEngine->pointScan->globalPointScanSettings.stimDelay + scanEngine->pointScan->globalPointScanSettings.nStimPulses * 
-							   scanEngine->pointScan->globalPointScanSettings.stimPulseONDuration + (scanEngine->pointScan->globalPointScanSettings.nStimPulses - 1) *
-							   scanEngine->pointScan->globalPointScanSettings.stimPulseOFFDuration;
+					stimTime = scanEngine->pointScan->globalPointScanSettings->stimDelay + scanEngine->pointScan->globalPointScanSettings->nStimPulses * 
+							   scanEngine->pointScan->globalPointScanSettings->stimPulseONDuration + (scanEngine->pointScan->globalPointScanSettings->nStimPulses - 1) *
+							   scanEngine->pointScan->globalPointScanSettings->stimPulseOFFDuration;
 					
 					if (stimTime > holdTime) {
 						// adjust stimulation to fit within holding time
-						scanEngine->pointScan->globalPointScanSettings.stimDelay = 0;
-						SetCtrlVal(panel, PointTab_StimDelay, scanEngine->pointScan->globalPointScanSettings.stimDelay);
-						scanEngine->pointScan->globalPointScanSettings.nStimPulses = 1;
-						SetCtrlVal(panel, PointTab_NPulses, scanEngine->pointScan->globalPointScanSettings.nStimPulses);
-						scanEngine->pointScan->globalPointScanSettings.stimPulseONDuration = holdTime;
-						SetCtrlVal(panel, PointTab_PulseON, scanEngine->pointScan->globalPointScanSettings.stimPulseONDuration);
+						scanEngine->pointScan->globalPointScanSettings->stimDelay = 0;
+						SetCtrlVal(panel, PointTab_StimDelay, scanEngine->pointScan->globalPointScanSettings->stimDelay);
+						scanEngine->pointScan->globalPointScanSettings->nStimPulses = 1;
+						SetCtrlVal(panel, PointTab_NPulses, scanEngine->pointScan->globalPointScanSettings->nStimPulses);
+						scanEngine->pointScan->globalPointScanSettings->stimPulseONDuration = holdTime;
+						SetCtrlVal(panel, PointTab_PulseON, scanEngine->pointScan->globalPointScanSettings->stimPulseONDuration);
 						SetCtrlAttribute(panel, PointTab_PulseOFF, ATTR_DIMMED, TRUE);
 					}
 							   
 					// update in scan engine and UI
-					scanEngine->pointScan->globalPointScanSettings.holdTime = holdTime;
-					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings.holdTime);
+					scanEngine->pointScan->globalPointScanSettings->holdTime = holdTime;
+					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings->holdTime);
 					// update minimum point jump period
 					//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					break;
@@ -5620,13 +5648,13 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					//---------------
 					
-					scanEngine->pointScan->globalPointScanSettings.holdBurstPeriod = holdBurstPeriod;
-					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings.holdBurstPeriod); 
+					scanEngine->pointScan->globalPointScanSettings->holdBurstPeriod = holdBurstPeriod;
+					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings->holdBurstPeriod); 
 					break;
 					
 				case PointTab_HoldBurstPeriodIncr:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings.holdBurstPeriodIncr);
+					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings->holdBurstPeriodIncr);
 					
 					break;
 					
@@ -5640,14 +5668,14 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					stimDelay = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, stimDelay);
 						
 					// calculate resulting stimulation time and check if it fits within the holding time
-					stimTime = stimDelay + scanEngine->pointScan->globalPointScanSettings.nStimPulses * scanEngine->pointScan->globalPointScanSettings.stimPulseONDuration + 
-							   (scanEngine->pointScan->globalPointScanSettings.nStimPulses - 1) * scanEngine->pointScan->globalPointScanSettings.stimPulseOFFDuration;
+					stimTime = stimDelay + scanEngine->pointScan->globalPointScanSettings->nStimPulses * scanEngine->pointScan->globalPointScanSettings->stimPulseONDuration + 
+							   (scanEngine->pointScan->globalPointScanSettings->nStimPulses - 1) * scanEngine->pointScan->globalPointScanSettings->stimPulseOFFDuration;
 					
 					// update stimulation delay if stimulation time does not exceed holding time
-					if (stimTime <= scanEngine->pointScan->globalPointScanSettings.holdTime)
-						scanEngine->pointScan->globalPointScanSettings.stimDelay = stimDelay;
+					if (stimTime <= scanEngine->pointScan->globalPointScanSettings->holdTime)
+						scanEngine->pointScan->globalPointScanSettings->stimDelay = stimDelay;
 						
-					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings.stimDelay); 
+					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings->stimDelay); 
 					break;
 					
 				case PointTab_NPulses:
@@ -5657,14 +5685,14 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &nPulses);
 					
 					// calculate resulting stimulation time and check if it fits within the holding time
-					stimTime = scanEngine->pointScan->globalPointScanSettings.stimDelay + nPulses * scanEngine->pointScan->globalPointScanSettings.stimPulseONDuration + 
-							   (nPulses - 1) * scanEngine->pointScan->globalPointScanSettings.stimPulseOFFDuration;
+					stimTime = scanEngine->pointScan->globalPointScanSettings->stimDelay + nPulses * scanEngine->pointScan->globalPointScanSettings->stimPulseONDuration + 
+							   (nPulses - 1) * scanEngine->pointScan->globalPointScanSettings->stimPulseOFFDuration;
 					
 					// update nPulses if stimulation time does not exceed holding time
-					if (stimTime <= scanEngine->pointScan->globalPointScanSettings.holdTime)
-						scanEngine->pointScan->globalPointScanSettings.nStimPulses = nPulses;
+					if (stimTime <= scanEngine->pointScan->globalPointScanSettings->holdTime)
+						scanEngine->pointScan->globalPointScanSettings->nStimPulses = nPulses;
 						
-					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings.nStimPulses);
+					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings->nStimPulses);
 					break;
 					
 				case PointTab_PulseON:
@@ -5676,14 +5704,14 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					pulseONDuration = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, pulseONDuration);
 					
 					// calculate resulting stimulation time and check if it fits within the holding time
-					stimTime = scanEngine->pointScan->globalPointScanSettings.stimDelay + scanEngine->pointScan->globalPointScanSettings.nStimPulses * 
-							    pulseONDuration + (scanEngine->pointScan->globalPointScanSettings.nStimPulses - 1) * scanEngine->pointScan->globalPointScanSettings.stimPulseOFFDuration;
+					stimTime = scanEngine->pointScan->globalPointScanSettings->stimDelay + scanEngine->pointScan->globalPointScanSettings->nStimPulses * 
+							    pulseONDuration + (scanEngine->pointScan->globalPointScanSettings->nStimPulses - 1) * scanEngine->pointScan->globalPointScanSettings->stimPulseOFFDuration;
 					
 					// update pulseON duration if stimulation time does not exceed holding time
-					if (stimTime <= scanEngine->pointScan->globalPointScanSettings.holdTime)
-						scanEngine->pointScan->globalPointScanSettings.stimPulseONDuration = pulseONDuration;
+					if (stimTime <= scanEngine->pointScan->globalPointScanSettings->holdTime)
+						scanEngine->pointScan->globalPointScanSettings->stimPulseONDuration = pulseONDuration;
 						
-					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings.stimPulseONDuration); 
+					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings->stimPulseONDuration); 
 					break;
 					
 				case PointTab_PulseOFF:
@@ -5695,46 +5723,46 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					pulseOFFDuration = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, pulseOFFDuration);
 					
 					// calculate resulting stimulation time and check if it fits within the holding time
-					stimTime = scanEngine->pointScan->globalPointScanSettings.stimDelay + scanEngine->pointScan->globalPointScanSettings.nStimPulses * 
-							    scanEngine->pointScan->globalPointScanSettings.stimPulseONDuration + (scanEngine->pointScan->globalPointScanSettings.nStimPulses - 1) * pulseOFFDuration;
+					stimTime = scanEngine->pointScan->globalPointScanSettings->stimDelay + scanEngine->pointScan->globalPointScanSettings->nStimPulses * 
+							    scanEngine->pointScan->globalPointScanSettings->stimPulseONDuration + (scanEngine->pointScan->globalPointScanSettings->nStimPulses - 1) * pulseOFFDuration;
 					
 					// update pulseON duration if stimulation time does not exceed holding time
-					if (stimTime <= scanEngine->pointScan->globalPointScanSettings.holdTime)
-						scanEngine->pointScan->globalPointScanSettings.stimPulseOFFDuration = pulseOFFDuration;
+					if (stimTime <= scanEngine->pointScan->globalPointScanSettings->holdTime)
+						scanEngine->pointScan->globalPointScanSettings->stimPulseOFFDuration = pulseOFFDuration;
 						
-					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings.stimPulseOFFDuration); 
+					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings->stimPulseOFFDuration); 
 					break;
 					
 				case PointTab_Repeat:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan->nSequenceRepeat);
+					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings->nSequenceRepeat);
 					break;
 					
 				case PointTab_RepeatWait:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan->repeatWait);
+					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings->repeatWait);
 					break;
 					
 				case PointTab_StartDelay:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan->startDelayInitVal);
+					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings->startDelayInitVal);
 					
 					// round up to a multiple of galvo sampling
-					scanEngine->pointScan->startDelayInitVal = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, scanEngine->pointScan->startDelayInitVal);
+					scanEngine->pointScan->globalPointScanSettings->startDelayInitVal = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, scanEngine->pointScan->globalPointScanSettings->startDelayInitVal);
 					
 					// make sure here that value is not smaller than the time needed to jump from parked position to the point ROI
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 					
-					SetCtrlVal(panel, control, scanEngine->pointScan->startDelayInitVal);
+					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings->startDelayInitVal);
 					break;
 				
 				case PointTab_StartDelayIncrement:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan->startDelayIncrement);
+					GetCtrlVal(panel, control, &scanEngine->pointScan->globalPointScanSettings->startDelayIncrement);
 					
 					// round up to a multiple of galvo sampling
-					scanEngine->pointScan->startDelayIncrement = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, scanEngine->pointScan->startDelayIncrement);
-					SetCtrlVal(panel, control, scanEngine->pointScan->startDelayIncrement);
+					scanEngine->pointScan->globalPointScanSettings->startDelayIncrement = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, scanEngine->pointScan->globalPointScanSettings->startDelayIncrement);
+					SetCtrlVal(panel, control, scanEngine->pointScan->globalPointScanSettings->startDelayIncrement);
 					break;
 					
 			}
@@ -6553,7 +6581,7 @@ INIT_ERR
 	// Calculate galvo jump voltages
 	//-----------------------------------------------
 	
-	switch (scanEngine->pointScan->jumpMethod) {
+	switch (scanEngine->pointScan->globalPointScanSettings->jumpMethod) {
 			
 		case PointJump_SinglePoints:
 			
@@ -6639,14 +6667,14 @@ INIT_ERR
 	
 	// add extra hold time such that this time plus the response delays make up the target hold time
 	for (size_t i = 1; i < pointScan->nJumpTimes; i++) {
-		extraHoldTime = pointScan->globalPointScanSettings.holdTime - pointScan->responseDelays[i];
+		extraHoldTime = pointScan->globalPointScanSettings->holdTime - pointScan->responseDelays[i];
 		if (extraHoldTime < 0.0)
 			extraHoldTime = 0.0;  // in this case the entire galvo hold period will fall within the galvo response time (the galvos received a command signal but did not leave yet the ROI within the calibrated resolution)
 	
 		totalExtraHoldTime += extraHoldTime;	
 	}
 		
-	for (size_t holdBurstIdx = 0; holdBurstIdx < pointScan->globalPointScanSettings.nHoldBurst; holdBurstIdx++) {
+	for (size_t holdBurstIdx = 0; holdBurstIdx < pointScan->globalPointScanSettings->nHoldBurst; holdBurstIdx++) {
 	
 		// initialize total jump time
 		totalJumpTime = totalPointJumpTime + totalExtraHoldTime;
@@ -6705,10 +6733,10 @@ INIT_ERR
 							   
 		// calculate number of samples during galvo position holding time at a point ROI
 		nExtraStartDelaySamples	= (size_t)RoundRealToNearestInteger(extraStartDelay * 1e-3 * scanEngine->galvoSamplingRate);
-		nHoldSamples 			= (size_t)RoundRealToNearestInteger(pointScan->globalPointScanSettings.holdTime * 1e-3 * scanEngine->galvoSamplingRate);
-		nStimPulseONSamples 	= (size_t)RoundRealToNearestInteger(pointScan->globalPointScanSettings.stimPulseONDuration * 1e-3 * scanEngine->galvoSamplingRate);
-		nStimPulseOFFSamples 	= (size_t)RoundRealToNearestInteger(pointScan->globalPointScanSettings.stimPulseOFFDuration * 1e-3 * scanEngine->galvoSamplingRate);
-		nStimPulseDelaySamples	= (size_t)RoundRealToNearestInteger(pointScan->globalPointScanSettings.stimDelay * 1e-3 * scanEngine->galvoSamplingRate);
+		nHoldSamples 			= (size_t)RoundRealToNearestInteger(pointScan->globalPointScanSettings->holdTime * 1e-3 * scanEngine->galvoSamplingRate);
+		nStimPulseONSamples 	= (size_t)RoundRealToNearestInteger(pointScan->globalPointScanSettings->stimPulseONDuration * 1e-3 * scanEngine->galvoSamplingRate);
+		nStimPulseOFFSamples 	= (size_t)RoundRealToNearestInteger(pointScan->globalPointScanSettings->stimPulseOFFDuration * 1e-3 * scanEngine->galvoSamplingRate);
+		nStimPulseDelaySamples	= (size_t)RoundRealToNearestInteger(pointScan->globalPointScanSettings->stimDelay * 1e-3 * scanEngine->galvoSamplingRate);
 	
 		// keep galvos parked during the extra start delay (the extra start delay + jump time from parked position to 1st point ROI is the start delay)
 		if (nExtraStartDelaySamples) {
@@ -6719,7 +6747,7 @@ INIT_ERR
 		nSamples = nPreviousGalvoJumpSamples + nExtraStartDelaySamples;
 		for (size_t i = 0; i < pointScan->nJumpTimes - 1; i++) {
 		
-			extraHoldTime = pointScan->globalPointScanSettings.holdTime - pointScan->responseDelays[i+1];
+			extraHoldTime = pointScan->globalPointScanSettings->holdTime - pointScan->responseDelays[i+1];
 			if (extraHoldTime < 0.0)
 				extraHoldTime = 0.0;  // in this case the entire galvo hold period will fall within the galvo response time (the galvos received a command signal but did not leave yet the ROI within the calibrated resolution)
 		
@@ -6737,7 +6765,7 @@ INIT_ERR
 		
 			// set ROI stimulate signal
 			if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIShutter))
-				for (uInt32 pulse = 0; pulse < pointScan->globalPointScanSettings.nStimPulses; pulse++)
+				for (uInt32 pulse = 0; pulse < pointScan->globalPointScanSettings->nStimPulses; pulse++)
 					for (size_t j = nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples + nStimPulseOFFSamples); 
 						j < nSamples + nJumpSamples + nStimPulseDelaySamples + pulse * (nStimPulseONSamples+nStimPulseOFFSamples) + nStimPulseONSamples; j++)
 						ROIShutterSignal[j] = TRUE;
@@ -6750,8 +6778,8 @@ INIT_ERR
 		Set1D(slowAxisJumpSignal + nSamples, nGalvoJumpSamples - nSamples, slowAxisVoltages[nVoltages - 1]);
 	
 		// update start delay
-		if (pointScan->globalPointScanSettings.nHoldBurst > 1) {
-			pointScan->startDelay = pointScan->globalPointScanSettings.holdBurstPeriod + pointScan->globalPointScanSettings.holdBurstPeriodIncr - (totalJumpTime - extraStartDelay - pointScan->jumpTimes[0]);
+		if (pointScan->globalPointScanSettings->nHoldBurst > 1) {
+			pointScan->startDelay = pointScan->globalPointScanSettings->holdBurstPeriod + pointScan->globalPointScanSettings->holdBurstPeriodIncr - (totalJumpTime - extraStartDelay - pointScan->jumpTimes[0]);
 			if (pointScan->startDelay < 0.0)
 				SET_ERR(NonResRectRasterScan_GeneratePointJumpSignals_Err_HoldBurstTooShort, "Hold burst period is too short.");
 		}
@@ -7589,8 +7617,8 @@ INIT_ERR
 	// Process waveform
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
 	
-	size_t nHoldSamples = (size_t)RoundRealToNearestInteger(rectRaster->pointScan->globalPointScanSettings.holdTime * 1e-3 * rectRaster->galvoSamplingRate);
-	errChk( IntegrateWaveform(&pointBuffer->integratedPixels, pointBuffer->rawPixels, pointBuffer->nSkipPixels, pointBuffer->nSkipPixels + nHoldSamples, rectRaster->pointScan->nIntegration, &errorInfo.errMsg) );
+	size_t nHoldSamples = (size_t)RoundRealToNearestInteger(rectRaster->pointScan->globalPointScanSettings->holdTime * 1e-3 * rectRaster->galvoSamplingRate);
+	errChk( IntegrateWaveform(&pointBuffer->integratedPixels, pointBuffer->rawPixels, pointBuffer->nSkipPixels, pointBuffer->nSkipPixels + nHoldSamples, rectRaster->pointScan->globalPointScanSettings->nIntegration, &errorInfo.errMsg) );
 	discard_Waveform_type(&pointBuffer->rawPixels);
 	
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -7685,7 +7713,7 @@ INIT_ERR
 		pointJumps[nPointJumps - 1] = pointJump;
 	}
 	
-	switch (rectRaster->pointScan->jumpMethod) {
+	switch (rectRaster->pointScan->globalPointScanSettings->jumpMethod) {
 		
 		case PointJump_SinglePoints:
 			
@@ -7710,9 +7738,9 @@ INIT_ERR
 	}
 	
 	// update lower bound and coerce value
-	if (pointScan->startDelayInitVal <= pointScan->minStartDelay) {
-		pointScan->startDelayInitVal = pointScan->minStartDelay;
-		SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, pointScan->startDelayInitVal);
+	if (pointScan->globalPointScanSettings->startDelayInitVal <= pointScan->minStartDelay) {
+		pointScan->globalPointScanSettings->startDelayInitVal = pointScan->minStartDelay;
+		SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, pointScan->globalPointScanSettings->startDelayInitVal);
 	}
 	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, ATTR_MIN_VALUE, pointScan->minStartDelay);  
 
@@ -7867,7 +7895,7 @@ static double NonResRectRasterScan_RoundToGalvoSampling (RectRaster_type* scanEn
 	return ceil(time * 1e-3 * scanEngine->galvoSamplingRate) * 1e3/scanEngine->galvoSamplingRate;
 }
 
-static PointScan_type* init_PointScan_type (void)
+static PointScan_type* init_PointScan_type (PointScanSettings_type** pointScanSettingsPtr)
 {
 INIT_ERR
 
@@ -7875,18 +7903,10 @@ INIT_ERR
 	if (!pointScan) return NULL;
 	
 	// init
-	pointScan->jumpMethod									= PointJump_SinglePoints;
-	pointScan->record										= FALSE;
-	pointScan->stimulate									= FALSE;
-	pointScan->startDelayInitVal							= 0;
 	pointScan->startDelay									= 0;
-	pointScan->startDelayIncrement							= 0;
 	pointScan->minStartDelay								= 0;
 	pointScan->sequenceDuration								= 0;
 	pointScan->minSequencePeriod							= 0;
-	pointScan->nSequenceRepeat								= 1;
-	pointScan->repeatWait									= 0;
-	pointScan->nIntegration									= 1;
 	pointScan->pointJumps									= 0;
 	pointScan->currentActivePoint							= 0;
 	pointScan->nPointsInGroup								= 0;
@@ -7894,16 +7914,12 @@ INIT_ERR
 	pointScan->responseDelays								= NULL;
 	
 	// hold settings
-	pointScan->globalPointScanSettings.nHoldBurst			= 1;
-	pointScan->globalPointScanSettings.holdTime				= NonResGalvoRasterScan_Default_HoldTime;
-	pointScan->globalPointScanSettings.holdBurstPeriod		= 0; // will be determined by the point ROI selection.
-	pointScan->globalPointScanSettings.holdBurstPeriodIncr	= 0;
-	
-	// stimulation settings
-	pointScan->globalPointScanSettings.nStimPulses			= 1;
-	pointScan->globalPointScanSettings.stimDelay			= 0; // will be determined by the point ROI selection.
-	pointScan->globalPointScanSettings.stimPulseOFFDuration = NonResGalvoRasterScan_Default_StimPulseOFFDuration;
-	pointScan->globalPointScanSettings.stimPulseONDuration 	= NonResGalvoRasterScan_Default_StimPulseONDuration;
+	if (pointScanSettingsPtr) {
+		pointScan->globalPointScanSettings					= *pointScanSettingsPtr;
+		*pointScanSettingsPtr								= NULL;
+	}
+	else
+		pointScan->globalPointScanSettings					= NULL;
 	
 	// allocate
 	nullChk( pointScan->pointJumps	= ListCreate(sizeof(PointJump_type*)) ); 
@@ -7933,19 +7949,36 @@ static void discard_PointScan_type (PointScan_type** pointScanPtr)
 	OKfree(pointScan->jumpTimes);
 	OKfree(pointScan->responseDelays);
 	
+	discard_PointScanSettings_type(&pointScan->globalPointScanSettings);
+	
 	OKfree(*pointScanPtr);
 }
 
 static PointScanSettings_type* init_PointScanSettings_type (double holdTime, uInt32 nHoldBurst, double holdBurstPeriod, double holdBurstPeriodIncr, double stimDelay,
-														    double stimPulseONDuration, double stimPulseOFFDuration, uInt32 nStimPulses)
+														    double stimPulseONDuration, double stimPulseOFFDuration, uInt32 nStimPulses, PointJumpMethods jumpMethod, 
+															BOOL record, BOOL stimulate, uInt32 nIntegration, uInt32 nSequenceRepeat, double startDelayInitVal,
+															double startDelayIncrement, double repeatWait)
 {
 	PointScanSettings_type* pointScanSet = malloc(sizeof(PointScanSettings_type));
 	if (!pointScanSet) return NULL;
 	
+	// jump settings
+	pointScanSet->jumpMethod			= jumpMethod;
+	pointScanSet->record				= record;
+	pointScanSet->stimulate				= stimulate;
+	pointScanSet->nIntegration			= nIntegration;
+	pointScanSet->nSequenceRepeat		= nSequenceRepeat;
+	pointScanSet->startDelayInitVal		= startDelayInitVal;
+	pointScanSet->startDelayIncrement	= startDelayIncrement;
+	pointScanSet->repeatWait			= repeatWait;
+	
+	// hold settings
 	pointScanSet->holdTime				= holdTime;
 	pointScanSet->nHoldBurst			= nHoldBurst;
 	pointScanSet->holdBurstPeriod		= holdBurstPeriod;
 	pointScanSet->holdBurstPeriodIncr	= holdBurstPeriodIncr;
+	
+	// stimulation settings
 	pointScanSet->stimDelay				= stimDelay;
 	pointScanSet->stimPulseONDuration	= stimPulseONDuration;
 	pointScanSet->stimPulseOFFDuration	= stimPulseOFFDuration;
@@ -8355,7 +8388,7 @@ static void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			for (uInt32 i = 0; i < scanEngine->baseClass.nScanChans; i++) {
 				
 				// activate/inactivate detection channels if recording is desired
-				if (scanEngine->pointScan->record)
+				if (scanEngine->pointScan->globalPointScanSettings->record)
 					SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan, TRUE);
 				else
 					SetVChanActive((VChan_type*)scanEngine->baseClass.scanChans[i]->detVChan, FALSE);
@@ -8372,7 +8405,7 @@ static void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			// inactivate composite image VChan
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanCompositeImage, FALSE);
 			
-			if (scanEngine->pointScan->record) { 
+			if (scanEngine->pointScan->globalPointScanSettings->record) { 
 				// N Pixels VChan
 				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanNPixels, TRUE);
 				// pixel sampling rate VChan
@@ -8392,7 +8425,7 @@ static void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIHold, TRUE);
 			
 			// activate ROI shutter VChan
-			if (scanEngine->pointScan->stimulate)
+			if (scanEngine->pointScan->globalPointScanSettings->stimulate)
 				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, TRUE);
 			else
 				SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, FALSE);
@@ -9597,14 +9630,14 @@ INIT_ERR
 				ResetRectRasterPointBuffer(engine->pointBuffers[i]);
 			
 			// set current active point and sequence
-			switch (engine->pointScan->jumpMethod) {
+			switch (engine->pointScan->globalPointScanSettings->jumpMethod) {
 							
 				case PointJump_SinglePoints:
 					
 					// update current active point
-					engine->pointScan->currentActivePoint = GetCurrentIterIndex(iterator)/engine->pointScan->nSequenceRepeat + 1;
+					engine->pointScan->currentActivePoint = GetCurrentIterIndex(iterator)/engine->pointScan->globalPointScanSettings->nSequenceRepeat + 1;
 					
-					currentSequenceRepeat = GetCurrentIterIndex(iterator)%engine->pointScan->nSequenceRepeat;
+					currentSequenceRepeat = GetCurrentIterIndex(iterator)%engine->pointScan->globalPointScanSettings->nSequenceRepeat;
 					
 					break;
 							
@@ -9617,9 +9650,9 @@ INIT_ERR
 				case PointJump_IncrementalPointGroup:
 					
 					// update number of points in group
-					engine->pointScan->nPointsInGroup = GetCurrentIterIndex(iterator)/engine->pointScan->nSequenceRepeat + 1;
+					engine->pointScan->nPointsInGroup = GetCurrentIterIndex(iterator)/engine->pointScan->globalPointScanSettings->nSequenceRepeat + 1;
 					
-					currentSequenceRepeat = GetCurrentIterIndex(iterator)%engine->pointScan->nSequenceRepeat; 
+					currentSequenceRepeat = GetCurrentIterIndex(iterator)%engine->pointScan->globalPointScanSettings->nSequenceRepeat; 
 					
 					break;
 			}
@@ -9628,7 +9661,7 @@ INIT_ERR
 			SetCtrlVal(engine->baseClass.pointScanPanHndl, PointTab_NRepeat, (uInt32)currentSequenceRepeat);
 			
 			// update start delay
-			engine->pointScan->startDelay = currentSequenceRepeat * engine->pointScan->startDelayIncrement + engine->pointScan->startDelayInitVal;
+			engine->pointScan->startDelay = currentSequenceRepeat * engine->pointScan->globalPointScanSettings->startDelayIncrement + engine->pointScan->globalPointScanSettings->startDelayInitVal;
 			
 			// send galvo and ROI timing waveforms
 			errChk ( NonResRectRasterScan_GeneratePointJumpSignals (engine, &errorInfo.errMsg) );  
@@ -9728,7 +9761,7 @@ INIT_ERR
 			
 			// update sequence repeats
 			// reset current repeat display
-			SetCtrlVal(engine->baseClass.pointScanPanHndl, PointTab_NRepeat, engine->pointScan->nSequenceRepeat);
+			SetCtrlVal(engine->baseClass.pointScanPanHndl, PointTab_NRepeat, engine->pointScan->globalPointScanSettings->nSequenceRepeat);
 			break;
 	}
 	
@@ -9963,24 +9996,24 @@ static void SetRectRasterTaskControllerSettings (RectRaster_type* scanEngine)
 			SetTaskControlMode(scanEngine->baseClass.taskControl, TASK_FINITE);
 
 			// set waiting time between iterations
-			SetTaskControlIterationsWait(scanEngine->baseClass.taskControl, scanEngine->pointScan->repeatWait);
+			SetTaskControlIterationsWait(scanEngine->baseClass.taskControl, scanEngine->pointScan->globalPointScanSettings->repeatWait);
 			
 			// set number of iterations
-			switch (scanEngine->pointScan->jumpMethod) {
+			switch (scanEngine->pointScan->globalPointScanSettings->jumpMethod) {
 							
 				case PointJump_SinglePoints:
 			
-					SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointScan->nSequenceRepeat * NonResRectRasterScan_GetNumActivePoints(scanEngine));
+					SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointScan->globalPointScanSettings->nSequenceRepeat * NonResRectRasterScan_GetNumActivePoints(scanEngine));
 					break;
 							
 				case PointJump_PointGroup:
 							
-					SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointScan->nSequenceRepeat);
+					SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointScan->globalPointScanSettings->nSequenceRepeat);
 					break;
 					
 				case PointJump_IncrementalPointGroup:
 					
-					SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointScan->nSequenceRepeat * NonResRectRasterScan_GetNumActivePoints(scanEngine));
+					SetTaskControlIterations(scanEngine->baseClass.taskControl, scanEngine->pointScan->globalPointScanSettings->nSequenceRepeat * NonResRectRasterScan_GetNumActivePoints(scanEngine));
 					break;
 			}
 			break;

@@ -2188,14 +2188,15 @@ INIT_ERR
 																	{"PulseONDuration",				BasicData_Double,	&stimPulseONDuration},
 																	{"PulseOFFDuration",			BasicData_Double,	&stimPulseOFFDuration} };
 	
+	// get settings
+	errChk( DLGetXMLElementAttributes(jumpSettingsXMLElement, jumpSettingsAttr, NumElem(jumpSettingsAttr)) ); 
+	errChk( DLGetXMLElementAttributes(pointSettingsXMLElement, pointSettingsAttr, NumElem(pointSettingsAttr)) );
+	
+	// store settings in data structures
 	nullChk( pointScanSettings = init_PointScanSettings_type(holdTime, nHoldBurst, holdBurstPeriod, holdBurstPeriodIncr, stimDelay, stimPulseONDuration, 
 								 stimPulseOFFDuration, nStimPulses, (PointJumpMethods)jumpMethod, record, stimulate, nIntegration, nSequenceRepeat, 
 								 startDelayInitVal, startDelayIncrement, repeatWait) );
 	nullChk( pointScan = init_PointScan_type(&pointScanSettings) );
-	
-	// get settings
-	errChk( DLGetXMLElementAttributes(jumpSettingsXMLElement, jumpSettingsAttr, NumElem(jumpSettingsAttr)) ); 
-	errChk( DLGetXMLElementAttributes(pointSettingsXMLElement, pointSettingsAttr, NumElem(pointSettingsAttr)) );
 	
 	// replace existing settings if there are any
 	discard_PointScan_type(&scanEngine->pointScan);

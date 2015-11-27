@@ -842,6 +842,9 @@ static int CVICALLBACK 					NonResRectRasterScan_MainPan_CB 					(int panel, int
 
 static int CVICALLBACK 					NonResRectRasterScan_FrameScanPan_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
+	// given a subregion frame scan 1-based list index from scanEngine->scanROIs list, this function sets the UI and scan engine data structures to scan the desired subregion 
+static int								NonResRectRasterScan_SetSubregionFrameScan			(RectRaster_type* rectRaster, size_t subregionIdx, char** errorMsg);
+
 static int CVICALLBACK 					NonResRectRasterScan_PointScanPan_CB		 		(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static int 								NonResRectRasterScan_ScanWidths						(RectRaster_type* scanEngine, char** errorMsg);
@@ -5437,6 +5440,10 @@ INIT_ERR
 					DeleteListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, itemIdx, 1);
 					ListRemoveItem(scanEngine->scanROIs, 0, itemIdx + 1);
 					
+					// update subregion scan settings to be in sync with the UI after deleting a list entry
+					GetCtrlIndex(panel, control, &itemIdx);
+					errChk( NonResRectRasterScan_SetSubregionFrameScan(scanEngine, itemIdx + 1, &errorInfo.errMsg) );
+					
 					break;
 					
 			}
@@ -5449,49 +5456,9 @@ INIT_ERR
 				case ScanTab_ROIs:
 					
 					int	itemIdx	= 0;
+					
 					GetCtrlIndex(panel, control, &itemIdx);
-					
-					//----------------------------------------------------
-					// Convert chosen subregion ROI to scan settings
-					//----------------------------------------------------
-					
-					Rect_type*	rectROI		= *(Rect_type**)ListGetPtrToItem(scanEngine->scanROIs, itemIdx+1);
-					
-					// adjust scan engine scan settings
-					/*
-					scanEngine->scanSettings.height			= rectROI->height;
-					scanEngine->scanSettings.heightOffset 	= scanEngine->parentFrameScanSettings.heightOffset + rectROI->top;
-					scanEngine->scanSettings.width			= rectROI->width;
-					scanEngine->scanSettings.widthOffset	= scanEngine->parentFrameScanSettings.widthOffset + rectROI->left;
-					scanEngine->scanSettings.pixSize		= scanEngine->parentFrameScanSettings.pixSize;
-					scanEngine->scanSettings.pixelDwellTime	= scanEngine->parentFrameScanSettings.pixelDwellTime;
-					*/
-					
-					scanEngine->scanSettings.height			= rectROI->height;
-					scanEngine->scanSettings.heightOffset 	= (rectROI->height + 2 * rectROI->top - (int)scanEngine->parentFrameScanSettings.height)/2;
-					scanEngine->scanSettings.width			= rectROI->width;
-					scanEngine->scanSettings.widthOffset	= (rectROI->width + 2 * rectROI->left - (int)scanEngine->parentFrameScanSettings.width)/2;
-					scanEngine->scanSettings.pixSize		= scanEngine->parentFrameScanSettings.pixSize;
-					scanEngine->scanSettings.pixelDwellTime	= scanEngine->parentFrameScanSettings.pixelDwellTime;
-					
-					//----------------------------------------------------
-					// Update UI scan settings
-					//----------------------------------------------------
-					
-					// height
-					SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, scanEngine->scanSettings.height * scanEngine->scanSettings.pixSize);
-					// width
-					char widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
-					Fmt(widthString, "%s<%f[p1]", scanEngine->scanSettings.width * scanEngine->scanSettings.pixSize);
-					SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Width, widthString); 
-					// update height and width offsets
-					SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_HeightOffset, scanEngine->scanSettings.heightOffset * scanEngine->scanSettings.pixSize); 
-					SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_WidthOffset, scanEngine->scanSettings.widthOffset * scanEngine->scanSettings.pixSize);
-					// update pixel size
-					SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, scanEngine->scanSettings.pixSize);
-					// update pixel dwell times
-					errChk( NonResRectRasterScan_PixelDwellTimes(scanEngine, &errorInfo.errMsg) ); 
-					
+					errChk( NonResRectRasterScan_SetSubregionFrameScan(scanEngine, itemIdx + 1, &errorInfo.errMsg) );
 					break;
 			}
 			
@@ -5528,6 +5495,47 @@ Error:
 PRINT_ERR
 
 	return 0;
+}
+
+static int NonResRectRasterScan_SetSubregionFrameScan (RectRaster_type* rectRaster, size_t subregionIdx, char** errorMsg)
+{
+INIT_ERR
+
+	//----------------------------------------------------
+	// Convert chosen subregion ROI to scan settings
+	//----------------------------------------------------
+	
+	Rect_type*	rectROI		= *(Rect_type**)ListGetPtrToItem(rectRaster->scanROIs, subregionIdx);
+	
+	// adjust scan engine scan settings
+	rectRaster->scanSettings.height			= rectROI->height;
+	rectRaster->scanSettings.heightOffset 	= (rectROI->height + 2 * rectROI->top - (int)rectRaster->parentFrameScanSettings.height)/2;
+	rectRaster->scanSettings.width			= rectROI->width;
+	rectRaster->scanSettings.widthOffset	= (rectROI->width + 2 * rectROI->left - (int)rectRaster->parentFrameScanSettings.width)/2;
+	rectRaster->scanSettings.pixSize		= rectRaster->parentFrameScanSettings.pixSize;
+	rectRaster->scanSettings.pixelDwellTime	= rectRaster->parentFrameScanSettings.pixelDwellTime;
+	
+	//----------------------------------------------------
+	// Update UI scan settings
+	//----------------------------------------------------
+	
+	// height
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_Height, rectRaster->scanSettings.height * rectRaster->scanSettings.pixSize);
+	// width
+	char widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
+	Fmt(widthString, "%s<%f[p1]", rectRaster->scanSettings.width * rectRaster->scanSettings.pixSize);
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_Width, widthString); 
+	// update height and width offsets
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, rectRaster->scanSettings.heightOffset * rectRaster->scanSettings.pixSize); 
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_WidthOffset, rectRaster->scanSettings.widthOffset * rectRaster->scanSettings.pixSize);
+	// update pixel size
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelSize, rectRaster->scanSettings.pixSize);
+	// update pixel dwell times
+	errChk( NonResRectRasterScan_PixelDwellTimes(rectRaster, &errorInfo.errMsg) );
+	
+Error:
+	
+RETURN_ERR
 }
 
 static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
@@ -8644,27 +8652,12 @@ INIT_ERR
 	}
 	ListClear(rectROIList);
 	
-	// add parent image ROI
-	Rect_type*	parentRectROI		= NULL;
-	RGBA_type	parentRectROIColor	= {.R = 0, .G = 0, .B = 0, .alpha = 255}; // transparent
-	
-	nullChk( parentRectROI = initalloc_Rect_type(NULL, "", parentRectROIColor, TRUE, 0, 0, scanEngine->scanSettings.height, scanEngine->scanSettings.width) );
-	
-	// insert parent ROI in UI list
-	InsertListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, 0, "parent", 0);
-	
-	// check parent image ROI list item, which means that if this item is selected, scanning will open a new window, otherwise the scanned image will be displayed in the same window
-	CheckListItem(scanEngine->baseClass.frameScanPanHndl, ScanTab_ROIs, 0, TRUE);
-	
-	// insert parent ROI in scan engine list
-	nullChk( ListInsertItem(scanEngine->scanROIs, &parentRectROI, END_OF_LIST) );
-	
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
 	// Set UI: Restore point jump and frame scan ROIs
 	//----------------------------------------------------------------------------------------------------------------------------------------------------
 	
 	nPointROIs			= 0;
-	nRectROIs			= 1;	// there is already the parent ROI in the UI and scan engine lists
+	nRectROIs			= 0;
 	
 	for (size_t i = 1; i <= nImageROIs; i++) {
 		ROI = *(ROI_type**)ListGetPtrToItem(imageROIList, i);

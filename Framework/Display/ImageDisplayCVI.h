@@ -34,6 +34,12 @@
 #define maxZoomLevel 		4
 		
 #define getByte(value, byteNum) ((value >> (8*byteNum)) & 0xff)
+		
+#define BUTNUM 				6
+#define CANVAS_MIN_HEIGHT	200
+#define CANVAS_MIN_WIDTH	200
+#define CANVAX_MAX_HEIGHT	1000
+#define CANVAS_MAX_WIDTH	1000
 
 //==============================================================================
 // Types

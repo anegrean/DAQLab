@@ -62,6 +62,9 @@ struct ImageDisplayCVI {
 //==============================================================================
 // Static global variables
 
+static int buttonArray[] = {DisplayPan_PICTUREBUTTON, DisplayPan_PICTUREBUTTON_2, DisplayPan_PICTUREBUTTON_3, DisplayPan_PICTUREBUTTON_4, DisplayPan_PICTUREBUTTON_5, DisplayPan_PICTUREBUTTON_6};
+
+
 //==============================================================================
 // Static functions
 
@@ -77,11 +80,15 @@ static int 						Zoom						(ImageDisplayCVI_type* display, char direction);
 
 static int CVICALLBACK 			CanvasPanCallback 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
+static int CVICALLBACK 			DisplayPanCtrlCallback 		(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+
 static int CVICALLBACK 			DisplayPanCallback			(int panel, int event, void *callbackData, int eventData1, int eventData2);
 
 void 							NormalizePixelArray			(ImageDisplayCVI_type* display, int **arrayPtr);
 
 static void 					Deserialize					(ImageDisplayCVI_type* display, int* array, int length);
+
+
 
 
 //==============================================================================
@@ -153,7 +160,6 @@ INIT_ERR
 	imgDisplay->bitmapBitArray		= NULL;
 	imgDisplay->crtImage			= NULL;
 	imgDisplay->ZoomLevel			= 0;
-
 	
 	// ALLOC Resources
 	//---------------------------------
@@ -169,7 +175,13 @@ INIT_ERR
 	SetPanelAttribute(imgDisplay->displayPanHndl, ATTR_CALLBACK_DATA, imgDisplay);
 	
 	// allow access to ImgDisplay
-	SetCtrlsInPanCBInfo(imgDisplay, CanvasPanCallback, imgDisplay->canvasPanHndl); 
+	SetCtrlsInPanCBInfo(imgDisplay, CanvasPanCallback, imgDisplay->canvasPanHndl);
+	SetCtrlsInPanCBInfo(imgDisplay, DisplayPanCtrlCallback, imgDisplay->displayPanHndl);
+	
+	
+	// configure visual elements (icons, controls size etc)
+	//setVisuals(imgDisplay);
+	
 	
 	// create image list
 	nullChk( imgDisplay->images = ListCreate(sizeof(Image_type*)) );
@@ -559,7 +571,8 @@ Error:
 static int CVICALLBACK CanvasPanCallback (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	ImageDisplayCVI_type* display = (ImageDisplayCVI_type*) callbackData;   
-
+	int state					  = 0;
+	
 	switch (event) {
 			
 		case EVENT_CLOSE:
@@ -570,23 +583,57 @@ static int CVICALLBACK CanvasPanCallback (int panel, int control, int event, voi
 		
 		case EVENT_RIGHT_CLICK:
 			
-			
-			
-			Zoom(display, 1);
+			GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON, &state); 
+			if(state)	
+				Zoom(display, 1);
 
 		break;
 		
 		case EVENT_LEFT_CLICK:
 			
-			Zoom(display, -1);
+			GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON, &state); 
+			if(state)	
+				Zoom(display, -1);
 		break;
 	}
 	
 	return 0;
 }
 
-static int CVICALLBACK DisplayPanCallback (int panel, int event, void *callbackData, int eventData1, int eventData2) 
+static int CVICALLBACK DisplayPanCtrlCallback (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+	ImageDisplayCVI_type* display = (ImageDisplayCVI_type*) callbackData;
+	switch(event) {
+		case EVENT_COMMIT:
+			 int state = 0;
+			 switch(control) {
+			 	case DisplayPan_PICTUREBUTTON:
+				
+				GetCtrlVal (display->displayPanHndl, control, &state);
+				 
+				for(int i = 0; i < BUTNUM; i++) {
+					SetCtrlVal(display->displayPanHndl, buttonArray[i], 0);
+				}
+				 
+				SetCtrlVal (display->displayPanHndl, control, !state);
+				break;
+				
+				default:
+					
+				for(int i = 0; i < BUTNUM; i++) {
+					SetCtrlVal(display->displayPanHndl, buttonArray[i], 0);
+				}
+				
+				break;
+					 
+			 };
+		break;
+	};
+	return 0;
+}
+
+static int CVICALLBACK DisplayPanCallback (int panel, int event, void *callbackData, int eventData1, int eventData2) 
+{  
 	switch (event) { 
 			
 		case EVENT_CLOSE:
@@ -647,7 +694,18 @@ INIT_ERR
 	Deserialize(display, display->resizedArray, newWidth * newHeight);
 
 	
+	if(newWidth < CANVAS_MIN_WIDTH) 
+		SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , CANVAS_MIN_WIDTH); 
+	else if (newWidth > CANVAS_MAX_WIDTH)
+		SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , CANVAS_MAX_WIDTH);
+	else 
 	SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , newWidth);
+	
+	if(newHeight < CANVAS_MIN_HEIGHT)
+		SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_HEIGHT, CANVAS_MIN_HEIGHT);
+	else if (newHeight > CANVAX_MAX_HEIGHT)
+		SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_HEIGHT, CANVAX_MAX_HEIGHT); 
+	else
 	SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_HEIGHT, newHeight);
 	
 	errChk( NewBitmap (-1, pixelDepth, display->imgWidth, display->imgHeight, NULL, display->bitmapBitArray, NULL, &display->imgBitmapID) );

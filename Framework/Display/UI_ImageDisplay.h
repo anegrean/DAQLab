@@ -15,6 +15,7 @@
 
 #define  CanvasPan                        1
 #define  CanvasPan_Canvas                 2       /* control type: canvas, callback function: (none) */
+#define  CanvasPan_SELECTION              3       /* control type: picture, callback function: (none) */
 
 #define  DisplayPan                       2
 #define  DisplayPan_NUMERICSLIDE          2       /* control type: scale, callback function: (none) */

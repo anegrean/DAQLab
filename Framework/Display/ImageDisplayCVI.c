@@ -78,15 +78,19 @@ static void 					BilinearResize				(int* input, int** outputPtr, int sourceWidth
 
 static int 						Zoom						(ImageDisplayCVI_type* display, char direction);
 
-static int CVICALLBACK 			CanvasPanCallback 			(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK 			CanvasCallback 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static int CVICALLBACK 			DisplayPanCtrlCallback 		(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 static int CVICALLBACK 			DisplayPanCallback			(int panel, int event, void *callbackData, int eventData1, int eventData2);
 
+static int CVICALLBACK 			CanvasPanelCallback 		(int panel, int event, void *callbackData, int eventData1, int eventData2);
+
 void 							NormalizePixelArray			(ImageDisplayCVI_type* display, int **arrayPtr);
 
 static void 					Deserialize					(ImageDisplayCVI_type* display, int* array, int length);
+
+static void 					DrawROIs					(ImageDisplayCVI_type* display);
 
 
 
@@ -174,9 +178,16 @@ INIT_ERR
 	SetPanelAttribute(imgDisplay->displayPanHndl, ATTR_CALLBACK_FUNCTION_POINTER, DisplayPanCallback);
 	SetPanelAttribute(imgDisplay->displayPanHndl, ATTR_CALLBACK_DATA, imgDisplay);
 	
+	SetPanelAttribute(imgDisplay->canvasPanHndl, ATTR_CALLBACK_FUNCTION_POINTER, CanvasPanelCallback);
+	SetPanelAttribute(imgDisplay->canvasPanHndl, ATTR_CALLBACK_DATA, imgDisplay);
+	
 	// allow access to ImgDisplay
-	SetCtrlsInPanCBInfo(imgDisplay, CanvasPanCallback, imgDisplay->canvasPanHndl);
+	SetCtrlsInPanCBInfo(imgDisplay, CanvasCallback, imgDisplay->canvasPanHndl);
 	SetCtrlsInPanCBInfo(imgDisplay, DisplayPanCtrlCallback, imgDisplay->displayPanHndl);
+	
+	// set Z plane priortiy for canvas and selection tool
+	SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_ZPLANE_POSITION, 0);
+    SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_SELECTION, ATTR_ZPLANE_POSITION, 1);
 	
 	
 	// configure visual elements (icons, controls size etc)
@@ -271,8 +282,6 @@ void DiscardImageList (ListType* imageListPtr)
 	OKfreeList(*imageListPtr);
 }
 
-
-// static int ConvertToBitArray (int BitArray[], int nPixels, void* pixelArray, ImageTypes imageType)
 
 static void ConvertToBitArray(ImageDisplayCVI_type* display, Image_type* image) 
 {
@@ -503,11 +512,10 @@ Error:
 	OKfree(pixArray);
 }
 
-//TODO : CHECK TIME FOR DISPLAY AFTER ZOOM CODE CLEANUP
+
 static int DisplayImageFunction (ImageDisplayCVI_type* imgDisplay, Image_type** imagePtr)
 {
 INIT_ERR 
-	float  start =  Timer();
 	
 	Image_type* 	image     		= *imagePtr;
 	int 			imgHeight 		= 0;
@@ -558,8 +566,6 @@ INIT_ERR
 	if (!panVisible)
 		DisplayPanel(imgDisplay->displayPanHndl); 
 	
-	float end =  Timer();
-	DebugPrintf(" Display took %f\n", end - start);
 	return 0;
 	
 Error: 
@@ -568,11 +574,11 @@ Error:
 	
 }
 
-static int CVICALLBACK CanvasPanCallback (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
+static int CVICALLBACK CanvasCallback (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	ImageDisplayCVI_type* display = (ImageDisplayCVI_type*) callbackData;   
-	int state					  = 0;
-	
+	ImageDisplayCVI_type* display 	= (ImageDisplayCVI_type*) callbackData;   
+	int 				  state	  	= 0;
+
 	switch (event) {
 			
 		case EVENT_CLOSE:
@@ -582,7 +588,7 @@ static int CVICALLBACK CanvasPanCallback (int panel, int control, int event, voi
 		break;
 		
 		case EVENT_RIGHT_CLICK:
-			
+			//if zoom button is toggled 
 			GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON, &state); 
 			if(state)	
 				Zoom(display, 1);
@@ -591,6 +597,7 @@ static int CVICALLBACK CanvasPanCallback (int panel, int control, int event, voi
 		
 		case EVENT_LEFT_CLICK:
 			
+			//if zoom button is toggled
 			GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON, &state); 
 			if(state)	
 				Zoom(display, -1);
@@ -609,22 +616,33 @@ static int CVICALLBACK DisplayPanCtrlCallback (int panel, int control, int event
 			 switch(control) {
 			 	case DisplayPan_PICTUREBUTTON:
 				
-				GetCtrlVal (display->displayPanHndl, control, &state);
+					GetCtrlVal (display->displayPanHndl, control, &state);
 				 
-				for(int i = 0; i < BUTNUM; i++) {
-					SetCtrlVal(display->displayPanHndl, buttonArray[i], 0);
-				}
+					for(int i = 0; i < BUTNUM; i++) {
+						SetCtrlVal(display->displayPanHndl, buttonArray[i], 0);
+					}
 				 
-				SetCtrlVal (display->displayPanHndl, control, !state);
-				break;
+					SetCtrlVal (display->displayPanHndl, control, !state);
+					break;
 				
+				case DisplayPan_PICTUREBUTTON_2:  
+			
+					GetCtrlVal (display->displayPanHndl, control, &state);
+				
+					for(int i = 0; i < BUTNUM; i++) {
+						SetCtrlVal(display->displayPanHndl, buttonArray[i], 0);
+					}
+				 
+					SetCtrlVal (display->displayPanHndl, control, !state);
+				 
+					break;
 				default:
 					
-				for(int i = 0; i < BUTNUM; i++) {
-					SetCtrlVal(display->displayPanHndl, buttonArray[i], 0);
-				}
+					for(int i = 0; i < BUTNUM; i++) {
+						SetCtrlVal(display->displayPanHndl, buttonArray[i], 0);
+					}
 				
-				break;
+					break;
 					 
 			 };
 		break;
@@ -639,18 +657,108 @@ static int CVICALLBACK DisplayPanCallback (int panel, int event, void *callbackD
 		case EVENT_CLOSE:
 			
 			HidePanel(panel);
-			
-		break;
-			
+			break;
+		
 	}
 	
 	return 0;
 	
 }
+
+int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData,
+        int eventData1, int eventData2)
+{
+	ImageDisplayCVI_type* display = (ImageDisplayCVI_type*) callbackData;
+    static int 			mouseDown = 0;
+    static Point oldp;
+    Point  newp;
+    static Rect oldr;
+    Rect   newr;
+    int    state;
+	
+	GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_2, &state); 
+	
+    switch (event) {
+			
+        case EVENT_LEFT_CLICK:
+			if(state) {
+	            mouseDown = 1;
+				
+				int x,y;
+				
+				if(eventData2 > display->imgWidth)
+					x = display->imgWidth;
+				else
+					x = eventData2;
+				
+				if(eventData1 > display->imgHeight)
+					y = display->imgHeight;
+				else
+					y = eventData1;
+				
+	            oldp = MakePoint (x, y);
+
+			}
+            break;
+        case EVENT_LEFT_CLICK_UP:
+   	         if(state) {	
+				mouseDown = 0;
+            	
+			
+                SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_VISIBLE, 0);
+                SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_WIDTH, 0);
+                SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_HEIGHT, 0);
+				
+				//refresh image
+				CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
+       	     };
+            break;
+        case EVENT_MOUSE_POINTER_MOVE:
+			if(state) {
+				
+				if(eventData2 > display->imgWidth || eventData1 > display->imgHeight)
+					return 1;
+				
+	            if (mouseDown) {
+
+	                SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_VISIBLE, 1);
+
+	                newp = MakePoint (eventData2, eventData1);
+	                if (newp.x > oldp.x && newp.y > oldp.y) {
+	                    newr = MakeRect (oldp.y, oldp.x, newp.y - oldp.y, newp.x - oldp.x);
+	                }
+	                else if (newp.x > oldp.x && newp.y < oldp.y) {
+	                    newr = MakeRect (newp.y, oldp.x, oldp.y - newp.y, newp.x - oldp.x);
+	                }
+	                else if (newp.x < oldp.x && newp.y > oldp.y) {
+	                    newr = MakeRect (oldp.y, newp.x, newp.y - oldp.y, oldp.x - newp.x);
+	                }
+	                else {
+	                    newr = MakeRect (newp.y, newp.x, oldp.y - newp.y, oldp.x - newp.x);
+	                }
+	                if (oldr.height || oldr.width) {
+	                    CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT); 
+	                }
+	                CanvasDrawRect (display->canvasPanHndl, CanvasPan_Canvas, newr, VAL_DRAW_FRAME);
+	                if (newr.width >= 0 && newr.height >= 0) {
+	                    SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_TOP, newr.top);
+	                    SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_LEFT, newr.left);
+	                    SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_WIDTH, newr.width);
+	                    SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_HEIGHT, newr.height);
+	                }
+	                memcpy (&oldr, &newr, sizeof (Rect));
+	            }
+			}
+            break;
+    }
+    return 0;
+}
+
+//==============
 static int Zoom (ImageDisplayCVI_type* display, char direction)
 {
 INIT_ERR 
-	float   start 				= Timer();
+
 	int 	newWidth 			= 0;
 	int 	newHeight 			= 0;
 	int 	imageWidth			= 0;
@@ -710,10 +818,7 @@ INIT_ERR
 	
 	errChk( NewBitmap (-1, pixelDepth, display->imgWidth, display->imgHeight, NULL, display->bitmapBitArray, NULL, &display->imgBitmapID) );
 	CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
-
-	float end =  Timer();
 	
-	DebugPrintf("Zoom took %f\n", end - start);
 Error:
 	
 	return errorInfo.error; 
@@ -794,3 +899,32 @@ static void BilinearResize(int* input, int** outputPtr, int sourceWidth, int sou
         }
     }
 }
+
+static void DrawROIs(ImageDisplayCVI_type* display) {
+	
+	ROI_type*	ROI_iterr;
+	int iterr = 0;
+	CanvasStartBatchDraw (display->canvasPanHndl, CanvasPan_Canvas);
+	
+	ROI_iterr = *(ROI_type**) ListGetPtrToItem(GetImageROIs(display->baseClass.image), iterr);
+	while (ROI_iterr != NULL) {
+	   if(ROI_iterr->active) {
+	   		if (ROI_iterr->ROIType == ROI_Rectangle)
+				break;
+	   	}
+		iterr++;
+	}
+};
+
+//TODO:
+
+/*
+
+1) Limit Rectangle and point selections to image extent. - Done
+
+2) Create separate function to overlay ROIs from an image, kept in Image_type
+
+3) Make point ROI button.
+
+4) Add ROIs to the image, both point or rectangle if spacebar is pressed while selecting.
+*/

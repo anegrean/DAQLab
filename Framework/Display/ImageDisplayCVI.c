@@ -634,8 +634,32 @@ static int CVICALLBACK DisplayPanCtrlCallback (int panel, int control, int event
 					}
 				 
 					SetCtrlVal (display->displayPanHndl, control, !state);
+					break;
+				
+				case DisplayPan_PICTUREBUTTON_3:  
+			
+					GetCtrlVal (display->displayPanHndl, control, &state);
+				
+					for(int i = 0; i < BUTNUM; i++) {
+						SetCtrlVal(display->displayPanHndl, buttonArray[i], 0);
+					}
+				 
+					SetCtrlVal (display->displayPanHndl, control, !state);
 				 
 					break;
+					
+				case DisplayPan_PICTUREBUTTON_4:  
+			
+					GetCtrlVal (display->displayPanHndl, control, &state);
+				
+					for(int i = 0; i < BUTNUM; i++) {
+						SetCtrlVal(display->displayPanHndl, buttonArray[i], 0);
+					}
+				 
+					SetCtrlVal (display->displayPanHndl, control, !state);
+				 
+					break;
+					
 				default:
 					
 					for(int i = 0; i < BUTNUM; i++) {
@@ -665,22 +689,23 @@ static int CVICALLBACK DisplayPanCallback (int panel, int event, void *callbackD
 	
 }
 
-int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData,
-        int eventData1, int eventData2)
+int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData, int eventData1, int eventData2)
 {
-	ImageDisplayCVI_type* display = (ImageDisplayCVI_type*) callbackData;
-    static int 			mouseDown = 0;
-    static Point oldp;
-    Point  newp;
-    static Rect oldr;
-    Rect   newr;
-    int    state;
+	ImageDisplayCVI_type* 	display 		= (ImageDisplayCVI_type*) callbackData;
+    static int 				mouseDown 		= 0;
+    static Point 			oldp;
+    Point  					newp;
+    static Rect 			oldr;
+    static Rect				newr;
+    int    					state;
 	
 	GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_2, &state); 
 	
     switch (event) {
-			
+		
         case EVENT_LEFT_CLICK:
+			
+			GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_2, &state);  
 			if(state) {
 	            mouseDown = 1;
 				
@@ -699,18 +724,80 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData,
 	            oldp = MakePoint (x, y);
 
 			}
+			GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_3, &state);
+			if(state) {
+				
+				int x,y;
+				
+				if(eventData2 > display->imgWidth)
+					x = display->imgWidth;
+				else
+					x = eventData2;
+				
+				if(eventData1 > display->imgHeight)
+					y = display->imgHeight;
+				else
+					y = eventData1;
+				
+				ListType	ROIlist		= 0;
+				
+				ROI_type*	newROI 		= NULL;
+				
+				RGBA_type	color 		= {.R = Default_ROI_R_Color, .G = Default_ROI_G_Color, .B = Default_ROI_B_Color, .alpha = Default_ROI_A_Color}; 
+				
+				ROIlist = GetImageROIs(display->baseClass.image);
+				
+				newROI = (ROI_type*)initalloc_Point_type(NULL, "", color, TRUE, y, x);
+				
+				newROI->ROIName = GetDefaultUniqueROIName(ROIlist); 
+				
+				Rect	textrect_point = { 	.top 		= y + ROILabel_YOffset,
+						 			 	   	.left 		= x + ROILabel_XOffset,						
+						 			 		.width 	= ROI_LABEL_WIDTH,
+						 			 		.height	= ROI_LABEL_HEIGHT	};
+				
+				CanvasDrawPoint(display->canvasPanHndl, CanvasPan_Canvas, MakePoint(x,y));
+				CanvasDrawText (display->canvasPanHndl, CanvasPan_Canvas, newROI->ROIName,VAL_APP_META_FONT,textrect_point, VAL_LOWER_LEFT);
+				
+				AddImageROI(display->baseClass.image, &newROI, NULL);   
+			}
             break;
         case EVENT_LEFT_CLICK_UP:
    	         if(state) {	
-				mouseDown = 0;
+				
+							mouseDown 	= 0;
             	
+				ListType	ROIlist		= 0;
+				
+				ROI_type*	newROI 		= NULL;
+				
+				RGBA_type	color 		= {.R = Default_ROI_R_Color, .G = Default_ROI_G_Color, .B = Default_ROI_B_Color, .alpha = Default_ROI_A_Color}; 
 			
                 SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_VISIBLE, 0);
                 SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_WIDTH, 0);
                 SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_HEIGHT, 0);
 				
-				//refresh image
+				ROIlist = GetImageROIs(display->baseClass.image); 
+				
+				newROI = (ROI_type*)initalloc_Rect_type(NULL, "", color, TRUE, newr.top, newr.left, newr.height, newr.width); 
+				
+				ROIlist = GetImageROIs(display->baseClass.image);
+				
+				newROI->ROIName = GetDefaultUniqueROIName(ROIlist);
+				
+				DebugPrintf("ROI is top %d left %d, width %d, height %d\n ", newr.top, newr.left, newr.width, newr.height);
+				
+							Rect	textrect = { .top 		= newr.top  + ROILabel_YOffset,
+						 			 .left 		= newr.left + ROILabel_XOffset,
+						 			 .width 	= ROI_LABEL_WIDTH,
+						 			 .height	= ROI_LABEL_HEIGHT	};
+				
+				CanvasDrawText (display->canvasPanHndl, CanvasPan_Canvas, newROI->ROIName,VAL_APP_META_FONT,textrect, VAL_LOWER_LEFT);   
+				
+				AddImageROI(display->baseClass.image, &newROI, NULL);
+
 				CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
+				DrawROIs(display);
        	     };
             break;
         case EVENT_MOUSE_POINTER_MOVE:
@@ -721,7 +808,7 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData,
 				
 	            if (mouseDown) {
 
-	                SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_VISIBLE, 1);
+	                
 
 	                newp = MakePoint (eventData2, eventData1);
 	                if (newp.x > oldp.x && newp.y > oldp.y) {
@@ -737,7 +824,8 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData,
 	                    newr = MakeRect (newp.y, newp.x, oldp.y - newp.y, oldp.x - newp.x);
 	                }
 	                if (oldr.height || oldr.width) {
-	                    CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT); 
+	                    CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
+						DrawROIs(display);
 	                }
 	                CanvasDrawRect (display->canvasPanHndl, CanvasPan_Canvas, newr, VAL_DRAW_FRAME);
 	                if (newr.width >= 0 && newr.height >= 0) {
@@ -745,6 +833,8 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData,
 	                    SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_LEFT, newr.left);
 	                    SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_WIDTH, newr.width);
 	                    SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_HEIGHT, newr.height);
+						
+						SetCtrlAttribute (display->canvasPanHndl, CanvasPan_SELECTION, ATTR_VISIBLE, 1);
 	                }
 	                memcpy (&oldr, &newr, sizeof (Rect));
 	            }
@@ -805,10 +895,11 @@ INIT_ERR
 	if(newWidth < CANVAS_MIN_WIDTH) 
 		SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , CANVAS_MIN_WIDTH); 
 	else if (newWidth > CANVAS_MAX_WIDTH)
-		SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , CANVAS_MAX_WIDTH);
+		SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , CANVAS_MAX_WIDTH);    
 	else 
-	SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , newWidth);
+		SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , newWidth);
 	
+	 
 	if(newHeight < CANVAS_MIN_HEIGHT)
 		SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_HEIGHT, CANVAS_MIN_HEIGHT);
 	else if (newHeight > CANVAX_MAX_HEIGHT)
@@ -818,6 +909,7 @@ INIT_ERR
 	
 	errChk( NewBitmap (-1, pixelDepth, display->imgWidth, display->imgHeight, NULL, display->bitmapBitArray, NULL, &display->imgBitmapID) );
 	CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
+	DrawROIs(display);
 	
 Error:
 	
@@ -900,31 +992,68 @@ static void BilinearResize(int* input, int** outputPtr, int sourceWidth, int sou
     }
 }
 
+
 static void DrawROIs(ImageDisplayCVI_type* display) {
 	
 	ROI_type*	ROI_iterr;
-	int iterr = 0;
-	CanvasStartBatchDraw (display->canvasPanHndl, CanvasPan_Canvas);
+	ListType	ROIlist				= GetImageROIs(display->baseClass.image);
+	size_t 		nROIs 				= ListNumItems(ROIlist);
+	float		magnify				= 0;    
 	
-	ROI_iterr = *(ROI_type**) ListGetPtrToItem(GetImageROIs(display->baseClass.image), iterr);
-	while (ROI_iterr != NULL) {
-	   if(ROI_iterr->active) {
-	   		if (ROI_iterr->ROIType == ROI_Rectangle)
-				break;
-	   	}
-		iterr++;
-	}
-};
+	CanvasStartBatchDraw (display->canvasPanHndl, CanvasPan_Canvas);
 
-//TODO:
+	for (int i = 0; i < nROIs; i++) {
+	   
+	   ROI_iterr = *(ROI_type**) ListGetPtrToItem(ROIlist, i);  
+	   
+	   if(ROI_iterr->active) {
+		   
+		    magnify = (1 + display->ZoomLevel * zoomFactor);
+	   		if (ROI_iterr->ROIType == ROI_Rectangle) {
+				
+				Rect		rect = { .top 		= ((Rect_type*)ROI_iterr)->top * magnify,
+						 			 .left 		= ((Rect_type*)ROI_iterr)->left * magnify,
+						 			 .width 	= ((Rect_type*)ROI_iterr)->width * magnify,
+						 			 .height	= ((Rect_type*)ROI_iterr)->height * magnify	};
+				
+				
+				Rect	textrect = { .top 		= ((Rect_type*)ROI_iterr)->top * magnify + ROILabel_YOffset,
+						 			 .left 		= ((Rect_type*)ROI_iterr)->left * magnify + ROILabel_XOffset,
+						 			 .width 	= ROI_LABEL_WIDTH,
+						 			 .height	= ROI_LABEL_HEIGHT	};
+				
+				CanvasDrawRect (display->canvasPanHndl, CanvasPan_Canvas, rect, VAL_DRAW_FRAME);
+				CanvasDrawText (display->canvasPanHndl, CanvasPan_Canvas, ROI_iterr->ROIName,VAL_APP_META_FONT,textrect, VAL_LOWER_LEFT);
+			}
+			
+			if (ROI_iterr->ROIType == ROI_Point) { 
+			
+				Point 		point = { .x = ((Point_type*)ROI_iterr)->x * magnify, 
+								  	  .y = ((Point_type*)ROI_iterr)->y * magnify	};
+			
+				Rect	textrect_point = { 	.top 		= point.y + ROILabel_YOffset,
+						 			 	   	.left 		= point.x + ROILabel_XOffset,
+						 			 		.width 	= ROI_LABEL_WIDTH,
+						 			 		.height	= ROI_LABEL_HEIGHT	};
+				
+				CanvasDrawPoint(display->canvasPanHndl, CanvasPan_Canvas, point);
+				CanvasDrawText (display->canvasPanHndl, CanvasPan_Canvas, ROI_iterr->ROIName,VAL_APP_META_FONT,textrect_point, VAL_LOWER_LEFT);
+					
+				
+			}
+	   	}
+	}
+	
+	CanvasEndBatchDraw (display->canvasPanHndl, CanvasPan_Canvas);  
+}
 
 /*
 
-1) Limit Rectangle and point selections to image extent. - Done
+to do:
 
-2) Create separate function to overlay ROIs from an image, kept in Image_type
-
-3) Make point ROI button.
-
-4) Add ROIs to the image, both point or rectangle if spacebar is pressed while selecting.
+1) Colors
+2) Conversion of ROIs when image zoom is not = 1
+3) Speed up of image update when exteding rectangle ROI
+4) Change point ROI marker from point to a crosshair (use lines).
+5) Implement ROI delete function pointer that is called by the scan engine when deleting ROIs. 
 */

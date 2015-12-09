@@ -50,6 +50,8 @@
 #define Default_ROI_G_Color					255	   	// green
 #define Default_ROI_B_Color					0		// blue
 #define Default_ROI_A_Color					0		// alpha
+		
+#define CROSS_LENGTH						6
 
 		
 //==============================================================================

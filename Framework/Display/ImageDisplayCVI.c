@@ -35,24 +35,23 @@ struct ImageDisplayCVI {
 	// DATA
 	//---------------------------------------------------------------------------------------------------------------
 	
-	ListType				images;				// List of Image_type* elements. Data in this image is used to update the display whenever needed. Note: do not modify this data directly!
-	BOOL					update;				// If True, the plot will display each time the latest waveform added to it. If False, the user can use the scrollbar to return to a previous plot. Default: True.
-	int						imgBitmapID;		// this is the handle to the image provided to the display canvas, it is updated from the "images" array, when needed.
-	unsigned char* 			bitmapBitArray;		// Array of bits used to create the bitmap image
-	int						nBytes;				// number of bytes in the bitmapBitArray;
-	int						imgHeight;			// image height
-	int 					imgWidth;			// image width
-	unsigned char			ZoomLevel;			// current Zoom level (can be 0,1,2,3,4)
-	Image_type* 			crtImage; 			// TODO replace with baseclass img
-	int*					interpolationArray; // array used to perform normalization ( squashing 4 bytes into an int) for the Bilinear interpolation
-	int*					resizedArray;		// array used to deserialize bytes from the integer into bitmapBitArray
-	
+	ListType				images;					// List of Image_type* elements. Data in this image is used to update the display whenever needed. Note: do not modify this data directly!
+	BOOL					update;					// If True, the plot will display each time the latest waveform added to it. If False, the user can use the scrollbar to return to a previous plot. Default: True.
+	int						imgBitmapID;			// this is the handle to the image provided to the display canvas, it is updated from the "images" array, when needed.
+	unsigned char* 			bitmapBitArray;			// Array of bits used to create the bitmap image
+	int						nBytes;					// number of bytes in the bitmapBitArray;
+	int						imgHeight;				// image height
+	int 					imgWidth;				// image width
+	unsigned char			ZoomLevel;				// current Zoom level (can be 0,1,2,3,4)
+	int*					interpolationArray; 	// array used to perform normalization ( squashing 4 bytes into an int) for the Bilinear interpolation
+	int*					resizedArray;			// array used to deserialize bytes from the integer into bitmapBitArray
+	float*					RGBOverlayBuffer[3];	// Image buffer used to sum up and overlay images from multiple RGB channels.
 	// UI
 	int						displayPanHndl;
 	int						canvasPanHndl;
 	int						menuBarHndl;
-	int						menuID_Close;
-	int						menuID_Save;
+	int						FilemenuID;
+	int						ImagemenuID;
 	
 	// CALLBACK
 	//WaveformDisplayCB_type	callbackFptr;
@@ -70,7 +69,7 @@ static int buttonArray[] = {DisplayPan_PICTUREBUTTON, DisplayPan_PICTUREBUTTON_2
 
 static void 					DiscardImageList 			(ListType* imageListPtr);
 
-static int						DisplayImageFunction		(ImageDisplayCVI_type* imgDisplay, Image_type** image);
+static int						DisplayImageFunction		(ImageDisplayCVI_type* imgDisplay, Image_type** image); // CPU 
 
 static void 					ConvertToBitArray			(ImageDisplayCVI_type* display, Image_type* image);
 
@@ -91,6 +90,10 @@ void 							NormalizePixelArray			(ImageDisplayCVI_type* display, int **arrayPtr
 static void 					Deserialize					(ImageDisplayCVI_type* display, int* array, int length);
 
 static void 					DrawROIs					(ImageDisplayCVI_type* display);
+
+void CVICALLBACK 				MenuSaveCB 					(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
+
+void CVICALLBACK 				MenuRestoreCB 				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 
 
 
@@ -189,9 +192,17 @@ INIT_ERR
 	SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_ZPLANE_POSITION, 0);
     SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_SELECTION, ATTR_ZPLANE_POSITION, 1);
 	
+	// set canvas pen color
 	
-	// configure visual elements (icons, controls size etc)
-	//setVisuals(imgDisplay);
+	SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_PEN_COLOR, VAL_GREEN); 
+	
+	//add menu items
+	imgDisplay->menuBarHndl = NewMenuBar(imgDisplay->displayPanHndl);
+	imgDisplay->FilemenuID = NewMenu (imgDisplay->menuBarHndl, "File", -1);
+	NewMenuItem (imgDisplay->menuBarHndl, imgDisplay->FilemenuID, "Save", -1, VAL_F2_VKEY, MenuSaveCB, imgDisplay);
+	
+	imgDisplay->ImagemenuID = NewMenu(imgDisplay->menuBarHndl, "Image", -1);
+	NewMenuItem(imgDisplay->menuBarHndl, imgDisplay->ImagemenuID, "Restore", -1, VAL_F1_VKEY, MenuRestoreCB, imgDisplay);
 	
 	
 	// create image list
@@ -698,15 +709,18 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData, i
     static Rect 			oldr;
     static Rect				newr;
     int    					state;
-	
 	GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_2, &state); 
 	
     switch (event) {
 		
         case EVENT_LEFT_CLICK:
 			
+			
+			//if selection ROI button is toggled 
 			GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_2, &state);  
 			if(state) {
+				
+				//mark that mouse button is down
 	            mouseDown = 1;
 				
 				int x,y;
@@ -721,9 +735,22 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData, i
 				else
 					y = eventData1;
 				
+				//Mark rectangle starting point
 	            oldp = MakePoint (x, y);
+				
+				
+				
+				//Draw all previous ROI's
+				DrawROIs(display);
+				
+				int canvasBitmap;
+				
+				//Update the ImgDisplay bitmap with the one with ROI's overlay, in order to avoid constantly redrawing the ROI's
+				GetCtrlDisplayBitmap (display->canvasPanHndl, CanvasPan_Canvas, 0, &canvasBitmap);
+				display->imgBitmapID = canvasBitmap;
 
 			}
+			//If ROI point button is toggled
 			GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_3, &state);
 			if(state) {
 				
@@ -743,11 +770,14 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData, i
 				
 				ROI_type*	newROI 		= NULL;
 				
+				
+				//default ROI color
 				RGBA_type	color 		= {.R = Default_ROI_R_Color, .G = Default_ROI_G_Color, .B = Default_ROI_B_Color, .alpha = Default_ROI_A_Color}; 
 				
 				ROIlist = GetImageROIs(display->baseClass.image);
 				
-				newROI = (ROI_type*)initalloc_Point_type(NULL, "", color, TRUE, y, x);
+				//create new point ROI
+				newROI = (ROI_type*)initalloc_Point_type(NULL, "", color, TRUE, x / (1 + display->ZoomLevel * zoomFactor), y / (1 + display->ZoomLevel * zoomFactor));
 				
 				newROI->ROIName = GetDefaultUniqueROIName(ROIlist); 
 				
@@ -756,13 +786,20 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData, i
 						 			 		.width 	= ROI_LABEL_WIDTH,
 						 			 		.height	= ROI_LABEL_HEIGHT	};
 				
-				CanvasDrawPoint(display->canvasPanHndl, CanvasPan_Canvas, MakePoint(x,y));
+				
+				//Draw cross to mark point ROI
+				CanvasDrawLine(display->canvasPanHndl, CanvasPan_Canvas, MakePoint(x - CROSS_LENGTH, y), MakePoint(x + CROSS_LENGTH, y));
+				CanvasDrawLine(display->canvasPanHndl, CanvasPan_Canvas, MakePoint(x, y - CROSS_LENGTH), MakePoint(x, y + CROSS_LENGTH));
+							   
 				CanvasDrawText (display->canvasPanHndl, CanvasPan_Canvas, newROI->ROIName,VAL_APP_META_FONT,textrect_point, VAL_LOWER_LEFT);
 				
 				AddImageROI(display->baseClass.image, &newROI, NULL);   
 			}
             break;
         case EVENT_LEFT_CLICK_UP:
+			 
+			//If selection button is toggled
+			 GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_2, &state); 
    	         if(state) {	
 				
 							mouseDown 	= 0;
@@ -779,15 +816,23 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData, i
 				
 				ROIlist = GetImageROIs(display->baseClass.image); 
 				
-				newROI = (ROI_type*)initalloc_Rect_type(NULL, "", color, TRUE, newr.top, newr.left, newr.height, newr.width); 
+				//transform coordinates to the base, no zoom level
+				
+				
+				// save ROI based on zero magnification level
+				int top  = newr.top / (1 + display->ZoomLevel * zoomFactor);
+				int left = newr.left / (1 + display->ZoomLevel * zoomFactor);
+				int height = newr.height / (1 + display->ZoomLevel * zoomFactor);
+				int width = newr.width / (1 + display->ZoomLevel * zoomFactor);
+				
+				newROI = (ROI_type*)initalloc_Rect_type(NULL, "", color, TRUE, top, left, height, width); 
 				
 				ROIlist = GetImageROIs(display->baseClass.image);
 				
 				newROI->ROIName = GetDefaultUniqueROIName(ROIlist);
+
 				
-				DebugPrintf("ROI is top %d left %d, width %d, height %d\n ", newr.top, newr.left, newr.width, newr.height);
-				
-							Rect	textrect = { .top 		= newr.top  + ROILabel_YOffset,
+				Rect	textrect = { .top 		= newr.top  + ROILabel_YOffset,
 						 			 .left 		= newr.left + ROILabel_XOffset,
 						 			 .width 	= ROI_LABEL_WIDTH,
 						 			 .height	= ROI_LABEL_HEIGHT	};
@@ -801,14 +846,16 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData, i
        	     };
             break;
         case EVENT_MOUSE_POINTER_MOVE:
+			//if selection button is toggled
+			GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_2, &state);  
 			if(state) {
 				
 				if(eventData2 > display->imgWidth || eventData1 > display->imgHeight)
 					return 1;
-				
+				//if mouse down, we're currently drawing a rectangular selection
 	            if (mouseDown) {
 
-	                
+	                //redraw the canvas bitmap and the new rectangle
 
 	                newp = MakePoint (eventData2, eventData1);
 	                if (newp.x > oldp.x && newp.y > oldp.y) {
@@ -825,7 +872,7 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData, i
 	                }
 	                if (oldr.height || oldr.width) {
 	                    CanvasDrawBitmap (display->canvasPanHndl, CanvasPan_Canvas, display->imgBitmapID, VAL_ENTIRE_OBJECT, VAL_ENTIRE_OBJECT);
-						DrawROIs(display);
+					//	DrawROIs(display);				   
 	                }
 	                CanvasDrawRect (display->canvasPanHndl, CanvasPan_Canvas, newr, VAL_DRAW_FRAME);
 	                if (newr.width >= 0 && newr.height >= 0) {
@@ -854,9 +901,11 @@ INIT_ERR
 	int 	imageWidth			= 0;
 	int 	imageHeight			= 0;
 	
+	//zoom out, if zoom strictly positive
 	if (display->ZoomLevel > 0 && direction < 0)
 		display->ZoomLevel--;
-	
+
+	//zoom in, if zoom smaller than max zoom level
 	if (display->ZoomLevel < maxZoomLevel && direction > 0)
 		display->ZoomLevel++;
 
@@ -864,19 +913,23 @@ INIT_ERR
 
 	newWidth = (int) (imageWidth * (1 + display->ZoomLevel * zoomFactor));
 	newHeight = (int) (imageHeight * (1 + display->ZoomLevel * zoomFactor));
-	
+
+	//clean old bitmap since we'll rebuild the image
 	DiscardBitmap(display->imgBitmapID);
 	
 	nullChk ( display->resizedArray  =  (int*) realloc(display->resizedArray, newWidth * newHeight * sizeof(int)));
  
+	
+	//update display image parameters ( Image structure in baseClass is unmodified ! )
 	display->imgHeight = imageHeight;
 	display->imgWidth = imageWidth;
 	display->nBytes = imageHeight * imageWidth * BytesPerPixelDepth;
 	
-	
+	//convert the pixel array to byte array of pixels (PixelDepth 32 -> 4 bytes per pixel)	
 	ConvertToBitArray(display, display->baseClass.image);
 	NormalizePixelArray(display, &display->interpolationArray);
 	
+	//free the byte array and interpolate a new one
 	OKfree(display->bitmapBitArray); 
 	BilinearResize(display->interpolationArray, &display->resizedArray, imageWidth, imageHeight, newWidth, newHeight);
 	
@@ -892,6 +945,7 @@ INIT_ERR
 	Deserialize(display, display->resizedArray, newWidth * newHeight);
 
 	
+	//resize canvas according to image size, within defined limits
 	if(newWidth < CANVAS_MIN_WIDTH) 
 		SetCtrlAttribute(display->canvasPanHndl, CanvasPan_Canvas, ATTR_WIDTH , CANVAS_MIN_WIDTH); 
 	else if (newWidth > CANVAS_MAX_WIDTH)
@@ -928,6 +982,7 @@ void NormalizePixelArray(ImageDisplayCVI_type* display, int **arrayPtr) {
 	
 	int 	nPixels 	= imgHeight * imgWidth; 
 
+	//create integer pixel array from byte array
 	for(int i = 0; i < nPixels; i++) {
 		array[i] = ( display->bitmapBitArray[4 * i] << 24) | ( display->bitmapBitArray[4 * i + 1] << 16) |
 				 	( display->bitmapBitArray[4 * i + 2] << 8) | display->bitmapBitArray[4 * i + 3] ;
@@ -963,7 +1018,8 @@ static void BilinearResize(int* input, int** outputPtr, int sourceWidth, int sou
             y = (int)(y_ratio * i) ;
             x_diff = (x_ratio * j) - x ;
             y_diff = (y_ratio * i) - y ;
-            index = (y * sourceWidth + x) ;                
+            index = (y * sourceWidth + x) ;
+			
             a = input[index] ;
             b = input[index + 1] ;
             c = input[index + sourceWidth] ;
@@ -1000,6 +1056,7 @@ static void DrawROIs(ImageDisplayCVI_type* display) {
 	size_t 		nROIs 				= ListNumItems(ROIlist);
 	float		magnify				= 0;    
 	
+	//start batch drawing, for higher drawing speed
 	CanvasStartBatchDraw (display->canvasPanHndl, CanvasPan_Canvas);
 
 	for (int i = 0; i < nROIs; i++) {
@@ -1007,8 +1064,14 @@ static void DrawROIs(ImageDisplayCVI_type* display) {
 	   ROI_iterr = *(ROI_type**) ListGetPtrToItem(ROIlist, i);  
 	   
 	   if(ROI_iterr->active) {
+		    
 		   
+		    //get the current zoom level
+			//all ROI's are stored based on no zoom
+			//and current magnification level needs to be applied
 		    magnify = (1 + display->ZoomLevel * zoomFactor);
+			
+			//in case current roi is a rectangle/selection
 	   		if (ROI_iterr->ROIType == ROI_Rectangle) {
 				
 				Rect		rect = { .top 		= ((Rect_type*)ROI_iterr)->top * magnify,
@@ -1026,6 +1089,7 @@ static void DrawROIs(ImageDisplayCVI_type* display) {
 				CanvasDrawText (display->canvasPanHndl, CanvasPan_Canvas, ROI_iterr->ROIName,VAL_APP_META_FONT,textrect, VAL_LOWER_LEFT);
 			}
 			
+			//in case current roi is a point
 			if (ROI_iterr->ROIType == ROI_Point) { 
 			
 				Point 		point = { .x = ((Point_type*)ROI_iterr)->x * magnify, 
@@ -1036,8 +1100,11 @@ static void DrawROIs(ImageDisplayCVI_type* display) {
 						 			 		.width 	= ROI_LABEL_WIDTH,
 						 			 		.height	= ROI_LABEL_HEIGHT	};
 				
-				CanvasDrawPoint(display->canvasPanHndl, CanvasPan_Canvas, point);
-				CanvasDrawText (display->canvasPanHndl, CanvasPan_Canvas, ROI_iterr->ROIName,VAL_APP_META_FONT,textrect_point, VAL_LOWER_LEFT);
+				
+				//draw the cross that marks a ROI point
+				CanvasDrawLine(display->canvasPanHndl, CanvasPan_Canvas, MakePoint(point.x - CROSS_LENGTH, point.y), MakePoint(point.x + CROSS_LENGTH, point.y));
+				CanvasDrawLine(display->canvasPanHndl, CanvasPan_Canvas, MakePoint(point.x, point.y - CROSS_LENGTH), MakePoint(point.x, point.y + CROSS_LENGTH));
+				CanvasDrawText(display->canvasPanHndl, CanvasPan_Canvas, ROI_iterr->ROIName,VAL_APP_META_FONT,textrect_point, VAL_LOWER_LEFT);
 					
 				
 			}
@@ -1047,13 +1114,112 @@ static void DrawROIs(ImageDisplayCVI_type* display) {
 	CanvasEndBatchDraw (display->canvasPanHndl, CanvasPan_Canvas);  
 }
 
-/*
+static void CVIROIActions (ImageDisplayCVI_type* display, int ROIIdx, ROIActions action)
+{
+	ROI_type**		ROIPtr 		= NULL;
+	ROI_type*		ROI			= NULL;
+	ListType		ROIlist 	= GetImageROIs(display->baseClass.image);
+	size_t			nROIs		= ListNumItems(ROIlist);
 
-to do:
+	if (ROIIdx) {
+		ROIPtr = ListGetPtrToItem(ROIlist, ROIIdx);
+		ROI = *ROIPtr;
+		switch (action) {
+			case ROI_Delete:
+				
+				// discard ROI data
+				(*ROI->discardFptr)((void**)ROIPtr);
+				// remove ROI from image display list
+				ListRemoveItem(ROIlist, 0, ROIIdx);
+				DrawROIs(display);
+				break;
+			case ROI_Show:
+				
+				if (!ROI->active) {
+					DrawROIs(display);
+					ROI->active = TRUE;
+				}
+				
+				break;
+			case ROI_Hide:
+				
+				// clear ROI group (shape and label)
+				if (ROI->active) {
+					DrawROIs(display);
+					ROI->active = FALSE;
+				}
+				
+				break;
+		}
+	} else {
+		for (size_t i = 1; i <= nROIs; i++) {
+			ROIPtr = ListGetPtrToItem(ROIlist, i);
+			ROI = *ROIPtr;
+			switch (action) {
+				
+				case ROI_Show:
+				
+					if (!ROI->active) {
+						DrawROIs(display);
+						ROI->active = TRUE;
+					}
+				
+					break;
+				
+				case ROI_Hide:
+				
+					// clear imaq ROI group (shape and label)
+					if (ROI->active) {
+						DrawROIs(display);
+						ROI->active = FALSE;
+					}
+				
+					break;
+				
+				case ROI_Delete:
+					
+					// discard ROI data
+					(*ROI->discardFptr)((void**)ROIPtr);
+					// remove ROI from image display list
+					ListRemoveItem(ROIlist, 0, ROIIdx);
+					DrawROIs(display); 
+					break;
+			}
+		}
+	}
+}
 
-1) Colors
-2) Conversion of ROIs when image zoom is not = 1
-3) Speed up of image update when exteding rectangle ROI
-4) Change point ROI marker from point to a crosshair (use lines).
-5) Implement ROI delete function pointer that is called by the scan engine when deleting ROIs. 
-*/
+//Callback triggered when "Save" button is clicked
+void CVICALLBACK MenuSaveCB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle) {
+		ImageDisplayCVI_type* 	display 		= (ImageDisplayCVI_type*) callbackData;
+
+		char fileSaveDir[MAX_DIRNAME_LEN+4]="";
+		char FileName[MAX_FILENAME_LEN]="";
+		char PathName[MAX_PATHNAME_LEN]="";
+		int bitmapID;
+		time_t Time;
+		struct tm *TM;
+	
+		//get current date and time
+		Time=time(NULL);
+		TM=localtime(&Time);
+		strftime (FileName, 80, "Image-%Y%m%d-%H%M%S", TM); //make format more lisible
+		strcat(FileName, ".jpg");
+
+		//fire dir select popup
+		if(VAL_DIRECTORY_SELECTED!=DirSelectPopup (fileSaveDir, "Save image to folder", 1, 1, fileSaveDir))
+					return;
+		//assemble path + filename			
+		MakePathname (fileSaveDir, FileName, PathName);
+		
+		//save bitmap
+		GetCtrlDisplayBitmap (display->canvasPanHndl, CanvasPan_Canvas, 0, &bitmapID);
+		SaveBitmapToJPEGFile (bitmapID, PathName, JPEG_DCTFLOAT, 100);
+};
+
+//Callback triggered when "Restore" button is clicked  
+void CVICALLBACK MenuRestoreCB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle) {
+		
+		ImageDisplayCVI_type* 	display 		= (ImageDisplayCVI_type*) callbackData;     
+		FireCallbackGroup(display->baseClass.callbackGroup, ImageDisplay_RestoreSettings, NULL); 
+};

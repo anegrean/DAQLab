@@ -66,6 +66,18 @@ typedef enum {
 // Displays or updates an image in a display window
 typedef int				(*DisplayImageFptr_type)					(ImageDisplay_type* imgDisplay, Image_type** image);
 
+// Displays a composite image from multiple images from separate R, G and B colors. All image dimensions must be the same.
+typedef struct {
+	size_t			nImages;	// Number of images belonging to this channel.
+	Image_type** 	images;		// Image array.
+	uInt32*			yOffsets;	// Image position offset in the height direction;
+	uInt32*			xOffsets;   // Image position offset in the width direction;
+} ColorChannel_type; 
+
+typedef int				(*DisplayRGBImageChannels_type)				(ImageDisplay_type* imgDisplay, ColorChannel_type** RChanPtr, ColorChannel_type** GChanPtr, ColorChannel_type** BChanPtr);
+
+
+
 // Performs a ROI operation on the image display. ROIIdx is the 1-based ROI index from the image ROI list. If ROIIdx is 0, the operation applies to all ROIs.
 typedef void			(*ROIActionsFptr_type)						(ImageDisplay_type* imgDisplay, int ROIIdx, ROIActions action);
 
@@ -124,6 +136,13 @@ int										init_ImageDisplay_type						(ImageDisplay_type* 		imageDisplay,
 
 void									discard_ImageDisplay_type					(ImageDisplay_type** imageDisplayPtr);
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Color Channels
+//--------------------------------------------------------------------------------------------------------------------------
+
+ColorChannel_type*						init_ColorChannel_type						(size_t nImages, Image_type** imagePtrs[], uInt32 xOffsets[], uInt32 yOffsets[]);
+
+void									discard_ColorChannel_type					(ColorChannel_type** colorChanPtr);
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Channel Group Display

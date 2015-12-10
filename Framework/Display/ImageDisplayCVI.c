@@ -18,7 +18,27 @@
 #include "ImageDisplayCVI.h"
 
 //==============================================================================
+
 // Constants
+
+
+//NOTE this macro's add two numbers by avoiding positive and negative overflow
+//NOTE 2 currently not supported by CVI, can be used if updated in future
+// http://digital.ni.com/public.nsf/allkb/73AEAD30C8AF681A86257BBB0054A26B
+
+// Min is 1 << (sizeof(type)*8-1)
+#define __MIN(type) ((type)-1 < 1?__MIN_SIGNED(type):(type)0)
+
+// The max value is NOT(operator) the min value
+#define __MAX(type) ((type)~__MIN(type))
+
+#define add_of(c,a,b) ({ \
+  typeof(a) __a=a; \
+  typeof(b) __b=b; \
+  (__b)<1 ? \
+    ((__MIN(typeof(c))-(__b)<=(__a))?assign(c,__a+__b):1) : \
+    ((__MAX(typeof(c))-(__b)>=(__a))?assign(c,__a+__b):1); \
+})
 
 //==============================================================================
 // Types
@@ -95,6 +115,14 @@ void CVICALLBACK 				MenuSaveCB 					(int menuBarHandle, int menuItemID, void *c
 
 void CVICALLBACK 				MenuRestoreCB 				(int menuBarHandle, int menuItemID, void *callbackData, int panelHandle);
 
+void 							GetResultedImageSize		(ColorChannel_type* colorChan, int* heightPtr, int* widthPtr);
+
+void 							AddImagePixels				(float** ResultImagePixArrayPtr, int ResultImageHeight, int ResultImageWidth, ColorChannel_type*  colorChan);
+
+int 							DisplayRGBImageChannels 	(ImageDisplayCVI_type* imgDisplay, ColorChannel_type** RChanPtr, ColorChannel_type** GChanPtr, ColorChannel_type** BChanPtr);
+
+void 							NormalizeFloatArrayToRGBA	(RGBA_type* outputPtr[], float* input, int nPixels, int RGBAChannel);
+
 
 
 
@@ -165,7 +193,6 @@ INIT_ERR
 	imgDisplay->imgHeight			= imgHeight;
 	imgDisplay->imgWidth			= imgWidth;
 	imgDisplay->bitmapBitArray		= NULL;
-	imgDisplay->crtImage			= NULL;
 	imgDisplay->ZoomLevel			= 0;
 	
 	// ALLOC Resources
@@ -192,10 +219,10 @@ INIT_ERR
 	SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_ZPLANE_POSITION, 0);
     SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_SELECTION, ATTR_ZPLANE_POSITION, 1);
 	
-	// set canvas pen color
+	// set canvas pen color  & text background color
 	
 	SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_PEN_COLOR, VAL_GREEN); 
-	
+	SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_PEN_FILL_COLOR, VAL_TRANSPARENT);
 	//add menu items
 	imgDisplay->menuBarHndl = NewMenuBar(imgDisplay->displayPanHndl);
 	imgDisplay->FilemenuID = NewMenu (imgDisplay->menuBarHndl, "File", -1);
@@ -213,6 +240,11 @@ INIT_ERR
 		nullChk( imgDisplay->bitmapBitArray 		= malloc(BytesPerPixelDepth * imgWidth * imgHeight) );
 		nullChk( imgDisplay->resizedArray   		= malloc(imgWidth * imgHeight * sizeof(int)) );
 		nullChk( imgDisplay->interpolationArray   	= malloc(imgWidth * imgHeight * sizeof(int)) ); 
+		
+		//allocate RGB overlay buffers
+		for(int i = 0; i < 3; i++) {
+			nullChk( imgDisplay->RGBOverlayBuffer[i] = malloc(imgWidth * imgHeight * sizeof(float)) );
+		}
 	} else
 		goto Error;
 				 
@@ -278,11 +310,11 @@ void discard_ImageCVI_type (ImageDisplayCVI_type** ImageCVIPtr)
 void ClearImageCVIList (ListType imageList)
 {
 	size_t				nImages 		= ListNumItems(imageList);
-	ImageDisplayCVI_type**		imageDisplayPtr = NULL;
+	Image_type**		imagePtr = NULL;
 	
 	for (size_t i = 1; i <= nImages; i++) {
-		imageDisplayPtr = ListGetPtrToItem(imageList, i);
-		discard_ImageDisplayCVI_type(imageDisplayPtr);
+		imagePtr = ListGetPtrToItem(imageList, i);
+		discard_Image_type(imagePtr);
 	}
 	ListClear(imageList);
 }
@@ -292,7 +324,6 @@ void DiscardImageList (ListType* imageListPtr)
 	ClearImageCVIList (*imageListPtr);
 	OKfreeList(*imageListPtr);
 }
-
 
 static void ConvertToBitArray(ImageDisplayCVI_type* display, Image_type* image) 
 {
@@ -671,6 +702,18 @@ static int CVICALLBACK DisplayPanCtrlCallback (int panel, int control, int event
 				 
 					break;
 					
+				case DisplayPan_PICTUREBUTTON_5:  
+			
+					GetCtrlVal (display->displayPanHndl, control, &state);
+				
+					for(int i = 0; i < BUTNUM; i++) {
+						SetCtrlVal(display->displayPanHndl, buttonArray[i], 0);
+					}
+				 
+					SetCtrlVal (display->displayPanHndl, control, !state);
+					
+					break;
+					
 				default:
 					
 					for(int i = 0; i < BUTNUM; i++) {
@@ -712,7 +755,104 @@ int CVICALLBACK CanvasPanelCallback (int panel, int event, void *callbackData, i
 	GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_2, &state); 
 	
     switch (event) {
-		
+			
+			
+		// COLOR CHANNEL TESTING, TO BE REMOVED LATER ON
+		//-----------------------------------------------------------------------------
+		/*
+		case EVENT_KEYPRESS:
+			GetCtrlVal (display->displayPanHndl, DisplayPan_PICTUREBUTTON_5, &state);
+
+			if(state && eventData1 == VAL_TAB_VKEY) {
+				
+				short int* 		pixArrayRedImg1 = 	malloc(10000 * sizeof(short int));		// 100 x 100
+				int*   			pixArrayRedImg2 = 	malloc (5000 * sizeof(int)); 			// 50  x 100
+				
+				float* 			pixArrayGreenImg1 = malloc(20000 * sizeof(float));			// 200 x 100
+				
+				unsigned char* 	pixArrayBlueImg1 = 	malloc(25000 * sizeof(unsigned char));	// 100  x 250
+				
+				ColorChannel_type*	red, *green, *blue;
+				Image_type** redImages;
+				Image_type** blueImages;
+				Image_type** greenImages;
+				uInt32 *redImageOffsetX;
+				uInt32 *redImageOffsetY;
+				uInt32 *noOffset;
+				
+				redImages = malloc(2 * sizeof(Image_type*));
+				blueImages = malloc(sizeof(Image_type*));
+				greenImages = malloc(sizeof(Image_type*));
+
+				redImageOffsetX = malloc(2 * sizeof(uInt32));
+				redImageOffsetY = malloc(2 * sizeof(uInt32));
+				noOffset = malloc(sizeof(uInt32));
+				//init pixel data
+				for (int i = 0; i < 10000; i++)
+					pixArrayRedImg1[i] = 125 + rand() % 125;
+				for(int i = 0; i < 5000; i++)
+					pixArrayRedImg2[i] = rand() % 200;
+				
+				for (int i = 0; i < 20000; i++)
+					pixArrayGreenImg1[i] = rand () % 500000;
+				for(int i = 0; i < 25000; i++)
+					pixArrayBlueImg1[i] =  + rand() % 50000 ;
+				
+				//init Images
+				
+				redImages[0] = init_Image_type(Image_Short, 100, 100, &pixArrayRedImg1);
+				
+				redImages[1] = init_Image_type(Image_Int, 50, 100, &pixArrayRedImg2);
+				
+				redImageOffsetX[0] = 10;  
+				redImageOffsetY[0] = 50;
+				
+				redImageOffsetX[1] = 50;
+				redImageOffsetY[1] = 10;
+				
+				
+				greenImages[0] = init_Image_type(Image_Float, 200, 100, &pixArrayGreenImg1);
+				
+				noOffset[0] = 0;
+											 
+				blueImages[0] = init_Image_type(Image_UChar, 100, 250, &pixArrayBlueImg1);
+				
+				red = init_ColorChannel_type (2, &redImages, redImageOffsetX, redImageOffsetY);
+				
+				green = init_ColorChannel_type(1, &greenImages, noOffset, noOffset);
+				
+				blue = init_ColorChannel_type(1, &blueImages, noOffset, noOffset);
+				
+
+					double start = Timer();
+					DisplayRGBImageChannels (display, &red, &green, &blue);
+					double end = Timer();
+
+					DebugPrintf("display RGB images took %f\n", end - start);
+					
+//					DisplayRGBImageChannels(display, NULL, &green, &blue);
+
+//					DisplayRGBImageChannels(display, &red, NULL, &blue);
+
+//					DisplayRGBImageChannels(display, &red, &green, NULL);
+				 
+				OKfree(redImages);
+				OKfree(greenImages);
+				OKfree(blueImages);
+				OKfree(redImageOffsetX);
+				OKfree(redImageOffsetY);
+				OKfree(noOffset);
+				OKfree(pixArrayRedImg1);
+				OKfree(pixArrayRedImg2);
+				OKfree(pixArrayGreenImg1);
+				OKfree(pixArrayBlueImg1);
+				OKfree(red);
+				OKfree(green);
+				OKfree(blue);
+			}
+			break;
+		//-----------------------------------------------------------------------------  
+		*/
         case EVENT_LEFT_CLICK:
 			
 			
@@ -1214,7 +1354,7 @@ void CVICALLBACK MenuSaveCB (int menuBarHandle, int menuItemID, void *callbackDa
 		
 		//save bitmap
 		GetCtrlDisplayBitmap (display->canvasPanHndl, CanvasPan_Canvas, 0, &bitmapID);
-		SaveBitmapToJPEGFile (bitmapID, PathName, JPEG_DCTFLOAT, 100);
+		SaveBitmapToJPEGFile (bitmapID, PathName, JPEG_DCTFLOAT, 100); //CHANGE2TIFF
 };
 
 //Callback triggered when "Restore" button is clicked  
@@ -1223,3 +1363,260 @@ void CVICALLBACK MenuRestoreCB (int menuBarHandle, int menuItemID, void *callbac
 		ImageDisplayCVI_type* 	display 		= (ImageDisplayCVI_type*) callbackData;     
 		FireCallbackGroup(display->baseClass.callbackGroup, ImageDisplay_RestoreSettings, NULL); 
 };
+
+int DisplayRGBImageChannels (ImageDisplayCVI_type* imgDisplay, ColorChannel_type** RChanPtr, ColorChannel_type** GChanPtr, ColorChannel_type** BChanPtr) {
+
+INIT_ERR
+	
+	ColorChannel_type* RChan; 			
+	ColorChannel_type* GChan; 
+	ColorChannel_type* BChan;
+	
+	if(RChanPtr)
+		RChan	= *RChanPtr;
+	else
+		RChan	= NULL;
+	
+	if(GChanPtr)
+		GChan	= *GChanPtr;
+	else
+		GChan	= NULL;
+
+	if(BChanPtr)
+		BChan	= *BChanPtr;
+	else
+		BChan	= NULL;
+	
+	int 		RImageHeight		= 0;	
+	int 		RImageWidth			= 0;	
+	int 		GImageHeight		= 0;	
+	int 		GImageWidth			= 0;	
+	int 		BImageHeight		= 0;	
+	int 		BImageWidth			= 0;	
+	int 		finalImageHeight	= 0;
+	int 		finalImageWidth		= 0;
+	RGBA_type* 	pixelArray			= NULL;
+	int			nPixels				= 0;
+	Image_type* finalImage			= NULL;
+	
+	if(RChan == NULL && GChan == NULL && BChan == NULL)
+		return -1;
+	
+	if(RChan) {
+		
+		//get max height and width for the red Channel resulted image, including all offsets
+		GetResultedImageSize(RChan, &RImageHeight, &RImageWidth);
+
+		//reallocate buffers to fit red channel resulted image pixels
+		nullChk(imgDisplay->RGBOverlayBuffer[0] = realloc(imgDisplay->RGBOverlayBuffer[0], RImageHeight * RImageWidth * sizeof(float)) );
+
+		//sum up pixels for each image of the red Channel
+		AddImagePixels(&imgDisplay->RGBOverlayBuffer[0], RImageHeight, RImageWidth, RChan); 
+		
+	};
+	
+	if(GChan) {
+		
+		//get max height and width for the green Channel resulted image, including all offsets
+		GetResultedImageSize(GChan, &GImageHeight, &GImageWidth);
+		
+		//reallocate buffers to fit green channel resulted image pixels
+		nullChk(imgDisplay->RGBOverlayBuffer[1] = realloc(imgDisplay->RGBOverlayBuffer[1], GImageHeight * GImageWidth * sizeof(float)) );
+
+		//sum up pixels for each image of the green Channel  
+		AddImagePixels(&imgDisplay->RGBOverlayBuffer[1], GImageHeight, GImageWidth, GChan); 	
+	}
+
+	
+	if (BChan) {
+		//get max height and width for the blue Channel resulted image, including all offsets 
+		GetResultedImageSize(BChan, &BImageHeight, &BImageWidth);
+		
+		//reallocate buffers to fit blue channel resulted image pixels
+		nullChk(imgDisplay->RGBOverlayBuffer[2] = realloc(imgDisplay->RGBOverlayBuffer[2], BImageHeight * BImageWidth * sizeof(float)) );
+		
+		//sum up pixels for each image of the blue Channel 
+		AddImagePixels(&imgDisplay->RGBOverlayBuffer[2], BImageHeight, BImageWidth, BChan); 
+	}
+	
+	//adjust final image to the size of the channel resulted image with highest dimensions
+	if(finalImageHeight < RImageHeight)
+		finalImageHeight = RImageHeight;
+	if(finalImageWidth < RImageWidth)
+		finalImageWidth = RImageWidth;
+	
+	
+	if(finalImageHeight < GImageHeight)
+		finalImageHeight = GImageHeight;
+	if(finalImageWidth < GImageWidth)
+		finalImageWidth = GImageWidth;
+	
+	
+	if(finalImageHeight < BImageHeight)
+		finalImageHeight = BImageHeight;
+	if(finalImageWidth < BImageWidth)
+		finalImageWidth = BImageWidth;
+	
+	nPixels = finalImageWidth * finalImageHeight;
+	
+	//allocate pixelArray to be used when constructing the final image
+	nullChk( pixelArray=(RGBA_type*) calloc(nPixels, sizeof(RGBA_type)) );
+	
+	//set R, G or B field in the pixelArray for the final Image, Normalize convers from [max, min] range in RGBOverlayBuffer[i] to [0, 255]
+	if(RChan){
+		int RedPixelsNum = RImageHeight * RImageWidth;
+		NormalizeFloatArrayToRGBA(&pixelArray, imgDisplay->RGBOverlayBuffer[0], RedPixelsNum, 0);
+	}
+	
+	if(GChan){
+		int GreenPixelsNum = GImageHeight * GImageWidth;
+		NormalizeFloatArrayToRGBA(&pixelArray, imgDisplay->RGBOverlayBuffer[1], GreenPixelsNum, 1);  
+	}
+	
+	if(BChan){
+		int BluePixelsNum = BImageHeight * BImageWidth;
+		NormalizeFloatArrayToRGBA(&pixelArray, imgDisplay->RGBOverlayBuffer[2], BluePixelsNum, 2);  
+		
+	}
+
+	finalImage = init_Image_type(Image_RGBA, finalImageHeight, finalImageWidth, &pixelArray);
+	
+	DisplayImageFunction(imgDisplay, &finalImage);
+	
+	return 0;
+	
+	
+Error:
+	return errorInfo.error;
+}
+
+
+//Converts a float array to a [0, 255] range array, representing R, G or B field in RGBA_type pixel array
+void NormalizeFloatArrayToRGBA(RGBA_type* outputPtr[], float* input, int nPixels, int RGBAChannel) {
+	
+	float 		min 		= input[0];
+	float 		max 		= input[0];
+	float 		interval 	=  0;
+	RGBA_type* 	output 		= *outputPtr;
+	
+	for(int i = 0; i < nPixels; i++) {
+		if (input[i] > max)
+			max = input[i];
+		if (input[i] < min)
+			min = input[i];
+	}
+	interval = max - min;
+	
+	for(int i = 0; i < nPixels; i++) {
+		if(RGBAChannel == 0) {
+			output[i].R = (unsigned char) ((input[i] - min)	* 255.0 / interval);
+		}
+		if(RGBAChannel == 1) {
+			output[i].G = (unsigned char) ((input[i] - min)	* 255.0 / interval);
+		}
+		if(RGBAChannel == 2) {
+			output[i].B = (unsigned char) ((input[i] - min)	* 255.0 / interval);
+		}
+	}
+}
+//Taking into account all offsets, calculate the max size(height and width) for the image
+// resulted by summing up pixels from all of the channel's images.
+void GetResultedImageSize(ColorChannel_type* colorChan, int* heightPtr, int* widthPtr) {
+  
+  int MaxHeight = 0;
+  int MaxWidth 	= 0;
+  int crtHeight = 0;
+  int crtWidth  = 0;
+  
+  for (int i = 0; i < colorChan->nImages; i++) {
+  	GetImageSize( colorChan->images[i], &crtHeight, &crtWidth);
+	
+	if ( (crtHeight + colorChan->xOffsets[i])  > MaxHeight)
+		MaxHeight = crtHeight + colorChan->xOffsets[i];
+	
+	if ( (crtWidth + colorChan->yOffsets[i]) > MaxWidth)
+		MaxWidth = crtWidth + colorChan->yOffsets[i];
+  }
+  
+  *heightPtr = MaxHeight;
+  *widthPtr  = MaxWidth;
+  
+};
+
+//Sum pixels in each position for all of the channel's images, taking into account the offset
+void AddImagePixels(float** ResultImagePixArrayPtr, int ResultImageHeight, int ResultImageWidth, ColorChannel_type*  colorChan) {
+	
+	ImageTypes 			imgType;
+	int					height;
+	int 				width;
+	int 				pixels;
+	float*				array = *ResultImagePixArrayPtr;
+	for(int i = 0; i < colorChan->nImages; i++) {
+		
+		imgType = GetImageType(colorChan->images[i]);
+		GetImageSize(colorChan->images[i], &height, &width);
+		pixels = height * width;
+		
+		int offset = colorChan->xOffsets[i] * ResultImageHeight + colorChan->yOffsets[i];
+		
+		switch(imgType) {
+			case Image_UChar:
+			
+			unsigned char* uchar_iterr = (unsigned char*) GetImagePixelArray(colorChan->images[i]);
+			for(int j = 0; j < pixels; j++) {
+				// add_of(array[offset + j], aray[offset + j] , uchar_iterr[j])
+				array[offset + j] = array[offset + j] +  uchar_iterr[j];
+			}
+			
+			break;
+			
+			case Image_UShort:					// 16 bit unsigned
+			
+			unsigned short int* ushort_iterr = (unsigned short int*) GetImagePixelArray(colorChan->images[i]);
+			for(int j = 0; j < pixels; j++) {
+				array[offset + j] = array[offset + j] +  ushort_iterr[j];
+			}
+			
+			break;
+			
+			case Image_Short:
+			
+			short int* short_iterr = (short int*) GetImagePixelArray(colorChan->images[i]);
+			for(int j = 0; j < pixels; j++) {
+				array[offset + j] = array[offset + j] +  short_iterr[j];
+			}
+			
+			break;
+			
+			case Image_UInt:					// 32 bit unsigned
+			
+			unsigned  int* 	uint_iterr 		= (unsigned int*) GetImagePixelArray(colorChan->images[i]);
+			for(int j = 0; j < pixels; j++) {
+				array[offset + j] = array[offset + j] +  uint_iterr[j];
+			}
+			
+			break;
+			
+			case Image_Int:						// 32 bit signed
+			
+			int* 	int_iterr 		= (int*) GetImagePixelArray(colorChan->images[i]);
+			for(int j = 0; j < pixels; j++) {
+				array[offset + j] = array[offset + j] +  int_iterr[j];
+			}
+			
+			break;
+
+			case Image_Float:					// 32 bit float 
+			
+			float* 	float_iterr 		= (float*) GetImagePixelArray(colorChan->images[i]);
+			for(int j = 0; j < pixels; j++) {
+				array[offset + j] = array[j] +  float_iterr[j];
+			}
+			
+			break;
+			
+		}
+	}
+	
+}
+			

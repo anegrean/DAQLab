@@ -26,8 +26,8 @@
 // Display module
 // Choose only one of the include files below
 //----------------------------------------------------------------------------
-//#include "ImageDisplayNIVision.h"
-#include "ImageDisplayCVI.h"
+#include "ImageDisplayNIVision.h"
+//#include "ImageDisplayCVI.h"
 //----------------------------------------------------------------------------
 
 									 
@@ -1864,7 +1864,7 @@ INIT_ERR
 	
 	uInt32							jumpMethod						= pointScan->globalPointScanSettings->jumpMethod;
 	
-	DAQLabXMLNode					pointScanAttr[]					= { {"Name",						BasicData_CString,		&pointScan->globalPointScanSettings->protocolName} };        
+	DAQLabXMLNode					pointScanAttr[]					= { {"Name",						BasicData_CString,		pointScan->globalPointScanSettings->protocolName} };        
 	
 	DAQLabXMLNode					jumpSettingsAttr[] 				= { {"Repeat",						BasicData_UInt,			&pointScan->globalPointScanSettings->nSequenceRepeat},
 																		{"StartDelay",					BasicData_Double,		&pointScan->globalPointScanSettings->startDelayInitVal},
@@ -10091,14 +10091,17 @@ INIT_ERR
 								SET_ERR(TaskTreeStateChange_RectRaster_Err_WrongPixelDataType, "Wrong pixel data type.");
 						}
 						
-						// display image in new window
-						imgDisplayPtr = NULL;
-						displayTSVHndl = engine->baseClass.scanChans[i]->imgDisplayTSV;
-						errChk( CmtGetTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV, &imgDisplayPtr) ); engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = __LINE__;
-						nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (engine->baseClass.scanChans[i], 0, imageType, engine->scanSettings->width, engine->scanSettings->height, NULL) );
-						errChk( CmtReleaseTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV) );
-						engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = 0;
-						imgDisplayPtr = NULL;
+						#ifdef __ImageDisplayNIVision_H__ 
+						
+							// display image in new window
+							imgDisplayPtr = NULL;
+							displayTSVHndl = engine->baseClass.scanChans[i]->imgDisplayTSV;
+							errChk( CmtGetTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV, &imgDisplayPtr) ); engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = __LINE__;
+							nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (engine->baseClass.scanChans[i], 0, imageType, engine->scanSettings->width, engine->scanSettings->height, NULL) );
+							errChk( CmtReleaseTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV) );
+							engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = 0;
+							imgDisplayPtr = NULL;
+						#endif
 						
 						engine->nImgBuffers++;
 						// allocate memory for image assembly

@@ -19,9 +19,16 @@
 #include <userint.h>
 #include "combobox.h" 
 #include <analysis.h>
-#include <ImageDisplayNIVision.h>
 #include "WaveformDisplay.h"
 #include "UI_LaserScanning.h"
+
+//----------------------------------------------------------------------------
+// Display module
+// Choose only one of the include files below
+//----------------------------------------------------------------------------
+#include "ImageDisplayNIVision.h"
+//#include "ImageDisplayCVI.h"
+//----------------------------------------------------------------------------
 
 									 
 
@@ -3066,6 +3073,7 @@ Error:
 //-------------------------------------------
 static ScanChan_type* init_ScanChan_type (ScanEngine_type* engine, uInt32 chanIdx)
 {
+#define init_ScanChan_type_ERR_NoDisplay	-1	// There is no display selected.
 INIT_ERR
 	
 	ScanChan_type* 			scanChan		= malloc(sizeof(ScanChan_type));
@@ -3094,7 +3102,22 @@ INIT_ERR
 	// image display TSV
 	errChk( CmtNewTSV(sizeof(ImageDisplay_type*), &scanChan->imgDisplayTSV) );
 	errChk( CmtGetTSVPtr(scanChan->imgDisplayTSV, &imgDisplayPtr) );
-	*imgDisplayPtr = NULL;
+	
+	// Switching between different displays
+	#ifdef __ImageDisplayNIVision_H__ 
+	
+		*imgDisplayPtr = NULL;  // Display handle initialization is not needed here.
+		
+	#elif __ImageDisplayCVI_H__
+		
+		nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayCVI_type(engine->lsModule->baseClass.workspacePanHndl, "", 10, 10, NULL) );
+	
+	#else
+	
+		SET_ERR(init_ScanChan_type_ERR_NoDisplay, "There is no display selected.");
+	
+	#endif
+	
 	errChk( CmtReleaseTSVPtr(scanChan->imgDisplayTSV) );
 	imgDisplayPtr = NULL;
 
@@ -3123,7 +3146,10 @@ Error:
 	// cleanup
 	OKfree(detVChanName);
 	OKfree(outputVChanName);
-	
+	if (imgDisplayPtr) {
+		CmtReleaseTSVPtr(scanChan->imgDisplayTSV);
+		imgDisplayPtr = NULL;
+	}
 	
 	discard_ScanChan_type(&scanChan);
 	
@@ -6746,7 +6772,7 @@ The function is not multi-threaded.
 static int NonResRectRasterScan_BuildImage (RectRaster_type* rectRaster, size_t bufferIdx, char** errorMsg)
 {
 #define NonResRectRasterScan_BuildImage_Err_WrongPixelDataType			-1
-//#define NonResRectRasterScan_BuildImage_Err_NotEnoughPixelsForImage		-2
+#define NonResRectRasterScan_BuildImage_Err_NoDisplay					-2
 	
 INIT_ERR
 
@@ -6963,6 +6989,7 @@ INIT_ERR
 				// Create image container
 				//-----------------------
 				
+				
 				nullChk( imgBuffer->image = init_Image_type(imageType, rectRaster->scanSettings.height, rectRaster->scanSettings.width, &imgBuffer->imagePixels) );  
 				SetImagePixSize(imgBuffer->image, rectRaster->scanSettings.pixSize);
 				// TEMPORARY: X, Y & Z coordinates set to 0 for now
@@ -6986,13 +7013,27 @@ INIT_ERR
 				// create new callback group
 				nullChk( imgDisplayCBGroup = init_CallbackGroup_type(NULL, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
 				
-				// if display was discarded, create a new display
-				if (!*imgDisplayPtr)
-					nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
-				else {
+				#ifdef __ImageDisplayNIVision_H__
+				
+					// if display was discarded, create a new display
+					if (!*imgDisplayPtr)
+						nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
+					else {
+						discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
+						(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
+					}
+					
+				#elif __ImageDisplayCVI_H__
+				
 					discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
 					(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
-				}
+					
+				#else
+					
+					SET_ERR(NonResRectRasterScan_BuildImage_Err_NoDisplay, "There is no display selected.");
+					
+				#endif
+				
 				
 				//--------------------------------------
 				// Display image for this channel
@@ -7184,6 +7225,8 @@ static int CVICALLBACK NonResRectRasterScan_LaunchPixelBuilder (void* functionDa
 INIT_ERR
 
 	PixelAssemblyBinding_type*		binding 				= functionData;
+	
+	SetSleepPolicy(VAL_SLEEP_SOME);
 	
 	switch (binding->scanEngine->baseClass.scanMode) {
 			

@@ -924,6 +924,7 @@ INIT_ERR
 	char*						VChanName				= NULL;
 	char*						msgBuff					= NULL;
 	
+	if (!sinkVChan) return 0;
 	
 	// Check if Task Controller is in use
 	errChk( IsTaskControllerInUse_GetLock(taskControl, &tcIsInUse, NULL, &tcIsInUseLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) );
@@ -957,7 +958,9 @@ INIT_ERR
 		discard_VChanCallbackData_type(VChanTSQDataPtr);
 		// and remove from queue
 		ListRemoveItem(taskControl->dataQs, 0, foundVChanIdx);
-	} else {
+	}
+	/* no need if not found, it's not removed
+	else {
 		nullChk( msgBuff = StrDup("Sink VChan ") );
 		nullChk( VChanName = GetVChanName((VChan_type*)sinkVChan) );
 		nullChk( AppendString(&msgBuff, VChanName, -1) );
@@ -966,7 +969,7 @@ INIT_ERR
 		nullChk( AppendString(&msgBuff, tcName, -1) );
 		nullChk( AppendString(&msgBuff, " and cannot be removed", -1) );
 		SET_ERR(RemoveSinkVChan_Err_SinkVChanNotFound, msgBuff);
-	}
+	}*/
 	
 Error:
 	

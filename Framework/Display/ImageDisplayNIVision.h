@@ -39,6 +39,7 @@ typedef struct ImageDisplayNIVision		ImageDisplayNIVision_type;	// Child class o
 // Initializes a display handle using NI Vision development module. If known, the parameters imageType, imgWidth and imgHeight should be supplied
 // as memory allocation can be done only once at this point and reused when updating the display with a similar image.
 ImageDisplayNIVision_type* 			init_ImageDisplayNIVision_type			(void*						imageDisplayOwner,
+																			 int						parentPanHndl, 
 																			 ImageTypes 				imageType,
 																			 int						imgWidth,
 																			 int						imgHeight,

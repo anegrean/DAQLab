@@ -409,8 +409,9 @@ INIT_ERR
 	SetMenuBarAttribute(laser->menuBarHndl, laser->menuIDSettings, ATTR_CALLBACK_FUNCTION_POINTER, SettingsMenu_CB);
 	
 	// if Serial COM settings have not been loaded, then use default
-	if (!laser->COMPortInfo)
+	if (!laser->COMPortInfo) {
 		nullChk( laser->COMPortInfo = init_COMPortSettings_type(Default_COMPort_Number, Default_COMPort_BaudRate, Default_COMPort_Parity, Default_COMPort_DataBits, Default_COMPort_StopBits) );
+	}
 	
 	errChk( InitLaserCOM(laser, &errorInfo.errMsg) );
 	
@@ -628,8 +629,9 @@ INIT_ERR
 	CoherentCham_type* 		laser 		= callbackData;
 	
 	// load serial COM settings panel if not loaded already
-	if (!laser->serialCOMSetPanHndl)
+	if (!laser->serialCOMSetPanHndl) {
 		errChk( laser->serialCOMSetPanHndl = LoadPanel(laser->baseClass.workspacePanHndl, MOD_CoherentCham_UI, COMSetPan) );
+	}
 	
 	SetCtrlsInPanCBInfo(laser, UISerialCOMSettings_CB, laser->serialCOMSetPanHndl);
 	

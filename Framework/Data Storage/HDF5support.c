@@ -751,8 +751,10 @@ Error:
    
 	// clear group names
 	if (groupNames)
-		for (size_t i = 0; i < nGroupNames; i++)
+		for (size_t i = 0; i < nGroupNames; i++) {
 			OKfree(groupNames[i]);
+		}
+	
 	OKfree(groupNames);
 	
 	// clear group IDs
@@ -1206,12 +1208,14 @@ INIT_ERR
 	char*	dateTimeString		= NULL;
 	
 	// waveform name
-	if (waveformName) 
+	if (waveformName) {
 		errChk( CreateStringAttr(datasetID, "Name", waveformName, &errorInfo.errMsg) );
+	}
 	
 	// waveform unit name
-	if (unitName) 
+	if (unitName) { 
 		errChk( CreateStringAttr(datasetID, "Units", unitName, &errorInfo.errMsg) );
+	}
 	
 	// waveform start timestamp
 	errChk( dateTimeBuffLen = FormatDateTimeString(timestamp, DATETIME_FORMATSTRING, NULL, 0) );

@@ -35,7 +35,7 @@
 //  Card Index is the zero-based index of the LStep-PCI card (PCI)
 
 #define Stage_IO_InterfaceType				1	 		// RS232
-#define Stage_IO_COMPort					"COM8"		// note: format of COM port is "COMx" where x is the number of the port
+#define Stage_IO_COMPort					"COM2"		// note: format of COM port is "COMx" where x is the number of the port
 #define Stage_IO_BaudRate					57600
 
 #ifndef nullWinChk

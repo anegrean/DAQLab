@@ -357,8 +357,9 @@ INIT_ERR
 	// Update stage position
 	//------------------------------------------
 	
-	if (stage->GetAbsPosition)
+	if (stage->GetAbsPosition) {
 		errChk( (*stage->GetAbsPosition) (stage, &stage->xPos, &stage->yPos, &errorInfo.errMsg) );
+	}
 		
 	// update stage X absolute position if position has been determined
 	// make visible stepper controls and update them if position has been determined
@@ -528,9 +529,9 @@ INIT_ERR
 NoReferencePositions:
 	
 	// cleanup
-	if (xmlRefPositionsNodeList) OKfreeCAHndl(xmlRefPositionsNodeList); 
-	if (xmlRefPositionsNode) OKfreeCAHndl(xmlRefPositionsNode);
-	if (xmlRefPosNodeList) OKfreeCAHndl(xmlRefPosNodeList); 
+	OKfreeCAHndl(xmlRefPositionsNodeList); 
+	OKfreeCAHndl(xmlRefPositionsNode);
+	OKfreeCAHndl(xmlRefPosNodeList); 
 	
 	return 0;
 	
@@ -724,6 +725,7 @@ static int CVICALLBACK UICtrls_CB (int panel, int control, int event, void *call
 INIT_ERR	
 	
 	XYStage_type* 				stage 				= callbackData;
+	MoveCommand_type*			moveCommand			= NULL;
 	int							refPosIdx			= 0;									// 0-based index of ref pos selected in the list
 	RefPosition_type**			refPosPtr			= NULL;
 	double						xStepSize			= 0;
@@ -770,56 +772,65 @@ INIT_ERR
 				case StagePan_MoveXForward:
 					
 					// move X axis in the positive direction if direction is positive, relative to current position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_MoveXBackward:
 					
 					// move X axis in the negative direction if direction is positive, relative to current position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_MoveYRight:
 					
 					// move Y axis in the positive direction if direction is positive, relative to current position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_MoveYLeft:
 					
 					// move Y axis in the negative direction if direction is positive, relative to current position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_Stop:
 					
 					// stop stage motion
-					if (stage->Stop)
+					if (stage->Stop) {
 						errChk( (*stage->Stop)	(stage, &errorInfo.errMsg) );
+					}
 					break;
 				
 				case StagePan_XAbsPos:
 					
 					// move to X absolute position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, moveXAbsPos), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, moveXAbsPos) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_YAbsPos:
 					
 					// move to Y absolute position with selected step size
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, moveYAbsPos), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, moveYAbsPos) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_XRelPos:
 					
 					// move X axis relative to current position
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, moveXRelPos), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, moveXRelPos) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_YRelPos:
 					
 					// move Y axis relative to current position
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, moveYRelPos), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, moveYRelPos) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					break;
 					
 				case StagePan_StartXAbsPos:
@@ -867,8 +878,9 @@ INIT_ERR
 					
 					GetCtrlVal(panel, control, &useJoystick);
 					
-					if (stage->UseJoystick)
+					if (stage->UseJoystick) {
 						errChk( (*stage->UseJoystick)	(stage, useJoystick, &errorInfo.errMsg) );
+					}
 					break;
 					
 				case StagePan_LockYStepSize:
@@ -896,14 +908,15 @@ INIT_ERR
 					
 					if (!stage->SetVelocity) break; // do nothing if there is no such functionality implemented by the child class
 					
-					if (velIdx == 0 && stage->lowVelocity)
+					if (velIdx == 0 && stage->lowVelocity) {
 						errChk( (*stage->SetVelocity) (stage, *stage->lowVelocity, &errorInfo.errMsg) );
-					else
-						if (velIdx == 1 && stage->midVelocity)
-						errChk( (*stage->SetVelocity) (stage, *stage->midVelocity, &errorInfo.errMsg) );
-						else
-							if (velIdx == 2 && stage->highVelocity)
+					} else
+						if (velIdx == 1 && stage->midVelocity) {
+							errChk( (*stage->SetVelocity) (stage, *stage->midVelocity, &errorInfo.errMsg) );
+						} else
+							if (velIdx == 2 && stage->highVelocity) {
 								errChk( (*stage->SetVelocity)	(stage, *stage->highVelocity, &errorInfo.errMsg) );
+							}
 					
 					break;
 					
@@ -947,10 +960,12 @@ INIT_ERR
 					refPosPtr = ListGetPtrToItem(stage->xyRefPos, refPosIdx + 1);
 					
 					// move X axis to reference position
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, (*refPosPtr)->x), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_X_AXIS, (*refPosPtr)->x) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					
 					// move Y axis to reference position
-					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, (*refPosPtr)->y), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+					nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_ABS, XYSTAGE_Y_AXIS, (*refPosPtr)->y) );
+					errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 					
 					break;
 			}
@@ -1030,14 +1045,16 @@ INIT_ERR
 							
 							SetCtrlVal(panel, control, (stage->xPos + xDirection * xStepSize) * 1000);	// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, (stage->xPos - xDirection * xStepSize) * 1000);	// convert back to [um] 
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 					}
@@ -1051,14 +1068,16 @@ INIT_ERR
 							
 							SetCtrlVal(panel, control, (stage->yPos + yDirection * yStepSize) * 1000);	// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, (stage->yPos - yDirection * yStepSize) * 1000);	// convert back to [um] 
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 					}
@@ -1072,14 +1091,16 @@ INIT_ERR
 							
 							SetCtrlVal(panel, control, xDirection * xStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, xDirection * xStepSize) ); 
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, -xDirection * xStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_X_AXIS, -xDirection * xStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					}
 					break;
@@ -1092,14 +1113,16 @@ INIT_ERR
 							
 							SetCtrlVal(panel, control, yDirection * yStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, yDirection * yStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					
 						case MOUSE_WHEEL_SCROLL_DOWN:
 					
 							SetCtrlVal(panel, control, -yDirection * yStepSize * 1000);					// convert back to [um]
 							// move relative to current position
-							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
+							nullChk( moveCommand = init_MoveCommand_type(XYSTAGE_MOVE_REL, XYSTAGE_Y_AXIS, -yDirection * yStepSize) );
+							errChk( TaskControlEvent(stage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) ); 
 							return 1;
 					}
 					break;
@@ -1174,7 +1197,10 @@ INIT_ERR
 			}
 	}
 	
+	return 0;
 Error:
+	
+	discard_MoveCommand_type(&moveCommand);
 	
 PRINT_ERR
 
@@ -1275,7 +1301,7 @@ INIT_ERR
 					newYMaxLimit *= 0.001; 	// convert from [um] to [mm]
 					
 					// if given, call hardware specific function to set these limits
-					if (stage->SetLimits)
+					if (stage->SetLimits) {
 						if ( (errorInfo.error = (*stage->SetLimits) (stage, newXMinLimit, newXMaxLimit, newYMinLimit, newYMaxLimit, &errorInfo.errMsg)) < 0) {
 							// error setting new limits, return to old values
 							SetCtrlVal(panel, SetPan_XMinLimit, *stage->xMinimumLimit * 1000);		// convert from [mm] to [um]
@@ -1290,6 +1316,7 @@ INIT_ERR
 							*stage->yMinimumLimit = newYMinLimit;
 							*stage->yMaximumLimit = newYMaxLimit;
 						}
+					}
 					
 					break;
 					
@@ -1303,8 +1330,9 @@ INIT_ERR
 						int		velIdx;	// velocity settings index to be applied to the stage:
 										// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(stage->controlPanHndl, StagePan_StageVel, &velIdx);
-						if (velIdx == 0 && stage->SetVelocity)
+						if (velIdx == 0 && stage->SetVelocity) {
 							errChk( (*stage->SetVelocity) (stage, *stage->lowVelocity, &errorInfo.errMsg) );
+						}
 					}
 					break;
 					
@@ -1318,8 +1346,9 @@ INIT_ERR
 						int		velIdx;	// velocity settings index to be applied to the stage:
 										// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(stage->controlPanHndl, StagePan_StageVel, &velIdx);
-						if (velIdx == 1 && stage->SetVelocity)
+						if (velIdx == 1 && stage->SetVelocity) {
 							errChk( (*stage->SetVelocity) (stage, *stage->midVelocity, &errorInfo.errMsg) );
+						}
 					}
 					break;
 					
@@ -1332,8 +1361,9 @@ INIT_ERR
 					{	int		velIdx;	// velocity settings index to be applied to the stage:
 										// 0 - low, 1 - mid, 2 - high.
 						GetCtrlIndex(stage->controlPanHndl, StagePan_StageVel, &velIdx);
-						if (velIdx == 0 && stage->SetVelocity)
+						if (velIdx == 0 && stage->SetVelocity) {
 							errChk( (*stage->SetVelocity) (stage, *stage->highVelocity, &errorInfo.errMsg) );
+						}
 					}
 					break;
 					
@@ -1427,8 +1457,9 @@ INIT_ERR
 	ChangeLEDStatus(stage, XYSTAGE_LED_MOVING);
 	
 	// move stage
-	if (stage->Move)
+	if (stage->Move) {
 		errChk( (*stage->Move)	(stage, moveCommand->moveType, moveCommand->axis, moveCommand->moveVal, &errorInfo.errMsg) );
+	}
 	
 	// movement assumed to be complete, check position if method given
 	if (stage->GetAbsPosition)

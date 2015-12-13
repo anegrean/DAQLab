@@ -9,7 +9,7 @@ IVI Standard Root Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework Dir = "/C/Program Files/IVI Foundation/VISA/winnt"
 IVI Standard Root 64-bit Dir = "/C/Program Files/IVI Foundation/IVI"
 VXIplug&play Framework 64-bit Dir = "/C/Program Files/IVI Foundation/VISA/win64"
-Number of Files = 86
+Number of Files = 88
 Target Type = "Executable"
 Flags = 2064
 Copied From Locked InstrDrv Directory = False
@@ -1093,32 +1093,35 @@ File Type = "CSource"
 Res Id = 82
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "DAQLab.c"
-Path = "/d/GitHub/DAQLab_private/DAQLab.c"
+Path Rel Path = "Framework/Error handling/DAQLabErrHandling.c"
+Path = "/d/GitHub/DAQLab_private/Framework/Error handling/DAQLabErrHandling.c"
 Exclude = False
 Compile Into Object File = False
 Project Flags = 0
-Folder = "Not In A Folder"
+Folder = "Framework/Error Handling"
+Folder Id = 23
 
 [File 0083]
 File Type = "Include"
 Res Id = 83
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "DAQLab.h"
-Path = "/d/GitHub/DAQLab_private/DAQLab.h"
+Path Rel Path = "Framework/Error handling/DAQLabErrHandling.h"
+Path = "/d/GitHub/DAQLab_private/Framework/Error handling/DAQLabErrHandling.h"
 Exclude = False
 Project Flags = 0
-Folder = "Not In A Folder"
+Folder = "Framework/Error Handling"
+Folder Id = 23
 
 [File 0084]
-File Type = "Include"
+File Type = "CSource"
 Res Id = 84
 Path Is Rel = True
 Path Rel To = "Project"
-Path Rel Path = "Module_Header.h"
-Path = "/d/GitHub/DAQLab_private/Module_Header.h"
+Path Rel Path = "DAQLab.c"
+Path = "/d/GitHub/DAQLab_private/DAQLab.c"
 Exclude = False
+Compile Into Object File = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
@@ -1127,15 +1130,37 @@ File Type = "Include"
 Res Id = 85
 Path Is Rel = True
 Path Rel To = "Project"
+Path Rel Path = "DAQLab.h"
+Path = "/d/GitHub/DAQLab_private/DAQLab.h"
+Exclude = False
+Project Flags = 0
+Folder = "Not In A Folder"
+
+[File 0086]
+File Type = "Include"
+Res Id = 86
+Path Is Rel = True
+Path Rel To = "Project"
+Path Rel Path = "Module_Header.h"
+Path = "/d/GitHub/DAQLab_private/Module_Header.h"
+Exclude = False
+Project Flags = 0
+Folder = "Not In A Folder"
+
+[File 0087]
+File Type = "Include"
+Res Id = 87
+Path Is Rel = True
+Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.h"
 Path = "/d/GitHub/DAQLab_private/UI_DAQLab.h"
 Exclude = False
 Project Flags = 0
 Folder = "Not In A Folder"
 
-[File 0086]
+[File 0088]
 File Type = "User Interface Resource"
-Res Id = 86
+Res Id = 88
 Path Is Rel = True
 Path Rel To = "Project"
 Path Rel Path = "UI_DAQLab.uir"

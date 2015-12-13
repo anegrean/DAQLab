@@ -66,7 +66,7 @@ Save Changes Before Compiling = "Always"
 Hide Windows = False
 Break At First Statement = False
 Sort Type = "File Name"
-Number of Opened Files = 4
+Number of Opened Files = 3
 Window Confinement Region Enabled = True
 MainColumnWidth = 254
 FileDateColumnWidth = 70
@@ -108,7 +108,7 @@ In Projects = "1,"
 Window Top = 32
 Window Left = 10
 Window Z-Order = 1
-Source Window State = "1,7442,7442,7442,0,22,22,0,0,171,0,0,0,0,0,67,7410,0,7435,60,349,683,1,0,"
+Source Window State = "1,7442,7442,7442,0,22,22,0,0,171,0,0,0,0,0,67,0,0,7430,31,349,683,1,0,"
 
 [File 0005]
 Path = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplay.h"
@@ -117,7 +117,7 @@ Disk Date = 3532878737
 In Projects = "1,"
 Window Top = 62
 Window Left = 26
-Window Z-Order = 4
+Window Z-Order = 3
 Source Window State = "1,88,88,88,0,21,0,0,0,80,0,0,0,0,0,25,55,0,88,0,349,683,1,0,"
 
 [File 0006]
@@ -137,7 +137,6 @@ Disk Date = 3529060573
 In Projects = "1,"
 Window Top = 92
 Window Left = 42
-Window Z-Order = 3
 Source Window State = "1,0,0,0,0,0,0,0,0,80,0,0,0,0,0,25,0,0,0,0,349,683,1,0,"
 
 [File 0008]
@@ -784,11 +783,24 @@ File Type = "User Interface Resource"
 Disk Date = 3529060578
 In Projects = "1,"
 
+[File 0087]
+Path = "/d/GitHub/DAQLab_private/Framework/Error handling/DAQLabErrHandling.c"
+File Type = "CSource"
+Disk Date = 3532882099
+In Projects = "1,"
+Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
+
+[File 0088]
+Path = "/d/GitHub/DAQLab_private/Framework/Error handling/DAQLabErrHandling.h"
+File Type = "Include"
+Disk Date = 3532882090
+In Projects = "1,"
+Source Window State = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,"
+
 [Tab Order]
 Tab 0001 = "/d/GitHub/DAQLab_private/Modules/Laser Scanning/LaserScanning.c"
 Tab 0002 = "/d/GitHub/DAQLab_private/Framework/Display/ImageDisplay.h"
 Tab 0003 = "/d/GitHub/DAQLab_private/DAQLab.c"
-Tab 0004 = "/d/GitHub/DAQLab_private/Module_Header.h"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

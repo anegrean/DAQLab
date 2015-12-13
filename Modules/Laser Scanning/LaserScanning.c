@@ -26,8 +26,8 @@
 // Display module
 // Choose only one of the include files below
 //----------------------------------------------------------------------------
-//#include "ImageDisplayNIVision.h"
-#include "ImageDisplayCVI.h"
+#include "ImageDisplayNIVision.h"
+//#include "ImageDisplayCVI.h"
 //----------------------------------------------------------------------------
 
 									 

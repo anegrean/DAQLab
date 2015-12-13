@@ -26,8 +26,8 @@
 // Display module
 // Choose only one of the include files below
 //----------------------------------------------------------------------------
-#include "ImageDisplayNIVision.h"
-//#include "ImageDisplayCVI.h"
+//#include "ImageDisplayNIVision.h"
+#include "ImageDisplayCVI.h"
 //----------------------------------------------------------------------------
 
 									 
@@ -3108,14 +3108,18 @@ INIT_ERR
 	
 		*imgDisplayPtr = NULL;  // Display handle initialization is not needed here.
 		
-	#elif __ImageDisplayCVI_H__
-		
-		nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayCVI_type(engine->lsModule->baseClass.workspacePanHndl, "", 10, 10, NULL) );
-	
 	#else
+		
+		#ifdef __ImageDisplayCVI_H__
+		
+			nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayCVI_type(engine->lsModule->baseClass.workspacePanHndl, "", 10, 10, NULL) );
 	
-		SET_ERR(init_ScanChan_type_ERR_NoDisplay, "There is no display selected.");
+		#else
 	
+			SET_ERR(init_ScanChan_type_ERR_NoDisplay, "There is no display selected.");
+	
+		#endif
+			
 	#endif
 	
 	errChk( CmtReleaseTSVPtr(scanChan->imgDisplayTSV) );
@@ -7023,15 +7027,19 @@ INIT_ERR
 						(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
 					}
 					
-				#elif __ImageDisplayCVI_H__
-				
-					discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
-					(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
-					
 				#else
 					
-					SET_ERR(NonResRectRasterScan_BuildImage_Err_NoDisplay, "There is no display selected.");
+					#ifdef __ImageDisplayCVI_H__
+				
+						discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
+						(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
 					
+					#else
+					
+						SET_ERR(NonResRectRasterScan_BuildImage_Err_NoDisplay, "There is no display selected.");
+					
+					#endif
+						
 				#endif
 				
 				

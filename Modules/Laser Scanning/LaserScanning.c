@@ -1864,7 +1864,7 @@ INIT_ERR
 	
 	uInt32							jumpMethod						= pointScan->globalPointScanSettings->jumpMethod;
 	
-	DAQLabXMLNode					pointScanAttr[]					= { {"Name",						BasicData_CString,		&pointScan->globalPointScanSettings->protocolName} };        
+	DAQLabXMLNode					pointScanAttr[]					= { {"Name",						BasicData_CString,		pointScan->globalPointScanSettings->protocolName} };        
 	
 	DAQLabXMLNode					jumpSettingsAttr[] 				= { {"Repeat",						BasicData_UInt,			&pointScan->globalPointScanSettings->nSequenceRepeat},
 																		{"StartDelay",					BasicData_Double,		&pointScan->globalPointScanSettings->startDelayInitVal},
@@ -3290,14 +3290,18 @@ INIT_ERR
 	
 		*imgDisplayPtr = NULL;  // Display handle initialization is not needed here.
 		
-	#elif __ImageDisplayCVI_H__
-		
-		nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayCVI_type(engine->lsModule->baseClass.workspacePanHndl, "", 10, 10, NULL) );
-	
 	#else
+		
+		#ifdef __ImageDisplayCVI_H__
+		
+			nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayCVI_type(engine->lsModule->baseClass.workspacePanHndl, "", 10, 10, NULL) );
 	
-		SET_ERR(init_ScanChan_type_ERR_NoDisplay, "There is no display selected.");
+		#else
 	
+			SET_ERR(init_ScanChan_type_ERR_NoDisplay, "There is no display selected.");
+	
+		#endif
+			
 	#endif
 	
 	errChk( CmtReleaseTSVPtr(scanChan->imgDisplayTSV) );
@@ -7429,16 +7433,20 @@ INIT_ERR
 						(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
 					}
 					
-				#elif __ImageDisplayCVI_H__
-				
-					discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
-					nullChk( imgDisplayCBGroup = init_CallbackGroup_type(*imgDisplayPtr, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
-					(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
-					
 				#else
 					
-					SET_ERR(NonResRectRasterScan_BuildImage_Err_NoDisplay, "There is no display selected.");
+					#ifdef __ImageDisplayCVI_H__
+				
+						discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
+						nullChk( imgDisplayCBGroup = init_CallbackGroup_type(*imgDisplayPtr, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
+						(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
+
+					#else
 					
+						SET_ERR(NonResRectRasterScan_BuildImage_Err_NoDisplay, "There is no display selected.");
+					
+					#endif
+						
 				#endif
 				
 				
@@ -10083,14 +10091,17 @@ INIT_ERR
 								SET_ERR(TaskTreeStateChange_RectRaster_Err_WrongPixelDataType, "Wrong pixel data type.");
 						}
 						
-						// display image in new window
-						imgDisplayPtr = NULL;
-						displayTSVHndl = engine->baseClass.scanChans[i]->imgDisplayTSV;
-						errChk( CmtGetTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV, &imgDisplayPtr) ); engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = __LINE__;
-						nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (engine->baseClass.scanChans[i], 0, imageType, engine->scanSettings->width, engine->scanSettings->height, NULL) );
-						errChk( CmtReleaseTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV) );
-						engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = 0;
-						imgDisplayPtr = NULL;
+						#ifdef __ImageDisplayNIVision_H__ 
+						
+							// display image in new window
+							imgDisplayPtr = NULL;
+							displayTSVHndl = engine->baseClass.scanChans[i]->imgDisplayTSV;
+							errChk( CmtGetTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV, &imgDisplayPtr) ); engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = __LINE__;
+							nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (engine->baseClass.scanChans[i], 0, imageType, engine->scanSettings->width, engine->scanSettings->height, NULL) );
+							errChk( CmtReleaseTSVPtr(engine->baseClass.scanChans[i]->imgDisplayTSV) );
+							engine->baseClass.scanChans[i]->imgDisplayTSVLineNumDebug = 0;
+							imgDisplayPtr = NULL;
+						#endif
 						
 						engine->nImgBuffers++;
 						// allocate memory for image assembly

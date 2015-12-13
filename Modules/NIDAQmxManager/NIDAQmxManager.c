@@ -550,6 +550,9 @@ typedef struct {
 	//------------------------------------
 	int							timingPanHndl;				// Panel handle containing timing controls.
 	int							settingsPanHndl;
+	int							sampleClkSrcCtrlID;
+	int							refClkSrcCtrlID;
+	int							startRoutingCtrlID;
 } ADTaskTiming_type;
 
 // timing structure for counter tasks
@@ -575,6 +578,7 @@ typedef struct {
 	TrigWndCond_type			wndTrigCond;  				// For analog window trigger.
 	uInt32						nPreTrigSamples;			// For reference type trigger. Number of pre-trigger samples to acquire.
 	Dev_type*					device;						// Reference to the device that owns this task trigger.
+	
 	//------------------------------------
 	// UI
 	//------------------------------------
@@ -1052,7 +1056,7 @@ static COChannel_type*				GetCOChannel							(Dev_type* dev, char physChanName[]
 // Channel settings
 //------------------------------------------------------------------------------
 	// channel settings base class
-static void							init_ChanSet_type						(Dev_type* dev, ChanSet_type* chanSet, char physChanName[], Channel_type chanType, DiscardFptr_type discardFptr);
+static void							init_ChanSet_type						(Dev_type* dev, ChanSet_type* chanSet, char physChanName[], Channel_type chanType, BOOL onDemand, DiscardFptr_type discardFptr);
 static void							discard_ChanSet_type					(ChanSet_type** chanSetPtr);
 
 	//-----------------------------
@@ -1061,7 +1065,7 @@ static void							discard_ChanSet_type					(ChanSet_type** chanSetPtr);
 
 	// AI Voltage
 static ChanSet_AI_Voltage_type*		init_ChanSet_AI_Voltage_type 			(Dev_type* dev, char physChanName[], AIChannel_type* chanAttr, BOOL integrateFlag, 
-													 						 DataTypeConversion_type dataTypeConversion, uInt32 VRangeIdx, Terminal_type terminalType);
+													 						 DataTypeConversion_type dataTypeConversion, uInt32 VRangeIdx, Terminal_type terminalType, BOOL onDemand);
 
 static void							discard_ChanSet_AI_Voltage_type			(ChanSet_AI_Voltage_type** chanSetPtr);
 
@@ -1072,7 +1076,7 @@ static int CVICALLBACK				ChanSetAIVoltageUI_CB					(int panel, int control, int
 	// AI Current
 static ChanSet_AI_Current_type*		init_ChanSet_AI_Current_type 			(Dev_type* dev, char physChanName[], AIChannel_type* chanAttr, BOOL integrateFlag, 
 													 						 DataTypeConversion_type dataTypeConversion, uInt32 IRangeIdx, ShuntResistor_type shuntResistorType, 
-																			 double shuntResistorValue, Terminal_type terminalType);
+																			 double shuntResistorValue, Terminal_type terminalType, BOOL onDemand);
 
 static void							discard_ChanSet_AI_Current_type			(ChanSet_AI_Current_type** chanSetPtr);                          
 
@@ -1086,7 +1090,7 @@ void 								ResetAIDataTypeGainOffset				(ChanSet_AI_Voltage_type* chSet);
 	//-----------------------------
 
 	// AO Voltage
-static ChanSet_AO_Voltage_type*		init_ChanSet_AO_Voltage_type 			(Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 VRangeIdx, Terminal_type terminalType);
+static ChanSet_AO_Voltage_type*		init_ChanSet_AO_Voltage_type 			(Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 VRangeIdx, Terminal_type terminalType, BOOL onDemand);
 
 static void							discard_ChanSet_AO_Voltage_type			(ChanSet_AO_Voltage_type** chanSetPtr);
 
@@ -1097,13 +1101,13 @@ static int CVICALLBACK				ChanSetAOVoltageUI_CB					(int panel, int control, int
 
 	// AO Current
 static ChanSet_AO_Current_type*		init_ChanSet_AO_Current_type 			(Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 IRangeIdx, ShuntResistor_type shuntResistorType, 
-																			 double shuntResistorValue, Terminal_type terminalType);
+																			 double shuntResistorValue, Terminal_type terminalType, BOOL onDemand);
 static void							discard_ChanSet_AO_Current_type			(ChanSet_AO_Current_type** chanSetPtr);                          
 
 	//-----------------------------
 	// DI and DO 
 	//-----------------------------
-static ChanSet_DIDO_type*			init_ChanSet_DIDO_type					(Dev_type* dev, char physChanName[], Channel_type chanType, BOOL invert);
+static ChanSet_DIDO_type*			init_ChanSet_DIDO_type					(Dev_type* dev, char physChanName[], Channel_type chanType, BOOL invert, BOOL onDemand);
 static void							discard_ChanSet_DIDO_type				(ChanSet_type** chanSetPtr);
 static int 							ChanSetLineDO_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
 static int 							ChanSetPortDO_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2); 
@@ -1116,16 +1120,16 @@ void 								SetPortControls							(int panel, uInt32 data);																	// 
 	//-----------------------------
 
 	// CI base class
-static void							init_ChanSet_CI_type					(Dev_type* dev, ChanSet_CI_type* chanSet, char physChanName[], Channel_type chanType, EdgeTypes activeEdge, DiscardFptr_type discardFptr);
+static void							init_ChanSet_CI_type					(Dev_type* dev, ChanSet_CI_type* chanSet, char physChanName[], Channel_type chanType, EdgeTypes activeEdge, BOOL onDemand, DiscardFptr_type discardFptr);
 static void							discard_ChanSet_CI_type					(ChanSet_CI_type** chanSetPtr);
 	// CI Edge Count
-static ChanSet_CI_EdgeCount_type* 	init_ChanSet_CI_EdgeCount_type 			(Dev_type* dev, char physChanName[], EdgeTypes activeEdge, uInt32 initialCount, CountDirections countDirection);
+static ChanSet_CI_EdgeCount_type* 	init_ChanSet_CI_EdgeCount_type 			(Dev_type* dev, char physChanName[], EdgeTypes activeEdge, uInt32 initialCount, CountDirections countDirection, BOOL onDemand);
 static void							discard_ChanSet_CI_EdgeCount_type		(ChanSet_CI_EdgeCount_type** chanSetPtr);
 static int 							ChanSetCIEdge_CB 						(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);   	// <---------- check & cleanup!!!
 
 	// CI Frequency
 static ChanSet_CI_Frequency_type* 	init_ChanSet_CI_Frequency_type 			(Dev_type* dev, char physChanName[], double freqMax, double freqMin, EdgeTypes activeEdge, CIFrequencyMeasMethods measMethod, 
-																  			 double measTime, uInt32 divisor, char freqInputTerminal[], CounterTaskTiming_type taskTiming);
+																  			 double measTime, uInt32 divisor, char freqInputTerminal[], CounterTaskTiming_type taskTiming, BOOL onDemand);
 static void 						discard_ChanSet_CI_Frequency_type 		(ChanSet_CI_Frequency_type** chanSetPtr);
 
 	//-----------------------------
@@ -1133,7 +1137,7 @@ static void 						discard_ChanSet_CI_Frequency_type 		(ChanSet_CI_Frequency_type
 	//-----------------------------
 
 	// CO
-static ChanSet_CO_type* 			init_ChanSet_CO_type 					(Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain);
+static ChanSet_CO_type* 			init_ChanSet_CO_type 					(Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain, BOOL onDemand);
 static void 						discard_ChanSet_CO_type 				(ChanSet_CO_type** chanSetPtr);
 static int 							ChanSetCO_CB 							(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);	// <---------- check & cleanup!!!
 static int 							AddToUI_Chan_CO			 				(ChanSet_CO_type* chanSet, char** errorMsg); 
@@ -2147,7 +2151,7 @@ INIT_ERR
 				
 				DataTypeConversion_type			dataTypeConversion		= {.dataType = (DataTypeConversions)AIDataTypeConversion, .min = dataTypeMin, .max = dataTypeMax, .offset = dataTypeOffset, .gain = dataTypeGain};
 				
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AI_Voltage_type(dev, physChanName, AIChanAttr, integrateFlag, dataTypeConversion, VRangeIdx, (Terminal_type) terminalType) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AI_Voltage_type(dev, physChanName, AIChanAttr, integrateFlag, dataTypeConversion, VRangeIdx, (Terminal_type) terminalType, onDemand) );
 				// reserve channel
 				AIChanAttr->inUse = TRUE;
 			}
@@ -2185,7 +2189,7 @@ INIT_ERR
 				
 				DataTypeConversion_type			dataTypeConversion		= {.dataType = (DataTypeConversions)AIDataTypeConversion, .min = dataTypeMin, .max = dataTypeMax, .offset = dataTypeOffset, .gain = dataTypeGain};
 				
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AI_Current_type(dev, physChanName, chanAttr, integrateFlag, dataTypeConversion, IRangeIdx, (ShuntResistor_type) AIShuntResistorType, shuntResistor, (Terminal_type) terminalType) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AI_Current_type(dev, physChanName, chanAttr, integrateFlag, dataTypeConversion, IRangeIdx, (ShuntResistor_type) AIShuntResistorType, shuntResistor, (Terminal_type) terminalType, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2206,7 +2210,7 @@ INIT_ERR
 				
 																			
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanAOVoltageAttr, NumElem(ChanAOVoltageAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AO_Voltage_type(dev, physChanName, chanAttr, VRangeIdx, (Terminal_type) terminalType) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AO_Voltage_type(dev, physChanName, chanAttr, VRangeIdx, (Terminal_type) terminalType, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2226,7 +2230,7 @@ INIT_ERR
 																			{"Terminal",			BasicData_UInt,		&terminalType} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanAOCurrentAttr, NumElem(ChanAOCurrentAttr)) );															
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AO_Current_type(dev, physChanName, chanAttr, IRangeIdx, 0, 0, (Terminal_type) terminalType) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AO_Current_type(dev, physChanName, chanAttr, IRangeIdx, 0, 0, (Terminal_type) terminalType, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 				
@@ -2240,7 +2244,7 @@ INIT_ERR
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2253,7 +2257,7 @@ INIT_ERR
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2266,7 +2270,7 @@ INIT_ERR
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2279,7 +2283,7 @@ INIT_ERR
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2296,7 +2300,7 @@ INIT_ERR
 																			{"CountDirection",		BasicData_UInt,		&countDirection} };
 																			
 				errChk( DLGetXMLElementAttributes(channelXMLElement, CIEdgeCountAttr, NumElem(CIEdgeCountAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CI_EdgeCount_type(dev, physChanName, edgeType, initialCount, countDirection) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CI_EdgeCount_type(dev, physChanName, edgeType, initialCount, countDirection, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 			}
@@ -2326,7 +2330,7 @@ INIT_ERR
 																			{"FrequencyInputTerminal",		BasicData_CString,		freqInputTerminal}};
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, CIFreqChanAttr, NumElem(CIFreqChanAttr)) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CI_Frequency_type(dev, physChanName, freqMax, freqMin, edgeType, freqMeasMethod, measTime, divisor, freqInputTerminal, CIFreqTaskTiming) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CI_Frequency_type(dev, physChanName, freqMax, freqMin, edgeType, freqMeasMethod, measTime, divisor, freqInputTerminal, CIFreqTaskTiming, onDemand) );
 				OKfree(freqInputTerminal);
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2353,7 +2357,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTimeTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTime, lowTime, initialDelay) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain, onDemand) );
 				
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2381,7 +2385,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainFreqTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, dutyCycle, frequency, initialDelay) );
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
 				
@@ -2411,7 +2415,7 @@ INIT_ERR
 				
 				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTickTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTicks, lowTicks, delayTicks, 0) ); // tick clock unknown at this point
-				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, (PulseTrain_type*)pulseTrain) );
+				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, (PulseTrain_type*)pulseTrain, onDemand) );
 				OKfree(clockSource);
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2429,12 +2433,14 @@ INIT_ERR
 	errChk ( DLGetSingleXMLElementFromElement(channelXMLElement, "Triggers", &triggersXMLElement) );
 	
 	// get start trigger XML element
-	if (triggersXMLElement)
+	if (triggersXMLElement) {
 		errChk ( DLGetSingleXMLElementFromElement(triggersXMLElement, "StartTrigger", &startTriggerXMLElement) );
+	}
 	
 	// get reference trigger XML element
-	if (triggersXMLElement)
+	if (triggersXMLElement) {
 		errChk ( DLGetSingleXMLElementFromElement(triggersXMLElement, "ReferenceTrigger", &referenceTriggerXMLElement) );
+	}
 	
 	// load trigger attributes only for counter channels
 	switch ((*chanSetPtr)->chanType) {
@@ -2650,8 +2656,9 @@ INIT_ERR
 	ActiveXMLObj_IXMLDOMElement_	ReferenceTriggerXMLElement	= 0;	 // holds the "ReferenceTrigger" element
 	
 	// create new triggers XML element
-	if (taskSet->startTrig || taskSet->referenceTrig)
+	if (taskSet->startTrig || taskSet->referenceTrig) {
 		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Triggers", &TriggersXMLElement) );
+	}
 	
 	//----------------------
 	// Start Trigger
@@ -3081,8 +3088,9 @@ INIT_ERR
 	}
 	
 	// create new triggers XML element
-	if (startTrig || referenceTrig)
+	if (startTrig || referenceTrig) {
 		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Triggers", &TriggersXMLElement) );
+	}
 	
 	// start Trigger
 	if (startTrig) {
@@ -4678,7 +4686,7 @@ static COChannel_type* GetCOChannel (Dev_type* dev, char physChanName[])
 // ChanSet_type base class
 //------------------------------------------------------------------------------
 
-static void  init_ChanSet_type (Dev_type* dev, ChanSet_type* chanSet, char physChanName[], Channel_type chanType, DiscardFptr_type discardFptr)
+static void  init_ChanSet_type (Dev_type* dev, ChanSet_type* chanSet, char physChanName[], Channel_type chanType, BOOL onDemand, DiscardFptr_type discardFptr)
 {
 	chanSet->name							= StrDup(physChanName);
 	chanSet->chanType						= chanType;
@@ -4686,7 +4694,7 @@ static void  init_ChanSet_type (Dev_type* dev, ChanSet_type* chanSet, char physC
 	chanSet->sinkVChan						= NULL;
 	chanSet->device							= dev;
 	chanSet->srcVChan						= NULL;
-	chanSet->onDemand						= FALSE;				// hw-timing by default
+	chanSet->onDemand						= onDemand;
 	chanSet->integrateFlag					= FALSE;
 	chanSet->dataTypeConversion.dataType	= Convert_To_Double;   // no conversion needed, gai, offset, min and max are ignored.
 	chanSet->dataTypeConversion.gain		= 1;
@@ -4716,13 +4724,13 @@ static void	discard_ChanSet_type (ChanSet_type** chanSetPtr)
 //------------------------------------------------------------------------------
 
 static ChanSet_AI_Voltage_type* init_ChanSet_AI_Voltage_type (Dev_type* dev, char physChanName[], AIChannel_type* chanAttr, BOOL integrateFlag, 
-															  DataTypeConversion_type dataTypeConversion, uInt32 VRangeIdx, Terminal_type terminalType)
+															  DataTypeConversion_type dataTypeConversion, uInt32 VRangeIdx, Terminal_type terminalType, BOOL onDemand)
 {
 	ChanSet_AI_Voltage_type* chan = malloc (sizeof(ChanSet_AI_Voltage_type));
 	if (!chan) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AI_Voltage, (DiscardFptr_type)discard_ChanSet_AI_Voltage_type);
+	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AI_Voltage, onDemand, (DiscardFptr_type)discard_ChanSet_AI_Voltage_type);
 	chan->baseClass.dataTypeConversion	= dataTypeConversion;
 	chan->baseClass.integrateFlag		= integrateFlag;
 	
@@ -4773,24 +4781,31 @@ static int AddToUI_Chan_AI_Voltage (ChanSet_AI_Voltage_type* chanSet)
 	SetPanelAttribute(chanSet->baseClass.chanPanHndl, ATTR_CALLBACK_DATA, chanSet);
 	// add callback data to the controls in the panel
 	SetCtrlsInPanCBInfo(chanSet, ChanSetAIVoltageUI_CB, chanSet->baseClass.chanPanHndl);
-							
+	
+	//--------------
+	// On demand
+	//--------------
+	
+	SetCtrlVal(chanSet->baseClass.chanPanHndl, AIVoltage_OnDemand, chanSet->baseClass.onDemand); 
+	
 	//--------------
 	// Terminal
 	//--------------
 	
 	// select default terminal configuration from available choices in the following order
-	if (chanSet->terminal == Terminal_None)
-	if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) 
-		chanSet->terminal = Terminal_RSE;
-	else
-		if (chanSet->chanAttr->terminalCfg | Terminal_Bit_NRSE) 
-			chanSet->terminal = Terminal_NRSE;
+	if (chanSet->terminal == Terminal_None) {
+		if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) 
+			chanSet->terminal = Terminal_RSE;
 		else
-			if (chanSet->chanAttr->terminalCfg | Terminal_Bit_Diff) 
-				chanSet->terminal = Terminal_Diff;
+			if (chanSet->chanAttr->terminalCfg | Terminal_Bit_NRSE) 
+				chanSet->terminal = Terminal_NRSE;
 			else
-				if (chanSet->chanAttr->terminalCfg | Terminal_Bit_PseudoDiff) 
-					chanSet->terminal = Terminal_PseudoDiff; // if none of the above then Terminal_None is used which should not happen
+				if (chanSet->chanAttr->terminalCfg | Terminal_Bit_Diff) 
+					chanSet->terminal = Terminal_Diff;
+				else
+					if (chanSet->chanAttr->terminalCfg | Terminal_Bit_PseudoDiff) 
+						chanSet->terminal = Terminal_PseudoDiff; // if none of the above then Terminal_None is used which should not happen
+	}
 									
 	// populate terminal ring control with available terminal configurations
 	if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) InsertListItem(chanSet->baseClass.chanPanHndl, AIVoltage_Terminal, -1, "RSE", Terminal_RSE);  
@@ -5091,13 +5106,13 @@ PRINT_ERR
 // ChanSet_AO_Voltage_type
 //------------------------------------------------------------------------------
 
-static ChanSet_AO_Voltage_type* init_ChanSet_AO_Voltage_type (Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 VRangeIdx, Terminal_type terminalType)
+static ChanSet_AO_Voltage_type* init_ChanSet_AO_Voltage_type (Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 VRangeIdx, Terminal_type terminalType, BOOL onDemand)
 {
 	ChanSet_AO_Voltage_type* chan = malloc (sizeof(ChanSet_AO_Voltage_type));
 	if (!chan) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AO_Voltage, (DiscardFptr_type)discard_ChanSet_AO_Voltage_type);
+	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AO_Voltage, onDemand, (DiscardFptr_type)discard_ChanSet_AO_Voltage_type);
 	
 	// init child
 	chan->chanAttr							= chanAttr;
@@ -5145,24 +5160,31 @@ INIT_ERR
 	SetPanelAttribute(chanSet->baseClass.chanPanHndl, ATTR_CALLBACK_DATA, chanSet);
 	// add callback data to the controls in the panel
 	SetCtrlsInPanCBInfo(chanSet, ChanSetAOVoltageUI_CB, chanSet->baseClass.chanPanHndl);
-							
+	
+	//--------------
+	// On demand
+	//--------------
+	
+	SetCtrlVal(chanSet->baseClass.chanPanHndl, AOVoltage_OnDemand, chanSet->baseClass.onDemand); 
+	
 	//--------------
 	// Terminal
 	//--------------
 	
 	// select default terminal configuration from available choices in the following order
-	if (chanSet->terminal == Terminal_None)
-	if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) 
-		chanSet->terminal = Terminal_RSE;
-	else
-		if (chanSet->chanAttr->terminalCfg | Terminal_Bit_NRSE)
-			chanSet->terminal = Terminal_NRSE;
+	if (chanSet->terminal == Terminal_None) {
+		if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) 
+			chanSet->terminal = Terminal_RSE;
 		else
-			if (chanSet->chanAttr->terminalCfg | Terminal_Bit_Diff) 
-				chanSet->terminal = Terminal_Diff;
+			if (chanSet->chanAttr->terminalCfg | Terminal_Bit_NRSE)
+				chanSet->terminal = Terminal_NRSE;
 			else
-				if (chanSet->chanAttr->terminalCfg | Terminal_Bit_PseudoDiff) 
-					chanSet->terminal = Terminal_PseudoDiff; // if none of the above then Terminal_None is used which should not happen
+				if (chanSet->chanAttr->terminalCfg | Terminal_Bit_Diff) 
+					chanSet->terminal = Terminal_Diff;
+				else
+					if (chanSet->chanAttr->terminalCfg | Terminal_Bit_PseudoDiff) 
+						chanSet->terminal = Terminal_PseudoDiff; // if none of the above then Terminal_None is used which should not happen
+	}
 											
 	// populate terminal ring control with available terminal configurations
 	if (chanSet->chanAttr->terminalCfg | Terminal_Bit_RSE) InsertListItem(chanSet->baseClass.chanPanHndl, AOVoltage_Terminal, -1, "RSE", Terminal_RSE);  
@@ -5291,13 +5313,13 @@ PRINT_ERR
 //------------------------------------------------------------------------------
 
 static ChanSet_AI_Current_type* init_ChanSet_AI_Current_type (Dev_type* dev, char physChanName[], AIChannel_type* chanAttr, BOOL integrateFlag, DataTypeConversion_type dataTypeConversion, 
-																uInt32 IRangeIdx, ShuntResistor_type shuntResistorType, double shuntResistorValue, Terminal_type terminalType)
+																uInt32 IRangeIdx, ShuntResistor_type shuntResistorType, double shuntResistorValue, Terminal_type terminalType, BOOL onDemand)
 {
 	ChanSet_AI_Current_type* chan = malloc (sizeof(ChanSet_AI_Current_type));
 	if (!chan) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AI_Current, (DiscardFptr_type)discard_ChanSet_AI_Current_type);
+	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AI_Current, onDemand, (DiscardFptr_type)discard_ChanSet_AI_Current_type);
 	chan->baseClass.dataTypeConversion	= dataTypeConversion;
 	chan->baseClass.integrateFlag		= integrateFlag;
 	
@@ -5326,13 +5348,13 @@ static void discard_ChanSet_AI_Current_type (ChanSet_AI_Current_type** chanSetPt
 //------------------------------------------------------------------------------
 
 static ChanSet_AO_Current_type* init_ChanSet_AO_Current_type (Dev_type* dev, char physChanName[], AOChannel_type* chanAttr, uInt32 IRangeIdx, ShuntResistor_type shuntResistorType, 
-															  double shuntResistorValue, Terminal_type terminalType)
+															  double shuntResistorValue, Terminal_type terminalType, BOOL onDemand)
 {
 	ChanSet_AO_Current_type* chan = malloc (sizeof(ChanSet_AO_Current_type));
 	if (!chan) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AO_Current, (DiscardFptr_type)discard_ChanSet_AO_Current_type);
+	init_ChanSet_type(dev, &chan->baseClass, physChanName, Chan_AO_Current, onDemand, (DiscardFptr_type)discard_ChanSet_AO_Current_type);
 	
 	// init child
 	chan->chanAttr						= chanAttr;
@@ -5426,13 +5448,13 @@ void ResetAIDataTypeGainOffset (ChanSet_AI_Voltage_type* chSet)
 //------------------------------------------------------------------------------
 // ChanSet_DIDO_type
 //------------------------------------------------------------------------------
-static ChanSet_DIDO_type* init_ChanSet_DIDO_type (Dev_type* dev, char physChanName[], Channel_type chanType, BOOL invert) 
+static ChanSet_DIDO_type* init_ChanSet_DIDO_type (Dev_type* dev, char physChanName[], Channel_type chanType, BOOL invert, BOOL onDemand) 
 {
 	ChanSet_DIDO_type* chanSet = malloc (sizeof(ChanSet_DIDO_type));
 	if (!chanSet) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, (DiscardFptr_type)discard_ChanSet_DIDO_type);
+	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, onDemand, (DiscardFptr_type)discard_ChanSet_DIDO_type);
 	
 	// init child
 	chanSet->invert		= invert;
@@ -5687,10 +5709,10 @@ void SetPortControls(int panel,uInt32 data)
 // ChanSet_CI
 //------------------------------------------------------------------------------
 
-static void	init_ChanSet_CI_type (Dev_type* dev, ChanSet_CI_type* chanSet, char physChanName[], Channel_type chanType, EdgeTypes activeEdge, DiscardFptr_type discardFptr)
+static void	init_ChanSet_CI_type (Dev_type* dev, ChanSet_CI_type* chanSet, char physChanName[], Channel_type chanType, EdgeTypes activeEdge, BOOL onDemand, DiscardFptr_type discardFptr)
 {
 	// init base class
-	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, discardFptr);
+	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, onDemand, discardFptr);
 	
 	// init
 	chanSet->taskHndl			= NULL;
@@ -5729,13 +5751,13 @@ static void discard_ChanSet_CI_type (ChanSet_CI_type** chanSetPtr)
 // ChanSet_CI_EdgeCount_type
 //------------------------------------------------------------------------------
 
-static ChanSet_CI_EdgeCount_type* init_ChanSet_CI_EdgeCount_type (Dev_type* dev, char physChanName[], EdgeTypes activeEdge, uInt32 initialCount, CountDirections countDirection)
+static ChanSet_CI_EdgeCount_type* init_ChanSet_CI_EdgeCount_type (Dev_type* dev, char physChanName[], EdgeTypes activeEdge, uInt32 initialCount, CountDirections countDirection, BOOL onDemand)
 {
 	ChanSet_CI_EdgeCount_type* chanSet = malloc (sizeof(ChanSet_CI_EdgeCount_type));
 	if (!chanSet) return NULL;
 	
 	// initialize base class
-	init_ChanSet_CI_type(dev, &chanSet->baseClass, physChanName, Chan_CI_EdgeCount, activeEdge, (DiscardFptr_type)discard_ChanSet_CI_EdgeCount_type);   
+	init_ChanSet_CI_type(dev, &chanSet->baseClass, physChanName, Chan_CI_EdgeCount, activeEdge, onDemand, (DiscardFptr_type)discard_ChanSet_CI_EdgeCount_type);   
 	
 	chanSet->initialCount		= initialCount;
 	chanSet->countDirection		= countDirection;
@@ -5788,13 +5810,13 @@ static int ChanSetCIEdge_CB (int panel, int control, int event, void *callbackDa
 //------------------------------------------------------------------------------
 
 static ChanSet_CI_Frequency_type* init_ChanSet_CI_Frequency_type (Dev_type* dev, char physChanName[], double freqMax, double freqMin, EdgeTypes activeEdge, CIFrequencyMeasMethods measMethod, 
-																  double measTime, uInt32 divisor, char freqInputTerminal[], CounterTaskTiming_type taskTiming)
+																  double measTime, uInt32 divisor, char freqInputTerminal[], CounterTaskTiming_type taskTiming, BOOL onDemand)
 {
 	ChanSet_CI_Frequency_type* chanSet = malloc (sizeof(ChanSet_CI_Frequency_type));
 	if (!chanSet) return NULL;
 	
 	// initialize base class
-	init_ChanSet_CI_type(dev, &chanSet->baseClass, physChanName, Chan_CI_Frequency, activeEdge, (DiscardFptr_type)discard_ChanSet_CI_Frequency_type);   
+	init_ChanSet_CI_type(dev, &chanSet->baseClass, physChanName, Chan_CI_Frequency, activeEdge, onDemand, (DiscardFptr_type)discard_ChanSet_CI_Frequency_type);   
 	
 	// init child class
 	chanSet->freqMax			= freqMax;
@@ -5823,13 +5845,13 @@ static void discard_ChanSet_CI_Frequency_type (ChanSet_CI_Frequency_type** chanS
 //------------------------------------------------------------------------------
 // ChanSet_CO_type
 //------------------------------------------------------------------------------
-static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain)
+static ChanSet_CO_type* init_ChanSet_CO_type (Dev_type* dev, char physChanName[], Channel_type chanType, char clockSource[], PulseTrain_type* pulseTrain, BOOL onDemand)
 {
 	ChanSet_CO_type*	chanSet = malloc (sizeof(ChanSet_CO_type));
 	if (!chanSet) return NULL;
 	
 	// initialize base class
-	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, (DiscardFptr_type)discard_ChanSet_CO_type);
+	init_ChanSet_type(dev, &chanSet->baseClass, physChanName, chanType, onDemand, (DiscardFptr_type)discard_ChanSet_CO_type);
 	
 	// init child class
 	chanSet->taskHndl		= NULL;
@@ -6265,10 +6287,16 @@ INIT_ERR
 	
 				
 	return 0;
+	
 Error:
 	
-	if (chanSetPanHndl > 0) OKfreePanHndl(chanSetPanHndl);
-	if (COPulsePanHndl > 0)
+	if (chanSetPanHndl > 0) {
+		OKfreePanHndl(chanSetPanHndl);
+	}
+	
+	if (COPulsePanHndl > 0) {
+		OKfreePanHndl(COPulsePanHndl);
+	}
 					
 RETURN_ERR
 }
@@ -6531,7 +6559,7 @@ INIT_ERR
 							// init new channel data
 							DataTypeConversion_type	AIDataTypeConversion = {.dataType = Convert_To_Double, .min = AIChanAttr->Vrngs->low[AIChanAttr->Vrngs->Nrngs - 1], 
 																			.max = AIChanAttr->Vrngs->high[AIChanAttr->Vrngs->Nrngs - 1], .offset = 0, .gain = 1};
-							ChanSet_AI_Voltage_type* newChan = init_ChanSet_AI_Voltage_type(dev, chName, AIChanAttr, FALSE, AIDataTypeConversion, AIChanAttr->Vrngs->Nrngs - 1, Terminal_None);
+							ChanSet_AI_Voltage_type* newChan = init_ChanSet_AI_Voltage_type(dev, chName, AIChanAttr, FALSE, AIDataTypeConversion, AIChanAttr->Vrngs->Nrngs - 1, Terminal_None, FALSE);
 							// add new AI channel to UI
 							AddToUI_Chan_AI_Voltage(newChan);
 							// add new AI channel to list of channels
@@ -6627,7 +6655,7 @@ INIT_ERR
 						CounterTaskTiming_type			counterTaskTiming = {.measMode = Operation_Finite, .nSamples = DAQmxDefault_CO_Task_nPulses, .sampleRate = DAQmxDefault_Task_SampleRate, .refClkFreq = DAQmxDefault_Task_RefClkFreq};	
 						ChanSet_CI_EdgeCount_type*	 	newChan 	=  (ChanSet_CI_EdgeCount_type*) init_ChanSet_CI_Frequency_type(dev, chName, DAQmxDefault_CI_Frequency_Task_MaxFreq, DAQmxDefault_CI_Frequency_Task_MinFreq,
 																														  DAQmxDefault_CI_Frequency_Task_Edge, DAQmxDefault_CI_Frequency_Task_MeasMethod, DAQmxDefault_CI_Frequency_Task_MeasTime, 
-																														  DAQmxDefault_CI_Frequency_Task_Divisor, NULL, counterTaskTiming);
+																														  DAQmxDefault_CI_Frequency_Task_Divisor, NULL, counterTaskTiming, FALSE);
 							
 						// insert new channel settings tab
 						int chanSetPanHndl = LoadPanel(0, MOD_NIDAQmxManager_UI, CICOChSet);  
@@ -6716,7 +6744,7 @@ INIT_ERR
 							// init new channel data
 							DataTypeConversion_type	AIDataTypeConversion = {.dataType = Convert_To_Double, .min = AOChanAttr->Vrngs->low[AOChanAttr->Vrngs->Nrngs - 1], 
 																			.max = AOChanAttr->Vrngs->high[AOChanAttr->Vrngs->Nrngs - 1], .offset = 0, .gain = 1}; 
-							ChanSet_AO_Voltage_type* newChan = init_ChanSet_AO_Voltage_type(dev, chName, AOChanAttr, AOChanAttr->Vrngs->Nrngs - 1, Terminal_None);
+							ChanSet_AO_Voltage_type* newChan = init_ChanSet_AO_Voltage_type(dev, chName, AOChanAttr, AOChanAttr->Vrngs->Nrngs - 1, Terminal_None, FALSE);
 							// add new AO channel to UI
 							AddToUI_Chan_AO_Voltage(newChan);
 							// add new AO channel to list of channels
@@ -6766,12 +6794,12 @@ INIT_ERR
 					
 					GetCtrlVal(dev->devPanHndl, TaskSetPan_IOType, &ioType); 
 					
-					//set channel type 
+					// set channel type 
 					switch (ioType){
 						
 						case Chan_DO_Line:
 						
-							newDOChan = init_ChanSet_DIDO_type (dev, chName, ioType, FALSE);  
+							newDOChan = init_ChanSet_DIDO_type (dev, chName, ioType, FALSE, FALSE);  
 							newDOChan->baseClass.chanType = Chan_DO_Line;
 							DOLineChannel_type* DOlineChanAttr = GetDOLineChannel (dev, chName);
 							// mark channel as in use 
@@ -6796,7 +6824,7 @@ INIT_ERR
 								
 						case Chan_DO_Port:
 							
-							newDOChan =init_ChanSet_DIDO_type (dev, chName, ioType, FALSE);  
+							newDOChan =init_ChanSet_DIDO_type (dev, chName, ioType, FALSE, FALSE);  
 							newDOChan->baseClass.chanType=Chan_DO_Port;  
 							DOPortChannel_type* DOportChanAttr=GetDOPortChannel (dev, chName);
 							// mark channel as in use 
@@ -6914,7 +6942,7 @@ INIT_ERR
 							break;
 					}
 					
-					nullChk( newChan = init_ChanSet_CO_type(dev, chName, chanType, NULL, pulseTrain) );
+					nullChk( newChan = init_ChanSet_CO_type(dev, chName, chanType, NULL, pulseTrain, FALSE) );
 					// add start trigger
 					nullChk( newChan->startTrig = init_TaskTrig_type(dev, NULL) );
 					// add to UI
@@ -7906,6 +7934,10 @@ static void	discard_TaskTrig_type (TaskTrig_type** taskTrigPtr)
 	
 	OKfree(taskTrig->trigSource);
 	
+	// UI terminal
+	if (taskTrig->trigSourceCtrlID > 0) NIDAQmx_DiscardIOCtrl(taskTrig->trigPanHndl, taskTrig->trigSourceCtrlID);
+	
+	
 	OKfree(*taskTrigPtr);
 }
 
@@ -7937,6 +7969,9 @@ static ADTaskTiming_type* init_ADTaskTiming_type (void)
 	// UI
 	taskTiming->timingPanHndl				= 0;
 	taskTiming->settingsPanHndl				= 0;
+	taskTiming->sampleClkSrcCtrlID			= -1;
+	taskTiming->refClkSrcCtrlID				= -1;
+	taskTiming->startRoutingCtrlID			= -1;
 	
 	return taskTiming;
 }
@@ -7956,6 +7991,11 @@ static void discard_ADTaskTiming_type (ADTaskTiming_type** taskTimingPtr)
 	discard_VChan_type((VChan_type**)&taskTiming->nSamplesSourceVChan);
 	discard_VChan_type((VChan_type**)&taskTiming->samplingRateSourceVChan);
 	
+	// UI
+	if (taskTiming->sampleClkSrcCtrlID > 0) NIDAQmx_RevertIOCtrl(taskTiming->timingPanHndl, taskTiming->sampleClkSrcCtrlID);
+	if (taskTiming->refClkSrcCtrlID > 0) NIDAQmx_RevertIOCtrl(taskTiming->timingPanHndl, taskTiming->refClkSrcCtrlID);
+	if (taskTiming->startRoutingCtrlID > 0) NIDAQmx_RevertIOCtrl(taskTiming->timingPanHndl, taskTiming->startRoutingCtrlID);
+	
 	OKfree(*taskTimingPtr);
 }
 
@@ -7972,12 +8012,12 @@ INIT_ERR
 		tskSet->timing->measMode = Operation_Finite;
 		// update number of samples in dev structure
 		tskSet->timing->nSamples = nSamples;
-		DAQmxErrChk (DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampPerChan, tskSet->timing->nSamples * oversampling));
-		DAQmxErrChk (DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampMode,  DAQmx_Val_FiniteSamps));
+		DAQmxErrChk( DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampPerChan, tskSet->timing->nSamples * oversampling) );
+		DAQmxErrChk( DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampMode,  DAQmx_Val_FiniteSamps) );
 	} else {
 		// continuous measurement mode
 		tskSet->timing->measMode = Operation_Continuous;
-		DAQmxErrChk (DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampMode,  DAQmx_Val_ContSamps));
+		DAQmxErrChk( DAQmxSetTimingAttribute(tskSet->taskHndl, DAQmx_SampQuant_SampMode,  DAQmx_Val_ContSamps) );
 	}
 	
 	// update meas mode in UI
@@ -8221,9 +8261,11 @@ INIT_ERR
 	// note: do this before changing the string controls to terminal controls!
 	SetCtrlsInPanCBInfo(tskSet, ADTimingSettings_CB, tskSet->timing->timingPanHndl);
 	// make sure that the host controls are not dimmed before inserting terminal controls!
-	NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_SampleClkSource, 0); // single terminal selection
-	NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_RefClkSource, 0);    // single terminal selection
-								
+	errChk( NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_SampleClkSource, 0) ); // single terminal selection
+	tskSet->timing->sampleClkSrcCtrlID = Timing_SampleClkSource;
+	errChk( NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_RefClkSource, 0) );    // single terminal selection
+	tskSet->timing->refClkSrcCtrlID = Timing_RefClkSource;
+	
 	// adjust sample clock terminal control properties
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_SampleClkSource, NIDAQmx_IOCtrl_Limit_To_Device, 0); 
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_SampleClkSource, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
@@ -8249,7 +8291,8 @@ INIT_ERR
 	SetCtrlVal(tskSet->timing->timingPanHndl, Timing_Timeout, tskSet->timeout);							// display in [s]
 	
 	// adjust signal routing control properties
-	NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_StartRouting, 0); 					// single terminal selection
+	errChk( NIDAQmx_NewTerminalCtrl(tskSet->timing->timingPanHndl, Timing_StartRouting, 0) ); 					// single terminal selection
+	tskSet->timing->startRoutingCtrlID = Timing_StartRouting;
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_StartRouting, NIDAQmx_IOCtrl_Limit_To_Device, 0);
 	NIDAQmx_SetTerminalCtrlAttribute(tskSet->timing->timingPanHndl, Timing_StartRouting, NIDAQmx_IOCtrl_TerminalAdvanced, 1);
 	
@@ -8468,6 +8511,7 @@ Error:
 static void	discardUI_ADTaskSet (ADTaskSet_type** taskSetPtr)
 {
 	ADTaskSet_type* taskSet = *taskSetPtr;
+	
 	//------------------------------------------
 	// remove nSamples Sink & Source VChans
 	//------------------------------------------
@@ -8650,17 +8694,21 @@ INIT_ERR
 	}
 	
 	// update device settings
-	if (tskSet->dev->AITaskSet == tskSet)
+	if (tskSet->dev->AITaskSet == tskSet) {
 		errChk ( ConfigDAQmxAITask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->AOTaskSet == tskSet)
+	if (tskSet->dev->AOTaskSet == tskSet) {
 		errChk ( ConfigDAQmxAOTask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->DITaskSet == tskSet)
+	if (tskSet->dev->DITaskSet == tskSet) {
 		errChk ( ConfigDAQmxDITask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->DOTaskSet == tskSet)
+	if (tskSet->dev->DOTaskSet == tskSet) {
 		errChk ( ConfigDAQmxDOTask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
 	return 0;
 	
@@ -8730,17 +8778,21 @@ INIT_ERR
 	}
 	
 	// update device settings
-	if (tskSet->dev->AITaskSet == tskSet)
+	if (tskSet->dev->AITaskSet == tskSet) {
 		errChk ( ConfigDAQmxAITask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->AOTaskSet == tskSet)
+	if (tskSet->dev->AOTaskSet == tskSet) {
 		errChk ( ConfigDAQmxAOTask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->DITaskSet == tskSet)
+	if (tskSet->dev->DITaskSet == tskSet) {
 		errChk ( ConfigDAQmxDITask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
-	if (tskSet->dev->DOTaskSet == tskSet)
+	if (tskSet->dev->DOTaskSet == tskSet) {
 		errChk ( ConfigDAQmxDOTask(tskSet->dev, &errorInfo.errMsg) );
+	}
 	
 Error:
 	
@@ -8917,12 +8969,15 @@ static void	discard_WriteAOData_type (WriteAOData_type** writeDataPtr)
 	if (!writeData) return;
 	
 	for (size_t i = 0; i < writeData->numchan; i++) {
-		if (writeData->datain)
+		if (writeData->datain) {
 			OKfree(writeData->datain[i]);
+		}
 		
-		if (writeData->databuff)
-		OKfree(writeData->databuff[i]);   
+		if (writeData->databuff) {
+			OKfree(writeData->databuff[i]);
+		}
 	}
+	
 	OKfree(writeData->databuff);
 	OKfree(writeData->datain); 
 	
@@ -9757,7 +9812,7 @@ INIT_ERR
 	// create DAQmx AI task 
 	char* taskName = GetTaskControlName(dev->taskController);
 	AppendString(&taskName, " AI Task", -1);
-	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->AITaskSet->taskHndl));
+	DAQmxErrChk( DAQmxCreateTask(taskName, &dev->AITaskSet->taskHndl) );
 	OKfree(taskName);
 	
 	// create AI channels and adjust data type conversion
@@ -9779,14 +9834,14 @@ INIT_ERR
 			case Chan_AI_Voltage:
 				
 				ChanSet_AI_Voltage_type*	AIVoltageChanSet	= (ChanSet_AI_Voltage_type*)chanSet;
-				DAQmxErrChk ( DAQmxCreateAIVoltageChan(dev->AITaskSet->taskHndl, chanSet->name, "", AIVoltageChanSet->terminal, AIVoltageChanSet->VMin, AIVoltageChanSet->VMax, DAQmx_Val_Volts, NULL) ); 
+				DAQmxErrChk( DAQmxCreateAIVoltageChan(dev->AITaskSet->taskHndl, chanSet->name, "", AIVoltageChanSet->terminal, AIVoltageChanSet->VMin, AIVoltageChanSet->VMax, DAQmx_Val_Volts, NULL) ); 
 				
 				break;
 				
 			case Chan_AI_Current:
 				
 				ChanSet_AI_Current_type*	AICurrentChanSet	= (ChanSet_AI_Current_type*)chanSet;
-				DAQmxErrChk ( DAQmxCreateAICurrentChan(dev->AITaskSet->taskHndl, chanSet->name, "", AICurrentChanSet->terminal, AICurrentChanSet->IMin, AICurrentChanSet->IMax, DAQmx_Val_Amps,
+				DAQmxErrChk( DAQmxCreateAICurrentChan(dev->AITaskSet->taskHndl, chanSet->name, "", AICurrentChanSet->terminal, AICurrentChanSet->IMin, AICurrentChanSet->IMax, DAQmx_Val_Amps,
 													  AICurrentChanSet->shuntResistorType, AICurrentChanSet->shuntResistorValue, NULL) );
 							  
 				break;
@@ -9803,26 +9858,26 @@ INIT_ERR
 	// sample clock source
 	// if no sample clock is given, then use OnboardClock by default
 	if (!dev->AITaskSet->timing->sampClkSource) 
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 	else
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, dev->AITaskSet->timing->sampClkSource));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Src, dev->AITaskSet->timing->sampClkSource) );
 	
 	// sample clock edge
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AITaskSet->timing->sampClkEdge));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AITaskSet->timing->sampClkEdge) );
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate * dev->AITaskSet->timing->oversampling));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AITaskSet->timing->sampleRate * dev->AITaskSet->timing->oversampling) );
 	
 	// set operation mode: finite, continuous
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AITaskSet->timing->measMode));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AITaskSet->timing->measMode) );
 	
 	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) ); 
 	
 	// if a reference clock is given, use it to synchronize the internal clock
 	if (dev->AITaskSet->timing->refClkSource && dev->AITaskSet->timing->refClkSource[0]) {
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Src, dev->AITaskSet->timing->refClkSource));
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AITaskSet->timing->refClkFreq));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Src, dev->AITaskSet->timing->refClkSource) );
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AITaskSet->timing->refClkFreq) );
 	}
 	
 	// adjust manually the number of samples to acquire and  input buffer size to be even multiple of blocksizes and make sure that the input buffer is
@@ -9836,7 +9891,7 @@ INIT_ERR
 		case Operation_Finite:
 			
 			// set number of samples per channel
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples * dev->AITaskSet->timing->oversampling));
+			DAQmxErrChk( DAQmxSetTimingAttribute(dev->AITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AITaskSet->timing->nSamples * dev->AITaskSet->timing->oversampling) );
 			quot = (dev->AITaskSet->timing->nSamples * dev->AITaskSet->timing->oversampling) / dev->AITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
 			if (!quot) quot = 1;
@@ -9861,23 +9916,30 @@ INIT_ERR
 		switch (dev->AITaskSet->startTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableStartTrig(dev->AITaskSet->taskHndl));
+				
+				DAQmxErrChk( DAQmxDisableStartTrig(dev->AITaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope, dev->AITaskSet->startTrig->level));  
+				
+				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope, dev->AITaskSet->startTrig->level) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->wndTrigCond, 
-							 dev->AITaskSet->startTrig->wndTop, dev->AITaskSet->startTrig->wndBttm));  
+				
+				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->wndTrigCond, 
+							 dev->AITaskSet->startTrig->wndTop, dev->AITaskSet->startTrig->wndBttm) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope));  
+				
+				if (dev->AITaskSet->startTrig->trigSource && dev->AITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->startTrig->trigSource, dev->AITaskSet->startTrig->slope) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -9889,23 +9951,29 @@ INIT_ERR
 		switch (dev->AITaskSet->referenceTrig->trigType) {
 			
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableRefTrig(dev->AITaskSet->taskHndl));
+				
+				DAQmxErrChk( DAQmxDisableRefTrig(dev->AITaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->level, dev->AITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->level, dev->AITaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0])
-				DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->wndTrigCond, 
-							 dev->AITaskSet->referenceTrig->wndTop, dev->AITaskSet->referenceTrig->wndBttm, dev->AITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->wndTrigCond, 
+							 dev->AITaskSet->referenceTrig->wndTop, dev->AITaskSet->referenceTrig->wndBttm, dev->AITaskSet->referenceTrig->nPreTrigSamples) );}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0])
-				DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AITaskSet->referenceTrig->trigSource && dev->AITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(dev->AITaskSet->taskHndl, dev->AITaskSet->referenceTrig->trigSource, dev->AITaskSet->referenceTrig->slope, dev->AITaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -9987,7 +10055,7 @@ INIT_ERR
 	// create DAQmx AO task with hardware timing
 	char* taskName = GetTaskControlName(dev->taskController);
 	AppendString(&taskName, " AO Task", -1);
-	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->AOTaskSet->taskHndl));
+	DAQmxErrChk( DAQmxCreateTask(taskName, &dev->AOTaskSet->taskHndl) );
 	OKfree(taskName);
 	
 	// create AO channels
@@ -10004,14 +10072,14 @@ INIT_ERR
 			case Chan_AO_Voltage:
 				
 				ChanSet_AO_Voltage_type*	AOVoltageChanSet = (ChanSet_AO_Voltage_type*)chanSet;
-				DAQmxErrChk (DAQmxCreateAOVoltageChan(dev->AOTaskSet->taskHndl, chanSet->name, "", AOVoltageChanSet->VMin, AOVoltageChanSet->VMax, DAQmx_Val_Volts, NULL)); 
+				DAQmxErrChk( DAQmxCreateAOVoltageChan(dev->AOTaskSet->taskHndl, chanSet->name, "", AOVoltageChanSet->VMin, AOVoltageChanSet->VMax, DAQmx_Val_Volts, NULL) ); 
 				
 				break;
 				
 			case Chan_AO_Current:
 				
 				ChanSet_AO_Current_type*	AOCurrentChanSet = (ChanSet_AO_Current_type*)chanSet;
-				DAQmxErrChk (DAQmxCreateAOCurrentChan(dev->AOTaskSet->taskHndl, chanSet->name, "", AOCurrentChanSet->IMin, AOCurrentChanSet->IMax, DAQmx_Val_Amps, NULL));
+				DAQmxErrChk( DAQmxCreateAOCurrentChan(dev->AOTaskSet->taskHndl, chanSet->name, "", AOCurrentChanSet->IMin, AOCurrentChanSet->IMax, DAQmx_Val_Amps, NULL) );
 							  
 				break;
 			/*	
@@ -10033,30 +10101,31 @@ INIT_ERR
 	// sample clock source
 	// if no sample clock is given, then OnboardClock is used by default
 	if (!dev->AOTaskSet->timing->sampClkSource) 
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 	else
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->AOTaskSet->timing->sampClkSource));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->AOTaskSet->timing->sampClkSource) );
 	
 	// sample clock edge
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AOTaskSet->timing->sampClkEdge));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->AOTaskSet->timing->sampClkEdge) );
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AOTaskSet->timing->sampleRate));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->AOTaskSet->timing->sampleRate) );
 	
 	// set operation mode: finite, continuous
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AOTaskSet->timing->measMode));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->AOTaskSet->timing->measMode) );
 	
 	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
 	
 	// set number of samples per channel for finite generation
-	if (dev->AOTaskSet->timing->measMode == Operation_Finite)
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AOTaskSet->timing->nSamples));
+	if (dev->AOTaskSet->timing->measMode == Operation_Finite) {
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->AOTaskSet->timing->nSamples) );
+	}
 	
 	// if a reference clock is given, use it to synchronize the internal clock
 	if (dev->AOTaskSet->timing->refClkSource && dev->AOTaskSet->timing->refClkSource[0]) {
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->AOTaskSet->timing->refClkSource));
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AOTaskSet->timing->refClkFreq));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->AOTaskSet->timing->refClkSource) );
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->AOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->AOTaskSet->timing->refClkFreq) );
 	}
 	
 	// disable AO regeneration
@@ -10071,7 +10140,7 @@ INIT_ERR
 			
 		case Operation_Continuous:
 			// adjust output buffer size to be twice (even multiple) the blocksize
-			DAQmxErrChk ( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, 2 * dev->AOTaskSet->timing->blockSize));
+			DAQmxErrChk( DAQmxCfgOutputBuffer(dev->AOTaskSet->taskHndl, 2 * dev->AOTaskSet->timing->blockSize) );
 			break;
 	}
 	
@@ -10081,24 +10150,32 @@ INIT_ERR
 	// configure start trigger
 	if (dev->AOTaskSet->startTrig)
 		switch (dev->AOTaskSet->startTrig->trigType) {
+				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableStartTrig(dev->AOTaskSet->taskHndl));   
+				
+				DAQmxErrChk( DAQmxDisableStartTrig(dev->AOTaskSet->taskHndl) );   
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope, dev->AOTaskSet->startTrig->level));  
+				
+				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope, dev->AOTaskSet->startTrig->level) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0]) 
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->wndTrigCond, 
-							 dev->AOTaskSet->startTrig->wndTop, dev->AOTaskSet->startTrig->wndBttm));  
+				
+				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->wndTrigCond, 
+							 dev->AOTaskSet->startTrig->wndTop, dev->AOTaskSet->startTrig->wndBttm) );  
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0]) 
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope));  
+				
+				if (dev->AOTaskSet->startTrig->trigSource && dev->AOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->startTrig->trigSource, dev->AOTaskSet->startTrig->slope) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10110,24 +10187,31 @@ INIT_ERR
 		switch (dev->AOTaskSet->referenceTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableRefTrig(dev->AOTaskSet->taskHndl));   
+				
+				DAQmxErrChk( DAQmxDisableRefTrig(dev->AOTaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, 
-														 dev->AOTaskSet->referenceTrig->level, dev->AOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, 
+														 dev->AOTaskSet->referenceTrig->level, dev->AOTaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->wndTrigCond, 
-							 dev->AOTaskSet->referenceTrig->wndTop, dev->AOTaskSet->referenceTrig->wndBttm, dev->AOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->wndTrigCond, 
+							 dev->AOTaskSet->referenceTrig->wndTop, dev->AOTaskSet->referenceTrig->wndBttm, dev->AOTaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, dev->AOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->AOTaskSet->referenceTrig->trigSource && dev->AOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(dev->AOTaskSet->taskHndl, dev->AOTaskSet->referenceTrig->trigSource, dev->AOTaskSet->referenceTrig->slope, dev->AOTaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10139,11 +10223,11 @@ INIT_ERR
 	//----------------------
 	// register AO data request callback if task is continuous
 	//if (dev->AOTaskSet->timing->measMode == Operation_Continuous)
-	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev)); 
+	DAQmxErrChk( DAQmxRegisterEveryNSamplesEvent(dev->AOTaskSet->taskHndl, DAQmx_Val_Transferred_From_Buffer, dev->AOTaskSet->timing->blockSize, 0, AODAQmxTaskDataRequest_CB, dev) ); 
 	// register AO task done event callback
 	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
-	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev));
+	DAQmxErrChk( DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev) );
 	
 	
 	//----------------------
@@ -10204,7 +10288,7 @@ INIT_ERR
 	// create DAQmx DI task 
 	char* taskName = GetTaskControlName(dev->taskController);
 	AppendString(&taskName, " DI Task", -1);
-	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->DITaskSet->taskHndl));
+	DAQmxErrChk( DAQmxCreateTask(taskName, &dev->DITaskSet->taskHndl) );
 	OKfree(taskName);
 	
 	// create DI channels
@@ -10215,32 +10299,32 @@ INIT_ERR
 		// include in the task only channel for which HW-timing is required
 		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->srcVChan)) continue;
 		
-		DAQmxErrChk (DAQmxCreateDIChan(dev->DITaskSet->taskHndl, chanSet->name, "", DAQmx_Val_ChanForAllLines)); 
+		DAQmxErrChk( DAQmxCreateDIChan(dev->DITaskSet->taskHndl, chanSet->name, "", DAQmx_Val_ChanForAllLines) ); 
 	}
 				 
 	// sample clock source
 	// if no sample clock is given, then use OnboardClock by default
 	if (!dev->DITaskSet->timing->sampClkSource) 
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 	else
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Src, dev->DITaskSet->timing->sampClkSource));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Src, dev->DITaskSet->timing->sampClkSource) );
 	
 	// sample clock edge
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DITaskSet->timing->sampClkEdge));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DITaskSet->timing->sampClkEdge) );
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->DITaskSet->timing->sampleRate));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampClk_Rate, dev->DITaskSet->timing->sampleRate) );
 	
 	// set operation mode: finite, continuous
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DITaskSet->timing->measMode));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DITaskSet->timing->measMode) );
 	
 	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) ); 
 	
 	// if a reference clock is given, use it to synchronize the internal clock
 	if (dev->DITaskSet->timing->refClkSource && dev->DITaskSet->timing->refClkSource[0]) {
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_RefClk_Src, dev->DITaskSet->timing->refClkSource));
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->DITaskSet->timing->refClkFreq));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_RefClk_Src, dev->DITaskSet->timing->refClkSource) );
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_RefClk_Rate, dev->DITaskSet->timing->refClkFreq) );
 	}
 	
 	// adjust manually number of samples and input buffer size to be even multiple of blocksizes and make sure that the input buffer is
@@ -10254,7 +10338,7 @@ INIT_ERR
 		case Operation_Finite:
 			
 			// set number of samples per channel read within one call of the read function, i.e. blocksize
-			DAQmxErrChk (DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->DITaskSet->timing->nSamples));
+			DAQmxErrChk( DAQmxSetTimingAttribute(dev->DITaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->DITaskSet->timing->nSamples) );
 			quot = dev->DITaskSet->timing->nSamples  / dev->DITaskSet->timing->blockSize; 
 			if (quot % 2) quot++;
 			DAQmxErrChk(DAQmxCfgInputBuffer (dev->DITaskSet->taskHndl, dev->DITaskSet->timing->blockSize * quot));
@@ -10277,23 +10361,30 @@ INIT_ERR
 		switch (dev->DITaskSet->startTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableStartTrig(dev->DITaskSet->taskHndl));
+				
+				DAQmxErrChk( DAQmxDisableStartTrig(dev->DITaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope, dev->DITaskSet->startTrig->level));  
+				
+				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope, dev->DITaskSet->startTrig->level) );  
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->wndTrigCond, 
-						 		dev->DITaskSet->startTrig->wndTop, dev->DITaskSet->startTrig->wndBttm));  
+				
+				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->wndTrigCond, 
+						 		dev->DITaskSet->startTrig->wndTop, dev->DITaskSet->startTrig->wndBttm) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope));  
+				
+				if (dev->DITaskSet->startTrig->trigSource && dev->DITaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->startTrig->trigSource, dev->DITaskSet->startTrig->slope) ); 
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10305,24 +10396,31 @@ INIT_ERR
 		switch (dev->DITaskSet->referenceTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableRefTrig(dev->DITaskSet->taskHndl)); 
+				
+				DAQmxErrChk( DAQmxDisableRefTrig(dev->DITaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, 
-														 dev->DITaskSet->referenceTrig->level, dev->DITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, 
+														 dev->DITaskSet->referenceTrig->level, dev->DITaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->wndTrigCond, 
-								 dev->DITaskSet->referenceTrig->wndTop, dev->DITaskSet->referenceTrig->wndBttm, dev->DITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->wndTrigCond, 
+								 dev->DITaskSet->referenceTrig->wndTop, dev->DITaskSet->referenceTrig->wndBttm, dev->DITaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, dev->DITaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DITaskSet->referenceTrig->trigSource && dev->DITaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(dev->DITaskSet->taskHndl, dev->DITaskSet->referenceTrig->trigSource, dev->DITaskSet->referenceTrig->slope, dev->DITaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10333,12 +10431,11 @@ INIT_ERR
 	// Add DI Task callbacks
 	//----------------------
 	// register DI data available callback 
-	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->DITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DITaskSet->timing->blockSize, 0, DIDAQmxTaskDataAvailable_CB, dev)); 
+	DAQmxErrChk( DAQmxRegisterEveryNSamplesEvent(dev->DITaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DITaskSet->timing->blockSize, 0, DIDAQmxTaskDataAvailable_CB, dev) );
 	// register DI task done event callback (which is called also if the task encounters an error)
 	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
-	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DITaskSet->taskHndl, 0, DIDAQmxTaskDone_CB, dev));
-	
+	DAQmxErrChk( DAQmxRegisterDoneEvent(dev->DITaskSet->taskHndl, 0, DIDAQmxTaskDone_CB, dev) );
 	
 	//----------------------
 	// Signal routing
@@ -10403,7 +10500,7 @@ INIT_ERR
 	// create DAQmx DO task 
 	char* taskName = GetTaskControlName(dev->taskController);
 	AppendString(&taskName, " DO Task", -1);
-	DAQmxErrChk (DAQmxCreateTask(taskName, &dev->DOTaskSet->taskHndl));
+	DAQmxErrChk( DAQmxCreateTask(taskName, &dev->DOTaskSet->taskHndl) );
 	OKfree(taskName);
 	
 	// create DO channels
@@ -10414,43 +10511,44 @@ INIT_ERR
 		// include in the task only channel for which HW-timing is required
 		if (chanSet->onDemand || !IsVChanOpen((VChan_type*)chanSet->sinkVChan)) continue;
 		
-		DAQmxErrChk (DAQmxCreateDOChan(dev->DOTaskSet->taskHndl, chanSet->name, "", DAQmx_Val_ChanForAllLines)); 
+		DAQmxErrChk( DAQmxCreateDOChan(dev->DOTaskSet->taskHndl, chanSet->name, "", DAQmx_Val_ChanForAllLines) );
 	}
 				 
 	// sample clock source
 	// if no sample clock is given, then use OnboardClock by default
 	if (!dev->DOTaskSet->timing->sampClkSource) 
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock"));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 	else
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->DOTaskSet->timing->sampClkSource));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Src, dev->DOTaskSet->timing->sampClkSource) );
 	
 	// sample clock edge
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DOTaskSet->timing->sampClkEdge));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_ActiveEdge, dev->DOTaskSet->timing->sampClkEdge) );
 	
 	// sampling rate
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->DOTaskSet->timing->sampleRate));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampClk_Rate, dev->DOTaskSet->timing->sampleRate) );
 	
 	// set operation mode: finite, continuous
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DOTaskSet->timing->measMode));
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampMode, dev->DOTaskSet->timing->measMode) );
 	
 	// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-	DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk)); 
+	DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) ); 
 	
 	// if a reference clock is given, use it to synchronize the internal clock
 	if (dev->DOTaskSet->timing->refClkSource && dev->DOTaskSet->timing->refClkSource[0]) {
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->DOTaskSet->timing->refClkSource));
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->DOTaskSet->timing->refClkFreq));
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_RefClk_Src, dev->DOTaskSet->timing->refClkSource) );
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_RefClk_Rate, dev->DOTaskSet->timing->refClkFreq) );
 	}
 	
 	// set number of samples per channel for finite acquisition
-	if (dev->DOTaskSet->timing->measMode == Operation_Finite)
-		DAQmxErrChk (DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->DOTaskSet->timing->nSamples));
+	if (dev->DOTaskSet->timing->measMode == Operation_Finite) {
+		DAQmxErrChk( DAQmxSetTimingAttribute(dev->DOTaskSet->taskHndl, DAQmx_SampQuant_SampPerChan, dev->DOTaskSet->timing->nSamples) );
+	}
 	
 	// disable DO regeneration
 	DAQmxSetWriteAttribute (dev->DOTaskSet->taskHndl, DAQmx_Write_RegenMode, DAQmx_Val_DoNotAllowRegen);
 	
 	// adjust output buffer size to be even multiple of blocksize
-	DAQmxErrChk (DAQmxCfgOutputBuffer(dev->DOTaskSet->taskHndl, 2 * dev->DOTaskSet->timing->blockSize));
+	DAQmxErrChk(DAQmxCfgOutputBuffer(dev->DOTaskSet->taskHndl, 2 * dev->DOTaskSet->timing->blockSize) );
 	
 	//----------------------
 	// Configure DO triggers
@@ -10460,23 +10558,30 @@ INIT_ERR
 		switch (dev->DOTaskSet->startTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableStartTrig(dev->DOTaskSet->taskHndl));  
+				
+				DAQmxErrChk( DAQmxDisableStartTrig(dev->DOTaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope, dev->DOTaskSet->startTrig->level));  
+				
+				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope, dev->DOTaskSet->startTrig->level) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->wndTrigCond, 
-						 		dev->DOTaskSet->startTrig->wndTop, dev->DOTaskSet->startTrig->wndBttm));  
+				
+				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->wndTrigCond, 
+						 		dev->DOTaskSet->startTrig->wndTop, dev->DOTaskSet->startTrig->wndBttm) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope));  
+				
+				if (dev->DOTaskSet->startTrig->trigSource && dev->DOTaskSet->startTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->startTrig->trigSource, dev->DOTaskSet->startTrig->slope) );
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10488,24 +10593,31 @@ INIT_ERR
 		switch (dev->DOTaskSet->referenceTrig->trigType) {
 				
 			case Trig_None:
-				DAQmxErrChk (DAQmxDisableRefTrig(dev->DOTaskSet->taskHndl));     
+				
+				DAQmxErrChk( DAQmxDisableRefTrig(dev->DOTaskSet->taskHndl) );
 				break;
 			
 			case Trig_AnalogEdge:
-				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, 
-														 dev->DOTaskSet->referenceTrig->level, dev->DOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, 
+														 dev->DOTaskSet->referenceTrig->level, dev->DOTaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_AnalogWindow:
-				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->wndTrigCond, 
-						 		dev->DOTaskSet->referenceTrig->wndTop, dev->DOTaskSet->referenceTrig->wndBttm, dev->DOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->wndTrigCond, 
+						 		dev->DOTaskSet->referenceTrig->wndTop, dev->DOTaskSet->referenceTrig->wndBttm, dev->DOTaskSet->referenceTrig->nPreTrigSamples) );
+				}
 				break;
 			
 			case Trig_DigitalEdge:
-				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0])
-					DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, dev->DOTaskSet->referenceTrig->nPreTrigSamples));  
+				
+				if (dev->DOTaskSet->referenceTrig->trigSource && dev->DOTaskSet->referenceTrig->trigSource[0]) {
+					DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(dev->DOTaskSet->taskHndl, dev->DOTaskSet->referenceTrig->trigSource, dev->DOTaskSet->referenceTrig->slope, dev->DOTaskSet->referenceTrig->nPreTrigSamples));
+				}
 				break;
 			
 			case Trig_DigitalPattern:
@@ -10516,11 +10628,11 @@ INIT_ERR
 	// Add DO Task callbacks
 	//----------------------
 	// register DO data available callback 
-	DAQmxErrChk (DAQmxRegisterEveryNSamplesEvent(dev->DOTaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DOTaskSet->timing->blockSize, 0, DODAQmxTaskDataRequest_CB, dev)); 
+	DAQmxErrChk( DAQmxRegisterEveryNSamplesEvent(dev->DOTaskSet->taskHndl, DAQmx_Val_Acquired_Into_Buffer, dev->DOTaskSet->timing->blockSize, 0, DODAQmxTaskDataRequest_CB, dev) ); 
 	// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
 	// A Done event does not occur when a task is stopped explicitly, such as by calling DAQmxStopTask.
 	// register DO task done event callback (which is called also if the task encounters an error)
-	DAQmxErrChk (DAQmxRegisterDoneEvent(dev->DOTaskSet->taskHndl, 0, DODAQmxTaskDone_CB, dev));
+	DAQmxErrChk( DAQmxRegisterDoneEvent(dev->DOTaskSet->taskHndl, 0, DODAQmxTaskDone_CB, dev) );
 	
 	
 	//----------------------
@@ -10604,40 +10716,42 @@ INIT_ERR
 				DAQmxErrChk(DAQmxCreateTask(taskName, &chCIFreq->baseClass.taskHndl) );
 				OKfree(taskName);
 				
-				DAQmxErrChk ( DAQmxCreateCIFreqChan(chCIFreq->baseClass.taskHndl, chanSet->name, "", chCIFreq->freqMin, chCIFreq->freqMax, DAQmx_Val_Hz, 
+				DAQmxErrChk( DAQmxCreateCIFreqChan(chCIFreq->baseClass.taskHndl, chanSet->name, "", chCIFreq->freqMin, chCIFreq->freqMax, DAQmx_Val_Hz, 
 												   chCIFreq->baseClass.activeEdge, chCIFreq->measMethod, chCIFreq->measTime, chCIFreq->divisor, NULL) );
 				
 				// use another terminal for the counter if other than default
-				if (chCIFreq->freqInputTerminal)
-				DAQmxErrChk ( DAQmxSetChanAttribute(chCIFreq->baseClass.taskHndl, chanSet->name, DAQmx_CI_Freq_Term, chCIFreq->freqInputTerminal) );
+				if (chCIFreq->freqInputTerminal) {
+					DAQmxErrChk( DAQmxSetChanAttribute(chCIFreq->baseClass.taskHndl, chanSet->name, DAQmx_CI_Freq_Term, chCIFreq->freqInputTerminal) );
+				}
 				
 				// sample clock source
 				// if no sample clock is given, then use OnboardClock by default
 				if (chCIFreq->taskTiming.sampClkSource || chCIFreq->taskTiming.sampClkSource[0])
-					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, chCIFreq->taskTiming.sampClkSource) );
+					DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, chCIFreq->taskTiming.sampClkSource) );
 				else
-					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
+					DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Src, "OnboardClock") );
 					
 				// sample clock edge
-				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreq->taskTiming.sampClkEdge) );
+				DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_ActiveEdge, chCIFreq->taskTiming.sampClkEdge) );
 	
 				// sampling rate
-				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Rate, chCIFreq->taskTiming.sampleRate) );
+				DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampClk_Rate, chCIFreq->taskTiming.sampleRate) );
 	
 				// set operation mode: finite, continuous
-				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampMode, chCIFreq->taskTiming.measMode) );
+				DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampMode, chCIFreq->taskTiming.measMode) );
 	
 				// set sample timing type: for now this is set to sample clock, i.e. samples are taken with respect to a clock signal
-				DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) );
+				DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampTimingType, DAQmx_Val_SampClk) );
 				
 				// set number of samples per channel for finite acquisition
-				if (chCIFreq->taskTiming.measMode == Operation_Finite)
-					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampPerChan, chCIFreq->taskTiming.nSamples) );
+				if (chCIFreq->taskTiming.measMode == Operation_Finite) {
+					DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_SampQuant_SampPerChan, chCIFreq->taskTiming.nSamples) );
+				}
 	
 				// if a reference clock is given, use it to synchronize the internal clock
 				if (chCIFreq->taskTiming.refClkSource && chCIFreq->taskTiming.refClkSource[0]) {  
-					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Src, chCIFreq->taskTiming.refClkSource) );
-					DAQmxErrChk ( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Rate, chCIFreq->taskTiming.refClkFreq) );
+					DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Src, chCIFreq->taskTiming.refClkSource) );
+					DAQmxErrChk( DAQmxSetTimingAttribute(chCIFreq->baseClass.taskHndl, DAQmx_RefClk_Rate, chCIFreq->taskTiming.refClkFreq) );
 				}
 	
 				//----------------------
@@ -10648,24 +10762,31 @@ INIT_ERR
 					switch (chCIFreq->baseClass.startTrig->trigType) {
 				
 						case Trig_None:
-							DAQmxErrChk (DAQmxDisableStartTrig(chCIFreq->baseClass.taskHndl));
+							
+							DAQmxErrChk( DAQmxDisableStartTrig(chCIFreq->baseClass.taskHndl) );
 							break;
 			
 						case Trig_AnalogEdge:
-							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0])
-								DAQmxErrChk (DAQmxCfgAnlgEdgeStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->slope, 
-																	   chCIFreq->baseClass.startTrig->level));  
+							
+							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->slope, 
+																	   chCIFreq->baseClass.startTrig->level) );  
+							}
 							break;
 			
 						case Trig_AnalogWindow:
-							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0])
-								DAQmxErrChk (DAQmxCfgAnlgWindowStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->wndTrigCond, 
-							 			     chCIFreq->baseClass.startTrig->wndTop, chCIFreq->baseClass.startTrig->wndBttm));  
+							
+							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->wndTrigCond, 
+							 			     chCIFreq->baseClass.startTrig->wndTop, chCIFreq->baseClass.startTrig->wndBttm) );
+							}
 							break;
 			
 						case Trig_DigitalEdge:
-							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0])
-								DAQmxErrChk (DAQmxCfgDigEdgeStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->slope));  
+							
+							if (chCIFreq->baseClass.startTrig->trigSource && chCIFreq->baseClass.startTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.startTrig->trigSource, chCIFreq->baseClass.startTrig->slope) );
+							}
 							break;
 			
 						case Trig_DigitalPattern:
@@ -10677,24 +10798,31 @@ INIT_ERR
 					switch (chCIFreq->baseClass.referenceTrig->trigType) {
 			
 						case Trig_None:
-							DAQmxErrChk (DAQmxDisableRefTrig(chCIFreq->baseClass.taskHndl));
+							
+							DAQmxErrChk( DAQmxDisableRefTrig(chCIFreq->baseClass.taskHndl) );
 							break;
 			
 						case Trig_AnalogEdge:
-							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0])
-								DAQmxErrChk (DAQmxCfgAnlgEdgeRefTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->slope, 
-																	 chCIFreq->baseClass.referenceTrig->level, chCIFreq->baseClass.referenceTrig->nPreTrigSamples));  
+							
+							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->slope, 
+																	 chCIFreq->baseClass.referenceTrig->level, chCIFreq->baseClass.referenceTrig->nPreTrigSamples) );  
+							}
 							break;
 			
 						case Trig_AnalogWindow:
-							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0])
-								DAQmxErrChk (DAQmxCfgAnlgWindowRefTrig(chCIFreq->baseClass.taskHndl,chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->wndTrigCond, 
-							 				chCIFreq->baseClass.referenceTrig->wndTop, chCIFreq->baseClass.referenceTrig->wndBttm, chCIFreq->baseClass.referenceTrig->nPreTrigSamples));  
+							
+							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(chCIFreq->baseClass.taskHndl,chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->wndTrigCond, 
+							 				chCIFreq->baseClass.referenceTrig->wndTop, chCIFreq->baseClass.referenceTrig->wndBttm, chCIFreq->baseClass.referenceTrig->nPreTrigSamples) );  
+							}
 							break;
 			
 						case Trig_DigitalEdge:
-							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0])
-							DAQmxErrChk (DAQmxCfgDigEdgeRefTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->slope, chCIFreq->baseClass.referenceTrig->nPreTrigSamples));  
+							
+							if (chCIFreq->baseClass.referenceTrig->trigSource && chCIFreq->baseClass.referenceTrig->trigSource[0]) {
+								DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(chCIFreq->baseClass.taskHndl, chCIFreq->baseClass.referenceTrig->trigSource, chCIFreq->baseClass.referenceTrig->slope, chCIFreq->baseClass.referenceTrig->nPreTrigSamples) );  
+							}
 							break;
 			
 						case Trig_DigitalPattern:
@@ -10826,23 +10954,30 @@ INIT_ERR
 			switch (chanSet->startTrig->trigType) {
 				
 				case Trig_None:
+					
 					DAQmxErrChk( DAQmxDisableStartTrig(chanSet->taskHndl) );
 					break;
 			
 				case Trig_AnalogEdge:
-					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0])
+					
+					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgAnlgEdgeStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->slope, chanSet->startTrig->level) );  
+					}
 					break;
 			
 				case Trig_AnalogWindow:
-					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0])
+					
+					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgAnlgWindowStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->wndTrigCond, 
 									 chanSet->startTrig->wndTop, chanSet->startTrig->wndBttm) );  
+					}
 					break;
 			
 				case Trig_DigitalEdge:
-					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0])
+					
+					if (chanSet->startTrig->trigSource && chanSet->startTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgDigEdgeStartTrig(chanSet->taskHndl, chanSet->startTrig->trigSource, chanSet->startTrig->slope) );  
+					}
 					break;
 			
 				case Trig_DigitalPattern:
@@ -10854,23 +10989,30 @@ INIT_ERR
 			switch (chanSet->referenceTrig->trigType) {
 			
 				case Trig_None:
+					
 					DAQmxErrChk( DAQmxDisableRefTrig(chanSet->taskHndl) );
 					break;
 			
 				case Trig_AnalogEdge:
-					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0])
+					
+					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgAnlgEdgeRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->slope, chanSet->referenceTrig->level, chanSet->referenceTrig->nPreTrigSamples) );  
+					}
 					break;
 			
 				case Trig_AnalogWindow:
-					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0])
+					
+					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgAnlgWindowRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->wndTrigCond, 
 							 		chanSet->referenceTrig->wndTop, chanSet->referenceTrig->wndBttm, chanSet->referenceTrig->nPreTrigSamples) );  
+					}
 					break;
 			
 				case Trig_DigitalEdge:
-					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0])
+					
+					if (chanSet->referenceTrig->trigSource && chanSet->referenceTrig->trigSource[0]) {
 						DAQmxErrChk( DAQmxCfgDigEdgeRefTrig(chanSet->taskHndl, chanSet->referenceTrig->trigSource, chanSet->referenceTrig->slope, chanSet->referenceTrig->nPreTrigSamples) );
+					}
 					break;
 			
 				case Trig_DigitalPattern:
@@ -10878,8 +11020,8 @@ INIT_ERR
 			}
 		
 		
-		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSet->taskHndl, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(chanSet->pulseTrain)), GetPulseTrainNPulses(chanSet->pulseTrain)) );
-		DAQmxErrChk ( DAQmxSetTrigAttribute(chanSet->taskHndl, DAQmx_StartTrig_Retriggerable, FALSE) );    
+		DAQmxErrChk( DAQmxCfgImplicitTiming(chanSet->taskHndl, PulseTrainModes_To_DAQmxVal(GetPulseTrainMode(chanSet->pulseTrain)), GetPulseTrainNPulses(chanSet->pulseTrain)) );
+		DAQmxErrChk( DAQmxSetTrigAttribute(chanSet->taskHndl, DAQmx_StartTrig_Retriggerable, FALSE) );    
 		
 		// register CO task done event callback
 		// Registers a callback function to receive an event when a task stops due to an error or when a finite acquisition task or finite generation task completes execution.
@@ -11059,16 +11201,16 @@ INIT_ERR
 	// AO task (stop if finite; continuous task stopping happens on receiving a NULL packet and is handled by WriteAODAQmx)
 	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl && dev->AOTaskSet->timing->measMode == Operation_Finite) {
 		DAQmxErrChk( DAQmxIsTaskDone(dev->AOTaskSet->taskHndl, &taskDoneFlag) ); 
-		if (!taskDoneFlag ) {
+		if (!taskDoneFlag) {
 			DAQmxErrChk( DAQmxStopTask(dev->AOTaskSet->taskHndl) );
-			(*nActiveTasksPtr)--; 
+			(*nActiveTasksPtr)--;
 		}
 	}
 	
 	// DI task
 	if (dev->DITaskSet && dev->DITaskSet->taskHndl) {
 		DAQmxErrChk( DAQmxIsTaskDone(dev->DITaskSet->taskHndl, &taskDoneFlag) ); 
-		if (!taskDoneFlag ) {
+		if (!taskDoneFlag) {
 			DAQmxErrChk( DAQmxStopTask(dev->DITaskSet->taskHndl) );
 			(*nActiveTasksPtr)--;
 		}
@@ -11077,7 +11219,7 @@ INIT_ERR
 	// DO task
 	if (dev->DOTaskSet && dev->DOTaskSet->taskHndl) {
 		DAQmxErrChk( DAQmxIsTaskDone(dev->DOTaskSet->taskHndl, &taskDoneFlag) );
-		if (!taskDoneFlag ) {
+		if (!taskDoneFlag) {
 			DAQmxErrChk( DAQmxStopTask(dev->DOTaskSet->taskHndl) );
 			(*nActiveTasksPtr)--;
 		}
@@ -11091,7 +11233,7 @@ INIT_ERR
 			chanSet = *(ChanSet_CI_type**)ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
 			if (chanSet->taskHndl) {
 				DAQmxErrChk( DAQmxIsTaskDone(chanSet->taskHndl, &taskDoneFlag) ); 
-				if (!taskDoneFlag ) {
+				if (!taskDoneFlag) {
 					DAQmxErrChk( DAQmxStopTask(chanSet->taskHndl) );
 					(*nActiveTasksPtr)--;
 				}
@@ -11107,7 +11249,7 @@ INIT_ERR
 			chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);	
 			if (chanSet->taskHndl) {
 				DAQmxErrChk( DAQmxIsTaskDone(chanSet->taskHndl, &taskDoneFlag) ); 
-				if (!taskDoneFlag ) {
+				if (!taskDoneFlag) {
 					DAQmxErrChk( DAQmxStopTask(chanSet->taskHndl) );
 					(*nActiveTasksPtr)--;
 				}
@@ -11115,8 +11257,9 @@ INIT_ERR
 		}
 	}
 	
-	if (!*nActiveTasksPtr)
+	if (!*nActiveTasksPtr) {
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+	}
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	nActiveTasksTSVLockObtained = FALSE;
@@ -11254,18 +11397,7 @@ INIT_ERR
 	
 	DAQmxErrChk(DAQmxTaskControl(dev->AITaskSet->taskHndl, DAQmx_Val_Task_Start));
 	
-	// increment number of active tasks
-	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
-	nActiveTasksTSVLockObtained = TRUE;
-	
-	(*nActiveTasksPtr)++;
-	
-	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
-	nActiveTasksTSVLockObtained = FALSE;
-	nActiveTasksPtr = NULL;
-	
 	errChk(SetHWTrigSlaveArmedStatus(dev->AITaskSet->HWTrigSlave, &errorInfo.errMsg));
-	
 	
 	return 0;
 	
@@ -11281,10 +11413,6 @@ Error:
 	
 	// cleanup
 	discard_DSInfo_type(&dsInfo);
-	
-	// try to release nActiveTasks lock if obtained before stopping all tasks
-	if (nActiveTasksTSVLockObtained)
-		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 
@@ -11406,17 +11534,6 @@ INIT_ERR
 	// launch task (and arm if this task is a slave triggered task)
 	DAQmxErrChk(DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Start));
 	
-	// increment number of active tasks
-	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
-	nActiveTasksTSVLockObtained = TRUE;
-	
-	(*nActiveTasksPtr)++;
-	
-	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
-	nActiveTasksTSVLockObtained = FALSE;
-	
-	nActiveTasksPtr = NULL;
-	
 	// if this task has a master HW-trigger, then signal it that task is armed
 	errChk(SetHWTrigSlaveArmedStatus(dev->AOTaskSet->HWTrigSlave, &errorInfo.errMsg));
 	
@@ -11436,10 +11553,6 @@ Error:
 	// cleanup
 	OKfree(AOData);
 	discard_Waveform_type(&AOWaveform);
-	
-	// try to release nActiveTasks lock if obtained before stopping all tasks
-	if (nActiveTasksTSVLockObtained)
-		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 	
@@ -11510,7 +11623,7 @@ INIT_ERR
 		pulseMode = GetPulseTrainMode(chanSetCO->pulseTrain);
 		// timing
 		nPulses = GetPulseTrainNPulses(chanSetCO->pulseTrain);
-		DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, PulseTrainModes_To_DAQmxVal(pulseMode), nPulses) );
+		DAQmxErrChk( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, PulseTrainModes_To_DAQmxVal(pulseMode), nPulses) );
 		
 		switch (dataPacketDataType) {
 			case DL_PulseTrain_Freq:
@@ -11642,16 +11755,6 @@ INIT_ERR
 	
 	DAQmxErrChk(DAQmxTaskControl(chanSetCO->taskHndl, DAQmx_Val_Task_Start));
 	
-	// increment number of active tasks
-	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
-	nActiveTasksTSVLockObtained	= TRUE;
-	
-	(*nActiveTasksPtr)++;
-	
-	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
-	nActiveTasksTSVLockObtained	= FALSE;
-	nActiveTasksPtr = NULL;
-	
 	errChk(SetHWTrigSlaveArmedStatus(chanSetCO->HWTrigSlave, &errorInfo.errMsg));
 	
 	
@@ -11669,10 +11772,6 @@ Error:
 	
 	// cleanup
 	discard_PulseTrain_type(&pulseTrain);
-	
-	// try to release nActiveTasks lock if obtained before stopping all tasks
-	if (nActiveTasksTSVLockObtained)
-		CmtReleaseTSVPtr(dev->nActiveTasks);
 	
 	StopDAQmxTasks(dev, NULL);
 	
@@ -11889,8 +11988,9 @@ INIT_ERR
 		
 			(*nActiveTasksPtr)--;
 		
-			if (!*nActiveTasksPtr)
+			if (!*nActiveTasksPtr) {
 				errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+			}
 		
 		CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 		nActiveTasksTSVLockObtained = FALSE;
@@ -11975,8 +12075,9 @@ INIT_ERR
 		
 			(*nActiveTasksPtr)--;
 		
-			if (!*nActiveTasksPtr)
+			if (!*nActiveTasksPtr) {
 				errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+			}
 		
 		CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 		nActiveTasksTSVLockObtained = FALSE; 
@@ -12012,8 +12113,9 @@ INIT_ERR
 	
 		(*nActiveTasksPtr)--;
 		
-		if (!*nActiveTasksPtr)
+		if (!*nActiveTasksPtr) {
 			errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+		}
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	nActiveTasksTSVLockObtained = FALSE; 
@@ -12093,8 +12195,9 @@ INIT_ERR
 	nActiveTasksTSVLockObtained = TRUE;
 	(*nActiveTasksPtr)--;
 		
-	if (!*nActiveTasksPtr)
+	if (!*nActiveTasksPtr) {
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+	}
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	nActiveTasksTSVLockObtained = FALSE;
@@ -12177,8 +12280,9 @@ INIT_ERR
 	
 	(*nActiveTasksPtr)--;
 		
-	if (!*nActiveTasksPtr)
+	if (!*nActiveTasksPtr) {
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+	}
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	nActiveTasksTSVLockObtained = FALSE;
@@ -12309,7 +12413,7 @@ INIT_ERR
 				}
 				
 				// process received NULL packet
-				if (data->nullPacketReceived[i])	
+				if (data->nullPacketReceived[i]) {	
 					if (!data->databuff_size[i]) {
 						// if NULL received and there is no data in the AO buffer, stop AO task if running
 					
@@ -12321,8 +12425,9 @@ INIT_ERR
 						
 						(*nActiveTasksPtr)--;
 		
-						if (!*nActiveTasksPtr)
+						if (!*nActiveTasksPtr) {
 							errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+						}
 		
 						CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 						nActiveTasksTSVLockObtained = FALSE;
@@ -12343,6 +12448,7 @@ INIT_ERR
 						
 						goto SkipPacket;
 					}
+				}
 			
 				
 				// copy data packet to datain
@@ -12519,8 +12625,9 @@ SkipPacket:
 		
 			(*nActiveTasksPtr)--;
 		
-			if (!*nActiveTasksPtr)
+			if (!*nActiveTasksPtr) {
 				errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+			}
 		
 		CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 		nActiveTasksTSVLockObtained = FALSE;
@@ -14137,10 +14244,9 @@ INIT_ERR
 	
 	
 	// set AO task to Verified state if it exists and is not on demand
-	if (dev->AOTaskSet->taskHndl && !chan->onDemand)
+	if (dev->AOTaskSet->taskHndl && !chan->onDemand) {
 		DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Abort) );
-	
-	
+	}
 	
 	// get all available data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errorInfo.errMsg) );
@@ -14231,7 +14337,8 @@ INIT_ERR
 			break;
 	}
 	
-	DAQmxErrChk(DAQmxClearTask(taskHndl));
+	DAQmxClearTask(taskHndl);
+	taskHndl = 0;
 	
 	// set AO task to Commited state if it exists and is not on demand
 	if (dev->AOTaskSet->taskHndl && !chan->onDemand) {
@@ -14239,8 +14346,13 @@ INIT_ERR
 		DAQmxErrChk( DAQmxTaskControl(dev->AOTaskSet->taskHndl, DAQmx_Val_Task_Commit) );  
 	}
 	
-	return 0;
+	// cleanup
+	for (size_t i = 0; i < nPackets; i++)
+		ReleaseDataPacket(&dataPackets[i]); 
+	OKfree(dataPackets);
 	
+	return 0;
+
 DAQmxError:
 	
 DAQmx_ERROR_INFO
@@ -14252,7 +14364,7 @@ Error:
 		ReleaseDataPacket(&dataPackets[i]); 
 	OKfree(dataPackets);
 	
-	DAQmxClearTask(taskHndl);
+	if (taskHndl) DAQmxClearTask(taskHndl);
 	
 RETURN_ERR
 }
@@ -14312,7 +14424,7 @@ INIT_ERR
 	pulseMode = GetPulseTrainMode(chanSetCO->pulseTrain);
 	// timing
 	nPulses = GetPulseTrainNPulses(chanSetCO->pulseTrain);
-	DAQmxErrChk ( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, PulseTrainModes_To_DAQmxVal(pulseMode), nPulses) );
+	DAQmxErrChk( DAQmxCfgImplicitTiming(chanSetCO->taskHndl, PulseTrainModes_To_DAQmxVal(pulseMode), nPulses) );
 		
 	switch (dataPacketType) {
 		case DL_PulseTrain_Freq:
@@ -14482,7 +14594,7 @@ INIT_ERR
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, 0);
 	
 	// configure device again
-	errChk( ConfigDAQmxDevice(dev, errorInfo.errMsg) );
+	errChk( ConfigDAQmxDevice(dev, &errorInfo.errMsg) );
 	
 Error:
 	
@@ -14502,24 +14614,26 @@ INIT_ERR
 
 	Dev_type*		dev											= GetTaskControlModuleData(taskControl);
 	char			CmtErrMsgBuffer[CMT_MAX_MESSAGE_BUF_SIZE]	= "";
-	int  			nActiveTasks								= 0;
+	int*  			nActiveTasksPtr								= NULL;
 	
 	// update iteration display
 	SetCtrlVal(dev->devPanHndl, TaskSetPan_TotalIterations, GetCurrentIterIndex(iterator));
 	
-	//----------------------------------------
-	// Reset Active Tasks counter
-	//----------------------------------------
+	// obtain active tasks TSV lock
+	CmtErrChk( CmtGetTSVPtr(dev->nActiveTasks, &nActiveTasksPtr) );
 	
-	CmtErrChk( CmtSetTSV(dev->nActiveTasks, &nActiveTasks) );
+	// reset Active Tasks counter
+	*nActiveTasksPtr = 0;
 	
 	//----------------------------------------
 	// Launch tasks 
 	//----------------------------------------
 	
 	// AI
-	if (dev->AITaskSet && dev->AITaskSet->taskHndl && dev->AITaskSet->nOpenChannels)
+	if (dev->AITaskSet && dev->AITaskSet->taskHndl && dev->AITaskSet->nOpenChannels) {
 		CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAIDAQmxTask_CB, dev, NULL) );
+		(*nActiveTasksPtr)++;
+	}
 	
 	// AO
 	if (dev->AOTaskSet && dev->AOTaskSet->taskHndl && dev->AOTaskSet->nOpenChannels) {
@@ -14531,6 +14645,7 @@ INIT_ERR
 		DAQmxErrChk( DAQmxRegisterDoneEvent(dev->AOTaskSet->taskHndl, 0, AODAQmxTaskDone_CB, dev) );  
 		
 		CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartAODAQmxTask_CB, dev, NULL) );
+		(*nActiveTasksPtr)++;
 	}
 	
 	// DI
@@ -14549,8 +14664,10 @@ INIT_ERR
 		size_t 				nCI 		= ListNumItems(dev->CITaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nCI; i++) {
 			chanSet = *(ChanSet_CI_type**)ListGetPtrToItem(dev->CITaskSet->chanTaskSet, i);
-			if (chanSet->taskHndl)
+			if (chanSet->taskHndl) {
 				CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCIDAQmxTasks_CB, chanSet, NULL) );
+				(*nActiveTasksPtr)++;
+			}
 		}
 	}
 	
@@ -14560,10 +14677,15 @@ INIT_ERR
 		size_t 				nCO 		= ListNumItems(dev->COTaskSet->chanTaskSet);
 		for (size_t i = 1; i <= nCO; i++) {
 			chanSet = *(ChanSet_CO_type**)ListGetPtrToItem(dev->COTaskSet->chanTaskSet, i);
-			if (chanSet->taskHndl)
+			if (chanSet->taskHndl) {
 				CmtErrChk( CmtScheduleThreadPoolFunction(DEFAULT_THREAD_POOL_HANDLE, StartCODAQmxTasks_CB, chanSet, NULL) );
+				(*nActiveTasksPtr)++;
+			}
 		}
 	}
+	
+	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
+	nActiveTasksPtr = NULL;
 	
 	return; // no error
 	
@@ -14577,6 +14699,11 @@ Cmt_ERR
 
 Error:
 	
+	if (nActiveTasksPtr) {
+		CmtReleaseTSVPtr(dev->nActiveTasks);
+		nActiveTasksPtr = NULL;
+	}
+		
 	AbortTaskControlExecution(taskControl);
 	
 PRINT_ERR
@@ -14639,8 +14766,9 @@ INIT_ERR
 	}
 	
 	// check if iteration can be set to done
-	if (!*nActiveTasksPtr)
+	if (!*nActiveTasksPtr) {
 		errChk( TaskControlIterationDone(dev->taskController, 0, "", FALSE, &errorInfo.errMsg) );
+	}
 		
 	CmtErrChk( CmtReleaseTSVPtr(dev->nActiveTasks) );
 	nActiveTasksTSVLockObtained = FALSE;
@@ -14776,8 +14904,9 @@ INIT_ERR
 	}
 	
 	// just make sure the device is configured again before start
-	if (state == TaskTree_Started)
+	if (state == TaskTree_Started)  {
 		errChk( ConfigDAQmxDevice(dev, &errorInfo.errMsg) );
+	}
 	
 Error:
 	

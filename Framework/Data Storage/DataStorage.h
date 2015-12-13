@@ -36,14 +36,15 @@ typedef struct DataStorage		DataStorage_type;
 typedef struct DS_Channel		DS_Channel_type;
 
 
-struct DS_Channel{
+struct DS_Channel {
 	DataStorage_type*	dsInstance;	    // reference to device that owns the channel
 	SinkVChan_type*		VChan;			// virtual channel assigned to this module
 	int					panHndl;		// panel handle to keep track of controls
 //	int 				iteration;		// local iteration counter (?)
+	
 	// METHODS
 	void (*Discard) 	(DS_Channel_type** channel);
-} ;
+};
 
 
 

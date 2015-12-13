@@ -53,8 +53,8 @@
 //------------------------------------------------------------------------------
 // Connection ID
 //------------------------------------------------------------------------------
-#define PIStage_USB_ID 						"PI C-863 Mercury"  //"0115500620"
-#define PIStage_COM_Port					3
+#define PIStage_USB_ID 						"0115500620" //"PI C-863 Mercury"  //"0115500620"
+#define PIStage_COM_Port					17
 #define PIStage_COM_BaudRate				9600
 
 //------------------------------------------------------------------------------
@@ -327,9 +327,16 @@ static int Move (ZStage_type* zstage, Zstage_move_type moveType, double moveVal,
 {
 INIT_ERR
 
-	errChk( TaskControlEvent(zstage->taskController, TC_Event_Custom, init_MoveCommand_type(moveType, moveVal), (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) );
+	MoveCommand_type*	moveCommand = NULL;
+	
+	nullChk( moveCommand = init_MoveCommand_type(moveType, moveVal) );
+	errChk( TaskControlEvent(zstage->taskController, TC_Event_Custom, (void**)&moveCommand, (DiscardFptr_type)discard_MoveCommand_type, &errorInfo.errMsg) );
+	
+	return 0;
 	
 Error:
+	
+	discard_MoveCommand_type(&moveCommand);
 	
 RETURN_ERR
 }
@@ -369,8 +376,9 @@ INIT_ERR
 		positionTrackerTimerID = 0;
 	}
 	// create new position tracker async timer
-	if (useJoystick)
+	if (useJoystick) {
 		errChk( positionTrackerTimerID = NewAsyncTimer(PIStage_POSITION_UPDATE_INTERVAL, -1, 1, TrackStagePosition, PIstage) );
+	}
 				   
 Error:
 	
@@ -621,8 +629,9 @@ INIT_ERR
 	}
 	
 	// set stage limits if available from loaded settings
-	if (PIstage->baseClass.zMinimumLimit && PIstage->baseClass.zMaximumLimit) 
+	if (PIstage->baseClass.zMinimumLimit && PIstage->baseClass.zMaximumLimit) { 
 		errChk( (*PIstage->baseClass.SetHWStageLimits)((ZStage_type*)PIstage, *PIstage->baseClass.zMinimumLimit, *PIstage->baseClass.zMaximumLimit, &errorInfo.errMsg) );
+	}
 	
 	// make sure the joystick is not active before referencing
 	errChk( UseJoystick(&PIstage->baseClass, FALSE, &errorInfo.errMsg) ); 
@@ -637,8 +646,9 @@ INIT_ERR
 	
 	if (IsReferencedFlag) {
 		// if referenced read in current position
-		if (!PIstage->baseClass.zPos)
+		if (!PIstage->baseClass.zPos) {
 			nullChk( PIstage->baseClass.zPos = malloc(sizeof(double)) );
+		}
 		
 		if (!PI_qPOS(ID, PIstage->assignedAxis, PIstage->baseClass.zPos)) {
 			OKfree(PIstage->baseClass.zPos);
@@ -703,11 +713,13 @@ INIT_ERR
 			}
 			// read stage limits if they are not loaded from a file already
 			if (!PIstage->baseClass.zMinimumLimit || !PIstage->baseClass.zMaximumLimit) {
-				if (!PIstage->baseClass.zMinimumLimit)
+				if (!PIstage->baseClass.zMinimumLimit) {
 					nullChk( PIstage->baseClass.zMinimumLimit = malloc(sizeof(double)) );
+				}
 				
-				if (!PIstage->baseClass.zMaximumLimit)
+				if (!PIstage->baseClass.zMaximumLimit) {
 					nullChk( PIstage->baseClass.zMaximumLimit = malloc(sizeof(double)) );
+				}
 					
 				errChk( (*PIstage->baseClass.GetHWStageLimits)((ZStage_type*)PIstage, PIstage->baseClass.zMinimumLimit, PIstage->baseClass.zMaximumLimit, &errorInfo.errMsg) );
 			}

@@ -1245,14 +1245,14 @@ INIT_ERR
 							
 							if (CalibTableRowIsValid(eom, eventData1)) {
 								eomCal->c = paramVal;
-								if (cell.y == eom->calibIdx)
+								if (cell.y == eom->calibIdx) {
 								// apply voltage
 								if (eom->isPulsed)
 									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->pulsedOutputPower), &errorInfo.errMsg) );
 								else
 									errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
-							}
-							else
+								}
+							} else
 								SetTableCellVal(panel, control, cell, eomCal->c);
 							
 							break;

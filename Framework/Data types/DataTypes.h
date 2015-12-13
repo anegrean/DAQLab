@@ -227,6 +227,14 @@ struct RGBA {
     unsigned char alpha; 								// Alpha value of the color (0 = transparent, 255 = opaque).
 };
 
+typedef struct RGBAImg	RGBAImg_type;
+struct RGBAImg {
+	Image_type*		red;
+	Image_type*		green;
+	Image_type*		blue;
+	Image_type*		alpha;
+};
+
 // identical to NI Vision's RGBU64Value_struct
 typedef struct RGBAU64	RGBAU64_type;
 struct RGBAU64 {

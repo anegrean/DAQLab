@@ -22,6 +22,7 @@
 #include <ImageDisplayNIVision.h>
 #include "WaveformDisplay.h"
 #include "UI_LaserScanning.h"
+#include "ImageDisplayCVI.h"
 
 									 
 
@@ -3094,7 +3095,8 @@ INIT_ERR
 	// image display TSV
 	errChk( CmtNewTSV(sizeof(ImageDisplay_type*), &scanChan->imgDisplayTSV) );
 	errChk( CmtGetTSVPtr(scanChan->imgDisplayTSV, &imgDisplayPtr) );
-	*imgDisplayPtr = NULL;
+	//*imgDisplayPtr = NULL; used for NI Vision
+	nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayCVI_type(engine->lsModule->baseClass.workspacePanHndl, "", 10, 10, NULL) );
 	errChk( CmtReleaseTSVPtr(scanChan->imgDisplayTSV) );
 	imgDisplayPtr = NULL;
 
@@ -6963,6 +6965,7 @@ INIT_ERR
 				// Create image container
 				//-----------------------
 				
+				
 				nullChk( imgBuffer->image = init_Image_type(imageType, rectRaster->scanSettings.height, rectRaster->scanSettings.width, &imgBuffer->imagePixels) );  
 				SetImagePixSize(imgBuffer->image, rectRaster->scanSettings.pixSize);
 				// TEMPORARY: X, Y & Z coordinates set to 0 for now
@@ -6986,6 +6989,7 @@ INIT_ERR
 				// create new callback group
 				nullChk( imgDisplayCBGroup = init_CallbackGroup_type(NULL, NumElem(CBFns), CBFns, callbackData, discardCallbackDataFunctions) );
 				
+				/*  for using NI Vision display
 				// if display was discarded, create a new display
 				if (!*imgDisplayPtr)
 					nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayNIVision_type (imgBuffer->scanChan, imageType, rectRaster->scanSettings.width, rectRaster->scanSettings.height, &imgDisplayCBGroup) );
@@ -6993,6 +6997,11 @@ INIT_ERR
 					discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
 					(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
 				}
+				*/
+				
+				discard_CallbackGroup_type(&(*imgDisplayPtr)->callbackGroup);
+				(*imgDisplayPtr)->callbackGroup = imgDisplayCBGroup;
+				
 				
 				//--------------------------------------
 				// Display image for this channel
@@ -7184,6 +7193,8 @@ static int CVICALLBACK NonResRectRasterScan_LaunchPixelBuilder (void* functionDa
 INIT_ERR
 
 	PixelAssemblyBinding_type*		binding 				= functionData;
+	
+	SetSleepPolicy(VAL_SLEEP_SOME);
 	
 	switch (binding->scanEngine->baseClass.scanMode) {
 			

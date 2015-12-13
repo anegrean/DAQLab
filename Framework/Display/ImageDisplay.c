@@ -44,6 +44,62 @@ struct ChannelGroupDisplayContainer {
 //==============================================================================
 // Global functions
 
+
+ColorChannel_type*	init_ColorChannel_type (size_t nImages, Image_type** imagePtrs[], uInt32 xOffsets[], uInt32 yOffsets[])
+{
+INIT_ERR
+	
+	//----------------------------------------------------------
+	// Init
+	//----------------------------------------------------------
+	ColorChannel_type* ret = NULL;
+	
+	//data
+	nullChk( ret = malloc (sizeof(ColorChannel_type)) );
+
+	nullChk( ret->images   = malloc(nImages * sizeof(Image_type*)) );
+	nullChk( ret->yOffsets = malloc (nImages * sizeof(uInt32)) );
+	nullChk( ret->xOffsets = malloc (nImages * sizeof(uInt32)) );
+	
+	ret->nImages = nImages;
+	
+	for ( size_t i = 0; i < nImages; i++ ) {
+		
+		if(imagePtrs[i]) {
+			ret->images[i] = *imagePtrs[i];
+			*imagePtrs[i] = NULL;
+		} else {
+			*imagePtrs[i] = NULL;
+		}
+		
+		ret->xOffsets[i] = xOffsets[i];
+		ret->yOffsets[i] = yOffsets[i];
+	}
+	
+	imagePtrs = NULL;
+		
+	return ret;
+		
+  
+Error:
+	discard_ColorChannel_type(&ret);  
+	return NULL;
+}
+void discard_ColorChannel_type(ColorChannel_type** colorChanPtr) {
+	ColorChannel_type* colorChan = *colorChanPtr;
+	
+	if(!colorChan) return;
+	
+	
+	//dispose of images
+	for (int i = 0; i < colorChan->nImages; i++) {
+			discard_Image_type(&colorChan->images[i]);
+	}
+	
+	OKfree(colorChan->xOffsets);
+	OKfree(colorChan->yOffsets);
+
+};
 int init_ImageDisplay_type (ImageDisplay_type* 				imageDisplay,
 							void*							imageDisplayOwner,
 							Image_type**					imagePtr,

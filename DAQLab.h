@@ -83,10 +83,6 @@ typedef struct{
 	
 } DAQLabXMLNode;
 
-	// function pointer type to validate user input, return TRUE for valid input
-typedef BOOL 		(*ValidateInputFptr_type) 			(char inputStr[], void* dataPtr); 
-	
-
 //==============================================================================
 // Global functions
 
@@ -167,9 +163,6 @@ ListType 			StringListCpy						(ListType src);
 
 	// displays messages in the main workspace log panel and optionally beeps
 void				DLMsg								(const char* text, BOOL beep);
-
-	// displays a popup box where the user can give a string after which a validate function pointer is called
-char*				DLGetUINameInput					(char popupWndName[], size_t maxInputLength, ValidateInputFptr_type validateInputFptr, void* dataPtr);
 
 //-------------------------------------------------------------------------------
 // DAQLab module and Task Controller management

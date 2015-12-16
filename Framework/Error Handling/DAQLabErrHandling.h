@@ -3,13 +3,13 @@
 // Title:		DAQLabUtility.h
 // Purpose:		A short description of the interface.
 //
-// Created on:	14-8-2014 at 22:25:52 by Adrian.
-// Copyright:	. All Rights Reserved.
+// Created on:	14-8-2014 at 22:25:52 by Adrian Negrean.
+// Copyright:	VU University Amsterdam. All Rights Reserved.
 //
 //==============================================================================
 
-#ifndef __DAQLabUtility_H__
-#define __DAQLabUtility_H__
+#ifndef __DAQLabErrHandling_H__
+#define __DAQLabErrHandling_H__
 
 #ifdef __cplusplus
     extern "C" {

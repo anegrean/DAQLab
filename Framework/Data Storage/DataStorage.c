@@ -12,6 +12,7 @@
 // Include files
 //#include "HDF5support.h"
 #include "DAQLab.h" 		// include this first
+#include "DAQLabUtility.h"
 #include "pathctrl.h"
 #include "UI_DataStorage.h"
 #include <formatio.h>

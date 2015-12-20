@@ -15,7 +15,7 @@
 #include <formatio.h>
 #include "toolbox.h"
 #include <userint.h>
-
+#include "DAQLabUtility.h"
 #include "UI_ZStage.h"
 #include "Zstage.h"
 

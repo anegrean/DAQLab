@@ -12,11 +12,11 @@
 // Include files
 
 #include "DAQLab.h" 		// include this first
+#include "DAQLabUtility.h"
 #include "DAQLabModule.h"
 #include <formatio.h>
 #include "toolbox.h"
 #include <userint.h>
-
 #include "XYStage.h"
 #include "UI_XYStage.h" 
 

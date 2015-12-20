@@ -12,6 +12,7 @@
 // Include files
 
 #include "DAQLab.h" 		// include this first
+#include "DAQLabUtility.h"
 #include "DAQLabErrHandling.h"
 #include <formatio.h> 
 #include <userint.h>
@@ -8092,43 +8093,44 @@ Error:
 
 static void	discard_ADTaskSet_type (ADTaskSet_type** taskSetPtr)
 {
-	if (!*taskSetPtr) return;
+	ADTaskSet_type*		taskSet = *taskSetPtr;
+	if (!taskSet) return;
 	
 	// DAQmx task
-	if ((*taskSetPtr)->taskHndl) {
-		DAQmxTaskControl((*taskSetPtr)->taskHndl, DAQmx_Val_Task_Abort);
-		DAQmxClearTask ((*taskSetPtr)->taskHndl); 
-		(*taskSetPtr)->taskHndl = 0;
+	if (taskSet->taskHndl) {
+		DAQmxTaskControl(taskSet->taskHndl, DAQmx_Val_Task_Abort);
+		DAQmxClearTask (taskSet->taskHndl); 
+		taskSet->taskHndl = 0;
 	}
 	
 	// channels
-	if ((*taskSetPtr)->chanSet) {
-		ChanSet_type** 		chanSetPtr;
-		size_t				nChans			= ListNumItems((*taskSetPtr)->chanSet); 	
+	if (taskSet->chanSet) {
+		ChanSet_type** 		chanSetPtr		= NULL;
+		size_t				nChans			= ListNumItems(taskSet->chanSet); 	
 		for (size_t i = 1; i <= nChans; i++) {			
-			chanSetPtr = ListGetPtrToItem((*taskSetPtr)->chanSet, i);
+			chanSetPtr = ListGetPtrToItem(taskSet->chanSet, i);
 			(*(*chanSetPtr)->discardFptr)	((void**)chanSetPtr);
 		}
-		ListDispose((*taskSetPtr)->chanSet);
+		ListDispose(taskSet->chanSet);
 	}
 	
 	// trigger data
-	discard_TaskTrig_type(&(*taskSetPtr)->startTrig);
-	discard_TaskTrig_type(&(*taskSetPtr)->referenceTrig);
-	discard_HWTrigMaster_type(&(*taskSetPtr)->HWTrigMaster);
-	discard_HWTrigSlave_type(&(*taskSetPtr)->HWTrigSlave);
+	discard_TaskTrig_type(&taskSet->startTrig);
+	discard_TaskTrig_type(&taskSet->referenceTrig);
+	discard_HWTrigMaster_type(&taskSet->HWTrigMaster);
+	discard_HWTrigSlave_type(&taskSet->HWTrigSlave);
 	
 	// timing info
-	discard_ADTaskTiming_type(&(*taskSetPtr)->timing);
+	discard_ADTaskTiming_type(&taskSet->timing);
 	
 	// AO streaming structure
-	discard_WriteAOData_type(&(*taskSetPtr)->writeAOData);
+	discard_WriteAOData_type(&taskSet->writeAOData);
 	
 	// AI read structure
-	discard_ReadAIData_type(&(*taskSetPtr)->readAIData);
+	discard_ReadAIData_type(&taskSet->readAIData);
 	
 	// DO streaming structure
-	discard_WriteDOData_type(&(*taskSetPtr)->writeDOData);
+	discard_WriteDOData_type(&taskSet->writeDOData);
 	
 	OKfree(*taskSetPtr);
 }

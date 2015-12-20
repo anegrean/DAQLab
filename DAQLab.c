@@ -12,6 +12,7 @@
 // Include files
 
 #include "DAQLab.h"			// include this first
+#include "DAQLabUtility.h"
 #include <formatio.h>
 #include <userint.h>
 #include <toolbox.h>
@@ -2302,13 +2303,15 @@ static void	DAQLab_discard_UITaskCtrl_type	(UITaskCtrl_type** UITaskCtrlPtr)
 	discard_TaskControl_type(&UITaskCtrl->taskControl);
 	
 	// discard SinkVChans
-	size_t				nVChans 		= ListNumItems(UITaskCtrl->dataStorageSinkVChans);
-	SinkVChan_type**	sinkVChanPtr	= NULL;
-	for (size_t i = 1; i <= nVChans; i++) {
-		sinkVChanPtr = ListGetPtrToItem(UITaskCtrl->dataStorageSinkVChans, i);
-		discard_VChan_type((VChan_type**)sinkVChanPtr);
+	if (UITaskCtrl->dataStorageSinkVChans) {
+		size_t				nVChans 		= ListNumItems(UITaskCtrl->dataStorageSinkVChans);
+		SinkVChan_type**	sinkVChanPtr	= NULL;
+		for (size_t i = 1; i <= nVChans; i++) {
+			sinkVChanPtr = ListGetPtrToItem(UITaskCtrl->dataStorageSinkVChans, i);
+			discard_VChan_type((VChan_type**)sinkVChanPtr);
+		}
+		OKfreeList(UITaskCtrl->dataStorageSinkVChans);
 	}
-	OKfreeList(UITaskCtrl->dataStorageSinkVChans);
 	
 	DiscardPanel(UITaskCtrl->panHndl);
 	

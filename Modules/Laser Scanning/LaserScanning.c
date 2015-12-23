@@ -886,8 +886,8 @@ static PointScanProtocol_type* 			init_PointScanProtocol_type 						(char protoc
 static void 							discard_PointScanProtocol_type						(PointScanProtocol_type** pointScanProtocolPtr);
 static PointScanProtocol_type*			copy_PointScanProtocol_type							(PointScanProtocol_type* pointScanProtocol);
 
-	// configures the point scan tab UI given a point scan protocol 
-static int								SetPointScanProtocolUI								(RectRaster_type* rectRaster, PointScanProtocol_type* pointScanProtocol);
+	// applies scan engine point scan configuration to the UI
+static int								SetPointScanProtocolUI								(RectRaster_type* rectRaster, BOOL updateProtocolsUIRing);
 
 static BOOL								VerifyPointScanProtocolName							(char inputStr[], void* callbackData);
 
@@ -1263,156 +1263,35 @@ static int InsertRectRasterScanEngineToUI (LaserScanning_type* ls, RectRaster_ty
 {
 INIT_ERR
 
-	int							scanPanHndl			= 0;	
-	int							frameScanPanHndl	= 0;	// contains frame scan controls
-	int							pointScanPanHndl	= 0;	// contains point scan controls
+	int							scanEnginePanHndl	= 0;
 	int							newTabIdx			= 0;
 	char*						scanEngineName		= NULL; 
 	
-	scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
-				
-	// set UI to match scan mode (frame scan by default)
-	SetActiveTabPage(scanPanHndl, RectRaster_Tab, rectRaster->baseClass.scanMode);
-				
-	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
-	// Set up Frame Scan UI
-	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
-	
-	GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &frameScanPanHndl); 
-				
-	// update operation mode and dim N Frames if necessary
-	SetCtrlVal(frameScanPanHndl, ScanTab_ExecutionMode, rectRaster->baseClass.continuousAcq);
-	if (rectRaster->baseClass.continuousAcq)
-		SetCtrlAttribute(frameScanPanHndl, ScanTab_NFrames, ATTR_DIMMED, TRUE);
-	else
-		SetCtrlAttribute(frameScanPanHndl, ScanTab_NFrames, ATTR_DIMMED, FALSE);
-					
-	// update number of frames
-	SetCtrlVal(frameScanPanHndl, ScanTab_NFrames, (unsigned int) rectRaster->baseClass.nFrames);
-							
-	// update objectives
-	size_t				nObjectives			= ListNumItems(rectRaster->baseClass.objectives);
-	Objective_type*		objective			= NULL;
-	for (size_t i = 1; i <= nObjectives; i++) {
-		objective = *(Objective_type**)ListGetPtrToItem(rectRaster->baseClass.objectives, i);
-		InsertListItem(frameScanPanHndl, ScanTab_Objective, -1, objective->objectiveName, objective->objectiveFL);
-		// select assigned objective
-		if (!strcmp(objective->objectiveName, rectRaster->baseClass.objectiveLens->objectiveName))
-		SetCtrlIndex(frameScanPanHndl, ScanTab_Objective, i-1);
-	}
-	
-	// add default parent frame scan ROI
-	InsertListItem(frameScanPanHndl, ScanTab_ROIs, 0, "parent", 0);
-	// check default parent frame scan ROI
-	CheckListItem(frameScanPanHndl, ScanTab_ROIs, 0, 1);
-				
-	// update height
-	SetCtrlVal(frameScanPanHndl, ScanTab_Height, rectRaster->scanSettings->height * rectRaster->scanSettings->pixSize);
-				
-	// update height and width offsets
-	SetCtrlVal(frameScanPanHndl, ScanTab_HeightOffset, rectRaster->scanSettings->heightOffset * rectRaster->scanSettings->pixSize); 
-	SetCtrlVal(frameScanPanHndl, ScanTab_WidthOffset, rectRaster->scanSettings->widthOffset * rectRaster->scanSettings->pixSize);
-				
-	// update pixel size & set boundaries
-	SetCtrlVal(frameScanPanHndl, ScanTab_PixelSize, rectRaster->scanSettings->pixSize);
-	SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
-	SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
-	SetCtrlAttribute(frameScanPanHndl, ScanTab_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
-				
-	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
-	// Set up Point Scan UI
-	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
-	
-	GetPanelHandleFromTabPage(scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &pointScanPanHndl); 
-	// populate point jump modes
-	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_SinglePoints, "Single points", PointJump_SinglePoints);
-	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_PointGroup, "Point group", PointJump_PointGroup);
-	InsertListItem(pointScanPanHndl, PointTab_Mode, PointJump_IncrementalPointGroup, "Incremental point group", PointJump_IncrementalPointGroup);
-	SetCtrlIndex(pointScanPanHndl, PointTab_Mode, (int)rectRaster->pointScan.pointScanProtocol->jumpMethod);
-	SetRectRasterScanEnginePointScanJumpModeUI(pointScanPanHndl, rectRaster->pointScan.pointScanProtocol->jumpMethod);
-				
-	// recording UI settings
-	SetCtrlVal(pointScanPanHndl, PointTab_Record, rectRaster->pointScan.pointScanProtocol->record);
-	SetRectRasterScanEnginePointScanRecordUI(pointScanPanHndl, rectRaster->pointScan.pointScanProtocol->record);    
-	
-	//------------------------
-	// stimulate UI settings
-	
-		// UI
-	SetCtrlVal(pointScanPanHndl, PointTab_Stimulate, rectRaster->pointScan.pointScanProtocol->stimulate);
-	SetRectRasterScanEnginePointScanStimulateUI(pointScanPanHndl, rectRaster->pointScan.pointScanProtocol->stimulate);
-		// VChan
-		// activate ROI shutter VChan
-	if (rectRaster->pointScan.pointScanProtocol->stimulate)
-		SetVChanActive((VChan_type*)rectRaster->baseClass.VChanROIShutter, TRUE);
-	else
-		SetVChanActive((VChan_type*)rectRaster->baseClass.VChanROIShutter, FALSE);
-	//------------------------
-	
-	// set integration
-	SetCtrlVal(pointScanPanHndl, PointTab_NIntegration, rectRaster->pointScan.pointScanProtocol->nIntegration);
-
-	// populate jump settings
-	SetCtrlVal(pointScanPanHndl, PointTab_Repeat, rectRaster->pointScan.pointScanProtocol->nSequenceRepeat);
-	SetCtrlVal(pointScanPanHndl, PointTab_RepeatWait, rectRaster->pointScan.pointScanProtocol->repeatWait);
-	SetCtrlVal(pointScanPanHndl, PointTab_StartDelay, rectRaster->pointScan.pointScanProtocol->startDelayInitVal);
-	SetCtrlVal(pointScanPanHndl, PointTab_StartDelayIncrement, rectRaster->pointScan.pointScanProtocol->startDelayIncrement);
-	
-	// populate hold settings
-	SetCtrlVal(pointScanPanHndl, PointTab_NHoldBurst, rectRaster->pointScan.pointScanProtocol->nHoldBurst);
-	SetCtrlVal(pointScanPanHndl, PointTab_Hold, rectRaster->pointScan.pointScanProtocol->holdTime);
-	SetCtrlVal(pointScanPanHndl, PointTab_HoldBurstPeriod, rectRaster->pointScan.pointScanProtocol->holdBurstPeriod);
-	SetCtrlVal(pointScanPanHndl, PointTab_HoldBurstPeriodIncr, rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr);
-	
-	// populate stimulation settings
-	SetCtrlVal(pointScanPanHndl, PointTab_StimDelay, rectRaster->pointScan.pointScanProtocol->stimDelay);
-	SetCtrlVal(pointScanPanHndl, PointTab_NPulses, rectRaster->pointScan.pointScanProtocol->nStimPulses);
-	SetCtrlVal(pointScanPanHndl, PointTab_PulseON, rectRaster->pointScan.pointScanProtocol->stimPulseONDuration);
-	SetCtrlVal(pointScanPanHndl, PointTab_PulseOFF, rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration);
-	
-	// populate available point scan protocols
-	size_t						nProtocols			= ListNumItems(rectRaster->pointScan.pointScanProtocols);
-	PointScanProtocol_type*		pointScanProtocol	= NULL;
-	
-	InsertListItem(pointScanPanHndl, PointTab_Protocol, 0, "", 0);
-	SetCtrlIndex(pointScanPanHndl, PointTab_Protocol, 0);
-	
-	if (nProtocols)
-		SetCtrlAttribute(pointScanPanHndl, PointTab_Protocol, ATTR_DIMMED, 0);
-	else
-		SetCtrlAttribute(pointScanPanHndl, PointTab_Protocol, ATTR_DIMMED, 1);
-	
-	for (size_t i = 1; i <= nProtocols; i++) {
-		pointScanProtocol = *(PointScanProtocol_type**)ListGetPtrToItem(rectRaster->pointScan.pointScanProtocols, i);
-		InsertListItem(pointScanPanHndl, PointTab_Protocol, i, pointScanProtocol->protocolName, i);
-		// select protocol
-		if (!strcmp(pointScanProtocol->protocolName, rectRaster->pointScan.pointScanProtocol->protocolName))
-		SetCtrlIndex(pointScanPanHndl, PointTab_Protocol, i);
-	}
-	
-	// dim point scan panel since there are no points initially
-	SetPanelAttribute(pointScanPanHndl, ATTR_DIMMED, TRUE);
-	
 	
 	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
-	// Insert scan engine to UI
+	// Prepare scan engine UI
 	//------------------------------------------------------------------------------------------------------------------------------------------------------
 	
-	newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanPanHndl);
-	OKfreePanHndl(scanPanHndl);
+	errChk( scanEnginePanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster) );
 	
-	// get panel handle to the inserted scan engine panel
-	GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &rectRaster->baseClass.scanPanHndl);
-	// get panel handle to the frame scan settings from the inserted scan engine
-	GetPanelHandleFromTabPage(rectRaster->baseClass.scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &rectRaster->baseClass.frameScanPanHndl);
-	// get panel handle to the point scan panel from the inserted scan engine
-	GetPanelHandleFromTabPage(rectRaster->baseClass.scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &rectRaster->baseClass.pointScanPanHndl);
-		
-	// change new scan engine tab title
-	scanEngineName = GetTaskControlName(rectRaster->baseClass.taskControl); 
+	errChk( newTabIdx = InsertPanelAsTabPage(ls->mainPanHndl, ScanPan_ScanEngines, -1, scanEnginePanHndl) );
+	OKfreePanHndl(scanEnginePanHndl);
+	
+	// set scan engine tab title
+	nullChk( scanEngineName = GetTaskControlName(rectRaster->baseClass.taskControl) ); 
 	SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, scanEngineName);
 	OKfree(scanEngineName);
-		
+	
+	// get scan engine panel handle
+	GetPanelHandleFromTabPage(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, &rectRaster->baseClass.scanPanHndl);
+	// get frame scan panel handle
+	GetPanelHandleFromTabPage(rectRaster->baseClass.scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_FrameScanTabIDX, &rectRaster->baseClass.frameScanPanHndl);
+	// get point scan panel handle
+	GetPanelHandleFromTabPage(rectRaster->baseClass.scanPanHndl, RectRaster_Tab, NonResGalvoRasterScan_PointScanTabIDX, &rectRaster->baseClass.pointScanPanHndl);
+	
+	// set scan mode
+	SetActiveTabPage(rectRaster->baseClass.scanPanHndl, RectRaster_Tab, rectRaster->baseClass.scanMode);
+	
 	// add scan engine panel callback data
 	SetPanelAttribute(rectRaster->baseClass.scanPanHndl, ATTR_CALLBACK_DATA, rectRaster);
 	
@@ -1421,6 +1300,49 @@ INIT_ERR
 	SetCtrlsInPanCBInfo(rectRaster, NonResRectRasterScan_FrameScanPan_CB, rectRaster->baseClass.frameScanPanHndl);
 	SetCtrlsInPanCBInfo(rectRaster, NonResRectRasterScan_PointScanPan_CB, rectRaster->baseClass.pointScanPanHndl);
 				
+	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
+	// Set up Frame Scan UI
+	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
+	
+	// update operation mode and dim N Frames if necessary
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_ExecutionMode, rectRaster->baseClass.continuousAcq);
+	if (rectRaster->baseClass.continuousAcq)
+		SetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_NFrames, ATTR_DIMMED, TRUE);
+	else
+		SetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_NFrames, ATTR_DIMMED, FALSE);
+					
+	// update number of frames
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_NFrames, (unsigned int) rectRaster->baseClass.nFrames);
+							
+	// update objectives
+	size_t				nObjectives			= ListNumItems(rectRaster->baseClass.objectives);
+	Objective_type*		objective			= NULL;
+	for (size_t i = 1; i <= nObjectives; i++) {
+		objective = *(Objective_type**)ListGetPtrToItem(rectRaster->baseClass.objectives, i);
+		InsertListItem(rectRaster->baseClass.frameScanPanHndl, ScanTab_Objective, -1, objective->objectiveName, objective->objectiveFL);
+		// select assigned objective
+		if (!strcmp(objective->objectiveName, rectRaster->baseClass.objectiveLens->objectiveName))
+		SetCtrlIndex(rectRaster->baseClass.frameScanPanHndl, ScanTab_Objective, i-1);
+	}
+	
+	// add default parent frame scan ROI
+	InsertListItem(rectRaster->baseClass.frameScanPanHndl, ScanTab_ROIs, 0, "parent", 0);
+	// check default parent frame scan ROI
+	CheckListItem(rectRaster->baseClass.frameScanPanHndl, ScanTab_ROIs, 0, 1);
+				
+	// update height
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_Height, rectRaster->scanSettings->height * rectRaster->scanSettings->pixSize);
+				
+	// update height and width offsets
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, rectRaster->scanSettings->heightOffset * rectRaster->scanSettings->pixSize); 
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_WidthOffset, rectRaster->scanSettings->widthOffset * rectRaster->scanSettings->pixSize);
+				
+	// update pixel size & set boundaries
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelSize, rectRaster->scanSettings->pixSize);
+	SetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelSize, ATTR_MIN_VALUE, NonResGalvoRasterScan_Min_PixelSize);
+	SetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelSize, ATTR_MAX_VALUE, NonResGalvoRasterScan_Max_PixelSize);
+	SetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelSize, ATTR_CHECK_RANGE, VAL_COERCE);
+	
 	// make width string control into combo box
 	// do this after calling SetCtrlsInPanCBInfo, otherwise the combobox is disrupted
 	errChk( Combo_NewComboBox(rectRaster->baseClass.frameScanPanHndl, ScanTab_Width) );
@@ -1445,7 +1367,13 @@ INIT_ERR
 		SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelDwell, pixelDwellString);
 	else
 		SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelDwell, "");
-				
+	
+	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
+	// Set up Point Scan UI
+	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
+	
+	SetPointScanProtocolUI(rectRaster, TRUE);
+	
 	// configure/unconfigure scan engine
 	// do this after adding combo boxes!
 	if (NonResRectRasterScan_ValidConfig(rectRaster)) {
@@ -1462,9 +1390,6 @@ INIT_ERR
 	
 	
 Error:
-	
-	// cleanup
-	discard_PointScanProtocol_type(&pointScanProtocol);
 	
 RETURN_ERR
 }
@@ -5815,8 +5740,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->jumpMethod != oldJumpMethod)
+					if (currentPointScanProtocol->jumpMethod != oldJumpMethod) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1); 
+					}
 					
 					break;
 				
@@ -5832,8 +5759,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetRectRasterScanEnginePointScanRecordUI(panel, currentPointScanProtocol->record);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->record != oldRecord)
+					if (currentPointScanProtocol->record != oldRecord) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -5844,8 +5773,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &currentPointScanProtocol->nIntegration);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->nIntegration != oldNIntegration)
+					if (currentPointScanProtocol->nIntegration != oldNIntegration) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -5864,8 +5795,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, FALSE);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->stimulate != oldStimulate)
+					if (currentPointScanProtocol->stimulate != oldStimulate) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 			
@@ -5876,8 +5809,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &currentPointScanProtocol->nHoldBurst); 
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->nHoldBurst != oldNHoldBurst)
+					if (currentPointScanProtocol->nHoldBurst != oldNHoldBurst) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -5916,8 +5851,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->holdTime != oldHoldTime)
+					if (currentPointScanProtocol->holdTime != oldHoldTime) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -5940,8 +5877,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->holdBurstPeriod);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->holdBurstPeriod != oldHoldBurstPeriod)
+					if (currentPointScanProtocol->holdBurstPeriod != oldHoldBurstPeriod) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -5952,8 +5891,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &currentPointScanProtocol->holdBurstPeriodIncr);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->holdBurstPeriodIncr != oldHoldBurstPeriodIncr)
+					if (currentPointScanProtocol->holdBurstPeriodIncr != oldHoldBurstPeriodIncr) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -5979,8 +5920,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->stimDelay);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->stimDelay != oldStimDelay)
+					if (currentPointScanProtocol->stimDelay != oldStimDelay) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -6002,8 +5945,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->nStimPulses);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->nStimPulses != oldNPulses)
+					if (currentPointScanProtocol->nStimPulses != oldNPulses) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -6027,8 +5972,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->stimPulseONDuration); 
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->stimPulseONDuration != oldPulseOnDuration)
+					if (currentPointScanProtocol->stimPulseONDuration != oldPulseOnDuration) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -6052,8 +5999,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->stimPulseOFFDuration); 
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->stimPulseOFFDuration != oldPulseOffDuration)
+					if (currentPointScanProtocol->stimPulseOFFDuration != oldPulseOffDuration) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -6064,8 +6013,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &currentPointScanProtocol->nSequenceRepeat);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->nSequenceRepeat != oldNSequenceRepeat)
+					if (currentPointScanProtocol->nSequenceRepeat != oldNSequenceRepeat) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -6076,8 +6027,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &currentPointScanProtocol->repeatWait);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->repeatWait != oldRepeatWait)
+					if (currentPointScanProtocol->repeatWait != oldRepeatWait) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -6096,8 +6049,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->startDelayInitVal);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->startDelayInitVal != oldStartDelayInitVal)
+					if (currentPointScanProtocol->startDelayInitVal != oldStartDelayInitVal) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 				
@@ -6112,8 +6067,10 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->startDelayIncrement);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->startDelayIncrement != oldStartDelayIncrement)
+					if (currentPointScanProtocol->startDelayIncrement != oldStartDelayIncrement) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+					}
 					
 					break;
 					
@@ -6159,15 +6116,14 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						DeleteListItem(panel, PointTab_Protocol, protocolIdx, 1);
 						// switch to unnamed protocol (settings kept from the deleted protocol)
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
 						
-						ListRemoveItem(scanEngine->pointScan.pointScanProtocols, &pointScanProtocol, protocolIdx + 1);
+						ListRemoveItem(scanEngine->pointScan.pointScanProtocols, &pointScanProtocol, protocolIdx);
 						discard_PointScanProtocol_type(&pointScanProtocol);
 					
-						// dim UI controls if there are no more point scan protocols available
-						if (!ListNumItems(scanEngine->pointScan.pointScanProtocols)) {
+						// dim protocols UI control if there are no more point scan protocols available
+						if (!ListNumItems(scanEngine->pointScan.pointScanProtocols))
 							SetCtrlAttribute(panel, PointTab_Protocol, ATTR_DIMMED, 1);
-							SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						}
 					}
 					
 					break;
@@ -6180,8 +6136,12 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						
 						GetCtrlIndex(panel, PointTab_Protocol, &protocolIdx);
 						// if the unnamed protocol is selected, do nothing
-						if (protocolIdx < 1)
-							return 1;
+						if (protocolIdx < 1) {
+							SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+							return 0;
+						}
+						
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 0);
 						
 						pointScanProtocol = *(PointScanProtocol_type**)ListGetPtrToItem(scanEngine->pointScan.pointScanProtocols, protocolIdx);
 						discard_PointScanProtocol_type(&scanEngine->pointScan.pointScanProtocol);
@@ -6189,9 +6149,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						currentPointScanProtocol = scanEngine->pointScan.pointScanProtocol;
 						
 						// apply protocol settings to the scan engine
-						
-						// CONTINUE HERE, create separate function to set up UI according to the protocol for both the Load function and here
-					
+						SetPointScanProtocolUI(scanEngine, FALSE);
 					}
 					
 					break;
@@ -8406,9 +8364,83 @@ static PointScanProtocol_type* copy_PointScanProtocol_type (PointScanProtocol_ty
 	return pointScanProtocolCopy;
 }
 
-static int SetPointScanProtocolUI (RectRaster_type* rectRaster, PointScanProtocol_type* pointScanProtocol)
+static int SetPointScanProtocolUI (RectRaster_type* rectRaster, BOOL updateProtocolsUIRing)
 {
+	// populate point jump modes
+	InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, PointJump_SinglePoints, "Single points", PointJump_SinglePoints);
+	InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, PointJump_PointGroup, "Point group", PointJump_PointGroup);
+	InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, PointJump_IncrementalPointGroup, "Incremental point group", PointJump_IncrementalPointGroup);
+	SetCtrlIndex(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, (int)rectRaster->pointScan.pointScanProtocol->jumpMethod);
+	SetRectRasterScanEnginePointScanJumpModeUI(rectRaster->baseClass.pointScanPanHndl, rectRaster->pointScan.pointScanProtocol->jumpMethod);
+				
+	// recording UI settings
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_Record, rectRaster->pointScan.pointScanProtocol->record);
+	SetRectRasterScanEnginePointScanRecordUI(rectRaster->baseClass.pointScanPanHndl, rectRaster->pointScan.pointScanProtocol->record);    
 	
+	//------------------------
+	// stimulate UI settings
+	
+		// UI
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_Stimulate, rectRaster->pointScan.pointScanProtocol->stimulate);
+	SetRectRasterScanEnginePointScanStimulateUI(rectRaster->baseClass.pointScanPanHndl, rectRaster->pointScan.pointScanProtocol->stimulate);
+		// VChan
+		// activate ROI shutter VChan
+	if (rectRaster->pointScan.pointScanProtocol->stimulate)
+		SetVChanActive((VChan_type*)rectRaster->baseClass.VChanROIShutter, TRUE);
+	else
+		SetVChanActive((VChan_type*)rectRaster->baseClass.VChanROIShutter, FALSE);
+	//------------------------
+	
+	// set integration
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_NIntegration, rectRaster->pointScan.pointScanProtocol->nIntegration);
+
+	// populate jump settings
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_Repeat, rectRaster->pointScan.pointScanProtocol->nSequenceRepeat);
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_RepeatWait, rectRaster->pointScan.pointScanProtocol->repeatWait);
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, rectRaster->pointScan.pointScanProtocol->startDelayInitVal);
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelayIncrement, rectRaster->pointScan.pointScanProtocol->startDelayIncrement);
+	
+	// populate hold settings
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_NHoldBurst, rectRaster->pointScan.pointScanProtocol->nHoldBurst);
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_Hold, rectRaster->pointScan.pointScanProtocol->holdTime);
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_HoldBurstPeriod, rectRaster->pointScan.pointScanProtocol->holdBurstPeriod);
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_HoldBurstPeriodIncr, rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr);
+	
+	// populate stimulation settings
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_StimDelay, rectRaster->pointScan.pointScanProtocol->stimDelay);
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_NPulses, rectRaster->pointScan.pointScanProtocol->nStimPulses);
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_PulseON, rectRaster->pointScan.pointScanProtocol->stimPulseONDuration);
+	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_PulseOFF, rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration);
+	
+	if (updateProtocolsUIRing) {
+		// select point scan protocol
+		size_t						nProtocols			= ListNumItems(rectRaster->pointScan.pointScanProtocols);
+		PointScanProtocol_type*		pointScanProtocol	= NULL;
+	
+		InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Protocol, 0, "", 0);
+		SetCtrlIndex(rectRaster->baseClass.pointScanPanHndl, PointTab_Protocol, 0);
+	
+		if (nProtocols)
+			SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_Protocol, ATTR_DIMMED, 0);
+		else
+			SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_Protocol, ATTR_DIMMED, 1);
+	
+		for (size_t i = 1; i <= nProtocols; i++) {
+			pointScanProtocol = *(PointScanProtocol_type**)ListGetPtrToItem(rectRaster->pointScan.pointScanProtocols, i);
+			InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Protocol, i, pointScanProtocol->protocolName, i);
+			// select protocol
+			if (!strcmp(pointScanProtocol->protocolName, rectRaster->pointScan.pointScanProtocol->protocolName))
+			SetCtrlIndex(rectRaster->baseClass.pointScanPanHndl, PointTab_Protocol, i);
+		}
+	}
+	
+	if (ListNumItems(rectRaster->pointScan.pointJumps))
+		SetPanelAttribute(rectRaster->baseClass.pointScanPanHndl, ATTR_DIMMED, FALSE);
+	else
+		// dim point scan panel since there are no points initially
+		SetPanelAttribute(rectRaster->baseClass.pointScanPanHndl, ATTR_DIMMED, TRUE);
+	
+	return 0;
 }
 
 static BOOL	VerifyPointScanProtocolName (char inputStr[], void* callbackData)

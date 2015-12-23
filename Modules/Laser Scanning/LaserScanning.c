@@ -886,6 +886,9 @@ static PointScanProtocol_type* 			init_PointScanProtocol_type 						(char protoc
 static void 							discard_PointScanProtocol_type						(PointScanProtocol_type** pointScanProtocolPtr);
 static PointScanProtocol_type*			copy_PointScanProtocol_type							(PointScanProtocol_type* pointScanProtocol);
 
+	// configures the point scan tab UI given a point scan protocol 
+static int								SetPointScanProtocolUI								(RectRaster_type* rectRaster, PointScanProtocol_type* pointScanProtocol);
+
 static BOOL								VerifyPointScanProtocolName							(char inputStr[], void* callbackData);
 
 static PointJump_type* 					init_PointJump_type 								(Point_type* point);
@@ -1265,7 +1268,6 @@ INIT_ERR
 	int							pointScanPanHndl	= 0;	// contains point scan controls
 	int							newTabIdx			= 0;
 	char*						scanEngineName		= NULL; 
-	PointScanProtocol_type*		pointScanProtocol	= NULL;
 	
 	scanPanHndl = LoadPanel(ls->mainPanHndl, MOD_LaserScanning_UI, RectRaster);
 				
@@ -1291,12 +1293,12 @@ INIT_ERR
 	// update objectives
 	size_t				nObjectives			= ListNumItems(rectRaster->baseClass.objectives);
 	Objective_type*		objective			= NULL;
-	for (size_t j = 1; j <= nObjectives; j++) {
-		objective = *(Objective_type**)ListGetPtrToItem(rectRaster->baseClass.objectives, j);
+	for (size_t i = 1; i <= nObjectives; i++) {
+		objective = *(Objective_type**)ListGetPtrToItem(rectRaster->baseClass.objectives, i);
 		InsertListItem(frameScanPanHndl, ScanTab_Objective, -1, objective->objectiveName, objective->objectiveFL);
 		// select assigned objective
 		if (!strcmp(objective->objectiveName, rectRaster->baseClass.objectiveLens->objectiveName))
-		SetCtrlIndex(frameScanPanHndl, ScanTab_Objective, j-1);
+		SetCtrlIndex(frameScanPanHndl, ScanTab_Objective, i-1);
 	}
 	
 	// add default parent frame scan ROI
@@ -1350,16 +1352,6 @@ INIT_ERR
 	// set integration
 	SetCtrlVal(pointScanPanHndl, PointTab_NIntegration, rectRaster->pointScan.pointScanProtocol->nIntegration);
 
-	// round settings to galvo sampling time
-	rectRaster->pointScan.pointScanProtocol->holdTime 				= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->holdTime);
-	rectRaster->pointScan.pointScanProtocol->holdBurstPeriod 		= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->holdBurstPeriod);
-	rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr);
-	rectRaster->pointScan.pointScanProtocol->stimDelay 				= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->stimDelay);
-	rectRaster->pointScan.pointScanProtocol->stimPulseONDuration 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->stimPulseONDuration);
-	rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration); 
-	rectRaster->pointScan.pointScanProtocol->startDelayInitVal 		= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->startDelayInitVal);
-	rectRaster->pointScan.pointScanProtocol->startDelayIncrement		= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->startDelayIncrement);
-	
 	// populate jump settings
 	SetCtrlVal(pointScanPanHndl, PointTab_Repeat, rectRaster->pointScan.pointScanProtocol->nSequenceRepeat);
 	SetCtrlVal(pointScanPanHndl, PointTab_RepeatWait, rectRaster->pointScan.pointScanProtocol->repeatWait);
@@ -1377,6 +1369,26 @@ INIT_ERR
 	SetCtrlVal(pointScanPanHndl, PointTab_NPulses, rectRaster->pointScan.pointScanProtocol->nStimPulses);
 	SetCtrlVal(pointScanPanHndl, PointTab_PulseON, rectRaster->pointScan.pointScanProtocol->stimPulseONDuration);
 	SetCtrlVal(pointScanPanHndl, PointTab_PulseOFF, rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration);
+	
+	// populate available point scan protocols
+	size_t						nProtocols			= ListNumItems(rectRaster->pointScan.pointScanProtocols);
+	PointScanProtocol_type*		pointScanProtocol	= NULL;
+	
+	InsertListItem(pointScanPanHndl, PointTab_Protocol, 0, "", 0);
+	SetCtrlIndex(pointScanPanHndl, PointTab_Protocol, 0);
+	
+	if (nProtocols)
+		SetCtrlAttribute(pointScanPanHndl, PointTab_Protocol, ATTR_DIMMED, 0);
+	else
+		SetCtrlAttribute(pointScanPanHndl, PointTab_Protocol, ATTR_DIMMED, 1);
+	
+	for (size_t i = 1; i <= nProtocols; i++) {
+		pointScanProtocol = *(PointScanProtocol_type**)ListGetPtrToItem(rectRaster->pointScan.pointScanProtocols, i);
+		InsertListItem(pointScanPanHndl, PointTab_Protocol, i, pointScanProtocol->protocolName, i);
+		// select protocol
+		if (!strcmp(pointScanProtocol->protocolName, rectRaster->pointScan.pointScanProtocol->protocolName))
+		SetCtrlIndex(pointScanPanHndl, PointTab_Protocol, i);
+	}
 	
 	// dim point scan panel since there are no points initially
 	SetPanelAttribute(pointScanPanHndl, ATTR_DIMMED, TRUE);
@@ -1401,7 +1413,7 @@ INIT_ERR
 	SetTabPageAttribute(ls->mainPanHndl, ScanPan_ScanEngines, newTabIdx, ATTR_LABEL_TEXT, scanEngineName);
 	OKfree(scanEngineName);
 		
-	// add scan engine pannel callback data
+	// add scan engine panel callback data
 	SetPanelAttribute(rectRaster->baseClass.scanPanHndl, ATTR_CALLBACK_DATA, rectRaster);
 	
 	// add callbacks to UI
@@ -2782,7 +2794,7 @@ INIT_ERR
 					
 							frameScanSettings = init_RectRasterScanSet_type(NonResGalvoRasterScan_Default_PixelSize, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelDwellTime); 
 							
-							pointScanProtocol = init_PointScanProtocol_type("default", NonResGalvoRasterScan_Default_HoldTime, 1, 0, 0, 0, NonResGalvoRasterScan_Default_StimPulseONDuration, 
+							pointScanProtocol = init_PointScanProtocol_type("", NonResGalvoRasterScan_Default_HoldTime, 1, 0, 0, 0, NonResGalvoRasterScan_Default_StimPulseONDuration, 
 									 NonResGalvoRasterScan_Default_StimPulseOFFDuration, 1, PointJump_SinglePoints, FALSE, FALSE, 1, 1, 0, 0, 0);
 							
 							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, FALSE, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 
@@ -5108,6 +5120,16 @@ INIT_ERR
 	rectRaster->pointScan.pointScanProtocol		= *pointScanProtocolPtr;
 	*pointScanProtocolPtr						= NULL;
 	
+	// round point scan protocol settings to galvo sampling time
+	rectRaster->pointScan.pointScanProtocol->holdTime 				= ceil(rectRaster->pointScan.pointScanProtocol->holdTime * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;  
+	rectRaster->pointScan.pointScanProtocol->holdBurstPeriod 		= ceil(rectRaster->pointScan.pointScanProtocol->holdBurstPeriod * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;  
+	rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr 	= ceil(rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+	rectRaster->pointScan.pointScanProtocol->stimDelay 				= ceil(rectRaster->pointScan.pointScanProtocol->stimDelay * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+	rectRaster->pointScan.pointScanProtocol->stimPulseONDuration 	= ceil(rectRaster->pointScan.pointScanProtocol->stimPulseONDuration * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+	rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration 	= ceil(rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+	rectRaster->pointScan.pointScanProtocol->startDelayInitVal 		= ceil(rectRaster->pointScan.pointScanProtocol->startDelayInitVal * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+	rectRaster->pointScan.pointScanProtocol->startDelayIncrement	= ceil(rectRaster->pointScan.pointScanProtocol->startDelayIncrement * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+	
 	//-----------------------------
 	// image and point scan buffers
 	//-----------------------------
@@ -5754,10 +5776,11 @@ RETURN_ERR
 
 static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	RectRaster_type*		scanEngine		= callbackData;
-	int						itemIdx			= 0;
-	int						nROIs			= 0;
-	double					stimTime		= 0;  
+	RectRaster_type*			scanEngine					= callbackData;
+	PointScanProtocol_type*		currentPointScanProtocol	= scanEngine->pointScan.pointScanProtocol;
+	int							itemIdx						= 0;
+	int							nROIs						= 0;
+	double						stimTime					= 0;  
 	
 	switch (event) {
 		
@@ -5767,11 +5790,13 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 				case PointTab_Mode:
 					
+					PointJumpMethods	oldJumpMethod = currentPointScanProtocol->jumpMethod;
+					
 					GetCtrlIndex(panel, control, &itemIdx);
-					scanEngine->pointScan.pointScanProtocol->jumpMethod = (PointJumpMethods) itemIdx;
+					currentPointScanProtocol->jumpMethod = (PointJumpMethods) itemIdx;
 					
 					// do not allow recording for point group
-					switch (scanEngine->pointScan.pointScanProtocol->jumpMethod) {
+					switch (currentPointScanProtocol->jumpMethod) {
 							
 						case PointJump_SinglePoints:
 							
@@ -5780,14 +5805,19 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						case PointJump_PointGroup:
 						case PointJump_IncrementalPointGroup:
 							
-							scanEngine->pointScan.pointScanProtocol->record = FALSE;
+							currentPointScanProtocol->record = FALSE;
 							SetCtrlVal(panel, PointTab_Record, FALSE);
-							SetRectRasterScanEnginePointScanRecordUI(panel, scanEngine->pointScan.pointScanProtocol->record);
+							SetRectRasterScanEnginePointScanRecordUI(panel, currentPointScanProtocol->record);
 							break;
 					}
 					
-					SetRectRasterScanEnginePointScanJumpModeUI(panel, scanEngine->pointScan.pointScanProtocol->jumpMethod);
+					SetRectRasterScanEnginePointScanJumpModeUI(panel, currentPointScanProtocol->jumpMethod);
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->jumpMethod != oldJumpMethod)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 				
 				case PointTab_ROIs:
@@ -5796,32 +5826,59 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 				case PointTab_Record:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan.pointScanProtocol->record);
-					SetRectRasterScanEnginePointScanRecordUI(panel, scanEngine->pointScan.pointScanProtocol->record); 
+					BOOL	oldRecord = currentPointScanProtocol->record;
+					
+					GetCtrlVal(panel, control, &currentPointScanProtocol->record);
+					SetRectRasterScanEnginePointScanRecordUI(panel, currentPointScanProtocol->record);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->record != oldRecord)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_NIntegration:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan.pointScanProtocol->nIntegration);
+					uInt32	oldNIntegration = currentPointScanProtocol->nIntegration;	
+					
+					GetCtrlVal(panel, control, &currentPointScanProtocol->nIntegration);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->nIntegration != oldNIntegration)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_Stimulate:
 					
+					BOOL oldStimulate = currentPointScanProtocol->stimulate;
+					
 					// UI
-					GetCtrlVal(panel, control, &scanEngine->pointScan.pointScanProtocol->stimulate);
-					SetRectRasterScanEnginePointScanStimulateUI(panel, scanEngine->pointScan.pointScanProtocol->stimulate);
+					GetCtrlVal(panel, control, &currentPointScanProtocol->stimulate);
+					SetRectRasterScanEnginePointScanStimulateUI(panel, currentPointScanProtocol->stimulate);
 					
 					// VChan
-					if (scanEngine->pointScan.pointScanProtocol->stimulate)
+					if (currentPointScanProtocol->stimulate)
 						SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, TRUE);
 					else
 						SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, FALSE);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->stimulate != oldStimulate)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
 					
 					break;
 			
 				case PointTab_NHoldBurst:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan.pointScanProtocol->nHoldBurst); 
+					uInt32	oldNHoldBurst = currentPointScanProtocol->nHoldBurst;
+					
+					GetCtrlVal(panel, control, &currentPointScanProtocol->nHoldBurst); 
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->nHoldBurst != oldNHoldBurst)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_Hold:
@@ -5832,28 +5889,36 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					// round up to a multiple of galvo sampling
 					holdTime = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, holdTime);
-						
+					
 					// if hold time is shorter than stimulation delay plus stimulation, then make delay 0 and use only one pulse
-					stimTime = scanEngine->pointScan.pointScanProtocol->stimDelay + scanEngine->pointScan.pointScanProtocol->nStimPulses * 
-							   scanEngine->pointScan.pointScanProtocol->stimPulseONDuration + (scanEngine->pointScan.pointScanProtocol->nStimPulses - 1) *
-							   scanEngine->pointScan.pointScanProtocol->stimPulseOFFDuration;
+					stimTime = currentPointScanProtocol->stimDelay + currentPointScanProtocol->nStimPulses * 
+							   currentPointScanProtocol->stimPulseONDuration + (currentPointScanProtocol->nStimPulses - 1) *
+							   currentPointScanProtocol->stimPulseOFFDuration;
 					
 					if (stimTime > holdTime) {
 						// adjust stimulation to fit within holding time
-						scanEngine->pointScan.pointScanProtocol->stimDelay = 0;
-						SetCtrlVal(panel, PointTab_StimDelay, scanEngine->pointScan.pointScanProtocol->stimDelay);
-						scanEngine->pointScan.pointScanProtocol->nStimPulses = 1;
-						SetCtrlVal(panel, PointTab_NPulses, scanEngine->pointScan.pointScanProtocol->nStimPulses);
-						scanEngine->pointScan.pointScanProtocol->stimPulseONDuration = holdTime;
-						SetCtrlVal(panel, PointTab_PulseON, scanEngine->pointScan.pointScanProtocol->stimPulseONDuration);
+						currentPointScanProtocol->stimDelay = 0;
+						SetCtrlVal(panel, PointTab_StimDelay, currentPointScanProtocol->stimDelay);
+						currentPointScanProtocol->nStimPulses = 1;
+						SetCtrlVal(panel, PointTab_NPulses, currentPointScanProtocol->nStimPulses);
+						currentPointScanProtocol->stimPulseONDuration = holdTime;
+						SetCtrlVal(panel, PointTab_PulseON, currentPointScanProtocol->stimPulseONDuration);
 						SetCtrlAttribute(panel, PointTab_PulseOFF, ATTR_DIMMED, TRUE);
 					}
 							   
 					// update in scan engine and UI
-					scanEngine->pointScan.pointScanProtocol->holdTime = holdTime;
-					SetCtrlVal(panel, control, scanEngine->pointScan.pointScanProtocol->holdTime);
+					
+					double oldHoldTime = currentPointScanProtocol->holdTime;
+					
+					currentPointScanProtocol->holdTime = holdTime;
+					SetCtrlVal(panel, control, currentPointScanProtocol->holdTime);
 					// update minimum point jump period
 					//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->holdTime != oldHoldTime)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_HoldBurstPeriod:
@@ -5869,14 +5934,26 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					
 					//---------------
+					double oldHoldBurstPeriod = currentPointScanProtocol->holdBurstPeriod;
 					
-					scanEngine->pointScan.pointScanProtocol->holdBurstPeriod = holdBurstPeriod;
-					SetCtrlVal(panel, control, scanEngine->pointScan.pointScanProtocol->holdBurstPeriod); 
+					currentPointScanProtocol->holdBurstPeriod = holdBurstPeriod;
+					SetCtrlVal(panel, control, currentPointScanProtocol->holdBurstPeriod);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->holdBurstPeriod != oldHoldBurstPeriod)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_HoldBurstPeriodIncr:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan.pointScanProtocol->holdBurstPeriodIncr);
+					double oldHoldBurstPeriodIncr = currentPointScanProtocol->holdBurstPeriodIncr;
+					
+					GetCtrlVal(panel, control, &currentPointScanProtocol->holdBurstPeriodIncr);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->holdBurstPeriodIncr != oldHoldBurstPeriodIncr)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
 					
 					break;
 					
@@ -5884,107 +5961,160 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					double stimDelay 	= 0;
 					
+					double oldStimDelay = currentPointScanProtocol->stimDelay;
+					
 					GetCtrlVal(panel, control, &stimDelay);
 					
 					// round up to a multiple of galvo sampling
 					stimDelay = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, stimDelay);
 						
 					// calculate resulting stimulation time and check if it fits within the holding time
-					stimTime = stimDelay + scanEngine->pointScan.pointScanProtocol->nStimPulses * scanEngine->pointScan.pointScanProtocol->stimPulseONDuration + 
-							   (scanEngine->pointScan.pointScanProtocol->nStimPulses - 1) * scanEngine->pointScan.pointScanProtocol->stimPulseOFFDuration;
+					stimTime = stimDelay + currentPointScanProtocol->nStimPulses * currentPointScanProtocol->stimPulseONDuration + 
+							   (currentPointScanProtocol->nStimPulses - 1) * currentPointScanProtocol->stimPulseOFFDuration;
 					
 					// update stimulation delay if stimulation time does not exceed holding time
-					if (stimTime <= scanEngine->pointScan.pointScanProtocol->holdTime)
-						scanEngine->pointScan.pointScanProtocol->stimDelay = stimDelay;
+					if (stimTime <= currentPointScanProtocol->holdTime)
+						currentPointScanProtocol->stimDelay = stimDelay;
 						
-					SetCtrlVal(panel, control, scanEngine->pointScan.pointScanProtocol->stimDelay); 
+					SetCtrlVal(panel, control, currentPointScanProtocol->stimDelay);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->stimDelay != oldStimDelay)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_NPulses:
 					
-					uInt32	nPulses = 0;
+					uInt32	nPulses 	= 0;
+					uInt32 	oldNPulses 	= currentPointScanProtocol->nStimPulses;
 					
 					GetCtrlVal(panel, control, &nPulses);
 					
 					// calculate resulting stimulation time and check if it fits within the holding time
-					stimTime = scanEngine->pointScan.pointScanProtocol->stimDelay + nPulses * scanEngine->pointScan.pointScanProtocol->stimPulseONDuration + 
-							   (nPulses - 1) * scanEngine->pointScan.pointScanProtocol->stimPulseOFFDuration;
+					stimTime = currentPointScanProtocol->stimDelay + nPulses * currentPointScanProtocol->stimPulseONDuration + 
+							   (nPulses - 1) * currentPointScanProtocol->stimPulseOFFDuration;
 					
 					// update nPulses if stimulation time does not exceed holding time
-					if (stimTime <= scanEngine->pointScan.pointScanProtocol->holdTime)
-						scanEngine->pointScan.pointScanProtocol->nStimPulses = nPulses;
+					if (stimTime <= currentPointScanProtocol->holdTime)
+						currentPointScanProtocol->nStimPulses = nPulses;
 						
-					SetCtrlVal(panel, control, scanEngine->pointScan.pointScanProtocol->nStimPulses);
+					SetCtrlVal(panel, control, currentPointScanProtocol->nStimPulses);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->nStimPulses != oldNPulses)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_PulseON:
 					
-					double	pulseONDuration = 0;
+					double	pulseONDuration 	= 0;
+					double 	oldPulseOnDuration 	= currentPointScanProtocol->stimPulseONDuration;
 					
 					GetCtrlVal(panel, control, &pulseONDuration);
 					
 					pulseONDuration = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, pulseONDuration);
 					
 					// calculate resulting stimulation time and check if it fits within the holding time
-					stimTime = scanEngine->pointScan.pointScanProtocol->stimDelay + scanEngine->pointScan.pointScanProtocol->nStimPulses * 
-							    pulseONDuration + (scanEngine->pointScan.pointScanProtocol->nStimPulses - 1) * scanEngine->pointScan.pointScanProtocol->stimPulseOFFDuration;
+					stimTime = currentPointScanProtocol->stimDelay + currentPointScanProtocol->nStimPulses * 
+							    pulseONDuration + (currentPointScanProtocol->nStimPulses - 1) * currentPointScanProtocol->stimPulseOFFDuration;
 					
 					// update pulseON duration if stimulation time does not exceed holding time
-					if (stimTime <= scanEngine->pointScan.pointScanProtocol->holdTime)
-						scanEngine->pointScan.pointScanProtocol->stimPulseONDuration = pulseONDuration;
+					if (stimTime <= currentPointScanProtocol->holdTime)
+						currentPointScanProtocol->stimPulseONDuration = pulseONDuration;
 						
-					SetCtrlVal(panel, control, scanEngine->pointScan.pointScanProtocol->stimPulseONDuration); 
+					SetCtrlVal(panel, control, currentPointScanProtocol->stimPulseONDuration); 
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->stimPulseONDuration != oldPulseOnDuration)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_PulseOFF:
 					
-					double	pulseOFFDuration = 0;
+					double	pulseOFFDuration 		= 0;
+					double 	oldPulseOffDuration 	= currentPointScanProtocol->stimPulseOFFDuration;
 					
 					GetCtrlVal(panel, control, &pulseOFFDuration);
 					
 					pulseOFFDuration = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, pulseOFFDuration);
 					
 					// calculate resulting stimulation time and check if it fits within the holding time
-					stimTime = scanEngine->pointScan.pointScanProtocol->stimDelay + scanEngine->pointScan.pointScanProtocol->nStimPulses * 
-							    scanEngine->pointScan.pointScanProtocol->stimPulseONDuration + (scanEngine->pointScan.pointScanProtocol->nStimPulses - 1) * pulseOFFDuration;
+					stimTime = currentPointScanProtocol->stimDelay + currentPointScanProtocol->nStimPulses * 
+							    currentPointScanProtocol->stimPulseONDuration + (currentPointScanProtocol->nStimPulses - 1) * pulseOFFDuration;
 					
 					// update pulseON duration if stimulation time does not exceed holding time
-					if (stimTime <= scanEngine->pointScan.pointScanProtocol->holdTime)
-						scanEngine->pointScan.pointScanProtocol->stimPulseOFFDuration = pulseOFFDuration;
+					if (stimTime <= currentPointScanProtocol->holdTime)
+						currentPointScanProtocol->stimPulseOFFDuration = pulseOFFDuration;
 						
-					SetCtrlVal(panel, control, scanEngine->pointScan.pointScanProtocol->stimPulseOFFDuration); 
+					SetCtrlVal(panel, control, currentPointScanProtocol->stimPulseOFFDuration); 
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->stimPulseOFFDuration != oldPulseOffDuration)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_Repeat:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan.pointScanProtocol->nSequenceRepeat);
+					uInt32 oldNSequenceRepeat = currentPointScanProtocol->nSequenceRepeat;
+					
+					GetCtrlVal(panel, control, &currentPointScanProtocol->nSequenceRepeat);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->nSequenceRepeat != oldNSequenceRepeat)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_RepeatWait:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan.pointScanProtocol->repeatWait);
+					double oldRepeatWait = currentPointScanProtocol->repeatWait;
+					
+					GetCtrlVal(panel, control, &currentPointScanProtocol->repeatWait);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->repeatWait != oldRepeatWait)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_StartDelay:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan.pointScanProtocol->startDelayInitVal);
+					double oldStartDelayInitVal = currentPointScanProtocol->startDelayInitVal;
+					
+					GetCtrlVal(panel, control, &currentPointScanProtocol->startDelayInitVal);
 					
 					// round up to a multiple of galvo sampling
-					scanEngine->pointScan.pointScanProtocol->startDelayInitVal = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, scanEngine->pointScan.pointScanProtocol->startDelayInitVal);
+					currentPointScanProtocol->startDelayInitVal = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, currentPointScanProtocol->startDelayInitVal);
 					
 					// make sure here that value is not smaller than the time needed to jump from parked position to the point ROI
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 					
-					SetCtrlVal(panel, control, scanEngine->pointScan.pointScanProtocol->startDelayInitVal);
+					SetCtrlVal(panel, control, currentPointScanProtocol->startDelayInitVal);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->startDelayInitVal != oldStartDelayInitVal)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 				
 				case PointTab_StartDelayIncrement:
 					
-					GetCtrlVal(panel, control, &scanEngine->pointScan.pointScanProtocol->startDelayIncrement);
+					double oldStartDelayIncrement = currentPointScanProtocol->startDelayIncrement;
+					
+					GetCtrlVal(panel, control, &currentPointScanProtocol->startDelayIncrement);
 					
 					// round up to a multiple of galvo sampling
-					scanEngine->pointScan.pointScanProtocol->startDelayIncrement = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, scanEngine->pointScan.pointScanProtocol->startDelayIncrement);
-					SetCtrlVal(panel, control, scanEngine->pointScan.pointScanProtocol->startDelayIncrement);
+					currentPointScanProtocol->startDelayIncrement = NonResRectRasterScan_RoundToGalvoSampling(scanEngine, currentPointScanProtocol->startDelayIncrement);
+					SetCtrlVal(panel, control, currentPointScanProtocol->startDelayIncrement);
+					
+					// if value changed, then switch to unnamed protocol
+					if (currentPointScanProtocol->startDelayIncrement != oldStartDelayIncrement)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+					
 					break;
 					
 				case PointTab_AddProtocol:
@@ -5995,7 +6125,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (!newPointScanProtocolName) return 0;
 					
 					// copy protocol
-					pointScanProtocolCopy = copy_PointScanProtocol_type(scanEngine->pointScan.pointScanProtocol);
+					pointScanProtocolCopy = copy_PointScanProtocol_type(currentPointScanProtocol);
 					// rename protocol
 					OKfree(pointScanProtocolCopy->protocolName);
 					pointScanProtocolCopy->protocolName = newPointScanProtocolName;
@@ -6005,6 +6135,9 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					InsertListItem(panel, PointTab_Protocol, -1, pointScanProtocolCopy->protocolName, ListNumItems(scanEngine->pointScan.pointScanProtocols));
 					SetCtrlAttribute(panel, PointTab_Protocol, ATTR_DIMMED, 0);
 					SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 0);
+					int nListPointScanProtocols = 0;
+					GetNumListItems(panel, PointTab_Protocol, &nListPointScanProtocols);
+					SetCtrlIndex(panel, PointTab_Protocol, nListPointScanProtocols - 1);
 					
 					// add protocol to data structure list
 					ListInsertItem(scanEngine->pointScan.pointScanProtocols, &pointScanProtocolCopy, END_OF_LIST);
@@ -6019,7 +6152,14 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						PointScanProtocol_type*		pointScanProtocol 	= NULL;
 					
 						GetCtrlIndex(panel, PointTab_Protocol, &protocolIdx);
+						// do not delete unnamed protocol
+						if (!protocolIdx)
+							break;
+						
 						DeleteListItem(panel, PointTab_Protocol, protocolIdx, 1);
+						// switch to unnamed protocol (settings kept from the deleted protocol)
+						SetCtrlIndex(panel, PointTab_Protocol, 0);
+						
 						ListRemoveItem(scanEngine->pointScan.pointScanProtocols, &pointScanProtocol, protocolIdx + 1);
 						discard_PointScanProtocol_type(&pointScanProtocol);
 					
@@ -6039,12 +6179,19 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						PointScanProtocol_type*		pointScanProtocol 	= NULL;
 						
 						GetCtrlIndex(panel, PointTab_Protocol, &protocolIdx);
-						if (protocolIdx < 0) return 0;
+						// if the unnamed protocol is selected, do nothing
+						if (protocolIdx < 1)
+							return 1;
 						
-						pointScanProtocol = *(PointScanProtocol_type**)ListGetPtrToItem(scanEngine->pointScan.pointScanProtocols, protocolIdx + 1);
+						pointScanProtocol = *(PointScanProtocol_type**)ListGetPtrToItem(scanEngine->pointScan.pointScanProtocols, protocolIdx);
 						discard_PointScanProtocol_type(&scanEngine->pointScan.pointScanProtocol);
 						scanEngine->pointScan.pointScanProtocol = copy_PointScanProtocol_type(pointScanProtocol);
+						currentPointScanProtocol = scanEngine->pointScan.pointScanProtocol;
 						
+						// apply protocol settings to the scan engine
+						
+						// CONTINUE HERE, create separate function to set up UI according to the protocol for both the Load function and here
+					
 					}
 					
 					break;
@@ -8257,6 +8404,11 @@ static PointScanProtocol_type* copy_PointScanProtocol_type (PointScanProtocol_ty
 	pointScanProtocolCopy->protocolName = StrDup(pointScanProtocol->protocolName);
 	
 	return pointScanProtocolCopy;
+}
+
+static int SetPointScanProtocolUI (RectRaster_type* rectRaster, PointScanProtocol_type* pointScanProtocol)
+{
+	
 }
 
 static BOOL	VerifyPointScanProtocolName (char inputStr[], void* callbackData)

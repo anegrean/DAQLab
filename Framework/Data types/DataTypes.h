@@ -420,11 +420,6 @@ void 						discard_Waveform_type 					(Waveform_type** waveform);
 	// Clears a list of Waveform_type* elements and keeps the list.
 void						ClearWaveformList						(ListType waveformList);
 
-	// Clears and discards a list of Waveform_type* elements..
-void						DiscardWaveformList						(ListType* waveformListPtr);
-
-
-
 //-----------------------------------------
 // Set/Get
 //-----------------------------------------
@@ -676,6 +671,8 @@ void 						discard_Point_type 						(Point_type** PointPtr);
 	// Creates a Rectangle.
 Rect_type*					initalloc_Rect_type						(Rect_type* rect, char ROIName[], RGBA_type color, BOOL active, int top, int left, int height, int width);
 void 						discard_Rect_type 						(Rect_type** RectPtr);
+
+void						discard_ROI_type						(ROI_type** ROIPtr);
 
 
 //---------------------------

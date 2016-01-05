@@ -516,7 +516,7 @@ INIT_ERR
 	// Load main panel position 
 	//-------------------------------------------------------------------------- 
 	
-	errChk( DLGetXMLElementAttributes(moduleElement, eomModuleAttr, NumElem(eomModuleAttr)) ); 
+	errChk( DLGetXMLElementAttributes("", moduleElement, eomModuleAttr, NumElem(eomModuleAttr)) ); 
 	
 	//-------------------------------------------------------------------------- 
 	// Load pockells cells
@@ -564,7 +564,7 @@ INIT_ERR
 	// Load pockells cell data
 	//--------------------------------------------------------------------------
 	
-	errChk( DLGetXMLElementAttributes(pockellsXMLElement, eomAttr, NumElem(eomAttr)) );
+	errChk( DLGetXMLElementAttributes("", pockellsXMLElement, eomAttr, NumElem(eomAttr)) );
 	
 	nullChk( taskController = init_TaskControl_type(taskControllerName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
 									  StartTC, ResetTC, DoneTC, StoppedTC, NULL, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC) );
@@ -616,7 +616,7 @@ INIT_ERR
 															   			{"c", BasicData_Double, &eomCal->c},
 															   			{"d", BasicData_Double, &eomCal->d}};
 																		
-	errChk( DLGetXMLElementAttributes(calXMLElement, calAttr, NumElem(calAttr)) ); 
+	errChk( DLGetXMLElementAttributes("", calXMLElement, calAttr, NumElem(calAttr)) ); 
 																		
 Error:
 	

@@ -202,10 +202,7 @@ CmtThreadPoolHandle	DLGetCommonThreadPoolHndl			(void);
 int					DLAddToXMLElem						(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes, ERRORINFO* xmlErrorInfo);
 
 	// places the value of multiple XML Attributes of an Element into user provided pointers
-int					DLGetXMLElementAttributes			(ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes);
-
-	// places the value of multiple XML Attributes of a Node into user provided pointers
-int 				DLGetXMLNodeAttributes 				(ActiveXMLObj_IXMLDOMNode_ XMLNode, DAQLabXMLNode Attributes[], size_t nAttributes);
+int					DLGetXMLElementAttributes			(char XMLElementName[], ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes);
 
 int					DLGetSingleXMLElementFromElement	(ActiveXMLObj_IXMLDOMElement_ parentXMLElement, char elementName[], ActiveXMLObj_IXMLDOMElement_* childXMLElement);
 

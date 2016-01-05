@@ -488,7 +488,7 @@ INIT_ERR
 	//--------------------------------------------------------------							
 	// get stage attributes
 	//--------------------------------------------------------------
-	DLGetXMLElementAttributes(moduleElement, StageAttr, NumElem(StageAttr));
+	DLGetXMLElementAttributes("", moduleElement, StageAttr, NumElem(StageAttr));
 	
 	//--------------------------------------------------------------
 	// get saved reference positions
@@ -520,7 +520,7 @@ INIT_ERR
 										  
 	for (long i = 0; i < nXMLElements; i++) {
 		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPosNodeList, xmlErrorInfo, i, &xmlRefPosNode) );
-		DLGetXMLNodeAttributes(xmlRefPosNode, refPosAttr, NumElem(refPosAttr));
+		DLGetXMLElementAttributes("", (ActiveXMLObj_IXMLDOMElement_)xmlRefPosNode, refPosAttr, NumElem(refPosAttr));
 		OKfreeCAHndl(xmlRefPosNode);
 		refPos = init_RefPosition_type(refName, refXPos, refYPos);
 		ListInsertItem(stage->xyRefPos, &refPos, END_OF_LIST);

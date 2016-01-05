@@ -215,16 +215,15 @@ static DS_Channel_type* init_DS_Channel_type (DataStorage_type* ds, int panHndl,
 
 static void	discard_DS_Channel_type (DS_Channel_type** chan)
 {   
-		
-	DS_Channel_type** 	chanPtr;
+	if (!*chan) return;
+	
+	DS_Channel_type** 	chanPtr			= NULL;
 	DataStorage_type* 	ds				= (*chan)->dsInstance;
 	size_t				nchannels		= ListNumItems(ds->channels);
 	size_t				chIdx			= 1;
 	char*				vchanname		= NULL;
-	char*				discvchanname		= NULL; 
+	char*				discvchanname	= NULL; 
 	
-	if (!*chan) return;
-
 	// remove channel     
 	for (size_t i = 1; i <= nchannels; i++) {	
 		chanPtr = ListGetPtrToItem(ds->channels, i);
@@ -274,17 +273,8 @@ void discard_DataStorage (DAQLabModule_type** mod)
 	DLRemoveTaskController((DAQLabModule_type*)ds, ds->taskController);
 	discard_TaskControl_type(&ds->taskController);
 
-	if (ds->channels) {
-		size_t 				nItems = ListNumItems(ds->channels);
-		DS_Channel_type**   channelPtr;
-		for (size_t i = 1; i <= nItems; i++) {
-			channelPtr = ListGetPtrToItem(ds->channels, nItems-i+1);
-			if (channelPtr!=NULL) discard_DS_Channel_type(channelPtr); 
-		}
-	}
-	
 	// ListDispose (offsetlist); 
-	OKfreeList(ds->channels);
+	OKfreeList(&ds->channels, (DiscardFptr_type)discard_DS_Channel_type);
 	
 	OKfree(ds->basefilepath);
 	OKfree(ds->rawDataPath); 

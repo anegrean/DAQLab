@@ -111,3 +111,26 @@ char* FormatMsg (int messageID, char fileName[], char functionName[], int lineNu
 	
 	return msg;
 }
+
+void OKfreeList (ListType* listPtr, DiscardFptr_type discardFptr)
+{
+	ListType 	list = *listPtr;
+	
+	if (!list) return;
+	
+	if (discardFptr) {
+		size_t	nItems 	= ListNumItems(list);
+		for (size_t i = 1; i <= nItems; i++)
+			(*discardFptr) (ListGetPtrToItem(list, i));
+	}
+	ListDispose(list);
+	*listPtr = 0;
+}
+
+void okfree	(void** objPtr)
+{
+	if (!*objPtr) return;
+	
+	free(*objPtr);
+	*objPtr = NULL;
+}

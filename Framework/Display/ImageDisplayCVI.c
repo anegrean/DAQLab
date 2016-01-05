@@ -87,8 +87,6 @@ static int buttonArray[] = {DisplayPan_PICTUREBUTTON, DisplayPan_PICTUREBUTTON_2
 //==============================================================================
 // Static functions
 
-static void 					DiscardImageList 			(ListType* imageListPtr);
-
 static int						DisplayImageFunction		(ImageDisplayCVI_type* imgDisplay, Image_type** image); // CPU 
 
 static void 					ConvertToBitArray			(ImageDisplayCVI_type* display, Image_type* image);
@@ -271,7 +269,7 @@ static void discard_ImageDisplayCVI_type	(ImageDisplayCVI_type** imageDisplayPtr
 	// Images
 	//--------------
 	
-	DiscardImageList(&imgDisp->images);
+	OKfreeList(&imgDisp->images, (DiscardFptr_type)discard_Image_type);
 	
 	if(imgDisp->imgBitmapID >= 0)
 		DiscardBitmap(imgDisp->imgBitmapID);
@@ -317,12 +315,6 @@ void ClearImageCVIList (ListType imageList)
 		discard_Image_type(imagePtr);
 	}
 	ListClear(imageList);
-}
-
-void DiscardImageList (ListType* imageListPtr)
-{
-	ClearImageCVIList (*imageListPtr);
-	OKfreeList(*imageListPtr);
 }
 
 static void ConvertToBitArray(ImageDisplayCVI_type* display, Image_type* image) 

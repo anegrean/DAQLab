@@ -10,8 +10,8 @@
 
 //==============================================================================										    
 // Include files
+#include <windows.h>  
 #include "DAQLabErrHandling.h"
-#include <windows.h>
 #include "asynctmr.h"
 #include <formatio.h>
 #include "TaskController.h"
@@ -337,10 +337,10 @@ void discard_TaskControl_type(TaskControl_type** taskControllerPtr)
 	// Discard this Task Controller
 	//----------------------------------------------------------------------------
 	
-	// incoming data queues (does not free the queue itself!)
+	// incoming data queues
 	if (tc->dataQs) {
 		RemoveAllSinkVChans(tc, NULL);
-		OKfreeList(tc->dataQs);
+		OKfreeList(&tc->dataQs, NULL);
 	}
 	
 	// discard state TSV
@@ -365,10 +365,10 @@ void discard_TaskControl_type(TaskControl_type** taskControllerPtr)
 	}
 	
 	// source VChan list
-	OKfreeList(tc->sourceVChans);
+	OKfreeList(&tc->sourceVChans, NULL);
 	
 	// child Task Controllers list
-	OKfreeList(tc->childTCs);
+	OKfreeList(&tc->childTCs, NULL);
 	
 	// release thread
 	if (tc->threadFunctionID) CmtReleaseThreadPoolFunctionID(tc->threadPoolHndl, tc->threadFunctionID);   

@@ -260,7 +260,7 @@ typedef struct {
 	double 					parked;         		// Value of command signal to be applied to the galvo when parked, in [V].
 	double					mechanicalResponse;		// Galvo mechanical response in [deg/V].
 	double					sampleDisplacement;		// Displacement factor in sample space [um] depending on applied voltage [V] and chosen scan engine optics. The unit of this factor is [um/V].
-}NonResGalvoCal_type;
+} NonResGalvoCal_type;
 
 //---------------------------------------------------
 // Resonant galvo scanner calibration data
@@ -810,10 +810,13 @@ static RectRaster_type*					init_RectRaster_type								(LaserScanning_type*		ls
 																							double						shutterSwitchTime,
 																				 	 		RectRasterScanSet_type**	frameScanSettingsPtr,
 																							PointScanProtocol_type**	pointScanProtocolPtr,
+																							ListType*					pointScanProtocolsListPtr,
 																				 	 		double						scanLensFL,
 																				 	 		double						tubeLensFL);
 
 static void								discard_RectRaster_type								(RectRaster_type** rectRasterPtr);
+
+static int								SetRectRasterPointScanProtocol						(RectRaster_type* rectRaster, PointScanProtocol_type* pointScanProtocol);
 
 static void 							SetRectRasterScanEnginePointScanStimulateUI			(int panel, BOOL stimulate);
 
@@ -954,7 +957,10 @@ static int 								LoadCfg_ScanChannels 								(ScanEngine_type* scanEngine, Ac
 
 static int								LoadCfg_RectRaster_FrameScan						(RectRasterScanSet_type** scanSetPtr, ActiveXMLObj_IXMLDOMElement_ frameScanSettingsXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int								LoadCfg_PointScanProtocol							(PointScanProtocol_type** pointScanProtocolPtr, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
+static int								LoadCfg_PointScanProtocol							(PointScanProtocol_type** pointScanProtocolPtr, ActiveXMLObj_IXMLDOMElement_ pointScanProtocolXMLElement, ERRORINFO* xmlErrorInfo);
+
+	// Returns a new list of PointScanProtocol_type* elements with loaded protocols if pointScanProtocols is set to 0 or modifies an existsing list. Also returns a selectedProtocol from the list if there is one, otherwise this parameter returns NULL.
+static int 								LoadCfg_RectRaster_PointScanProtocols				(ListType* pointScanProtocolsPtr, PointScanProtocol_type** selectedProtocolPtr, ActiveXMLObj_IXMLDOMElement_ pointScanProtocolsXMLElement, ERRORINFO* xmlErrorInfo);
 
 //----------------------------------------
 // Save settings
@@ -971,6 +977,8 @@ static int 								SaveCfg_ScanChannels 								(ScanEngine_type* scanEngine, CA
 static int								SaveCfg_RectRaster_FrameScan						(RectRasterScanSet_type* scanSet, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
 
 static int								SaveCfg_PointScanProtocol							(PointScanProtocol_type* pointScanProtocol, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
+
+static int								SaveCfg_RectRaster_PointScanProtocols				(RectRaster_type* rectRaster, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
 
 static int 								DisplayPanels										(DAQLabModule_type* mod, BOOL visibleFlag); 
 
@@ -1160,8 +1168,8 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	
 	// available calibrations
 	if (ls->availableCals) {
-		size_t 				nItems = ListNumItems(ls->availableCals);
-		ScanAxisCal_type**  calPtr;
+		size_t 				nItems 	= ListNumItems(ls->availableCals);
+		ScanAxisCal_type**  calPtr	= NULL;
 		for (size_t i = 1; i <= nItems; i++) {
 			calPtr = ListGetPtrToItem(ls->availableCals, i);
 			(*(*calPtr)->Discard)	(calPtr); 
@@ -1172,8 +1180,8 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	
 	// active calibrations
 	if (ls->activeCal) {
-		size_t 				nItems = ListNumItems(ls->activeCal);
-		ActiveScanAxisCal_type**  calPtr;
+		size_t 						nItems 	= ListNumItems(ls->activeCal);
+		ActiveScanAxisCal_type**  	calPtr	= NULL;
 		for (size_t i = 1; i <= nItems; i++) {
 			calPtr = ListGetPtrToItem(ls->activeCal, i);
 			(*(*calPtr)->Discard)	(calPtr); 
@@ -1184,8 +1192,8 @@ void discard_LaserScanning (DAQLabModule_type** mod)
 	
 	// scan engines
 	if (ls->scanEngines) {
-		size_t 				nItems = ListNumItems(ls->scanEngines);
-		ScanEngine_type**  	enginePtr;
+		size_t 				nItems 		= ListNumItems(ls->scanEngines);
+		ScanEngine_type**  	enginePtr	= NULL;
 		for (size_t i = 1; i <= nItems; i++) {
 			enginePtr = ListGetPtrToItem(ls->scanEngines, i);
 			DLUnregisterScanEngine(*enginePtr);
@@ -1594,8 +1602,8 @@ INIT_ERR
 				// save frame scan settings
 				errChk( SaveCfg_RectRaster_FrameScan(rectRaster->scanSettings, xmlDOM, scanEngineXMLElement, xmlErrorInfo) );
 				
-				// save point scan settings
-				errChk( SaveCfg_PointScanProtocol(rectRaster->pointScan.pointScanProtocol, xmlDOM, scanEngineXMLElement, xmlErrorInfo) );
+				// save point scan protocols
+				errChk( SaveCfg_RectRaster_PointScanProtocols(rectRaster, xmlDOM, scanEngineXMLElement, xmlErrorInfo) );
 				
 				break;
 		}
@@ -1817,8 +1825,8 @@ INIT_ERR
 																		{"PulseOFFDuration",			BasicData_Double,		&pointScanProtocol->stimPulseOFFDuration} };
 	
 	
-	// create point scan settings XML element
-	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "PointScanSettings", &pointScanProtocolXMLElement) );
+	// create point scan protocol XML element
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "PointScanProtocol", &pointScanProtocolXMLElement) );
 	// save point scan settings XML element attributes
 	errChk( DLAddToXMLElem(xmlDOM, pointScanProtocolXMLElement, pointScanAttr, DL_ATTRIBUTE, NumElem(pointScanAttr), xmlErrorInfo) );
 	
@@ -1849,6 +1857,39 @@ Error:
 	return errorInfo.error;
 }
 
+static int SaveCfg_RectRaster_PointScanProtocols (RectRaster_type* rectRaster, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
+{
+INIT_ERR
+	
+	ActiveXMLObj_IXMLDOMElement_	pointScanProtocolsXMLElement	= 0;
+	DAQLabXMLNode					pointScanProtocolsAttr[]		= {{"SelectedProtocol",			BasicData_CString,		rectRaster->pointScan.pointScanProtocol->protocolName}};
+	
+	// create point scan protocols XML element
+	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "PointScanProtocols", &pointScanProtocolsXMLElement) );
+	
+	// save selected point scan protocol name
+	errChk( DLAddToXMLElem(xmlDOM, pointScanProtocolsXMLElement, pointScanProtocolsAttr, DL_ATTRIBUTE, NumElem(pointScanProtocolsAttr), xmlErrorInfo) );
+	
+	// add available point scan protocols
+	size_t						nProtocols			= ListNumItems(rectRaster->pointScan.pointScanProtocols);
+	PointScanProtocol_type*		pointScanProtocol   = NULL;
+	
+	for (size_t i = 1; i <= nProtocols; i++) {
+		pointScanProtocol = *(PointScanProtocol_type**) ListGetPtrToItem(rectRaster->pointScan.pointScanProtocols, i);
+		errChk( SaveCfg_PointScanProtocol(pointScanProtocol, xmlDOM, pointScanProtocolsXMLElement, xmlErrorInfo) );
+	}
+	
+	// add point scan protocols XML element to parent
+	errChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, xmlErrorInfo, pointScanProtocolsXMLElement, NULL) ); 
+	
+Error:
+	
+	// cleanup
+	OKfreeCAHndl(pointScanProtocolsXMLElement);
+	
+	return 0;
+}
+
 static int LoadCfg (DAQLabModule_type* mod, ActiveXMLObj_IXMLDOMElement_  moduleElement, ERRORINFO* xmlErrorInfo)
 {
 INIT_ERR
@@ -1861,6 +1902,7 @@ INIT_ERR
 	ActiveXMLObj_IXMLDOMElement_	scanAxisCalibrationsXMLElement 	= 0;   			// element containing multiple scan axis calibrations
 	ActiveXMLObj_IXMLDOMElement_	scanEnginesXMLElement 			= 0;   			// element containing multiple scan engines
 	ActiveXMLObj_IXMLDOMElement_	frameScanXMLElement				= 0;
+	ActiveXMLObj_IXMLDOMElement_	pointScanProtocolsXMLElement	= 0;
 	ActiveXMLObj_IXMLDOMElement_	objectivesXMLElement			= 0;
 	ActiveXMLObj_IXMLDOMNodeList_	scanEngineNodeList				= 0;
 	ActiveXMLObj_IXMLDOMNodeList_	objectivesNodeList				= 0;
@@ -1884,6 +1926,9 @@ INIT_ERR
 	char*							objectiveName					= NULL;
 	ScanEngine_type*				scanEngine						= NULL;
 	Objective_type*					objective						= NULL;
+	ListType						pointScanProtocolsList			= 0;	  // elements of PointScanProtocol_type* type
+	PointScanProtocol_type*			selectedPointScanProtocol		= NULL;
+	PointScanProtocol_type*			pointScanProtocolCopy			= NULL;
 	DAQLabXMLNode					scanEngineGenericAttr[] 		= {	{"Name", 						BasicData_CString, 		&scanEngineName},
 																		{"ContinuousFrameScan", 		BasicData_Bool, 		&continuousFrameScan},
 																		{"NFrames", 					BasicData_UInt, 		&nFrames},
@@ -1901,7 +1946,7 @@ INIT_ERR
 																		{"FL", 							BasicData_Double, 		&objectiveFL} };
 	
 	// load main panel position 
-	errChk( DLGetXMLElementAttributes(moduleElement, lsAttr, NumElem(lsAttr)) ); 
+	errChk( DLGetXMLElementAttributes("", moduleElement, lsAttr, NumElem(lsAttr)) ); 
 	
 	//--------------------------------------------------------------------------
 	// Load scan axis calibrations
@@ -1924,7 +1969,7 @@ INIT_ERR
 	for (long i = 0; i < nScanEngines; i++) {
 		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(scanEngineNodeList, xmlErrorInfo, i, &scanEngineNode) );
 		// get generic scan engine attributes
-		errChk( DLGetXMLNodeAttributes(scanEngineNode, scanEngineGenericAttr, NumElem(scanEngineGenericAttr)) );
+		errChk( DLGetXMLElementAttributes("", (ActiveXMLObj_IXMLDOMElement_)scanEngineNode, scanEngineGenericAttr, NumElem(scanEngineGenericAttr)) );
 		// get objectives XML element
 		errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, "Objectives", &objectivesXMLElement ) );  
 		
@@ -1935,22 +1980,24 @@ INIT_ERR
 				
 				double						galvoSamplingRate		= 0;
 				RectRasterScanSet_type*		frameScanSettings		= NULL;
-				PointScanProtocol_type*		pointScanProtocol		= NULL;
 				DAQLabXMLNode				rectangleRasterAttr[] 	= { {"GalvoSamplingRate", 	BasicData_Double, 	&galvoSamplingRate} }; 				
 				
 				// load rectangular raster scan attributes from the generic scan engine element
-				errChk( DLGetXMLElementAttributes((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, rectangleRasterAttr, NumElem(rectangleRasterAttr)) );
+				errChk( DLGetXMLElementAttributes("", (ActiveXMLObj_IXMLDOMElement_)scanEngineNode, rectangleRasterAttr, NumElem(rectangleRasterAttr)) );
 				
 				// load frame scan settings
 				errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, "FrameScanSettings", &frameScanXMLElement) );
 				errChk( LoadCfg_RectRaster_FrameScan(&frameScanSettings, frameScanXMLElement, xmlErrorInfo) );
 				OKfreeCAHndl(frameScanXMLElement);
 				
-				// load point scan settings
-				errChk( LoadCfg_PointScanProtocol(&pointScanProtocol, (ActiveXMLObj_IXMLDOMElement_)scanEngineNode, xmlErrorInfo) );
+				// load point scan protocols
+				errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, "PointScanProtocols", &pointScanProtocolsXMLElement) );
+				errChk( LoadCfg_RectRaster_PointScanProtocols(&pointScanProtocolsList, &selectedPointScanProtocol, pointScanProtocolsXMLElement, xmlErrorInfo) );
+				OKfreeCAHndl(pointScanProtocolsXMLElement);
+				nullChk( pointScanProtocolCopy = copy_PointScanProtocol_type(selectedPointScanProtocol) );
 				
 				nullChk( scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, continuousFrameScan, nFrames, galvoSamplingRate, referenceClockFreq, 
-							 												 pixelDelay, shutterSwitchTime, &frameScanSettings, &pointScanProtocol,scanLensFL, tubeLensFL) ); 
+							 												 pixelDelay, shutterSwitchTime, &frameScanSettings, &pointScanProtocolCopy, &pointScanProtocolsList, scanLensFL, tubeLensFL) ); 
 				
 				break;
 			
@@ -1988,7 +2035,7 @@ INIT_ERR
 		
 		for (long j = 0; j < nObjectives; j++) {
 			errChk ( ActiveXML_IXMLDOMNodeList_Getitem(objectivesNodeList, xmlErrorInfo, j, &objectiveNode) );
-			errChk( DLGetXMLNodeAttributes(objectiveNode, objectiveAttr, NumElem(objectiveAttr)) );    
+			errChk( DLGetXMLElementAttributes("", (ActiveXMLObj_IXMLDOMElement_)objectiveNode, objectiveAttr, NumElem(objectiveAttr)) );    
 			objective = init_Objective_type(objectiveName, objectiveFL);
 			// assign objective to scan engine
 			if (!strcmp(objectiveName, assignedObjectiveName)) {
@@ -2014,7 +2061,6 @@ INIT_ERR
 		// cleanup
 	
 		OKfreeCAHndl(scanEngineNode);
-		OKfreeCAHndl(frameScanXMLElement);
 		OKfreeCAHndl(objectivesXMLElement);
 		OKfreeCAHndl(objectivesNodeList);
 		OKfree(scanEngineName);
@@ -2026,6 +2072,9 @@ INIT_ERR
 
 Error:
 	
+	discard_PointScanProtocol_type(&pointScanProtocolCopy);
+	OKfreeCAHndl(frameScanXMLElement);
+	OKfreeCAHndl(pointScanProtocolsXMLElement);
 	OKfreeCAHndl(scanEngineNodeList); 
 	OKfreeCAHndl(scanEnginesXMLElement);
 	OKfreeCAHndl(scanEngineNode); 
@@ -2049,7 +2098,7 @@ INIT_ERR
 	
 	for (long i = 0; i < nAxisCalibrations; i++) {
 		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(axisCalibrationNodeList, xmlErrorInfo, i, &axisCalibrationNode) );
-		errChk ( DLGetXMLNodeAttributes(axisCalibrationNode, axisCalibrationGenericAttr, NumElem(axisCalibrationGenericAttr)) ); 
+		errChk ( DLGetXMLElementAttributes("", (ActiveXMLObj_IXMLDOMElement_)axisCalibrationNode, axisCalibrationGenericAttr, NumElem(axisCalibrationGenericAttr)) ); 
 		   
 		switch (axisCalibrationType) {
 				
@@ -2109,7 +2158,7 @@ INIT_ERR
 	// get channel attributes
 	for (long i = 0; i < nScanChannels; i++) {
 		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(scanChannelsNodeList, xmlErrorInfo, i, &scanChannelNode) );
-		errChk( DLGetXMLNodeAttributes(scanChannelNode, scanChannelAttr, NumElem(scanChannelAttr)) ); 
+		errChk( DLGetXMLElementAttributes("", (ActiveXMLObj_IXMLDOMElement_)scanChannelNode, scanChannelAttr, NumElem(scanChannelAttr)) ); 
 		scanEngine->scanChans[i]->color = chanColor;
 		OKfreeCAHndl(scanChannelNode);
 	}
@@ -2147,7 +2196,7 @@ INIT_ERR
 																{"PixelSize", 			BasicData_Double, 	&pixelSize},
 																{"PixelDwellTime",		BasicData_Double, 	&pixelDwellTime} };
 	// load frame scan settings
-	errChk( DLGetXMLElementAttributes(frameScanSettingsXMLElement, frameScanAttr, NumElem(frameScanAttr)) ); 															
+	errChk( DLGetXMLElementAttributes("", frameScanSettingsXMLElement, frameScanAttr, NumElem(frameScanAttr)) ); 															
 																
 	//-----------------------------------
 	// coerce min and max limits
@@ -2186,11 +2235,10 @@ Error:
 	return errorInfo.error;
 }
 
-static int LoadCfg_PointScanProtocol (PointScanProtocol_type** pointScanProtocolPtr, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
+static int LoadCfg_PointScanProtocol (PointScanProtocol_type** pointScanProtocolPtr, ActiveXMLObj_IXMLDOMElement_ pointScanProtocolXMLElement, ERRORINFO* xmlErrorInfo)
 {
 INIT_ERR
 	
-	ActiveXMLObj_IXMLDOMElement_	pointScanProtocolXMLElement	= 0;
 	ActiveXMLObj_IXMLDOMElement_	jumpSettingsXMLElement		= 0;
 	ActiveXMLObj_IXMLDOMElement_	pointSettingsXMLElement		= 0;
 	
@@ -2210,9 +2258,6 @@ INIT_ERR
 	uInt32							nIntegration				= 0;
 	BOOL							stimulate					= 0;
 	char*							protocolName				= NULL;
-	
-	// get point scan settings XML element
-	errChk( DLGetSingleXMLElementFromElement(parentXMLElement, "PointScanSettings", &pointScanProtocolXMLElement) );
 	
 	// get jump settings XML element
 	errChk( DLGetSingleXMLElementFromElement(pointScanProtocolXMLElement, "JumpSettings", &jumpSettingsXMLElement) );
@@ -2246,11 +2291,11 @@ INIT_ERR
 																	{"PulseOFFDuration",			BasicData_Double,		&stimPulseOFFDuration} };
 	
 	// get point scan protocol name
-	errChk( DLGetXMLElementAttributes(pointScanProtocolXMLElement, pointScanAttr, NumElem(pointScanAttr)) );
+	errChk( DLGetXMLElementAttributes("", pointScanProtocolXMLElement, pointScanAttr, NumElem(pointScanAttr)) );
 	
 	// get point scan settings
-	errChk( DLGetXMLElementAttributes(jumpSettingsXMLElement, jumpSettingsAttr, NumElem(jumpSettingsAttr)) ); 
-	errChk( DLGetXMLElementAttributes(pointSettingsXMLElement, pointSettingsAttr, NumElem(pointSettingsAttr)) );
+	errChk( DLGetXMLElementAttributes("", jumpSettingsXMLElement, jumpSettingsAttr, NumElem(jumpSettingsAttr)) ); 
+	errChk( DLGetXMLElementAttributes("", pointSettingsXMLElement, pointSettingsAttr, NumElem(pointSettingsAttr)) );
 	
 	// store settings in data structures
 	nullChk( *pointScanProtocolPtr = init_PointScanProtocol_type(protocolName, holdTime, nHoldBurst, holdBurstPeriod, holdBurstPeriodIncr, stimDelay, stimPulseONDuration, 
@@ -2265,9 +2310,69 @@ Error:
 	// cleanup
 	OKfreeCAHndl(jumpSettingsXMLElement);
 	OKfreeCAHndl(pointSettingsXMLElement);
-	OKfreeCAHndl(pointScanProtocolXMLElement);
 	
 	return errorInfo.error;																
+}
+
+static int LoadCfg_RectRaster_PointScanProtocols (ListType* pointScanProtocolsPtr, PointScanProtocol_type** selectedProtocolPtr, ActiveXMLObj_IXMLDOMElement_ pointScanProtocolsXMLElement, ERRORINFO* xmlErrorInfo)
+{
+INIT_ERR
+
+	char*							selectedProtocolName			= NULL;
+	long							nXMLProtocols					= 0;
+	DAQLabXMLNode					pointScanProtocolsAttr[]		= { {"SelectedProtocol",		BasicData_CString,		&selectedProtocolName} };
+	ActiveXMLObj_IXMLDOMNodeList_	protocolsNodeList				= 0;
+	ActiveXMLObj_IXMLDOMNode_		protocolNode					= 0;
+	PointScanProtocol_type*			pointScanProtocol   			= NULL;
+	ListType						protocolsList					= 0;
+	
+	
+	errChk( DLGetXMLElementAttributes("", pointScanProtocolsXMLElement, pointScanProtocolsAttr, NumElem(pointScanProtocolsAttr)) );
+	
+	errChk( ActiveXML_IXMLDOMElement_getElementsByTagName(pointScanProtocolsXMLElement, xmlErrorInfo, "PointScanProtocol", &protocolsNodeList) );
+	errChk( ActiveXML_IXMLDOMNodeList_Getlength(protocolsNodeList, xmlErrorInfo, &nXMLProtocols) );
+	
+	// discard previous protocols if list already exists, otherwise create a new list
+	if (*pointScanProtocolsPtr) {
+		size_t						nProtocols 				= ListNumItems(*pointScanProtocolsPtr);
+		PointScanProtocol_type**	pointScanProtocolPtr   	= NULL;
+	
+		for (size_t i = 1; i <= nProtocols; i++) {
+			pointScanProtocolPtr = (PointScanProtocol_type**)ListGetPtrToItem(*pointScanProtocolsPtr, i);
+			discard_PointScanProtocol_type(pointScanProtocolPtr);
+		}
+		ListClear(*pointScanProtocolsPtr);
+	
+	} else {
+		nullChk( protocolsList = ListCreate(sizeof(PointScanProtocol_type*)) );
+	}
+		
+	// load protocols and assign chosen protocol
+	for (long i = 0; i < nXMLProtocols; i++) {
+		errChk( ActiveXML_IXMLDOMNodeList_Getitem(protocolsNodeList, xmlErrorInfo, i, &protocolNode) );
+		errChk( LoadCfg_PointScanProtocol(&pointScanProtocol, (ActiveXMLObj_IXMLDOMElement_) protocolNode, xmlErrorInfo) );
+		OKfreeCAHndl(protocolNode);
+		nullChk( ListInsertItem(protocolsList, &pointScanProtocol, END_OF_LIST) );
+		
+		// assign protocol
+		if (!strcmp(selectedProtocolName, pointScanProtocol->protocolName))
+			*selectedProtocolPtr = pointScanProtocol;
+		
+		pointScanProtocol = NULL;
+	}
+	
+	*pointScanProtocolsPtr = protocolsList;
+	
+	return 0;
+
+Error:
+	
+	OKfreeList(&protocolsList, (DiscardFptr_type)discard_PointScanProtocol_type);
+	OKfree(selectedProtocolName);
+	discard_PointScanProtocol_type(&pointScanProtocol);
+	
+	return errorInfo.error;
+	
 }
 
 static int SaveNonResGalvoCalToXML	(NonResGalvoCal_type* nrgCal, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ axisCalibrationsElement, ERRORINFO* xmlErrorInfo)
@@ -2420,7 +2525,7 @@ INIT_ERR
 	unsigned int					nTriangleCal					= 0;
 	double							deadTime						= 0;
 	
-	errChk( DLGetXMLElementAttributes(axisCalibrationElement, axisCalibrationAttr, NumElem(axisCalibrationAttr)) ); 
+	errChk( DLGetXMLElementAttributes("", axisCalibrationElement, axisCalibrationAttr, NumElem(axisCalibrationAttr)) ); 
 	
 	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "SwitchTimes", &switchTimesXMLElement) ); 
 	errChk( DLGetSingleXMLElementFromElement(axisCalibrationElement, "MaxSlopes", &maxSlopesXMLElement) );
@@ -2444,7 +2549,7 @@ INIT_ERR
 																		{"ResidualLag", 		BasicData_CString, 	&triangleCalResiduaLagStr} };
 	
 	// switch times
-	errChk( DLGetXMLElementAttributes(switchTimesXMLElement, switchTimesAttr, NumElem(switchTimesAttr)) );
+	errChk( DLGetXMLElementAttributes("", switchTimesXMLElement, switchTimesAttr, NumElem(switchTimesAttr)) );
 	OKfreeCAHndl(switchTimesXMLElement);
 	
 	SwitchTimes_type*	switchTimes = init_SwitchTimes_type();
@@ -2459,7 +2564,7 @@ INIT_ERR
 	Scan(switchTimesDelayStr, STRING_TO_CALIBRATION_DATA, switchTimes->n, switchTimes->delay);  
 	
 	// max slopes
-	errChk( DLGetXMLElementAttributes(maxSlopesXMLElement, maxSlopesAttr, NumElem(maxSlopesAttr)) );
+	errChk( DLGetXMLElementAttributes("", maxSlopesXMLElement, maxSlopesAttr, NumElem(maxSlopesAttr)) );
 	OKfreeCAHndl(maxSlopesXMLElement);
 	
 	MaxSlopes_type*		maxSlopes = init_MaxSlopes_type();
@@ -2472,7 +2577,7 @@ INIT_ERR
 	Scan(maxSlopesAmplitudeStr, STRING_TO_CALIBRATION_DATA, maxSlopes->n , maxSlopes->amplitude);  
 	
 	// triangle waveform calibration
-	errChk( DLGetXMLElementAttributes(triangleCalXMLElement, triangleCalAttr, NumElem(triangleCalAttr)) );
+	errChk( DLGetXMLElementAttributes("", triangleCalXMLElement, triangleCalAttr, NumElem(triangleCalAttr)) );
 	OKfreeCAHndl(triangleCalXMLElement);
 	
 	TriangleCal_type*	triangleCal = init_TriangleCal_type();
@@ -2723,7 +2828,7 @@ INIT_ERR
 									 NonResGalvoRasterScan_Default_StimPulseOFFDuration, 1, PointJump_SinglePoints, FALSE, FALSE, 1, 1, 0, 0, 0);
 							
 							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, FALSE, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 
-											0, 0, &frameScanSettings, &pointScanProtocol, 1, 1);
+											0, 0, &frameScanSettings, &pointScanProtocol, NULL, 1, 1);
 							
 							errChk( InsertRectRasterScanEngineToUI(ls, (RectRaster_type*)newScanEngine, &errorInfo.errMsg) );
 							
@@ -4984,6 +5089,7 @@ static RectRaster_type* init_RectRaster_type (	LaserScanning_type*			lsModule,
 												double						shutterSwitchTime,
 												RectRasterScanSet_type**	frameScanSettingsPtr,
 												PointScanProtocol_type**	pointScanProtocolPtr,
+												ListType*					pointScanProtocolsListPtr,
 												double						scanLensFL,
 												double						tubeLensFL)
 {
@@ -5042,19 +5148,24 @@ INIT_ERR
 	rectRaster->pointScan.jumpTimes				= NULL;
 	rectRaster->pointScan.responseDelays		= NULL;
 	rectRaster->pointScan.pointScanProtocols	= 0;
-	rectRaster->pointScan.pointScanProtocol		= *pointScanProtocolPtr;
-	*pointScanProtocolPtr						= NULL;
 	
-	// round point scan protocol settings to galvo sampling time
-	rectRaster->pointScan.pointScanProtocol->holdTime 				= ceil(rectRaster->pointScan.pointScanProtocol->holdTime * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;  
-	rectRaster->pointScan.pointScanProtocol->holdBurstPeriod 		= ceil(rectRaster->pointScan.pointScanProtocol->holdBurstPeriod * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;  
-	rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr 	= ceil(rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-	rectRaster->pointScan.pointScanProtocol->stimDelay 				= ceil(rectRaster->pointScan.pointScanProtocol->stimDelay * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-	rectRaster->pointScan.pointScanProtocol->stimPulseONDuration 	= ceil(rectRaster->pointScan.pointScanProtocol->stimPulseONDuration * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-	rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration 	= ceil(rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-	rectRaster->pointScan.pointScanProtocol->startDelayInitVal 		= ceil(rectRaster->pointScan.pointScanProtocol->startDelayInitVal * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-	rectRaster->pointScan.pointScanProtocol->startDelayIncrement	= ceil(rectRaster->pointScan.pointScanProtocol->startDelayIncrement * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+	if (pointScanProtocolPtr) {
+		rectRaster->pointScan.pointScanProtocol		= *pointScanProtocolPtr;
+		*pointScanProtocolPtr						= NULL;
+		
+		// round point scan protocol settings to galvo sampling time
+		rectRaster->pointScan.pointScanProtocol->holdTime 				= ceil(rectRaster->pointScan.pointScanProtocol->holdTime * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;  
+		rectRaster->pointScan.pointScanProtocol->holdBurstPeriod 		= ceil(rectRaster->pointScan.pointScanProtocol->holdBurstPeriod * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;  
+		rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr 	= ceil(rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+		rectRaster->pointScan.pointScanProtocol->stimDelay 				= ceil(rectRaster->pointScan.pointScanProtocol->stimDelay * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+		rectRaster->pointScan.pointScanProtocol->stimPulseONDuration 	= ceil(rectRaster->pointScan.pointScanProtocol->stimPulseONDuration * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+		rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration 	= ceil(rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+		rectRaster->pointScan.pointScanProtocol->startDelayInitVal 		= ceil(rectRaster->pointScan.pointScanProtocol->startDelayInitVal * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+		rectRaster->pointScan.pointScanProtocol->startDelayIncrement	= ceil(rectRaster->pointScan.pointScanProtocol->startDelayIncrement * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
 	
+	} else
+		rectRaster->pointScan.pointScanProtocol		= NULL;
+		
 	//-----------------------------
 	// image and point scan buffers
 	//-----------------------------
@@ -5096,9 +5207,13 @@ INIT_ERR
 	//-----------------------------
 	
 	nullChk( rectRaster->pointScan.pointJumps = ListCreate(sizeof(PointJump_type*)) );
-	nullChk( rectRaster->pointScan.pointScanProtocols = ListCreate(sizeof(PointScanProtocol_type*)) );
-	
-
+	if (pointScanProtocolsListPtr) {
+		rectRaster->pointScan.pointScanProtocols = *pointScanProtocolsListPtr;
+		*pointScanProtocolsListPtr = 0;
+	} else {
+		nullChk( rectRaster->pointScan.pointScanProtocols = ListCreate(sizeof(PointScanProtocol_type*)) );
+	}
+		
 	return rectRaster;
 	
 Error:
@@ -5150,28 +5265,10 @@ static void	discard_RectRaster_type (RectRaster_type** rectRasterPtr)
 	//----------------------------------
 	
 	// discard point jumps
-	if (rectRaster->pointScan.pointJumps) {
-		PointJump_type**	pointJumpPtr	= NULL;
-		size_t				nPointJumps		= ListNumItems(rectRaster->pointScan.pointJumps);
-	
-		for (size_t i = 1; i <= nPointJumps; i++) {
-			pointJumpPtr = ListGetPtrToItem(rectRaster->pointScan.pointJumps, i);
-			discard_PointJump_type(pointJumpPtr);
-		}
-		OKfreeList(rectRaster->pointScan.pointJumps);
-	}
+	OKfreeList(&rectRaster->pointScan.pointJumps, (DiscardFptr_type)discard_PointJump_type);
 	
 	// discard point jump protocols
-	if (rectRaster->pointScan.pointScanProtocols) {
-		PointScanProtocol_type**	protocolPtr		= NULL;
-		size_t						nProtocols		= ListNumItems(rectRaster->pointScan.pointScanProtocols);
-		
-		for (size_t i = 1; i <= nProtocols; i++) {
-			protocolPtr = ListGetPtrToItem(rectRaster->pointScan.pointScanProtocols, i);
-			discard_PointScanProtocol_type(protocolPtr);
-		}
-		OKfreeList(rectRaster->pointScan.pointScanProtocols);
-	}
+	OKfreeList(&rectRaster->pointScan.pointScanProtocols, (DiscardFptr_type)discard_PointScanProtocol_type);
 	
 	OKfree(rectRaster->pointScan.jumpTimes);
 	OKfree(rectRaster->pointScan.responseDelays);
@@ -5182,21 +5279,24 @@ static void	discard_RectRaster_type (RectRaster_type** rectRasterPtr)
 	// Scan ROIs
 	//----------------------------------
 	
-	if(rectRaster->scanROIs) {
-		Rect_type**		rectPtr		= NULL;
-		size_t			nROIs		= ListNumItems(rectRaster->scanROIs);
-	
-		for (size_t i = 1; i <= nROIs; i++) {
-			rectPtr = ListGetPtrToItem(rectRaster->scanROIs, i);
-			discard_Rect_type(rectPtr);
-		}
-		OKfreeList(rectRaster->scanROIs);
-	}
+	OKfreeList(&rectRaster->scanROIs, (DiscardFptr_type)discard_Rect_type);
 	
 	//--------------------------------------------------------------------
 	// discard Scan Engine data
 	//--------------------------------------------------------------------
 	discard_ScanEngine_type((ScanEngine_type**)rectRasterPtr);
+}
+
+static int SetRectRasterPointScanProtocol (RectRaster_type* rectRaster, PointScanProtocol_type* pointScanProtocol)
+{
+INIT_ERR
+
+	discard_PointScanProtocol_type(&rectRaster->pointScan.pointScanProtocol);
+	nullChk( rectRaster->pointScan.pointScanProtocol = copy_PointScanProtocol_type(pointScanProtocol) );
+	
+Error:
+	
+	return errorInfo.error;
 }
 
 static RectRasterImgBuff_type* init_RectRasterImgBuff_type (ScanChan_type* scanChan, uInt32 imgHeight, uInt32 imgWidth, DLDataTypes pixelDataType, BOOL flipRows)
@@ -6144,8 +6244,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 0);
 						
 						pointScanProtocol = *(PointScanProtocol_type**)ListGetPtrToItem(scanEngine->pointScan.pointScanProtocols, protocolIdx);
-						discard_PointScanProtocol_type(&scanEngine->pointScan.pointScanProtocol);
-						scanEngine->pointScan.pointScanProtocol = copy_PointScanProtocol_type(pointScanProtocol);
+						SetRectRasterPointScanProtocol(scanEngine, pointScanProtocol);
 						currentPointScanProtocol = scanEngine->pointScan.pointScanProtocol;
 						
 						// apply protocol settings to the scan engine
@@ -7602,9 +7701,9 @@ INIT_ERR
 				nullChk( frameScanROIList = CopyROIList(rectRaster->scanROIs) );
 				nullChk( ROIList = ListCreate(sizeof(ROI_type*)) );
 				nullChk( ListAppend(ROIList, pointJumpROIList) );
-				OKfreeList(pointJumpROIList);
+				OKfreeList(&pointJumpROIList, NULL);
 				nullChk( ListAppend(ROIList, frameScanROIList) );
-				OKfreeList(frameScanROIList);
+				OKfreeList(&frameScanROIList, NULL);
 				SetImageROIs(imgBuffer->image, ROIList);
 				ROIList = 0;
 				
@@ -7816,9 +7915,9 @@ Error:
 	
 	// cleanup
 	ReleaseDataPacket(&pixelPacket);
-	DiscardROIList(&pointJumpROIList);
-	DiscardROIList(&frameScanROIList);
-	DiscardROIList(&ROIList);
+	OKfreeList(&pointJumpROIList, (DiscardFptr_type)discard_PointJump_type);
+	OKfreeList(&frameScanROIList, (DiscardFptr_type)discard_Rect_type);
+	OKfreeList(&ROIList, (DiscardFptr_type)discard_ROI_type);
 	
 	if (imgDisplayPtr) {
 		CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV);

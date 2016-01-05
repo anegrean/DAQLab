@@ -451,7 +451,7 @@ INIT_ERR
 	//--------------------------------------------------------------							
 	// get safety limits and velocities	
 	//--------------------------------------------------------------
-	DLGetXMLElementAttributes(moduleElement, zStageAttr, NumElem(zStageAttr));
+	DLGetXMLElementAttributes("", moduleElement, zStageAttr, NumElem(zStageAttr));
 	
 	//--------------------------------------------------------------
 	// get saved reference positions
@@ -484,7 +484,7 @@ INIT_ERR
 											
 	for (long i = 0; i < nXMLElements; i++) {
 		errChk ( ActiveXML_IXMLDOMNodeList_Getitem(xmlRefPosNodeList, xmlErrorInfo, i, &xmlRefPosNode) );
-		DLGetXMLNodeAttributes(xmlRefPosNode, refPosAttr, NumElem(refPosAttr));
+		DLGetXMLElementAttributes("", (ActiveXMLObj_IXMLDOMElement_)xmlRefPosNode, refPosAttr, NumElem(refPosAttr));
 		OKfreeCAHndl(xmlRefPosNode);
 		refPos = init_RefPosition_type(refName, refVal);
 		ListInsertItem(zstage->zRefPos, &refPos, END_OF_LIST);

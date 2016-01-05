@@ -15,6 +15,7 @@
 
 #include "DAQLab.h"				// include this first
 #include "WaveformDisplay.h"
+#include "DAQLabErrHandling.h"
 #include "UI_WaveformDisplay.h"
 #include "HDF5support.h"
 
@@ -23,9 +24,6 @@
 
 #define WaveformDisplay_UI 	"./Framework/Display/UI_WaveformDisplay.uir"
 
-#define OKfree(ptr) if (ptr) {free(ptr); ptr = NULL;}
-#define OKfreePanHndl(panelHandle)  	if (panelHandle) {DiscardPanel(panelHandle); panelHandle = 0;}
-#define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}  
 //==============================================================================
 // Types
 
@@ -189,7 +187,7 @@ void discard_WaveformDisplay_type (WaveformDisplay_type** waveDispPtr)
 	// Waveforms
 	//--------------
 	
-	DiscardWaveformList(&waveDisp->waveforms);
+	OKfreeList(&waveDisp->waveforms, (DiscardFptr_type)discard_Waveform_type);
 	
 	//--------------
 	// UI

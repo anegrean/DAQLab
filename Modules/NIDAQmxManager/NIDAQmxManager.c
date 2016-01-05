@@ -974,7 +974,6 @@ static void 						discard_Dev_type						(Dev_type** devPtr);
 	// device detection
 static ListType 					ListAllDAQmxDevices 					(void); 
 static void 						UpdateDeviceList 						(ListType devList, int panHndl, int tableCtrl);
-static void 						DiscardDeviceList 						(ListType* devList); 
 
 	// device attributes data structure
 static DevAttr_type* 				init_DevAttr_type						(void); 
@@ -985,7 +984,6 @@ static DevAttr_type* 				copy_DevAttr_type						(DevAttr_type* attr);
 static AIChannel_type* 				init_AIChannel_type						(void); 
 static void 						discard_AIChannel_type					(AIChannel_type** chanPtr);
 
-int CVICALLBACK 					DisposeAIChannelList	 				(size_t index, void* ptrToItem, void* callbackData);
 static AIChannel_type* 				copy_AIChannel_type						(AIChannel_type* channel);
 static ListType						copy_AIChannelList						(ListType chanList);
 static AIChannel_type*				GetAIChannel							(Dev_type* dev, char physChanName[]);
@@ -994,7 +992,6 @@ static AIChannel_type*				GetAIChannel							(Dev_type* dev, char physChanName[]
 static AOChannel_type* 				init_AOChannel_type						(void); 
 static void 						discard_AOChannel_type					(AOChannel_type** chanPtr);
 
-int CVICALLBACK 					DisposeAOChannelList 					(size_t index, void* ptrToItem, void*callbackData);
 static AOChannel_type* 				copy_AOChannel_type						(AOChannel_type* channel);
 static ListType						copy_AOChannelList						(ListType chanList);
 static AOChannel_type*				GetAOChannel							(Dev_type* dev, char physChanName[]);
@@ -1003,7 +1000,6 @@ static AOChannel_type*				GetAOChannel							(Dev_type* dev, char physChanName[]
 static DILineChannel_type* 			init_DILineChannel_type					(void); 
 static void 						discard_DILineChannel_type				(DILineChannel_type** chanPtr);
 
-int CVICALLBACK 					DisposeDILineChannelList	 			(size_t index, void* ptrToItem, void* callbackData);
 static DILineChannel_type* 			copy_DILineChannel_type					(DILineChannel_type* channel);
 static ListType						copy_DILineChannelList					(ListType chanList);
 static DILineChannel_type*			GetDILineChannel						(Dev_type* dev, char physChanName[]);
@@ -1012,7 +1008,6 @@ static DILineChannel_type*			GetDILineChannel						(Dev_type* dev, char physChan
 static DIPortChannel_type* 			init_DIPortChannel_type					(void); 
 static void 						discard_DIPortChannel_type				(DIPortChannel_type** chanPtr);
 
-int CVICALLBACK 					DisposeDIPortChannelList 				(size_t index, void* ptrToItem, void* callbackData);
 static DIPortChannel_type* 			copy_DIPortChannel_type					(DIPortChannel_type* channel);
 static ListType						copy_DIPortChannelList					(ListType chanList);
 static DIPortChannel_type*			GetDIPortChannel						(Dev_type* dev, char physChanName[]);
@@ -1021,7 +1016,6 @@ static DIPortChannel_type*			GetDIPortChannel						(Dev_type* dev, char physChan
 static DOLineChannel_type* 			init_DOLineChannel_type					(void); 
 static void 						discard_DOLineChannel_type				(DOLineChannel_type** chanPtr);
 
-int CVICALLBACK 					DisposeDOLineChannelList	 			(size_t index, void* ptrToItem, void* callbackData);
 static DOLineChannel_type* 			copy_DOLineChannel_type					(DOLineChannel_type* channel);
 static ListType						copy_DOLineChannelList					(ListType chanList);
 static DOLineChannel_type*			GetDOLineChannel						(Dev_type* dev, char physChanName[]);
@@ -1030,7 +1024,6 @@ static DOLineChannel_type*			GetDOLineChannel						(Dev_type* dev, char physChan
 static DOPortChannel_type* 			init_DOPortChannel_type					(void); 
 static void 						discard_DOPortChannel_type				(DOPortChannel_type** chanPtr);
 
-int CVICALLBACK 					DisposeDOPortChannelList 				(size_t index, void* ptrToItem, void* callbackData);
 static DOPortChannel_type* 			copy_DOPortChannel_type					(DOPortChannel_type* channel);
 static ListType						copy_DOPortChannelList					(ListType chanList);
 static DOPortChannel_type*			GetDOPortChannel						(Dev_type* dev, char physChanName[]);
@@ -1039,7 +1032,6 @@ static DOPortChannel_type*			GetDOPortChannel						(Dev_type* dev, char physChan
 static CIChannel_type* 				init_CIChannel_type						(void); 
 static void 						discard_CIChannel_type					(CIChannel_type** chanPtr);
 
-int CVICALLBACK 					DisposeCIChannelList 					(size_t index, void* ptrToItem, void* callbackData);
 static CIChannel_type* 				copy_CIChannel_type						(CIChannel_type* channel);
 static ListType						copy_CIChannelList						(ListType chanList);
 static CIChannel_type*				GetCIChannel							(Dev_type* dev, char physChanName[]);
@@ -1048,7 +1040,6 @@ static CIChannel_type*				GetCIChannel							(Dev_type* dev, char physChanName[]
 static COChannel_type* 				init_COChannel_type						(void); 
 static void 						discard_COChannel_type					(COChannel_type** chanPtr);
 
-int CVICALLBACK 					DisposeCOChannelList 					(size_t index, void* ptrToItem, void* callbackData);
 static COChannel_type* 				copy_COChannel_type						(COChannel_type* channel);
 static ListType						copy_COChannelList						(ListType chanList);
 static COChannel_type*				GetCOChannel							(Dev_type* dev, char physChanName[]);
@@ -1523,7 +1514,7 @@ void discard_NIDAQmxManager (DAQLabModule_type** mod)
 	ListDispose(nidaq->DAQmxDevices);
 	
 	//discard global devList
-	DiscardDeviceList(&allInstalledDevices);
+	OKfreeList(&allInstalledDevices, (DiscardFptr_type)discard_DevAttr_type);
 	
 	// discard UI
 	OKfree(nidaq->mainPanTopPos);
@@ -1707,7 +1698,7 @@ INIT_ERR
 	// Find devices and load their attributes
 	//--------------------------------------------------------------------------
 	
-	DiscardDeviceList(&allInstalledDevices);
+	OKfreeList(&allInstalledDevices, (DiscardFptr_type)discard_DevAttr_type);
 	nullChk( allInstalledDevices = ListAllDAQmxDevices() );
 	nInstalledDevs = ListNumItems(allInstalledDevices);
 	
@@ -1721,7 +1712,7 @@ INIT_ERR
 	DAQLabXMLNode 			NIDAQAttr[] 				= {	{"PanTopPos", BasicData_Int, NIDAQ->mainPanTopPos},
 											  		   		{"PanLeftPos", BasicData_Int, NIDAQ->mainPanLeftPos} };
 														
-	errChk( DLGetXMLElementAttributes(moduleElement, NIDAQAttr, NumElem(NIDAQAttr)) ); 
+	errChk( DLGetXMLElementAttributes("", moduleElement, NIDAQAttr, NumElem(NIDAQAttr)) ); 
 	
 	//--------------------------------------------------------------------------
 	// Load DAQmx devices if they are still present
@@ -1775,7 +1766,7 @@ INIT_ERR
 	// Try to load XML device
 	//-------------------------------------------------------------------------------------------------
 													
-	errChk( DLGetXMLElementAttributes(NIDAQDeviceXMLElement, deviceXMLAttr, NumElem(deviceXMLAttr)) );
+	errChk( DLGetXMLElementAttributes("", NIDAQDeviceXMLElement, deviceXMLAttr, NumElem(deviceXMLAttr)) );
 	
 	// check first if device with the same serial number is present in the system
 	for (size_t i = 1; i <= nDevs; i++) {
@@ -1919,7 +1910,7 @@ INIT_ERR
 																		{"ReferenceClockFrequency", 	BasicData_Double, 		&taskSet->timing->refClkFreq},
 																		{"StartSignalRouting",			BasicData_CString,		&taskSet->timing->startSignalRouting}	};
 	
-	errChk( DLGetXMLElementAttributes(taskSetXMLElement, taskAttr, NumElem(taskAttr)) );
+	errChk( DLGetXMLElementAttributes("", taskSetXMLElement, taskAttr, NumElem(taskAttr)) );
 	// assign remaining attributes
 	taskSet->timing->measMode = (OperationModes) operationMode;
 	taskSet->timing->sampClkEdge = (SampClockEdgeTypes) sampleClockEdge;
@@ -2054,7 +2045,7 @@ INIT_ERR
 																{"WindowTriggerCondition", 	BasicData_UInt, 	&triggerCondition} };
 																
 	// load shared trigger attributes
-	errChk( DLGetXMLElementAttributes(triggerXMLElement, sharedTrigAttr, NumElem(sharedTrigAttr)) );
+	errChk( DLGetXMLElementAttributes("", triggerXMLElement, sharedTrigAttr, NumElem(sharedTrigAttr)) );
 	
 	taskTrig->trigType 		= (Trig_type) trigType; 
 	
@@ -2068,7 +2059,7 @@ INIT_ERR
 			
 		case Trig_DigitalEdge:
 			
-			errChk( DLGetXMLElementAttributes(triggerXMLElement, edgeTrigAttr, NumElem(edgeTrigAttr)) );
+			errChk( DLGetXMLElementAttributes("", triggerXMLElement, edgeTrigAttr, NumElem(edgeTrigAttr)) );
 			taskTrig->slope = (TrigSlope_type) slopeType;
 			break;
 			
@@ -2078,14 +2069,14 @@ INIT_ERR
 			
 		case Trig_AnalogEdge:
 			
-			errChk( DLGetXMLElementAttributes(triggerXMLElement, edgeTrigAttr, NumElem(edgeTrigAttr)) );
+			errChk( DLGetXMLElementAttributes("", triggerXMLElement, edgeTrigAttr, NumElem(edgeTrigAttr)) );
 			taskTrig->slope = (TrigSlope_type) slopeType;
-			errChk( DLGetXMLElementAttributes(triggerXMLElement, levelTrigAttr, NumElem(levelTrigAttr)) );
+			errChk( DLGetXMLElementAttributes("", triggerXMLElement, levelTrigAttr, NumElem(levelTrigAttr)) );
 			break;
 			
 		case Trig_AnalogWindow:
 			
-			errChk( DLGetXMLElementAttributes(triggerXMLElement, windowTrigAttr, NumElem(windowTrigAttr)) );
+			errChk( DLGetXMLElementAttributes("", triggerXMLElement, windowTrigAttr, NumElem(windowTrigAttr)) );
 			taskTrig->wndTrigCond	= (TrigWndCond_type) triggerCondition; 
 			break;
 	}
@@ -2118,7 +2109,7 @@ INIT_ERR
 	
 	
 	// load common channel attributes
-	errChk( DLGetXMLElementAttributes(channelXMLElement, SharedChanAttr, NumElem(SharedChanAttr)) ); 
+	errChk( DLGetXMLElementAttributes("", channelXMLElement, SharedChanAttr, NumElem(SharedChanAttr)) ); 
 	
 	// load channel specific attributes
 	switch ((Channel_type)chanType) {
@@ -2148,7 +2139,7 @@ INIT_ERR
 																			{"Integrate",			BasicData_Bool,		&integrateFlag} };
 																			
 																			
-				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanAIVoltageAttr, NumElem(ChanAIVoltageAttr)) ); 
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, ChanAIVoltageAttr, NumElem(ChanAIVoltageAttr)) ); 
 				
 				DataTypeConversion_type			dataTypeConversion		= {.dataType = (DataTypeConversions)AIDataTypeConversion, .min = dataTypeMin, .max = dataTypeMax, .offset = dataTypeOffset, .gain = dataTypeGain};
 				
@@ -2186,7 +2177,7 @@ INIT_ERR
 																			{"DataTypeOfset",		BasicData_Double,	&dataTypeOffset},
 																			{"Integrate",			BasicData_Double,	&integrateFlag} };
 																			
-				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanAICurrentAttr, NumElem(ChanAICurrentAttr)) ); 
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, ChanAICurrentAttr, NumElem(ChanAICurrentAttr)) ); 
 				
 				DataTypeConversion_type			dataTypeConversion		= {.dataType = (DataTypeConversions)AIDataTypeConversion, .min = dataTypeMin, .max = dataTypeMax, .offset = dataTypeOffset, .gain = dataTypeGain};
 				
@@ -2210,7 +2201,7 @@ INIT_ERR
 																			{"Terminal",			BasicData_UInt,		&terminalType} };
 				
 																			
-				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanAOVoltageAttr, NumElem(ChanAOVoltageAttr)) );
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, ChanAOVoltageAttr, NumElem(ChanAOVoltageAttr)) );
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AO_Voltage_type(dev, physChanName, chanAttr, VRangeIdx, (Terminal_type) terminalType, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2230,7 +2221,7 @@ INIT_ERR
 																			{"IMin",				BasicData_Double, 	&IMin},
 																			{"Terminal",			BasicData_UInt,		&terminalType} };
 				
-				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanAOCurrentAttr, NumElem(ChanAOCurrentAttr)) );															
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, ChanAOCurrentAttr, NumElem(ChanAOCurrentAttr)) );															
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_AO_Current_type(dev, physChanName, chanAttr, IRangeIdx, 0, 0, (Terminal_type) terminalType, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2244,7 +2235,7 @@ INIT_ERR
 				BOOL							invert					= FALSE;
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
-				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2257,7 +2248,7 @@ INIT_ERR
 				BOOL							invert					= FALSE;
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
-				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2270,7 +2261,7 @@ INIT_ERR
 				BOOL							invert					= FALSE;
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
-				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2283,7 +2274,7 @@ INIT_ERR
 				BOOL							invert					= FALSE;
 				DAQLabXMLNode 					ChanDIDOAttr[]			= { {"Invert",				BasicData_Bool, 	&invert} };
 				
-				errChk( DLGetXMLElementAttributes(channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, ChanDIDOAttr, NumElem(ChanDIDOAttr)) );
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_DIDO_type(dev, physChanName, Chan_DI_Line, invert, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2300,7 +2291,7 @@ INIT_ERR
 																			{"InitialCount",		BasicData_UInt,		&initialCount},
 																			{"CountDirection",		BasicData_UInt,		&countDirection} };
 																			
-				errChk( DLGetXMLElementAttributes(channelXMLElement, CIEdgeCountAttr, NumElem(CIEdgeCountAttr)) );
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, CIEdgeCountAttr, NumElem(CIEdgeCountAttr)) );
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CI_EdgeCount_type(dev, physChanName, edgeType, initialCount, countDirection, onDemand) );
 				// reserve channel
 				chanAttr->inUse = TRUE;
@@ -2330,7 +2321,7 @@ INIT_ERR
 																			{"Divisor",						BasicData_UInt,			&divisor},
 																			{"FrequencyInputTerminal",		BasicData_CString,		freqInputTerminal}};
 				
-				errChk( DLGetXMLElementAttributes(channelXMLElement, CIFreqChanAttr, NumElem(CIFreqChanAttr)) );
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, CIFreqChanAttr, NumElem(CIFreqChanAttr)) );
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CI_Frequency_type(dev, physChanName, freqMax, freqMin, edgeType, freqMeasMethod, measTime, divisor, freqInputTerminal, CIFreqTaskTiming, onDemand) );
 				OKfree(freqInputTerminal);
 				// reserve channel
@@ -2342,7 +2333,6 @@ INIT_ERR
 			{
 				COChannel_type*					chanAttr				= GetCOChannel(dev, physChanName);
 				PulseTrainTimeTiming_type*		pulseTrain				= NULL;	
-				TaskTrig_type*					startTrig				= NULL;
 				uInt32							pulseMode				= 0;
 				uInt32							idlePulseState			= 0;
 				uInt64							nPulses					= 0;
@@ -2356,7 +2346,7 @@ INIT_ERR
 																			{"PulseLowTime",			BasicData_Double,		&lowTime},
 																			{"PulseInitialDelay",		BasicData_Double,		&initialDelay}};
 				
-				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTimeTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTime, lowTime, initialDelay) );
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain, onDemand) );
 				
@@ -2370,7 +2360,6 @@ INIT_ERR
 			{
 				COChannel_type*					chanAttr				= GetCOChannel(dev, physChanName);
 				PulseTrainFreqTiming_type*		pulseTrain				= NULL;				
-				TaskTrig_type*					startTrig				= NULL;
 				uInt32							pulseMode				= 0;
 				uInt32							idlePulseState			= 0;
 				uInt64							nPulses					= 0;
@@ -2384,7 +2373,7 @@ INIT_ERR
 																			{"DutyCycle",				BasicData_Double,		&dutyCycle},
 																			{"InitialDelay",			BasicData_Double,		&initialDelay} };
 				
-				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainFreqTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, dutyCycle, frequency, initialDelay) );
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, NULL, (PulseTrain_type*)pulseTrain, onDemand) );
 				// reserve channel
@@ -2414,7 +2403,7 @@ INIT_ERR
 																			{"LowTicks",				BasicData_UInt,			&lowTicks},
 																			{"DelayTicks",				BasicData_UInt,			&delayTicks} };
 				
-				errChk( DLGetXMLElementAttributes(channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
+				errChk( DLGetXMLElementAttributes("", channelXMLElement, COChanAttr, NumElem(COChanAttr)) );
 				nullChk( pulseTrain = init_PulseTrainTickTiming_type((PulseTrainModes)pulseMode, (PulseTrainIdleStates)idlePulseState, nPulses, highTicks, lowTicks, delayTicks, 0) ); // tick clock unknown at this point
 				nullChk( *chanSetPtr = (ChanSet_type*) init_ChanSet_CO_type(dev, physChanName, (Channel_type) chanType, clockSource, (PulseTrain_type*)pulseTrain, onDemand) );
 				OKfree(clockSource);
@@ -2759,11 +2748,11 @@ INIT_ERR
 	errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Channels", &ChannelsXMLElement) );
 	// save channels info
 	for (size_t i = 1; i <= nChannels; i++) {
-		chanSet = *(ChanSet_type**) ListGetPtrToItem(taskSet->chanTaskSet, i);
+		chanSet = *(ChanSet_CO_type**) ListGetPtrToItem(taskSet->chanTaskSet, i);
 		// create new "Channel" element
 		errChk ( ActiveXML_IXMLDOMDocument3_createElement (xmlDOM, xmlErrorInfo, "Channel", &ChannelXMLElement) );
 		// save channel info
-		errChk( SaveChannelCfg(chanSet, xmlDOM, ChannelXMLElement, xmlErrorInfo) );
+		errChk( SaveChannelCfg((ChanSet_type*)chanSet, xmlDOM, ChannelXMLElement, xmlErrorInfo) );
 		// add "Channel" element to "Channels" element
 		errChk ( ActiveXML_IXMLDOMElement_appendChild (ChannelsXMLElement, xmlErrorInfo, ChannelXMLElement, NULL) );
 		// discard "Channel" XML element handle
@@ -3647,7 +3636,7 @@ Error:
 	discard_CIChannel_type(&newCIChan);
 	discard_COChannel_type(&newCOChan);
 	
-	DiscardDeviceList(&devList);
+	OKfreeList(&devList, (DiscardFptr_type)discard_DevAttr_type);
 	
 	return 0;
 	
@@ -3731,22 +3720,6 @@ static void UpdateDeviceList (ListType devList, int panHndl, int tableCtrl)
 	
 }
 
-static void DiscardDeviceList (ListType* devList)
-{
-    DevAttr_type** 	devAttrPtr	= NULL;
-	
-	if (!*devList) return;
-	
-	size_t			nDevs		= ListNumItems(*devList);
-	
-	for (size_t i = 1; i <= nDevs; i++) {
-		devAttrPtr = ListGetPtrToItem(*devList, i);
-		discard_DevAttr_type(devAttrPtr);
-	}
-	
-	OKfreeList(*devList);
-}
-
 //------------------------------------------------------------------------------
 // DevAttr_type Device attributes data structure
 //------------------------------------------------------------------------------
@@ -3828,51 +3801,20 @@ static void discard_DevAttr_type(DevAttr_type** attrPtr)
 	OKfree(attr->type);
 	
 	// discard channel lists and free pointers within lists.
-	if (attr->AIchan) { 	
-		ListApplyToEachEx (attr->AIchan, 1, DisposeAIChannelList, NULL); 
-		OKfreeList(attr->AIchan);
-	}						   
-	
-	if (attr->AOchan) {
-		ListApplyToEachEx (attr->AOchan, 1, DisposeAOChannelList, NULL);
-		OKfreeList(attr->AOchan);
-	}
-	
-	if (attr->DIlines) {
-		ListApplyToEachEx (attr->DIlines, 1, DisposeDILineChannelList, NULL);
-		OKfreeList(attr->DIlines);
-	}
-	
-	if (attr->DIports) {
-		ListApplyToEachEx (attr->DIports, 1, DisposeDIPortChannelList, NULL); 
-		OKfreeList(attr->DIports);
-	}
-	
-	if (attr->DOlines) {
-		ListApplyToEachEx (attr->DOlines, 1, DisposeDOLineChannelList, NULL);
-		OKfreeList(attr->DOlines);
-	}
-	
-	if (attr->DOports) {
-		ListApplyToEachEx (attr->DOports, 1, DisposeDOPortChannelList, NULL);
-		OKfreeList(attr->DOports); 
-	}
-	
-	if (attr->CIchan) {
-		ListApplyToEachEx (attr->CIchan, 1, DisposeCIChannelList, NULL);
-		OKfreeList(attr->CIchan); 
-	}
-	
-	if (attr->COchan) {
-		ListApplyToEachEx (attr->COchan, 1, DisposeCOChannelList, NULL);
-		OKfreeList(attr->COchan); 
-	}
+	OKfreeList(&attr->AIchan, (DiscardFptr_type)discard_AIChannel_type);
+	OKfreeList(&attr->AOchan, (DiscardFptr_type)discard_AOChannel_type);					   
+	OKfreeList(&attr->DIlines, (DiscardFptr_type)discard_DILineChannel_type);					   
+	OKfreeList(&attr->DIports, (DiscardFptr_type)discard_DIPortChannel_type);					   
+	OKfreeList(&attr->DOlines, (DiscardFptr_type)discard_DOLineChannel_type);
+	OKfreeList(&attr->DOports, (DiscardFptr_type)discard_DOPortChannel_type);					   
+	OKfreeList(&attr->CIchan, (DiscardFptr_type)discard_CIChannel_type);					   
+	OKfreeList(&attr->COchan, (DiscardFptr_type)discard_COChannel_type);					   
 	
 	// discard supported IO type lists
-	OKfreeList(attr->AISupportedMeasTypes);
-	OKfreeList(attr->AOSupportedOutputTypes);
-	OKfreeList(attr->CISupportedMeasTypes);
-	OKfreeList(attr->COSupportedOutputTypes);
+	OKfreeList(&attr->AISupportedMeasTypes, NULL);
+	OKfreeList(&attr->AOSupportedOutputTypes, NULL);
+	OKfreeList(&attr->CISupportedMeasTypes, NULL);
+	OKfreeList(&attr->COSupportedOutputTypes, NULL);
 	
 	OKfree(*attrPtr);
 }
@@ -3968,7 +3910,7 @@ static void discard_AIChannel_type (AIChannel_type** chanPtr)
 	if (!chan) return;
 	
 	OKfree(chan->physChanName);
-	OKfreeList(chan->supportedMeasTypes);
+	OKfreeList(&chan->supportedMeasTypes, NULL);
 	discard_IORange_type(&chan->Vrngs);
 	discard_IORange_type(&chan->Irngs);
 	
@@ -4023,7 +3965,7 @@ static ListType	copy_AIChannelList (ListType chanList)
 	return dest;
 	
 Error:
-	ListApplyToEachEx (dest, 1, DisposeAIChannelList, NULL); ListDispose(dest);  
+	OKfreeList(&dest, (DiscardFptr_type)discard_AIChannel_type);
 	return 0;
 }
 
@@ -4064,19 +4006,11 @@ static void discard_AOChannel_type (AOChannel_type** chanPtr)
 	if (!chan) return;
 	
 	OKfree(chan->physChanName);
-	OKfreeList(chan->supportedOutputTypes);
+	OKfreeList(&chan->supportedOutputTypes, NULL);
 	discard_IORange_type(&chan->Vrngs);
 	discard_IORange_type(&chan->Irngs);
 	
 	OKfree(*chanPtr);
-}
-
-int CVICALLBACK DisposeAOChannelList (size_t index, void *ptrToItem, void *callbackData)
-{
-	AOChannel_type** chanPtr = ptrToItem;
-	
-	discard_AOChannel_type(chanPtr);
-	return 0;
 }
 
 static AOChannel_type* copy_AOChannel_type (AOChannel_type* channel)
@@ -4119,7 +4053,7 @@ static ListType	copy_AOChannelList (ListType chanList)
 	return dest;
 	
 Error:
-	ListApplyToEachEx (dest, 1, DisposeAOChannelList, NULL); ListDispose(dest);  
+	OKfreeList(&dest, (DiscardFptr_type)discard_AOChannel_type);
 	return 0;
 }
 
@@ -4159,17 +4093,9 @@ static void discard_DILineChannel_type (DILineChannel_type** chanPtr)
 	if (!chan) return;
 	
 	OKfree(chan->physChanName);
-	OKfreeList(chan->sampModes);
+	OKfreeList(&chan->sampModes, NULL);
 	
 	OKfree(*chanPtr);
-}
-
-int CVICALLBACK DisposeDILineChannelList (size_t index, void *ptrToItem, void *callbackData)
-{
-	DILineChannel_type** chanPtr = ptrToItem;
-	
-	discard_DILineChannel_type(chanPtr);
-	return 0;
 }
 
 static DILineChannel_type* copy_DILineChannel_type (DILineChannel_type* channel)
@@ -4211,7 +4137,7 @@ static ListType	copy_DILineChannelList (ListType chanList)
 	return dest;
 	
 Error:
-	ListApplyToEachEx (dest, 1, DisposeDILineChannelList, NULL); ListDispose(dest);  
+	OKfreeList(&dest, (DiscardFptr_type)discard_DILineChannel_type);
 	return 0;
 }
 
@@ -4252,17 +4178,9 @@ static void discard_DIPortChannel_type (DIPortChannel_type** chanPtr)
 	if (!chan) return;
 	
 	OKfree(chan->physChanName);
-	OKfreeList(chan->sampModes);
+	OKfreeList(&chan->sampModes, NULL);
 	
 	OKfree(*chanPtr);
-}
-
-int CVICALLBACK DisposeDIPortChannelList (size_t index, void *ptrToItem, void *callbackData)
-{
-	DIPortChannel_type** chanPtr = ptrToItem;
-	
-	discard_DIPortChannel_type(chanPtr);
-	return 0;
 }
 
 static DIPortChannel_type* copy_DIPortChannel_type (DIPortChannel_type* channel)
@@ -4305,7 +4223,7 @@ static ListType	copy_DIPortChannelList (ListType chanList)
 	return dest;
 	
 Error:
-	ListApplyToEachEx (dest, 1, DisposeDIPortChannelList, NULL); ListDispose(dest);  
+	OKfreeList(&dest, (DiscardFptr_type)discard_DIPortChannel_type);
 	return 0;
 }
 
@@ -4344,17 +4262,9 @@ static void discard_DOLineChannel_type (DOLineChannel_type** chanPtr)
 	if (!chan) return;
 	
 	OKfree(chan->physChanName);
-	OKfreeList(chan->sampModes);
+	OKfreeList(&chan->sampModes, NULL);
 	
 	OKfree(*chanPtr);
-}
-
-int CVICALLBACK DisposeDOLineChannelList (size_t index, void *ptrToItem, void *callbackData)
-{
-	DOLineChannel_type** chanPtr = ptrToItem;
-	
-	discard_DOLineChannel_type(chanPtr);
-	return 0;
 }
 
 static DOLineChannel_type* copy_DOLineChannel_type (DOLineChannel_type* channel)
@@ -4395,7 +4305,7 @@ static ListType	copy_DOLineChannelList (ListType chanList)
 	return dest;
 	
 Error:
-	ListApplyToEachEx (dest, 1, DisposeDOLineChannelList, NULL); ListDispose(dest);  
+	OKfreeList(&dest, (DiscardFptr_type)discard_DOLineChannel_type);
 	return 0;
 }
 
@@ -4435,17 +4345,9 @@ static void discard_DOPortChannel_type (DOPortChannel_type** chanPtr)
 	if (!chan) return;
 	
 	OKfree(chan->physChanName);
-	OKfreeList(chan->sampModes);
+	OKfreeList(&chan->sampModes, NULL);
 	
 	OKfree(*chanPtr);
-}
-
-int CVICALLBACK DisposeDOPortChannelList (size_t index, void *ptrToItem, void *callbackData)
-{
-	DOPortChannel_type** chanPtr = ptrToItem;
-	
-	discard_DOPortChannel_type(chanPtr);
-	return 0;
 }
 
 static DOPortChannel_type* copy_DOPortChannel_type (DOPortChannel_type* channel)
@@ -4487,7 +4389,7 @@ static ListType	copy_DOPortChannelList (ListType chanList)
 	return dest;
 	
 Error:
-	ListApplyToEachEx (dest, 1, DisposeDOPortChannelList, NULL); ListDispose(dest);  
+	OKfreeList(&dest, (DiscardFptr_type)discard_DOPortChannel_type);
 	return 0;
 }
 
@@ -4525,17 +4427,9 @@ static void discard_CIChannel_type (CIChannel_type** chanPtr)
 	if (!chan) return;
 	
 	OKfree(chan->physChanName);
-	OKfreeList(chan->supportedMeasTypes);
+	OKfreeList(&chan->supportedMeasTypes, NULL);
 	
 	OKfree(*chanPtr);
-}
-
-int CVICALLBACK DisposeCIChannelList (size_t index, void *ptrToItem, void *callbackData)
-{
-	CIChannel_type** chanPtr = ptrToItem;
-	
-	discard_CIChannel_type(chanPtr);
-	return 0;
 }
 
 static CIChannel_type* copy_CIChannel_type (CIChannel_type* channel)
@@ -4575,7 +4469,7 @@ static ListType	copy_CIChannelList (ListType chanList)
 	return dest;
 	
 Error:
-	ListApplyToEachEx (dest, 1, DisposeCIChannelList, NULL); ListDispose(dest);  
+	OKfreeList(&dest, (DiscardFptr_type)discard_CIChannel_type);
 	return 0;
 }
 
@@ -4613,17 +4507,9 @@ static void discard_COChannel_type (COChannel_type** chanPtr)
 	if (!chan) return;
 	
 	OKfree(chan->physChanName);
-	OKfreeList(chan->supportedOutputTypes);
+	OKfreeList(&chan->supportedOutputTypes, NULL);
 	
 	OKfree(*chanPtr);
-}
-
-int CVICALLBACK DisposeCOChannelList (size_t index, void *ptrToItem, void *callbackData)
-{
-	COChannel_type** chanPtrPtr = ptrToItem;
-	
-	discard_COChannel_type(chanPtrPtr);
-	return 0;
 }
 
 static COChannel_type* copy_COChannel_type (COChannel_type* channel)
@@ -4663,7 +4549,7 @@ static ListType	copy_COChannelList (ListType chanList)
 	return dest;
 	
 Error:
-	ListApplyToEachEx (dest, 1, DisposeCOChannelList, NULL); ListDispose(dest);  
+	OKfreeList(&dest, (DiscardFptr_type)discard_COChannel_type);
 	return 0;
 }
 
@@ -12949,7 +12835,8 @@ INIT_ERR
 	DisplayPanel(nidaq->devListPanHndl);
 	
 	// find devices
-	DiscardDeviceList(&allInstalledDevices);
+	OKfreeList(&allInstalledDevices, (DiscardFptr_type)discard_DevAttr_type);
+	
 	SetCtrlAttribute (nidaq->devListPanHndl, DevListPan_DAQTable, ATTR_LABEL_TEXT, "Searching for devices...");
 	ProcessDrawEvents();
 	nullChk( allInstalledDevices = ListAllDAQmxDevices() );

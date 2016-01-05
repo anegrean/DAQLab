@@ -297,7 +297,7 @@ INIT_ERR
 											  						{"PanTopPos", 	BasicData_Int, laser->mainPanTopPos} };
 	
 	// load laser attributes
-	errChk( DLGetXMLElementAttributes(moduleElement, laserAttr, NumElem(laserAttr)) );
+	errChk( DLGetXMLElementAttributes("", moduleElement, laserAttr, NumElem(laserAttr)) );
 	
 	// get COM settings XML element from module XML element
 	errChk( DLGetSingleXMLElementFromElement(moduleElement, "SerialCOMSettings", &COMSettingsXMLElement) );
@@ -324,7 +324,7 @@ INIT_ERR
 												{"StopBits",	BasicData_Int,	&COMSettingsPtr->stopBits}	};
 	
 	// get COM settings
-	errChk( DLGetXMLElementAttributes(COMSettingsXMLElement, COMSettingsAttr, NumElem(COMSettingsAttr)) ); 
+	errChk( DLGetXMLElementAttributes("", COMSettingsXMLElement, COMSettingsAttr, NumElem(COMSettingsAttr)) ); 
 	COMSettingsPtr->baudRate = baudRate;
 	
 Error:

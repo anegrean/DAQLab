@@ -16,15 +16,8 @@
 #include <ansi_c.h>
 #include "toolbox.h"
 
-
-
-
-
 //==============================================================================
 // Constants
-
-#define OKfree(ptr) 		if (ptr) {free(ptr); ptr = NULL;}
-#define OKfreeList(list)	if (list) {ListDispose(list); list = 0;}  
 
 //==============================================================================
 // Types
@@ -461,12 +454,6 @@ void ClearWaveformList (ListType waveformList)
 		discard_Waveform_type(waveformPtr);
 	}
 	ListClear(waveformList);
-}
-
-void DiscardWaveformList (ListType* waveformListPtr)
-{
-	ClearWaveformList(*waveformListPtr);
-	OKfreeList(*waveformListPtr);
 }
 
 void SetWaveformName (Waveform_type* waveform, char waveformName[])
@@ -989,13 +976,13 @@ INIT_ERR
 	
 	//-----------------------------------------------------------
 	// alloc
-	nullChk( image->ROIs		= ListCreate(sizeof(ROI_type*)));
+	nullChk( image->ROIs				= ListCreate(sizeof(ROI_type*)));
 	
 	return image;
 	
 Error:
 	
-	OKfreeList(image->ROIs);
+	OKfreeList(&image->ROIs, NULL);
 	free(image);
 	return NULL;
 }
@@ -1010,8 +997,8 @@ void discard_Image_type (Image_type** imagePtr)
 	OKfree(image->pixData);
 	
 	// free ROIs
-	DiscardROIList(&image->ROIs);
-
+	OKfreeList(&image->ROIs, (DiscardFptr_type)discard_ROI_type);
+	
 	OKfree(*imagePtr);
 }
 
@@ -1119,7 +1106,7 @@ ImageTypes GetImageType (Image_type* image)
 void SetImageROIs (Image_type* image, ListType ROIs)
 {
 	// free previous ROIs
-	DiscardROIList(&image->ROIs);
+	OKfreeList(&image->ROIs, (DiscardFptr_type)discard_ROI_type);
 	image->ROIs = ROIs; 
 }
 
@@ -1315,6 +1302,13 @@ void discard_Rect_type (Rect_type** RectPtr)
 	discard_ROIBaseClass((ROI_type**)RectPtr);
 }
 
+void discard_ROI_type (ROI_type** ROIPtr)
+{
+	if (!*ROIPtr) return;
+	
+	(*(*ROIPtr)->discardFptr) ((void**)ROIPtr);
+}
+
 static Rect_type* copy_Rect_type (Rect_type* rect)
 {
 INIT_ERR
@@ -1340,23 +1334,6 @@ Error:
 // All ROIs
 //-------------------------     
 
-void DiscardROIList (ListType* ROIListPtr)
-{
-	ListType	ROIList = *ROIListPtr;
-	
-	if (!ROIList) return;
-	
-	// free ROIs
-	size_t 			nROIs 	= ListNumItems(ROIList);
-	ROI_type** 		ROIPtr	= NULL;
-	for (size_t i = 1; i <= nROIs; i++) {
-		ROIPtr = ListGetPtrToItem(ROIList, i);
-		(*(*ROIPtr)->discardFptr) ((void**)ROIPtr);
-	}
-	
-	OKfreeList(*ROIListPtr);
-}
-
 ListType CopyROIList (ListType ROIList)
 {
 INIT_ERR
@@ -1378,7 +1355,7 @@ INIT_ERR
 	
 Error:
 	
-	DiscardROIList(&listCopy);
+	OKfreeList(&listCopy, (DiscardFptr_type)discard_ROI_type);
 	return 0;
 }
 

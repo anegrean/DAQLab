@@ -38,6 +38,11 @@ typedef BOOL 		(*ValidateInputFptr_type) 			(char inputStr[], void* callbackData
 // Displays a popup box where the user can give a string after which a validate function pointer is called.
 char*				DLGetUINameInput					(char popupWndName[], size_t maxInputLength, ValidateInputFptr_type validateInputFptr, void* callbackData);
 
+// Concatenates several input strings and returns the resulting dynamically allocated string. Note, for this function to work correctly, the last string argument must
+// be always set to NULL. Instead of using the function directly, it is more convenient to use the macro which automatically includes the NULL string as the last argument.
+#define 			DLDynStringCat(string1, ...)		DL_DynStringCat(string1, __VA_ARGS__, NULL)
+char*				DL_DynStringCat						(char string1[], ...);
+
 #ifdef __cplusplus
     }
 #endif

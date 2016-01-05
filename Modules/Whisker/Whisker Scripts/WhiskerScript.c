@@ -264,15 +264,10 @@ discard_script_elements(ListType script_elements)
 		DiscardPanel(element->panel_handle);
 		
 		/* Free element */
-		if (element->MAGIC_NUM == XYMOVE) {	/* Free saved Positions */
-			Position_t	*saved_position = NULL;
-			while (ListNumItems(((XYMoveElement_t *)element)->saved_positions)) {
-				ListRemoveItem(((XYMoveElement_t *)element)->saved_positions, 
-							   		&saved_position, FRONT_OF_LIST);
-				OKfree(saved_position);
-			}
-			OKfreeList(((XYMoveElement_t *)element)->saved_positions);
-		}
+		if (element->MAGIC_NUM == XYMOVE) 
+			/* Free saved Positions */
+			OKfreeList(&((XYMoveElement_t *)element)->saved_positions, okfree);
+		
 		OKfree(element);
 	}
 	
@@ -293,7 +288,7 @@ discard_cur_script(WScript_t *cur_script)
 	discard_script_elements(cur_script->script_elements);
 	
 	/* Free list */
-	OKfreeList(cur_script->script_elements);
+	OKfreeList(&cur_script->script_elements, NULL);
 	cur_script->num_elements = 0;
 	cur_script->xml_script.VALID_FILE = FALSE;
 	/* Close log file handle */
@@ -850,7 +845,7 @@ INIT_ERR
 			LOG_MSG(0, "Error when inserting element into list\n");
 			/* TODO: Free list */
 			discard_script_elements(script_elements);
-			OKfreeList(script_elements);
+			OKfreeList(&script_elements, NULL);
 			goto Error;
 		}
 		
@@ -1359,7 +1354,7 @@ script_runner(void *thread_data)
 	 * explicitely.
 	 */
 	free_thread_functionIDs(cur_script);
-	OKfreeList(cur_script->thread_functionIDs);
+	OKfreeList(&cur_script->thread_functionIDs, NULL);
 	
 	/* Save stats */
 	save_stats(whisker_script);

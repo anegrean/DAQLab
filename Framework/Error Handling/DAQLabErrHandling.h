@@ -27,10 +27,14 @@
 // Include files
 
 #include "cvidef.h"
+#include "toolbox.h"
 
 //==============================================================================
 // Constants
 		
+// Generic function type to dispose of dinamically allocated data
+typedef void (*DiscardFptr_type) (void** objectPtr);
+
 //-------------------------------------------------------------------------------
 // Error checking macros
 //-------------------------------------------------------------------------------
@@ -63,9 +67,10 @@ typedef struct {
 // Macros
 
 #define OKfree(ptr) 					if (ptr) {free(ptr); ptr = NULL;}
+
 #define OKfreeCAHndl(objHandle)			if (objHandle) {CA_DiscardObjHandle(objHandle); objHandle = 0;}
+
 #define OKfreePanHndl(panelHandle)  	if (panelHandle) {DiscardPanel(panelHandle); panelHandle = 0;}
-#define OKfreeList(list) 				if (list) {ListDispose(list); list = 0;}  
 
 #define NumElem(ptr) (sizeof(ptr)/sizeof(ptr[0]))	 // Note: do not use this inside a function to get the number of elements in an array passed as an argument!
 
@@ -169,6 +174,13 @@ void				discard_FCallReturn_type		(FCallReturn_type** fCallReturnPtr);
 
 // Formats error and warning messages ( errors: msgID < 0, message: msgID = 0, warning: msgID > 0 )
 char* 				FormatMsg						(int messageID, char fileName[], char functionName[], int lineNumber, char message[]);
+
+// Discards a list by applying a chosen discard function to each list element
+void				OKfreeList						(ListType* listPtr, DiscardFptr_type discardFptr);
+
+// Releases memory using free() and sets the freed pointer to NULL.
+void				okfree							(void** objPtr);
+
 
 #ifdef __cplusplus
     }

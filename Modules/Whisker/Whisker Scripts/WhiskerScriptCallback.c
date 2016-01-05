@@ -528,12 +528,12 @@ insert_procedure(WhiskerScript_t *whisker_script, size_t insert_pos)
 								   	&element, insert_pos++)) {
 			ListInsertItem(script_elements, &element, END_OF_LIST);	/* This frees element properly */
 			discard_script_elements(script_elements);
-			OKfreeList(script_elements);
+			OKfreeList(&script_elements, NULL);
 			MessagePopup("Insert Procedure Error", "Failed to load complete sub script");
 			return;
 		}
 	}
-	OKfreeList(script_elements);
+	OKfreeList(&script_elements, NULL);
 	
 	cur_script->num_elements = ListNumItems(cur_script->script_elements);
 	/* Redraw cur script elements */
@@ -667,14 +667,9 @@ delete_element(WScript_t *cur_script, int index)
 	/* Discard Panel */
 	DiscardPanel(element->panel_handle);
 	
-	if (element->MAGIC_NUM == XYMOVE) {	/* Free saved Positions */
-			Position_t	*saved_position = NULL;
-			while (ListNumItems(((XYMoveElement_t *)element)->saved_positions)) {
-				ListRemoveItem(((XYMoveElement_t *)element)->saved_positions, 
-							   		&saved_position, FRONT_OF_LIST);
-				OKfree(saved_position);
-			}
-			OKfreeList(((XYMoveElement_t *)element)->saved_positions);
+	if (element->MAGIC_NUM == XYMOVE) 
+		/* Free saved Positions */
+		OKfreeList(&((XYMoveElement_t *)element)->saved_positions, okfree);	
 	}
 	
 	OKfree(element);

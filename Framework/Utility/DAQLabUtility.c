@@ -77,3 +77,35 @@ char* DLGetUINameInput (char popupWndName[], size_t maxInputLength, ValidateInpu
 	return 	newName;
 	
 }
+
+char* DL_DynStringCat (char string1[], ...)
+{
+INIT_ERR
+
+	va_list 	arguments;
+	char*		catStrings	= StrDup(string1);
+	char*		strArg		= NULL;
+	
+	if (!catStrings) return NULL;
+	
+	// initializing arguments to store all values after string1
+    va_start(arguments, string1);           
+	
+    // concatenate strings
+	while ((strArg = va_arg(arguments, char* ))) {
+		nullChk( AppendString(&catStrings, strArg, -1) );
+	}
+	
+	// clean up the list
+    va_end ( arguments );
+
+    return catStrings;
+	
+Error:
+	
+	// clean up the list
+	va_end ( arguments );
+	
+	OKfree(catStrings);
+	return NULL;
+}
